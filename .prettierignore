@@ -1,0 +1,14 @@
+node_modules
+dist
+out
+coverage
+docker/cache
+docker/dist
+docker/node_modules
+docker/storage
+docker/home
+docker/logs
+docker/tmp
+bun.lock
+*.bun-build
+.*.bun-build

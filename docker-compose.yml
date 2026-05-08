@@ -1,0 +1,25 @@
+name: flyflor
+
+services:
+    flyflor:
+        image: debian:bookworm-slim
+        container_name: flyflor-dev
+        working_dir: /workspace
+        volumes:
+            - .:/workspace
+            - ./docker/config:/root/.flyflor
+            - ./dist/flyflor-linux:/usr/local/bin/flyflor:ro
+        command: sleep infinity
+        depends_on:
+            qdrant:
+                condition: service_started
+        stdin_open: true
+        tty: true
+
+    qdrant:
+        image: qdrant/qdrant:latest
+        container_name: flyflor-qdrant
+        volumes:
+            - ./docker/storage/qdrant:/qdrant/storage
+        expose:
+            - "6333"

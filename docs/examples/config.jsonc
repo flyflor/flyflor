@@ -1,0 +1,121 @@
+{
+    // Flyflor global config. Copy to ~/.flyflor/config.jsonc.
+    "model": {
+        // FastAi is a custom OpenAI-compatible relay profile, matching ccswitch/OpenCode shape.
+        "activeProvider": "fastai",
+        "activeModel": "gpt-5.5",
+        "temperature": 0.2,
+        "timeoutMs": 60000,
+        "secrets": {
+            "fastai-api-key": "",
+        },
+        "providers": {
+            "fastai": {
+                "type": "openai-compatible",
+                "apiMode": "responses",
+                "baseUrl": "https://fastai.fast",
+                "apiKey": {
+                    "provider": "config",
+                    "id": "fastai-api-key",
+                },
+                "defaultModel": "gpt-5.5",
+                "maxTokens": 65536,
+                "models": ["gpt-5.5"],
+            },
+
+            // Built-ins are reserved by convention and only need overrides.
+            // FastAi is intentionally not a built-in official provider; keep it as a custom profile.
+            // openai, claude, anthropic, deepseek, gemini, kimi, minimax,
+            // minimax-cn, qwen, qwen-intl, openrouter, ai-gateway, xai,
+            // zai, groq, mistral, azure-openai, bedrock, ollama, local, custom.
+            "openai": {},
+            "claude": {},
+            "deepseek": {},
+            "gemini": {},
+            "kimi": {},
+            "minimax": {},
+            "qwen": {},
+            "openrouter": {},
+            "custom": {
+                "type": "openai-compatible",
+                "baseUrl": "",
+                "apiKey": "",
+                "defaultModel": "",
+                "models": [],
+            },
+        },
+    },
+    "gateway": {
+        "host": "0.0.0.0",
+        "port": 8787,
+        "stdio": false,
+        "allowedChannels": ["webhook", "stdio"],
+        "channelReplyUrls": {},
+        "channels": {
+            "telegram": {},
+            "discord": {},
+            "feishu": {},
+            "wechat": {},
+            "weixinIlink": {
+                "pollIntervalMs": 1500,
+            },
+        },
+    },
+    "memory": {
+        "analyzer": {
+            "enabled": true,
+            "candidateThreshold": 0.65,
+            "keyphraseLimit": 12,
+            "minimumTextChars": 4,
+        },
+        "enabled": true,
+        "candidates": {
+            "autoPromoteExplicit": true,
+            "maxCandidatesPerTurn": 3,
+        },
+        "markdown": {
+            "enabled": true,
+            "maxPromptChars": 12000,
+        },
+        "sqlite": {
+            "enabled": true,
+            "maxPromptItems": 8,
+        },
+        "qdrant": {
+            // Qdrant is Flyflor internal infrastructure. Do not expose it as a public endpoint.
+            // Docker dev resolves this service name internally; native installer will manage a local endpoint.
+            "enabled": true,
+            "internalUrl": "http://qdrant:6333",
+            "collection": "flyflor_memories",
+            "dimensions": 384,
+            "timeoutMs": 1500,
+        },
+        "retrieval": {
+            "maxResults": 12,
+            "maxPromptChars": 18000,
+        },
+        "session": {
+            "consolidationBatchSize": 24,
+            "maxHistoryEntryChars": 8000,
+            "maxLiveMessages": 80,
+            "maxPromptMessages": 16,
+        },
+        "weights": {
+            "actionability": 0.7,
+            "arousal": 0.5,
+            "certainty": 0.65,
+            "importance": 0.85,
+            "confidence": 1,
+            "durability": 0.65,
+            "dominance": 0.5,
+            "emotionalValence": 0,
+            "recurrence": 1,
+            "relevance": 0.8,
+            "sourceDiversity": 1,
+            "validationCount": 1,
+        },
+    },
+    "sandbox": {
+        "mode": "off",
+    },
+}

@@ -27,6 +27,17 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# docker dev workspace
+docker/cache/*
+!docker/cache/.gitkeep
+docker/dist/*
+!docker/dist/.gitkeep
+docker/node_modules
+docker/config/*
+!docker/config/.gitkeep
+docker/storage/*
+!docker/storage/.gitkeep
+
 # IntelliJ based IDEs
 .idea
 
