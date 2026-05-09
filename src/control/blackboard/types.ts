@@ -1,6 +1,7 @@
 import {
     BlackboardTurnStatus,
     type BlackboardDecisionKind,
+    type BlackboardDiscussionPlan,
     type BlackboardTurnStatus as BlackboardTurnStatusType,
     type BlackboardWorkerResult,
     type BlackboardWorkerRole,
@@ -14,6 +15,23 @@ export interface BlackboardBudget {
     maxWorkerContextChars: number;
     startedAt: string;
 }
+
+export interface BlackboardContract {
+    contradictions: BlackboardContractContradiction[];
+    evidence: string[];
+    mode: "normal" | "non-convergent";
+    policyReason: string;
+    proposition?: string;
+    reviewerTrigger?: string;
+}
+
+export interface BlackboardContractContradiction {
+    left: string;
+    reason: string;
+    right: string;
+}
+
+export type { BlackboardDiscussionPlan };
 
 export interface BlackboardWorkerState {
     role: BlackboardWorkerRole;

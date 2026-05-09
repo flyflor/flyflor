@@ -551,25 +551,22 @@ describe("Agent memory stability and latency", () => {
         const reply = await runtime.handleMessage(message, runtimeContext());
         const turns = await blackboard.listTurns(scopeFor(message), 5);
 
-        expect(reply.text).toContain("黑板讨论：");
-        expect(reply.text).toContain("第 1 轮：");
-        expect(reply.text).toContain("第 2 轮：");
-        expect(reply.text).toContain("internal/flyflor-planner");
-        expect(reply.text).toContain("public/flyflor-planner");
-        expect(reply.text).toContain("step/flyflor-planner");
-        expect(reply.text).toContain("newFacts:");
-        expect(reply.text).toContain("blockers:");
-        expect(reply.text).toContain("risk:");
-        expect(reply.text).toContain("flyflor-planner");
-        expect(reply.text).toContain("flyflor-reviewer");
+        expect(reply.text).toContain("--------------1--------------------");
+        expect(reply.text).toContain("黑板：");
+        expect(reply.text).toContain("Planner：");
+        expect(reply.text).toContain("Reviewer：");
+        expect(reply.text).toContain("-----------------------------------");
+        expect(reply.text).not.toContain("metadata:");
+        expect(reply.text).not.toContain("previousSteps");
+        expect(reply.text).not.toContain("input:");
         expect(reply.text).toContain("最终回答：");
         expect(reply.text).toContain("这是主脑综合黑板后的最终回答。");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
             status: BlackboardTurnStatus.Converged,
         });
-        expect(model.messages[0]?.[0]?.content).toContain("Blackboard discussion:");
-        expect(model.messages[0]?.[0]?.content).toContain("flyflor-planner");
+        expect(model.messages[0]?.[0]?.content).toContain("Use the blackboard as advisory context");
+        expect(model.messages[0]?.[0]?.content).toContain("--------------1--------------------");
         expect(turns[0]?.status).toBe(BlackboardTurnStatus.Converged);
         expect(turns[0]?.messages.filter((item) => item.visibility === "public")).toHaveLength(4);
     });
@@ -589,9 +586,10 @@ describe("Agent memory stability and latency", () => {
 
         const reply = await runtime.handleMessage(gatewayMessage("你好，花花宝宝。"), runtimeContext());
 
-        expect(reply.text).toContain("黑板讨论：");
-        expect(reply.text).toContain("flyflor-planner");
-        expect(reply.text).toContain("flyflor-reviewer");
+        expect(reply.text).toContain("Planner：");
+        expect(reply.text).toContain("Reviewer：");
+        expect(reply.text).not.toContain("metadata:");
+        expect(reply.text).not.toContain("previousSteps");
         expect(reply.text).toContain("最终回答：");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",

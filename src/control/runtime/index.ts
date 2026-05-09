@@ -14,7 +14,13 @@ import { createMemory, type AgentMemory } from "../memory/index.ts";
 import { parseMemoryActions, renderMemoryActionPrompt } from "../memory/actions.ts";
 import { loadMcpServers, renderMcpPrompt } from "../../core/mcp/index.ts";
 import { createSandboxPolicy } from "../sandbox/index.ts";
-import { type BlackboardController, type BlackboardMessage, type BlackboardTurn } from "../blackboard/index.ts";
+import {
+    type BlackboardController,
+    type BlackboardDecision,
+    type BlackboardMessage,
+    type BlackboardStep,
+    type BlackboardTurn,
+} from "../blackboard/index.ts";
 import { scopeFor } from "../session/index.ts";
 import { loadSkills, renderSkillPrompt, selectSkills } from "../../core/skills/index.ts";
 
@@ -24,6 +30,8 @@ interface RuntimeBlackboardRun {
     elapsedMs: number;
     mode: "blackboard" | "direct";
     reason: string;
+    decisions: BlackboardDecision[];
+    metadata: Record<string, unknown>;
     steps: BlackboardTurn["steps"];
     status?: BlackboardTurnStatusType;
     transcript: BlackboardMessage[];
@@ -140,6 +148,8 @@ export class AgentRuntime {
                 elapsedMs: elapsed(started),
                 mode: "blackboard",
                 reason: "session-lease-conflict",
+                decisions: [],
+                metadata: {},
                 steps: [],
                 status: BlackboardTurnStatus.Running,
                 transcript: [
@@ -174,6 +184,8 @@ export class AgentRuntime {
                 elapsedMs: elapsed(started),
                 mode: "blackboard",
                 reason: "blackboard-worker-failed",
+                decisions: loaded?.decisions ?? [],
+                metadata: loaded?.metadata ?? {},
                 steps: loaded?.steps ?? [],
                 status: BlackboardTurnStatus.Failed,
                 transcript: [
@@ -207,6 +219,8 @@ function blackboardRunFromTurn(
         elapsedMs: elapsed(started),
         mode: "blackboard",
         reason,
+        decisions: turn?.decisions ?? [],
+        metadata: turn?.metadata ?? {},
         steps: turn?.steps ?? [],
         status: turn?.status,
         transcript: turn?.messages ?? [],
@@ -221,20 +235,10 @@ function renderBlackboardPrompt(run: RuntimeBlackboardRun | undefined): string {
     if (run.mode === "direct") {
         return `Direct route selected: ${run.reason}.`;
     }
-    const lines = run.transcript
-        .filter((message) => message.role !== "adapter")
-        .map((message) => {
-            const label = message.workerRole ? `${message.role}/${message.workerRole}` : message.role;
-            return `- round=${message.round ?? "-"} visibility=${message.visibility} ${label}: ${message.content}`;
-        });
     return [
-        "Use the blackboard as advisory context. The main model still makes the final answer.",
+        "Use the blackboard as advisory context. If the blackboard status is needs-user or failed, do not claim it converged.",
         `turnId=${run.turnId ?? "unknown"} status=${run.status ?? "unknown"} reason=${run.reason} elapsedMs=${run.elapsedMs}`,
-        ...lines,
-        ...run.steps.map(
-            (step) =>
-                `- step round=${step.round} worker=${step.workerRole} risk=${step.risk} facts=${step.newFacts.join("；") || "-"} blockers=${step.blockers.join("；") || "-"} output=${step.outputSummary}`,
-        ),
+        ...renderCompactRounds(run),
     ].join("\n");
 }
 
@@ -242,56 +246,143 @@ function renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefi
     if (!run || run.mode === "direct") {
         return finalAnswer;
     }
-    const rounds = [
-        ...new Set([...run.transcript.map((message) => message.round ?? 0), ...run.steps.map((step) => step.round)]),
-    ]
-        .filter((round) => round > 0)
-        .sort((left, right) => left - right);
-    const discussion = rounds.flatMap((round) => renderRound(run, round));
-    const unrounded = run.transcript.filter((message) => !message.round);
-    return [
-        "黑板讨论：",
-        `- turn: ${run.turnId ?? "unknown"}；状态：${run.status ?? "unknown"}；耗时：${run.elapsedMs}ms；原因：${run.reason}`,
-        ...unrounded.map(renderMessageLine),
-        ...discussion,
-        "",
-        "最终回答：",
-        finalAnswer,
-    ].join("\n");
+    return [...renderCompactRounds(run), ...renderDecisionLines(run), "", "最终回答：", finalAnswer].join("\n");
 }
 
-function renderRound(run: RuntimeBlackboardRun, round: number): string[] {
-    const messages = run.transcript.filter((message) => message.round === round);
+function renderCompactRounds(run: RuntimeBlackboardRun): string[] {
+    const rounds = [...new Set(run.steps.map((step) => step.round))]
+        .filter((round) => round > 0)
+        .sort((left, right) => left - right);
+    return rounds.flatMap((round) => renderRoundBlock(run, round));
+}
+
+function renderRoundBlock(run: RuntimeBlackboardRun, round: number): string[] {
     const steps = run.steps.filter((step) => step.round === round);
+    const planner = steps.find((step) => isPlannerStep(step));
+    const reviewer = steps.find((step) => isReviewerStep(step));
+    const others = steps.filter((step) => step !== planner && step !== reviewer);
     return [
         "",
-        `第 ${round} 轮：`,
-        ...messages.map(renderMessageLine),
-        ...steps.flatMap((step) => [
-            `- step/${step.workerRole}:`,
-            `  - input: ${step.inputSummary}`,
-            `  - output: ${step.outputSummary}`,
-            `  - newFacts: ${step.newFacts.length > 0 ? step.newFacts.join("；") : "-"}`,
-            `  - blockers: ${step.blockers.length > 0 ? step.blockers.join("；") : "-"}`,
-            `  - risk: ${step.risk}`,
-            `  - metadata: ${JSON.stringify(step.metadata)}`,
-        ]),
+        `--------------${round}--------------------`,
+        `黑板：${renderBlackboardState(run, round)}`,
+        `Planner：${planner ? compactStepOutput(planner) : "-"}`,
+        `Reviewer：${reviewer ? compactStepOutput(reviewer) : "-"}`,
+        ...others.map((step) => `${readableWorkerRole(step.workerRole)}：${compactStepOutput(step)}`),
+        "-----------------------------------",
     ];
 }
 
-function renderMessageLine(message: BlackboardMessage): string {
-    const label = readableBlackboardLabel(message);
-    if (message.role === "adapter" && message.visibility === "internal") {
-        return `- ${message.visibility}/${label}: dispatch；完整输入见下方 step/${label}.input`;
+function renderBlackboardState(run: RuntimeBlackboardRun, round: number): string {
+    const policy = policyReasonForRound(run, round);
+    const phase = phaseForRound(run, round, policy);
+    const plan = planSummaryForRun(run);
+    const status =
+        round < latestRound(run) ? BlackboardTurnStatus.Running : (run.status ?? BlackboardTurnStatus.Running);
+    if (policy === "declared-non-convergent-contract" && status === BlackboardTurnStatus.Running && round > 1) {
+        return `phase=${phase}；plan=${plan}；policy=${policy}；仍存在不可满足契约；继续至 hard cap`;
     }
-    return `- ${message.visibility}/${label}: ${message.content}`;
+    return `phase=${phase}；plan=${plan}；policy=${policy}；status=${status}`;
 }
 
-function readableBlackboardLabel(message: BlackboardMessage): string {
-    if (message.workerRole) {
-        return message.workerRole;
+function phaseForRound(run: RuntimeBlackboardRun, round: number, policy: string): string {
+    if (policy === "declared-non-convergent-contract" && round > 1) {
+        return "重构";
     }
-    return message.role;
+    if (round <= 1) {
+        return "拆分";
+    }
+    return run.status === BlackboardTurnStatus.Converged && round === latestRound(run) ? "一致输出" : "QA";
+}
+
+function policyReasonForRound(run: RuntimeBlackboardRun, round: number): string {
+    const step = run.steps.find((item) => item.round === round);
+    const policy = step?.metadata.convergencePolicy;
+    if (isPolicyMetadata(policy)) {
+        return policy.reason;
+    }
+    if (run.steps.length === 0) {
+        return "default-convergence";
+    }
+    return "default-convergence";
+}
+
+function isPolicyMetadata(value: unknown): value is { forceHardCap: boolean; reason: string } {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+    const candidate = value as { reason?: unknown };
+    return typeof candidate.reason === "string";
+}
+
+function compactStepOutput(step: BlackboardStep): string {
+    const questions = readStringArray(step.metadata.qaQuestions);
+    const answers = readStringArray(step.metadata.qaAnswers);
+    const openIssues = readStringArray(step.metadata.qaOpenIssues);
+    const agreement = readBoolean(step.metadata.qaAgreement);
+    const qa = [
+        questions.length > 0 ? `Q=${questions.join("；")}` : "",
+        answers.length > 0 ? `A=${answers.join("；")}` : "",
+        agreement !== undefined ? `一致=${agreement ? "是" : "否"}` : "",
+        openIssues.length > 0 ? `open=${openIssues.join("；")}` : "",
+    ].filter(Boolean);
+    const blockers = step.blockers.length > 0 ? `；blockers=${step.blockers.join("；")}` : "";
+    return `${step.outputSummary}${qa.length > 0 ? `；QA：${qa.join("；")}` : ""}${blockers}`;
+}
+
+function isPlannerStep(step: BlackboardStep): boolean {
+    return step.workerRole.toLowerCase().includes("planner");
+}
+
+function isReviewerStep(step: BlackboardStep): boolean {
+    return step.workerRole.toLowerCase().includes("reviewer");
+}
+
+function readableWorkerRole(role: string): string {
+    const lower = role.toLowerCase();
+    if (lower.includes("planner")) {
+        return "Planner";
+    }
+    if (lower.includes("reviewer")) {
+        return "Reviewer";
+    }
+    return role;
+}
+
+function latestRound(run: RuntimeBlackboardRun): number {
+    return run.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
+}
+
+function renderDecisionLines(run: RuntimeBlackboardRun): string[] {
+    if (run.decisions.length === 0) {
+        return [];
+    }
+    return run.decisions.map((decision) => `黑板裁决：${decision.reason}；${decision.prompt.replace(/\s+/gu, " ")}`);
+}
+
+function planSummaryForRun(run: RuntimeBlackboardRun): string {
+    const plan = run.metadata.blackboardPlan;
+    if (!plan || typeof plan !== "object") {
+        return "-";
+    }
+    const workstreams = (plan as { workstreams?: unknown }).workstreams;
+    if (!Array.isArray(workstreams) || workstreams.length === 0) {
+        return "-";
+    }
+    return workstreams
+        .filter((item): item is string => typeof item === "string")
+        .slice(0, 2)
+        .join(" / ");
+}
+
+function readStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.filter((item): item is string => typeof item === "string");
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+    return typeof value === "boolean" ? value : undefined;
 }
 
 function elapsed(started: number): number {

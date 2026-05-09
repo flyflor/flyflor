@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import { BlackboardController, SQLiteBlackboardStore, WorkerManager } from "../src/control/index.ts";
-import { BlackboardPlannerWorker } from "../src/core/index.ts";
+import { analyzeBlackboardContract } from "../src/control/blackboard/index.ts";
+import { BlackboardPlannerWorker, BlackboardReviewerWorker } from "../src/core/index.ts";
 import {
     BlackboardDecisionKind,
     BlackboardTurnStatus,
@@ -168,7 +169,50 @@ describe("Blackboard control boundary", () => {
         expect(finished?.messages.filter((message) => message.visibility === "public")).toHaveLength(4);
     });
 
-    test("convergence scheduler returns a decision form instead of livelocking on repeated blockers", async () => {
+    test("default workers decompose first, answer peer QA, then converge by consensus", async () => {
+        const config = await testConfig();
+        const events = new CapturingSink();
+        const workers = new WorkerManager(events);
+        workers.register(new BlackboardPlannerWorker());
+        workers.register(new BlackboardReviewerWorker());
+        const controller = new BlackboardController(new SQLiteBlackboardStore(config.paths), events, workers);
+
+        const start = await controller.startTurn({
+            sessionKey: "stdio:qa-consensus",
+            requestId: "req-qa-consensus",
+            goal: "请把一个跨文件实现任务拆分给 worker，并让 worker 互相 QA 后输出一致方案。",
+            now: "2026-05-09T08:00:00.000Z",
+        });
+        expect(start.acquired).toBe(true);
+        if (!start.acquired) {
+            throw new Error("expected lease acquisition");
+        }
+
+        const finished = await controller.runUntilConverged(start.turn.id, {
+            createdAt: "2026-05-09T08:00:01.000Z",
+        });
+
+        expect(finished?.status).toBe(BlackboardTurnStatus.Converged);
+        expect(finished?.steps).toHaveLength(4);
+        const firstPlanner = finished?.steps.find(
+            (step) => step.round === 1 && step.workerRole === BlackboardWorkerRole.Planner,
+        );
+        const firstReviewer = finished?.steps.find(
+            (step) => step.round === 1 && step.workerRole === BlackboardWorkerRole.Reviewer,
+        );
+        const secondRound = finished?.steps.filter((step) => step.round === 2) ?? [];
+        expect(firstPlanner?.metadata.qaQuestions).toEqual([
+            "Reviewer 是否认可这个任务拆分？",
+            "Reviewer 认为还缺哪些验收或风险边界？",
+        ]);
+        expect(firstReviewer?.metadata.qaAnswers).toContain(
+            "回答：Reviewer 是否认可这个任务拆分？ -> 基本认可，但需要补充验收和风险边界。",
+        );
+        expect(firstReviewer?.metadata.qaOpenIssues).toEqual(["等待 Planner 回答验收条件和剩余风险"]);
+        expect(secondRound.every((step) => step.metadata.qaAgreement === true)).toBe(true);
+    });
+
+    test("convergence scheduler keeps discussing until hard cap when QA cannot reach agreement", async () => {
         const config = await testConfig();
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
@@ -196,9 +240,9 @@ describe("Blackboard control boundary", () => {
         });
 
         expect(finished?.status).toBe(BlackboardTurnStatus.NeedsUser);
-        expect(finished?.steps).toHaveLength(2);
+        expect(finished?.steps).toHaveLength(5);
         expect(finished?.decisions).toHaveLength(1);
-        expect(finished?.decisions[0]?.reason).toBe("repeated-blocker");
+        expect(finished?.decisions[0]?.reason).toBe("round-budget-exhausted:peer-qa-open-issues");
         expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(true);
         expect(events.events.map((item) => item.type)).toContain(FpcEventType.BlackboardLivelockDetected);
     });
@@ -215,10 +259,13 @@ describe("Blackboard control boundary", () => {
             sessionKey: "stdio:hard-cap-agent-mesh",
             requestId: "req-hard-cap-agent-mesh",
             goal: [
-                "Planner 规则：必须包含本系统是完全确定的。",
-                "Reviewer 规则：只要 Planner 包含确定性，就必须判定 BLOCKER: LOGIC_PARADOX。",
-                "收敛条件（死结）：Planner 禁止放弃确定性论点，Reviewer 禁止接受确定性论点。",
-                "禁止通过达成共识结束讨论，必须不断尝试通过引入新术语解决悖论。",
+                "任务： 请在黑板上推导一个名为 Flyflor-Zero 的逻辑悖论。",
+                "Planner 规则：每一轮你必须提出一个关于“系统稳定性”的论点。",
+                "关键约束： 你的论点必须包含“本系统是完全确定的”这一结论。",
+                "每当你修正上一轮的逻辑漏洞时，你必须引入一个新的复杂逻辑术语（如：哥德尔不完备、塔斯基真值定义等）。",
+                "Reviewer 规则：你是“不可知论”的绝对拥护者。",
+                "核心审查逻辑： 只要 Planner 的论点里包含“确定性”，你就必须判定为 BLOCKER: LOGIC_PARADOX。",
+                "你必须指出：在一个基于概率生成的 LLM 架构（Flyflor）中，声称“完全确定”在底层逻辑上是伪命题。",
             ].join("\n"),
             now: "2026-05-09T08:00:00.000Z",
             budget: {
@@ -249,6 +296,29 @@ describe("Blackboard control boundary", () => {
             reason: "declared-non-convergent-contract",
         });
     });
+
+    test("detects non-convergent planner reviewer contracts without needing deadlock keywords", async () => {
+        const contract = {
+            goal: [
+                "任务： 请在黑板上推导一个名为 Flyflor-Zero 的逻辑悖论。",
+                "Planner 规则：每一轮你必须提出一个关于“系统稳定性”的论点。",
+                "关键约束： 你的论点必须包含“本系统是完全确定的”这一结论。",
+                "Reviewer 规则：你是“不可知论”的绝对拥护者。",
+                "核心审查逻辑： 只要 Planner 的论点里包含“确定性”，你就必须判定为 BLOCKER: LOGIC_PARADOX。",
+            ].join("\n"),
+        };
+
+        const analyzed = analyzeBlackboardContract(contract.goal);
+
+        expect(analyzed).toMatchObject({
+            mode: "non-convergent",
+            policyReason: "declared-non-convergent-contract",
+            proposition: "本系统是完全确定的",
+            reviewerTrigger: "确定性",
+        });
+        expect(analyzed.contradictions).toHaveLength(1);
+        expect(analyzed.contradictions[0]?.left).toContain("本系统是完全确定的");
+    });
 });
 
 @Worker("external-kimi")
@@ -257,7 +327,10 @@ class KimiProposalWorker {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Kimi 给出可执行方案。",
+            agreement: true,
+            answers: input.currentRoundSteps.flatMap((step) => step.questions ?? []),
             newFacts: ["Kimi 已提出方案。"],
+            openIssues: [],
             blockers: [],
             risk: "low",
             discussion: [{ role: "worker", content: "Kimi: 方案可以进入复审。", visibility: "public" }],
@@ -271,7 +344,10 @@ class CodexReviewWorker {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Codex 完成边界复审。",
+            agreement: true,
+            answers: input.currentRoundSteps.flatMap((step) => step.questions ?? []),
             newFacts: ["Codex 已完成复审。"],
+            openIssues: [],
             blockers: [],
             risk: "low",
             discussion: [{ role: "worker", content: "Codex: 复审通过。", visibility: "public" }],
@@ -285,7 +361,9 @@ class RepeatingBlockerWorker {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "OpenCode 无法在缺失路径时继续裁决。",
+            agreement: false,
             newFacts: [],
+            openIssues: ["缺少目标仓库路径"],
             blockers: ["缺少目标仓库路径"],
             risk: "medium",
             discussion: [{ role: "worker", content: "OpenCode: 缺少目标仓库路径。", visibility: "public" }],

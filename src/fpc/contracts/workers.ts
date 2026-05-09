@@ -5,11 +5,19 @@ export interface BlackboardWorkerTask {
     sessionKey: string;
     requestId: string;
     goal: string;
+    discussionPlan?: BlackboardDiscussionPlan;
     round: number;
     workerRole: BlackboardWorkerRole;
     prompt?: string;
+    currentRoundSteps: BlackboardWorkerTaskStep[];
     previousSteps: BlackboardWorkerTaskStep[];
     decisions: BlackboardWorkerTaskDecision[];
+}
+
+export interface BlackboardDiscussionPlan {
+    objective: string;
+    qaGoal: string;
+    workstreams: string[];
 }
 
 export interface BlackboardWorkerTaskStep {
@@ -18,6 +26,10 @@ export interface BlackboardWorkerTaskStep {
     outputSummary: string;
     newFacts: string[];
     blockers: string[];
+    agreement?: boolean;
+    questions?: string[];
+    answers?: string[];
+    openIssues?: string[];
 }
 
 export interface BlackboardWorkerTaskDecision {
@@ -32,6 +44,11 @@ export interface BlackboardWorkerResult {
     newFacts: string[];
     blockers: string[];
     risk: "low" | "medium" | "high";
+    agreement?: boolean;
+    questions?: string[];
+    answers?: string[];
+    openIssues?: string[];
+    proposal?: string;
     discussion?: BlackboardWorkerDiscussion[];
     metadata?: Record<string, unknown>;
 }

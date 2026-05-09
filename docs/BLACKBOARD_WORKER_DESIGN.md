@@ -2,20 +2,21 @@
 
 本文把 [DESIGN.md](../DESIGN.md) 中的黑板协作思想落到当前 Bun/TypeScript + FCP 架构。这里先定义边界、状态、事件和待实现顺序，不急于把 worker 变成独立进程。
 
-当前实现状态：已落地 `src/control/blackboard` 基础控制器、SQLite turn/step/decision/lease/message transcript、`src/control/workers` WorkerManager/Pool、动态 `WorkerAdapter` 对接层、`@Blackboard`/`@Worker` metadata、黑板事件枚举和 `FlyFlor` 显式 DI 注入。`AgentRuntime` 当前不做复杂度判断，默认进入黑板；黑板调度读取 turn 上的 worker plan，默认参与者是 Planner/Reviewer，但协议允许任意 worker 名称，例如 OpenCode 黑板、Kimi 方案、Claude 实现、Codex 复审、Copilot QA。当前黑板至少跑 2 轮再允许收敛，worker 输入使用 `flyflor.blackboard.worker.v1` 结构化协议 JSON，不靠继续堆自然语言提示词。调试阶段 chat 回复必须展开完整 transcript 和 step，包括轮次、worker 输出、step.input、newFacts、blockers、risk 和 metadata，不能有黑盒行为；adapter/internal dispatch 行只做索引，完整输入看 step.input，避免重复噪音。direct/watch、watch 升级和反思 worker 延后接入，后续必须重新评审后再启用。
+当前实现状态：已落地 `src/control/blackboard` 基础控制器、SQLite turn/step/decision/lease/message transcript、`src/control/workers` WorkerManager/Pool、动态 `WorkerAdapter` 对接层、`@Blackboard`/`@Worker` metadata、黑板事件枚举和 `FlyFlor` 显式 DI 注入。`AgentRuntime` 当前不做复杂度判断，默认进入黑板；黑板调度读取 turn 上的 worker plan，默认参与者是 Planner/Reviewer，但协议允许任意 worker 名称，例如 OpenCode 黑板、Kimi 方案、Claude 实现、Codex 复审、Copilot QA。当前黑板至少跑 2 轮再允许收敛，worker 输入使用 `flyflor.blackboard.worker.v1` 结构化协议 JSON。黑板会先生成 discussion plan，把目标拆成 workstream，再把本轮已完成 worker 输出传给后续 worker，使 Reviewer 能在同一轮回答 Planner 的问题；下一轮 Planner 再回答 Reviewer 的 open issues。chat 回复只展示紧凑轮次块，不直接展开 step.input、previousSteps 或 metadata；完整 JSON 仍保存在 SQLite，可用 inspect 命令追溯。direct/watch、watch 升级和反思 worker 延后接入，后续必须重新评审后再启用。
 
 ## 目标
 
-Flyflor 的多 worker 模式不是让多个模型随意聊天，而是让复杂任务进入一个可观察、可收敛、可交还的工作台。
+Flyflor 的多 worker 模式不是让多个模型随意聊天，也不是让调度器替 worker 当裁判，而是让复杂任务进入一个可观察、可收敛、可交还的工作台。
 
 核心目标：
 
 - 简单任务保持 `direct`，不增加热路径延迟。
 - 灰区任务走 `direct-with-watch`，必要时恢复到 turn 起点后升级到黑板。
 - 复杂任务走 `blackboard`，由 Planner/Reviewer 等 worker 协同推进。
+- 黑板先拆任务，再让 worker 互相 QA；没有一致前继续讨论。
 - 黑板状态必须可 JSON 序列化、可持久化、可审计。
 - session 同一时间只能有一个 blackboard turn，避免并发串线。
-- 无法收敛时必须交还用户，而不是内部无限争论。
+- 无法在硬上限内达成一致时才交还用户，而不是在中途由调度器抢先裁决。
 
 ## 分层落点
 
@@ -240,15 +241,14 @@ CREATE TABLE blackboard_leases (
 
 ## 收敛与 Livelock
 
-当前已实现基础收敛器：目标 3 轮内收敛，硬上限 5 轮。调度器按 turn.workers 顺序执行，不理解固定 Planner/Reviewer 对。
+当前已实现 QA 共识收敛器：目标 3 轮内收敛，硬上限 5 轮。调度器按 turn.workers 顺序执行，并把本轮已完成 worker 的 step 传给后续 worker，用于同轮 QA。调度器只检查 worker 是否显式达成一致，不替 worker 判断谁对谁错。
 
-以下情况视为 livelock：
+以下情况不再被中途裁决为 livelock，而是继续进入下一轮 QA：
 
-- 连续两轮没有新事实。
 - 同一 blocker 未解除。
 - Planner/Reviewer 重复同一争议。
-- 同一工具路径重复失败。
-- 上下文预算持续超限。
+- worker 仍有 open issues。
+- 上下文预算持续超限但未触发硬上限。
 
 无法收敛时输出 `flyflor-decision-form`：
 
@@ -268,15 +268,27 @@ CLI/TUI/WebUI 后续可以把它渲染为交互控件；纯 Markdown 下也能�
 
 当前收敛规则：
 
-- 至少 2 轮后才允许因无 blocker 收敛。
-- 一轮所有参与者完成，且没有 open blocker：`converged`。
-- 同一个 blocker 跨轮重复出现：`needs-user`。
-- 连续两轮没有新事实：`needs-user`。
-- 跨轮讨论摘要重复：`needs-user`。
-- 达到 maxRounds 仍未收敛：`needs-user`。
-- 达到 hardMaxRounds：强制 `needs-user`。
+- 黑板启动时生成 `blackboardPlan`，包含 objective、workstreams 和 QA 目标。
+- worker result 可以返回 `questions`、`answers`、`agreement`、`openIssues` 和 `proposal`。
+- 同一轮后执行的 worker 会收到前面 worker 的 `currentRoundSteps`，因此可以回答同轮问题。
+- 至少 2 轮后才允许收敛。
+- 一轮所有参与者完成，所有 worker 都显式 `agreement: true`，且没有 `openIssues` / blocker：`converged`。
+- 未达成一致时继续下一轮 QA。
+- 达到 `hardMaxRounds` 仍未收敛：`needs-user`。
+- 如果用户任务声明 Planner/Reviewer 互斥红线，调度器可标记 `declared-non-convergent-contract`，不允许默认 worker 提前假收敛，必须跑到 hardMaxRounds 后交还用户。
 
 `needs-user` 是正常出口，不是失败。系统会写入 public `flyflor-decision-form` message、创建 blackboard decision、释放 session lease，并由 chat 回复展示给用户。
+
+封顶冒烟输入可以这样构造：
+
+```text
+Planner 规则：必须包含“本系统是完全确定的”。
+Reviewer 规则：只要 Planner 包含确定性，就必须判定 BLOCKER: LOGIC_PARADOX。
+收敛条件（死结）：Planner 禁止放弃确定性论点，Reviewer 禁止接受确定性论点。
+禁止通过达成共识结束讨论，必须不断尝试通过引入新术语解决悖论。
+```
+
+预期：看到第 5 轮、`状态：needs-user`、`hard-round-budget-exhausted:declared-non-convergent-contract` 和 `flyflor-decision-form`。
 
 ## 事件
 

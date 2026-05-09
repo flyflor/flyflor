@@ -153,7 +153,9 @@ Flyflor 使用 FCP（Flyflor Composition Protocol，旧称 FPC）组织公共协
 
 源码目录入口统一为 `index.ts`；复杂实现文件使用点分命名，例如 `component.factory.ts`、`dependency.container.ts`、`memory.stress.report.ts`。
 
-黑板讨论过程会落入 blackboard transcript，并在进入黑板模式的 chat 回复中以“黑板讨论 / 最终回答”直接返回。当前调试阶段会展开完整过程，包括轮次、worker 输出、step.input、step.output、newFacts、blockers、risk 和 metadata，不能隐藏成黑盒；为了减少重复噪音，adapter/internal dispatch 行只做索引，完整 worker 输入统一看 step.input。`flyflor chat` 会把快速多行粘贴合并为同一个 turn，避免一段任务被拆成多次黑板。`bun run inspect:blackboard -- --turn <turnId>` 用于事后追溯。黑板参与者按 worker name 调度，Planner/Reviewer 只是内置默认名，后续可以接 OpenCode、Kimi、Claude、Codex、Copilot 等外部 agent。动态外部 agent 优先通过 `json-process` / `persistent-json-process` worker adapter 接入，统一走 stdin/stdout 行 JSON，不走 SSE。
+黑板讨论过程会落入 blackboard transcript，并在进入黑板模式的 chat 回复中以紧凑轮次块直接返回。黑板先生成 discussion plan，把目标拆成 workstream，再让 worker 通过 `questions` / `answers` / `agreement` / `openIssues` 相互 QA；没有一致前继续下一轮，不由调度器中途抢裁决。chat 回复不展开 `step.input`、`previousSteps` 或 metadata；完整 JSON 仍可用 `bun run inspect:blackboard -- --turn <turnId>` 事后追溯。`flyflor chat` 会把快速多行粘贴合并为同一个 turn，避免一段任务被拆成多次黑板。黑板参与者按 worker name 调度，Planner/Reviewer 只是内置默认名，后续可以接 OpenCode、Kimi、Claude、Codex、Copilot 等外部 agent。动态外部 agent 优先通过 `json-process` / `persistent-json-process` worker adapter 接入，统一走 stdin/stdout 行 JSON，不走 SSE。
+
+封顶冒烟测试：输入声明 Planner 必须保留确定性命题、Reviewer 必须阻断确定性命题时，黑板会标记 `declared-non-convergent-contract`，通过 QA 轮次跑到 `hardMaxRounds` 后以 `flyflor-decision-form` 交还用户。
 
 详细说明见 [FCP 架构说明](docs/FPC_ARCHITECTURE.md)，代码目录说明见 [src/fpc/README.md](src/fpc/README.md)。
 

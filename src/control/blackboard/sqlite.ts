@@ -474,7 +474,7 @@ function updateWorkerState(
     const next: BlackboardWorkerState = {
         role: input.workerRole,
         name: input.workerRole,
-        status: input.blockers && input.blockers.length > 0 ? "blocked" : "done",
+        status: hasOpenStepIssues(input) ? "blocked" : "done",
         lastStepId: stepId,
         updatedAt: input.createdAt,
     };
@@ -484,6 +484,14 @@ function updateWorkerState(
         return workers;
     }
     return [...workers, next];
+}
+
+function hasOpenStepIssues(input: BlackboardStepInput): boolean {
+    const openIssues = input.metadata?.qaOpenIssues;
+    return Boolean(
+        (input.blockers && input.blockers.length > 0) ||
+        (Array.isArray(openIssues) && openIssues.some((item) => typeof item === "string" && item.length > 0)),
+    );
 }
 
 function rowToLease(row: BlackboardLeaseRow): BlackboardLease {

@@ -21,6 +21,8 @@ import type {
     BlackboardStore,
     BlackboardTurn,
     BlackboardConvergenceResult,
+    BlackboardContract,
+    BlackboardDiscussionPlan,
     BlackboardWorkerPlanInput,
     BlackboardWorkerRunInput,
     BlackboardWorkerTask,
@@ -60,6 +62,7 @@ export class BlackboardController {
             return lease;
         }
 
+        const plannedWorkers = workersFromPlan(request.workers, request.now);
         const turn: BlackboardTurn = {
             id: turnId,
             sessionKey: request.sessionKey,
@@ -74,13 +77,17 @@ export class BlackboardController {
                 maxWorkerContextChars: request.budget?.maxWorkerContextChars ?? DEFAULT_MAX_WORKER_CONTEXT_CHARS,
                 startedAt: request.now,
             },
-            workers: workersFromPlan(request.workers, request.now),
+            workers: plannedWorkers,
             messages: [],
             steps: [],
             decisions: [],
             createdAt: request.now,
             updatedAt: request.now,
-            metadata: request.metadata ?? {},
+            metadata: {
+                ...(request.metadata ?? {}),
+                blackboardContract: analyzeBlackboardContract(request.goal),
+                blackboardPlan: buildBlackboardPlan(request.goal, plannedWorkers),
+            },
         };
 
         try {
@@ -128,9 +135,8 @@ export class BlackboardController {
         const workers = runnableWorkers(turn);
         const hardMaxRounds = Math.max(1, turn.budget.hardMaxRounds);
         const minRounds = Math.min(Math.max(1, turn.budget.minRounds), hardMaxRounds);
-        const maxRounds = Math.min(Math.max(1, turn.budget.maxRounds), hardMaxRounds);
-        const convergencePolicy = convergencePolicyFor(turn.goal);
-        const effectiveMaxRounds = convergencePolicy.forceHardCap ? hardMaxRounds : maxRounds;
+        const convergencePolicy = convergencePolicyFor(turn);
+        const effectiveMaxRounds = hardMaxRounds;
         const startRound = nextRound(turn);
 
         for (let round = startRound; round <= hardMaxRounds; round += 1) {
@@ -299,16 +305,12 @@ export class BlackboardController {
             sessionKey: turn.sessionKey,
             requestId: turn.requestId,
             goal: turn.goal,
+            discussionPlan: blackboardPlanFor(turn),
             round: input.round,
             workerRole: input.workerRole,
             prompt: input.prompt,
-            previousSteps: turn.steps.map((step) => ({
-                round: step.round,
-                workerRole: step.workerRole,
-                outputSummary: step.outputSummary,
-                newFacts: step.newFacts,
-                blockers: step.blockers,
-            })),
+            currentRoundSteps: turn.steps.filter((step) => step.round === input.round).map(stepToWorkerTaskStep),
+            previousSteps: turn.steps.filter((step) => step.round < input.round).map(stepToWorkerTaskStep),
             decisions: turn.decisions.map((decision) => ({
                 kind: decision.kind,
                 prompt: decision.prompt,
@@ -370,6 +372,11 @@ export class BlackboardController {
             metadata: {
                 ...(result.output.metadata ?? {}),
                 ...(input.metadata ?? {}),
+                qaAgreement: result.output.agreement,
+                qaAnswers: result.output.answers ?? [],
+                qaOpenIssues: result.output.openIssues ?? [],
+                qaProposal: result.output.proposal,
+                qaQuestions: result.output.questions ?? [],
                 taskId: result.taskId,
                 workerElapsedMs: result.elapsedMs,
             },
@@ -448,11 +455,9 @@ export class BlackboardController {
             },
         ];
         const prompt = [
-            "黑板无法继续可靠收敛，需要用户裁决下一步。",
+            "黑板已达到讨论上限，需要用户补充或选择下一步。",
             `原因：${input.reason}`,
-            blockers.length > 0
-                ? `当前 blocker：${blockers.join("；")}`
-                : "当前没有明确 blocker，但继续讨论不会产生新事实。",
+            blockers.length > 0 ? `当前 blocker：${blockers.join("；")}` : "当前仍未形成所有 worker 都认可的一致输出。",
         ].join("\n");
         const form = renderDecisionForm({
             question: prompt,
@@ -533,6 +538,67 @@ function runnableWorkers(turn: BlackboardTurn): BlackboardWorkerState[] {
     return turn.workers.length > 0 ? turn.workers : workersFromPlan(undefined, turn.createdAt);
 }
 
+export function buildBlackboardPlan(goal: string, workers: BlackboardWorkerState[] = []): BlackboardDiscussionPlan {
+    const objective = summarizeObjective(goal);
+    const workerNames = workers.map((worker) => worker.name).filter(Boolean);
+    const hasPlannerReviewer =
+        workerNames.some((name) => name.toLowerCase().includes("planner")) &&
+        workerNames.some((name) => name.toLowerCase().includes("reviewer"));
+    const workstreams =
+        hasPlannerReviewer || mentionsPlannerReviewer(goal)
+            ? [
+                  "拆解目标、角色约束和不可让步条件",
+                  "Planner 提出候选拆分、论点和需要 Reviewer 回答的问题",
+                  "Reviewer 回答 Planner 问题并指出漏洞、风险或反例",
+                  "双方消除 open issues 后形成一致输出",
+              ]
+            : [
+                  "明确目标、输入边界和验收条件",
+                  "拆分执行子任务并分配 worker 关注点",
+                  "通过 worker 间 QA 暴露遗漏、风险和冲突",
+                  "在无 open issues 后汇总一致输出",
+              ];
+    return {
+        objective,
+        qaGoal: "worker 必须先互相提问和回答；没有一致前继续讨论，不由调度器替 worker 裁决。",
+        workstreams,
+    };
+}
+
+function blackboardPlanFor(turn: BlackboardTurn): BlackboardDiscussionPlan {
+    const plan = turn.metadata.blackboardPlan;
+    if (isBlackboardPlan(plan)) {
+        return plan;
+    }
+    return buildBlackboardPlan(turn.goal, turn.workers);
+}
+
+function isBlackboardPlan(value: unknown): value is BlackboardDiscussionPlan {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+    const candidate = value as Partial<BlackboardDiscussionPlan>;
+    return (
+        typeof candidate.objective === "string" &&
+        typeof candidate.qaGoal === "string" &&
+        Array.isArray(candidate.workstreams)
+    );
+}
+
+function stepToWorkerTaskStep(step: BlackboardStep): BlackboardWorkerTask["previousSteps"][number] {
+    return {
+        round: step.round,
+        workerRole: step.workerRole,
+        outputSummary: step.outputSummary,
+        newFacts: step.newFacts,
+        blockers: step.blockers,
+        agreement: readMetadataBoolean(step.metadata.qaAgreement),
+        answers: readMetadataStringArray(step.metadata.qaAnswers),
+        openIssues: readMetadataStringArray(step.metadata.qaOpenIssues),
+        questions: readMetadataStringArray(step.metadata.qaQuestions),
+    };
+}
+
 function nextRound(turn: BlackboardTurn): number {
     const maxRound = turn.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
     return maxRound + 1;
@@ -541,7 +607,7 @@ function nextRound(turn: BlackboardTurn): number {
 function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round: number): string {
     const minRounds = Math.max(1, turn.budget.minRounds);
     const phase = round < minRounds ? "探索和追问阶段" : "收敛和裁决阶段";
-    const convergencePolicy = convergencePolicyFor(turn.goal);
+    const convergencePolicy = convergencePolicyFor(turn);
     return JSON.stringify(
         {
             protocol: "flyflor.blackboard.worker.v1",
@@ -550,16 +616,22 @@ function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round
             minRounds,
             phase,
             participant: worker.name,
+            contract: blackboardContractFor(turn),
+            discussionPlan: blackboardPlanFor(turn),
             convergencePolicy,
-            previousSteps: turn.steps.map((step) => ({
-                round: step.round,
-                workerRole: step.workerRole,
-                outputSummary: step.outputSummary,
-                newFacts: step.newFacts,
-                blockers: step.blockers,
-                risk: step.risk,
-            })),
-            expectedOutput: ["outputSummary", "newFacts", "blockers", "risk", "discussion"],
+            currentRoundSteps: turn.steps.filter((step) => step.round === round).map(stepToWorkerTaskStep),
+            previousSteps: turn.steps.filter((step) => step.round < round).map(stepToWorkerTaskStep),
+            expectedOutput: [
+                "outputSummary",
+                "newFacts",
+                "blockers",
+                "risk",
+                "questions",
+                "answers",
+                "agreement",
+                "openIssues",
+                "discussion",
+            ],
             constraints: ["no-tool-execution", "no-long-term-memory-write", "surface-blockers"],
         },
         null,
@@ -567,13 +639,40 @@ function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round
     );
 }
 
-function convergencePolicyFor(goal: string): { forceHardCap: boolean; reason: string } {
+export function convergencePolicyFor(turnOrGoal: BlackboardTurn | string): { forceHardCap: boolean; reason: string } {
+    const contract =
+        typeof turnOrGoal === "string" ? analyzeBlackboardContract(turnOrGoal) : blackboardContractFor(turnOrGoal);
+    if (contract.mode === "non-convergent") {
+        return {
+            forceHardCap: true,
+            reason: contract.policyReason,
+        };
+    }
+    return {
+        forceHardCap: false,
+        reason: "default-convergence",
+    };
+}
+
+export function analyzeBlackboardContract(goal: string): BlackboardContract {
     const text = normalizeText(goal);
-    const declaresPlannerReviewerConflict =
-        text.includes("planner") &&
-        text.includes("reviewer") &&
-        (text.includes("blocker") || text.includes("审计红线") || text.includes("红线"));
-    const declaresNonConvergence =
+    const hasPlanner = text.includes("planner") || text.includes("规划");
+    const hasReviewer = text.includes("reviewer") || text.includes("审查") || text.includes("复核");
+    const proposition = extractDeterminismProposition(goal);
+    const plannerMustAssertDeterminism =
+        hasPlanner &&
+        Boolean(proposition) &&
+        (text.includes("必须") || text.includes("关键约束") || text.includes("每一轮"));
+    const reviewerBlocksDeterminism =
+        hasReviewer &&
+        text.includes("确定") &&
+        (text.includes("blocker") ||
+            text.includes("logic_paradox") ||
+            text.includes("判定") ||
+            text.includes("红线") ||
+            text.includes("拒绝") ||
+            text.includes("禁止接受"));
+    const declaresNoEscape =
         text.includes("死结") ||
         text.includes("禁止通过") ||
         text.includes("禁止接受") ||
@@ -582,16 +681,92 @@ function convergencePolicyFor(goal: string): { forceHardCap: boolean; reason: st
         text.includes("永不收敛") ||
         text.includes("无法收敛");
 
-    if (declaresPlannerReviewerConflict && declaresNonConvergence) {
+    if (plannerMustAssertDeterminism && reviewerBlocksDeterminism) {
         return {
-            forceHardCap: true,
-            reason: "declared-non-convergent-contract",
+            contradictions: [
+                {
+                    left: `Planner 必须保留命题：${proposition}`,
+                    right: "Reviewer 必须阻断包含确定性的命题",
+                    reason: declaresNoEscape
+                        ? "任务显式声明角色互斥且禁止让步"
+                        : "Planner 的必需输出会稳定触发 Reviewer 的必需 blocker",
+                },
+            ],
+            evidence: [
+                "Planner obligation: assert determinism",
+                "Reviewer rejection: determinism implies BLOCKER",
+                ...(declaresNoEscape ? ["No escape hatch declared"] : []),
+            ],
+            mode: "non-convergent",
+            policyReason: "declared-non-convergent-contract",
+            proposition,
+            reviewerTrigger: "确定性",
         };
     }
+
     return {
-        forceHardCap: false,
-        reason: "default-convergence",
+        contradictions: [],
+        evidence: [],
+        mode: "normal",
+        policyReason: "default-convergence",
     };
+}
+
+function blackboardContractFor(turn: BlackboardTurn): BlackboardContract {
+    const contract = turn.metadata.blackboardContract;
+    if (isBlackboardContract(contract)) {
+        return contract;
+    }
+    return analyzeBlackboardContract(turn.goal);
+}
+
+function isBlackboardContract(value: unknown): value is BlackboardContract {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+    const candidate = value as Partial<BlackboardContract>;
+    return candidate.mode === "normal" || candidate.mode === "non-convergent";
+}
+
+function extractDeterminismProposition(goal: string): string | undefined {
+    if (goal.includes("本系统是完全确定的")) {
+        return "本系统是完全确定的";
+    }
+    if (goal.includes("完全确定")) {
+        return "完全确定";
+    }
+    if (goal.includes("确定性")) {
+        return "确定性";
+    }
+    if (goal.includes("确定")) {
+        return "确定";
+    }
+    return undefined;
+}
+
+function summarizeObjective(goal: string): string {
+    const firstLine = goal
+        .split(/\n+/u)
+        .map((line) => line.trim())
+        .find(Boolean);
+    const summary = firstLine ?? goal.trim();
+    return summary.length <= 120 ? summary : `${summary.slice(0, 120)}...`;
+}
+
+function mentionsPlannerReviewer(goal: string): boolean {
+    const text = normalizeText(goal);
+    return text.includes("planner") && text.includes("reviewer");
+}
+
+function readMetadataBoolean(value: unknown): boolean | undefined {
+    return typeof value === "boolean" ? value : undefined;
+}
+
+function readMetadataStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.filter((item): item is string => typeof item === "string");
 }
 
 function evaluateConvergence(
@@ -604,30 +779,22 @@ function evaluateConvergence(
         return { status: "continue", reason: "waiting-for-workers" };
     }
 
-    const currentBlockers = normalizedUnique(currentSteps.flatMap((step) => step.blockers));
-    if (currentBlockers.length === 0) {
-        return { status: BlackboardTurnStatus.Converged, reason: "no-open-blockers" };
+    const openIssues = normalizedUnique([
+        ...currentSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues)),
+        ...currentSteps.flatMap((step) => step.blockers),
+    ]);
+    const agreements = currentSteps.map((step) => readMetadataBoolean(step.metadata.qaAgreement));
+    const hasExplicitConsensus =
+        agreements.length === expectedWorkerCount && agreements.every((agreement) => agreement === true);
+    if (hasExplicitConsensus && openIssues.length === 0) {
+        return { status: BlackboardTurnStatus.Converged, reason: "workers-reached-consensus" };
     }
 
-    const previousSteps = turn.steps.filter((step) => step.round === round - 1);
-    const previousBlockers = normalizedUnique(previousSteps.flatMap((step) => step.blockers));
-    if (hasIntersection(currentBlockers, previousBlockers)) {
-        return { status: BlackboardTurnStatus.NeedsUser, reason: "repeated-blocker" };
+    if (openIssues.length > 0) {
+        return { status: "continue", reason: "peer-qa-open-issues" };
     }
 
-    const currentFacts = normalizedUnique(currentSteps.flatMap((step) => step.newFacts));
-    const previousFacts = normalizedUnique(previousSteps.flatMap((step) => step.newFacts));
-    if (round > 1 && currentFacts.length === 0 && previousFacts.length === 0) {
-        return { status: BlackboardTurnStatus.NeedsUser, reason: "two-rounds-without-new-facts" };
-    }
-
-    const currentSummaries = normalizedUnique(currentSteps.map((step) => step.outputSummary));
-    const previousSummaries = normalizedUnique(previousSteps.map((step) => step.outputSummary));
-    if (round > 1 && currentSummaries.length > 0 && hasIntersection(currentSummaries, previousSummaries)) {
-        return { status: BlackboardTurnStatus.NeedsUser, reason: "repeated-discussion" };
-    }
-
-    return { status: "continue", reason: "blockers-may-be-resolved-next-round" };
+    return { status: "continue", reason: "awaiting-worker-consensus" };
 }
 
 function latestBlockers(turn: BlackboardTurn): string[] {
@@ -651,11 +818,6 @@ function normalizedUnique(values: string[]): string[] {
 
 function normalizeText(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/gu, " ");
-}
-
-function hasIntersection(left: string[], right: string[]): boolean {
-    const rightSet = new Set(right.map(normalizeText));
-    return left.some((item) => rightSet.has(normalizeText(item)));
 }
 
 function renderDecisionForm(input: {
