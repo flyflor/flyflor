@@ -5,13 +5,18 @@
     "scripts": {
         "dev": "bun run app.ts",
         "chat": "bun run app.ts chat",
-        "docker:chat": "bun run build:binary:linux-x64 && docker compose up -d flyflor && docker exec -it flyflor-dev flyflor",
-        "docker:dev": "bun run build:binary:linux-x64 && docker compose up -d flyflor",
+        "docker:chat": "bun run build:binary:docker && docker compose up -d --force-recreate flyflor && docker exec -it flyflor-dev flyflor",
+        "docker:dev": "bun run build:binary:docker && docker compose up -d --force-recreate flyflor",
+        "test": "bun test",
+        "test:session:stress": "bun run scripts/session.stress.report.ts",
+        "test:memory:stress": "bun run scripts/memory.stress.report.ts",
+        "inspect:sessions": "bun run scripts/session.inspect.ts",
+        "inspect:blackboard": "bun run scripts/blackboard.inspect.ts",
         "check": "bunx tsc --noEmit",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "build:binary": "bun build --compile --target=bun --packages=bundle --reject-unresolved --outfile dist/flyflor app.ts",
-        "build:binary:docker": "bun run build:binary:linux-x64",
+        "build:binary:docker": "bun run scripts/build.docker.binary.ts",
         "build:binary:linux-arm64": "bun build --compile --target=bun-linux-arm64 --packages=bundle --reject-unresolved --outfile dist/flyflor-linux-arm64 app.ts",
         "build:binary:linux-x64": "bun build --compile --target=bun-linux-x64 --packages=bundle --reject-unresolved --outfile dist/flyflor-linux app.ts"
     },
@@ -24,6 +29,7 @@
         "typescript": "^5"
     },
     "dependencies": {
-        "lodash-es": "^4.18.1"
+        "lodash-es": "^4.18.1",
+        "natural": "8.1.1"
     }
 }

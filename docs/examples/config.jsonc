@@ -1,7 +1,7 @@
 {
     // Flyflor global config. Copy to ~/.flyflor/config.jsonc.
     "model": {
-        // FastAi is a custom OpenAI-compatible relay profile, matching ccswitch/OpenCode shape.
+        // FastAi is a built-in OpenAI-compatible responses profile, matching ccswitch/Codex shape.
         "activeProvider": "fastai",
         "activeModel": "gpt-5.5",
         "temperature": 0.2,
@@ -11,21 +11,15 @@
         },
         "providers": {
             "fastai": {
-                "type": "openai-compatible",
-                "apiMode": "responses",
-                "baseUrl": "https://fastai.fast",
                 "apiKey": {
                     "provider": "config",
                     "id": "fastai-api-key",
                 },
-                "defaultModel": "gpt-5.5",
                 "maxTokens": 65536,
-                "models": ["gpt-5.5"],
             },
 
             // Built-ins are reserved by convention and only need overrides.
-            // FastAi is intentionally not a built-in official provider; keep it as a custom profile.
-            // openai, claude, anthropic, deepseek, gemini, kimi, minimax,
+            // openai, claude, anthropic, deepseek, fastai, gemini, kimi, minimax,
             // minimax-cn, qwen, qwen-intl, openrouter, ai-gateway, xai,
             // zai, groq, mistral, azure-openai, bedrock, ollama, local, custom.
             "openai": {},
@@ -72,6 +66,12 @@
         "candidates": {
             "autoPromoteExplicit": true,
             "maxCandidatesPerTurn": 3,
+        },
+        "matrix": {
+            "enabled": true,
+            "maxSourceChars": 4096,
+            "maxTokens": 128,
+            "naturalSentiment": true,
         },
         "markdown": {
             "enabled": true,

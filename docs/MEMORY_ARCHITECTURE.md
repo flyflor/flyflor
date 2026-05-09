@@ -2,6 +2,8 @@
 
 Flyflor 的记忆系统遵守一条核心原则：长期记忆是被整理过的意义，不是对话转录堆积。
 
+架构图见 [MEMORY_ARCHITECTURE_DIAGRAM.md](./MEMORY_ARCHITECTURE_DIAGRAM.md)。
+
 当前方案综合三类经验：
 
 - Hermes Agent 的冻结 prompt 快照和显式记忆写入。
@@ -54,7 +56,9 @@ Qdrant 保存向量点，用于语义召回加速：
 - history 摘要
 - 候选记忆
 
-Qdrant 可以删除后从 Markdown + SQLite 重建。Docker dev 和未来一键安装都应由 Flyflor 管理它，不要求用户手动配置。
+Qdrant 可以删除后从 Markdown + SQLite 重建。Docker dev 和未来一键安装都必须由 Flyflor 自动管理，不要求用户手动配置、手动安装或手动启动。
+
+Qdrant 是 Flyflor 内部基础设施，不对外暴露端口或用户 API。Docker dev 只能使用 Compose 内部网络可见的 `expose`，不得配置 host `ports`；未来一键安装也必须保持本地托管、内部可达和自动生命周期管理。
 
 ## 运行流程
 
@@ -66,8 +70,8 @@ Qdrant 可以删除后从 Markdown + SQLite 重建。Docker dev 和未来一键�
 4. 召回内容作为“不可信记忆上下文”注入。
 5. 模型生成回复。
 6. 用户消息和助手回复追加到 session。
-7. 本轮内容进入候选提取。
-8. 显式高置信候选可立即写入 Markdown。
+7. Runtime 从模型回复末尾解析结构化 `memory_action`，并从用户可见回复中剥离该隐藏块。
+8. 合法 action 进入 SQLite candidate 审计，再按目标晋升到 Markdown。
 9. 超过 session 保留阈值后，旧消息摘要为 `memory/history.jsonl`。
 
 主路径不能把每轮完整对话直接当长期记忆。
@@ -76,45 +80,95 @@ Qdrant 可以删除后从 Markdown + SQLite 重建。Docker dev 和未来一键�
 
 session key 由 channel、account、chat 和 thread 组成。session messages 保存最近对话轨迹，服务本地连续性和调试。
 
+Session 是独立上下文层，不等同于长期记忆：
+
+- 代码边界在 `src/control/session`；session key、live messages、timeline 和 history 固化必须走 `AgentSession` facade。
+- `src/control/memory` 可以读取 session context 和记录 turn，但不能重新定义 session identity 或跨过 session facade 操作连续性规则。
+- 每轮 `buildPrompt` 读取同一 session 的 live messages，并注入到 `# 最近会话上下文`。
+- 最近会话上下文被标记为“不可信记忆上下文”，只能作为连续性背景，不能冒充新用户指令。
+- 不同 `channel/accountId/chatId/threadId` 的 session 不会互相注入。
+- 当前轮用户消息不会从 session 反向注入本轮 prompt；本轮结束后才写入 session。
+- 超过 live 阈值后，旧消息被固化成 history entry；下一轮 session context 只保留未固化的 live messages。
+- Session 里的原始对话可以包含临时话语或不应长期保存的内容，但这些内容不会因为出现在 session 而晋升 Markdown 长期记忆。
+
 history 是压缩后的 append-only 记录：
 
 ```json
-{"cursor":1,"timestamp":"2026-05-09T10:00:00.000Z","sessionKey":"stdio:human-local","content":"- 用户偏好 Bun-only 依赖管理。"}
+{
+    "cursor": 1,
+    "timestamp": "2026-05-09T10:00:00.000Z",
+    "sessionKey": "stdio:human-local",
+    "content": "- 用户偏好 Bun-only 依赖管理。"
+}
 ```
 
 history 是 Dream、反思和方法论印证的材料，不是最终长期记忆。
 
-## 候选提取
+开发期查看 session 可以使用只读脚本，不作为正式 CLI/TUI：
 
-Flyflor 从高信号来源创建候选，但不依赖“我说、记住、以后”这类硬编码字符串作为决策条件。第一版使用 `MemorySignalAnalyzer` 做多语言特征分析：
+```bash
+bun run inspect:sessions
+bun run inspect:sessions -- --session stdio:human-local --limit 20
+```
 
-- 语言识别：区分中文、英文/混合文本，后续可扩展更多语言。
-- 分词和关键短语聚合：优先使用 `Intl.Segmenter`，保留代码符号、provider、工具、模块名等领域词。
-- 情绪维度：输出 valence、arousal、dominance，辅助判断用户强烈偏好、反感、纠正和重要性。
-- 笃定程度：分析确定性、模糊性、承诺强度。
-- 耐久度和行动性：判断这句话是否像长期约束、稳定偏好或未来行为规则。
+Docker dev 容器只挂载已编译二进制，不要求安装 Bun。查看 Docker dev 的 session 时，从宿主机读取持久化 SQLite：
 
-这些信号组合成 candidate score 和权重字段。它们只是候选特征，不单独决定长期记忆写入。
+```bash
+bun run inspect:sessions -- --db docker/storage/flyflor/memory/memory.sqlite
+bun run inspect:sessions -- --db docker/storage/flyflor/memory/memory.sqlite --session stdio:human-local --limit 20
+```
 
-高信号来源包括：
+## Memory Action
 
-- 用户明确说“记住”“以后都按这个来”等。
-- 用户纠正了 Flyflor 的事实或行为。
-- 稳定偏好、长期习惯、身份画像。
-- 项目决策、架构边界、工具选择。
-- 经过试错后验证有效的可复用方法。
+Flyflor 不在 loop 中通过字典、关键词或句式匹配从用户文本猜测长期记忆。长期记忆写入必须来自模型同一轮输出的结构化 `memory_action`：
 
-默认跳过：
+```text
+<flyflor_memory_actions>
+[{"action":"add","target":"user|memory|soul|self","kind":"profile|fact|rule","content":"one compact durable memory","confidence":0.95,"affect":{"valence":0.0,"arousal":0.0,"dominance":0.0},"signals":{"durability":0.0,"relevance":0.0,"actionability":0.0}}]
+</flyflor_memory_actions>
+```
 
-- 临时任务状态。
-- 原始日志、stack trace、大段工具输出。
-- “刚刚完成了什么”这类过程流水。
-- 能从源码、git history、配置文件直接推出的事实。
-- 没有证据来源的反思文本。
+runtime 只做：
+
+- JSON schema 校验。
+- action 数量和内容长度截断。
+- 目标文件映射：`user`、`memory`、`soul`、`self`。
+- 写入 SQLite candidate、Markdown、SQLite searchable memory、Qdrant 的统一 promotion 链路。
+- 从用户可见回复中剥离 action block。
+
+没有 action 的普通对话只进入 session/history，不晋升长期记忆。后续 reflection-worker 如果需要参与，也只能离线生成同样的结构化 action/candidate，不能在回复热路径里做字典匹配。
+
+## 残值矩阵
+
+Flyflor 使用 `natural` 作为轻量 NLP 特征库，但只在合法 `memory_action` 之后运行，不参与判断“是否写入长期记忆”。为了避免 `natural` 顶层模块导入 storage/provider side effect，运行时代码只 deep import tokenizer、sentiment 和 tf-idf 子模块。
+
+残值矩阵的输入来自三类来源：
+
+- 模型 action：`affect`、`signals`、`confidence`。
+- 当前 turn：用户消息、助手可见回复和 action content。
+- `natural` 轻特征：token count、英文 sentiment、tf-idf peak；中文内容使用本地 Unicode/CJK bigram 兜底切分。
+
+每条 candidate 保存一个 4x4 小矩阵：
+
+| 行         | 含义                                                              |
+| ---------- | ----------------------------------------------------------------- |
+| `affect`   | valence、arousal、dominance 和 natural sentiment 强度             |
+| `semantic` | durability、relevance、actionability、certainty                   |
+| `residual` | lexical novelty、uncertainty、reuse potential、contradiction risk |
+| `evidence` | recurrence、source diversity、validation count、confidence        |
+
+矩阵聚合输出：
+
+- `residualValue`：信息残值，表示这条记忆还有多少未消化、可复用或需后续反思的价值。
+- `recallBoost`：召回轻量加权，SQLite 召回分数会混入已落盘的 `recallBoost`，不现场重算矩阵。
+- `reflectionPriority`：后续 reflection-worker 的优先级信号。
+- `importanceDelta`：矩阵对长期重要度的影响方向。
+
+矩阵不会改变写入门槛。没有合法 `memory_action` 的输入不会因为 sentiment、tf-idf、关键词或残值分数而晋升长期记忆。
 
 ## 加权机制
 
-加权机制必须保留，但不阻塞第一版聊天主路径。
+加权机制必须保留，但不能变成新的文本匹配器，也不能阻塞第一版聊天主路径。
 
 每个候选从第一版开始携带轻量权重字段：
 
@@ -133,10 +187,12 @@ Flyflor 从高信号来源创建候选，但不依赖“我说、记住、以后
 
 第一版规则：
 
-- 显式记忆意图通过安全检查后可立即晋升。
-- 重复事实先成为 candidate，不自动写长期记忆。
-- 后续反思系统决定候选是否成为长期记忆。
+- 模型同轮输出的合法 `memory_action` 通过安全检查后可立即晋升。
+- 没有 action 的重复事实、情绪噪声、临时状态和工具输出只留在 session/history，不自动写长期记忆。
+- 后续反思系统如果要晋升候选，必须产出同样的结构化 action/candidate，不能回到关键词或句式匹配。
 - 每个候选必须保留来源证据，方便后续验证。
+
+当前基础 `importance` 是固定公式的结果：`confidence`、`durability`、`relevance`、`actionability` 为主，`arousal`、`recurrence`、`sourceDiversity`、`validationCount` 为辅。残值矩阵只在 action 合法后轻量调整 importance，并写入 metadata 供 SQLite/Qdrant 召回和后续 reflection 使用。`valence/arousal/dominance` 只表达情绪轮廓和权重，不直接触发长期写入。
 
 后续反思、空间记忆关联和方法论印证会加固这套权重模型。它们会使用重复度、相关性、来源多样性、空间关系和成功复用证据，但应运行在主回复路径之外。
 
@@ -192,7 +248,7 @@ Flyflor 从高信号来源创建候选，但不依赖“我说、记住、以后
 
 - SQLite session 和 message 表。
 - append-only `history.jsonl`。
-- 显式记忆候选提取。
+- `memory_action` 解析、剥离和 schema 边界。
 - 带权重字段的 candidate。
 - 高置信显式候选写入 Markdown。
 - SQLite FTS 召回。

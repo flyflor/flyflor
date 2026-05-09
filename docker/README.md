@@ -11,8 +11,8 @@ Qdrant is part of Flyflor internal memory infrastructure. Docker dev exposes it 
 Docker chat mode:
 
 ```bash
-bun run build:binary:linux-x64
-docker compose up -d flyflor
+bun run build:binary:docker
+docker compose up -d --force-recreate flyflor
 docker exec -it flyflor-dev flyflor
 ```
 

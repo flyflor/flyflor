@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import merge from "lodash-es/merge.js";
+import mergeWith from "lodash-es/mergeWith.js";
 import {
     Channel,
     ModelApiMode,
@@ -10,7 +10,7 @@ import {
     ModelProviderKind,
     type ModelProviderKind as ModelProviderKindType,
     SandboxMode,
-} from "../shared/core/enums.ts";
+} from "../fpc/contracts/index.ts";
 
 export interface FlyflorConfig {
     gateway: GatewayConfig;
@@ -164,6 +164,7 @@ export interface MemoryConfig {
     analyzer: MemoryAnalyzerConfig;
     enabled: boolean;
     candidates: MemoryCandidateConfig;
+    matrix: MemoryMatrixConfig;
     markdown: MarkdownMemoryConfig;
     sqlite: SQLiteMemoryConfig;
     qdrant: QdrantMemoryConfig;
@@ -182,6 +183,13 @@ export interface MemoryAnalyzerConfig {
 export interface MemoryCandidateConfig {
     autoPromoteExplicit: boolean;
     maxCandidatesPerTurn: number;
+}
+
+export interface MemoryMatrixConfig {
+    enabled: boolean;
+    maxSourceChars: number;
+    maxTokens: number;
+    naturalSentiment: boolean;
 }
 
 export interface MarkdownMemoryConfig {
@@ -242,6 +250,10 @@ interface ConfigFileShape {
 
 export async function loadConfig(): Promise<FlyflorConfig> {
     const paths = resolvePaths();
+    return loadConfigForPaths(paths);
+}
+
+export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorConfig> {
     await ensureDirectories(paths);
 
     const configFile = await readConfigFile(paths.configDir);
@@ -299,7 +311,7 @@ function mergeGatewayConfig(defaults: GatewayConfig, override: Partial<GatewayCo
         return defaults;
     }
 
-    return merge({}, defaults, override);
+    return mergeConfig(defaults, override);
 }
 
 function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfig> | undefined): MemoryConfig {
@@ -307,7 +319,16 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
         return defaults;
     }
 
-    return merge({}, defaults, override);
+    return mergeConfig(defaults, override);
+}
+
+function mergeConfig<T>(defaults: T, override: Partial<T>): T {
+    return mergeWith({}, defaults, override, (_defaultValue, overrideValue) => {
+        if (Array.isArray(overrideValue)) {
+            return overrideValue;
+        }
+        return undefined;
+    }) as T;
 }
 
 function createDefaultMemoryConfig(): MemoryConfig {
@@ -322,6 +343,12 @@ function createDefaultMemoryConfig(): MemoryConfig {
         candidates: {
             autoPromoteExplicit: true,
             maxCandidatesPerTurn: 3,
+        },
+        matrix: {
+            enabled: true,
+            maxSourceChars: 4096,
+            maxTokens: 128,
+            naturalSentiment: true,
         },
         markdown: {
             enabled: true,
@@ -366,7 +393,7 @@ function createDefaultMemoryConfig(): MemoryConfig {
 }
 
 function resolveModelConfig(config: ModelRegistryConfig | undefined): ModelConfig {
-    const providers = merge({}, createDefaultModelProviders(), config?.providers ?? {});
+    const providers = mergeConfig(createDefaultModelProviders(), config?.providers ?? {});
     const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.Mock;
     const provider = providers[providerId] ?? {
         type: ModelProviderKind.Mock,
@@ -419,6 +446,13 @@ function createDefaultModelProviders(): Record<string, ModelProviderConfig> {
             baseUrl: "https://api.deepseek.com/v1",
             defaultModel: "deepseek-chat",
             models: ["deepseek-chat", "deepseek-reasoner"],
+        },
+        [ModelProviderId.FastAi]: {
+            type: ModelProviderKind.OpenAICompatible,
+            apiMode: ModelApiMode.Responses,
+            baseUrl: "https://fastai.fast",
+            defaultModel: "gpt-5.5",
+            models: ["gpt-5.5"],
         },
         [ModelProviderId.Gemini]: {
             type: ModelProviderKind.OpenAICompatible,
