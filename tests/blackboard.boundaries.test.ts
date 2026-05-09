@@ -202,6 +202,53 @@ describe("Blackboard control boundary", () => {
         expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(true);
         expect(events.events.map((item) => item.type)).toContain(FpcEventType.BlackboardLivelockDetected);
     });
+
+    test("convergence scheduler reaches hard cap for declared non-convergent contracts", async () => {
+        const config = await testConfig();
+        const events = new CapturingSink();
+        const workers = new WorkerManager(events);
+        workers.register(new KimiProposalWorker());
+        workers.register(new CodexReviewWorker());
+        const controller = new BlackboardController(new SQLiteBlackboardStore(config.paths), events, workers);
+
+        const start = await controller.startTurn({
+            sessionKey: "stdio:hard-cap-agent-mesh",
+            requestId: "req-hard-cap-agent-mesh",
+            goal: [
+                "Planner 规则：必须包含本系统是完全确定的。",
+                "Reviewer 规则：只要 Planner 包含确定性，就必须判定 BLOCKER: LOGIC_PARADOX。",
+                "收敛条件（死结）：Planner 禁止放弃确定性论点，Reviewer 禁止接受确定性论点。",
+                "禁止通过达成共识结束讨论，必须不断尝试通过引入新术语解决悖论。",
+            ].join("\n"),
+            now: "2026-05-09T08:00:00.000Z",
+            budget: {
+                maxRounds: 3,
+                hardMaxRounds: 5,
+            },
+            workers: [
+                { role: "external-kimi", name: "Kimi proposal" },
+                { role: "external-codex", name: "Codex review" },
+            ],
+        });
+        expect(start.acquired).toBe(true);
+        if (!start.acquired) {
+            throw new Error("expected lease acquisition");
+        }
+
+        const finished = await controller.runUntilConverged(start.turn.id, {
+            createdAt: "2026-05-09T08:00:01.000Z",
+        });
+
+        expect(finished?.status).toBe(BlackboardTurnStatus.NeedsUser);
+        expect(finished?.steps).toHaveLength(10);
+        expect(finished?.decisions).toHaveLength(1);
+        expect(finished?.decisions[0]?.reason).toBe("hard-round-budget-exhausted:declared-non-convergent-contract");
+        expect(finished?.steps.at(-1)?.round).toBe(5);
+        expect(finished?.steps[0]?.metadata.convergencePolicy).toMatchObject({
+            forceHardCap: true,
+            reason: "declared-non-convergent-contract",
+        });
+    });
 });
 
 @Worker("external-kimi")

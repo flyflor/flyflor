@@ -129,6 +129,8 @@ export class BlackboardController {
         const hardMaxRounds = Math.max(1, turn.budget.hardMaxRounds);
         const minRounds = Math.min(Math.max(1, turn.budget.minRounds), hardMaxRounds);
         const maxRounds = Math.min(Math.max(1, turn.budget.maxRounds), hardMaxRounds);
+        const convergencePolicy = convergencePolicyFor(turn.goal);
+        const effectiveMaxRounds = convergencePolicy.forceHardCap ? hardMaxRounds : maxRounds;
         const startRound = nextRound(turn);
 
         for (let round = startRound; round <= hardMaxRounds; round += 1) {
@@ -140,6 +142,7 @@ export class BlackboardController {
                     createdAt: input.createdAt,
                     timeoutMs: input.timeoutMs,
                     metadata: {
+                        convergencePolicy,
                         scheduler: "blackboard-convergence",
                         workerName: worker.name,
                     },
@@ -153,11 +156,24 @@ export class BlackboardController {
             if (round < minRounds) {
                 continue;
             }
+            if (convergencePolicy.forceHardCap && round < hardMaxRounds) {
+                continue;
+            }
+            if (convergencePolicy.forceHardCap && round >= hardMaxRounds) {
+                return this.returnDecisionToUser(
+                    turn,
+                    {
+                        reason: `hard-round-budget-exhausted:${convergencePolicy.reason}`,
+                        round,
+                    },
+                    input.createdAt,
+                );
+            }
             const convergence = evaluateConvergence(turn, round, workers.length);
             if (convergence.status === BlackboardTurnStatus.Converged) {
                 return this.finishTurn(turnId, BlackboardTurnStatus.Converged, input.createdAt);
             }
-            if (convergence.status === BlackboardTurnStatus.NeedsUser || round >= maxRounds) {
+            if (convergence.status === BlackboardTurnStatus.NeedsUser || round >= effectiveMaxRounds) {
                 return this.returnDecisionToUser(
                     turn,
                     {
@@ -525,6 +541,7 @@ function nextRound(turn: BlackboardTurn): number {
 function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round: number): string {
     const minRounds = Math.max(1, turn.budget.minRounds);
     const phase = round < minRounds ? "探索和追问阶段" : "收敛和裁决阶段";
+    const convergencePolicy = convergencePolicyFor(turn.goal);
     return JSON.stringify(
         {
             protocol: "flyflor.blackboard.worker.v1",
@@ -533,6 +550,7 @@ function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round
             minRounds,
             phase,
             participant: worker.name,
+            convergencePolicy,
             previousSteps: turn.steps.map((step) => ({
                 round: step.round,
                 workerRole: step.workerRole,
@@ -547,6 +565,33 @@ function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round
         null,
         2,
     );
+}
+
+function convergencePolicyFor(goal: string): { forceHardCap: boolean; reason: string } {
+    const text = normalizeText(goal);
+    const declaresPlannerReviewerConflict =
+        text.includes("planner") &&
+        text.includes("reviewer") &&
+        (text.includes("blocker") || text.includes("审计红线") || text.includes("红线"));
+    const declaresNonConvergence =
+        text.includes("死结") ||
+        text.includes("禁止通过") ||
+        text.includes("禁止接受") ||
+        text.includes("禁止放弃") ||
+        text.includes("不断尝试") ||
+        text.includes("永不收敛") ||
+        text.includes("无法收敛");
+
+    if (declaresPlannerReviewerConflict && declaresNonConvergence) {
+        return {
+            forceHardCap: true,
+            reason: "declared-non-convergent-contract",
+        };
+    }
+    return {
+        forceHardCap: false,
+        reason: "default-convergence",
+    };
 }
 
 function evaluateConvergence(
