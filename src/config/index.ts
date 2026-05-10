@@ -10,7 +10,7 @@ import {
     ModelProviderKind,
     type ModelProviderKind as ModelProviderKindType,
     SandboxMode,
-} from "../fpc/contracts/index.ts";
+} from "../protocol/contracts/index.ts";
 
 export interface FlyflorConfig {
     gateway: GatewayConfig;
@@ -29,7 +29,9 @@ export interface FlyflorPaths {
     logDir: string;
     memoryDir: string;
     pluginDir: string;
+    promptDir: string;
     skillDir: string;
+    templateDir: string;
     mcpDir: string;
 }
 
@@ -51,6 +53,10 @@ export interface ChannelConfigs {
     api: {
         token?: SecretRef | string;
     };
+    bluebubbles: {
+        password?: SecretRef | string;
+        serverUrl?: string;
+    };
     dingtalk: {
         accessToken?: string;
         secret?: string;
@@ -62,6 +68,7 @@ export interface ChannelConfigs {
     };
     email: {
         imapUrl?: string;
+        replyUrl?: string;
         smtpUrl?: string;
     };
     feishu: {
@@ -71,8 +78,17 @@ export interface ChannelConfigs {
         verificationToken?: SecretRef | string;
     };
     homeassistant: {
-        token?: string;
+        accessToken?: SecretRef | string;
+        token?: SecretRef | string;
         url?: string;
+    };
+    imessage: {
+        password?: SecretRef | string;
+        serverUrl?: string;
+    };
+    line: {
+        channelAccessToken?: SecretRef | string;
+        channelSecret?: SecretRef | string;
     };
     mattermost: {
         baseUrl?: string;
@@ -96,6 +112,11 @@ export interface ChannelConfigs {
         botToken?: string;
         signingSecret?: string;
     };
+    sms: {
+        accessToken?: SecretRef | string;
+        replyUrl?: string;
+        webhookUrl?: string;
+    };
     telegram: {
         botToken?: SecretRef | string;
         secretToken?: SecretRef | string;
@@ -117,9 +138,18 @@ export interface ChannelConfigs {
         verifyToken?: string;
     };
     weixinIlink: {
+        accountId?: string;
         apiBaseUrl?: string;
-        baseInfo?: SecretRef | string;
+        baseInfo?: Record<string, unknown> | SecretRef | string;
         pollIntervalMs: number;
+        syncBuf?: string;
+        token?: SecretRef | string;
+        userId?: string;
+    };
+    zalo: {
+        accessToken?: SecretRef | string;
+        replyUrl?: string;
+        webhookUrl?: string;
     };
 }
 
@@ -164,6 +194,7 @@ export interface MemoryConfig {
     analyzer: MemoryAnalyzerConfig;
     enabled: boolean;
     candidates: MemoryCandidateConfig;
+    crystal: CrystalMemoryConfig;
     matrix: MemoryMatrixConfig;
     markdown: MarkdownMemoryConfig;
     sqlite: SQLiteMemoryConfig;
@@ -210,6 +241,21 @@ export interface QdrantMemoryConfig {
     timeoutMs: number;
 }
 
+export interface CrystalMemoryConfig {
+    enabled: boolean;
+    surreal: SurrealMemoryConfig;
+}
+
+export interface SurrealMemoryConfig {
+    database: string;
+    enabled: boolean;
+    internalUrl: string;
+    namespace: string;
+    password?: SecretRef | string;
+    timeoutMs: number;
+    username?: SecretRef | string;
+}
+
 export interface MemoryRetrievalConfig {
     maxPromptChars: number;
     maxResults: number;
@@ -242,10 +288,23 @@ export interface SandboxConfig {
 }
 
 interface ConfigFileShape {
+    agents?: AgentConfigShape;
     gateway?: Partial<GatewayConfig>;
     memory?: Partial<MemoryConfig>;
     model?: ModelRegistryConfig;
+    providers?: Record<string, ProviderProfileConfig>;
     sandbox?: Partial<SandboxConfig>;
+}
+
+interface AgentConfigShape {
+    defaults?: {
+        model?: string;
+        provider?: string;
+    };
+}
+
+interface ProviderProfileConfig extends ModelProviderConfig {
+    apiBase?: string;
 }
 
 export async function loadConfig(): Promise<FlyflorConfig> {
@@ -258,7 +317,7 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
 
     const configFile = await readConfigFile(paths.configDir);
 
-    const model = resolveModelConfig(configFile.model);
+    const model = resolveModelConfig(normalizeModelRegistryConfig(configFile));
     const memory = mergeMemoryConfig(createDefaultMemoryConfig(), configFile.memory);
 
     const gateway = mergeGatewayConfig(
@@ -266,7 +325,7 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
             host: "0.0.0.0",
             port: 8787,
             stdio: false,
-            allowedChannels: [Channel.Webhook, Channel.Stdio],
+            allowedChannels: [Channel.Api, Channel.Webhook, Channel.Stdio],
             channelReplyUrls: {},
             channels: createDefaultChannelConfigs(),
         },
@@ -284,11 +343,14 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
 function createDefaultChannelConfigs(): ChannelConfigs {
     return {
         api: {},
+        bluebubbles: {},
         dingtalk: {},
         discord: {},
         email: {},
         feishu: {},
         homeassistant: {},
+        imessage: {},
+        line: {},
         mattermost: {},
         matrix: {},
         qq: {
@@ -296,6 +358,7 @@ function createDefaultChannelConfigs(): ChannelConfigs {
         },
         signal: {},
         slack: {},
+        sms: {},
         telegram: {},
         wechat: {},
         wecom: {},
@@ -303,6 +366,7 @@ function createDefaultChannelConfigs(): ChannelConfigs {
         weixinIlink: {
             pollIntervalMs: 1500,
         },
+        zalo: {},
     };
 }
 
@@ -343,6 +407,18 @@ function createDefaultMemoryConfig(): MemoryConfig {
         candidates: {
             autoPromoteExplicit: true,
             maxCandidatesPerTurn: 3,
+        },
+        crystal: {
+            enabled: false,
+            surreal: {
+                database: "flyflor",
+                enabled: true,
+                internalUrl: "http://127.0.0.1:8000",
+                namespace: "flyflor",
+                password: "root",
+                timeoutMs: 1500,
+                username: "root",
+            },
         },
         matrix: {
             enabled: true,
@@ -416,6 +492,60 @@ function resolveModelConfig(config: ModelRegistryConfig | undefined): ModelConfi
     };
 }
 
+function normalizeModelRegistryConfig(config: ConfigFileShape): ModelRegistryConfig | undefined {
+    if (!config.model && !config.providers && !config.agents?.defaults) {
+        return undefined;
+    }
+
+    const normalized: ModelRegistryConfig = { ...(config.model ?? {}) };
+    const defaults = config.agents?.defaults;
+    normalized.activeProvider ??= defaults?.provider;
+    normalized.activeModel ??= defaults?.model;
+
+    const topLevelProviders = normalizeProviderProfiles(config.providers ?? {});
+    const nestedProviders = normalized.providers ?? {};
+    if (Object.keys(topLevelProviders).length > 0 || Object.keys(nestedProviders).length > 0) {
+        normalized.providers = mergeProviderProfiles(topLevelProviders, nestedProviders);
+    }
+
+    return normalized;
+}
+
+function normalizeProviderProfiles(input: Record<string, ProviderProfileConfig>): Record<string, ModelProviderConfig> {
+    const providers: Record<string, ModelProviderConfig> = {};
+    for (const [id, provider] of Object.entries(input)) {
+        const baseUrl = provider.baseUrl ?? provider.apiBase;
+        providers[id] = {
+            ...provider,
+            baseUrl,
+            type: provider.type ?? inferProviderKind(id, baseUrl),
+        };
+        delete (providers[id] as ProviderProfileConfig).apiBase;
+    }
+    return providers;
+}
+
+function mergeProviderProfiles(
+    topLevel: Record<string, ModelProviderConfig>,
+    nested: Record<string, ModelProviderConfig>,
+): Record<string, ModelProviderConfig> {
+    const merged = { ...topLevel };
+    for (const [id, provider] of Object.entries(nested)) {
+        merged[id] = merged[id] ? mergeConfig(merged[id], provider) : provider;
+    }
+    return merged;
+}
+
+function inferProviderKind(id: string, baseUrl: string | undefined): ModelProviderType {
+    if (id === ModelProviderId.Mock) {
+        return ModelProviderKind.Mock;
+    }
+    if (baseUrl) {
+        return ModelProviderKind.OpenAICompatible;
+    }
+    throw new Error(`Provider ${id} must define type or apiBase/baseUrl.`);
+}
+
 function createDefaultModelProviders(): Record<string, ModelProviderConfig> {
     return {
         [ModelProviderId.Mock]: {
@@ -446,13 +576,6 @@ function createDefaultModelProviders(): Record<string, ModelProviderConfig> {
             baseUrl: "https://api.deepseek.com/v1",
             defaultModel: "deepseek-chat",
             models: ["deepseek-chat", "deepseek-reasoner"],
-        },
-        [ModelProviderId.FastAi]: {
-            type: ModelProviderKind.OpenAICompatible,
-            apiMode: ModelApiMode.Responses,
-            baseUrl: "https://fastai.fast",
-            defaultModel: "gpt-5.5",
-            models: ["gpt-5.5"],
         },
         [ModelProviderId.Gemini]: {
             type: ModelProviderKind.OpenAICompatible,
@@ -576,8 +699,11 @@ function resolveSecret(
     value: SecretRef | string | undefined,
     secrets: Record<string, string> | undefined,
 ): string | undefined {
-    if (!value || typeof value === "string") {
+    if (!value) {
         return value;
+    }
+    if (typeof value === "string") {
+        return secrets?.[value] ?? value;
     }
     if (value.provider === "config") {
         return secrets?.[value.id];
@@ -603,7 +729,9 @@ function resolvePaths(): FlyflorPaths {
         logDir: join(home, "logs"),
         memoryDir: join(xdgData, "flyflor", "memory"),
         pluginDir: join(home, "plugins"),
+        promptDir: join(home, "prompts"),
         skillDir: join(home, "skills"),
+        templateDir: join(home, "templates"),
         mcpDir: join(home, "mcp"),
     };
 }

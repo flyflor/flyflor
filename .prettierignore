@@ -12,3 +12,4 @@ docker/tmp
 bun.lock
 *.bun-build
 .*.bun-build
+hermes-agent

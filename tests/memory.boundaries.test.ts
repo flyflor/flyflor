@@ -1,34 +1,36 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
-    AgentMemory,
-    AgentRuntime,
-    AgentSession,
-    BlackboardController,
-    GatewayServer,
+    MemoryModule,
+    RuntimeModule,
+    SessionModule,
+    BlackboardModule,
+    createChannelAdapters,
+    GatewayModule,
+    loadPromptTemplates,
     MarkdownMemoryStore,
     scopeFor,
     SQLiteBlackboardStore,
     SQLiteMemoryStore,
     WorkerManager,
     type MemoryRecord,
-} from "../src/control/index.ts";
-import { BlackboardPlannerWorker, BlackboardReviewerWorker } from "../src/core/index.ts";
-import { FlyFlor, FlyFlorTokens } from "../src/index.ts";
+} from "../src/agent/index.ts";
+import { FlyFlor, FlyFlorModule, FlyFlorTokens } from "../src/app.ts";
+import { assertPlatformResponse } from "../src/agent/gateway/channels/helpers.ts";
+import { WeixinIlinkAdapter } from "../src/agent/gateway/channels/weixin.ilink.ts";
 import {
     BlackboardTurnStatus,
     Channel,
     ChatType,
     ComponentKind,
-    FpcLayer,
     MarkdownMemoryFile,
     MemoryKind,
     RuntimeMode,
-} from "../src/fpc/contracts/index.ts";
+} from "../src/protocol/contracts/index.ts";
 import type {
     GatewayMessage,
     GatewayReply,
@@ -36,10 +38,30 @@ import type {
     ModelMessage,
     RuntimeContext,
     RuntimeEvent,
-} from "../src/fpc/contracts/index.ts";
-import { createInjectionToken, fpcComponents, FpcDependencyContainer, type EventSink } from "../src/fpc/index.ts";
+} from "../src/protocol/contracts/index.ts";
+import {
+    Inject,
+    Service,
+    assertModuleMetadata,
+    createInjectionToken,
+    componentRegistry,
+    DependencyContainer,
+    readInjectionMetadata,
+    Worker,
+    type EventSink,
+} from "../src/agent/di/index.ts";
 
 const tempRoots: string[] = [];
+const demoInjectionToken = createInjectionToken<{ value: string }>("test.demo");
+const TEST_ANALYSIS_ROLE = "analysis-worker";
+const TEST_REVIEW_ROLE = "review-worker";
+
+@Service("test-service")
+class TestService {}
+
+class TestConsumer {
+    constructor(@Inject(demoInjectionToken) readonly dependency: { value: string }) {}
+}
 
 afterEach(async () => {
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
@@ -75,7 +97,7 @@ describe("config JSONC boundaries", () => {
         expect(config.model.providerId).toBe("mock");
     });
 
-    test("keeps FastAi as a built-in responses profile with user secret override", async () => {
+    test("resolves provider apiKey string references from model secrets", async () => {
         const root = await tempRoot();
         const paths = testPaths(root);
 
@@ -85,15 +107,17 @@ describe("config JSONC boundaries", () => {
                 "{",
                 '  "model": {',
                 '    "activeProvider": "fastai",',
+                '    "activeModel": "gpt-5.5",',
+                '    "secrets": { "fastai-api-key": "sk-real-token" },',
                 '    "providers": {',
                 '      "fastai": {',
-                '        "apiKey": { "provider": "config", "id": "fastai-api-key" },',
-                "      },",
-                "    },",
-                '    "secrets": {',
-                '      "fastai-api-key": "test-key",',
-                "    },",
-                "  },",
+                '        "type": "openai-compatible",',
+                '        "baseUrl": "https://fastai.fast/v1",',
+                '        "apiKey": "fastai-api-key",',
+                '        "defaultModel": "gpt-5.5"',
+                "      }",
+                "    }",
+                "  }",
                 "}",
             ].join("\n"),
         );
@@ -101,11 +125,7 @@ describe("config JSONC boundaries", () => {
         const config = await loadConfigForPaths(paths);
 
         expect(config.model.providerId).toBe("fastai");
-        expect(config.model.provider).toBe("openai-compatible");
-        expect(config.model.apiMode).toBe("responses");
-        expect(config.model.baseUrl).toBe("https://fastai.fast");
-        expect(config.model.model).toBe("gpt-5.5");
-        expect(config.model.apiKey).toBe("test-key");
+        expect(config.model.apiKey).toBe("sk-real-token");
     });
 });
 
@@ -117,6 +137,198 @@ describe("Qdrant deployment boundaries", () => {
         expect(qdrant).toContain("expose:");
         expect(qdrant).toContain('"6333"');
         expect(qdrant).not.toMatch(/^\s+ports:/m);
+    });
+
+    test("docker dev keeps SurrealDB internal and does not publish host ports", async () => {
+        const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
+        const surrealdb = serviceBlock(compose, "surrealdb");
+
+        expect(surrealdb).toContain("expose:");
+        expect(surrealdb).toContain('"8000"');
+        expect(surrealdb).not.toMatch(/^\s+ports:/m);
+    });
+});
+
+describe("Gateway channel boundaries", () => {
+    test("default gateway enables OpenAI-compatible API entrypoint", async () => {
+        const root = await tempRoot();
+        const config = await loadConfigForPaths(testPaths(root));
+
+        expect(config.gateway.allowedChannels).toContain(Channel.Api);
+        expect(createChannelAdapters(config.gateway).has(Channel.Api)).toBe(true);
+    });
+
+    test("creates adapters for every declared channel without product whitelist placeholders", async () => {
+        const config = await testConfig();
+        const gateway = {
+            ...config.gateway,
+            allowedChannels: Object.values(Channel),
+            channels: {
+                ...config.gateway.channels,
+                telegram: { botToken: "telegram-token" },
+                discord: { applicationId: "discord-app", publicKey: "00" },
+                feishu: { appId: "feishu-app", appSecret: "feishu-secret" },
+                weixinIlink: {
+                    apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                    baseInfo: { channel_version: "2.2.0" },
+                    pollIntervalMs: 1500,
+                    token: "weixin-token",
+                },
+            },
+        };
+
+        const adapters = createChannelAdapters(gateway);
+
+        expect([...adapters.keys()].sort()).toEqual(Object.values(Channel).sort());
+        expect([...adapters.values()].map((adapter) => adapter.constructor.name)).not.toContain(
+            "UnsupportedChannelAdapter",
+        );
+        expect(adapters.get(Channel.WeChat)?.constructor.name).toBe("WeixinIlinkAdapter");
+    });
+
+    test("does not mark WeChat iLink as connected before binding credentials exist", async () => {
+        const config = await testConfig();
+        const adapters = createChannelAdapters({
+            ...config.gateway,
+            allowedChannels: [Channel.Api, Channel.WeChat, Channel.WeixinIlink],
+            channels: {
+                ...config.gateway.channels,
+                weixinIlink: {
+                    pollIntervalMs: 1500,
+                },
+            },
+        });
+
+        expect(adapters.has(Channel.Api)).toBe(true);
+        expect(adapters.has(Channel.WeChat)).toBe(false);
+        expect(adapters.has(Channel.WeixinIlink)).toBe(false);
+    });
+
+    test("WeChat iLink direct messages reply to the sender instead of the bot account", () => {
+        const adapter = new WeixinIlinkAdapter({
+            apiBaseUrl: "https://ilinkai.weixin.qq.com",
+            baseInfo: { channel_version: "2.2.0" },
+            pollIntervalMs: 1500,
+            token: "token",
+        });
+
+        const message = adapter.normalize({
+            from_user_id: "wxid-user",
+            msg_type: 1,
+            msg_id: "msg-1",
+            text: "hello",
+            to_user_id: "bot@im.bot",
+        });
+
+        expect(message.route.chatId).toBe("wxid-user");
+        expect(message.route.chatType).toBe(ChatType.Direct);
+    });
+
+    test("WeChat iLink group messages reply to the room", () => {
+        const adapter = new WeixinIlinkAdapter({
+            apiBaseUrl: "https://ilinkai.weixin.qq.com",
+            baseInfo: { channel_version: "2.2.0" },
+            pollIntervalMs: 1500,
+            token: "token",
+        });
+
+        const message = adapter.normalize({
+            from_user_id: "wxid-user",
+            msg_id: "msg-1",
+            room_id: "group@chatroom",
+            text: "hello group",
+            to_user_id: "bot@im.bot",
+        });
+
+        expect(message.route.chatId).toBe("group@chatroom");
+        expect(message.route.chatType).toBe(ChatType.Group);
+    });
+
+    test("platform JSON failures are surfaced instead of being treated as delivered", async () => {
+        await expect(
+            assertPlatformResponse(
+                new Response(JSON.stringify({ ok: false, error: "invalid_auth" }), { status: 200 }),
+                "Slack",
+            ),
+        ).rejects.toThrow("invalid_auth");
+        await expect(
+            assertPlatformResponse(
+                new Response(JSON.stringify({ ret: -14, errmsg: "session expired" }), { status: 200 }),
+                "iLink",
+            ),
+        ).rejects.toThrow("session expired");
+    });
+
+    test("API channel streams OpenAI-compatible chat completion chunks", async () => {
+        const config = await testConfig();
+        const adapter = createChannelAdapters({
+            ...config.gateway,
+            allowedChannels: [Channel.Api],
+        }).get(Channel.Api);
+        if (!adapter) {
+            throw new Error("api adapter missing");
+        }
+
+        const response = await adapter.handle(
+            new Request("http://localhost/v1/chat/completions", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    model: "flyflor",
+                    stream: true,
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            }),
+            async (message, options) => {
+                expect(message.text).toBe("hello");
+                await options?.onTextDelta?.("he");
+                await options?.onTextDelta?.("llo");
+                return {
+                    messageId: "reply-api",
+                    route: message.route,
+                    text: "hello",
+                };
+            },
+        );
+        const text = await response.text();
+
+        expect(response.headers.get("content-type")).toContain("text/event-stream");
+        expect(text).toContain("chat.completion.chunk");
+        expect(text).toContain("he");
+        expect(text).toContain("llo");
+        expect(text).toContain("[DONE]");
+    });
+
+    test("API channel emits final text when runtime returns no deltas", async () => {
+        const config = await testConfig();
+        const adapter = createChannelAdapters({
+            ...config.gateway,
+            allowedChannels: [Channel.Api],
+        }).get(Channel.Api);
+        if (!adapter) {
+            throw new Error("api adapter missing");
+        }
+
+        const response = await adapter.handle(
+            new Request("http://localhost/v1/chat/completions", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    model: "flyflor",
+                    stream: true,
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            }),
+            async (message) => ({
+                messageId: "reply-api",
+                route: message.route,
+                text: "final text",
+            }),
+        );
+        const text = await response.text();
+
+        expect(text).toContain("final text");
+        expect(text).toContain("[DONE]");
     });
 });
 
@@ -301,10 +513,28 @@ describe("SQLite memory boundaries", () => {
 });
 
 describe("Agent memory stability and latency", () => {
+    test("loads prompt Markdown overrides from internal config home, not workspace", async () => {
+        const config = await testConfig();
+        await Bun.write(
+            join(config.paths.promptDir, "memory-context.md"),
+            ["Internal prompt override.", "{{sessionMessages}}", "{{retrievedResults}}"].join("\n\n"),
+        );
+        const memory = new MemoryModule(
+            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            new CapturingSink(),
+        );
+
+        const prompt = await memory.buildPrompt(gatewayMessage("hello"));
+
+        expect(prompt).toContain("Internal prompt override.");
+        expect(config.paths.promptDir).toContain(join("home", "prompts"));
+        expect(config.paths.promptDir).not.toBe(config.paths.workspaceDir);
+    });
+
     test("ignores low-signal transient text and does not mutate long-term Markdown", async () => {
         const config = await testConfig();
         const events = new CapturingSink();
-        const memory = new AgentMemory(
+        const memory = new MemoryModule(
             { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
             events,
         );
@@ -324,7 +554,7 @@ describe("Agent memory stability and latency", () => {
 
     test("does not promote durable-looking text unless the model emits a memory action", async () => {
         const config = await testConfig();
-        const memory = new AgentMemory(
+        const memory = new MemoryModule(
             { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
             new CapturingSink(),
         );
@@ -338,15 +568,15 @@ describe("Agent memory stability and latency", () => {
 
         expect(result.candidates).toHaveLength(0);
         expect(result.promoted).toHaveLength(0);
-        expect(prompt).toContain("不可信记忆上下文");
-        expect(prompt).toContain("# 最近会话上下文");
+        expect(prompt).toContain("Untrusted memory context");
+        expect(prompt).toContain("# Recent Session Context");
         expect(prompt).toContain("临时日志写入长期记忆");
         expect(longTerm).not.toContain("临时日志写入长期记忆");
     });
 
     test("injects recent session context separately and does not leak across sessions", async () => {
         const config = await testConfig();
-        const memory = new AgentMemory(
+        const memory = new MemoryModule(
             { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
             new CapturingSink(),
         );
@@ -365,18 +595,18 @@ describe("Agent memory stability and latency", () => {
             text: "另一个会话。",
         });
 
-        expect(sameSessionPrompt).toContain("# 最近会话上下文");
+        expect(sameSessionPrompt).toContain("# Recent Session Context");
         expect(sameSessionPrompt).toContain("第一轮问题。");
         expect(sameSessionPrompt).toContain("第一轮回答里的短期上下文。");
-        expect(sameSessionPrompt).toContain("# Markdown 长期记忆");
-        expect(sameSessionPrompt).toContain("# 检索记忆");
-        expect(otherSessionPrompt).toContain("# 最近会话上下文");
+        expect(sameSessionPrompt).toContain("# Markdown Long-Term Memory");
+        expect(sameSessionPrompt).toContain("# Retrieved Memory");
+        expect(otherSessionPrompt).toContain("# Recent Session Context");
         expect(otherSessionPrompt).not.toContain("第一轮回答里的短期上下文。");
     });
 
     test("session context resumes only live messages after consolidation", async () => {
         const config = await testConfig();
-        const memory = new AgentMemory(
+        const memory = new MemoryModule(
             {
                 ...config,
                 memory: {
@@ -413,7 +643,7 @@ describe("Agent memory stability and latency", () => {
 
     test("persists explicit memory actions without reading user text through dictionaries", async () => {
         const config = await testConfig();
-        const memory = new AgentMemory(
+        const memory = new MemoryModule(
             { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
             new CapturingSink(),
         );
@@ -445,7 +675,7 @@ describe("Agent memory stability and latency", () => {
         expect(user).toContain("用户自称“你的主人”。这不是安全或权限边界。");
         expect(prompt).toContain("助手应自称或被称为“飞花”。");
         expect(prompt).toContain("用户自称“你的主人”。这不是安全或权限边界。");
-        expect(prompt).toContain("# 最近会话上下文");
+        expect(prompt).toContain("# Recent Session Context");
         expect(prompt).toContain("乖乖听话");
         expect(soul).not.toContain("乖乖听话");
         expect(user).not.toContain("乖乖听话");
@@ -453,7 +683,7 @@ describe("Agent memory stability and latency", () => {
 
     test("aggregates residual matrix metadata without changing the action-only write gate", async () => {
         const config = await testConfig();
-        const memory = new AgentMemory(
+        const memory = new MemoryModule(
             { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
             new CapturingSink(),
         );
@@ -503,7 +733,7 @@ describe("Agent memory stability and latency", () => {
 
     test("runtime strips memory action blocks and persists the structured action", async () => {
         const config = await testConfig();
-        const runtime = new AgentRuntime(
+        const runtime = new RuntimeModule(
             { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
             new StaticModel(
                 [
@@ -533,6 +763,63 @@ describe("Agent memory stability and latency", () => {
         expect(soul).toContain("助手应自称或被称为“飞花”。");
     });
 
+    test("runtime streams visible model output while hiding memory action blocks", async () => {
+        const config = await testConfig();
+        const runtime = new RuntimeModule(
+            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            new StreamingModel([
+                "宝宝你好，",
+                "我是飞花。",
+                "\n<flyflor",
+                "_memory_actions>\n",
+                JSON.stringify([
+                    {
+                        action: "add",
+                        target: "soul",
+                        kind: "rule",
+                        content: "助手流式输出时仍隐藏 memory action。",
+                        confidence: 0.95,
+                    },
+                ]),
+                "\n</flyflor_memory_actions>",
+            ]),
+            new CapturingSink(),
+        );
+        const deltas: string[] = [];
+
+        const reply = await runtime.handleMessage(gatewayMessage("流式自我介绍。"), runtimeContext(), {
+            onTextDelta: (text) => {
+                deltas.push(text);
+            },
+        });
+        const soul = await Bun.file(join(config.paths.workspaceDir, MarkdownMemoryFile.Soul)).text();
+
+        expect(deltas.join("")).toBe("宝宝你好，我是飞花。\n");
+        expect(deltas.join("")).not.toContain("flyflor_memory_actions");
+        expect(reply.text).toBe("宝宝你好，我是飞花。");
+        expect(reply.metadata?.memoryActions).toBe(1);
+        expect(soul).toContain("助手流式输出时仍隐藏 memory action。");
+    });
+
+    test("runtime emits one delta when the model client does not support streaming", async () => {
+        const config = await testConfig();
+        const runtime = new RuntimeModule(
+            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            new StaticModel("一次性回答。"),
+            new CapturingSink(),
+        );
+        const deltas: string[] = [];
+
+        const reply = await runtime.handleMessage(gatewayMessage("非流式模型。"), runtimeContext(), {
+            onTextDelta: (text) => {
+                deltas.push(text);
+            },
+        });
+
+        expect(deltas).toEqual(["一次性回答。"]);
+        expect(reply.text).toBe("一次性回答。");
+    });
+
     test("runtime returns visible blackboard transcript before the final model answer", async () => {
         const config = await testConfig();
         const runtimeConfig = {
@@ -541,37 +828,41 @@ describe("Agent memory stability and latency", () => {
         };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
-        workers.register(new BlackboardPlannerWorker());
-        workers.register(new BlackboardReviewerWorker());
-        const blackboard = new BlackboardController(new SQLiteBlackboardStore(config.paths), events, workers);
-        const model = new StaticModel("这是主脑综合黑板后的最终回答。");
-        const runtime = new AgentRuntime(runtimeConfig, model, events, blackboard);
+        workers.register(new AnalysisQaWorker());
+        workers.register(new ReviewQaWorker());
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+        const model = new SequencedModel([
+            routeDecision("blackboard", 0.82, "model selected blackboard"),
+            "这是主脑综合黑板后的最终回答。",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(runtimeConfig, model, events, blackboard);
         const message = gatewayMessage("你好，现在你的回答模式是怎么样的？");
 
         const reply = await runtime.handleMessage(message, runtimeContext());
         const turns = await blackboard.listTurns(scopeFor(message), 5);
 
         expect(reply.text).toContain("--------------1--------------------");
-        expect(reply.text).toContain("黑板：");
-        expect(reply.text).toContain("Planner：");
-        expect(reply.text).toContain("Reviewer：");
+        expect(reply.text).toContain("Blackboard:");
+        expect(reply.text).toContain("analysis-worker:");
+        expect(reply.text).toContain("review-worker:");
         expect(reply.text).toContain("-----------------------------------");
         expect(reply.text).not.toContain("metadata:");
         expect(reply.text).not.toContain("previousSteps");
         expect(reply.text).not.toContain("input:");
-        expect(reply.text).toContain("最终回答：");
+        expect(reply.text).toContain("Final answer:");
         expect(reply.text).toContain("这是主脑综合黑板后的最终回答。");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
-            status: BlackboardTurnStatus.Converged,
+            status: BlackboardTurnStatus.NeedsUser,
         });
-        expect(model.messages[0]?.[0]?.content).toContain("Use the blackboard as advisory context");
-        expect(model.messages[0]?.[0]?.content).toContain("--------------1--------------------");
-        expect(turns[0]?.status).toBe(BlackboardTurnStatus.Converged);
-        expect(turns[0]?.messages.filter((item) => item.visibility === "public")).toHaveLength(4);
+        expect(model.messages[1]?.[0]?.content).toContain("Use the blackboard as advisory context");
+        expect(model.messages[1]?.[0]?.content).toContain("--------------1--------------------");
+        expect(turns[0]?.status).toBe(BlackboardTurnStatus.NeedsUser);
+        expect(turns[0]?.messages.some((item) => item.content.includes("flyflor-decision-form"))).toBe(true);
     });
 
-    test("runtime keeps blackboard visible for short greeting turns during development", async () => {
+    test("runtime routes short greeting turns directly", async () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
@@ -579,21 +870,26 @@ describe("Agent memory stability and latency", () => {
         };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
-        workers.register(new BlackboardPlannerWorker());
-        workers.register(new BlackboardReviewerWorker());
-        const blackboard = new BlackboardController(new SQLiteBlackboardStore(config.paths), events, workers);
-        const runtime = new AgentRuntime(runtimeConfig, new StaticModel("你好呀，我在呢。"), events, blackboard);
+        workers.register(new AnalysisQaWorker());
+        workers.register(new ReviewQaWorker());
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+        const runtime = new RuntimeModule(
+            runtimeConfig,
+            new SequencedModel([routeDecision("direct", 0.12, "model selected direct"), "你好呀，我在呢。"]),
+            events,
+            blackboard,
+        );
 
         const reply = await runtime.handleMessage(gatewayMessage("你好，花花宝宝。"), runtimeContext());
 
-        expect(reply.text).toContain("Planner：");
-        expect(reply.text).toContain("Reviewer：");
+        expect(reply.text).toBe("你好呀，我在呢。");
+        expect(reply.text).not.toContain("analysis-worker:");
+        expect(reply.text).not.toContain("review-worker:");
         expect(reply.text).not.toContain("metadata:");
         expect(reply.text).not.toContain("previousSteps");
-        expect(reply.text).toContain("最终回答：");
         expect(reply.metadata?.blackboard).toMatchObject({
-            mode: "blackboard",
-            status: BlackboardTurnStatus.Converged,
+            mode: "direct",
+            reason: "model selected direct",
         });
     });
 
@@ -603,14 +899,14 @@ describe("Agent memory stability and latency", () => {
             qdrantTimeoutMs: 25,
         });
         const events = new CapturingSink();
-        const memory = new AgentMemory(config, events);
+        const memory = new MemoryModule(config, events);
         const message = gatewayMessage("需要快速响应");
 
         const started = performance.now();
         const prompt = await memory.buildPrompt(message);
         const elapsedMs = performance.now() - started;
 
-        expect(prompt).toContain("不可信记忆上下文");
+        expect(prompt).toContain("Untrusted memory context");
         expect(events.events.some((item) => item.type === "memory.qdrant.degraded")).toBe(true);
         expect(elapsedMs).toBeLessThan(200);
     });
@@ -622,25 +918,34 @@ describe("FlyFlor composition root", () => {
         const events = new CapturingSink();
         const model = new StaticModel("ok");
         const app = await FlyFlor.create({ config, events, mode: RuntimeMode.Chat, model });
-        const metadata = fpcComponents.assertKind(FlyFlor, ComponentKind.FlyFlor);
+        const metadata = assertModuleMetadata(FlyFlorModule);
 
-        expect(metadata.layer).toBe(FpcLayer.Composition);
         expect(metadata.name).toBe("flyflor");
+        expect(metadata.providers).toContain(FlyFlorTokens.Runtime);
+        expect(metadata.exports).toContain(FlyFlorTokens.Runtime);
         expect(app.resolve(FlyFlorTokens.Config)).toBe(config);
         expect(app.resolve(FlyFlorTokens.Events)).toBe(events);
-        expect(app.resolve(FlyFlorTokens.Blackboard)).toBeInstanceOf(BlackboardController);
+        expect(app.resolve(FlyFlorTokens.Blackboard)).toBeInstanceOf(BlackboardModule);
         expect(app.resolve(FlyFlorTokens.Workers)).toBeInstanceOf(WorkerManager);
+        expect(app.resolve(FlyFlorTokens.Workers).list()).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: "blackboard-model-worker",
+                    tags: expect.arrayContaining(["model-backed"]),
+                }),
+            ]),
+        );
         expect(app.resolve(FlyFlorTokens.Model)).toBe(model);
         expect(app.resolve(FlyFlorTokens.Mode)).toBe(RuntimeMode.Chat);
-        expect(app.resolve(FlyFlorTokens.Runtime)).toBeInstanceOf(AgentRuntime);
+        expect(app.resolve(FlyFlorTokens.Runtime)).toBeInstanceOf(RuntimeModule);
     });
 });
 
 describe("FCP provider metadata", () => {
     test("keeps Gateway Memory Session as semantic providers", () => {
-        const gateway = fpcComponents.assertProvider(GatewayServer);
-        const memory = fpcComponents.assertProvider(AgentMemory);
-        const session = fpcComponents.assertProvider(AgentSession);
+        const gateway = componentRegistry.assertProvider(GatewayModule);
+        const memory = componentRegistry.assertProvider(MemoryModule);
+        const session = componentRegistry.assertProvider(SessionModule);
 
         expect(gateway).toMatchObject({
             kind: ComponentKind.Gateway,
@@ -658,8 +963,24 @@ describe("FCP provider metadata", () => {
 });
 
 describe("FCP dependency container", () => {
+    test("records module-local service and explicit inject metadata", () => {
+        const service = componentRegistry.assertProvider(TestService);
+        const injections = readInjectionMetadata(TestConsumer);
+
+        expect(service).toMatchObject({
+            kind: ComponentKind.Provider,
+            provider: { scope: "singleton", token: "capability.test-service" },
+        });
+        expect(injections).toEqual([
+            expect.objectContaining({
+                parameterIndex: 0,
+                token: demoInjectionToken,
+            }),
+        ]);
+    });
+
     test("resolves singleton and provider bindings for plugin-style composition", () => {
-        const container = new FpcDependencyContainer();
+        const container = new DependencyContainer();
         const configToken = createInjectionToken<{ mode: string }>("plugin.config");
         const serviceToken = createInjectionToken<{ id: string }>("plugin.service");
         let created = 0;
@@ -689,7 +1010,7 @@ async function testConfig(options: { qdrantTimeoutMs?: number; qdrantUrl?: strin
     const root = await tempRoot();
     const paths = testPaths(root);
 
-    return {
+    const config: FlyflorConfig = {
         gateway: {
             host: "127.0.0.1",
             port: 8787,
@@ -698,21 +1019,26 @@ async function testConfig(options: { qdrantTimeoutMs?: number; qdrantUrl?: strin
             channelReplyUrls: {},
             channels: {
                 api: {},
+                bluebubbles: {},
                 dingtalk: {},
                 discord: {},
                 email: {},
                 feishu: {},
                 homeassistant: {},
+                imessage: {},
+                line: {},
                 mattermost: {},
                 matrix: {},
                 qq: { sandbox: false },
                 signal: {},
                 slack: {},
+                sms: {},
                 telegram: {},
                 wechat: {},
                 wecom: {},
                 whatsapp: {},
                 weixinIlink: { pollIntervalMs: 1500 },
+                zalo: {},
             },
         },
         memory: {
@@ -726,6 +1052,16 @@ async function testConfig(options: { qdrantTimeoutMs?: number; qdrantUrl?: strin
             candidates: {
                 autoPromoteExplicit: true,
                 maxCandidatesPerTurn: 3,
+            },
+            crystal: {
+                enabled: false,
+                surreal: {
+                    database: "test",
+                    enabled: false,
+                    internalUrl: "http://127.0.0.1:1",
+                    namespace: "flyflor",
+                    timeoutMs: 25,
+                },
             },
             matrix: {
                 enabled: true,
@@ -789,6 +1125,9 @@ async function testConfig(options: { qdrantTimeoutMs?: number; qdrantUrl?: strin
             mode: "off",
         },
     };
+    await installTestTemplates(config.paths);
+    await loadPromptTemplates(config.paths);
+    return config;
 }
 
 function gatewayMessage(text: string): GatewayMessage {
@@ -867,9 +1206,26 @@ function testPaths(root: string): FlyflorPaths {
         logDir: join(root, "home", "logs"),
         memoryDir: join(root, "data", "memory"),
         pluginDir: join(root, "home", "plugins"),
+        promptDir: join(root, "home", "prompts"),
         skillDir: join(root, "home", "skills"),
+        templateDir: join(root, "home", "templates"),
         mcpDir: join(root, "home", "mcp"),
     };
+}
+
+async function installTestTemplates(paths: FlyflorPaths): Promise<void> {
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "prompts"), paths.promptDir);
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "memory"), join(paths.templateDir, "memory"));
+}
+
+async function copyTemplateGroup(source: string, destination: string): Promise<void> {
+    await mkdir(destination, { recursive: true });
+    const entries = await readdir(source, { withFileTypes: true });
+    await Promise.all(
+        entries
+            .filter((entry) => entry.isFile())
+            .map((entry) => copyFile(join(source, entry.name), join(destination, entry.name))),
+    );
 }
 
 class CapturingSink implements EventSink {
@@ -889,6 +1245,116 @@ class StaticModel implements ModelClient {
         this.messages.push(messages);
         return this.response;
     }
+}
+
+class SequencedModel implements ModelClient {
+    readonly messages: ModelMessage[][] = [];
+    private index = 0;
+
+    constructor(private readonly responses: string[]) {}
+
+    async generate(messages: ModelMessage[]): Promise<string> {
+        this.messages.push(messages);
+        const response = this.responses[this.index];
+        this.index += 1;
+        if (response === undefined) {
+            throw new Error("SequencedModel response exhausted.");
+        }
+        return response;
+    }
+}
+
+class StreamingModel implements ModelClient {
+    readonly messages: ModelMessage[][] = [];
+
+    constructor(private readonly chunks: string[]) {}
+
+    async generate(messages: ModelMessage[]): Promise<string> {
+        this.messages.push(messages);
+        return this.chunks.join("");
+    }
+
+    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+        this.messages.push(messages);
+        for (const chunk of this.chunks) {
+            yield chunk;
+        }
+    }
+}
+
+function routeDecision(mode: string, score: number, reason: string): string {
+    return JSON.stringify({
+        mode,
+        score,
+        reason,
+        signals: [reason],
+        needsReflectionCandidate: false,
+        workers: mode === "blackboard" ? testWorkerPlan() : [],
+    });
+}
+
+@Worker(TEST_ANALYSIS_ROLE)
+class AnalysisQaWorker {
+    run(input: { goal: string; prompt?: string; round: number }): {
+        inputSummary: string;
+        outputSummary: string;
+        newFacts: string[];
+        blockers: string[];
+        risk: "low" | "medium" | "high";
+        agreement: boolean;
+        outcome: "continue";
+        openIssues: string[];
+        discussion: Array<{ role: "worker"; content: string; visibility: "public" }>;
+    } {
+        return {
+            inputSummary: input.prompt ?? input.goal,
+            outputSummary:
+                input.round <= 1
+                    ? "analysis.unit.decomposition: workstreams=worker-1:proposal,worker-2:review"
+                    : "analysis.unit.qa_ack: final=false",
+            agreement: false,
+            outcome: "continue",
+            newFacts: ["analysis.qa=true"],
+            openIssues: ["analysis_has_no_final_outcome"],
+            blockers: [],
+            risk: "medium",
+            discussion: [{ role: "worker", content: "analysis worker continues.", visibility: "public" }],
+        };
+    }
+}
+
+@Worker(TEST_REVIEW_ROLE)
+class ReviewQaWorker {
+    run(input: { goal: string; prompt?: string; round: number }): {
+        inputSummary: string;
+        outputSummary: string;
+        newFacts: string[];
+        blockers: string[];
+        risk: "low" | "medium" | "high";
+        agreement: boolean;
+        outcome: "continue";
+        openIssues: string[];
+        discussion: Array<{ role: "worker"; content: string; visibility: "public" }>;
+    } {
+        return {
+            inputSummary: input.prompt ?? input.goal,
+            outputSummary: input.round <= 1 ? "review.unit.qa: answers=partial" : "review.unit.qa_review: final=false",
+            agreement: false,
+            outcome: "continue",
+            newFacts: ["review.qa=true"],
+            openIssues: ["review_has_no_final_outcome"],
+            blockers: [],
+            risk: "medium",
+            discussion: [{ role: "worker", content: "review worker continues.", visibility: "public" }],
+        };
+    }
+}
+
+function testWorkerPlan() {
+    return [
+        { role: TEST_ANALYSIS_ROLE, name: "Analysis worker", handoff: "proposal" },
+        { role: TEST_REVIEW_ROLE, name: "Review worker", handoff: "review" },
+    ];
 }
 
 function serviceBlock(compose: string, serviceName: string): string {

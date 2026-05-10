@@ -1,16 +1,16 @@
 import { Database } from "bun:sqlite";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { format } from "prettier";
 import type { FlyflorConfig, FlyflorPaths } from "../src/config/index.ts";
 import {
-    AgentMemory,
+    MemoryModule,
     parseMemoryActions,
     targetFileForMemoryAction,
     type MemoryAction,
     type MemoryWeights,
-} from "../src/control/memory/index.ts";
+} from "../src/neural/memory/index.ts";
 import {
     Channel,
     ChatType,
@@ -18,8 +18,8 @@ import {
     type GatewayReply,
     type RuntimeContext,
     type RuntimeEvent,
-} from "../src/fpc/contracts/index.ts";
-import type { EventSink } from "../src/fpc/events/index.ts";
+} from "../src/protocol/contracts/index.ts";
+import type { EventSink } from "../src/protocol/events/index.ts";
 
 type ExpectedOutcome = "promote" | "suppress";
 
@@ -253,8 +253,9 @@ const root = await mkdtemp(join(tmpdir(), "flyflor-memory-stress-"));
 
 try {
     const config = createConfig(root);
+    await installScriptTemplates(config.paths);
     const events = new CapturingSink();
-    const memory = new AgentMemory(config, events);
+    const memory = new MemoryModule(config, events);
     await memory.buildPrompt(messageFor("初始化三层记忆压力测试快照", 0));
 
     const parseLatencies = measureActionParsing();
@@ -648,7 +649,7 @@ function validateStress(input: {
 async function inspectFlowRows(
     config: FlyflorConfig,
     events: CapturingSink,
-    memory: AgentMemory,
+    memory: MemoryModule,
 ): Promise<MemoryFlowRow[]> {
     const db = new Database(join(config.paths.memoryDir, "memory.sqlite"), { readonly: true });
     try {
@@ -914,21 +915,26 @@ function createConfig(root: string): FlyflorConfig {
             channelReplyUrls: {},
             channels: {
                 api: {},
+                bluebubbles: {},
                 dingtalk: {},
                 discord: {},
                 email: {},
                 feishu: {},
                 homeassistant: {},
+                imessage: {},
+                line: {},
                 mattermost: {},
                 matrix: {},
                 qq: { sandbox: false },
                 signal: {},
                 slack: {},
+                sms: {},
                 telegram: {},
                 wechat: {},
                 wecom: {},
                 whatsapp: {},
                 weixinIlink: { pollIntervalMs: 1500 },
+                zalo: {},
             },
         },
         memory: {
@@ -942,6 +948,16 @@ function createConfig(root: string): FlyflorConfig {
             candidates: {
                 autoPromoteExplicit: true,
                 maxCandidatesPerTurn: 3,
+            },
+            crystal: {
+                enabled: false,
+                surreal: {
+                    database: "stress",
+                    enabled: false,
+                    internalUrl: "http://127.0.0.1:1",
+                    namespace: "flyflor",
+                    timeoutMs: 25,
+                },
             },
             matrix: {
                 enabled: true,
@@ -1038,9 +1054,26 @@ function testPaths(root: string): FlyflorPaths {
         logDir: join(root, "home", "logs"),
         memoryDir: join(root, "data", "memory"),
         pluginDir: join(root, "home", "plugins"),
+        promptDir: join(root, "home", "prompts"),
         skillDir: join(root, "home", "skills"),
+        templateDir: join(root, "home", "templates"),
         mcpDir: join(root, "home", "mcp"),
     };
+}
+
+async function installScriptTemplates(paths: FlyflorPaths): Promise<void> {
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "prompts"), paths.promptDir);
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "memory"), join(paths.templateDir, "memory"));
+}
+
+async function copyTemplateGroup(source: string, destination: string): Promise<void> {
+    await mkdir(destination, { recursive: true });
+    const entries = await readdir(source, { withFileTypes: true });
+    await Promise.all(
+        entries
+            .filter((entry) => entry.isFile())
+            .map((entry) => copyFile(join(source, entry.name), join(destination, entry.name))),
+    );
 }
 
 function summarize(values: number[]): LatencyStats {

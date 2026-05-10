@@ -1,10 +1,16 @@
 import { Database } from "bun:sqlite";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
-import { AgentSession, scopeFor, SQLiteMemoryStore } from "../src/control/index.ts";
-import { Channel, ChatType, type GatewayMessage, type GatewayReply, type RuntimeContext } from "../src/fpc/index.ts";
+import { SessionModule, scopeFor, SQLiteMemoryStore } from "../src/agent/index.ts";
+import {
+    Channel,
+    ChatType,
+    type GatewayMessage,
+    type GatewayReply,
+    type RuntimeContext,
+} from "../src/agent/di/index.ts";
 
 interface SessionCase {
     accountId?: string;
@@ -39,9 +45,10 @@ const keepRoot = booleanArg("keep");
 const root = args.get("root") ?? (await mkdtemp(join(tmpdir(), "flyflor-session-stress-")));
 const shouldCleanup = !keepRoot && !args.has("root");
 const paths = testPaths(root);
+await installScriptTemplates(paths);
 const config = await stressConfig(paths);
 const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-const session = new AgentSession(store, config.memory.session);
+const session = new SessionModule(store, config.memory.session);
 const cases = createCases(sessionCount);
 const latencies: LatencyBucket = {
     consolidate: [],
@@ -382,7 +389,7 @@ function renderReport(input: {
         "",
         "## 测试范围",
         "",
-        "本报告专门验证 `src/control/session` 边界和 SQLite session 存储：session key 隔离、timeline 顺序、live context、history 固化、凭据脱敏和响应延迟。",
+        "本报告专门验证 `src/agent/session` 边界和 SQLite session 存储：session key 隔离、timeline 顺序、live context、history 固化、凭据脱敏和响应延迟。",
         "",
         "## 压测规模",
         "",
@@ -460,8 +467,25 @@ function testPaths(rootPath: string): FlyflorPaths {
         mcpDir: join(rootPath, "home", "mcp"),
         memoryDir: join(rootPath, "data", "memory"),
         pluginDir: join(rootPath, "home", "plugins"),
+        promptDir: join(rootPath, "home", "prompts"),
         skillDir: join(rootPath, "home", "skills"),
+        templateDir: join(rootPath, "home", "templates"),
         storageDir: join(rootPath, "data"),
         workspaceDir: join(rootPath, "home", "workspace"),
     };
+}
+
+async function installScriptTemplates(paths: FlyflorPaths): Promise<void> {
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "prompts"), paths.promptDir);
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "memory"), join(paths.templateDir, "memory"));
+}
+
+async function copyTemplateGroup(source: string, destination: string): Promise<void> {
+    await mkdir(destination, { recursive: true });
+    const entries = await readdir(source, { withFileTypes: true });
+    await Promise.all(
+        entries
+            .filter((entry) => entry.isFile())
+            .map((entry) => copyFile(join(source, entry.name), join(destination, entry.name))),
+    );
 }

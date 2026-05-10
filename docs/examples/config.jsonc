@@ -1,25 +1,18 @@
 {
     // Flyflor global config. Copy to ~/.flyflor/config.jsonc.
     "model": {
-        // FastAi is a built-in OpenAI-compatible responses profile, matching ccswitch/Codex shape.
-        "activeProvider": "fastai",
+        // Custom relay profiles can use any provider id, e.g. custom, xxxai, fastai.
+        // Defaults are OpenAI-compatible; protocol/baseUrl are normalized automatically.
+        "activeProvider": "custom",
         "activeModel": "gpt-5.5",
         "temperature": 0.2,
         "timeoutMs": 60000,
         "secrets": {
-            "fastai-api-key": "",
+            "custom-api-key": "",
         },
         "providers": {
-            "fastai": {
-                "apiKey": {
-                    "provider": "config",
-                    "id": "fastai-api-key",
-                },
-                "maxTokens": 65536,
-            },
-
             // Built-ins are reserved by convention and only need overrides.
-            // openai, claude, anthropic, deepseek, fastai, gemini, kimi, minimax,
+            // openai, claude, anthropic, deepseek, gemini, kimi, minimax,
             // minimax-cn, qwen, qwen-intl, openrouter, ai-gateway, xai,
             // zai, groq, mistral, azure-openai, bedrock, ollama, local, custom.
             "openai": {},
@@ -33,7 +26,7 @@
             "custom": {
                 "type": "openai-compatible",
                 "baseUrl": "",
-                "apiKey": "",
+                "apiKey": "custom-api-key",
                 "defaultModel": "",
                 "models": [],
             },
@@ -43,15 +36,85 @@
         "host": "0.0.0.0",
         "port": 8787,
         "stdio": false,
-        "allowedChannels": ["webhook", "stdio"],
+        "allowedChannels": ["api", "webhook", "stdio"],
         "channelReplyUrls": {},
         "channels": {
+            "api": {},
+            "bluebubbles": {
+                // BlueBubbles/iMessage bridge.
+                // "serverUrl": "http://127.0.0.1:1234",
+                // "password": "",
+            },
+            "dingtalk": {
+                // "webhookUrl": "",
+                // "accessToken": "",
+                // "secret": "",
+            },
+            "email": {
+                // Native SMTP/IMAP bridge can be configured later; replyUrl works today.
+                // "replyUrl": "",
+            },
+            "homeassistant": {
+                // "url": "http://homeassistant.local:8123",
+                // "accessToken": "",
+            },
+            "imessage": {
+                // Uses the same BlueBubbles bridge shape.
+                // "serverUrl": "http://127.0.0.1:1234",
+                // "password": "",
+            },
+            "line": {
+                // "channelAccessToken": "",
+                // "channelSecret": "",
+            },
+            "mattermost": {
+                // "baseUrl": "",
+                // "botToken": "",
+            },
+            "matrix": {
+                // "homeserverUrl": "",
+                // "accessToken": "",
+                // "userId": "",
+            },
+            "qq": {
+                "sandbox": false,
+            },
+            "signal": {
+                // "restUrl": "http://127.0.0.1:8080",
+                // "number": "",
+            },
+            "slack": {
+                // "botToken": "",
+                // "signingSecret": "",
+            },
+            "sms": {
+                // "replyUrl": "",
+            },
             "telegram": {},
             "discord": {},
             "feishu": {},
-            "wechat": {},
+            "wechat": {
+                // WeChat must use iLink. Configure weixinIlink below and enable "wechat" or "weixin-ilink".
+            },
+            "wecom": {
+                // "token": "",
+            },
+            "whatsapp": {
+                // "accessToken": "",
+                // "phoneNumberId": "",
+                // "verifyToken": "",
+            },
             "weixinIlink": {
+                // iLink personal WeChat protocol.
+                // The init wizard can bind via QR and prefill apiBaseUrl/token.
+                // "apiBaseUrl": "https://ilinkai.weixin.qq.com",
+                // "token": "",
+                // "baseInfo": { "channel_version": "2.2.0" },
                 "pollIntervalMs": 1500,
+            },
+            "zalo": {
+                // "replyUrl": "",
+                // "accessToken": "",
             },
         },
     },
@@ -89,6 +152,16 @@
             "collection": "flyflor_memories",
             "dimensions": 384,
             "timeoutMs": 1500,
+        },
+        "crystal": {
+            // SurrealDB is Flyflor internal Crystal Memory infrastructure. Do not expose it as a public endpoint.
+            "enabled": false,
+            "surreal": {
+                "enabled": true,
+                "internalUrl": "http://127.0.0.1:8000",
+                "namespace": "flyflor",
+                "database": "flyflor",
+            },
         },
         "retrieval": {
             "maxResults": 12,

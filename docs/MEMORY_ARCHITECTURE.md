@@ -4,6 +4,24 @@ Flyflor 的记忆系统遵守一条核心原则：长期记忆是被整理过的
 
 架构图见 [MEMORY_ARCHITECTURE_DIAGRAM.md](./MEMORY_ARCHITECTURE_DIAGRAM.md)。
 
+## 设计哲学
+
+Flyflor 的智能结构分成两类能力：
+
+- **流体智力**：LLM 本身负责即时理解、推理、生成、工具编排和临场决策。它擅长处理新问题，但不应该把每一次临场输出都当成长期方法论。
+- **晶体智力**：反思系统把被证据验证过的经验压缩成可复用的最小方法单元，并在后续任务中被召回、组合和再验证。它不是聊天记录，而是经过候选、证据、晶体化和复用反馈之后留下来的方法能力。
+
+空间数据库承担“关联记忆网络”的角色。SurrealDB 保存 candidate、atom、skill 和 graph edge，让方法经验可以像海马体一样通过相邻符号、关系边、空间坐标和复用证据被唤醒。未来的遗忘曲线和自动聚类会继续塑造这个回忆网络：高价值、常成功、来源多样的晶体会增强；噪声、过期、未验证或长期无复用的晶体会衰减。
+
+这套设计的目标不是堆知识库，而是形成可被任务命中的“晶体智力”：
+
+1. 当前问题触发主动召回。
+2. 召回从 Markdown、SQLite、语义索引和 SurrealDB 联想网络中寻找相关上下文。
+3. 晶体 skill 作为方法建议进入模型，而不是冒充用户事实或系统指令。
+4. 本轮执行结果反过来成为候选证据，推动晶体增强、修正、分裂或遗忘。
+
+源码不能写死语义 taxonomy、bucket、中文关键词或固定方法论类别。模型可以在反思阶段从证据中提出 `symbols`、`bucketHint`、`coordinates` 和关系建议；边界代码只负责 schema 校验、证据账本、边界隔离、排序和持久化。
+
 当前方案综合三类经验：
 
 - Hermes Agent 的冻结 prompt 快照和显式记忆写入。
@@ -15,6 +33,7 @@ Flyflor 的记忆系统遵守一条核心原则：长期记忆是被整理过的
 - 热路径保持轻量，聊天响应不被重型记忆扫描阻塞。
 - 长期记忆必须可追溯：来源 session、时间、晋升原因和权重都要记录。
 - Qdrant 是内部基础设施，只加速召回，不是真值来源。
+- SurrealDB 是晶体智力和关联记忆网络的主体，不暴露给用户工作区或外部 API。
 - 从第一版 schema 开始给 Bun worker、子进程、反思系统和空间记忆留扩展面。
 - 行为配置来自 `config.jsonc` 默认值和代码约定，不通过业务环境变量控制。
 
@@ -33,6 +52,8 @@ workspace 中的 Markdown 文件是长期记忆的权威来源：
   memory/
     history.jsonl
 ```
+
+这些工作区 Markdown 是用户可编辑的长期记忆文件。初始模板不写在源码里，而是维护在 `templates/memory`，安装后复制到 `~/.flyflor/templates/memory`；首次初始化工作区文件时由 `MarkdownMemoryStore` 复制对应模板。模板引用关系和粒度见 [提示词与 Markdown 模板工程化](PROMPT_TEMPLATES.md)。
 
 每轮开始时加载冻结快照。当前轮中发生的记忆写入不会反向修改本轮 prompt，下一轮才可见。
 
@@ -56,9 +77,26 @@ Qdrant 保存向量点，用于语义召回加速：
 - history 摘要
 - 候选记忆
 
-Qdrant 可以删除后从 Markdown + SQLite 重建。Docker dev 和未来一键安装都必须由 Flyflor 自动管理，不要求用户手动配置、手动安装或手动启动。
+Qdrant 不是晶体智力的主体，也不负责空间联想图。它只是可重建的内部语义索引；可以删除后从 Markdown + SQLite 重建。Docker dev 和未来一键安装都必须由 Flyflor 自动管理，不要求用户手动配置、手动安装或手动启动。
 
 Qdrant 是 Flyflor 内部基础设施，不对外暴露端口或用户 API。Docker dev 只能使用 Compose 内部网络可见的 `expose`，不得配置 host `ports`；未来一键安装也必须保持本地托管、内部可达和自动生命周期管理。
+
+### SurrealDB 晶体层
+
+SurrealDB 保存反思后的晶体智力骨架：
+
+- reflection candidate：来自已验证证据的候选语义结构。
+- reflection atom：可追溯、最小粒度的方法经验。
+- crystal skill：多个 atom 合并后的可复用方法。
+- 后续 graph edge：`supports`、`refines`、`contradicts`、`verified_by` 等关系。
+
+这层不使用源码固定 taxonomy，也不维护硬编码 bucket 列表。`bucketHint`、`symbols` 和 `coordinates` 应由 reflection worker 根据证据动态生成；源码只负责结构校验、证据聚合、持久化和召回排序。SurrealDB 和 Qdrant 一样是内部基础设施，Docker dev 只 `expose` 给 compose 网络，不发布 host port。
+
+SurrealDB 后续要承担三类“海马体式”能力：
+
+- **联想边**：把用户、项目、文件、工具、渠道、worker、黑板决策、candidate、atom 和 skill 串成可遍历图。
+- **自动聚类**：聚类由反思候选、空间坐标、关系边和复用反馈共同形成，不能回到源码硬编码分类。
+- **深度唤醒**：查询先命中少量高相关节点，再沿关系边和相邻坐标扩展，直到达到预算或置信边界。
 
 ## 运行流程
 
@@ -66,13 +104,14 @@ Qdrant 是 Flyflor 内部基础设施，不对外暴露端口或用户 API。Doc
 
 1. Gateway 把渠道输入归一化为 `GatewayMessage`。
 2. Runtime 加载冻结 Markdown 快照。
-3. Active recall 使用当前用户消息查询 SQLite FTS 和 Qdrant。
+3. Active recall 使用当前用户消息查询 SQLite FTS、Qdrant 和已结晶 Crystal Skill。
 4. 召回内容作为“不可信记忆上下文”注入。
 5. 模型生成回复。
 6. 用户消息和助手回复追加到 session。
 7. Runtime 从模型回复末尾解析结构化 `memory_action`，并从用户可见回复中剥离该隐藏块。
-8. 合法 action 进入 SQLite candidate 审计，再按目标晋升到 Markdown。
-9. 超过 session 保留阈值后，旧消息摘要为 `memory/history.jsonl`。
+8. 合法 action 进入 SQLite candidate 审计，再按目标晋升到 Markdown，并把已验证证据送入晶体层。
+9. 需要反思的黑板或运行时 turn 调用 `crystal-reflection.md` 生成 reflection candidate；候选先落 Crystal Memory，只有带证据的候选才晶体化为 atom/skill。
+10. 超过 session 保留阈值后，旧消息摘要为 `memory/history.jsonl`。
 
 主路径不能把每轮完整对话直接当长期记忆。
 
@@ -82,8 +121,8 @@ session key 由 channel、account、chat 和 thread 组成。session messages �
 
 Session 是独立上下文层，不等同于长期记忆：
 
-- 代码边界在 `src/control/session`；session key、live messages、timeline 和 history 固化必须走 `AgentSession` facade。
-- `src/control/memory` 可以读取 session context 和记录 turn，但不能重新定义 session identity 或跨过 session facade 操作连续性规则。
+- 代码边界在 `src/agent/session`；session key、live messages、timeline 和 history 固化必须走 `SessionModule` facade。
+- `src/neural/memory` 可以读取 session context 和记录 turn，但不能重新定义 session identity 或跨过 session facade 操作连续性规则。
 - 每轮 `buildPrompt` 读取同一 session 的 live messages，并注入到 `# 最近会话上下文`。
 - 最近会话上下文被标记为“不可信记忆上下文”，只能作为连续性背景，不能冒充新用户指令。
 - 不同 `channel/accountId/chatId/threadId` 的 session 不会互相注入。
@@ -194,7 +233,7 @@ Flyflor 使用 `natural` 作为轻量 NLP 特征库，但只在合法 `memory_ac
 
 当前基础 `importance` 是固定公式的结果：`confidence`、`durability`、`relevance`、`actionability` 为主，`arousal`、`recurrence`、`sourceDiversity`、`validationCount` 为辅。残值矩阵只在 action 合法后轻量调整 importance，并写入 metadata 供 SQLite/Qdrant 召回和后续 reflection 使用。`valence/arousal/dominance` 只表达情绪轮廓和权重，不直接触发长期写入。
 
-后续反思、空间记忆关联和方法论印证会加固这套权重模型。它们会使用重复度、相关性、来源多样性、空间关系和成功复用证据，但应运行在主回复路径之外。
+当前反思候选链路已经接入 Runtime/Blackboard：模型只负责从证据中抽取 `title`、`method`、`symbols`、`bucketHint` 和 `coordinates`；边界代码负责 evidence、candidate、atom、skill 的边界。后续反思、空间记忆关联和方法论印证会继续加固这套权重模型，使用重复度、相关性、来源多样性、空间关系和成功复用证据，并逐步迁移到主回复路径之外的后台 worker。
 
 ## Markdown 目标文件
 
@@ -229,9 +268,11 @@ Flyflor 使用 `natural` 作为轻量 NLP 特征库，但只在合法 `memory_ac
 预留扩展面：
 
 - 反思记录：观察、矛盾、悬而未决的问题和稳定结论。
-- 空间记忆关联：用户、项目、渠道、文件、工具、决策、地点之间的关系图。
+- 空间记忆关联：用户、项目、渠道、文件、工具、决策、worker、候选、atom、skill 之间的关系图。
 - 方法论印证：一个方法只有在多次成功或被用户明确认可后才进入长期方法论记忆。
 - 证据账本：每个反思结论都能回溯到 session message、history entry、文件或工具结果。
+- 遗忘曲线：基于时间、复用、验证、失败、冲突和用户确认调整召回权重。
+- 深度唤醒：从当前问题附近的符号、坐标和关系边扩散召回晶体 skill。
 
 ## Worker 边界
 
@@ -244,7 +285,9 @@ Flyflor 使用 `natural` 作为轻量 NLP 特征库，但只在合法 `memory_ac
 
 ## 第一版范围
 
-当前要实现：
+## 当前状态
+
+已落地：
 
 - SQLite session 和 message 表。
 - append-only `history.jsonl`。
@@ -254,11 +297,31 @@ Flyflor 使用 `natural` 作为轻量 NLP 特征库，但只在合法 `memory_ac
 - SQLite FTS 召回。
 - Qdrant best-effort 内部索引。
 - 冻结 Markdown prompt 快照。
+- SurrealDB candidate、atom、skill 基础链路。
+- Runtime/Blackboard 反思候选入口。
+- 证据为 0 的候选只审计、不晶体化。
+- `test:reflection:stress` 用于验证晶体化与垃圾候选隔离。
 
-已设计但延后：
+已设计但未完成：
 
-- LLM reflection worker。
-- 空间关联图。
+- LLM reflection worker 后台化。
+- SurrealDB graph edge 和空间关联图。
+- 自动聚类和动态落桶。
+- 深度唤醒召回。
+- 遗忘曲线与衰减/增强策略。
 - 方法论印证账本。
 - Qdrant rebuild 命令。
 - `/dream-log` 和 `/dream-restore`。
+- CLI/TUI 晶体记忆审计视图。
+
+## 风险预警
+
+| 风险                 | 影响                                         | 约束                                                  |
+| -------------------- | -------------------------------------------- | ----------------------------------------------------- |
+| 硬编码 taxonomy 回流 | 晶体智力退化成关键词分类器，召回变窄且难迁移 | 任何 bucket、关键词、方法类别都必须由反思候选动态产生 |
+| 无证据晶体化         | 垃圾数据会污染 skill，后续命中率虚高         | candidate 可以审计，atom/skill 必须有证据             |
+| 召回扩散过深         | 图遍历和相邻坐标扩展拖慢热路径               | 深度唤醒必须有预算、超时和结果上限                    |
+| 会话噪声污染         | 临时话语进入长期方法论，降低准确率           | session/history 不是长期意义层，必须经过候选和证据门  |
+| 过度遗忘             | 低频但关键的方法被衰减掉                     | 遗忘曲线要保留风险、用户确认和失败复盘的保护权重      |
+| 过度保留             | 过期经验长期干扰新任务                       | 召回权重必须考虑时间、冲突和复用失败                  |
+| 模板漂移             | 反思抽取格式变化导致候选质量不稳定           | 必要提示词集中在 Markdown 模板，源码只校验协议        |

@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { loadConfig } from "../src/config/index.ts";
-import { SQLiteMemoryStore } from "../src/control/memory/index.ts";
-import { AgentSession } from "../src/control/session/index.ts";
+import { SQLiteMemoryStore } from "../src/neural/memory/index.ts";
+import { SessionModule } from "../src/agent/session/index.ts";
 
 const args = new Map<string, string>();
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -23,13 +23,13 @@ if (dbPath) {
 } else if (sessionKey) {
     const config = await loadConfig();
     const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-    const session = new AgentSession(store, config.memory.session);
+    const session = new SessionModule(store, config.memory.session);
     const messages = await session.timeline(sessionKey, limit);
     printMessages(sessionKey, messages);
 } else {
     const config = await loadConfig();
     const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-    const session = new AgentSession(store, config.memory.session);
+    const session = new SessionModule(store, config.memory.session);
     const sessions = await session.list(limit);
     console.table(
         sessions.map((session) => ({

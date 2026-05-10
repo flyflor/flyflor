@@ -2,11 +2,11 @@
 
 <!-- prettier-ignore-start -->
 
-生成时间：2026-05-09T08:31:24.636Z
+生成时间：2026-05-09T19:42:12.856Z
 
 ## 测试范围
 
-本报告专门验证 `src/control/session` 边界和 SQLite session 存储：session key 隔离、timeline 顺序、live context、history 固化、凭据脱敏和响应延迟。
+本报告专门验证 `src/agent/session` 边界和 SQLite session 存储：session key 隔离、timeline 顺序、live context、history 固化、凭据脱敏和响应延迟。
 
 ## 压测规模
 
@@ -19,7 +19,7 @@
 | maxLiveMessages        | 20      |
 | consolidationBatchSize | 10      |
 | maxPromptMessages      | 12      |
-| 总耗时 ms                 | 121.550 |
+| 总耗时 ms                 | 653.958 |
 
 ## Session 汇总
 
@@ -42,10 +42,10 @@
 
 | 路径          | Avg ms | P50 ms | P95 ms | Max ms |
 | ----------- | ------ | ------ | ------ | ------ |
-| recordTurn  | 0.117  | 0.059  | 0.176  | 6.156  |
-| consolidate | 0.045  | 0.007  | 0.156  | 2.754  |
-| timeline    | 0.087  | 0.075  | 0.094  | 0.208  |
-| recent      | 0.029  | 0.019  | 0.033  | 0.111  |
+| recordTurn  | 0.622  | 0.423  | 1.234  | 23.501 |
+| consolidate | 0.228  | 0.058  | 0.946  | 6.426  |
+| timeline    | 0.542  | 0.461  | 0.840  | 0.960  |
+| recent      | 0.172  | 0.101  | 0.442  | 0.550  |
 
 ## 红线检查
 
@@ -57,8 +57,8 @@
 
 ```bash
 bun run test:session:stress -- --sessions 12 --turns 60 --keep
-bun run inspect:sessions -- --db /var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-session-stress-QumWMK/data/memory/memory.sqlite --limit 20
-bun run inspect:sessions -- --db /var/folders/gs/j4x9_rkx27b016_1wvl_lhh40000gn/T/flyflor-session-stress-QumWMK/data/memory/memory.sqlite --session stdio:account-a:chat-0:thread-0 --limit 30
+bun run inspect:sessions -- --db /var/folders/n5/wyt93n392vd8w49l3h8yz30r0000gp/T/flyflor-session-stress-w6c7xH/data/memory/memory.sqlite --limit 20
+bun run inspect:sessions -- --db /var/folders/n5/wyt93n392vd8w49l3h8yz30r0000gp/T/flyflor-session-stress-w6c7xH/data/memory/memory.sqlite --session stdio:account-a:chat-0:thread-0 --limit 30
 ```
 
 人工重点看：

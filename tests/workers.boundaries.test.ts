@@ -2,11 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WorkerManager, type WorkerRunContext } from "../src/control/index.ts";
-import { BlackboardPlannerWorker, BlackboardReviewerWorker } from "../src/core/index.ts";
-import { ComponentKind, FpcLayer, Worker, WorkerTaskStatus } from "../src/fpc/index.ts";
-import type { RuntimeEvent } from "../src/fpc/contracts/index.ts";
-import { FpcEventType, fpcComponents, type EventSink } from "../src/fpc/index.ts";
+import { WorkerManager, type WorkerRunContext } from "../src/agent/index.ts";
+import { ComponentKind, ArchitectureLayer, Worker, WorkerTaskStatus } from "../src/agent/di/index.ts";
+import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/agent/di/index.ts";
 
 const tempRoots: string[] = [];
 
@@ -18,17 +17,15 @@ describe("Worker manager boundary", () => {
     test("registers semantic worker instances from metadata", () => {
         const manager = new WorkerManager();
 
-        manager.register(new BlackboardPlannerWorker());
-        manager.register(new BlackboardReviewerWorker());
+        manager.register(new DeferredWorker());
 
-        expect(manager.has("flyflor-planner")).toBe(true);
-        expect(manager.has("flyflor-reviewer")).toBe(true);
+        expect(manager.has("test-deferred-worker")).toBe(true);
         expect(manager.list()).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    name: "flyflor-planner",
+                    name: "test-deferred-worker",
                     kind: ComponentKind.Worker,
-                    layer: FpcLayer.Capability,
+                    layer: ArchitectureLayer.Capability,
                     maxConcurrency: 1,
                 }),
             ]),
@@ -61,28 +58,12 @@ describe("Worker manager boundary", () => {
         expect(manager.list()[0]?.active).toBe(0);
         expect(manager.list()[0]?.queued).toBe(0);
 
-        expect(events.events.map((item) => item.type)).toContain(FpcEventType.WorkerTaskQueued);
-        expect(events.events.map((item) => item.type)).toContain(FpcEventType.WorkerTaskStart);
-        expect(events.events.map((item) => item.type)).toContain(FpcEventType.WorkerTaskEnd);
+        expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.WorkerTaskQueued);
+        expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.WorkerTaskStart);
+        expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.WorkerTaskEnd);
         for (const item of events.events) {
             expect(() => JSON.stringify(item)).not.toThrow();
         }
-    });
-
-    test("declares built-in planner and reviewer as worker providers", () => {
-        const planner = fpcComponents.assertProvider(BlackboardPlannerWorker);
-        const reviewer = fpcComponents.assertProvider(BlackboardReviewerWorker);
-
-        expect(planner).toMatchObject({
-            kind: ComponentKind.Worker,
-            layer: FpcLayer.Capability,
-            provider: { scope: "singleton", token: "capability.flyflor-planner" },
-        });
-        expect(reviewer).toMatchObject({
-            kind: ComponentKind.Worker,
-            layer: FpcLayer.Capability,
-            provider: { scope: "singleton", token: "capability.flyflor-reviewer" },
-        });
     });
 
     test("registers dynamic JSON process workers for external agent adapters", async () => {

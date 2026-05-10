@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { coalesceChatInput } from "../src/control/runtime/chat.ts";
+import { coalesceChatInput } from "../src/agent/runtime/chat.ts";
 
 describe("Human chat input boundary", () => {
     test("coalesces pasted multiline content into one turn before /exit", async () => {
