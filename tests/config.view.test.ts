@@ -9,6 +9,9 @@ const fakeConfig = (): FlyflorConfig =>
             storageDir: "/tmp/flyflor/storage",
             memoryDir: "/tmp/flyflor/memory",
             promptDir: "/tmp/flyflor/prompts",
+            projectDir: "/tmp/project",
+            projectFlyflorDir: "/tmp/project/.flyflor",
+            projectMemoryDir: "/tmp/project/.flyflor/memory",
         },
         model: {
             providerId: "openai",
@@ -32,6 +35,12 @@ const fakeConfig = (): FlyflorConfig =>
             crystal: { enabled: true, surreal: { enabled: false } },
             redis: { enabled: true },
         },
+        sandbox: {
+            mode: "off",
+            mcpToolApproval: "ask",
+            shellHookApproval: "allow",
+            pluginApproval: "deny",
+        },
     }) as unknown as FlyflorConfig;
 
 describe("config view", () => {
@@ -54,6 +63,9 @@ describe("config view", () => {
         expect(out).toContain("provider: openai");
         expect(out).toContain("model: gpt-4o");
         expect(out).toContain("apiKey: sk-a…90");
+        expect(out).toContain("mcpToolApproval: ask");
+        expect(out).toContain("shellHookApproval: allow");
+        expect(out).toContain("pluginApproval: deny");
         expect(out).not.toContain("sk-abcdef1234567890");
     });
 
@@ -75,6 +87,12 @@ describe("config view", () => {
         const parsed = JSON.parse(out);
         expect(parsed.model.apiKey).toBe("sk-a…90");
         expect(parsed.gateway.allowedChannels).toEqual(["telegram", "slack"]);
+        expect(parsed.sandbox).toEqual({
+            mode: "off",
+            mcpToolApproval: "ask",
+            shellHookApproval: "allow",
+            pluginApproval: "deny",
+        });
         expect(parsed.gateway.configuredChannels.find((c: { name: string }) => c.name === "slack").ready).toBe(false);
         expect(parsed.memory).toEqual({ enabled: true, crystal: true, redis: true, surreal: false });
     });

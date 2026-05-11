@@ -9,6 +9,7 @@
  */
 
 import type { FlyflorConfig } from "../config/index.ts";
+import { ToolApprovalMode } from "../protocol/contracts/index.ts";
 
 export type ConfigViewFormat = "text" | "json";
 
@@ -38,12 +39,21 @@ interface ConfigView {
     storageDir: string;
     memoryDir: string;
     promptDir: string;
+    projectDir: string;
+    projectFlyflorDir: string;
+    projectMemoryDir: string;
     model: {
         provider: string;
         model: string;
         apiMode: string;
         apiKey: string;
         baseUrl?: string;
+    };
+    sandbox: {
+        mode: string;
+        mcpToolApproval: string;
+        pluginApproval: string;
+        shellHookApproval: string;
     };
     gateway: {
         host: string;
@@ -68,12 +78,21 @@ function buildView(config: FlyflorConfig, redact: boolean): ConfigView {
         storageDir: config.paths.storageDir,
         memoryDir: config.paths.memoryDir,
         promptDir: config.paths.promptDir,
+        projectDir: config.paths.projectDir,
+        projectFlyflorDir: config.paths.projectFlyflorDir,
+        projectMemoryDir: config.paths.projectMemoryDir,
         model: {
             provider: config.model.providerId,
             model: config.model.model,
             apiMode: config.model.apiMode,
             apiKey: redact ? redactSecret(apiKeyRaw) : apiKeyRaw,
             baseUrl: typeof config.model.baseUrl === "string" ? config.model.baseUrl : undefined,
+        },
+        sandbox: {
+            mode: config.sandbox.mode,
+            mcpToolApproval: config.sandbox.mcpToolApproval ?? ToolApprovalMode.Deny,
+            pluginApproval: config.sandbox.pluginApproval ?? ToolApprovalMode.Deny,
+            shellHookApproval: config.sandbox.shellHookApproval ?? ToolApprovalMode.Deny,
         },
         gateway: {
             host: config.gateway.host,
@@ -131,6 +150,12 @@ function renderText(view: ConfigView): string {
     if (view.model.baseUrl) lines.push(`  baseUrl: ${view.model.baseUrl}`);
     lines.push(`  apiKey: ${view.model.apiKey || "(unset)"}`);
     lines.push("");
+    lines.push("[sandbox]");
+    lines.push(`  mode: ${view.sandbox.mode}`);
+    lines.push(`  mcpToolApproval: ${view.sandbox.mcpToolApproval}`);
+    lines.push(`  shellHookApproval: ${view.sandbox.shellHookApproval}`);
+    lines.push(`  pluginApproval: ${view.sandbox.pluginApproval}`);
+    lines.push("");
     lines.push("[gateway]");
     lines.push(`  bind: ${view.gateway.host}:${view.gateway.port}`);
     lines.push(`  allowedChannels: ${view.gateway.allowedChannels.join(", ") || "(none)"}`);
@@ -155,5 +180,8 @@ function renderText(view: ConfigView): string {
     lines.push(`  storage: ${view.storageDir}`);
     lines.push(`  memory: ${view.memoryDir}`);
     lines.push(`  prompts: ${view.promptDir}`);
+    lines.push(`  project: ${view.projectDir}`);
+    lines.push(`  projectLocal: ${view.projectFlyflorDir}`);
+    lines.push(`  projectMemory: ${view.projectMemoryDir}`);
     return lines.join("\n");
 }

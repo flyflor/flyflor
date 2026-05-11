@@ -20,6 +20,7 @@ import { spreadActivation, type ActivationCandidate } from "./activation.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
+import { ProjectMemoryStore } from "./project.memory.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
@@ -31,6 +32,7 @@ import { DreamWorkerImpl, NullDreamWorker, type DreamWorker } from "../../agent/
 import type {
     MemoryAction,
     MemoryCandidate,
+    MemoryEpisodeProvenance,
     MemoryRecord,
     MemorySearchRequest,
     MemorySearchResult,
@@ -41,10 +43,12 @@ import type { HistoryEntry, SessionMessageRecord } from "../../agent/session/ind
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
 export { MarkdownMemoryStore } from "./markdown.ts";
+export { ProjectMemoryStore } from "./project.memory.ts";
 export { SQLiteMemoryStore } from "./sqlite.ts";
 export type {
     MemoryAction,
     MemoryCandidate,
+    MemoryEpisodeProvenance,
     MemoryMatrixResult,
     MemoryRecord,
     MemorySearchRequest,
@@ -57,6 +61,7 @@ export type {
 @Provide({ kind: ComponentKind.Memory, layer: ArchitectureLayer.Control, name: "memory", provider: true })
 export class MemoryModule extends Memory {
     private readonly markdown: MarkdownMemoryStore;
+    private readonly projectMemory: ProjectMemoryStore;
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
     private readonly crystal: CrystalMemoryService;
@@ -79,6 +84,7 @@ export class MemoryModule extends Memory {
         this.model = model;
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
+        this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         this.crystal = new CrystalMemoryService(config.memory.crystal);
@@ -183,21 +189,28 @@ export class MemoryModule extends Memory {
         };
 
         const sessionKey = scopeFor(message);
-        const markdown = await this.markdown.snapshot();
-        const [sessionMessages, sqliteResults, crystalResults, hippocampus] = await Promise.all([
+        const [sessionMessages, hippocampus, projectMemory, crystalResults, sqliteResults, markdown] = await Promise.all([
             this.session.recentMessagesFor(message),
-            this.sqlite.search(request),
-            this.crystal.recall(request),
             this.assembleHippocampusContext(message, context),
+            this.projectMemory.snapshot({
+                maxChars: this.config.memory.retrieval.maxPromptChars,
+                query: message.text,
+                requestId: context?.requestId,
+                scope: request.scope,
+            }),
+            this.crystal.recall(request),
+            this.sqlite.search(request),
+            this.markdown.snapshot(),
         ]);
-        const results = dedupeResults([...crystalResults, ...sqliteResults]);
+        const results = dedupeResults([...projectMemory.results, ...crystalResults, ...sqliteResults]);
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
+            projectMemory.prompt,
+            hippocampus,
             results,
             sessionMessages,
             this.config.memory.retrieval.maxPromptChars,
         );
-        const prompt = hippocampus ? `${memoryBody}\n\n${hippocampus}` : memoryBody;
 
         this.events.publish(
             event(RuntimeEventType.MemoryPromptBuilt, {
@@ -205,10 +218,14 @@ export class MemoryModule extends Memory {
                 sessionKey,
                 sessionMessages: sessionMessages.length,
                 hippocampusActivated: hippocampus ? true : false,
+                projectMemoryActivated: projectMemory.prompt ? true : false,
+                projectMemoryManifestPath: projectMemory.manifest.paths.manifest,
+                projectMemoryRecallReceiptId: projectMemory.receipt?.id,
+                projectMemoryRecallResults: projectMemory.results.length,
             }),
         );
 
-        return prompt;
+        return memoryBody;
     }
 
     /**
@@ -282,6 +299,7 @@ export class MemoryModule extends Memory {
         reply: GatewayReply,
         context: RuntimeContext,
         actions: MemoryAction[] = [],
+        provenance: MemoryEpisodeProvenance = {},
     ): Promise<TurnMemoryResult> {
         if (!this.config.memory.enabled) {
             return {
@@ -294,7 +312,7 @@ export class MemoryModule extends Memory {
 
         // async-pipeline: redis episode 在拿到 session 之前就可以启动（不需要 session.key）。
         // 用 actions 直接估 importance，避免等 candidates 构造完成。
-        void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions));
+        void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
         this.scheduler?.trackUser(message.user.id);
@@ -328,6 +346,17 @@ export class MemoryModule extends Memory {
             .slice(0, this.config.memory.candidates.maxCandidatesPerTurn);
 
         // 三路并行：candidate 写入 / session consolidate→markdown history / Redis 已经 fire-and-forget。
+        const projectMemoryPipeline =
+            projectTrigger.kind !== ProjectTriggerKind.None
+                ? this.projectMemory.recordTurn({
+                      message,
+                      reply,
+                      context,
+                      trigger: projectTrigger,
+                      candidates,
+                      projectId: deriveProjectId(message),
+                  })
+                : Promise.resolve([]);
         const candidatePipeline = Promise.all(
             candidates.map(async (candidate) => {
                 await this.sqlite.addCandidate(candidate);
@@ -349,8 +378,13 @@ export class MemoryModule extends Memory {
             return entries;
         })();
 
-        const [candidateResults, historyEntries] = await Promise.all([candidatePipeline, historyPipeline]);
+        const [candidateResults, historyEntries, projectRecords] = await Promise.all([
+            candidatePipeline,
+            historyPipeline,
+            projectMemoryPipeline,
+        ]);
         const promoted: MemoryRecord[] = candidateResults.filter((r): r is MemoryRecord => r !== undefined);
+        const promotedRecords = [...promoted, ...projectRecords];
 
         // 晶体记忆（fire-and-forget，不阻塞回答返回）
         void this.crystal
@@ -358,7 +392,7 @@ export class MemoryModule extends Memory {
                 requestId: context.requestId,
                 now: context.now,
                 candidates,
-                promoted,
+                promoted: promotedRecords,
                 historyEntries,
                 reflectionCandidates: [],
             })
@@ -370,7 +404,8 @@ export class MemoryModule extends Memory {
                 {
                     candidates: candidates.length,
                     historyEntries: historyEntries.length,
-                    promoted: promoted.length,
+                    projectPromoted: projectRecords.length,
+                    promoted: promotedRecords.length,
                     sessionKey: session.key,
                 },
                 context.requestId,
@@ -380,7 +415,7 @@ export class MemoryModule extends Memory {
         return {
             sessionKey: session.key,
             candidates,
-            promoted,
+            promoted: promotedRecords,
             historyEntries,
         };
     }
@@ -584,6 +619,7 @@ export class MemoryModule extends Memory {
         reply: GatewayReply,
         context: RuntimeContext,
         importance: number,
+        provenance: MemoryEpisodeProvenance,
     ): Promise<void> {
         if (!this.redis) return;
         try {
@@ -597,7 +633,9 @@ export class MemoryModule extends Memory {
                     : await this.embeddings.embed(message.text);
 
             const episodeId = crypto.randomUUID();
-            const text = `[user] ${message.text.slice(0, 512)}\n[assistant] ${reply.text.slice(0, 512)}`;
+            const normalizedProvenance = normalizeEpisodeProvenance(provenance);
+            const hasMcpSuccess = (normalizedProvenance.mcpCalls ?? []).some((call) => call.ok);
+            const text = renderEpisodeText(message.text, reply.text, normalizedProvenance);
 
             await this.redis.writeEpisode({
                 userId: message.user.id,
@@ -607,15 +645,26 @@ export class MemoryModule extends Memory {
                 embedding,
                 importance,
                 stability,
-                sourceKind: MemorySourceKind.SessionTurn,
+                sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.SessionTurn,
                 createdAt: Date.now(),
                 ttlSeconds,
+                metadata: {
+                    provenance: normalizedProvenance,
+                    schemaVersion: 1,
+                },
             });
 
             this.events.publish(
                 event(
                     RuntimeEventType.MemoryEpisodeWritten,
-                    { episodeId, importance, ttlSeconds },
+                    {
+                        episodeId,
+                        importance,
+                        mcpCalls: normalizedProvenance.mcpCalls?.length ?? 0,
+                        skillNames: normalizedProvenance.skillNames ?? [],
+                        sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.SessionTurn,
+                        ttlSeconds,
+                    },
                     context.requestId,
                 ),
             );
@@ -632,6 +681,55 @@ export class MemoryModule extends Memory {
             );
         }
     }
+}
+
+function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): MemoryEpisodeProvenance {
+    const skillNames = uniqueStrings(provenance.skillNames ?? []).slice(0, 16);
+    const mcpCalls = (provenance.mcpCalls ?? [])
+        .filter((call) => call.server.trim() && call.tool.trim())
+        .slice(0, 8)
+        .map((call) => ({
+            error: call.error ? call.error.slice(0, 240) : undefined,
+            ok: call.ok,
+            resultSummary: call.resultSummary ? compactText(call.resultSummary, 500) : undefined,
+            server: call.server.trim(),
+            tool: call.tool.trim(),
+        }));
+    return {
+        ...(skillNames.length > 0 ? { skillNames } : {}),
+        ...(mcpCalls.length > 0 ? { mcpCalls } : {}),
+    };
+}
+
+function renderEpisodeText(
+    userText: string,
+    assistantText: string,
+    provenance: MemoryEpisodeProvenance,
+): string {
+    const lines = [
+        `[user] ${compactText(userText, 512)}`,
+        `[assistant] ${compactText(assistantText, 512)}`,
+    ];
+    if (provenance.skillNames && provenance.skillNames.length > 0) {
+        lines.push(`[skills] ${provenance.skillNames.join(", ")}`);
+    }
+    if (provenance.mcpCalls && provenance.mcpCalls.length > 0) {
+        lines.push("[mcp]");
+        for (const call of provenance.mcpCalls) {
+            const status = call.ok ? "ok" : "failed";
+            const detail = call.ok ? call.resultSummary : call.error;
+            lines.push(`- ${call.server}.${call.tool}: ${status}${detail ? `; ${detail}` : ""}`);
+        }
+    }
+    return lines.join("\n").slice(0, 2048);
+}
+
+function compactText(value: string, maxChars: number): string {
+    return value.replace(/\s+/g, " ").trim().slice(0, maxChars);
+}
+
+function uniqueStrings(values: string[]): string[] {
+    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 export function createMemory(config: FlyflorConfig, events: EventSink, model?: ModelClient): MemoryModule {
@@ -741,12 +839,16 @@ function dedupeResults(results: MemorySearchResult[]): MemorySearchResult[] {
 
 function renderMemoryPrompt(
     markdown: string,
+    projectMemory: string,
+    hippocampus: string | undefined,
     results: MemorySearchResult[],
     sessionMessages: SessionMessageRecord[],
     maxChars: number,
 ): string {
     const content = renderMemoryContextPrompt({
         markdown,
+        hippocampus: hippocampus ?? "",
+        projectMemory,
         renderedResults: results.length > 0 ? renderResults(results) : "",
         renderedSessionMessages: sessionMessages.length > 0 ? renderSessionMessages(sessionMessages) : "",
     });

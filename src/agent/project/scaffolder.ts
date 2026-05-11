@@ -2,10 +2,10 @@
  * 项目脚手架（ProjectScaffolder）。
  *
  * 当 detectExplicitIntent / detectClusterCandidate 返回非 None 的 trigger 时，
- * 在 workspace/projects/{projectId}/{README,TODO,DESIGN}.md 落盘项目骨架。
+ * 在 workspace/projects/{projectId}/{AGENTS,TODO,README}.md 落盘项目骨架，并预建项目 `.flyflor/memory`。
  *
  * 设计约束（与 docs/boundaries.md 对齐）：
- *  - 模板放 templates/projects/*.md，由 install.templates.ts 拷贝到 paths.templateDir/projects；
+ *  - 模板源文件使用小写点分名，由 install.templates.ts 拷贝到 paths.templateDir/projects；
  *  - 路径用 paths.workspaceDir/projects/{projectId}，每个 projectId 单独目录；
  *  - 文件已存在时不覆盖（幂等），便于多轮触发；
  *  - 失败发事件不抛错，调用方按 best-effort 处理。
@@ -17,8 +17,14 @@ import type { FlyflorPaths } from "../../config/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { ProjectTriggerKind, type ProjectTriggerResult } from "./index.ts";
 
-const PROJECT_FILES = ["README.md", "TODO.md", "DESIGN.md"] as const;
+const PROJECT_FILES = ["AGENTS.md", "TODO.md", "README.md"] as const;
 type ProjectFile = (typeof PROJECT_FILES)[number];
+
+const PROJECT_TEMPLATE_FILES: Record<ProjectFile, string> = {
+    "AGENTS.md": "agents.md",
+    "README.md": "readme.md",
+    "TODO.md": "todo.md",
+};
 
 export interface ProjectScaffoldInput {
     projectId: string;
@@ -59,6 +65,9 @@ export class ProjectScaffolder {
         }
         try {
             await mkdir(projectDir, { recursive: true });
+            await Promise.all(
+                ["skills", "mcp", "plugins", "memory"].map((name) => mkdir(join(projectDir, ".flyflor", name), { recursive: true })),
+            );
             for (const file of PROJECT_FILES) {
                 const targetPath = join(projectDir, file);
                 if (await Bun.file(targetPath).exists()) {
@@ -101,7 +110,7 @@ export class ProjectScaffolder {
 }
 
 async function readProjectTemplate(templateRoot: string, file: ProjectFile): Promise<string> {
-    const path = join(templateRoot, "projects", file);
+    const path = join(templateRoot, "projects", PROJECT_TEMPLATE_FILES[file]);
     const handle = Bun.file(path);
     if (!(await handle.exists())) {
         throw new Error(`Missing project template: ${path}. Run "bun run install:templates".`);

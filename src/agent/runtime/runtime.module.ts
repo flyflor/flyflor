@@ -11,6 +11,7 @@ import {
     ArchitectureLayer,
     BlackboardMode,
     BlackboardTurnStatus,
+    CapabilityExecutionKind,
     ComponentKind,
     ModelRole,
 } from "../../protocol/contracts/index.ts";
@@ -18,10 +19,20 @@ import { Runtime as RuntimeBoundary } from "../components.ts";
 import { Module, Provide } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions, renderMemoryActionPrompt } from "../../neural/memory/actions.ts";
-import { createMemory, type MemoryModule } from "../../neural/memory/index.ts";
+import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
 import { LocalHashEmbeddingProvider } from "../../neural/memory/embedding.ts";
-import { loadMcpServers } from "../mcp/index.ts";
-import { createSandboxPolicy } from "../sandbox/index.ts";
+import {
+    callMcpTool,
+    listMcpTools,
+    loadMcpServers,
+    parseMcpToolCalls,
+    renderMcpToolCatalog,
+    renderMcpToolResults,
+    type McpToolCallExecution,
+    type McpToolCatalogEntry,
+    type McpToolCallRequest,
+} from "../mcp/index.ts";
+import { createSandboxPolicy, decideCapabilityExecution } from "../sandbox/index.ts";
 import {
     loadPromptTemplates,
     renderBlackboardAdvisoryPrompt,
@@ -37,7 +48,7 @@ import {
     type BlackboardTurn,
 } from "../blackboard/index.ts";
 import { scopeFor } from "../session/index.ts";
-import { loadSkills, selectSkills } from "../../crystal/skills/index.ts";
+import { loadSkills, recordSkillUsage, selectSkills, type Skill } from "../../crystal/skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 import { extractRuntimeReflectionCandidates } from "./reflection.ts";
 import {
@@ -53,7 +64,7 @@ import {
 } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 
-export { startHumanChat } from "./chat.ts";
+export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
 interface RuntimeBlackboardRun {
     elapsedMs: number;
@@ -68,8 +79,16 @@ interface RuntimeBlackboardRun {
 }
 
 export interface RuntimeStreamOptions {
+    approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     onTextDelta?: (text: string) => void | Promise<void>;
 }
+
+interface CachedMcpToolCatalog {
+    expiresAt: number;
+    tools: McpToolCatalogEntry[];
+}
+
+const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 
 @Module({ name: "runtime", tags: ["flyflor", "boundary"] })
 @Provide({ kind: ComponentKind.Runtime, layer: ArchitectureLayer.Runtime, name: "runtime", provider: true })
@@ -78,6 +97,7 @@ export class RuntimeModule extends RuntimeBoundary {
     /** Shared embedding provider — compute once per turn, reused by memory recall + episode write. */
     private readonly embeddings: LocalHashEmbeddingProvider;
     private readonly perf: PerfMetrics;
+    private readonly mcpToolCatalogCache = new Map<string, CachedMcpToolCatalog>();
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
      * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
@@ -164,8 +184,25 @@ export class RuntimeModule extends RuntimeBoundary {
                 return r;
             }),
         ]);
-        const selectedSkills = selectSkills(skills, message.text);
+        const selectedSkills = selectRuntimeSkills(skills, context.skillNames);
+        this.events.publish(
+            event(
+                RuntimeEventType.SkillContextBuilt,
+                {
+                    requested: context.skillNames ?? [],
+                    selected: selectedSkills.map((skill) => ({
+                        name: skill.name,
+                        source: skill.source,
+                        compatibility: skill.manifest.compatibility,
+                        capabilities: skill.manifest.capabilities,
+                    })),
+                    totalLoaded: skills.length,
+                },
+                context.requestId,
+            ),
+        );
         const sandbox = createSandboxPolicy(this.config.sandbox);
+        const mcpExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.McpTool);
 
         // direct-with-watch 升级器：累计 watch / blackboard 失败计数，跨过阈值时升格为 blackboard。
         const snapshotForEscalation = this.fastRouteSnapshots.get(snapshotKey);
@@ -176,13 +213,33 @@ export class RuntimeModule extends RuntimeBoundary {
             message.route.channel,
         );
         const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
+        const mcpToolCatalog = await this.buildMcpToolCatalog(mcpServers, mcpExecution.canExecute, context.requestId);
+        this.events.publish(
+            event(
+                RuntimeEventType.McpToolCatalogBuilt,
+                {
+                    canExecute: mcpExecution.canExecute,
+                    requiresApproval: mcpExecution.requiresApproval,
+                    servers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
+                    tools: mcpToolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
+                },
+                context.requestId,
+            ),
+        );
 
         const modelMessages: ModelMessage[] = [
             {
                 role: ModelRole.System,
                 content: renderRuntimeSystemPrompt({
                     blackboardContext: renderBlackboardPrompt(blackboardRun),
-                    mcpContext: renderMcpContextPrompt({ servers: mcpServers }),
+                    mcpContext: renderMcpContextPrompt({
+                        servers: mcpServers,
+                        toolContext: renderMcpToolCatalog({
+                            canExecuteTools: sandbox.canExecuteTools,
+                            servers: mcpServers,
+                            tools: mcpToolCatalog,
+                        }),
+                    }),
                     memoryActionInstructions: renderMemoryActionPrompt(),
                     memoryContext: memoryPrompt,
                     sandboxSummary: sandbox.summary,
@@ -195,15 +252,26 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         ];
 
-        const rawText = await this.generateModelText(
+        const replyPrefix = options.onTextDelta
+            ? renderReplyStreamingPrefix(blackboardRun)
+            : renderReplyPrefix(blackboardRun);
+        const generated = await this.generateTextWithMcpTools(
             modelMessages,
-            options.onTextDelta
-                ? renderReplyStreamingPrefix(blackboardRun)
-                : renderReplyPrefix(blackboardRun),
+            replyPrefix,
             options,
+            {
+                canExecuteTools: mcpExecution.canExecute,
+                requiresApproval: mcpExecution.requiresApproval,
+                catalog: mcpToolCatalog,
+                requestId: context.requestId,
+                approveMcpToolCall: options.approveMcpToolCall,
+            },
         );
+        const selectedSkillNames = selectedSkills.map((skill) => skill.name);
+        const mcpCallProvenance = mcpExecutionsToProvenance(generated.mcpToolCalls);
+        const rawText = generated.rawText;
         const parsed = parseMemoryActions(rawText, this.config.memory.candidates.maxCandidatesPerTurn);
-        const visibleText = parsed.text || rawText;
+        const visibleText = parseMcpToolCalls(parsed.text || rawText).text || parsed.text || rawText;
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
@@ -224,13 +292,24 @@ export class RuntimeModule extends RuntimeBoundary {
                       },
                 memoryActions: parsed.actions.length,
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
+                mcpToolCalls: generated.mcpToolCalls.length,
+                mcpToolExecutions: mcpCallProvenance,
                 sandboxMode: sandbox.mode,
-                skills: selectedSkills.map((skill) => skill.name),
+                skills: selectedSkillNames,
             },
         };
 
         // Fast path: session + candidates + Redis episode (awaited, no LLM).
-        await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions);
+        await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions, {
+            mcpCalls: mcpCallProvenance,
+            skillNames: selectedSkillNames,
+        });
+        await recordSkillUsage(this.config.paths, selectedSkills, {
+            mcpCallCount: mcpCallProvenance.length,
+            mcpSuccessCount: mcpCallProvenance.filter((call) => call.ok).length,
+            now: context.now,
+            requestId: context.requestId,
+        }).catch(() => undefined);
 
         // Snapshot for next-turn fastRoute decision.
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
@@ -251,7 +330,10 @@ export class RuntimeModule extends RuntimeBoundary {
         });
 
         // Async reflection: LLM extraction + crystal write — non-blocking, after reply returned.
-        void this.scheduleReflection(message, enrichedContext, visibleText, blackboardRun);
+        void this.scheduleReflection(message, enrichedContext, visibleText, blackboardRun, {
+            mcpCalls: mcpCallProvenance,
+            skillNames: selectedSkillNames,
+        });
 
         // Async feedback classification (A/B/C/D 四通道入记忆) — fire-and-forget；首轮自动 no-op。
         void this.memory.classifyAndApplyFeedback(message, enrichedContext);
@@ -347,9 +429,16 @@ export class RuntimeModule extends RuntimeBoundary {
         context: RuntimeContext,
         visibleText: string,
         blackboardRun: RuntimeBlackboardRun | undefined,
+        provenance: MemoryEpisodeProvenance,
     ): Promise<void> {
         try {
-            const candidates = await this.extractReflectionCandidates(message, context, visibleText, blackboardRun);
+            const candidates = await this.extractReflectionCandidates(
+                message,
+                context,
+                visibleText,
+                blackboardRun,
+                provenance,
+            );
             if (candidates.length > 0) {
                 await this.memory.applyReflection(candidates, context);
             }
@@ -401,6 +490,180 @@ export class RuntimeModule extends RuntimeBoundary {
             await options.onTextDelta(tail);
         }
         return rawText;
+    }
+
+    private async generateTextWithMcpTools(
+        messages: ModelMessage[],
+        replyPrefix: string,
+        options: RuntimeStreamOptions,
+        mcp: {
+            canExecuteTools: boolean;
+            requiresApproval: boolean;
+            catalog: McpToolCatalogEntry[];
+            approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
+            requestId: string;
+        },
+    ): Promise<{ rawText: string; mcpToolCalls: McpToolCallExecution[] }> {
+        if (!mcp.canExecuteTools || mcp.catalog.length === 0) {
+            return {
+                rawText: await this.generateModelText(messages, replyPrefix, options),
+                mcpToolCalls: [],
+            };
+        }
+
+        const initial = await this.model.generate(messages);
+        const parsedCalls = parseMcpToolCalls(initial);
+        if (parsedCalls.calls.length === 0) {
+            if (options.onTextDelta) {
+                await options.onTextDelta(`${replyPrefix}${filterVisibleMemoryActionText(parsedCalls.text || initial)}`);
+            }
+            return {
+                rawText: parsedCalls.text || initial,
+                mcpToolCalls: [],
+            };
+        }
+
+        const executions = await this.executeMcpToolCalls(
+            parsedCalls.calls,
+            mcp.catalog,
+            mcp.requestId,
+            mcp.requiresApproval,
+            mcp.approveMcpToolCall,
+        );
+        const finalMessages: ModelMessage[] = [
+            ...messages,
+            {
+                role: ModelRole.Assistant,
+                content: parsedCalls.text || initial,
+            },
+            {
+                role: ModelRole.Tool,
+                content: renderMcpToolResults(executions),
+            },
+        ];
+        return {
+            rawText: await this.generateModelText(finalMessages, replyPrefix, options),
+            mcpToolCalls: executions,
+        };
+    }
+
+    private async buildMcpToolCatalog(
+        servers: Awaited<ReturnType<typeof loadMcpServers>>,
+        canExecuteTools: boolean,
+        requestId: string,
+    ): Promise<McpToolCatalogEntry[]> {
+        if (!canExecuteTools) {
+            return [];
+        }
+        const entries: McpToolCatalogEntry[] = [];
+        for (const server of servers) {
+            if (!server.enabled || (!server.url && !server.command)) {
+                continue;
+            }
+            const cacheKey = mcpCatalogCacheKey(server);
+            const cached = this.mcpToolCatalogCache.get(cacheKey);
+            if (cached && cached.expiresAt > Date.now()) {
+                entries.push(...cached.tools);
+                continue;
+            }
+            try {
+                const tools = await listMcpTools(this.config.paths, server, {
+                    events: this.events,
+                    requestId,
+                    timeoutMs: 1_500,
+                });
+                const serverEntries = tools.map((tool) => ({ server: server.name, tool }));
+                this.mcpToolCatalogCache.set(cacheKey, {
+                    expiresAt: Date.now() + MCP_TOOL_CATALOG_CACHE_TTL_MS,
+                    tools: serverEntries,
+                });
+                entries.push(...serverEntries);
+            } catch {
+                // Tool discovery is best-effort; failed servers stay configured but are not offered this turn.
+            }
+        }
+        return entries;
+    }
+
+    private async executeMcpToolCalls(
+        calls: McpToolCallRequest[],
+        catalog: McpToolCatalogEntry[],
+        requestId: string,
+        requiresApproval: boolean,
+        approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+    ): Promise<McpToolCallExecution[]> {
+        const catalogKeys = new Set(catalog.map((entry) => `${entry.server}.${entry.tool.name}`));
+        const servers = await loadMcpServers(this.config.paths);
+        const executions: McpToolCallExecution[] = [];
+        for (const call of calls) {
+            const key = `${call.server}.${call.tool}`;
+            const server = servers.find((candidate) => candidate.name === call.server);
+            if (!catalogKeys.has(key) || !server) {
+                const execution = {
+                    call,
+                    ok: false,
+                    error: `MCP tool is not available this turn: ${key}`,
+                };
+                executions.push(execution);
+                this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
+                continue;
+            }
+            if (requiresApproval) {
+                const approved = approveMcpToolCall ? await approveMcpToolCall(call) : false;
+                if (!approved) {
+                    const execution = {
+                        call,
+                        ok: false,
+                        error: `MCP tool call was not approved: ${key}`,
+                    };
+                    executions.push(execution);
+                    this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
+                    continue;
+                }
+            }
+            try {
+                const execution = {
+                    call,
+                    ok: true,
+                    result: await callMcpTool(this.config.paths, server, call.tool, call.input, {
+                        events: this.events,
+                        requestId,
+                        timeoutMs: 8_000,
+                    }),
+                };
+                executions.push(execution);
+                this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
+            } catch (error) {
+                const execution = {
+                    call,
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                };
+                executions.push(execution);
+                this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
+            }
+        }
+        return executions;
+    }
+
+    private publishMcpToolCallExecution(
+        execution: McpToolCallExecution,
+        requestId: string,
+        requiresApproval: boolean,
+    ): void {
+        this.events.publish(
+            event(
+                RuntimeEventType.McpToolCallExecuted,
+                {
+                    error: execution.error,
+                    ok: execution.ok,
+                    requiresApproval,
+                    server: execution.call.server,
+                    tool: execution.call.tool,
+                },
+                requestId,
+            ),
+        );
     }
 
     private async runBlackboard(
@@ -533,8 +796,9 @@ export class RuntimeModule extends RuntimeBoundary {
         context: RuntimeContext,
         visibleText: string,
         blackboardRun: RuntimeBlackboardRun | undefined,
+        provenance: MemoryEpisodeProvenance,
     ) {
-        if (!shouldExtractReflection(blackboardRun)) {
+        if (!shouldExtractReflection(blackboardRun, provenance.mcpCalls)) {
             return [];
         }
         return extractRuntimeReflectionCandidates(this.model, {
@@ -561,6 +825,8 @@ export class RuntimeModule extends RuntimeBoundary {
             request: message.text,
             requestId: context.requestId,
             route: readRouteMetadata(blackboardRun?.metadata),
+            mcpCalls: provenance.mcpCalls,
+            skillNames: provenance.skillNames,
         });
     }
 }
@@ -687,10 +953,14 @@ function normalBlackboardContract(): RuntimeBlackboardRouteDecision["blackboardC
     };
 }
 
-function shouldExtractReflection(run: RuntimeBlackboardRun | undefined): boolean {
-    if (!run) {
-        return false;
+function shouldExtractReflection(
+    run: RuntimeBlackboardRun | undefined,
+    mcpCalls: MemoryEpisodeProvenance["mcpCalls"] = [],
+): boolean {
+    if ((mcpCalls ?? []).some((call) => call.ok)) {
+        return true;
     }
+    if (!run) return false;
     const route = readRouteMetadata(run.metadata);
     return run.mode === BlackboardMode.Blackboard || route?.needsReflectionCandidate === true;
 }
@@ -890,34 +1160,83 @@ function filterVisibleMemoryActionText(text: string): string {
     return `${filter.push(text)}${filter.finish()}`;
 }
 
+function mcpCatalogCacheKey(server: Awaited<ReturnType<typeof loadMcpServers>>[number]): string {
+    return JSON.stringify({
+        args: server.args ?? [],
+        command: server.command,
+        env: server.env ?? {},
+        name: server.name,
+        source: server.source,
+        transport: server.transport,
+        url: server.url,
+    });
+}
+
+function mcpExecutionsToProvenance(
+    executions: McpToolCallExecution[],
+): NonNullable<MemoryEpisodeProvenance["mcpCalls"]> {
+    return executions.map((execution) => ({
+        error: execution.error ? execution.error.slice(0, 240) : undefined,
+        ok: execution.ok,
+        resultSummary: execution.result ? summarizeMcpResult(execution.result.raw) : undefined,
+        server: execution.call.server,
+        tool: execution.call.tool,
+    }));
+}
+
+function summarizeMcpResult(value: unknown): string {
+    if (typeof value === "string") {
+        return value.replace(/\s+/g, " ").trim().slice(0, 500);
+    }
+    return JSON.stringify(value)
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 500);
+}
+
+function selectRuntimeSkills(
+    skills: Skill[],
+    requestedNames: string[] | undefined,
+): Skill[] {
+    const requested = new Set((requestedNames ?? []).map((name) => name.trim()).filter(Boolean));
+    if (requested.size === 0) {
+        return selectSkills(skills);
+    }
+
+    const explicit = skills.filter((skill) => requested.has(skill.name));
+    const explicitNames = new Set(explicit.map((skill) => skill.name));
+    const automatic = selectSkills(skills).filter((skill) => !explicitNames.has(skill.name));
+    return [...explicit, ...automatic].slice(0, 4);
+}
+
 class MemoryActionVisibilityFilter {
     private buffer = "";
-    private hidden = false;
+    private hiddenClose: string | undefined;
 
     push(chunk: string): string {
         this.buffer += chunk;
         let output = "";
         while (this.buffer) {
-            if (this.hidden) {
-                const closeIndex = this.buffer.indexOf("</flyflor_memory_actions>");
+            if (this.hiddenClose) {
+                const closeIndex = this.buffer.indexOf(this.hiddenClose);
                 if (closeIndex < 0) {
-                    this.buffer = keepSuffix(this.buffer, "</flyflor_memory_actions>");
+                    this.buffer = keepSuffix(this.buffer, this.hiddenClose);
                     return output;
                 }
-                this.buffer = this.buffer.slice(closeIndex + "</flyflor_memory_actions>".length);
-                this.hidden = false;
+                this.buffer = this.buffer.slice(closeIndex + this.hiddenClose.length);
+                this.hiddenClose = undefined;
                 continue;
             }
 
-            const openIndex = this.buffer.indexOf("<flyflor_memory_actions>");
-            if (openIndex >= 0) {
-                output += this.buffer.slice(0, openIndex);
-                this.buffer = this.buffer.slice(openIndex + "<flyflor_memory_actions>".length);
-                this.hidden = true;
+            const nextBlock = findHiddenProtocolBlock(this.buffer);
+            if (nextBlock) {
+                output += this.buffer.slice(0, nextBlock.index);
+                this.buffer = this.buffer.slice(nextBlock.index + nextBlock.open.length);
+                this.hiddenClose = nextBlock.close;
                 continue;
             }
 
-            const emitLength = Math.max(0, this.buffer.length - "<flyflor_memory_actions>".length + 1);
+            const emitLength = Math.max(0, this.buffer.length - HIDDEN_PROTOCOL_MAX_OPEN_LENGTH + 1);
             if (emitLength === 0) {
                 return output;
             }
@@ -928,11 +1247,32 @@ class MemoryActionVisibilityFilter {
     }
 
     finish(): string {
-        const output = this.hidden ? "" : this.buffer;
+        const output = this.hiddenClose ? "" : this.buffer;
         this.buffer = "";
-        this.hidden = false;
+        this.hiddenClose = undefined;
         return output;
     }
+}
+
+const HIDDEN_PROTOCOL_BLOCKS = [
+    { open: "<flyflor_memory_actions>", close: "</flyflor_memory_actions>" },
+    { open: "<flyflor_mcp_calls>", close: "</flyflor_mcp_calls>" },
+] as const;
+
+const HIDDEN_PROTOCOL_MAX_OPEN_LENGTH = Math.max(...HIDDEN_PROTOCOL_BLOCKS.map((block) => block.open.length));
+
+function findHiddenProtocolBlock(buffer: string): { close: string; index: number; open: string } | undefined {
+    let found: { close: string; index: number; open: string } | undefined;
+    for (const block of HIDDEN_PROTOCOL_BLOCKS) {
+        const index = buffer.indexOf(block.open);
+        if (index < 0) {
+            continue;
+        }
+        if (!found || index < found.index) {
+            found = { close: block.close, index, open: block.open };
+        }
+    }
+    return found;
 }
 
 function keepSuffix(value: string, token: string): string {

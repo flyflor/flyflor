@@ -11,7 +11,7 @@
  *     某 userId 下若存在一组 episode：
  *       - cluster_size >= projectInitThreshold（默认 5）
  *       - 跨越 ≥ 2 次不同 turn（用 createdAt 离散度近似）
- *       - 至少有 1 条 sourceKind = blackboard-converged
+ *       - 至少有 1 条 sourceKind = blackboard-converged 或 mcp-augmented
  *       - cluster evidence_score > 0.5
  *     → 触发 project-candidate（由调用方通过 decision form 询问用户确认）。
  *
@@ -26,6 +26,7 @@
 
 import type { MemoryAction } from "../../neural/memory/actions.ts";
 import type { EpisodeRecord } from "../../neural/memory/redis.ts";
+import { MemorySourceKind } from "../../protocol/contracts/index.ts";
 
 export const ProjectTriggerKind = {
     ExplicitProject: "explicit-project",
@@ -121,7 +122,9 @@ export function detectClusterCandidate(
             rationale: "single-turn-cluster",
         };
     }
-    const hasConverged = cluster.episodes.some((e) => e.sourceKind === "blackboard-converged");
+    const hasConverged = cluster.episodes.some(
+        (e) => e.sourceKind === MemorySourceKind.BlackboardConverged || e.sourceKind === MemorySourceKind.McpAugmented,
+    );
     if (!hasConverged) {
         return {
             kind: ProjectTriggerKind.None,
@@ -153,7 +156,9 @@ export function clusterEvidenceScore(cluster: ConceptCluster): number {
     let convergedBoost = 0;
     for (const ep of cluster.episodes) {
         total += clamp01(ep.importance);
-        if (ep.sourceKind === "blackboard-converged") convergedBoost += 0.1;
+        if (ep.sourceKind === MemorySourceKind.BlackboardConverged || ep.sourceKind === MemorySourceKind.McpAugmented) {
+            convergedBoost += 0.1;
+        }
     }
     return clamp01(total / cluster.episodes.length + convergedBoost);
 }

@@ -14,8 +14,11 @@
 
 ## 目录映射
 
-- `./docker/config` → 容器内 `/root/.flyflor`（global config、secrets、templates）。
 - `./` → 容器内 `/workspace`（dev 源码挂载，便于热替换）。
+- `./docker/config` → 容器内 `/root/.flyflor`（global config、secrets、templates）。
+- `./docker/workspace` → 容器内 `/root/.flyflor/workspace`（默认项目根；局部状态写入 `./docker/workspace/.flyflor`）。
+- `./docker/skills` → 容器内 `/root/.flyflor/skills`（显式 `--global` 的全局技能包目录）。
+- `./docker/mcp` → 容器内 `/root/.flyflor/mcp`（显式 `--global` 的 MCP server 配置和状态目录）。
 - `./dist/flyflor-linux` → 容器内 `/mounted/flyflor-linux:ro`（已编译的 Linux 二进制）。
 - 具名卷 `flyflor_data` → `/root/.local/share/flyflor`（会话/记忆持久数据）。
 

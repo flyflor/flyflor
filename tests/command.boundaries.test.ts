@@ -87,6 +87,48 @@ describe("Command boundary", () => {
         expect(parseFlyflorCommand(["bun", "flyflor", "plugins", "rm", "demo"])).toBeUndefined();
         expect(parseFlyflorCommand(["bun", "flyflor", "plugins", "ls"])).toBeUndefined();
         expect(parseFlyflorCommand(["bun", "flyflor", "skills", "ls"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "skills", "list", "--json"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "skills", "show", "demo"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "skills", "validate", "demo"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "skills", "usage", "demo", "--json"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "chat", "--accept-hooks", "--query", "hello"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "gateway", "run", "--accept-hooks"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "ls"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "show", "filesystem"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "validate"])).toBeUndefined();
+        expect(
+            parseFlyflorCommand([
+                "bun",
+                "flyflor",
+                "mcp",
+                "add",
+                "filesystem",
+                "--command",
+                "bunx",
+                "--args",
+                "mcp-server-filesystem",
+                "/tmp",
+                "--env",
+                "TOKEN=test",
+                "--global",
+            ]),
+        ).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "tools", "filesystem"])).toBeUndefined();
+        expect(
+            parseFlyflorCommand([
+                "bun",
+                "flyflor",
+                "mcp",
+                "call",
+                "filesystem",
+                "read_file",
+                "--input",
+                '{"path":"/tmp/demo"}',
+            ]),
+        ).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "enable", "filesystem"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "disable", "filesystem"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "remove", "filesystem"])).toBeUndefined();
         expect(parseFlyflorCommand(["bun", "flyflor", "dream", "status"])).toBeUndefined();
     });
 
@@ -165,6 +207,9 @@ describe("Command boundary", () => {
         expect(output).toContain('"api"');
         expect(output).toContain('"webhook"');
         expect(output).toContain('"stdio"');
+        expect(output).toContain('"mcpToolApproval": "deny"');
+        expect(output).toContain('"shellHookApproval": "deny"');
+        expect(output).toContain('"pluginApproval": "deny"');
         expect(output).not.toContain("process.env");
     });
 

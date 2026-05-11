@@ -1,5 +1,6 @@
 import {
     RuntimeModule,
+    promptApproveMcpToolCall,
     BlackboardModule,
     createChannelAdapters,
     GatewayModule,
@@ -111,7 +112,9 @@ export class FlyFlor {
             return;
         }
 
-        await startHumanChat(this.dependencies.runtime);
+        await startHumanChat(this.dependencies.runtime, {
+            approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+        });
     }
 
     resolve<TValue>(token: InjectionToken<TValue>): TValue {

@@ -154,6 +154,8 @@ function normalizeSignals(value: unknown): MemoryActionSignals {
         durability: clamp01(numberValue(value.durability)),
         recurrence: clamp01(numberValue(value.recurrence)),
         relevance: clamp01(numberValue(value.relevance)),
+        projectIntent: clamp01(numberValue(value.projectIntent)),
+        eventIntent: clamp01(numberValue(value.eventIntent)),
         sourceDiversity: clamp01(numberValue(value.sourceDiversity)),
         validationCount: clamp01(numberValue(value.validationCount)),
     };

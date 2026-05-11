@@ -1,13 +1,13 @@
 # {{title}}
 
-> Project scaffolded by Flyflor on {{createdAt}} (trigger: {{trigger}}).
+Project scaffolded by Flyflor on {{createdAt}}.
 
 ## Goal
 
 {{goal}}
 
-## Notes
+## Files
 
-- Project id: `{{projectId}}`
-- Originating user: `{{userId}}`
-- Related episode ids: {{relatedIds}}
+- `AGENTS.md` - shared instructions for AI coding agents.
+- `TODO.md` - active project backlog.
+- `.flyflor/` - Flyflor-local skills, MCP, plugins, and project metadata.

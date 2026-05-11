@@ -19,6 +19,7 @@ import {
     detectSkillPromotion,
     ProjectTriggerKind,
 } from "../src/agent/project/index.ts";
+import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { EpisodeRecord } from "../src/neural/memory/redis.ts";
 
 const HOUR = 3_600_000;
@@ -235,7 +236,7 @@ describe("project triggers (three paths, no string match)", () => {
         const result = detectClusterCandidate({
             concepts: ["x"],
             episodes: Array.from({ length: 6 }, () =>
-                ep({ sourceKind: "blackboard-converged", importance: 0.9 }),
+                ep({ sourceKind: MemorySourceKind.BlackboardConverged, importance: 0.9 }),
             ),
         });
         expect(result.kind).toBe(ProjectTriggerKind.None);
@@ -246,7 +247,7 @@ describe("project triggers (three paths, no string match)", () => {
         const result = detectClusterCandidate({
             concepts: ["x"],
             episodes: Array.from({ length: 6 }, (_, i) =>
-                ep({ createdAt: NOW + i * 24 * HOUR, sourceKind: "session-turn" }),
+                ep({ createdAt: NOW + i * 24 * HOUR, sourceKind: MemorySourceKind.SessionTurn }),
             ),
         });
         expect(result.kind).toBe(ProjectTriggerKind.None);
@@ -258,7 +259,7 @@ describe("project triggers (three paths, no string match)", () => {
             ep({
                 createdAt: NOW + i * 24 * HOUR,
                 importance: 0.7,
-                sourceKind: i === 0 ? "blackboard-converged" : "session-turn",
+                sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.SessionTurn,
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes });
@@ -266,12 +267,24 @@ describe("project triggers (three paths, no string match)", () => {
         expect(result.relatedIds.length).toBe(6);
     });
 
+    test("path B: MCP augmented evidence can trigger project candidate", () => {
+        const episodes = Array.from({ length: 6 }, (_, i) =>
+            ep({
+                createdAt: NOW + i * 24 * HOUR,
+                importance: 0.72,
+                sourceKind: i === 0 ? MemorySourceKind.McpAugmented : MemorySourceKind.SessionTurn,
+            }),
+        );
+        const result = detectClusterCandidate({ concepts: ["x"], episodes });
+        expect(result.kind).toBe(ProjectTriggerKind.ClusterCandidate);
+    });
+
     test("path B: evidence below threshold returns none", () => {
         const episodes = Array.from({ length: 6 }, (_, i) =>
             ep({
                 createdAt: NOW + i * 24 * HOUR,
                 importance: 0.05,
-                sourceKind: i === 0 ? "blackboard-converged" : "session-turn",
+                sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.SessionTurn,
             }),
         );
         const result = detectClusterCandidate(

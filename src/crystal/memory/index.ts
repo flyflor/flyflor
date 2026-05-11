@@ -140,6 +140,7 @@ function candidateFromPromotedMemory(record: MemoryRecord, now: string) {
         ],
         metadata: {
             memoryKind: record.kind,
+            memoryMetadata: record.metadata ?? {},
             scope: record.scope,
         },
     });

@@ -9,10 +9,12 @@ Flyflor 的原则是约定大于配置：能用协议、schema、枚举、状态
 | 源目录              | 安装目录                           | 是否进入用户工作区 | 作用                                                         |
 | ------------------- | ---------------------------------- | ------------------ | ------------------------------------------------------------ |
 | `templates/prompts` | `~/.flyflor/prompts`               | 否                 | 模型上下文模板，按 turn 动态装配                             |
-| `templates/memory`  | `~/.flyflor/templates/memory`      | 否                 | `self.md`、`soul.md`、`user.md`、`memory.md` 的初始模板      |
+| `templates/memory`  | `~/.flyflor/templates/memory`      | 否                 | `SELF.md`、`SOUL.md`、`USER.md`、`MEMORY.md` 的初始模板      |
+| `templates/projects` | `~/.flyflor/templates/projects`   | 否                 | `agents.md`、`todo.md`、`readme.md`、`project.memory.md` 项目骨架和局部记忆模板 |
 | 无                  | `~/.flyflor/workspace/*.md`        | 是                 | 用户可编辑的长期记忆文件，由 memory 模板首次初始化后独立演化 |
 | `templates/prompts` | `./docker/config/prompts`          | 否                 | Docker dev 容器内 `/root/.flyflor/prompts`                   |
 | `templates/memory`  | `./docker/config/templates/memory` | 否                 | Docker dev 容器内 `/root/.flyflor/templates/memory`          |
+| `templates/projects` | `./docker/config/templates/projects` | 否              | Docker dev 容器内 `/root/.flyflor/templates/projects`        |
 
 ## 安装命令
 
@@ -44,10 +46,10 @@ Flyflor 的原则是约定大于配置：能用协议、schema、枚举、状态
 
 | 模板        | 初始化目标                       | 最小职责                                 | 自动分配方式                                                     |
 | ----------- | -------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
-| `self.md`   | `~/.flyflor/workspace/SELF.md`   | Flyflor 自我模型和运行身份的初始文本     | `MarkdownMemoryStore.initialize` 发现目标文件缺失时复制          |
-| `soul.md`   | `~/.flyflor/workspace/SOUL.md`   | 长期语气、行为原则和稳定画像的初始文本   | `targetFileForMemoryAction` 接受 `target: "soul"` 后追加到该文件 |
-| `user.md`   | `~/.flyflor/workspace/USER.md`   | 用户画像、偏好和长期习惯的初始文本       | `targetFileForMemoryAction` 接受 `target: "user"` 后追加到该文件 |
-| `memory.md` | `~/.flyflor/workspace/MEMORY.md` | 项目事实、长期上下文和决策记录的初始文本 | 默认长期事实写入目标，SQLite/Qdrant 只做索引和召回               |
+| `SELF.md`   | `~/.flyflor/workspace/SELF.md`   | Flyflor 自我模型和运行身份的初始文本     | `MarkdownMemoryStore.initialize` 发现目标文件缺失时复制          |
+| `SOUL.md`   | `~/.flyflor/workspace/SOUL.md`   | 长期语气、行为原则和稳定画像的初始文本   | `targetFileForMemoryAction` 接受 `target: "soul"` 后追加到该文件 |
+| `USER.md`   | `~/.flyflor/workspace/USER.md`   | 用户画像、偏好和长期习惯的初始文本       | `targetFileForMemoryAction` 接受 `target: "user"` 后追加到该文件 |
+| `MEMORY.md` | `~/.flyflor/workspace/MEMORY.md` | 项目事实、长期上下文和决策记录的初始文本 | 默认长期事实写入目标，SQLite/Qdrant 只做索引和召回               |
 
 ## 引用关系
 

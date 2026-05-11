@@ -284,6 +284,12 @@ async function buildConfig(): Promise<FlyflorConfig> {
         configDir: home,
         storageDir: join(home, "storage"),
         cacheDir: join(home, "cache"),
+        projectDir: join(home, "project"),
+        projectFlyflorDir: join(home, "project", ".flyflor"),
+        projectSkillDir: join(home, "project", ".flyflor", "skills"),
+        projectMcpDir: join(home, "project", ".flyflor", "mcp"),
+        projectPluginDir: join(home, "project", ".flyflor", "plugins"),
+        projectMemoryDir: join(home, "project", ".flyflor", "memory"),
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(home, "memory"),
@@ -295,9 +301,15 @@ async function buildConfig(): Promise<FlyflorConfig> {
     };
     await mkdir(paths.promptDir, { recursive: true });
     await mkdir(join(paths.templateDir, "memory"), { recursive: true });
+    await mkdir(join(paths.templateDir, "projects"), { recursive: true });
     const promptSrc = join(import.meta.dir, "..", "templates", "prompts");
     const memSrc = join(import.meta.dir, "..", "templates", "memory");
-    for (const [src, dst] of [[promptSrc, paths.promptDir], [memSrc, join(paths.templateDir, "memory")]] as const) {
+    const projectSrc = join(import.meta.dir, "..", "templates", "projects");
+    for (const [src, dst] of [
+        [promptSrc, paths.promptDir],
+        [memSrc, join(paths.templateDir, "memory")],
+        [projectSrc, join(paths.templateDir, "projects")],
+    ] as const) {
         const entries = await readdir(src, { withFileTypes: true });
         await Promise.all(
             entries.filter((e) => e.isFile()).map((e) => copyFile(join(src, e.name), join(dst, e.name))),

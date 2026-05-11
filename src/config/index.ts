@@ -10,6 +10,8 @@ import {
     ModelProviderKind,
     type ModelProviderKind as ModelProviderKindType,
     SandboxMode,
+    ToolApprovalMode,
+    type ToolApprovalMode as ToolApprovalModeType,
 } from "../protocol/contracts/index.ts";
 
 export interface FlyflorConfig {
@@ -22,11 +24,24 @@ export interface FlyflorConfig {
     sandbox: SandboxConfig;
 }
 
+export interface FlyflorConfigLoadOptions {
+    model?: {
+        providerId?: string;
+        model?: string;
+    };
+}
+
 export interface FlyflorPaths {
     home: string;
     configDir: string;
     storageDir: string;
     cacheDir: string;
+    projectDir: string;
+    projectFlyflorDir: string;
+    projectSkillDir: string;
+    projectMcpDir: string;
+    projectPluginDir: string;
+    projectMemoryDir: string;
     workspaceDir: string;
     logDir: string;
     memoryDir: string;
@@ -299,6 +314,9 @@ export interface MemoryWeightConfig {
 
 export interface SandboxConfig {
     mode: SandboxMode;
+    mcpToolApproval?: ToolApprovalModeType;
+    pluginApproval?: ToolApprovalModeType;
+    shellHookApproval?: ToolApprovalModeType;
 }
 
 /**
@@ -349,17 +367,20 @@ interface ProviderProfileConfig extends ModelProviderConfig {
     apiBase?: string;
 }
 
-export async function loadConfig(): Promise<FlyflorConfig> {
+export async function loadConfig(options: FlyflorConfigLoadOptions = {}): Promise<FlyflorConfig> {
     const paths = resolvePaths();
-    return loadConfigForPaths(paths);
+    return loadConfigForPaths(paths, options);
 }
 
-export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorConfig> {
+export async function loadConfigForPaths(
+    paths: FlyflorPaths,
+    options: FlyflorConfigLoadOptions = {},
+): Promise<FlyflorConfig> {
     await ensureDirectories(paths);
 
     const configFile = await readConfigFile(paths.configDir);
 
-    const model = resolveModelConfig(normalizeModelRegistryConfig(configFile));
+    const model = resolveModelConfig(applyModelOverrides(normalizeModelRegistryConfig(configFile), options.model));
     const memory = mergeMemoryConfig(createDefaultMemoryConfig(), configFile.memory);
 
     const gateway = mergeGatewayConfig(
@@ -376,6 +397,9 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
 
     const sandbox: SandboxConfig = {
         mode: SandboxMode.Off,
+        mcpToolApproval: ToolApprovalMode.Deny,
+        pluginApproval: ToolApprovalMode.Deny,
+        shellHookApproval: ToolApprovalMode.Deny,
         ...configFile.sandbox,
     };
 
@@ -395,6 +419,20 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
     };
 
     return { gateway, memory, metrics, model, paths, routing, sandbox };
+}
+
+function applyModelOverrides(
+    config: ModelRegistryConfig | undefined,
+    override: FlyflorConfigLoadOptions["model"] | undefined,
+): ModelRegistryConfig | undefined {
+    if (!override?.providerId && !override?.model) {
+        return config;
+    }
+    return {
+        ...(config ?? {}),
+        activeProvider: override.providerId ?? config?.activeProvider,
+        activeModel: override.model ?? config?.activeModel,
+    };
 }
 
 function createDefaultChannelConfigs(): ChannelConfigs {
@@ -781,12 +819,20 @@ function resolvePaths(): FlyflorPaths {
     const home = join(homedir(), ".flyflor");
     const xdgData = env("XDG_DATA_HOME") ?? join(homedir(), ".local", "share");
     const xdgCache = env("XDG_CACHE_HOME") ?? join(homedir(), ".cache");
+    const projectDir = process.cwd();
+    const projectFlyflorDir = join(projectDir, ".flyflor");
 
     return {
         home,
         configDir: home,
         storageDir: join(xdgData, "flyflor"),
         cacheDir: join(xdgCache, "flyflor"),
+        projectDir,
+        projectFlyflorDir,
+        projectSkillDir: join(projectFlyflorDir, "skills"),
+        projectMcpDir: join(projectFlyflorDir, "mcp"),
+        projectPluginDir: join(projectFlyflorDir, "plugins"),
+        projectMemoryDir: join(projectFlyflorDir, "memory"),
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(xdgData, "flyflor", "memory"),
@@ -799,7 +845,22 @@ function resolvePaths(): FlyflorPaths {
 }
 
 async function ensureDirectories(paths: FlyflorPaths): Promise<void> {
-    await Promise.all(Object.values(paths).map((path) => mkdir(path, { recursive: true })));
+    await Promise.all(
+        [
+            paths.home,
+            paths.configDir,
+            paths.storageDir,
+            paths.cacheDir,
+            paths.workspaceDir,
+            paths.logDir,
+            paths.memoryDir,
+            paths.pluginDir,
+            paths.promptDir,
+            paths.skillDir,
+            paths.templateDir,
+            paths.mcpDir,
+        ].map((path) => mkdir(path, { recursive: true })),
+    );
 }
 
 async function readConfigFile(configDir: string): Promise<ConfigFileShape> {

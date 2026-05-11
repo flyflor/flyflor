@@ -11,7 +11,7 @@
 | 时间尺度 | 短期（一次对话窗口） | 长期（跨多次对话） |
 | 边界来源 | Gateway 路由元组 `(channel, accountId, chatId, threadId)` | 概念聚类 / 显式意图 / 技能升格 |
 | 触发方式 | 自动（每条消息进入即归属一个 session） | 三路径触发（A 显式 / B cluster / C skill） |
-| 存储位置 | SQLite 表：`sessions` / `session_messages` / `session_history` | `~/.flyflor/workspace/projects/{projectId}/{README,TODO,DESIGN}.md` + SurrealDB `projectRef` 反向标记 |
+| 存储位置 | SQLite 表：`sessions` / `session_messages` / `session_history` | `~/.flyflor/workspace/projects/{projectId}/{AGENTS,TODO,README}.md` + 项目 `.flyflor/memory/` + SurrealDB `projectRef` 反向标记 |
 | LLM 介入 | 无（纯结构化索引） | 有（cluster 评分 + 决策表单确认） |
 | 数量级 | 多（每个聊天窗口一个） | 少（高价值聚类才创建） |
 | 是否可删 | 否（runtime 与 memory 都依赖） | 否（已是单独模块） |
@@ -45,7 +45,17 @@
 
 1. **触发器（`detectExplicitIntent` / `detectClusterCandidate` / `detectSkillPromotion`）** — 三条独立路径判定"这堆 episode 是否值得固化为一个长期项目"。判定全部走数值（intent score / cluster size / converged 比例 / support / confidence），**零字符串匹配**。
 
-2. **Scaffolder（`ProjectScaffolder.scaffold`）** — 触发命中后，在 `~/.flyflor/workspace/projects/{projectId}/` 创建 `README.md`、`TODO.md`、`DESIGN.md`（来自 `templates/projects/`），并发布 `ProjectScaffolded` 事件。幂等：projectId 由 stable hash 决定，重复触发只会 skip。
+2. **Scaffolder（`ProjectScaffolder.scaffold`）** — 触发命中后，在 `~/.flyflor/workspace/projects/{projectId}/` 创建 `AGENTS.md`、`TODO.md`、`README.md`（来自 `templates/projects/`），并预建 `.flyflor/{skills,mcp,plugins,memory}`。`AGENTS.md` 采用 AI 工具体系通用约定，Flyflor 私有状态放入项目 `.flyflor/`。幂等：projectId 由 stable hash 决定，重复触发只会 skip。
+
+3. **ProjectMemoryStore** — 当同一轮 memory action 带有结构化 `signals.projectIntent` 并触发 project 固化时，把候选写入当前启动项目的 `.flyflor/memory/project.memory.md`，同时写 `episodes.jsonl`、`candidates.jsonl`、`events.jsonl`、`recalls.jsonl` 和 `manifest.json` 形成闭环证据链。项目局部记忆参与下一轮 prompt，排在全局 Markdown 记忆之前，并作为 Crystal Memory 的候选来源之一。
+
+Project memory 的闭环必须保留：
+
+- 模型同轮返回的结构化 memory action。
+- project trigger 的 `kind`、`score`、`rationale` 和相关证据 id。
+- candidate/write/recall receipt，包含 request id、source message id、reply id、目标文件路径和写入状态。
+- runtime event 摘要，便于 CLI、日志和后续调试界面观察。
+- Crystal Memory provenance metadata，至少包括 project id、project dir、project memory path 和 memory layer。
 
 > Project 不知道 session 是什么，只通过 `EpisodeRecord.episodeId` 间接关联。
 
@@ -53,7 +63,7 @@
 
 - **粒度不同**：一个用户在一天内可能开 20 个 session（来自不同 channel / chat 窗口），但只产生 0–2 个真正值得 scaffold 的 project。如果 session = project，每条聊天都会触发 README 生成，workspace 会爆炸。
 - **生命周期不同**：session 随 channel 自然存在，关闭聊天窗口就不再活跃；project 是用户/agent 主动认定的"我要持续推进的事情"，会跨越多个 session。
-- **存储介质不同**：session 是 SQLite 索引（高频读写），project 是 Markdown 文件 + SurrealDB 节点（低频读写、人可读）。
+- **存储介质不同**：session 是 SQLite 索引（高频读写），project 是通用 `AGENTS.md/TODO.md/README.md` + `.flyflor/memory` + SurrealDB 节点（低频读写、人可读、可被其他 AI 工具复用）。
 - **LLM 成本不同**：session 路径 0 LLM 调用；project 路径要 LLM 评估 cluster 证据，所以不能让每个 message 都走 project trigger。
 
 ## 代码地图

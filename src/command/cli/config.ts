@@ -425,6 +425,9 @@ export function buildConfigJsonc(input: {
         },
         sandbox: {
             mode: "off",
+            mcpToolApproval: "deny",
+            shellHookApproval: "deny",
+            pluginApproval: "deny",
         },
     };
 

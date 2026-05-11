@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, copyFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, copyFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../src/config/index.ts";
@@ -31,6 +31,12 @@ async function buildPaths(): Promise<FlyflorPaths> {
         configDir: join(root, "home"),
         storageDir: join(root, "data"),
         cacheDir: join(root, "cache"),
+        projectDir: join(root, "project"),
+        projectFlyflorDir: join(root, "project", ".flyflor"),
+        projectSkillDir: join(root, "project", ".flyflor", "skills"),
+        projectMcpDir: join(root, "project", ".flyflor", "mcp"),
+        projectPluginDir: join(root, "project", ".flyflor", "plugins"),
+        projectMemoryDir: join(root, "project", ".flyflor", "memory"),
         workspaceDir: join(root, "home", "workspace"),
         logDir: join(root, "home", "logs"),
         memoryDir: join(root, "data", "memory"),
@@ -58,7 +64,7 @@ const explicitTrigger: ProjectTriggerResult = {
 };
 
 describe("ProjectScaffolder", () => {
-    test("writes README/TODO/DESIGN on first explicit trigger", async () => {
+    test("writes AGENTS/TODO/README on first explicit trigger", async () => {
         const paths = await buildPaths();
         const sink = new CapturingSink();
         const scaffolder = new ProjectScaffolder(paths, sink);
@@ -70,11 +76,17 @@ describe("ProjectScaffolder", () => {
             trigger: explicitTrigger,
             createdAt: new Date().toISOString(),
         });
-        expect(r.written).toEqual(["README.md", "TODO.md", "DESIGN.md"]);
+        expect(r.written).toEqual(["AGENTS.md", "TODO.md", "README.md"]);
         expect(r.skipped).toEqual([]);
+        const agents = await Bun.file(join(r.projectDir, "AGENTS.md")).text();
         const readme = await Bun.file(join(r.projectDir, "README.md")).text();
+        expect(agents).toContain("Test project Agent Guide");
+        expect(agents).toContain("Build a memory consolidation pipeline");
+        expect(agents).toContain("ep-1, ep-2");
         expect(readme).toContain("Test project");
-        expect(readme).toContain("ep-1, ep-2");
+        expect(readme).toContain("AGENTS.md");
+        expect((await stat(join(r.projectDir, ".flyflor", "memory"))).isDirectory()).toBe(true);
+        expect((await stat(join(r.projectDir, ".flyflor", "skills"))).isDirectory()).toBe(true);
         expect(sink.events.find((e) => e.type === RuntimeEventType.ProjectScaffolded)).toBeDefined();
     });
 
@@ -98,7 +110,7 @@ describe("ProjectScaffolder", () => {
             createdAt: new Date().toISOString(),
         });
         expect(r.written).toEqual([]);
-        expect(r.skipped).toEqual(["README.md", "TODO.md", "DESIGN.md"]);
+        expect(r.skipped).toEqual(["AGENTS.md", "TODO.md", "README.md"]);
     });
 
     test("trigger=None is a no-op", async () => {

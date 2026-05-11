@@ -183,6 +183,7 @@ function renderEpisodeBlock(episode: EpisodeRecord): string {
         `importance: ${episode.importance.toFixed(2)}`,
         `concepts: ${JSON.stringify(episode.concepts ?? [])}`,
         `sourceKind: ${episode.sourceKind}`,
+        `metadata: ${JSON.stringify(episode.metadata ?? {})}`,
         `text:`,
         episode.text.slice(0, 1500),
     ].join("\n");

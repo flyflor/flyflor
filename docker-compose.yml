@@ -95,14 +95,17 @@ services:
         image: debian:bookworm-slim
         container_name: flyflor-dev
         restart: unless-stopped
-        working_dir: /workspace
+        working_dir: /root/.flyflor/workspace
         entrypoint: ["/bin/sh", "/workspace/docker/entrypoint.sh"]
         command: ["gateway"]
-        # dev 挂载：源码、配置、本地状态目录、已编译 Linux 二进制。
+        # dev 挂载：源码、配置、工作区、技能、MCP 配置、本地状态目录、已编译 Linux 二进制。
         # 生产/安装态会替换 image 为预构建版本，并去掉源码挂载。
         volumes:
             - .:/workspace
             - ./docker/config:/root/.flyflor
+            - ./docker/workspace:/root/.flyflor/workspace
+            - ./docker/skills:/root/.flyflor/skills
+            - ./docker/mcp:/root/.flyflor/mcp
             - flyflor_data:/root/.local/share/flyflor
             - ./dist/flyflor-linux:/mounted/flyflor-linux:ro
         networks:

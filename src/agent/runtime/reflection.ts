@@ -29,6 +29,14 @@ export interface RuntimeReflectionSource {
     request: string;
     requestId: string;
     route?: RuntimeBlackboardRouteDecision;
+    mcpCalls?: Array<{
+        error?: string;
+        ok: boolean;
+        resultSummary?: string;
+        server: string;
+        tool: string;
+    }>;
+    skillNames?: string[];
 }
 
 interface ExtractedReflectionItem {
@@ -83,6 +91,8 @@ function reflectionCandidateFromItem(
             routeMode: source.route?.mode,
             routeReason: source.route?.reason,
             schemaVersion: 1,
+            mcpCalls: source.mcpCalls,
+            skillNames: source.skillNames,
         },
         symbols: normalizeStringArray(item.symbols),
         title,
@@ -145,6 +155,8 @@ function renderReflectionEvidence(source: RuntimeReflectionSource): string {
                   }
                 : undefined,
             answer: source.answer,
+            mcpCalls: source.mcpCalls,
+            skillNames: source.skillNames,
         },
         null,
         2,

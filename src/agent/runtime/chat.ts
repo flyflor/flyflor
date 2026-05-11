@@ -1,10 +1,14 @@
+import * as prompts from "@clack/prompts";
 import type { GatewayMessage, RuntimeContext } from "../../protocol/contracts/index.ts";
 import { Channel, ChatType } from "../../protocol/contracts/index.ts";
 import type { RuntimeModule } from "./index.ts";
+import type { McpToolCallRequest } from "../mcp/index.ts";
 
 export interface HumanChatOptions {
     agentName?: string;
     pasteSettleMs?: number;
+    approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
+    skillNames?: string[];
     userId?: string;
 }
 
@@ -33,6 +37,7 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
         const context: RuntimeContext = {
             requestId: crypto.randomUUID(),
             now: new Date().toISOString(),
+            skillNames: options.skillNames,
         };
         const message: GatewayMessage = {
             id: crypto.randomUUID(),
@@ -51,6 +56,7 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
         try {
             let wrote = false;
             await runtime.handleMessage(message, context, {
+                approveMcpToolCall: options.approveMcpToolCall,
                 onTextDelta: (text) => {
                     wrote = true;
                     process.stdout.write(text);
@@ -67,6 +73,14 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
         }
         process.stdout.write("> ");
     }
+}
+
+export async function promptApproveMcpToolCall(call: McpToolCallRequest): Promise<boolean> {
+    const answer = await prompts.confirm({
+        initialValue: false,
+        message: `Allow MCP tool call ${call.server}.${call.tool}?`,
+    });
+    return !prompts.isCancel(answer) && Boolean(answer);
 }
 
 export async function* coalesceChatInput(source: AsyncIterable<unknown>, settleMs = 35): AsyncGenerator<ChatInput> {

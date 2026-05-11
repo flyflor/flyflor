@@ -61,7 +61,7 @@ Flyflor 是一个可观察、可扩展、可编译成单文件二进制的智能
 - 提示词、内部模板、脚本和测试辅助文件也必须使用点分命名，例如 `blackboard.route.md`、`blackboard.route.zh.cn.md`、`memory.context.md`、`build.docker.binary.ts`。
 - 不再新增连字符或下划线命名的仓库文件，例如 `component-factory.ts`、`session-inspect.ts`、`blackboard-route.md`、`memory_context.md`。
 - 单职责短文件可保留语义名，例如 `types.ts`、`scope.ts`。
-- 用户工作区文件和外部协议值可以保留其领域约定，例如工作区长期记忆文件仍是 `MEMORY.md`、`SELF.md`、`SOUL.md`、`USER.md`；仓库内对应初始模板必须是 `memory.md`、`self.md`、`soul.md`、`user.md`。
+- 用户工作区文件和外部协议值可以保留其领域约定，例如工作区长期记忆文件和仓库内对应初始模板都使用 `MEMORY.md`、`SELF.md`、`SOUL.md`、`USER.md`。
 - 目录内部可以导入私有实现文件；跨目录需要使用明确 public API，避免深层私有导入。
 
 ## 3. 导入方向
@@ -208,7 +208,11 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved --outfile
 - `~/.flyflor/skills`：本地技能目录。
 - `~/.flyflor/mcp`：MCP 配置和状态目录。
 
-Docker dev 把 `./docker/config` 映射到容器内 `/root/.flyflor`，避免污染宿主机真实全局 agent 配置。模型、provider、渠道凭据、沙箱策略和网关行为必须来自 `config.jsonc` 或后续 secrets provider，不能来自业务环境变量。
+项目局部 capability 与局部记忆状态固定放在启动项目根的 `.flyflor/` 下，例如 `project/.flyflor/skills`、`project/.flyflor/mcp`、`project/.flyflor/plugins`、`project/.flyflor/memory`。全局 capability 状态才放在 `~/.flyflor/skills`、`~/.flyflor/mcp`、`~/.flyflor/plugins`。局部配置优先，全局配置兜底。
+
+项目局部记忆是 session 溶解成 project 的冷层入口，默认文件为 `project/.flyflor/memory/project.memory.md`，附带 `episodes.jsonl`、`candidates.jsonl`、`events.jsonl`、`recalls.jsonl` 和 `manifest.json` 作为闭环证据链。它只存当前项目的稳定事实、决策、约束、开放问题和可复用上下文，不存密钥、原始会话数据库或用户私有工作区数据。是否写入项目记忆只能由结构化 memory action 的 `signals.projectIntent`、project trigger 或专用 LLM 输出决定，不能靠关键词判断。每条项目记忆必须能反查模型结构化 action、trigger 评分、写入目标、写入状态、召回回执和 Crystal Memory provenance metadata。
+
+Docker dev 把 `./docker/config` 映射到容器内 `/root/.flyflor`，避免污染宿主机真实全局 agent 配置；同时把 `./docker/workspace` 映射到 `/root/.flyflor/workspace` 作为默认项目根，项目局部状态写入 `./docker/workspace/.flyflor`。显式全局 capability 状态可写入 `./docker/skills`、`./docker/mcp`。模型、provider、渠道凭据、沙箱策略和网关行为必须来自 `config.jsonc` 或后续 secrets provider，不能来自业务环境变量。
 
 Blackboard 路由不得在源码里维护业务语义关键词表，也不得依赖固定角色目录。`RuntimeModule` 使用 `templates/prompts/blackboard.route.md` 获取结构化 `direct` / `direct-with-watch` / `blackboard` 决策；代码只校验枚举、分数和 JSON shape。worker 拆分必须是模型根据当前请求做的角色竞价/博弈结果，谁提方案、谁挑战、谁验证都由本次任务语义决定，不能靠固定名单硬写。无法回答问题是否进入黑板也属于该路由模板的模型判断，后续交还用户仍由 BlackboardModule 的结构化 blocker 和 decision form 完成，封顶后必须把疑问整理成 1-n 条确认项。
 
@@ -252,7 +256,8 @@ Crystal Memory 的语义结构不得由源码固定 taxonomy、关键词表或�
   agents/<agentId>/config.json # JSONC 单 agent 覆盖配置
   profiles/<profile>.json      # JSONC 可选 profile 配置
   prompts/                     # 内部提示词 Markdown 模板；由安装/开发脚本复制
-  templates/memory/            # self/soul/user/memory 初始模板；由安装/开发脚本复制
+  templates/memory/            # MEMORY/SELF/SOUL/USER 初始模板；由安装/开发脚本复制
+  templates/projects/          # agents/todo/readme 项目骨架模板；生成用户侧 AGENTS.md/TODO.md/README.md
 
 $XDG_DATA_HOME/flyflor/
   agents/<agentId>/sessions/   # 会话 JSONL、摘要和索引元数据
@@ -266,7 +271,11 @@ $XDG_DATA_HOME/flyflor/
   USER.md
   MEMORY.md
   memory/
-  skills/                      # workspace 级技能，优先级高于全局技能
+  .flyflor/
+    skills/                    # 项目级技能，优先级高于全局技能
+    mcp/                       # 项目级 MCP 配置
+    plugins/                   # 项目级插件
+    memory/                    # 项目级局部记忆：project.memory.md、episodes/candidates/events/recalls JSONL、manifest.json
 
 ~/.flyflor/plugins/            # 全局插件
 ~/.flyflor/skills/             # 全局技能
@@ -275,7 +284,7 @@ $XDG_DATA_HOME/flyflor/
 $XDG_CACHE_HOME/flyflor/       # 可删除缓存
 ```
 
-workspace 不是全局配置目录。agent 可以读写 workspace，但不能默认修改全局配置、凭据、sessions 或 managed skills；这些目录必须经过明确权限和工具策略。
+workspace/project 不是全局配置目录。agent 可以读写项目根的 `.flyflor` 局部 capability 状态，但不能默认修改全局配置、凭据、sessions 或 managed skills；这些目录必须经过明确权限和工具策略。仓库不使用 `.agents` 作为内部状态目录。
 
 规则：
 
@@ -301,6 +310,12 @@ Bun 多进程和子进程边界必须从第一版开始保留：
 - 子进程输出必须走结构化事件和大小限制，不能把 stdout/stderr 原样塞回模型上下文。
 - 使用 Bun.spawn/Bun.Subprocess 时必须显式设置 cwd、env 白名单、超时、stdin/stdout/stderr 策略和退出码处理。
 - YOLO 模式只取消交互式审批，不取消审计、路径边界、超时和输出限制。
+
+MCP stdio server 必须按项目根作为 `cwd` 启动；默认只继承必要系统环境（PATH/HOME/TMPDIR/locale 等）和 MCP 配置里显式声明的 `env`，不得继承完整宿主环境。stdout 使用 MCP `Content-Length` framing 解析，stderr 只保留截断摘要用于错误诊断，不进入模型上下文。
+
+Runtime 自动调用 MCP 工具时，模型必须返回 `<flyflor_mcp_calls>` 包裹的结构化 JSON；代码只校验 server/tool/input 协议字段，不从自然语言里判断是否需要工具。工具结果以结构化 Tool 消息回灌给模型后再生成最终答复。
+
+Sandbox 对外部副作用使用统一能力审批策略。`mcp-tool`、`shell-hook`、`plugin` 都必须先经过 `src/agent/sandbox` 的 `deny` / `ask` / `allow` 决策；YOLO 只可把默认审批放宽为 allow，不能绕过审计、cwd、env 白名单、超时、输出限制和协议校验。CLI 的临时覆盖只能改本次 invocation 的 sandbox policy，不能写入长期配置。
 
 必须遵守：
 

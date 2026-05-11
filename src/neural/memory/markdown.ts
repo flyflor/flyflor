@@ -14,10 +14,10 @@ const MARKDOWN_FILES = [
 ];
 
 const MARKDOWN_TEMPLATE_FILES: Record<MarkdownMemoryFile, string> = {
-    [MarkdownMemoryFile.Memory]: "memory.md",
-    [MarkdownMemoryFile.Self]: "self.md",
-    [MarkdownMemoryFile.Soul]: "soul.md",
-    [MarkdownMemoryFile.User]: "user.md",
+    [MarkdownMemoryFile.Memory]: "MEMORY.md",
+    [MarkdownMemoryFile.Self]: "SELF.md",
+    [MarkdownMemoryFile.Soul]: "SOUL.md",
+    [MarkdownMemoryFile.User]: "USER.md",
 };
 
 export interface MarkdownMemorySnapshot {

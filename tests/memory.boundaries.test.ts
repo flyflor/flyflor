@@ -4,6 +4,7 @@ import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import {
     MemoryModule,
     RuntimeModule,
@@ -49,6 +50,7 @@ import {
     createInjectionToken,
     componentRegistry,
     DependencyContainer,
+    RuntimeEventType,
     readInjectionMetadata,
     Worker,
     type EventSink,
@@ -607,7 +609,8 @@ describe("Agent memory stability and latency", () => {
         expect(sameSessionPrompt).toContain("# Recent Session Context");
         expect(sameSessionPrompt).toContain("第一轮问题。");
         expect(sameSessionPrompt).toContain("第一轮回答里的短期上下文。");
-        expect(sameSessionPrompt).toContain("# Markdown Long-Term Memory");
+        expect(sameSessionPrompt).toContain("# Project Local Memory");
+        expect(sameSessionPrompt).toContain("# Global Markdown Long-Term Memory");
         expect(sameSessionPrompt).toContain("# Retrieved Memory");
         expect(otherSessionPrompt).toContain("# Recent Session Context");
         expect(otherSessionPrompt).not.toContain("第一轮回答里的短期上下文。");
@@ -687,6 +690,117 @@ describe("Agent memory stability and latency", () => {
         expect(prompt).toContain("乖乖听话");
         expect(soul).not.toContain("乖乖听话");
         expect(user).not.toContain("乖乖听话");
+    });
+
+    test("project intent writes project-local memory under .flyflor and exposes it before global memory", async () => {
+        const config = await testConfig();
+        const sink = new CapturingSink();
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, sink);
+        const message = gatewayMessage("把这个 session 固化为项目。");
+        const context = runtimeContext();
+
+        const result = await memory.rememberTurn(message, gatewayReply("已记录。"), context, [
+            {
+                action: "add",
+                target: "memory",
+                kind: MemoryKind.Rule,
+                content: "项目必须维护局部技能和局部记忆。",
+                confidence: 0.95,
+                signals: {
+                    projectIntent: 0.95,
+                    durability: 0.9,
+                    relevance: 0.9,
+                },
+            },
+        ]);
+        const projectMemory = await Bun.file(join(config.paths.projectMemoryDir, "project.memory.md")).text();
+        const candidates = await Bun.file(join(config.paths.projectMemoryDir, "candidates.jsonl")).text();
+        const prompt = await memory.buildPrompt({ ...message, text: "项目局部记忆是什么？" }, context);
+        const events = await Bun.file(join(config.paths.projectMemoryDir, "events.jsonl")).text();
+        const manifest = JSON.parse(
+            await Bun.file(join(config.paths.projectMemoryDir, "manifest.json")).text(),
+        ) as {
+            counts: { candidates: number; episodes: number; events: number; recalls: number; writes: number };
+            lastRecalledAt?: string;
+            lastWrittenAt?: string;
+            paths: { candidates: string; memory: string; recalls: string };
+        };
+        const recallLines = (await Bun.file(join(config.paths.projectMemoryDir, "recalls.jsonl")).text())
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line) as Record<string, unknown>);
+        const candidateLine = JSON.parse(candidates.trim().split("\n")[0] ?? "{}") as {
+            record?: { metadata?: Record<string, unknown> };
+            structuredAction?: { signals?: { projectIntent?: number } };
+            target?: { memoryPath?: string };
+        };
+        const eventTypes = events
+            .trim()
+            .split("\n")
+            .map((line) => (JSON.parse(line) as { type: string }).type);
+
+        expect(result.candidates).toHaveLength(1);
+        expect(result.promoted).toHaveLength(2);
+        expect(projectMemory).toContain("项目必须维护局部技能和局部记忆。");
+        expect(candidateLine.structuredAction?.signals?.projectIntent).toBe(0.95);
+        expect(candidateLine.record?.metadata?.projectMemoryPath).toBe(
+            join(config.paths.projectMemoryDir, "project.memory.md"),
+        );
+        expect(candidateLine.target?.memoryPath).toBe(join(config.paths.projectMemoryDir, "project.memory.md"));
+        expect(manifest.counts.candidates).toBe(1);
+        expect(manifest.counts.episodes).toBe(1);
+        expect(manifest.counts.recalls).toBe(1);
+        expect(manifest.counts.writes).toBe(1);
+        expect(manifest.lastRecalledAt).toBeDefined();
+        expect(manifest.lastWrittenAt).toBe(context.now);
+        expect(manifest.paths.candidates).toBe(join(config.paths.projectMemoryDir, "candidates.jsonl"));
+        expect(recallLines[0]?.requestId).toBeDefined();
+        expect(recallLines[0]?.promptChars).toBeGreaterThan(0);
+        expect(eventTypes).toContain("project.memory.candidate.recorded");
+        expect(eventTypes).toContain("project.memory.write");
+        expect(eventTypes).toContain("project.memory.recalled");
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.MemoryProjectCandidateRecorded);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.MemoryProjectMemoryWritten);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.MemoryProjectMemoryRecalled);
+        expect(prompt.indexOf("# Project Local Memory")).toBeLessThan(
+            prompt.indexOf("# Global Markdown Long-Term Memory"),
+        );
+        expect(prompt).toContain("项目必须维护局部技能和局部记忆。");
+    });
+
+    test("crystal candidates keep project-local memory provenance metadata", async () => {
+        const config = await testConfig();
+        const store = new InMemoryCrystalMemoryStore();
+        const crystal = new CrystalMemoryService(
+            {
+                ...config.memory.crystal,
+                enabled: true,
+            },
+            store,
+        );
+        const record = memoryRecord("project-record-1", config.paths.projectDir, "项目局部记忆进入晶体层。");
+        record.metadata = {
+            candidateId: "candidate-1",
+            projectId: "project-a",
+            projectDir: config.paths.projectDir,
+            projectMemoryPath: join(config.paths.projectMemoryDir, "project.memory.md"),
+            memoryLayer: "project",
+        };
+
+        await crystal.recordTurn({
+            requestId: "req-1",
+            now: "2026-05-09T02:00:00.000Z",
+            candidates: [],
+            promoted: [record],
+            historyEntries: [],
+            reflectionCandidates: [],
+        });
+        const candidate = store.candidates.get("reflection-project-record-1");
+        const metadata = candidate?.metadata?.memoryMetadata as Record<string, unknown> | undefined;
+
+        expect(metadata?.projectId).toBe("project-a");
+        expect(metadata?.projectMemoryPath).toBe(join(config.paths.projectMemoryDir, "project.memory.md"));
+        expect(metadata?.memoryLayer).toBe("project");
     });
 
     test("aggregates residual matrix metadata without changing the action-only write gate", async () => {
@@ -895,12 +1009,16 @@ describe("Agent memory stability and latency", () => {
         });
         const streamed = deltas.join("");
 
-        expect(streamed).toContain("Blackboard discussion:");
-        expect(streamed).toContain("Analysis worker: analysis worker continues.");
-        expect(streamed).toContain("Review worker: review worker continues.");
+        expect(streamed).toContain("黑板讨论中");
+        expect(streamed).toContain("Analysis worker：");
+        expect(streamed).toContain("Review worker：");
         expect(streamed).toContain("Final answer:");
         expect(streamed.endsWith("流式最终回答。")).toBe(true);
-        expect(reply.text).toBe(streamed);
+        expect(reply.text).toContain("Blackboard discussion:");
+        expect(reply.text).toContain("Analysis worker: analysis worker continues.");
+        expect(reply.text).toContain("Review worker: review worker continues.");
+        expect(reply.text).toContain("Final answer:");
+        expect(reply.text.endsWith("流式最终回答。")).toBe(true);
     });
 
     test("runtime sends route-declared non-convergent work to the hard cap", async () => {
@@ -1289,6 +1407,12 @@ function testPaths(root: string): FlyflorPaths {
         configDir: join(root, "home"),
         storageDir: join(root, "data"),
         cacheDir: join(root, "cache"),
+        projectDir: join(root, "project"),
+        projectFlyflorDir: join(root, "project", ".flyflor"),
+        projectSkillDir: join(root, "project", ".flyflor", "skills"),
+        projectMcpDir: join(root, "project", ".flyflor", "mcp"),
+        projectPluginDir: join(root, "project", ".flyflor", "plugins"),
+        projectMemoryDir: join(root, "project", ".flyflor", "memory"),
         workspaceDir: join(root, "home", "workspace"),
         logDir: join(root, "home", "logs"),
         memoryDir: join(root, "data", "memory"),
@@ -1303,6 +1427,7 @@ function testPaths(root: string): FlyflorPaths {
 async function installTestTemplates(paths: FlyflorPaths): Promise<void> {
     await copyTemplateGroup(join(import.meta.dir, "..", "templates", "prompts"), paths.promptDir);
     await copyTemplateGroup(join(import.meta.dir, "..", "templates", "memory"), join(paths.templateDir, "memory"));
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "projects"), join(paths.templateDir, "projects"));
 }
 
 async function copyTemplateGroup(source: string, destination: string): Promise<void> {

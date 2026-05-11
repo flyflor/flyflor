@@ -93,6 +93,22 @@ export const SandboxMode = {
 
 export type SandboxMode = (typeof SandboxMode)[keyof typeof SandboxMode];
 
+export const ToolApprovalMode = {
+    Allow: "allow",
+    Ask: "ask",
+    Deny: "deny",
+} as const;
+
+export type ToolApprovalMode = (typeof ToolApprovalMode)[keyof typeof ToolApprovalMode];
+
+export const CapabilityExecutionKind = {
+    McpTool: "mcp-tool",
+    Plugin: "plugin",
+    ShellHook: "shell-hook",
+} as const;
+
+export type CapabilityExecutionKind = (typeof CapabilityExecutionKind)[keyof typeof CapabilityExecutionKind];
+
 export const RuntimeMode = {
     Chat: "chat",
     Cli: "cli",
@@ -243,6 +259,7 @@ export type FpcLayer = ArchitectureLayer;
 export const MemoryLayer = {
     Crystal: "crystal",
     Markdown: "markdown",
+    Project: "project",
     Redis: "redis",
     SQLite: "sqlite",
     Surreal: "surreal",
@@ -279,6 +296,7 @@ export const MemorySourceKind = {
     Reflection: "reflection",
     SignalAnalysis: "signal-analysis",
     BlackboardConverged: "blackboard-converged",
+    McpAugmented: "mcp-augmented",
     UserFeedback: "user-feedback",
 } as const;
 

@@ -28,6 +28,7 @@ export interface McpContextPromptInput {
         name: string;
         url?: string;
     }>;
+    toolContext?: string;
 }
 
 export interface BlackboardAdvisoryPromptInput {
@@ -62,7 +63,9 @@ export interface BlackboardWorkerSystemPromptInput {
 }
 
 export interface MemoryContextPromptInput {
+    hippocampus: string;
     markdown: string;
+    projectMemory: string;
     renderedResults: string;
     renderedSessionMessages: string;
 }
@@ -217,12 +220,14 @@ export function renderMcpContextPrompt(input: McpContextPromptInput): string {
     // 必要提示词：这里只告知已配置 MCP 端点；实际工具执行仍必须通过后续 sandbox/MCP 协议边界。
     const enabled = input.servers.filter((server) => server.enabled);
     return renderTemplate(requiredTemplates().mcpContext.content, {
-        mcpEntries: enabled
-            .map((server) => {
-                const target = server.url ?? [server.command, ...(server.args ?? [])].filter(Boolean).join(" ");
-                return `- ${server.name}: ${target}`;
-            })
-            .join("\n"),
+        mcpEntries:
+            input.toolContext ??
+            enabled
+                .map((server) => {
+                    const target = server.url ?? [server.command, ...(server.args ?? [])].filter(Boolean).join(" ");
+                    return `- ${server.name}: ${target}`;
+                })
+                .join("\n"),
     });
 }
 
@@ -314,7 +319,9 @@ export function renderBlackboardWorkerSystemPrompt(input: BlackboardWorkerSystem
 export function renderMemoryContextPrompt(input: MemoryContextPromptInput): string {
     // 必要提示词：这里只标注记忆来源和不可信边界，写入门槛仍由结构化 memory_action 决定。
     return renderTemplate(requiredTemplates().memoryContext.content, {
+        hippocampus: input.hippocampus,
         markdownContent: input.markdown,
+        projectMemory: input.projectMemory,
         retrievedResults: input.renderedResults,
         sessionMessages: input.renderedSessionMessages,
     });

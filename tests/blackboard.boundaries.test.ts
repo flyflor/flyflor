@@ -906,6 +906,12 @@ function testPaths(root: string): FlyflorPaths {
         configDir: join(root, "home"),
         storageDir: join(root, "data"),
         cacheDir: join(root, "cache"),
+        projectDir: join(root, "project"),
+        projectFlyflorDir: join(root, "project", ".flyflor"),
+        projectSkillDir: join(root, "project", ".flyflor", "skills"),
+        projectMcpDir: join(root, "project", ".flyflor", "mcp"),
+        projectPluginDir: join(root, "project", ".flyflor", "plugins"),
+        projectMemoryDir: join(root, "project", ".flyflor", "memory"),
         workspaceDir: join(root, "home", "workspace"),
         logDir: join(root, "home", "logs"),
         memoryDir: join(root, "data", "memory"),
@@ -920,6 +926,7 @@ function testPaths(root: string): FlyflorPaths {
 async function installTestTemplates(paths: FlyflorPaths): Promise<void> {
     await copyTemplateGroup(join(import.meta.dir, "..", "templates", "prompts"), paths.promptDir);
     await copyTemplateGroup(join(import.meta.dir, "..", "templates", "memory"), join(paths.templateDir, "memory"));
+    await copyTemplateGroup(join(import.meta.dir, "..", "templates", "projects"), join(paths.templateDir, "projects"));
 }
 
 async function copyTemplateGroup(source: string, destination: string): Promise<void> {

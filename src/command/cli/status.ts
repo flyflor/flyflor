@@ -27,6 +27,8 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
         section("Runtime", [
             line("Config", getFlyflorConfigPath()),
             line("Home", config.paths.home),
+            line("Project", config.paths.projectDir),
+            line("Project local", config.paths.projectFlyflorDir),
             line("Workspace", config.paths.workspaceDir),
             line("Model", `${config.model.providerId}/${config.model.model}`),
             line("API mode", config.model.apiMode),

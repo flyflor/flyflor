@@ -190,5 +190,8 @@
     },
     "sandbox": {
         "mode": "off",
+        "mcpToolApproval": "deny",
+        "shellHookApproval": "deny",
+        "pluginApproval": "deny",
     },
 }

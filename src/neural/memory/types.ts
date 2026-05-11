@@ -83,6 +83,17 @@ export interface MemoryCandidate {
     metadata?: Record<string, unknown>;
 }
 
+export interface MemoryEpisodeProvenance {
+    mcpCalls?: Array<{
+        error?: string;
+        ok: boolean;
+        resultSummary?: string;
+        server: string;
+        tool: string;
+    }>;
+    skillNames?: string[];
+}
+
 export interface TurnMemoryResult {
     sessionKey: string;
     candidates: MemoryCandidate[];

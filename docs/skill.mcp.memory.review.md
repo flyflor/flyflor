@@ -20,20 +20,21 @@
 - `detectClusterCandidate` 接受 `mcp-augmented` 作为收敛证据，项目局部记忆可覆盖 MCP 辅助完成的问题。
 - Runtime 对 stdio MCP `tools/list` 加了 30 秒 TTL 缓存，减少热路径重复 discovery。
 - 项目本地 `.flyflor/skills/skill.usage.jsonl` 和 `.flyflor/skills/skill.usage.summary.json` 已记录 skill `useCount`、`lastUsedAt`、MCP 调用数和成功数，给后续 support/热度排序提供真实数据源。
+- Streamable HTTP MCP runtime client 已接入 `initialize`、`tools/list`、`tools/call`，支持 `Mcp-Session-Id` 会话头和 JSON/SSE 响应解析。
 
 仍未完成：
 
 - sessionKey 还未从核心记忆类型中降级为纯审计字段。
 - skill 选择仍主要是显式请求优先 + 默认前 4 个；还没接 embedding/热度排序。
-- remote HTTP/SSE MCP runtime client 还未实现；CLI 可配置 URL，但 runtime 当前只执行 stdio command server。
+- 旧式单独 SSE endpoint 兼容还未实现；当前 remote runtime 按 MCP Streamable HTTP transport 实现。
 
 ## 后续计划
 
-P0：补 MCP remote runtime client
+P0：补完整 MCP remote transport 兼容
 
-- 支持 HTTP/SSE MCP server 的 `initialize`、`tools/list`、`tools/call`。
-- 统一 stdio 与 remote 的 tool catalog/cache/call 接口。
-- CLI 已支持 `mcp add --url`，runtime 需要从“可配置但不执行”升级为“可发现、可调用、可审计”。
+- Streamable HTTP 已完成。
+- 后续补旧式 SSE 双端点兼容和 auth/secrets provider 头注入。
+- 增加 remote transport 的 CLI inspect/doctor 检查。
 
 P0：Skill 选择从固定前 4 个升级为有数据依据的排序
 

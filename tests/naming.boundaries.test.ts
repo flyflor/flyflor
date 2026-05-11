@@ -5,13 +5,14 @@ import { basename, join, relative } from "node:path";
 const REPO_ROOT = join(import.meta.dir, "..");
 const SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const DOT_SEGMENTED_FILE = /^[a-z0-9]+(?:\.[a-z0-9]+)*\.[a-z0-9]+$/u;
+const CANONICAL_MEMORY_TEMPLATE = /^(MEMORY|SELF|SOUL|USER)(?:\.zh\.cn)?\.md$/u;
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
         const files = (await Promise.all(SCANNED_DIRS.map((dir) => listFiles(join(REPO_ROOT, dir))))).flat();
         const violations = files
             .map((file) => relative(REPO_ROOT, file))
-            .filter((file) => !DOT_SEGMENTED_FILE.test(basename(file)));
+            .filter((file) => !isAllowedFilename(file));
 
         expect(violations).toEqual([]);
     });
@@ -25,6 +26,14 @@ describe("repository naming boundary", () => {
         expect(legacyNames).toEqual([]);
     });
 });
+
+function isAllowedFilename(file: string): boolean {
+    const name = basename(file);
+    if (file.startsWith("templates/memory/") && CANONICAL_MEMORY_TEMPLATE.test(name)) {
+        return true;
+    }
+    return DOT_SEGMENTED_FILE.test(name);
+}
 
 async function listFiles(root: string): Promise<string[]> {
     const entries = await readdir(root, { withFileTypes: true });
