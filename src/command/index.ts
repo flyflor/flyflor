@@ -1,4 +1,5 @@
 import { RuntimeMode, type RuntimeMode as RuntimeModeType } from "../protocol/contracts/index.ts";
+import { RuntimeEventBus } from "../protocol/events/index.ts";
 import {
     isFlyflorUtilityCommand,
     parseFlyflorCommand,
@@ -9,6 +10,13 @@ import {
 export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandResult> {
     if (isHelpRequest(argv)) {
         return { exitCode: parseFlyflorCommand(argv) ?? 0 };
+    }
+
+    const oneshot = optionValue(argv, "-z", "--oneshot");
+    if (oneshot && oneshot.trim().length > 0) {
+        return (await runFlyflorUtilityCommand([argv[0] ?? "flyflor", argv[1] ?? "flyflor", "chat", "--query", oneshot])) ?? {
+            exitCode: 1,
+        };
     }
 
     const commandResult = await runFlyflorUtilityCommand(argv);
@@ -31,6 +39,19 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
 
     const { getFlyFlor } = await import("../app.ts");
     const app = await getFlyFlor({ argv, mode: parsed });
+
+    if (parsed === RuntimeMode.Chat && process.stdin.isTTY) {
+        const { startChatTui } = await import("./tui/chat.tui.tsx");
+        const { FlyFlorTokens } = await import("../app.ts");
+        const runtime = app.resolve(FlyFlorTokens.Runtime);
+        const events = app.resolve(FlyFlorTokens.Events);
+        startChatTui(runtime, {
+            eventBus: events instanceof RuntimeEventBus ? events : undefined,
+            agentName: "flyflor",
+        });
+        return { exitCode: 0 };
+    }
+
     await app.start();
     return { exitCode: 0 };
 }
@@ -64,4 +85,18 @@ function isHelpRequest(argv: string[]): boolean {
         return argv.includes("-h") || argv.includes("--help");
     }
     return isFlyflorUtilityCommand(command) && (argv.includes("-h") || argv.includes("--help"));
+}
+
+function optionValue(argv: string[], shortFlag: string, longFlag: string): string | undefined {
+    for (let index = 2; index < argv.length; index += 1) {
+        const value = argv[index];
+        if (value === shortFlag || value === longFlag) {
+            const next = argv[index + 1];
+            return next && !next.startsWith("-") ? next : undefined;
+        }
+        if (value?.startsWith(`${longFlag}=`)) {
+            return value.slice(longFlag.length + 1);
+        }
+    }
+    return undefined;
 }
