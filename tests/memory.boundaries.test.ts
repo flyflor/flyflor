@@ -132,23 +132,29 @@ describe("config JSONC boundaries", () => {
     });
 });
 
-describe("Qdrant deployment boundaries", () => {
-    test("docker dev keeps Qdrant internal and does not publish host ports", async () => {
+describe("Internal infrastructure deployment boundaries", () => {
+    test("docker dev keeps Redis internal and does not publish host ports", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
-        const qdrant = serviceBlock(compose, "qdrant");
+        const redis = serviceBlock(compose, "redis");
 
-        expect(qdrant).toContain("expose:");
-        expect(qdrant).toContain('"6333"');
-        expect(qdrant).not.toMatch(/^\s+ports:/m);
+        expect(redis).not.toMatch(/^\s+ports:/m);
+        expect(redis).toMatch(/networks:\s*\n\s*-\s*flyflor-internal/);
     });
 
     test("docker dev keeps SurrealDB internal and does not publish host ports", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
         const surrealdb = serviceBlock(compose, "surrealdb");
 
-        expect(surrealdb).toContain("expose:");
-        expect(surrealdb).toContain('"8000"');
         expect(surrealdb).not.toMatch(/^\s+ports:/m);
+        expect(surrealdb).toMatch(/networks:\s*\n\s*-\s*flyflor-internal/);
+    });
+
+    test("docker dev keeps the flyflor agent itself off the host network", async () => {
+        const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
+        const flyflor = serviceBlock(compose, "flyflor");
+
+        expect(flyflor).not.toMatch(/^\s+ports:/m);
+        expect(flyflor).toMatch(/networks:\s*\n\s*-\s*flyflor-internal/);
     });
 });
 
@@ -523,7 +529,7 @@ describe("Agent memory stability and latency", () => {
             ["Internal prompt override.", "{{sessionMessages}}", "{{retrievedResults}}"].join("\n\n"),
         );
         const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new CapturingSink(),
         );
 
@@ -538,7 +544,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             events,
         );
         await memory.buildPrompt(gatewayMessage("初始化长期记忆快照"));
@@ -558,7 +564,7 @@ describe("Agent memory stability and latency", () => {
     test("does not promote durable-looking text unless the model emits a memory action", async () => {
         const config = await testConfig();
         const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new CapturingSink(),
         );
         const message = gatewayMessage(
@@ -580,7 +586,7 @@ describe("Agent memory stability and latency", () => {
     test("injects recent session context separately and does not leak across sessions", async () => {
         const config = await testConfig();
         const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new CapturingSink(),
         );
         const baseMessage = gatewayMessage("第一轮问题。");
@@ -614,8 +620,7 @@ describe("Agent memory stability and latency", () => {
                 ...config,
                 memory: {
                     ...config.memory,
-                    qdrant: { ...config.memory.qdrant, enabled: false },
-                    session: {
+                                        session: {
                         ...config.memory.session,
                         consolidationBatchSize: 2,
                         maxLiveMessages: 2,
@@ -647,7 +652,7 @@ describe("Agent memory stability and latency", () => {
     test("persists explicit memory actions without reading user text through dictionaries", async () => {
         const config = await testConfig();
         const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new CapturingSink(),
         );
         const message = gatewayMessage("你以后叫飞花哦。我是你的主人，你要乖乖听话哦。");
@@ -687,7 +692,7 @@ describe("Agent memory stability and latency", () => {
     test("aggregates residual matrix metadata without changing the action-only write gate", async () => {
         const config = await testConfig();
         const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new CapturingSink(),
         );
 
@@ -737,7 +742,7 @@ describe("Agent memory stability and latency", () => {
     test("runtime strips memory action blocks and persists the structured action", async () => {
         const config = await testConfig();
         const runtime = new RuntimeModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new StaticModel(
                 [
                     "宝宝你好，我是飞花。",
@@ -769,7 +774,7 @@ describe("Agent memory stability and latency", () => {
     test("runtime streams visible model output while hiding memory action blocks", async () => {
         const config = await testConfig();
         const runtime = new RuntimeModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new StreamingModel([
                 "宝宝你好，",
                 "我是飞花。",
@@ -807,7 +812,7 @@ describe("Agent memory stability and latency", () => {
     test("runtime emits one delta when the model client does not support streaming", async () => {
         const config = await testConfig();
         const runtime = new RuntimeModule(
-            { ...config, memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } } },
+            { ...config, memory: { ...config.memory } },
             new StaticModel("一次性回答。"),
             new CapturingSink(),
         );
@@ -827,7 +832,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } },
+            memory: { ...config.memory },
         };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
@@ -869,7 +874,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } },
+            memory: { ...config.memory },
         };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
@@ -902,7 +907,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } },
+            memory: { ...config.memory },
         };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
@@ -951,7 +956,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } },
+            memory: { ...config.memory },
         };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
@@ -978,23 +983,6 @@ describe("Agent memory stability and latency", () => {
         });
     });
 
-    test("Qdrant outage is bounded and surfaced as degraded event during prompt build", async () => {
-        const config = await testConfig({
-            qdrantUrl: "http://127.0.0.1:1",
-            qdrantTimeoutMs: 25,
-        });
-        const events = new CapturingSink();
-        const memory = new MemoryModule(config, events);
-        const message = gatewayMessage("需要快速响应");
-
-        const started = performance.now();
-        const prompt = await memory.buildPrompt(message);
-        const elapsedMs = performance.now() - started;
-
-        expect(prompt).toContain("Untrusted memory context");
-        expect(events.events.some((item) => item.type === "memory.qdrant.degraded")).toBe(true);
-        expect(elapsedMs).toBeLessThan(200);
-    });
 });
 
 describe("FlyFlor composition root", () => {
@@ -1091,7 +1079,7 @@ async function tempRoot(): Promise<string> {
     return root;
 }
 
-async function testConfig(options: { qdrantTimeoutMs?: number; qdrantUrl?: string } = {}): Promise<FlyflorConfig> {
+async function testConfig(_options: Record<string, never> = {}): Promise<FlyflorConfig> {
     const root = await tempRoot();
     const paths = testPaths(root);
 
@@ -1162,12 +1150,17 @@ async function testConfig(options: { qdrantTimeoutMs?: number; qdrantUrl?: strin
                 enabled: true,
                 maxPromptItems: 8,
             },
-            qdrant: {
-                enabled: true,
-                collection: "flyflor_memories_test",
+            redis: {
+                enabled: false,
+                internalUrl: "redis://127.0.0.1:1",
+                namespace: "flyflor-test",
+                defaultTtlSeconds: 60,
+                maxEpisodesPerUser: 32,
+                contextRingSize: 8,
+                timeoutMs: 25,
+            },
+            embedding: {
                 dimensions: 32,
-                internalUrl: options.qdrantUrl ?? "http://127.0.0.1:1",
-                timeoutMs: options.qdrantTimeoutMs ?? 25,
             },
             retrieval: {
                 maxPromptChars: 18_000,

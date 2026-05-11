@@ -4,7 +4,6 @@ import {
     ArchitectureLayer,
     ComponentKind,
     MemoryCandidateStatus,
-    MemoryLayer,
     MemorySourceKind,
 } from "../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
@@ -17,9 +16,9 @@ import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
-import { QdrantMemoryStore } from "./qdrant.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
+import { RedisMemoryStore } from "./redis.ts";
 import type {
     MemoryAction,
     MemoryCandidate,
@@ -51,25 +50,45 @@ export class MemoryModule extends Memory {
     private readonly markdown: MarkdownMemoryStore;
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
-    private readonly qdrant: QdrantMemoryStore;
     private readonly crystal: CrystalMemoryService;
     private readonly session: SessionModule;
+    private readonly redis: RedisMemoryStore | null;
+    /** 单例 embedding provider；用于 context.embedding 缺省时降级计算。 */
+    private readonly embeddings: LocalHashEmbeddingProvider;
 
     constructor(
         private readonly config: FlyflorConfig,
         private readonly events: EventSink,
     ) {
         super();
-        const embeddings = new LocalHashEmbeddingProvider(config.memory.qdrant.dimensions);
+        this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-        this.qdrant = new QdrantMemoryStore(config.memory.qdrant, embeddings);
         this.crystal = new CrystalMemoryService(config.memory.crystal);
         this.session = new SessionModule(this.sqlite, config.memory.session);
+        this.redis = config.memory.redis.enabled
+            ? new RedisMemoryStore(config.memory.redis)
+            : null;
     }
 
-    async buildPrompt(message: GatewayMessage): Promise<string> {
+    /**
+     * 预热：连接 Redis 并测 PING 往返延迟。
+     * 失败时降级（redis = null 已经 guard），不抛出。
+     */
+    async warmup(): Promise<void> {
+        if (!this.redis) return;
+        try {
+            const latencyMs = await this.redis.ping();
+            this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs }));
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryWarmupComplete, { latencyMs: -1, error: String(err) }),
+            );
+        }
+    }
+
+    async buildPrompt(message: GatewayMessage, context?: RuntimeContext): Promise<string> {
         if (!this.config.memory.enabled) {
             return "Memory is disabled.";
         }
@@ -86,13 +105,12 @@ export class MemoryModule extends Memory {
 
         const sessionKey = scopeFor(message);
         const markdown = await this.markdown.snapshot();
-        const [sessionMessages, sqliteResults, qdrantResults, crystalResults] = await Promise.all([
+        const [sessionMessages, sqliteResults, crystalResults] = await Promise.all([
             this.session.recentMessagesFor(message),
             this.sqlite.search(request),
-            this.safeQdrantSearch(request),
             this.crystal.recall(request),
         ]);
-        const results = dedupeResults([...crystalResults, ...qdrantResults, ...sqliteResults]);
+        const results = dedupeResults([...crystalResults, ...sqliteResults]);
         const prompt = renderMemoryPrompt(
             markdown.prompt,
             results,
@@ -116,7 +134,6 @@ export class MemoryModule extends Memory {
         reply: GatewayReply,
         context: RuntimeContext,
         actions: MemoryAction[] = [],
-        reflectionCandidates: CrystalCandidateInput[] = [],
     ): Promise<TurnMemoryResult> {
         if (!this.config.memory.enabled) {
             return {
@@ -150,21 +167,27 @@ export class MemoryModule extends Memory {
                 const record = await this.markdown.promoteCandidate(candidate, promotedAt);
                 await this.sqlite.markCandidatePromoted(candidate.id, promotedAt);
                 await this.sqlite.addSearchRecord(record);
-                this.safeQdrantUpsert(record, context.requestId);
                 promoted.push(record);
             }
         }
 
         const historyEntries = await this.session.consolidate(session.key, context.now);
         await Promise.all(historyEntries.map((entry) => this.markdown.appendHistory(entry)));
-        await this.crystal.recordTurn({
-            requestId: context.requestId,
-            now: context.now,
-            candidates,
-            promoted,
-            historyEntries,
-            reflectionCandidates,
-        });
+
+        // Redis episode 写入（工作记忆，最高 importance 取自 candidates 均值或默认）
+        void this.writeEpisodeToRedis(message, reply, context, candidates);
+
+        // 晶体记忆（fire-and-forget，不阻塞回答返回）
+        void this.crystal
+            .recordTurn({
+                requestId: context.requestId,
+                now: context.now,
+                candidates,
+                promoted,
+                historyEntries,
+                reflectionCandidates: [],
+            })
+            .catch(() => {});
 
         this.events.publish(
             event(
@@ -187,33 +210,91 @@ export class MemoryModule extends Memory {
         };
     }
 
-    private async safeQdrantSearch(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
+    /**
+     * 异步反思入口：由 RuntimeModule 在回答已返回后 fire-and-forget 调用。
+     * 不阻塞主链路；失败发布 MemoryReflectionFailed 事件后静默。
+     */
+    async applyReflection(
+        candidates: CrystalCandidateInput[],
+        context: RuntimeContext,
+    ): Promise<void> {
+        if (!this.config.memory.enabled || candidates.length === 0) return;
         try {
-            return await this.qdrant.search(request);
-        } catch (error) {
+            await this.crystal.recordTurn({
+                requestId: context.requestId,
+                now: context.now,
+                candidates: [],
+                promoted: [],
+                historyEntries: [],
+                reflectionCandidates: candidates,
+            });
+        } catch (err) {
             this.events.publish(
-                event(RuntimeEventType.MemoryQdrantDegraded, {
-                    layer: MemoryLayer.Qdrant,
-                    reason: String(error),
-                }),
+                event(RuntimeEventType.MemoryReflectionFailed, { error: String(err) }, context.requestId),
             );
-            return [];
         }
     }
 
-    private safeQdrantUpsert(record: MemoryRecord, requestId?: string): void {
-        this.qdrant.upsert(record).catch((error) => {
+    // ───── 内部 ──────────────────────────────────────────────────────
+
+    /**
+     * 向 Redis 写入本轮 episode（工作记忆）。
+     * best-effort：失败只记录事件，不影响主链路。
+     * embedding 优先复用 context.embedding；缺省时本地降级计算。
+     */
+    private async writeEpisodeToRedis(
+        message: GatewayMessage,
+        reply: GatewayReply,
+        context: RuntimeContext,
+        candidates: MemoryCandidate[],
+    ): Promise<void> {
+        if (!this.redis) return;
+        try {
+            const importance =
+                candidates.length > 0
+                    ? candidates.reduce((sum, c) => sum + (c.weights?.importance ?? 0), 0) / candidates.length
+                    : 0.4;
+            const stability = Math.min(1, importance * 1.2);
+            const ttlMultiplier = this.config.memory.redis.defaultTtlSeconds;
+            const ttlSeconds = Math.max(60, Math.floor(ttlMultiplier * (0.5 + importance)));
+
+            const embedding =
+                context.embedding && context.embedding.length > 0
+                    ? context.embedding
+                    : await this.embeddings.embed(message.text);
+
+            const episodeId = crypto.randomUUID();
+            const text = `[user] ${message.text.slice(0, 512)}\n[assistant] ${reply.text.slice(0, 512)}`;
+
+            await this.redis.writeEpisode({
+                userId: message.user.id,
+                episodeId,
+                text,
+                concepts: [],
+                embedding,
+                importance,
+                stability,
+                sourceKind: MemorySourceKind.SessionTurn,
+                createdAt: Date.now(),
+                ttlSeconds,
+            });
+
             this.events.publish(
                 event(
-                    RuntimeEventType.MemoryQdrantDegraded,
-                    {
-                        layer: MemoryLayer.Qdrant,
-                        reason: String(error),
-                    },
-                    requestId,
+                    RuntimeEventType.MemoryEpisodeWritten,
+                    { episodeId, importance, ttlSeconds },
+                    context.requestId,
                 ),
             );
-        });
+        } catch (err) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryReflectionFailed,
+                    { stage: "episode-write", error: String(err) },
+                    context.requestId,
+                ),
+            );
+        }
     }
 }
 

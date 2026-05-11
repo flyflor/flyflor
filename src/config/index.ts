@@ -15,8 +15,10 @@ import {
 export interface FlyflorConfig {
     gateway: GatewayConfig;
     memory: MemoryConfig;
+    metrics: MetricsConfig;
     model: ModelConfig;
     paths: FlyflorPaths;
+    routing: RoutingConfig;
     sandbox: SandboxConfig;
 }
 
@@ -197,8 +199,9 @@ export interface MemoryConfig {
     crystal: CrystalMemoryConfig;
     matrix: MemoryMatrixConfig;
     markdown: MarkdownMemoryConfig;
+    redis: RedisMemoryConfig;
     sqlite: SQLiteMemoryConfig;
-    qdrant: QdrantMemoryConfig;
+    embedding: MemoryEmbeddingConfig;
     retrieval: MemoryRetrievalConfig;
     session: MemorySessionConfig;
     weights: MemoryWeightConfig;
@@ -233,12 +236,23 @@ export interface SQLiteMemoryConfig {
     maxPromptItems: number;
 }
 
-export interface QdrantMemoryConfig {
+export interface RedisMemoryConfig {
     enabled: boolean;
-    collection: string;
-    dimensions: number;
     internalUrl: string;
+    namespace: string;
+    // 默认 episode 稳定度 (importance≈0.5) 对应的 TTL，以秒计；
+    // 真正写入时由 importance × multiplier 决定个体 TTL。
+    defaultTtlSeconds: number;
+    // 单 user 工作记忆 episode 数硬上限，用于触发 forced-forgetting。
+    maxEpisodesPerUser: number;
+    // ring buffer 长度（最近上下文条数，对应 ff:ctx:{userId} LTRIM）。
+    contextRingSize: number;
+    // socket 超时；Redis 不可达时所有 best-effort 调用必须在此时间内 timeout。
     timeoutMs: number;
+}
+
+export interface MemoryEmbeddingConfig {
+    dimensions: number;
 }
 
 export interface CrystalMemoryConfig {
@@ -287,12 +301,36 @@ export interface SandboxConfig {
     mode: SandboxMode;
 }
 
+/**
+ * 路由短路（fastRoute）配置：完全基于资源指标，不允许任何关键词/正则匹配。
+ * 命中规则（满足任一即 bypass route LLM）：
+ *   - 上轮 nextRouteHint === "direct" 且 age < routeHintTtlMs
+ *   - cosine(curEmbed, lastEmbed) > similarityBypassThreshold 且上轮 mode 为 direct
+ *   - 估算 tokens < routeBypassTokenBudget
+ */
+export interface RoutingConfig {
+    fastRouteEnabled: boolean;
+    routeHintTtlMs: number;
+    similarityBypassThreshold: number;
+    routeBypassTokenBudget: number;
+}
+
+/**
+ * 性能 metrics 事件采集配置。
+ * 关闭时所有 perf 事件不发布；不影响业务行为。
+ */
+export interface MetricsConfig {
+    enabled: boolean;
+}
+
 interface ConfigFileShape {
     agents?: AgentConfigShape;
     gateway?: Partial<GatewayConfig>;
     memory?: Partial<MemoryConfig>;
+    metrics?: Partial<MetricsConfig>;
     model?: ModelRegistryConfig;
     providers?: Record<string, ProviderProfileConfig>;
+    routing?: Partial<RoutingConfig>;
     sandbox?: Partial<SandboxConfig>;
 }
 
@@ -337,7 +375,20 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
         ...configFile.sandbox,
     };
 
-    return { gateway, memory, model, paths, sandbox };
+    const routing: RoutingConfig = {
+        fastRouteEnabled: true,
+        routeHintTtlMs: 5_000,
+        similarityBypassThreshold: 0.85,
+        routeBypassTokenBudget: 32,
+        ...(configFile.routing ?? {}),
+    };
+
+    const metrics: MetricsConfig = {
+        enabled: true,
+        ...(configFile.metrics ?? {}),
+    };
+
+    return { gateway, memory, metrics, model, paths, routing, sandbox };
 }
 
 function createDefaultChannelConfigs(): ChannelConfigs {
@@ -434,12 +485,17 @@ function createDefaultMemoryConfig(): MemoryConfig {
             enabled: true,
             maxPromptItems: 8,
         },
-        qdrant: {
-            enabled: true,
-            collection: "flyflor_memories",
+        redis: {
+            enabled: false,
+            internalUrl: "redis://127.0.0.1:6379",
+            namespace: "flyflor",
+            defaultTtlSeconds: 86_400,
+            maxEpisodesPerUser: 200,
+            contextRingSize: 12,
+            timeoutMs: 250,
+        },
+        embedding: {
             dimensions: 384,
-            internalUrl: "http://127.0.0.1:6333",
-            timeoutMs: 1500,
         },
         retrieval: {
             maxPromptChars: 18_000,

@@ -19,6 +19,7 @@ import { Module, Provide } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions, renderMemoryActionPrompt } from "../../neural/memory/actions.ts";
 import { createMemory, type MemoryModule } from "../../neural/memory/index.ts";
+import { LocalHashEmbeddingProvider } from "../../neural/memory/embedding.ts";
 import { loadMcpServers } from "../mcp/index.ts";
 import { createSandboxPolicy } from "../sandbox/index.ts";
 import {
@@ -39,6 +40,13 @@ import { scopeFor } from "../session/index.ts";
 import { loadSkills, selectSkills } from "../../crystal/skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 import { extractRuntimeReflectionCandidates } from "./reflection.ts";
+import {
+    buildBypassDecision,
+    evaluateFastRoute,
+    type FastRouteSnapshot,
+    type FastRouteResult,
+} from "./fast.route.ts";
+import { PerfMetrics } from "./perf.metrics.ts";
 
 export { startHumanChat } from "./chat.ts";
 
@@ -62,6 +70,14 @@ export interface RuntimeStreamOptions {
 @Provide({ kind: ComponentKind.Runtime, layer: ArchitectureLayer.Runtime, name: "runtime", provider: true })
 export class RuntimeModule extends RuntimeBoundary {
     private readonly memory: MemoryModule;
+    /** Shared embedding provider — compute once per turn, reused by memory recall + episode write. */
+    private readonly embeddings: LocalHashEmbeddingProvider;
+    private readonly perf: PerfMetrics;
+    /**
+     * 上一轮的路由快照（per (channel, chatId, user) 维度）。
+     * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
+     */
+    private readonly fastRouteSnapshots = new Map<string, FastRouteSnapshot>();
 
     constructor(
         private readonly config: FlyflorConfig,
@@ -71,6 +87,13 @@ export class RuntimeModule extends RuntimeBoundary {
     ) {
         super();
         this.memory = createMemory(config, events);
+        this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
+        this.perf = new PerfMetrics(config.metrics, events);
+    }
+
+    /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
+    async warmup(): Promise<void> {
+        await this.memory.warmup();
     }
 
     async handleMessage(
@@ -81,17 +104,46 @@ export class RuntimeModule extends RuntimeBoundary {
         this.events.publish(
             event(RuntimeEventType.AgentTurnStart, { channel: message.route.channel }, context.requestId),
         );
+        const ttfbDone = this.perf.mark(RuntimeEventType.PerfTtfb, { channel: message.route.channel }, context.requestId);
         await loadPromptTemplates(this.config.paths);
+
+        // Compute embedding once; attach to context so buildPrompt + rememberTurn share the same vector.
+        const embedding = await this.embeddings.embed(message.text);
+        const enrichedContext: RuntimeContext = { ...context, embedding };
+
+        // fastRoute：基于资源指标短路 LLM 路由调用（零字符串匹配）。
+        const snapshotKey = this.snapshotKeyFor(message);
+        const fastRoute = evaluateFastRoute({
+            config: this.config.routing,
+            snapshot: this.fastRouteSnapshots.get(snapshotKey),
+            nowMs: Date.now(),
+            currentEmbedding: embedding,
+            messageChars: message.text.length,
+        });
+        this.perf.record(
+            RuntimeEventType.PerfFastRouteEvaluated,
+            { bypass: fastRoute.bypass, reason: fastRoute.reason, ...(fastRoute.metrics ?? {}) },
+            context.requestId,
+        );
+
+        const buildPromptDone = this.perf.mark(RuntimeEventType.PerfBuildPrompt, {}, context.requestId);
+        const routeDone = this.perf.mark(RuntimeEventType.PerfRouteLlm, { bypassed: fastRoute.bypass }, context.requestId);
 
         const [skills, mcpServers, memoryPrompt, preRoute] = await Promise.all([
             loadSkills(this.config.paths),
             loadMcpServers(this.config.paths),
-            this.memory.buildPrompt(message),
-            this.blackboard ? decideBlackboardRoute(this.model, message.text) : Promise.resolve(undefined),
+            this.memory.buildPrompt(message, enrichedContext).then((p) => {
+                buildPromptDone();
+                return p;
+            }),
+            this.resolveRouteDecision(message, fastRoute).then((r) => {
+                routeDone();
+                return r;
+            }),
         ]);
         const selectedSkills = selectSkills(skills, message.text);
         const sandbox = createSandboxPolicy(this.config.sandbox);
-        const blackboardRun = await this.runBlackboard(message, context, options, preRoute);
+        const blackboardRun = await this.runBlackboard(message, enrichedContext, options, preRoute);
 
         const modelMessages: ModelMessage[] = [
             {
@@ -144,18 +196,48 @@ export class RuntimeModule extends RuntimeBoundary {
                 skills: selectedSkills.map((skill) => skill.name),
             },
         };
-        const reflectionCandidates = await this.extractReflectionCandidates(
-            message,
-            context,
-            visibleText,
-            blackboardRun,
-        );
-        await this.memory.rememberTurn(message, reply, context, parsed.actions, reflectionCandidates);
+
+        // Fast path: session + candidates + Redis episode (awaited, no LLM).
+        await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions);
+
+        // Snapshot for next-turn fastRoute decision.
+        const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
+        this.fastRouteSnapshots.set(snapshotKey, {
+            recordedAt: Date.now(),
+            embedding,
+            lastMode,
+            nextRouteHint: lastMode === BlackboardMode.Direct ? BlackboardMode.Direct : undefined,
+        });
+
+        // Async reflection: LLM extraction + crystal write — non-blocking, after reply returned.
+        void this.scheduleReflection(message, enrichedContext, visibleText, blackboardRun);
+
+        ttfbDone();
         this.events.publish(
             event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
         );
 
         return reply;
+    }
+
+    /**
+     * 后台反思调度：LLM 提取 → memory.applyReflection → crystal write。
+     * 不阻塞主回答；失败由 applyReflection 内部发布 MemoryReflectionFailed 事件。
+     */
+    private async scheduleReflection(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        visibleText: string,
+        blackboardRun: RuntimeBlackboardRun | undefined,
+    ): Promise<void> {
+        try {
+            const candidates = await this.extractReflectionCandidates(message, context, visibleText, blackboardRun);
+            if (candidates.length > 0) {
+                await this.memory.applyReflection(candidates, context);
+            }
+        } catch {
+            // reflection failures are observable via MemoryReflectionFailed events; never surface to user
+        }
     }
 
     private async generateModelText(

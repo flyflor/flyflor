@@ -46,6 +46,9 @@ export class GatewayModule extends Gateway {
 
         this.events.publish(event(RuntimeEventType.GatewayStart, { url: server.url.toString() }));
 
+        // Redis pre-warm: fire-and-forget; first real turn won't block on socket handshake.
+        void this.runtime.warmup?.();
+
         for (const adapter of this.adapters.values()) {
             void adapter.start?.(this.createTrackedDispatcher(adapter.name));
         }

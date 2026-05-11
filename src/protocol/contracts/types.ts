@@ -34,6 +34,12 @@ export interface GatewayReply {
 export interface RuntimeContext {
     requestId: string;
     now: string;
+    /**
+     * 本轮消息文本的预计算嵌入向量（由 RuntimeModule 在 handleMessage 入口统一计算一次）。
+     * buildPrompt、rememberTurn 等下游调用复用此向量，避免重复 embed 计算。
+     * 未注入时下游按需自行计算（降级）。
+     */
+    embedding?: number[];
 }
 
 export interface ModelMessage {

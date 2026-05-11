@@ -243,8 +243,9 @@ export type FpcLayer = ArchitectureLayer;
 export const MemoryLayer = {
     Crystal: "crystal",
     Markdown: "markdown",
-    Qdrant: "qdrant",
+    Redis: "redis",
     SQLite: "sqlite",
+    Surreal: "surreal",
 } as const;
 
 export type MemoryLayer = (typeof MemoryLayer)[keyof typeof MemoryLayer];
@@ -274,6 +275,7 @@ export type MemoryCandidateStatus = (typeof MemoryCandidateStatus)[keyof typeof 
 export const MemorySourceKind = {
     ExplicitUserIntent: "explicit-user-intent",
     SessionConsolidation: "session-consolidation",
+    SessionTurn: "session-turn",
     Reflection: "reflection",
     SignalAnalysis: "signal-analysis",
 } as const;

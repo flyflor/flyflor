@@ -109,8 +109,23 @@ const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = {
 };
 
 let promptTemplates: PromptTemplateMap | undefined;
+let promptTemplatesDir: string | undefined;
+let promptTemplatesSignature: string | undefined;
 
-export async function loadPromptTemplates(paths: FlyflorPaths): Promise<void> {
+export async function loadPromptTemplates(paths: FlyflorPaths, options: { force?: boolean } = {}): Promise<void> {
+    // 启动期由 app.ts 加载一次；热路径（runtime / memory.buildPrompt）的后续调用直接复用缓存。
+    // 缓存键 = promptDir + 所有模板的 mtime 签名；任意一个文件被改写都会自动失效，
+    // 同时不依赖 fs.watch（避免 bun 编译 binary 在容器里跨挂载点 watch 的兼容性问题）。
+    const signature = options.force ? undefined : await readSignature(paths.promptDir);
+    if (
+        !options.force &&
+        promptTemplates &&
+        promptTemplatesDir === paths.promptDir &&
+        signature !== undefined &&
+        signature === promptTemplatesSignature
+    ) {
+        return;
+    }
     const loaded = {} as PromptTemplateMap;
     for (const key of Object.keys(PROMPT_TEMPLATE_FILES) as PromptTemplateKey[]) {
         const filename = PROMPT_TEMPLATE_FILES[key];
@@ -131,6 +146,25 @@ export async function loadPromptTemplates(paths: FlyflorPaths): Promise<void> {
         };
     }
     promptTemplates = loaded;
+    promptTemplatesDir = paths.promptDir;
+    promptTemplatesSignature = signature ?? (await readSignature(paths.promptDir));
+}
+
+async function readSignature(promptDir: string): Promise<string> {
+    // 用所有模板文件的 mtime + size 拼接出 fingerprint；任何编辑都会改变 signature。
+    // 比 fs.watch 简单可靠（同步快照），命中失败时只是退回完整加载，开销可忽略。
+    const parts: string[] = [];
+    for (const key of Object.keys(PROMPT_TEMPLATE_FILES) as PromptTemplateKey[]) {
+        const filename = PROMPT_TEMPLATE_FILES[key];
+        const path = join(promptDir, filename);
+        try {
+            const stat = await Bun.file(path).stat();
+            parts.push(`${filename}:${stat.mtimeMs}:${stat.size}`);
+        } catch {
+            parts.push(`${filename}:missing`);
+        }
+    }
+    return parts.join("|");
 }
 
 export function renderRuntimeSystemPrompt(input: RuntimeSystemPromptInput): string {
