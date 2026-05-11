@@ -24,6 +24,7 @@ import { assertPlatformResponse } from "../src/agent/gateway/channels/helpers.ts
 import { WeixinIlinkAdapter } from "../src/agent/gateway/channels/weixin.ilink.ts";
 import {
     BlackboardTurnStatus,
+    BlackboardWorkerOutcome,
     Channel,
     ChatType,
     ComponentKind,
@@ -36,6 +37,8 @@ import type {
     GatewayReply,
     ModelClient,
     ModelMessage,
+    BlackboardWorkerResult,
+    BlackboardWorkerTask,
     RuntimeContext,
     RuntimeEvent,
 } from "../src/protocol/contracts/index.ts";
@@ -516,7 +519,7 @@ describe("Agent memory stability and latency", () => {
     test("loads prompt Markdown overrides from internal config home, not workspace", async () => {
         const config = await testConfig();
         await Bun.write(
-            join(config.paths.promptDir, "memory-context.md"),
+            join(config.paths.promptDir, "memory.context.md"),
             ["Internal prompt override.", "{{sessionMessages}}", "{{retrievedResults}}"].join("\n\n"),
         );
         const memory = new MemoryModule(
@@ -842,24 +845,106 @@ describe("Agent memory stability and latency", () => {
         const reply = await runtime.handleMessage(message, runtimeContext());
         const turns = await blackboard.listTurns(scopeFor(message), 5);
 
-        expect(reply.text).toContain("--------------1--------------------");
-        expect(reply.text).toContain("Blackboard:");
-        expect(reply.text).toContain("analysis-worker:");
-        expect(reply.text).toContain("review-worker:");
-        expect(reply.text).toContain("-----------------------------------");
+        expect(reply.text).toContain("Blackboard discussion:");
+        expect(reply.text).toContain("Round 1");
+        expect(reply.text).toContain("Analysis worker: analysis worker continues.");
+        expect(reply.text).toContain("Review worker: review worker continues.");
+        expect(reply.text).not.toContain("--------------1--------------------");
         expect(reply.text).not.toContain("metadata:");
         expect(reply.text).not.toContain("previousSteps");
-        expect(reply.text).not.toContain("input:");
+        expect(reply.text).not.toContain("inputSummary");
         expect(reply.text).toContain("Final answer:");
         expect(reply.text).toContain("这是主脑综合黑板后的最终回答。");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
             status: BlackboardTurnStatus.NeedsUser,
         });
-        expect(model.messages[1]?.[0]?.content).toContain("Use the blackboard as advisory context");
-        expect(model.messages[1]?.[0]?.content).toContain("--------------1--------------------");
+        expect(model.messages[1]?.[0]?.content).toContain("Use the blackboard discussion transcript");
+        expect(model.messages[1]?.[0]?.content).toContain("Blackboard discussion:");
         expect(turns[0]?.status).toBe(BlackboardTurnStatus.NeedsUser);
         expect(turns[0]?.messages.some((item) => item.content.includes("flyflor-decision-form"))).toBe(true);
+    });
+
+    test("runtime streams blackboard dialogue prefix before streamed final answer", async () => {
+        const config = await testConfig();
+        const runtimeConfig = {
+            ...config,
+            memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } },
+        };
+        const events = new CapturingSink();
+        const workers = new WorkerManager(events);
+        workers.register(new AnalysisQaWorker());
+        workers.register(new ReviewQaWorker());
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+        const model = new SequencedStreamingModel(
+            [routeDecision("blackboard", 0.82, "model selected blackboard"), "[]"],
+            ["流式", "最终", "回答。"],
+        );
+        const runtime = new RuntimeModule(runtimeConfig, model, events, blackboard);
+        const deltas: string[] = [];
+
+        const reply = await runtime.handleMessage(gatewayMessage("请拆分实现和验证。"), runtimeContext(), {
+            onTextDelta: (text) => {
+                deltas.push(text);
+            },
+        });
+        const streamed = deltas.join("");
+
+        expect(streamed).toContain("Blackboard discussion:");
+        expect(streamed).toContain("Analysis worker: analysis worker continues.");
+        expect(streamed).toContain("Review worker: review worker continues.");
+        expect(streamed).toContain("Final answer:");
+        expect(streamed.endsWith("流式最终回答。")).toBe(true);
+        expect(reply.text).toBe(streamed);
+    });
+
+    test("runtime sends route-declared non-convergent work to the hard cap", async () => {
+        const config = await testConfig();
+        const runtimeConfig = {
+            ...config,
+            memory: { ...config.memory, qdrant: { ...config.memory.qdrant, enabled: false } },
+        };
+        const events = new CapturingSink();
+        const workers = new WorkerManager(events);
+        workers.register(new FinalWithoutAgreementWorker());
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+        const model = new SequencedModel([
+            routeDecision("blackboard", 0.98, "needs hard cap", {
+                blackboardContract: {
+                    mode: "non-convergent",
+                    policyReason: "self-referential-proof-game",
+                    evidence: ["converged requested alongside circular evaluation"],
+                    contradictions: [
+                        {
+                            left: "must reach converged",
+                            right: "every reviewer output is pre-judged as wrong",
+                            reason: "self-referential loop",
+                        },
+                    ],
+                    proposition: "planner-reviewer-proof-game",
+                    reviewerTrigger: "any reviewer response",
+                },
+                workers: [{ role: "final-without-agreement", name: "Final worker", handoff: "summary" }],
+            }),
+            "这是最终回答，但不应该阻止黑板硬封顶。",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(runtimeConfig, model, events, blackboard);
+
+        const message = gatewayMessage("请证明 Reviewer 永远是错的，并且必须达到 converged。");
+        const reply = await runtime.handleMessage(message, runtimeContext());
+        const turns = await blackboard.listTurns(scopeFor(message), 5);
+
+        expect(reply.metadata?.blackboard).toMatchObject({
+            mode: "blackboard",
+            status: BlackboardTurnStatus.NeedsUser,
+            reason: "needs hard cap",
+        });
+        expect(turns[0]?.status).toBe(BlackboardTurnStatus.NeedsUser);
+        expect(turns[0]?.steps).toHaveLength(5);
+        expect(turns[0]?.steps.every((step) => step.metadata.qaOutcome === BlackboardWorkerOutcome.Final)).toBe(true);
+        expect(turns[0]?.decisions[0]?.reason).toBe("hard-round-budget-exhausted:self-referential-proof-game");
+        expect(reply.text).toContain("Final answer:");
     });
 
     test("runtime routes short greeting turns directly", async () => {
@@ -1264,6 +1349,33 @@ class SequencedModel implements ModelClient {
     }
 }
 
+class SequencedStreamingModel implements ModelClient {
+    readonly messages: ModelMessage[][] = [];
+    private generateIndex = 0;
+
+    constructor(
+        private readonly generateResponses: string[],
+        private readonly streamChunks: string[],
+    ) {}
+
+    async generate(messages: ModelMessage[]): Promise<string> {
+        this.messages.push(messages);
+        const response = this.generateResponses[this.generateIndex];
+        this.generateIndex += 1;
+        if (response === undefined) {
+            throw new Error("SequencedStreamingModel response exhausted.");
+        }
+        return response;
+    }
+
+    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+        this.messages.push(messages);
+        for (const chunk of this.streamChunks) {
+            yield chunk;
+        }
+    }
+}
+
 class StreamingModel implements ModelClient {
     readonly messages: ModelMessage[][] = [];
 
@@ -1282,14 +1394,32 @@ class StreamingModel implements ModelClient {
     }
 }
 
-function routeDecision(mode: string, score: number, reason: string): string {
+function routeDecision(
+    mode: string,
+    score: number,
+    reason: string,
+    options: {
+        blackboardContract?: Record<string, unknown>;
+        workers?: Array<Record<string, unknown>>;
+    } = {},
+): string {
     return JSON.stringify({
         mode,
         score,
         reason,
         signals: [reason],
         needsReflectionCandidate: false,
-        workers: mode === "blackboard" ? testWorkerPlan() : [],
+        blackboardContract:
+            options.blackboardContract ??
+            (mode === "blackboard"
+                ? {
+                      mode: "normal",
+                      policyReason: "default-convergence",
+                      evidence: [],
+                      contradictions: [],
+                  }
+                : undefined),
+        workers: mode === "blackboard" ? (options.workers ?? testWorkerPlan()) : [],
     });
 }
 
@@ -1355,6 +1485,22 @@ function testWorkerPlan() {
         { role: TEST_ANALYSIS_ROLE, name: "Analysis worker", handoff: "proposal" },
         { role: TEST_REVIEW_ROLE, name: "Review worker", handoff: "review" },
     ];
+}
+
+@Worker("final-without-agreement")
+class FinalWithoutAgreementWorker {
+    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+        return {
+            inputSummary: input.prompt ?? input.goal,
+            outputSummary: "Final worker keeps returning final, but route contract should force hard cap.",
+            outcome: BlackboardWorkerOutcome.Final,
+            newFacts: ["final-worker-returned-final"],
+            openIssues: [],
+            blockers: [],
+            risk: "low",
+            discussion: [{ role: "worker", content: "Final worker: 我认为已经完成。", visibility: "public" }],
+        };
+    }
 }
 
 function serviceBlock(compose: string, serviceName: string): string {

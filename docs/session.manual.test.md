@@ -1,6 +1,6 @@
 # Session 人工验证方法
 
-本文档用于人工复核 Flyflor session 边界。自动压测报告见 [SESSION_STRESS_REPORT.md](./SESSION_STRESS_REPORT.md)。
+本文档用于人工复核 Flyflor session 边界。自动压测报告见 [session.stress.report.md](./session.stress.report.md)。
 
 ## 方法一：可复现压测数据库
 

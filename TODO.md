@@ -1,8 +1,8 @@
 # Flyflor 工作进度 / Roadmap
 
-当前目标：保持运行时、Docker dev、CLI/TUI、记忆、黑板和 DI 结构可编译、可验证、可打包，然后围绕晶体智力和空间记忆继续迭代。
+当前目标：P0 基线已经收口，后续开发聚焦 Crystal graph/recall、reflection 后台化、TUI/Gateway 可观测、Sandbox 审计和扩展组件接入。
 
-Current goal: keep the runtime buildable, testable, binary-friendly, and cleanly layered while evolving crystal intelligence and spatial memory.
+Current goal: keep the closed P0 baseline stable while moving the active backlog toward graph memory, background reflection, observability, sandbox audit, and extension components.
 
 ## 当前状态
 
@@ -12,62 +12,73 @@ Current goal: keep the runtime buildable, testable, binary-friendly, and cleanly
 | Gateway    | Done        | `GatewayModule extends Gateway`，所有 channel adapter 统一走 streaming dispatcher                         |
 | Blackboard | Done        | `BlackboardModule extends Blackboard`，worker plan 由路由模板动态生成，支持首轮收敛、5 轮硬上限和编号反抛 |
 | Memory     | Done        | Markdown + SQLite + internal vector index + Crystal candidate/skill 链路已接通                            |
-| Crystal    | In progress | candidate、atom、skill 已有；graph edge、深度唤醒、遗忘曲线仍需强化                                       |
-| CLI/TUI    | In progress | `src/command` 已迁移，配置、状态、Markdown 渲染和基础 TUI 已接通                                          |
+| Crystal    | In progress | candidate、atom、skill、证据门已接通；graph edge、深度唤醒、遗忘曲线是下一阶段主线                        |
+| CLI/TUI    | In progress | `src/command` 已迁移，配置、状态、Markdown 渲染和基础 TUI 已接通；审计/讨论视图待强化                     |
 | Docker dev | Done        | `bun run docker:dev` 刷新模板、编译 Linux binary、重启 `flyflor-dev`                                      |
 | DI         | Done        | 只保留 `@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`       |
-| Docs       | In progress | README 已压缩为入口文档；细节归档到 `docs/*`                                                              |
+| Docs       | In progress | README 做入口，TODO 做路线图，细节归档到 `docs/*`                                                         |
 
-## P0-P5 问题清单
+## 当前调试 TODO
 
-| Priority | Problem                    | 当前处理                                                                                                          | 验收                                                   |
-| -------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| P0       | 工程结构必须干净           | 已移除历史过渡目录；worker 基础设施和能力实现已合并到 `src/agent/worker`                                          | `bun run check`、路径扫描无旧目录                      |
-| P0       | Decorator 不能膨胀         | 已删除 Gateway/Session/Memory/Runtime/Sandbox/Blackboard 等专门 decorator；边界语义改为 `class XModule extends X` | decorator 目录只剩允许清单                             |
-| P0       | Docker dev 必须立即可用    | 已刷新 Docker 模板并重建 `dist/flyflor-linux`；`flyflor-dev` 已重启                                               | `/health` 返回 ok，容器内 `flyflor --help` 正常        |
-| P0       | Prompt 不能硬编码          | 必要提示词集中到 `templates/prompts`，Docker dev 同步到 `docker/config/prompts`                                   | 每个英文模板都有 `.zh-CN.md` 审查副本                  |
-| P1       | 晶体智力需要证据门         | 零证据候选只审计，不生成 atom/skill                                                                               | 垃圾候选压力测试不污染 skill                           |
-| P1       | 空间记忆需要关联图         | SurrealDB 已作为 Crystal store；graph edge、recall trace、cluster 仍需扩展                                        | candidate/atom/skill/turn/worker/evidence 可形成关系边 |
-| P1       | 自动聚类不能写死           | 反思模板生成 symbols、bucketHint、coordinates；源码不维护固定 bucket                                              | 扫描源码无业务 taxonomy/关键词桶                       |
-| P1       | 深度唤醒要兼顾延迟         | 待实现 hop/top-k/timeout/cache 预算                                                                               | 命中率压测和延迟分位数报告                             |
-| P2       | 黑板收敛不能拖轮次         | 已支持首轮 final/blocked；非决定性才继续 QA                                                                       | 简单问题不进黑板，可结论问题首轮收敛                   |
-| P2       | needs-user 要结构化        | 已按 1-n 编号 unresolved issues，避免重复大段 blocker                                                             | 封顶测试输出简洁问题列表                               |
-| P2       | direct-with-watch 要补升级 | 当前作为可观测直通模式；工具 churn、重复失败、上下文压力升级仍待补齐                                              | watch 触发 restore point 并以 blackboard 重跑          |
-| P3       | CLI/TUI 要工业化           | CLI 命令面已迁到 `src/command`，TUI 有基础面板                                                                    | 后续补 channel 连接状态、黑板讨论、晶体审计视图        |
-| P3       | Channel 要稳定可观测       | Gateway status snapshot 已统一；平台 adapter 继续补交互细节                                                       | `/channels`、CLI、TUI 展示一致状态                     |
-| P3       | Provider 要自动兼容        | OpenAI/Anthropic compatible factory 已拆分；custom provider 可多实例                                              | base URL `/v1` 自动兼容，支持流式优先                  |
-| P4       | Skill/MCP 要组件化         | 后续使用 `@Component class A extends Skill/MCPService/MCPClient`                                                  | manifest/registry 接入，无动态扫描                     |
-| P4       | Sandbox 要审计化           | `SandboxModule` 已有策略摘要；真实工具执行、审批、事件审计待接入                                                  | 每次工具执行有 requestId、来源、权限结果               |
-| P4       | Worker 要进程隔离          | 已有 `json-process` / `persistent-json-process`                                                                   | raw stdio/PTY TUI adapter 复用 WorkerManager 语义      |
-| P5       | 一键安装要轻量             | 模板可复制安装；Docker dev 验证二进制路径                                                                         | 安装只复制模板、配置和 binary，不污染 workspace        |
-| P5       | 文档要保持清爽             | README 做入口，TODO 做路线图，docs 放细节                                                                         | stale term 扫描和 format/check 通过                    |
+| Priority | 问题                                 | 处理要求                                                                                                  | 验收方式                                                                                                    |
+| -------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| P0       | Worker 角色被固定成 Planner/Reviewer | 黑板路由必须由 LLM 按当前请求动态拆分 worker；Planner/Reviewer 只在用户显式点名时保留，不能作为默认组合   | 路由提示词和测试覆盖任意角色/多模型视角，例如 codex、claude、opencode、deepseek、kimi                       |
+| P0       | 复杂/无限任务没有稳定触发黑板        | 自指、互斥、无限深入、穷尽所有可能等任务必须进入 blackboard，并声明 `non-convergent` contract             | “覆盖所有可能物理现象”等用例触发黑板，不直接长答，并进入硬轮次预算                                          |
+| P0       | 五轮硬封顶没有按预期触发             | `non-convergent` 任务必须忽略早期伪 final，持续讨论到 `hardMaxRounds` 后编号反抛用户                      | 测试断言第 5 轮结束、reason 包含 `hard-round-budget-exhausted`，不会提前 converged                          |
+| P0       | 黑板输出仍像调试日志                 | public transcript 必须是面向用户的对话形式；不得暴露 `qa_ack`、`analysis.unit`、`worker-1`、`final=false` | 黑板对话渲染测试覆盖 public discussion 清洗与自然语言展示                                                   |
+| P0       | 文件命名规范没有硬约束               | 源码、脚本、提示词模板和内部模板都使用点分后缀 `xxx.xxx.ext`；禁止新增连字符/下划线命名                   | `bun test` 包含命名边界扫描；提示词文件迁移为 `blackboard.route.md`、`blackboard.route.zh.cn.md` 等点分命名 |
+| P1       | 全量测试覆盖不足                     | 为黑板路由、调度、硬封顶、对话输出、命名规范补充边界测试                                                  | `bun run format:check && bun run check && bun test && bun run build:binary` 全部通过                        |
 
-## 已完成
+## P0-P5 清理结果
 
-| Module       | Done                                                                                         |
-| ------------ | -------------------------------------------------------------------------------------------- |
-| Architecture | `app.ts` 薄入口，`src/app.ts` composition root，`src/agent` 边界模块，`src/command` 命令层   |
-| DI           | 显式 token/provider container；不做反射扫描，不做动态目录加载                                |
-| Runtime      | direct / direct-with-watch / blackboard 路由模板接入                                         |
-| LLM          | OpenAI-compatible 与 Anthropic-compatible 分层，支持流式优先、非流式回落                     |
-| Gateway      | API、webhook、stdio、iLink 等 channel adapter registry                                       |
-| Blackboard   | SQLite turn/step/decision/lease，通用模型 worker，角色/数量由 `blackboard-route.md` 动态生成 |
-| Memory       | Markdown source of truth、SQLite session/history、内部向量索引、Crystal candidate            |
-| Crystal      | candidate -> atom -> skill 基础链路，SurrealDB store，证据门                                 |
-| Templates    | `templates/prompts` 和 `templates/memory` 均有 `.zh-CN.md` 副本                              |
-| Docker       | `docker:dev` 自动刷新模板、构建 Linux binary、重启 dev container                             |
-| Tests        | command/memory/reflection/blackboard/workers 边界测试通过                                    |
+| Priority | 结论          | 清理说明                                                                                         |
+| -------- | ------------- | ------------------------------------------------------------------------------------------------ |
+| P0       | Closed        | 工程结构、decorator 收敛、Docker dev、prompt 模板外置都已进入基线，后续只做回归守护              |
+| P1       | Active        | Crystal graph、cluster、recall trace、deep activation、forgetting/reinforcement 是当前最高优先级 |
+| P2       | Mostly closed | 黑板首轮收敛、needs-user 编号反抛已落地；`direct-with-watch` 自动升级仍保留为 P2 增强            |
+| P3       | Active        | CLI/TUI、channel 状态、provider 兼容已经有底座，下一步补可观测、错误反馈和用户操作面             |
+| P4       | Active        | Skill/MCP/Plugin manifest、Sandbox 审计、外部 worker 进程隔离进入扩展能力建设                    |
+| P5       | Watch         | 一键安装和文档清爽度作为持续约束，不再阻塞当前开发                                               |
 
-## 进行中
+## 已清理基线
 
-| Module     | Next                                                                |
-| ---------- | ------------------------------------------------------------------- |
-| Crystal    | graph edge、cluster、recall trace、reuse feedback、forgetting state |
-| Reflection | 后台 reflection worker，从热路径拆出可调度、可审计、可重跑          |
-| TUI        | 黑板讨论格式化、channel 状态、晶体记忆审计、思考中状态              |
-| Gateway    | 各渠道连接状态、引用/评论/输入中状态、平台级错误反馈                |
-| Sandbox    | 工具执行审计、审批流、MCP/tool 权限边界                             |
-| Plugins    | plugin manifest、marketplace index、binary compatibility checks     |
+| Area         | 已完成                                                                                      | 回归守护                                        |
+| ------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Architecture | `app.ts` 薄入口，`src/app.ts` composition root，`src/agent` 边界模块，`src/command` 命令层  | `bun run check`，边界测试                       |
+| DI           | 显式 token/provider container；不做反射扫描，不做动态目录加载                               | decorator 目录只保留允许清单                    |
+| Runtime      | direct / direct-with-watch / blackboard 路由模板接入                                        | 路由结果只校验枚举和 JSON shape                 |
+| Gateway      | API、webhook、stdio、iLink 等 channel adapter registry                                      | `/channels`、CLI、TUI 消费同一 snapshot         |
+| Blackboard   | SQLite turn/step/decision/lease，通用模型 worker，动态 worker plan，首轮 final/blocked 收敛 | 简单任务不进黑板，阻塞时输出编号问题            |
+| Memory       | Markdown source of truth、SQLite session/history、内部向量索引、Crystal candidate           | 长期记忆 promotion 必须走结构化 action          |
+| Crystal      | candidate -> atom -> skill 基础链路，SurrealDB store，零证据不升格                          | 垃圾候选压力测试不污染 skill                    |
+| Templates    | `templates/prompts` 和 `templates/memory` 均有 `.zh.cn.md` 审查副本                         | Docker dev 同步到 `docker/config`               |
+| Docker       | `docker:dev` 自动刷新模板、构建 Linux binary、重启 dev container                            | `/health` 返回 ok，容器内 `flyflor --help` 正常 |
+
+## 活跃 Backlog
+
+| Priority | Workstream                  | 下一步                                                                           | 验收                                                  |
+| -------- | --------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| P1       | Crystal graph               | 为 candidate、atom、skill、turn、worker step、evidence、verification 写入关系边  | SurrealDB 可追溯一条 skill 的来源、支持关系和使用记录 |
+| P1       | Recall trace                | 记录每次 skill 唤醒原因、命中路径、使用结果和失败反馈                            | TUI/CLI 可查看某次召回为什么发生                      |
+| P1       | Deep activation             | 实现 query -> seed skills -> graph expansion -> budgeted rerank                  | 有 hop、top-k、timeout、cache 预算和延迟报告          |
+| P1       | Forgetting/reinforcement    | 为 skill/edge 增加 decay、reuse、failure、protected 状态                         | 旧方法会衰减，验证过或高风险方法不会被激进遗忘        |
+| P2       | direct-with-watch           | direct 执行时观察工具 churn、重复失败、上下文压力，并支持 restore point 升级黑板 | watch 触发后能以 blackboard 重跑同一 turn             |
+| P3       | TUI observability           | 补黑板讨论、channel 状态、晶体记忆审计、思考中状态                               | TUI 展示与 Gateway/Blackboard/Crystal 持久状态一致    |
+| P3       | Gateway adapters            | 补引用/评论/输入中状态、平台级错误反馈和 channel 连接诊断                        | `/channels`、CLI、TUI 展示一致且可定位失败原因        |
+| P3       | Provider compatibility      | 完善自定义 provider、多实例、streaming fallback 和凭据状态                       | base URL `/v1` 兼容，流式优先，失败可降级             |
+| P4       | Sandbox audit               | 接入真实工具执行、审批、MCP/tool 权限事件和审计日志                              | 每次副作用有 requestId、来源、策略、结果              |
+| P4       | Skill/MCP/Plugin components | 通过 manifest/registry 接入扩展组件，不做目录扫描                                | 可列出、校验、启停组件且兼容 binary                   |
+| P4       | Worker isolation            | 扩展 `json-process` / `persistent-json-process`，补 raw stdio/PTY TUI adapter    | 外部 agent 复用 WorkerManager 队列、超时和事件语义    |
+| P5       | Install/update              | 梳理轻量安装、更新、备份和卸载路径                                               | 安装只复制模板、配置和 binary，不污染 workspace       |
+| P5       | Docs hygiene                | 保持 README 入口化，TODO 路线图化，docs 设计细节化                               | stale term 扫描、format/check 通过                    |
+
+## 当前推荐执行顺序
+
+1. P1 Crystal graph + recall trace。
+2. P1 deep activation 的预算和压测报告。
+3. P2 direct-with-watch 自动升级。
+4. P3 TUI/Gateway 可观测补齐。
+5. P4 Sandbox 审计和扩展组件 manifest。
 
 ## 验证基线
 

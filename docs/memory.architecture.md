@@ -2,7 +2,7 @@
 
 Flyflor 的记忆系统遵守一条核心原则：长期记忆是被整理过的意义，不是对话转录堆积。
 
-架构图见 [MEMORY_ARCHITECTURE_DIAGRAM.md](./MEMORY_ARCHITECTURE_DIAGRAM.md)。
+架构图见 [memory.architecture.diagram.md](./memory.architecture.diagram.md)。
 
 ## 设计哲学
 
@@ -53,7 +53,7 @@ workspace 中的 Markdown 文件是长期记忆的权威来源：
     history.jsonl
 ```
 
-这些工作区 Markdown 是用户可编辑的长期记忆文件。初始模板不写在源码里，而是维护在 `templates/memory`，安装后复制到 `~/.flyflor/templates/memory`；首次初始化工作区文件时由 `MarkdownMemoryStore` 复制对应模板。模板引用关系和粒度见 [提示词与 Markdown 模板工程化](PROMPT_TEMPLATES.md)。
+这些工作区 Markdown 是用户可编辑的长期记忆文件。初始模板不写在源码里，而是维护在 `templates/memory`，安装后复制到 `~/.flyflor/templates/memory`；首次初始化工作区文件时由 `MarkdownMemoryStore` 复制对应模板。模板引用关系和粒度见 [提示词与 Markdown 模板工程化](prompt.templates.md)。
 
 每轮开始时加载冻结快照。当前轮中发生的记忆写入不会反向修改本轮 prompt，下一轮才可见。
 
@@ -110,7 +110,7 @@ SurrealDB 后续要承担三类“海马体式”能力：
 6. 用户消息和助手回复追加到 session。
 7. Runtime 从模型回复末尾解析结构化 `memory_action`，并从用户可见回复中剥离该隐藏块。
 8. 合法 action 进入 SQLite candidate 审计，再按目标晋升到 Markdown，并把已验证证据送入晶体层。
-9. 需要反思的黑板或运行时 turn 调用 `crystal-reflection.md` 生成 reflection candidate；候选先落 Crystal Memory，只有带证据的候选才晶体化为 atom/skill。
+9. 需要反思的黑板或运行时 turn 调用 `crystal.reflection.md` 生成 reflection candidate；候选先落 Crystal Memory，只有带证据的候选才晶体化为 atom/skill。
 10. 超过 session 保留阈值后，旧消息摘要为 `memory/history.jsonl`。
 
 主路径不能把每轮完整对话直接当长期记忆。

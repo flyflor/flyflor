@@ -13,6 +13,13 @@ const MARKDOWN_FILES = [
     MarkdownMemoryFile.Memory,
 ];
 
+const MARKDOWN_TEMPLATE_FILES: Record<MarkdownMemoryFile, string> = {
+    [MarkdownMemoryFile.Memory]: "memory.md",
+    [MarkdownMemoryFile.Self]: "self.md",
+    [MarkdownMemoryFile.Soul]: "soul.md",
+    [MarkdownMemoryFile.User]: "user.md",
+};
+
 export interface MarkdownMemorySnapshot {
     prompt: string;
     results: MemorySearchResult[];
@@ -104,7 +111,7 @@ async function ensureMarkdownFile(root: string, templateRoot: string, file: Mark
     if (await handle.exists()) {
         return;
     }
-    const templatePath = join(templateRoot, "memory", file);
+    const templatePath = join(templateRoot, "memory", MARKDOWN_TEMPLATE_FILES[file]);
     const template = Bun.file(templatePath);
     if (!(await template.exists())) {
         throw new Error(`Missing memory Markdown template: ${templatePath}. Run "bun run install:templates".`);

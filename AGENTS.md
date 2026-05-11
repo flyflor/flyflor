@@ -1,6 +1,6 @@
 # Flyflor Agent Rules
 
-本仓库使用 Bun + TypeScript 开发，并计划编译为独立二进制。所有自动化开发代理必须先遵守 [docs/BOUNDARIES.md](docs/BOUNDARIES.md)。
+本仓库使用 Bun + TypeScript 开发，并计划编译为独立二进制。所有自动化开发代理必须先遵守 [docs/boundaries.md](docs/boundaries.md)。
 
 硬性规则：
 
@@ -9,7 +9,7 @@
 - 业务配置不能走环境变量；provider、模型、渠道凭据、沙箱策略和网关行为必须走 config/secrets provider。
 - 约定大于配置：默认目录、默认 provider、默认 channel registry 应在代码里有清晰约定，配置只覆盖差异。
 - 该使用枚举/常量对象时不要裸写字符串；新增协议值先放入 `src/protocol/contracts/enums.ts` 并经 `src/protocol/contracts/index.ts` 暴露，或放入对应 registry。
-- 目录入口统一为 `index.ts`；有明确角色的实现文件必须使用点分后缀，例如 `runtime.module.ts`、`memory.service.ts`、`blackboard.worker.ts`、`worker.manager.ts`、`http.adapter.ts`、`sqlite.store.ts`；不要新增连字符源码文件。
+- 目录入口统一为 `index.ts`；有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `runtime.module.ts`、`memory.service.ts`、`blackboard.worker.ts`、`worker.manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`；不要新增连字符或下划线命名的仓库文件。
 - 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`。
 - `@Provide` 是注入底座；Gateway、Blackboard、Memory、Session、Runtime、Sandbox 通过 `class XModule extends X` 表达边界语义，不再新增专门 decorator。
 - 入口必须保持薄：`app.ts` 只启动 FlyFlor 主类；依赖注入只能在 composition root 使用显式 token/provider 容器，不做反射扫描或动态加载。
@@ -20,7 +20,7 @@
 - 不把密钥、`.env`、日志、会话数据库、用户工作区数据编译进二进制。
 - 不绕过 sandbox 执行文件写入、shell、网络、插件或 MCP 工具。
 - 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化。
-- 修改边界、高风险工具或依赖策略时，同步更新 `docs/BOUNDARIES.md`。
+- 修改边界、高风险工具或依赖策略时，同步更新 `docs/boundaries.md`。
 
 常用验证：
 

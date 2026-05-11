@@ -153,10 +153,15 @@ export class BlackboardModule extends Blackboard {
 
         for (let round = startRound; round <= hardMaxRounds; round += 1) {
             for (const worker of workers) {
+                const latestTurn = await this.store.getTurn(turnId);
+                if (!latestTurn) {
+                    return undefined;
+                }
+                ensureRunning(latestTurn);
                 await this.runWorker(turnId, {
                     round,
                     workerRole: worker.role,
-                    prompt: workerPrompt(turn, worker, round),
+                    prompt: workerPrompt(latestTurn, worker, round),
                     createdAt: input.createdAt,
                     timeoutMs: input.timeoutMs,
                     metadata: {
@@ -380,12 +385,20 @@ export class BlackboardModule extends Blackboard {
             },
         ];
         for (const item of discussion) {
+            const visibility = item.visibility ?? "public";
             await this.appendMessage(turnId, {
                 round: input.round,
                 workerRole: input.workerRole,
                 role: item.role,
-                content: item.content,
-                visibility: item.visibility ?? "public",
+                content:
+                    visibility === "public"
+                        ? userFacingDiscussionContent(
+                              item.content,
+                              result.output.outputSummary,
+                              stringMetadata(input.metadata?.workerName) ?? input.workerRole,
+                          )
+                        : item.content,
+                visibility,
                 createdAt: input.createdAt,
                 metadata: {
                     ...(item.metadata ?? {}),
@@ -482,6 +495,7 @@ export class BlackboardModule extends Blackboard {
             unresolvedIssues,
         });
         const form = renderDecisionForm({
+            openQuestions: unresolvedIssues,
             question: prompt,
             options,
             reason: input.reason,
@@ -518,6 +532,7 @@ export class BlackboardModule extends Blackboard {
             createdAt: now,
             metadata: {
                 form,
+                openQuestions: unresolvedIssues,
                 round: input.round,
             },
         });
@@ -538,7 +553,13 @@ function workersFromPlan(workers: BlackboardWorkerPlanInput[] | undefined, now: 
     if (!workers || workers.length === 0) {
         throw new Error("Blackboard requires a prompt-generated worker plan.");
     }
-    return workers.map((worker, index) => ({
+    const deduped = dedupeWorkers(workers);
+    const roles = new Set(deduped.map((worker) => worker.role));
+    const normalized = deduped.map((worker) => ({
+        ...worker,
+        dependsOn: (worker.dependsOn ?? []).filter((dependency) => roles.has(dependency) && dependency !== worker.role),
+    }));
+    return sortWorkersByDependencies(normalized).map((worker, index) => ({
         capabilities: worker.capabilities ?? ["general-worker"],
         dependsOn: worker.dependsOn ?? [],
         handoff: worker.handoff ?? "proposal",
@@ -548,6 +569,40 @@ function workersFromPlan(workers: BlackboardWorkerPlanInput[] | undefined, now: 
         status: "idle",
         updatedAt: now,
     }));
+}
+
+function dedupeWorkers(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {
+    const seen = new Set<string>();
+    const result: BlackboardWorkerPlanInput[] = [];
+    for (const worker of workers) {
+        if (seen.has(worker.role)) {
+            continue;
+        }
+        seen.add(worker.role);
+        result.push(worker);
+    }
+    return result;
+}
+
+function sortWorkersByDependencies(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {
+    const pending = new Map(workers.map((worker) => [worker.role, worker]));
+    const emitted = new Set<string>();
+    const sorted: BlackboardWorkerPlanInput[] = [];
+
+    while (pending.size > 0) {
+        const ready = [...pending.values()].find((worker) =>
+            (worker.dependsOn ?? []).every((dependency) => emitted.has(dependency)),
+        );
+        if (!ready) {
+            sorted.push(...pending.values());
+            break;
+        }
+        sorted.push(ready);
+        emitted.add(ready.role);
+        pending.delete(ready.role);
+    }
+
+    return sorted;
 }
 
 function runnableWorkers(turn: BlackboardTurn): BlackboardWorkerState[] {
@@ -628,7 +683,7 @@ function nextRound(turn: BlackboardTurn): number {
 
 function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round: number): string {
     const minRounds = Math.max(1, turn.budget.minRounds);
-    const phase = round < minRounds ? "explore-and-question" : "converge-or-defer";
+    const phase = workerPhase(turn, worker, round, minRounds);
     const convergencePolicy = convergencePolicyFor(turn);
     return renderBlackboardWorkerEnvelope({
         contract: blackboardContractFor(turn),
@@ -642,6 +697,19 @@ function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round
         previousSteps: turn.steps.filter((step) => step.round < round).map(stepToWorkerTaskStep),
         round,
     });
+}
+
+function workerPhase(turn: BlackboardTurn, worker: BlackboardWorkerState, round: number, minRounds: number): string {
+    if (round < minRounds) {
+        return "explore-and-question";
+    }
+    if (round === 1) {
+        return worker.dependsOn.length > 0 ? "respond-to-upstream-and-propose" : "decompose-and-propose";
+    }
+    const priorOpenIssues = turn.steps
+        .filter((step) => step.round < round)
+        .flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues));
+    return priorOpenIssues.length > 0 ? "answer-open-issues-and-converge" : "converge-or-defer";
 }
 
 export function convergencePolicyFor(turnOrGoal: BlackboardTurn | string): { forceHardCap: boolean; reason: string } {
@@ -707,6 +775,28 @@ function readMetadataStringArray(value: unknown): string[] {
     return value.filter((item): item is string => typeof item === "string");
 }
 
+function stringMetadata(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function userFacingDiscussionContent(content: string, fallback: string, participant: string): string {
+    const clean = content.trim();
+    if (clean && !looksLikeDiagnosticDiscussion(clean)) {
+        return clean;
+    }
+    const fallbackText = fallback.trim();
+    if (fallbackText && !looksLikeDiagnosticDiscussion(fallbackText)) {
+        return fallbackText;
+    }
+    return `${participant} 提出了阶段性意见，等待同伴继续交叉检查。`;
+}
+
+function looksLikeDiagnosticDiscussion(value: string): boolean {
+    return /\b(?:qa_ack|analysis\.unit|review\.unit|worker-\d+|final=false|outcome=|agreement=|flyflor\.)\b/iu.test(
+        value,
+    );
+}
+
 function readMetadataWorkerOutcome(value: unknown): BlackboardWorkerOutcome | undefined {
     if (
         value === BlackboardWorkerOutcome.Blocked ||
@@ -763,22 +853,31 @@ function evaluateConvergence(
 
 function latestUnresolvedIssues(turn: BlackboardTurn, reason: string): string[] {
     const latestRound = turn.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
-    const latestSteps = turn.steps.filter((step) => step.round === latestRound);
+    const useFullTurn = reason.startsWith("hard-round-budget-exhausted");
+    const sourceSteps = useFullTurn ? turn.steps : turn.steps.filter((step) => step.round === latestRound);
+    const contract = blackboardContractFor(turn);
     const issues = normalizedUnique([
-        ...latestSteps.flatMap((step) => step.blockers),
-        ...latestSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues)),
-        ...latestSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaQuestions)),
+        ...sourceSteps.flatMap((step) => step.blockers),
+        ...sourceSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues)),
+        ...sourceSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaQuestions)),
+        ...contract.contradictions.map((item) => `${item.left} / ${item.right}: ${item.reason}`),
     ]);
     if (issues.length > 0) {
         return issues.slice(0, MAX_UNRESOLVED_ISSUES);
     }
     if (reason.includes("awaiting-worker-final-output")) {
-        return ["Workers did not return explicit final outcome."];
+        return [
+            "Confirm whether the board should continue even though workers did not return a structured final outcome.",
+        ];
     }
     if (reason.includes("awaiting-worker-consensus")) {
-        return ["Workers did not return explicit agreement."];
+        return [
+            "Confirm which remaining disagreement should decide the next round because workers did not return structured agreement.",
+        ];
     }
-    return ["No concrete blocker was reported; the turn reached its discussion limit without structured convergence."];
+    return [
+        "Confirm whether to narrow the task, accept the remaining risk, or provide new facts because the board reached its discussion limit without structured convergence.",
+    ];
 }
 
 function normalizedUnique(values: string[]): string[] {
@@ -800,6 +899,7 @@ function normalizeText(value: string): string {
 }
 
 function renderDecisionForm(input: {
+    openQuestions: string[];
     question: string;
     options: Array<{ id: string; label: string; description?: string }>;
     reason: string;
@@ -809,6 +909,7 @@ function renderDecisionForm(input: {
         "```flyflor-decision-form",
         JSON.stringify(
             {
+                openQuestions: input.openQuestions,
                 question: input.question,
                 options: input.options,
                 reason: input.reason,

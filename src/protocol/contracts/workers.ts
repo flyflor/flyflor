@@ -89,7 +89,7 @@ export interface BlackboardWorkerResult {
 }
 
 export interface BlackboardWorkerDiscussion {
-    role: "assistant" | "critic" | "planner" | "reviewer" | "system" | "worker";
+    role: string;
     content: string;
     visibility?: "debug" | "internal" | "public";
     metadata?: Record<string, unknown>;

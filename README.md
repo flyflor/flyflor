@@ -91,11 +91,11 @@ Flyflor uses layered memory:
 
 Long-term memory writes require a structured `memory_action` emitted in the same model turn. Ordinary chat text, keywords, regexes, and affect scores do not promote memory by themselves.
 
-Prompt templates live in `templates/prompts` with `.zh-CN.md` review copies. Runtime reads installed Markdown from `~/.flyflor/prompts`; Docker dev reads `./docker/config/prompts`.
+Prompt templates live in `templates/prompts` with `.zh.cn.md` review copies. Runtime reads installed Markdown from `~/.flyflor/prompts`; Docker dev reads `./docker/config/prompts`.
 
 ## Blackboard
 
-Runtime asks `blackboard-route.md` for a structured route:
+Runtime asks `blackboard.route.md` for a structured route:
 
 - `direct`: answer directly.
 - `direct-with-watch`: answer directly while watching for escalation signals.
@@ -107,13 +107,13 @@ Blackboard can converge on the first decisive round. Non-decisive discussions co
 
 | Document                                                             | Purpose               |
 | -------------------------------------------------------------------- | --------------------- |
-| [TODO.md](TODO.md)                                                   | current P0-P5 plan    |
+| [TODO.md](TODO.md)                                                   | cleaned P0-P5 roadmap |
 | [DESIGN.md](DESIGN.md)                                               | long-form philosophy  |
-| [docs/BOUNDARIES.md](docs/BOUNDARIES.md)                             | engineering rules     |
-| [docs/DI_PROTOCOL_ARCHITECTURE.md](docs/DI_PROTOCOL_ARCHITECTURE.md) | DI/protocol design    |
-| [docs/MEMORY_ARCHITECTURE.md](docs/MEMORY_ARCHITECTURE.md)           | memory architecture   |
-| [docs/CRYSTAL_MEMORY.md](docs/CRYSTAL_MEMORY.md)                     | crystal memory flow   |
-| [docs/BLACKBOARD_WORKER_DESIGN.md](docs/BLACKBOARD_WORKER_DESIGN.md) | blackboard design     |
-| [docs/PROMPT_TEMPLATES.md](docs/PROMPT_TEMPLATES.md)                 | Markdown template map |
+| [docs/boundaries.md](docs/boundaries.md)                             | engineering rules     |
+| [docs/di.protocol.architecture.md](docs/di.protocol.architecture.md) | DI/protocol design    |
+| [docs/memory.architecture.md](docs/memory.architecture.md)           | memory architecture   |
+| [docs/crystal.memory.md](docs/crystal.memory.md)                     | crystal memory flow   |
+| [docs/blackboard.worker.design.md](docs/blackboard.worker.design.md) | blackboard design     |
+| [docs/prompt.templates.md](docs/prompt.templates.md)                 | Markdown template map |
 
 Development rules are also mirrored in [AGENTS.md](AGENTS.md).

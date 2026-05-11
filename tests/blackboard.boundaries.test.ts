@@ -3,7 +3,15 @@ import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
-import { BlackboardModule, loadPromptTemplates, SQLiteBlackboardStore, WorkerManager } from "../src/agent/index.ts";
+import {
+    BlackboardModule,
+    loadPromptTemplates,
+    renderBlackboardRoutePrompt,
+    renderBlackboardWorkerEnvelope,
+    renderBlackboardWorkerSystemPrompt,
+    SQLiteBlackboardStore,
+    WorkerManager,
+} from "../src/agent/index.ts";
 import {
     BlackboardDecisionKind,
     BlackboardTurnStatus,
@@ -13,6 +21,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import type { BlackboardWorkerResult, BlackboardWorkerTask, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, componentRegistry, type EventSink, Worker } from "../src/agent/di/index.ts";
+import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard.route.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
@@ -68,7 +77,8 @@ describe("Blackboard control boundary", () => {
         const loaded = await controller.getTurn(first.turn.id);
         expect(loaded?.steps).toHaveLength(1);
         expect(loaded?.messages.map((message) => message.role)).toEqual(["adapter", "worker"]);
-        expect(loaded?.messages[1]?.content).toContain("analysis.unit.decomposition");
+        expect(loaded?.messages[1]?.content).not.toContain("analysis.unit.decomposition");
+        expect(loaded?.messages[1]?.content).toContain("阶段性意见");
         expect(loaded?.workers.find((worker) => worker.role === TEST_ANALYSIS_ROLE)?.status).toBe("blocked");
 
         const decision = await controller.requestDecision(first.turn.id, {
@@ -134,6 +144,246 @@ describe("Blackboard control boundary", () => {
         });
     });
 
+    test("blackboard prompt templates encode worker splitting and dialogue contracts", async () => {
+        await testConfig();
+
+        const routePrompt = renderBlackboardRoutePrompt({ request: "实现一个跨文件功能并验证" });
+        const workerPrompt = renderBlackboardWorkerSystemPrompt({ participant: "Verification worker" });
+        const envelope = JSON.parse(
+            renderBlackboardWorkerEnvelope({
+                contract: { mode: "normal", evidence: [], contradictions: [], policyReason: "default" },
+                convergencePolicy: { forceHardCap: false, reason: "default-convergence" },
+                currentRoundSteps: [{ workerRole: "implementation-worker", questions: ["tests?"] }],
+                discussionPlan: {
+                    objective: "实现一个跨文件功能并验证",
+                    participants: [
+                        {
+                            capabilities: ["implement"],
+                            dependsOn: [],
+                            handoff: "implementation",
+                            name: "Implementation",
+                            order: 1,
+                            role: "implementation-worker",
+                            stage: "implementation",
+                        },
+                        {
+                            capabilities: ["verify"],
+                            dependsOn: ["implementation-worker"],
+                            handoff: "verification",
+                            name: "Verification",
+                            order: 2,
+                            role: "verification-worker",
+                            stage: "verification",
+                        },
+                    ],
+                    qaGoal: "cross-check",
+                    workstreams: ["implementation:implementation", "verification:verification"],
+                },
+                goal: "实现一个跨文件功能并验证",
+                minRounds: 1,
+                participant: "Verification",
+                phase: "respond-to-upstream-and-propose",
+                previousSteps: [],
+                round: 1,
+            }),
+        ) as { constraints: string[]; expectedOutput: string[]; phase: string };
+
+        expect(routePrompt).toContain("Treat worker selection as a small game");
+        expect(routePrompt).toContain("Do not rely on any built-in role catalog");
+        expect(routePrompt).toContain("dependsOn value match another worker role exactly");
+        expect(routePrompt).toContain("Worker names should be short display names");
+        expect(routePrompt).toContain('Use blackboardContract.mode "non-convergent"');
+        expect(routePrompt).toContain("cannot be proven by finite board evidence");
+        expect(routePrompt).not.toContain("Planner/Reviewer");
+        expect(routePrompt).not.toContain("Codex");
+        expect(workerPrompt).toContain("Read currentRoundSteps before answering");
+        expect(workerPrompt).toContain("1 to 3 public entries");
+        expect(workerPrompt).toContain("not a log line");
+        expect(envelope.phase).toBe("respond-to-upstream-and-propose");
+        expect(envelope.expectedOutput).toContain("proposal");
+        expect(envelope.constraints).toEqual(
+            expect.arrayContaining(["write-public-discussion-as-dialogue", "answer-current-round-peer-questions"]),
+        );
+    });
+
+    test("route parser normalizes worker plans before scheduling", () => {
+        const decision = parseBlackboardRouteDecision(
+            JSON.stringify({
+                mode: "blackboard",
+                score: 0.8,
+                reason: "cross-file implementation needs review",
+                signals: ["implementation", "verification"],
+                needsReflectionCandidate: true,
+                workers: [
+                    {
+                        role: "Verification Worker",
+                        name: "Verification",
+                        handoff: "verification",
+                        dependsOn: ["Implementation Worker"],
+                    },
+                    {
+                        role: "Implementation Worker",
+                        name: "Implementation",
+                        handoff: "implementation",
+                        dependsOn: ["missing-upstream"],
+                    },
+                    {
+                        role: "Implementation Worker",
+                        name: "Duplicate implementation",
+                        handoff: "implementation",
+                    },
+                ],
+            }),
+        );
+
+        expect(decision.workers.map((worker) => worker.role)).toEqual(["implementation-worker", "verification-worker"]);
+        expect(decision.workers[0]?.dependsOn).toEqual([]);
+        expect(decision.workers[1]?.dependsOn).toEqual(["implementation-worker"]);
+    });
+
+    test("route parser accepts arbitrary model and persona worker roles", () => {
+        const decision = parseBlackboardRouteDecision(
+            JSON.stringify({
+                mode: "blackboard",
+                score: 0.92,
+                reason: "multi-model deliberation",
+                signals: ["model-perspectives"],
+                needsReflectionCandidate: false,
+                workers: [
+                    { role: "Codex", name: "Codex", handoff: "implementation" },
+                    { role: "DeepSeek", name: "DeepSeek", handoff: "analysis" },
+                    { role: "Claude", name: "Claude", handoff: "review", dependsOn: ["Codex"] },
+                    { role: "OpenCode", name: "OpenCode", handoff: "verification", dependsOn: ["Codex"] },
+                    { role: "Kimi", name: "Kimi", handoff: "summary", dependsOn: ["Claude", "OpenCode"] },
+                ],
+            }),
+        );
+
+        expect(decision.workers.map((worker) => worker.role)).toEqual([
+            "codex",
+            "deepseek",
+            "claude",
+            "opencode",
+            "kimi",
+        ]);
+        expect(decision.workers.map((worker) => worker.name)).toEqual([
+            "Codex",
+            "DeepSeek",
+            "Claude",
+            "OpenCode",
+            "Kimi",
+        ]);
+        expect(decision.workers.at(-1)?.dependsOn).toEqual(["claude", "opencode"]);
+    });
+
+    test("route parser strips workers for direct mode and caps oversized plans", () => {
+        const direct = parseBlackboardRouteDecision(
+            JSON.stringify({
+                mode: "direct",
+                score: 0.1,
+                reason: "simple greeting",
+                signals: [],
+                needsReflectionCandidate: false,
+                workers: [{ role: "should-not-run" }],
+            }),
+        );
+        const oversized = parseBlackboardRouteDecision(
+            JSON.stringify({
+                mode: "blackboard",
+                score: 0.91,
+                reason: "many workstreams",
+                signals: ["many"],
+                needsReflectionCandidate: false,
+                workers: Array.from({ length: 7 }, (_value, index) => ({
+                    role: `worker ${index + 1}`,
+                    handoff: "analysis",
+                })),
+            }),
+        );
+
+        expect(direct.workers).toEqual([]);
+        expect(oversized.workers).toHaveLength(5);
+        expect(oversized.workers.map((worker) => worker.role)).toEqual([
+            "worker-1",
+            "worker-2",
+            "worker-3",
+            "worker-4",
+            "worker-5",
+        ]);
+    });
+
+    test("route parser reads non-convergent blackboard contracts", () => {
+        const decision = parseBlackboardRouteDecision(
+            JSON.stringify({
+                mode: "blackboard",
+                score: 0.97,
+                reason: "self-referential proof game",
+                signals: ["convergence", "self-reference"],
+                needsReflectionCandidate: false,
+                blackboardContract: {
+                    mode: "non-convergent",
+                    policyReason: "circular-proof-game",
+                    evidence: ["user asks for converged while banning the only valid blocker"],
+                    contradictions: [
+                        {
+                            left: "must reach converged",
+                            right: "every reviewer response is pre-judged as wrong",
+                            reason: "circular evaluation",
+                        },
+                    ],
+                },
+                workers: [{ role: "planner", handoff: "analysis" }],
+            }),
+        );
+
+        expect(decision.blackboardContract).toMatchObject({
+            mode: "non-convergent",
+            policyReason: "circular-proof-game",
+            evidence: expect.arrayContaining(["user asks for converged while banning the only valid blocker"]),
+        });
+        expect(decision.blackboardContract.contradictions).toEqual([
+            {
+                left: "must reach converged",
+                right: "every reviewer response is pre-judged as wrong",
+                reason: "circular evaluation",
+            },
+        ]);
+    });
+
+    test("startTurn dedupes worker plans and schedules dependency order", async () => {
+        const config = await testConfig();
+        const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths));
+
+        const start = await controller.startTurn({
+            sessionKey: "stdio:worker-plan-normalization",
+            requestId: "req-worker-plan-normalization",
+            goal: "先实现再验证",
+            now: "2026-05-09T08:00:00.000Z",
+            workers: [
+                { role: "verification-worker", name: "Verification", dependsOn: ["implementation-worker"] },
+                { role: "implementation-worker", name: "Implementation", dependsOn: ["missing-worker"] },
+                { role: "implementation-worker", name: "Duplicate implementation" },
+            ],
+        });
+
+        expect(start.acquired).toBe(true);
+        if (!start.acquired) {
+            throw new Error("expected lease acquisition");
+        }
+        expect(start.turn.workers.map((worker) => worker.role)).toEqual([
+            "implementation-worker",
+            "verification-worker",
+        ]);
+        expect(start.turn.workers[0]?.dependsOn).toEqual([]);
+        expect(start.turn.workers[1]?.dependsOn).toEqual(["implementation-worker"]);
+        expect(start.turn.metadata.blackboardPlan).toMatchObject({
+            participants: [
+                expect.objectContaining({ order: 1, role: "implementation-worker" }),
+                expect.objectContaining({ order: 2, role: "verification-worker" }),
+            ],
+        });
+    });
+
     test("convergence scheduler runs arbitrary worker names and converges on first decisive round", async () => {
         const config = await testConfig();
         const events = new CapturingSink();
@@ -166,6 +416,51 @@ describe("Blackboard control boundary", () => {
         expect(finished?.steps.map((step) => step.workerRole)).toEqual(["external-kimi", "external-codex"]);
         expect(finished?.steps.map((step) => step.round)).toEqual([1, 1]);
         expect(finished?.messages.filter((message) => message.visibility === "public")).toHaveLength(2);
+    });
+
+    test("worker envelopes expose phases and same-round peer context for dependent workers", async () => {
+        const config = await testConfig();
+        const events = new CapturingSink();
+        const workers = new WorkerManager(events);
+        workers.register(new KimiProposalWorker());
+        workers.register(new CodexReviewWorker());
+        const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+
+        const start = await controller.startTurn({
+            sessionKey: "stdio:worker-envelope-context",
+            requestId: "req-worker-envelope-context",
+            goal: "先让 Kimi 出方案，再让 Codex 复审",
+            now: "2026-05-09T08:00:00.000Z",
+            workers: [
+                { role: "external-codex", name: "Codex review", dependsOn: ["external-kimi"] },
+                { role: "external-kimi", name: "Kimi proposal" },
+            ],
+        });
+        expect(start.acquired).toBe(true);
+        if (!start.acquired) {
+            throw new Error("expected lease acquisition");
+        }
+
+        const finished = await controller.runUntilConverged(start.turn.id, {
+            createdAt: "2026-05-09T08:00:01.000Z",
+        });
+        const kimiEnvelope = JSON.parse(finished?.steps[0]?.inputSummary ?? "{}") as {
+            currentRoundSteps: unknown[];
+            phase: string;
+        };
+        const codexEnvelope = JSON.parse(finished?.steps[1]?.inputSummary ?? "{}") as {
+            currentRoundSteps: Array<{ workerRole: string; outputSummary: string }>;
+            phase: string;
+        };
+
+        expect(finished?.steps.map((step) => step.workerRole)).toEqual(["external-kimi", "external-codex"]);
+        expect(kimiEnvelope.phase).toBe("decompose-and-propose");
+        expect(kimiEnvelope.currentRoundSteps).toEqual([]);
+        expect(codexEnvelope.phase).toBe("respond-to-upstream-and-propose");
+        expect(codexEnvelope.currentRoundSteps[0]).toMatchObject({
+            workerRole: "external-kimi",
+            outputSummary: "Kimi 给出可执行方案。",
+        });
     });
 
     test("default workers do not fake consensus without explicit final outcome", async () => {
@@ -243,7 +538,7 @@ describe("Blackboard control boundary", () => {
         expect(finished?.steps).toHaveLength(1);
         expect(finished?.decisions).toHaveLength(1);
         expect(finished?.decisions[0]?.reason).toBe("peer-qa-open-issues");
-        expect(finished?.decisions[0]?.prompt).toContain("Current unresolved issues:");
+        expect(finished?.decisions[0]?.prompt).toContain("Please confirm these 1 open questions:");
         expect(finished?.decisions[0]?.prompt).toContain("1. 缺少目标仓库路径");
         expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(true);
         expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.BlackboardLivelockDetected);
@@ -371,6 +666,12 @@ describe("Blackboard control boundary", () => {
         expect(finished?.steps).toHaveLength(10);
         expect(finished?.decisions).toHaveLength(1);
         expect(finished?.decisions[0]?.reason).toBe("hard-round-budget-exhausted:declared-non-convergent-contract");
+        expect(finished?.decisions[0]?.prompt).toContain("Please confirm these");
+        expect(finished?.decisions[0]?.metadata.openQuestions).toEqual(
+            expect.arrayContaining([
+                "Planner 必须保留命题：本系统是完全确定的 / Reviewer 必须阻断包含确定性的命题: 外部 manifest 声明角色互斥",
+            ]),
+        );
         expect(finished?.steps.at(-1)?.round).toBe(5);
         expect(finished?.steps[0]?.metadata.convergencePolicy).toMatchObject({
             forceHardCap: true,
@@ -397,6 +698,20 @@ describe("Blackboard control boundary", () => {
                 maxRounds: 3,
                 hardMaxRounds: 5,
             },
+            metadata: {
+                blackboardContract: {
+                    contradictions: [
+                        {
+                            left: "一直分析下去",
+                            right: "确定已经覆盖所有可能的物理现象",
+                            reason: "开放物理现象空间不能被有限轮次穷尽",
+                        },
+                    ],
+                    evidence: ["用户要求一直分析直到覆盖所有可能物理现象"],
+                    mode: "non-convergent",
+                    policyReason: "unbounded-physics-exhaustive-request",
+                },
+            },
             workers: testWorkerPlan(),
         });
         expect(start.acquired).toBe(true);
@@ -411,7 +726,8 @@ describe("Blackboard control boundary", () => {
         expect(finished?.status).toBe(BlackboardTurnStatus.NeedsUser);
         expect(finished?.steps).toHaveLength(10);
         expect(finished?.steps.at(-1)?.round).toBe(5);
-        expect(finished?.decisions[0]?.reason).toBe("round-budget-exhausted:peer-qa-open-issues");
+        expect(finished?.decisions[0]?.reason).toBe("hard-round-budget-exhausted:unbounded-physics-exhaustive-request");
+        expect(finished?.decisions[0]?.prompt).toContain("一直分析下去 / 确定已经覆盖所有可能的物理现象");
         expect(finished?.steps.every((step) => step.metadata.qaAgreement === false)).toBe(true);
         expect(finished?.steps.every((step) => step.metadata.qaOutcome === BlackboardWorkerOutcome.Continue)).toBe(
             true,

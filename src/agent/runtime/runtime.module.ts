@@ -230,6 +230,7 @@ export class RuntimeModule extends RuntimeBoundary {
             },
             workers: route.workers,
             metadata: {
+                blackboardContract: route.blackboardContract,
                 routeReason: route.reason,
                 routeScore: route.score,
                 routeSignals: route.signals,
@@ -361,7 +362,7 @@ function renderBlackboardPrompt(run: RuntimeBlackboardRun | undefined): string {
         return renderBlackboardAdvisoryPrompt({ configured: true, mode: "direct", reason: run.reason });
     }
     return renderBlackboardAdvisoryPrompt({
-        compactRounds: renderCompactRounds(run),
+        compactRounds: renderBlackboardTranscript(run),
         configured: true,
         elapsedMs: run.elapsedMs,
         mode: run.mode,
@@ -379,7 +380,7 @@ function renderReplyPrefix(run: RuntimeBlackboardRun | undefined): string {
     if (!run || run.mode !== BlackboardMode.Blackboard) {
         return "";
     }
-    return [...renderCompactRounds(run), ...renderDecisionLines(run), "", "Final answer:", ""].join("\n");
+    return [...renderBlackboardTranscript(run), ...renderDecisionLines(run), "", "Final answer:", ""].join("\n");
 }
 
 function routeMetadata(route: RuntimeBlackboardRouteDecision): Record<string, unknown> {
@@ -412,6 +413,9 @@ function readRouteMetadata(metadata: Record<string, unknown> | undefined): Runti
     ) {
         return {
             mode: candidate.mode,
+            blackboardContract: isBlackboardContract(candidate.blackboardContract)
+                ? candidate.blackboardContract
+                : normalBlackboardContract(),
             needsReflectionCandidate: candidate.needsReflectionCandidate === true,
             raw: candidate.raw,
             reason: candidate.reason,
@@ -423,6 +427,23 @@ function readRouteMetadata(metadata: Record<string, unknown> | undefined): Runti
     return undefined;
 }
 
+function isBlackboardContract(value: unknown): value is RuntimeBlackboardRouteDecision["blackboardContract"] {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+    const candidate = value as { mode?: unknown };
+    return candidate.mode === "normal" || candidate.mode === "non-convergent";
+}
+
+function normalBlackboardContract(): RuntimeBlackboardRouteDecision["blackboardContract"] {
+    return {
+        contradictions: [],
+        evidence: [],
+        mode: "normal",
+        policyReason: "default-convergence",
+    };
+}
+
 function shouldExtractReflection(run: RuntimeBlackboardRun | undefined): boolean {
     if (!run) {
         return false;
@@ -431,22 +452,60 @@ function shouldExtractReflection(run: RuntimeBlackboardRun | undefined): boolean
     return run.mode === BlackboardMode.Blackboard || route?.needsReflectionCandidate === true;
 }
 
-function renderCompactRounds(run: RuntimeBlackboardRun): string[] {
-    const rounds = [...new Set(run.steps.map((step) => step.round))]
+function renderBlackboardTranscript(run: RuntimeBlackboardRun): string[] {
+    const rounds = [
+        ...new Set([
+            ...run.steps.map((step) => step.round),
+            ...run.transcript
+                .map((message) => message.round)
+                .filter((round): round is number => typeof round === "number"),
+        ]),
+    ]
         .filter((round) => round > 0)
         .sort((left, right) => left - right);
-    return rounds.flatMap((round) => renderRoundBlock(run, round));
+    const header = [
+        "",
+        "Blackboard discussion:",
+        `Status: ${run.status ?? BlackboardTurnStatus.Running}; reason: ${run.reason}; plan: ${planSummaryForRun(run)}`,
+    ];
+    if (rounds.length === 0) {
+        return [...header, "Blackboard: No worker discussion was recorded."];
+    }
+    return [...header, ...rounds.flatMap((round) => renderRoundDialogue(run, round))];
 }
 
-function renderRoundBlock(run: RuntimeBlackboardRun, round: number): string[] {
+function renderRoundDialogue(run: RuntimeBlackboardRun, round: number): string[] {
     const steps = run.steps.filter((step) => step.round === round);
+    const messages = run.transcript.filter(
+        (message) => message.round === round && message.visibility === "public" && !isDecisionFormMessage(message),
+    );
+    const dialogue = messages.length > 0 ? messages.map((message) => renderDialogueMessage(run, message)) : [];
+    const fallback = dialogue.length > 0 ? [] : steps.map((step) => renderStepAsDialogue(run, step));
     return [
         "",
-        `--------------${round}--------------------`,
-        `Blackboard: ${renderBlackboardState(run, round)}`,
-        ...steps.map((step) => `${readableWorkerRole(step.workerRole)}: ${compactStepOutput(step)}`),
-        "-----------------------------------",
+        `Round ${round} (${phaseForRound(run, round, policyReasonForRound(run, round))})`,
+        ...dialogue,
+        ...fallback,
     ];
+}
+
+function renderDialogueMessage(run: RuntimeBlackboardRun, message: BlackboardMessage): string {
+    const speaker = message.workerRole
+        ? displayNameForWorker(run, message.workerRole)
+        : readableMessageRole(message.role);
+    return `${speaker}: ${compactDialogueText(message.content)}`;
+}
+
+function renderStepAsDialogue(run: RuntimeBlackboardRun, step: BlackboardStep): string {
+    return `${displayNameForWorker(run, step.workerRole)}: ${compactStepOutput(step)}`;
+}
+
+function isDecisionFormMessage(message: BlackboardMessage): boolean {
+    return message.metadata.event === "blackboard.needs-user" || message.content.includes("flyflor-decision-form");
+}
+
+function compactDialogueText(value: string): string {
+    return value.replace(/\s+/gu, " ").trim();
 }
 
 function renderBlackboardState(run: RuntimeBlackboardRun, round: number): string {
@@ -509,14 +568,11 @@ function compactStepOutput(step: BlackboardStep): string {
 }
 
 function readableWorkerRole(role: string): string {
-    const lower = role.toLowerCase();
-    if (lower.includes("planner")) {
-        return "Planner";
-    }
-    if (lower.includes("reviewer")) {
-        return "Reviewer";
-    }
-    return role;
+    return role
+        .split(/[-_.]+/u)
+        .filter(Boolean)
+        .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+        .join(" ");
 }
 
 function latestRound(run: RuntimeBlackboardRun): number {
@@ -528,7 +584,7 @@ function renderDecisionLines(run: RuntimeBlackboardRun): string[] {
         return [];
     }
     return run.decisions.map(
-        (decision) => `Blackboard decision: ${decision.reason}; ${decision.prompt.replace(/\s+/gu, " ")}`,
+        (decision) => `Blackboard needs input: ${decision.reason}; ${decision.prompt.replace(/\s+/gu, " ")}`,
     );
 }
 
@@ -545,6 +601,30 @@ function planSummaryForRun(run: RuntimeBlackboardRun): string {
         .filter((item): item is string => typeof item === "string")
         .slice(0, 2)
         .join(" / ");
+}
+
+function displayNameForWorker(run: RuntimeBlackboardRun, role: string): string {
+    const plan = run.metadata.blackboardPlan;
+    if (plan && typeof plan === "object") {
+        const participants = (plan as { participants?: unknown }).participants;
+        if (Array.isArray(participants)) {
+            const participant = participants.find(
+                (item): item is { name?: unknown; role?: unknown } =>
+                    !!item && typeof item === "object" && (item as { role?: unknown }).role === role,
+            );
+            if (typeof participant?.name === "string" && participant.name.trim()) {
+                return participant.name.trim();
+            }
+        }
+    }
+    return readableWorkerRole(role);
+}
+
+function readableMessageRole(role: BlackboardMessage["role"]): string {
+    if (role === "system") {
+        return "Blackboard";
+    }
+    return readableWorkerRole(role);
 }
 
 function readStringArray(value: unknown): string[] {

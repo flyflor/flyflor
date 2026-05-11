@@ -228,28 +228,20 @@ function discussionArray(value: unknown, participant: string, fallback: string):
         : [{ role: discussionRole(undefined, participant), content: fallback, visibility: "public" }];
 }
 
-function discussionRole(
-    value: unknown,
-    participant: string,
-): "assistant" | "critic" | "planner" | "reviewer" | "system" | "worker" {
-    if (
-        value === "assistant" ||
-        value === "critic" ||
-        value === "planner" ||
-        value === "reviewer" ||
-        value === "system" ||
-        value === "worker"
-    ) {
-        return value;
+function discussionRole(value: unknown, participant: string): string {
+    const explicit = stringValue(value);
+    if (explicit) {
+        return normalizeDiscussionRole(explicit);
     }
-    const lower = participant.toLowerCase();
-    if (lower.includes("planner")) {
-        return "planner";
-    }
-    if (lower.includes("reviewer") || lower.includes("critic")) {
-        return "reviewer";
-    }
-    return "worker";
+    return normalizeDiscussionRole(participant) || "worker";
+}
+
+function normalizeDiscussionRole(value: string): string {
+    return value
+        .trim()
+        .replace(/[^a-zA-Z0-9_.-]+/gu, "-")
+        .replace(/^-+|-+$/gu, "")
+        .slice(0, 64);
 }
 
 function discussionVisibility(value: unknown): "debug" | "internal" | "public" {

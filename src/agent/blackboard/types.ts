@@ -58,7 +58,7 @@ export interface BlackboardMessage {
     turnId: string;
     round?: number;
     workerRole?: BlackboardWorkerRole;
-    role: "adapter" | "system" | "worker" | "planner" | "reviewer" | "critic" | "assistant";
+    role: string;
     content: string;
     visibility: "debug" | "internal" | "public";
     createdAt: string;

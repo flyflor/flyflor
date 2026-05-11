@@ -96,16 +96,16 @@ type PromptTemplateKey =
 type PromptTemplateMap = Record<PromptTemplateKey, PromptTemplate>;
 
 const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = {
-    blackboardAdvisory: "blackboard-advisory.md",
-    blackboardDecision: "blackboard-decision.md",
-    blackboardRoute: "blackboard-route.md",
-    blackboardWorkerSystem: "blackboard-worker-system.md",
-    crystalReflection: "crystal-reflection.md",
-    memoryAction: "memory-action.md",
-    memoryContext: "memory-context.md",
-    mcpContext: "mcp-context.md",
-    runtimeSystem: "runtime-system.md",
-    skillContext: "skill-context.md",
+    blackboardAdvisory: "blackboard.advisory.md",
+    blackboardDecision: "blackboard.decision.md",
+    blackboardRoute: "blackboard.route.md",
+    blackboardWorkerSystem: "blackboard.worker.system.md",
+    crystalReflection: "crystal.reflection.md",
+    memoryAction: "memory.action.md",
+    memoryContext: "memory.context.md",
+    mcpContext: "mcp.context.md",
+    runtimeSystem: "runtime.system.md",
+    skillContext: "skill.context.md",
 };
 
 let promptTemplates: PromptTemplateMap | undefined;
@@ -234,9 +234,16 @@ export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeIn
                 "agreement",
                 "outcome",
                 "openIssues",
+                "proposal",
                 "discussion",
             ],
-            constraints: ["no-tool-execution", "no-long-term-memory-write", "surface-blockers"],
+            constraints: [
+                "no-tool-execution",
+                "no-long-term-memory-write",
+                "surface-blockers",
+                "write-public-discussion-as-dialogue",
+                "answer-current-round-peer-questions",
+            ],
         },
         null,
         2,
@@ -269,6 +276,7 @@ export function renderCrystalReflectionPrompt(input: CrystalReflectionPromptInpu
 export function renderBlackboardDecisionPrompt(input: BlackboardDecisionPromptInput): string {
     // 必要提示词：这是交还用户的表单问题文本，不参与模型收敛裁决。
     return renderTemplate(requiredTemplates().blackboardDecision.content, {
+        questionCount: String(input.unresolvedIssues.length),
         reason: input.reason,
         unresolvedIssues: input.unresolvedIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n"),
     });

@@ -22,7 +22,7 @@ Flyflor 是一个可观察、可扩展、可编译成单文件二进制的智能
 - 业务配置不使用环境变量。
 - 约定大于配置，配置只覆盖差异。
 - 协议值使用枚举/常量对象，不裸写字符串。
-- 收敛、权限、记忆写入和工具执行不能靠提示词工程裁决；必须优先用 schema、枚举、状态机和显式协议。确实必须进入模型上下文的提示词必须使用英文 Markdown 小单元，安装到 `~/.flyflor` 后动态加载，并在源码旁用中文注释说明必要性和边界；`.zh-CN.md` 只作审查副本。
+- 收敛、权限、记忆写入和工具执行不能靠提示词工程裁决；必须优先用 schema、枚举、状态机和显式协议。确实必须进入模型上下文的提示词必须使用英文 Markdown 小单元，安装到 `~/.flyflor` 后动态加载，并在源码旁用中文注释说明必要性和边界；`.zh.cn.md` 只作审查副本。
 - 后续模块注册优先 `@Module` / `@Provide` / `@Inject`，现有 DI/Protocol decorator 作为迁移期兼容。
 - Docker dev 只挂载工作目录、配置目录和已编译二进制。
 - 多 provider 是一等能力，内置常见厂商 profile，用户配置只覆盖 key、active 和少数差异。
@@ -53,13 +53,15 @@ Flyflor 是一个可观察、可扩展、可编译成单文件二进制的智能
 
 核心约定是保留 `llm` / `crystal` / `neural` 三层智能体能力，并通过 `agent`、`agent/di`、`protocol`、`config`、`app` 组织编排和装配。项目不新增独立 `interface` 层或 `service` 层；接口和 service 声明必须贴着所属模块放，例如 `src/agent/runtime/types.ts`、`src/agent/runtime/runtime.service.ts`。
 
-目录和文件命名采用 NestJS 风格约定：
+目录和文件命名采用点分后缀约定，这是硬规则，不只适用于源码：
 
 - 每个源码目录必须提供 `index.ts` 作为对外入口，跨目录导入优先指向目录入口。
 - 有明确角色的实现文件使用点分后缀，例如 `runtime.module.ts`、`memory.service.ts`、`blackboard.worker.ts`、`worker.manager.ts`、`http.adapter.ts`、`sqlite.store.ts`。
 - 无角色后缀的复杂工具文件仍使用点分命名，例如 `component.factory.ts`、`dependency.container.ts`、`memory.stress.report.ts`。
-- 不再新增连字符源码文件，例如 `component-factory.ts`、`session-inspect.ts`。
+- 提示词、内部模板、脚本和测试辅助文件也必须使用点分命名，例如 `blackboard.route.md`、`blackboard.route.zh.cn.md`、`memory.context.md`、`build.docker.binary.ts`。
+- 不再新增连字符或下划线命名的仓库文件，例如 `component-factory.ts`、`session-inspect.ts`、`blackboard-route.md`、`memory_context.md`。
 - 单职责短文件可保留语义名，例如 `types.ts`、`scope.ts`。
+- 用户工作区文件和外部协议值可以保留其领域约定，例如工作区长期记忆文件仍是 `MEMORY.md`、`SELF.md`、`SOUL.md`、`USER.md`；仓库内对应初始模板必须是 `memory.md`、`self.md`、`soul.md`、`user.md`。
 - 目录内部可以导入私有实现文件；跨目录需要使用明确 public API，避免深层私有导入。
 
 ## 3. 导入方向
@@ -208,9 +210,9 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved --outfile
 
 Docker dev 把 `./docker/config` 映射到容器内 `/root/.flyflor`，避免污染宿主机真实全局 agent 配置。模型、provider、渠道凭据、沙箱策略和网关行为必须来自 `config.jsonc` 或后续 secrets provider，不能来自业务环境变量。
 
-Blackboard 路由不得在源码里维护业务语义关键词表。`RuntimeModule` 使用 `templates/prompts/blackboard-route.md` 获取结构化 `direct` / `direct-with-watch` / `blackboard` 决策；代码只校验枚举、分数和 JSON shape。无法回答问题是否进入黑板也属于该路由模板的模型判断，后续交还用户仍由 BlackboardModule 的结构化 blocker 和 decision form 完成。
+Blackboard 路由不得在源码里维护业务语义关键词表，也不得依赖固定角色目录。`RuntimeModule` 使用 `templates/prompts/blackboard.route.md` 获取结构化 `direct` / `direct-with-watch` / `blackboard` 决策；代码只校验枚举、分数和 JSON shape。worker 拆分必须是模型根据当前请求做的角色竞价/博弈结果，谁提方案、谁挑战、谁验证都由本次任务语义决定，不能靠固定名单硬写。无法回答问题是否进入黑板也属于该路由模板的模型判断，后续交还用户仍由 BlackboardModule 的结构化 blocker 和 decision form 完成，封顶后必须把疑问整理成 1-n 条确认项。
 
-Crystal Memory 的语义结构不得由源码固定 taxonomy、关键词表或硬编码 bucket 产生。Reflection worker 可以使用 `templates/prompts/crystal-reflection.md` 的极短英文提示从证据中生成 `symbols`、`bucketHint`、`coordinates` 和 `method`；边界代码只做结构校验、证据聚合、SurrealDB 持久化和召回排序。运行时反思必须先写 reflection candidate；证据为 0 的候选只能保留审计，不得生成 atom 或 skill。
+Crystal Memory 的语义结构不得由源码固定 taxonomy、关键词表或硬编码 bucket 产生。Reflection worker 可以使用 `templates/prompts/crystal.reflection.md` 的极短英文提示从证据中生成 `symbols`、`bucketHint`、`coordinates` 和 `method`；边界代码只做结构校验、证据聚合、SurrealDB 持久化和召回排序。运行时反思必须先写 reflection candidate；证据为 0 的候选只能保留审计，不得生成 atom 或 skill。
 
 推荐目录语义：
 
@@ -220,7 +222,7 @@ Crystal Memory 的语义结构不得由源码固定 taxonomy、关键词表或�
   agents/<agentId>/config.json # JSONC 单 agent 覆盖配置
   profiles/<profile>.json      # JSONC 可选 profile 配置
   prompts/                     # 内部提示词 Markdown 模板；由安装/开发脚本复制
-  templates/memory/            # SELF/SOUL/USER/MEMORY 初始模板；由安装/开发脚本复制
+  templates/memory/            # self/soul/user/memory 初始模板；由安装/开发脚本复制
 
 $XDG_DATA_HOME/flyflor/
   agents/<agentId>/sessions/   # 会话 JSONL、摘要和索引元数据

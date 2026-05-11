@@ -1,6 +1,8 @@
 import { BlackboardMode, ModelRole, type ModelClient, type ModelMessage } from "../../protocol/contracts/index.ts";
-import type { BlackboardWorkerPlanInput } from "../blackboard/index.ts";
+import type { BlackboardContract, BlackboardWorkerPlanInput } from "../blackboard/index.ts";
 import { renderBlackboardRoutePrompt } from "../prompts/index.ts";
+
+const MAX_ROUTE_WORKERS = 5;
 
 export interface RuntimeBlackboardRouteDecision {
     mode: BlackboardMode;
@@ -8,6 +10,7 @@ export interface RuntimeBlackboardRouteDecision {
     reason: string;
     signals: string[];
     needsReflectionCandidate: boolean;
+    blackboardContract: BlackboardContract;
     workers: BlackboardWorkerPlanInput[];
     raw: string;
 }
@@ -40,6 +43,7 @@ export function parseBlackboardRouteDecision(raw: string): RuntimeBlackboardRout
         reason: readString(parsed.reason, "model-route"),
         signals: readStringArray(parsed.signals),
         needsReflectionCandidate: parsed.needsReflectionCandidate === true,
+        blackboardContract: readBlackboardContract(parsed.blackboardContract, mode),
         workers: readWorkers(parsed.workers, mode),
         raw,
     };
@@ -97,24 +101,160 @@ function readWorkers(value: unknown, mode: BlackboardMode): BlackboardWorkerPlan
     if (!Array.isArray(value) || value.length === 0) {
         throw new Error("Blackboard route model must return workers for blackboard mode.");
     }
-    return value.map((item, index) => {
-        if (!item || typeof item !== "object" || Array.isArray(item)) {
-            throw new Error(`Blackboard worker plan item ${index + 1} is invalid.`);
+    return normalizeWorkerPlan(
+        value.map((item, index) => {
+            if (!item || typeof item !== "object" || Array.isArray(item)) {
+                throw new Error(`Blackboard worker plan item ${index + 1} is invalid.`);
+            }
+            const candidate = item as Record<string, unknown>;
+            const rawRole = pickWorkerLabel(candidate, ["role", "id", "key"]);
+            const rawName = pickWorkerLabel(candidate, ["name", "title", "label", "displayName"]);
+            const rawStage = pickWorkerLabel(candidate, ["stage", "phase", "step"]);
+            const roleSeed = rawRole || rawName || rawStage || `worker-${index + 1}`;
+            const role = normalizeWorkerRole(roleSeed) || `worker-${index + 1}`;
+            const name = rawName || humanizeRole(role);
+            const stage = rawStage || `worker-${index + 1}`;
+            return {
+                capabilities: readStringArray(candidate.capabilities),
+                dependsOn: readStringArray(candidate.dependsOn).map(normalizeWorkerRole).filter(Boolean),
+                handoff: readHandoff(candidate.handoff),
+                name,
+                role,
+                stage,
+            };
+        }),
+    );
+}
+
+function pickWorkerLabel(candidate: Record<string, unknown>, keys: readonly string[]): string {
+    for (const key of keys) {
+        const direct = candidate[key];
+        if (typeof direct === "string" && direct.trim()) {
+            return direct.trim();
         }
-        const candidate = item as Record<string, unknown>;
-        const role = readString(candidate.role, "");
-        if (!role) {
-            throw new Error(`Blackboard worker plan item ${index + 1} is missing role.`);
+    }
+    const lowered = new Map<string, unknown>();
+    for (const [key, value] of Object.entries(candidate)) {
+        lowered.set(key.toLowerCase(), value);
+    }
+    for (const key of keys) {
+        const value = lowered.get(key.toLowerCase());
+        if (typeof value === "string" && value.trim()) {
+            return value.trim();
         }
-        return {
-            capabilities: readStringArray(candidate.capabilities),
-            dependsOn: readStringArray(candidate.dependsOn),
-            handoff: readHandoff(candidate.handoff),
-            name: readString(candidate.name, role),
-            role,
-            stage: readString(candidate.stage, `worker-${index + 1}`),
-        };
-    });
+    }
+    return "";
+}
+
+function readBlackboardContract(value: unknown, mode: BlackboardMode): BlackboardContract {
+    if (mode !== BlackboardMode.Blackboard || !value || typeof value !== "object" || Array.isArray(value)) {
+        return normalBlackboardContract();
+    }
+    const candidate = value as Record<string, unknown>;
+    const contractMode = candidate.mode === "non-convergent" ? "non-convergent" : "normal";
+    return {
+        contradictions: readContradictions(candidate.contradictions),
+        evidence: readStringArray(candidate.evidence),
+        mode: contractMode,
+        policyReason:
+            contractMode === "non-convergent"
+                ? readString(candidate.policyReason, "route-declared-non-convergent")
+                : readString(candidate.policyReason, "default-convergence"),
+        proposition: readOptionalString(candidate.proposition),
+        reviewerTrigger: readOptionalString(candidate.reviewerTrigger),
+    };
+}
+
+function normalBlackboardContract(): BlackboardContract {
+    return {
+        contradictions: [],
+        evidence: [],
+        mode: "normal",
+        policyReason: "default-convergence",
+    };
+}
+
+function readContradictions(value: unknown): BlackboardContract["contradictions"] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
+        .map((item) => ({
+            left: readString(item.left, ""),
+            reason: readString(item.reason, ""),
+            right: readString(item.right, ""),
+        }))
+        .filter((item) => item.left && item.right && item.reason)
+        .slice(0, 8);
+}
+
+function readOptionalString(value: unknown): string | undefined {
+    const text = readString(value, "");
+    return text || undefined;
+}
+
+function normalizeWorkerPlan(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {
+    const unique: BlackboardWorkerPlanInput[] = [];
+    const seen = new Set<string>();
+    for (const worker of workers) {
+        if (seen.has(worker.role)) {
+            continue;
+        }
+        seen.add(worker.role);
+        unique.push(worker);
+        if (unique.length >= MAX_ROUTE_WORKERS) {
+            break;
+        }
+    }
+    if (unique.length === 0) {
+        throw new Error("Blackboard route model returned no usable workers.");
+    }
+
+    const roles = new Set(unique.map((worker) => worker.role));
+    const withKnownDependencies = unique.map((worker) => ({
+        ...worker,
+        dependsOn: (worker.dependsOn ?? []).filter((dependency) => roles.has(dependency) && dependency !== worker.role),
+    }));
+    return sortWorkersByDependencies(withKnownDependencies);
+}
+
+function sortWorkersByDependencies(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {
+    const pending = new Map(workers.map((worker) => [worker.role, worker]));
+    const emitted = new Set<string>();
+    const sorted: BlackboardWorkerPlanInput[] = [];
+
+    while (pending.size > 0) {
+        const ready = [...pending.values()].find((worker) =>
+            (worker.dependsOn ?? []).every((dependency) => emitted.has(dependency)),
+        );
+        if (!ready) {
+            sorted.push(...pending.values());
+            break;
+        }
+        sorted.push(ready);
+        emitted.add(ready.role);
+        pending.delete(ready.role);
+    }
+
+    return sorted;
+}
+
+function normalizeWorkerRole(value: string): string {
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_.-]+/gu, "-")
+        .replace(/^-+|-+$/gu, "")
+        .slice(0, 64);
+}
+
+function humanizeRole(role: string): string {
+    return role
+        .split(/[-_.]+/u)
+        .filter(Boolean)
+        .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+        .join(" ");
 }
 
 function readHandoff(value: unknown): BlackboardWorkerPlanInput["handoff"] | undefined {

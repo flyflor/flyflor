@@ -3,7 +3,7 @@ import { Box, render, Text, useApp, useInput } from "ink";
 import pc from "picocolors";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
-import type { BlackboardStep, BlackboardTurn } from "../../agent/blackboard/index.ts";
+import type { BlackboardMessage, BlackboardStep, BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import { BlackboardTurnStatus, BlackboardWorkerOutcome, ChannelLinkState } from "../../protocol/contracts/index.ts";
 import { renderFlyflorBanner, resolveGatewaySnapshot } from "../cli/status.ts";
@@ -236,12 +236,15 @@ function BlackboardDetail({ turn }: { turn: BlackboardTurn }): React.ReactElemen
             </Text>
 
             <SectionTitle title="Transcript" />
-            {turn.messages.slice(-8).map((message) => (
-                <Text key={message.id}>
-                    {messageSymbol(message.role)} {message.role} {message.workerRole ? `(${message.workerRole})` : ""}{" "}
-                    {message.visibility === "public" ? "❝" : "·"} {renderMarkdownToPlainText(message.content)}
-                </Text>
-            ))}
+            {turn.messages
+                .filter(isReadableTranscriptMessage)
+                .slice(-8)
+                .map((message) => (
+                    <Text key={message.id}>
+                        {messageSymbol(message.role)} {messageSpeaker(turn, message)}:{" "}
+                        {renderMarkdownToPlainText(message.content)}
+                    </Text>
+                ))}
 
             <SectionTitle title="Steps" />
             {turn.steps.map((step) => (
@@ -274,6 +277,26 @@ function BlackboardDetail({ turn }: { turn: BlackboardTurn }): React.ReactElemen
             ) : null}
         </Box>
     );
+}
+
+function isReadableTranscriptMessage(message: BlackboardMessage): boolean {
+    return message.visibility === "public" && !message.content.includes("flyflor-decision-form");
+}
+
+function messageSpeaker(turn: BlackboardTurn, message: BlackboardMessage): string {
+    if (!message.workerRole) {
+        return message.role === "system" ? "Blackboard" : titleCase(message.role);
+    }
+    const participant = turn.workers.find((worker) => worker.role === message.workerRole);
+    return participant?.name || titleCase(message.workerRole.replace(/[-_.]+/gu, " "));
+}
+
+function titleCase(value: string): string {
+    return value
+        .split(/\s+/u)
+        .filter(Boolean)
+        .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+        .join(" ");
 }
 
 function renderActivity(channel: GatewayStatusSnapshot["channels"][number]): string {
@@ -324,12 +347,6 @@ function messageSymbol(role: BlackboardTurn["messages"][number]["role"]): string
     }
     if (role === "assistant") {
         return "↩";
-    }
-    if (role === "planner") {
-        return "◆";
-    }
-    if (role === "reviewer") {
-        return "✓";
     }
     if (role === "critic") {
         return "❝";

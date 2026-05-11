@@ -24,7 +24,7 @@ Future forgetting and reinforcement will update the network. A skill that is reu
 
 - Reflection workers produce `title`, `method`, `symbols`, `bucketHint`, and `coordinates` from evidence.
 - Source code does not define semantic buckets, domain keywords, or methodology categories.
-- The short extraction prompt lives in `templates/prompts/crystal-reflection.md`; the Chinese file is only a review copy.
+- The short extraction prompt lives in `templates/prompts/crystal.reflection.md`; the Chinese file is only a review copy.
 - Evidence scores come from verified source records, not from model confidence alone.
 - SurrealDB stores candidates, atoms, skills, and later graph edges as internal infrastructure. It is not exposed to the host.
 - Runtime and Blackboard reflection must enter as candidates first. Candidates with zero evidence are persisted for audit but do not become atoms or skills.
@@ -57,7 +57,7 @@ verified evidence or blackboard transcript
 
 ## Current Implementation
 
-- `RuntimeModule` can call `crystal-reflection.md` after a routed turn when reflection is required.
+- `RuntimeModule` can call `crystal.reflection.md` after a routed turn when reflection is required.
 - `CrystalMemoryService.recordTurn` accepts explicit reflection candidates in addition to promoted memory and history evidence.
 - Evidence-backed candidates crystallize into atoms/skills.
 - Direct or garbage candidates with zero evidence remain candidates only.
@@ -65,12 +65,14 @@ verified evidence or blackboard transcript
 
 ## Next Steps
 
-1. Move reflection extraction to a schedulable background worker.
-2. Add SurrealDB graph edges between candidates, atoms, skills, blackboard turns, worker steps, source evidence, and verification events.
-3. Add automatic cluster formation from generated symbols, coordinates, graph edges, and reuse traces.
-4. Add deep activation: query -> seed skills -> graph expansion -> budgeted rerank.
-5. Add forgetting and reinforcement fields without deleting audit records.
-6. Add CLI/TUI inspection views for candidates, atoms, skills, graph edges, recall traces, and garbage-candidate audits.
+| Priority | Workstream                   | Next                                                                                                                                 |
+| -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| P1       | Graph edges                  | Add SurrealDB relations between candidates, atoms, skills, blackboard turns, worker steps, source evidence, and verification events. |
+| P1       | Recall traces                | Persist why a skill was woken, which graph path contributed, and whether the method helped or failed.                                |
+| P1       | Deep activation              | Implement query -> seed skills -> graph expansion -> budgeted rerank with hop, top-k, timeout, and cache limits.                     |
+| P1       | Forgetting and reinforcement | Add decay, reuse, failure, and protected-state fields without deleting audit records.                                                |
+| P2       | Background reflection        | Move reflection extraction to a schedulable worker so the hot turn path stays predictable.                                           |
+| P3       | Inspection views             | Add CLI/TUI views for candidates, atoms, skills, graph edges, recall traces, and garbage-candidate audits.                           |
 
 ## Risk Warnings
 

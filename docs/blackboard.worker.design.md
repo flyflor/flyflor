@@ -1,8 +1,8 @@
 # Blackboard 多 Worker 设计
 
-本文把 [DESIGN.md](../DESIGN.md) 中的黑板协作思想落到当前 Bun/TypeScript + DI/Protocol 架构。这里先定义边界、状态、事件和待实现顺序，不急于把 worker 变成独立进程。
+本文把 [DESIGN.md](../DESIGN.md) 中的黑板协作思想落到当前 Bun/TypeScript + DI/Protocol 架构。这里记录已经收口的黑板基线、外部 worker 协议边界和后续增强顺序。
 
-当前实现状态：已落地 `src/agent/blackboard` 边界模块、SQLite turn/step/decision/lease/message transcript、`src/agent/worker` WorkerManager/Pool、动态 `WorkerAdapter` 对接层、黑板事件枚举和 `FlyFlor` 显式 DI 注入。`RuntimeModule` 已通过 `templates/prompts/blackboard-route.md` 启用 `direct` / `direct-with-watch` / `blackboard` 判断；路由语义由模型按模板返回结构化 JSON，源码只校验 mode、score、signals 和 worker plan，不维护业务关键词表、固定分类桶或固定 Planner/Reviewer 组合。无法回答的问题会先判断黑板是否能整理 blocker、替代路径或安全交还用户；需要交还时仍由黑板输出编号 unresolved issues。黑板调度读取 turn 上的 worker plan，参与者可以是任意 worker graph。当前黑板允许第一轮决定性收敛或阻塞；非决定性讨论继续 QA，第 5 轮硬封顶；worker 输入使用 `flyflor.blackboard.worker.v1` 结构化协议 JSON。收敛必须来自 worker result 的显式 `outcome: "final"`，没有 open issues/blocker，且没有 worker 显式 `agreement: false`；所有 worker 显式 `outcome: "blocked"` 且存在 blocker/open issues 时直接交还用户；单纯 `agreement: true` 只表示口头一致，不能终止黑板。默认只注册一个通用模型型 blackboard worker；具体 worker 数量、role、stage、handoff、capabilities 由 `blackboard-route.md` 动态生成。chat 回复只展示紧凑轮次块，不直接展开 step.input、previousSteps 或 metadata；完整 JSON 仍保存在 SQLite，可用 inspect 命令追溯。提示词入口已集中到 `src/agent/prompts` 和 `templates/prompts`，必要提示词必须是英文并附中文边界注释；模板粒度和引用关系见 [提示词与 Markdown 模板工程化](PROMPT_TEMPLATES.md)。收敛、权限和工具执行仍由 schema、枚举和状态机裁决。
+当前实现状态：已落地 `src/agent/blackboard` 边界模块、SQLite turn/step/decision/lease/message transcript、`src/agent/worker` WorkerManager/Pool、动态 `WorkerAdapter` 对接层、`json-process` / `persistent-json-process` 外部 worker 协议、黑板事件枚举和 `FlyFlor` 显式 DI 注入。`RuntimeModule` 已通过 `templates/prompts/blackboard.route.md` 启用 `direct` / `direct-with-watch` / `blackboard` 判断；路由语义由模型按模板返回结构化 JSON，源码只校验 mode、score、signals 和 worker plan，不维护业务关键词表、固定分类桶或固定角色目录。worker 选择必须是模型按当前请求做的角色竞价/博弈结果：谁提方案、谁挑战、谁验证都由任务语义决定，不能靠固定名单硬写。无法回答的问题会先判断黑板是否能整理 blocker、替代路径或安全交还用户；需要交还时仍由黑板输出编号 unresolved issues，且封顶后必须把疑问整理成 1-n 条确认项。黑板调度读取 turn 上的 worker plan，参与者可以是任意 worker graph。当前黑板允许第一轮决定性收敛或阻塞；非决定性讨论继续 QA，第 5 轮硬封顶；worker 输入使用 `flyflor.blackboard.worker.v1` 结构化协议 JSON。收敛必须来自 worker result 的显式 `outcome: "final"`，没有 open issues/blocker，且没有 worker 显式 `agreement: false`；所有 worker 显式 `outcome: "blocked"` 且存在 blocker/open issues 时直接交还用户；单纯 `agreement: true` 只表示口头一致，不能终止黑板。默认只注册一个通用模型型 blackboard worker；具体 worker 数量、role、stage、handoff、capabilities 由 `blackboard.route.md` 动态生成。chat 回复只展示紧凑轮次块，不直接展开 step.input、previousSteps 或 metadata；完整 JSON 仍保存在 SQLite，可用 inspect 命令追溯。提示词入口已集中到 `src/agent/prompts` 和 `templates/prompts`，必要提示词必须是英文并附中文边界注释；模板粒度和引用关系见 [提示词与 Markdown 模板工程化](prompt.templates.md)。收敛、权限和工具执行仍由 schema、枚举和状态机裁决。
 
 ## 目标
 
@@ -27,7 +27,7 @@ Flyflor 的多 worker 模式不是让多个模型随意聊天，也不是让调�
 | Worker      | `src/agent/worker`                 | worker registry、pool、adapter、通用模型 worker、队列、并发、超时和事件 |
 | DI/Protocol | `src/protocol/contracts/events`    | Blackboard mode、worker role、事件名、可序列化协议                      |
 | Processes   | `src/protocol/processes`           | 后续把 worker 隔离到 Bun worker/subprocess 的信封协议                   |
-| Docs        | `docs/BLACKBOARD_WORKER_DESIGN.md` | 设计约束和验证方法                                                      |
+| Docs        | `docs/blackboard.worker.design.md` | 设计约束和验证方法                                                      |
 
 `src/agent/blackboard` 是黑板边界组件，不直接执行工具、不直接写长期记忆。工具执行仍走 Sandbox，长期记忆仍走 Memory Action 链路。
 
@@ -141,18 +141,18 @@ interface BlackboardTurn {
 
 - `round`
 - `workerRole`
-- `role`: `adapter | planner | reviewer | worker | critic | assistant | system`
+- `role`: 字符串；系统角色如 `adapter` / `system` 只表示消息来源，worker 发言可以保留 Codex、Claude、Kimi、requirements-boundary 等动态视角
 - `content`
 - `visibility`: `public | internal | debug`
 - `metadata`
 
 ## Worker 角色
 
-黑板协议中的 `workerRole` 是字符串。角色不是源码枚举，也不是固定默认组合；`blackboard-route.md` 必须根据当前请求生成 worker plan。
+黑板协议中的 `workerRole` 是字符串。角色不是源码枚举，也不是固定默认组合；`blackboard.route.md` 必须根据当前请求生成 worker plan。
 
 worker plan 至少包含：
 
-- `role`：紧凑语义 id，例如 `requirements-analyst`、`implementation-worker`、`verification-worker`。
+- `role`：紧凑语义 id，例如 `requirements-boundary`、`implementation-worker`、`verification-worker`、`codex`、`claude`、`opencode`、`deepseek`、`kimi`。
 - `stage`：本轮所处阶段。
 - `handoff`：analysis / implementation / proposal / review / structure / summary / verification。
 - `capabilities`：该 worker 需要承担的能力摘要。
@@ -344,7 +344,7 @@ payload 必须 JSON 可序列化，不能携带密钥、stream、socket、class 
 
 第四阶段：动态 worker plan
 
-- 已内置通用模型型 blackboard worker 和 WorkerManager pool 调度；具体 worker role 由 `blackboard-route.md` 动态生成。
+- 已内置通用模型型 blackboard worker 和 WorkerManager pool 调度；具体 worker role 由 `blackboard.route.md` 动态生成。
 - 已支持黑板 message transcript，进入黑板模式的 chat 回复会直接显示“黑板讨论 / 最终回答”，也可用 `bun run inspect:blackboard -- --turn <turnId>` 追溯讨论过程。
 - 已接入 runtime prompt contributor，仅在 blackboard 模式启用，主 LLM 仍负责最终回答。
 - 已接入第一轮决定性收敛/阻塞和 5 轮硬上限。
