@@ -302,6 +302,40 @@ export function ChatTui({
         return () => { unsubRef.current?.(); unsubRef.current = null; };
     }, [eventBus]);
 
+    /* ── Mouse scroll ── */
+    useEffect(() => {
+        // Enable SGR mouse mode (DEC 1000 + 1006)
+        // This lets the terminal send mouse wheel events as escape sequences.
+        process.stdout.write("\x1b[?1000h\x1b[?1006h");
+
+        let buf = "";
+        const handler = (data: Buffer): void => {
+            buf += data.toString();
+            // Try to parse complete SGR mouse sequences: ESC[<btn;col;rowM or ESC[<btn;col;rowm
+            const re = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
+            let match: RegExpExecArray | null;
+            while ((match = re.exec(buf)) !== null) {
+                const btn = Number.parseInt(match[1]!, 10);
+                // Button 64 = scroll up, 65 = scroll down
+                if (btn === 64) {
+                    setScrollOfs((s) => Math.min(s + 3, Math.max(0, turns.length - 1)));
+                } else if (btn === 65) {
+                    setScrollOfs((s) => Math.max(0, s - 3));
+                }
+            }
+            // Keep only the unprocessed tail (after the last complete match)
+            const lastIdx = buf.lastIndexOf("\x1b");
+            if (lastIdx > 0) buf = buf.slice(lastIdx);
+            else if (lastIdx < 0) buf = "";
+        };
+
+        process.stdin.on("data", handler);
+        return () => {
+            process.stdout.write("\x1b[?1000l\x1b[?1006l");
+            process.stdin.removeListener("data", handler);
+        };
+    }, [turns.length]);
+
     /* ── Viewport calc ── */
     const HEADER_H = 1;
     const SEP_H = 2; // two separators (header-sep, sep-input)
