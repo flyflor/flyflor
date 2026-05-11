@@ -162,6 +162,24 @@ describe("Command boundary", () => {
         log.mockRestore();
     });
 
+    test("root oneshot forwards global chat overrides", async () => {
+        expect(parseFlyflorCommand([
+            "bun",
+            "flyflor",
+            "chat",
+            "--query",
+            "hello",
+            "--model",
+            "test-model",
+            "--provider",
+            "custom",
+            "--skills",
+            "alpha",
+            "beta",
+            "--accept-hooks",
+        ])).toBeUndefined();
+    });
+
     test("markdown renderer produces terminal text without HTML output", () => {
         const output = renderMarkdownToPlainText(["# Title", "- `item`", "plain **bold** text"].join("\n"));
 

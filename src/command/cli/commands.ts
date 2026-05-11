@@ -1,3 +1,6 @@
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { Database } from "bun:sqlite";
 import { Command, CommanderError } from "commander";
 import * as prompts from "@clack/prompts";
 import pc from "picocolors";
@@ -5,6 +8,7 @@ import Table from "cli-table3";
 import {
     Channel,
     ChatType,
+    MarkdownMemoryFile,
     RuntimeMode,
     ToolApprovalMode,
     type GatewayMessage,
@@ -857,6 +861,16 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
             return;
         }
     }
+    if (sub === "reset") {
+        const app = await cliApp();
+        const config = app.resolve(FlyFlorTokens.Config);
+        const removed = await resetBuiltInMemory(config);
+        console.log(`Memory reset complete. Removed ${removed.length} paths.`);
+        for (const path of removed) {
+            console.log(`- ${path}`);
+        }
+        return;
+    }
     printPendingCommand(["memory", sub]);
 }
 
@@ -883,6 +897,55 @@ async function runSessions(sub: string | undefined, command: Command): Promise<v
         const limit = parseOptionalPositive(opts.limit) ?? 40;
         const messages = await session.timeline(sessionKey, limit);
         console.log(renderSessionTimeline(sessionKey, messages, Boolean(opts.json)));
+        return;
+    }
+    if (sub === "export") {
+        const output = command.args[0];
+        if (!output) {
+            throw new CommanderError(1, "flyflor.missingOutput", "Missing export output path");
+        }
+        const sessions = await session.list(10_000);
+        const timelines = await Promise.all(
+            sessions.map(async (item) => ({
+                session: item,
+                messages: await session.timeline(item.key, 10_000),
+            })),
+        );
+        await mkdir(dirname(output), { recursive: true });
+        await writeFile(output, `${JSON.stringify({ exportedAt: new Date().toISOString(), sessions: timelines }, null, 2)}\n`);
+        console.log(`Exported ${timelines.length} sessions to ${output}`);
+        return;
+    }
+    if (sub === "delete") {
+        const sessionKey = command.args[0];
+        if (!sessionKey) {
+            throw new CommanderError(1, "flyflor.missingSession", "Missing session id");
+        }
+        const opts = command.opts<{ yes?: boolean }>();
+        if (!opts.yes && process.stdin.isTTY) {
+            const confirm = await prompts.confirm({ message: `Delete session ${sessionKey}?`, initialValue: false });
+            if (prompts.isCancel(confirm) || !confirm) {
+                prompts.cancel("Session delete cancelled");
+                return;
+            }
+        }
+        const deleted = deleteSessionRecords(config.paths.memoryDir, sessionKey);
+        console.log(`Deleted session ${sessionKey}: messages=${deleted.messages} history=${deleted.history} sessions=${deleted.sessions}`);
+        return;
+    }
+    if (sub === "prune") {
+        const opts = command.opts<{ days?: string | number; yes?: boolean }>();
+        const days = parseOptionalPositive(opts.days) ?? 30;
+        if (!opts.yes && process.stdin.isTTY) {
+            const confirm = await prompts.confirm({ message: `Delete sessions older than ${days} days?`, initialValue: false });
+            if (prompts.isCancel(confirm) || !confirm) {
+                prompts.cancel("Session prune cancelled");
+                return;
+            }
+        }
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        const pruned = pruneSessionRecords(config.paths.memoryDir, cutoff);
+        console.log(`Pruned sessions older than ${cutoff}: sessions=${pruned.sessions} messages=${pruned.messages} history=${pruned.history}`);
         return;
     }
     printPendingCommand(["sessions", sub]);
@@ -1195,6 +1258,78 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
 
 async function cliApp(): Promise<FlyFlor> {
     return getFlyFlor({ argv: process.argv, mode: RuntimeMode.Chat });
+}
+
+async function resetBuiltInMemory(config: FlyflorConfig): Promise<string[]> {
+    const targets = [
+        config.paths.memoryDir,
+        join(config.paths.workspaceDir, "memory"),
+        join(config.paths.workspaceDir, MarkdownMemoryFile.Memory),
+        join(config.paths.workspaceDir, MarkdownMemoryFile.Self),
+        join(config.paths.workspaceDir, MarkdownMemoryFile.Soul),
+        join(config.paths.workspaceDir, MarkdownMemoryFile.User),
+    ];
+    const removed: string[] = [];
+    for (const target of targets) {
+        try {
+            await rm(target, { force: true, recursive: true });
+            removed.push(target);
+        } catch {
+            // Best-effort reset; non-removable paths are ignored so the CLI stays non-interactive after confirmation.
+        }
+    }
+    return removed;
+}
+
+function deleteSessionRecords(
+    memoryDir: string,
+    sessionKey: string,
+): { history: number; messages: number; memories: number; sessions: number } {
+    const db = new Database(join(memoryDir, "memory.sqlite"));
+    try {
+        return deleteSessionRecordsFromDb(db, sessionKey);
+    } catch {
+        return { history: 0, messages: 0, memories: 0, sessions: 0 };
+    } finally {
+        db.close();
+    }
+}
+
+function pruneSessionRecords(
+    memoryDir: string,
+    cutoffIso: string,
+): { history: number; messages: number; memories: number; sessions: number } {
+    const db = new Database(join(memoryDir, "memory.sqlite"));
+    try {
+        const rows = db
+            .query("SELECT session_key FROM sessions WHERE updated_at < ?")
+            .all(cutoffIso) as Array<{ session_key: string }>;
+        const totals = { history: 0, messages: 0, memories: 0, sessions: 0 };
+        for (const row of rows) {
+            const deleted = deleteSessionRecordsFromDb(db, row.session_key);
+            totals.history += deleted.history;
+            totals.messages += deleted.messages;
+            totals.memories += deleted.memories;
+            totals.sessions += deleted.sessions;
+        }
+        return totals;
+    } catch {
+        return { history: 0, messages: 0, memories: 0, sessions: 0 };
+    } finally {
+        db.close();
+    }
+}
+
+function deleteSessionRecordsFromDb(
+    db: Database,
+    sessionKey: string,
+): { history: number; messages: number; memories: number; sessions: number } {
+    const messages = Number(db.query("DELETE FROM session_messages WHERE session_key = ?").run(sessionKey).changes ?? 0);
+    const history = Number(db.query("DELETE FROM history_entries WHERE session_key = ?").run(sessionKey).changes ?? 0);
+    const memories = Number(db.query("DELETE FROM memories WHERE scope = ?").run(sessionKey).changes ?? 0);
+    db.query("DELETE FROM memories_fts WHERE id NOT IN (SELECT id FROM memories)").run();
+    const sessions = Number(db.query("DELETE FROM sessions WHERE session_key = ?").run(sessionKey).changes ?? 0);
+    return { history, messages, memories, sessions };
 }
 
 function printPendingCommand(path: string[]): void {

@@ -11,20 +11,20 @@
 
 ## Current Cursor
 
-- Next: continue filling CLI commands backed by existing stores.
-- Last done: Streamable HTTP MCP runtime client plus project-local skill usage summary.
+- Next: decide service lifecycle strategy for `gateway start/stop/restart`, plugin manager storage, and update channel.
+- Last done: Streamable HTTP MCP runtime client, project-local skill usage CLI, memory reset, and session export/delete/prune.
 
 ## Global Options
 
-- [ ] `-V, --version` - Todo. Global version flag is registered but root dispatch has not been wired.
+- [x] `-V, --version` - Done. Root entry prints structured version/build/runtime information.
 - [x] `-z, --oneshot <prompt>` - Done. Reuses `chat --query` one-shot runtime path.
-- [ ] `-m, --model <model>` - Todo. Global model override is registered but not wired.
-- [ ] `--provider <provider>` - Todo. Global provider override is registered but not wired.
+- [x] `-m, --model <model>` - Done for `--oneshot`. Forwarded to the `chat --query` runtime path.
+- [x] `--provider <provider>` - Done for `--oneshot`. Forwarded to the `chat --query` runtime path.
 - [ ] `-t, --toolsets <toolsets>` - Todo. Global toolset override is registered but not wired.
-- [ ] `--accept-hooks` - Todo. Global root hook approval override is registered but root dispatch has not been wired.
-- [ ] `-s, --skills <skills...>` - Todo. Global skill preload is registered but not wired.
+- [x] `--accept-hooks` - Done for `--oneshot`. Forwarded to the `chat --query` runtime path.
+- [x] `-s, --skills <skills...>` - Done for `--oneshot`. Forwarded to the `chat --query` runtime path.
 - [ ] `--ignore-user-config` - Todo. Registered but config loading bypass is not wired.
-- [ ] `--tui` - Todo. Registered but root flag dispatch to TUI is not wired.
+- [x] `--tui` - Done. Root flag dispatches to TUI mode.
 
 ## Chat
 
@@ -102,8 +102,8 @@
 
 - [x] `memory status` - Done. Shows configured memory state and paths.
 - [~] `memory setup` - Partial. Provider choice UI exists; persistence is staged.
-- [ ] `memory reset` - Todo. Confirmed reset behavior is not implemented.
-- [ ] `memory reset --yes` / `memory reset -y` - Todo. Confirmation skip exists, erase action is not implemented.
+- [x] `memory reset` - Done. Confirms and removes built-in SQLite/Markdown memory files.
+- [x] `memory reset --yes` / `memory reset -y` - Done. Non-interactive reset.
 
 ## Sessions
 
@@ -113,12 +113,12 @@
 - [x] `sessions show <sessionKey>` - Done. Shows recent session messages.
 - [x] `sessions show <sessionKey> --limit <n>` - Done. Limits session timeline rows.
 - [x] `sessions show <sessionKey> --json` - Done. Emits timeline JSON.
-- [ ] `sessions export <output>` - Todo. Export is not implemented.
-- [ ] `sessions delete <sessionId>` - Todo. Delete is not implemented.
-- [ ] `sessions delete <sessionId> --yes` / `sessions delete <sessionId> -y` - Todo. Confirmation skip exists, delete action is not implemented.
-- [ ] `sessions prune` - Todo. Prune is not implemented.
-- [ ] `sessions prune --days <days>` - Todo. Age filter is registered but not wired.
-- [ ] `sessions prune --yes` / `sessions prune -y` - Todo. Confirmation skip exists, prune action is not implemented.
+- [x] `sessions export <output>` - Done. Exports session summaries and timelines to JSON.
+- [x] `sessions delete <sessionId>` - Done. Deletes a session by session key from SQLite session/history/search records.
+- [x] `sessions delete <sessionId> --yes` / `sessions delete <sessionId> -y` - Done. Non-interactive delete.
+- [x] `sessions prune` - Done. Deletes sessions older than the default 30 days.
+- [x] `sessions prune --days <days>` - Done. Applies an age cutoff.
+- [x] `sessions prune --yes` / `sessions prune -y` - Done. Non-interactive prune.
 
 ## Blackboard
 
@@ -148,8 +148,8 @@
 - [x] `skills reset <name> --global` - Done. Removes the global skill.
 - [x] `skills reset <name> --yes` / `skills reset <name> -y` - Done. Non-interactive reset.
 - [x] Runtime skill usage summary - Done. Records selected skill use into project-local `.flyflor/skills/skill.usage.jsonl` and `.flyflor/skills/skill.usage.summary.json`.
-- [ ] `skills usage [name]` - Todo. CLI view for project-local skill usage counters is not implemented yet.
-- [ ] `skills usage [name] --json` - Todo. JSON view for skill usage counters is not implemented yet.
+- [x] `skills usage [name]` - Done. Shows project-local skill usage counters.
+- [x] `skills usage [name] --json` - Done. Emits project-local skill usage counters as JSON.
 
 ## Tools
 

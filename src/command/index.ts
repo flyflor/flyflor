@@ -14,9 +14,13 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
 
     const oneshot = optionValue(argv, "-z", "--oneshot");
     if (oneshot && oneshot.trim().length > 0) {
-        return (await runFlyflorUtilityCommand([argv[0] ?? "flyflor", argv[1] ?? "flyflor", "chat", "--query", oneshot])) ?? {
+        return (await runFlyflorUtilityCommand(rootChatArgs(argv, oneshot))) ?? {
             exitCode: 1,
         };
+    }
+
+    if (argv.includes("--tui")) {
+        return runFlyflorCommand([argv[0] ?? "flyflor", argv[1] ?? "flyflor", RuntimeMode.Tui]);
     }
 
     const commandResult = await runFlyflorUtilityCommand(argv);
@@ -99,4 +103,39 @@ function optionValue(argv: string[], shortFlag: string, longFlag: string): strin
         }
     }
     return undefined;
+}
+
+function rootChatArgs(argv: string[], query: string): string[] {
+    const args = [argv[0] ?? "flyflor", argv[1] ?? "flyflor", "chat", "--query", query];
+    appendOption(args, "--model", optionValue(argv, "-m", "--model"));
+    appendOption(args, "--provider", optionValue(argv, "", "--provider"));
+    if (argv.includes("--accept-hooks")) {
+        args.push("--accept-hooks");
+    }
+    const skills = optionValues(argv, "-s", "--skills");
+    if (skills.length > 0) {
+        args.push("--skills", ...skills);
+    }
+    return args;
+}
+
+function appendOption(args: string[], flag: string, value: string | undefined): void {
+    if (value && value.trim().length > 0) {
+        args.push(flag, value);
+    }
+}
+
+function optionValues(argv: string[], shortFlag: string, longFlag: string): string[] {
+    const values: string[] = [];
+    for (let index = 2; index < argv.length; index += 1) {
+        const value = argv[index];
+        if (value === shortFlag || value === longFlag) {
+            for (let next = index + 1; next < argv.length; next += 1) {
+                const candidate = argv[next];
+                if (!candidate || candidate.startsWith("-")) break;
+                values.push(candidate);
+            }
+        }
+    }
+    return values;
 }
