@@ -196,8 +196,8 @@ describe("Blackboard control boundary", () => {
         expect(routePrompt).toContain("cannot be proven by finite board evidence");
         expect(routePrompt).not.toContain("Planner/Reviewer");
         expect(routePrompt).not.toContain("Codex");
-        expect(workerPrompt).toContain("Read currentRoundSteps before answering");
-        expect(workerPrompt).toContain("1 to 3 public entries");
+        expect(workerPrompt).toContain("Read currentRoundSteps before writing");
+        expect(workerPrompt).toContain("1–3 public entries");
         expect(workerPrompt).toContain("not a log line");
         expect(envelope.phase).toBe("respond-to-upstream-and-propose");
         expect(envelope.expectedOutput).toContain("proposal");

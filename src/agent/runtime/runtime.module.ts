@@ -83,14 +83,15 @@ export class RuntimeModule extends RuntimeBoundary {
         );
         await loadPromptTemplates(this.config.paths);
 
-        const [skills, mcpServers, memoryPrompt] = await Promise.all([
+        const [skills, mcpServers, memoryPrompt, preRoute] = await Promise.all([
             loadSkills(this.config.paths),
             loadMcpServers(this.config.paths),
             this.memory.buildPrompt(message),
+            this.blackboard ? decideBlackboardRoute(this.model, message.text) : Promise.resolve(undefined),
         ]);
         const selectedSkills = selectSkills(skills, message.text);
         const sandbox = createSandboxPolicy(this.config.sandbox);
-        const blackboardRun = await this.runBlackboard(message, context);
+        const blackboardRun = await this.runBlackboard(message, context, options, preRoute);
 
         const modelMessages: ModelMessage[] = [
             {
@@ -110,7 +111,13 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         ];
 
-        const rawText = await this.generateModelText(modelMessages, renderReplyPrefix(blackboardRun), options);
+        const rawText = await this.generateModelText(
+            modelMessages,
+            options.onTextDelta
+                ? renderReplyStreamingPrefix(blackboardRun)
+                : renderReplyPrefix(blackboardRun),
+            options,
+        );
         const parsed = parseMemoryActions(rawText, this.config.memory.candidates.maxCandidatesPerTurn);
         const visibleText = parsed.text || rawText;
         const reply: GatewayReply = {
@@ -199,12 +206,14 @@ export class RuntimeModule extends RuntimeBoundary {
     private async runBlackboard(
         message: GatewayMessage,
         context: RuntimeContext,
+        options: RuntimeStreamOptions = {},
+        preRoute?: RuntimeBlackboardRouteDecision,
     ): Promise<RuntimeBlackboardRun | undefined> {
         if (!this.blackboard) {
             return undefined;
         }
 
-        const route = await decideBlackboardRoute(this.model, message.text);
+        const route = preRoute ?? (await decideBlackboardRoute(this.model, message.text));
         if (route.mode !== BlackboardMode.Blackboard) {
             return {
                 elapsedMs: 0,
@@ -216,6 +225,11 @@ export class RuntimeModule extends RuntimeBoundary {
                 transcript: [],
             };
         }
+
+        const workerNames = route.workers.map((w) => w.name || w.role).join("、");
+        await options.onTextDelta?.(
+            `> 🤔 黑板讨论中 · 参与者：${workerNames}\n\n`,
+        );
 
         const started = performance.now();
         const start = await this.blackboard.startTurn({
@@ -264,8 +278,26 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
+        let currentRound = 0;
+        const onWorkerDone = options.onTextDelta
+            ? async (ev: { round: number; workerName: string; outputSummary: string; blockers: string[] }) => {
+                  if (ev.round !== currentRound) {
+                      currentRound = ev.round;
+                      await options.onTextDelta!(`> **第 ${ev.round} 轮**\n\n`);
+                  }
+                  const blockerLine =
+                      ev.blockers.length > 0 ? `\n> ⚠ ${ev.blockers.slice(0, 2).join("；")}` : "";
+                  await options.onTextDelta!(
+                      `> **${ev.workerName}：** ${ev.outputSummary}${blockerLine}\n\n`,
+                  );
+              }
+            : undefined;
+
         try {
-            const finished = await this.blackboard.runUntilConverged(start.turn.id, { createdAt: context.now });
+            const finished = await this.blackboard.runUntilConverged(start.turn.id, {
+                createdAt: context.now,
+                onWorkerDone,
+            });
             return blackboardRunFromTurn(finished ?? (await this.blackboard.getTurn(start.turn.id)), started, route);
         } catch (error) {
             await this.blackboard.finishTurn(start.turn.id, BlackboardTurnStatus.Failed, context.now);
@@ -381,6 +413,17 @@ function renderReplyPrefix(run: RuntimeBlackboardRun | undefined): string {
         return "";
     }
     return [...renderBlackboardTranscript(run), ...renderDecisionLines(run), "", "Final answer:", ""].join("\n");
+}
+
+function renderReplyStreamingPrefix(run: RuntimeBlackboardRun | undefined): string {
+    if (!run || run.mode !== BlackboardMode.Blackboard) {
+        return "";
+    }
+    const decisionLines = renderDecisionLines(run);
+    if (decisionLines.length > 0) {
+        return [...decisionLines, "", "Final answer:", ""].join("\n");
+    }
+    return "\n---\n\n";
 }
 
 function routeMetadata(route: RuntimeBlackboardRouteDecision): Record<string, unknown> {

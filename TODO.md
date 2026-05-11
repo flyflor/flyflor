@@ -18,17 +18,6 @@ Current goal: keep the closed P0 baseline stable while moving the active backlog
 | DI         | Done        | 只保留 `@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`       |
 | Docs       | In progress | README 做入口，TODO 做路线图，细节归档到 `docs/*`                                                         |
 
-## 当前调试 TODO
-
-| Priority | 问题                                 | 处理要求                                                                                                  | 验收方式                                                                                                    |
-| -------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| P0       | Worker 角色被固定成 Planner/Reviewer | 黑板路由必须由 LLM 按当前请求动态拆分 worker；Planner/Reviewer 只在用户显式点名时保留，不能作为默认组合   | 路由提示词和测试覆盖任意角色/多模型视角，例如 codex、claude、opencode、deepseek、kimi                       |
-| P0       | 复杂/无限任务没有稳定触发黑板        | 自指、互斥、无限深入、穷尽所有可能等任务必须进入 blackboard，并声明 `non-convergent` contract             | “覆盖所有可能物理现象”等用例触发黑板，不直接长答，并进入硬轮次预算                                          |
-| P0       | 五轮硬封顶没有按预期触发             | `non-convergent` 任务必须忽略早期伪 final，持续讨论到 `hardMaxRounds` 后编号反抛用户                      | 测试断言第 5 轮结束、reason 包含 `hard-round-budget-exhausted`，不会提前 converged                          |
-| P0       | 黑板输出仍像调试日志                 | public transcript 必须是面向用户的对话形式；不得暴露 `qa_ack`、`analysis.unit`、`worker-1`、`final=false` | 黑板对话渲染测试覆盖 public discussion 清洗与自然语言展示                                                   |
-| P0       | 文件命名规范没有硬约束               | 源码、脚本、提示词模板和内部模板都使用点分后缀 `xxx.xxx.ext`；禁止新增连字符/下划线命名                   | `bun test` 包含命名边界扫描；提示词文件迁移为 `blackboard.route.md`、`blackboard.route.zh.cn.md` 等点分命名 |
-| P1       | 全量测试覆盖不足                     | 为黑板路由、调度、硬封顶、对话输出、命名规范补充边界测试                                                  | `bun run format:check && bun run check && bun test && bun run build:binary` 全部通过                        |
-
 ## P0-P5 清理结果
 
 | Priority | 结论          | 清理说明                                                                                         |

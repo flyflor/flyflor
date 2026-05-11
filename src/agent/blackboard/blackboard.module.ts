@@ -45,9 +45,19 @@ const DEFAULT_HARD_MAX_ROUNDS = 5;
 const DEFAULT_MAX_WORKER_CONTEXT_CHARS = 12_000;
 const MAX_UNRESOLVED_ISSUES = 8;
 
+export interface BlackboardProgressEvent {
+    round: number;
+    workerRole: string;
+    workerName: string;
+    outputSummary: string;
+    newFacts: string[];
+    blockers: string[];
+}
+
 export interface BlackboardRunUntilConvergedInput {
     createdAt: string;
     timeoutMs?: number;
+    onWorkerDone?: (event: BlackboardProgressEvent) => void | Promise<void>;
 }
 
 @Module({ name: "blackboard", tags: ["flyflor", "boundary"] })
@@ -138,10 +148,10 @@ export class BlackboardModule extends Blackboard {
         turnId: string,
         input: BlackboardRunUntilConvergedInput,
     ): Promise<BlackboardTurn | undefined> {
-        let turn = await this.store.getTurn(turnId);
-        if (!turn) {
-            throw new Error(`Blackboard turn not found: ${turnId}`);
-        }
+        let turn: BlackboardTurn = await this.store.getTurn(turnId).then((t) => {
+            if (!t) throw new Error(`Blackboard turn not found: ${turnId}`);
+            return t;
+        });
         ensureRunning(turn);
 
         const workers = runnableWorkers(turn);
@@ -153,29 +163,36 @@ export class BlackboardModule extends Blackboard {
 
         for (let round = startRound; round <= hardMaxRounds; round += 1) {
             for (const worker of workers) {
-                const latestTurn = await this.store.getTurn(turnId);
-                if (!latestTurn) {
-                    return undefined;
-                }
-                ensureRunning(latestTurn);
-                await this.runWorker(turnId, {
-                    round,
-                    workerRole: worker.role,
-                    prompt: workerPrompt(latestTurn, worker, round),
-                    createdAt: input.createdAt,
-                    timeoutMs: input.timeoutMs,
-                    metadata: {
-                        convergencePolicy,
-                        scheduler: "blackboard-convergence",
-                        workerName: worker.name,
+                ensureRunning(turn);
+                await this.runWorker(
+                    turnId,
+                    {
+                        round,
+                        workerRole: worker.role,
+                        prompt: workerPrompt(turn, worker, round),
+                        createdAt: input.createdAt,
+                        timeoutMs: input.timeoutMs,
+                        metadata: {
+                            convergencePolicy,
+                            scheduler: "blackboard-convergence",
+                            workerName: worker.name,
+                        },
                     },
+                    turn,
+                ).then((step) => {
+                    turn = appendStepToTurn(turn, step);
+                    return input.onWorkerDone?.({
+                        round,
+                        workerRole: worker.role,
+                        workerName: worker.name,
+                        outputSummary: step.outputSummary,
+                        newFacts: step.newFacts,
+                        blockers: step.blockers,
+                    });
                 });
             }
 
-            turn = await this.store.getTurn(turnId);
-            if (!turn) {
-                return undefined;
-            }
+            turn = (await this.store.getTurn(turnId)) ?? turn;
             if (convergencePolicy.forceHardCap && round < hardMaxRounds) {
                 continue;
             }
@@ -221,10 +238,7 @@ export class BlackboardModule extends Blackboard {
             }
         }
 
-        turn = await this.store.getTurn(turnId);
-        if (!turn) {
-            return undefined;
-        }
+        turn = (await this.store.getTurn(turnId)) ?? turn;
         return this.returnDecisionToUser(
             turn,
             {
@@ -317,11 +331,11 @@ export class BlackboardModule extends Blackboard {
         return decision;
     }
 
-    async runWorker(turnId: string, input: BlackboardWorkerRunInput): Promise<BlackboardStep> {
+    async runWorker(turnId: string, input: BlackboardWorkerRunInput, turnHint?: BlackboardTurn): Promise<BlackboardStep> {
         if (!this.workers) {
             throw new Error("Blackboard worker manager is not configured.");
         }
-        const turn = await this.store.getTurn(turnId);
+        const turn = turnHint ?? await this.store.getTurn(turnId);
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
         }
@@ -920,4 +934,8 @@ function renderDecisionForm(input: {
         ),
         "```",
     ].join("\n");
+}
+
+function appendStepToTurn(turn: BlackboardTurn, step: BlackboardStep): BlackboardTurn {
+    return { ...turn, steps: [...turn.steps, step] };
 }

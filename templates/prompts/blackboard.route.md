@@ -32,12 +32,13 @@ Routing contract:
 - Use "direct" only for short, single-intent requests that one model can answer in one shot without internal cross-checking. Examples: chit-chat, a single factual lookup, one-shot rewrite, a single piece of code under one file, a quick definition.
 - Use "direct-with-watch" for ambiguous mid-size requests that can start directly but may need escalation if execution churn appears. Examples: a single feature change touching a handful of files, a short answer that may turn out to need verification.
 - Use "blackboard" when ANY of the following apply, regardless of domain (engineering, planning, strategy, writing, research, life advice):
-  - The request enumerates two or more hard constraints that must all hold in the final answer (e.g. "must cover X, Y, Z", "no more than N per day", "at least M of A", "consider B and C", explicit budgets, deadlines, role limits).
-  - The request asks to satisfy or balance two or more stakeholders, preferences, or competing positions (e.g. "兼顾双方", "trade off A vs B", "we disagree, give a plan").
-  - The expected output is a structured, multi-section artifact such as a multi-day schedule, a roadmap, a milestone plan, an org/strategy proposal, a design doc, a market plan, a curriculum, a comparative analysis.
+  - The request enumerates two or more hard constraints that must all hold AND those constraints create genuine tension that a single model pass is likely to violate or miss (e.g. "no more than 3 attractions per day" + "cover all three cities" + "consider travel time").
+  - The request asks to satisfy or balance two or more stakeholders, preferences, or competing positions where the perspectives are genuinely in conflict (e.g. "兼顾双方 — 我偏 ToC，他偏私有化", "trade off A vs B with real disagreement").
   - The request explicitly asks for review, peer review, debate, multiple perspectives, role-play between named participants, or several rounds of discussion.
   - The request needs implementation plus independent verification, cross-file coordination, evidence checking, or contradiction hunting.
-  - The request is open-ended and high-stakes (money, safety, legal, hiring, architecture) where a single perspective is likely to miss alternatives or risks.
+  - The request is open-ended and high-stakes (money, safety, legal, hiring, architecture) where a single perspective will predictably miss important alternatives or risks.
+- Discussion-value gate: before choosing "blackboard", ask — would a structured worker discussion surface claims or risks that a single model pass would miss? If the answer is no (the task is complex but all information is already in the request and a single model can satisfy all constraints reliably), choose "direct" or "direct-with-watch" instead. Blackboard adds latency; justify it with genuine competing claims.
+- Multi-section structured output (multi-day plans, roadmaps, curricula) justifies blackboard ONLY when the sections have interdependencies or cross-constraints that workers can challenge each other on. Pure formatting or templated output does not warrant blackboard.
 - If the request appears unanswerable from the available context, decide whether blackboard discussion can resolve it. Use "blackboard" only when discussion can identify blockers, alternatives, or a safe user-facing decision. Otherwise use "direct" and answer plainly.
 - Treat worker selection as a small game: bid the smallest worker set that can both PRODUCE a candidate answer AND independently CHALLENGE it. For most blackboard cases this means 2–3 workers (e.g. planner + critic, or two persona advocates + synthesizer). A single worker is not a blackboard — if you can only justify one worker, choose "direct" or "direct-with-watch" instead.
 - Every worker MUST include a non-empty "role" field as a short ASCII slug (lowercase letters, digits, dashes), e.g. "planner", "critic", "kansai-route-architect". "name" is the human display label. Never omit "role".
@@ -58,9 +59,17 @@ Routing contract:
 - For "non-convergent", include concise evidence from the request and contradictions that explain why the board must run to the hard round cap instead of accepting a quick final answer.
 - Do not use fixed taxonomies. Infer signals from this request only.
 - Keep score in [0, 1]. Calibrate as follows:
-  - 0.00–0.30: pure direct (chit-chat, single fact, single-sentence rewrite).
-  - 0.30–0.50: direct-with-watch (single ambiguous task, may need follow-up).
-  - 0.50–1.00: blackboard. Any request matching one of the blackboard triggers above must score at least 0.55 and use mode "blackboard"; do not downgrade because the topic is "easy to write a long answer" — long-form, multi-constraint or multi-stakeholder requests are exactly what the blackboard exists for.
+  - 0.00–0.30: pure direct (chit-chat, single fact, single-sentence rewrite, long output where all constraints are easily satisfiable).
+  - 0.30–0.50: direct-with-watch (single ambiguous task, may need follow-up, mild constraint tension).
+  - 0.50–0.70: blackboard with 2 workers — genuine competing claims, one proposer + one challenger is enough.
+  - 0.70–1.00: blackboard with 3+ workers — clearly independent workstreams or multiple distinct stakeholder perspectives that each need their own voice.
+  Do not use score to override mode: if the request does not pass the discussion-value gate, use direct/direct-with-watch regardless of score.
+
+Worker count calibration:
+- 2 workers: one constructs the answer, one independently challenges it. Sufficient for most blackboard cases.
+- 3 workers: only when there are three genuinely distinct roles that cannot collapse into propose + challenge (e.g. two opposing stakeholders + a neutral synthesizer; or analysis + implementation + verification as separate passes).
+- 4–5 workers: rare, only when the request explicitly names that many perspectives or when sub-tasks are demonstrably independent with different domain knowledge.
+- Default to 2 workers when in doubt.
 
 User request:
 {{request}}
