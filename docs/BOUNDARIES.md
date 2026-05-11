@@ -214,6 +214,36 @@ Blackboard 路由不得在源码里维护业务语义关键词表，也不得依
 
 Crystal Memory 的语义结构不得由源码固定 taxonomy、关键词表或硬编码 bucket 产生。Reflection worker 可以使用 `templates/prompts/crystal.reflection.md` 的极短英文提示从证据中生成 `symbols`、`bucketHint`、`coordinates` 和 `method`；边界代码只做结构校验、证据聚合、SurrealDB 持久化和召回排序。运行时反思必须先写 reflection candidate；证据为 0 的候选只能保留审计，不得生成 atom 或 skill。
 
+## 业务语义判断零字符匹配（全局红线）
+
+整个项目任何路径上，业务语义判断都不允许使用字符匹配、关键词表、正则识别意图、情感词典、句式启发式、长度阈值等任何硬编码规则代替模型判断。所有意图、复杂度、路由、记忆动作、反馈分类、固化触发、矛盾检测、概念提取等语义结论都必须满足下列条件之一：
+
+1. **来自结构化协议字段**：模型在同一轮明确返回的 `mode`、`type`、`action`、`memory_action`、`route` 等字段，代码只做枚举/JSON shape 校验。
+2. **来自专用提示词模板**：通过 `templates/prompts/*.md` 调用模型生成结构化 JSON，代码只校验形状，不二次解析自然语言。
+3. **来自数学/统计指标**：纯数值阈值（importance 分、cosine 相似度、cluster size、TTL 倒计时、token 预算）允许在代码里写死，因为它们与业务语义无关，只与资源/概率有关。
+
+明确禁止的反模式：
+
+- 用 `text.includes("记住")`、`/项目|工程/i`、`message.endsWith("?")` 之类判断用户意图、对话类型或路由方向。
+- 用关键词列表或停用词表过滤、分类或归桶 episode/memory_node/skill/concept。
+- 在源码里写"如果消息小于 N 字 → direct"这种业务启发式（用资源指标如 token 数代替不算）。
+- 在源码里维护"项目类关键词"、"问题类关键词"、"反馈类关键词"等任何 hand-crafted lexicon。
+- 用情感词典或正则提取 valence/arousal/importance；这些必须来自模型同轮输出或纯统计（如复用次数）。
+- 把模型自然语言输出再用字符串匹配二次解析；模型必须返回 JSON。
+
+唯一例外（不算违规）：
+
+- 命令行 CLI flag、配置 key、环境变量、文件后缀、URL scheme 等纯协议层字符匹配。
+- 无业务语义的字符串处理（trim、split、长度截断到 token budget、UUID 校验、JSON 解析）。
+- 不可绕过的安全过滤（如 secrets 脱敏字段名匹配）。
+
+工程实现指南：
+
+- 凡需要"判断这是不是 X 类型的消息/动作/记忆"，先想能否让模型在上一轮直接返回结构化字段；若不行，再加一个轻量提示词模板调用。
+- 性能担心 LLM 延迟时，正确做法是优化提示词长度、并行启动、缓存模型输出，而不是用关键词短路代替模型判断。
+- 概念/symbol 提取允许使用 TF-IDF、向量相似度等纯数学方法（这些是统计而非语义匹配），但禁止维护 stop-words 业务清单或硬编码语义聚类规则。
+- 评审 PR 时，凡看到 `if (text.includes(...))`、`/.../.test(text)`、关键词数组用于业务判断 → 一律打回。
+
 推荐目录语义：
 
 ```text

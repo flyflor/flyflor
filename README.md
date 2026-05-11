@@ -50,7 +50,7 @@ Mounted paths:
 | `./docker/storage/flyflor` | `/root/.local/share/flyflor` | session and memory data |
 | `./dist/flyflor-linux`     | copied to `/usr/local/bin`   | compiled binary         |
 
-Qdrant and SurrealDB are internal compose services only. They are not published to host ports.
+Redis and SurrealDB are internal compose services only. They are not published to host ports.
 
 ## Architecture
 
@@ -64,8 +64,8 @@ Current source layout:
 | `src/agent`    | runtime, gateway, blackboard, session, sandbox, worker, MCP |
 | `src/agent/di` | `@Module`, `@Provide`, `@Inject`, registry, container       |
 | `src/llm`      | model providers, OpenAI/Anthropic-compatible protocol layer |
-| `src/crystal`  | reflection candidates, crystal skills, SurrealDB store      |
-| `src/neural`   | hippocampus-like memory, recall, SQLite/Qdrant indexes      |
+| `src/crystal`  | crystal intelligence: episode, memory_node, skill, consolidation, dream mode |
+| `src/neural`   | hippocampus-like working memory: Redis episodes, recall, recent-exchanges    |
 | `src/protocol` | contracts, enums, events, process envelopes                 |
 | `templates`    | prompt and memory Markdown templates                        |
 
@@ -80,16 +80,18 @@ Decorator rules:
 
 ## Memory
 
-Flyflor uses layered memory:
+Flyflor uses a hippocampus-inspired layered memory (refactor in progress, see [docs/memory.graph.refactor.md](docs/memory.graph.refactor.md)):
 
-| Layer                 | Purpose                                                          |
-| --------------------- | ---------------------------------------------------------------- |
-| Markdown              | durable human-readable source of truth                           |
-| SQLite                | session timeline, history, candidates, FTS, audit records        |
-| Internal vector index | best-effort semantic recall acceleration                         |
-| SurrealDB Crystal     | candidate, atom, skill, symbolic coordinates, relationship graph |
+| Layer                 | Backend     | Purpose                                                                |
+| --------------------- | ----------- | ---------------------------------------------------------------------- |
+| Constitutional        | Markdown    | identity, user preferences, project facts (hand-edited, slow-changing) |
+| Working memory        | Redis       | episode buffer with TTL-based forgetting curve, recent-exchange ring   |
+| Long-term graph       | SurrealDB   | episode → memory_node → skill, with RELATE edges and MTREE ANN         |
+| Audit log             | SQLite      | replay/debug + blackboard turn state                                   |
 
-Long-term memory writes require a structured `memory_action` emitted in the same model turn. Ordinary chat text, keywords, regexes, and affect scores do not promote memory by themselves.
+Episodes are captured asynchronously after every turn. Consolidation (LLM-assisted reinforce/consolidate/discard) runs as a background worker triggered by Redis ZSET pre-expiry sweep. Skill upgrades go through two quality gates: episode source-kind weight + cluster evidence score.
+
+Markdown writes still require a structured `memory_action`. Ordinary chat does not promote constitutional memory by itself, but every turn produces working-memory episodes that may consolidate into long-term knowledge over time.
 
 Prompt templates live in `templates/prompts` with `.zh.cn.md` review copies. Runtime reads installed Markdown from `~/.flyflor/prompts`; Docker dev reads `./docker/config/prompts`.
 
@@ -107,13 +109,13 @@ Blackboard can converge on the first decisive round. Non-decisive discussions co
 
 | Document                                                             | Purpose               |
 | -------------------------------------------------------------------- | --------------------- |
-| [TODO.md](TODO.md)                                                   | cleaned P0-P5 roadmap |
-| [DESIGN.md](DESIGN.md)                                               | long-form philosophy  |
-| [docs/boundaries.md](docs/boundaries.md)                             | engineering rules     |
+| [TODO.md](TODO.md)                                                   | active roadmap, refactor phases |
+| [DESIGN.md](DESIGN.md)                                               | architecture philosophy and current state |
+| [docs/memory.graph.refactor.md](docs/memory.graph.refactor.md)       | **active** — hippocampus memory redesign (Redis + SurrealDB graph + dream mode) |
+| [docs/boundaries.md](docs/boundaries.md)                             | engineering rules and decorator/file-naming guardrails |
 | [docs/di.protocol.architecture.md](docs/di.protocol.architecture.md) | DI/protocol design    |
-| [docs/memory.architecture.md](docs/memory.architecture.md)           | memory architecture   |
-| [docs/crystal.memory.md](docs/crystal.memory.md)                     | crystal memory flow   |
-| [docs/blackboard.worker.design.md](docs/blackboard.worker.design.md) | blackboard design     |
-| [docs/prompt.templates.md](docs/prompt.templates.md)                 | Markdown template map |
+| [docs/blackboard.worker.design.md](docs/blackboard.worker.design.md) | blackboard worker design |
+| [docs/prompt.templates.md](docs/prompt.templates.md)                 | prompt template map   |
+| [docs/cli.command.status.md](docs/cli.command.status.md)             | CLI command inventory |
 
 Development rules are also mirrored in [AGENTS.md](AGENTS.md).
