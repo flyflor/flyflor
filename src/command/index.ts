@@ -4,7 +4,7 @@ import {
     parseFlyflorCommand,
     runFlyflorUtilityCommand,
     type FlyflorCommandResult,
-} from "./cli/hermes.commands.ts";
+} from "./cli/commands.ts";
 
 export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandResult> {
     if (isHelpRequest(argv)) {

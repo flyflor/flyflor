@@ -1,10 +1,11 @@
 import type { SurrealMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { LruCache } from "./lru.cache.ts";
 
 /**
  * 海马体长期记忆图：SurrealDB v2+ 实现。
  *
- * 表结构（与 docs/memory.graph.refactor.md §3-§5 对齐）：
+ * 表结构（与 DESIGN.md §5.3 长期记忆图 对齐）：
  *
  *   节点：
  *     episode      已 consolidate 落库的事件级条目（短期 Redis episode 升格而来）
@@ -30,8 +31,18 @@ import { Component } from "../../agent/di/decorators/index.ts";
 @Component({ name: "surreal-graph-store", tags: ["database", "memory", "graph", "hippocampus"] })
 export class SurrealGraphStore {
     private initialized = false;
+    /**
+     * ANN 召回结果 LRU 缓存：相同 (userId, symbols, embedding 摘要, limit)
+     * 在 60s 窗口内复用，减少 SurrealDB MTREE 查询开销（预期省 15-25ms / 命中）。
+     */
+    private readonly recallCache = new LruCache<MemoryNodeRecord[]>({ maxSize: 100, ttlMs: 60_000 });
 
     constructor(private readonly config: SurrealMemoryConfig) {}
+
+    /** 暴露缓存命中率，便于 perf 事件采集。 */
+    recallCacheStats(): ReturnType<LruCache<MemoryNodeRecord[]>["stats"]> {
+        return this.recallCache.stats();
+    }
 
     /**
      * 建表/建索引；初次调用时 push 全量 schema。
@@ -71,6 +82,55 @@ export class SurrealGraphStore {
         );
     }
 
+    /**
+     * 衰减扫描：把 memory_node / skill 的 importance 按时间衰减写回。
+     * decayFn 由调用方注入（来自 decay.ts 的纯函数），本方法只负责拉数据 / 写回。
+     * 返回处理的节点数；调用方据此计 metric。
+     */
+    async applyDecaySweep(input: DecaySweepInput): Promise<DecaySweepResult> {
+        if (!this.config.enabled) return { memoryNodes: 0, skills: 0 };
+        await this.initialize();
+        const userLit = literal(input.userId);
+        const limit = Math.max(1, Math.floor(input.batchSize ?? 200));
+        const mnRows = await this.query<DecayRow[]>(
+            `SELECT id, importance, updatedAt FROM memory_node WHERE userId = ${userLit} LIMIT ${limit};`,
+        );
+        const skillRows = await this.query<DecayRow[]>(
+            `SELECT id, importance, updatedAt, lastVerifiedAt FROM skill WHERE userId = ${userLit} LIMIT ${limit};`,
+        );
+        let mnTouched = 0;
+        for (const row of mnRows ?? []) {
+            const id = extractRecordId(row.id, "memory_node");
+            if (!id) continue;
+            const next = input.decayMemoryNode({
+                importance: typeof row.importance === "number" ? row.importance : 0,
+                updatedAt: typeof row.updatedAt === "number" ? row.updatedAt : Date.now(),
+            });
+            if (Math.abs(next - (row.importance ?? 0)) < 1e-4) continue;
+            await this.query(
+                `UPDATE memory_node:${ident(id)} SET importance = ${literal(next)};`,
+            );
+            mnTouched += 1;
+        }
+        let skillTouched = 0;
+        for (const row of skillRows ?? []) {
+            const id = extractRecordId(row.id, "skill");
+            if (!id) continue;
+            const next = input.decaySkill({
+                importance: typeof row.importance === "number" ? row.importance : 0,
+                updatedAt: typeof row.updatedAt === "number" ? row.updatedAt : Date.now(),
+                lastVerifiedAt:
+                    typeof row.lastVerifiedAt === "number" ? row.lastVerifiedAt : undefined,
+            });
+            if (Math.abs(next - (row.importance ?? 0)) < 1e-4) continue;
+            await this.query(
+                `UPDATE skill:${ident(id)} SET importance = ${literal(next)};`,
+            );
+            skillTouched += 1;
+        }
+        return { memoryNodes: mnTouched, skills: skillTouched };
+    }
+
     // ───── 关系写入 ─────────────────────────────────────────────────
 
     async relateNextContext(prev: string, curr: string): Promise<void> {
@@ -107,6 +167,9 @@ export class SurrealGraphStore {
     async recallMemoryNodes(input: GraphRecallInput): Promise<MemoryNodeRecord[]> {
         if (!this.config.enabled) return [];
         await this.initialize();
+        const cacheKey = recallCacheKey(input);
+        const cached = this.recallCache.get(cacheKey);
+        if (cached) return cached;
         const conditions: string[] = [];
         if (input.userId) conditions.push(`userId = ${literal(input.userId)}`);
         if (input.symbols && input.symbols.length > 0) {
@@ -122,7 +185,9 @@ export class SurrealGraphStore {
             ? `SELECT *, vector::similarity::cosine(embedding, ${literal(input.embedding)}) AS score FROM memory_node${where} ORDER BY score DESC LIMIT ${limit};`
             : `SELECT * FROM memory_node${where} ORDER BY confidence DESC LIMIT ${limit};`;
         const rows = await this.query<MemoryNodeRecord[]>(sql);
-        return rows ?? [];
+        const result = rows ?? [];
+        this.recallCache.set(cacheKey, result);
+        return result;
     }
 
     async recallSkills(input: GraphRecallInput): Promise<SkillRecord[]> {
@@ -355,6 +420,30 @@ export interface GraphCounts {
     skills: number;
 }
 
+export interface DecaySweepInput {
+    userId: string;
+    /** 单次扫描每张表最多拉的行数，默认 200。 */
+    batchSize?: number;
+    decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
+    decaySkill: (row: {
+        importance: number;
+        updatedAt: number;
+        lastVerifiedAt?: number;
+    }) => number;
+}
+
+export interface DecaySweepResult {
+    memoryNodes: number;
+    skills: number;
+}
+
+interface DecayRow {
+    id: unknown;
+    importance?: number;
+    updatedAt?: number;
+    lastVerifiedAt?: number;
+}
+
 // ───── 辅助 ───────────────────────────────────────────────────────
 
 /** 把 ws://surrealdb:8000/rpc 形式的内部 URL 归一化成 http://surrealdb:8000 给 /sql 用。 */
@@ -372,4 +461,48 @@ function literal(value: unknown): string {
 function ident(value: string): string {
     if (/^[A-Za-z0-9_]+$/.test(value)) return value;
     return "`" + value.replace(/`/g, "\\`") + "`";
+}
+
+/**
+ * SurrealDB Thing id 形式可能是 "table:id" 字符串，也可能是 { tb, id } 对象；
+ * 抽出纯 id 字段供后续 UPDATE 语句使用。返回 undefined 表示无法识别。
+ */
+function extractRecordId(raw: unknown, expectedTable: string): string | undefined {
+    if (typeof raw === "string") {
+        const idx = raw.indexOf(":");
+        if (idx < 0) return raw.length > 0 ? raw : undefined;
+        const tb = raw.slice(0, idx);
+        const id = raw.slice(idx + 1);
+        if (tb !== expectedTable) return undefined;
+        return id.replace(/^`|`$/g, "");
+    }
+    if (raw && typeof raw === "object") {
+        const obj = raw as { tb?: unknown; id?: unknown };
+        if (obj.tb !== expectedTable) return undefined;
+        if (typeof obj.id === "string") return obj.id;
+        if (obj.id && typeof obj.id === "object") {
+            const inner = (obj.id as { String?: string }).String;
+            if (typeof inner === "string") return inner;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * 构造 ANN 召回的缓存 key。
+ * embedding 使用前 4 维 + 长度做指纹（避免长字符串拼接 + 区分维度）。
+ * 不引入哈希依赖（保持 bun --compile 兼容）。
+ */
+function recallCacheKey(input: GraphRecallInput): string {
+    const symbols = (input.symbols ?? []).slice().sort().join(",");
+    const embFingerprint = input.embedding && input.embedding.length > 0
+        ? `${input.embedding.length}:${input.embedding.slice(0, 4).map((n) => n.toFixed(4)).join(",")}`
+        : "none";
+    return [
+        input.userId ?? "anon",
+        symbols,
+        embFingerprint,
+        input.minConfidence ?? "any",
+        input.limit ?? 16,
+    ].join("|");
 }

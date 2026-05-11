@@ -278,6 +278,8 @@ export const MemorySourceKind = {
     SessionTurn: "session-turn",
     Reflection: "reflection",
     SignalAnalysis: "signal-analysis",
+    BlackboardConverged: "blackboard-converged",
+    UserFeedback: "user-feedback",
 } as const;
 
 export type MemorySourceKind = (typeof MemorySourceKind)[keyof typeof MemorySourceKind];

@@ -26,6 +26,10 @@ export interface MemoryActionSignals {
     relevance?: number;
     sourceDiversity?: number;
     validationCount?: number;
+    /** 显式项目固化意图（0..1）。≥ 0.7 直接触发 project-init（见 src/agent/project）。 */
+    projectIntent?: number;
+    /** 显式事件记录意图（0..1）。≥ 0.7 触发 event-record。 */
+    eventIntent?: number;
 }
 
 export interface ParsedMemoryActions {

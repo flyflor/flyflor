@@ -1202,6 +1202,15 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
         sandbox: {
             mode: "off",
         },
+        routing: {
+            fastRouteEnabled: false,
+            routeHintTtlMs: 5_000,
+            similarityBypassThreshold: 0.85,
+            routeBypassTokenBudget: 32,
+        },
+        metrics: {
+            enabled: true,
+        },
     };
     await installTestTemplates(config.paths);
     await loadPromptTemplates(config.paths);

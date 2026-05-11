@@ -5,7 +5,7 @@ import { Component } from "../../agent/di/decorators/index.ts";
 /**
  * 海马体工作记忆 Redis 客户端：封装 ff:* 四类 key 的 CRUD。
  *
- * Key 协议（与 docs/memory.graph.refactor.md §3 / §4 对齐）：
+ * Key 协议（与 DESIGN.md §5.2 工作记忆 对齐）：
  *   ff:ep:{userId}:{episodeId}    HASH   episode 全字段 + EXPIRE TTL
  *   ff:ctx:{userId}               LIST   最近 N 轮上下文 ring buffer（LPUSH+LTRIM）
  *   ff:cq:{userId}                ZSET   整合候选队列，score = 预期 review 时间戳
@@ -124,7 +124,58 @@ export class RedisMemoryStore {
         const pipeline = this.client.pipeline();
         pipeline.del(this.episodeKey(userId, episodeId));
         pipeline.zrem(this.consolidationKey(userId), episodeId);
+        pipeline.lrem(this.dreamKey(userId), 0, episodeId);
         await pipeline.exec();
+    }
+
+    /** 把一个 episodeId 推入 dream 队列尾部（非 protected episode 才入队，由调用方判断）。 */
+    async enqueueDream(userId: string, episodeId: string): Promise<void> {
+        if (typeof episodeId !== "string" || episodeId.length === 0) return;
+        // RPUSH + LTRIM：保持 dream 队列长度不超过 maxEpisodesPerUser，避免无限增长。
+        const pipeline = this.client.pipeline();
+        pipeline.rpush(this.dreamKey(userId), episodeId);
+        pipeline.ltrim(this.dreamKey(userId), -this.maxEpisodesPerUser, -1);
+        pipeline.expire(this.dreamKey(userId), this.defaultTtlSeconds * 4);
+        await pipeline.exec();
+    }
+
+    /** 弹出 dream 队列首部至多 limit 条 episodeId（FIFO）。 */
+    async popDreamCandidates(userId: string, limit: number): Promise<string[]> {
+        if (limit <= 0) return [];
+        const popped: string[] = [];
+        for (let i = 0; i < limit; i += 1) {
+            const id = await this.client.lpop(this.dreamKey(userId));
+            if (id === null) break;
+            popped.push(id);
+        }
+        return popped;
+    }
+
+    /** 当前 dream 队列长度（可观察性）。 */
+    async dreamQueueSize(userId: string): Promise<number> {
+        return await this.client.llen(this.dreamKey(userId));
+    }
+
+    /** 原地改写 episode（dream rewrite 决策）：保留 id 与 createdAt，重写 text/concepts/importance。 */
+    async rewriteEpisode(
+        userId: string,
+        episodeId: string,
+        patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
+    ): Promise<boolean> {
+        const existing = await this.readEpisode(userId, episodeId);
+        if (!existing) return false;
+        const fields: Record<string, string> = {};
+        if (typeof patch.text === "string") fields.text = patch.text;
+        if (Array.isArray(patch.concepts)) fields.concepts = JSON.stringify(patch.concepts);
+        if (typeof patch.importance === "number" && Number.isFinite(patch.importance)) {
+            fields.importance = String(patch.importance);
+        }
+        if (patch.metadata && typeof patch.metadata === "object") {
+            fields.metadata = JSON.stringify({ ...existing.metadata, ...patch.metadata });
+        }
+        if (Object.keys(fields).length === 0) return true;
+        await this.client.hset(this.episodeKey(userId, episodeId), fields);
+        return true;
     }
 
     async touchConcepts(userId: string, concepts: string[]): Promise<void> {
@@ -213,6 +264,10 @@ export class RedisMemoryStore {
 
     private activationKey(userId: string): string {
         return `${this.prefix}:act:${userId}`;
+    }
+
+    private dreamKey(userId: string): string {
+        return `${this.prefix}:dream:${userId}`;
     }
 }
 

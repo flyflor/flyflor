@@ -1,0 +1,232 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { BackgroundScheduler } from "../src/neural/memory/background.scheduler.ts";
+import { ConsolidationDecisionKind, type ConsolidationRunResult } from "../src/neural/memory/consolidation.worker.ts";
+import { RuntimeEventType } from "../src/protocol/events/index.ts";
+import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
+
+class FakeEvents {
+    readonly published: RuntimeEvent[] = [];
+    publish(e: RuntimeEvent): void {
+        this.published.push(e);
+    }
+    subscribe(): () => void {
+        return () => undefined;
+    }
+}
+
+class FakeConsolidation {
+    readonly drained: string[] = [];
+    fail = false;
+    result: ConsolidationRunResult = {
+        scanned: 1,
+        reinforced: 1,
+        consolidated: 0,
+        discarded: 0,
+        skipped: 0,
+    };
+    async drain(userId: string): Promise<ConsolidationRunResult> {
+        this.drained.push(userId);
+        if (this.fail) throw new Error("boom-consolidation");
+        return this.result;
+    }
+}
+
+class FakeGraph {
+    readonly swept: Array<{ userId: string; batchSize?: number }> = [];
+    failNext = false;
+    decayBudget = { mn: 3, sk: 1 };
+    async applyDecaySweep(input: {
+        userId: string;
+        batchSize?: number;
+        decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
+        decaySkill: (row: { importance: number; updatedAt: number; lastVerifiedAt?: number }) => number;
+    }): Promise<{ memoryNodes: number; skills: number }> {
+        this.swept.push({ userId: input.userId, batchSize: input.batchSize });
+        if (this.failNext) {
+            this.failNext = false;
+            throw new Error("boom-decay");
+        }
+        // call the decay funcs to make sure inputs are wired
+        input.decayMemoryNode({ importance: 0.5, updatedAt: 0 });
+        input.decaySkill({ importance: 0.5, updatedAt: 0, lastVerifiedAt: 0 });
+        return { memoryNodes: this.decayBudget.mn, skills: this.decayBudget.sk };
+    }
+}
+
+class FakeDream {
+    readonly drained: Array<{ userId: string; limit?: number }> = [];
+    async drain(userId: string, limit?: number) {
+        this.drained.push({ userId, limit });
+        return { rewritten: 1, discarded: 0, skipped: 0 };
+    }
+    async enqueue() {}
+}
+
+function build(extra?: { dream?: FakeDream }): {
+    scheduler: BackgroundScheduler;
+    consolidation: FakeConsolidation;
+    graph: FakeGraph;
+    events: FakeEvents;
+} {
+    const consolidation = new FakeConsolidation();
+    const graph = new FakeGraph();
+    const events = new FakeEvents();
+    const scheduler = new BackgroundScheduler(
+        consolidation as never,
+        graph as never,
+        events,
+        {
+            consolidationIntervalMs: 1_000,
+            decayIntervalMs: 1_000,
+            decayBatchSize: 50,
+            now: () => 1_700_000_000_000,
+            dream: extra?.dream as never,
+        },
+    );
+    return { scheduler, consolidation, graph, events };
+}
+
+const SCHEDULERS: BackgroundScheduler[] = [];
+afterEach(() => {
+    while (SCHEDULERS.length) SCHEDULERS.pop()?.stop();
+});
+
+describe("BackgroundScheduler", () => {
+    test("trackUser dedupes and counts", () => {
+        const { scheduler } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u1");
+        scheduler.trackUser("u1");
+        scheduler.trackUser("u2");
+        scheduler.trackUser("");
+        // @ts-expect-error garbage
+        scheduler.trackUser(null);
+        expect(scheduler.activeUsers()).toBe(2);
+    });
+
+    test("runConsolidationOnce drains every active user", async () => {
+        const { scheduler, consolidation } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("a");
+        scheduler.trackUser("b");
+        consolidation.result = {
+            scanned: 2,
+            reinforced: 1,
+            consolidated: 1,
+            discarded: 0,
+            skipped: 0,
+        };
+        const totals = await scheduler.runConsolidationOnce();
+        expect(consolidation.drained.sort()).toEqual(["a", "b"]);
+        expect(totals.users).toBe(2);
+        expect(totals.consolidated).toBe(2);
+        expect(totals.reinforced).toBe(2);
+    });
+
+    test("runConsolidationOnce swallows per-user failure and continues", async () => {
+        const { scheduler, consolidation, events } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("ok");
+        scheduler.trackUser("ko");
+        // fail every drain — both users emit a failure event, totals.users=0
+        consolidation.fail = true;
+        const totals = await scheduler.runConsolidationOnce();
+        expect(totals.users).toBe(0);
+        const failures = events.published.filter(
+            (e) => e.type === RuntimeEventType.MemoryConsolidationFailed,
+        );
+        expect(failures.length).toBe(2);
+    });
+
+    test("runConsolidationOnce is reentrant-safe", async () => {
+        const { scheduler, consolidation } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("a");
+        // Force a hang via promise; the second call must early-exit with zeros
+        let release!: () => void;
+        const block = new Promise<ConsolidationRunResult>((resolve) => {
+            release = () =>
+                resolve({ scanned: 0, reinforced: 0, consolidated: 0, discarded: 0, skipped: 0 });
+        });
+        consolidation.drain = () => block;
+        const first = scheduler.runConsolidationOnce();
+        const second = await scheduler.runConsolidationOnce();
+        expect(second.users).toBe(0);
+        release();
+        await first;
+    });
+
+    test("runDecayOnce sweeps each user with batch size and emits event", async () => {
+        const { scheduler, graph, events } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u1");
+        scheduler.trackUser("u2");
+        const totals = await scheduler.runDecayOnce();
+        expect(totals.users).toBe(2);
+        expect(totals.memoryNodes).toBe(6);
+        expect(totals.skills).toBe(2);
+        expect(graph.swept.map((s) => s.userId).sort()).toEqual(["u1", "u2"]);
+        for (const s of graph.swept) expect(s.batchSize).toBe(50);
+        const swept = events.published.filter((e) => e.type === RuntimeEventType.MemoryDecaySwept);
+        expect(swept.length).toBe(1);
+    });
+
+    test("runDecayOnce continues past a failing user", async () => {
+        const { scheduler, graph, events } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("bad");
+        scheduler.trackUser("good");
+        graph.failNext = true;
+        const totals = await scheduler.runDecayOnce();
+        expect(totals.users).toBe(1);
+        const failures = events.published.filter(
+            (e) => e.type === RuntimeEventType.MemoryConsolidationFailed,
+        );
+        expect(failures.length).toBe(1);
+    });
+
+    test("start / stop are idempotent and timers fire periodically", async () => {
+        const { scheduler, consolidation } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u");
+        scheduler.start();
+        scheduler.start(); // restart should be safe
+        await new Promise((r) => setTimeout(r, 1_200));
+        scheduler.stop();
+        scheduler.stop();
+        expect(consolidation.drained.length).toBeGreaterThan(0);
+    });
+
+    test("zero users → totals zero, no exceptions", async () => {
+        const { scheduler } = build();
+        SCHEDULERS.push(scheduler);
+        const c = await scheduler.runConsolidationOnce();
+        const d = await scheduler.runDecayOnce();
+        expect(c.users).toBe(0);
+        expect(d.users).toBe(0);
+    });
+
+    test("decay function actually applies decay layer profile", async () => {
+        const { scheduler, graph } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u");
+        let captured = 0;
+        graph.applyDecaySweep = async (input) => {
+            captured = input.decayMemoryNode({ importance: 1, updatedAt: 0 });
+            return { memoryNodes: 0, skills: 0 };
+        };
+        await scheduler.runDecayOnce();
+        // After many half-lives the decay profile clamps to the floor; just verify it actually decayed below 1.
+        expect(captured).toBeLessThan(1);
+        expect(captured).toBeGreaterThanOrEqual(0);
+    });
+
+    test("decision kinds enum still triple", () => {
+        // Sanity check we did not accidentally extend the enum
+        expect(Object.values(ConsolidationDecisionKind).sort()).toEqual([
+            "consolidate",
+            "discard",
+            "reinforce",
+        ]);
+    });
+});

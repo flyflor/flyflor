@@ -29,6 +29,12 @@ await installTemplateGroup({
     source: join(repoRoot, "templates", "memory"),
 });
 
+await installTemplateGroup({
+    destination: join(options.targetHome, "templates", "projects"),
+    force: options.force,
+    source: join(repoRoot, "templates", "projects"),
+});
+
 console.log(`Template install complete: ${options.targetHome}`);
 
 async function installTemplateGroup(input: { destination: string; force: boolean; source: string }): Promise<void> {

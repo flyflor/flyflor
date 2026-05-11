@@ -313,6 +313,10 @@ export interface RoutingConfig {
     routeHintTtlMs: number;
     similarityBypassThreshold: number;
     routeBypassTokenBudget: number;
+    /** direct-with-watch 模式连续命中多少次后强制升级到 blackboard。0 表示禁用。默认 3。 */
+    watchEscalationThreshold?: number;
+    /** 黑板返回非收敛状态（NeedsUser / Failed / MaxRoundsReached）连续多少次后，下一轮强制 blackboard 模式。默认 2。 */
+    blackboardFailureEscalationThreshold?: number;
 }
 
 /**
@@ -380,6 +384,8 @@ export async function loadConfigForPaths(paths: FlyflorPaths): Promise<FlyflorCo
         routeHintTtlMs: 5_000,
         similarityBypassThreshold: 0.85,
         routeBypassTokenBudget: 32,
+        watchEscalationThreshold: 3,
+        blackboardFailureEscalationThreshold: 2,
         ...(configFile.routing ?? {}),
     };
 

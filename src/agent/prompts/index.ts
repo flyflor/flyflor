@@ -71,6 +71,20 @@ export interface CrystalReflectionPromptInput {
     evidence: string;
 }
 
+export interface MemoryConsolidationPromptInput {
+    episode: string;
+}
+
+export interface MemoryDreamPromptInput {
+    userId: string;
+    episodes: string;
+}
+
+export interface FeedbackClassifyPromptInput {
+    previousAssistantText: string;
+    currentUserText: string;
+}
+
 export interface BlackboardDecisionPromptInput {
     reason: string;
     unresolvedIssues: string[];
@@ -87,8 +101,11 @@ type PromptTemplateKey =
     | "blackboardRoute"
     | "blackboardWorkerSystem"
     | "crystalReflection"
+    | "feedbackClassify"
     | "memoryAction"
+    | "memoryConsolidation"
     | "memoryContext"
+    | "memoryDream"
     | "mcpContext"
     | "runtimeSystem"
     | "skillContext";
@@ -101,8 +118,11 @@ const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = {
     blackboardRoute: "blackboard.route.md",
     blackboardWorkerSystem: "blackboard.worker.system.md",
     crystalReflection: "crystal.reflection.md",
+    feedbackClassify: "feedback.classify.md",
     memoryAction: "memory.action.md",
+    memoryConsolidation: "memory.consolidation.md",
     memoryContext: "memory.context.md",
+    memoryDream: "memory.dream.md",
     mcpContext: "mcp.context.md",
     runtimeSystem: "runtime.system.md",
     skillContext: "skill.context.md",
@@ -304,6 +324,29 @@ export function renderCrystalReflectionPrompt(input: CrystalReflectionPromptInpu
     // 必要提示词：反思 worker 只收到最小英文抽取要求；桶、符号和坐标必须从证据中生成，代码不提供固定分类。
     return renderTemplate(requiredTemplates().crystalReflection.content, {
         evidence: input.evidence,
+    });
+}
+
+export function renderMemoryConsolidationPrompt(input: MemoryConsolidationPromptInput): string {
+    // 必要提示词：海马体整合分类器；决策由结构化 JSON 输出承载，代码只做枚举校验，不做语义匹配。
+    return renderTemplate(requiredTemplates().memoryConsolidation.content, {
+        episode: input.episode,
+    });
+}
+
+export function renderMemoryDreamPrompt(input: MemoryDreamPromptInput): string {
+    // 必要提示词：dream 模式 worker；rewrite/discard/skip 由结构化 JSON 输出承载，代码不做语义匹配。
+    return renderTemplate(requiredTemplates().memoryDream.content, {
+        userId: input.userId,
+        episodes: input.episodes,
+    });
+}
+
+export function renderFeedbackClassifyPrompt(input: FeedbackClassifyPromptInput): string {
+    // 必要提示词：用户反馈五分类；类别集合由模板约束，代码只校验 enum + JSON shape。
+    return renderTemplate(requiredTemplates().feedbackClassify.content, {
+        previousAssistantText: input.previousAssistantText,
+        currentUserText: input.currentUserText,
     });
 }
 

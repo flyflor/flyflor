@@ -103,6 +103,21 @@ export class MarkdownMemoryStore {
             },
         };
     }
+
+    /**
+     * Append a single feedback line to one of the four canonical markdown files.
+     * Used by the feedback router (B Preference → user.md, C GlobalStrategy → self.md).
+     * 不解析提示词；只做附加写入，由调用方决定 `target` 与 `content`。
+     */
+    async appendFeedback(target: MarkdownMemoryFile, content: string, recordedAt: string): Promise<void> {
+        if (!this.config.enabled) return;
+        await this.initialize();
+        const filePath = join(this.paths.workspaceDir, target);
+        const handle = Bun.file(filePath);
+        const existing = (await handle.exists()) ? await handle.text() : "";
+        const next = appendManagedMemory(existing, content, recordedAt);
+        await Bun.write(filePath, next);
+    }
 }
 
 async function ensureMarkdownFile(root: string, templateRoot: string, file: MarkdownMemoryFile): Promise<void> {

@@ -10,7 +10,7 @@
  *   FLYFLOR_REDIS_URL=redis://127.0.0.1:6379 bun run scripts/redis.smoke.ts
  *
  * 通过 stdout JSON 报告 episode 写入、读取、ring buffer、consolidation 队列、
- * 概念激活和 forced-forgetting 链路是否符合 docs/memory.graph.refactor.md §3 协议。
+ * 概念激活和 forced-forgetting 链路是否符合 DESIGN.md §5.2 工作记忆。
  */
 import { RedisMemoryStore } from "../src/neural/memory/redis.ts";
 

@@ -46,6 +46,11 @@ import {
     type FastRouteSnapshot,
     type FastRouteResult,
 } from "./fast.route.ts";
+import {
+    decideRouteEscalation,
+    nextEscalationCounters,
+    RouteEscalationReason,
+} from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 
 export { startHumanChat } from "./chat.ts";
@@ -86,7 +91,7 @@ export class RuntimeModule extends RuntimeBoundary {
         private readonly blackboard?: BlackboardModule,
     ) {
         super();
-        this.memory = createMemory(config, events);
+        this.memory = createMemory(config, events, model);
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.perf = new PerfMetrics(config.metrics, events);
     }
@@ -94,6 +99,24 @@ export class RuntimeModule extends RuntimeBoundary {
     /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
     async warmup(): Promise<void> {
         await this.memory.warmup();
+    }
+
+    /** CLI 接口：dream 状态快照。 */
+    dreamSnapshot(): { dreamEnabled: boolean; dreamBusy: boolean; users: number } {
+        return this.memory.dreamSnapshot();
+    }
+
+    /** CLI 接口：每个被追踪用户的 dream 队列长度。 */
+    dreamQueueSizes(): Promise<Array<{ userId: string; pending: number }>> {
+        return this.memory.dreamQueueSizes();
+    }
+
+    /** CLI 接口：手动跑一轮 dream pass，可指定单用户。 */
+    runDreamOnce(
+        limit?: number,
+        userId?: string,
+    ): Promise<{ users: number; rewritten: number; discarded: number; skipped: number }> {
+        return this.memory.runDreamOnce(limit, userId);
     }
 
     async handleMessage(
@@ -143,7 +166,16 @@ export class RuntimeModule extends RuntimeBoundary {
         ]);
         const selectedSkills = selectSkills(skills, message.text);
         const sandbox = createSandboxPolicy(this.config.sandbox);
-        const blackboardRun = await this.runBlackboard(message, enrichedContext, options, preRoute);
+
+        // direct-with-watch 升级器：累计 watch / blackboard 失败计数，跨过阈值时升格为 blackboard。
+        const snapshotForEscalation = this.fastRouteSnapshots.get(snapshotKey);
+        const effectivePreRoute = this.applyRouteEscalation(
+            preRoute,
+            snapshotForEscalation,
+            context.requestId,
+            message.route.channel,
+        );
+        const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
 
         const modelMessages: ModelMessage[] = [
             {
@@ -202,15 +234,37 @@ export class RuntimeModule extends RuntimeBoundary {
 
         // Snapshot for next-turn fastRoute decision.
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
+        const previousSnapshot = this.fastRouteSnapshots.get(snapshotKey);
+        const counters = nextEscalationCounters({
+            actualMode: lastMode,
+            blackboardStatus: blackboardRun?.status,
+            previousWatch: previousSnapshot?.consecutiveWatchTurns ?? 0,
+            previousFailure: previousSnapshot?.consecutiveBlackboardFailures ?? 0,
+        });
         this.fastRouteSnapshots.set(snapshotKey, {
             recordedAt: Date.now(),
             embedding,
             lastMode,
             nextRouteHint: lastMode === BlackboardMode.Direct ? BlackboardMode.Direct : undefined,
+            consecutiveWatchTurns: counters.watch,
+            consecutiveBlackboardFailures: counters.failure,
         });
 
         // Async reflection: LLM extraction + crystal write — non-blocking, after reply returned.
         void this.scheduleReflection(message, enrichedContext, visibleText, blackboardRun);
+
+        // Async feedback classification (A/B/C/D 四通道入记忆) — fire-and-forget；首轮自动 no-op。
+        void this.memory.classifyAndApplyFeedback(message, enrichedContext);
+
+        // 黑板辩论收敛 → 沉淀为高权重 episode（fire-and-forget）。
+        if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
+            void this.memory.recordDebateEpisode({
+                userId: message.user.id,
+                text: renderDebateEpisodeText(message.text, blackboardRun),
+                embedding,
+                requestId: context.requestId,
+            });
+        }
 
         ttfbDone();
         this.events.publish(
@@ -224,6 +278,70 @@ export class RuntimeModule extends RuntimeBoundary {
      * 后台反思调度：LLM 提取 → memory.applyReflection → crystal write。
      * 不阻塞主回答；失败由 applyReflection 内部发布 MemoryReflectionFailed 事件。
      */
+    /**
+     * fastRoute 命中时直接返回 bypass 决策（不发起 LLM 调用）；
+     * 未命中时才调用 decideBlackboardRoute（仅当 blackboard 装配可用）。
+     */
+    private async resolveRouteDecision(
+        message: GatewayMessage,
+        fastRoute: FastRouteResult,
+    ): Promise<RuntimeBlackboardRouteDecision | undefined> {
+        if (!this.blackboard) return undefined;
+        if (fastRoute.bypass) {
+            return buildBypassDecision(fastRoute.reason);
+        }
+        return decideBlackboardRoute(this.model, message.text);
+    }
+
+    /**
+     * direct-with-watch 升级器：基于上一轮 snapshot 的累计计数，
+     * 把 LLM 给出的 direct/direct-with-watch 强制升格为 blackboard。
+     * 升格触发时发布 RouteEscalated 事件并构造一个最小化的 blackboard route decision。
+     */
+    private applyRouteEscalation(
+        original: RuntimeBlackboardRouteDecision | undefined,
+        snapshot: FastRouteSnapshot | undefined,
+        requestId: string,
+        channel: string,
+    ): RuntimeBlackboardRouteDecision | undefined {
+        if (!original) return original;
+        const decision = decideRouteEscalation({
+            currentMode: original.mode,
+            consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
+            consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,
+            watchThreshold: this.config.routing.watchEscalationThreshold ?? 3,
+            failureThreshold: this.config.routing.blackboardFailureEscalationThreshold ?? 2,
+        });
+        if (!decision.escalated) return original;
+        this.events.publish(
+            event(
+                RuntimeEventType.RouteEscalated,
+                {
+                    channel,
+                    fromMode: original.mode,
+                    toMode: decision.targetMode,
+                    reason: decision.reason,
+                    consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
+                    consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,
+                },
+                requestId,
+            ),
+        );
+        return {
+            ...original,
+            mode: decision.targetMode,
+            reason: `${original.reason} | escalated:${decision.reason}`,
+        };
+    }
+
+    /**
+     * fastRoute snapshot 的 key：(channel, chatId, user) 维度，
+     * 与 scopeFor 一致，但不引入 session 概念。
+     */
+    private snapshotKeyFor(message: GatewayMessage): string {
+        return `${message.route.channel}:${message.route.chatId}:${message.user.id}`;
+    }
+
     private async scheduleReflection(
         message: GatewayMessage,
         context: RuntimeContext,
@@ -819,4 +937,21 @@ class MemoryActionVisibilityFilter {
 
 function keepSuffix(value: string, token: string): string {
     return value.slice(Math.max(0, value.length - token.length + 1));
+}
+
+/**
+ * 把黑板辩论转写为 episode text：用户问题 + 每个 worker 的 outputSummary，
+ * 截断保护，便于 Redis 长期检索而不存原始长 transcript。
+ */
+function renderDebateEpisodeText(userText: string, run: RuntimeBlackboardRun): string {
+    const head = `[debate-goal] ${userText.slice(0, 256)}`;
+    const summaries = run.steps
+        .map((step) => {
+            const summary = step.outputSummary ?? "";
+            if (!summary) return "";
+            return `[${step.workerRole}] ${summary.slice(0, 256)}`;
+        })
+        .filter((s) => s.length > 0)
+        .join("\n");
+    return summaries ? `${head}\n${summaries}` : head;
 }

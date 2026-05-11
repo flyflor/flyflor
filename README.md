@@ -6,6 +6,23 @@ Flyflor is a Bun + TypeScript agent runtime designed to compile into a single bi
 
 ## Start Here
 
+### Install (curl-pipe, no source clone)
+
+```bash
+curl -fsSL https://flyflor.dev/install.sh | sh
+# Pin a version:
+curl -fsSL https://flyflor.dev/install.sh | sh -s -- --version v0.4.0
+# Custom prefix:
+curl -fsSL https://flyflor.dev/install.sh | sh -s -- --prefix /usr/local/flyflor
+# Update / Uninstall:
+curl -fsSL https://flyflor.dev/install.sh | sh -s -- --update
+curl -fsSL https://flyflor.dev/install.sh | sh -s -- --uninstall
+```
+
+The script downloads the matching `flyflor-{os}-{arch}` binary and `flyflor-templates.tar.gz` from GitHub releases, installs them under `~/.flyflor` by default, and prints the `PATH` line if the bin dir is not yet on it. `--uninstall` keeps your config and data under the prefix.
+
+### From source
+
 ```bash
 bun install
 bun run install:templates
@@ -15,7 +32,7 @@ bun run chat
 Useful commands:
 
 ```bash
-bun run init
+bun run setup
 bun run status
 bun run doctor
 bun run tui
@@ -80,7 +97,7 @@ Decorator rules:
 
 ## Memory
 
-Flyflor uses a hippocampus-inspired layered memory (refactor in progress, see [docs/memory.graph.refactor.md](docs/memory.graph.refactor.md)):
+Flyflor uses a hippocampus-inspired layered memory:
 
 | Layer                 | Backend     | Purpose                                                                |
 | --------------------- | ----------- | ---------------------------------------------------------------------- |
@@ -107,15 +124,15 @@ Blackboard can converge on the first decisive round. Non-decisive discussions co
 
 ## Documentation
 
-| Document                                                             | Purpose               |
-| -------------------------------------------------------------------- | --------------------- |
-| [TODO.md](TODO.md)                                                   | active roadmap, refactor phases |
-| [DESIGN.md](DESIGN.md)                                               | architecture philosophy and current state |
-| [docs/memory.graph.refactor.md](docs/memory.graph.refactor.md)       | **active** — hippocampus memory redesign (Redis + SurrealDB graph + dream mode) |
-| [docs/boundaries.md](docs/boundaries.md)                             | engineering rules and decorator/file-naming guardrails |
-| [docs/di.protocol.architecture.md](docs/di.protocol.architecture.md) | DI/protocol design    |
-| [docs/blackboard.worker.design.md](docs/blackboard.worker.design.md) | blackboard worker design |
-| [docs/prompt.templates.md](docs/prompt.templates.md)                 | prompt template map   |
-| [docs/cli.command.status.md](docs/cli.command.status.md)             | CLI command inventory |
+| Document                                                             | Purpose                              |
+| -------------------------------------------------------------------- | ------------------------------------ |
+| [DESIGN.md](DESIGN.md)                                               | architecture single source of truth  |
+| [TODO.md](TODO.md)                                                   | active backlog                       |
+| [AGENTS.md](AGENTS.md)                                               | agent / contributor hard rules       |
+| [docs/boundaries.md](docs/boundaries.md)                             | engineering boundaries               |
+| [docs/di.protocol.architecture.md](docs/di.protocol.architecture.md) | DI / protocol layering               |
+| [docs/blackboard.worker.design.md](docs/blackboard.worker.design.md) | blackboard worker protocol           |
+| [docs/prompt.templates.md](docs/prompt.templates.md)                 | prompt template registry             |
+| [docs/cli.command.status.md](docs/cli.command.status.md)             | CLI command inventory                |
 
 Development rules are also mirrored in [AGENTS.md](AGENTS.md).

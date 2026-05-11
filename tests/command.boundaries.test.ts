@@ -4,7 +4,7 @@ import {
     listFlyflorCommandSpecs,
     parseFlyflorCommand,
     runFlyflorUtilityCommand,
-} from "../src/command/cli/hermes.commands.ts";
+} from "../src/command/cli/commands.ts";
 import { renderChannelTable } from "../src/command/cli/status.ts";
 import { parseFlyflorMode } from "../src/command/index.ts";
 import { renderMarkdownToPlainText } from "../src/command/render/index.ts";
@@ -28,36 +28,66 @@ describe("Command boundary", () => {
         error.mockRestore();
     });
 
-    test("Hermes-compatible command registry exposes the copied command surface", () => {
+    test("flyflor command registry exposes the active command surface", () => {
         const commandNames = listFlyflorCommandSpecs().map((spec) => spec.name);
 
-        expect(commandNames).toContain("model");
-        expect(commandNames).toContain("fallback");
+        expect(commandNames).toContain("chat");
+        expect(commandNames).toContain("tui");
         expect(commandNames).toContain("gateway");
         expect(commandNames).toContain("setup");
-        expect(commandNames).toContain("auth");
-        expect(commandNames).toContain("cron");
-        expect(commandNames).toContain("webhook");
-        expect(commandNames).toContain("kanban");
-        expect(commandNames).toContain("hooks");
-        expect(commandNames).toContain("skills");
-        expect(commandNames).toContain("plugins");
-        expect(commandNames).toContain("curator");
+        expect(commandNames).toContain("model");
+        expect(commandNames).toContain("status");
+        expect(commandNames).toContain("channels");
+        expect(commandNames).toContain("doctor");
+        expect(commandNames).toContain("config");
         expect(commandNames).toContain("memory");
+        expect(commandNames).toContain("sessions");
+        expect(commandNames).toContain("skills");
         expect(commandNames).toContain("tools");
         expect(commandNames).toContain("mcp");
-        expect(commandNames).toContain("sessions");
-        expect(commandNames).toContain("profile");
-        expect(commandNames).toContain("dashboard");
-        expect(commandNames).toContain("logs");
-        expect(commandNames).not.toContain("cli");
+        expect(commandNames).toContain("plugins");
+        expect(commandNames).toContain("dream");
+        expect(commandNames).toContain("update");
+        expect(commandNames).toContain("version");
+
+        for (const removed of [
+            "cli",
+            "fallback",
+            "auth",
+            "cron",
+            "webhook",
+            "kanban",
+            "hooks",
+            "curator",
+            "profile",
+            "dashboard",
+            "logs",
+            "init",
+            "login",
+            "logout",
+            "uninstall",
+            "completion",
+            "slack",
+            "whatsapp",
+            "backup",
+            "import",
+            "checkpoints",
+            "pairing",
+            "claw",
+            "insights",
+            "debug",
+            "acp",
+            "dump",
+        ]) {
+            expect(commandNames).not.toContain(removed);
+        }
     });
 
-    test("Hermes-compatible command aliases parse without starting runtime modes", () => {
-        expect(parseFlyflorCommand(["bun", "flyflor", "fallback", "ls"])).toBeUndefined();
+    test("flyflor command aliases parse without starting runtime modes", () => {
         expect(parseFlyflorCommand(["bun", "flyflor", "plugins", "rm", "demo"])).toBeUndefined();
-        expect(parseFlyflorCommand(["bun", "flyflor", "mcp", "ls"])).toBeUndefined();
-        expect(parseFlyflorCommand(["bun", "flyflor", "kanban", "boards", "ls"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "plugins", "ls"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "skills", "ls"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "dream", "status"])).toBeUndefined();
     });
 
     test("config command surface only exposes supported configuration operations", () => {
@@ -67,23 +97,23 @@ describe("Command boundary", () => {
         expect(subcommands).toContain("show");
         expect(subcommands).toContain("path");
         expect(subcommands).toContain("env-path");
-        expect(subcommands).toContain("check");
+        expect(subcommands).not.toContain("check");
         expect(subcommands).not.toContain("edit");
         expect(subcommands).not.toContain("set");
         expect(subcommands).not.toContain("migrate");
 
         const error = spyOn(console, "error").mockImplementation(() => {});
-        expect(parseFlyflorCommand(["bun", "flyflor", "config", "check"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "config", "show"])).toBeUndefined();
         expect(parseFlyflorCommand(["bun", "flyflor", "config", "edit"])).toBe(1);
         expect(parseFlyflorCommand(["bun", "flyflor", "config", "set", "model.provider", "x"])).toBe(1);
         expect(parseFlyflorCommand(["bun", "flyflor", "config", "migrate"])).toBe(1);
         error.mockRestore();
     });
 
-    test("placeholder Hermes-compatible commands return success", async () => {
+    test("placeholder commands return success", async () => {
         const log = spyOn(console, "log").mockImplementation(() => {});
 
-        const result = await runFlyflorUtilityCommand(["bun", "flyflor", "fallback", "ls"]);
+        const result = await runFlyflorUtilityCommand(["bun", "flyflor", "version"]);
 
         expect(result?.exitCode).toBe(0);
         expect(log).toHaveBeenCalled();

@@ -1,0 +1,266 @@
+/**
+ * 海马体后台调度器（BackgroundScheduler）。
+ *
+ * 单一职责：按固定节拍对每个"活跃用户"驱动两条后台流水：
+ *   1. ConsolidationWorker.drain(userId) — 把到期的 episode candidate 跑过 LLM 决策
+ *      （reinforce / consolidate / discard）；
+ *   2. decay sweep — 对 SurrealDB memory_node / skill 跑衰减纯函数并把
+ *      新 importance 写回（避免假高分长期占据召回）。
+ *
+ * 设计约束（与 docs/boundaries.md 对齐）：
+ *  - 不依赖系统 cron / node-cron，只用 setInterval；编译进 bun 二进制零风险；
+ *  - 用户集合由 trackUser() 显式注册；不做 Redis SCAN 爆炸；
+ *  - 单个 tick 内串行执行同一用户的两条任务，跨用户也串行（避免并发 LLM 风暴）；
+ *  - 失败只发事件不抛错，下一 tick 自动重试；
+ *  - 关停时立即清 timer，正在跑的 tick 让其自然结束。
+ */
+
+import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import {
+    DecayLayer,
+    DEFAULT_DECAY_PROFILES,
+    decayImportance,
+    type DecayProfile,
+} from "./decay.ts";
+import type { ConsolidationWorker } from "./consolidation.worker.ts";
+import type { SurrealGraphStore } from "./surreal.graph.ts";
+import type { DreamWorker } from "../../agent/runtime/dream.worker.ts";
+
+export interface BackgroundSchedulerOptions {
+    /** 整合 worker 节拍（毫秒）。默认 10 分钟。 */
+    consolidationIntervalMs?: number;
+    /** 衰减扫描节拍（毫秒）。默认 24 小时。 */
+    decayIntervalMs?: number;
+    /** dream worker 节拍（毫秒）。默认 30 分钟，0 关闭。 */
+    dreamIntervalMs?: number;
+    /** dream 单 tick 每用户处理上限。默认 8。 */
+    dreamBatchSize?: number;
+    /** 单 tick 内每用户 decay sweep 的 batch 大小，默认 200。 */
+    decayBatchSize?: number;
+    /** 自定义衰减 profile（测试可注入更短半衰期）。 */
+    profiles?: Partial<Record<DecayLayer, DecayProfile>>;
+    /** 注入 now 函数（测试用）。 */
+    now?: () => number;
+    /** 可选 dream worker。未注入则跳过 dream tick。 */
+    dream?: DreamWorker;
+}
+
+export class BackgroundScheduler {
+    private readonly users = new Set<string>();
+    private consolidationTimer: ReturnType<typeof setInterval> | undefined;
+    private decayTimer: ReturnType<typeof setInterval> | undefined;
+    private dreamTimer: ReturnType<typeof setInterval> | undefined;
+    private consolidationBusy = false;
+    private decayBusy = false;
+    private dreamBusy = false;
+    private readonly dream: DreamWorker | undefined;
+    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream">> & {
+        profiles: Record<DecayLayer, DecayProfile>;
+        now: () => number;
+    };
+
+    constructor(
+        private readonly consolidation: ConsolidationWorker,
+        private readonly graph: SurrealGraphStore,
+        private readonly events: EventSink,
+        options: BackgroundSchedulerOptions = {},
+    ) {
+        this.dream = options.dream;
+        this.opts = {
+            consolidationIntervalMs: options.consolidationIntervalMs ?? 10 * 60_000,
+            decayIntervalMs: options.decayIntervalMs ?? 24 * 60 * 60_000,
+            dreamIntervalMs: options.dreamIntervalMs ?? 30 * 60_000,
+            dreamBatchSize: options.dreamBatchSize ?? 8,
+            decayBatchSize: options.decayBatchSize ?? 200,
+            profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
+            now: options.now ?? (() => Date.now()),
+        };
+    }
+
+    /** 把一个 userId 加入活跃集合。MemoryModule 在 rememberTurn 时调用。 */
+    trackUser(userId: string): void {
+        if (typeof userId !== "string" || userId.length === 0) return;
+        this.users.add(userId);
+    }
+
+    /** 当前活跃用户数（用于可观察性）。 */
+    activeUsers(): number {
+        return this.users.size;
+    }
+
+    /** 启动两条 timer。重复调用安全（先 stop 再 start）。 */
+    start(): void {
+        this.stop();
+        this.consolidationTimer = setInterval(() => {
+            void this.runConsolidationOnce();
+        }, this.opts.consolidationIntervalMs);
+        this.decayTimer = setInterval(() => {
+            void this.runDecayOnce();
+        }, this.opts.decayIntervalMs);
+        if (this.dream && this.opts.dreamIntervalMs > 0) {
+            this.dreamTimer = setInterval(() => {
+                void this.runDreamOnce();
+            }, this.opts.dreamIntervalMs);
+        }
+        // setInterval 在 bun 下不阻止退出
+        if (typeof (this.consolidationTimer as { unref?: () => void })?.unref === "function") {
+            (this.consolidationTimer as { unref: () => void }).unref();
+        }
+        if (typeof (this.decayTimer as { unref?: () => void })?.unref === "function") {
+            (this.decayTimer as { unref: () => void }).unref();
+        }
+        if (this.dreamTimer && typeof (this.dreamTimer as { unref?: () => void })?.unref === "function") {
+            (this.dreamTimer as { unref: () => void }).unref();
+        }
+    }
+
+    stop(): void {
+        if (this.consolidationTimer !== undefined) {
+            clearInterval(this.consolidationTimer);
+            this.consolidationTimer = undefined;
+        }
+        if (this.decayTimer !== undefined) {
+            clearInterval(this.decayTimer);
+            this.decayTimer = undefined;
+        }
+        if (this.dreamTimer !== undefined) {
+            clearInterval(this.dreamTimer);
+            this.dreamTimer = undefined;
+        }
+    }
+
+    /** 立即跑一轮整合（测试与 dream-trigger 复用）。串行所有用户。 */
+    async runConsolidationOnce(): Promise<{ users: number; consolidated: number; reinforced: number; discarded: number }> {
+        if (this.consolidationBusy) {
+            return { users: 0, consolidated: 0, reinforced: 0, discarded: 0 };
+        }
+        this.consolidationBusy = true;
+        const totals = { users: 0, consolidated: 0, reinforced: 0, discarded: 0 };
+        try {
+            for (const userId of [...this.users]) {
+                try {
+                    const r = await this.consolidation.drain(userId);
+                    totals.users += 1;
+                    totals.consolidated += r.consolidated;
+                    totals.reinforced += r.reinforced;
+                    totals.discarded += r.discarded;
+                } catch (err) {
+                    this.publishFailure("consolidation-tick", userId, err);
+                }
+            }
+        } finally {
+            this.consolidationBusy = false;
+        }
+        return totals;
+    }
+
+    /** 立即跑一轮衰减扫描（测试与手动触发复用）。 */
+    async runDecayOnce(): Promise<{ users: number; memoryNodes: number; skills: number }> {
+        if (this.decayBusy) return { users: 0, memoryNodes: 0, skills: 0 };
+        this.decayBusy = true;
+        const totals = { users: 0, memoryNodes: 0, skills: 0 };
+        try {
+            const now = this.opts.now();
+            for (const userId of [...this.users]) {
+                try {
+                    const r = await this.graph.applyDecaySweep({
+                        userId,
+                        batchSize: this.opts.decayBatchSize,
+                        decayMemoryNode: ({ importance, updatedAt }) =>
+                            decayImportance({
+                                layer: DecayLayer.MemoryNode,
+                                importance,
+                                updatedAt,
+                                nowMs: now,
+                                profile: this.opts.profiles[DecayLayer.MemoryNode],
+                            }),
+                        decaySkill: ({ importance, updatedAt, lastVerifiedAt }) =>
+                            decayImportance({
+                                layer: DecayLayer.Skill,
+                                importance,
+                                updatedAt,
+                                lastVerifiedAt,
+                                nowMs: now,
+                                profile: this.opts.profiles[DecayLayer.Skill],
+                            }),
+                    });
+                    totals.users += 1;
+                    totals.memoryNodes += r.memoryNodes;
+                    totals.skills += r.skills;
+                } catch (err) {
+                    this.publishFailure("decay-tick", userId, err);
+                }
+            }
+            this.events.publish(
+                event(RuntimeEventType.MemoryDecaySwept, {
+                    users: totals.users,
+                    memoryNodes: totals.memoryNodes,
+                    skills: totals.skills,
+                }),
+            );
+        } finally {
+            this.decayBusy = false;
+        }
+        return totals;
+    }
+
+    private publishFailure(stage: string, userId: string, err: unknown): void {
+        this.events.publish(
+            event(RuntimeEventType.MemoryConsolidationFailed, {
+                userId,
+                stage,
+                error: String(err),
+            }),
+        );
+    }
+
+    /** 立即跑一轮 dream（测试与手动触发复用）。串行所有用户。 */
+    async runDreamOnce(
+        limit?: number,
+        userId?: string,
+    ): Promise<{ users: number; rewritten: number; discarded: number; skipped: number }> {
+        const totals = { users: 0, rewritten: 0, discarded: 0, skipped: 0 };
+        if (!this.dream || this.dreamBusy) return totals;
+        this.dreamBusy = true;
+        const batchSize = limit && limit > 0 ? limit : this.opts.dreamBatchSize;
+        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        try {
+            for (const u of targets) {
+                try {
+                    const r = await this.dream.drain(u, batchSize);
+                    totals.users += 1;
+                    totals.rewritten += r.rewritten;
+                    totals.discarded += r.discarded;
+                    totals.skipped += r.skipped;
+                } catch (err) {
+                    this.publishFailure("dream-tick", u, err);
+                }
+            }
+        } finally {
+            this.dreamBusy = false;
+        }
+        return totals;
+    }
+
+    /** 返回当前注册的活跃用户快照（CLI 诊断使用）。 */
+    trackedUsers(): string[] {
+        return [...this.users];
+    }
+
+    /** 后台调度状态快照（CLI / 诊断使用，不抛错）。 */
+    snapshot(): {
+        dreamEnabled: boolean;
+        dreamBusy: boolean;
+        consolidationBusy: boolean;
+        decayBusy: boolean;
+        users: number;
+    } {
+        return {
+            dreamEnabled: Boolean(this.dream) && this.opts.dreamIntervalMs > 0,
+            dreamBusy: this.dreamBusy,
+            consolidationBusy: this.consolidationBusy,
+            decayBusy: this.decayBusy,
+            users: this.users.size,
+        };
+    }
+}

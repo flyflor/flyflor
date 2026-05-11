@@ -1,0 +1,96 @@
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
+import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
+import { MemoryModule } from "../src/neural/memory/index.ts";
+import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
+import { type EventSink } from "../src/protocol/events/index.ts";
+import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
+
+beforeAll(async () => {
+    await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);
+});
+
+const tempRoots: string[] = [];
+afterEach(async () => {
+    while (tempRoots.length > 0) {
+        const root = tempRoots.pop();
+        if (root) await rm(root, { recursive: true, force: true });
+    }
+});
+
+class CapturingSink implements EventSink {
+    readonly events: RuntimeEvent[] = [];
+    publish(e: RuntimeEvent): void {
+        this.events.push(e);
+    }
+}
+
+class StubModel implements ModelClient {
+    async generate(_messages: ModelMessage[]): Promise<string> {
+        void ModelRole.User;
+        return "{}";
+    }
+}
+
+describe("MemoryModule background scheduler wiring", () => {
+    test("scheduler is null when Redis is disabled (default)", async () => {
+        const config = await testConfig();
+        const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
+        // 默认 Redis disabled → scheduler 为 null；warmup/dispose 必须无副作用
+        await memory.warmup();
+        memory.dispose();
+        expect((memory as unknown as { scheduler: unknown }).scheduler).toBeNull();
+    });
+
+    test("scheduler is null without a model even if Redis+Surreal would qualify", async () => {
+        const config = await testConfig();
+        config.memory.redis.enabled = true;
+        config.memory.crystal.surreal.enabled = true;
+        const memory = new MemoryModule(config, new CapturingSink());
+        expect((memory as unknown as { scheduler: unknown }).scheduler).toBeNull();
+    });
+
+    test("scheduler is instantiated when redis + surreal + model all present", async () => {
+        const config = await testConfig();
+        config.memory.redis.enabled = true;
+        config.memory.crystal.surreal.enabled = true;
+        const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
+        const scheduler = (memory as unknown as { scheduler: { activeUsers(): number } | null }).scheduler;
+        expect(scheduler).not.toBeNull();
+        expect(scheduler?.activeUsers()).toBe(0);
+        // dispose 必须可以多次调用
+        memory.dispose();
+        memory.dispose();
+    });
+});
+
+async function testConfig() {
+    const root = await mkdtemp(join(tmpdir(), "flyflor-mem-wire-"));
+    tempRoots.push(root);
+    const paths: FlyflorPaths = {
+        home: join(root, "home"),
+        configDir: join(root, "home"),
+        storageDir: join(root, "data"),
+        cacheDir: join(root, "cache"),
+        workspaceDir: join(root, "home", "workspace"),
+        logDir: join(root, "home", "logs"),
+        memoryDir: join(root, "data", "memory"),
+        pluginDir: join(root, "home", "plugins"),
+        promptDir: join(root, "home", "prompts"),
+        skillDir: join(root, "home", "skills"),
+        templateDir: join(root, "home", "templates"),
+        mcpDir: join(root, "home", "mcp"),
+    };
+    await mkdir(paths.promptDir, { recursive: true });
+    const src = join(import.meta.dir, "..", "templates", "prompts");
+    const entries = await readdir(src, { withFileTypes: true });
+    await Promise.all(
+        entries
+            .filter((e) => e.isFile())
+            .map((e) => copyFile(join(src, e.name), join(paths.promptDir, e.name))),
+    );
+    return loadConfigForPaths(paths);
+}

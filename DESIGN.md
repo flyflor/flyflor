@@ -1,8 +1,6 @@
-# Flyflor 智能体架构设计总结
+# Flyflor 智能体架构设计
 
-本文总结当前 Flyflor 智能体架构的实际设计，包括三层智能（流体/晶体/海马体）、黑板协作、记忆系统重构方向、思考能力自我迭代的设计哲学。
-
-记忆系统正在从 SQLite/Qdrant/Crystal 三路并行重构为 Redis 海马体 + SurrealDB 图 + 遗忘曲线 + 梦境模式。详细方案见 [docs/memory.graph.refactor.md](docs/memory.graph.refactor.md)，本文反映的是设计哲学与稳定核心，重构进行中的细节以方案文档为准。
+本文是 Flyflor 当前架构的单一真源（single source of truth）：三层智能（流体/晶体/海马体）、黑板协作、海马体记忆系统、思考能力自我迭代的设计哲学。海马体记忆重构（v2）已落地，本文记录的是稳定核心；运行时事件、事件枚举、协议结构以源码为准。
 
 ## 0. 设计哲学
 
@@ -202,7 +200,7 @@ ConsolidationWorker LLM 决策新增 `contradict` 动作：
 - project init token 预算 20K/天
 - 全局并发 LLM ≤ 2
 
-详细分解见 [docs/memory.graph.refactor.md §15](docs/memory.graph.refactor.md)。
+详细分解见 §11 后台 worker 资源预算。
 
 ## 12. 梦境模式（占位设计）
 
@@ -213,7 +211,7 @@ Agent 空闲时的离线认知整合，对应人类海马体回放：
 
 Reconstruction（清醒）+ ConsolidationWorker（短期）+ Dream Mode（长期）= 思考能力自我迭代链路。
 
-详细见 [docs/memory.graph.refactor.md §16](docs/memory.graph.refactor.md)。
+实现细节见 `src/agent/runtime/dream.worker.ts`（占位接口）。
 
 ## 13. 运行时可观察性
 
