@@ -24,6 +24,7 @@ import { ProjectMemoryStore } from "./project.memory.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
+import type { PendingProjectOffer } from "./sqlite.ts";
 import { RedisMemoryStore } from "./redis.ts";
 import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
@@ -208,6 +209,12 @@ export class MemoryModule extends Memory {
             this.config.memory.retrieval.maxPromptChars,
         );
 
+        // 项目候选 nudge 注入：若该 userId 有待确认 offer，把 nudge 拼到 memoryBody 顶部。
+        // 复用 Path A：用户下一轮回复若给出明确意图，model 自然在 memory action 的 signals 中
+        // 抬高 projectIntent，commitTurn 的 detectExplicitIntent 即触发 scaffolder。
+        const offer = await this.sqlite.getProjectOffer(message.user.id).catch(() => undefined);
+        const body = offer ? `${renderProjectOfferNudge(offer)}\n\n${memoryBody}` : memoryBody;
+
         this.events.publish(
             event(RuntimeEventType.MemoryPromptBuilt, {
                 recallResults: results.length,
@@ -221,7 +228,7 @@ export class MemoryModule extends Memory {
             }),
         );
 
-        return memoryBody;
+        return body;
     }
 
     /**
@@ -323,6 +330,11 @@ export class MemoryModule extends Memory {
                 createdAt: new Date(context.now).toISOString(),
             });
         }
+        // 项目候选 offer 生命周期：显式触发即消费，否则 ttl-1。
+        void this.noteProjectOfferTurn(
+            message.user.id,
+            projectTrigger.kind !== ProjectTriggerKind.None,
+        ).catch(() => undefined);
 
         const session = await this.session.recordTurn(message, reply, context);
         const candidates = actions
@@ -707,6 +719,118 @@ export class MemoryModule extends Memory {
             );
         }
     }
+
+    /**
+     * 项目候选 cluster 扫描：从 Redis context ring 拿近期 episode，按 concept 聚合，
+     * 用 `detectClusterCandidate` 判定；命中即写入 pending_project_offer（每 userId 最多一条；
+     * 已有 offer 时不重复触发，避免噪声）。
+     *
+     * 返回是否新增了一条 offer（用于测试与诊断）。
+     */
+    async sweepProjectClusters(userId: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
+        if (!this.redis) return false;
+        const existing = await this.sqlite.getProjectOffer(userId).catch(() => undefined);
+        if (existing) return false;
+
+        const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
+        const episodeIds = await this.redis.readContextRing(userId, ringLimit).catch(() => [] as string[]);
+        if (episodeIds.length === 0) return false;
+        const episodes = (
+            await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id).catch(() => undefined)))
+        ).filter((e): e is NonNullable<typeof e> => Boolean(e));
+        if (episodes.length === 0) return false;
+
+        // 按 concept 聚合，找出出现次数最高的概念作为 seed。
+        const conceptCount = new Map<string, number>();
+        for (const ep of episodes) {
+            for (const c of ep.concepts ?? []) {
+                conceptCount.set(c, (conceptCount.get(c) ?? 0) + 1);
+            }
+        }
+        if (conceptCount.size === 0) return false;
+        const ranked = [...conceptCount.entries()].sort((a, b) => b[1] - a[1]);
+        const top = ranked[0];
+        if (!top) return false;
+        const topConcept = top[0];
+        const clusterEpisodes = episodes.filter((e) => (e.concepts ?? []).includes(topConcept));
+        if (clusterEpisodes.length === 0) return false;
+
+        const { detectClusterCandidate } = await import("../../agent/project/index.ts");
+        const trigger = detectClusterCandidate({ concepts: [topConcept], episodes: clusterEpisodes });
+        if (trigger.kind === ProjectTriggerKind.None) return false;
+
+        const proposedAt = new Date().toISOString();
+        const projectId = `project-${userId}-${Date.now().toString(36)}`;
+        const title = `Recurring topic: ${topConcept}`;
+        const goal = `Cluster around concept "${topConcept}" with ${clusterEpisodes.length} related episodes.`;
+        const offer: PendingProjectOffer = {
+            userId,
+            projectId,
+            title,
+            goal,
+            triggerKind: trigger.kind,
+            evidenceScore: trigger.score,
+            relatedIds: trigger.relatedIds.slice(0, 16),
+            proposedAt,
+            ttlTurns: Math.max(1, options.ttlTurns ?? 3),
+        };
+        await this.sqlite.upsertProjectOffer(offer);
+        this.events.publish(
+            event(RuntimeEventType.MemoryProjectOfferProposed, {
+                userId,
+                projectId,
+                title,
+                triggerKind: trigger.kind,
+                evidenceScore: trigger.score,
+                relatedEpisodes: offer.relatedIds.length,
+                ttlTurns: offer.ttlTurns,
+            }),
+        );
+        return true;
+    }
+
+    /**
+     * commitTurn 末端调用：若 Path A 触发了显式 project intent，消费 offer 并发事件；
+     * 否则 ttl-1，0 时自动过期。
+     */
+    async noteProjectOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
+        const offer = await this.sqlite.getProjectOffer(userId).catch(() => undefined);
+        if (!offer) return;
+        if (explicitTriggered) {
+            await this.sqlite.deleteProjectOffer(userId);
+            this.events.publish(
+                event(RuntimeEventType.MemoryProjectOfferConsumed, {
+                    userId,
+                    projectId: offer.projectId,
+                    triggerKind: offer.triggerKind,
+                }),
+            );
+            return;
+        }
+        const remaining = await this.sqlite.decrementProjectOfferTtl(userId);
+        if (remaining === 0) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryProjectOfferExpired, {
+                    userId,
+                    projectId: offer.projectId,
+                    evidenceScore: offer.evidenceScore,
+                }),
+            );
+        }
+    }
+}
+
+function renderProjectOfferNudge(offer: PendingProjectOffer): string {
+    // Hermes-style 自我 nudge：把候选项目以"自我笔记"形式注入 system prompt，
+    // 由 LLM 在自然对话中向用户提议确认；用户明确同意时，模型会在 memory action
+    // signals 中抬高 projectIntent，commitTurn Path A 自动触发 scaffolder。
+    return [
+        "[project-offer]",
+        `  title: ${offer.title}`,
+        `  evidence: ${offer.evidenceScore.toFixed(2)} from ${offer.relatedIds.length} related episodes`,
+        `  remaining_turns: ${offer.ttlTurns}`,
+        `  hint: 这是一个可能值得固化为长期项目的候选。如果对话主题确实在持续聚焦，可以主动询问用户是否希望把它升格为长期项目；用户明确同意时再固化。不要凭空创建，也不要重复询问。`,
+    ].join("\n");
 }
 
 function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): MemoryEpisodeProvenance {

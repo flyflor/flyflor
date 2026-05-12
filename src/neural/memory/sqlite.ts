@@ -166,6 +166,19 @@ export class SQLiteMemoryStore {
                 tokenize = 'unicode61'
             );
         `);
+        database.exec(`
+            CREATE TABLE IF NOT EXISTS pending_project_offer (
+                user_id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                trigger_kind TEXT NOT NULL,
+                evidence_score REAL NOT NULL,
+                related_ids_json TEXT NOT NULL,
+                proposed_at TEXT NOT NULL,
+                ttl_turns INTEGER NOT NULL
+            );
+        `);
         database.exec(
             "CREATE INDEX IF NOT EXISTS idx_session_messages_session_sequence ON session_messages(session_key, sequence)",
         );
@@ -605,6 +618,108 @@ export class SQLiteMemoryStore {
             `,
             )
             .all(request.scope, request.subjectId ?? null, request.subjectId ?? null, limit) as MemoryRow[];
+    }
+
+    /** 持久化一个待用户确认的项目候选（每 userId 最多一条；存在则覆盖）。 */
+    async upsertProjectOffer(offer: PendingProjectOffer): Promise<void> {
+        await this.initialize();
+        if (!this.database) return;
+        this.database
+            .prepare(
+                `INSERT INTO pending_project_offer (user_id, project_id, title, goal, trigger_kind, evidence_score, related_ids_json, proposed_at, ttl_turns)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(user_id) DO UPDATE SET project_id=excluded.project_id, title=excluded.title, goal=excluded.goal,
+                    trigger_kind=excluded.trigger_kind, evidence_score=excluded.evidence_score,
+                    related_ids_json=excluded.related_ids_json, proposed_at=excluded.proposed_at, ttl_turns=excluded.ttl_turns`,
+            )
+            .run(
+                offer.userId,
+                offer.projectId,
+                offer.title,
+                offer.goal,
+                offer.triggerKind,
+                offer.evidenceScore,
+                JSON.stringify(offer.relatedIds),
+                offer.proposedAt,
+                offer.ttlTurns,
+            );
+    }
+
+    async getProjectOffer(userId: string): Promise<PendingProjectOffer | undefined> {
+        await this.initialize();
+        if (!this.database) return undefined;
+        const row = this.database
+            .prepare(
+                `SELECT user_id, project_id, title, goal, trigger_kind, evidence_score, related_ids_json, proposed_at, ttl_turns
+                 FROM pending_project_offer WHERE user_id = ?`,
+            )
+            .get(userId) as
+            | {
+                  user_id: string;
+                  project_id: string;
+                  title: string;
+                  goal: string;
+                  trigger_kind: string;
+                  evidence_score: number;
+                  related_ids_json: string;
+                  proposed_at: string;
+                  ttl_turns: number;
+              }
+            | undefined;
+        if (!row) return undefined;
+        return {
+            userId: row.user_id,
+            projectId: row.project_id,
+            title: row.title,
+            goal: row.goal,
+            triggerKind: row.trigger_kind,
+            evidenceScore: row.evidence_score,
+            relatedIds: safeParseArray(row.related_ids_json),
+            proposedAt: row.proposed_at,
+            ttlTurns: row.ttl_turns,
+        };
+    }
+
+    /** TTL -1；返回更新后的剩余 TTL（不存在则返回 undefined）。 */
+    async decrementProjectOfferTtl(userId: string): Promise<number | undefined> {
+        await this.initialize();
+        if (!this.database) return undefined;
+        const current = await this.getProjectOffer(userId);
+        if (!current) return undefined;
+        const next = current.ttlTurns - 1;
+        if (next <= 0) {
+            await this.deleteProjectOffer(userId);
+            return 0;
+        }
+        this.database.prepare("UPDATE pending_project_offer SET ttl_turns = ? WHERE user_id = ?").run(next, userId);
+        return next;
+    }
+
+    async deleteProjectOffer(userId: string): Promise<void> {
+        await this.initialize();
+        if (!this.database) return;
+        this.database.prepare("DELETE FROM pending_project_offer WHERE user_id = ?").run(userId);
+    }
+}
+
+export interface PendingProjectOffer {
+    userId: string;
+    projectId: string;
+    title: string;
+    goal: string;
+    triggerKind: string;
+    evidenceScore: number;
+    relatedIds: string[];
+    proposedAt: string;
+    ttlTurns: number;
+}
+
+function safeParseArray(raw: string): string[] {
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+    } catch {
+        return [];
     }
 }
 
