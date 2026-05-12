@@ -62,7 +62,7 @@
 
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
-| SK-01 | 选择仍是 `slice(0, maxAuto)`，**未按 embedding 相似度 / usage 频次排序** | P2 |
+| ~~SK-01~~ | ~~选择仍是 `slice(0, maxAuto)`，**未按 embedding 相似度 / usage 频次排序**~~ ✅ done (usage 维度) — `selectSkills` 接受 `{ usage, limit, now }`：`useCount` 对数缩放 + `mcpSuccessRate` + 1/7/30 天新鲜度阶梯，按分数降序；`activation.auto:false` 过滤。Runtime 顶层 `loadSkillUsageSummary` 一并并发，requestId 用户显式指定 skill 时仍优先。Embedding 维度待 `M-09 RETROSPECTIVE` 与 skill 向量化合并设计 | P2 |
 | SK-02 | promotion 路径未跑通：cluster → LLM 询问 → 用户确认 → 安装 | P2 |
 | SK-03 | skill 模板缺版本兼容声明，runtime 升级后旧模板降级失败弱 | P2 |
 

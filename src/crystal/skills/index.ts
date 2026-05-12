@@ -103,8 +103,44 @@ export function skillRoots(paths: FlyflorPaths): SkillRoot[] {
     ];
 }
 
-export function selectSkills(skills: Skill[], limit = 4): Skill[] {
-    return skills.slice(0, limit);
+export interface SkillSelectionOptions {
+    limit?: number;
+    usage?: SkillUsageSummary;
+    now?: number;
+}
+
+export function selectSkills(skills: Skill[], optionsOrLimit: SkillSelectionOptions | number = {}): Skill[] {
+    const options: SkillSelectionOptions =
+        typeof optionsOrLimit === "number" ? { limit: optionsOrLimit } : optionsOrLimit;
+    const limit = options.limit ?? 4;
+    const now = options.now ?? Date.now();
+    const eligible = skills.filter((skill) => skill.manifest.activation?.auto !== false);
+    const scored = eligible.map((skill) => ({
+        skill,
+        score: scoreSkill(skill, options.usage, now),
+    }));
+    scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.skill.name.localeCompare(b.skill.name);
+    });
+    return scored.slice(0, limit).map((entry) => entry.skill);
+}
+
+function scoreSkill(skill: Skill, usage: SkillUsageSummary | undefined, now: number): number {
+    const stats = usage?.skills[skill.name];
+    if (!stats) return 0;
+    let score = Math.log1p(stats.useCount) * 2;
+    if (stats.mcpCallCount > 0) {
+        score += (stats.mcpSuccessCount / stats.mcpCallCount) * 5;
+    }
+    const last = Date.parse(stats.lastUsedAt);
+    if (Number.isFinite(last)) {
+        const ageDays = (now - last) / (24 * 60 * 60 * 1000);
+        if (ageDays < 1) score += 3;
+        else if (ageDays < 7) score += 2;
+        else if (ageDays < 30) score += 1;
+    }
+    return score;
 }
 
 export async function loadSkillUsageSummary(paths: FlyflorPaths): Promise<SkillUsageSummary> {

@@ -49,7 +49,14 @@ import {
     type BlackboardTurn,
 } from "../blackboard/index.ts";
 import { scopeFor } from "../session/index.ts";
-import { loadSkills, recordSkillUsage, selectSkills, type Skill } from "../../crystal/skills/index.ts";
+import {
+    loadSkills,
+    loadSkillUsageSummary,
+    recordSkillUsage,
+    selectSkills,
+    type Skill,
+    type SkillUsageSummary,
+} from "../../crystal/skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 import { extractRuntimeReflectionCandidates } from "./reflection.ts";
 import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./fast.route.ts";
@@ -255,8 +262,9 @@ export class RuntimeModule extends RuntimeBoundary {
             context.requestId,
         );
 
-        const [skills, mcpServers, memoryPrompt, preRoute] = await Promise.all([
+        const [skills, skillUsage, mcpServers, memoryPrompt, preRoute] = await Promise.all([
             loadSkills(this.config.paths),
+            loadSkillUsageSummary(this.config.paths).catch(() => undefined),
             loadMcpServers(this.config.paths),
             this.memory.buildPrompt(message, enrichedContext).then((p) => {
                 buildPromptDone();
@@ -267,7 +275,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 return r;
             }),
         ]);
-        const selectedSkills = selectRuntimeSkills(skills, context.skillNames);
+        const selectedSkills = selectRuntimeSkills(skills, context.skillNames, skillUsage);
         this.events.publish(
             event(
                 RuntimeEventType.SkillContextBuilt,
@@ -1372,15 +1380,19 @@ function summarizeMcpResult(value: unknown): string {
     return JSON.stringify(value).replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
-function selectRuntimeSkills(skills: Skill[], requestedNames: string[] | undefined): Skill[] {
+function selectRuntimeSkills(
+    skills: Skill[],
+    requestedNames: string[] | undefined,
+    usage: SkillUsageSummary | undefined,
+): Skill[] {
     const requested = new Set((requestedNames ?? []).map((name) => name.trim()).filter(Boolean));
     if (requested.size === 0) {
-        return selectSkills(skills);
+        return selectSkills(skills, { usage });
     }
 
     const explicit = skills.filter((skill) => requested.has(skill.name));
     const explicitNames = new Set(explicit.map((skill) => skill.name));
-    const automatic = selectSkills(skills).filter((skill) => !explicitNames.has(skill.name));
+    const automatic = selectSkills(skills, { usage }).filter((skill) => !explicitNames.has(skill.name));
     return [...explicit, ...automatic].slice(0, 4);
 }
 
