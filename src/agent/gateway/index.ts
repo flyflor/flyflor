@@ -7,3 +7,12 @@ export {
 } from "./channels/index.ts";
 export type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "./channels/index.ts";
 export { GatewayModule } from "./gateway.module.ts";
+export {
+    gatewayDaemonStatus,
+    resolveDaemonPaths,
+    restartGatewayDaemon,
+    startGatewayDaemon,
+    stopGatewayDaemon,
+    type DaemonStatus,
+    type GatewayDaemonPaths,
+} from "./daemon.ts";

@@ -18,6 +18,12 @@ import { ConsoleEventSink } from "../../protocol/events/index.ts";
 import { loadConfig, type FlyflorConfig } from "../../config/index.ts";
 import type { FlyFlor } from "../../app.ts";
 import { FlyFlorTokens, getFlyFlor } from "../../app.ts";
+import {
+    gatewayDaemonStatus,
+    restartGatewayDaemon,
+    startGatewayDaemon,
+    stopGatewayDaemon,
+} from "../../agent/gateway/index.ts";
 import { SessionModule, type SessionMessageRecord, type SessionSummary } from "../../agent/session/index.ts";
 import { SQLiteMemoryStore } from "../../neural/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
@@ -643,10 +649,47 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         if (sub === "status") {
             const app = await cliApp();
             console.log(await renderChannels(app));
+            const daemonStatus = await gatewayDaemonStatus(app.resolve(FlyFlorTokens.Config).paths);
+            if (daemonStatus.running) {
+                console.log(`\nBackground daemon: running (pid ${daemonStatus.pid})`);
+            } else {
+                console.log(`\nBackground daemon: not running (${daemonStatus.reason})`);
+            }
             if (command.opts<{ deep?: boolean }>().deep) {
                 console.log("");
                 console.log(await renderDoctor(app));
             }
+            return;
+        }
+        if (sub === "start") {
+            const app = await cliApp();
+            const paths = app.resolve(FlyFlorTokens.Config).paths;
+            const result = await startGatewayDaemon(paths);
+            if (result.started) {
+                console.log(`gateway daemon started (pid ${result.pid}); logs → ${result.logFile}`);
+            } else {
+                console.log(`gateway daemon already running (pid ${result.pid})`);
+            }
+            return;
+        }
+        if (sub === "stop") {
+            const app = await cliApp();
+            const paths = app.resolve(FlyFlorTokens.Config).paths;
+            const result = await stopGatewayDaemon(paths);
+            if (result.stopped) {
+                console.log(`gateway daemon stopped (pid ${result.pid}${result.forced ? ", forced" : ""})`);
+            } else {
+                console.log("gateway daemon was not running");
+            }
+            return;
+        }
+        if (sub === "restart") {
+            const app = await cliApp();
+            const paths = app.resolve(FlyFlorTokens.Config).paths;
+            const result = await restartGatewayDaemon(paths);
+            console.log(
+                `gateway daemon restarted (pid ${result.pid}${result.forced ? ", previous forced" : ""}); logs → ${result.logFile}`,
+            );
             return;
         }
         printPendingCommand(path);
