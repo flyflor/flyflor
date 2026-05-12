@@ -2,7 +2,7 @@ import type { CrystalCandidateInput } from "../reflection/index.ts";
 import type {
     CrystalRecallRequest,
     CrystalRecallResult,
-    CrystalSkill,
+    CrystalGem,
     ReflectionAtom,
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
@@ -21,23 +21,23 @@ export interface CrystalTurnInput {
 export interface CrystalTurnResult {
     candidates: ReflectionCandidate[];
     atoms: ReflectionAtom[];
-    skills: CrystalSkill[];
+    gems: CrystalGem[];
 }
 
 export interface CrystalMemoryStore {
     initialize(): Promise<void>;
-    findSkill(id: string): Promise<CrystalSkill | undefined>;
-    listSkills(request: CrystalRecallRequest): Promise<CrystalSkill[]>;
+    findGem(id: string): Promise<CrystalGem | undefined>;
+    listGems(request: CrystalRecallRequest): Promise<CrystalGem[]>;
     upsertCandidate(candidate: ReflectionCandidate): Promise<void>;
     upsertAtom(atom: ReflectionAtom): Promise<void>;
-    upsertSkill(skill: CrystalSkill): Promise<void>;
+    upsertGem(skill: CrystalGem): Promise<void>;
 }
 
 export type {
     CrystalCandidateInput,
     CrystalRecallRequest,
     CrystalRecallResult,
-    CrystalSkill,
+    CrystalGem,
     ReflectionAtom,
     ReflectionCandidate,
 };

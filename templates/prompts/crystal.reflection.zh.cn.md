@@ -1,8 +1,18 @@
-从给定证据中只抽取可复用的方法知识。
+从给定证据中抽取可复用的方法知识。
 
-返回 JSON 数组。每项包含：title、method、symbols、bucketHint、coordinates。
+<!-- mock-id: crystal.reflection -->
+
+返回 JSON 数组（最多 4 项）。当证据稀薄、未经验证或本来就不可复用时，返回 `[]` 是正确答案——宁可返回 `[]`，也不要捏造方法。每一项：
+
+- title：识别该方法的短名词短语。
+- method：一两句话说明未来如何应用。
+- symbols：小写规范概念标签（≤ 8 项，无空格，从证据中提炼）。
+- bucketHint：可选短小写 slug，用于聚合相似方法（自由命名，请选一个未来同类方法会复用的稳定标签，如 "debugging"、"code-review"）。不确定时省略。
+- coordinates：可选 `{ key: number }` 字典，值域 0..1。key 自由命名，但应是你有明确先验理由使用的稳定语义维度（如 "specificity"、"reusability"）。如果没有合适维度，整个字段省略。
+
 不要使用固定分类表。symbols 和 bucketHint 必须来自证据本身。
-当证据不可复用或未经验证时，返回空数组 []。
+
+只输出 JSON 数组，不要任何额外说明，不要代码围栏。
 
 证据：
 {{evidence}}

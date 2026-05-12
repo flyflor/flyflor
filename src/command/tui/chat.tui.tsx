@@ -34,12 +34,12 @@ type SectionMap = Record<Section, boolean>;
 /* ─── Phase animation definitions ───────────────────── */
 
 const PHASE_DEF: Record<Phase, { frames: string[]; label: string; doneIcon: string; color: string }> = {
-    idle:       { frames: [""],                label: "",            doneIcon: "",   color: "gray" },
-    blackboard: { frames: ["🔍","🔎","🔍","🔎"], label: "Researching", doneIcon: "📋", color: "yellow" },
-    thinking:   { frames: ["🧠","💭","🧠","💭"], label: "Thinking",    doneIcon: "💡", color: "cyan" },
-    mcp:        { frames: ["🔗","🔌","🔗","🔌"], label: "Tool call",   doneIcon: "🔧", color: "blue" },
-    skill:      { frames: ["⚡","📋","⚡","📋"], label: "Skill",       doneIcon: "✅", color: "green" },
-    streaming:  { frames: ["✨","💫","✨","💫"], label: "Generating",  doneIcon: "✨", color: "white" },
+    idle: { frames: [""], label: "", doneIcon: "", color: "gray" },
+    blackboard: { frames: ["🔍", "🔎", "🔍", "🔎"], label: "Researching", doneIcon: "📋", color: "yellow" },
+    thinking: { frames: ["🧠", "💭", "🧠", "💭"], label: "Thinking", doneIcon: "💡", color: "cyan" },
+    mcp: { frames: ["🔗", "🔌", "🔗", "🔌"], label: "Tool call", doneIcon: "🔧", color: "blue" },
+    skill: { frames: ["⚡", "📋", "⚡", "📋"], label: "Skill", doneIcon: "✅", color: "green" },
+    streaming: { frames: ["✨", "💫", "✨", "💫"], label: "Generating", doneIcon: "✨", color: "white" },
 };
 
 /* ─── Hooks ─────────────────────────────────────────── */
@@ -48,7 +48,10 @@ const PHASE_DEF: Record<Phase, { frames: string[]; label: string; doneIcon: stri
 function useAnim(active: boolean, frames: string[], intervalMs = 240): string {
     const [i, setI] = useState(0);
     useEffect(() => {
-        if (!active || frames.length <= 1) { setI(0); return; }
+        if (!active || frames.length <= 1) {
+            setI(0);
+            return;
+        }
         const t = setInterval(() => setI((x) => (x + 1) % frames.length), intervalMs);
         return () => clearInterval(t);
     }, [active, frames.length, intervalMs]);
@@ -61,7 +64,9 @@ function useTermSize(): { rows: number; cols: number } {
     useEffect(() => {
         const up = (): void => setSz({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
         stdout.on("resize", up);
-        return () => { stdout.off("resize", up); };
+        return () => {
+            stdout.off("resize", up);
+        };
     }, [stdout]);
     return sz;
 }
@@ -74,7 +79,7 @@ function emptySections(): SectionMap {
 
 function fmtTime(iso: string): string {
     const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2,"0")}:${d.getMinutes().toString().padStart(2,"0")}`;
+    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
 }
 
 /** Return last ~2 visual lines of text (rough wrap at cols). */
@@ -113,11 +118,16 @@ function Card({ icon, label, preview, open, color, children }: CardProps): React
                     <Text dimColor>{open ? "▼" : "▶"}</Text>
                 </Box>
                 <Box marginLeft={1}>
-                    <Text color={c(color)} bold>{label}</Text>
+                    <Text color={c(color)} bold>
+                        {label}
+                    </Text>
                 </Box>
                 {!open && preview ? (
                     <Box marginLeft={1}>
-                        <Text dimColor italic>{preview.slice(0, 70)}{preview.length > 70 ? "…" : ""}</Text>
+                        <Text dimColor italic>
+                            {preview.slice(0, 70)}
+                            {preview.length > 70 ? "…" : ""}
+                        </Text>
                     </Box>
                 ) : null}
             </Box>
@@ -140,11 +150,12 @@ interface TurnProps {
 function TurnView({ turn, expanded }: TurnProps): React.ReactElement {
     const { cols } = useTermSize();
     const meta = turn.metadata;
-    const metaSkills: string[] = (meta && Array.isArray(meta.skills) ? meta.skills as string[] : []);
-    const metaMcpN: number = (meta && typeof meta.mcpToolCalls === "number" ? meta.mcpToolCalls : 0);
+    const metaSkills: string[] = meta && Array.isArray(meta.skills) ? (meta.skills as string[]) : [];
+    const metaMcpN: number = meta && typeof meta.mcpToolCalls === "number" ? meta.mcpToolCalls : 0;
     const metaBb: Record<string, unknown> | undefined =
         meta && typeof meta.blackboard === "object" && meta.blackboard !== null
-            ? (meta.blackboard as Record<string, unknown>) : undefined;
+            ? (meta.blackboard as Record<string, unknown>)
+            : undefined;
 
     const hBb = turn.blackboardStarted || !!metaBb;
     const hSk = turn.skills.length > 0 || metaSkills.length > 0;
@@ -154,66 +165,126 @@ function TurnView({ turn, expanded }: TurnProps): React.ReactElement {
     return (
         <Box flexDirection="column">
             {/* User */}
-            <Box><Text color="cyan">┃</Text><Box paddingLeft={1}><Text color="cyan" bold>You</Text></Box></Box>
-            <Box><Text color="cyan">┃</Text><Box paddingLeft={1} flexGrow={1} paddingRight={1}><Text>{turn.userMessage}</Text></Box></Box>
+            <Box>
+                <Text color="cyan">┃</Text>
+                <Box paddingLeft={1}>
+                    <Text color="cyan" bold>
+                        You
+                    </Text>
+                </Box>
+            </Box>
+            <Box>
+                <Text color="cyan">┃</Text>
+                <Box paddingLeft={1} flexGrow={1} paddingRight={1}>
+                    <Text>{turn.userMessage}</Text>
+                </Box>
+            </Box>
 
             {/* Status cards */}
             {hBb ? (
-                <Box><Text color="cyan">┃</Text><Box paddingLeft={1} flexGrow={1}>
-                    <Card icon={PHASE_DEF.blackboard.doneIcon} label="Blackboard"
-                        preview={preview2(turn.blackboardText, cols - 20)}
-                        open={expanded.blackboard} color="yellow">
-                        <Box flexDirection="column">
-                            {turn.blackboardText.split("\n").slice(0, 20).map((l, i) => (
-                                <Text key={i} dimColor>{l || " "}</Text>
-                            ))}
-                            {turn.blackboardText.split("\n").length > 20 ? <Text dimColor>… (truncated)</Text> : null}
-                        </Box>
-                    </Card>
-                </Box></Box>
+                <Box>
+                    <Text color="cyan">┃</Text>
+                    <Box paddingLeft={1} flexGrow={1}>
+                        <Card
+                            icon={PHASE_DEF.blackboard.doneIcon}
+                            label="Blackboard"
+                            preview={preview2(turn.blackboardText, cols - 20)}
+                            open={expanded.blackboard}
+                            color="yellow"
+                        >
+                            <Box flexDirection="column">
+                                {turn.blackboardText
+                                    .split("\n")
+                                    .slice(0, 20)
+                                    .map((l, i) => (
+                                        <Text key={i} dimColor>
+                                            {l || " "}
+                                        </Text>
+                                    ))}
+                                {turn.blackboardText.split("\n").length > 20 ? (
+                                    <Text dimColor>… (truncated)</Text>
+                                ) : null}
+                            </Box>
+                        </Card>
+                    </Box>
+                </Box>
             ) : null}
 
             {hSk && !hBb ? (
-                <Box><Text color="cyan">┃</Text><Box paddingLeft={1} flexGrow={1}>
-                    <Card icon={PHASE_DEF.skill.doneIcon} label="Skills"
-                        preview={[...turn.skills, ...metaSkills].join(", ")}
-                        open={expanded.skills} color="green">
-                        <Box flexDirection="column">
-                            {[...turn.skills, ...metaSkills].map((n) => (
-                                <Text key={n} dimColor>• {n}</Text>
-                            ))}
-                        </Box>
-                    </Card>
-                </Box></Box>
+                <Box>
+                    <Text color="cyan">┃</Text>
+                    <Box paddingLeft={1} flexGrow={1}>
+                        <Card
+                            icon={PHASE_DEF.skill.doneIcon}
+                            label="Skills"
+                            preview={[...turn.skills, ...metaSkills].join(", ")}
+                            open={expanded.skills}
+                            color="green"
+                        >
+                            <Box flexDirection="column">
+                                {[...turn.skills, ...metaSkills].map((n) => (
+                                    <Text key={n} dimColor>
+                                        • {n}
+                                    </Text>
+                                ))}
+                            </Box>
+                        </Card>
+                    </Box>
+                </Box>
             ) : null}
 
             {hMcp ? (
-                <Box><Text color="cyan">┃</Text><Box paddingLeft={1} flexGrow={1}>
-                    <Card icon={PHASE_DEF.mcp.doneIcon} label="MCP Tools"
-                        preview={`${turn.mcpCalls.length || metaMcpN} call(s)`}
-                        open={expanded.mcp} color="blue">
-                        <Box flexDirection="column">
-                            {turn.mcpCalls.map((c, i) => (
-                                <Box key={i} flexDirection="column" marginBottom={1}>
-                                    <Text>{c.ok ? "✓" : "✗"} {c.server}.{c.tool}</Text>
-                                    {c.resultText ? <Box marginLeft={2}><Text dimColor>{c.resultText.slice(0, 300)}</Text></Box> : null}
-                                </Box>
-                            ))}
-                            {turn.mcpCalls.length === 0 && metaMcpN > 0 ? <Text dimColor>  {metaMcpN} tool(s) executed</Text> : null}
-                        </Box>
-                    </Card>
-                </Box></Box>
+                <Box>
+                    <Text color="cyan">┃</Text>
+                    <Box paddingLeft={1} flexGrow={1}>
+                        <Card
+                            icon={PHASE_DEF.mcp.doneIcon}
+                            label="MCP Tools"
+                            preview={`${turn.mcpCalls.length || metaMcpN} call(s)`}
+                            open={expanded.mcp}
+                            color="blue"
+                        >
+                            <Box flexDirection="column">
+                                {turn.mcpCalls.map((c, i) => (
+                                    <Box key={i} flexDirection="column" marginBottom={1}>
+                                        <Text>
+                                            {c.ok ? "✓" : "✗"} {c.server}.{c.tool}
+                                        </Text>
+                                        {c.resultText ? (
+                                            <Box marginLeft={2}>
+                                                <Text dimColor>{c.resultText.slice(0, 300)}</Text>
+                                            </Box>
+                                        ) : null}
+                                    </Box>
+                                ))}
+                                {turn.mcpCalls.length === 0 && metaMcpN > 0 ? (
+                                    <Text dimColor> {metaMcpN} tool(s) executed</Text>
+                                ) : null}
+                            </Box>
+                        </Card>
+                    </Box>
+                </Box>
             ) : null}
 
             {/* Separator */}
             <Text dimColor>{sep}</Text>
 
             {/* Assistant */}
-            <Box><Text color="green">┃</Text><Box paddingLeft={1}>
-                <Text color="green" bold>Flyflor</Text>
-                {turn.completedAt ? <Text dimColor>  {fmtTime(turn.completedAt)}</Text> : null}
-            </Box></Box>
-            <Box><Text color="green">┃</Text><Box paddingLeft={1} flexGrow={1} paddingRight={1}><Text>{turn.assistantText || " "}</Text></Box></Box>
+            <Box>
+                <Text color="green">┃</Text>
+                <Box paddingLeft={1}>
+                    <Text color="green" bold>
+                        Flyflor
+                    </Text>
+                    {turn.completedAt ? <Text dimColor> {fmtTime(turn.completedAt)}</Text> : null}
+                </Box>
+            </Box>
+            <Box>
+                <Text color="green">┃</Text>
+                <Box paddingLeft={1} flexGrow={1} paddingRight={1}>
+                    <Text>{turn.assistantText || " "}</Text>
+                </Box>
+            </Box>
         </Box>
     );
 }
@@ -225,10 +296,24 @@ function ProcessingView({ phase, userMsg }: { phase: Phase; userMsg: string }): 
     const icon = useAnim(phase !== "idle", def.frames, 250);
     return (
         <Box flexDirection="column">
-            <Box><Text color="cyan">┃</Text><Box paddingLeft={1}><Text color="cyan" bold>You</Text></Box></Box>
-            <Box><Text color="cyan">┃</Text><Box paddingLeft={1}><Text>{userMsg}</Text></Box></Box>
+            <Box>
+                <Text color="cyan">┃</Text>
+                <Box paddingLeft={1}>
+                    <Text color="cyan" bold>
+                        You
+                    </Text>
+                </Box>
+            </Box>
+            <Box>
+                <Text color="cyan">┃</Text>
+                <Box paddingLeft={1}>
+                    <Text>{userMsg}</Text>
+                </Box>
+            </Box>
             <Box marginTop={1}>
-                <Text color={c(def.color)}>{icon || def.frames[0]} {def.label}</Text>
+                <Text color={c(def.color)}>
+                    {icon || def.frames[0]} {def.label}
+                </Text>
             </Box>
         </Box>
     );
@@ -257,6 +342,17 @@ export function ChatTui({
     const [turns, setTurns] = useState<Turn[]>([]);
     const [input, setInput] = useState("");
     const [cursor, setCursor] = useState(0);
+    // Refs mirror state so successive keypress events (which run before React re-renders)
+    // read the up-to-date position. Without this, IME-committed CJK characters or
+    // rapid typing all collide at the stale closure-captured cursor → "only one char works".
+    const inputRef = useRef("");
+    const cursorRef = useRef(0);
+    useEffect(() => {
+        inputRef.current = input;
+    }, [input]);
+    useEffect(() => {
+        cursorRef.current = cursor;
+    }, [cursor]);
     const [processing, setProcessing] = useState(false);
     const [phase, setPhase] = useState<Phase>("idle");
     const [error, setError] = useState<string | null>(null);
@@ -279,8 +375,10 @@ export function ChatTui({
                     const p = ev.payload as Record<string, unknown> | undefined;
                     if (p && curTurnRef.current) {
                         curTurnRef.current.mcpCalls.push({
-                            server: String(p.server ?? ""), tool: String(p.tool ?? ""),
-                            ok: p.ok === true, resultText: String(p.resultSummary ?? ""),
+                            server: String(p.server ?? ""),
+                            tool: String(p.tool ?? ""),
+                            ok: p.ok === true,
+                            resultText: String(p.resultSummary ?? ""),
                         });
                     }
                 } else if (ev.type === RuntimeEventType.SkillContextBuilt) {
@@ -293,13 +391,19 @@ export function ChatTui({
                         }
                     }
                     setPhase("skill");
-                } else if (ev.type === RuntimeEventType.BlackboardTurnEnd || ev.type === RuntimeEventType.AgentTurnEnd) {
+                } else if (
+                    ev.type === RuntimeEventType.BlackboardTurnEnd ||
+                    ev.type === RuntimeEventType.AgentTurnEnd
+                ) {
                     setPhase("streaming");
                 }
             },
         };
         unsubRef.current = eventBus.subscribe(sink);
-        return () => { unsubRef.current?.(); unsubRef.current = null; };
+        return () => {
+            unsubRef.current?.();
+            unsubRef.current = null;
+        };
     }, [eventBus]);
 
     /* ── Mouse scroll ── */
@@ -353,8 +457,10 @@ export function ChatTui({
 
     /* ── Submit ── */
     const submit = useCallback(async () => {
-        const text = input.trim();
+        const text = inputRef.current.trim();
         if (!text || procRef.current) return;
+        inputRef.current = "";
+        cursorRef.current = 0;
         setInput("");
         setCursor(0);
         setError(null);
@@ -363,10 +469,15 @@ export function ChatTui({
         setScrollOfs(0);
 
         const turn: Turn = {
-            id: crypto.randomUUID(), userMessage: text, assistantText: "",
-            completedAt: null, metadata: null,
-            mcpCalls: [], skills: [],
-            blackboardStarted: false, blackboardText: "",
+            id: crypto.randomUUID(),
+            userMessage: text,
+            assistantText: "",
+            completedAt: null,
+            metadata: null,
+            mcpCalls: [],
+            skills: [],
+            blackboardStarted: false,
+            blackboardText: "",
         };
         curTurnRef.current = turn;
         setPhase("thinking");
@@ -376,7 +487,9 @@ export function ChatTui({
         const msg: GatewayMessage = {
             id: crypto.randomUUID(),
             route: { channel: Channel.Stdio, chatId: "chat-tui", chatType: ChatType.Direct },
-            user: { id: userId }, text, receivedAt: ctx.now,
+            user: { id: userId },
+            text,
+            receivedAt: ctx.now,
         };
 
         try {
@@ -386,26 +499,41 @@ export function ChatTui({
                 approveMcpToolCall: approveMcpToolCall ?? (async () => true),
                 onTextDelta: (chunk: string) => {
                     acc += chunk;
-                    if (chunk.includes(">") || bb.length > 0) { bb += chunk; setPhase("blackboard"); }
-                    else { setPhase("streaming"); }
+                    if (chunk.includes(">") || bb.length > 0) {
+                        bb += chunk;
+                        setPhase("blackboard");
+                    } else {
+                        setPhase("streaming");
+                    }
                     setTurns((prev) => {
-                        const u = [...prev]; const l = u[u.length - 1];
-                        if (l) { l.assistantText = acc; l.blackboardText = bb; }
+                        const u = [...prev];
+                        const l = u[u.length - 1];
+                        if (l) {
+                            l.assistantText = acc;
+                            l.blackboardText = bb;
+                        }
                         return u;
                     });
                 },
             });
 
             const allSkills = [...turn.skills];
-            const metaSk: string[] = (reply.metadata && Array.isArray(reply.metadata.skills) ? reply.metadata.skills as string[] : []);
-            for (const n of metaSk) { if (!allSkills.includes(n)) allSkills.push(n); }
+            const metaSk: string[] =
+                reply.metadata && Array.isArray(reply.metadata.skills) ? (reply.metadata.skills as string[]) : [];
+            for (const n of metaSk) {
+                if (!allSkills.includes(n)) allSkills.push(n);
+            }
 
             setTurns((prev) => {
-                const u = [...prev]; const l = u[u.length - 1];
+                const u = [...prev];
+                const l = u[u.length - 1];
                 if (l) {
-                    l.assistantText = reply.text; l.completedAt = new Date().toISOString();
-                    l.metadata = reply.metadata; l.skills = allSkills;
-                    l.mcpCalls = curTurnRef.current?.mcpCalls ?? []; l.blackboardText = bb;
+                    l.assistantText = reply.text;
+                    l.completedAt = new Date().toISOString();
+                    l.metadata = reply.metadata;
+                    l.skills = allSkills;
+                    l.mcpCalls = curTurnRef.current?.mcpCalls ?? [];
+                    l.blackboardText = bb;
                 }
                 return u;
             });
@@ -413,13 +541,19 @@ export function ChatTui({
             const et = err instanceof Error ? err.message : String(err);
             setError(et);
             setTurns((prev) => {
-                const u = [...prev]; const l = u[u.length - 1];
-                if (l) { l.assistantText = l.assistantText || `Error: ${et}`; l.completedAt = new Date().toISOString(); }
+                const u = [...prev];
+                const l = u[u.length - 1];
+                if (l) {
+                    l.assistantText = l.assistantText || `Error: ${et}`;
+                    l.completedAt = new Date().toISOString();
+                }
                 return u;
             });
         } finally {
-            curTurnRef.current = null; procRef.current = false;
-            setProcessing(false); setPhase("idle");
+            curTurnRef.current = null;
+            procRef.current = false;
+            setProcessing(false);
+            setPhase("idle");
         }
     }, [input, runtime, approveMcpToolCall, userId]);
 
@@ -437,42 +571,125 @@ export function ChatTui({
     useInput(
         (ch, key) => {
             // Global shortcuts always fire
-            if (key.escape || (key.ctrl && ch === "c")) { exit(); return; }
-            if (key.ctrl && ch === "l") { setTurns([]); setError(null); setScrollOfs(0); return; }
+            if (key.escape || (key.ctrl && ch === "c")) {
+                exit();
+                return;
+            }
+            if (key.ctrl && ch === "l") {
+                setTurns([]);
+                setError(null);
+                setScrollOfs(0);
+                return;
+            }
 
             // Submit
-            if (key.return && !processing) { void submit(); return; }
+            if (key.return && !processing) {
+                void submit();
+                return;
+            }
 
             // Scroll: Up/Down/Page/Home/End only
-            if (key.upArrow) { setScrollOfs((s) => Math.min(s + 1, Math.max(0, turns.length - 1))); return; }
-            if (key.downArrow) { setScrollOfs((s) => Math.max(0, s - 1)); return; }
-            if (key.pageUp) { setScrollOfs((s) => Math.min(s + maxTurns, Math.max(0, turns.length - 1))); return; }
-            if (key.pageDown) { setScrollOfs((s) => Math.max(0, s - maxTurns)); return; }
-            if (key.home) { setScrollOfs(turns.length - 1); return; }
-            if (key.end) { setScrollOfs(0); return; }
+            if (key.upArrow) {
+                setScrollOfs((s) => Math.min(s + 1, Math.max(0, turns.length - 1)));
+                return;
+            }
+            if (key.downArrow) {
+                setScrollOfs((s) => Math.max(0, s - 1));
+                return;
+            }
+            if (key.pageUp) {
+                setScrollOfs((s) => Math.min(s + maxTurns, Math.max(0, turns.length - 1)));
+                return;
+            }
+            if (key.pageDown) {
+                setScrollOfs((s) => Math.max(0, s - maxTurns));
+                return;
+            }
+            if (key.home) {
+                setScrollOfs(turns.length - 1);
+                return;
+            }
+            if (key.end) {
+                setScrollOfs(0);
+                return;
+            }
 
             // Text input — only when not processing
             if (!processing) {
                 if (key.backspace || key.delete) {
-                    if (cursor > 0) { setInput((p) => p.slice(0, cursor - 1) + p.slice(cursor)); setCursor((c) => c - 1); }
+                    const c = cursorRef.current;
+                    if (c > 0) {
+                        const next = inputRef.current.slice(0, c - 1) + inputRef.current.slice(c);
+                        inputRef.current = next;
+                        cursorRef.current = c - 1;
+                        setInput(next);
+                        setCursor(c - 1);
+                    }
                     return;
                 }
                 // Left/Right move cursor in input — NOT scroll
-                if (key.leftArrow) { setCursor((c) => Math.max(0, c - 1)); return; }
-                if (key.rightArrow) { setCursor((c) => Math.min(input.length, c + 1)); return; }
-                if (key.ctrl && ch === "u") { setInput(""); setCursor(0); return; }
-                if (key.ctrl && ch === "w") {
-                    setInput((p) => {
-                        const be = p.lastIndexOf(" ", cursor - 1);
-                        const a = p.slice(cursor);
-                        const b = be >= 0 ? p.slice(0, be + 1) : "";
-                        setCursor(b.length); return b + a;
-                    }); return;
+                if (key.leftArrow) {
+                    const next = Math.max(0, cursorRef.current - 1);
+                    cursorRef.current = next;
+                    setCursor(next);
+                    return;
                 }
-                // Printable character
-                if (ch.length === 1 && ch.charCodeAt(0) >= 32) {
-                    setInput((p) => p.slice(0, cursor) + ch + p.slice(cursor));
-                    setCursor((c) => c + 1); return;
+                if (key.rightArrow) {
+                    const next = Math.min(inputRef.current.length, cursorRef.current + 1);
+                    cursorRef.current = next;
+                    setCursor(next);
+                    return;
+                }
+                if (key.ctrl && ch === "u") {
+                    inputRef.current = "";
+                    cursorRef.current = 0;
+                    setInput("");
+                    setCursor(0);
+                    return;
+                }
+                if (key.ctrl && ch === "w") {
+                    const c = cursorRef.current;
+                    const p = inputRef.current;
+                    const be = p.lastIndexOf(" ", c - 1);
+                    const tail = p.slice(c);
+                    const head = be >= 0 ? p.slice(0, be + 1) : "";
+                    const next = head + tail;
+                    inputRef.current = next;
+                    cursorRef.current = head.length;
+                    setInput(next);
+                    setCursor(head.length);
+                    return;
+                }
+                // Toggle latest turn's sections (Ctrl+B blackboard / Ctrl+T tools / Ctrl+S skills).
+                if (key.ctrl && (ch === "b" || ch === "t" || ch === "s")) {
+                    const latest = turns[turns.length - 1];
+                    if (latest) {
+                        const section: Section =
+                            ch === "b" ? "blackboard" : ch === "t" ? "mcp" : "skills";
+                        toggle(latest.id, section);
+                    }
+                    return;
+                }
+                // Tab cycles fold state on latest turn's blackboard (most common case).
+                if (key.tab) {
+                    const latest = turns[turns.length - 1];
+                    if (latest) toggle(latest.id, "blackboard");
+                    return;
+                }
+                // Printable text input. Accept multi-codepoint strings so paste,
+                // IME-committed Chinese/CJK input, and emojis all flow through.
+                // Use refs (not state closures) so successive keypresses queued before
+                // the next render still see the up-to-date cursor — otherwise each
+                // CJK char overwrites the previous one at stale cursor=0.
+                if (ch && ch.length > 0 && ch.charCodeAt(0) >= 32) {
+                    const c = cursorRef.current;
+                    const p = inputRef.current;
+                    const next = p.slice(0, c) + ch + p.slice(c);
+                    inputRef.current = next;
+                    cursorRef.current = c + ch.length;
+                    setInput(next);
+                    setCursor(cursorRef.current);
+                    return;
                 }
             }
         },
@@ -488,15 +705,19 @@ export function ChatTui({
         <Box flexDirection="column" height={termRows} overflow="hidden">
             {/* Header — 1 line */}
             <Box marginLeft={1} marginRight={1} minHeight={1}>
-                <Text bold color="cyan">{agentName}</Text>
-                <Text dimColor>  • chat</Text>
+                <Text bold color="cyan">
+                    {agentName}
+                </Text>
+                <Text dimColor> • chat</Text>
                 <Box flexGrow={1} />
-                {scrollOfs > 0 ? <Text color="yellow">↑ {scrollOfs} more  </Text> : null}
-                <Text dimColor>↑↓ scroll ↵ send ^C quit ^L clear</Text>
+                {scrollOfs > 0 ? <Text color="yellow">↑ {scrollOfs} more </Text> : null}
+                <Text dimColor>↑↓ scroll ↵ send ⇥/^B fold ^T tools ^S skills ^C quit ^L clear</Text>
             </Box>
 
             {/* Header separator */}
-            <Box minHeight={1}><Text dimColor>{sep}</Text></Box>
+            <Box minHeight={1}>
+                <Text dimColor>{sep}</Text>
+            </Box>
 
             {/* Conversation — fills remaining space */}
             <Box flexGrow={1} flexDirection="column" overflow="hidden" marginLeft={1} marginRight={1}>
@@ -512,7 +733,11 @@ export function ChatTui({
                         {visibleTurns.map((turn, i) => (
                             <Box key={turn.id} flexDirection="column" marginTop={i > 0 ? 1 : 0}>
                                 <TurnView turn={turn} expanded={expanded.get(turn.id) ?? emptySections()} />
-                                {i < visibleTurns.length - 1 ? <Box minHeight={1}><Text dimColor>{sep}</Text></Box> : null}
+                                {i < visibleTurns.length - 1 ? (
+                                    <Box minHeight={1}>
+                                        <Text dimColor>{sep}</Text>
+                                    </Box>
+                                ) : null}
                             </Box>
                         ))}
 
@@ -532,7 +757,9 @@ export function ChatTui({
             </Box>
 
             {/* Bottom separator */}
-            <Box minHeight={1}><Text dimColor>{sep}</Text></Box>
+            <Box minHeight={1}>
+                <Text dimColor>{sep}</Text>
+            </Box>
 
             {/* Input bar — fixed at bottom */}
             <Box minHeight={1} marginLeft={1} marginRight={1} marginBottom={1}>
@@ -549,9 +776,7 @@ export function ChatTui({
                         <Text color={c(PHASE_DEF[phase].color)}>{PHASE_DEF[phase].frames[0]}</Text>
                     </Box>
                 ) : null}
-                {!processing ? (
-                    <Text color="cyan">▎</Text>
-                ) : null}
+                {!processing ? <Text color="cyan">▎</Text> : null}
             </Box>
         </Box>
     );
@@ -576,5 +801,7 @@ export function startChatTui(
             agentName={options.agentName}
             userId={options.userId}
         />,
-    ).waitUntilExit().catch(() => {});
+    )
+        .waitUntilExit()
+        .catch(() => {});
 }

@@ -359,12 +359,7 @@ function childEnv(serverEnv: Record<string, string> | undefined): Record<string,
 
 function findHeaderEnd(buffer: Uint8Array<ArrayBufferLike>): { end: number; index: number } | undefined {
     for (let index = 0; index < buffer.byteLength - 3; index += 1) {
-        if (
-            buffer[index] === 13 &&
-            buffer[index + 1] === 10 &&
-            buffer[index + 2] === 13 &&
-            buffer[index + 3] === 10
-        ) {
+        if (buffer[index] === 13 && buffer[index + 1] === 10 && buffer[index + 2] === 13 && buffer[index + 3] === 10) {
             return { index, end: index + 4 };
         }
     }

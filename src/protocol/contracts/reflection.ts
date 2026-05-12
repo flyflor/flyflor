@@ -37,7 +37,7 @@ export interface ReflectionAtom {
     metadata?: Record<string, unknown>;
 }
 
-export interface CrystalSkill {
+export interface CrystalGem {
     id: string;
     bucket: CrystalBucketId;
     title: string;
@@ -61,7 +61,7 @@ export interface CrystalRecallRequest {
 }
 
 export interface CrystalRecallResult {
-    skill: CrystalSkill;
+    gem: CrystalGem;
     score: number;
     reasons: string[];
 }

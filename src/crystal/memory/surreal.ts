@@ -2,7 +2,7 @@ import type { SurrealMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
 import type {
     CrystalRecallRequest,
-    CrystalSkill,
+    CrystalGem,
     ReflectionAtom,
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
@@ -27,34 +27,34 @@ export class SurrealCrystalMemoryStore implements CrystalMemoryStore {
             [
                 "DEFINE TABLE IF NOT EXISTS reflection_candidate SCHEMALESS;",
                 "DEFINE TABLE IF NOT EXISTS reflection_atom SCHEMALESS;",
-                "DEFINE TABLE IF NOT EXISTS crystal_skill SCHEMALESS;",
-                "DEFINE INDEX IF NOT EXISTS crystal_skill_bucket ON crystal_skill COLUMNS bucket;",
-                "DEFINE INDEX IF NOT EXISTS crystal_skill_stable_id ON crystal_skill COLUMNS stableId UNIQUE;",
+                "DEFINE TABLE IF NOT EXISTS crystal_gem SCHEMALESS;",
+                "DEFINE INDEX IF NOT EXISTS crystal_gem_bucket ON crystal_gem COLUMNS bucket;",
+                "DEFINE INDEX IF NOT EXISTS crystal_gem_stable_id ON crystal_gem COLUMNS stableId UNIQUE;",
             ].join("\n"),
         );
         this.initialized = true;
     }
 
-    async findSkill(id: string): Promise<CrystalSkill | undefined> {
+    async findGem(id: string): Promise<CrystalGem | undefined> {
         if (!this.config.enabled) {
             return undefined;
         }
         await this.initialize();
-        const rows = await this.query<CrystalSkill[]>(
-            `SELECT * FROM crystal_skill WHERE stableId = ${literal(id)} LIMIT 1;`,
+        const rows = await this.query<CrystalGem[]>(
+            `SELECT * FROM crystal_gem WHERE stableId = ${literal(id)} LIMIT 1;`,
         );
         return rows[0];
     }
 
-    async listSkills(request: CrystalRecallRequest): Promise<CrystalSkill[]> {
+    async listGems(request: CrystalRecallRequest): Promise<CrystalGem[]> {
         if (!this.config.enabled) {
             return [];
         }
         await this.initialize();
         const buckets = request.buckets ?? [];
         const where = buckets.length > 0 ? ` WHERE bucket IN [${buckets.map(literal).join(", ")}]` : "";
-        return this.query<CrystalSkill[]>(
-            `SELECT * FROM crystal_skill${where} LIMIT ${Math.max(1, request.limit * 8)};`,
+        return this.query<CrystalGem[]>(
+            `SELECT * FROM crystal_gem${where} LIMIT ${Math.max(1, request.limit * 8)};`,
         );
     }
 
@@ -74,12 +74,12 @@ export class SurrealCrystalMemoryStore implements CrystalMemoryStore {
         await this.upsert("reflection_atom", atom.id, { ...atom });
     }
 
-    async upsertSkill(skill: CrystalSkill): Promise<void> {
+    async upsertGem(skill: CrystalGem): Promise<void> {
         if (!this.config.enabled) {
             return;
         }
         await this.initialize();
-        await this.upsert("crystal_skill", skill.id, { ...skill, stableId: skill.id });
+        await this.upsert("crystal_gem", skill.id, { ...skill, stableId: skill.id });
     }
 
     private async upsert(table: string, id: string, value: Record<string, unknown>): Promise<void> {

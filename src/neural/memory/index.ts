@@ -28,7 +28,7 @@ import { RedisMemoryStore } from "./redis.ts";
 import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { BackgroundScheduler } from "./background.scheduler.ts";
-import { DreamWorkerImpl, NullDreamWorker, type DreamWorker } from "../../agent/runtime/dream.worker.ts";
+import { DreamWorkerImpl } from "../../agent/runtime/dream.worker.ts";
 import type {
     MemoryAction,
     MemoryCandidate,
@@ -69,7 +69,6 @@ export class MemoryModule extends Memory {
     private readonly redis: RedisMemoryStore | null;
     private readonly surreal: SurrealGraphStore | null;
     private readonly scheduler: BackgroundScheduler | null;
-    private readonly dream: DreamWorker;
     private readonly model: ModelClient | undefined;
     private readonly projectScaffolder: ProjectScaffolder;
     /** 单例 embedding provider；用于 context.embedding 缺省时降级计算。 */
@@ -89,9 +88,7 @@ export class MemoryModule extends Memory {
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         this.crystal = new CrystalMemoryService(config.memory.crystal);
         this.session = new SessionModule(this.sqlite, config.memory.session);
-        this.redis = config.memory.redis.enabled
-            ? new RedisMemoryStore(config.memory.redis)
-            : null;
+        this.redis = config.memory.redis.enabled ? new RedisMemoryStore(config.memory.redis) : null;
         this.surreal = config.memory.crystal.surreal.enabled
             ? new SurrealGraphStore(config.memory.crystal.surreal)
             : null;
@@ -104,14 +101,9 @@ export class MemoryModule extends Memory {
                       new ConsolidationWorker(this.redis, this.surreal, model, this.events),
                       this.surreal,
                       this.events,
-                      { dream: new DreamWorkerImpl(this.redis, model, this.events) },
+                      { dream: new DreamWorkerImpl(this.surreal, model, this.events) },
                   )
                 : null;
-        // dream worker：Redis + 模型齐备即启用真实实现；否则 NullDream（与 scheduler 解耦）。
-        this.dream =
-            this.redis && model
-                ? new DreamWorkerImpl(this.redis, model, this.events)
-                : new NullDreamWorker();
     }
 
     /**
@@ -120,17 +112,29 @@ export class MemoryModule extends Memory {
      */
     async warmup(): Promise<void> {
         if (this.scheduler) {
-            // 调度器只在 boot 路径启动；timers 已 .unref()，不阻塞进程退出。
             this.scheduler.start();
+        } else {
+            const missing: string[] = [];
+            if (!this.redis) missing.push("redis");
+            if (!this.surreal) missing.push("surreal");
+            if (!this.model) missing.push("model");
+            this.events.publish(
+                event(RuntimeEventType.MemoryBackgroundSchedulerSkipped, {
+                    missing,
+                    redisEnabled: this.config.memory.redis.enabled,
+                    surrealEnabled: this.config.memory.crystal.surreal.enabled,
+                    modelProvider: this.config.model.provider,
+                    impact:
+                        "consolidation/decay/dream 全部跳过；记忆只走当轮 markdown+sqlite 短期路径，不会自动整合到长期晶体层",
+                }),
+            );
         }
         if (!this.redis) return;
         try {
             const latencyMs = await this.redis.ping();
             this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs }));
         } catch (err) {
-            this.events.publish(
-                event(RuntimeEventType.MemoryWarmupComplete, { latencyMs: -1, error: String(err) }),
-            );
+            this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs: -1, error: String(err) }));
         }
     }
 
@@ -148,28 +152,19 @@ export class MemoryModule extends Memory {
         return { dreamEnabled: s.dreamEnabled, dreamBusy: s.dreamBusy, users: s.users };
     }
 
-    /** CLI / 诊断接口：返回每个被追踪用户的 dream 队列长度。 */
-    async dreamQueueSizes(): Promise<Array<{ userId: string; pending: number }>> {
-        if (!this.scheduler || !this.redis) return [];
-        const users = this.scheduler.trackedUsers();
-        const result: Array<{ userId: string; pending: number }> = [];
-        for (const userId of users) {
-            try {
-                const pending = await this.redis.dreamQueueSize(userId);
-                result.push({ userId, pending });
-            } catch {
-                result.push({ userId, pending: -1 });
-            }
-        }
-        return result;
-    }
-
     /** CLI 手动触发一轮 dream pass；scheduler 未启用时返回零值。 */
     async runDreamOnce(
         limit?: number,
         userId?: string,
-    ): Promise<{ users: number; rewritten: number; discarded: number; skipped: number }> {
-        if (!this.scheduler) return { users: 0, rewritten: 0, discarded: 0, skipped: 0 };
+    ): Promise<{
+        users: number;
+        driftRepaired: number;
+        recallReinforced: number;
+        contradictionsFlagged: number;
+        skipped: number;
+    }> {
+        if (!this.scheduler)
+            return { users: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, skipped: 0 };
         return this.scheduler.runDreamOnce(limit, userId);
     }
 
@@ -189,19 +184,20 @@ export class MemoryModule extends Memory {
         };
 
         const sessionKey = scopeFor(message);
-        const [sessionMessages, hippocampus, projectMemory, crystalResults, sqliteResults, markdown] = await Promise.all([
-            this.session.recentMessagesFor(message),
-            this.assembleHippocampusContext(message, context),
-            this.projectMemory.snapshot({
-                maxChars: this.config.memory.retrieval.maxPromptChars,
-                query: message.text,
-                requestId: context?.requestId,
-                scope: request.scope,
-            }),
-            this.crystal.recall(request),
-            this.sqlite.search(request),
-            this.markdown.snapshot(),
-        ]);
+        const [sessionMessages, hippocampus, projectMemory, crystalResults, sqliteResults, markdown] =
+            await Promise.all([
+                this.session.recentMessagesFor(message),
+                this.assembleHippocampusContext(message, context),
+                this.projectMemory.snapshot({
+                    maxChars: this.config.memory.retrieval.maxPromptChars,
+                    query: message.text,
+                    requestId: context?.requestId,
+                    scope: request.scope,
+                }),
+                this.crystal.recall(request),
+                this.sqlite.search(request),
+                this.markdown.snapshot(),
+            ]);
         const results = dedupeResults([...projectMemory.results, ...crystalResults, ...sqliteResults]);
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
@@ -246,9 +242,7 @@ export class MemoryModule extends Memory {
                 this.redis.hotConcepts(userId, 16),
             ]);
             if (episodeIds.length === 0) return undefined;
-            const records = await Promise.all(
-                episodeIds.map((id) => this.redis!.readEpisode(userId, id)),
-            );
+            const records = await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)));
             const candidates: ActivationCandidate[] = [];
             for (const rec of records) {
                 if (!rec) continue;
@@ -315,7 +309,7 @@ export class MemoryModule extends Memory {
         void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
-        this.scheduler?.trackUser(message.user.id);
+        this.scheduler?.noteUserTurn(message.user.id);
 
         // 项目脚手架触发（仅显式意图通道，幂等；cluster 通道由后台 sweep 触发，本路径不参与）。
         const projectTrigger = detectExplicitIntent(actions);
@@ -424,10 +418,7 @@ export class MemoryModule extends Memory {
      * 异步反思入口：由 RuntimeModule 在回答已返回后 fire-and-forget 调用。
      * 不阻塞主链路；失败发布 MemoryReflectionFailed 事件后静默。
      */
-    async applyReflection(
-        candidates: CrystalCandidateInput[],
-        context: RuntimeContext,
-    ): Promise<void> {
+    async applyReflection(candidates: CrystalCandidateInput[], context: RuntimeContext): Promise<void> {
         if (!this.config.memory.enabled || candidates.length === 0) return;
         try {
             await this.crystal.recordTurn({
@@ -668,9 +659,7 @@ export class MemoryModule extends Memory {
                     context.requestId,
                 ),
             );
-            // 入 dream 队列：低重要度且非 protected 的 episode 进入梦境模式重整队列；
-            // protected 由 enqueue 内部判断（这里 metadata 没有 protected 字段，统一 false）。
-            void this.dream.enqueue({ userId: message.user.id, episodeId, protected: false });
+            // Dream 已转 SurrealDB 长期层维护（DESIGN §12），不再有 episode 入队步骤。
         } catch (err) {
             this.events.publish(
                 event(
@@ -701,15 +690,8 @@ function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): Memory
     };
 }
 
-function renderEpisodeText(
-    userText: string,
-    assistantText: string,
-    provenance: MemoryEpisodeProvenance,
-): string {
-    const lines = [
-        `[user] ${compactText(userText, 512)}`,
-        `[assistant] ${compactText(assistantText, 512)}`,
-    ];
+function renderEpisodeText(userText: string, assistantText: string, provenance: MemoryEpisodeProvenance): string {
+    const lines = [`[user] ${compactText(userText, 512)}`, `[assistant] ${compactText(assistantText, 512)}`];
     if (provenance.skillNames && provenance.skillNames.length > 0) {
         lines.push(`[skills] ${provenance.skillNames.join(", ")}`);
     }

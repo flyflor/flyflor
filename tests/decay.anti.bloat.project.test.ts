@@ -6,11 +6,11 @@ import {
     reinforceImportance,
 } from "../src/neural/memory/decay.ts";
 import {
-    dedupeSkills,
+    dedupeGems,
     isContradiction,
     isStale,
-    shouldMergeSkills,
-    type SkillCandidate,
+    shouldMergeGems,
+    type GemCandidate,
 } from "../src/neural/memory/anti.bloat.ts";
 import {
     clusterEvidenceScore,
@@ -100,7 +100,7 @@ describe("decay & reinforcement", () => {
 });
 
 describe("anti-bloat: skill dedupe + contradiction + staleness", () => {
-    function skill(over: Partial<SkillCandidate> = {}): SkillCandidate {
+    function skill(over: Partial<GemCandidate> = {}): GemCandidate {
         return {
             id: "s1",
             symbols: ["redis", "agent"],
@@ -111,37 +111,30 @@ describe("anti-bloat: skill dedupe + contradiction + staleness", () => {
         };
     }
 
-    test("shouldMergeSkills: merges when symbols + embedding align", () => {
-        expect(
-            shouldMergeSkills(skill(), skill({ id: "s2", embedding: [0.95, 0.1, 0, 0] })),
-        ).toBe(true);
+    test("shouldMergeGems: merges when symbols + embedding align", () => {
+        expect(shouldMergeGems(skill(), skill({ id: "s2", embedding: [0.95, 0.1, 0, 0] }))).toBe(true);
     });
 
-    test("shouldMergeSkills: rejects when symbols disjoint", () => {
-        expect(
-            shouldMergeSkills(skill(), skill({ id: "s2", symbols: ["unrelated"], embedding: [1, 0, 0, 0] })),
-        ).toBe(false);
+    test("shouldMergeGems: rejects when symbols disjoint", () => {
+        expect(shouldMergeGems(skill(), skill({ id: "s2", symbols: ["unrelated"], embedding: [1, 0, 0, 0] }))).toBe(
+            false,
+        );
     });
 
-    test("shouldMergeSkills: rejects when cosine too low", () => {
-        expect(
-            shouldMergeSkills(skill(), skill({ id: "s2", embedding: [0, 1, 0, 0] })),
-        ).toBe(false);
+    test("shouldMergeGems: rejects when cosine too low", () => {
+        expect(shouldMergeGems(skill(), skill({ id: "s2", embedding: [0, 1, 0, 0] }))).toBe(false);
     });
 
-    test("dedupeSkills: keeps higher-confidence candidate", () => {
-        const result = dedupeSkills([
-            skill({ id: "low", confidence: 0.6 }),
-            skill({ id: "high", confidence: 0.9 }),
-        ]);
+    test("dedupeGems: keeps higher-confidence candidate", () => {
+        const result = dedupeGems([skill({ id: "low", confidence: 0.6 }), skill({ id: "high", confidence: 0.9 })]);
         expect(result.length).toBe(1);
         expect(result[0]?.surviving.id).toBe("high");
         expect(result[0]?.droppedIds).toContain("low");
         expect(result[0]?.surviving.evidenceCount).toBe(2);
     });
 
-    test("dedupeSkills: protected survivor gets evidence appended only", () => {
-        const result = dedupeSkills([
+    test("dedupeGems: protected survivor gets evidence appended only", () => {
+        const result = dedupeGems([
             skill({ id: "core", protected: true, confidence: 0.5 }),
             skill({ id: "challenger", confidence: 0.99 }),
         ]);
@@ -151,8 +144,8 @@ describe("anti-bloat: skill dedupe + contradiction + staleness", () => {
         expect(result[0]?.surviving.evidenceCount).toBe(2);
     });
 
-    test("dedupeSkills: independent skills both kept", () => {
-        const result = dedupeSkills([
+    test("dedupeGems: independent skills both kept", () => {
+        const result = dedupeGems([
             skill({ id: "a", symbols: ["a"] }),
             skill({ id: "b", symbols: ["b"], embedding: [0, 1, 0, 0] }),
         ]);
@@ -287,10 +280,7 @@ describe("project triggers (three paths, no string match)", () => {
                 sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.SessionTurn,
             }),
         );
-        const result = detectClusterCandidate(
-            { concepts: ["x"], episodes },
-            { clusterEvidenceMin: 0.9 },
-        );
+        const result = detectClusterCandidate({ concepts: ["x"], episodes }, { clusterEvidenceMin: 0.9 });
         expect(result.kind).toBe(ProjectTriggerKind.None);
         expect(result.rationale).toBe("evidence-below-threshold");
     });

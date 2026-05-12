@@ -239,10 +239,29 @@ export class GatewayModule extends Gateway {
 
     private markChannelRuntime(channel: ChannelName, patch: Partial<ChannelRuntimeState>): void {
         const current = this.channelRuntime.get(channel) ?? {};
-        this.channelRuntime.set(channel, {
-            ...current,
-            ...patch,
-        });
+        const next = { ...current, ...patch };
+        this.channelRuntime.set(channel, next);
+        // 状态切换才广播 ChannelLinkChanged（避免高频心跳噪声）。
+        if (patch.state !== undefined && current.state !== patch.state) {
+            this.events.publish(
+                event(RuntimeEventType.ChannelLinkChanged, {
+                    channel,
+                    from: current.state,
+                    to: patch.state,
+                    detail: next.detail,
+                }),
+            );
+        }
+        // lastError 首次出现 / 文本变化时广播 ChannelError。
+        if (patch.lastError && patch.lastError !== current.lastError) {
+            this.events.publish(
+                event(RuntimeEventType.ChannelError, {
+                    channel,
+                    error: patch.lastError,
+                    at: patch.lastErrorAt ?? new Date().toISOString(),
+                }),
+            );
+        }
     }
 
     private async startStdio(): Promise<void> {

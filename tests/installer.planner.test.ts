@@ -42,21 +42,16 @@ describe("resolveInstallTarget", () => {
 
 describe("binaryAssetName / templatesAssetName", () => {
     test("二进制资产名固定为 flyflor-{os}-{arch}", () => {
-        expect(
-            binaryAssetName({ os: InstallTargetOs.Linux, arch: InstallTargetArch.X64 }),
-        ).toBe("flyflor-linux-x64");
-        expect(
-            binaryAssetName({ os: InstallTargetOs.Darwin, arch: InstallTargetArch.Arm64 }),
-        ).toBe("flyflor-darwin-arm64");
+        expect(binaryAssetName({ os: InstallTargetOs.Linux, arch: InstallTargetArch.X64 })).toBe("flyflor-linux-x64");
+        expect(binaryAssetName({ os: InstallTargetOs.Darwin, arch: InstallTargetArch.Arm64 })).toBe(
+            "flyflor-darwin-arm64",
+        );
     });
 
     test("自定义 base 名生效", () => {
-        expect(
-            binaryAssetName(
-                { os: InstallTargetOs.Linux, arch: InstallTargetArch.X64 },
-                "flyflor-edge",
-            ),
-        ).toBe("flyflor-edge-linux-x64");
+        expect(binaryAssetName({ os: InstallTargetOs.Linux, arch: InstallTargetArch.X64 }, "flyflor-edge")).toBe(
+            "flyflor-edge-linux-x64",
+        );
     });
 
     test("模板包名固定", () => {
@@ -74,9 +69,7 @@ describe("planInstall", () => {
             prefix: "/home/u/.flyflor",
             releaseBase: DEFAULT_RELEASE_BASE,
         });
-        expect(plan.binaryUrl).toBe(
-            "https://github.com/flyflor/flyflor/releases/latest/download/flyflor-linux-x64",
-        );
+        expect(plan.binaryUrl).toBe("https://github.com/flyflor/flyflor/releases/latest/download/flyflor-linux-x64");
         expect(plan.templatesUrl).toBe(
             "https://github.com/flyflor/flyflor/releases/latest/download/flyflor-templates.tar.gz",
         );
@@ -99,9 +92,7 @@ describe("planInstall", () => {
             prefix: "/home/u/.flyflor",
             releaseBase: DEFAULT_RELEASE_BASE,
         });
-        expect(plan.binaryUrl).toBe(
-            "https://github.com/flyflor/flyflor/releases/download/v0.4.0/flyflor-linux-x64",
-        );
+        expect(plan.binaryUrl).toBe("https://github.com/flyflor/flyflor/releases/download/v0.4.0/flyflor-linux-x64");
     });
 
     test("缺 v 前缀的 tagged 版本会补 v", () => {

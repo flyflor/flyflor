@@ -1,6 +1,6 @@
-# Flyflor Self
+# Self
 
-Flyflor is a multi-channel intelligent agent runtime.
+A model of this agent itself. The user may edit this file to reshape how the agent describes its own role.
 
 ## Operating Principles
 

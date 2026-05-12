@@ -530,10 +530,7 @@ describe("Agent memory stability and latency", () => {
             join(config.paths.promptDir, "memory.context.md"),
             ["Internal prompt override.", "{{sessionMessages}}", "{{retrievedResults}}"].join("\n\n"),
         );
-        const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory } },
-            new CapturingSink(),
-        );
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
 
         const prompt = await memory.buildPrompt(gatewayMessage("hello"));
 
@@ -545,10 +542,7 @@ describe("Agent memory stability and latency", () => {
     test("ignores low-signal transient text and does not mutate long-term Markdown", async () => {
         const config = await testConfig();
         const events = new CapturingSink();
-        const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory } },
-            events,
-        );
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, events);
         await memory.buildPrompt(gatewayMessage("初始化长期记忆快照"));
 
         const result = await memory.rememberTurn(
@@ -565,10 +559,7 @@ describe("Agent memory stability and latency", () => {
 
     test("does not promote durable-looking text unless the model emits a memory action", async () => {
         const config = await testConfig();
-        const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory } },
-            new CapturingSink(),
-        );
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
         const message = gatewayMessage(
             "以后必须 always 保持 memory 响应延迟 stable important，不能 avoid 临时日志写入长期记忆。",
         );
@@ -587,10 +578,7 @@ describe("Agent memory stability and latency", () => {
 
     test("injects recent session context separately and does not leak across sessions", async () => {
         const config = await testConfig();
-        const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory } },
-            new CapturingSink(),
-        );
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
         const baseMessage = gatewayMessage("第一轮问题。");
 
         await memory.rememberTurn(baseMessage, gatewayReply("第一轮回答里的短期上下文。"), runtimeContext());
@@ -623,7 +611,7 @@ describe("Agent memory stability and latency", () => {
                 ...config,
                 memory: {
                     ...config.memory,
-                                        session: {
+                    session: {
                         ...config.memory.session,
                         consolidationBatchSize: 2,
                         maxLiveMessages: 2,
@@ -654,10 +642,7 @@ describe("Agent memory stability and latency", () => {
 
     test("persists explicit memory actions without reading user text through dictionaries", async () => {
         const config = await testConfig();
-        const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory } },
-            new CapturingSink(),
-        );
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
         const message = gatewayMessage("你以后叫飞花哦。我是你的主人，你要乖乖听话哦。");
 
         const result = await memory.rememberTurn(message, gatewayReply("记住了。"), runtimeContext(), [
@@ -717,9 +702,7 @@ describe("Agent memory stability and latency", () => {
         const candidates = await Bun.file(join(config.paths.projectMemoryDir, "candidates.jsonl")).text();
         const prompt = await memory.buildPrompt({ ...message, text: "项目局部记忆是什么？" }, context);
         const events = await Bun.file(join(config.paths.projectMemoryDir, "events.jsonl")).text();
-        const manifest = JSON.parse(
-            await Bun.file(join(config.paths.projectMemoryDir, "manifest.json")).text(),
-        ) as {
+        const manifest = JSON.parse(await Bun.file(join(config.paths.projectMemoryDir, "manifest.json")).text()) as {
             counts: { candidates: number; episodes: number; events: number; recalls: number; writes: number };
             lastRecalledAt?: string;
             lastWrittenAt?: string;
@@ -805,10 +788,7 @@ describe("Agent memory stability and latency", () => {
 
     test("aggregates residual matrix metadata without changing the action-only write gate", async () => {
         const config = await testConfig();
-        const memory = new MemoryModule(
-            { ...config, memory: { ...config.memory } },
-            new CapturingSink(),
-        );
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
 
         const result = await memory.rememberTurn(
             gatewayMessage("Qdrant 只能内部可达，同时后续一键安装必须自动管理。"),
@@ -1100,7 +1080,6 @@ describe("Agent memory stability and latency", () => {
             reason: "model selected direct",
         });
     });
-
 });
 
 describe("FlyFlor composition root", () => {

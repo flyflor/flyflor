@@ -33,9 +33,7 @@ export class PerfMetrics {
         const start = performance.now();
         return (extra) => {
             const elapsedMs = Math.max(0, Math.round((performance.now() - start) * 1000) / 1000);
-            this.events.publish(
-                event(type, { ...baseline, ...(extra ?? {}), elapsedMs }, requestId),
-            );
+            this.events.publish(event(type, { ...baseline, ...(extra ?? {}), elapsedMs }, requestId));
         };
     }
 

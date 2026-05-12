@@ -5,7 +5,7 @@ import type { RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 /**
  * fastRoute：在调用 LLM 路由器之前的纯指标短路。
  *
- * 严禁字符串/正则/关键词匹配（见 docs/boundaries.md "业务语义零字符串匹配"）；
+ * 严禁字符串/正则/关键词匹配（见 docs/BOUNDARIES.md "业务语义零字符串匹配"）；
  * 只允许使用：
  *   1. 上一轮模型显式给出的 nextRouteHint（结构化输出，age 内有效）；
  *   2. 当前 message embedding 与上一轮 message embedding 的余弦相似度；
@@ -28,6 +28,11 @@ export interface FastRouteSnapshot {
     consecutiveWatchTurns?: number;
     /** 黑板未收敛（NeedsUser / Failed / MaxRoundsReached）连续轮数。 */
     consecutiveBlackboardFailures?: number;
+    /**
+     * 上一轮 MCP 工具调用失败率达到 toolFailureRatioTrigger 的连续轮数。
+     * 用于「工具反复失败」语义升级信号；零字符匹配，仅用 ok 计数。
+     */
+    consecutiveToolFailureTurns?: number;
 }
 
 export interface FastRouteInput {

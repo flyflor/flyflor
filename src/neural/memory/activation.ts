@@ -4,7 +4,7 @@
  * 输入：当前 query embedding + 热点概念列表 + episode 候选（带 embedding/concepts/importance）。
  * 输出：按激活分数排序后的 episode 子集。
  *
- * 设计约束（与 docs/boundaries.md 对齐）：
+ * 设计约束（与 docs/BOUNDARIES.md 对齐）：
  * - **零字符串匹配**：query 与 episode 之间不做 text.includes 或正则；
  *   仅依赖向量余弦 + 概念集合交集 + importance/recency 这些资源指标。
  * - 无 I/O，无 clock 依赖（now 由调用方注入），方便测试与编译进二进制。
@@ -46,7 +46,7 @@ export function spreadActivation(input: ActivationInput): ActivationResult[] {
     const w = {
         similarity: input.weights?.similarity ?? 0.55,
         concept: input.weights?.concept ?? 0.25,
-        importance: input.weights?.importance ?? 0.20,
+        importance: input.weights?.importance ?? 0.2,
     };
     const minScore = input.minScore ?? 0.05;
     const hotSet = new Set(input.hotConcepts);
@@ -54,17 +54,14 @@ export function spreadActivation(input: ActivationInput): ActivationResult[] {
 
     const scored: ActivationResult[] = [];
     for (const c of input.candidates) {
-        const similarity =
-            input.queryEmbedding && c.embedding ? cosine(input.queryEmbedding, c.embedding) : 0;
+        const similarity = input.queryEmbedding && c.embedding ? cosine(input.queryEmbedding, c.embedding) : 0;
         const conceptOverlap = conceptScore(c.concepts ?? [], hotSet);
         const importance = clamp01(c.importance);
         const ageMs = Math.max(0, input.nowMs - c.createdAt);
         const recency = halfLifeMs > 0 ? Math.pow(0.5, ageMs / halfLifeMs) : 1;
         const importanceWithRecency = importance * recency;
         const score =
-            w.similarity * Math.max(0, similarity) +
-            w.concept * conceptOverlap +
-            w.importance * importanceWithRecency;
+            w.similarity * Math.max(0, similarity) + w.concept * conceptOverlap + w.importance * importanceWithRecency;
         if (score >= minScore) {
             scored.push({
                 id: c.id,

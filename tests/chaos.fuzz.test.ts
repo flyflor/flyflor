@@ -18,11 +18,11 @@ import {
     DEFAULT_DECAY_PROFILES,
 } from "../src/neural/memory/decay.ts";
 import {
-    dedupeSkills,
+    dedupeGems,
     isContradiction,
     isStale,
-    shouldMergeSkills,
-    type SkillCandidate,
+    shouldMergeGems,
+    type GemCandidate,
 } from "../src/neural/memory/anti.bloat.ts";
 import { parseConsolidationDecision } from "../src/neural/memory/consolidation.worker.ts";
 import {
@@ -48,18 +48,30 @@ function rng(seed: number): () => number {
 function chaosNumber(r: () => number): number {
     const dice = Math.floor(r() * 12);
     switch (dice) {
-        case 0: return Number.NaN;
-        case 1: return Number.POSITIVE_INFINITY;
-        case 2: return Number.NEGATIVE_INFINITY;
-        case 3: return Number.MAX_SAFE_INTEGER;
-        case 4: return Number.MIN_SAFE_INTEGER;
-        case 5: return -1e300;
-        case 6: return 1e300;
-        case 7: return -0;
-        case 8: return Number.EPSILON;
-        case 9: return r() * 2 - 1; // typical
-        case 10: return Math.floor(r() * 1_000_000);
-        default: return r();
+        case 0:
+            return Number.NaN;
+        case 1:
+            return Number.POSITIVE_INFINITY;
+        case 2:
+            return Number.NEGATIVE_INFINITY;
+        case 3:
+            return Number.MAX_SAFE_INTEGER;
+        case 4:
+            return Number.MIN_SAFE_INTEGER;
+        case 5:
+            return -1e300;
+        case 6:
+            return 1e300;
+        case 7:
+            return -0;
+        case 8:
+            return Number.EPSILON;
+        case 9:
+            return r() * 2 - 1; // typical
+        case 10:
+            return Math.floor(r() * 1_000_000);
+        default:
+            return r();
     }
 }
 
@@ -83,17 +95,17 @@ const POISONED_JSON: string[] = [
     "not json at all",
     "{",
     "}",
-    "{ \"decision\":",
-    "{\"decision\":\"DROP TABLE users;\"}",
-    "{\"decision\":\"reinforce\",\"confidence\":NaN}",
-    "{\"decision\":\"discard\",\"confidence\":-9}",
-    "{\"decision\":\"consolidate\",\"confidence\":1.5,\"summary\":\"\",\"symbols\":[1,2,null]}",
-    "garbage {\"decision\":\"reinforce\",\"confidence\":0.5} trailing",
-    "{\"decision\":[\"discard\"]}",
-    "[\"discard\"]",
+    '{ "decision":',
+    '{"decision":"DROP TABLE users;"}',
+    '{"decision":"reinforce","confidence":NaN}',
+    '{"decision":"discard","confidence":-9}',
+    '{"decision":"consolidate","confidence":1.5,"summary":"","symbols":[1,2,null]}',
+    'garbage {"decision":"reinforce","confidence":0.5} trailing',
+    '{"decision":["discard"]}',
+    '["discard"]',
     "null",
     "true",
-    "{\"decision\":\"reinforce\",\"confidence\":\"0.7\"}",
+    '{"decision":"reinforce","confidence":"0.7"}',
     `{"decision":"consolidate","confidence":0.7,"symbols":${JSON.stringify(Array.from({ length: 200 }, (_, i) => `s${i}`))}}`,
     `{"decision":"consolidate","summary":"${"x".repeat(2000)}","confidence":0.5}`,
     "{}{}{}{}",
@@ -205,23 +217,20 @@ describe("chaos: decay & reinforce", () => {
 
 // ─── anti-bloat 暴力 ───────────────────────────────────────────────
 describe("chaos: anti-bloat", () => {
-    test("dedupeSkills handles 200 skills with NaN/dup ids without throwing", () => {
+    test("dedupeGems handles 200 skills with NaN/dup ids without throwing", () => {
         const r = rng(99);
-        const skills: SkillCandidate[] = [];
+        const skills: GemCandidate[] = [];
         for (let i = 0; i < 200; i += 1) {
             skills.push({
                 id: r() < 0.05 ? "dup" : `s${i}`,
-                symbols: Array.from(
-                    { length: Math.floor(r() * 5) },
-                    () => `tag${Math.floor(r() * 6)}`,
-                ),
+                symbols: Array.from({ length: Math.floor(r() * 5) }, () => `tag${Math.floor(r() * 6)}`),
                 embedding: chaosVector(r, 6),
                 confidence: chaosNumber(r),
                 evidenceCount: chaosNumber(r),
                 protected: r() < 0.1,
             });
         }
-        const result = dedupeSkills(skills);
+        const result = dedupeGems(skills);
         // 每个 surviving 的 confidence/evidence 已被 sanitize
         for (const item of result) {
             expect(item.surviving.confidence).toBeGreaterThanOrEqual(0);
@@ -236,8 +245,8 @@ describe("chaos: anti-bloat", () => {
         expect(dupCount).toBeLessThanOrEqual(1);
     });
 
-    test("dedupeSkills drops malformed entries (no id)", () => {
-        const result = dedupeSkills([
+    test("dedupeGems drops malformed entries (no id)", () => {
+        const result = dedupeGems([
             { id: "", symbols: ["x"], embedding: [1, 0], confidence: 1, evidenceCount: 1 },
             // @ts-expect-error garbage
             null,
@@ -249,10 +258,10 @@ describe("chaos: anti-bloat", () => {
         expect(result[0]?.surviving.id).toBe("ok");
     });
 
-    test("shouldMergeSkills with NaN-poisoned vectors never throws/returns NaN", () => {
+    test("shouldMergeGems with NaN-poisoned vectors never throws/returns NaN", () => {
         const r = rng(123);
         for (let i = 0; i < 1_000; i += 1) {
-            const out = shouldMergeSkills(
+            const out = shouldMergeGems(
                 {
                     id: "a",
                     symbols: ["x", "y"],
@@ -341,9 +350,7 @@ describe("chaos: spreadActivation", () => {
     });
 
     test("empty candidates / empty hot concepts", () => {
-        expect(
-            spreadActivation({ hotConcepts: [], candidates: [], nowMs: 0, topK: 5 }),
-        ).toEqual([]);
+        expect(spreadActivation({ hotConcepts: [], candidates: [], nowMs: 0, topK: 5 })).toEqual([]);
     });
 });
 

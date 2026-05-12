@@ -1,27 +1,27 @@
 # Flyflor
 
-Flyflor is a Bun + TypeScript agent runtime designed to compile into a single binary. It combines LLM fluid intelligence with reflection-based crystal intelligence, spatial memory, blackboard collaboration, multi-channel gateway, CLI/TUI, MCP, skills, sandbox policy, and session memory.
+Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进制交付。
 
-飞花是一个 Bun + TypeScript 智能体运行时，目标是单文件二进制交付。核心设计是：LLM 负责流体智力，反思沉淀晶体智力，空间记忆负责联想召回，黑板负责复杂任务协作。
+核心设计：LLM 负责流体智力，反思沉淀晶体智力（Gem），海马体负责工作记忆与长期记忆图，黑板协作处理复杂任务。
 
-## Start Here
+## 快速开始
 
-### Install (curl-pipe, no source clone)
+### 安装（curl-pipe，无需克隆源码）
 
 ```bash
 curl -fsSL https://flyflor.dev/install.sh | sh
-# Pin a version:
+# 固定版本：
 curl -fsSL https://flyflor.dev/install.sh | sh -s -- --version v0.4.0
-# Custom prefix:
+# 自定义前缀：
 curl -fsSL https://flyflor.dev/install.sh | sh -s -- --prefix /usr/local/flyflor
-# Update / Uninstall:
-curl -fsSL https://flyflor.dev/install.sh | sh -s -- --update
+# 更新 / 卸载：
+flyflor update -y
 curl -fsSL https://flyflor.dev/install.sh | sh -s -- --uninstall
 ```
 
-The script downloads the matching `flyflor-{os}-{arch}` binary and `flyflor-templates.tar.gz` from GitHub releases, installs them under `~/.flyflor` by default, and prints the `PATH` line if the bin dir is not yet on it. `--uninstall` keeps your config and data under the prefix.
+脚本从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 二进制与 `flyflor-templates.tar.gz`，默认安装到 `~/.flyflor`。`--uninstall` 保留配置和数据。
 
-### From source
+### 从源码
 
 ```bash
 bun install
@@ -29,110 +29,224 @@ bun run install:templates
 bun run chat
 ```
 
-Useful commands:
+常用命令：
 
 ```bash
-bun run setup
-bun run status
-bun run doctor
-bun run tui
+bun run setup        # 初始化向导
+bun run status       # 运行状态
+bun run doctor       # 诊断配置与依赖
+bun run doctor --fix # 自动创建缺失目录
+bun run tui          # 仪表板 TUI
 bun run app.ts gateway
 ```
 
-Quality checks:
+质量验证：
 
 ```bash
-bun run format:check
-bun run check
-bun test
-bun run build:binary
+bun run check        # TypeScript 类型检查
+bun test             # 运行所有测试
+bun run build:binary # 编译本机二进制
 ```
 
 ## Docker Dev
 
-Docker dev runs the compiled Linux binary. Compose does not install dependencies or build inside the container.
+Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不构建。
 
 ```bash
-bun run docker:dev
-curl http://127.0.0.1:18790/health
-docker exec -it flyflor-dev flyflor
+bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
+bun run docker:chat                       # 直接进入 chat TUI
+curl http://127.0.0.1:18790/health        # 健康检查
+docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```
 
-Mounted paths:
+挂载路径：
 
-| Host path                  | Container path               | Purpose                 |
-| -------------------------- | ---------------------------- | ----------------------- |
-| `.`                        | `/workspace`                 | repo workspace          |
-| `./docker/config`          | `/root/.flyflor`             | dev config and prompts  |
-| `./docker/storage/flyflor` | `/root/.local/share/flyflor` | session and memory data |
-| `./dist/flyflor-linux`     | copied to `/usr/local/bin`   | compiled binary         |
+| 宿主路径               | 容器路径                       | 用途                    |
+| ---------------------- | ------------------------------ | ----------------------- |
+| `./docker/config`      | `/root/.flyflor`               | dev 配置 + 提示词模板   |
+| `./docker/workspace`   | `/root/.flyflor/workspace`     | 工作区数据              |
+| `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor`| 编译好的二进制          |
 
-Redis and SurrealDB are internal compose services only. They are not published to host ports.
+Redis 和 SurrealDB 为内部 compose 服务，不向宿主机暴露端口。架构变更后重新编译 + 重启：
 
-## Architecture
+```bash
+bun run docker:up   # = 重编 binary + force-recreate compose
+```
 
-Current source layout:
+## 架构
 
-| Path           | Role                                                        |
-| -------------- | ----------------------------------------------------------- |
-| `app.ts`       | thin binary entry                                           |
-| `src/app.ts`   | FlyFlor composition root                                    |
-| `src/command`  | CLI, TUI, command registry, terminal rendering              |
-| `src/agent`    | runtime, gateway, blackboard, session, sandbox, worker, MCP |
-| `src/agent/di` | `@Module`, `@Provide`, `@Inject`, registry, container       |
-| `src/llm`      | model providers, OpenAI/Anthropic-compatible protocol layer |
-| `src/crystal`  | crystal intelligence: episode, memory_node, skill, consolidation, dream mode |
-| `src/neural`   | hippocampus-like working memory: Redis episodes, recall, recent-exchanges    |
-| `src/protocol` | contracts, enums, events, process envelopes                 |
-| `templates`    | prompt and memory Markdown templates                        |
+### 目录结构
 
-Decorator rules:
+| 路径              | 职责                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| `app.ts`          | 薄入口，启动 FlyFlor 主类                                      |
+| `src/app.ts`      | FlyFlor composition root，显式 DI 容器                        |
+| `src/command`     | CLI、TUI、命令注册、终端渲染                                   |
+| `src/agent`       | runtime、gateway、blackboard、session、sandbox、worker、MCP    |
+| `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
+| `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
+| `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
+| `src/neural`      | 海马体工作记忆：Redis episodes、召回、最近交流 ring            |
+| `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
+| `templates`       | 提示词和记忆 Markdown 模板                                     |
 
-- Keep only `@Module`, `@Provide`, `@Inject`, `@Service`, `@Component`, `@Worker`, `@Channel`, `@Plugin`.
-- Boundary modules use object-oriented semantics: `class RuntimeModule extends Runtime`, `class GatewayModule extends Gateway`, `class SessionModule extends Session`, etc.
-- Role-bearing implementation files use dot suffixes: `*.module.ts`, `*.service.ts`, `*.worker.ts`, `*.manager.ts`, `*.adapter.ts`, `*.store.ts`.
-- Database and storage implementations use `@Component`.
-- Service-like code stays inside its owning module and may use `@Service`.
-- No reflection scanning, no dynamic directory loading, no hidden fallback prompt logic.
+### 三层智能模型
 
-## Memory
+- **LLM = 流体智力**：当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策。
+- **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格。
+- **Neural = 海马体**：工作记忆（Redis）+ 长期记忆图（SurrealDB），支持 TTL 遗忘曲线、概念激活、记忆重建。
 
-Flyflor uses a hippocampus-inspired layered memory:
+**核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
-| Layer                 | Backend     | Purpose                                                                |
-| --------------------- | ----------- | ---------------------------------------------------------------------- |
-| Constitutional        | Markdown    | identity, user preferences, project facts (hand-edited, slow-changing) |
-| Working memory        | Redis       | episode buffer with TTL-based forgetting curve, recent-exchange ring   |
-| Long-term graph       | SurrealDB   | episode → memory_node → skill, with RELATE edges and MTREE ANN         |
-| Audit log             | SQLite      | replay/debug + blackboard turn state                                   |
+### 请求流程
 
-Episodes are captured asynchronously after every turn. Consolidation (LLM-assisted reinforce/consolidate/discard) runs as a background worker triggered by Redis ZSET pre-expiry sweep. Skill upgrades go through two quality gates: episode source-kind weight + cluster evidence score.
+1. 渠道、消息、用户身份归一为 `GatewayMessage`
+2. 路由判断：fastRoute 启发式（~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
+3. 上下文装配（热路径）：宪法层 Markdown + Redis 最近交流 ring + SurrealDB 概念激活（memory_node + Gem ANN）
+4. LLM 主循环：流式生成，TTFB 目标 < 350ms
+5. 异步收尾：episode 写 Redis、ring buffer 更新、Markdown 显式动作处理（不阻塞 stream）
+6. 后台 worker：consolidation（10 min）、decay（24h）、dream（空闲触发）
 
-Markdown writes still require a structured `memory_action`. Ordinary chat does not promote constitutional memory by itself, but every turn produces working-memory episodes that may consolidate into long-term knowledge over time.
+## 记忆系统
 
-Prompt templates live in `templates/prompts` with `.zh.cn.md` review copies. Runtime reads installed Markdown from `~/.flyflor/prompts`; Docker dev reads `./docker/config/prompts`.
+| 层               | 后端      | 职责                                                             |
+| ---------------- | --------- | ---------------------------------------------------------------- |
+| 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑，慢变）                         |
+| 工作记忆         | Redis     | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer            |
+| 长期记忆图       | SurrealDB | episode → memory_node → Gem，RELATE 边 + MTREE ANN              |
+| 审计日志         | SQLite    | 黑板状态 + 回放调试                                              |
 
-## Blackboard
+**SurrealDB 主表：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）
 
-Runtime asks `blackboard.route.md` for a structured route:
+**图边：** `next_context`、`similar_ep`、`consolidated_into`、`similar_concept`、`proven_as`、`proven_by`
 
-- `direct`: answer directly.
-- `direct-with-watch`: answer directly while watching for escalation signals.
-- `blackboard`: run worker discussion.
+### Gem（晶体智力固化产物）升格流程
 
-Blackboard can converge on the first decisive round. Non-decisive discussions continue toward a 5-round hard cap. If blocked, it returns numbered issues to the user instead of looping.
+候选三来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升 (`promoted-memory`)、session history（evidence weight=0，不结晶）。
 
-## Documentation
+**双质量门：**
+- 门 1：episode cluster sourceKind weight gate
+- 门 2：memory_node confidence > 0.5 AND evidenceCount ≥ 3 → 升格 Gem
 
-| Document                                                             | Purpose                              |
-| -------------------------------------------------------------------- | ------------------------------------ |
-| [DESIGN.md](DESIGN.md)                                               | architecture single source of truth  |
-| [TODO.md](TODO.md)                                                   | active backlog                       |
-| [AGENTS.md](AGENTS.md)                                               | agent / contributor hard rules       |
-| [docs/boundaries.md](docs/boundaries.md)                             | engineering boundaries               |
-| [docs/di.protocol.architecture.md](docs/di.protocol.architecture.md) | DI / protocol layering               |
-| [docs/blackboard.worker.design.md](docs/blackboard.worker.design.md) | blackboard worker protocol           |
-| [docs/prompt.templates.md](docs/prompt.templates.md)                 | prompt template registry             |
-| [docs/cli.command.status.md](docs/cli.command.status.md)             | CLI command inventory                |
+Evidence Weight 裁判表：
 
-Development rules are also mirrored in [AGENTS.md](AGENTS.md).
+| sourceKind             | weight |
+| ---------------------- | ------ |
+| direct / unverified    | 0.0    |
+| blackboard-needs-user  | 0.65   |
+| blackboard-converged   | 0.8    |
+| explicit               | 0.9    |
+
+### 遗忘与防膨胀
+
+- **双轨衰减**：episode 5%/天、memory_node 2%/天、Gem 0.5%/天；lastVerifiedAt 超 30 天额外打折。
+- **矛盾检测**：`contradictionCount ≥ 2` → drift-repair；confidence < 0.1 → deprecated 归档。
+- **容量阀门**：Redis `maxEpisodesPerUser=200`；SurrealDB episode 500 / memory_node 100 / Gem 50。
+- **Gem 去重**：symbols IoU ≥ 0.7 且 cosine ≥ 0.85 → merge（`dedupeGems`，纯函数，无字符匹配）。
+
+### Dream 模式（晶体层离线维护）
+
+Dream 是长期晶体层的主动维护 worker，仅读写 SurrealDB（`gem / memory_node / episode / gem_snapshot`），不触碰 Redis 工作记忆。
+
+| Worker        | 作用层             | 唯一职责                                                       |
+| ------------- | ------------------ | -------------------------------------------------------------- |
+| Consolidation | Redis → SurrealDB  | 升格通道：到期 episode → reinforce / consolidate / discard     |
+| Decay         | SurrealDB（纯函数）| 被动衰减：importance × 时间 / verification age                 |
+| Anti-bloat    | Redis & SurrealDB  | 容量阀门：超额强制遗忘 / 归档                                  |
+| Dream         | SurrealDB only     | 晶体维护：drift-repair / recall-reinforce / contradiction-audit|
+
+三类动作：
+- `drift-repair`：先写 `gem_snapshot` 存档，再收窄 scope/precondition 或转 deprecated
+- `recall-reinforce`：importance × 1.1，追加 `proven_by` 边
+- `contradiction-audit`：弱侧 `contradictionCount += 1`，confidence × 0.7；< 0.1 → deprecated 归档
+
+触发：定时 30 min 节拍 + 用户 10 min 静默自动触发（类海马 SWR 回放）。
+
+单 pass：≤ 1 次 LLM 调用、≤ 8K token；候选选择仅用资源指标（counter / age / cosine），不用关键词。
+
+## 黑板
+
+Runtime 通过 `blackboard.route.md` 获取结构化路由：
+
+- `direct`：单智能体直接回答
+- `direct-with-watch`：直接回答同时监听升级信号
+- `blackboard`：动态 worker 多轮讨论
+
+黑板特性：
+- 同 session 同时只能一个 turn（lease 机制）
+- 目标 3 轮收敛，5 轮硬上限
+- livelock 检测（两轮无新事实、重复争议、重复失败工具）
+- 流式输出 worker 讨论步骤
+- 无法收敛时返回 `flyflor-decision-form` 让用户决策
+
+## CLI 参考
+
+```bash
+flyflor                      # 启动 chat TUI（TTY 环境）
+flyflor chat                 # 对话模式
+flyflor tui                  # 仪表板 TUI
+flyflor setup                # 初始化向导
+flyflor status               # 运行状态
+flyflor doctor [--fix]       # 诊断（--fix 自动创建缺失目录）
+flyflor update [--check] [-y]# 检查 / 应用更新
+flyflor version              # 版本信息
+flyflor config show          # 查看配置
+flyflor config path          # 配置文件路径
+flyflor memory status        # 记忆状态
+flyflor blackboard list      # 黑板 turn 列表
+flyflor gem list             # 晶体列表（`skills` 子命令已更名为 `gem`）
+flyflor mcp list             # MCP 服务列表
+flyflor plugins list         # 插件列表
+flyflor dream status         # Dream 队列状态
+flyflor dream run            # 手动触发 dream pass
+flyflor model                # 模型配置向导
+flyflor gateway status       # 网关状态
+```
+
+## 工程规则
+
+### DI 与命名
+
+- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`
+- 边界模块用继承表达：`class RuntimeModule extends Runtime`，不新增专用 decorator
+- 实现文件使用点分后缀：`*.module.ts`、`*.service.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`
+- 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
+
+### 零字符匹配红线
+
+业务语义判断（意图、路由、记忆动作、反馈分类、矛盾检测、复杂度评估等）**只能**由模型同轮返回的结构化字段或专用提示词模板的 JSON 输出驱动。
+
+禁止：`text.includes()`、正则识别意图、关键词列表、句式启发式、情感词典、句末标点判断。
+
+性能优化只能用资源指标（token 数、向量相似度、TTL、cluster size）短路。
+
+### 其他约束
+
+- 只使用 Bun 命令管理依赖，不要求安装 Node.js
+- 配置走 `~/.flyflor/config.jsonc`（Docker dev：`./docker/config/config.jsonc`），兼容 JSONC
+- 业务配置不走环境变量；凭据、沙箱策略走 config/secrets provider
+- 新增运行时依赖前确认兼容 `bun build --compile`（无 native addon、无 postinstall、无动态 require）
+- 不把密钥、日志、会话数据库、用户数据编译进二进制
+- 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化
+- 修改边界、高风险工具或依赖策略时同步更新 `docs/boundaries.md`
+
+## 文档
+
+完整文档索引见 [docs/README.md](docs/README.md)。核心文档：
+
+| 文档 | 用途 |
+| --- | --- |
+| [docs/architecture.md](docs/architecture.md) | 分层架构 / composition root / 进程模型 |
+| [docs/boundaries.md](docs/boundaries.md) | 工程边界与红线 |
+| [docs/runtime.turn.md](docs/runtime.turn.md) | 单轮请求完整流程 |
+| [docs/memory.system.md](docs/memory.system.md) | 四层记忆 / 升格 / 衰减 / Dream |
+| [docs/blackboard.md](docs/blackboard.md) | 黑板路由 / 收敛 / Worker 协议 |
+| [docs/gateway.channels.md](docs/gateway.channels.md) | Gateway 与渠道矩阵 |
+| [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计 |
+| [docs/mcp.tools.md](docs/mcp.tools.md) | MCP 工具循环 |
+| [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection → Gem |
+| [docs/skill.system.md](docs/skill.system.md) | Skill 加载与升格 |
+| [docs/project.session.md](docs/project.session.md) | Session 与 Project |
+| [docs/prompt.templates.md](docs/prompt.templates.md) | 提示词模板 |
+| [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
+| [TODO.md](TODO.md) | 风险点 / 后续计划 |

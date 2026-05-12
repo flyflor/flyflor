@@ -1,7 +1,7 @@
 /**
  * 项目/事件固化触发器（project-module）。
  *
- * 三条触发路径（与 DESIGN.md §10 事件与项目固化对齐）：
+ * 三条触发路径（与 README.md §10 事件与项目固化对齐）：
  *
  *   A 显式用户意图（最高优先级）
  *     由模型在 memory action 的 signals 中给出 projectIntent / eventIntent ∈ [0,1]，
@@ -19,7 +19,7 @@
  *     某 skill：support >= 5 AND confidence > 0.7
  *     → 标记 domain-anchor，在 MEMORY.md 追加技能摘要（不创建新文件）。
  *
- * 严格遵守 docs/boundaries.md "业务语义零字符串匹配"——
+ * 严格遵守 docs/BOUNDARIES.md "业务语义零字符串匹配"——
  * 三条路径全部用资源指标（signals 数值 / cluster 大小 / cosine / support / confidence）判定，
  * 没有任何 text.includes / 正则 / 关键词。
  */
@@ -62,17 +62,12 @@ const DEFAULTS: Required<ProjectTriggerConfig> = {
 
 // ─── 路径 A: 显式意图 ──────────────────────────────────────────────
 
-export function detectExplicitIntent(
-    actions: MemoryAction[],
-    config: ProjectTriggerConfig = {},
-): ProjectTriggerResult {
+export function detectExplicitIntent(actions: MemoryAction[], config: ProjectTriggerConfig = {}): ProjectTriggerResult {
     const threshold = config.explicitThreshold ?? DEFAULTS.explicitThreshold;
     let projectScore = 0;
     let eventScore = 0;
     for (const action of actions) {
-        const signals = action.signals as
-            | { projectIntent?: number; eventIntent?: number }
-            | undefined;
+        const signals = action.signals as { projectIntent?: number; eventIntent?: number } | undefined;
         const p = clamp01(signals?.projectIntent ?? 0);
         const e = clamp01(signals?.eventIntent ?? 0);
         if (p > projectScore) projectScore = p;

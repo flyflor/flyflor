@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-    spreadActivation,
-    type ActivationCandidate,
-} from "../src/neural/memory/activation.ts";
-import {
-    NullDreamWorker,
-    dreamQueueKey,
-    DREAM_QUEUE_KEY_TEMPLATE,
-} from "../src/agent/runtime/dream.worker.ts";
+import { spreadActivation, type ActivationCandidate } from "../src/neural/memory/activation.ts";
+import { NullDreamWorker } from "../src/agent/runtime/dream.worker.ts";
 
 const nowMs = 1_700_000_000_000;
 
@@ -158,9 +151,7 @@ describe("spreadActivation (no string match, pure resource metrics)", () => {
         const result = spreadActivation({
             queryEmbedding: [1, 0, 0, 0],
             hotConcepts: [],
-            candidates: [
-                candidate({ id: "x", embedding: [1, 0, 0, 0], importance: 0.5, createdAt: 0 }),
-            ],
+            candidates: [candidate({ id: "x", embedding: [1, 0, 0, 0], importance: 0.5, createdAt: 0 })],
             nowMs,
             topK: 5,
             halfLifeHours: 0,
@@ -170,21 +161,15 @@ describe("spreadActivation (no string match, pure resource metrics)", () => {
 });
 
 describe("DreamWorker stub", () => {
-    test("NullDreamWorker enqueue is no-op", async () => {
+    test("NullDreamWorker runOnce returns zeroed metrics", async () => {
         const worker = new NullDreamWorker();
-        await expect(
-            worker.enqueue({ userId: "u1", episodeId: "e1", protected: false }),
-        ).resolves.toBeUndefined();
-    });
-
-    test("NullDreamWorker drain returns zeroed metrics", async () => {
-        const worker = new NullDreamWorker();
-        const result = await worker.drain("u1", 100);
-        expect(result).toEqual({ consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 });
-    });
-
-    test("dreamQueueKey substitutes userId into template", () => {
-        expect(dreamQueueKey("u1")).toBe("ff:dream:u1");
-        expect(DREAM_QUEUE_KEY_TEMPLATE).toContain("{userId}");
+        const result = await worker.runOnce("u1", 100);
+        expect(result).toEqual({
+            scanned: 0,
+            driftRepaired: 0,
+            recallReinforced: 0,
+            contradictionsFlagged: 0,
+            skipped: 0,
+        });
     });
 });

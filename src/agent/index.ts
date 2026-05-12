@@ -6,5 +6,6 @@ export * from "./sandbox/index.ts";
 export * from "./session/index.ts";
 export * from "./worker/index.ts";
 export * from "./mcp/index.ts";
+export * from "./plugin/index.ts";
 export * from "../neural/memory/index.ts";
 export * from "../crystal/memory/index.ts";

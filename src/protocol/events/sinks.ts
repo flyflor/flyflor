@@ -10,3 +10,17 @@ export class ConsoleEventSink implements EventSink {
 export class NullEventSink implements EventSink {
     publish(_event: RuntimeEvent): void {}
 }
+
+/** 把多个 sink fan-out 成单个 sink；任一 sink 抛错被吞掉以防互相影响。 */
+export class CompositeEventSink implements EventSink {
+    constructor(private readonly sinks: EventSink[]) {}
+    publish(event: RuntimeEvent): void {
+        for (const sink of this.sinks) {
+            try {
+                sink.publish(event);
+            } catch (err) {
+                console.warn(`[composite-sink] sink failed: ${String(err)}`);
+            }
+        }
+    }
+}

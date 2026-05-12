@@ -80,7 +80,7 @@ export interface MemoryConsolidationPromptInput {
 
 export interface MemoryDreamPromptInput {
     userId: string;
-    episodes: string;
+    candidates: string;
 }
 
 export interface FeedbackClassifyPromptInput {
@@ -342,10 +342,11 @@ export function renderMemoryConsolidationPrompt(input: MemoryConsolidationPrompt
 }
 
 export function renderMemoryDreamPrompt(input: MemoryDreamPromptInput): string {
-    // 必要提示词：dream 模式 worker；rewrite/discard/skip 由结构化 JSON 输出承载，代码不做语义匹配。
+    // 必要提示词：dream 晶体层维护 worker；drift-repair / recall-reinforce / contradiction-audit / skip
+    // 由结构化 JSON 输出承载，代码不做语义匹配，只校验 enum + JSON shape（README.md §12）。
     return renderTemplate(requiredTemplates().memoryDream.content, {
         userId: input.userId,
-        episodes: input.episodes,
+        candidates: input.candidates,
     });
 }
 

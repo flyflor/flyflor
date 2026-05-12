@@ -1,10 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { buildConfigJsonc, listProviderChoices, listRelayProtocols } from "../src/command/cli/config.ts";
-import {
-    listFlyflorCommandSpecs,
-    parseFlyflorCommand,
-    runFlyflorUtilityCommand,
-} from "../src/command/cli/commands.ts";
+import { listFlyflorCommandSpecs, parseFlyflorCommand, runFlyflorUtilityCommand } from "../src/command/cli/commands.ts";
 import { renderChannelTable } from "../src/command/cli/status.ts";
 import { parseFlyflorMode } from "../src/command/index.ts";
 import { renderMarkdownToPlainText } from "../src/command/render/index.ts";
@@ -163,21 +159,23 @@ describe("Command boundary", () => {
     });
 
     test("root oneshot forwards global chat overrides", async () => {
-        expect(parseFlyflorCommand([
-            "bun",
-            "flyflor",
-            "chat",
-            "--query",
-            "hello",
-            "--model",
-            "test-model",
-            "--provider",
-            "custom",
-            "--skills",
-            "alpha",
-            "beta",
-            "--accept-hooks",
-        ])).toBeUndefined();
+        expect(
+            parseFlyflorCommand([
+                "bun",
+                "flyflor",
+                "chat",
+                "--query",
+                "hello",
+                "--model",
+                "test-model",
+                "--provider",
+                "custom",
+                "--skills",
+                "alpha",
+                "beta",
+                "--accept-hooks",
+            ]),
+        ).toBeUndefined();
     });
 
     test("markdown renderer produces terminal text without HTML output", () => {

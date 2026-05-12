@@ -4,8 +4,8 @@ import {
     buildReflectionCandidate,
     crystallizeCandidate,
     evidence,
-    mergeCrystalSkill,
-    recallCrystalSkills,
+    mergeCrystalGem,
+    recallCrystalGems,
 } from "../reflection/index.ts";
 import { MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
 import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
@@ -34,28 +34,28 @@ export class CrystalMemoryService {
             createdAt: new Date().toISOString(),
             evidence: [],
         });
-        const skills = await this.store.listSkills({
+        const gems = await this.store.listGems({
             query: request.query,
             symbols: candidate.symbols,
             limit: request.limit,
         });
-        return recallCrystalSkills(
+        return recallCrystalGems(
             {
                 query: request.query,
                 symbols: candidate.symbols,
                 limit: request.limit,
             },
-            skills,
+            gems,
         ).map((result) => ({
             layer: MemoryLayer.Crystal,
             score: result.score,
-            record: crystalSkillToMemoryRecord(result.skill),
+            record: crystalGemToMemoryRecord(result.gem),
         }));
     }
 
     async recordTurn(input: CrystalTurnInput): Promise<CrystalTurnResult> {
         if (!this.config.enabled) {
-            return { candidates: [], atoms: [], skills: [] };
+            return { candidates: [], atoms: [], gems: [] };
         }
 
         const candidates = [
@@ -80,21 +80,21 @@ export class CrystalMemoryService {
             ),
         ];
         const atoms = [];
-        const skills = [];
+        const gems = [];
         for (const candidate of candidates) {
             await this.store.upsertCandidate(candidate);
             const crystallized = crystallizeCandidate(candidate);
             if (!crystallized) {
                 continue;
             }
-            const existing = await this.store.findSkill(crystallized.skill.id);
-            const merged = mergeCrystalSkill(existing, crystallized.skill);
+            const existing = await this.store.findGem(crystallized.gem.id);
+            const merged = mergeCrystalGem(existing, crystallized.gem);
             await this.store.upsertAtom(crystallized.atom);
-            await this.store.upsertSkill(merged);
+            await this.store.upsertGem(merged);
             atoms.push(crystallized.atom);
-            skills.push(merged);
+            gems.push(merged);
         }
-        return { candidates, atoms, skills };
+        return { candidates, atoms, gems };
     }
 }
 
@@ -102,16 +102,16 @@ export class CrystalMemoryService {
 export class InMemoryCrystalMemoryStore implements CrystalMemoryStore {
     readonly candidates = new Map<string, Awaited<CrystalTurnResult["candidates"][number]>>();
     readonly atoms = new Map<string, Awaited<CrystalTurnResult["atoms"][number]>>();
-    readonly skills = new Map<string, Awaited<CrystalTurnResult["skills"][number]>>();
+    readonly gems = new Map<string, Awaited<CrystalTurnResult["gems"][number]>>();
 
     async initialize(): Promise<void> {}
 
-    async findSkill(id: string): Promise<Awaited<CrystalTurnResult["skills"][number]> | undefined> {
-        return this.skills.get(id);
+    async findGem(id: string): Promise<Awaited<CrystalTurnResult["gems"][number]> | undefined> {
+        return this.gems.get(id);
     }
 
-    async listSkills(): Promise<Awaited<CrystalTurnResult["skills"][number]>[]> {
-        return [...this.skills.values()];
+    async listGems(): Promise<Awaited<CrystalTurnResult["gems"][number]>[]> {
+        return [...this.gems.values()];
     }
 
     async upsertCandidate(candidate: Awaited<CrystalTurnResult["candidates"][number]>): Promise<void> {
@@ -122,8 +122,8 @@ export class InMemoryCrystalMemoryStore implements CrystalMemoryStore {
         this.atoms.set(atom.id, atom);
     }
 
-    async upsertSkill(skill: Awaited<CrystalTurnResult["skills"][number]>): Promise<void> {
-        this.skills.set(skill.id, skill);
+    async upsertGem(gem: Awaited<CrystalTurnResult["gems"][number]>): Promise<void> {
+        this.gems.set(gem.id, gem);
     }
 }
 
@@ -146,20 +146,20 @@ function candidateFromPromotedMemory(record: MemoryRecord, now: string) {
     });
 }
 
-function crystalSkillToMemoryRecord(skill: Awaited<CrystalTurnResult["skills"][number]>): MemoryRecord {
+function crystalGemToMemoryRecord(gem: Awaited<CrystalTurnResult["gems"][number]>): MemoryRecord {
     return {
-        id: skill.id,
+        id: gem.id,
         kind: MemoryKind.Skill,
-        content: `${skill.title}: ${skill.method}`,
+        content: `${gem.title}: ${gem.method}`,
         scope: "global",
-        importance: skill.evidenceScore,
-        confidence: skill.confidence,
-        createdAt: skill.createdAt,
-        updatedAt: skill.updatedAt,
+        importance: gem.evidenceScore,
+        confidence: gem.confidence,
+        createdAt: gem.createdAt,
+        updatedAt: gem.updatedAt,
         metadata: {
-            bucket: skill.bucket,
-            sourceAtomIds: skill.sourceAtomIds,
-            symbols: skill.symbols,
+            bucket: gem.bucket,
+            sourceAtomIds: gem.sourceAtomIds,
+            symbols: gem.symbols,
         },
     };
 }

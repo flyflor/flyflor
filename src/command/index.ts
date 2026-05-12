@@ -14,9 +14,11 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
 
     const oneshot = optionValue(argv, "-z", "--oneshot");
     if (oneshot && oneshot.trim().length > 0) {
-        return (await runFlyflorUtilityCommand(rootChatArgs(argv, oneshot))) ?? {
-            exitCode: 1,
-        };
+        return (
+            (await runFlyflorUtilityCommand(rootChatArgs(argv, oneshot))) ?? {
+                exitCode: 1,
+            }
+        );
     }
 
     if (argv.includes("--tui")) {

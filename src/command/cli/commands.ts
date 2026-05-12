@@ -35,6 +35,17 @@ import {
     type McpServerDefinition,
     type McpToolDefinition,
 } from "../../agent/mcp/index.ts";
+import {
+    findPlugin,
+    loadPlugins,
+    pluginConfigPath,
+    removePlugin,
+    setPluginEnabled,
+    upsertPlugin,
+    validatePlugins,
+    type PluginDefinition,
+    type PluginValidationResult,
+} from "../../agent/plugin/index.ts";
 import { promptApproveMcpToolCall, startHumanChat } from "../../agent/runtime/index.ts";
 import {
     findSkill,
@@ -57,6 +68,7 @@ import {
 } from "./index.ts";
 import { formatFlyflorVersion } from "../version.ts";
 import { renderConfigView } from "../config.view.ts";
+import { runUpdate } from "./update.ts";
 
 export interface FlyflorCommandResult {
     exitCode: number;
@@ -400,14 +412,56 @@ const COMMAND_SPECS: CommandSpec[] = [
         help: "Manage plugins",
         subcommands: [
             {
-                name: "install",
-                argument: "<identifier>",
-                help: "Install a plugin",
-                options: [["-f, --force", "Reinstall"]],
+                name: "list",
+                aliases: ["ls"],
+                help: "List plugins",
+                options: [["--json", "Emit JSON instead of a table"]],
             },
-            { name: "list", aliases: ["ls"], help: "List plugins" },
-            { name: "update", argument: "<name>", help: "Update plugin" },
-            { name: "remove", aliases: ["rm", "uninstall"], argument: "<name>", help: "Remove plugin" },
+            {
+                name: "show",
+                argument: "<name>",
+                help: "Show plugin manifest",
+                options: [["--json", "Emit JSON instead of text"]],
+            },
+            {
+                name: "validate",
+                argument: "[name]",
+                help: "Validate one plugin or all plugins",
+                options: [["--json", "Emit JSON instead of text"]],
+            },
+            {
+                name: "add",
+                argument: "<name>",
+                help: "Add a plugin manifest entry",
+                options: [
+                    ["--entry <path>", "Relative entry path"],
+                    ["--description <text>", "Plugin description"],
+                    ["--global", "Write global plugin manifest"],
+                    ["-y, --yes", "Skip confirmation"],
+                ],
+            },
+            {
+                name: "enable",
+                argument: "<name>",
+                help: "Enable a plugin in project manifest",
+                options: [["--global", "Write global plugin manifest"]],
+            },
+            {
+                name: "disable",
+                argument: "<name>",
+                help: "Disable a plugin in project manifest",
+                options: [["--global", "Write global plugin manifest"]],
+            },
+            {
+                name: "remove",
+                aliases: ["rm", "uninstall"],
+                argument: "<name>",
+                help: "Remove plugin manifest entry",
+                options: [
+                    ["--global", "Write global plugin manifest"],
+                    ["-y, --yes", "Skip confirmation"],
+                ],
+            },
         ],
     },
     {
@@ -617,7 +671,11 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "doctor") {
+        const opts = command.opts<{ fix?: boolean }>();
         const app = await cliApp();
+        if (opts.fix) {
+            await runDoctorFix(app);
+        }
         console.log(await renderDoctor(app));
         return;
     }
@@ -645,6 +703,10 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         await runMcp(sub, command);
         return;
     }
+    if (root === "plugins") {
+        await runPlugins(sub, command);
+        return;
+    }
     if (root === "dream") {
         await runDream(sub, command);
         return;
@@ -657,7 +719,37 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         console.log(formatFlyflorVersion());
         return;
     }
+    if (root === "update") {
+        const opts = command.opts<{ check?: boolean; yes?: boolean }>();
+        const result = await runUpdate({ check: opts.check, yes: opts.yes });
+        if (result.exitCode !== 0) {
+            process.exitCode = result.exitCode;
+        }
+        return;
+    }
     printPendingCommand(path);
+}
+
+async function runDoctorFix(app: FlyFlor): Promise<void> {
+    const config = app.resolve(FlyFlorTokens.Config);
+    const targets = [
+        config.paths.home,
+        config.paths.workspaceDir,
+        config.paths.storageDir,
+        config.paths.logDir,
+        config.paths.memoryDir,
+        config.paths.skillDir,
+        config.paths.mcpDir,
+        config.paths.pluginDir,
+    ].filter((p): p is string => typeof p === "string" && p.length > 0);
+    for (const dir of targets) {
+        try {
+            await mkdir(dir, { recursive: true });
+            console.log(pc.green(`✓ ensured ${dir}`));
+        } catch (error) {
+            console.log(pc.red(`✗ failed ${dir}: ${error instanceof Error ? error.message : String(error)}`));
+        }
+    }
 }
 
 async function runSetup(command: Command): Promise<void> {
@@ -730,9 +822,12 @@ async function configWithRuntimeOverrides(options: {
     model?: string;
     provider?: string;
 }): Promise<FlyflorConfig | undefined> {
-    const model = typeof options.model === "string" && options.model.trim().length > 0 ? options.model.trim() : undefined;
+    const model =
+        typeof options.model === "string" && options.model.trim().length > 0 ? options.model.trim() : undefined;
     const providerId =
-        typeof options.provider === "string" && options.provider.trim().length > 0 ? options.provider.trim() : undefined;
+        typeof options.provider === "string" && options.provider.trim().length > 0
+            ? options.provider.trim()
+            : undefined;
     const acceptHooks = Boolean(options.acceptHooks);
     if (!model && !providerId && !acceptHooks) {
         return undefined;
@@ -754,7 +849,6 @@ async function configWithRuntimeOverrides(options: {
         },
     };
 }
-
 
 async function runModelWizard(command?: Command): Promise<void> {
     prompts.intro(pc.cyan("Model Setup"));
@@ -877,10 +971,7 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
 async function runSessions(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
     const config = app.resolve(FlyFlorTokens.Config);
-    const session = new SessionModule(
-        new SQLiteMemoryStore(config.paths, config.memory.sqlite),
-        config.memory.session,
-    );
+    const session = new SessionModule(new SQLiteMemoryStore(config.paths, config.memory.sqlite), config.memory.session);
     if (!sub || sub === "list") {
         const opts = command.opts<{ json?: boolean; limit?: string | number }>();
         const limit = parseOptionalPositive(opts.limit) ?? 20;
@@ -912,7 +1003,10 @@ async function runSessions(sub: string | undefined, command: Command): Promise<v
             })),
         );
         await mkdir(dirname(output), { recursive: true });
-        await writeFile(output, `${JSON.stringify({ exportedAt: new Date().toISOString(), sessions: timelines }, null, 2)}\n`);
+        await writeFile(
+            output,
+            `${JSON.stringify({ exportedAt: new Date().toISOString(), sessions: timelines }, null, 2)}\n`,
+        );
         console.log(`Exported ${timelines.length} sessions to ${output}`);
         return;
     }
@@ -930,14 +1024,19 @@ async function runSessions(sub: string | undefined, command: Command): Promise<v
             }
         }
         const deleted = deleteSessionRecords(config.paths.memoryDir, sessionKey);
-        console.log(`Deleted session ${sessionKey}: messages=${deleted.messages} history=${deleted.history} sessions=${deleted.sessions}`);
+        console.log(
+            `Deleted session ${sessionKey}: messages=${deleted.messages} history=${deleted.history} sessions=${deleted.sessions}`,
+        );
         return;
     }
     if (sub === "prune") {
         const opts = command.opts<{ days?: string | number; yes?: boolean }>();
         const days = parseOptionalPositive(opts.days) ?? 30;
         if (!opts.yes && process.stdin.isTTY) {
-            const confirm = await prompts.confirm({ message: `Delete sessions older than ${days} days?`, initialValue: false });
+            const confirm = await prompts.confirm({
+                message: `Delete sessions older than ${days} days?`,
+                initialValue: false,
+            });
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("Session prune cancelled");
                 return;
@@ -945,7 +1044,9 @@ async function runSessions(sub: string | undefined, command: Command): Promise<v
         }
         const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
         const pruned = pruneSessionRecords(config.paths.memoryDir, cutoff);
-        console.log(`Pruned sessions older than ${cutoff}: sessions=${pruned.sessions} messages=${pruned.messages} history=${pruned.history}`);
+        console.log(
+            `Pruned sessions older than ${cutoff}: sessions=${pruned.sessions} messages=${pruned.messages} history=${pruned.history}`,
+        );
         return;
     }
     printPendingCommand(["sessions", sub]);
@@ -986,20 +1087,11 @@ async function runDream(sub: string | undefined, command: Command): Promise<void
     const runtime = app.resolve(FlyFlorTokens.Runtime);
     if (!sub || sub === "status") {
         const snapshot = runtime.dreamSnapshot();
-        const queues = await runtime.dreamQueueSizes();
-        const totalPending = queues.reduce((sum, q) => sum + Math.max(q.pending, 0), 0);
         const lines = [
             `Dream enabled: ${snapshot.dreamEnabled ? "yes" : "no"}`,
             `Tracked users: ${snapshot.users}`,
             `Dream busy: ${snapshot.dreamBusy ? "yes" : "no"}`,
-            `Pending episodes (total): ${totalPending}`,
         ];
-        if (queues.length > 0) {
-            lines.push("Per-user queue:");
-            for (const q of queues) {
-                lines.push(`  - ${q.userId}: ${q.pending < 0 ? "error" : q.pending}`);
-            }
-        }
         console.log(lines.join("\n"));
         return;
     }
@@ -1010,7 +1102,7 @@ async function runDream(sub: string | undefined, command: Command): Promise<void
         const totals = await runtime.runDreamOnce(limit, userId);
         const scope = userId ? `user=${userId}` : "all users";
         console.log(
-            `Dream pass (${scope}): users=${totals.users} rewritten=${totals.rewritten} discarded=${totals.discarded} skipped=${totals.skipped}`,
+            `Dream pass (${scope}): users=${totals.users} drift=${totals.driftRepaired} recall=${totals.recallReinforced} contradiction=${totals.contradictionsFlagged} skipped=${totals.skipped}`,
         );
         return;
     }
@@ -1044,7 +1136,9 @@ async function runSkills(sub: string | undefined, command: Command): Promise<voi
         const opts = command.opts<{ json?: boolean }>();
         const results = name
             ? [await validateSkill(config.paths, name)]
-            : await Promise.all((await loadSkills(config.paths)).map((skill) => validateSkill(config.paths, skill.name)));
+            : await Promise.all(
+                  (await loadSkills(config.paths)).map((skill) => validateSkill(config.paths, skill.name)),
+              );
         console.log(renderSkillValidation(results, Boolean(opts.json)));
         if (results.some((result) => !result.ok)) {
             throw new CommanderError(1, "flyflor.skillInvalid", "Skill validation failed.");
@@ -1133,7 +1227,9 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
     if (sub === "validate") {
         const name = command.args[0];
         const opts = command.opts<{ json?: boolean }>();
-        const results = (await validateMcpServers(config.paths)).filter((result) => !name || result.server.name === name);
+        const results = (await validateMcpServers(config.paths)).filter(
+            (result) => !name || result.server.name === name,
+        );
         if (name && results.length === 0) {
             throw new CommanderError(1, "flyflor.mcpNotFound", `MCP server not found: ${name}`);
         }
@@ -1256,6 +1352,155 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
     printPendingCommand(["mcp", sub]);
 }
 
+async function runPlugins(sub: string | undefined, command: Command): Promise<void> {
+    const app = await cliApp();
+    const config = app.resolve(FlyFlorTokens.Config);
+    if (!sub || sub === "list" || sub === "ls") {
+        const opts = command.opts<{ json?: boolean }>();
+        const plugins = await loadPlugins(config.paths);
+        console.log(renderPluginList(plugins, Boolean(opts.json)));
+        return;
+    }
+    if (sub === "show") {
+        const name = command.args[0];
+        if (!name) {
+            throw new CommanderError(1, "flyflor.missingPlugin", "Missing plugin name");
+        }
+        const opts = command.opts<{ json?: boolean }>();
+        const plugin = await findPlugin(config.paths, name);
+        if (!plugin) {
+            throw new CommanderError(1, "flyflor.pluginNotFound", `Plugin not found: ${name}`);
+        }
+        console.log(renderPluginDetails(plugin, Boolean(opts.json)));
+        return;
+    }
+    if (sub === "validate") {
+        const name = command.args[0];
+        const opts = command.opts<{ json?: boolean }>();
+        const results = (await validatePlugins(config.paths)).filter((result) => !name || result.plugin.name === name);
+        if (name && results.length === 0) {
+            throw new CommanderError(1, "flyflor.pluginNotFound", `Plugin not found: ${name}`);
+        }
+        console.log(renderPluginValidation(results, Boolean(opts.json)));
+        if (results.some((result) => !result.ok)) {
+            throw new CommanderError(1, "flyflor.pluginInvalid", "Plugin validation failed.");
+        }
+        return;
+    }
+    if (sub === "add") {
+        const name = command.args[0];
+        if (!name) {
+            throw new CommanderError(1, "flyflor.missingPlugin", "Missing plugin name");
+        }
+        const opts = command.opts<{
+            description?: string;
+            entry?: string;
+            global?: boolean;
+            yes?: boolean;
+        }>();
+        const entry = typeof opts.entry === "string" ? opts.entry.trim() : "";
+        if (!entry) {
+            throw new CommanderError(1, "flyflor.invalidPlugin", "Plugin requires --entry.");
+        }
+        if (!opts.yes && process.stdin.isTTY) {
+            const confirm = await prompts.confirm({
+                initialValue: true,
+                message: `Add plugin ${name}: ${entry}?`,
+            });
+            if (prompts.isCancel(confirm) || !confirm) {
+                prompts.cancel("Plugin add cancelled");
+                return;
+            }
+        }
+        const plugin = await upsertPlugin(config.paths, {
+            description: opts.description,
+            entry,
+            global: opts.global,
+            name,
+        });
+        console.log(`Saved plugin: ${plugin.name}`);
+        console.log(`Path: ${pluginConfigPath(config.paths, { global: opts.global })}`);
+        return;
+    }
+    if (sub === "enable" || sub === "disable") {
+        const name = command.args[0];
+        if (!name) {
+            throw new CommanderError(1, "flyflor.missingPlugin", "Missing plugin name");
+        }
+        const opts = command.opts<{ global?: boolean }>();
+        const plugin = await setPluginEnabled(config.paths, name, sub === "enable", { global: opts.global });
+        console.log(`${sub === "enable" ? "Enabled" : "Disabled"} ${plugin.source} plugin: ${plugin.name}`);
+        console.log(`Path: ${pluginConfigPath(config.paths, { global: opts.global })}`);
+        return;
+    }
+    if (sub === "remove" || sub === "rm" || sub === "uninstall") {
+        const name = command.args[0];
+        if (!name) {
+            throw new CommanderError(1, "flyflor.missingPlugin", "Missing plugin name");
+        }
+        const opts = command.opts<{ global?: boolean; yes?: boolean }>();
+        if (!opts.yes && process.stdin.isTTY) {
+            const confirm = await prompts.confirm({
+                initialValue: false,
+                message: `Remove ${opts.global ? "global" : "project"} plugin ${name}?`,
+            });
+            if (prompts.isCancel(confirm) || !confirm) {
+                prompts.cancel("Plugin remove cancelled");
+                return;
+            }
+        }
+        const result = await removePlugin(config.paths, name, { global: opts.global });
+        const scope = opts.global ? "global" : "project";
+        console.log(result.removed ? `Removed ${scope} plugin: ${name}` : `No ${scope} plugin found: ${name}`);
+        console.log(`Path: ${result.path}`);
+        return;
+    }
+    printPendingCommand(["plugins", sub]);
+}
+
+function renderPluginList(plugins: PluginDefinition[], json: boolean): string {
+    if (json) return JSON.stringify(plugins, null, 2);
+    if (plugins.length === 0) return "No plugins configured.";
+    const table = new Table({
+        head: ["Name", "Source", "Enabled", "Entry", "Description"],
+        style: { head: [] },
+        wordWrap: true,
+    });
+    for (const plugin of plugins) {
+        table.push([plugin.name, plugin.source, plugin.enabled ? "yes" : "no", plugin.entry, plugin.description ?? ""]);
+    }
+    return table.toString();
+}
+
+function renderPluginDetails(plugin: PluginDefinition, json: boolean): string {
+    if (json) return JSON.stringify(plugin, null, 2);
+    return [
+        pc.bold(pc.cyan(`Plugin: ${plugin.name}`)),
+        `Source: ${plugin.source}`,
+        `Enabled: ${plugin.enabled ? "yes" : "no"}`,
+        `Entry: ${plugin.entry}`,
+        `Description: ${plugin.description ?? "-"}`,
+    ].join("\n");
+}
+
+function renderPluginValidation(results: PluginValidationResult[], json: boolean): string {
+    if (json) return JSON.stringify(results, null, 2);
+    const table = new Table({
+        head: ["Plugin", "OK", "Warnings", "Errors"],
+        style: { head: [] },
+        wordWrap: true,
+    });
+    for (const result of results) {
+        table.push([
+            result.plugin.name,
+            result.ok ? "yes" : "no",
+            result.warnings.join("\n"),
+            result.errors.join("\n"),
+        ]);
+    }
+    return table.toString();
+}
+
 async function cliApp(): Promise<FlyFlor> {
     return getFlyFlor({ argv: process.argv, mode: RuntimeMode.Chat });
 }
@@ -1301,9 +1546,9 @@ function pruneSessionRecords(
 ): { history: number; messages: number; memories: number; sessions: number } {
     const db = new Database(join(memoryDir, "memory.sqlite"));
     try {
-        const rows = db
-            .query("SELECT session_key FROM sessions WHERE updated_at < ?")
-            .all(cutoffIso) as Array<{ session_key: string }>;
+        const rows = db.query("SELECT session_key FROM sessions WHERE updated_at < ?").all(cutoffIso) as Array<{
+            session_key: string;
+        }>;
         const totals = { history: 0, messages: 0, memories: 0, sessions: 0 };
         for (const row of rows) {
             const deleted = deleteSessionRecordsFromDb(db, row.session_key);
@@ -1324,7 +1569,9 @@ function deleteSessionRecordsFromDb(
     db: Database,
     sessionKey: string,
 ): { history: number; messages: number; memories: number; sessions: number } {
-    const messages = Number(db.query("DELETE FROM session_messages WHERE session_key = ?").run(sessionKey).changes ?? 0);
+    const messages = Number(
+        db.query("DELETE FROM session_messages WHERE session_key = ?").run(sessionKey).changes ?? 0,
+    );
     const history = Number(db.query("DELETE FROM history_entries WHERE session_key = ?").run(sessionKey).changes ?? 0);
     const memories = Number(db.query("DELETE FROM memories WHERE scope = ?").run(sessionKey).changes ?? 0);
     db.query("DELETE FROM memories_fts WHERE id NOT IN (SELECT id FROM memories)").run();
@@ -1521,7 +1768,10 @@ function renderSkillDetails(skill: Skill, json: boolean): string {
     ].join("\n");
 }
 
-function renderSkillValidation(results: Array<{ errors: string[]; ok: boolean; skill?: Skill; warnings: string[] }>, json: boolean): string {
+function renderSkillValidation(
+    results: Array<{ errors: string[]; ok: boolean; skill?: Skill; warnings: string[] }>,
+    json: boolean,
+): string {
     if (json) {
         return JSON.stringify(results, null, 2);
     }
@@ -1556,7 +1806,9 @@ function renderSkillUsage(summary: SkillUsageSummary, name: string | undefined, 
         style: { head: [] },
         wordWrap: true,
     });
-    for (const row of rows.sort((left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name))) {
+    for (const row of rows.sort(
+        (left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name),
+    )) {
         table.push([
             row.name,
             row.source,

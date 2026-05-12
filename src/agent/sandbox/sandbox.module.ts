@@ -7,6 +7,7 @@ import {
     ToolApprovalMode,
     type CapabilityExecutionKind as CapabilityExecutionKindType,
 } from "../../protocol/contracts/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { Sandbox } from "../components.ts";
 import { Module, Provide } from "../di/decorators/index.ts";
 
@@ -100,9 +101,7 @@ export function decideCapabilityExecution(
     };
 }
 
-function resolveCapabilityApprovals(
-    config: SandboxConfig,
-): Record<CapabilityExecutionKindType, ToolApprovalMode> {
+function resolveCapabilityApprovals(config: SandboxConfig): Record<CapabilityExecutionKindType, ToolApprovalMode> {
     return {
         [CapabilityExecutionKind.McpTool]: config.mcpToolApproval ?? defaultApproval(config.mode),
         [CapabilityExecutionKind.Plugin]: config.pluginApproval ?? defaultApproval(config.mode),
@@ -124,4 +123,89 @@ function renderSandboxPolicySummary(
         `Shell hooks: ${approvals[CapabilityExecutionKind.ShellHook]}.`,
         `Plugins: ${approvals[CapabilityExecutionKind.Plugin]}.`,
     ].join(" ");
+}
+
+/**
+ * 统一 capability 执行闸门：把「策略判定 + 事件发布 + 审批回调」收口到一个函数，
+ * 避免每个执行点（plugin / shell-hook / MCP tool）各自复制一份审批流程，
+ * 也避免新增执行点时漏发 Sandbox* 事件造成审计盲区。
+ *
+ * 调用方只需提供 descriptor（描述被门控对象的元数据，会原样写入事件 payload），
+ * 可选 preDeny（前置拒因，例如「不在 catalog 内」「命令不在 allowlist」）和 approve（交互审批回调）。
+ *
+ * 返回 `{ allowed, reason }`：
+ * - allowed=false 时 reason 是给调用方记录到错误对象的可读理由；
+ * - 所有 deny / approval-requested / approval-denied 事件都已经在本函数内发布，
+ *   调用方不需要再重复发布同样的 Sandbox* 事件。
+ */
+export interface CapabilityGateInput {
+    policy: SandboxPolicy;
+    kind: CapabilityExecutionKindType;
+    events: EventSink;
+    requestId?: string;
+    /** 写入事件 payload 的描述字段（如 { server, tool } / { plugin, command } / { hook, command }）。 */
+    descriptor: Record<string, unknown>;
+    /** 前置拒因；非空时立即作为 SandboxToolDenied 上报并拒绝执行。 */
+    preDeny?: { reason: string; message: string };
+    /** 交互审批回调；缺省视作未批准。仅在策略要求审批时被调用。 */
+    approve?: () => boolean | Promise<boolean>;
+    /** 审批被拒时给调用方的可读理由，缺省 `${kind} was not approved`. */
+    deniedMessage?: string;
+}
+
+export async function gateCapabilityExecution(
+    input: CapabilityGateInput,
+): Promise<{ allowed: boolean; reason: string }> {
+    const { policy, kind, events, requestId, descriptor } = input;
+    if (input.preDeny) {
+        events.publish(
+            event(
+                RuntimeEventType.SandboxToolDenied,
+                { reason: input.preDeny.reason, kind, ...descriptor },
+                requestId,
+            ),
+        );
+        return { allowed: false, reason: input.preDeny.message };
+    }
+    const decision = decideCapabilityExecution(policy, kind);
+    if (!decision.canExecute) {
+        events.publish(
+            event(
+                RuntimeEventType.SandboxToolDenied,
+                { reason: `${kind}-denied-by-policy`, kind, ...descriptor },
+                requestId,
+            ),
+        );
+        return { allowed: false, reason: decision.reason };
+    }
+    if (decision.requiresApproval) {
+        events.publish(
+            event(
+                RuntimeEventType.SandboxToolApprovalRequested,
+                { kind, ...descriptor },
+                requestId,
+            ),
+        );
+        const approved = await runApprover(input.approve);
+        if (!approved) {
+            events.publish(
+                event(
+                    RuntimeEventType.SandboxToolApprovalDenied,
+                    { kind, ...descriptor },
+                    requestId,
+                ),
+            );
+            return { allowed: false, reason: input.deniedMessage ?? `${kind} was not approved` };
+        }
+    }
+    return { allowed: true, reason: decision.reason };
+}
+
+async function runApprover(approve?: () => boolean | Promise<boolean>): Promise<boolean> {
+    if (!approve) return false;
+    try {
+        return await approve();
+    } catch {
+        return false;
+    }
 }

@@ -1,56 +1,106 @@
-# Flyflor 工作进度 / Roadmap
+# TODO
 
-海马体记忆系统重构（v2，24 项任务）已全部完成。本文是**当前的活动 backlog**；架构和设计原则见 [DESIGN.md](DESIGN.md)，工程红线见 [docs/boundaries.md](docs/boundaries.md)。
+近期与长期工作统一收敛在本文件，按主题分组。新增缺口请直接在本文件添加，并在对应文档的「风险点 / 已知缺口」小节同步描述。
 
-## 当前模块状态
+## 优先级口径
 
-| Area       | 状态        | 说明                                                                                |
-| ---------- | ----------- | ----------------------------------------------------------------------------------- |
-| Runtime    | Done        | direct / direct-with-watch / blackboard 三模式；fastRoute 启发式与 LLM 路由并行     |
-| Gateway    | Done        | 所有 channel adapter 走统一 streaming dispatcher                                    |
-| Blackboard | Done        | 动态 worker plan、首轮收敛、5 轮硬上限、流式输出                                     |
-| Memory     | Done        | Redis 工作记忆 + SurrealDB 图 + LLM 整合 worker + 双轨衰减 + 防膨胀                 |
-| Crystal    | Done        | candidate→memory_node→skill；矛盾检测、陈旧降权、dedupe                             |
-| Dream      | Stub        | 接口与队列 key 已就位；实际重组 / 矛盾审计 / 主题压缩在 backlog                     |
-| Project    | Done (pure) | 三路径触发器（显式/cluster/skill 升格）就位；workspace 文件 scaffold 在 backlog     |
-| CLI/TUI    | In progress | 配置、状态、Markdown 渲染、基础 TUI 已接通；审计/讨论视图待强化                     |
-| Docker dev | Done        | `bun run docker:dev` 刷新模板、编译 Linux binary、重启 `flyflor-dev`，无外部端口    |
-| Docs       | Cleaned     | README + DESIGN + TODO + boundaries 为主线；过期文档已删除                          |
+- **P0**：阻碍主用例（chat / gateway / memory）正常运行
+- **P1**：影响生产稳定性 / 多副本部署 / 长期演进
+- **P2**：功能增强 / 体验 / 二级路径
 
-## 活跃 backlog
+## 路由与黑板
 
-按价值与依赖排序：
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| ~~R-01~~ | ~~direct-with-watch 升级器仅看计数器，**未读「工具反复失败 / 上下文压力」语义信号**~~ ✅ done — 新增两路升级原因 `tool-failure-saturation` / `context-pressure`：runtime 在 persistTurn 计算 toolFailureRatio 写回 `consecutiveToolFailureTurns`；applyRouteEscalation 估算 messageChars→tokens 与 `routing.contextPressureBudgetTokens` 比值；新增 9 个升级器测试（全数值，零字符匹配） | P1 |
+| R-02 | `fastRouteSnapshots` 进程内 Map，重启即丢失；多 gateway 节点不共享 | P1 |
+| R-03 | 黑板进程隔离（Bun Worker / 子进程）阶段未完成，目前 worker 大多 in-process | P1 |
+| R-04 | TUI 未实时订阅 `worker.step` / 黑板讨论流 | P2 |
 
-1. **dream-mode-impl**：把 `dream.worker.ts` 占位实现成真实重组 / 矛盾审计 / 主题压缩 worker（空闲触发）
-2. **consolidation-cron**：当前 `ConsolidationWorker.drain()` 已实现，仍需后台调度（cron / lazy / dream 触发器）接通
-3. **decay-scheduler**：`decayImportance` 是纯函数，需要后台 cron 把它跑到 SurrealDB 并刷新 Redis EXPIRE
-4. **feedback-wire**：`feedback.interpreter` 模块就位，需要在 `RuntimeModule.handleMessage` 后路径识别用户反馈并写入对应记忆通道
-5. **project-scaffold**：项目固化触发后写入 `workspace/projects/{id}/{README,TODO,DESIGN}.md`，并打 SurrealDB `projectRef` 反向标记
-6. **direct-with-watch-escalation**：direct 执行时观察工具 churn / 重复失败，达到阈值升级黑板
-7. **TUI observability**：黑板讨论、channel 状态、晶体记忆审计、思考中状态
-8. **Gateway adapters**：引用/评论/输入中状态、平台级错误反馈、channel 连接诊断
-9. **Provider compatibility**：自定义 provider、多实例、streaming fallback、凭据状态
-10. **Sandbox audit**：真实工具执行、审批、MCP/tool 权限事件、审计日志
-11. **Skill/MCP/Plugin**：通过 manifest/registry 接入扩展组件，不做目录扫描
-12. **Worker isolation**：扩展 `json-process` / `persistent-json-process`，补 raw stdio/PTY TUI adapter
-13. **Install/update**：轻量安装、更新、备份、卸载路径，curl-pipe 一键脚本
+## 记忆与结晶
 
-SQL 状态：todos 表用于追踪正在做的工作；本文是人读 backlog。
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| M-01 | `sessionKey` 仍贯穿 `MemoryCandidate / CrystalTurnInput / MemorySearchRequest`；session 溶解未完成 ⏸ blocked-needs-design — 涉及 SQLite 列重命名、blackboard lease 主键、crystal 反思 sourceId 拼接 + 历史数据迁移脚本，留待 EQ 阶段统一规划 | P1 |
+| ~~M-02~~ | ~~`BackgroundScheduler` 仅在 Redis+Surreal+Model 三件齐备时启用，默认开发环境**静默 noop**，缺降级告警~~ ✅ done — MemoryModule.warmup 在 scheduler=null 时发布 `MemoryBackgroundSchedulerSkipped` 事件（含 missing[] 与影响说明）；`doctor` 表新增「Background scheduler」一行，缺 redis/surreal/model 时 warn | P1 |
+| M-03 | Reflection 仍在 Runtime 同进程；独立 Reflection worker 未拆 | P2 |
+| M-04 | Dream worker 缺压测；候选选择策略未在大数据集下验证 | P2 |
+| M-05 | SurrealDB 旧表 `crystal_skill / skill_snapshot → gem / gem_snapshot` 迁移脚本待写 | P1 |
+| ~~M-06~~ | ~~`ioredis` 兼容 `bun build --compile` 未真实验证；备选 RESP-over-Bun-TCP 未实现~~ ✅ done — `dist/redis.smoke` 二进制对真实 Redis 完整 CRUD（write/read/ring/queue/touch/drop）通过；`scripts/redis.smoke.ts` 保留作为回归手段 | P0 |
+| M-07 | feedback 四分类（A/B/C/D）已分类但**写入 episode/preference/宪法/skill 的通道未全部打通** | P1 |
+| M-08 | project cluster 路径触发完整，但「LLM 询问 → 用户确认 → 脚手架落地」闭环未跑通 | P1 |
+| M-09 | `RETROSPECTIVE.md` 自动归档入口缺失 | P2 |
 
-## 验证基线
+## Gateway 与渠道
 
-每次修改架构、DI、prompt、memory、gateway、sandbox、CLI/TUI 或 Docker dev 后至少运行：
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| G-01 | BlueBubbles / iMessage / DingTalk / Email / HomeAssistant / Line / Mattermost / Matrix / QQ / Signal / Slack / SMS / WeCom / WhatsApp / Zalo 仅是 `HttpPlatformAdapter` 占位，**缺签名校验 / 富媒体 / 群组识别** | P2 |
+| G-02 | `gateway start/stop/restart` 后台服务模式未实现 | P1 |
+| G-03 | `MessageDispatcher` 单进程，多副本部署缺消息去重与幂等键 | P1 |
+| G-04 | `attachments` 入站类型存在，runtime 未消费（`chat --image` blocked） | P2 |
 
-```bash
-bun run format:check
-bun run check
-bun test
-bun run build:binary
-```
+## Sandbox
 
-记忆链路变更追加：
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| S-01 | ~~Plugin runtime / Shell hook 执行路径未**全部**经过 SandboxModule~~ → 已统一为 `gateCapabilityExecution`（plugin / shell-hook / MCP tool 同一闸门，事件白名单全覆盖） | done |
+| S-02 | `allowlist` 持久化仍写主 config，缺独立 `~/.flyflor/sandbox.allow.jsonc` | P2 |
+| S-03 | 无「逐次仅允许 N 次」quota；YOLO 模式无冷却 | P2 |
+| S-04 | 审计 sink 不可插拔，无法转发外部 SIEM | P2 |
 
-```bash
-bun run docker:dev
-curl http://127.0.0.1:18790/health
-```
+## MCP
+
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| MCP-01 | 旧式 SSE 双端点（`GET /events` + `POST /messages`）未实现 | P2 |
+| MCP-02 | catalog 缓存进程内 Map，多副本不共享，缺 LRU 限制 | P1 |
+| MCP-03 | tool 调用结果无摘要 / 截断策略，长结果直接拼回模型 | P1 |
+| MCP-04 | 客户端未做 `inputSchema` JSON-Schema 校验 | P2 |
+
+## Skill
+
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| SK-01 | 选择仍是 `slice(0, maxAuto)`，**未按 embedding 相似度 / usage 频次排序** | P2 |
+| SK-02 | promotion 路径未跑通：cluster → LLM 询问 → 用户确认 → 安装 | P2 |
+| SK-03 | skill 模板缺版本兼容声明，runtime 升级后旧模板降级失败弱 | P2 |
+
+## CLI
+
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| CLI-01 | `flyflor tools enable/disable` 未实现 | P2 |
+| CLI-02 | `flyflor plugins *` 大多骨架 | P1 |
+| CLI-03 | `flyflor update` 未做下载升级 | P2 |
+| CLI-04 | `flyflor doctor --fix` 未实现 | P2 |
+| CLI-05 | `flyflor chat --image / --toolsets / --max-turns / --tui` blocked / todo | P2 |
+| CLI-06 | `flyflor tui` 与 `chat --tui` 重复职责未对齐 | P2 |
+
+## 模型 / Provider
+
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| P-01 | 内置 provider profile 仅 OpenAI / Mock；**Anthropic / Gemini / Ollama** 未内置（schema 已留，配置层未默认） | P1 |
+| P-02 | Provider 凭据走 secrets provider，环境变量入口待统一审查 | P1 |
+
+## 未落地的设计稿
+
+| ID | 描述 | 状态 |
+| --- | --- | --- |
+| EQ-01 | EQ 模块（情绪 / 情感建模）仅有设计稿 | proposal（见 `docs/proposals/eq.module.md`） |
+
+## 工程边界
+
+| ID | 描述 | 优先级 |
+| --- | --- | --- |
+| ~~E-01~~ | ~~`RuntimeModule.handleMessage` 1300 行高度集中~~ ✅ done — 拆为 `prepareTurn` / `assembleTurnContext` / `generateTurnReply` / `persistTurn` / `dispatchAsyncTurnTasks` 五个 phase；handleMessage 现在仅 ~25 行编排，行为与事件序列保持一致（402 tests pass） | P1 |
+| ~~E-02~~ | ~~`MemoryModule` 由 RuntimeModule 内部 `new`，外部无法注入替代实现~~ ✅ done — RuntimeModule 构造函数新增可选 `memory` 入参；composition root 注入 `MemoryModule` 并注册 `FlyFlorTokens.Memory`，外部测试/装配可显式替换 | P1 |
+| E-03 | 模板 lint / 兼容性检查缺失（升级 runtime 后旧用户模板缺字段不报错） | P2 |
+
+## 工作建议（不含时间估算）
+
+1. 先打 P0：sandbox 全覆盖、ioredis 兼容验证。
+2. 再清 P1 主要堵点：BackgroundScheduler 降级告警、session 溶解、gateway 后台服务、feedback 写入通道、表迁移脚本。
+3. 同步推进 reflection worker 独立化、provider profile 内置、CLI plugins 子命令落地。
+4. P2 工作按用户场景按需排队。

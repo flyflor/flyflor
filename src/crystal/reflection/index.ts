@@ -4,7 +4,7 @@ import type {
     CrystalEvidence,
     CrystalRecallRequest,
     CrystalRecallResult,
-    CrystalSkill,
+    CrystalGem,
     ReflectionAtom,
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
@@ -46,7 +46,7 @@ export function buildReflectionCandidate(input: CrystalCandidateInput): Reflecti
 
 export function crystallizeCandidate(
     candidate: ReflectionCandidate,
-): { atom: ReflectionAtom; skill: CrystalSkill } | undefined {
+): { atom: ReflectionAtom; gem: CrystalGem } | undefined {
     const evidenceScore = scoreEvidence(candidate.evidence);
     if (evidenceScore <= 0) {
         return undefined;
@@ -68,8 +68,8 @@ export function crystallizeCandidate(
         },
     };
 
-    const skill: CrystalSkill = {
-        id: stableSkillId(candidate.bucket, candidate.symbols),
+    const gem: CrystalGem = {
+        id: stableGemId(candidate.bucket, candidate.symbols),
         bucket: candidate.bucket,
         title: titleFor(candidate),
         method: methodFor(candidate),
@@ -87,10 +87,10 @@ export function crystallizeCandidate(
         },
     };
 
-    return { atom, skill };
+    return { atom, gem };
 }
 
-export function mergeCrystalSkill(existing: CrystalSkill | undefined, incoming: CrystalSkill): CrystalSkill {
+export function mergeCrystalGem(existing: CrystalGem | undefined, incoming: CrystalGem): CrystalGem {
     if (!existing) {
         return incoming;
     }
@@ -115,26 +115,26 @@ export function mergeCrystalSkill(existing: CrystalSkill | undefined, incoming: 
     };
 }
 
-export function recallCrystalSkills(request: CrystalRecallRequest, skills: CrystalSkill[]): CrystalRecallResult[] {
+export function recallCrystalGems(request: CrystalRecallRequest, gems: CrystalGem[]): CrystalRecallResult[] {
     const querySymbols = normalizeSymbols([...(request.symbols ?? []), ...extractSymbolTokens(request.query)]);
     const queryBucket = request.buckets?.[0] ?? dynamicBucketId(querySymbols, request.query);
     const queryCoordinates = normalizeCoordinates();
 
-    return skills
-        .map((skill) => {
-            const bucketScore = skill.bucket === queryBucket ? 1 : 0;
-            const symbolScore = overlapScore(querySymbols, skill.symbols);
-            const coordinateScore = cosineSimilarity(queryCoordinates, skill.coordinates);
+    return gems
+        .map((gem) => {
+            const bucketScore = gem.bucket === queryBucket ? 1 : 0;
+            const symbolScore = overlapScore(querySymbols, gem.symbols);
+            const coordinateScore = cosineSimilarity(queryCoordinates, gem.coordinates);
             const confidenceScore = clamp01(
-                (skill.confidence + Math.min(1, skill.support / Math.max(1, skill.sourceAtomIds.length))) / 2,
+                (gem.confidence + Math.min(1, gem.support / Math.max(1, gem.sourceAtomIds.length))) / 2,
             );
             const signals = [bucketScore, symbolScore, coordinateScore, confidenceScore];
             const score = signals.reduce((sum, value) => sum + value, 0) / signals.length;
             return {
-                skill,
+                gem,
                 score,
                 reasons: [
-                    bucketScore > 0 ? `bucket:${skill.bucket}` : "",
+                    bucketScore > 0 ? `bucket:${gem.bucket}` : "",
                     symbolScore > 0 ? `symbols:${symbolScore.toFixed(2)}` : "",
                     coordinateScore > 0 ? `space:${coordinateScore.toFixed(2)}` : "",
                 ].filter(Boolean),
@@ -175,7 +175,7 @@ function dynamicBucketId(symbols: string[], content: string): string {
     return `bucket-${hashText(basis)}`;
 }
 
-function stableSkillId(bucketId: CrystalBucketId, symbols: string[]): string {
+function stableGemId(bucketId: CrystalBucketId, symbols: string[]): string {
     return `crystal-${hashText(`${bucketId}:${symbols.slice(0, 6).join(":")}`)}`;
 }
 

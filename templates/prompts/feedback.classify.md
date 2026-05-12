@@ -7,10 +7,11 @@ You are a feedback classifier. Read the previous assistant reply and the user's 
 - "none" — not feedback at all; ordinary conversation.
 
 Output a single JSON object with keys:
+
 - category (one of the five)
 - confidence (0..1)
 - rationale (one short sentence)
-- extractedFact (optional short string)
+- extractedFact (optional, ≤ 500 chars; the corrected or asserted fact in canonical form — used directly as the stored memory)
 
 Output only the JSON object. No prose, no code fences.
 

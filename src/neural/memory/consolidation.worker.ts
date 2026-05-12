@@ -7,7 +7,7 @@ import { renderMemoryConsolidationPrompt } from "../../agent/prompts/index.ts";
 /**
  * 整合 Worker (consolidation worker)。
  *
- * 角色（与 DESIGN.md §7 晶体智力候选与升格对齐）：
+ * 角色（与 README.md §7 晶体智力候选与升格对齐）：
  * 1. 周期扫描 Redis ff:cq:{userId}（已到 review 时间的 episode 候选）；
  * 2. 让 LLM 输出结构化决策：reinforce / consolidate / discard；
  * 3. consolidate → upsert SurrealDB episode + memory_node + 边；
@@ -26,8 +26,7 @@ export const ConsolidationDecisionKind = {
     Consolidate: "consolidate",
     Discard: "discard",
 } as const;
-export type ConsolidationDecisionKind =
-    (typeof ConsolidationDecisionKind)[keyof typeof ConsolidationDecisionKind];
+export type ConsolidationDecisionKind = (typeof ConsolidationDecisionKind)[keyof typeof ConsolidationDecisionKind];
 
 export interface ConsolidationDecision {
     decision: ConsolidationDecisionKind;
@@ -136,10 +135,7 @@ export class ConsolidationWorker {
     }
 
     /** Promote one episode to SurrealDB long-term storage with a memory_node + edge. */
-    async consolidateEpisode(
-        episode: EpisodeRecord,
-        decision: ConsolidationDecision,
-    ): Promise<void> {
+    async consolidateEpisode(episode: EpisodeRecord, decision: ConsolidationDecision): Promise<void> {
         const memoryNodeId = crypto.randomUUID();
         await this.graph.upsertEpisode({
             id: episode.episodeId,
@@ -213,12 +209,9 @@ export function parseConsolidationDecision(raw: string): ConsolidationDecision {
             ? parsed.summary.trim().slice(0, 500)
             : undefined;
     const symbols = Array.isArray(parsed.symbols)
-        ? parsed.symbols
-              .filter((s): s is string => typeof s === "string" && s.length > 0)
-              .slice(0, 16)
+        ? parsed.symbols.filter((s): s is string => typeof s === "string" && s.length > 0).slice(0, 16)
         : undefined;
-    const rationale =
-        typeof parsed.rationale === "string" ? parsed.rationale.trim().slice(0, 200) : "";
+    const rationale = typeof parsed.rationale === "string" ? parsed.rationale.trim().slice(0, 200) : "";
     return { decision, confidence, summary, symbols, rationale };
 }
 

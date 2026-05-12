@@ -2,11 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-    buildBypassDecision,
-    evaluateFastRoute,
-    FastRouteReason,
-} from "../src/agent/runtime/fast.route.ts";
+import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/fast.route.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/memory/embedding.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
@@ -311,9 +307,7 @@ async function buildConfig(): Promise<FlyflorConfig> {
         [projectSrc, join(paths.templateDir, "projects")],
     ] as const) {
         const entries = await readdir(src, { withFileTypes: true });
-        await Promise.all(
-            entries.filter((e) => e.isFile()).map((e) => copyFile(join(src, e.name), join(dst, e.name))),
-        );
+        await Promise.all(entries.filter((e) => e.isFile()).map((e) => copyFile(join(src, e.name), join(dst, e.name))));
     }
     const config = await loadConfigForPaths(paths);
     config.memory.crystal.enabled = false;

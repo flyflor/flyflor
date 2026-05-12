@@ -172,9 +172,7 @@ async function testConfig() {
     ]) {
         const entries = await readdir(src!, { withFileTypes: true });
         await Promise.all(
-            entries
-                .filter((e) => e.isFile())
-                .map((e) => copyFile(join(src!, e.name), join(dst!, e.name))),
+            entries.filter((e) => e.isFile()).map((e) => copyFile(join(src!, e.name), join(dst!, e.name))),
         );
     }
     return loadConfigForPaths(paths);

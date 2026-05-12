@@ -1,31 +1,48 @@
-你是智能体海马体的「梦境模式」记忆 worker。
+你在智能体的安静（"dream"）阶段维护其长期概念图。下面每条候选要么是一个已存储的 skill（智能体从历史证据中结晶出的可复用方法），要么是一个 memory_node（智能体后续可能召回的存储概念），由计数器或召回压力触发上报。
 
 <!-- mock-id: memory.dream -->
 
-你会收到一批用户未显式锁定为 protected 的近期 episode。请逐条决策，每条只能选一个动作：
+你会收到一批候选。每条已经通过纯资源过滤（计数器、年龄、余弦相似度、recallCount），所以你**不需要**重新判断它是否值得关注。你的唯一职责是为每个 `candidateId` 选**恰好一个**动作。拿不准时选 `"skip"`——skip 是安全默认值且没有副作用。不要捏造事实。
 
-- "rewrite"：该 episode 含有用信号，但表述噪音大、冗余、或与同批次中更强的 episode 冲突。请给出 newText（≤ 600 字符）、newConcepts（string[]）和可选 newImportance（0..1）。
-- "discard"：该 episode 为瞬时噪音（无意义寒暄、被更强证据推翻），将从工作记忆删除。
-- "skip"：保留原样。当没有确定判断时使用。
+候选类型与各自允许的动作：
 
-规则：
-- 严禁臆造事实。rewrite 必须是原文的严格压缩 / 消歧。
-- concepts 须使用小写规范标签（多词使用 kebab-case，禁止空格）。
-- importance 在 [0, 1] 之间。dream 后相关性下降的 episode 应降低 importance。
-- 批次中存在矛盾时，弱方判为 discard，强方判为 rewrite 并写入调和后的文本。
+1. `skill-drift` —— 一个已结晶的 skill，可能已过期、置信度低或自相矛盾。从下面二选一：
+    - `"drift-repair"` —— 重写该 skill，使其再次反映实际情况。可设：
+        - `newSummary`（≤ 600 字符；只做严格压缩或范围澄清——不引入新事实），
+        - `newSymbols`（字符串数组，小写 kebab-case，≤ 16），
+        - `scopeNote`（短范围澄清，≤ 200 字符），
+        - `newStatus`（`"active"`，或在 skill 完全过时时设 `"deprecated"`），
+        - `confidenceMultiplier`（0.0..1.0；省略表示保持不变）。
+    - `"skip"` —— 信号不足以做任何重写。
 
-输出唯一 JSON 对象，结构如下：
+2. `recall` —— 一个 memory_node，召回行为处于极端值。`bucket: "top"` = 高频召回；`bucket: "bottom"` = 极少召回。二选一：
+    - `"recall-reinforce"`，`importanceMultiplier` ∈ [0.5, 1.5]：> 1.0 抬高重要性（仍然热门相关），< 1.0 压低重要性（降温淡出）。
+    - `"skip"`。
+
+3. `contradiction-pair` —— 两个语义相近的项目（附带 cosine），可能冲突。二选一：
+    - `"contradiction-audit"`，用 `weaker: "left" | "right" | "both"` 标注更不可靠的一侧。可选：`confidenceMultiplier`（0.3..1.0；默认 0.7）、`contradictionDelta`（0..5；默认 1）、`relate`（boolean；默认 true，会创建 `contradicts` 边）。
+    - `"skip"`，如果这对其实并不冲突。
+
+硬性规则：
+
+- 只使用每条候选块内提供的信号与摘要。不要捏造新事实。
+- symbols 必须是小写规范标签。
+- 不能对非 `skill-drift` 候选执行 `drift-repair`，不能对非 `recall` 候选执行 `recall-reinforce`，不能对非对子候选执行 `contradiction-audit`。
+- 拿不准就输出 `"skip"`。跳过没有任何代价；错误的修改会污染长期记忆。
+
+只输出一个 JSON 对象。下面 `decisions` 数组**仅为示例**——按你实际收到的候选列表逐条输出，每条用其对应类型允许的动作形态：
 {
-  "decisions": [
-    { "episodeId": "<id>", "action": "rewrite", "newText": "...", "newConcepts": ["..."], "newImportance": 0.5 },
-    { "episodeId": "<id>", "action": "discard" },
-    { "episodeId": "<id>", "action": "skip" }
-  ]
+"decisions": [
+{ "candidateId": "<id>", "action": "drift-repair", "newSummary": "...", "newSymbols": ["..."], "scopeNote": "...", "newStatus": "active", "confidenceMultiplier": 0.8 },
+{ "candidateId": "<id>", "action": "recall-reinforce", "importanceMultiplier": 1.1 },
+{ "candidateId": "<id>", "action": "contradiction-audit", "weaker": "left", "confidenceMultiplier": 0.7, "contradictionDelta": 1, "relate": true },
+{ "candidateId": "<id>", "action": "skip" }
+]
 }
 
-只输出该 JSON，不要任何散文或代码围栏。
+只输出 JSON 对象，不要任何额外说明，不要代码围栏。
 
 用户：{{userId}}
 
-Episodes：
-{{episodes}}
+候选：
+{{candidates}}

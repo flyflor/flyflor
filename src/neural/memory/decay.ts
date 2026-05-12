@@ -1,7 +1,7 @@
 /**
  * 衰减与强化（decay & reinforcement）—— 纯函数 + 调度器。
  *
- * 设计（与 DESIGN.md §8 遗忘曲线对齐）：
+ * 设计（与 README.md §8 遗忘曲线对齐）：
  *  - 三层不同衰减率：episode 最快、memory_node 中、skill 最慢；
  *  - skill 还引入 lastVerifiedAt 双轨衰减：长时间未被复用的 skill 即使 importance
  *    没动，也按时间因子降权，避免"假高分"长期占据召回。
@@ -59,8 +59,7 @@ export function decayImportance(input: {
         const lv = Number.isFinite(input.lastVerifiedAt) ? (input.lastVerifiedAt as number) : updatedAt;
         const verifyAge = Math.max(0, nowMs - lv);
         const verifyFactor = Math.max(0, 1 - verifyAge / (halfLifeMs * 2));
-        factor =
-            (1 - profile.verificationWeight) * base + profile.verificationWeight * verifyFactor;
+        factor = (1 - profile.verificationWeight) * base + profile.verificationWeight * verifyFactor;
     }
     const decayed = clamp01(input.importance) * factor;
     const floor = Number.isFinite(profile.floor) ? profile.floor : 0;

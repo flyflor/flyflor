@@ -230,10 +230,7 @@ export async function resetSkill(
     return { path, removed };
 }
 
-export async function validateSkill(
-    paths: FlyflorPaths,
-    name: string,
-): Promise<SkillValidationResult> {
+export async function validateSkill(paths: FlyflorPaths, name: string): Promise<SkillValidationResult> {
     const errors: string[] = [];
     const warnings: string[] = [];
     let skill: Skill | undefined;
@@ -420,7 +417,10 @@ function listValue(value: unknown): string[] {
         return splitList(text);
     }
     if (Array.isArray(value)) {
-        return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+        return value
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim())
+            .filter(Boolean);
     }
     return [];
 }

@@ -32,7 +32,7 @@ import {
     type McpToolCatalogEntry,
     type McpToolCallRequest,
 } from "../mcp/index.ts";
-import { createSandboxPolicy, decideCapabilityExecution } from "../sandbox/index.ts";
+import { createSandboxPolicy, decideCapabilityExecution, gateCapabilityExecution } from "../sandbox/index.ts";
 import {
     loadPromptTemplates,
     renderBlackboardAdvisoryPrompt,
@@ -51,17 +51,8 @@ import { scopeFor } from "../session/index.ts";
 import { loadSkills, recordSkillUsage, selectSkills, type Skill } from "../../crystal/skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 import { extractRuntimeReflectionCandidates } from "./reflection.ts";
-import {
-    buildBypassDecision,
-    evaluateFastRoute,
-    type FastRouteSnapshot,
-    type FastRouteResult,
-} from "./fast.route.ts";
-import {
-    decideRouteEscalation,
-    nextEscalationCounters,
-    RouteEscalationReason,
-} from "./route.escalation.ts";
+import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./fast.route.ts";
+import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
@@ -90,6 +81,37 @@ interface CachedMcpToolCatalog {
 
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 
+/** Phase 1 输出：被 phase 2~5 共享的“轮内不可变上下文”。 */
+interface PreparedTurn {
+    context: RuntimeContext;
+    enrichedContext: RuntimeContext;
+    embedding: number[];
+    snapshotKey: string;
+    fastRoute: FastRouteResult;
+    ttfbDone: () => void;
+}
+
+/** Phase 2 输出：装配后的运行时资源（skills/mcp/memory/sandbox/blackboard）。 */
+interface AssembledTurnContext {
+    skills: Skill[];
+    selectedSkills: Skill[];
+    mcpServers: Awaited<ReturnType<typeof loadMcpServers>>;
+    memoryPrompt: string;
+    sandbox: ReturnType<typeof createSandboxPolicy>;
+    mcpExecution: ReturnType<typeof decideCapabilityExecution>;
+    blackboardRun: RuntimeBlackboardRun | undefined;
+    mcpToolCatalog: McpToolCatalogEntry[];
+}
+
+/** Phase 3 输出：完整 GatewayReply + persist/async 阶段需要的中间值。 */
+interface GeneratedTurn {
+    reply: GatewayReply;
+    parsed: ReturnType<typeof parseMemoryActions>;
+    visibleText: string;
+    mcpCallProvenance: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
+    selectedSkillNames: string[];
+}
+
 @Module({ name: "runtime", tags: ["flyflor", "boundary"] })
 @Provide({ kind: ComponentKind.Runtime, layer: ArchitectureLayer.Runtime, name: "runtime", provider: true })
 export class RuntimeModule extends RuntimeBoundary {
@@ -109,9 +131,10 @@ export class RuntimeModule extends RuntimeBoundary {
         private readonly model: ModelClient,
         private readonly events: EventSink,
         private readonly blackboard?: BlackboardModule,
+        memory?: MemoryModule,
     ) {
         super();
-        this.memory = createMemory(config, events, model);
+        this.memory = memory ?? createMemory(config, events, model);
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.perf = new PerfMetrics(config.metrics, events);
     }
@@ -126,35 +149,65 @@ export class RuntimeModule extends RuntimeBoundary {
         return this.memory.dreamSnapshot();
     }
 
-    /** CLI 接口：每个被追踪用户的 dream 队列长度。 */
-    dreamQueueSizes(): Promise<Array<{ userId: string; pending: number }>> {
-        return this.memory.dreamQueueSizes();
-    }
-
     /** CLI 接口：手动跑一轮 dream pass，可指定单用户。 */
     runDreamOnce(
         limit?: number,
         userId?: string,
-    ): Promise<{ users: number; rewritten: number; discarded: number; skipped: number }> {
+    ): Promise<{
+        users: number;
+        driftRepaired: number;
+        recallReinforced: number;
+        contradictionsFlagged: number;
+        skipped: number;
+    }> {
         return this.memory.runDreamOnce(limit, userId);
     }
 
+    /**
+     * 单轮请求总入口。仅做编排：
+     *   1) prepareTurn —— 触发 start/ttfb 事件、复用 embedding、评估 fastRoute；
+     *   2) assembleTurnContext —— 并行装配 skills/mcp/memory/route，再跑黑板与 mcp catalog；
+     *   3) generateTurnReply —— 拼 prompt、LLM+MCP 循环、解析记忆动作、构造 GatewayReply；
+     *   4) persistTurn —— 同步落 episode/skill usage 并刷新 fastRoute 快照；
+     *   5) dispatchAsyncTurnTasks —— fire-and-forget 反思 / 反馈分类 / 辩论 episode；
+     *   6) finalize —— ttfbDone + AgentTurnEnd。
+     */
     async handleMessage(
         message: GatewayMessage,
         context: RuntimeContext,
         options: RuntimeStreamOptions = {},
     ): Promise<GatewayReply> {
+        const prepared = await this.prepareTurn(message, context);
+        const assembled = await this.assembleTurnContext(message, prepared, options);
+        const generated = await this.generateTurnReply(message, prepared, assembled, options);
+
+        await this.persistTurn(message, prepared, assembled, generated);
+        this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
+
+        prepared.ttfbDone();
+        this.events.publish(
+            event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
+        );
+        return generated.reply;
+    }
+
+    /**
+     * Phase 1：发布 start 事件、记录 ttfb 计时、加载提示词模板、复用 embedding，
+     * 并依据资源指标评估 fastRoute（决定是否短路 LLM 路由调用）。
+     */
+    private async prepareTurn(message: GatewayMessage, context: RuntimeContext): Promise<PreparedTurn> {
         this.events.publish(
             event(RuntimeEventType.AgentTurnStart, { channel: message.route.channel }, context.requestId),
         );
-        const ttfbDone = this.perf.mark(RuntimeEventType.PerfTtfb, { channel: message.route.channel }, context.requestId);
+        const ttfbDone = this.perf.mark(
+            RuntimeEventType.PerfTtfb,
+            { channel: message.route.channel },
+            context.requestId,
+        );
         await loadPromptTemplates(this.config.paths);
 
-        // Compute embedding once; attach to context so buildPrompt + rememberTurn share the same vector.
         const embedding = await this.embeddings.embed(message.text);
         const enrichedContext: RuntimeContext = { ...context, embedding };
-
-        // fastRoute：基于资源指标短路 LLM 路由调用（零字符串匹配）。
         const snapshotKey = this.snapshotKeyFor(message);
         const fastRoute = evaluateFastRoute({
             config: this.config.routing,
@@ -168,9 +221,26 @@ export class RuntimeModule extends RuntimeBoundary {
             { bypass: fastRoute.bypass, reason: fastRoute.reason, ...(fastRoute.metrics ?? {}) },
             context.requestId,
         );
+        return { context, enrichedContext, embedding, snapshotKey, fastRoute, ttfbDone };
+    }
 
+    /**
+     * Phase 2：并行装配 skills / mcp servers / memory prompt / 路由决策；
+     * 解析 sandbox 与 mcp 执行能力；应用 direct-with-watch 升级器；
+     * 跑黑板（如配置）；构建 MCP 工具 catalog 并发布对应事件。
+     */
+    private async assembleTurnContext(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        options: RuntimeStreamOptions,
+    ): Promise<AssembledTurnContext> {
+        const { context, enrichedContext, snapshotKey, fastRoute } = prepared;
         const buildPromptDone = this.perf.mark(RuntimeEventType.PerfBuildPrompt, {}, context.requestId);
-        const routeDone = this.perf.mark(RuntimeEventType.PerfRouteLlm, { bypassed: fastRoute.bypass }, context.requestId);
+        const routeDone = this.perf.mark(
+            RuntimeEventType.PerfRouteLlm,
+            { bypassed: fastRoute.bypass },
+            context.requestId,
+        );
 
         const [skills, mcpServers, memoryPrompt, preRoute] = await Promise.all([
             loadSkills(this.config.paths),
@@ -201,16 +271,17 @@ export class RuntimeModule extends RuntimeBoundary {
                 context.requestId,
             ),
         );
+
         const sandbox = createSandboxPolicy(this.config.sandbox);
         const mcpExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.McpTool);
 
-        // direct-with-watch 升级器：累计 watch / blackboard 失败计数，跨过阈值时升格为 blackboard。
         const snapshotForEscalation = this.fastRouteSnapshots.get(snapshotKey);
         const effectivePreRoute = this.applyRouteEscalation(
             preRoute,
             snapshotForEscalation,
             context.requestId,
             message.route.channel,
+            message.text.length,
         );
         const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
         const mcpToolCatalog = await this.buildMcpToolCatalog(mcpServers, mcpExecution.canExecute, context.requestId);
@@ -226,6 +297,32 @@ export class RuntimeModule extends RuntimeBoundary {
                 context.requestId,
             ),
         );
+
+        return {
+            skills,
+            selectedSkills,
+            mcpServers,
+            memoryPrompt,
+            sandbox,
+            mcpExecution,
+            blackboardRun,
+            mcpToolCatalog,
+        };
+    }
+
+    /**
+     * Phase 3：根据 assembled context 拼 system+user prompt，进入 LLM+MCP loop，
+     * 解析记忆动作 / mcp 工具调用，构造最终 GatewayReply。
+     */
+    private async generateTurnReply(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        assembled: AssembledTurnContext,
+        options: RuntimeStreamOptions,
+    ): Promise<GeneratedTurn> {
+        const { context } = prepared;
+        const { selectedSkills, mcpServers, memoryPrompt, sandbox, mcpExecution, blackboardRun, mcpToolCatalog } =
+            assembled;
 
         const modelMessages: ModelMessage[] = [
             {
@@ -255,18 +352,14 @@ export class RuntimeModule extends RuntimeBoundary {
         const replyPrefix = options.onTextDelta
             ? renderReplyStreamingPrefix(blackboardRun)
             : renderReplyPrefix(blackboardRun);
-        const generated = await this.generateTextWithMcpTools(
-            modelMessages,
-            replyPrefix,
-            options,
-            {
-                canExecuteTools: mcpExecution.canExecute,
-                requiresApproval: mcpExecution.requiresApproval,
-                catalog: mcpToolCatalog,
-                requestId: context.requestId,
-                approveMcpToolCall: options.approveMcpToolCall,
-            },
-        );
+        const generated = await this.generateTextWithMcpTools(modelMessages, replyPrefix, options, {
+            canExecuteTools: mcpExecution.canExecute,
+            requiresApproval: mcpExecution.requiresApproval,
+            catalog: mcpToolCatalog,
+            requestId: context.requestId,
+            approveMcpToolCall: options.approveMcpToolCall,
+        });
+
         const selectedSkillNames = selectedSkills.map((skill) => skill.name);
         const mcpCallProvenance = mcpExecutionsToProvenance(generated.mcpToolCalls);
         const rawText = generated.rawText;
@@ -299,26 +392,49 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         };
 
-        // Fast path: session + candidates + Redis episode (awaited, no LLM).
+        return { reply, parsed, visibleText, mcpCallProvenance, selectedSkillNames };
+    }
+
+    /**
+     * Phase 4：同步落库 —— rememberTurn（session+candidates+episode）、skill usage，
+     * 并按本轮实际模式 + 黑板状态刷新 fastRoute 快照（升级器计数器）。
+     */
+    private async persistTurn(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        assembled: AssembledTurnContext,
+        generated: GeneratedTurn,
+    ): Promise<void> {
+        const { context, enrichedContext, embedding, snapshotKey } = prepared;
+        const { blackboardRun } = assembled;
+        const { reply, parsed, mcpCallProvenance, selectedSkillNames } = generated;
+
         await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions, {
             mcpCalls: mcpCallProvenance,
             skillNames: selectedSkillNames,
         });
-        await recordSkillUsage(this.config.paths, selectedSkills, {
+        await recordSkillUsage(this.config.paths, assembled.selectedSkills, {
             mcpCallCount: mcpCallProvenance.length,
             mcpSuccessCount: mcpCallProvenance.filter((call) => call.ok).length,
             now: context.now,
             requestId: context.requestId,
         }).catch(() => undefined);
 
-        // Snapshot for next-turn fastRoute decision.
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
         const previousSnapshot = this.fastRouteSnapshots.get(snapshotKey);
+        const totalToolCalls = mcpCallProvenance.length;
+        const toolFailureRatio =
+            totalToolCalls > 0
+                ? mcpCallProvenance.filter((call) => !call.ok).length / totalToolCalls
+                : 0;
         const counters = nextEscalationCounters({
             actualMode: lastMode,
             blackboardStatus: blackboardRun?.status,
             previousWatch: previousSnapshot?.consecutiveWatchTurns ?? 0,
             previousFailure: previousSnapshot?.consecutiveBlackboardFailures ?? 0,
+            previousToolFailure: previousSnapshot?.consecutiveToolFailureTurns ?? 0,
+            toolFailureRatio,
+            toolFailureRatioTrigger: this.config.routing.toolFailureRatioTrigger ?? 0.5,
         });
         this.fastRouteSnapshots.set(snapshotKey, {
             recordedAt: Date.now(),
@@ -327,18 +443,29 @@ export class RuntimeModule extends RuntimeBoundary {
             nextRouteHint: lastMode === BlackboardMode.Direct ? BlackboardMode.Direct : undefined,
             consecutiveWatchTurns: counters.watch,
             consecutiveBlackboardFailures: counters.failure,
+            consecutiveToolFailureTurns: counters.toolFailure,
         });
+    }
 
-        // Async reflection: LLM extraction + crystal write — non-blocking, after reply returned.
+    /**
+     * Phase 5：fire-and-forget —— 反思（LLM 抽取 → crystal）、反馈四分类、
+     * 黑板辩论收敛后写入高权重 episode。失败由各自模块发布事件。
+     */
+    private dispatchAsyncTurnTasks(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        assembled: AssembledTurnContext,
+        generated: GeneratedTurn,
+    ): void {
+        const { context, enrichedContext, embedding } = prepared;
+        const { blackboardRun } = assembled;
+        const { visibleText, mcpCallProvenance, selectedSkillNames } = generated;
+
         void this.scheduleReflection(message, enrichedContext, visibleText, blackboardRun, {
             mcpCalls: mcpCallProvenance,
             skillNames: selectedSkillNames,
         });
-
-        // Async feedback classification (A/B/C/D 四通道入记忆) — fire-and-forget；首轮自动 no-op。
         void this.memory.classifyAndApplyFeedback(message, enrichedContext);
-
-        // 黑板辩论收敛 → 沉淀为高权重 episode（fire-and-forget）。
         if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
             void this.memory.recordDebateEpisode({
                 userId: message.user.id,
@@ -347,13 +474,6 @@ export class RuntimeModule extends RuntimeBoundary {
                 requestId: context.requestId,
             });
         }
-
-        ttfbDone();
-        this.events.publish(
-            event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
-        );
-
-        return reply;
     }
 
     /**
@@ -385,14 +505,22 @@ export class RuntimeModule extends RuntimeBoundary {
         snapshot: FastRouteSnapshot | undefined,
         requestId: string,
         channel: string,
+        currentMessageChars: number,
     ): RuntimeBlackboardRouteDecision | undefined {
         if (!original) return original;
+        const budget = this.config.routing.contextPressureBudgetTokens ?? 0;
+        const estimatedTokens = Math.ceil(currentMessageChars / 4);
+        const pressureRatio = budget > 0 ? estimatedTokens / budget : 0;
         const decision = decideRouteEscalation({
             currentMode: original.mode,
             consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
             consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,
+            consecutiveToolFailureTurns: snapshot?.consecutiveToolFailureTurns ?? 0,
+            contextPressureRatio: pressureRatio,
             watchThreshold: this.config.routing.watchEscalationThreshold ?? 3,
             failureThreshold: this.config.routing.blackboardFailureEscalationThreshold ?? 2,
+            toolFailureThreshold: this.config.routing.toolFailureEscalationThreshold ?? 2,
+            contextPressureTrigger: budget > 0 ? 1 : 0,
         });
         if (!decision.escalated) return original;
         this.events.publish(
@@ -405,6 +533,10 @@ export class RuntimeModule extends RuntimeBoundary {
                     reason: decision.reason,
                     consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
                     consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,
+                    consecutiveToolFailureTurns: snapshot?.consecutiveToolFailureTurns ?? 0,
+                    contextPressureRatio: pressureRatio,
+                    estimatedTokens,
+                    contextPressureBudget: budget,
                 },
                 requestId,
             ),
@@ -515,7 +647,9 @@ export class RuntimeModule extends RuntimeBoundary {
         const parsedCalls = parseMcpToolCalls(initial);
         if (parsedCalls.calls.length === 0) {
             if (options.onTextDelta) {
-                await options.onTextDelta(`${replyPrefix}${filterVisibleMemoryActionText(parsedCalls.text || initial)}`);
+                await options.onTextDelta(
+                    `${replyPrefix}${filterVisibleMemoryActionText(parsedCalls.text || initial)}`,
+                );
             }
             return {
                 rawText: parsedCalls.text || initial,
@@ -594,38 +728,39 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<McpToolCallExecution[]> {
         const catalogKeys = new Set(catalog.map((entry) => `${entry.server}.${entry.tool.name}`));
         const servers = await loadMcpServers(this.config.paths);
+        const sandboxPolicy = createSandboxPolicy(this.config.sandbox);
         const executions: McpToolCallExecution[] = [];
         for (const call of calls) {
             const key = `${call.server}.${call.tool}`;
             const server = servers.find((candidate) => candidate.name === call.server);
-            if (!catalogKeys.has(key) || !server) {
-                const execution = {
-                    call,
-                    ok: false,
-                    error: `MCP tool is not available this turn: ${key}`,
-                };
+            const descriptor = { server: call.server, tool: call.tool };
+            const gate = await gateCapabilityExecution({
+                policy: sandboxPolicy,
+                kind: CapabilityExecutionKind.McpTool,
+                events: this.events,
+                requestId,
+                descriptor,
+                preDeny:
+                    !catalogKeys.has(key) || !server
+                        ? {
+                              reason: "tool-not-in-catalog",
+                              message: `MCP tool is not available this turn: ${key}`,
+                          }
+                        : undefined,
+                approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
+                deniedMessage: `MCP tool call was not approved: ${key}`,
+            });
+            if (!gate.allowed) {
+                const execution = { call, ok: false, error: gate.reason };
                 executions.push(execution);
                 this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
                 continue;
-            }
-            if (requiresApproval) {
-                const approved = approveMcpToolCall ? await approveMcpToolCall(call) : false;
-                if (!approved) {
-                    const execution = {
-                        call,
-                        ok: false,
-                        error: `MCP tool call was not approved: ${key}`,
-                    };
-                    executions.push(execution);
-                    this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
-                    continue;
-                }
             }
             try {
                 const execution = {
                     call,
                     ok: true,
-                    result: await callMcpTool(this.config.paths, server, call.tool, call.input, {
+                    result: await callMcpTool(this.config.paths, server!, call.tool, call.input, {
                         events: this.events,
                         requestId,
                         timeoutMs: 8_000,
@@ -690,9 +825,7 @@ export class RuntimeModule extends RuntimeBoundary {
         }
 
         const workerNames = route.workers.map((w) => w.name || w.role).join("、");
-        await options.onTextDelta?.(
-            `> 🤔 黑板讨论中 · 参与者：${workerNames}\n\n`,
-        );
+        await options.onTextDelta?.(`> 🤔 黑板讨论中 · 参与者：${workerNames}\n\n`);
 
         const started = performance.now();
         const start = await this.blackboard.startTurn({
@@ -748,11 +881,8 @@ export class RuntimeModule extends RuntimeBoundary {
                       currentRound = ev.round;
                       await options.onTextDelta!(`> **第 ${ev.round} 轮**\n\n`);
                   }
-                  const blockerLine =
-                      ev.blockers.length > 0 ? `\n> ⚠ ${ev.blockers.slice(0, 2).join("；")}` : "";
-                  await options.onTextDelta!(
-                      `> **${ev.workerName}：** ${ev.outputSummary}${blockerLine}\n\n`,
-                  );
+                  const blockerLine = ev.blockers.length > 0 ? `\n> ⚠ ${ev.blockers.slice(0, 2).join("；")}` : "";
+                  await options.onTextDelta!(`> **${ev.workerName}：** ${ev.outputSummary}${blockerLine}\n\n`);
               }
             : undefined;
 
@@ -1188,16 +1318,10 @@ function summarizeMcpResult(value: unknown): string {
     if (typeof value === "string") {
         return value.replace(/\s+/g, " ").trim().slice(0, 500);
     }
-    return JSON.stringify(value)
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 500);
+    return JSON.stringify(value).replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
-function selectRuntimeSkills(
-    skills: Skill[],
-    requestedNames: string[] | undefined,
-): Skill[] {
+function selectRuntimeSkills(skills: Skill[], requestedNames: string[] | undefined): Skill[] {
     const requested = new Set((requestedNames ?? []).map((name) => name.trim()).filter(Boolean));
     if (requested.size === 0) {
         return selectSkills(skills);

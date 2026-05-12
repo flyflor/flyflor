@@ -1,7 +1,7 @@
 /**
  * curl-pipe 安装器纯函数计划层。
  *
- * 职责（按 docs/boundaries.md "约定大于配置"）：
+ * 职责（按 docs/BOUNDARIES.md "约定大于配置"）：
  *  - 把"平台 + 版本 + 前缀"映射成确定的下载 URL、目标路径与目录布局；
  *  - 完全无副作用：不调 fs / 不调 fetch / 不调 process；
  *  - shell 脚本与 ts CLI subcommand 共用同一个计划层，避免逻辑分叉。

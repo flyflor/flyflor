@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { CrystalMemoryService, InMemoryCrystalMemoryStore, SurrealCrystalMemoryStore } from "../src/agent/index.ts";
-import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalSkills } from "../src/crystal/index.ts";
+import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/crystal/index.ts";
 import { MemoryKind } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
 import type { MemoryRecord } from "../src/agent/index.ts";
@@ -27,8 +27,8 @@ describe("Crystal memory boundaries", () => {
         expect(candidate.coordinates.blocker).toBe(0.9);
 
         const crystallized = crystallizeCandidate(candidate);
-        expect(crystallized?.skill.bucket).toBe(candidate.bucket);
-        expect(crystallized?.skill.method).toContain("missing facts");
+        expect(crystallized?.gem.bucket).toBe(candidate.bucket);
+        expect(crystallized?.gem.method).toContain("missing facts");
     });
 
     test("recalls crystallized skills through generated symbols and evidence score", async () => {
@@ -74,13 +74,13 @@ describe("Crystal memory boundaries", () => {
             throw new Error("expected crystallized skill");
         }
 
-        const results = recallCrystalSkills(
+        const results = recallCrystalGems(
             {
                 query: "blocker summary",
                 symbols: ["blocker", "summary"],
                 limit: 1,
             },
-            [first.skill],
+            [first.gem],
         );
 
         expect(results).toHaveLength(1);
@@ -113,7 +113,7 @@ describe("Crystal memory boundaries", () => {
 
         expect(store.candidates.size).toBe(1);
         expect(store.atoms.size).toBe(1);
-        expect(store.skills.size).toBe(1);
+        expect(store.gems.size).toBe(1);
     });
 
     test("garbage reflection candidates are stored as candidates without becoming skills", async () => {
@@ -141,7 +141,7 @@ describe("Crystal memory boundaries", () => {
 
         expect(store.candidates.size).toBe(1);
         expect(store.atoms.size).toBe(0);
-        expect(store.skills.size).toBe(0);
+        expect(store.gems.size).toBe(0);
     });
 
     test("SurrealDB store sends namespace and database headers", async () => {

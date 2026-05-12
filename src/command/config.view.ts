@@ -109,7 +109,10 @@ function buildView(config: FlyflorConfig, redact: boolean): ConfigView {
     };
 }
 
-function collectConfiguredChannels(config: FlyflorConfig, redact: boolean): ConfigView["gateway"]["configuredChannels"] {
+function collectConfiguredChannels(
+    config: FlyflorConfig,
+    redact: boolean,
+): ConfigView["gateway"]["configuredChannels"] {
     const result: ConfigView["gateway"]["configuredChannels"] = [];
     const channels = config.gateway.channels as unknown as Record<string, Record<string, unknown> | undefined>;
     for (const [name, cfg] of Object.entries(channels)) {

@@ -1,324 +1,336 @@
+/**
+ * Dream worker 单元测试（README.md §12）。
+ *
+ * 用 fake SurrealGraphStore 覆盖三类动作的执行路径：
+ *  - drift-repair 必须先 writeGemSnapshot 再 applyGemDriftRepair；
+ *  - recall-reinforce 调 applyMemoryReinforce；
+ *  - contradiction-audit 调 applyContradictionAudit 一或两次（取决于 weaker）。
+ *
+ * 同时验证：
+ *  - parseDreamDecisions 对 enum/JSON shape 校验严格；
+ *  - 未知 action 与缺失字段一律丢弃，不做关键词回退；
+ *  - LLM 失败时所有候选计入 skipped；
+ *  - 候选与决策的 kind 必须匹配，否则 skip（不会越界写入）。
+ */
+
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdtemp, copyFile, mkdir, readdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import {
     DreamActionKind,
     DreamWorkerImpl,
     NullDreamWorker,
     parseDreamDecisions,
-    dreamQueueKey,
-    type DreamMemoryPort,
 } from "../src/agent/runtime/dream.worker.ts";
-import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
+import type { SurrealGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/surreal.graph.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
-import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/redis.ts";
 
 beforeAll(async () => {
-    const promptDir = await mkdtemp(join(tmpdir(), "flyflor-prompts-"));
-    await mkdir(promptDir, { recursive: true });
-    const src = join(import.meta.dir, "..", "templates", "prompts");
-    const files = await readdir(src);
-    await Promise.all(
-        files.map((f) => copyFile(join(src, f), join(promptDir, f))),
-    );
-    await loadPromptTemplates({ promptDir } as never, { force: true });
+    await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);
 });
 
-class FakeMemoryPort implements DreamMemoryPort {
-    queue = new Map<string, string[]>();
-    episodes = new Map<string, EpisodeRecord>();
-    rewrites: Array<{ episodeId: string; patch: Record<string, unknown> }> = [];
-    drops: string[] = [];
-    failPop = false;
-    failRead = false;
-    failRewrite: Set<string> = new Set();
-
-    async enqueueDream(userId: string, episodeId: string): Promise<void> {
-        const list = this.queue.get(userId) ?? [];
-        list.push(episodeId);
-        this.queue.set(userId, list);
-    }
-    async popDreamCandidates(userId: string, limit: number): Promise<string[]> {
-        if (this.failPop) throw new Error("redis-down");
-        const list = this.queue.get(userId) ?? [];
-        const popped = list.splice(0, limit);
-        this.queue.set(userId, list);
-        return popped;
-    }
-    async readEpisode(_u: string, episodeId: string): Promise<EpisodeRecord | undefined> {
-        if (this.failRead) throw new Error("read-failed");
-        return this.episodes.get(episodeId);
-    }
-    async rewriteEpisode(_u: string, episodeId: string, patch: Record<string, unknown>): Promise<boolean> {
-        if (this.failRewrite.has(episodeId)) return false;
-        this.rewrites.push({ episodeId, patch });
-        return true;
-    }
-    async dropEpisode(_u: string, episodeId: string): Promise<void> {
-        this.drops.push(episodeId);
-    }
-}
-
 class CapturingSink implements EventSink {
-    events: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
-        this.events.push(e);
+    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+        this.events.push({ type: evt.type, payload: evt.payload });
     }
 }
 
-class ScriptedModel implements ModelClient {
-    calls = 0;
+class StubModel implements ModelClient {
     constructor(private readonly responses: string[]) {}
-    async generate(_msgs: ModelMessage[]): Promise<string> {
-        const r = this.responses[this.calls];
-        this.calls += 1;
-        if (r === undefined) throw new Error("ScriptedModel exhausted");
+    private idx = 0;
+    async generate(_messages: ModelMessage[]): Promise<string> {
+        const r = this.responses[this.idx] ?? this.responses[this.responses.length - 1] ?? "";
+        this.idx += 1;
         return r;
     }
 }
 
 class ThrowingModel implements ModelClient {
-    async generate(_msgs: ModelMessage[]): Promise<string> {
-        throw new Error("model-down");
+    async generate(_messages: ModelMessage[]): Promise<string> {
+        throw new Error("llm boom");
     }
 }
 
-function ep(id: string, overrides: Partial<EpisodeRecord> = {}): EpisodeRecord {
+interface FakeSurrealOpts {
+    driftGems?: GemRecord[];
+    recallTops?: MemoryNodeRecord[];
+    recallBottoms?: MemoryNodeRecord[];
+    pairs?: Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>;
+}
+
+class FakeSurrealGraph {
+    readonly snapshots: Array<{ skillId: string; reason: string; takenAt: number }> = [];
+    readonly drift: Array<Record<string, unknown>> = [];
+    readonly reinforce: Array<Record<string, unknown>> = [];
+    readonly contradiction: Array<Record<string, unknown>> = [];
+
+    constructor(private readonly state: FakeSurrealOpts = {}) {}
+
+    async listGemDriftCandidates(): Promise<GemRecord[]> {
+        return this.state.driftGems ?? [];
+    }
+    async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
+        return { tops: this.state.recallTops ?? [], bottoms: this.state.recallBottoms ?? [] };
+    }
+    async listContradictionPairs(): Promise<
+        Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>
+    > {
+        return this.state.pairs ?? [];
+    }
+    async writeGemSnapshot(skill: GemRecord, reason: string, takenAtMs: number): Promise<string> {
+        const id = `${skill.id}-${takenAtMs}`;
+        this.snapshots.push({ skillId: skill.id, reason, takenAt: takenAtMs });
+        return id;
+    }
+    async applyGemDriftRepair(input: Record<string, unknown>): Promise<boolean> {
+        this.drift.push(input);
+        return true;
+    }
+    async applyMemoryReinforce(input: Record<string, unknown>): Promise<boolean> {
+        this.reinforce.push(input);
+        return true;
+    }
+    async applyContradictionAudit(input: Record<string, unknown>): Promise<boolean> {
+        this.contradiction.push(input);
+        return true;
+    }
+}
+
+function fakeAs(graph: FakeSurrealGraph): SurrealGraphStore {
+    return graph as unknown as SurrealGraphStore;
+}
+
+function mkSkill(over: Partial<GemRecord> = {}): GemRecord {
     return {
-        episodeId: id,
+        id: "s1",
         userId: "u1",
-        text: `text-${id}`,
-        concepts: ["a"],
+        symbols: ["x"],
+        summary: "old summary",
         embedding: [],
-        importance: 0.5,
-        stability: 0.5,
-        sourceKind: "session.turn",
-        createdAt: Date.now(),
-        metadata: {},
-        ...overrides,
+        confidence: 0.4,
+        support: 1,
+        protected: false,
+        updatedAt: 0,
+        recallCount: 0,
+        contradictionCount: 0,
+        ...over,
     };
 }
 
-describe("DreamActionKind & queue key", () => {
-    test("dreamQueueKey 模板替换", () => {
-        expect(dreamQueueKey("u-x")).toBe("ff:dream:u-x");
+function mkMem(over: Partial<MemoryNodeRecord> = {}): MemoryNodeRecord {
+    return {
+        id: "m1",
+        userId: "u1",
+        symbols: ["y"],
+        summary: "mem one",
+        embedding: [],
+        confidence: 0.6,
+        evidenceCount: 2,
+        importance: 0.5,
+        updatedAt: 0,
+        recallCount: 0,
+        ...over,
+    };
+}
+
+describe("parseDreamDecisions", () => {
+    test("rejects non-object / missing decisions array", () => {
+        expect(parseDreamDecisions("not json")).toEqual([]);
+        expect(parseDreamDecisions(JSON.stringify({}))).toEqual([]);
+        expect(parseDreamDecisions(JSON.stringify({ decisions: "x" }))).toEqual([]);
     });
 
-    test("DreamActionKind 枚举固定", () => {
-        expect(DreamActionKind.Rewrite).toBe("rewrite");
-        expect(DreamActionKind.Discard).toBe("discard");
-        expect(DreamActionKind.Skip).toBe("skip");
+    test("drops entries with missing candidateId or unknown action", () => {
+        const raw = JSON.stringify({
+            decisions: [
+                { action: "skip" },
+                { candidateId: "", action: "skip" },
+                { candidateId: "c1", action: "nonsense" },
+                { candidateId: "c2", action: "skip" },
+            ],
+        });
+        const out = parseDreamDecisions(raw);
+        expect(out).toEqual([{ candidateId: "c2", action: DreamActionKind.Skip }]);
+    });
+
+    test("drift-repair clamps and sanitizes fields", () => {
+        const raw = JSON.stringify({
+            decisions: [
+                {
+                    candidateId: "drift:s1",
+                    action: "drift-repair",
+                    newSummary: "Tighter scope",
+                    newSymbols: ["A", "a", " b ", 42, "c", "c"],
+                    scopeNote: "only macOS",
+                    newStatus: "deprecated",
+                    confidenceMultiplier: 5,
+                },
+            ],
+        });
+        const out = parseDreamDecisions(raw);
+        expect(out).toHaveLength(1);
+        const d = out[0]!;
+        if (d.action !== DreamActionKind.DriftRepair) throw new Error("expected drift-repair");
+        expect(d.newSummary).toBe("Tighter scope");
+        expect(d.newSymbols).toEqual(["a", "b", "c"]);
+        expect(d.scopeNote).toBe("only macOS");
+        expect(d.newStatus).toBe("deprecated");
+        expect(d.confidenceMultiplier).toBe(1);
+    });
+
+    test("recall-reinforce clamps importanceMultiplier into [0.5,1.5]", () => {
+        const raw = JSON.stringify({
+            decisions: [
+                { candidateId: "r1", action: "recall-reinforce", importanceMultiplier: 99 },
+                { candidateId: "r2", action: "recall-reinforce", importanceMultiplier: -1 },
+                { candidateId: "r3", action: "recall-reinforce" },
+            ],
+        });
+        const out = parseDreamDecisions(raw);
+        expect(out.map((d) => (d.action === DreamActionKind.RecallReinforce ? d.importanceMultiplier : null))).toEqual([
+            1.5, 0.5, 1.0,
+        ]);
+    });
+
+    test("contradiction-audit requires weaker enum; drops invalid", () => {
+        const raw = JSON.stringify({
+            decisions: [
+                { candidateId: "p1", action: "contradiction-audit", weaker: "unknown" },
+                {
+                    candidateId: "p2",
+                    action: "contradiction-audit",
+                    weaker: "left",
+                    confidenceMultiplier: 0.1,
+                    contradictionDelta: 99,
+                },
+            ],
+        });
+        const out = parseDreamDecisions(raw);
+        expect(out).toHaveLength(1);
+        const d = out[0]!;
+        if (d.action !== DreamActionKind.ContradictionAudit) throw new Error("expected contradiction-audit");
+        expect(d.weaker).toBe("left");
+        expect(d.confidenceMultiplier).toBe(0.3);
+        expect(d.contradictionDelta).toBe(5);
     });
 });
 
 describe("NullDreamWorker", () => {
-    test("enqueue 与 drain 都返回零指标", async () => {
+    test("runOnce returns zeroed result", async () => {
         const w = new NullDreamWorker();
-        await w.enqueue({ userId: "u1", episodeId: "e1", protected: false });
-        const r = await w.drain("u1", 8);
-        expect(r).toEqual({ consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 });
+        const r = await w.runOnce("u1");
+        expect(r).toEqual({
+            scanned: 0,
+            driftRepaired: 0,
+            recallReinforced: 0,
+            contradictionsFlagged: 0,
+            skipped: 0,
+        });
     });
 });
 
-describe("parseDreamDecisions", () => {
-    test("parses rewrite/discard/skip and trims rewrite text", () => {
-        const raw = JSON.stringify({
-            decisions: [
-                { episodeId: "e1", action: "rewrite", newText: "x".repeat(2000), newConcepts: ["foo", "BAR"], newImportance: 0.9 },
-                { episodeId: "e2", action: "discard" },
-                { episodeId: "e3", action: "skip" },
-            ],
-        });
-        const out = parseDreamDecisions(raw, 100);
-        expect(out).toHaveLength(3);
-        expect(out[0]?.newText?.length).toBe(100);
-        expect(out[0]?.newConcepts).toEqual(["foo", "bar"]);
-        expect(out[0]?.newImportance).toBe(0.9);
-        expect(out[1]?.action).toBe("discard");
-        expect(out[2]?.action).toBe("skip");
-    });
+describe("DreamWorkerImpl.runOnce", () => {
+    const now = () => 1_700_000_000_000;
 
-    test("rewrite 缺 newText 退化为 skip", () => {
-        const raw = JSON.stringify({ decisions: [{ episodeId: "e1", action: "rewrite" }] });
-        const out = parseDreamDecisions(raw, 100);
-        expect(out[0]?.action).toBe("skip");
-    });
-
-    test("非 JSON / 缺 decisions 返回空", () => {
-        expect(parseDreamDecisions("not json", 100)).toEqual([]);
-        expect(parseDreamDecisions(JSON.stringify({}), 100)).toEqual([]);
-        expect(parseDreamDecisions(JSON.stringify({ decisions: "x" }), 100)).toEqual([]);
-    });
-
-    test("非法 action / 缺 episodeId / 非记录跳过", () => {
-        const raw = JSON.stringify({
-            decisions: [
-                "x",
-                { episodeId: "", action: "skip" },
-                { episodeId: "e1", action: "explode" },
-                { episodeId: "e2", action: "skip" },
-            ],
-        });
-        const out = parseDreamDecisions(raw, 100);
-        expect(out).toHaveLength(1);
-        expect(out[0]?.episodeId).toBe("e2");
-    });
-
-    test("importance 越界 clamp 到 [0,1]", () => {
-        const raw = JSON.stringify({
-            decisions: [{ episodeId: "e1", action: "rewrite", newText: "ok", newImportance: 9 }],
-        });
-        const out = parseDreamDecisions(raw, 100);
-        expect(out[0]?.newImportance).toBe(1);
-    });
-});
-
-describe("DreamWorkerImpl.enqueue", () => {
-    test("protected 候选不入队", async () => {
-        const port = new FakeMemoryPort();
-        const w = new DreamWorkerImpl(port, new ScriptedModel([]), new CapturingSink());
-        await w.enqueue({ userId: "u1", episodeId: "e1", protected: true });
-        expect(port.queue.size).toBe(0);
-    });
-
-    test("非 protected 候选入队", async () => {
-        const port = new FakeMemoryPort();
-        const w = new DreamWorkerImpl(port, new ScriptedModel([]), new CapturingSink());
-        await w.enqueue({ userId: "u1", episodeId: "e1", protected: false });
-        expect(port.queue.get("u1")).toEqual(["e1"]);
-    });
-
-    test("空 episodeId 跳过", async () => {
-        const port = new FakeMemoryPort();
-        const w = new DreamWorkerImpl(port, new ScriptedModel([]), new CapturingSink());
-        await w.enqueue({ userId: "u1", episodeId: "", protected: false });
-        expect(port.queue.size).toBe(0);
-    });
-});
-
-describe("DreamWorkerImpl.drain", () => {
-    test("空队列返回零指标且不调 LLM", async () => {
-        const port = new FakeMemoryPort();
-        const model = new ScriptedModel([]);
+    test("empty userId returns zero without calling LLM", async () => {
         const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(port, model, sink);
-        const r = await w.drain("u1", 4);
-        expect(r).toEqual({ consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 });
-        expect(model.calls).toBe(0);
+        const w = new DreamWorkerImpl(fakeAs(new FakeSurrealGraph()), new StubModel([]), sink, { now });
+        const r = await w.runOnce("");
+        expect(r.scanned).toBe(0);
+        expect(sink.events).toHaveLength(0);
     });
 
-    test("正常路径：rewrite + discard + skip 计数正确，事件发布", async () => {
-        const port = new FakeMemoryPort();
-        port.episodes.set("e1", ep("e1"));
-        port.episodes.set("e2", ep("e2"));
-        port.episodes.set("e3", ep("e3"));
-        await port.enqueueDream("u1", "e1");
-        await port.enqueueDream("u1", "e2");
-        await port.enqueueDream("u1", "e3");
+    test("no candidates → publishes completed with zero", async () => {
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(new FakeSurrealGraph()), new StubModel([]), sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.scanned).toBe(0);
+        expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryDreamCompleted);
+    });
 
-        const model = new ScriptedModel([
+    test("drift-repair: snapshots before repair and fires MemoryDriftRepaired", async () => {
+        const graph = new FakeSurrealGraph({ driftGems: [mkSkill({ id: "s1" })] });
+        const model = new StubModel([
             JSON.stringify({
                 decisions: [
-                    { episodeId: "e1", action: "rewrite", newText: "compressed", newConcepts: ["x"], newImportance: 0.7 },
-                    { episodeId: "e2", action: "discard" },
-                    { episodeId: "e3", action: "skip" },
+                    {
+                        candidateId: "drift:s1",
+                        action: "drift-repair",
+                        newSummary: "tighter",
+                        newSymbols: ["a"],
+                        newStatus: "active",
+                        confidenceMultiplier: 0.5,
+                    },
                 ],
             }),
         ]);
         const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(port, model, sink);
-        const r = await w.drain("u1", 8);
-
-        expect(r).toEqual({ consolidated: 0, rewritten: 1, discarded: 1, skipped: 1 });
-        expect(port.rewrites).toHaveLength(1);
-        expect(port.rewrites[0]?.episodeId).toBe("e1");
-        expect(port.rewrites[0]?.patch).toMatchObject({
-            text: "compressed",
-            concepts: ["x"],
-            importance: 0.7,
-        });
-        expect(port.drops).toEqual(["e2"]);
-        const completed = sink.events.find((e) => e.type === RuntimeEventType.MemoryDreamCompleted);
-        expect(completed).toBeDefined();
+        const w = new DreamWorkerImpl(fakeAs(graph), model, sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.driftRepaired).toBe(1);
+        expect(r.skipped).toBe(0);
+        expect(graph.snapshots).toHaveLength(1);
+        expect(graph.snapshots[0]!.skillId).toBe("s1");
+        expect(graph.drift).toHaveLength(1);
+        expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryDriftRepaired);
     });
 
-    test("LLM 抛错时全部计为 skipped 并发布失败事件", async () => {
-        const port = new FakeMemoryPort();
-        port.episodes.set("e1", ep("e1"));
-        port.episodes.set("e2", ep("e2"));
-        await port.enqueueDream("u1", "e1");
-        await port.enqueueDream("u1", "e2");
-
-        const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(port, new ThrowingModel(), sink);
-        const r = await w.drain("u1", 8);
-
-        expect(r).toEqual({ consolidated: 0, rewritten: 0, discarded: 0, skipped: 2 });
-        const failed = sink.events.find((e) => e.type === RuntimeEventType.MemoryDreamFailed);
-        expect(failed).toBeDefined();
-    });
-
-    test("readEpisode 抛错的条目计为 skipped 但不阻断后续", async () => {
-        const port = new FakeMemoryPort();
-        port.failRead = true;
-        await port.enqueueDream("u1", "e1");
-        const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(port, new ScriptedModel([]), sink);
-        const r = await w.drain("u1", 4);
-        expect(r.skipped).toBe(1);
-        expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryDreamFailed)).toBe(true);
-    });
-
-    test("popDreamCandidates 抛错只记事件不抛出", async () => {
-        const port = new FakeMemoryPort();
-        port.failPop = true;
-        const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(port, new ScriptedModel([]), sink);
-        const r = await w.drain("u1", 4);
-        expect(r).toEqual({ consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 });
-        expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryDreamFailed)).toBe(true);
-    });
-
-    test("rewrite 返回 false 时计为 skipped 不计入 rewritten", async () => {
-        const port = new FakeMemoryPort();
-        port.episodes.set("e1", ep("e1"));
-        port.failRewrite.add("e1");
-        await port.enqueueDream("u1", "e1");
-
-        const model = new ScriptedModel([
+    test("recall-reinforce: applies importance multiplier to target", async () => {
+        const graph = new FakeSurrealGraph({ recallTops: [mkMem({ id: "m1" })] });
+        const model = new StubModel([
             JSON.stringify({
-                decisions: [{ episodeId: "e1", action: "rewrite", newText: "x" }],
+                decisions: [
+                    { candidateId: "recall-top:memory_node:m1", action: "recall-reinforce", importanceMultiplier: 1.2 },
+                ],
             }),
         ]);
-        const w = new DreamWorkerImpl(port, model, new CapturingSink());
-        const r = await w.drain("u1", 4);
-        expect(r.rewritten).toBe(0);
-        expect(r.skipped).toBe(1);
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(graph), model, sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.recallReinforced).toBe(1);
+        expect(graph.reinforce[0]).toMatchObject({ table: "memory_node", id: "m1", importanceMultiplier: 1.2 });
     });
 
-    test("limit=0 直接返回空，不调 redis 或 LLM", async () => {
-        const port = new FakeMemoryPort();
-        await port.enqueueDream("u1", "e1");
-        const model = new ScriptedModel([]);
-        const w = new DreamWorkerImpl(port, model, new CapturingSink());
-        const r = await w.drain("u1", 0);
-        expect(r).toEqual({ consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 });
-        expect(port.queue.get("u1")).toEqual(["e1"]);
-        expect(model.calls).toBe(0);
-    });
-
-    test("LLM 决策中找不到对应 episodeId 的条目计为 skipped", async () => {
-        const port = new FakeMemoryPort();
-        port.episodes.set("e1", ep("e1"));
-        await port.enqueueDream("u1", "e1");
-        const model = new ScriptedModel([
-            JSON.stringify({ decisions: [{ episodeId: "e-other", action: "discard" }] }),
+    test("contradiction-audit (both): applies to both sides", async () => {
+        const graph = new FakeSurrealGraph({
+            pairs: [{ left: mkMem({ id: "L" }), right: mkMem({ id: "R" }), cosine: 0.9 }],
+        });
+        const model = new StubModel([
+            JSON.stringify({
+                decisions: [{ candidateId: "contra:L:R", action: "contradiction-audit", weaker: "both" }],
+            }),
         ]);
-        const r = await new DreamWorkerImpl(port, model, new CapturingSink()).drain("u1", 4);
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(graph), model, sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.contradictionsFlagged).toBe(1);
+        expect(graph.contradiction).toHaveLength(2);
+    });
+
+    test("kind mismatch (drift-repair on a recall candidate) → skip, no writes", async () => {
+        const graph = new FakeSurrealGraph({ recallTops: [mkMem({ id: "m1" })] });
+        const model = new StubModel([
+            JSON.stringify({
+                decisions: [{ candidateId: "recall-top:memory_node:m1", action: "drift-repair", newSummary: "no" }],
+            }),
+        ]);
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(graph), model, sink, { now });
+        const r = await w.runOnce("u1");
         expect(r.skipped).toBe(1);
-        expect(port.drops).toEqual([]);
+        expect(graph.snapshots).toHaveLength(0);
+        expect(graph.drift).toHaveLength(0);
+    });
+
+    test("LLM throws → all candidates skipped, MemoryDreamFailed emitted", async () => {
+        const graph = new FakeSurrealGraph({ recallTops: [mkMem({ id: "m1" })] });
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(graph), new ThrowingModel(), sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.scanned).toBe(1);
+        expect(r.skipped).toBe(1);
+        expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryDreamFailed);
     });
 });

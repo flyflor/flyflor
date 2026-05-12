@@ -127,25 +127,11 @@ describe("Skill and MCP capability config", () => {
         await mkdir(join(globalSkill), { recursive: true });
         await writeFile(
             join(globalSkill, "SKILL.md"),
-            [
-                "---",
-                "name: alpha",
-                "description: Global alpha skill",
-                "---",
-                "",
-                "Global body.",
-            ].join("\n"),
+            ["---", "name: alpha", "description: Global alpha skill", "---", "", "Global body."].join("\n"),
         );
         await writeFile(
             join(projectSkill, "SKILL.md"),
-            [
-                "---",
-                "name: alpha",
-                "description: Project alpha skill",
-                "---",
-                "",
-                "Project body.",
-            ].join("\n"),
+            ["---", "name: alpha", "description: Project alpha skill", "---", "", "Project body."].join("\n"),
         );
 
         const loaded = await findSkill(paths, "alpha");
@@ -418,12 +404,16 @@ describe("Skill and MCP capability config", () => {
             events,
         );
 
-        const reply = await runtime.handleMessage(gatewayMessage("use fake echo"), {
+        const reply = await runtime.handleMessage(
+            gatewayMessage("use fake echo"),
+            {
                 requestId: crypto.randomUUID(),
                 now: new Date().toISOString(),
-            }, {
+            },
+            {
                 approveMcpToolCall: async () => true,
-            });
+            },
+        );
 
         expect(reply.text).toBe("Final from MCP result.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
@@ -489,7 +479,9 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toBe("Final without MCP result.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(model.messages).toHaveLength(2);
-        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain("not approved");
+        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain(
+            "not approved",
+        );
     });
 
     test("runtime executes MCP tool calls without callback when policy allows tools", async () => {
@@ -569,7 +561,9 @@ describe("Skill and MCP capability config", () => {
 
         expect(reply.text).toBe("Noninteractive final.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
-        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain("not approved");
+        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain(
+            "not approved",
+        );
     });
 
     test("runtime hides MCP protocol blocks from streamed output when execution is denied", async () => {
@@ -798,7 +792,9 @@ async function copyTemplateGroup(source: string, destination: string): Promise<v
     await mkdir(destination, { recursive: true });
     const entries = await readdir(source, { withFileTypes: true });
     await Promise.all(
-        entries.filter((entry) => entry.isFile()).map((entry) => copyFile(join(source, entry.name), join(destination, entry.name))),
+        entries
+            .filter((entry) => entry.isFile())
+            .map((entry) => copyFile(join(source, entry.name), join(destination, entry.name))),
     );
 }
 

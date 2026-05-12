@@ -4,11 +4,11 @@
 
 ## 服务拓扑
 
-| 服务 | 镜像 | 角色 | 暴露 |
-|---|---|---|---|
-| `redis` | `redis:7.4-alpine` | 海马体工作记忆（TTL/遗忘曲线层） | 仅 internal |
-| `surrealdb` | `surrealdb/surrealdb:v2.1.4` | 长期记忆图 + MTREE 向量索引 | 仅 internal |
-| `flyflor` | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / gateway | 仅 internal |
+| 服务        | 镜像                                           | 角色                             | 暴露        |
+| ----------- | ---------------------------------------------- | -------------------------------- | ----------- |
+| `redis`     | `redis:7.4-alpine`                             | 海马体工作记忆（TTL/遗忘曲线层） | 仅 internal |
+| `surrealdb` | `surrealdb/surrealdb:v2.1.4`                   | 长期记忆图 + MTREE 向量索引      | 仅 internal |
+| `flyflor`   | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / gateway           | 仅 internal |
 
 所有服务挂在 `flyflor-internal` bridge 网络上，使用具名卷 `flyflor_redis` / `flyflor_surreal` / `flyflor_data` 持久化数据。compose 故意不写 `ports:`，等价于"对宿主机不可见"。
 

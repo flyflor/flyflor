@@ -87,7 +87,7 @@ await store.relateConsolidatedInto("ep-1", "mn-B");
 await store.relateSimilarConcept("mn-A", "mn-B", 0.6);
 
 // skill
-await store.upsertSkill({
+await store.upsertGem({
     id: "sk-1",
     userId,
     symbols: ["smoke", "concept-0"],
@@ -116,7 +116,11 @@ console.log(
     JSON.stringify(
         {
             counts,
-            recalledIds: recalled.map((r) => ({ id: (r as { id?: string }).id, score: r.score, confidence: r.confidence })),
+            recalledIds: recalled.map((r) => ({
+                id: (r as { id?: string }).id,
+                score: r.score,
+                confidence: r.confidence,
+            })),
             skillIds: skills.map((s) => ({ id: (s as { id?: string }).id, score: s.score, confidence: s.confidence })),
             expandedIds: expanded.map((m) => ({ id: (m as { id?: string }).id, summary: m.summary })),
         },

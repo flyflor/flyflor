@@ -14,6 +14,7 @@ import type {
     DynamicWorkerRegisterOptions,
     JsonProcessWorkerSpec,
     ManagedWorker,
+    RawStdioWorkerSpec,
     WorkerAdapter,
     WorkerManifest,
     WorkerRegisterOptions,
@@ -95,6 +96,19 @@ export class WorkerManager {
                 runtime: options.runtime ?? WorkerRuntimeKind.PersistentJsonProcess,
             },
         );
+    }
+
+    /** 注册 raw-stdio 工作器：spawn 外部命令，纯文本进 / 纯文本出。 */
+    registerRawStdioProcess(
+        manifest: WorkerManifest,
+        spec: RawStdioWorkerSpec,
+        options: WorkerRegisterOptions = {},
+    ): WorkerRegistration<string, string> {
+        return this.registerDynamic<RawStdioWorkerSpec, string, string>(spec, new RawStdioWorkerAdapter(), {
+            ...options,
+            manifest,
+            runtime: options.runtime ?? WorkerRuntimeKind.Process,
+        });
     }
 
     has(name: string): boolean {
@@ -389,6 +403,51 @@ export class PersistentJsonProcessWorkerAdapter<TInput, TOutput> implements Work
         const session = new PersistentJsonSession(target);
         this.sessions.set(target, session);
         return session;
+    }
+}
+
+/**
+ * Raw-stdio adapter：spawn 子进程 → 写 stdin → 等 exit → 读 stdout。
+ *
+ * 与 JsonProcessWorkerAdapter 同构，但不强制 JSON。失败：
+ * - 退出码不在 okExitCodes（默认 [0]）→ 抛包含 stderr 的 Error；
+ * - 进程未启动 / spawn 抛错 → 透传。
+ *
+ * bun --compile 安全：仅用 Bun.spawn + 普通 pipe，无 native addon。
+ */
+export class RawStdioWorkerAdapter implements WorkerAdapter<RawStdioWorkerSpec, string, string> {
+    readonly interaction = WorkerInteractionKind.OneShot;
+    readonly runtime = WorkerRuntimeKind.Process;
+
+    async run(target: RawStdioWorkerSpec, input: string, _context: WorkerRunContext): Promise<string> {
+        const child = Bun.spawn({
+            cmd: target.cmd,
+            cwd: target.cwd,
+            env: target.env,
+            stdin: "pipe",
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const stdin = child.stdin;
+        if (!stdin || typeof stdin === "number") {
+            throw new Error("Raw-stdio worker stdin is not writable.");
+        }
+        stdin.write(input);
+        if (target.inputSuffix) {
+            stdin.write(target.inputSuffix);
+        }
+        stdin.end();
+
+        const [stdout, stderr, exitCode] = await Promise.all([
+            readLimited(child.stdout, target.outputLimitBytes ?? 1024 * 1024),
+            readLimited(child.stderr, target.outputLimitBytes ?? 64 * 1024),
+            child.exited,
+        ]);
+        const okCodes = target.okExitCodes ?? [0];
+        if (!okCodes.includes(exitCode)) {
+            throw new Error(`Raw-stdio worker exited with ${exitCode}: ${stderr.trim()}`);
+        }
+        return stdout;
     }
 }
 

@@ -7,7 +7,7 @@
  *   2. decay sweep — 对 SurrealDB memory_node / skill 跑衰减纯函数并把
  *      新 importance 写回（避免假高分长期占据召回）。
  *
- * 设计约束（与 docs/boundaries.md 对齐）：
+ * 设计约束（与 docs/BOUNDARIES.md 对齐）：
  *  - 不依赖系统 cron / node-cron，只用 setInterval；编译进 bun 二进制零风险；
  *  - 用户集合由 trackUser() 显式注册；不做 Redis SCAN 爆炸；
  *  - 单个 tick 内串行执行同一用户的两条任务，跨用户也串行（避免并发 LLM 风暴）；
@@ -16,12 +16,7 @@
  */
 
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import {
-    DecayLayer,
-    DEFAULT_DECAY_PROFILES,
-    decayImportance,
-    type DecayProfile,
-} from "./decay.ts";
+import { DecayLayer, DEFAULT_DECAY_PROFILES, decayImportance, type DecayProfile } from "./decay.ts";
 import type { ConsolidationWorker } from "./consolidation.worker.ts";
 import type { SurrealGraphStore } from "./surreal.graph.ts";
 import type { DreamWorker } from "../../agent/runtime/dream.worker.ts";
@@ -37,6 +32,8 @@ export interface BackgroundSchedulerOptions {
     dreamBatchSize?: number;
     /** 单 tick 内每用户 decay sweep 的 batch 大小，默认 200。 */
     decayBatchSize?: number;
+    /** 用户空闲多久触发一次 dream（毫秒）；0 关闭。默认 5 分钟。 */
+    idleDreamTriggerMs?: number;
     /** 自定义衰减 profile（测试可注入更短半衰期）。 */
     profiles?: Partial<Record<DecayLayer, DecayProfile>>;
     /** 注入 now 函数（测试用）。 */
@@ -50,6 +47,8 @@ export class BackgroundScheduler {
     private consolidationTimer: ReturnType<typeof setInterval> | undefined;
     private decayTimer: ReturnType<typeof setInterval> | undefined;
     private dreamTimer: ReturnType<typeof setInterval> | undefined;
+    /** 每用户 idle one-shot timer：每次 noteUserTurn 重置；命中后触发 dream。 */
+    private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private consolidationBusy = false;
     private decayBusy = false;
     private dreamBusy = false;
@@ -72,6 +71,7 @@ export class BackgroundScheduler {
             dreamIntervalMs: options.dreamIntervalMs ?? 30 * 60_000,
             dreamBatchSize: options.dreamBatchSize ?? 8,
             decayBatchSize: options.decayBatchSize ?? 200,
+            idleDreamTriggerMs: options.idleDreamTriggerMs ?? 5 * 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
             now: options.now ?? (() => Date.now()),
         };
@@ -81,6 +81,33 @@ export class BackgroundScheduler {
     trackUser(userId: string): void {
         if (typeof userId !== "string" || userId.length === 0) return;
         this.users.add(userId);
+    }
+
+    /**
+     * 标记一次用户 turn 完成 → 重置该用户的 idle one-shot timer。
+     * idle 阈值到点未被再次重置时，触发一轮该用户的 dream pass。
+     * - dream 未注入或 idleDreamTriggerMs <= 0 时无副作用；
+     * - 同一 userId 重复调用会 clear 旧 timer，避免 timer 堆积；
+     * - 失败完全静默（dream.runOnce 内部已发事件）。
+     */
+    noteUserTurn(userId: string): void {
+        if (typeof userId !== "string" || userId.length === 0) return;
+        this.trackUser(userId);
+        if (!this.dream || this.opts.idleDreamTriggerMs <= 0) return;
+        const existing = this.idleTimers.get(userId);
+        if (existing !== undefined) {
+            clearTimeout(existing);
+        }
+        const timer = setTimeout(() => {
+            this.idleTimers.delete(userId);
+            void this.runDreamOnce(this.opts.dreamBatchSize, userId).catch(() => {
+                // runDreamOnce 内部已 publish 失败事件；这里只是兜底吞错。
+            });
+        }, this.opts.idleDreamTriggerMs);
+        if (typeof (timer as { unref?: () => void })?.unref === "function") {
+            (timer as { unref: () => void }).unref();
+        }
+        this.idleTimers.set(userId, timer);
     }
 
     /** 当前活跃用户数（用于可观察性）。 */
@@ -127,10 +154,19 @@ export class BackgroundScheduler {
             clearInterval(this.dreamTimer);
             this.dreamTimer = undefined;
         }
+        for (const timer of this.idleTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.idleTimers.clear();
     }
 
     /** 立即跑一轮整合（测试与 dream-trigger 复用）。串行所有用户。 */
-    async runConsolidationOnce(): Promise<{ users: number; consolidated: number; reinforced: number; discarded: number }> {
+    async runConsolidationOnce(): Promise<{
+        users: number;
+        consolidated: number;
+        reinforced: number;
+        discarded: number;
+    }> {
         if (this.consolidationBusy) {
             return { users: 0, consolidated: 0, reinforced: 0, discarded: 0 };
         }
@@ -155,10 +191,10 @@ export class BackgroundScheduler {
     }
 
     /** 立即跑一轮衰减扫描（测试与手动触发复用）。 */
-    async runDecayOnce(): Promise<{ users: number; memoryNodes: number; skills: number }> {
-        if (this.decayBusy) return { users: 0, memoryNodes: 0, skills: 0 };
+    async runDecayOnce(): Promise<{ users: number; memoryNodes: number; gems: number }> {
+        if (this.decayBusy) return { users: 0, memoryNodes: 0, gems: 0 };
         this.decayBusy = true;
-        const totals = { users: 0, memoryNodes: 0, skills: 0 };
+        const totals = { users: 0, memoryNodes: 0, gems: 0 };
         try {
             const now = this.opts.now();
             for (const userId of [...this.users]) {
@@ -174,7 +210,7 @@ export class BackgroundScheduler {
                                 nowMs: now,
                                 profile: this.opts.profiles[DecayLayer.MemoryNode],
                             }),
-                        decaySkill: ({ importance, updatedAt, lastVerifiedAt }) =>
+                        decayGem: ({ importance, updatedAt, lastVerifiedAt }) =>
                             decayImportance({
                                 layer: DecayLayer.Skill,
                                 importance,
@@ -186,7 +222,7 @@ export class BackgroundScheduler {
                     });
                     totals.users += 1;
                     totals.memoryNodes += r.memoryNodes;
-                    totals.skills += r.skills;
+                    totals.gems += r.gems;
                 } catch (err) {
                     this.publishFailure("decay-tick", userId, err);
                 }
@@ -195,7 +231,7 @@ export class BackgroundScheduler {
                 event(RuntimeEventType.MemoryDecaySwept, {
                     users: totals.users,
                     memoryNodes: totals.memoryNodes,
-                    skills: totals.skills,
+                    skills: totals.gems,
                 }),
             );
         } finally {
@@ -218,8 +254,14 @@ export class BackgroundScheduler {
     async runDreamOnce(
         limit?: number,
         userId?: string,
-    ): Promise<{ users: number; rewritten: number; discarded: number; skipped: number }> {
-        const totals = { users: 0, rewritten: 0, discarded: 0, skipped: 0 };
+    ): Promise<{
+        users: number;
+        driftRepaired: number;
+        recallReinforced: number;
+        contradictionsFlagged: number;
+        skipped: number;
+    }> {
+        const totals = { users: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, skipped: 0 };
         if (!this.dream || this.dreamBusy) return totals;
         this.dreamBusy = true;
         const batchSize = limit && limit > 0 ? limit : this.opts.dreamBatchSize;
@@ -227,10 +269,11 @@ export class BackgroundScheduler {
         try {
             for (const u of targets) {
                 try {
-                    const r = await this.dream.drain(u, batchSize);
+                    const r = await this.dream.runOnce(u, batchSize);
                     totals.users += 1;
-                    totals.rewritten += r.rewritten;
-                    totals.discarded += r.discarded;
+                    totals.driftRepaired += r.driftRepaired;
+                    totals.recallReinforced += r.recallReinforced;
+                    totals.contradictionsFlagged += r.contradictionsFlagged;
                     totals.skipped += r.skipped;
                 } catch (err) {
                     this.publishFailure("dream-tick", u, err);

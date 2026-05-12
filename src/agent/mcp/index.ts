@@ -71,9 +71,7 @@ export async function listMcpTools(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpToolDefinition[]> {
-    return server.url
-        ? listHttpMcpTools(paths, server, options)
-        : listStdioMcpTools(paths, server, options);
+    return server.url ? listHttpMcpTools(paths, server, options) : listStdioMcpTools(paths, server, options);
 }
 
 export async function callMcpTool(
@@ -110,10 +108,7 @@ export async function findMcpServer(paths: FlyflorPaths, name: string): Promise<
     return (await loadMcpServers(paths)).find((server) => server.name === normalized);
 }
 
-export async function readMcpConfig(
-    paths: FlyflorPaths,
-    options: { global?: boolean } = {},
-): Promise<McpConfigFile> {
+export async function readMcpConfig(paths: FlyflorPaths, options: { global?: boolean } = {}): Promise<McpConfigFile> {
     const file = Bun.file(mcpConfigPath(paths, options));
     if (!(await file.exists())) {
         return {};
@@ -289,7 +284,8 @@ function assertMcpName(name: string): void {
     }
 }
 
-function parseJsonc(input: string): unknown {
+/** 共享 JSONC 解析（剥注释 + 容忍尾逗号），供 mcp / plugin 等 manifest 复用。 */
+export function parseJsonc(input: string): unknown {
     let output = "";
     let inString = false;
     let quote = "";
@@ -312,7 +308,7 @@ function parseJsonc(input: string): unknown {
             continue;
         }
 
-        if (char === "\"" || char === "'") {
+        if (char === '"' || char === "'") {
             inString = true;
             quote = char;
             output += char;

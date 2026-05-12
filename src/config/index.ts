@@ -182,6 +182,8 @@ export interface ModelConfig {
     model: string;
     temperature: number;
     timeoutMs: number;
+    /** 主 provider 调用失败（瞬时错误 / 凭据缺失）时按顺序尝试的备用 provider 配置；不参与流式分支。 */
+    fallbacks?: ModelConfig[];
 }
 
 export type ModelProviderType = ModelProviderKindType;
@@ -201,6 +203,8 @@ export interface ModelProviderConfig {
 export interface ModelRegistryConfig {
     activeModel?: string;
     activeProvider?: string;
+    /** 主 provider 失败时按顺序尝试的备用 provider id 列表。 */
+    fallbackProviderIds?: string[];
     providers?: Record<string, ModelProviderConfig>;
     secrets?: Record<string, string>;
     temperature?: number;
@@ -335,6 +339,20 @@ export interface RoutingConfig {
     watchEscalationThreshold?: number;
     /** 黑板返回非收敛状态（NeedsUser / Failed / MaxRoundsReached）连续多少次后，下一轮强制 blackboard 模式。默认 2。 */
     blackboardFailureEscalationThreshold?: number;
+    /**
+     * 上一轮 MCP 工具调用失败率（≥）持续多少轮后强制升级到 blackboard。0 表示禁用。默认 2。
+     * 语义信号——"工具反复失败"通常意味着规划层面需要黑板深度审议，而非 direct 路径继续撞墙。
+     */
+    toolFailureEscalationThreshold?: number;
+    /**
+     * 触发"工具失败轮"判定的失败率阈值（0..1）。默认 0.5（≥半数失败即记一轮）。
+     */
+    toolFailureRatioTrigger?: number;
+    /**
+     * 上下文压力比（当前 prompt 估算 tokens / contextPressureBudget）≥1 时立即升级到 blackboard。
+     * 0 表示禁用。默认 0（先观察事件，不强制升级）。
+     */
+    contextPressureBudgetTokens?: number;
 }
 
 /**
@@ -410,6 +428,9 @@ export async function loadConfigForPaths(
         routeBypassTokenBudget: 32,
         watchEscalationThreshold: 3,
         blackboardFailureEscalationThreshold: 2,
+        toolFailureEscalationThreshold: 2,
+        toolFailureRatioTrigger: 0.5,
+        contextPressureBudgetTokens: 0,
         ...(configFile.routing ?? {}),
     };
 
@@ -571,12 +592,28 @@ function createDefaultMemoryConfig(): MemoryConfig {
 function resolveModelConfig(config: ModelRegistryConfig | undefined): ModelConfig {
     const providers = mergeConfig(createDefaultModelProviders(), config?.providers ?? {});
     const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.Mock;
-    const provider = providers[providerId] ?? {
-        type: ModelProviderKind.Mock,
-    };
+    const primary = buildModelConfig(providers, providerId, config);
+    const seen = new Set<string>([providerId]);
+    const fallbacks: ModelConfig[] = [];
+    for (const fallbackId of config?.fallbackProviderIds ?? []) {
+        if (seen.has(fallbackId)) continue;
+        if (!providers[fallbackId]) continue;
+        seen.add(fallbackId);
+        fallbacks.push(buildModelConfig(providers, fallbackId, config));
+    }
+    if (fallbacks.length > 0) {
+        primary.fallbacks = fallbacks;
+    }
+    return primary;
+}
 
+function buildModelConfig(
+    providers: Record<string, ModelProviderConfig>,
+    providerId: string,
+    config: ModelRegistryConfig | undefined,
+): ModelConfig {
+    const provider = providers[providerId] ?? { type: ModelProviderKind.Mock };
     const model = config?.activeModel ?? provider.defaultModel ?? provider.models?.[0] ?? ModelProviderId.Mock;
-
     return {
         apiMode: provider.apiMode ?? ModelApiMode.ChatCompletions,
         providerId,

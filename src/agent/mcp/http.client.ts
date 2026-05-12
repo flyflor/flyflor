@@ -115,10 +115,7 @@ class McpHttpSession {
             throw new Error(`MCP server URL is missing: ${this.server.name}`);
         }
         const controller = new AbortController();
-        const timeout = setTimeout(
-            () => controller.abort(),
-            this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        );
+        const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
         try {
             const response = await fetch(this.server.url, {
                 method: "POST",

@@ -94,9 +94,7 @@ async function testConfig() {
     const src = join(import.meta.dir, "..", "templates", "prompts");
     const entries = await readdir(src, { withFileTypes: true });
     await Promise.all(
-        entries
-            .filter((e) => e.isFile())
-            .map((e) => copyFile(join(src, e.name), join(paths.promptDir, e.name))),
+        entries.filter((e) => e.isFile()).map((e) => copyFile(join(src, e.name), join(paths.promptDir, e.name))),
     );
     return loadConfigForPaths(paths);
 }

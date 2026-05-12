@@ -4,7 +4,7 @@
  * 当 detectExplicitIntent / detectClusterCandidate 返回非 None 的 trigger 时，
  * 在 workspace/projects/{projectId}/{AGENTS,TODO,README}.md 落盘项目骨架，并预建项目 `.flyflor/memory`。
  *
- * 设计约束（与 docs/boundaries.md 对齐）：
+ * 设计约束（与 docs/BOUNDARIES.md 对齐）：
  *  - 模板源文件使用小写点分名，由 install.templates.ts 拷贝到 paths.templateDir/projects；
  *  - 路径用 paths.workspaceDir/projects/{projectId}，每个 projectId 单独目录；
  *  - 文件已存在时不覆盖（幂等），便于多轮触发；
@@ -21,9 +21,9 @@ const PROJECT_FILES = ["AGENTS.md", "TODO.md", "README.md"] as const;
 type ProjectFile = (typeof PROJECT_FILES)[number];
 
 const PROJECT_TEMPLATE_FILES: Record<ProjectFile, string> = {
-    "AGENTS.md": "agents.md",
-    "README.md": "readme.md",
-    "TODO.md": "todo.md",
+    "AGENTS.md": "AGENTS.md",
+    "README.md": "README.md",
+    "TODO.md": "TODO.md",
 };
 
 export interface ProjectScaffoldInput {
@@ -66,7 +66,9 @@ export class ProjectScaffolder {
         try {
             await mkdir(projectDir, { recursive: true });
             await Promise.all(
-                ["skills", "mcp", "plugins", "memory"].map((name) => mkdir(join(projectDir, ".flyflor", name), { recursive: true })),
+                ["skills", "mcp", "plugins", "memory"].map((name) =>
+                    mkdir(join(projectDir, ".flyflor", name), { recursive: true }),
+                ),
             );
             for (const file of PROJECT_FILES) {
                 const targetPath = join(projectDir, file);

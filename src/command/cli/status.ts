@@ -81,6 +81,9 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
     ]);
     rows.push(["iLink channel", hasIlinkBinding(config) ? "ok" : "warn", describeIlinkState(config)]);
 
+    const schedulerStatus = describeBackgroundScheduler(config);
+    rows.push(["Background scheduler", schedulerStatus.status, schedulerStatus.detail]);
+
     const table = new Table({
         head: ["Check", "Status", "Detail"],
         style: { head: [] },
@@ -188,6 +191,25 @@ function describeIlinkState(config: FlyflorConfig): string {
     }
     const baseUrl = config.gateway.channels.weixinIlink.apiBaseUrl ?? "https://ilinkai.weixin.qq.com";
     return `wechat uses iLink via ${baseUrl}`;
+}
+
+/**
+ * 后台调度器（consolidation / decay / dream）需要 Redis + Surreal + 真实 model 三件齐备。
+ * 任一缺失都会让 MemoryModule.scheduler = null，导致长期记忆链路完全停摆。
+ * 本函数从配置侧静态判断，给 doctor 一行可见性。
+ */
+function describeBackgroundScheduler(config: FlyflorConfig): { status: string; detail: string } {
+    const missing: string[] = [];
+    if (!config.memory.redis.enabled) missing.push("redis");
+    if (!config.memory.crystal.surreal.enabled) missing.push("surreal");
+    if (config.model.provider === "mock") missing.push("model(non-mock)");
+    if (missing.length === 0) {
+        return { status: "ok", detail: "consolidation+decay+dream enabled" };
+    }
+    return {
+        status: "warn",
+        detail: `disabled — missing ${missing.join(", ")}; long-term memory consolidation is paused`,
+    };
 }
 
 function section(title: string, content: string | string[]): string {

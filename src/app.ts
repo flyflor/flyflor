@@ -13,6 +13,7 @@ import {
     type ChannelAdapter,
 } from "./agent/index.ts";
 import { loadConfig, type FlyflorConfig } from "./config/index.ts";
+import { createMemory, type MemoryModule } from "./neural/memory/index.ts";
 import {
     assertModuleMetadata,
     createInjectionToken,
@@ -30,6 +31,9 @@ import {
     type ModelClient,
     type RuntimeMode as RuntimeModeType,
 } from "./protocol/index.ts";
+import { CompositeEventSink } from "./protocol/events/index.ts";
+import { FileAuditSink } from "./agent/sandbox/audit.sink.ts";
+import { join } from "node:path";
 
 export const FlyFlorTokens = {
     Adapters: createInjectionToken<Map<ChannelName, ChannelAdapter>>("flyflor.adapters"),
@@ -40,6 +44,7 @@ export const FlyFlorTokens = {
     Gateway: createInjectionToken<GatewayModule>("flyflor.gateway"),
     Mode: createInjectionToken<RuntimeModeType>("flyflor.mode"),
     Model: createInjectionToken<ModelClient>("flyflor.model"),
+    Memory: createInjectionToken<MemoryModule>("flyflor.memory"),
     Runtime: createInjectionToken<RuntimeModule>("flyflor.runtime"),
     Workers: createInjectionToken<WorkerManager>("flyflor.workers"),
 } as const;
@@ -54,6 +59,7 @@ export const FlyFlorTokens = {
         FlyFlorTokens.Model,
         FlyFlorTokens.Workers,
         FlyFlorTokens.Blackboard,
+        FlyFlorTokens.Memory,
         FlyFlorTokens.Runtime,
         FlyFlorTokens.Adapters,
         FlyFlorTokens.Gateway,
@@ -64,6 +70,7 @@ export const FlyFlorTokens = {
         FlyFlorTokens.Model,
         FlyFlorTokens.Workers,
         FlyFlorTokens.Blackboard,
+        FlyFlorTokens.Memory,
         FlyFlorTokens.Runtime,
         FlyFlorTokens.Adapters,
         FlyFlorTokens.Gateway,
@@ -80,6 +87,7 @@ export interface FlyFlorCreateOptions {
     container?: DependencyContainer;
     events?: EventSink;
     gateway?: GatewayModule;
+    memory?: MemoryModule;
     mode?: RuntimeModeType | string;
     model?: ModelClient;
     runtime?: RuntimeModule;
@@ -93,6 +101,7 @@ export interface FlyFlorDependencies {
     container: DependencyContainer;
     events: EventSink;
     gateway: GatewayModule;
+    memory: MemoryModule;
     mode: RuntimeModeType;
     model: ModelClient;
     runtime: RuntimeModule;
@@ -139,12 +148,13 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
     const mode = normalizeRuntimeMode(options.mode ?? options.argv?.[2]);
     const config = options.config ?? (await loadConfig());
     await loadPromptTemplates(config.paths);
-    const events = options.events ?? createDefaultEventSink(mode);
-    const model = options.model ?? createModelClient(config.model);
+    const events = options.events ?? createDefaultEventSink(mode, config.paths.logDir);
+    const model = options.model ?? createModelClient(config.model, events);
     const workers = options.workers ?? createDefaultWorkerManager(model, events);
     const blackboard =
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
-    const runtime = options.runtime ?? new RuntimeModule(config, model, events, blackboard);
+    const memory = options.memory ?? createMemory(config, events, model);
+    const runtime = options.runtime ?? new RuntimeModule(config, model, events, blackboard, memory);
     const adapters = options.adapters ?? createChannelAdapters(config.gateway);
     const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters, runtime, events);
     const container = options.container ?? new DependencyContainer();
@@ -156,6 +166,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         container,
         events,
         gateway,
+        memory,
         mode,
         model,
         runtime,
@@ -173,6 +184,7 @@ function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies
         [FlyFlorTokens.Model, dependencies.model],
         [FlyFlorTokens.Workers, dependencies.workers],
         [FlyFlorTokens.Blackboard, dependencies.blackboard],
+        [FlyFlorTokens.Memory, dependencies.memory],
         [FlyFlorTokens.Runtime, dependencies.runtime],
         [FlyFlorTokens.Adapters, dependencies.adapters],
         [FlyFlorTokens.Gateway, dependencies.gateway],
@@ -200,8 +212,11 @@ function isInjectionToken(value: unknown): value is InjectionToken<unknown> {
     );
 }
 
-function createDefaultEventSink(mode: RuntimeModeType): EventSink {
-    return mode === RuntimeMode.Gateway ? new ConsoleEventSink() : new NullEventSink();
+function createDefaultEventSink(mode: RuntimeModeType, logDir: string): EventSink {
+    // 审计 sink 始终启用：失败 best-effort，bun --compile 安全。
+    const audit = new FileAuditSink({ filePath: join(logDir, "audit.jsonl") });
+    const primary = mode === RuntimeMode.Gateway ? new ConsoleEventSink() : new NullEventSink();
+    return new CompositeEventSink([primary, audit]);
 }
 
 function createDefaultWorkerManager(model: ModelClient, events: EventSink): WorkerManager {

@@ -1,11 +1,11 @@
 /**
  * 记忆膨胀 + 晶体偏移防控（anti-bloat）。
  *
- * 与 DESIGN.md §8 遗忘曲线与晶体偏移防控对齐：
+ * 与 README.md §8 遗忘曲线与晶体偏移防控对齐：
  *  1. skill 去重：同 user 下若 (symbols 重叠 ≥ 0.7 且 cosine ≥ 0.85) 则视为同一 skill，
  *     合并 evidenceCount + 取 confidence 较高者；
  *  2. 矛盾检测：两条 memory_node summary embedding 余弦 < -0.5 视为相反向量，触发降级；
- *  3. skill_snapshot：写入新 skill 之前若已存在 protected 标记则只追加证据不覆盖；
+ *  3. gem_snapshot：写入新 skill 之前若已存在 protected 标记则只追加证据不覆盖；
  *  4. 时效性衰减：skill.lastVerifiedAt 与现在差 > 90 天则强制降权（由 decay.ts 提供）。
  *
  * 边界约束：
@@ -13,7 +13,7 @@
  *  - **零字符串匹配**：判断同一 skill / 矛盾，全部使用 cosine 向量 + 集合 IoU。
  */
 
-export interface SkillCandidate {
+export interface GemCandidate {
     id: string;
     symbols: string[];
     embedding: number[];
@@ -22,17 +22,17 @@ export interface SkillCandidate {
     protected?: boolean;
 }
 
-export interface SkillMergeResult {
+export interface GemMergeResult {
     /** 合并后唯一保留的 skill，由调用方决定如何 upsert。 */
-    surviving: SkillCandidate;
+    surviving: GemCandidate;
     /** 合并掉的 skill ID 列表，调用方负责 SurrealDB DELETE。 */
     droppedIds: string[];
 }
 
 /** 决定两条 skill 是否应当合并。 */
-export function shouldMergeSkills(
-    a: SkillCandidate,
-    b: SkillCandidate,
+export function shouldMergeGems(
+    a: GemCandidate,
+    b: GemCandidate,
     options: { iouThreshold?: number; cosineThreshold?: number } = {},
 ): boolean {
     const iouMin = options.iouThreshold ?? 0.7;
@@ -55,7 +55,7 @@ function sanitizeEvidence(value: number): number {
     return Math.floor(value);
 }
 
-function sanitize(c: SkillCandidate): SkillCandidate {
+function sanitize(c: GemCandidate): GemCandidate {
     return {
         ...c,
         confidence: sanitizeConfidence(c.confidence),
@@ -67,8 +67,8 @@ function sanitize(c: SkillCandidate): SkillCandidate {
  * 合并一组 skill：对全部候选两两判断，保留 confidence 高者，evidenceCount 累加。
  * O(N²)，但 N ≤ 几十；后台调用足够快。
  */
-export function dedupeSkills(skills: SkillCandidate[]): SkillMergeResult[] {
-    const survivors: SkillCandidate[] = [];
+export function dedupeGems(skills: GemCandidate[]): GemMergeResult[] {
+    const survivors: GemCandidate[] = [];
     const dropped = new Map<string, string[]>(); // surviving.id -> droppedIds
     const seenIds = new Set<string>();
     for (const raw of skills) {
@@ -80,7 +80,7 @@ export function dedupeSkills(skills: SkillCandidate[]): SkillMergeResult[] {
         for (const survivor of survivors) {
             if (survivor.protected) {
                 // protected: 只追加证据，不覆盖；候选作为"被保留"
-                if (shouldMergeSkills(survivor, candidate)) {
+                if (shouldMergeGems(survivor, candidate)) {
                     survivor.evidenceCount += candidate.evidenceCount;
                     pushDropped(dropped, survivor.id, candidate.id);
                     merged = true;
@@ -88,7 +88,7 @@ export function dedupeSkills(skills: SkillCandidate[]): SkillMergeResult[] {
                 }
                 continue;
             }
-            if (shouldMergeSkills(survivor, candidate)) {
+            if (shouldMergeGems(survivor, candidate)) {
                 if (candidate.confidence > survivor.confidence) {
                     // 反客为主：保留 candidate，丢 survivor
                     pushDropped(dropped, candidate.id, survivor.id);
@@ -115,11 +115,7 @@ export function dedupeSkills(skills: SkillCandidate[]): SkillMergeResult[] {
  * 检测两条 memory_node 是否语义相反（矛盾）。
  * cosine < -0.5 视为强反向；调用方应将较旧/较弱者降权或归档。
  */
-export function isContradiction(
-    a: { embedding: number[] },
-    b: { embedding: number[] },
-    threshold = -0.5,
-): boolean {
+export function isContradiction(a: { embedding: number[] }, b: { embedding: number[] }, threshold = -0.5): boolean {
     return cosine(a.embedding, b.embedding) < threshold;
 }
 

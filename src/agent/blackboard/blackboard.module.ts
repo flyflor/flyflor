@@ -331,11 +331,15 @@ export class BlackboardModule extends Blackboard {
         return decision;
     }
 
-    async runWorker(turnId: string, input: BlackboardWorkerRunInput, turnHint?: BlackboardTurn): Promise<BlackboardStep> {
+    async runWorker(
+        turnId: string,
+        input: BlackboardWorkerRunInput,
+        turnHint?: BlackboardTurn,
+    ): Promise<BlackboardStep> {
         if (!this.workers) {
             throw new Error("Blackboard worker manager is not configured.");
         }
-        const turn = turnHint ?? await this.store.getTurn(turnId);
+        const turn = turnHint ?? (await this.store.getTurn(turnId));
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
         }

@@ -143,9 +143,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
     });
 
     test("rejects unknown decision string", () => {
-        const d = parseConsolidationDecision(
-            JSON.stringify({ decision: "frobnicate", confidence: 1 }),
-        );
+        const d = parseConsolidationDecision(JSON.stringify({ decision: "frobnicate", confidence: 1 }));
         expect(d.decision).toBe(ConsolidationDecisionKind.Reinforce);
         expect(d.rationale).toBe("parse-failed");
     });

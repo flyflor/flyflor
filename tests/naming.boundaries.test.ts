@@ -6,13 +6,13 @@ const REPO_ROOT = join(import.meta.dir, "..");
 const SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const DOT_SEGMENTED_FILE = /^[a-z0-9]+(?:\.[a-z0-9]+)*\.[a-z0-9]+$/u;
 const CANONICAL_MEMORY_TEMPLATE = /^(MEMORY|SELF|SOUL|USER)(?:\.zh\.cn)?\.md$/u;
+// 首页类知识文档约定大写：README/TODO/AGENTS/BOUNDARIES/DESIGN（顶层 + docs/ + templates/projects/ 共用）。
+const CANONICAL_FRONTPAGE_DOC = /^(README|TODO|AGENTS|BOUNDARIES|DESIGN)\.md$/u;
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
         const files = (await Promise.all(SCANNED_DIRS.map((dir) => listFiles(join(REPO_ROOT, dir))))).flat();
-        const violations = files
-            .map((file) => relative(REPO_ROOT, file))
-            .filter((file) => !isAllowedFilename(file));
+        const violations = files.map((file) => relative(REPO_ROOT, file)).filter((file) => !isAllowedFilename(file));
 
         expect(violations).toEqual([]);
     });
@@ -30,6 +30,9 @@ describe("repository naming boundary", () => {
 function isAllowedFilename(file: string): boolean {
     const name = basename(file);
     if (file.startsWith("templates/memory/") && CANONICAL_MEMORY_TEMPLATE.test(name)) {
+        return true;
+    }
+    if (CANONICAL_FRONTPAGE_DOC.test(name)) {
         return true;
     }
     return DOT_SEGMENTED_FILE.test(name);

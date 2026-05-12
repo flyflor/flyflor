@@ -1,3 +1,3 @@
 # Long-Term Memory
 
-Curated durable notes live here. SQLite and Qdrant handle operational search indexes.
+Curated durable notes about the world, the user's projects, and stable facts the agent should keep across sessions.

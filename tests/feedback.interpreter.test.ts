@@ -68,9 +68,7 @@ describe("FeedbackInterpreter (LLM-driven, no string match)", () => {
     });
 
     test("returns none for unknown category string", () => {
-        const result = parseClassification(
-            JSON.stringify({ category: "frobnicate", confidence: 0.9, rationale: "x" }),
-        );
+        const result = parseClassification(JSON.stringify({ category: "frobnicate", confidence: 0.9, rationale: "x" }));
         expect(result.category).toBe(FeedbackCategory.None);
     });
 
@@ -102,9 +100,7 @@ describe("FeedbackInterpreter (LLM-driven, no string match)", () => {
     });
 
     test("ignores non-string rationale", () => {
-        const result = parseClassification(
-            JSON.stringify({ category: "preference", confidence: 0.4, rationale: 42 }),
-        );
+        const result = parseClassification(JSON.stringify({ category: "preference", confidence: 0.4, rationale: 42 }));
         expect(result.rationale).toBe("");
     });
 });

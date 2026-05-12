@@ -39,8 +39,8 @@ class FakeGraph {
         userId: string;
         batchSize?: number;
         decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
-        decaySkill: (row: { importance: number; updatedAt: number; lastVerifiedAt?: number }) => number;
-    }): Promise<{ memoryNodes: number; skills: number }> {
+        decayGem: (row: { importance: number; updatedAt: number; lastVerifiedAt?: number }) => number;
+    }): Promise<{ memoryNodes: number; gems: number }> {
         this.swept.push({ userId: input.userId, batchSize: input.batchSize });
         if (this.failNext) {
             this.failNext = false;
@@ -48,8 +48,8 @@ class FakeGraph {
         }
         // call the decay funcs to make sure inputs are wired
         input.decayMemoryNode({ importance: 0.5, updatedAt: 0 });
-        input.decaySkill({ importance: 0.5, updatedAt: 0, lastVerifiedAt: 0 });
-        return { memoryNodes: this.decayBudget.mn, skills: this.decayBudget.sk };
+        input.decayGem({ importance: 0.5, updatedAt: 0, lastVerifiedAt: 0 });
+        return { memoryNodes: this.decayBudget.mn, gems: this.decayBudget.sk };
     }
 }
 
@@ -71,18 +71,13 @@ function build(extra?: { dream?: FakeDream }): {
     const consolidation = new FakeConsolidation();
     const graph = new FakeGraph();
     const events = new FakeEvents();
-    const scheduler = new BackgroundScheduler(
-        consolidation as never,
-        graph as never,
-        events,
-        {
-            consolidationIntervalMs: 1_000,
-            decayIntervalMs: 1_000,
-            decayBatchSize: 50,
-            now: () => 1_700_000_000_000,
-            dream: extra?.dream as never,
-        },
-    );
+    const scheduler = new BackgroundScheduler(consolidation as never, graph as never, events, {
+        consolidationIntervalMs: 1_000,
+        decayIntervalMs: 1_000,
+        decayBatchSize: 50,
+        now: () => 1_700_000_000_000,
+        dream: extra?.dream as never,
+    });
     return { scheduler, consolidation, graph, events };
 }
 
@@ -132,9 +127,7 @@ describe("BackgroundScheduler", () => {
         consolidation.fail = true;
         const totals = await scheduler.runConsolidationOnce();
         expect(totals.users).toBe(0);
-        const failures = events.published.filter(
-            (e) => e.type === RuntimeEventType.MemoryConsolidationFailed,
-        );
+        const failures = events.published.filter((e) => e.type === RuntimeEventType.MemoryConsolidationFailed);
         expect(failures.length).toBe(2);
     });
 
@@ -145,8 +138,7 @@ describe("BackgroundScheduler", () => {
         // Force a hang via promise; the second call must early-exit with zeros
         let release!: () => void;
         const block = new Promise<ConsolidationRunResult>((resolve) => {
-            release = () =>
-                resolve({ scanned: 0, reinforced: 0, consolidated: 0, discarded: 0, skipped: 0 });
+            release = () => resolve({ scanned: 0, reinforced: 0, consolidated: 0, discarded: 0, skipped: 0 });
         });
         consolidation.drain = () => block;
         const first = scheduler.runConsolidationOnce();
@@ -164,7 +156,7 @@ describe("BackgroundScheduler", () => {
         const totals = await scheduler.runDecayOnce();
         expect(totals.users).toBe(2);
         expect(totals.memoryNodes).toBe(6);
-        expect(totals.skills).toBe(2);
+        expect(totals.gems).toBe(2);
         expect(graph.swept.map((s) => s.userId).sort()).toEqual(["u1", "u2"]);
         for (const s of graph.swept) expect(s.batchSize).toBe(50);
         const swept = events.published.filter((e) => e.type === RuntimeEventType.MemoryDecaySwept);
@@ -179,9 +171,7 @@ describe("BackgroundScheduler", () => {
         graph.failNext = true;
         const totals = await scheduler.runDecayOnce();
         expect(totals.users).toBe(1);
-        const failures = events.published.filter(
-            (e) => e.type === RuntimeEventType.MemoryConsolidationFailed,
-        );
+        const failures = events.published.filter((e) => e.type === RuntimeEventType.MemoryConsolidationFailed);
         expect(failures.length).toBe(1);
     });
 
@@ -213,7 +203,7 @@ describe("BackgroundScheduler", () => {
         let captured = 0;
         graph.applyDecaySweep = async (input) => {
             captured = input.decayMemoryNode({ importance: 1, updatedAt: 0 });
-            return { memoryNodes: 0, skills: 0 };
+            return { memoryNodes: 0, gems: 0 };
         };
         await scheduler.runDecayOnce();
         // After many half-lives the decay profile clamps to the floor; just verify it actually decayed below 1.
@@ -223,10 +213,6 @@ describe("BackgroundScheduler", () => {
 
     test("decision kinds enum still triple", () => {
         // Sanity check we did not accidentally extend the enum
-        expect(Object.values(ConsolidationDecisionKind).sort()).toEqual([
-            "consolidate",
-            "discard",
-            "reinforce",
-        ]);
+        expect(Object.values(ConsolidationDecisionKind).sort()).toEqual(["consolidate", "discard", "reinforce"]);
     });
 });

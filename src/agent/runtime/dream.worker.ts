@@ -1,207 +1,255 @@
 /**
- * Dream Mode worker：海马体梦境模式（DESIGN.md §12）。
+ * Dream 模式 worker（README.md §12）：晶体层离线维护。
  *
- * 触发方式：
- *  - 由 BackgroundScheduler 在低活跃 tick 触发；
- *  - 也可由 RuntimeModule 在用户长时间静默时手动触发。
+ * 与 ConsolidationWorker 严格不重叠：
+ *  - Consolidation 在 Redis→SurrealDB 升格通道，处理"哪些 episode 应该被晶体化"；
+ *  - Dream 完全运行在 SurrealDB 长期层上，做三件事：
+ *    1. drift-repair：修复已晶体化但产生漂移的 skill（scope 错位 / 长期未验证 / 矛盾累积）；
+ *    2. recall-reinforce：把近期 recallCount 极端值反映到 importance（热门拉高、冷门降级）；
+ *    3. contradiction-audit：ANN 邻居中疑似冲突的二元对，让 LLM 决断弱侧并降权。
  *
- * 数据流（与 ConsolidationWorker 互补，不重叠）：
- *  - Consolidation 处理"到期 review 候选"，决策 reinforce / consolidate / discard；
- *  - Dream 处理"未 protected 的批量 episode"，决策 rewrite / discard / skip；
- *  - 二者使用不同 Redis 队列，互不踩踏：consolidation 走 ff:cq:{userId}，dream 走 ff:dream:{userId}。
+ * 候选来自 SurrealDB 查询（dream.candidates.ts），不读 text；语义判断只由 LLM 在
+ * memory.dream 提示词模板中产出结构化 JSON，本文件做 enum + JSON shape 校验。
  *
- * 设计约束（与 docs/boundaries.md 对齐）：
- *  - 零字符串匹配：所有动作判定来自 LLM 结构化 JSON，代码只校验 enum + JSON shape；
- *  - 提示词全部走 templates/prompts/memory.dream.md，源码内零提示词；
- *  - protected 候选直接 skip，绝不送入 LLM；
- *  - 失败只发事件不抛错（保持后台幂等）；
+ * 红线（与 docs/BOUNDARIES.md 对齐）：
+ *  - 零业务字符串匹配；
+ *  - 任何 skill 写入必须先 writeGemSnapshot；
+ *  - protected = true 的 skill 不参与 dream（候选层就过滤掉）；
+ *  - 失败只发事件不抛错；
  *  - 无 native 依赖，bun --compile 安全。
  */
 
 import { ModelRole, type ModelClient } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderMemoryDreamPrompt } from "../prompts/index.ts";
-import type { EpisodeRecord } from "../../neural/memory/redis.ts";
+import {
+    collectDreamCandidates,
+    DreamCandidateKind,
+    type DreamCandidate,
+} from "../../neural/memory/dream.candidates.ts";
+import { DreamActionKind, parseDreamDecisions, type DreamDecision } from "../../neural/memory/dream.decisions.ts";
+import type { SurrealGraphStore } from "../../neural/memory/surreal.graph.ts";
 
-export interface DreamCandidate {
-    userId: string;
-    episodeId: string;
-    /** 是否是 protected episode（identity core / 用户明确锁定）。protected 不参与重写。 */
-    protected: boolean;
-}
+export { DreamActionKind, parseDreamDecisions } from "../../neural/memory/dream.decisions.ts";
+export type { DreamDecision } from "../../neural/memory/dream.decisions.ts";
+export type { DreamCandidate } from "../../neural/memory/dream.candidates.ts";
 
 export interface DreamRunResult {
-    consolidated: number;
-    rewritten: number;
-    discarded: number;
+    scanned: number;
+    driftRepaired: number;
+    recallReinforced: number;
+    contradictionsFlagged: number;
     skipped: number;
 }
 
 export interface DreamWorker {
-    /** 入队一条候选；失败请抛出，由调用方决定降级。 */
-    enqueue(candidate: DreamCandidate): Promise<void>;
-    /** 拉取并处理至多 limit 条；返回结构化指标（无副作用 logger 化）。 */
-    drain(userId: string, limit: number): Promise<DreamRunResult>;
+    /**
+     * 跑一轮 dream pass。limit 是单批次送 LLM 的候选数上限。
+     * userId 强制必填：dream 是 per-user 操作（用户记忆边界）。
+     */
+    runOnce(userId: string, limit?: number): Promise<DreamRunResult>;
 }
 
-/**
- * Dream worker 所需的最小记忆端口，便于测试用 fake 替换。
- * 真实实现由 RedisMemoryStore 满足（structural typing）。
- */
-export interface DreamMemoryPort {
-    enqueueDream(userId: string, episodeId: string): Promise<void>;
-    popDreamCandidates(userId: string, limit: number): Promise<string[]>;
-    readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined>;
-    rewriteEpisode(
-        userId: string,
-        episodeId: string,
-        patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
-    ): Promise<boolean>;
-    dropEpisode(userId: string, episodeId: string): Promise<void>;
-}
-
-/**
- * 默认 No-op 实现：返回零指标，不做任何工作。
- * 在没有 Redis 或 ModelClient 时使用，保持 RuntimeModule 依赖图稳定。
- */
+/** No-op 实现：缺少 SurrealDB 或 ModelClient 时使用，保持依赖图稳定。 */
 export class NullDreamWorker implements DreamWorker {
-    async enqueue(_candidate: DreamCandidate): Promise<void> {
-        // intentional no-op
+    async runOnce(_userId: string, _limit?: number): Promise<DreamRunResult> {
+        return zeroResult();
     }
-
-    async drain(_userId: string, _limit: number): Promise<DreamRunResult> {
-        return { consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 };
-    }
-}
-
-export const DreamActionKind = {
-    Rewrite: "rewrite",
-    Discard: "discard",
-    Skip: "skip",
-} as const;
-export type DreamActionKind = (typeof DreamActionKind)[keyof typeof DreamActionKind];
-
-export interface DreamDecision {
-    episodeId: string;
-    action: DreamActionKind;
-    newText?: string;
-    newConcepts?: string[];
-    newImportance?: number;
 }
 
 export interface DreamWorkerOptions {
-    /** 单批次送入 LLM 的最大 episode 数（默认 8）。 */
-    batchSize?: number;
-    /** rewrite 决策时单条 newText 的硬上限字符数（默认 600）。 */
-    maxRewriteChars?: number;
+    /** 单 pass 候选上限（与 DREAM_THRESHOLDS.maxCandidatesPerPass 取小）。 */
+    maxCandidates?: number;
+    /** 注入 now（测试用）。 */
+    now?: () => number;
 }
 
 export class DreamWorkerImpl implements DreamWorker {
-    private readonly batchSize: number;
-    private readonly maxRewriteChars: number;
+    private readonly now: () => number;
+    private readonly maxCandidates: number;
 
     constructor(
-        private readonly memory: DreamMemoryPort,
+        private readonly graph: SurrealGraphStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
         options: DreamWorkerOptions = {},
     ) {
-        this.batchSize = Math.max(1, options.batchSize ?? 8);
-        this.maxRewriteChars = Math.max(64, options.maxRewriteChars ?? 600);
+        this.now = options.now ?? (() => Date.now());
+        this.maxCandidates = Math.max(1, options.maxCandidates ?? 24);
     }
 
-    async enqueue(candidate: DreamCandidate): Promise<void> {
-        if (!candidate || typeof candidate.episodeId !== "string" || candidate.episodeId.length === 0) {
-            return;
-        }
-        if (candidate.protected) {
-            // protected episode 永不参与 dream rewrite，连入队都跳过。
-            return;
-        }
-        await this.memory.enqueueDream(candidate.userId, candidate.episodeId);
-    }
+    async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
+        if (typeof userId !== "string" || userId.length === 0) return zeroResult();
+        const cap = Math.min(this.maxCandidates, limit && limit > 0 ? limit : this.maxCandidates);
+        const nowMs = this.now();
 
-    async drain(userId: string, limit: number): Promise<DreamRunResult> {
-        const result: DreamRunResult = { consolidated: 0, rewritten: 0, discarded: 0, skipped: 0 };
-        const cap = Math.min(Math.max(0, limit), this.batchSize);
-        if (cap === 0) return result;
-
-        let ids: string[];
+        let candidates: DreamCandidate[];
         try {
-            ids = await this.memory.popDreamCandidates(userId, cap);
+            candidates = await collectDreamCandidates(this.graph, { userId, nowMs });
         } catch (err) {
-            this.publishFailure(userId, "pop-candidates", err);
+            this.publishFailure(userId, "collect", err);
+            return zeroResult();
+        }
+        candidates = candidates.slice(0, cap);
+        const result = zeroResult();
+        result.scanned = candidates.length;
+        if (candidates.length === 0) {
+            this.publishCompleted(userId, result);
             return result;
         }
-        if (ids.length === 0) return result;
-
-        const episodes: EpisodeRecord[] = [];
-        for (const id of ids) {
-            try {
-                const ep = await this.memory.readEpisode(userId, id);
-                if (ep) episodes.push(ep);
-                else result.skipped += 1;
-            } catch (err) {
-                this.publishFailure(userId, "read-episode", err);
-                result.skipped += 1;
-            }
-        }
-        if (episodes.length === 0) return result;
 
         let raw: string;
         try {
             const prompt = renderMemoryDreamPrompt({
                 userId,
-                episodes: renderDreamEpisodeBlock(episodes),
+                candidates: renderCandidatesBlock(candidates),
             });
             raw = await this.model.generate([{ role: ModelRole.User, content: prompt }]);
         } catch (err) {
-            this.publishFailure(userId, "llm-call", err);
-            // LLM 失败时所有未处理的 episode 计为 skipped；候选已经从 Redis pop 出来不会再次处理，
-            // 但 dream 是有损通道，丢失 ≤ batch 条 episode 的影响在可容忍范围内。
-            result.skipped += episodes.length;
+            this.publishFailure(userId, "llm", err);
+            result.skipped = candidates.length;
             return result;
         }
 
-        const decisions = parseDreamDecisions(raw, this.maxRewriteChars);
-        const byId = new Map(decisions.map((d) => [d.episodeId, d] as const));
-        for (const ep of episodes) {
-            const decision = byId.get(ep.episodeId);
-            if (!decision) {
+        const decisions = parseDreamDecisions(raw);
+        const byId = new Map<string, DreamDecision>(decisions.map((d) => [d.candidateId, d]));
+        for (const cand of candidates) {
+            const dec = byId.get(cand.candidateId);
+            if (!dec) {
                 result.skipped += 1;
                 continue;
             }
             try {
-                if (decision.action === DreamActionKind.Discard) {
-                    await this.memory.dropEpisode(userId, ep.episodeId);
-                    result.discarded += 1;
-                } else if (decision.action === DreamActionKind.Rewrite) {
-                    const ok = await this.memory.rewriteEpisode(userId, ep.episodeId, {
-                        text: decision.newText,
-                        concepts: decision.newConcepts,
-                        importance: decision.newImportance,
-                    });
-                    if (ok) {
-                        result.rewritten += 1;
-                    } else {
-                        result.skipped += 1;
-                    }
-                } else {
-                    result.skipped += 1;
-                }
+                const applied = await this.applyDecision(userId, cand, dec, nowMs);
+                if (applied === "drift") result.driftRepaired += 1;
+                else if (applied === "recall") result.recallReinforced += 1;
+                else if (applied === "contradiction") result.contradictionsFlagged += 1;
+                else result.skipped += 1;
             } catch (err) {
-                this.publishFailure(userId, "apply-decision", err);
+                this.publishFailure(userId, "apply", err);
                 result.skipped += 1;
             }
         }
-        this.events.publish(
-            event(RuntimeEventType.MemoryDreamCompleted, {
-                userId,
-                scanned: episodes.length,
-                ...result,
-            }),
-        );
+        this.publishCompleted(userId, result);
         return result;
+    }
+
+    private async applyDecision(
+        userId: string,
+        candidate: DreamCandidate,
+        decision: DreamDecision,
+        nowMs: number,
+    ): Promise<"drift" | "recall" | "contradiction" | "skip"> {
+        if (decision.action === DreamActionKind.Skip) return "skip";
+
+        if (decision.action === DreamActionKind.DriftRepair) {
+            if (candidate.kind !== DreamCandidateKind.SkillDrift) return "skip";
+            // 红线：写入前必须先快照。
+            const snapId = await this.graph.writeGemSnapshot(
+                {
+                    id: candidate.gemId,
+                    userId,
+                    summary: candidate.summary,
+                    symbols: candidate.symbols,
+                    embedding: [],
+                    confidence: candidate.signals.confidence ?? 0,
+                    support: 0,
+                    protected: false,
+                    updatedAt: nowMs,
+                },
+                `dream-drift-repair:${nowMs}`,
+                nowMs,
+            );
+            const ok = await this.graph.applyGemDriftRepair({
+                gemId: candidate.gemId,
+                nowMs,
+                newSummary: decision.newSummary,
+                newSymbols: decision.newSymbols,
+                newStatus: decision.newStatus,
+                scopeNote: decision.scopeNote,
+                confidenceMultiplier: decision.confidenceMultiplier,
+            });
+            if (ok) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryDriftRepaired, {
+                        userId,
+                        gemId: candidate.gemId,
+                        snapshotId: snapId,
+                        newStatus: decision.newStatus,
+                    }),
+                );
+                return "drift";
+            }
+            return "skip";
+        }
+
+        if (decision.action === DreamActionKind.RecallReinforce) {
+            if (candidate.kind !== DreamCandidateKind.Recall) return "skip";
+            const ok = await this.graph.applyMemoryReinforce({
+                table: candidate.target.table,
+                id: candidate.target.id,
+                importanceMultiplier: decision.importanceMultiplier,
+                nowMs,
+            });
+            if (ok) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryRecallReinforced, {
+                        userId,
+                        table: candidate.target.table,
+                        id: candidate.target.id,
+                        importanceMultiplier: decision.importanceMultiplier,
+                    }),
+                );
+                return "recall";
+            }
+            return "skip";
+        }
+
+        if (decision.action === DreamActionKind.ContradictionAudit) {
+            if (candidate.kind !== DreamCandidateKind.ContradictionPair) return "skip";
+            const targets: Array<{ side: "left" | "right"; ref: { table: "memory_node" | "gem"; id: string } }> = [];
+            if (decision.weaker === "left" || decision.weaker === "both") {
+                targets.push({ side: "left", ref: candidate.left });
+            }
+            if (decision.weaker === "right" || decision.weaker === "both") {
+                targets.push({ side: "right", ref: candidate.right });
+            }
+            const m = decision.confidenceMultiplier ?? 0.7;
+            const delta = decision.contradictionDelta ?? 1;
+            const relate = decision.relate ?? true;
+            let appliedAny = false;
+            for (const t of targets) {
+                const other = t.side === "left" ? candidate.right : candidate.left;
+                const ok = await this.graph.applyContradictionAudit({
+                    table: t.ref.table,
+                    id: t.ref.id,
+                    confidenceMultiplier: m,
+                    contradictionDelta: delta,
+                    nowMs,
+                    relateWith: relate ? { table: other.table, id: other.id } : undefined,
+                });
+                if (ok) appliedAny = true;
+            }
+            if (appliedAny) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryContradictionFlagged, {
+                        userId,
+                        left: candidate.left,
+                        right: candidate.right,
+                        weaker: decision.weaker,
+                        cosine: candidate.cosine,
+                    }),
+                );
+                return "contradiction";
+            }
+            return "skip";
+        }
+
+        return "skip";
+    }
+
+    private publishCompleted(userId: string, result: DreamRunResult): void {
+        this.events.publish(event(RuntimeEventType.MemoryDreamCompleted, { userId, ...result }));
     }
 
     private publishFailure(userId: string, stage: string, err: unknown): void {
@@ -215,87 +263,50 @@ export class DreamWorkerImpl implements DreamWorker {
     }
 }
 
-export const DREAM_QUEUE_KEY_TEMPLATE = "ff:dream:{userId}";
-
-export function dreamQueueKey(userId: string): string {
-    return DREAM_QUEUE_KEY_TEMPLATE.replace("{userId}", userId);
+function zeroResult(): DreamRunResult {
+    return { scanned: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, skipped: 0 };
 }
 
-function renderDreamEpisodeBlock(episodes: EpisodeRecord[]): string {
-    return episodes
-        .map((ep) =>
-            [
-                `- episodeId: ${ep.episodeId}`,
-                `  importance: ${ep.importance.toFixed(2)}`,
-                `  concepts: ${JSON.stringify(ep.concepts ?? [])}`,
-                `  sourceKind: ${ep.sourceKind}`,
-                `  text: ${ep.text.slice(0, 800).replace(/\s+/g, " ").trim()}`,
-            ].join("\n"),
-        )
+/** 把候选集合渲染成 LLM 可读的紧凑文本块；不包含任何业务语义指令。 */
+export function renderCandidatesBlock(candidates: DreamCandidate[]): string {
+    return candidates
+        .map((c) => {
+            if (c.kind === DreamCandidateKind.SkillDrift) {
+                return [
+                    `- candidateId: ${c.candidateId}`,
+                    `  kind: skill-drift`,
+                    `  gemId: ${c.gemId}`,
+                    `  symbols: ${JSON.stringify(c.symbols)}`,
+                    `  signals: ${JSON.stringify(c.signals)}`,
+                    `  summary: ${oneLine(c.summary)}`,
+                ].join("\n");
+            }
+            if (c.kind === DreamCandidateKind.Recall) {
+                return [
+                    `- candidateId: ${c.candidateId}`,
+                    `  kind: recall`,
+                    `  target: ${c.target.table}:${c.target.id}`,
+                    `  bucket: ${c.bucket}`,
+                    `  symbols: ${JSON.stringify(c.symbols)}`,
+                    `  signals: ${JSON.stringify(c.signals)}`,
+                    `  summary: ${oneLine(c.summary)}`,
+                ].join("\n");
+            }
+            return [
+                `- candidateId: ${c.candidateId}`,
+                `  kind: contradiction-pair`,
+                `  cosine: ${c.cosine}`,
+                `  left: ${c.left.table}:${c.left.id}`,
+                `  leftSummary: ${oneLine(c.left.summary)}`,
+                `  leftSignals: ${JSON.stringify(c.signalsLeft)}`,
+                `  right: ${c.right.table}:${c.right.id}`,
+                `  rightSummary: ${oneLine(c.right.summary)}`,
+                `  rightSignals: ${JSON.stringify(c.signalsRight)}`,
+            ].join("\n");
+        })
         .join("\n");
 }
 
-export function parseDreamDecisions(raw: string, maxRewriteChars: number): DreamDecision[] {
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) return [];
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-        return [];
-    }
-    if (!isRecord(parsed)) return [];
-    const list = (parsed as { decisions?: unknown }).decisions;
-    if (!Array.isArray(list)) return [];
-    const out: DreamDecision[] = [];
-    for (const entry of list) {
-        if (!isRecord(entry)) continue;
-        const episodeId = typeof entry.episodeId === "string" ? entry.episodeId.trim() : "";
-        if (episodeId.length === 0) continue;
-        const action = normaliseDreamAction(entry.action);
-        if (!action) continue;
-        const decision: DreamDecision = { episodeId, action };
-        if (action === DreamActionKind.Rewrite) {
-            const text = typeof entry.newText === "string" ? entry.newText.trim() : "";
-            if (text.length === 0) {
-                // rewrite 缺少新文本 → 退化为 skip
-                decision.action = DreamActionKind.Skip;
-            } else {
-                decision.newText = text.slice(0, maxRewriteChars);
-                if (Array.isArray(entry.newConcepts)) {
-                    decision.newConcepts = entry.newConcepts
-                        .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-                        .map((s) => s.trim().toLowerCase())
-                        .slice(0, 16);
-                }
-                if (
-                    typeof entry.newImportance === "number" &&
-                    Number.isFinite(entry.newImportance)
-                ) {
-                    decision.newImportance = clamp01(entry.newImportance);
-                }
-            }
-        }
-        out.push(decision);
-    }
-    return out;
+function oneLine(text: string): string {
+    return text.slice(0, 400).replace(/\s+/g, " ").trim();
 }
-
-function normaliseDreamAction(value: unknown): DreamActionKind | undefined {
-    if (typeof value !== "string") return undefined;
-    const known = Object.values(DreamActionKind) as string[];
-    return known.includes(value) ? (value as DreamActionKind) : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function clamp01(value: number): number {
-    if (Number.isNaN(value)) return 0;
-    if (value < 0) return 0;
-    if (value > 1) return 1;
-    return value;
-}
-

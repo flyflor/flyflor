@@ -50,9 +50,7 @@ async function buildPaths(): Promise<FlyflorPaths> {
     await mkdir(dst, { recursive: true });
     const src = join(import.meta.dir, "..", "templates", "projects");
     const entries = await readdir(src, { withFileTypes: true });
-    await Promise.all(
-        entries.filter((e) => e.isFile()).map((e) => copyFile(join(src, e.name), join(dst, e.name))),
-    );
+    await Promise.all(entries.filter((e) => e.isFile()).map((e) => copyFile(join(src, e.name), join(dst, e.name))));
     return paths;
 }
 
