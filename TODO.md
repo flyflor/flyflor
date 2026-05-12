@@ -56,7 +56,7 @@
 | MCP-01 | 旧式 SSE 双端点（`GET /events` + `POST /messages`）未实现 | P2 |
 | ~~MCP-02~~ | ~~catalog 缓存进程内 Map，多副本不共享，缺 LRU 限制~~ ✅ done — 新增 `MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES=64` 上限 + `cacheMcpToolEntries` 写时清理过期 + LRU 淘汰；命中时 `delete+set` 维护 recency。多副本共享留待 EQ 阶段考虑外置缓存 | P1 |
 | ~~MCP-03~~ | ~~tool 调用结果无摘要 / 截断策略，长结果直接拼回模型~~ ✅ done — `renderMcpToolResults` 走 `summarizeMcpResultPayload`：超过 4000 字符的结果保留 head 2400 + tail 1200 + originalChars 与 notice；不可序列化结果降级为占位（4 个新测试） | P1 |
-| MCP-04 | 客户端未做 `inputSchema` JSON-Schema 校验 | P2 |
+| ~~MCP-04~~ | ~~客户端未做 `inputSchema` JSON-Schema 校验~~ ✅ done — `src/agent/mcp/schema.validate.ts` 实现轻量子集（type/required/properties/items/enum/additionalProperties:false 递归）；`RuntimeModule.executeMcpToolCalls` 在 sandbox gate 之前对 catalog `inputSchema` 做校验，违例以 `input-schema-violation` preDeny；7 个单测 | P2 |
 
 ## Skill
 

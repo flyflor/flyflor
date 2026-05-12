@@ -28,6 +28,7 @@ import {
     parseMcpToolCalls,
     renderMcpToolCatalog,
     renderMcpToolResults,
+    validateAgainstInputSchema,
     type McpToolCallExecution,
     type McpToolCatalogEntry,
     type McpToolCallRequest,
@@ -764,6 +765,9 @@ export class RuntimeModule extends RuntimeBoundary {
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
     ): Promise<McpToolCallExecution[]> {
         const catalogKeys = new Set(catalog.map((entry) => `${entry.server}.${entry.tool.name}`));
+        const catalogByKey = new Map<string, McpToolCatalogEntry>(
+            catalog.map((entry) => [`${entry.server}.${entry.tool.name}`, entry]),
+        );
         const servers = await loadMcpServers(this.config.paths);
         const sandboxPolicy = createSandboxPolicy(this.config.sandbox);
         const executions: McpToolCallExecution[] = [];
@@ -771,19 +775,28 @@ export class RuntimeModule extends RuntimeBoundary {
             const key = `${call.server}.${call.tool}`;
             const server = servers.find((candidate) => candidate.name === call.server);
             const descriptor = { server: call.server, tool: call.tool };
+            const catalogEntry = catalogByKey.get(key);
+            const schemaCheck = catalogEntry
+                ? validateAgainstInputSchema(catalogEntry.tool.inputSchema, call.input)
+                : { ok: true, errors: [] };
+            const preDeny = !catalogKeys.has(key) || !server
+                ? {
+                      reason: "tool-not-in-catalog",
+                      message: `MCP tool is not available this turn: ${key}`,
+                  }
+                : !schemaCheck.ok
+                  ? {
+                        reason: "input-schema-violation",
+                        message: `MCP tool input violates inputSchema for ${key}: ${schemaCheck.errors.join("; ")}`,
+                    }
+                  : undefined;
             const gate = await gateCapabilityExecution({
                 policy: sandboxPolicy,
                 kind: CapabilityExecutionKind.McpTool,
                 events: this.events,
                 requestId,
                 descriptor,
-                preDeny:
-                    !catalogKeys.has(key) || !server
-                        ? {
-                              reason: "tool-not-in-catalog",
-                              message: `MCP tool is not available this turn: ${key}`,
-                          }
-                        : undefined,
+                preDeny,
                 approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
                 deniedMessage: `MCP tool call was not approved: ${key}`,
             });

@@ -11,6 +11,7 @@ import {
 } from "./stdio.client.ts";
 
 export * from "./tool.calls.ts";
+export { validateAgainstInputSchema, type SchemaValidationResult } from "./schema.validate.ts";
 export { callHttpMcpTool, listHttpMcpTools } from "./http.client.ts";
 export {
     callStdioMcpTool,
