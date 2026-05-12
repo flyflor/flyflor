@@ -45,6 +45,7 @@ import {
     findPlugin,
     loadPlugins,
     pluginConfigPath,
+    PluginRunner,
     removePlugin,
     setPluginEnabled,
     upsertPlugin,
@@ -53,6 +54,7 @@ import {
     type PluginValidationResult,
 } from "../../agent/plugin/index.ts";
 import { promptApproveMcpToolCall, startHumanChat } from "../../agent/runtime/index.ts";
+import { createSandboxPolicy } from "../../agent/sandbox/index.ts";
 import {
     findSkill,
     installSkill,
@@ -466,6 +468,19 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--global", "Write global plugin manifest"],
                     ["-y, --yes", "Skip confirmation"],
+                ],
+            },
+            {
+                name: "run",
+                argument: "<name>",
+                help: "Invoke plugin via PluginRunner with a JSON payload",
+                options: [
+                    ["--input <json>", "Inline JSON request (default: {})"],
+                    ["--input-file <path>", "Read JSON request from file"],
+                    ["--timeout-ms <ms>", "Per-invocation timeout (default: 8000)"],
+                    ["--command <cmd>", "Override command (default: bun)"],
+                    ["--allow-cmd <cmd...>", "Additional allowed commands"],
+                    ["--json", "Emit raw JSON result"],
                 ],
             },
         ],
@@ -1496,6 +1511,77 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
         const scope = opts.global ? "global" : "project";
         console.log(result.removed ? `Removed ${scope} plugin: ${name}` : `No ${scope} plugin found: ${name}`);
         console.log(`Path: ${result.path}`);
+        return;
+    }
+    if (sub === "run") {
+        const name = command.args[0];
+        if (!name) {
+            throw new CommanderError(1, "flyflor.missingPlugin", "Missing plugin name");
+        }
+        const opts = command.opts<{
+            allowCmd?: string[];
+            command?: string;
+            input?: string;
+            inputFile?: string;
+            json?: boolean;
+            timeoutMs?: string;
+        }>();
+        const plugin = await findPlugin(config.paths, name);
+        if (!plugin) {
+            throw new CommanderError(1, "flyflor.pluginNotFound", `Plugin not found: ${name}`);
+        }
+        let requestJson = "{}";
+        if (typeof opts.inputFile === "string" && opts.inputFile.length > 0) {
+            requestJson = await Bun.file(opts.inputFile).text();
+        } else if (typeof opts.input === "string") {
+            requestJson = opts.input;
+        }
+        let request: Record<string, unknown>;
+        try {
+            const parsed = JSON.parse(requestJson) as unknown;
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                throw new Error("plugin request must be a JSON object");
+            }
+            request = parsed as Record<string, unknown>;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new CommanderError(1, "flyflor.invalidPluginRequest", `Invalid JSON request: ${message}`);
+        }
+        const events = app.resolve(FlyFlorTokens.Events);
+        const policy = createSandboxPolicy(config.sandbox);
+        const command_ = opts.command?.trim() || "bun";
+        const allowed = new Set<string>(["bun", command_]);
+        for (const extra of opts.allowCmd ?? []) {
+            if (typeof extra === "string" && extra.length > 0) allowed.add(extra);
+        }
+        const runner = new PluginRunner({
+            policy,
+            events,
+            allowedCommands: [...allowed],
+        });
+        const timeoutMs = opts.timeoutMs ? Number(opts.timeoutMs) : undefined;
+        const result = await runner.invoke({
+            plugin,
+            command: command_,
+            args: [plugin.entry],
+            cwd: config.paths.projectDir,
+            env: process.env as Record<string, string>,
+            timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
+            request,
+        });
+        if (opts.json) {
+            console.log(JSON.stringify(result, null, 2));
+        } else {
+            console.log(`plugin=${plugin.name} ok=${result.ok} exit=${result.exitCode ?? "?"} ${result.durationMs}ms`);
+            if (result.error) console.log(`error: ${result.error}`);
+            if (result.stderr) console.log(`stderr: ${result.stderr.trim()}`);
+            if (result.response !== undefined) {
+                console.log(`response: ${JSON.stringify(result.response, null, 2)}`);
+            }
+        }
+        if (!result.ok) {
+            throw new CommanderError(1, "flyflor.pluginFailed", `Plugin ${plugin.name} failed`);
+        }
         return;
     }
     printPendingCommand(["plugins", sub]);

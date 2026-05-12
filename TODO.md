@@ -71,7 +71,7 @@
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
 | CLI-01 | `flyflor tools enable/disable` 未实现 | P2 |
-| CLI-02 | `flyflor plugins *` 大多骨架 | P1 |
+| ~~CLI-02~~ | ~~`flyflor plugins *` 大多骨架~~ ✅ done — list/show/validate/add/enable/disable/remove 已完整；本批补齐 `plugins run <name>` 子命令：通过 `PluginRunner` + `createSandboxPolicy` 在子进程内调用 plugin entry，支持 `--input` / `--input-file` 注入 JSON 请求、`--timeout-ms` / `--command` / `--allow-cmd` 覆盖白名单、`--json` 原始输出；失败返回非零退出码并打印 stderr | P1 |
 | CLI-03 | `flyflor update` 未做下载升级 | P2 |
 | CLI-04 | `flyflor doctor --fix` 未实现 | P2 |
 | CLI-05 | `flyflor chat --image / --toolsets / --max-turns / --tui` blocked / todo | P2 |
