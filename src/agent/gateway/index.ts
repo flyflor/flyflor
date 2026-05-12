@@ -8,6 +8,13 @@ export {
 export type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "./channels/index.ts";
 export { GatewayModule } from "./gateway.module.ts";
 export {
+    buildDedupKey,
+    InMemoryDedupStore,
+    RedisDedupStore,
+    type DedupClaim,
+    type MessageDedupStore,
+} from "./dedup.ts";
+export {
     gatewayDaemonStatus,
     resolveDaemonPaths,
     restartGatewayDaemon,

@@ -37,7 +37,7 @@
 | --- | --- | --- |
 | G-01 | BlueBubbles / iMessage / DingTalk / Email / HomeAssistant / Line / Mattermost / Matrix / QQ / Signal / Slack / SMS / WeCom / WhatsApp / Zalo 仅是 `HttpPlatformAdapter` 占位，**缺签名校验 / 富媒体 / 群组识别** | P2 |
 | ~~G-02~~ | ~~`gateway start/stop/restart` 后台服务模式未实现~~ ✅ done — `src/agent/gateway/daemon.ts`：PID 文件 `cacheDir/gateway.pid` + 日志 `logDir/gateway.log`；`startGatewayDaemon` 用 `Bun.spawn` 启动 `flyflor gateway run` 子进程 + `unref()` 立即 detach + 健康轮询；`stopGatewayDaemon` SIGTERM → 2s grace → SIGKILL；`restartGatewayDaemon` = stop+start；CLI `gateway start/stop/restart/status` 全部接入；5 用例覆盖 PID 生命周期 | P1 |
-| G-03 | `MessageDispatcher` 单进程，多副本部署缺消息去重与幂等键 | P1 |
+| ~~G-03~~ | ~~`MessageDispatcher` 单进程，多副本部署缺消息去重与幂等键~~ ✅ done — `src/agent/gateway/dedup.ts`：`MessageDedupStore` 接口 + `InMemoryDedupStore`（LRU+TTL，默认 60s/1024 槽）+ `RedisDedupStore`（`SET key … EX ttl NX` 抢占 → `SET … XX` 写回 reply）；GatewayModule.dispatch 接入 tryClaim/recordReply/release：duplicate 直接返回 cachedReply，in-flight 短路空 reply（上游 webhook 收 200 不再重试）；5 用例覆盖 claim/release/TTL/LRU/key 隔离 | P1 |
 | G-04 | `attachments` 入站类型存在，runtime 未消费（`chat --image` blocked） | P2 |
 
 ## Sandbox

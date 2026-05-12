@@ -6,6 +6,7 @@ import {
     ArchitectureLayer,
     type ChannelName,
     type GatewayMessage,
+    type GatewayReply,
     type RuntimeContext,
 } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
@@ -13,6 +14,7 @@ import { Gateway } from "../components.ts";
 import { Module, Provide } from "../di/decorators/index.ts";
 import { buildGatewayStatusSnapshot, type ChannelRuntimeState } from "./channels/status.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./channels/types.ts";
+import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.ts";
 
 @Module({ name: "gateway", tags: ["flyflor", "boundary"] })
 @Provide({ kind: ComponentKind.Gateway, layer: ArchitectureLayer.Control, name: "gateway", provider: true })
@@ -27,6 +29,7 @@ export class GatewayModule extends Gateway {
         private readonly adapters: Map<ChannelName, ChannelAdapter>,
         private readonly runtime: RuntimeModule,
         private readonly events: EventSink,
+        private readonly dedup: MessageDedupStore = new InMemoryDedupStore(),
     ) {
         super();
     }
@@ -174,10 +177,50 @@ export class GatewayModule extends Gateway {
             requestId: crypto.randomUUID(),
             now: new Date().toISOString(),
         };
+        // 跨副本幂等：同一 (channel, message.id) 第二次进入直接复用第一次结果，
+        // in-flight 重复请求短路返回空文 reply（webhook 上游会收到 200 不再重试）。
+        const dedupKey = buildDedupKey(message.route.channel, message.id);
+        const claim = await this.dedup.tryClaim(dedupKey);
+        if (claim.state === "duplicate") {
+            this.events.publish(
+                event(
+                    RuntimeEventType.GatewayMessageReceived,
+                    { channel: message.route.channel, dedup: "duplicate" },
+                    context.requestId,
+                ),
+            );
+            return claim.cachedReply;
+        }
+        if (claim.state === "in-flight") {
+            this.events.publish(
+                event(
+                    RuntimeEventType.GatewayMessageReceived,
+                    { channel: message.route.channel, dedup: "in-flight" },
+                    context.requestId,
+                ),
+            );
+            return {
+                messageId: message.id,
+                route: message.route,
+                text: "",
+                metadata: { dedup: "in-flight" },
+            } satisfies GatewayReply;
+        }
         this.events.publish(
-            event(RuntimeEventType.GatewayMessageReceived, { channel: message.route.channel }, context.requestId),
+            event(
+                RuntimeEventType.GatewayMessageReceived,
+                { channel: message.route.channel, dedup: "claimed" },
+                context.requestId,
+            ),
         );
-        return this.runtime.handleMessage(message, context, options);
+        try {
+            const reply = await this.runtime.handleMessage(message, context, options);
+            await this.dedup.recordReply(dedupKey, reply).catch(() => undefined);
+            return reply;
+        } catch (err) {
+            await this.dedup.release(dedupKey).catch(() => undefined);
+            throw err;
+        }
     }
 
     getStatusSnapshot() {
