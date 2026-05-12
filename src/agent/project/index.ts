@@ -31,7 +31,9 @@ import { MemorySourceKind } from "../../protocol/contracts/index.ts";
 export const ProjectTriggerKind = {
     ExplicitProject: "explicit-project",
     ExplicitEvent: "explicit-event",
+    ExplicitSkill: "explicit-skill",
     ClusterCandidate: "cluster-candidate",
+    SkillCandidate: "skill-candidate",
     SkillPromotion: "skill-promotion",
     None: "none",
 } as const;
@@ -90,6 +92,29 @@ export function detectExplicitIntent(actions: MemoryAction[], config: ProjectTri
         };
     }
     return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [], rationale: "no-explicit" };
+}
+
+/** 显式技能固化意图（独立通道，避免与 project/event 互相挤压）。 */
+export function detectExplicitSkillIntent(
+    actions: MemoryAction[],
+    config: ProjectTriggerConfig = {},
+): ProjectTriggerResult {
+    const threshold = config.explicitThreshold ?? DEFAULTS.explicitThreshold;
+    let score = 0;
+    for (const action of actions) {
+        const signals = action.signals as { skillPromotionIntent?: number } | undefined;
+        const s = clamp01(signals?.skillPromotionIntent ?? 0);
+        if (s > score) score = s;
+    }
+    if (score >= threshold) {
+        return {
+            kind: ProjectTriggerKind.ExplicitSkill,
+            score,
+            relatedIds: [],
+            rationale: "explicit-skill-intent",
+        };
+    }
+    return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [], rationale: "no-explicit-skill" };
 }
 
 // ─── 路径 B: cluster 自动识别 ─────────────────────────────────────
@@ -182,6 +207,53 @@ export function detectSkillPromotion(
         };
     }
     return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [], rationale: "below-thresholds" };
+}
+
+// ─── 路径 D: 技能候选（从 episode cluster 识别新技能） ────────────
+
+export interface SkillClusterInput {
+    /** 共享的 MCP 工具调用集合（按字典序去重）。 */
+    tools: string[];
+    /** 命中此工具组合的 episode。 */
+    episodes: EpisodeRecord[];
+}
+
+export function detectSkillCandidate(
+    cluster: SkillClusterInput,
+    config: ProjectTriggerConfig = {},
+): ProjectTriggerResult {
+    const supportMin = config.skillSupportMin ?? DEFAULTS.skillSupportMin;
+    const confMin = config.skillConfidenceMin ?? DEFAULTS.skillConfidenceMin;
+    if (cluster.tools.length === 0) {
+        return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [], rationale: "no-tools" };
+    }
+    if (cluster.episodes.length < supportMin) {
+        return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [], rationale: "support-too-low" };
+    }
+    let importanceSum = 0;
+    let mcpSuccessCount = 0;
+    for (const ep of cluster.episodes) {
+        importanceSum += clamp01(ep.importance);
+        if (ep.sourceKind === MemorySourceKind.McpAugmented) mcpSuccessCount += 1;
+    }
+    const meanImportance = importanceSum / cluster.episodes.length;
+    if (meanImportance <= confMin) {
+        return { kind: ProjectTriggerKind.None, score: meanImportance, relatedIds: [], rationale: "confidence-too-low" };
+    }
+    if (mcpSuccessCount < Math.ceil(supportMin / 2)) {
+        return {
+            kind: ProjectTriggerKind.None,
+            score: meanImportance,
+            relatedIds: [],
+            rationale: "mcp-evidence-too-thin",
+        };
+    }
+    return {
+        kind: ProjectTriggerKind.SkillCandidate,
+        score: clamp01(meanImportance * 0.5 + Math.min(1, cluster.episodes.length / (supportMin * 2)) * 0.5),
+        relatedIds: cluster.episodes.map((e) => e.episodeId),
+        rationale: "skill-cluster-meets-criteria",
+    };
 }
 
 // ─── 助手 ──────────────────────────────────────────────────────────

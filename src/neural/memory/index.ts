@@ -14,7 +14,7 @@ import { event, RuntimeEventType, type EventSink } from "../../protocol/events/i
 import { SessionModule, scopeFor } from "../../agent/session/index.ts";
 import { loadPromptTemplates, renderMemoryContextPrompt } from "../../agent/prompts/index.ts";
 import { FeedbackCategory, classifyFeedback } from "../../agent/runtime/feedback.interpreter.ts";
-import { detectExplicitIntent, ProjectTriggerKind } from "../../agent/project/index.ts";
+import { detectExplicitIntent, detectExplicitSkillIntent, ProjectTriggerKind } from "../../agent/project/index.ts";
 import { ProjectScaffolder } from "../../agent/project/scaffolder.ts";
 import { spreadActivation, type ActivationCandidate } from "./activation.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
@@ -24,7 +24,7 @@ import { ProjectMemoryStore } from "./project.memory.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
-import type { PendingProjectOffer } from "./sqlite.ts";
+import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
 import { RedisMemoryStore } from "./redis.ts";
 import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
@@ -110,6 +110,8 @@ export class MemoryModule extends Memory {
                           dream: new DreamWorkerImpl(this.surreal, model, this.events),
                           projectSweeper: (userId: string) =>
                               this.sweepProjectClusters(userId).catch(() => false),
+                          skillSweeper: (userId: string) =>
+                              this.sweepSkillCandidates(userId).catch(() => false),
                       },
                   )
                 : null;
@@ -225,8 +227,14 @@ export class MemoryModule extends Memory {
         // 项目候选 nudge 注入：若该 userId 有待确认 offer，把 nudge 拼到 memoryBody 顶部。
         // 复用 Path A：用户下一轮回复若给出明确意图，model 自然在 memory action 的 signals 中
         // 抬高 projectIntent，commitTurn 的 detectExplicitIntent 即触发 scaffolder。
-        const offer = await this.sqlite.getProjectOffer(message.user.id).catch(() => undefined);
-        const body = offer ? `${renderProjectOfferNudge(offer)}\n\n${memoryBody}` : memoryBody;
+        const [offer, skillOffer] = await Promise.all([
+            this.sqlite.getProjectOffer(message.user.id).catch(() => undefined),
+            this.sqlite.getSkillOffer(message.user.id).catch(() => undefined),
+        ]);
+        const nudges: string[] = [];
+        if (offer) nudges.push(renderProjectOfferNudge(offer));
+        if (skillOffer) nudges.push(renderSkillOfferNudge(skillOffer));
+        const body = nudges.length > 0 ? `${nudges.join("\n\n")}\n\n${memoryBody}` : memoryBody;
 
         this.events.publish(
             event(RuntimeEventType.MemoryPromptBuilt, {
@@ -348,6 +356,15 @@ export class MemoryModule extends Memory {
             message.user.id,
             projectTrigger.kind !== ProjectTriggerKind.None,
         ).catch(() => undefined);
+
+        // 技能候选 offer 生命周期：用户在本轮回复中明确同意（skillPromotionIntent ≥ 0.7）即
+        // 立即从 pending_skill_offer 生成 SKILL.md；否则 ttl-1。完全与 project offer 解耦。
+        const skillTrigger = detectExplicitSkillIntent(actions);
+        if (skillTrigger.kind !== ProjectTriggerKind.None) {
+            void this.consumeSkillOffer(message.user.id).catch(() => undefined);
+        } else {
+            void this.noteSkillOfferTurn(message.user.id, false).catch(() => undefined);
+        }
 
         const session = await this.session.recordTurn(message, reply, context);
         const candidates = actions
@@ -831,6 +848,152 @@ export class MemoryModule extends Memory {
             );
         }
     }
+
+    /**
+     * 技能候选扫描：从 Redis context ring 拿近期 episode，按 episode.provenance.mcpCalls
+     * 的工具组合（成功的 tools，按字典序去重）聚合 cluster；满足 support/confidence 阈值即
+     * 写入 pending_skill_offer。
+     *
+     * 同 sweepProjectClusters 一样：每 userId 最多一条 offer；已存在 offer 时直接跳过。
+     */
+    async sweepSkillCandidates(userId: string): Promise<boolean> {
+        if (!this.redis) return false;
+        const existing = await this.sqlite.getSkillOffer(userId).catch(() => undefined);
+        if (existing) return false;
+
+        const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
+        const episodeIds = await this.redis.readContextRing(userId, ringLimit).catch(() => [] as string[]);
+        if (episodeIds.length === 0) return false;
+        const episodes = (
+            await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id).catch(() => undefined)))
+        ).filter((e): e is NonNullable<typeof e> => Boolean(e));
+        if (episodes.length === 0) return false;
+
+        const { detectSkillCandidate } = await import("../../agent/project/index.ts");
+        const supportMin = 5;
+
+        // 按工具组合聚合：episode.metadata.provenance.mcpCalls 中 ok=true 的 (server.tool) 集合 (sorted).
+        const clusters = new Map<string, { tools: string[]; episodes: typeof episodes }>();
+        for (const ep of episodes) {
+            const tools = extractEpisodeMcpTools(ep.metadata);
+            if (tools.length === 0) continue;
+            const key = tools.join("\u0001");
+            const bucket = clusters.get(key);
+            if (bucket) {
+                bucket.episodes.push(ep);
+            } else {
+                clusters.set(key, { tools, episodes: [ep] });
+            }
+        }
+        if (clusters.size === 0) return false;
+        const sorted = [...clusters.values()].sort((a, b) => b.episodes.length - a.episodes.length);
+        const top = sorted[0];
+        if (!top) return false;
+
+        const trigger = detectSkillCandidate(top, { skillSupportMin: supportMin });
+        if (trigger.kind === ProjectTriggerKind.None) return false;
+
+        const proposedAt = new Date().toISOString();
+        const skillId = `skill-${userId}-${Date.now().toString(36)}`;
+        const name = synthesizeSkillName(top.tools);
+        const description = `Recurring workflow combining ${top.tools.length} MCP tool(s): ${top.tools.join(", ")}.`;
+        const summary = buildSkillSummary(top.episodes, top.tools);
+        const offer: PendingSkillOffer = {
+            userId,
+            skillId,
+            name,
+            description,
+            summary,
+            support: top.episodes.length,
+            confidence: trigger.score,
+            mcpTools: top.tools,
+            relatedIds: trigger.relatedIds.slice(0, 16),
+            proposedAt,
+            ttlTurns: 3,
+        };
+        await this.sqlite.upsertSkillOffer(offer);
+        this.events.publish(
+            event(RuntimeEventType.MemorySkillOfferProposed, {
+                userId,
+                skillId,
+                name,
+                support: offer.support,
+                confidence: offer.confidence,
+                tools: top.tools.length,
+            }),
+        );
+        return true;
+    }
+
+    /** 显式同意：把 pending offer 物化为 SKILL.md，并写 RETROSPECTIVE。 */
+    async consumeSkillOffer(userId: string): Promise<boolean> {
+        const offer = await this.sqlite.getSkillOffer(userId).catch(() => undefined);
+        if (!offer) return false;
+        try {
+            const skillDir = await materializeSkillFromOffer(this.config.paths.skillDir, offer);
+            await this.sqlite.deleteSkillOffer(userId);
+            this.events.publish(
+                event(RuntimeEventType.MemorySkillInstalled, {
+                    userId,
+                    skillId: offer.skillId,
+                    name: offer.name,
+                    path: skillDir,
+                    tools: offer.mcpTools.length,
+                }),
+            );
+            this.events.publish(
+                event(RuntimeEventType.MemorySkillOfferConsumed, {
+                    userId,
+                    skillId: offer.skillId,
+                    name: offer.name,
+                }),
+            );
+            try {
+                const retrospective = new RetrospectiveLog({ projectMemoryDir: this.config.paths.projectMemoryDir });
+                await retrospective.append({
+                    kind: "skill-promoted",
+                    userId,
+                    summary: offer.description,
+                    symbols: offer.mcpTools,
+                    rationale: `User confirmed promotion of recurring MCP workflow (support=${offer.support}, confidence=${offer.confidence.toFixed(2)}).`,
+                    extra: { skillId: offer.skillId, name: offer.name, path: skillDir },
+                });
+            } catch {
+                // retrospective is audit-only; never fail consume
+            }
+            return true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemorySkillInstallFailed, {
+                    userId,
+                    skillId: offer.skillId,
+                    name: offer.name,
+                    error: String(err),
+                }),
+            );
+            return false;
+        }
+    }
+
+    /** 用户未显式同意 → ttl-1；归零即过期。 */
+    async noteSkillOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
+        const offer = await this.sqlite.getSkillOffer(userId).catch(() => undefined);
+        if (!offer) return;
+        if (explicitTriggered) {
+            // consumeSkillOffer 已处理；这里幂等保护
+            return;
+        }
+        const remaining = await this.sqlite.decrementSkillOfferTtl(userId);
+        if (remaining === 0) {
+            this.events.publish(
+                event(RuntimeEventType.MemorySkillOfferExpired, {
+                    userId,
+                    skillId: offer.skillId,
+                    confidence: offer.confidence,
+                }),
+            );
+        }
+    }
 }
 
 function renderProjectOfferNudge(offer: PendingProjectOffer): string {
@@ -844,6 +1007,98 @@ function renderProjectOfferNudge(offer: PendingProjectOffer): string {
         `  remaining_turns: ${offer.ttlTurns}`,
         `  hint: 这是一个可能值得固化为长期项目的候选。如果对话主题确实在持续聚焦，可以主动询问用户是否希望把它升格为长期项目；用户明确同意时再固化。不要凭空创建，也不要重复询问。`,
     ].join("\n");
+}
+
+function renderSkillOfferNudge(offer: PendingSkillOffer): string {
+    // 与 project-offer 同构：以自我笔记注入 system prompt。用户在自然对话中明确同意
+    // 后，模型抬高 memory action 的 signals.skillPromotionIntent ≥ 0.7，commitTurn 自动
+    // 调用 consumeSkillOffer 物化为 SKILL.md。
+    return [
+        "[skill-offer]",
+        `  name: ${offer.name}`,
+        `  tools: ${offer.mcpTools.join(", ")}`,
+        `  support: ${offer.support} episodes, confidence ${offer.confidence.toFixed(2)}`,
+        `  remaining_turns: ${offer.ttlTurns}`,
+        `  hint: 这是一个反复出现的 MCP 工具组合，可能值得固化为可复用 Skill（写入 ~/.flyflor/skills/）。若用户表达过想"保存为技能/把这套流程留下来"等明确意图，再设置 signals.skillPromotionIntent ≥ 0.7。否则保持 0，不要凭空提议或重复询问。`,
+    ].join("\n");
+}
+
+function extractEpisodeMcpTools(metadata: Record<string, unknown> | undefined): string[] {
+    if (!metadata || typeof metadata !== "object") return [];
+    const provenance = (metadata as { provenance?: unknown }).provenance;
+    if (!provenance || typeof provenance !== "object") return [];
+    const calls = (provenance as { mcpCalls?: unknown }).mcpCalls;
+    if (!Array.isArray(calls)) return [];
+    const tools = new Set<string>();
+    for (const call of calls) {
+        if (!call || typeof call !== "object") continue;
+        const c = call as { ok?: unknown; server?: unknown; tool?: unknown };
+        if (c.ok !== true) continue;
+        if (typeof c.server !== "string" || typeof c.tool !== "string") continue;
+        const id = `${c.server.trim()}.${c.tool.trim()}`;
+        if (id.length > 1 && id.length <= 120) tools.add(id);
+    }
+    return [...tools].sort();
+}
+
+function synthesizeSkillName(tools: string[]): string {
+    const base = tools
+        .map((t) => t.split(".").pop() ?? t)
+        .map((t) => t.replace(/[^A-Za-z0-9]+/g, "-"))
+        .filter(Boolean)
+        .slice(0, 3)
+        .join("-")
+        .toLowerCase();
+    const fallback = base || "mcp-recurring";
+    return fallback.length > 48 ? fallback.slice(0, 48) : fallback;
+}
+
+function buildSkillSummary(episodes: Array<{ text: string }>, tools: string[]): string {
+    const sample = episodes
+        .slice(0, 3)
+        .map((e) => compactText(e.text, 200))
+        .filter(Boolean);
+    const lines = [
+        `Recurring workflow over MCP tools: ${tools.join(", ")}.`,
+        "",
+        "## When to use",
+        `- Trigger when the user wants to combine ${tools.join(" + ")} for a similar task.`,
+        "",
+        "## Sample interactions",
+        ...sample.map((s) => `- ${s}`),
+    ];
+    return lines.join("\n");
+}
+
+async function materializeSkillFromOffer(skillDir: string, offer: PendingSkillOffer): Promise<string> {
+    const { mkdir } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const safeName = offer.name.replace(/[^A-Za-z0-9_-]+/g, "-");
+    const dest = join(skillDir, safeName);
+    await mkdir(dest, { recursive: true });
+    const frontmatter = [
+        "---",
+        `name: ${safeName}`,
+        `description: ${offer.description.replace(/[\r\n]+/g, " ")}`,
+        "schemaVersion: 1",
+        "---",
+        "",
+    ].join("\n");
+    const tools = offer.mcpTools.length > 0 ? `\n## MCP tools\n${offer.mcpTools.map((t) => `- ${t}`).join("\n")}\n` : "";
+    await Bun.write(join(dest, "SKILL.md"), `${frontmatter}\n${offer.summary}\n${tools}`);
+    const manifest = {
+        name: safeName,
+        description: offer.description,
+        capabilities: offer.mcpTools,
+        compatibility: [],
+        mcpServers: offer.mcpTools.map((t) => t.split(".")[0]).filter((v, i, arr) => arr.indexOf(v) === i),
+        permissions: [],
+        tags: ["auto-promoted"],
+        author: "flyflor:auto",
+        activation: { auto: true, manual: true },
+    };
+    await Bun.write(join(dest, "skill.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    return dest;
 }
 
 function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): MemoryEpisodeProvenance {

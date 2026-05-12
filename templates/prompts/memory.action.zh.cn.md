@@ -9,7 +9,7 @@ Markdown 长期记忆工具。
 完整格式：
 
 <flyflor_memory_actions>
-[{"action":"add","target":"user|memory|soul|self","kind":"profile|fact|rule","content":"one compact durable memory","confidence":0.0,"affect":{"valence":0.0,"arousal":0.0,"dominance":0.0},"signals":{"durability":0.0,"relevance":0.0,"actionability":0.0,"certainty":0.0,"recurrence":0.0,"sourceDiversity":0.0,"validationCount":0,"projectIntent":0.0,"eventIntent":0.0}}]
+[{"action":"add","target":"user|memory|soul|self","kind":"profile|fact|rule","content":"one compact durable memory","confidence":0.0,"affect":{"valence":0.0,"arousal":0.0,"dominance":0.0},"signals":{"durability":0.0,"relevance":0.0,"actionability":0.0,"certainty":0.0,"recurrence":0.0,"sourceDiversity":0.0,"validationCount":0,"projectIntent":0.0,"eventIntent":0.0,"skillPromotionIntent":0.0}}]
 </flyflor_memory_actions>
 
 最小有效格式 —— 只填必填字段，当没有额外信号可打分时使用：
@@ -36,5 +36,6 @@ Markdown 长期记忆工具。
 - signals.actionability / certainty / recurrence / sourceDiversity / validationCount —— 更细粒度的持久性证据。
 - signals.projectIntent —— 0..1；**仅当**用户明确要求把当前工作固化为项目时设为 ≥ 0.7（会生成 `.flyflor/` 脚手架）。
 - signals.eventIntent —— 0..1；**仅当**用户明确要求把当前轮记入项目事件时设为 ≥ 0.7。
+- signals.skillPromotionIntent —— 0..1；**仅当** system prompt 中已有 `[skill-offer]` 自我笔记，且用户明确同意把这套反复出现的工具组合固化为 Skill 时设为 ≥ 0.7（会写入 `~/.flyflor/skills/<name>/SKILL.md`）。
 
-projectIntent 和 eventIntent 涉及文件系统副作用——在用户意图毫不含糊之前，保持为 0。
+projectIntent、eventIntent 和 skillPromotionIntent 涉及文件系统副作用——在用户意图毫不含糊之前，保持为 0。

@@ -63,7 +63,7 @@
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
 | ~~SK-01~~ | ~~选择仍是 `slice(0, maxAuto)`，**未按 embedding 相似度 / usage 频次排序**~~ ✅ done (usage 维度) — `selectSkills` 接受 `{ usage, limit, now }`：`useCount` 对数缩放 + `mcpSuccessRate` + 1/7/30 天新鲜度阶梯，按分数降序；`activation.auto:false` 过滤。Runtime 顶层 `loadSkillUsageSummary` 一并并发，requestId 用户显式指定 skill 时仍优先。Embedding 维度待 `M-09 RETROSPECTIVE` 与 skill 向量化合并设计 | P2 |
-| SK-02 | promotion 路径未跑通：cluster → LLM 询问 → 用户确认 → 安装 | P2 |
+| ~~SK-02~~ | ~~promotion 路径未跑通：cluster → LLM 询问 → 用户确认 → 安装~~ ✅ `detectSkillCandidate` 扫描 episode.provenance.mcpCalls，按工具组合聚合 cluster（support≥5 + meanImportance>0.7 + MCP 证据 ≥ 半数）；`pending_skill_offer` 表 + `sweepSkillCandidates` 后台 sweep（20min interval，单独 Scheduler timer + skillBusy 互斥）；`renderSkillOfferNudge` 注入 system prompt（与 project-offer 同构 `[skill-offer]` 块）；新增 `MemoryActionSignals.skillPromotionIntent` + `detectExplicitSkillIntent`，commitTurn 检测到 ≥ 0.7 即 `consumeSkillOffer` → 写 `~/.flyflor/skills/<name>/SKILL.md` + `skill.json` manifest（capabilities=tools, mcpServers=unique servers, activation auto+manual）+ RETROSPECTIVE.md `skill-promoted` entry；事件 `MemorySkillOfferProposed/Consumed/Expired/Installed/InstallFailed`；未确认轮 ttl-1 自动过期；8 个新单测覆盖 cluster 阈值/显式意图/DAO/物化全链路 | P2 |
 | ~~SK-03~~ | ~~skill 模板缺版本兼容声明，runtime 升级后旧模板降级失败弱~~ ✅ done — `SkillManifest.schemaVersion` 新增（默认 `SKILL_MANIFEST_SCHEMA_VERSION=1`，frontmatter / skill.json 覆盖），`validateSkill` 在版本 mismatch 时附加 `newer`/`older` 警告，`checkSkillSchemaCompatibility(paths)` 汇总不兼容 skill 列表，`doctor` 表新增 `Skill schemas` 行；3 个新测试覆盖 default / newer / older | P2 |
 
 ## CLI

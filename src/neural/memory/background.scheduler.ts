@@ -36,6 +36,8 @@ export interface BackgroundSchedulerOptions {
     idleDreamTriggerMs?: number;
     /** 项目候选 cluster sweep 节拍（毫秒）。默认 15 分钟，0 关闭。 */
     projectClusterIntervalMs?: number;
+    /** 技能候选 cluster sweep 节拍（毫秒）。默认 20 分钟，0 关闭。 */
+    skillClusterIntervalMs?: number;
     /** 自定义衰减 profile（测试可注入更短半衰期）。 */
     profiles?: Partial<Record<DecayLayer, DecayProfile>>;
     /** 注入 now 函数（测试用）。 */
@@ -47,6 +49,11 @@ export interface BackgroundSchedulerOptions {
      * 由 MemoryModule 注入 `(userId) => this.sweepProjectClusters(userId)`。
      */
     projectSweeper?: (userId: string) => Promise<boolean>;
+    /**
+     * 可选 skill cluster sweeper（避免 Scheduler 反向依赖 MemoryModule）。
+     * 由 MemoryModule 注入 `(userId) => this.sweepSkillCandidates(userId)`。
+     */
+    skillSweeper?: (userId: string) => Promise<boolean>;
 }
 
 export class BackgroundScheduler {
@@ -55,15 +62,18 @@ export class BackgroundScheduler {
     private decayTimer: ReturnType<typeof setInterval> | undefined;
     private dreamTimer: ReturnType<typeof setInterval> | undefined;
     private projectTimer: ReturnType<typeof setInterval> | undefined;
+    private skillTimer: ReturnType<typeof setInterval> | undefined;
     /** 每用户 idle one-shot timer：每次 noteUserTurn 重置；命中后触发 dream。 */
     private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private consolidationBusy = false;
     private decayBusy = false;
     private dreamBusy = false;
     private projectBusy = false;
+    private skillBusy = false;
     private readonly dream: DreamWorker | undefined;
     private readonly projectSweeper: ((userId: string) => Promise<boolean>) | undefined;
-    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper">> & {
+    private readonly skillSweeper: ((userId: string) => Promise<boolean>) | undefined;
+    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper">> & {
         profiles: Record<DecayLayer, DecayProfile>;
         now: () => number;
     };
@@ -76,6 +86,7 @@ export class BackgroundScheduler {
     ) {
         this.dream = options.dream;
         this.projectSweeper = options.projectSweeper;
+        this.skillSweeper = options.skillSweeper;
         this.opts = {
             consolidationIntervalMs: options.consolidationIntervalMs ?? 10 * 60_000,
             decayIntervalMs: options.decayIntervalMs ?? 24 * 60 * 60_000,
@@ -84,6 +95,7 @@ export class BackgroundScheduler {
             decayBatchSize: options.decayBatchSize ?? 200,
             idleDreamTriggerMs: options.idleDreamTriggerMs ?? 5 * 60_000,
             projectClusterIntervalMs: options.projectClusterIntervalMs ?? 15 * 60_000,
+            skillClusterIntervalMs: options.skillClusterIntervalMs ?? 20 * 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
             now: options.now ?? (() => Date.now()),
         };
@@ -146,6 +158,11 @@ export class BackgroundScheduler {
                 void this.runProjectClusterOnce();
             }, this.opts.projectClusterIntervalMs);
         }
+        if (this.skillSweeper && this.opts.skillClusterIntervalMs > 0) {
+            this.skillTimer = setInterval(() => {
+                void this.runSkillSweepOnce();
+            }, this.opts.skillClusterIntervalMs);
+        }
         // setInterval 在 bun 下不阻止退出
         if (typeof (this.consolidationTimer as { unref?: () => void })?.unref === "function") {
             (this.consolidationTimer as { unref: () => void }).unref();
@@ -158,6 +175,9 @@ export class BackgroundScheduler {
         }
         if (this.projectTimer && typeof (this.projectTimer as { unref?: () => void })?.unref === "function") {
             (this.projectTimer as { unref: () => void }).unref();
+        }
+        if (this.skillTimer && typeof (this.skillTimer as { unref?: () => void })?.unref === "function") {
+            (this.skillTimer as { unref: () => void }).unref();
         }
     }
 
@@ -177,6 +197,10 @@ export class BackgroundScheduler {
         if (this.projectTimer !== undefined) {
             clearInterval(this.projectTimer);
             this.projectTimer = undefined;
+        }
+        if (this.skillTimer !== undefined) {
+            clearInterval(this.skillTimer);
+            this.skillTimer = undefined;
         }
         for (const timer of this.idleTimers.values()) {
             clearTimeout(timer);
@@ -331,6 +355,28 @@ export class BackgroundScheduler {
         return totals;
     }
 
+    /** 立即跑一轮技能 cluster 扫描（测试与手动触发复用）。串行所有用户。 */
+    async runSkillSweepOnce(userId?: string): Promise<{ users: number; offers: number }> {
+        const totals = { users: 0, offers: 0 };
+        if (!this.skillSweeper || this.skillBusy) return totals;
+        this.skillBusy = true;
+        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        try {
+            for (const u of targets) {
+                try {
+                    const proposed = await this.skillSweeper(u);
+                    totals.users += 1;
+                    if (proposed) totals.offers += 1;
+                } catch (err) {
+                    this.publishFailure("skill-cluster-tick", u, err);
+                }
+            }
+        } finally {
+            this.skillBusy = false;
+        }
+        return totals;
+    }
+
     /** 返回当前注册的活跃用户快照（CLI 诊断使用）。 */
     trackedUsers(): string[] {
         return [...this.users];
@@ -344,6 +390,8 @@ export class BackgroundScheduler {
         decayBusy: boolean;
         projectClusterEnabled: boolean;
         projectClusterBusy: boolean;
+        skillClusterEnabled: boolean;
+        skillClusterBusy: boolean;
         users: number;
     } {
         return {
@@ -353,6 +401,8 @@ export class BackgroundScheduler {
             decayBusy: this.decayBusy,
             projectClusterEnabled: Boolean(this.projectSweeper) && this.opts.projectClusterIntervalMs > 0,
             projectClusterBusy: this.projectBusy,
+            skillClusterEnabled: Boolean(this.skillSweeper) && this.opts.skillClusterIntervalMs > 0,
+            skillClusterBusy: this.skillBusy,
             users: this.users.size,
         };
     }

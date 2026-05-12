@@ -30,6 +30,8 @@ export interface MemoryActionSignals {
     projectIntent?: number;
     /** 显式事件记录意图（0..1）。≥ 0.7 触发 event-record。 */
     eventIntent?: number;
+    /** 显式技能固化意图（0..1）。≥ 0.7 直接把当前 pending skill offer 升格成 SKILL.md。 */
+    skillPromotionIntent?: number;
 }
 
 export interface ParsedMemoryActions {
@@ -156,6 +158,7 @@ function normalizeSignals(value: unknown): MemoryActionSignals {
         relevance: clamp01(numberValue(value.relevance)),
         projectIntent: clamp01(numberValue(value.projectIntent)),
         eventIntent: clamp01(numberValue(value.eventIntent)),
+        skillPromotionIntent: clamp01(numberValue(value.skillPromotionIntent)),
         sourceDiversity: clamp01(numberValue(value.sourceDiversity)),
         validationCount: clamp01(numberValue(value.validationCount)),
     };
