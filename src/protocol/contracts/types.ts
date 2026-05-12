@@ -15,11 +15,29 @@ export interface GatewayRoute {
     accountId?: string;
 }
 
+export interface GatewayAttachment {
+    /** 附件类型；目前仅区分 image 与通用 file，方便 prompt 摘要 / channel 适配。 */
+    kind: "image" | "file";
+    /** 本地或远端路径；CLI / API 入站为本地绝对路径，远端 channel 为下载链接。 */
+    path?: string;
+    /** 平台原始 ID，用于幂等去重。 */
+    id?: string;
+    /** 文件名；用于 prompt 标注。 */
+    name?: string;
+    /** MIME 类型；image/png、application/pdf 等。 */
+    mimeType?: string;
+    /** 字节数。 */
+    size?: number;
+    /** SHA-256，便于审计 / 去重。 */
+    sha256?: string;
+}
+
 export interface GatewayMessage {
     id: string;
     route: GatewayRoute;
     user: GatewayUser;
     text: string;
+    attachments?: GatewayAttachment[];
     raw?: unknown;
     receivedAt: string;
 }

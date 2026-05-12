@@ -10,6 +10,8 @@ export interface HumanChatOptions {
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     skillNames?: string[];
     userId?: string;
+    toolsetAllowlist?: string[];
+    maxToolTurns?: number;
 }
 
 export interface ChatInput {
@@ -57,6 +59,8 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
             let wrote = false;
             await runtime.handleMessage(message, context, {
                 approveMcpToolCall: options.approveMcpToolCall,
+                toolsetAllowlist: options.toolsetAllowlist,
+                maxToolTurns: options.maxToolTurns,
                 onTextDelta: (text) => {
                     wrote = true;
                     process.stdout.write(text);

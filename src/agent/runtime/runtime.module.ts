@@ -85,6 +85,13 @@ interface RuntimeBlackboardRun {
 export interface RuntimeStreamOptions {
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     onTextDelta?: (text: string) => void | Promise<void>;
+    /**
+     * MCP tool-call 循环最大轮数。默认 1（与历史行为一致：发起 → 工具结果 → 总结）。
+     * `--max-turns N` 把上限提高到 N，允许模型多轮调用工具；超过上限后下一轮直接总结。
+     */
+    maxToolTurns?: number;
+    /** CLI `--toolsets` 透传的逗号分隔白名单，仅保留这些 MCP server。 */
+    toolsetAllowlist?: string[];
 }
 
 interface CachedMcpToolCatalog {
@@ -262,7 +269,7 @@ export class RuntimeModule extends RuntimeBoundary {
             context.requestId,
         );
 
-        const [skills, skillUsage, mcpServers, memoryPrompt, preRoute] = await Promise.all([
+        const [skills, skillUsage, mcpServersAll, memoryPrompt, preRoute] = await Promise.all([
             loadSkills(this.config.paths),
             loadSkillUsageSummary(this.config.paths).catch(() => undefined),
             loadMcpServers(this.config.paths),
@@ -275,6 +282,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 return r;
             }),
         ]);
+        const mcpServers = filterMcpServersByToolset(mcpServersAll, options.toolsetAllowlist);
         const selectedSkills = selectRuntimeSkills(skills, context.skillNames, skillUsage);
         this.events.publish(
             event(
@@ -366,7 +374,7 @@ export class RuntimeModule extends RuntimeBoundary {
             },
             {
                 role: ModelRole.User,
-                content: message.text,
+                content: renderUserContentWithAttachments(message),
             },
         ];
 
@@ -664,41 +672,42 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        const initial = await this.model.generate(messages);
-        const parsedCalls = parseMcpToolCalls(initial);
-        if (parsedCalls.calls.length === 0) {
-            if (options.onTextDelta) {
-                await options.onTextDelta(
-                    `${replyPrefix}${filterVisibleMemoryActionText(parsedCalls.text || initial)}`,
-                );
+        const maxTurns = Math.max(1, options.maxToolTurns ?? 1);
+        const allExecutions: McpToolCallExecution[] = [];
+        const transcript: ModelMessage[] = [...messages];
+
+        for (let turn = 0; turn < maxTurns; turn++) {
+            const raw = await this.model.generate(transcript);
+            const parsedCalls = parseMcpToolCalls(raw);
+            if (parsedCalls.calls.length === 0) {
+                if (options.onTextDelta) {
+                    await options.onTextDelta(
+                        `${replyPrefix}${filterVisibleMemoryActionText(parsedCalls.text || raw)}`,
+                    );
+                }
+                return {
+                    rawText: parsedCalls.text || raw,
+                    mcpToolCalls: allExecutions,
+                };
             }
-            return {
-                rawText: parsedCalls.text || initial,
-                mcpToolCalls: [],
-            };
+            const executions = await this.executeMcpToolCalls(
+                parsedCalls.calls,
+                mcp.catalog,
+                mcp.requestId,
+                mcp.requiresApproval,
+                mcp.approveMcpToolCall,
+            );
+            allExecutions.push(...executions);
+            transcript.push(
+                { role: ModelRole.Assistant, content: parsedCalls.text || raw },
+                { role: ModelRole.Tool, content: renderMcpToolResults(executions) },
+            );
         }
 
-        const executions = await this.executeMcpToolCalls(
-            parsedCalls.calls,
-            mcp.catalog,
-            mcp.requestId,
-            mcp.requiresApproval,
-            mcp.approveMcpToolCall,
-        );
-        const finalMessages: ModelMessage[] = [
-            ...messages,
-            {
-                role: ModelRole.Assistant,
-                content: parsedCalls.text || initial,
-            },
-            {
-                role: ModelRole.Tool,
-                content: renderMcpToolResults(executions),
-            },
-        ];
+        // 超过上限：让模型在 tool 结果之上做最终总结，不再开放工具调用。
         return {
-            rawText: await this.generateModelText(finalMessages, replyPrefix, options),
-            mcpToolCalls: executions,
+            rawText: await this.generateModelText(transcript, replyPrefix, options),
+            mcpToolCalls: allExecutions,
         };
     }
 
@@ -1060,6 +1069,36 @@ function renderBlackboardPrompt(run: RuntimeBlackboardRun | undefined): string {
 
 function renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefined): string {
     return `${renderReplyPrefix(run)}${finalAnswer}`;
+}
+
+function renderUserContentWithAttachments(message: GatewayMessage): string {
+    const summary = renderAttachmentSummary(message.attachments);
+    if (!summary) return message.text;
+    return message.text ? `${message.text}\n\n${summary}` : summary;
+}
+
+export function filterMcpServersByToolset<T extends { name: string }>(
+    servers: T[],
+    allowlist: string[] | undefined,
+): T[] {
+    if (!allowlist || allowlist.length === 0) return servers;
+    const allowed = new Set(allowlist.map((entry) => entry.trim()).filter((entry) => entry.length > 0));
+    if (allowed.size === 0) return servers;
+    return servers.filter((server) => allowed.has(server.name));
+}
+
+function renderAttachmentSummary(attachments: GatewayMessage["attachments"]): string {
+    if (!attachments || attachments.length === 0) return "";
+    const lines = attachments.map((a, idx) => {
+        const parts: string[] = [`#${idx + 1}`, a.kind];
+        if (a.name) parts.push(a.name);
+        else if (a.path) parts.push(a.path);
+        if (a.mimeType) parts.push(a.mimeType);
+        if (typeof a.size === "number") parts.push(`${a.size}B`);
+        if (a.sha256) parts.push(`sha256:${a.sha256.slice(0, 12)}`);
+        return `- ${parts.join(" | ")}`;
+    });
+    return ["[attachments]", ...lines].join("\n");
 }
 
 function renderReplyPrefix(run: RuntimeBlackboardRun | undefined): string {

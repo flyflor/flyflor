@@ -38,7 +38,7 @@
 | G-01 | BlueBubbles / iMessage / DingTalk / Email / HomeAssistant / Line / Mattermost / Matrix / QQ / Signal / Slack / SMS / WeCom / WhatsApp / Zalo 仅是 `HttpPlatformAdapter` 占位，**缺签名校验 / 富媒体 / 群组识别** | P2 |
 | ~~G-02~~ | ~~`gateway start/stop/restart` 后台服务模式未实现~~ ✅ done — `src/agent/gateway/daemon.ts`：PID 文件 `cacheDir/gateway.pid` + 日志 `logDir/gateway.log`；`startGatewayDaemon` 用 `Bun.spawn` 启动 `flyflor gateway run` 子进程 + `unref()` 立即 detach + 健康轮询；`stopGatewayDaemon` SIGTERM → 2s grace → SIGKILL；`restartGatewayDaemon` = stop+start；CLI `gateway start/stop/restart/status` 全部接入；5 用例覆盖 PID 生命周期 | P1 |
 | ~~G-03~~ | ~~`MessageDispatcher` 单进程，多副本部署缺消息去重与幂等键~~ ✅ done — `src/agent/gateway/dedup.ts`：`MessageDedupStore` 接口 + `InMemoryDedupStore`（LRU+TTL，默认 60s/1024 槽）+ `RedisDedupStore`（`SET key … EX ttl NX` 抢占 → `SET … XX` 写回 reply）；GatewayModule.dispatch 接入 tryClaim/recordReply/release：duplicate 直接返回 cachedReply，in-flight 短路空 reply（上游 webhook 收 200 不再重试）；5 用例覆盖 claim/release/TTL/LRU/key 隔离 | P1 |
-| G-04 | `attachments` 入站类型存在，runtime 未消费（`chat --image` blocked） | P2 |
+| ~~G-04~~ | ~~`attachments` 入站类型存在，runtime 未消费（`chat --image` blocked）~~ ✅ done — `GatewayAttachment{kind,path,name,mimeType,size,sha256,id}` 协议字段 + `GatewayMessage.attachments?` 加入 `src/protocol/contracts/types.ts`；runtime `renderUserContentWithAttachments` 在 user 消息后追加 `[attachments]` 摘要块；CLI `chat --image <path>` 通过 `loadAttachmentsFromPaths` 读取本地文件、计算 SHA-256、推断 MIME（png/jpg/gif/webp/bmp/heic→image，其它→file），不存在或非文件给出 stderr 警告并跳过；3 个新单测覆盖空、字段渲染、path fallback | P2 |
 
 ## Sandbox
 
@@ -76,7 +76,7 @@
 | ~~CLI-02~~ | ~~`flyflor plugins *` 大多骨架~~ ✅ done — list/show/validate/add/enable/disable/remove 已完整；本批补齐 `plugins run <name>` 子命令：通过 `PluginRunner` + `createSandboxPolicy` 在子进程内调用 plugin entry，支持 `--input` / `--input-file` 注入 JSON 请求、`--timeout-ms` / `--command` / `--allow-cmd` 覆盖白名单、`--json` 原始输出；失败返回非零退出码并打印 stderr | P1 |
 | ~~CLI-03~~ | ~~`flyflor update` 未做下载升级~~ ✅ done — `src/command/cli/update.ts` 已实现 `--check` / `-y` install.sh 调用 | P2 |
 | ~~CLI-04~~ | ~~`flyflor doctor --fix` 未实现~~ ✅ done — `runDoctorFix` 批量 `mkdir -p` 缺失目录 | P2 |
-| CLI-05 | `flyflor chat --image / --toolsets / --max-turns / --tui` blocked / todo | P2 |
+| ~~CLI-05~~ | ~~`flyflor chat --image / --toolsets / --max-turns / --tui` blocked / todo~~ ✅ done — `--image` 经 G-04 闭环；`--toolsets foo,bar` 在 `RuntimeStreamOptions.toolsetAllowlist` 透传，`filterMcpServersByToolset(servers, allowlist)` 按名字精确过滤 MCP servers（空 / 缺省直通，未知名静默跳过）；`--max-turns N` 经 `RuntimeStreamOptions.maxToolTurns` 把单轮 MCP-tool 调用循环改为最多 N 轮（保留历史默认 1 轮），第 N+1 轮自动收口为最终总结；CLI 的 `--tui` 见 CLI-06。新增 `tests/runtime.toolset.test.ts` 覆盖 4 个 allowlist 用例 | P2 |
 | ~~CLI-06~~ | ~~`flyflor tui` 与 `chat --tui` 重复职责未对齐~~ ✅ done — `chat --tui` 进入与 `tui` 同一 TUI bootstrap（`getFlyFlor({ mode: RuntimeMode.Tui }) → startTui`），保留 CLI runtime override（provider/model）；不再静默忽略 `--tui` flag | P2 |
 
 ## 模型 / Provider

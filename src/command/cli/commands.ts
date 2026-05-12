@@ -1,5 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, rm, writeFile, stat as fsStat } from "node:fs/promises";
+import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";
+import { createHash } from "node:crypto";
 import { Database } from "bun:sqlite";
 import { Command, CommanderError } from "commander";
 import * as prompts from "@clack/prompts";
@@ -11,6 +12,7 @@ import {
     MarkdownMemoryFile,
     RuntimeMode,
     ToolApprovalMode,
+    type GatewayAttachment,
     type GatewayMessage,
     type RuntimeContext,
 } from "../../protocol/contracts/index.ts";
@@ -680,14 +682,22 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             config: await configWithRuntimeOverrides(opts),
             events: opts.verbose && !opts.quiet ? new ConsoleEventSink() : undefined,
         });
+        const toolsetAllowlist = parseToolsetAllowlist(opts.toolsets);
+        const maxToolTurns = parseMaxTurns(opts.maxTurns);
         if (typeof opts.query === "string" && opts.query.trim().length > 0) {
-            await runChatQuery(app, opts.query, opts.skills, Boolean(opts.quiet));
+            const imagePaths = typeof opts.image === "string" && opts.image.trim().length > 0 ? [opts.image] : [];
+            await runChatQuery(app, opts.query, opts.skills, Boolean(opts.quiet), imagePaths, {
+                toolsetAllowlist,
+                maxToolTurns,
+            });
             return;
         }
         if (Array.isArray(opts.skills) && opts.skills.length > 0) {
             await startHumanChat(app.resolve(FlyFlorTokens.Runtime), {
                 approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
                 skillNames: opts.skills,
+                toolsetAllowlist,
+                maxToolTurns,
             });
             return;
         }
@@ -895,7 +905,14 @@ async function runSetup(command: Command): Promise<void> {
     }
 }
 
-async function runChatQuery(app: FlyFlor, query: string, skillNames?: string[], quiet = false): Promise<void> {
+async function runChatQuery(
+    app: FlyFlor,
+    query: string,
+    skillNames?: string[],
+    quiet = false,
+    imagePaths: string[] = [],
+    runtimeOptions: { toolsetAllowlist?: string[]; maxToolTurns?: number } = {},
+): Promise<void> {
     const runtime = app.resolve(FlyFlorTokens.Runtime);
     const now = new Date().toISOString();
     const context: RuntimeContext = {
@@ -903,6 +920,7 @@ async function runChatQuery(app: FlyFlor, query: string, skillNames?: string[], 
         now,
         skillNames,
     };
+    const attachments = await loadAttachmentsFromPaths(imagePaths);
     const message: GatewayMessage = {
         id: crypto.randomUUID(),
         route: {
@@ -914,6 +932,7 @@ async function runChatQuery(app: FlyFlor, query: string, skillNames?: string[], 
             id: "human",
         },
         text: query.trim(),
+        attachments: attachments.length > 0 ? attachments : undefined,
         receivedAt: now,
     };
 
@@ -921,6 +940,8 @@ async function runChatQuery(app: FlyFlor, query: string, skillNames?: string[], 
     let buffered = "";
     await runtime.handleMessage(message, context, {
         approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+        toolsetAllowlist: runtimeOptions.toolsetAllowlist,
+        maxToolTurns: runtimeOptions.maxToolTurns,
         onTextDelta: (text) => {
             wrote = true;
             if (quiet) {
@@ -936,6 +957,69 @@ async function runChatQuery(app: FlyFlor, query: string, skillNames?: string[], 
     if (wrote) {
         process.stdout.write("\n");
     }
+}
+
+function parseToolsetAllowlist(value: string | undefined): string[] | undefined {
+    if (typeof value !== "string") return undefined;
+    const entries = value.split(",").map((e) => e.trim()).filter((e) => e.length > 0);
+    return entries.length > 0 ? entries : undefined;
+}
+
+function parseMaxTurns(value: string | undefined): number | undefined {
+    if (typeof value !== "string") return undefined;
+    const n = Number.parseInt(value.trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+async function loadAttachmentsFromPaths(paths: string[]): Promise<GatewayAttachment[]> {
+    const out: GatewayAttachment[] = [];
+    for (const raw of paths) {
+        const trimmed = raw?.trim();
+        if (!trimmed) continue;
+        const absolute = resolvePath(trimmed);
+        try {
+            const info = await fsStat(absolute);
+            if (!info.isFile()) {
+                process.stderr.write(`warn: --image "${trimmed}" is not a regular file; skipping.\n`);
+                continue;
+            }
+            const buffer = new Uint8Array(await Bun.file(absolute).arrayBuffer());
+            const sha256 = createHash("sha256").update(buffer).digest("hex");
+            out.push({
+                kind: inferAttachmentKind(absolute),
+                path: absolute,
+                name: basename(absolute),
+                mimeType: inferMimeType(absolute),
+                size: info.size,
+                sha256,
+            });
+        } catch (error) {
+            process.stderr.write(`warn: --image "${trimmed}" could not be read: ${String(error)}\n`);
+        }
+    }
+    return out;
+}
+
+function inferAttachmentKind(path: string): GatewayAttachment["kind"] {
+    const ext = extname(path).toLowerCase();
+    return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic"].includes(ext) ? "image" : "file";
+}
+
+function inferMimeType(path: string): string | undefined {
+    const ext = extname(path).toLowerCase();
+    const map: Record<string, string> = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".heic": "image/heic",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".md": "text/markdown",
+    };
+    return map[ext];
 }
 
 async function configWithRuntimeOverrides(options: {
