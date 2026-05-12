@@ -3,6 +3,7 @@ import type { EpisodeRecord, RedisMemoryStore } from "./redis.ts";
 import type { SurrealGraphStore } from "./surreal.graph.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderMemoryConsolidationPrompt } from "../../agent/prompts/index.ts";
+import type { RetrospectiveLog } from "./retrospective.ts";
 
 /**
  * 整合 Worker (consolidation worker)。
@@ -51,6 +52,8 @@ export interface ConsolidationWorkerOptions {
     reinforceTtlSeconds?: number;
     /** consolidate 时 memory_node 默认 confidence */
     defaultConfidence?: number;
+    /** 可选的回顾日志：consolidate / discard 决策结果会追加到 RETROSPECTIVE.md */
+    retrospective?: RetrospectiveLog;
 }
 
 // 系统消息留空：所有提示词内容由 templates/prompts/*.md 提供，避免代码内出现提示词字符串。
@@ -59,6 +62,7 @@ export class ConsolidationWorker {
     private readonly batchSize: number;
     private readonly reinforceTtl: number;
     private readonly defaultConfidence: number;
+    private readonly retrospective?: RetrospectiveLog;
 
     constructor(
         private readonly redis: RedisMemoryStore,
@@ -70,6 +74,7 @@ export class ConsolidationWorker {
         this.batchSize = options.batchSize ?? 32;
         this.reinforceTtl = options.reinforceTtlSeconds ?? 7 * 24 * 3600;
         this.defaultConfidence = options.defaultConfidence ?? 0.6;
+        this.retrospective = options.retrospective;
     }
 
     /**
@@ -108,6 +113,12 @@ export class ConsolidationWorker {
                 if (decision.decision === ConsolidationDecisionKind.Discard) {
                     await this.redis.dropEpisode(userId, id);
                     result.discarded += 1;
+                    await this.retrospective?.append({
+                        kind: "discard",
+                        userId,
+                        episodeId: episode.episodeId,
+                        rationale: decision.rationale,
+                    });
                 } else if (decision.decision === ConsolidationDecisionKind.Reinforce) {
                     await this.redis.touchConcepts(userId, episode.concepts ?? []);
                     result.reinforced += 1;
@@ -115,6 +126,14 @@ export class ConsolidationWorker {
                     await this.consolidateEpisode(episode, decision);
                     await this.redis.dropEpisode(userId, id);
                     result.consolidated += 1;
+                    await this.retrospective?.append({
+                        kind: "consolidate",
+                        userId,
+                        episodeId: episode.episodeId,
+                        summary: decision.summary ?? episode.text.slice(0, 240),
+                        symbols: decision.symbols ?? episode.concepts,
+                        rationale: decision.rationale,
+                    });
                 } else {
                     result.skipped += 1;
                 }

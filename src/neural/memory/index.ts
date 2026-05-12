@@ -28,6 +28,7 @@ import type { PendingProjectOffer } from "./sqlite.ts";
 import { RedisMemoryStore } from "./redis.ts";
 import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
+import { RetrospectiveLog } from "./retrospective.ts";
 import { BackgroundScheduler } from "./background.scheduler.ts";
 import { DreamWorkerImpl } from "../../agent/runtime/dream.worker.ts";
 import type {
@@ -45,6 +46,7 @@ import type { HistoryEntry, SessionMessageRecord } from "../../agent/session/ind
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
 export { MarkdownMemoryStore } from "./markdown.ts";
 export { ProjectMemoryStore } from "./project.memory.ts";
+export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
 export { SQLiteMemoryStore } from "./sqlite.ts";
 export type {
     MemoryAction,
@@ -99,7 +101,9 @@ export class MemoryModule extends Memory {
         this.scheduler =
             this.redis && this.surreal && model
                 ? new BackgroundScheduler(
-                      new ConsolidationWorker(this.redis, this.surreal, model, this.events),
+                      new ConsolidationWorker(this.redis, this.surreal, model, this.events, {
+                          retrospective: new RetrospectiveLog({ projectMemoryDir: config.paths.projectMemoryDir }),
+                      }),
                       this.surreal,
                       this.events,
                       {

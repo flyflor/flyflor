@@ -25,7 +25,7 @@ import {
     stopGatewayDaemon,
 } from "../../agent/gateway/index.ts";
 import { SessionModule, type SessionMessageRecord, type SessionSummary } from "../../agent/session/index.ts";
-import { SQLiteMemoryStore } from "../../neural/memory/index.ts";
+import { RetrospectiveLog, SQLiteMemoryStore } from "../../neural/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import {
     callMcpTool,
@@ -211,6 +211,14 @@ const COMMAND_SPECS: CommandSpec[] = [
                 name: "reset",
                 help: "Erase built-in memory",
                 options: [["-y, --yes", "Skip confirmation"]],
+            },
+            {
+                name: "retrospective",
+                help: "Show RETROSPECTIVE.md (consolidation audit log)",
+                options: [
+                    ["--tail <n>", "Show only the last N entries"],
+                    ["--json", "Emit JSON metadata (path, size, entryCount)"],
+                ],
             },
         ],
     },
@@ -1061,6 +1069,28 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
         for (const path of removed) {
             console.log(`- ${path}`);
         }
+        return;
+    }
+    if (sub === "retrospective") {
+        const app = await cliApp();
+        const config = app.resolve(FlyFlorTokens.Config);
+        const log = new RetrospectiveLog({ projectMemoryDir: config.paths.projectMemoryDir });
+        const opts = command.opts<{ json?: boolean; tail?: string }>();
+        const tail = opts.tail ? Math.max(0, Number(opts.tail) | 0) : undefined;
+        const path = log.path();
+        const exists = await Bun.file(path).exists();
+        if (opts.json) {
+            const text = exists ? await log.read({ tail }) : "";
+            const entryCount = text ? (text.match(/^## /gm)?.length ?? 0) - (text.startsWith("## RETROSPECTIVE") ? 1 : 0) : 0;
+            console.log(JSON.stringify({ path, exists, tail: tail ?? null, entryCount: Math.max(entryCount, 0) }, null, 2));
+            return;
+        }
+        if (!exists) {
+            console.log(`No retrospective log yet at: ${path}`);
+            return;
+        }
+        console.log(`# Source: ${path}\n`);
+        console.log(await log.read({ tail }));
         return;
     }
     printPendingCommand(["memory", sub]);

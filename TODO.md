@@ -29,7 +29,7 @@
 | ~~M-06~~ | ~~`ioredis` 兼容 `bun build --compile` 未真实验证；备选 RESP-over-Bun-TCP 未实现~~ ✅ done — `dist/redis.smoke` 二进制对真实 Redis 完整 CRUD（write/read/ring/queue/touch/drop）通过；`scripts/redis.smoke.ts` 保留作为回归手段 | P0 |
 | ~~M-07~~ | ~~feedback 四分类（A/B/C/D）已分类但**写入 episode/preference/宪法/skill 的通道未全部打通**~~ ✅ done — `Confirmation` 通道补齐：Redis 写一条 `concept=confirmation` 高稳定性 episode；若 Surreal 装配则用 `previousAssistantText` embedding 做 ANN top-1 召回，score≥0.75 时 `applyMemoryReinforce` 提升 importance + 刷 `lastVerifiedAt`；新增 `feedback.wire.test.ts > Confirmation without redis is a graceful no-op` 用例 | P1 |
 | ~~M-08~~ | ~~project cluster 路径触发完整，但「LLM 询问 → 用户确认 → 脚手架落地」闭环未跑通~~ ✅ done — Hermes-style 周期 nudge 闭环：SQLite `pending_project_offer` 表 + DAO；`MemoryModule.sweepProjectClusters(userId)`（Redis ring → concept 聚合 → `detectClusterCandidate`）；`BackgroundScheduler.runProjectClusterOnce` + `projectClusterIntervalMs`（默认 15min）周期 tick；`buildPrompt` 注入 offer nudge；commitTurn 末端 `noteProjectOfferTurn`：显式 `projectIntent` 触发即 consume 复用 Path A scaffolder，否则 ttl-1，0 时过期；3 新事件 + doctor 表更新 | P1 |
-| M-09 | `RETROSPECTIVE.md` 自动归档入口缺失 | P2 |
+| ~~M-09~~ | ~~`RETROSPECTIVE.md` 自动归档入口缺失~~ ✅ done — 新建 `src/neural/memory/retrospective.ts`（append-only Markdown，路径 `<projectMemoryDir>/RETROSPECTIVE.md`，失败静默不阻断 hot path）；`ConsolidationWorker.options.retrospective` 注入，consolidate/discard 决策即时落 audit 块；composition root 默认装配；CLI 新增 `flyflor memory retrospective [--tail N] [--json]`；4 个单测 | P2 |
 
 ## Gateway 与渠道
 
