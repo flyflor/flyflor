@@ -77,7 +77,7 @@
 | ~~CLI-03~~ | ~~`flyflor update` 未做下载升级~~ ✅ done — `src/command/cli/update.ts` 已实现 `--check` / `-y` install.sh 调用 | P2 |
 | ~~CLI-04~~ | ~~`flyflor doctor --fix` 未实现~~ ✅ done — `runDoctorFix` 批量 `mkdir -p` 缺失目录 | P2 |
 | CLI-05 | `flyflor chat --image / --toolsets / --max-turns / --tui` blocked / todo | P2 |
-| CLI-06 | `flyflor tui` 与 `chat --tui` 重复职责未对齐 | P2 |
+| ~~CLI-06~~ | ~~`flyflor tui` 与 `chat --tui` 重复职责未对齐~~ ✅ done — `chat --tui` 进入与 `tui` 同一 TUI bootstrap（`getFlyFlor({ mode: RuntimeMode.Tui }) → startTui`），保留 CLI runtime override（provider/model）；不再静默忽略 `--tui` flag | P2 |
 
 ## 模型 / Provider
 

@@ -652,13 +652,28 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "chat") {
         const opts = command.opts<{
             acceptHooks?: boolean;
+            image?: string;
+            maxTurns?: string;
             model?: string;
             provider?: string;
             quiet?: boolean;
             query?: string;
             skills?: string[];
+            toolsets?: string;
+            tui?: boolean;
             verbose?: boolean;
         }>();
+        if (opts.tui) {
+            // `chat --tui` 与 `tui` 对齐：都进入 TUI 主循环，避免两条职责不清的入口。
+            const app = await getFlyFlor({
+                argv: process.argv,
+                mode: RuntimeMode.Tui,
+                config: await configWithRuntimeOverrides(opts),
+            });
+            const { startTui } = await import("../tui/index.tsx");
+            await startTui(app);
+            return;
+        }
         const app = await getFlyFlor({
             argv: process.argv,
             mode: RuntimeMode.Chat,
