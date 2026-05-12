@@ -320,6 +320,13 @@ export type AuditSinkConfig =
     | { kind: "file"; path?: string }
     | { kind: "http"; url: string; headers?: Record<string, string>; timeoutMs?: number };
 
+export interface SandboxQuotaConfig {
+    /** 单次请求内每 capability kind 的最大放行次数；缺省/<=0 不限制。 */
+    perKindPerRequest?: number;
+    /** YOLO 自动放行的最小冷却（ms）；同 kind 上一次放行后未到冷却时改为 ask/deny。 */
+    yoloCooldownMs?: number;
+}
+
 export interface SandboxConfig {
     mode: SandboxMode;
     mcpToolApproval?: ToolApprovalModeType;
@@ -330,6 +337,8 @@ export interface SandboxConfig {
      * 多 sink 时按顺序 fan-out；任一失败 best-effort 不阻塞其它。
      */
     auditSinks?: AuditSinkConfig[];
+    /** quota 配置：限频与 YOLO 冷却；缺省不限制。 */
+    quota?: SandboxQuotaConfig;
 }
 
 /**

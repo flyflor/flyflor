@@ -31,3 +31,8 @@ export {
     type SandboxAllowlistFile,
     type SandboxAllowlistMerged,
 } from "./allowlist.store.ts";
+export {
+    SandboxQuotaTracker,
+    type SandboxQuotaCheck,
+    type SandboxQuotaOptions,
+} from "./quota.ts";

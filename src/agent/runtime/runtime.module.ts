@@ -33,7 +33,7 @@ import {
     type McpToolCatalogEntry,
     type McpToolCallRequest,
 } from "../mcp/index.ts";
-import { createSandboxPolicy, decideCapabilityExecution, gateCapabilityExecution } from "../sandbox/index.ts";
+import { createSandboxPolicy, decideCapabilityExecution, gateCapabilityExecution, SandboxQuotaTracker } from "../sandbox/index.ts";
 import {
     loadPromptTemplates,
     renderBlackboardAdvisoryPrompt,
@@ -141,6 +141,7 @@ export class RuntimeModule extends RuntimeBoundary {
     private readonly embeddings: LocalHashEmbeddingProvider;
     private readonly perf: PerfMetrics;
     private readonly mcpToolCatalogCache = new Map<string, CachedMcpToolCatalog>();
+    private readonly sandboxQuota: SandboxQuotaTracker;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
      * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
@@ -158,6 +159,10 @@ export class RuntimeModule extends RuntimeBoundary {
         this.memory = memory ?? createMemory(config, events, model);
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.perf = new PerfMetrics(config.metrics, events);
+        this.sandboxQuota = new SandboxQuotaTracker({
+            perKindPerRequest: config.sandbox.quota?.perKindPerRequest,
+            yoloCooldownMs: config.sandbox.quota?.yoloCooldownMs,
+        });
     }
 
     /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
@@ -214,6 +219,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.events.publish(
             event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
         );
+        this.sandboxQuota.forgetRequest(context.requestId);
         return generated.reply;
     }
 
@@ -816,6 +822,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 preDeny,
                 approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
                 deniedMessage: `MCP tool call was not approved: ${key}`,
+                quota: this.sandboxQuota,
             });
             if (!gate.allowed) {
                 const execution = { call, ok: false, error: gate.reason };

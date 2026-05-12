@@ -10,6 +10,7 @@ import {
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { Sandbox } from "../components.ts";
 import { Module, Provide } from "../di/decorators/index.ts";
+import { SandboxQuotaTracker } from "./quota.ts";
 
 export interface SandboxPolicy {
     mode: SandboxMode;
@@ -151,6 +152,8 @@ export interface CapabilityGateInput {
     approve?: () => boolean | Promise<boolean>;
     /** 审批被拒时给调用方的可读理由，缺省 `${kind} was not approved`. */
     deniedMessage?: string;
+    /** quota tracker：限频与 YOLO 冷却。 */
+    quota?: SandboxQuotaTracker;
 }
 
 export async function gateCapabilityExecution(
@@ -178,6 +181,25 @@ export async function gateCapabilityExecution(
         );
         return { allowed: false, reason: decision.reason };
     }
+    if (input.quota) {
+        const yolo = policy.mode === SandboxMode.Yolo && decision.approval === ToolApprovalMode.Allow;
+        const check = input.quota.checkBeforeAllow(kind, requestId, { yolo });
+        if (!check.ok) {
+            events.publish(
+                event(
+                    RuntimeEventType.SandboxToolDenied,
+                    { reason: check.reason ?? "quota", kind, detail: check.detail, ...descriptor },
+                    requestId,
+                ),
+            );
+            return {
+                allowed: false,
+                reason: check.reason === "yolo-cooldown"
+                    ? `${kind} blocked by sandbox YOLO cooldown (${check.detail ?? ""})`
+                    : `${kind} blocked by sandbox quota (${check.detail ?? ""})`,
+            };
+        }
+    }
     if (decision.requiresApproval) {
         events.publish(
             event(
@@ -197,6 +219,10 @@ export async function gateCapabilityExecution(
             );
             return { allowed: false, reason: input.deniedMessage ?? `${kind} was not approved` };
         }
+    }
+    if (input.quota) {
+        const yolo = policy.mode === SandboxMode.Yolo && decision.approval === ToolApprovalMode.Allow;
+        input.quota.recordAllow(kind, requestId, { yolo });
     }
     return { allowed: true, reason: decision.reason };
 }
