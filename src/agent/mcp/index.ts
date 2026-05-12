@@ -31,6 +31,8 @@ export interface McpServerDefinition {
     transport?: string;
     url?: string;
     enabled: boolean;
+    /** 工具白名单/黑名单：禁用的工具名（精确匹配）。空数组等价于无限制。 */
+    disabledTools?: string[];
 }
 
 export interface McpConfigFile {
@@ -42,6 +44,8 @@ export interface McpServerShape {
     args?: string[];
     command?: string;
     disabled?: boolean;
+    /** 禁用的工具名列表（与 enabled 字段独立，仅影响 catalog 暴露）。 */
+    disabledTools?: string[];
     enabled?: boolean;
     env?: Record<string, string>;
     transport?: string;
@@ -190,6 +194,52 @@ export async function setMcpServerEnabled(
     return normalizeServerDefinition(normalized, servers[normalized]!, options.global ? "global" : "project");
 }
 
+/**
+ * 切换某 MCP 服务器下指定工具的启用状态。
+ *
+ * 行为：
+ *  - action="disable"：把 tools 并入 disabledTools；
+ *  - action="enable"：从 disabledTools 中移除 tools；
+ *  - 工具名仅做精确等值匹配，零字符语义判断。
+ */
+export async function setMcpServerToolsEnabled(
+    paths: FlyflorPaths,
+    name: string,
+    tools: readonly string[],
+    action: "enable" | "disable",
+    options: { global?: boolean } = {},
+): Promise<McpServerDefinition> {
+    const normalized = name.trim();
+    assertMcpName(normalized);
+    const cleanedTools = [
+        ...new Set(tools.map((t) => t.trim()).filter((t) => t.length > 0)),
+    ];
+    if (cleanedTools.length === 0) {
+        throw new Error("At least one tool name is required.");
+    }
+    const payload = await readMcpConfig(paths, options);
+    const servers = mergeServerMaps(payload);
+    const current = servers[normalized];
+    if (!current) {
+        throw new Error(
+            `MCP server not found in ${options.global ? "global" : "project"} config: ${normalized}`,
+        );
+    }
+    const currentDisabled = new Set(current.disabledTools ?? []);
+    if (action === "disable") {
+        for (const t of cleanedTools) currentDisabled.add(t);
+    } else {
+        for (const t of cleanedTools) currentDisabled.delete(t);
+    }
+    const nextDisabled = [...currentDisabled].sort();
+    servers[normalized] = {
+        ...current,
+        disabledTools: nextDisabled.length > 0 ? nextDisabled : undefined,
+    };
+    await writeMcpConfig(paths, { servers }, options);
+    return normalizeServerDefinition(normalized, servers[normalized]!, options.global ? "global" : "project");
+}
+
 export async function validateMcpServers(paths: FlyflorPaths): Promise<McpValidationResult[]> {
     const servers = await loadMcpServers(paths);
     return servers.map((server) => {
@@ -250,6 +300,9 @@ function normalizeServerDefinition(name: string, server: McpServerShape, source:
         source,
         transport: server.transport,
         url: server.url,
+        disabledTools: Array.isArray(server.disabledTools)
+            ? [...new Set(server.disabledTools.filter((t): t is string => typeof t === "string" && t.length > 0))].sort()
+            : undefined,
     };
 }
 

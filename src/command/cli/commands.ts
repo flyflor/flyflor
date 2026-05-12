@@ -35,6 +35,7 @@ import {
     mcpConfigPath,
     removeMcpServer,
     setMcpServerEnabled,
+    setMcpServerToolsEnabled,
     upsertMcpServer,
     validateMcpServers,
     type McpCallResult,
@@ -761,6 +762,10 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         await runMcp(sub, command);
         return;
     }
+    if (root === "tools") {
+        await runTools(sub, command);
+        return;
+    }
     if (root === "plugins") {
         await runPlugins(sub, command);
         return;
@@ -1408,6 +1413,30 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
         return;
     }
     printPendingCommand(["mcp", sub]);
+}
+
+async function runTools(sub: string | undefined, command: Command): Promise<void> {
+    const app = await cliApp();
+    const config = app.resolve(FlyFlorTokens.Config);
+    if (sub !== "enable" && sub !== "disable") {
+        printPendingCommand(["tools", sub ?? ""]);
+        return;
+    }
+    const tools = command.args.filter((arg): arg is string => typeof arg === "string" && arg.length > 0);
+    if (tools.length === 0) {
+        throw new CommanderError(1, "flyflor.missingTool", "Provide at least one tool name.");
+    }
+    const opts = command.opts<{ global?: boolean; mcpServer?: string }>();
+    const server = opts.mcpServer?.trim();
+    if (!server) {
+        throw new CommanderError(1, "flyflor.missingMcp", "Specify the owning MCP server with --mcp-server <name>.");
+    }
+    const updated = await setMcpServerToolsEnabled(config.paths, server, tools, sub, { global: opts.global });
+    const disabled = updated.disabledTools ?? [];
+    const verb = sub === "enable" ? "Enabled" : "Disabled";
+    console.log(`${verb} ${tools.length} tool(s) on ${updated.source} MCP server ${updated.name}.`);
+    console.log(`Currently disabled: ${disabled.length > 0 ? disabled.join(", ") : "(none)"}`);
+    console.log(`Path: ${mcpConfigPath(config.paths, { global: opts.global })}`);
 }
 
 async function runPlugins(sub: string | undefined, command: Command): Promise<void> {

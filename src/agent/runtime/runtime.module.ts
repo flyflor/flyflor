@@ -722,7 +722,9 @@ export class RuntimeModule extends RuntimeBoundary {
                     requestId,
                     timeoutMs: 1_500,
                 });
-                const serverEntries = tools.map((tool) => ({ server: server.name, tool }));
+                const disabled = new Set(server.disabledTools ?? []);
+                const allowedTools = disabled.size > 0 ? tools.filter((t) => !disabled.has(t.name)) : tools;
+                const serverEntries = allowedTools.map((tool) => ({ server: server.name, tool }));
                 this.cacheMcpToolEntries(cacheKey, serverEntries);
                 entries.push(...serverEntries);
             } catch {
@@ -1329,6 +1331,7 @@ function mcpCatalogCacheKey(server: Awaited<ReturnType<typeof loadMcpServers>>[n
     return JSON.stringify({
         args: server.args ?? [],
         command: server.command,
+        disabledTools: server.disabledTools ?? [],
         env: server.env ?? {},
         name: server.name,
         source: server.source,

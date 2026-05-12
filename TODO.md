@@ -70,10 +70,12 @@
 
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
-| CLI-01 | `flyflor tools enable/disable` 未实现 | P2 |
+| ~~CLI-01~~ | ~~`flyflor tools enable/disable` 未实现~~ ✅ done — `McpServerShape.disabledTools` + `setMcpServerToolsEnabled` DAO（精确等值，零字符语义匹配）；CLI `tools enable/disable <names...> --mcp-server <name> [--global]` 接入，写入 `mcp.json`；`buildMcpToolCatalog` 按 disabledTools 过滤；`mcpCatalogCacheKey` 加入 disabledTools 触发缓存失效；3 个新 DAO 测试 | P2 |
+| ~~CLI-03~~ | ~~`flyflor update` 未做下载升级~~ ✅ done — `src/command/cli/update.ts` 已实现：`--check` 仅比对版本；`-y` 调用 `install.sh` 走 `Bun.spawn`；`FLYFLOR_RELEASE_BASE` 支持自托管镜像；网络失败返回非零退出码 | P2 |
+| ~~CLI-04~~ | ~~`flyflor doctor --fix` 未实现~~ ✅ done — `runDoctorFix` 对 home/workspace/storage/log/memory/skill/mcp/plugin 目录批量 `mkdir -p`，逐项打印 ✓/✗；与 `doctor` 表正常合用 | P2 |
 | ~~CLI-02~~ | ~~`flyflor plugins *` 大多骨架~~ ✅ done — list/show/validate/add/enable/disable/remove 已完整；本批补齐 `plugins run <name>` 子命令：通过 `PluginRunner` + `createSandboxPolicy` 在子进程内调用 plugin entry，支持 `--input` / `--input-file` 注入 JSON 请求、`--timeout-ms` / `--command` / `--allow-cmd` 覆盖白名单、`--json` 原始输出；失败返回非零退出码并打印 stderr | P1 |
-| CLI-03 | `flyflor update` 未做下载升级 | P2 |
-| CLI-04 | `flyflor doctor --fix` 未实现 | P2 |
+| ~~CLI-03~~ | ~~`flyflor update` 未做下载升级~~ ✅ done — `src/command/cli/update.ts` 已实现 `--check` / `-y` install.sh 调用 | P2 |
+| ~~CLI-04~~ | ~~`flyflor doctor --fix` 未实现~~ ✅ done — `runDoctorFix` 批量 `mkdir -p` 缺失目录 | P2 |
 | CLI-05 | `flyflor chat --image / --toolsets / --max-turns / --tui` blocked / todo | P2 |
 | CLI-06 | `flyflor tui` 与 `chat --tui` 重复职责未对齐 | P2 |
 
