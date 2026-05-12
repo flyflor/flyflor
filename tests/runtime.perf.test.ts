@@ -308,7 +308,8 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const ctx = withEmbedding(await embedFor(config, "broken journal"));
         const journal = new JournalStore({ journalRoot: join(config.paths.home, "journal") });
         const location = journal.locationFor(ctx.now);
-        await mkdir(location.dbPath, { recursive: true });
+        await mkdir(location.weekDir, { recursive: true });
+        await Bun.write(location.dbPath, "not a sqlite database");
 
         await expect(memory.buildPrompt(msg("broken journal"), ctx)).rejects.toThrow();
     });

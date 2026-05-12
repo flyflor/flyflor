@@ -33,9 +33,10 @@
 | `memory.reconsolidation.driftHitCount`           | 2                                                            |
 | `memory.inbox.{decayMultiplier,ttlDays}`         | 2.0 / 7                                                      |
 | `memory.dormant.idleMinutes`                     | 10                                                           |
+| `memory.atomScore.visibilityThreshold`            | 0.65                                                         |
 | `memory.atomScore.weights`                       | recency 0.35 / access 0.15 / successPrior 0.35 / fanout 0.15 |
 
-**新红线**（待写入 `docs/boundaries.md`）：
+**红线**（已写入 `docs/boundaries.md`）：
 
 - R1 无 session：协议 / 提示词 / 存储 / 事件 / CLI 禁用 `sessionId/sessionKey/sessionScope/legacySessionKey`
 - R2 journal 目录是公开契约，不得为性能合并 `day.db`
@@ -45,13 +46,24 @@
 | ID    | 阶段   | 描述                                                                                                                                                                                               | 状态    |
 | ----- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | LF-P0 | 阶段 0 | 协议 + 边界 + 配置 schema：MemoryAtom / AtomScore / FocusPointer 类型；`RuntimeMode.Dormant` 等新枚举；`memory.*` 配置默认值；`boundaries.md` R1-R4；`docs/proposals/life.form.md`；不改运行时行为 | done    |
-| LF-P1 | 阶段 1 | Journal 主链路：`journal/` 目录布局、按天 SQLite writer、`week.index.surreal`、`week.summary.md`；turn 结束写 episode / atom；`journal.smoke.ts` 压测 bun sqlite 多文件 open 行为                  | 进行中  |
+| LF-P1 | 阶段 1 | Journal 主链路：`journal/` 目录布局、按天 SQLite writer、`week.index.surreal`、`week.summary.md`；turn 结束写 episode / atom；`journal.smoke.ts` 压测 bun sqlite 多文件 open 行为                  | done    |
 | LF-P2 | 阶段 2 | 无 session 清理：已删除 `SessionModule` / `scopeFor` / `sessionKey` 正常路径 / `flyflor sessions *`；Blackboard lease 已切到内部 `projectConstraintId` + request/turn 审计 id；Memory SQLite 仅保留 candidates / offers / search | done |
-| LF-P3 | 阶段 3 | Atom 抽取 + 三层漏斗：热相（turn 结束零额外 LLM）/ 冷相（每日离线本地模型）；AtomScore 替换现 evidence gate；Gate A 量 / B 质 / C 信 接入 cluster sweeper（复用 project-offer / skill-offer 框架） | pending |
+| LF-P3 | 阶段 3 | Atom 抽取 + 三层漏斗：热相（turn 结束零额外 LLM）/ 冷相（每日离线本地模型）；AtomScore 替换现 evidence gate；Gate A 量 / B 质 / C 信 接入 cluster sweeper（复用 project-offer / skill-offer 框架） | 进行中 |
 | LF-P4 | 阶段 4 | 生命体能力：identity 自写 + `revert.log.jsonl` + `flyflor identity revert <id>`；weekly summary worker（rolling 7d）；Dream worker 新增 reconsolidation 第 4 类动作；`RuntimeMode.Dormant` 实装    | pending |
 | LF-P5 | 阶段 5 | 文档 / CLI / 测试全量收束；所有正常路径禁词扫描：`sessionKey/sessionId/sessionScope/legacySessionKey/SessionModule` 为 0；EQ-01 解锁前置                                                           | pending |
 
 **作废条目**：M-01（旧会话语义 blocked-needs-design）→ 由 LF-P2 替代；但 LF-P2 不是迁移兼容期，而是删除 session 语义。
+
+**LF-P3 当前进展（2026-05-13）**：
+
+- done：热相 atom 已由同轮结构化 `MemoryAction` 派生，落入按天 `journal/<yyyy>/W<ww>/day_YYYY_MM_DD.db`。
+- done：`memory.atomScore.visibilityThreshold=0.65` 已接入 prompt 可见性；`buildPrompt` 只消费通过阈值的 journal atom，不再把 SQLite search / crystal recall 绕过 AtomScore 注入 `Retrieved Memory`。
+- done：Redis 热海马体只作为激活源；最终注入 prompt 的文本来自已过 AtomScore 的 journal atom，避免 raw episode 绕过分数门。
+- done：本段链路不吞 journal 读取错误；损坏 day DB 会向上抛出，测试覆盖 `buildPrompt propagates journal read errors`。
+- done：新增 `JournalStore.listVisibleAtomsWindow`，按天/周目录窗口召回并保持 `score_total DESC, created_at DESC` 排序；`tests/journal.store.test.ts` 和 `tests/chaos.fuzz.test.ts` 覆盖阈值、跨日窗口、随机分数暴力数据。
+- pending：冷相每日本地模型 refine（补 `outcome/success/refinedAt`）未做。
+- pending：Gate A 量 / B 质 / C 信尚未接入 project / skill sweeper；目前 cluster sweeper 仍复用旧 evidence/importance 路径。
+- pending：全局“无静默兜底”还未系统性清理；本次只保证 LF-P3 prompt 可见性链路不隐藏异常。历史 best-effort/no-op 测试仍存在，应作为 LF-P5 前置质量门处理。
 
 ## 路由与黑板
 

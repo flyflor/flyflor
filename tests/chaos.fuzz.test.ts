@@ -9,7 +9,11 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { LruCache } from "../src/neural/memory/lru.cache.ts";
+import { JournalStore, type JournalAtomWrite } from "../src/neural/memory/journal.store.ts";
 import { spreadActivation } from "../src/neural/memory/activation.ts";
 import {
     DecayLayer,
@@ -32,6 +36,7 @@ import {
     ProjectTriggerKind,
 } from "../src/agent/project/index.ts";
 import type { EpisodeRecord } from "../src/neural/memory/redis.ts";
+import { AtomStage, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────
 function rng(seed: number): () => number {
@@ -354,6 +359,57 @@ describe("chaos: spreadActivation", () => {
     });
 });
 
+// ─── journal AtomScore 暴力 ───────────────────────────────────────
+describe("chaos: JournalStore AtomScore gate", () => {
+    test("window recall keeps only threshold-passing atoms across random day partitions", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-chaos-journal-"));
+        const store = new JournalStore({ journalRoot: join(root, "journal") });
+        const r = rng(0xa70);
+        const expected = new Set<string>();
+
+        for (let day = 0; day < 14; day += 1) {
+            const createdAt = new Date(Date.UTC(2026, 4, 12 - day, 8, 0, 0)).toISOString();
+            const episodeId = `chaos-ep-${day}`;
+            const writes: JournalAtomWrite[] = [];
+            for (let i = 0; i < 40; i += 1) {
+                const score = Math.max(0, Math.min(1, r()));
+                const id = `chaos-${day}-${i}`;
+                writes.push(journalAtomWrite(id, episodeId, score, createdAt));
+                if (day < 7 && score >= 0.7) expected.add(id);
+            }
+            await store.appendEpisode(
+                {
+                    id: episodeId,
+                    userId: "u-chaos",
+                    channelId: "stdio",
+                    projectId: "p-chaos",
+                    role: ModelRole.User,
+                    text: `chaos day ${day}`,
+                    createdAt,
+                },
+                writes,
+            );
+        }
+
+        const visible = await store.listVisibleAtomsWindow("2026-05-12T08:00:00.000Z", {
+            days: 7,
+            limit: 100,
+            minScore: 0.7,
+            userId: "u-chaos",
+        });
+
+        expect(visible.length).toBeLessThanOrEqual(100);
+        for (const entry of visible) {
+            expect(expected.has(entry.atom.id)).toBe(true);
+            expect(entry.score.total).toBeGreaterThanOrEqual(0.7);
+            expect(Number.isFinite(entry.score.total)).toBe(true);
+        }
+        for (let i = 1; i < visible.length; i += 1) {
+            expect(visible[i - 1]!.score.total).toBeGreaterThanOrEqual(visible[i]!.score.total);
+        }
+    });
+});
+
 // ─── parseConsolidationDecision 垃圾数据 ───────────────────────────
 describe("chaos: parseConsolidationDecision (poisoned JSON)", () => {
     test("never throws on the poisoned-input corpus", () => {
@@ -474,3 +530,35 @@ describe("chaos: determinism check", () => {
         expect(a).toEqual(b);
     });
 });
+
+function journalAtomWrite(id: string, episodeId: string, total: number, createdAt: string): JournalAtomWrite {
+    const atom: MemoryAtom = {
+        id,
+        episodeIds: [episodeId],
+        userId: "u-chaos",
+        channelId: "stdio",
+        projectId: "p-chaos",
+        role: ModelRole.User,
+        task: "chaos",
+        context: "journal chaos",
+        action: id,
+        outcome: "stored",
+        success: total >= 0.7,
+        confidence: total,
+        priorWeight: total,
+        embedding: [total, 1 - total, 0.5],
+        text: id,
+        stage: AtomStage.Raw,
+        createdAt,
+    };
+    const score: AtomScore = {
+        atomId: id,
+        recency: total,
+        access: total,
+        successPrior: total,
+        fanout: total,
+        total,
+        inboxDecayApplied: false,
+    };
+    return { atom, score };
+}

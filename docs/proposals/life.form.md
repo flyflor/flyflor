@@ -106,7 +106,7 @@ Agent 可以 append `identity/{soul.md,user.md}`，但每次必须写 `revert.lo
 
 - 热相：turn 结束零额外 LLM，生成最小 atom。
 - 冷相：每日离线本地模型，补 outcome / success / refined text。
-- `AtomScore` 替换现有 evidence gate。
+- `AtomScore` 替换现有 evidence gate；prompt 可见性默认走 `memory.tuning.atomScore.visibilityThreshold = 0.65`。
 - Gate A 量、Gate B 质、Gate C 信接入 project / skill sweeper。
 
 ### LF-P4 — 生命体能力

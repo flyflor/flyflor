@@ -213,7 +213,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 
 ### R4 — 分数决定可见性
 
-- 所有记忆召回入口必须先过 `AtomScore` 阈值；禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
+- 所有记忆召回入口必须先过 `AtomScore` 阈值；默认 prompt 可见性阈值为 `memory.tuning.atomScore.visibilityThreshold = 0.65`。禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
 - 唯一例外：`flyflor memory dump` / `doctor` / 调试 CLI 等显式调试入口，必须在日志中标注 `bypass-score: true`。
 - inbox project 内 atom 的 `recency` 分量必须乘以 `memory.tuning.inbox.decayMultiplier`（默认 2.0），实现"7 天加速淡出"。
 - `RuntimeMode.Dormant` 期间召回阈值不变；Dormant 不等于关闭召回，gateway 监听不停（W2 行为契约，不可配）。
