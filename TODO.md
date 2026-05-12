@@ -81,8 +81,8 @@
 
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
-| P-01 | 内置 provider profile 仅 OpenAI / Mock；**Anthropic / Gemini / Ollama** 未内置（schema 已留，配置层未默认） | P1 |
-| P-02 | Provider 凭据走 secrets provider，环境变量入口待统一审查 | P1 |
+| ~~P-01~~ | ~~内置 provider profile 仅 OpenAI / Mock；**Anthropic / Gemini / Ollama** 未内置（schema 已留，配置层未默认）~~ ✅ done — 复核 `src/config/index.ts createDefaultModelProviders` 已内置：OpenAI / Claude / Anthropic / DeepSeek / Gemini / Kimi / Minimax / MinimaxCn / Qwen / QwenIntl / OpenRouter / AiGateway / Xai / Zai / Groq / Mistral / AzureOpenAI（占位）/ Bedrock（占位）/ Ollama / Local / Custom，共 20+ profile；本条仅文档遗留 | P1 |
+| ~~P-02~~ | ~~Provider 凭据走 secrets provider，环境变量入口待统一审查~~ ✅ done — 审计 `src/config/index.ts:resolveSecret` 是 provider 凭据唯一入口（只从显式 `secrets` map 取值，`provider="config"` 时按 id 解析），未做任何 `process.env.OPENAI_API_KEY` 回退；`src/config/index.ts env()` 仅用于 XDG 路径与 FLYFLOR_BUILD_* 构建元数据，不参与业务配置；与 AGENTS.md「业务配置不能走环境变量」一致 | P1 |
 
 ## 未落地的设计稿
 
