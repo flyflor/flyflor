@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, render, Text, useApp, useInput, useStdout } from "ink";
-import type { RuntimeEvent, GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
+import type { GatewayMessage, GatewayReply, RuntimeContext, RuntimeEvent } from "../../protocol/contracts/index.ts";
 import { Channel, ChatType } from "../../protocol/contracts/index.ts";
-import { RuntimeEventType, RuntimeEventBus, type EventSink } from "../../protocol/events/index.ts";
+import { RuntimeEventBus, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import type { BlackboardMessage, BlackboardModule, BlackboardStep, BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { RuntimeModule } from "../../agent/runtime/index.ts";
 import type { McpToolCallRequest } from "../../agent/mcp/index.ts";
 
-/* ─── Types ─────────────────────────────────────────── */
+type ToneColor = "blue" | "cyan" | "gray" | "green" | "magenta" | "red" | "white" | "yellow";
+type Phase = "idle" | "blackboard" | "thinking" | "mcp" | "skill" | "streaming";
+type Section = "blackboard" | "skills" | "mcp" | "metadata";
+type SectionMap = Record<Section, boolean>;
 
 interface McpTrace {
     server: string;
@@ -15,598 +19,1283 @@ interface McpTrace {
     resultText: string;
 }
 
+interface BlackboardMeta {
+    elapsedMs?: number;
+    messages?: number;
+    mode: string;
+    reason?: string;
+    status?: string;
+    turnId?: string;
+}
+
 interface Turn {
     id: string;
-    userMessage: string;
     assistantText: string;
+    blackboard: BlackboardMeta | null;
+    blackboardTurn: BlackboardTurn | null;
     completedAt: string | null;
-    metadata: GatewayReply["metadata"] | null;
+    error: string | null;
     mcpCalls: McpTrace[];
+    metadata: GatewayReply["metadata"] | null;
     skills: string[];
-    blackboardStarted: boolean;
-    blackboardText: string;
+    startedAt: string;
+    userMessage: string;
 }
 
-type Phase = "idle" | "blackboard" | "thinking" | "mcp" | "skill" | "streaming";
-type Section = "blackboard" | "skills" | "mcp";
-type SectionMap = Record<Section, boolean>;
-
-/* ─── Phase animation definitions ───────────────────── */
-
-const PHASE_DEF: Record<Phase, { frames: string[]; label: string; doneIcon: string; color: string }> = {
-    idle: { frames: [""], label: "", doneIcon: "", color: "gray" },
-    blackboard: { frames: ["🔍", "🔎", "🔍", "🔎"], label: "Researching", doneIcon: "📋", color: "yellow" },
-    thinking: { frames: ["🧠", "💭", "🧠", "💭"], label: "Thinking", doneIcon: "💡", color: "cyan" },
-    mcp: { frames: ["🔗", "🔌", "🔗", "🔌"], label: "Tool call", doneIcon: "🔧", color: "blue" },
-    skill: { frames: ["⚡", "📋", "⚡", "📋"], label: "Skill", doneIcon: "✅", color: "green" },
-    streaming: { frames: ["✨", "💫", "✨", "💫"], label: "Generating", doneIcon: "✨", color: "white" },
-};
-
-/* ─── Hooks ─────────────────────────────────────────── */
-
-/** Cycles through frames at intervalMs. Returns the current frame. */
-function useAnim(active: boolean, frames: string[], intervalMs = 240): string {
-    const [i, setI] = useState(0);
-    useEffect(() => {
-        if (!active || frames.length <= 1) {
-            setI(0);
-            return;
-        }
-        const t = setInterval(() => setI((x) => (x + 1) % frames.length), intervalMs);
-        return () => clearInterval(t);
-    }, [active, frames.length, intervalMs]);
-    return frames[i % frames.length] ?? frames[0] ?? "";
-}
-
-function useTermSize(): { rows: number; cols: number } {
-    const { stdout } = useStdout();
-    const [sz, setSz] = useState({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
-    useEffect(() => {
-        const up = (): void => setSz({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
-        stdout.on("resize", up);
-        return () => {
-            stdout.off("resize", up);
-        };
-    }, [stdout]);
-    return sz;
-}
-
-/* ─── Helpers ───────────────────────────────────────── */
-
-function emptySections(): SectionMap {
-    return { blackboard: false, skills: false, mcp: false };
-}
-
-function fmtTime(iso: string): string {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-}
-
-/** Return last ~2 visual lines of text (rough wrap at cols). */
-function preview2(text: string, cols: number): string {
-    if (!text) return "";
-    const wrapped: string[] = [];
-    for (const p of text.split("\n")) {
-        const w = Math.max(1, Math.ceil((p.length || 1) / Math.max(1, cols)));
-        for (let i = 0; i < w; i++) wrapped.push(p.slice(i * cols, (i + 1) * cols));
-    }
-    return wrapped.slice(-2).join(" ").trim();
-}
-
-/** Colour-safe cast for Ink Text color prop. */
-function c(name: string): "yellow" | "cyan" | "blue" | "green" | "white" | "gray" | "red" {
-    return name as "yellow" | "cyan" | "blue" | "green" | "white" | "gray" | "red";
-}
-
-/* ─── Section Card (collapsible) ────────────────────── */
-
-interface CardProps {
-    icon: string;
+interface PhaseDef {
+    color: ToneColor;
+    done: string;
+    frames: string[];
     label: string;
-    preview: string;
-    open: boolean;
-    color: string;
-    children?: React.ReactNode;
 }
-
-function Card({ icon, label, preview, open, color, children }: CardProps): React.ReactElement {
-    return (
-        <Box flexDirection="column">
-            <Box>
-                <Text>{icon}</Text>
-                <Box marginLeft={1}>
-                    <Text dimColor>{open ? "▼" : "▶"}</Text>
-                </Box>
-                <Box marginLeft={1}>
-                    <Text color={c(color)} bold>
-                        {label}
-                    </Text>
-                </Box>
-                {!open && preview ? (
-                    <Box marginLeft={1}>
-                        <Text dimColor italic>
-                            {preview.slice(0, 70)}
-                            {preview.length > 70 ? "…" : ""}
-                        </Text>
-                    </Box>
-                ) : null}
-            </Box>
-            {open && children ? (
-                <Box marginLeft={2} marginTop={0}>
-                    {children}
-                </Box>
-            ) : null}
-        </Box>
-    );
-}
-
-/* ─── Finished Turn ─────────────────────────────────── */
-
-interface TurnProps {
-    turn: Turn;
-    expanded: SectionMap;
-}
-
-function TurnView({ turn, expanded }: TurnProps): React.ReactElement {
-    const { cols } = useTermSize();
-    const meta = turn.metadata;
-    const metaSkills: string[] = meta && Array.isArray(meta.skills) ? (meta.skills as string[]) : [];
-    const metaMcpN: number = meta && typeof meta.mcpToolCalls === "number" ? meta.mcpToolCalls : 0;
-    const metaBb: Record<string, unknown> | undefined =
-        meta && typeof meta.blackboard === "object" && meta.blackboard !== null
-            ? (meta.blackboard as Record<string, unknown>)
-            : undefined;
-
-    const hBb = turn.blackboardStarted || !!metaBb;
-    const hSk = turn.skills.length > 0 || metaSkills.length > 0;
-    const hMcp = turn.mcpCalls.length > 0 || metaMcpN > 0;
-    const sep = "─".repeat(Math.max(0, cols - 2));
-
-    return (
-        <Box flexDirection="column">
-            {/* User */}
-            <Box>
-                <Text color="cyan">┃</Text>
-                <Box paddingLeft={1}>
-                    <Text color="cyan" bold>
-                        You
-                    </Text>
-                </Box>
-            </Box>
-            <Box>
-                <Text color="cyan">┃</Text>
-                <Box paddingLeft={1} flexGrow={1} paddingRight={1}>
-                    <Text>{turn.userMessage}</Text>
-                </Box>
-            </Box>
-
-            {/* Status cards */}
-            {hBb ? (
-                <Box>
-                    <Text color="cyan">┃</Text>
-                    <Box paddingLeft={1} flexGrow={1}>
-                        <Card
-                            icon={PHASE_DEF.blackboard.doneIcon}
-                            label="Blackboard"
-                            preview={preview2(turn.blackboardText, cols - 20)}
-                            open={expanded.blackboard}
-                            color="yellow"
-                        >
-                            <Box flexDirection="column">
-                                {turn.blackboardText
-                                    .split("\n")
-                                    .slice(0, 20)
-                                    .map((l, i) => (
-                                        <Text key={i} dimColor>
-                                            {l || " "}
-                                        </Text>
-                                    ))}
-                                {turn.blackboardText.split("\n").length > 20 ? (
-                                    <Text dimColor>… (truncated)</Text>
-                                ) : null}
-                            </Box>
-                        </Card>
-                    </Box>
-                </Box>
-            ) : null}
-
-            {hSk && !hBb ? (
-                <Box>
-                    <Text color="cyan">┃</Text>
-                    <Box paddingLeft={1} flexGrow={1}>
-                        <Card
-                            icon={PHASE_DEF.skill.doneIcon}
-                            label="Skills"
-                            preview={[...turn.skills, ...metaSkills].join(", ")}
-                            open={expanded.skills}
-                            color="green"
-                        >
-                            <Box flexDirection="column">
-                                {[...turn.skills, ...metaSkills].map((n) => (
-                                    <Text key={n} dimColor>
-                                        • {n}
-                                    </Text>
-                                ))}
-                            </Box>
-                        </Card>
-                    </Box>
-                </Box>
-            ) : null}
-
-            {hMcp ? (
-                <Box>
-                    <Text color="cyan">┃</Text>
-                    <Box paddingLeft={1} flexGrow={1}>
-                        <Card
-                            icon={PHASE_DEF.mcp.doneIcon}
-                            label="MCP Tools"
-                            preview={`${turn.mcpCalls.length || metaMcpN} call(s)`}
-                            open={expanded.mcp}
-                            color="blue"
-                        >
-                            <Box flexDirection="column">
-                                {turn.mcpCalls.map((c, i) => (
-                                    <Box key={i} flexDirection="column" marginBottom={1}>
-                                        <Text>
-                                            {c.ok ? "✓" : "✗"} {c.server}.{c.tool}
-                                        </Text>
-                                        {c.resultText ? (
-                                            <Box marginLeft={2}>
-                                                <Text dimColor>{c.resultText.slice(0, 300)}</Text>
-                                            </Box>
-                                        ) : null}
-                                    </Box>
-                                ))}
-                                {turn.mcpCalls.length === 0 && metaMcpN > 0 ? (
-                                    <Text dimColor> {metaMcpN} tool(s) executed</Text>
-                                ) : null}
-                            </Box>
-                        </Card>
-                    </Box>
-                </Box>
-            ) : null}
-
-            {/* Separator */}
-            <Text dimColor>{sep}</Text>
-
-            {/* Assistant */}
-            <Box>
-                <Text color="green">┃</Text>
-                <Box paddingLeft={1}>
-                    <Text color="green" bold>
-                        Flyflor
-                    </Text>
-                    {turn.completedAt ? <Text dimColor> {fmtTime(turn.completedAt)}</Text> : null}
-                </Box>
-            </Box>
-            <Box>
-                <Text color="green">┃</Text>
-                <Box paddingLeft={1} flexGrow={1} paddingRight={1}>
-                    <Text>{turn.assistantText || " "}</Text>
-                </Box>
-            </Box>
-        </Box>
-    );
-}
-
-/* ─── Processing overlay ────────────────────────────── */
-
-function ProcessingView({ phase, userMsg }: { phase: Phase; userMsg: string }): React.ReactElement {
-    const def = PHASE_DEF[phase];
-    const icon = useAnim(phase !== "idle", def.frames, 250);
-    return (
-        <Box flexDirection="column">
-            <Box>
-                <Text color="cyan">┃</Text>
-                <Box paddingLeft={1}>
-                    <Text color="cyan" bold>
-                        You
-                    </Text>
-                </Box>
-            </Box>
-            <Box>
-                <Text color="cyan">┃</Text>
-                <Box paddingLeft={1}>
-                    <Text>{userMsg}</Text>
-                </Box>
-            </Box>
-            <Box marginTop={1}>
-                <Text color={c(def.color)}>
-                    {icon || def.frames[0]} {def.label}
-                </Text>
-            </Box>
-        </Box>
-    );
-}
-
-/* ─── ChatTui ───────────────────────────────────────── */
 
 interface ChatTuiProps {
     runtime: RuntimeModule;
+    blackboard?: BlackboardModule;
     eventBus?: RuntimeEventBus;
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     agentName?: string;
     userId?: string;
 }
 
+interface BadgeProps {
+    color?: ToneColor;
+    dim?: boolean;
+    label: string;
+}
+
+interface TraceChipProps {
+    color: ToneColor;
+    count?: number;
+    label: string;
+    state: "active" | "done" | "error" | "idle";
+}
+
+interface DetailSectionProps {
+    color?: ToneColor;
+    title: string;
+    children?: React.ReactNode;
+}
+
+interface TurnCardProps {
+    turn: Turn;
+    expanded: SectionMap;
+    isActive: boolean;
+    isLatest: boolean;
+    minimalMode: boolean;
+    phase: Phase;
+}
+
+const SECTION_ORDER: Section[] = ["blackboard", "skills", "mcp", "metadata"];
+const BREAKPOINT_INSPECTOR = 140;
+const BREAKPOINT_COMPACT = 100;
+const BREAKPOINT_MINIMAL = 80;
+
+const PHASE_DEF: Record<Phase, PhaseDef> = {
+    idle: { color: "gray", done: "○", frames: ["○"], label: "IDLE" },
+    blackboard: { color: "magenta", done: "◆", frames: ["◇", "◆", "◇"], label: "BLACKBOARD" },
+    thinking: { color: "cyan", done: "◆", frames: ["◐", "◓", "◑", "◒"], label: "THINKING" },
+    mcp: { color: "blue", done: "◆", frames: ["▣", "■", "▣"], label: "TOOLS" },
+    skill: { color: "green", done: "◆", frames: ["◈", "◆", "◈"], label: "SKILLS" },
+    streaming: { color: "white", done: "◆", frames: ["•", "◦", "•"], label: "STREAMING" },
+};
+
+function useAnim(active: boolean, frames: string[], intervalMs = 220): string {
+    const [index, setIndex] = useState(0);
+    useEffect(() => {
+        if (!active || frames.length <= 1) {
+            setIndex(0);
+            return;
+        }
+        const timer = setInterval(() => setIndex((value) => (value + 1) % frames.length), intervalMs);
+        return () => clearInterval(timer);
+    }, [active, frames, intervalMs]);
+    return frames[index] ?? frames[0] ?? "";
+}
+
+function useTermSize(): { rows: number; cols: number } {
+    const { stdout } = useStdout();
+    const [size, setSize] = useState({ cols: stdout.columns ?? 80, rows: stdout.rows ?? 24 });
+
+    useEffect(() => {
+        const update = (): void => {
+            setSize({ cols: stdout.columns ?? 80, rows: stdout.rows ?? 24 });
+        };
+        stdout.on("resize", update);
+        return () => {
+            stdout.off("resize", update);
+        };
+    }, [stdout]);
+
+    return size;
+}
+
+function c(color: ToneColor): ToneColor {
+    return color;
+}
+
+function emptySections(): SectionMap {
+    return {
+        blackboard: false,
+        metadata: false,
+        mcp: false,
+        skills: false,
+    };
+}
+
+function toggleAllSections(value: SectionMap): SectionMap {
+    const nextOpen = !SECTION_ORDER.every((section) => value[section]);
+    return {
+        blackboard: nextOpen,
+        metadata: nextOpen,
+        mcp: nextOpen,
+        skills: nextOpen,
+    };
+}
+
+function updateTurnById(turns: Turn[], turnId: string | null, recipe: (turn: Turn) => Turn): Turn[] {
+    if (!turnId) {
+        return turns;
+    }
+    return turns.map((turn) => (turn.id === turnId ? recipe(turn) : turn));
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readStringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
+function uniqueStrings(values: string[]): string[] {
+    const seen = new Set<string>();
+    const items: string[] = [];
+    for (const value of values) {
+        if (value.length === 0 || seen.has(value)) {
+            continue;
+        }
+        seen.add(value);
+        items.push(value);
+    }
+    return items;
+}
+
+function readBlackboardMeta(metadata: GatewayReply["metadata"] | null | undefined): BlackboardMeta | null {
+    const source = readRecord(readRecord(metadata)?.blackboard);
+    const mode = readString(source?.mode);
+    if (!mode) {
+        return null;
+    }
+    return {
+        elapsedMs: readNumber(source?.elapsedMs),
+        messages: readNumber(source?.messages),
+        mode,
+        reason: readString(source?.reason),
+        status: readString(source?.status),
+        turnId: readString(source?.turnId),
+    };
+}
+
+function readMcpExecutions(metadata: GatewayReply["metadata"] | null | undefined): McpTrace[] {
+    const source = readRecord(metadata);
+    const executions = source?.mcpToolExecutions;
+    if (!Array.isArray(executions)) {
+        return [];
+    }
+    return executions
+        .map((entry) => readRecord(entry))
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+        .map((entry) => ({
+            ok: entry.ok === true,
+            resultText: readString(entry.resultSummary) ?? readString(entry.resultText) ?? "",
+            server: readString(entry.server) ?? "",
+            tool: readString(entry.tool) ?? "",
+        }));
+}
+
+function mergeMcpTraces(primary: McpTrace[], secondary: McpTrace[]): McpTrace[] {
+    const seen = new Set<string>();
+    const merged: McpTrace[] = [];
+    for (const trace of [...primary, ...secondary]) {
+        const key = JSON.stringify([trace.server, trace.tool, trace.ok, trace.resultText]);
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        merged.push(trace);
+    }
+    return merged;
+}
+
+function readMetadataSkills(metadata: GatewayReply["metadata"] | null | undefined): string[] {
+    return readStringArray(readRecord(metadata)?.skills);
+}
+
+function readToolCount(turn: Turn): number {
+    const metadataCount = readNumber(readRecord(turn.metadata)?.mcpToolCalls) ?? 0;
+    return Math.max(metadataCount, turn.mcpCalls.length);
+}
+
+function readSkillNames(turn: Turn): string[] {
+    return uniqueStrings([...turn.skills, ...readMetadataSkills(turn.metadata)]);
+}
+
+function hasAnyDetails(expanded: SectionMap): boolean {
+    return SECTION_ORDER.some((section) => expanded[section]);
+}
+
+function fmtTime(iso: string | null | undefined): string {
+    if (!iso) {
+        return "--:--";
+    }
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+        return "--:--";
+    }
+    return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+}
+
+function formatRelativeTime(value: string): string {
+    const time = Date.parse(value);
+    if (!Number.isFinite(time)) {
+        return value;
+    }
+    const delta = Date.now() - time;
+    const abs = Math.abs(delta);
+    if (abs < 1_000) {
+        return "now";
+    }
+    if (abs < 60_000) {
+        return `${Math.round(abs / 1_000)}s ago`;
+    }
+    if (abs < 3_600_000) {
+        return `${Math.round(abs / 60_000)}m ago`;
+    }
+    return `${Math.round(abs / 3_600_000)}h ago`;
+}
+
+function truncate(value: string, limit: number): string {
+    if (value.length <= limit) {
+        return value;
+    }
+    return `${value.slice(0, Math.max(0, limit - 1))}…`;
+}
+
+function formatDuration(ms: number | undefined): string | undefined {
+    if (typeof ms !== "number" || !Number.isFinite(ms)) {
+        return undefined;
+    }
+    if (ms < 1_000) {
+        return `${ms}ms`;
+    }
+    return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)}s`;
+}
+
+function titleCase(value: string): string {
+    return value
+        .split(/[\s._-]+/u)
+        .filter(Boolean)
+        .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+        .join(" ");
+}
+
+function readStepOutcome(step: BlackboardStep): string {
+    const metadata = readRecord(step.metadata);
+    return readString(metadata?.qaOutcome) ?? "unknown";
+}
+
+function stepTone(step: BlackboardStep): ToneColor {
+    const outcome = readStepOutcome(step);
+    if (outcome === "final") {
+        return "green";
+    }
+    if (outcome === "blocked") {
+        return "red";
+    }
+    if (outcome === "continue") {
+        return "yellow";
+    }
+    return "gray";
+}
+
+function stepBullet(step: BlackboardStep): string {
+    const outcome = readStepOutcome(step);
+    if (outcome === "final") {
+        return "●";
+    }
+    if (outcome === "blocked") {
+        return "△";
+    }
+    return "•";
+}
+
+function isReadableBlackboardMessage(message: BlackboardMessage): boolean {
+    return message.visibility === "public" && !message.content.includes("flyflor-decision-form");
+}
+
+function speakerForMessage(turn: BlackboardTurn, message: BlackboardMessage): string {
+    if (!message.workerRole) {
+        return message.role === "system" ? "Blackboard" : titleCase(message.role);
+    }
+    const worker = turn.workers.find((item) => item.role === message.workerRole);
+    return worker?.name ?? titleCase(message.workerRole);
+}
+
+function metadataLines(metadata: GatewayReply["metadata"] | null): string[] {
+    const source = readRecord(metadata);
+    if (!source) {
+        return [];
+    }
+    return Object.entries(source)
+        .map(([key, value]) => {
+            if (Array.isArray(value)) {
+                return `${key}: ${truncate(value.map((item) => JSON.stringify(item)).join(", "), 140)}`;
+            }
+            if (typeof value === "object" && value !== null) {
+                return `${key}: ${truncate(JSON.stringify(value), 140)}`;
+            }
+            return `${key}: ${String(value)}`;
+        })
+        .slice(0, 8);
+}
+
+function buildInputWindow(
+    input: string,
+    cursor: number,
+    limit: number,
+): { after: string; before: string; clippedLeft: boolean; clippedRight: boolean } {
+    if (input.length <= limit) {
+        return {
+            after: input.slice(cursor),
+            before: input.slice(0, cursor),
+            clippedLeft: false,
+            clippedRight: false,
+        };
+    }
+
+    let start = Math.max(0, cursor - Math.floor(limit * 0.6));
+    let end = Math.min(input.length, start + limit);
+    if (end - start < limit) {
+        start = Math.max(0, end - limit);
+    }
+
+    const relativeCursor = Math.max(0, Math.min(cursor - start, end - start));
+    const window = input.slice(start, end);
+    return {
+        after: window.slice(relativeCursor),
+        before: window.slice(0, relativeCursor),
+        clippedLeft: start > 0,
+        clippedRight: end < input.length,
+    };
+}
+
+function renderShortcutText(compactMode: boolean, minimalMode: boolean): string {
+    if (minimalMode) {
+        return "Enter send · Tab details · ^C quit";
+    }
+    if (compactMode) {
+        return "Enter send · ↑↓ history · Tab details · ^B/^T/^S · ^C quit";
+    }
+    return "Enter send · ↑↓ history · Tab all · ^B board · ^T tools · ^S skills · ^L clear · ^C quit";
+}
+
+function renderTraceState(active: boolean, currentPhase: Phase, target: Phase, enabled: boolean): TraceChipProps["state"] {
+    if (!enabled) {
+        return active && currentPhase === target ? "active" : "idle";
+    }
+    if (active && currentPhase === target) {
+        return "active";
+    }
+    return "done";
+}
+
+function Badge({ color = "gray", dim = false, label }: BadgeProps): React.ReactElement {
+    return (
+        <Text bold={!dim} color={c(color)} dimColor={dim}>
+            [{label}]
+        </Text>
+    );
+}
+
+function TraceChip({ color, count, label, state }: TraceChipProps): React.ReactElement {
+    const suffix = count && count > 0 ? `×${count}` : "";
+    const chipLabel = `${label}${suffix}`;
+    if (state === "idle") {
+        return <Badge color="gray" dim label={chipLabel} />;
+    }
+    if (state === "error") {
+        return <Badge color="red" label={chipLabel} />;
+    }
+    if (state === "active") {
+        return <Badge color={color} label={chipLabel} />;
+    }
+    return <Badge color={color} dim label={chipLabel} />;
+}
+
+function DetailSection({ color = "gray", title, children }: DetailSectionProps): React.ReactElement {
+    return (
+        <Box flexDirection="column" marginTop={1}>
+            <Text color={c(color)} bold>
+                ◇ {title}
+            </Text>
+            <Box marginLeft={2} flexDirection="column">
+                {children}
+            </Box>
+        </Box>
+    );
+}
+
+function BlackboardDetails({
+    blackboard,
+    turn,
+}: {
+    blackboard: BlackboardMeta | null;
+    turn: BlackboardTurn | null;
+}): React.ReactElement {
+    if (!blackboard && !turn) {
+        return (
+            <DetailSection color="magenta" title="Blackboard">
+                <Text dimColor>No structured blackboard trace.</Text>
+            </DetailSection>
+        );
+    }
+
+    const latestSteps = turn?.steps.slice(-3) ?? [];
+    const latestMessages = (turn?.messages.filter(isReadableBlackboardMessage) ?? []).slice(-3);
+
+    return (
+        <DetailSection color="magenta" title="Blackboard">
+            {blackboard ? (
+                <Text>
+                    mode {blackboard.mode}
+                    {blackboard.status ? ` · status ${blackboard.status}` : ""}
+                    {blackboard.messages ? ` · messages ${blackboard.messages}` : ""}
+                    {formatDuration(blackboard.elapsedMs) ? ` · elapsed ${formatDuration(blackboard.elapsedMs)}` : ""}
+                </Text>
+            ) : null}
+            {blackboard?.reason ? <Text dimColor>reason {truncate(blackboard.reason, 120)}</Text> : null}
+            {blackboard?.turnId ? <Text dimColor>turn {blackboard.turnId}</Text> : null}
+            {latestSteps.length > 0 ? (
+                <>
+                    <Text color="magenta">steps</Text>
+                    {latestSteps.map((step) => (
+                        <Box key={step.id} flexDirection="column" marginBottom={1}>
+                            <Text color={c(stepTone(step))}>
+                                {stepBullet(step)} round {step.round} · {titleCase(step.workerRole)} · {readStepOutcome(step)}
+                            </Text>
+                            <Text dimColor>{truncate(step.outputSummary, 140)}</Text>
+                            {step.blockers.length > 0 ? (
+                                <Text color="yellow">blockers {truncate(step.blockers.join(" · "), 140)}</Text>
+                            ) : null}
+                            {step.newFacts.length > 0 ? (
+                                <Text color="green">facts {truncate(step.newFacts.join(" · "), 140)}</Text>
+                            ) : null}
+                        </Box>
+                    ))}
+                </>
+            ) : null}
+            {latestMessages.length > 0 ? (
+                <>
+                    <Text color="magenta">discussion</Text>
+                    {latestMessages.map((message) => (
+                        <Text key={message.id} dimColor>
+                            {speakerForMessage(turn!, message)}: {truncate(message.content.replace(/\s+/gu, " "), 140)}
+                        </Text>
+                    ))}
+                </>
+            ) : null}
+            {turn && turn.decisions.length > 0 ? (
+                <Text dimColor>decisions {turn.decisions.length}</Text>
+            ) : null}
+        </DetailSection>
+    );
+}
+
+function SkillsDetails({ skills }: { skills: string[] }): React.ReactElement {
+    return (
+        <DetailSection color="green" title="Skills">
+            {skills.length === 0 ? <Text dimColor>No skills loaded.</Text> : null}
+            {skills.map((skill) => (
+                <Text key={skill} dimColor>
+                    • {skill}
+                </Text>
+            ))}
+        </DetailSection>
+    );
+}
+
+function ToolsDetails({ tools }: { tools: McpTrace[] }): React.ReactElement {
+    return (
+        <DetailSection color="blue" title="Tools">
+            {tools.length === 0 ? <Text dimColor>No tool calls recorded.</Text> : null}
+            {tools.map((tool, index) => (
+                <Box key={`${tool.server}-${tool.tool}-${index}`} flexDirection="column" marginBottom={1}>
+                    <Text color={tool.ok ? "green" : "red"}>
+                        {tool.ok ? "✓" : "✗"} {tool.server}.{tool.tool}
+                    </Text>
+                    {tool.resultText ? <Text dimColor>{truncate(tool.resultText.replace(/\s+/gu, " "), 140)}</Text> : null}
+                </Box>
+            ))}
+        </DetailSection>
+    );
+}
+
+function MetadataDetails({ metadata }: { metadata: GatewayReply["metadata"] | null }): React.ReactElement {
+    const lines = metadataLines(metadata);
+    return (
+        <DetailSection color="yellow" title="Metadata">
+            {lines.length === 0 ? <Text dimColor>No metadata.</Text> : null}
+            {lines.map((line) => (
+                <Text key={line} dimColor>
+                    {line}
+                </Text>
+            ))}
+        </DetailSection>
+    );
+}
+
+function TurnCard({ turn, expanded, isActive, isLatest, minimalMode, phase }: TurnCardProps): React.ReactElement {
+    const phaseDef = PHASE_DEF[phase];
+    const phaseIcon = useAnim(isActive, phaseDef.frames);
+    const skills = readSkillNames(turn);
+    const tools = turn.mcpCalls;
+    const route = turn.blackboard?.mode ?? "direct";
+    const statusLabel = turn.error ? "ERROR" : isActive ? phaseDef.label : "DONE";
+    const statusColor: ToneColor = turn.error ? "red" : isActive ? phaseDef.color : "green";
+    const open = hasAnyDetails(expanded);
+
+    return (
+        <Box borderStyle="round" borderColor={c(isActive ? phaseDef.color : turn.error ? "red" : "gray")} flexDirection="column" paddingX={1}>
+            <Box justifyContent="space-between">
+                <Box>
+                    <Text color="cyan" bold>
+                        You
+                    </Text>
+                    <Text dimColor> {fmtTime(turn.startedAt)}</Text>
+                </Box>
+                <Badge color={statusColor} label={statusLabel} />
+            </Box>
+            <Text>{turn.userMessage}</Text>
+
+            <Box marginTop={1} flexWrap="wrap">
+                <TraceChip
+                    color="cyan"
+                    label={isActive && phase === "thinking" ? `${phaseIcon} think` : "think"}
+                    state={renderTraceState(isActive, phase, "thinking", true)}
+                />
+                <Box marginLeft={1}>
+                    <TraceChip
+                        color="magenta"
+                        label="board"
+                        state={renderTraceState(isActive, phase, "blackboard", turn.blackboard?.mode === "blackboard")}
+                    />
+                </Box>
+                <Box marginLeft={1}>
+                    <TraceChip
+                        color="green"
+                        count={skills.length}
+                        label="skill"
+                        state={renderTraceState(isActive, phase, "skill", skills.length > 0)}
+                    />
+                </Box>
+                <Box marginLeft={1}>
+                    <TraceChip
+                        color="blue"
+                        count={readToolCount(turn)}
+                        label="tool"
+                        state={renderTraceState(isActive, phase, "mcp", readToolCount(turn) > 0)}
+                    />
+                </Box>
+                <Box marginLeft={1}>
+                    <TraceChip
+                        color="white"
+                        label={isActive && phase === "streaming" ? `${phaseIcon} write` : "write"}
+                        state={renderTraceState(isActive, phase, "streaming", turn.assistantText.length > 0 || Boolean(turn.completedAt))}
+                    />
+                </Box>
+                <Box marginLeft={1}>
+                    <Badge color="gray" dim label={`route:${route}`} />
+                </Box>
+                {isLatest && !minimalMode ? (
+                    <Box marginLeft={1}>
+                        <Badge color="gray" dim label={open ? "details:open" : "details:closed"} />
+                    </Box>
+                ) : null}
+            </Box>
+
+            <Box marginTop={1}>
+                <Text color="green" bold>
+                    Flyflor
+                </Text>
+                <Text dimColor> {fmtTime(turn.completedAt ?? turn.startedAt)}</Text>
+            </Box>
+            <Text>
+                {turn.assistantText || (isActive ? `${phaseDef.label.toLowerCase()}…` : " ")}
+            </Text>
+
+            {turn.error ? (
+                <Box marginTop={1}>
+                    <Text color="red">error {turn.error}</Text>
+                </Box>
+            ) : null}
+
+            {expanded.blackboard ? <BlackboardDetails blackboard={turn.blackboard} turn={turn.blackboardTurn} /> : null}
+            {expanded.skills ? <SkillsDetails skills={skills} /> : null}
+            {expanded.mcp ? <ToolsDetails tools={tools} /> : null}
+            {expanded.metadata ? <MetadataDetails metadata={turn.metadata} /> : null}
+        </Box>
+    );
+}
+
+function ChatHeader({
+    agentName,
+    compactMode,
+    minimalMode,
+    processing,
+    scrollOfs,
+    phase,
+}: {
+    agentName: string;
+    compactMode: boolean;
+    minimalMode: boolean;
+    processing: boolean;
+    scrollOfs: number;
+    phase: Phase;
+}): React.ReactElement {
+    const label = processing ? PHASE_DEF[phase].label : PHASE_DEF.idle.label;
+    const color = processing ? PHASE_DEF[phase].color : "gray";
+
+    return (
+        <Box borderStyle="round" borderColor="cyan" paddingX={1}>
+            <Text color="white" bold>
+                FLYFLOR
+            </Text>
+            <Text color="magenta" bold>
+                {" "}
+                Chat
+            </Text>
+            {!minimalMode ? (
+                <Text dimColor>
+                    {" "}
+                    agent {agentName}
+                </Text>
+            ) : null}
+            <Box flexGrow={1} />
+            {!compactMode ? <Text dimColor>{renderShortcutText(compactMode, minimalMode)}</Text> : null}
+            {compactMode ? <Text dimColor>{renderShortcutText(compactMode, minimalMode)}</Text> : null}
+            <Box marginLeft={1}>
+                <Badge color={color} label={label} />
+            </Box>
+            {scrollOfs > 0 ? (
+                <Box marginLeft={1}>
+                    <Badge color="yellow" label={`HISTORY+${scrollOfs}`} />
+                </Box>
+            ) : null}
+        </Box>
+    );
+}
+
+function ChatStatusStrip({
+    currentTurn,
+    error,
+    phase,
+    processing,
+    scrollOfs,
+    showInspector,
+}: {
+    currentTurn: Turn | null;
+    error: string | null;
+    phase: Phase;
+    processing: boolean;
+    scrollOfs: number;
+    showInspector: boolean;
+}): React.ReactElement {
+    const skills = currentTurn ? readSkillNames(currentTurn).length : 0;
+    const tools = currentTurn ? readToolCount(currentTurn) : 0;
+    const boardMode = currentTurn?.blackboard?.mode ?? "direct";
+
+    return (
+        <Box borderStyle="single" borderColor="gray" paddingX={1} flexWrap="wrap">
+            <Badge color={processing ? PHASE_DEF[phase].color : "gray"} label={`phase:${processing ? phase : "idle"}`} />
+            <Box marginLeft={1}>
+                <Badge color={boardMode === "blackboard" ? "magenta" : "gray"} label={`board:${boardMode}`} />
+            </Box>
+            <Box marginLeft={1}>
+                <Badge color={skills > 0 ? "green" : "gray"} label={`skills:${skills}`} />
+            </Box>
+            <Box marginLeft={1}>
+                <Badge color={tools > 0 ? "blue" : "gray"} label={`tools:${tools}`} />
+            </Box>
+            <Box marginLeft={1}>
+                <Badge color={scrollOfs > 0 ? "yellow" : "gray"} label={`scroll:${scrollOfs > 0 ? "scrolled" : "live"}`} />
+            </Box>
+            {!showInspector && currentTurn?.blackboard?.status ? (
+                <Box marginLeft={1}>
+                    <Badge color="magenta" label={`status:${currentTurn.blackboard.status}`} />
+                </Box>
+            ) : null}
+            {error ? (
+                <Box marginLeft={1}>
+                    <Badge color="red" label={truncate(`error:${error}`, 44)} />
+                </Box>
+            ) : null}
+        </Box>
+    );
+}
+
+function EmptyState(): React.ReactElement {
+    return (
+        <Box flexGrow={1} justifyContent="center" alignItems="center">
+            <Box flexDirection="column" alignItems="center">
+                <Text color="white" bold>
+                    Start an agent session
+                </Text>
+                <Text dimColor>Ask a question, request a task, or inspect runtime details with Tab.</Text>
+                <Text dimColor>Press Enter to send • Ctrl+C to quit</Text>
+            </Box>
+        </Box>
+    );
+}
+
+function RightInspector({
+    currentTurn,
+    error,
+    phase,
+    processing,
+}: {
+    currentTurn: Turn | null;
+    error: string | null;
+    phase: Phase;
+    processing: boolean;
+}): React.ReactElement {
+    const skills = currentTurn ? readSkillNames(currentTurn).slice(-5) : [];
+    const tools = currentTurn?.mcpCalls.slice(-4) ?? [];
+    const blackboard = currentTurn?.blackboard;
+    const latestActivityAt = currentTurn?.completedAt ?? currentTurn?.startedAt;
+
+    return (
+        <Box width={38} flexDirection="column">
+            <Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
+                <Text color="magenta" bold>
+                    ◆ Current turn
+                </Text>
+                <Text>
+                    phase {processing ? phase : "idle"}
+                    {latestActivityAt ? ` · ${formatRelativeTime(latestActivityAt)}` : ""}
+                </Text>
+                <Text dimColor>route {blackboard?.mode ?? "direct"}</Text>
+                {blackboard?.status ? <Text dimColor>blackboard {blackboard.status}</Text> : null}
+                {blackboard?.reason ? <Text dimColor>{truncate(blackboard.reason, 90)}</Text> : null}
+                {error ? <Text color="red">last error {truncate(error, 90)}</Text> : null}
+            </Box>
+
+            <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
+                <Text color="green" bold>
+                    ◇ Skills
+                </Text>
+                {skills.length === 0 ? <Text dimColor>No skills in latest turn.</Text> : null}
+                {skills.map((skill) => (
+                    <Text key={skill} dimColor>
+                        • {truncate(skill, 32)}
+                    </Text>
+                ))}
+            </Box>
+
+            <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
+                <Text color="blue" bold>
+                    ◇ Tools
+                </Text>
+                {tools.length === 0 ? <Text dimColor>No tool calls in latest turn.</Text> : null}
+                {tools.map((tool, index) => (
+                    <Text key={`${tool.server}-${tool.tool}-${index}`} dimColor>
+                        {tool.ok ? "✓" : "✗"} {truncate(`${tool.server}.${tool.tool}`, 32)}
+                    </Text>
+                ))}
+            </Box>
+
+            <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
+                <Text color="cyan" bold>
+                    ◇ Keys
+                </Text>
+                <Text dimColor>Tab all details</Text>
+                <Text dimColor>Ctrl+B board</Text>
+                <Text dimColor>Ctrl+T tools</Text>
+                <Text dimColor>Ctrl+S skills</Text>
+                <Text dimColor>Up/Down history</Text>
+                <Text dimColor>End live mode</Text>
+            </Box>
+        </Box>
+    );
+}
+
+function ComposerBar({
+    compactMode,
+    input,
+    cursor,
+    minimalMode,
+    phase,
+    processing,
+    termCols,
+}: {
+    compactMode: boolean;
+    cursor: number;
+    input: string;
+    minimalMode: boolean;
+    phase: Phase;
+    processing: boolean;
+    termCols: number;
+}): React.ReactElement {
+    const phaseDef = PHASE_DEF[phase];
+    const icon = useAnim(processing, phaseDef.frames);
+    const limit = Math.max(8, termCols - (minimalMode ? 18 : compactMode ? 28 : 38));
+    const window = buildInputWindow(input, cursor, limit);
+    const hasContent = input.length > 0;
+
+    return (
+        <Box borderStyle="round" borderColor={processing ? c(phaseDef.color) : "cyan"} paddingX={1} flexDirection="column">
+            <Box>
+                <Text color="cyan" bold>
+                    ›
+                </Text>
+                <Box marginLeft={1} flexGrow={1}>
+                    {!hasContent ? (
+                        <Text dimColor>{processing ? "Agent is working…" : "Type a message…"}</Text>
+                    ) : (
+                        <Text>
+                            {window.clippedLeft ? "…" : ""}
+                            {window.before}
+                            {!processing ? <Text color="cyan">▎</Text> : null}
+                            {window.after}
+                            {window.clippedRight ? "…" : ""}
+                        </Text>
+                    )}
+                </Box>
+                <Badge color={processing ? phaseDef.color : "gray"} label={processing ? phaseDef.label : "READY"} />
+                {processing ? (
+                    <Box marginLeft={1}>
+                        <Text color={c(phaseDef.color)}>{icon || phaseDef.done}</Text>
+                    </Box>
+                ) : null}
+            </Box>
+            {!minimalMode ? (
+                <Text dimColor>
+                    {compactMode
+                        ? "Enter send · Ctrl+U clear line · Ctrl+W delete word"
+                        : "Enter send · Left/Right move cursor · Ctrl+U clear line · Ctrl+W delete word"}
+                </Text>
+            ) : null}
+        </Box>
+    );
+}
+
 export function ChatTui({
     runtime,
+    blackboard,
     eventBus,
     approveMcpToolCall,
     agentName = "flyflor",
     userId = "human",
 }: ChatTuiProps): React.ReactElement {
     const { exit } = useApp();
-    const { rows: termRows, cols: termCols } = useTermSize();
+    const { cols: termCols, rows: termRows } = useTermSize();
+
+    const showInspector = termCols >= BREAKPOINT_INSPECTOR;
+    const compactMode = termCols < BREAKPOINT_COMPACT;
+    const minimalMode = termCols < BREAKPOINT_MINIMAL;
 
     const [turns, setTurns] = useState<Turn[]>([]);
     const [input, setInput] = useState("");
     const [cursor, setCursor] = useState(0);
-    // Refs mirror state so successive keypress events (which run before React re-renders)
-    // read the up-to-date position. Without this, IME-committed CJK characters or
-    // rapid typing all collide at the stale closure-captured cursor → "only one char works".
-    const inputRef = useRef("");
-    const cursorRef = useRef(0);
-    useEffect(() => {
-        inputRef.current = input;
-    }, [input]);
-    useEffect(() => {
-        cursorRef.current = cursor;
-    }, [cursor]);
     const [processing, setProcessing] = useState(false);
     const [phase, setPhase] = useState<Phase>("idle");
     const [error, setError] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<Map<string, SectionMap>>(new Map());
     const [scrollOfs, setScrollOfs] = useState(0);
 
-    const curTurnRef = useRef<Turn | null>(null);
-    const procRef = useRef(false);
-    const unsubRef = useRef<(() => void) | null>(null);
+    const inputRef = useRef("");
+    const cursorRef = useRef(0);
+    const currentTurnIdRef = useRef<string | null>(null);
+    const currentBlackboardTurnIdRef = useRef<string | null>(null);
+    const blackboardRefreshPendingRef = useRef(false);
+    const processingRef = useRef(false);
+    const streamedTextRef = useRef("");
 
-    /* ── Event subscription ── */
     useEffect(() => {
-        if (!eventBus) return;
+        inputRef.current = input;
+    }, [input]);
+
+    useEffect(() => {
+        cursorRef.current = cursor;
+    }, [cursor]);
+
+    const refreshBlackboardTurn = useCallback(
+        async (chatTurnId: string, blackboardTurnId: string): Promise<void> => {
+            if (!blackboard) {
+                return;
+            }
+            const record = await blackboard.getTurn(blackboardTurnId).catch(() => undefined);
+            if (!record) {
+                return;
+            }
+            setTurns((current) =>
+                updateTurnById(current, chatTurnId, (turn) => ({
+                    ...turn,
+                    blackboardTurn: record,
+                })),
+            );
+        },
+        [blackboard],
+    );
+
+    const scheduleBlackboardRefresh = useCallback((): void => {
+        const chatTurnId = currentTurnIdRef.current;
+        const blackboardTurnId = currentBlackboardTurnIdRef.current;
+        if (!chatTurnId || !blackboardTurnId || blackboardRefreshPendingRef.current) {
+            return;
+        }
+        blackboardRefreshPendingRef.current = true;
+        queueMicrotask(() => {
+            blackboardRefreshPendingRef.current = false;
+            void refreshBlackboardTurn(chatTurnId, blackboardTurnId);
+        });
+    }, [refreshBlackboardTurn]);
+
+    useEffect(() => {
+        if (!eventBus) {
+            return;
+        }
+
         const sink: EventSink = {
-            publish: (ev: RuntimeEvent) => {
-                if (ev.type === RuntimeEventType.BlackboardTurnStart) {
+            publish: (event: RuntimeEvent) => {
+                const currentTurnId = currentTurnIdRef.current;
+                const payload = readRecord(event.payload);
+
+                if (event.type === RuntimeEventType.BlackboardTurnStart) {
                     setPhase("blackboard");
-                    if (curTurnRef.current) curTurnRef.current.blackboardStarted = true;
-                } else if (ev.type === RuntimeEventType.McpToolCallExecuted) {
-                    const p = ev.payload as Record<string, unknown> | undefined;
-                    if (p && curTurnRef.current) {
-                        curTurnRef.current.mcpCalls.push({
-                            server: String(p.server ?? ""),
-                            tool: String(p.tool ?? ""),
-                            ok: p.ok === true,
-                            resultText: String(p.resultSummary ?? ""),
-                        });
+                    const blackboardTurnId = readString(payload?.turnId);
+                    if (blackboardTurnId) {
+                        currentBlackboardTurnIdRef.current = blackboardTurnId;
                     }
-                } else if (ev.type === RuntimeEventType.SkillContextBuilt) {
-                    const p = ev.payload as Record<string, unknown> | undefined;
-                    if (p?.skillNames && Array.isArray(p.skillNames)) {
-                        for (const n of p.skillNames) {
-                            if (typeof n === "string" && curTurnRef.current && !curTurnRef.current.skills.includes(n)) {
-                                curTurnRef.current.skills.push(n);
-                            }
-                        }
+                    setTurns((current) =>
+                        updateTurnById(current, currentTurnId, (turn) => ({
+                            ...turn,
+                            blackboard: {
+                                elapsedMs: turn.blackboard?.elapsedMs,
+                                messages: turn.blackboard?.messages,
+                                mode: "blackboard",
+                                reason: turn.blackboard?.reason,
+                                status: "running",
+                                turnId: blackboardTurnId ?? turn.blackboard?.turnId,
+                            },
+                        })),
+                    );
+                    return;
+                }
+
+                if (event.type === RuntimeEventType.BlackboardTurnEnd) {
+                    const blackboardTurnId = readString(payload?.turnId);
+                    const status = readString(payload?.status);
+                    setPhase("thinking");
+                    setTurns((current) =>
+                        updateTurnById(current, currentTurnId, (turn) => ({
+                            ...turn,
+                            blackboard: turn.blackboard
+                                ? {
+                                      ...turn.blackboard,
+                                      status: status ?? turn.blackboard.status,
+                                      turnId: blackboardTurnId ?? turn.blackboard.turnId,
+                                  }
+                                : {
+                                      mode: "blackboard",
+                                      status,
+                                      turnId: blackboardTurnId,
+                                  },
+                        })),
+                    );
+                    if (currentTurnId && blackboardTurnId) {
+                        void refreshBlackboardTurn(currentTurnId, blackboardTurnId);
                     }
+                    return;
+                }
+
+                if (event.type === RuntimeEventType.McpToolCallExecuted) {
+                    setPhase("mcp");
+                    const nextTrace: McpTrace = {
+                        ok: payload?.ok === true,
+                        resultText: readString(payload?.resultSummary) ?? "",
+                        server: readString(payload?.server) ?? "",
+                        tool: readString(payload?.tool) ?? "",
+                    };
+                    setTurns((current) =>
+                        updateTurnById(current, currentTurnId, (turn) => ({
+                            ...turn,
+                            mcpCalls: mergeMcpTraces(turn.mcpCalls, [nextTrace]),
+                        })),
+                    );
+                    return;
+                }
+
+                if (event.type === RuntimeEventType.BlackboardWorkerStart) {
+                    setPhase("blackboard");
+                    scheduleBlackboardRefresh();
+                    return;
+                }
+
+                if (event.type === RuntimeEventType.BlackboardWorkerEnd) {
+                    scheduleBlackboardRefresh();
+                    return;
+                }
+
+                if (event.type === RuntimeEventType.BlackboardMessageAppended) {
+                    scheduleBlackboardRefresh();
+                    return;
+                }
+
+                if (event.type === RuntimeEventType.SkillContextBuilt) {
                     setPhase("skill");
-                } else if (
-                    ev.type === RuntimeEventType.BlackboardTurnEnd ||
-                    ev.type === RuntimeEventType.AgentTurnEnd
-                ) {
-                    setPhase("streaming");
+                    const skillNames = readStringArray(payload?.skillNames);
+                    if (skillNames.length === 0) {
+                        return;
+                    }
+                    setTurns((current) =>
+                        updateTurnById(current, currentTurnId, (turn) => ({
+                            ...turn,
+                            skills: uniqueStrings([...turn.skills, ...skillNames]),
+                        })),
+                    );
                 }
             },
         };
-        unsubRef.current = eventBus.subscribe(sink);
-        return () => {
-            unsubRef.current?.();
-            unsubRef.current = null;
-        };
-    }, [eventBus]);
 
-    /* ── Mouse scroll ── */
+        const unsubscribe = eventBus.subscribe(sink);
+        return () => unsubscribe();
+    }, [eventBus, refreshBlackboardTurn, scheduleBlackboardRefresh]);
+
     useEffect(() => {
-        // Enable SGR mouse mode (DEC 1000 + 1006)
-        // This lets the terminal send mouse wheel events as escape sequences.
         process.stdout.write("\x1b[?1000h\x1b[?1006h");
+        let buffer = "";
 
-        let buf = "";
-        const handler = (data: Buffer): void => {
-            buf += data.toString();
-            // Try to parse complete SGR mouse sequences: ESC[<btn;col;rowM or ESC[<btn;col;rowm
-            const re = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
+        const onData = (data: Buffer): void => {
+            buffer += data.toString();
+            const pattern = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
             let match: RegExpExecArray | null;
-            while ((match = re.exec(buf)) !== null) {
-                const btn = Number.parseInt(match[1]!, 10);
-                // Button 64 = scroll up, 65 = scroll down
-                if (btn === 64) {
-                    setScrollOfs((s) => Math.min(s + 3, Math.max(0, turns.length - 1)));
-                } else if (btn === 65) {
-                    setScrollOfs((s) => Math.max(0, s - 3));
+
+            while ((match = pattern.exec(buffer)) !== null) {
+                const button = Number.parseInt(match[1] ?? "0", 10);
+                if (button === 64) {
+                    setScrollOfs((value) => Math.min(value + 3, Math.max(0, turns.length - 1)));
+                } else if (button === 65) {
+                    setScrollOfs((value) => Math.max(0, value - 3));
                 }
             }
-            // Keep only the unprocessed tail (after the last complete match)
-            const lastIdx = buf.lastIndexOf("\x1b");
-            if (lastIdx > 0) buf = buf.slice(lastIdx);
-            else if (lastIdx < 0) buf = "";
+
+            const lastEscape = buffer.lastIndexOf("\x1b");
+            if (lastEscape > 0) {
+                buffer = buffer.slice(lastEscape);
+            } else if (lastEscape < 0) {
+                buffer = "";
+            }
         };
 
-        process.stdin.on("data", handler);
+        process.stdin.on("data", onData);
         return () => {
             process.stdout.write("\x1b[?1000l\x1b[?1006l");
-            process.stdin.removeListener("data", handler);
+            process.stdin.removeListener("data", onData);
         };
     }, [turns.length]);
 
-    /* ── Viewport calc ── */
-    const HEADER_H = 1;
-    const SEP_H = 2; // two separators (header-sep, sep-input)
-    const INPUT_H = 1;
-    const avail = termRows - HEADER_H - SEP_H - INPUT_H;
-    const maxTurns = Math.max(1, Math.floor(avail / 5));
+    const reservedRows = showInspector ? 10 : compactMode ? 9 : 8;
+    const perTurnRows = minimalMode ? 7 : showInspector ? 8 : 9;
+    const maxTurns = Math.max(1, Math.floor((termRows - reservedRows) / perTurnRows));
+    const clampedScroll = Math.min(scrollOfs, Math.max(0, turns.length - 1));
+    const visibleTurns = turns.slice(Math.max(0, turns.length - maxTurns - clampedScroll), turns.length - clampedScroll);
+    const latestTurn = turns.at(-1) ?? null;
 
-    const visibleTurns = (() => {
-        if (turns.length === 0) return [];
-        const clamped = Math.min(scrollOfs, Math.max(0, turns.length - 1));
-        const start = Math.max(0, turns.length - maxTurns - clamped);
-        const end = Math.min(turns.length, start + maxTurns + Math.min(clamped, maxTurns));
-        return turns.slice(start, end);
-    })();
+    const setTurnSection = useCallback((section: Section | "all") => {
+        const latest = turns.at(-1);
+        if (!latest) {
+            return;
+        }
+        setExpanded((current) => {
+            const next = new Map(current);
+            const previous = next.get(latest.id) ?? emptySections();
+            next.set(
+                latest.id,
+                section === "all" ? toggleAllSections(previous) : { ...previous, [section]: !previous[section] },
+            );
+            return next;
+        });
+    }, [turns]);
 
-    /* ── Submit ── */
     const submit = useCallback(async () => {
         const text = inputRef.current.trim();
-        if (!text || procRef.current) return;
+        if (!text || processingRef.current) {
+            return;
+        }
+
+        const startedAt = new Date().toISOString();
+        const turnId = crypto.randomUUID();
+        const turn: Turn = {
+            assistantText: "",
+            blackboard: null,
+            blackboardTurn: null,
+            completedAt: null,
+            error: null,
+            id: turnId,
+            mcpCalls: [],
+            metadata: null,
+            skills: [],
+            startedAt,
+            userMessage: text,
+        };
+
         inputRef.current = "";
         cursorRef.current = 0;
+        streamedTextRef.current = "";
+        currentTurnIdRef.current = turnId;
+        processingRef.current = true;
+
         setInput("");
         setCursor(0);
         setError(null);
-        procRef.current = true;
         setProcessing(true);
-        setScrollOfs(0);
-
-        const turn: Turn = {
-            id: crypto.randomUUID(),
-            userMessage: text,
-            assistantText: "",
-            completedAt: null,
-            metadata: null,
-            mcpCalls: [],
-            skills: [],
-            blackboardStarted: false,
-            blackboardText: "",
-        };
-        curTurnRef.current = turn;
         setPhase("thinking");
-        setTurns((prev) => [...prev, turn]);
+        setScrollOfs(0);
+        setTurns((current) => [...current, turn]);
 
-        const ctx: RuntimeContext = { requestId: crypto.randomUUID(), now: new Date().toISOString() };
-        const msg: GatewayMessage = {
+        const context: RuntimeContext = {
+            now: startedAt,
+            requestId: crypto.randomUUID(),
+        };
+        const message: GatewayMessage = {
             id: crypto.randomUUID(),
-            route: { channel: Channel.Stdio, chatId: "chat-tui", chatType: ChatType.Direct },
-            user: { id: userId },
+            receivedAt: startedAt,
+            route: {
+                channel: Channel.Stdio,
+                chatId: "chat-tui",
+                chatType: ChatType.Direct,
+            },
             text,
-            receivedAt: ctx.now,
+            user: { id: userId },
         };
 
         try {
-            let acc = "";
-            let bb = "";
-            const reply = await runtime.handleMessage(msg, ctx, {
+            const reply = await runtime.handleMessage(message, context, {
                 approveMcpToolCall: approveMcpToolCall ?? (async () => true),
                 onTextDelta: (chunk: string) => {
-                    acc += chunk;
-                    if (chunk.includes(">") || bb.length > 0) {
-                        bb += chunk;
-                        setPhase("blackboard");
-                    } else {
-                        setPhase("streaming");
-                    }
-                    setTurns((prev) => {
-                        const u = [...prev];
-                        const l = u[u.length - 1];
-                        if (l) {
-                            l.assistantText = acc;
-                            l.blackboardText = bb;
-                        }
-                        return u;
-                    });
+                    streamedTextRef.current += chunk;
+                    setPhase("streaming");
+                    setTurns((current) =>
+                        updateTurnById(current, turnId, (item) => ({
+                            ...item,
+                            assistantText: streamedTextRef.current,
+                        })),
+                    );
                 },
             });
 
-            const allSkills = [...turn.skills];
-            const metaSk: string[] =
-                reply.metadata && Array.isArray(reply.metadata.skills) ? (reply.metadata.skills as string[]) : [];
-            for (const n of metaSk) {
-                if (!allSkills.includes(n)) allSkills.push(n);
-            }
+            const blackboardMeta = readBlackboardMeta(reply.metadata);
+            const blackboardTurnId = blackboardMeta?.turnId;
+            const blackboardTurn = blackboardTurnId ? await blackboard?.getTurn(blackboardTurnId).catch(() => undefined) : undefined;
 
-            setTurns((prev) => {
-                const u = [...prev];
-                const l = u[u.length - 1];
-                if (l) {
-                    l.assistantText = reply.text;
-                    l.completedAt = new Date().toISOString();
-                    l.metadata = reply.metadata;
-                    l.skills = allSkills;
-                    l.mcpCalls = curTurnRef.current?.mcpCalls ?? [];
-                    l.blackboardText = bb;
-                }
-                return u;
-            });
-        } catch (err) {
-            const et = err instanceof Error ? err.message : String(err);
-            setError(et);
-            setTurns((prev) => {
-                const u = [...prev];
-                const l = u[u.length - 1];
-                if (l) {
-                    l.assistantText = l.assistantText || `Error: ${et}`;
-                    l.completedAt = new Date().toISOString();
-                }
-                return u;
-            });
+            setTurns((current) =>
+                updateTurnById(current, turnId, (item) => ({
+                    ...item,
+                    assistantText: reply.text,
+                    blackboard: blackboardMeta,
+                    blackboardTurn: blackboardTurn ?? item.blackboardTurn,
+                    completedAt: new Date().toISOString(),
+                    mcpCalls: mergeMcpTraces(item.mcpCalls, readMcpExecutions(reply.metadata)),
+                    metadata: reply.metadata ?? null,
+                    skills: uniqueStrings([...item.skills, ...readMetadataSkills(reply.metadata)]),
+                })),
+            );
+        } catch (cause) {
+            const messageText = cause instanceof Error ? cause.message : String(cause);
+            setError(messageText);
+            setTurns((current) =>
+                updateTurnById(current, turnId, (item) => ({
+                    ...item,
+                    assistantText: item.assistantText || `Error: ${messageText}`,
+                    completedAt: new Date().toISOString(),
+                    error: messageText,
+                })),
+            );
         } finally {
-            curTurnRef.current = null;
-            procRef.current = false;
+            currentTurnIdRef.current = null;
+            currentBlackboardTurnIdRef.current = null;
+            processingRef.current = false;
             setProcessing(false);
             setPhase("idle");
         }
-    }, [input, runtime, approveMcpToolCall, userId]);
+    }, [approveMcpToolCall, blackboard, runtime, userId]);
 
-    /* ── Toggle expand ── */
-    const toggle = useCallback((id: string, s: Section) => {
-        setExpanded((prev) => {
-            const n = new Map(prev);
-            const cur = n.get(id) ?? emptySections();
-            n.set(id, { ...cur, [s]: !cur[s] });
-            return n;
-        });
-    }, []);
-
-    /* ── Keyboard ── */
     useInput(
-        (ch, key) => {
-            // Global shortcuts always fire
-            if (key.escape || (key.ctrl && ch === "c")) {
+        (keyInput, key) => {
+            if (key.escape || (key.ctrl && keyInput === "c")) {
                 exit();
                 return;
             }
-            if (key.ctrl && ch === "l") {
+
+            if (key.ctrl && keyInput === "l") {
                 setTurns([]);
+                setExpanded(new Map());
                 setError(null);
                 setScrollOfs(0);
+                currentTurnIdRef.current = null;
+                currentBlackboardTurnIdRef.current = null;
                 return;
             }
 
-            // Submit
+            if (key.ctrl && keyInput === "b") {
+                setTurnSection("blackboard");
+                return;
+            }
+            if (key.ctrl && keyInput === "t") {
+                setTurnSection("mcp");
+                return;
+            }
+            if (key.ctrl && keyInput === "s") {
+                setTurnSection("skills");
+                return;
+            }
+            if (key.tab) {
+                setTurnSection("all");
+                return;
+            }
+
             if (key.return && !processing) {
                 void submit();
                 return;
             }
 
-            // Scroll: Up/Down/Page/Home/End only
             if (key.upArrow) {
-                setScrollOfs((s) => Math.min(s + 1, Math.max(0, turns.length - 1)));
+                setScrollOfs((value) => Math.min(value + 1, Math.max(0, turns.length - 1)));
                 return;
             }
             if (key.downArrow) {
-                setScrollOfs((s) => Math.max(0, s - 1));
+                setScrollOfs((value) => Math.max(0, value - 1));
                 return;
             }
             if (key.pageUp) {
-                setScrollOfs((s) => Math.min(s + maxTurns, Math.max(0, turns.length - 1)));
+                setScrollOfs((value) => Math.min(value + maxTurns, Math.max(0, turns.length - 1)));
                 return;
             }
             if (key.pageDown) {
-                setScrollOfs((s) => Math.max(0, s - maxTurns));
+                setScrollOfs((value) => Math.max(0, value - maxTurns));
                 return;
             }
             if (key.home) {
-                setScrollOfs(turns.length - 1);
+                setScrollOfs(Math.max(0, turns.length - 1));
                 return;
             }
             if (key.end) {
@@ -614,180 +1303,142 @@ export function ChatTui({
                 return;
             }
 
-            // Text input — only when not processing
-            if (!processing) {
-                if (key.backspace || key.delete) {
-                    const c = cursorRef.current;
-                    if (c > 0) {
-                        const next = inputRef.current.slice(0, c - 1) + inputRef.current.slice(c);
-                        inputRef.current = next;
-                        cursorRef.current = c - 1;
-                        setInput(next);
-                        setCursor(c - 1);
-                    }
+            if (processing) {
+                return;
+            }
+
+            if (key.backspace || key.delete) {
+                const nextCursor = Math.max(0, cursorRef.current - 1);
+                if (cursorRef.current === 0) {
                     return;
                 }
-                // Left/Right move cursor in input — NOT scroll
-                if (key.leftArrow) {
-                    const next = Math.max(0, cursorRef.current - 1);
-                    cursorRef.current = next;
-                    setCursor(next);
-                    return;
-                }
-                if (key.rightArrow) {
-                    const next = Math.min(inputRef.current.length, cursorRef.current + 1);
-                    cursorRef.current = next;
-                    setCursor(next);
-                    return;
-                }
-                if (key.ctrl && ch === "u") {
-                    inputRef.current = "";
-                    cursorRef.current = 0;
-                    setInput("");
-                    setCursor(0);
-                    return;
-                }
-                if (key.ctrl && ch === "w") {
-                    const c = cursorRef.current;
-                    const p = inputRef.current;
-                    const be = p.lastIndexOf(" ", c - 1);
-                    const tail = p.slice(c);
-                    const head = be >= 0 ? p.slice(0, be + 1) : "";
-                    const next = head + tail;
-                    inputRef.current = next;
-                    cursorRef.current = head.length;
-                    setInput(next);
-                    setCursor(head.length);
-                    return;
-                }
-                // Toggle latest turn's sections (Ctrl+B blackboard / Ctrl+T tools / Ctrl+S skills).
-                if (key.ctrl && (ch === "b" || ch === "t" || ch === "s")) {
-                    const latest = turns[turns.length - 1];
-                    if (latest) {
-                        const section: Section =
-                            ch === "b" ? "blackboard" : ch === "t" ? "mcp" : "skills";
-                        toggle(latest.id, section);
-                    }
-                    return;
-                }
-                // Tab cycles fold state on latest turn's blackboard (most common case).
-                if (key.tab) {
-                    const latest = turns[turns.length - 1];
-                    if (latest) toggle(latest.id, "blackboard");
-                    return;
-                }
-                // Printable text input. Accept multi-codepoint strings so paste,
-                // IME-committed Chinese/CJK input, and emojis all flow through.
-                // Use refs (not state closures) so successive keypresses queued before
-                // the next render still see the up-to-date cursor — otherwise each
-                // CJK char overwrites the previous one at stale cursor=0.
-                if (ch && ch.length > 0 && ch.charCodeAt(0) >= 32) {
-                    const c = cursorRef.current;
-                    const p = inputRef.current;
-                    const next = p.slice(0, c) + ch + p.slice(c);
-                    inputRef.current = next;
-                    cursorRef.current = c + ch.length;
-                    setInput(next);
-                    setCursor(cursorRef.current);
-                    return;
-                }
+                const next = inputRef.current.slice(0, nextCursor) + inputRef.current.slice(cursorRef.current);
+                inputRef.current = next;
+                cursorRef.current = nextCursor;
+                setInput(next);
+                setCursor(nextCursor);
+                return;
+            }
+
+            if (key.leftArrow) {
+                const nextCursor = Math.max(0, cursorRef.current - 1);
+                cursorRef.current = nextCursor;
+                setCursor(nextCursor);
+                return;
+            }
+
+            if (key.rightArrow) {
+                const nextCursor = Math.min(inputRef.current.length, cursorRef.current + 1);
+                cursorRef.current = nextCursor;
+                setCursor(nextCursor);
+                return;
+            }
+
+            if (key.ctrl && keyInput === "u") {
+                inputRef.current = "";
+                cursorRef.current = 0;
+                setInput("");
+                setCursor(0);
+                return;
+            }
+
+            if (key.ctrl && keyInput === "w") {
+                const position = cursorRef.current;
+                const prefix = inputRef.current.slice(0, position);
+                const suffix = inputRef.current.slice(position);
+                const boundary = prefix.trimEnd().lastIndexOf(" ");
+                const head = boundary >= 0 ? prefix.slice(0, boundary + 1) : "";
+                const next = head + suffix;
+                inputRef.current = next;
+                cursorRef.current = head.length;
+                setInput(next);
+                setCursor(head.length);
+                return;
+            }
+
+            if (keyInput && keyInput.length > 0 && keyInput.charCodeAt(0) >= 32) {
+                const position = cursorRef.current;
+                const next = inputRef.current.slice(0, position) + keyInput + inputRef.current.slice(position);
+                inputRef.current = next;
+                cursorRef.current = position + keyInput.length;
+                setInput(next);
+                setCursor(cursorRef.current);
             }
         },
         { isActive: true },
     );
 
-    const sep = "─".repeat(Math.max(0, termCols - 1));
-    // Keep input visible text short enough to fit one line
-    const maxInputLen = Math.max(10, termCols - 6);
-    const displayInput = input.length > maxInputLen ? input.slice(0, maxInputLen - 1) + "…" : input;
-
     return (
         <Box flexDirection="column" height={termRows} overflow="hidden">
-            {/* Header — 1 line */}
-            <Box marginLeft={1} marginRight={1} minHeight={1}>
-                <Text bold color="cyan">
-                    {agentName}
-                </Text>
-                <Text dimColor> • chat</Text>
-                <Box flexGrow={1} />
-                {scrollOfs > 0 ? <Text color="yellow">↑ {scrollOfs} more </Text> : null}
-                <Text dimColor>↑↓ scroll ↵ send ⇥/^B fold ^T tools ^S skills ^C quit ^L clear</Text>
+            <ChatHeader
+                agentName={agentName}
+                compactMode={compactMode}
+                minimalMode={minimalMode}
+                phase={phase}
+                processing={processing}
+                scrollOfs={scrollOfs}
+            />
+
+            <Box marginTop={1}>
+                <ChatStatusStrip
+                    currentTurn={latestTurn}
+                    error={error}
+                    phase={phase}
+                    processing={processing}
+                    scrollOfs={scrollOfs}
+                    showInspector={showInspector}
+                />
             </Box>
 
-            {/* Header separator */}
-            <Box minHeight={1}>
-                <Text dimColor>{sep}</Text>
-            </Box>
-
-            {/* Conversation — fills remaining space */}
-            <Box flexGrow={1} flexDirection="column" overflow="hidden" marginLeft={1} marginRight={1}>
-                {turns.length === 0 && !processing ? (
-                    <Box flexGrow={1} justifyContent="center" alignItems="center">
-                        <Box flexDirection="column" alignItems="center">
-                            <Text dimColor>Start a conversation</Text>
-                            <Text dimColor>Type a message and press Enter</Text>
-                        </Box>
-                    </Box>
-                ) : (
-                    <Box flexDirection="column" overflow="hidden">
-                        {visibleTurns.map((turn, i) => (
-                            <Box key={turn.id} flexDirection="column" marginTop={i > 0 ? 1 : 0}>
-                                <TurnView turn={turn} expanded={expanded.get(turn.id) ?? emptySections()} />
-                                {i < visibleTurns.length - 1 ? (
-                                    <Box minHeight={1}>
-                                        <Text dimColor>{sep}</Text>
-                                    </Box>
-                                ) : null}
-                            </Box>
-                        ))}
-
-                        {processing && (
-                            <Box marginTop={1}>
-                                <ProcessingView phase={phase} userMsg={curTurnRef.current?.userMessage ?? ""} />
-                            </Box>
-                        )}
-
-                        {error ? (
-                            <Box marginTop={1}>
-                                <Text color="red">✗ {error}</Text>
-                            </Box>
-                        ) : null}
-                    </Box>
-                )}
-            </Box>
-
-            {/* Bottom separator */}
-            <Box minHeight={1}>
-                <Text dimColor>{sep}</Text>
-            </Box>
-
-            {/* Input bar — fixed at bottom */}
-            <Box minHeight={1} marginLeft={1} marginRight={1} marginBottom={1}>
-                <Text color="cyan">❯</Text>
-                <Box paddingLeft={1} flexGrow={1}>
-                    {displayInput.length > 0 ? (
-                        <Text>{displayInput}</Text>
+            <Box flexGrow={1} marginTop={1} overflow="hidden">
+                <Box flexGrow={1} flexDirection="column">
+                    {turns.length === 0 ? (
+                        <EmptyState />
                     ) : (
-                        <Text dimColor>{processing ? "Waiting..." : "Type a message..."}</Text>
+                        <Box flexDirection={showInspector ? "row" : "column"} gap={1} flexGrow={1}>
+                            <Box flexDirection="column" flexGrow={1}>
+                                {visibleTurns.map((turn, index) => (
+                                    <Box key={turn.id} marginBottom={index < visibleTurns.length - 1 ? 1 : 0}>
+                                        <TurnCard
+                                            turn={turn}
+                                            expanded={expanded.get(turn.id) ?? emptySections()}
+                                            isActive={processing && turn.id === latestTurn?.id}
+                                            isLatest={turn.id === latestTurn?.id}
+                                            minimalMode={minimalMode}
+                                            phase={phase}
+                                        />
+                                    </Box>
+                                ))}
+                            </Box>
+
+                            {showInspector ? (
+                                <RightInspector currentTurn={latestTurn} error={error} phase={phase} processing={processing} />
+                            ) : null}
+                        </Box>
                     )}
                 </Box>
-                {processing ? (
-                    <Box marginRight={1}>
-                        <Text color={c(PHASE_DEF[phase].color)}>{PHASE_DEF[phase].frames[0]}</Text>
-                    </Box>
-                ) : null}
-                {!processing ? <Text color="cyan">▎</Text> : null}
+            </Box>
+
+            <Box marginTop={1}>
+                <ComposerBar
+                    compactMode={compactMode}
+                    cursor={cursor}
+                    input={input}
+                    minimalMode={minimalMode}
+                    phase={phase}
+                    processing={processing}
+                    termCols={termCols}
+                />
             </Box>
         </Box>
     );
 }
 
-/* ─── Entry ─────────────────────────────────────────── */
-
 export function startChatTui(
     runtime: RuntimeModule,
     options: {
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
+        blackboard?: BlackboardModule;
         eventBus?: RuntimeEventBus;
         agentName?: string;
         userId?: string;
@@ -795,10 +1446,11 @@ export function startChatTui(
 ): void {
     render(
         <ChatTui
-            runtime={runtime}
-            eventBus={options.eventBus}
             approveMcpToolCall={options.approveMcpToolCall}
             agentName={options.agentName}
+            blackboard={options.blackboard}
+            eventBus={options.eventBus}
+            runtime={runtime}
             userId={options.userId}
         />,
     )

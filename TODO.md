@@ -15,7 +15,7 @@
 | ~~R-01~~ | ~~direct-with-watch 升级器仅看计数器，**未读「工具反复失败 / 上下文压力」语义信号**~~ ✅ done — 新增两路升级原因 `tool-failure-saturation` / `context-pressure`：runtime 在 persistTurn 计算 toolFailureRatio 写回 `consecutiveToolFailureTurns`；applyRouteEscalation 估算 messageChars→tokens 与 `routing.contextPressureBudgetTokens` 比值；新增 9 个升级器测试（全数值，零字符匹配） | P1 |
 | ~~R-02~~ | ~~`fastRouteSnapshots` 进程内 Map，重启即丢失；多 gateway 节点不共享~~ ✅ done — `src/agent/runtime/fast.route.store.ts`：`FastRouteSnapshotStore` 接口 + `InMemoryFastRouteSnapshotStore`（默认）+ `RedisFastRouteSnapshotStore`（L1 内存 + L2 Redis，`ff:fastroute:*` key，3600s TTL，写后回填，Redis 故障自动降级 L1-only）；RuntimeModule.warmup 在 MemoryModule 持有 ioredis 客户端时自动升级为双层存储；4 个新测试覆盖 hydration / 故障降级 / TTL 写入 | P1 |
 | ~~R-03~~ | ~~黑板进程隔离（Bun Worker / 子进程）阶段未完成，目前 worker 大多 in-process~~ ✅ done — 新增 `BlackboardThreadRunner`：把 BlackboardWorker 的纯解析/规范化（JSON 抽取、字段裁剪、outcome 推导）offload 到 Bun Web Worker 线程，主线程只负责模型调用与编排；`src/agent/worker/blackboard.worker.normalize.ts` 抽离纯函数模块；`blackboard.worker.thread.ts` 为 Worker entry（`new URL(..., import.meta.url)` 形态，被 `bun build --compile` 自动打包）；Runner 提供超时回退、worker 异常自动降级到主线程、可注入 fake factory 进行测试；4 新测试 + `build:binary` 编译通过 | P1 |
-| R-04 | TUI 未实时订阅 `worker.step` / 黑板讨论流 | P2 |
+| ~~R-04~~ | ~~TUI 未实时订阅 `worker.step` / 黑板讨论流~~ ✅ done — `chat.tui.tsx` 新增对 `BlackboardWorkerStart` / `BlackboardWorkerEnd` / `BlackboardMessageAppended` 三类事件的订阅；引入 `currentBlackboardTurnIdRef` 跟踪活跃黑板 turn 与 `scheduleBlackboardRefresh` 通过 `queueMicrotask` 节流回拉 `blackboard.getTurn(turnId)` 快照，避免高频事件冲击渲染；现有「latestMessages = turn.messages.slice(-3)」区段自动随之刷新；turn 完成 / Ctrl-L 清屏时一并清空 ref；零关键词分类，事件驱动 | P2 |
 
 ## 记忆与结晶
 
