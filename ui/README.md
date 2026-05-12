@@ -21,6 +21,7 @@
 - `ui/07.visual-spec.md`
 - `ui/08.high-fidelity-mockups.html`
 - `ui/09.excalidraw-ui-flow.excalidraw`
+- `ui/10.feihua-brand-extraction.md`
 
 产物说明：
 - Markdown：产品定义、信息架构、交互与工程映射

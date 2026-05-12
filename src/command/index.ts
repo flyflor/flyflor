@@ -50,10 +50,12 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
         const { startChatTui } = await import("./tui/chat.tui.tsx");
         const { FlyFlorTokens } = await import("../app.ts");
         const runtime = app.resolve(FlyFlorTokens.Runtime);
+        const blackboard = app.resolve(FlyFlorTokens.Blackboard);
         const events = app.resolve(FlyFlorTokens.Events);
         startChatTui(runtime, {
             eventBus: events instanceof RuntimeEventBus ? events : undefined,
             agentName: "flyflor",
+            blackboard,
         });
         return { exitCode: 0 };
     }

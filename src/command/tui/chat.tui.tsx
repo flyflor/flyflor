@@ -7,7 +7,7 @@ import type { BlackboardMessage, BlackboardModule, BlackboardStep, BlackboardTur
 import type { RuntimeModule } from "../../agent/runtime/index.ts";
 import type { McpToolCallRequest } from "../../agent/mcp/index.ts";
 
-type ToneColor = "blue" | "cyan" | "gray" | "green" | "magenta" | "red" | "white" | "yellow";
+type ToneColor = string;
 type Phase = "idle" | "blackboard" | "thinking" | "mcp" | "skill" | "streaming";
 type Section = "blackboard" | "skills" | "mcp" | "metadata";
 type SectionMap = Record<Section, boolean>;
@@ -77,6 +77,12 @@ interface DetailSectionProps {
     children?: React.ReactNode;
 }
 
+interface NoticeState {
+    color: ToneColor;
+    kind: "exit" | "runtime";
+    text: string;
+}
+
 interface TurnCardProps {
     turn: Turn;
     expanded: SectionMap;
@@ -91,13 +97,30 @@ const BREAKPOINT_INSPECTOR = 140;
 const BREAKPOINT_COMPACT = 100;
 const BREAKPOINT_MINIMAL = 80;
 
+const THEME = {
+    bg: "#0B1020",
+    border: "#98A3C7",
+    cyan: "#6FE7FF",
+    cyanSoft: "#79E6FF",
+    error: "#FF7EA8",
+    gold: "#D8B36A",
+    iris: "#6C63FF",
+    mint: "#8EDBB5",
+    muted: "#98A3C7",
+    panel: "#141A31",
+    panelAlt: "#1B223D",
+    pink: "#F3A6D6",
+    silver: "#EAEAF6",
+    violet: "#C78BFF",
+} as const;
+
 const PHASE_DEF: Record<Phase, PhaseDef> = {
-    idle: { color: "gray", done: "○", frames: ["○"], label: "IDLE" },
-    blackboard: { color: "magenta", done: "◆", frames: ["◇", "◆", "◇"], label: "BLACKBOARD" },
-    thinking: { color: "cyan", done: "◆", frames: ["◐", "◓", "◑", "◒"], label: "THINKING" },
-    mcp: { color: "blue", done: "◆", frames: ["▣", "■", "▣"], label: "TOOLS" },
-    skill: { color: "green", done: "◆", frames: ["◈", "◆", "◈"], label: "SKILLS" },
-    streaming: { color: "white", done: "◆", frames: ["•", "◦", "•"], label: "STREAMING" },
+    idle: { color: THEME.muted, done: "○", frames: ["○"], label: "IDLE" },
+    blackboard: { color: THEME.violet, done: "◆", frames: ["◇", "◆", "◇"], label: "BLACKBOARD" },
+    thinking: { color: THEME.cyan, done: "◆", frames: ["◐", "◓", "◑", "◒"], label: "THINKING" },
+    mcp: { color: THEME.cyanSoft, done: "◆", frames: ["▣", "■", "▣"], label: "TOOLS" },
+    skill: { color: THEME.pink, done: "◆", frames: ["◈", "◆", "◈"], label: "SKILLS" },
+    streaming: { color: THEME.silver, done: "◆", frames: ["•", "◦", "•"], label: "STREAMING" },
 };
 
 function useAnim(active: boolean, frames: string[], intervalMs = 220): string {
@@ -316,15 +339,15 @@ function readStepOutcome(step: BlackboardStep): string {
 function stepTone(step: BlackboardStep): ToneColor {
     const outcome = readStepOutcome(step);
     if (outcome === "final") {
-        return "green";
+        return THEME.mint;
     }
     if (outcome === "blocked") {
-        return "red";
+        return THEME.error;
     }
     if (outcome === "continue") {
-        return "yellow";
+        return THEME.gold;
     }
-    return "gray";
+    return THEME.muted;
 }
 
 function stepBullet(step: BlackboardStep): string {
@@ -398,16 +421,6 @@ function buildInputWindow(
     };
 }
 
-function renderShortcutText(compactMode: boolean, minimalMode: boolean): string {
-    if (minimalMode) {
-        return "Enter send · Tab details · ^C quit";
-    }
-    if (compactMode) {
-        return "Enter send · ↑↓ history · Tab details · ^B/^T/^S · ^C quit";
-    }
-    return "Enter send · ↑↓ history · Tab all · ^B board · ^T tools · ^S skills · ^L clear · ^C quit";
-}
-
 function renderTraceState(active: boolean, currentPhase: Phase, target: Phase, enabled: boolean): TraceChipProps["state"] {
     if (!enabled) {
         return active && currentPhase === target ? "active" : "idle";
@@ -430,10 +443,10 @@ function TraceChip({ color, count, label, state }: TraceChipProps): React.ReactE
     const suffix = count && count > 0 ? `×${count}` : "";
     const chipLabel = `${label}${suffix}`;
     if (state === "idle") {
-        return <Badge color="gray" dim label={chipLabel} />;
+        return <Badge color={THEME.muted} dim label={chipLabel} />;
     }
     if (state === "error") {
-        return <Badge color="red" label={chipLabel} />;
+        return <Badge color={THEME.error} label={chipLabel} />;
     }
     if (state === "active") {
         return <Badge color={color} label={chipLabel} />;
@@ -463,7 +476,7 @@ function BlackboardDetails({
 }): React.ReactElement {
     if (!blackboard && !turn) {
         return (
-            <DetailSection color="magenta" title="Blackboard">
+            <DetailSection color={THEME.violet} title="Blackboard">
                 <Text dimColor>No structured blackboard trace.</Text>
             </DetailSection>
         );
@@ -473,7 +486,7 @@ function BlackboardDetails({
     const latestMessages = (turn?.messages.filter(isReadableBlackboardMessage) ?? []).slice(-3);
 
     return (
-        <DetailSection color="magenta" title="Blackboard">
+        <DetailSection color={THEME.violet} title="Blackboard">
             {blackboard ? (
                 <Text>
                     mode {blackboard.mode}
@@ -486,7 +499,7 @@ function BlackboardDetails({
             {blackboard?.turnId ? <Text dimColor>turn {blackboard.turnId}</Text> : null}
             {latestSteps.length > 0 ? (
                 <>
-                    <Text color="magenta">steps</Text>
+                    <Text color={THEME.violet}>steps</Text>
                     {latestSteps.map((step) => (
                         <Box key={step.id} flexDirection="column" marginBottom={1}>
                             <Text color={c(stepTone(step))}>
@@ -494,10 +507,10 @@ function BlackboardDetails({
                             </Text>
                             <Text dimColor>{truncate(step.outputSummary, 140)}</Text>
                             {step.blockers.length > 0 ? (
-                                <Text color="yellow">blockers {truncate(step.blockers.join(" · "), 140)}</Text>
+                                <Text color={THEME.gold}>blockers {truncate(step.blockers.join(" · "), 140)}</Text>
                             ) : null}
                             {step.newFacts.length > 0 ? (
-                                <Text color="green">facts {truncate(step.newFacts.join(" · "), 140)}</Text>
+                                <Text color={THEME.mint}>facts {truncate(step.newFacts.join(" · "), 140)}</Text>
                             ) : null}
                         </Box>
                     ))}
@@ -505,7 +518,7 @@ function BlackboardDetails({
             ) : null}
             {latestMessages.length > 0 ? (
                 <>
-                    <Text color="magenta">discussion</Text>
+                    <Text color={THEME.violet}>discussion</Text>
                     {latestMessages.map((message) => (
                         <Text key={message.id} dimColor>
                             {speakerForMessage(turn!, message)}: {truncate(message.content.replace(/\s+/gu, " "), 140)}
@@ -522,7 +535,7 @@ function BlackboardDetails({
 
 function SkillsDetails({ skills }: { skills: string[] }): React.ReactElement {
     return (
-        <DetailSection color="green" title="Skills">
+        <DetailSection color={THEME.pink} title="Skills">
             {skills.length === 0 ? <Text dimColor>No skills loaded.</Text> : null}
             {skills.map((skill) => (
                 <Text key={skill} dimColor>
@@ -535,11 +548,11 @@ function SkillsDetails({ skills }: { skills: string[] }): React.ReactElement {
 
 function ToolsDetails({ tools }: { tools: McpTrace[] }): React.ReactElement {
     return (
-        <DetailSection color="blue" title="Tools">
+        <DetailSection color={THEME.cyanSoft} title="Tools">
             {tools.length === 0 ? <Text dimColor>No tool calls recorded.</Text> : null}
             {tools.map((tool, index) => (
                 <Box key={`${tool.server}-${tool.tool}-${index}`} flexDirection="column" marginBottom={1}>
-                    <Text color={tool.ok ? "green" : "red"}>
+                    <Text color={tool.ok ? THEME.mint : THEME.error}>
                         {tool.ok ? "✓" : "✗"} {tool.server}.{tool.tool}
                     </Text>
                     {tool.resultText ? <Text dimColor>{truncate(tool.resultText.replace(/\s+/gu, " "), 140)}</Text> : null}
@@ -552,7 +565,7 @@ function ToolsDetails({ tools }: { tools: McpTrace[] }): React.ReactElement {
 function MetadataDetails({ metadata }: { metadata: GatewayReply["metadata"] | null }): React.ReactElement {
     const lines = metadataLines(metadata);
     return (
-        <DetailSection color="yellow" title="Metadata">
+        <DetailSection color={THEME.gold} title="Metadata">
             {lines.length === 0 ? <Text dimColor>No metadata.</Text> : null}
             {lines.map((line) => (
                 <Text key={line} dimColor>
@@ -570,14 +583,20 @@ function TurnCard({ turn, expanded, isActive, isLatest, minimalMode, phase }: Tu
     const tools = turn.mcpCalls;
     const route = turn.blackboard?.mode ?? "direct";
     const statusLabel = turn.error ? "ERROR" : isActive ? phaseDef.label : "DONE";
-    const statusColor: ToneColor = turn.error ? "red" : isActive ? phaseDef.color : "green";
+    const statusColor: ToneColor = turn.error ? THEME.error : isActive ? phaseDef.color : THEME.mint;
     const open = hasAnyDetails(expanded);
 
     return (
-        <Box borderStyle="round" borderColor={c(isActive ? phaseDef.color : turn.error ? "red" : "gray")} flexDirection="column" paddingX={1}>
+        <Box
+            backgroundColor={THEME.panel}
+            borderStyle="round"
+            borderColor={c(isActive ? phaseDef.color : turn.error ? THEME.error : THEME.border)}
+            flexDirection="column"
+            paddingX={1}
+        >
             <Box justifyContent="space-between">
                 <Box>
-                    <Text color="cyan" bold>
+                    <Text color={THEME.cyanSoft} bold>
                         You
                     </Text>
                     <Text dimColor> {fmtTime(turn.startedAt)}</Text>
@@ -588,20 +607,20 @@ function TurnCard({ turn, expanded, isActive, isLatest, minimalMode, phase }: Tu
 
             <Box marginTop={1} flexWrap="wrap">
                 <TraceChip
-                    color="cyan"
+                    color={THEME.cyan}
                     label={isActive && phase === "thinking" ? `${phaseIcon} think` : "think"}
                     state={renderTraceState(isActive, phase, "thinking", true)}
                 />
                 <Box marginLeft={1}>
                     <TraceChip
-                        color="magenta"
+                        color={THEME.violet}
                         label="board"
                         state={renderTraceState(isActive, phase, "blackboard", turn.blackboard?.mode === "blackboard")}
                     />
                 </Box>
                 <Box marginLeft={1}>
                     <TraceChip
-                        color="green"
+                        color={THEME.pink}
                         count={skills.length}
                         label="skill"
                         state={renderTraceState(isActive, phase, "skill", skills.length > 0)}
@@ -609,7 +628,7 @@ function TurnCard({ turn, expanded, isActive, isLatest, minimalMode, phase }: Tu
                 </Box>
                 <Box marginLeft={1}>
                     <TraceChip
-                        color="blue"
+                        color={THEME.cyanSoft}
                         count={readToolCount(turn)}
                         label="tool"
                         state={renderTraceState(isActive, phase, "mcp", readToolCount(turn) > 0)}
@@ -617,23 +636,23 @@ function TurnCard({ turn, expanded, isActive, isLatest, minimalMode, phase }: Tu
                 </Box>
                 <Box marginLeft={1}>
                     <TraceChip
-                        color="white"
+                        color={THEME.silver}
                         label={isActive && phase === "streaming" ? `${phaseIcon} write` : "write"}
                         state={renderTraceState(isActive, phase, "streaming", turn.assistantText.length > 0 || Boolean(turn.completedAt))}
                     />
                 </Box>
                 <Box marginLeft={1}>
-                    <Badge color="gray" dim label={`route:${route}`} />
+                    <Badge color={THEME.muted} dim label={`route:${route}`} />
                 </Box>
                 {isLatest && !minimalMode ? (
                     <Box marginLeft={1}>
-                        <Badge color="gray" dim label={open ? "details:open" : "details:closed"} />
+                        <Badge color={THEME.muted} dim label={open ? "details:open" : "details:closed"} />
                     </Box>
                 ) : null}
             </Box>
 
             <Box marginTop={1}>
-                <Text color="green" bold>
+                <Text color={THEME.silver} bold>
                     Flyflor
                 </Text>
                 <Text dimColor> {fmtTime(turn.completedAt ?? turn.startedAt)}</Text>
@@ -644,7 +663,7 @@ function TurnCard({ turn, expanded, isActive, isLatest, minimalMode, phase }: Tu
 
             {turn.error ? (
                 <Box marginTop={1}>
-                    <Text color="red">error {turn.error}</Text>
+                    <Text color={THEME.error}>error {turn.error}</Text>
                 </Box>
             ) : null}
 
@@ -672,32 +691,34 @@ function ChatHeader({
     phase: Phase;
 }): React.ReactElement {
     const label = processing ? PHASE_DEF[phase].label : PHASE_DEF.idle.label;
-    const color = processing ? PHASE_DEF[phase].color : "gray";
+    const color = processing ? PHASE_DEF[phase].color : THEME.muted;
+    const shortcutText = minimalMode ? "" : compactMode ? "Enter · Tab · ^C" : "Enter send · Tab details · ^C confirm";
 
     return (
-        <Box borderStyle="round" borderColor="cyan" paddingX={1}>
-            <Text color="white" bold>
-                FLYFLOR
+        <Box backgroundColor={THEME.panelAlt} borderStyle="round" borderColor={THEME.cyanSoft} paddingX={1}>
+            <Text color={THEME.violet} bold>
+                ◈
             </Text>
-            <Text color="magenta" bold>
+            <Text color={THEME.silver} bold>
+                {" "}FLYFLOR
+            </Text>
+            <Text color={THEME.violet} bold>
                 {" "}
                 Chat
             </Text>
-            {!minimalMode ? (
+            {!compactMode ? (
                 <Text dimColor>
-                    {" "}
-                    agent {agentName}
+                    {" "}agent {agentName}
                 </Text>
             ) : null}
             <Box flexGrow={1} />
-            {!compactMode ? <Text dimColor>{renderShortcutText(compactMode, minimalMode)}</Text> : null}
-            {compactMode ? <Text dimColor>{renderShortcutText(compactMode, minimalMode)}</Text> : null}
+            {shortcutText.length > 0 ? <Text dimColor>{shortcutText}</Text> : null}
             <Box marginLeft={1}>
                 <Badge color={color} label={label} />
             </Box>
             {scrollOfs > 0 ? (
                 <Box marginLeft={1}>
-                    <Badge color="yellow" label={`HISTORY+${scrollOfs}`} />
+                    <Badge color={THEME.gold} label={`HISTORY+${scrollOfs}`} />
                 </Box>
             ) : null}
         </Box>
@@ -724,28 +745,28 @@ function ChatStatusStrip({
     const boardMode = currentTurn?.blackboard?.mode ?? "direct";
 
     return (
-        <Box borderStyle="single" borderColor="gray" paddingX={1} flexWrap="wrap">
-            <Badge color={processing ? PHASE_DEF[phase].color : "gray"} label={`phase:${processing ? phase : "idle"}`} />
+        <Box backgroundColor={THEME.panel} borderStyle="single" borderColor={THEME.border} paddingX={1} flexWrap="wrap">
+            <Badge color={processing ? PHASE_DEF[phase].color : THEME.muted} label={`phase:${processing ? phase : "idle"}`} />
             <Box marginLeft={1}>
-                <Badge color={boardMode === "blackboard" ? "magenta" : "gray"} label={`board:${boardMode}`} />
+                <Badge color={boardMode === "blackboard" ? THEME.violet : THEME.muted} label={`board:${boardMode}`} />
             </Box>
             <Box marginLeft={1}>
-                <Badge color={skills > 0 ? "green" : "gray"} label={`skills:${skills}`} />
+                <Badge color={skills > 0 ? THEME.pink : THEME.muted} label={`skills:${skills}`} />
             </Box>
             <Box marginLeft={1}>
-                <Badge color={tools > 0 ? "blue" : "gray"} label={`tools:${tools}`} />
+                <Badge color={tools > 0 ? THEME.cyanSoft : THEME.muted} label={`tools:${tools}`} />
             </Box>
             <Box marginLeft={1}>
-                <Badge color={scrollOfs > 0 ? "yellow" : "gray"} label={`scroll:${scrollOfs > 0 ? "scrolled" : "live"}`} />
+                <Badge color={scrollOfs > 0 ? THEME.gold : THEME.muted} label={`scroll:${scrollOfs > 0 ? "scrolled" : "live"}`} />
             </Box>
             {!showInspector && currentTurn?.blackboard?.status ? (
                 <Box marginLeft={1}>
-                    <Badge color="magenta" label={`status:${currentTurn.blackboard.status}`} />
+                    <Badge color={THEME.violet} label={`status:${currentTurn.blackboard.status}`} />
                 </Box>
             ) : null}
             {error ? (
                 <Box marginLeft={1}>
-                    <Badge color="red" label={truncate(`error:${error}`, 44)} />
+                    <Badge color={THEME.error} label={truncate(`error:${error}`, 44)} />
                 </Box>
             ) : null}
         </Box>
@@ -756,11 +777,11 @@ function EmptyState(): React.ReactElement {
     return (
         <Box flexGrow={1} justifyContent="center" alignItems="center">
             <Box flexDirection="column" alignItems="center">
-                <Text color="white" bold>
+                <Text color={THEME.silver} bold>
                     Start an agent session
                 </Text>
-                <Text dimColor>Ask a question, request a task, or inspect runtime details with Tab.</Text>
-                <Text dimColor>Press Enter to send • Ctrl+C to quit</Text>
+                <Text color={THEME.muted}>Ask a question, request a task, or inspect runtime details with Tab.</Text>
+                <Text color={THEME.muted}>Press Enter to send • Ctrl+C to clear / confirm exit</Text>
             </Box>
         </Box>
     );
@@ -784,8 +805,8 @@ function RightInspector({
 
     return (
         <Box width={38} flexDirection="column">
-            <Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
-                <Text color="magenta" bold>
+            <Box backgroundColor={THEME.panelAlt} borderStyle="round" borderColor={THEME.violet} paddingX={1} flexDirection="column">
+                <Text color={THEME.violet} bold>
                     ◆ Current turn
                 </Text>
                 <Text>
@@ -795,11 +816,11 @@ function RightInspector({
                 <Text dimColor>route {blackboard?.mode ?? "direct"}</Text>
                 {blackboard?.status ? <Text dimColor>blackboard {blackboard.status}</Text> : null}
                 {blackboard?.reason ? <Text dimColor>{truncate(blackboard.reason, 90)}</Text> : null}
-                {error ? <Text color="red">last error {truncate(error, 90)}</Text> : null}
+                {error ? <Text color={THEME.error}>last error {truncate(error, 90)}</Text> : null}
             </Box>
 
-            <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
-                <Text color="green" bold>
+            <Box backgroundColor={THEME.panel} borderStyle="single" borderColor={THEME.border} paddingX={1} flexDirection="column" marginTop={1}>
+                <Text color={THEME.pink} bold>
                     ◇ Skills
                 </Text>
                 {skills.length === 0 ? <Text dimColor>No skills in latest turn.</Text> : null}
@@ -810,8 +831,8 @@ function RightInspector({
                 ))}
             </Box>
 
-            <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
-                <Text color="blue" bold>
+            <Box backgroundColor={THEME.panel} borderStyle="single" borderColor={THEME.border} paddingX={1} flexDirection="column" marginTop={1}>
+                <Text color={THEME.cyanSoft} bold>
                     ◇ Tools
                 </Text>
                 {tools.length === 0 ? <Text dimColor>No tool calls in latest turn.</Text> : null}
@@ -822,8 +843,8 @@ function RightInspector({
                 ))}
             </Box>
 
-            <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column" marginTop={1}>
-                <Text color="cyan" bold>
+            <Box backgroundColor={THEME.panel} borderStyle="single" borderColor={THEME.border} paddingX={1} flexDirection="column" marginTop={1}>
+                <Text color={THEME.cyan} bold>
                     ◇ Keys
                 </Text>
                 <Text dimColor>Tab all details</Text>
@@ -831,7 +852,7 @@ function RightInspector({
                 <Text dimColor>Ctrl+T tools</Text>
                 <Text dimColor>Ctrl+S skills</Text>
                 <Text dimColor>Up/Down history</Text>
-                <Text dimColor>End live mode</Text>
+                <Text dimColor>Ctrl+C clear / confirm exit</Text>
             </Box>
         </Box>
     );
@@ -842,6 +863,7 @@ function ComposerBar({
     input,
     cursor,
     minimalMode,
+    notice,
     phase,
     processing,
     termCols,
@@ -850,6 +872,7 @@ function ComposerBar({
     cursor: number;
     input: string;
     minimalMode: boolean;
+    notice: NoticeState | null;
     phase: Phase;
     processing: boolean;
     termCols: number;
@@ -861,25 +884,31 @@ function ComposerBar({
     const hasContent = input.length > 0;
 
     return (
-        <Box borderStyle="round" borderColor={processing ? c(phaseDef.color) : "cyan"} paddingX={1} flexDirection="column">
+        <Box
+            backgroundColor={THEME.panelAlt}
+            borderStyle="round"
+            borderColor={processing ? c(phaseDef.color) : THEME.cyanSoft}
+            paddingX={1}
+            flexDirection="column"
+        >
             <Box>
-                <Text color="cyan" bold>
+                <Text color={THEME.cyanSoft} bold>
                     ›
                 </Text>
                 <Box marginLeft={1} flexGrow={1}>
                     {!hasContent ? (
-                        <Text dimColor>{processing ? "Agent is working…" : "Type a message…"}</Text>
+                        <Text color={THEME.muted}>{processing ? "Agent is working…" : "Type a message…"}</Text>
                     ) : (
                         <Text>
                             {window.clippedLeft ? "…" : ""}
                             {window.before}
-                            {!processing ? <Text color="cyan">▎</Text> : null}
+                            {!processing ? <Text color={THEME.cyanSoft}>▎</Text> : null}
                             {window.after}
                             {window.clippedRight ? "…" : ""}
                         </Text>
                     )}
                 </Box>
-                <Badge color={processing ? phaseDef.color : "gray"} label={processing ? phaseDef.label : "READY"} />
+                <Badge color={processing ? phaseDef.color : THEME.muted} label={processing ? phaseDef.label : "READY"} />
                 {processing ? (
                     <Box marginLeft={1}>
                         <Text color={c(phaseDef.color)}>{icon || phaseDef.done}</Text>
@@ -887,10 +916,11 @@ function ComposerBar({
                 ) : null}
             </Box>
             {!minimalMode ? (
-                <Text dimColor>
-                    {compactMode
-                        ? "Enter send · Ctrl+U clear line · Ctrl+W delete word"
-                        : "Enter send · Left/Right move cursor · Ctrl+U clear line · Ctrl+W delete word"}
+                <Text color={notice?.color ?? THEME.muted}>
+                    {notice?.text ??
+                        (compactMode
+                            ? "Enter send · Ctrl+U clear line · Ctrl+W delete word · Ctrl+C confirm exit"
+                            : "Enter send · Left/Right move cursor · Ctrl+U clear line · Ctrl+W delete word · Ctrl+C confirm exit")}
                 </Text>
             ) : null}
         </Box>
@@ -918,7 +948,9 @@ export function ChatTui({
     const [processing, setProcessing] = useState(false);
     const [phase, setPhase] = useState<Phase>("idle");
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<NoticeState | null>(null);
     const [expanded, setExpanded] = useState<Map<string, SectionMap>>(new Map());
+    const [exitArmed, setExitArmed] = useState(false);
     const [scrollOfs, setScrollOfs] = useState(0);
 
     const inputRef = useRef("");
@@ -936,6 +968,11 @@ export function ChatTui({
     useEffect(() => {
         cursorRef.current = cursor;
     }, [cursor]);
+
+    const clearExitIntent = useCallback(() => {
+        setExitArmed(false);
+        setNotice((current) => (current?.kind === "exit" ? null : current));
+    }, []);
 
     const refreshBlackboardTurn = useCallback(
         async (chatTurnId: string, blackboardTurnId: string): Promise<void> => {
@@ -1080,39 +1117,6 @@ export function ChatTui({
         return () => unsubscribe();
     }, [eventBus, refreshBlackboardTurn, scheduleBlackboardRefresh]);
 
-    useEffect(() => {
-        process.stdout.write("\x1b[?1000h\x1b[?1006h");
-        let buffer = "";
-
-        const onData = (data: Buffer): void => {
-            buffer += data.toString();
-            const pattern = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
-            let match: RegExpExecArray | null;
-
-            while ((match = pattern.exec(buffer)) !== null) {
-                const button = Number.parseInt(match[1] ?? "0", 10);
-                if (button === 64) {
-                    setScrollOfs((value) => Math.min(value + 3, Math.max(0, turns.length - 1)));
-                } else if (button === 65) {
-                    setScrollOfs((value) => Math.max(0, value - 3));
-                }
-            }
-
-            const lastEscape = buffer.lastIndexOf("\x1b");
-            if (lastEscape > 0) {
-                buffer = buffer.slice(lastEscape);
-            } else if (lastEscape < 0) {
-                buffer = "";
-            }
-        };
-
-        process.stdin.on("data", onData);
-        return () => {
-            process.stdout.write("\x1b[?1000l\x1b[?1006l");
-            process.stdin.removeListener("data", onData);
-        };
-    }, [turns.length]);
-
     const reservedRows = showInspector ? 10 : compactMode ? 9 : 8;
     const perTurnRows = minimalMode ? 7 : showInspector ? 8 : 9;
     const maxTurns = Math.max(1, Math.floor((termRows - reservedRows) / perTurnRows));
@@ -1167,6 +1171,8 @@ export function ChatTui({
         setInput("");
         setCursor(0);
         setError(null);
+        setNotice(null);
+        setExitArmed(false);
         setProcessing(true);
         setPhase("thinking");
         setScrollOfs(0);
@@ -1222,6 +1228,7 @@ export function ChatTui({
         } catch (cause) {
             const messageText = cause instanceof Error ? cause.message : String(cause);
             setError(messageText);
+            setNotice({ color: THEME.error, kind: "runtime", text: "The last turn failed. Review the error block or retry." });
             setTurns((current) =>
                 updateTurnById(current, turnId, (item) => ({
                     ...item,
@@ -1239,17 +1246,44 @@ export function ChatTui({
         }
     }, [approveMcpToolCall, blackboard, runtime, userId]);
 
+    const requestExit = useCallback(() => {
+        if (processing) {
+            setNotice({ color: THEME.gold, kind: "exit", text: "Wait for the current turn to finish before exiting." });
+            return;
+        }
+
+        if (inputRef.current.length > 0) {
+            inputRef.current = "";
+            cursorRef.current = 0;
+            setInput("");
+            setCursor(0);
+            setExitArmed(true);
+            setNotice({ color: THEME.gold, kind: "exit", text: "Input cleared. Press Ctrl+C again to confirm exit." });
+            return;
+        }
+
+        if (!exitArmed) {
+            setExitArmed(true);
+            setNotice({ color: THEME.error, kind: "exit", text: "Press Ctrl+C again to exit Flyflor chat." });
+            return;
+        }
+
+        exit();
+    }, [exit, exitArmed, processing]);
+
     useInput(
         (keyInput, key) => {
             if (key.escape || (key.ctrl && keyInput === "c")) {
-                exit();
+                requestExit();
                 return;
             }
 
             if (key.ctrl && keyInput === "l") {
+                clearExitIntent();
                 setTurns([]);
                 setExpanded(new Map());
                 setError(null);
+                setNotice(null);
                 setScrollOfs(0);
                 currentTurnIdRef.current = null;
                 currentBlackboardTurnIdRef.current = null;
@@ -1257,48 +1291,59 @@ export function ChatTui({
             }
 
             if (key.ctrl && keyInput === "b") {
+                clearExitIntent();
                 setTurnSection("blackboard");
                 return;
             }
             if (key.ctrl && keyInput === "t") {
+                clearExitIntent();
                 setTurnSection("mcp");
                 return;
             }
             if (key.ctrl && keyInput === "s") {
+                clearExitIntent();
                 setTurnSection("skills");
                 return;
             }
             if (key.tab) {
+                clearExitIntent();
                 setTurnSection("all");
                 return;
             }
 
             if (key.return && !processing) {
+                clearExitIntent();
                 void submit();
                 return;
             }
 
             if (key.upArrow) {
+                clearExitIntent();
                 setScrollOfs((value) => Math.min(value + 1, Math.max(0, turns.length - 1)));
                 return;
             }
             if (key.downArrow) {
+                clearExitIntent();
                 setScrollOfs((value) => Math.max(0, value - 1));
                 return;
             }
             if (key.pageUp) {
+                clearExitIntent();
                 setScrollOfs((value) => Math.min(value + maxTurns, Math.max(0, turns.length - 1)));
                 return;
             }
             if (key.pageDown) {
+                clearExitIntent();
                 setScrollOfs((value) => Math.max(0, value - maxTurns));
                 return;
             }
             if (key.home) {
+                clearExitIntent();
                 setScrollOfs(Math.max(0, turns.length - 1));
                 return;
             }
             if (key.end) {
+                clearExitIntent();
                 setScrollOfs(0);
                 return;
             }
@@ -1308,6 +1353,7 @@ export function ChatTui({
             }
 
             if (key.backspace || key.delete) {
+                clearExitIntent();
                 const nextCursor = Math.max(0, cursorRef.current - 1);
                 if (cursorRef.current === 0) {
                     return;
@@ -1321,6 +1367,7 @@ export function ChatTui({
             }
 
             if (key.leftArrow) {
+                clearExitIntent();
                 const nextCursor = Math.max(0, cursorRef.current - 1);
                 cursorRef.current = nextCursor;
                 setCursor(nextCursor);
@@ -1328,6 +1375,7 @@ export function ChatTui({
             }
 
             if (key.rightArrow) {
+                clearExitIntent();
                 const nextCursor = Math.min(inputRef.current.length, cursorRef.current + 1);
                 cursorRef.current = nextCursor;
                 setCursor(nextCursor);
@@ -1335,6 +1383,7 @@ export function ChatTui({
             }
 
             if (key.ctrl && keyInput === "u") {
+                clearExitIntent();
                 inputRef.current = "";
                 cursorRef.current = 0;
                 setInput("");
@@ -1343,6 +1392,7 @@ export function ChatTui({
             }
 
             if (key.ctrl && keyInput === "w") {
+                clearExitIntent();
                 const position = cursorRef.current;
                 const prefix = inputRef.current.slice(0, position);
                 const suffix = inputRef.current.slice(position);
@@ -1357,6 +1407,7 @@ export function ChatTui({
             }
 
             if (keyInput && keyInput.length > 0 && keyInput.charCodeAt(0) >= 32) {
+                clearExitIntent();
                 const position = cursorRef.current;
                 const next = inputRef.current.slice(0, position) + keyInput + inputRef.current.slice(position);
                 inputRef.current = next;
@@ -1425,6 +1476,7 @@ export function ChatTui({
                     cursor={cursor}
                     input={input}
                     minimalMode={minimalMode}
+                    notice={notice}
                     phase={phase}
                     processing={processing}
                     termCols={termCols}
@@ -1453,6 +1505,9 @@ export function startChatTui(
             runtime={runtime}
             userId={options.userId}
         />,
+        {
+            exitOnCtrlC: false,
+        },
     )
         .waitUntilExit()
         .catch(() => {});
