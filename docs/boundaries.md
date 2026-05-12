@@ -180,8 +180,42 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 用户当前指令优先级最高。
 - 长期记忆只保存稳定偏好、项目事实、明确结论、可复用方法。
 - 工具输出 / 日志 / stack trace / 大文件不能无筛选写入长期记忆。
-- 记忆写入必须记录来源、时间、session key 和 schema version。
-- 删除会话必须能删除对应索引、摘要和向量记录。
+- 记忆写入必须记录来源、时间、focus pointer（替代 session key）和 schema version。
+- 删除任何范围的记忆必须能删除对应索引、摘要和向量记录。
+
+## 11.1 生命体重构红线（LF-P0，与第 11 章并列硬约束）
+
+> 这四条红线规范了「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life-form.md`。
+
+### R1 — 无 session
+
+- 协议、提示词、存储、事件、日志中禁止出现 `sessionId` / `sessionKey` / `sessionScope` 等任何形式的会话标识。
+- 过渡期允许在数据结构中保留 `legacySessionKey?: string` 字段，仅用于双写期数据迁移；`memory.tuning.session.legacyDoubleWriteDays` 到期后必须清除。
+- 时间是唯一连续轴：所有"哪一段对话"问题改由 `(userId, channelId, projectId, ts)` + 焦点指针（`FocusPointer`）共同表达。
+- 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 清屏语义全部由 project 承担。
+
+### R2 — Journal 目录是公开契约
+
+- `~/.flyflor/journal/<yyyy>/W<ww>/day_YYYY_MM_DD.db` 的目录布局是用户可见、可手动 inspect 的"生平"。
+- 禁止"为性能"把每天的 SQLite 文件合并、压缩或迁出该目录；归档只能在分区内做（同分区内 vacuum / 冷链 attach 允许）。
+- 同目录下的 `week.index.surreal`、`week.summary.md` 是周级语义聚合；不允许跨周生成"月/年级"压缩态去替换原日记。
+- 任何工具（CLI / TUI / sandbox plugin）写入此目录必须 append-only，删除操作只能通过显式 CLI `flyflor memory forget` 触发并审计。
+
+### R3 — Identity 自写：append-only + revertable
+
+- `~/.flyflor/identity/{soul.md,user.md}` 由 agent 直接 append，但必须满足三件事：
+    1. 写入前后落 `revert.log.jsonl`，记录 `beforeHash` / `afterHash` / `appendedText` / `atomIds` 完整证据链。
+    2. 频率门：每文件每天最多 `memory.tuning.identity.appendDailyLimitPerFile` 次（默认 3）；超额走 dream 慢通道，不丢弃。
+    3. 用户可 1-click revert（`flyflor identity revert <entryId>`），revert 后回写反向标记 atom，未来同主题 append 概率下调。
+- 禁止覆盖式重写、行内 patch、二进制 diff；必须是整段 append。
+- `flyflor doctor` 必须显示最近 7 天 agent 对 identity 的写入条数与待 review 条数。
+
+### R4 — 分数决定可见性
+
+- 所有记忆召回入口必须先过 `AtomScore` 阈值；禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
+- 唯一例外：`flyflor memory dump` / `doctor` / 调试 CLI 等显式调试入口，必须在日志中标注 `bypass-score: true`。
+- inbox project 内 atom 的 `recency` 分量必须乘以 `memory.tuning.inbox.decayMultiplier`（默认 2.0），实现"7 天加速淡出"。
+- `RuntimeMode.Dormant` 期间召回阈值不变；Dormant 不等于关闭召回，gateway 监听不停（W2 行为契约，不可配）。
 
 ## 12. 可观察性
 

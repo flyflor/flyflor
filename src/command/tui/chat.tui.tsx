@@ -6,6 +6,7 @@ import { RuntimeEventBus, RuntimeEventType, type EventSink } from "../../protoco
 import type { BlackboardMessage, BlackboardModule, BlackboardStep, BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { RuntimeModule } from "../../agent/runtime/index.ts";
 import type { McpToolCallRequest } from "../../agent/mcp/index.ts";
+import { renderMarkdownToPlainText } from "../render/index.ts";
 
 type ToneColor = string;
 type Phase = "idle" | "blackboard" | "thinking" | "mcp" | "skill" | "streaming";
@@ -80,6 +81,13 @@ interface DetailSectionProps {
 interface NoticeState {
     color: ToneColor;
     kind: "exit" | "runtime";
+    text: string;
+}
+
+interface ViewLine {
+    bold?: boolean;
+    color?: ToneColor;
+    dim?: boolean;
     text: string;
 }
 
@@ -391,33 +399,471 @@ function metadataLines(metadata: GatewayReply["metadata"] | null): string[] {
         .slice(0, 8);
 }
 
+function isWideCodePoint(codePoint: number): boolean {
+    return (
+        (codePoint >= 0x1100 && codePoint <= 0x115f) ||
+        (codePoint >= 0x2329 && codePoint <= 0x232a) ||
+        (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+        (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+        (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+        (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+        (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+        (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+        (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+    );
+}
+
+function charDisplayWidth(character: string): number {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) {
+        return 0;
+    }
+    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) {
+        return 0;
+    }
+    return isWideCodePoint(codePoint) ? 2 : 1;
+}
+
+function stringDisplayWidth(value: string): number {
+    let width = 0;
+    for (const character of value) {
+        width += charDisplayWidth(character);
+    }
+    return width;
+}
+
+function sliceByDisplayWidth(value: string, width: number): string {
+    if (width <= 0) {
+        return "";
+    }
+    let currentWidth = 0;
+    let output = "";
+    for (const character of value) {
+        const nextWidth = currentWidth + charDisplayWidth(character);
+        if (nextWidth > width) {
+            break;
+        }
+        output += character;
+        currentWidth = nextWidth;
+    }
+    return output;
+}
+
+function takeLeftByDisplayWidth(value: string, width: number): string {
+    if (width <= 0 || value.length === 0) {
+        return "";
+    }
+    let currentWidth = 0;
+    let output = "";
+    for (const character of value) {
+        const nextWidth = currentWidth + charDisplayWidth(character);
+        if (nextWidth > width) {
+            break;
+        }
+        output += character;
+        currentWidth = nextWidth;
+    }
+    return output;
+}
+
+function takeRightByDisplayWidth(value: string, width: number): string {
+    if (width <= 0 || value.length === 0) {
+        return "";
+    }
+    const characters = Array.from(value);
+    let currentWidth = 0;
+    let output = "";
+    for (let index = characters.length - 1; index >= 0; index -= 1) {
+        const character = characters[index];
+        if (!character) {
+            continue;
+        }
+        const nextWidth = currentWidth + charDisplayWidth(character);
+        if (nextWidth > width) {
+            break;
+        }
+        output = `${character}${output}`;
+        currentWidth = nextWidth;
+    }
+    return output;
+}
+
+function padDisplayText(value: string, width: number): string {
+    const current = stringDisplayWidth(value);
+    if (current >= width) {
+        return value;
+    }
+    return `${value}${" ".repeat(width - current)}`;
+}
+
+function truncateDisplayText(value: string, width: number): string {
+    if (stringDisplayWidth(value) <= width) {
+        return value;
+    }
+    if (width <= 1) {
+        return "…";
+    }
+    return `${sliceByDisplayWidth(value, width - 1)}…`;
+}
+
+function wrapDisplayText(value: string, width: number): string[] {
+    if (width <= 0) {
+        return [""];
+    }
+    const output: string[] = [];
+    for (const rawLine of value.split("\n")) {
+        if (rawLine.length === 0) {
+            output.push("");
+            continue;
+        }
+        let remaining = rawLine;
+        while (remaining.length > 0) {
+            const next = sliceByDisplayWidth(remaining, width);
+            if (next.length === 0) {
+                break;
+            }
+            output.push(next);
+            remaining = remaining.slice(next.length);
+        }
+    }
+    return output.length > 0 ? output : [""];
+}
+
+function appendWrappedViewLines(
+    lines: ViewLine[],
+    text: string,
+    width: number,
+    style: Omit<ViewLine, "text">,
+    firstPrefix = "",
+    nextPrefix = firstPrefix,
+): void {
+    const effectiveWidth = Math.max(1, width - Math.max(stringDisplayWidth(firstPrefix), stringDisplayWidth(nextPrefix)));
+    const wrapped = wrapDisplayText(text, effectiveWidth);
+    wrapped.forEach((line, index) => {
+        lines.push({
+            ...style,
+            text: `${index === 0 ? firstPrefix : nextPrefix}${line}`,
+        });
+    });
+}
+
+function buildTraceLine(turn: Turn, isActive: boolean, phase: Phase, minimalMode: boolean, expanded: SectionMap): string {
+    const skills = readSkillNames(turn);
+    const tools = readToolCount(turn);
+    const route = turn.blackboard?.mode ?? "direct";
+    const labels = [
+        isActive && phase === "thinking" ? "[• think]" : "[think]",
+        turn.blackboard?.mode === "blackboard" ? "[board]" : "[board:direct]",
+        `[skill${skills.length > 0 ? `×${skills.length}` : ""}]`,
+        `[tool${tools > 0 ? `×${tools}` : ""}]`,
+        isActive && phase === "streaming" ? "[• write]" : "[write]",
+        `[route:${route}]`,
+    ];
+    if (!minimalMode) {
+        labels.push(`[details:${hasAnyDetails(expanded) ? "open" : "closed"}]`);
+    }
+    return labels.join(" ");
+}
+
+function buildBlackboardDetailLines(blackboard: BlackboardMeta | null, turn: BlackboardTurn | null, width: number): ViewLine[] {
+    const lines: ViewLine[] = [];
+    if (!blackboard && !turn) {
+        lines.push({ color: THEME.violet, text: "◇ Blackboard" });
+        lines.push({ color: THEME.muted, dim: true, text: "  No structured blackboard trace." });
+        return lines;
+    }
+
+    lines.push({ color: THEME.violet, bold: true, text: "◇ Blackboard" });
+    if (blackboard) {
+        const summary = [
+            `mode ${blackboard.mode}`,
+            blackboard.status ? `status ${blackboard.status}` : "",
+            blackboard.messages ? `messages ${blackboard.messages}` : "",
+            formatDuration(blackboard.elapsedMs) ? `elapsed ${formatDuration(blackboard.elapsedMs)}` : "",
+        ]
+            .filter(Boolean)
+            .join(" · ");
+        appendWrappedViewLines(lines, summary, width, { color: THEME.muted, dim: true }, "  ");
+        if (blackboard.reason) {
+            appendWrappedViewLines(lines, `reason ${blackboard.reason}`, width, { color: THEME.muted, dim: true }, "  ");
+        }
+    }
+
+    for (const step of turn?.steps.slice(-3) ?? []) {
+        appendWrappedViewLines(
+            lines,
+            `${stepBullet(step)} round ${step.round} · ${titleCase(step.workerRole)} · ${readStepOutcome(step)}`,
+            width,
+            { color: stepTone(step) },
+            "  ",
+        );
+        appendWrappedViewLines(lines, renderMarkdownToPlainText(step.outputSummary), width, { color: THEME.muted, dim: true }, "    ");
+        if (step.blockers.length > 0) {
+            appendWrappedViewLines(lines, `blockers ${step.blockers.join(" · ")}`, width, { color: THEME.gold }, "    ");
+        }
+        if (step.newFacts.length > 0) {
+            appendWrappedViewLines(lines, `facts ${step.newFacts.join(" · ")}`, width, { color: THEME.mint }, "    ");
+        }
+    }
+
+    for (const message of (turn?.messages.filter(isReadableBlackboardMessage) ?? []).slice(-3)) {
+        appendWrappedViewLines(
+            lines,
+            `${speakerForMessage(turn!, message)}: ${renderMarkdownToPlainText(message.content).replace(/\s+/gu, " ")}`,
+            width,
+            { color: THEME.muted, dim: true },
+            "  ",
+        );
+    }
+
+    return lines;
+}
+
+function buildSkillsDetailLines(skills: string[], width: number): ViewLine[] {
+    const lines: ViewLine[] = [{ color: THEME.pink, bold: true, text: "◇ Skills" }];
+    if (skills.length === 0) {
+        lines.push({ color: THEME.muted, dim: true, text: "  No skills loaded." });
+        return lines;
+    }
+    for (const skill of skills) {
+        appendWrappedViewLines(lines, skill, width, { color: THEME.muted, dim: true }, "  • ");
+    }
+    return lines;
+}
+
+function buildToolDetailLines(tools: McpTrace[], width: number): ViewLine[] {
+    const lines: ViewLine[] = [{ color: THEME.cyanSoft, bold: true, text: "◇ Tools" }];
+    if (tools.length === 0) {
+        lines.push({ color: THEME.muted, dim: true, text: "  No tool calls recorded." });
+        return lines;
+    }
+    for (const tool of tools) {
+        appendWrappedViewLines(
+            lines,
+            `${tool.ok ? "✓" : "✗"} ${tool.server}.${tool.tool}`,
+            width,
+            { color: tool.ok ? THEME.mint : THEME.error },
+            "  ",
+        );
+        if (tool.resultText) {
+            appendWrappedViewLines(
+                lines,
+                renderMarkdownToPlainText(tool.resultText).replace(/\s+/gu, " "),
+                width,
+                { color: THEME.muted, dim: true },
+                "    ",
+            );
+        }
+    }
+    return lines;
+}
+
+function buildMetadataDetailLines(metadata: GatewayReply["metadata"] | null, width: number): ViewLine[] {
+    const lines: ViewLine[] = [{ color: THEME.gold, bold: true, text: "◇ Metadata" }];
+    const meta = metadataLines(metadata);
+    if (meta.length === 0) {
+        lines.push({ color: THEME.muted, dim: true, text: "  No metadata." });
+        return lines;
+    }
+    for (const line of meta) {
+        appendWrappedViewLines(lines, line, width, { color: THEME.muted, dim: true }, "  ");
+    }
+    return lines;
+}
+
+function buildInspectorLines(
+    turn: Turn | null,
+    error: string | null,
+    phase: Phase,
+    processing: boolean,
+    scrollOffset: number,
+    width: number,
+): ViewLine[] {
+    const lines: ViewLine[] = [];
+
+    lines.push({ color: THEME.violet, bold: true, text: "◆ Current turn" });
+    if (!turn) {
+        lines.push({ color: THEME.muted, dim: true, text: "  No turns yet." });
+    } else {
+        const latestActivityAt = turn.completedAt ?? turn.startedAt;
+        appendWrappedViewLines(
+            lines,
+            `phase ${processing ? phase : "idle"} · ${latestActivityAt ? formatRelativeTime(latestActivityAt) : "now"}`,
+            width,
+            { color: THEME.silver },
+            "  ",
+        );
+        appendWrappedViewLines(
+            lines,
+            `route ${turn.blackboard?.mode ?? "direct"} · session ${scrollOffset > 0 ? "SCROLLED" : "LIVE"}`,
+            width,
+            { color: THEME.muted, dim: true },
+            "  ",
+        );
+        if (turn.blackboard?.status) {
+            appendWrappedViewLines(lines, `blackboard ${turn.blackboard.status}`, width, { color: THEME.violet }, "  ");
+        }
+        if (turn.blackboard?.reason) {
+            appendWrappedViewLines(lines, turn.blackboard.reason, width, { color: THEME.muted, dim: true }, "  ");
+        }
+        if (error) {
+            appendWrappedViewLines(lines, `last error ${error}`, width, { color: THEME.error }, "  ");
+        }
+    }
+
+    lines.push({ text: "" });
+    lines.push({ color: THEME.pink, bold: true, text: "◇ Skills" });
+    const skills = turn ? readSkillNames(turn).slice(-5) : [];
+    if (skills.length === 0) {
+        lines.push({ color: THEME.muted, dim: true, text: "  No skills in latest turn." });
+    } else {
+        for (const skill of skills) {
+            appendWrappedViewLines(lines, skill, width, { color: THEME.muted, dim: true }, "  • ");
+        }
+    }
+
+    lines.push({ text: "" });
+    lines.push({ color: THEME.cyanSoft, bold: true, text: "◇ Latest tools" });
+    const tools = turn?.mcpCalls.slice(-4) ?? [];
+    if (tools.length === 0) {
+        lines.push({ color: THEME.muted, dim: true, text: "  No tool calls in latest turn." });
+    } else {
+        for (const tool of tools) {
+            appendWrappedViewLines(
+                lines,
+                `${tool.ok ? "✓" : "✗"} ${tool.server}.${tool.tool}`,
+                width,
+                { color: tool.ok ? THEME.mint : THEME.error },
+                "  ",
+            );
+        }
+    }
+
+    lines.push({ text: "" });
+    lines.push({ color: THEME.cyan, bold: true, text: "◇ Hotkeys" });
+    const hotkeys = [
+        "Tab toggle details",
+        "Ctrl+B blackboard",
+        "Ctrl+T tools",
+        "Ctrl+S skills",
+        "↑↓ PgUp PgDn scroll",
+        "Ctrl+C clear / exit",
+    ];
+    for (const shortcut of hotkeys) {
+        appendWrappedViewLines(lines, shortcut, width, { color: THEME.muted, dim: true }, "  • ");
+    }
+
+    return lines;
+}
+
+function buildConversationLines(
+    turns: Turn[],
+    width: number,
+    latestTurnId: string | null,
+    expanded: Map<string, SectionMap>,
+    minimalMode: boolean,
+    phase: Phase,
+    processing: boolean,
+): ViewLine[] {
+    const lines: ViewLine[] = [];
+
+    if (turns.length === 0) {
+        return [
+            { bold: true, color: THEME.silver, text: "Start an agent session" },
+            { color: THEME.muted, text: "Ask a question, request a task, or inspect runtime details with Tab." },
+            { color: THEME.muted, text: "Press Enter to send • Ctrl+C to clear / confirm exit" },
+        ];
+    }
+
+    for (const turn of turns) {
+        const isLatest = turn.id === latestTurnId;
+        const isActive = processing && isLatest;
+        const currentPhase = isActive ? phase : "idle";
+        const phaseDef = PHASE_DEF[currentPhase];
+        const detailState = expanded.get(turn.id) ?? emptySections();
+        const skills = readSkillNames(turn);
+
+        lines.push({
+            bold: true,
+            color: THEME.cyanSoft,
+            text: `◈ You ${fmtTime(turn.startedAt)}`,
+        });
+        appendWrappedViewLines(lines, renderMarkdownToPlainText(turn.userMessage), width, { color: THEME.silver }, "  ");
+        lines.push({
+            color: THEME.muted,
+            dim: true,
+            text: buildTraceLine(turn, isActive, phase, minimalMode, detailState),
+        });
+
+        lines.push({
+            bold: true,
+            color: turn.error ? THEME.error : isActive ? phaseDef.color : THEME.silver,
+            text: `◆ Feihua ${fmtTime(turn.completedAt ?? turn.startedAt)} [${turn.error ? "ERROR" : isActive ? PHASE_DEF[phase].label : "DONE"}]`,
+        });
+        appendWrappedViewLines(
+            lines,
+            turn.assistantText.length > 0
+                ? renderMarkdownToPlainText(turn.assistantText)
+                : isActive
+                  ? `${PHASE_DEF[phase].label.toLowerCase()}…`
+                  : " ",
+            width,
+            { color: THEME.silver },
+            "  ",
+        );
+
+        if (turn.error) {
+            appendWrappedViewLines(lines, `error ${turn.error}`, width, { color: THEME.error }, "  ");
+        }
+
+        if (detailState.blackboard) {
+            lines.push(...buildBlackboardDetailLines(turn.blackboard, turn.blackboardTurn, width));
+        }
+        if (detailState.skills) {
+            lines.push(...buildSkillsDetailLines(skills, width));
+        }
+        if (detailState.mcp) {
+            lines.push(...buildToolDetailLines(turn.mcpCalls, width));
+        }
+        if (detailState.metadata) {
+            lines.push(...buildMetadataDetailLines(turn.metadata, width));
+        }
+
+        if (turn !== turns.at(-1)) {
+            lines.push({ color: THEME.border, text: "─".repeat(Math.max(4, width - 2)) });
+        }
+    }
+
+    return lines;
+}
+
 function buildInputWindow(
     input: string,
     cursor: number,
     limit: number,
 ): { after: string; before: string; clippedLeft: boolean; clippedRight: boolean } {
-    if (input.length <= limit) {
+    const beforeCursor = input.slice(0, cursor);
+    const afterCursor = input.slice(cursor);
+    if (stringDisplayWidth(input) <= limit) {
         return {
-            after: input.slice(cursor),
-            before: input.slice(0, cursor),
+            after: afterCursor,
+            before: beforeCursor,
             clippedLeft: false,
             clippedRight: false,
         };
     }
 
-    let start = Math.max(0, cursor - Math.floor(limit * 0.6));
-    let end = Math.min(input.length, start + limit);
-    if (end - start < limit) {
-        start = Math.max(0, end - limit);
+    let before = takeRightByDisplayWidth(beforeCursor, Math.max(0, Math.floor(limit * 0.6)));
+    let after = takeLeftByDisplayWidth(afterCursor, Math.max(0, limit - stringDisplayWidth(before)));
+    const usedWidth = stringDisplayWidth(before) + stringDisplayWidth(after);
+    if (usedWidth < limit) {
+        before = takeRightByDisplayWidth(beforeCursor, limit - stringDisplayWidth(after));
     }
-
-    const relativeCursor = Math.max(0, Math.min(cursor - start, end - start));
-    const window = input.slice(start, end);
     return {
-        after: window.slice(relativeCursor),
-        before: window.slice(0, relativeCursor),
-        clippedLeft: start > 0,
-        clippedRight: end < input.length,
+        after,
+        before,
+        clippedLeft: before.length < beforeCursor.length,
+        clippedRight: after.length < afterCursor.length,
     };
 }
 
@@ -927,6 +1373,264 @@ function ComposerBar({
     );
 }
 
+function RenderSegments({ segments }: { segments: Array<{ bold?: boolean; color?: ToneColor; dim?: boolean; text: string }> }): React.ReactElement {
+    return (
+        <Text>
+            {segments.map((segment, index) => (
+                <Text key={`${index}-${segment.text}`} bold={segment.bold} color={segment.color} dimColor={segment.dim}>
+                    {segment.text}
+                </Text>
+            ))}
+        </Text>
+    );
+}
+
+function framedRowText(content: string, width: number, scrollbarChar?: string): string {
+    const contentWidth = Math.max(1, width - (scrollbarChar ? 3 : 2));
+    return `│${padDisplayText(truncateDisplayText(content, contentWidth), contentWidth)}${scrollbarChar ?? ""}│`;
+}
+
+function FrameLine({
+    borderColor,
+    content,
+    contentBold,
+    contentColor,
+    contentDim,
+    scrollbarChar,
+    scrollbarColor,
+}: {
+    borderColor: ToneColor;
+    content: string;
+    contentBold?: boolean;
+    contentColor: ToneColor;
+    contentDim?: boolean;
+    scrollbarChar?: string;
+    scrollbarColor?: ToneColor;
+}): React.ReactElement {
+    return (
+        <RenderSegments
+            segments={[
+                { color: borderColor, text: "│" },
+                { bold: contentBold, color: contentColor, dim: contentDim, text: content },
+                ...(scrollbarChar ? [{ color: scrollbarColor ?? borderColor, text: scrollbarChar }] : []),
+                { color: borderColor, text: "│" },
+            ]}
+        />
+    );
+}
+
+function HeaderPanel({
+    agentName,
+    phase,
+    processing,
+    scrollOffset,
+    width,
+}: {
+    agentName: string;
+    phase: Phase;
+    processing: boolean;
+    scrollOffset: number;
+    width: number;
+}): React.ReactElement {
+    const left = `◈ FEIHUA · chat · agent: ${agentName}`;
+    const rightParts = [
+        width >= BREAKPOINT_COMPACT ? "Enter send · ↑↓ scroll · Tab details · ^T tools · ^C quit" : "Enter · ↑↓ · ^C",
+        `[${processing ? PHASE_DEF[phase].label : "IDLE"}]`,
+    ];
+    if (scrollOffset > 0) {
+        rightParts.push(`[SCROLLED+${scrollOffset}]`);
+    }
+    const raw = [left, rightParts.filter(Boolean).join(" ")].filter(Boolean).join("   ");
+    return (
+        <Box flexDirection="column">
+            <Text color={THEME.cyanSoft}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
+            <FrameLine
+                borderColor={THEME.cyanSoft}
+                content={padDisplayText(truncateDisplayText(raw, width - 2), width - 2)}
+                contentBold
+                contentColor={THEME.silver}
+            />
+            <Text color={THEME.cyanSoft}>{`╰${"─".repeat(Math.max(0, width - 2))}╯`}</Text>
+        </Box>
+    );
+}
+
+function StatusPanel({
+    currentTurn,
+    error,
+    phase,
+    processing,
+    scrollOffset,
+    width,
+}: {
+    currentTurn: Turn | null;
+    error: string | null;
+    phase: Phase;
+    processing: boolean;
+    scrollOffset: number;
+    width: number;
+}): React.ReactElement {
+    const skills = currentTurn ? readSkillNames(currentTurn).length : 0;
+    const tools = currentTurn ? readToolCount(currentTurn) : 0;
+    const boardMode = currentTurn?.blackboard?.mode ?? "direct";
+    const text = [
+        `[phase:${processing ? phase : "idle"}]`,
+        `[board:${boardMode}]`,
+        `[skills:${skills}]`,
+        `[tools:${tools}]`,
+        `[session:${scrollOffset > 0 ? "scrolled" : "live"}]`,
+        error ? `[error:${truncate(error, 22)}]` : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
+    return (
+        <Box flexDirection="column">
+            <Text color={THEME.border}>{`┌${"─".repeat(Math.max(0, width - 2))}┐`}</Text>
+            <FrameLine
+                borderColor={THEME.border}
+                content={padDisplayText(truncateDisplayText(text, width - 2), width - 2)}
+                contentBold
+                contentColor={THEME.silver}
+            />
+            <Text color={THEME.border}>{`└${"─".repeat(Math.max(0, width - 2))}┘`}</Text>
+        </Box>
+    );
+}
+
+function ScrollbarChars(total: number, viewport: number, start: number): string[] {
+    if (viewport <= 0) {
+        return [];
+    }
+    if (total <= viewport) {
+        return Array.from({ length: viewport }, () => " ");
+    }
+    const thumbSize = Math.max(1, Math.round((viewport * viewport) / total));
+    const maxThumbStart = Math.max(0, viewport - thumbSize);
+    const thumbStart = Math.round((start * maxThumbStart) / Math.max(1, total - viewport));
+    return Array.from({ length: viewport }, (_, index) => (index >= thumbStart && index < thumbStart + thumbSize ? "█" : "┆"));
+}
+
+function ConversationViewport({
+    height,
+    lines,
+    scrollOffset,
+    width,
+}: {
+    height: number;
+    lines: ViewLine[];
+    scrollOffset: number;
+    width: number;
+}): React.ReactElement {
+    const totalLines = lines.length;
+    const maxOffset = Math.max(0, totalLines - height);
+    const safeOffset = Math.min(scrollOffset, maxOffset);
+    const start = Math.max(0, totalLines - height - safeOffset);
+    const viewportLines = lines.slice(start, start + height);
+    const scrollbar = ScrollbarChars(totalLines, height, start);
+    const contentWidth = Math.max(1, width - 3);
+
+    return (
+        <Box flexDirection="column">
+            <Text color={THEME.border}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
+            {Array.from({ length: height }, (_, index) => {
+                const line = viewportLines[index] ?? { text: "" };
+                const content = padDisplayText(truncateDisplayText(line.text, contentWidth), contentWidth);
+                return (
+                    <FrameLine
+                        key={`viewport-${index}`}
+                        borderColor={THEME.border}
+                        content={content}
+                        contentBold={line.bold}
+                        contentColor={line.color ?? THEME.silver}
+                        contentDim={line.dim}
+                        scrollbarChar={scrollbar[index] ?? " "}
+                        scrollbarColor={scrollbar[index] === "█" ? THEME.cyanSoft : THEME.border}
+                    />
+                );
+            })}
+            <Text color={THEME.border}>{`╰${"─".repeat(Math.max(0, width - 2))}╯`}</Text>
+        </Box>
+    );
+}
+
+function InspectorPanel({
+    height,
+    lines,
+    width,
+}: {
+    height: number;
+    lines: ViewLine[];
+    width: number;
+}): React.ReactElement {
+    const contentWidth = Math.max(1, width - 2);
+    return (
+        <Box flexDirection="column">
+            <Text color={THEME.violet}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
+            {Array.from({ length: height }, (_, index) => {
+                const line = lines[index] ?? { text: "" };
+                const content = padDisplayText(truncateDisplayText(line.text, contentWidth), contentWidth);
+                return (
+                    <FrameLine
+                        key={`inspector-${index}`}
+                        borderColor={THEME.violet}
+                        content={content}
+                        contentBold={line.bold}
+                        contentColor={line.color ?? THEME.silver}
+                        contentDim={line.dim}
+                    />
+                );
+            })}
+            <Text color={THEME.violet}>{`╰${"─".repeat(Math.max(0, width - 2))}╯`}</Text>
+        </Box>
+    );
+}
+
+function ComposerPanel({
+    cursor,
+    input,
+    notice,
+    phase,
+    processing,
+    agentName,
+    width,
+}: {
+    cursor: number;
+    input: string;
+    notice: NoticeState | null;
+    phase: Phase;
+    processing: boolean;
+    agentName: string;
+    width: number;
+}): React.ReactElement {
+    const phaseLabel = processing ? PHASE_DEF[phase].label : "READY";
+    const inputWidth = Math.max(10, width - stringDisplayWidth(`│ ›  [${phaseLabel}]│`) - 1);
+    const window = buildInputWindow(input, cursor, inputWidth);
+    const body = input.length === 0
+        ? `Type a message to ${agentName}…`
+        : `${window.clippedLeft ? "…" : ""}${window.before}${processing ? "" : "▎"}${window.after}${window.clippedRight ? "…" : ""}`;
+    const hint =
+        notice?.text ??
+        "Enter send · Ctrl+U clear line · Ctrl+W delete word · Ctrl+C clear / confirm exit · ↑↓ PgUp PgDn scroll";
+
+    return (
+        <Box flexDirection="column">
+            <Text color={THEME.cyanSoft}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
+            <FrameLine
+                borderColor={THEME.cyanSoft}
+                content={padDisplayText(truncateDisplayText(`› ${body} [${phaseLabel}]`, width - 2), width - 2)}
+                contentBold={input.length > 0}
+                contentColor={input.length === 0 ? THEME.muted : THEME.silver}
+            />
+            <FrameLine
+                borderColor={THEME.cyanSoft}
+                content={padDisplayText(truncateDisplayText(hint, width - 2), width - 2)}
+                contentColor={notice?.color ?? THEME.muted}
+            />
+            <Text color={THEME.cyanSoft}>{`╰${"─".repeat(Math.max(0, width - 2))}╯`}</Text>
+        </Box>
+    );
+}
+
 export function ChatTui({
     runtime,
     blackboard,
@@ -939,8 +1643,10 @@ export function ChatTui({
     const { cols: termCols, rows: termRows } = useTermSize();
 
     const showInspector = termCols >= BREAKPOINT_INSPECTOR;
-    const compactMode = termCols < BREAKPOINT_COMPACT;
     const minimalMode = termCols < BREAKPOINT_MINIMAL;
+    const inspectorWidth = showInspector ? 38 : 0;
+    const conversationWidth = showInspector ? Math.max(1, termCols - inspectorWidth - 1) : termCols;
+    const mainViewportHeight = Math.max(1, termRows - 12);
 
     const [turns, setTurns] = useState<Turn[]>([]);
     const [input, setInput] = useState("");
@@ -1117,12 +1823,26 @@ export function ChatTui({
         return () => unsubscribe();
     }, [eventBus, refreshBlackboardTurn, scheduleBlackboardRefresh]);
 
-    const reservedRows = showInspector ? 10 : compactMode ? 9 : 8;
-    const perTurnRows = minimalMode ? 7 : showInspector ? 8 : 9;
-    const maxTurns = Math.max(1, Math.floor((termRows - reservedRows) / perTurnRows));
-    const clampedScroll = Math.min(scrollOfs, Math.max(0, turns.length - 1));
-    const visibleTurns = turns.slice(Math.max(0, turns.length - maxTurns - clampedScroll), turns.length - clampedScroll);
     const latestTurn = turns.at(-1) ?? null;
+    const conversationLines = buildConversationLines(
+        turns,
+        Math.max(1, conversationWidth - 3),
+        latestTurn?.id ?? null,
+        expanded,
+        minimalMode,
+        phase,
+        processing,
+    );
+    const maxScroll = Math.max(0, conversationLines.length - mainViewportHeight);
+    const clampedScroll = Math.min(scrollOfs, maxScroll);
+    const inspectorLines = buildInspectorLines(
+        latestTurn,
+        error,
+        phase,
+        processing,
+        clampedScroll,
+        Math.max(1, inspectorWidth - 2),
+    );
 
     const setTurnSection = useCallback((section: Section | "all") => {
         const latest = turns.at(-1);
@@ -1319,7 +2039,7 @@ export function ChatTui({
 
             if (key.upArrow) {
                 clearExitIntent();
-                setScrollOfs((value) => Math.min(value + 1, Math.max(0, turns.length - 1)));
+                setScrollOfs((value) => Math.min(value + 1, maxScroll));
                 return;
             }
             if (key.downArrow) {
@@ -1329,17 +2049,17 @@ export function ChatTui({
             }
             if (key.pageUp) {
                 clearExitIntent();
-                setScrollOfs((value) => Math.min(value + maxTurns, Math.max(0, turns.length - 1)));
+                setScrollOfs((value) => Math.min(value + mainViewportHeight, maxScroll));
                 return;
             }
             if (key.pageDown) {
                 clearExitIntent();
-                setScrollOfs((value) => Math.max(0, value - maxTurns));
+                setScrollOfs((value) => Math.max(0, value - mainViewportHeight));
                 return;
             }
             if (key.home) {
                 clearExitIntent();
-                setScrollOfs(Math.max(0, turns.length - 1));
+                setScrollOfs(maxScroll);
                 return;
             }
             if (key.end) {
@@ -1421,67 +2141,53 @@ export function ChatTui({
 
     return (
         <Box flexDirection="column" height={termRows} overflow="hidden">
-            <ChatHeader
+            <HeaderPanel
                 agentName={agentName}
-                compactMode={compactMode}
-                minimalMode={minimalMode}
                 phase={phase}
                 processing={processing}
-                scrollOfs={scrollOfs}
+                scrollOffset={clampedScroll}
+                width={termCols}
             />
 
-            <Box marginTop={1}>
-                <ChatStatusStrip
-                    currentTurn={latestTurn}
-                    error={error}
-                    phase={phase}
-                    processing={processing}
-                    scrollOfs={scrollOfs}
-                    showInspector={showInspector}
-                />
-            </Box>
+            <StatusPanel
+                currentTurn={latestTurn}
+                error={error}
+                phase={phase}
+                processing={processing}
+                scrollOffset={clampedScroll}
+                width={termCols}
+            />
 
-            <Box flexGrow={1} marginTop={1} overflow="hidden">
-                <Box flexGrow={1} flexDirection="column">
-                    {turns.length === 0 ? (
-                        <EmptyState />
-                    ) : (
-                        <Box flexDirection={showInspector ? "row" : "column"} gap={1} flexGrow={1}>
-                            <Box flexDirection="column" flexGrow={1}>
-                                {visibleTurns.map((turn, index) => (
-                                    <Box key={turn.id} marginBottom={index < visibleTurns.length - 1 ? 1 : 0}>
-                                        <TurnCard
-                                            turn={turn}
-                                            expanded={expanded.get(turn.id) ?? emptySections()}
-                                            isActive={processing && turn.id === latestTurn?.id}
-                                            isLatest={turn.id === latestTurn?.id}
-                                            minimalMode={minimalMode}
-                                            phase={phase}
-                                        />
-                                    </Box>
-                                ))}
-                            </Box>
-
-                            {showInspector ? (
-                                <RightInspector currentTurn={latestTurn} error={error} phase={phase} processing={processing} />
-                            ) : null}
-                        </Box>
-                    )}
+            {showInspector ? (
+                <Box flexDirection="row">
+                    <ConversationViewport
+                        height={mainViewportHeight}
+                        lines={conversationLines}
+                        scrollOffset={clampedScroll}
+                        width={conversationWidth}
+                    />
+                    <Box marginLeft={1}>
+                        <InspectorPanel height={mainViewportHeight} lines={inspectorLines} width={inspectorWidth} />
+                    </Box>
                 </Box>
-            </Box>
-
-            <Box marginTop={1}>
-                <ComposerBar
-                    compactMode={compactMode}
-                    cursor={cursor}
-                    input={input}
-                    minimalMode={minimalMode}
-                    notice={notice}
-                    phase={phase}
-                    processing={processing}
-                    termCols={termCols}
+            ) : (
+                <ConversationViewport
+                    height={mainViewportHeight}
+                    lines={conversationLines}
+                    scrollOffset={clampedScroll}
+                    width={conversationWidth}
                 />
-            </Box>
+            )}
+
+            <ComposerPanel
+                agentName={agentName}
+                cursor={cursor}
+                input={input}
+                notice={notice}
+                phase={phase}
+                processing={processing}
+                width={termCols}
+            />
         </Box>
     );
 }

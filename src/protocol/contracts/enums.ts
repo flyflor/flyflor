@@ -112,6 +112,12 @@ export type CapabilityExecutionKind = (typeof CapabilityExecutionKind)[keyof typ
 export const RuntimeMode = {
     Chat: "chat",
     Cli: "cli",
+    /**
+     * 生命体常驻态：无 user 输入超过 memory.dormant.idleMinutes 后进入。
+     * 行为契约：gateway 监听不停（任意入站立即切回 Chat），后台 worker 主导节拍。
+     * 详见 docs/boundaries.md R1-R4 与 docs/proposals/life-form.md。
+     */
+    Dormant: "dormant",
     Gateway: "gateway",
     Tui: "tui",
 } as const;

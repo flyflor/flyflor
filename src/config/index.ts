@@ -223,6 +223,8 @@ export interface MemoryConfig {
     embedding: MemoryEmbeddingConfig;
     retrieval: MemoryRetrievalConfig;
     session: MemorySessionConfig;
+    /** 生命体重构调参块（LF-P0）；详见 `MemoryTuningConfig` 注释。 */
+    tuning: MemoryTuningConfig;
     weights: MemoryWeightConfig;
 }
 
@@ -314,6 +316,80 @@ export interface MemoryWeightConfig {
     relevance: number;
     sourceDiversity: number;
     validationCount: number;
+}
+
+/**
+ * 生命体重构（LF-P0）配置块。所有字段都有默认值；缺省走 `createDefaultMemoryTuning()`。
+ * 详见 `docs/proposals/life-form.md` 与 `docs/boundaries.md` R1-R4。
+ *
+ * R 红线提醒：本块属于内部行为调参，**禁止走环境变量**；必须落 `~/.flyflor/config.jsonc`。
+ */
+export interface MemoryTuningConfig {
+    identity: IdentityTuningConfig;
+    summary: SummaryTuningConfig;
+    session: SessionTuningConfig;
+    reconsolidation: ReconsolidationTuningConfig;
+    inbox: InboxTuningConfig;
+    dormant: DormantTuningConfig;
+    atomScore: AtomScoreTuningConfig;
+}
+
+export interface IdentityTuningConfig {
+    /** W1：agent 对单个 identity 文件每天 append 的硬上限。超额走 dream 慢通道（不丢弃）。 */
+    appendDailyLimitPerFile: number;
+    /** 超额溢出策略；目前仅支持 dream；预留扩展。 */
+    appendOverflowQueue: "dream";
+}
+
+export interface SummaryTuningConfig {
+    /** W3：rolling = 滚动窗口；calendar = 周日 00:00 节拍。 */
+    trigger: "rolling" | "calendar";
+    /** rolling 模式窗口天数。 */
+    rollingWindowDays: number;
+    /** 两次 summary 写入的最小间隔（小时），防止同日反复改写。 */
+    minIntervalHours: number;
+}
+
+export interface SessionTuningConfig {
+    /** W4：legacySessionKey 双写期天数；到期后 phase-5 清理。 */
+    legacyDoubleWriteDays: number;
+}
+
+export interface ReconsolidationTuningConfig {
+    /** W5：cosine 距离阈值；命中 gem 但 atom 与中位 embedding 距离 ≥ 此值才计入偏离。 */
+    embeddingDriftThreshold: number;
+    /** 累计偏离次数门，避免单次扰动触发 reconsolidation。 */
+    driftHitCount: number;
+}
+
+export interface InboxTuningConfig {
+    /** D5：inbox project 内 atom 的 recency 衰减倍率。 */
+    decayMultiplier: number;
+    /** atom 在 inbox 内的 TTL 天数；过期 → 自然淡出（仍可被 cluster sweeper 抢救升格）。 */
+    ttlDays: number;
+}
+
+export interface DormantTuningConfig {
+    /** D7：进入 Dormant 的静默阈值（分钟）。 */
+    idleMinutes: number;
+    /**
+     * 审计字段：W2 决策的行为契约，**编辑无效**。
+     * Dormant 期间 gateway 必须保持订阅；此字段仅供 doctor 输出。
+     */
+    _keepGatewayListening: true;
+}
+
+export interface AtomScoreTuningConfig {
+    /**
+     * 四分量权重；总和不强制为 1。
+     * 默认值经内部实验调参；用户可覆盖但 CLI / README 不暴露此项。
+     */
+    weights: {
+        recency: number;
+        access: number;
+        successPrior: number;
+        fanout: number;
+    };
 }
 
 export type AuditSinkConfig =
@@ -517,7 +593,11 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
         return defaults;
     }
 
-    return mergeConfig(defaults, override);
+    const merged = mergeConfig(defaults, override);
+    // R red-line enforcement: `_keepGatewayListening` is an audit-only field;
+    // user edits are silently ignored (W2 behavior contract, see docs/proposals/life-form.md).
+    merged.tuning.dormant._keepGatewayListening = true;
+    return merged;
 }
 
 function mergeConfig<T>(defaults: T, override: Partial<T>): T {
@@ -590,6 +670,7 @@ function createDefaultMemoryConfig(): MemoryConfig {
             maxLiveMessages: 80,
             maxPromptMessages: 16,
         },
+        tuning: createDefaultMemoryTuning(),
         weights: {
             actionability: 0.7,
             arousal: 0.5,
@@ -603,6 +684,49 @@ function createDefaultMemoryConfig(): MemoryConfig {
             relevance: 0.8,
             sourceDiversity: 1,
             validationCount: 1,
+        },
+    };
+}
+
+/**
+ * 生命体重构（LF-P0）默认调参。所有字段都经过设计讨论拍板，详见 `docs/proposals/life-form.md`。
+ *
+ * 配置覆盖规则：用户在 `~/.flyflor/config.jsonc` 的 `memory.tuning.*` 下显式覆盖即生效；
+ * 类型不正确时由 doctor 表 `Memory tuning` 一行高亮（不报错）。
+ */
+export function createDefaultMemoryTuning(): MemoryTuningConfig {
+    return {
+        identity: {
+            appendDailyLimitPerFile: 3,
+            appendOverflowQueue: "dream",
+        },
+        summary: {
+            trigger: "rolling",
+            rollingWindowDays: 7,
+            minIntervalHours: 24,
+        },
+        session: {
+            legacyDoubleWriteDays: 30,
+        },
+        reconsolidation: {
+            embeddingDriftThreshold: 0.25,
+            driftHitCount: 2,
+        },
+        inbox: {
+            decayMultiplier: 2.0,
+            ttlDays: 7,
+        },
+        dormant: {
+            idleMinutes: 10,
+            _keepGatewayListening: true,
+        },
+        atomScore: {
+            weights: {
+                recency: 0.35,
+                access: 0.15,
+                successPrior: 0.35,
+                fanout: 0.15,
+            },
         },
     };
 }

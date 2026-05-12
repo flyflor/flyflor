@@ -8,6 +8,50 @@
 - **P1**：影响生产稳定性 / 多副本部署 / 长期演进
 - **P2**：功能增强 / 体验 / 二级路径
 
+## 生命体重构（Life-form 主线，正在进行）
+
+> 目标：把架构从「带记忆的智能体」推进为「在时间里持续活着的生命体」。完整设计见 `docs/proposals/life-form.md`（待建）与 session plan.md。
+
+**核心决策**：
+- D1 完全删除 session 概念，时间成为唯一连续轴
+- D2 SQLite 按天分文件 + 周级语义索引（`journal/<yyyy>/W<ww>/`）
+- D3 Memory Atom 作为 episode 的 derived view（schema 可独立演化）
+- D4 Project 接管原 session 的语义边界（黑板 lease / Confirmation / Reflection sourceId / 焦点指针）
+- D5 inbox project 7 天加速衰减（×2）→ 自然淡出
+- D6 identity 自写：agent 直接 append + 用户可 revert（`revert.log.jsonl`）
+- D7 新增 `RuntimeMode.Dormant`，无输入 10min 进入；gateway 监听不停（行为契约，不可配）
+
+**配置项（默认值，走 `~/.flyflor/config.jsonc`，禁走环境变量）**：
+
+| 路径 | 默认 |
+| --- | --- |
+| `memory.identity.appendDailyLimitPerFile` | 3 |
+| `memory.summary.trigger` | `"rolling"`（7 天滚动） |
+| `memory.summary.minIntervalHours` | 24 |
+| `memory.session.legacyDoubleWriteDays` | 30 |
+| `memory.reconsolidation.embeddingDriftThreshold` | 0.25 |
+| `memory.reconsolidation.driftHitCount` | 2 |
+| `memory.inbox.{decayMultiplier,ttlDays}` | 2.0 / 7 |
+| `memory.dormant.idleMinutes` | 10 |
+| `memory.atomScore.weights` | recency 0.35 / access 0.15 / successPrior 0.35 / fanout 0.15 |
+
+**新红线**（待写入 `docs/boundaries.md`）：
+- R1 无 session：协议 / 提示词 / 存储禁用 `sessionId/sessionKey`
+- R2 journal 目录是公开契约，不得为性能合并 `day.db`
+- R3 identity append-only + revert，禁覆盖式重写，必须带证据链
+- R4 分数决定可见性：召回必须先过 AtomScore 阈值，绕过 = 边界违规
+
+| ID | 阶段 | 描述 | 状态 |
+| --- | --- | --- | --- |
+| LF-P0 | 阶段 0 | 协议 + 边界 + 配置 schema：MemoryAtom / AtomScore / FocusPointer 类型；`RuntimeMode.Dormant` 等新枚举；`memory.*` 配置默认值；`boundaries.md` R1-R4；`docs/proposals/life-form.md`；不改运行时行为 | 进行中 |
+| LF-P1 | 阶段 1 | 存储重构（向下兼容）：`journal/` 目录布局、按天 SQLite writer、`week.index.surreal`、Redis activation key；先写 `journal.smoke.ts` 压测 bun sqlite 多文件 open 行为 | pending |
+| LF-P2 | 阶段 2 | Session 溶解：blackboard lease 主键 → `(userId, projectId)` + requestId tie-breaker；reflection `sourceId` → `<projectId>/<turnId>`；Confirmation lookup 改造；`legacySessionKey` 30 天双写期 | pending |
+| LF-P3 | 阶段 3 | Atom 抽取 + 三层漏斗：热相（turn 结束零额外 LLM）/ 冷相（每日离线本地模型）；AtomScore 替换现 evidence gate；Gate A 量 / B 质 / C 信 接入 cluster sweeper（复用 project-offer / skill-offer 框架） | pending |
+| LF-P4 | 阶段 4 | 生命体能力：identity 自写 + `revert.log.jsonl` + `flyflor identity revert <id>`；weekly summary worker（rolling 7d）；Dream worker 新增 reconsolidation 第 4 类动作；`RuntimeMode.Dormant` 实装 | pending |
+| LF-P5 | 阶段 5 | 清理：删 `legacySessionKey` 字段 / 过渡表；文档全量更新；EQ-01 解锁前置 | pending |
+
+**作废条目**：M-01（session 溶解 blocked-needs-design）→ 由 LF-P2 替代。
+
 ## 路由与黑板
 
 | ID | 描述 | 优先级 |
@@ -21,7 +65,7 @@
 
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
-| M-01 | `sessionKey` 仍贯穿 `MemoryCandidate / CrystalTurnInput / MemorySearchRequest`；session 溶解未完成 ⏸ blocked-needs-design — 涉及 SQLite 列重命名、blackboard lease 主键、crystal 反思 sourceId 拼接 + 历史数据迁移脚本，留待 EQ 阶段统一规划 | P1 |
+| ~~M-01~~ | ~~`sessionKey` 仍贯穿 `MemoryCandidate / CrystalTurnInput / MemorySearchRequest`；session 溶解未完成~~ ⏭️ superseded — 由生命体重构 LF-P2 接管，完全删 session 而非渐进迁移 | 替代 |
 | ~~M-02~~ | ~~`BackgroundScheduler` 仅在 Redis+Surreal+Model 三件齐备时启用，默认开发环境**静默 noop**，缺降级告警~~ ✅ done — MemoryModule.warmup 在 scheduler=null 时发布 `MemoryBackgroundSchedulerSkipped` 事件（含 missing[] 与影响说明）；`doctor` 表新增「Background scheduler」一行，缺 redis/surreal/model 时 warn | P1 |
 | ~~M-03~~ | ~~Reflection 仍在 Runtime 同进程；独立 Reflection worker 未拆~~ ✅ done — 抽出 `src/agent/runtime/reflection.normalize.ts` 纯函数模块（`normalizeReflectionRaw` / `renderReflectionEvidence`），新增 `reflection.worker.thread.ts` Worker entry + `ReflectionThreadRunner` 主线程伴生类（单例 Worker、自增 id 配对、`timeoutMs` 超时 / 异常 / postMessage 失败统一回退主线程），`extractRuntimeReflectionCandidates(model, source, runner?)` 在传入 runner 时把规范化挪到独立线程；4 个新测试覆盖 ok / fallback / timeout / 主线程同结果 | P2 |
 | ~~M-04~~ | ~~Dream worker 缺压测；候选选择策略未在大数据集下验证~~ ✅ done — 新增 `scripts/dream.stress.ts`：内存 fake `SurrealGraphStore` + 确定性 `StubModel`，支持 `--candidates / --passes / --mix drift,recall,contradiction`；统计每 pass 耗时、apply 分类计数、P50/P95/max 与 avg 吞吐；本地 200 候选 × 5 pass，P50 0.3ms，avg ≈ 46k cand/s；完全不依赖外部 Surreal / LLM / 网络 | P2 |
@@ -90,7 +134,7 @@
 
 | ID | 描述 | 状态 |
 | --- | --- | --- |
-| EQ-01 | EQ 模块（情绪 / 情感建模）仅有设计稿 | proposal（见 `docs/proposals/eq.module.md`） |
+| EQ-01 | EQ 模块（情绪 / 情感建模）仅有设计稿 | proposal（见 `docs/proposals/eq.module.md`），**前置依赖：LF-P4 完成**（EQ 需要 atom outcome / success 作为输入） |
 
 ## 工程边界
 
@@ -102,7 +146,6 @@
 
 ## 工作建议（不含时间估算）
 
-1. 先打 P0：sandbox 全覆盖、ioredis 兼容验证。
-2. 再清 P1 主要堵点：BackgroundScheduler 降级告警、session 溶解、gateway 后台服务、feedback 写入通道、表迁移脚本。
-3. 同步推进 reflection worker 独立化、provider profile 内置、CLI plugins 子命令落地。
-4. P2 工作按用户场景按需排队。
+1. **当前主线：生命体重构 LF-P0 → LF-P5**，按依赖顺序串行推进。
+2. P0/P1 历史堵点已清零；LF 主线进行期间，零散 P2（如 G-01 长尾渠道）按需穿插。
+3. EQ-01 待 LF-P4 完成后解锁。

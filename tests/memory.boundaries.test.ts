@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import { loadConfigForPaths, createDefaultMemoryTuning, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import {
     MemoryModule,
@@ -1269,6 +1269,7 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
                 maxLiveMessages: 80,
                 maxPromptMessages: 16,
             },
+            tuning: createDefaultMemoryTuning(),
             weights: {
                 actionability: 0.7,
                 arousal: 0.5,
