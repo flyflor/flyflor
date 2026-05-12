@@ -37,7 +37,7 @@ export interface BlackboardWorkerState {
 
 export interface BlackboardTurn {
     id: string;
-    sessionKey: string;
+    projectConstraintId: string;
     requestId: string;
     mode: "blackboard";
     status: BlackboardTurnStatusType;
@@ -97,7 +97,7 @@ export interface BlackboardDecision {
 }
 
 export interface BlackboardLease {
-    sessionKey: string;
+    projectConstraintId: string;
     turnId: string;
     requestId: string;
     acquiredAt: string;
@@ -105,7 +105,7 @@ export interface BlackboardLease {
 }
 
 export interface BlackboardStartRequest {
-    sessionKey: string;
+    projectConstraintId: string;
     requestId: string;
     goal: string;
     now: string;
@@ -184,7 +184,7 @@ export interface BlackboardConvergenceResult {
 export type { BlackboardWorkerResult, BlackboardWorkerTask };
 
 export interface BlackboardLeaseAcquireRequest {
-    sessionKey: string;
+    projectConstraintId: string;
     turnId: string;
     requestId: string;
     now: string;
@@ -209,7 +209,11 @@ export interface BlackboardStore {
     createTurn(turn: BlackboardTurn): Promise<void>;
     getTurn(turnId: string): Promise<BlackboardTurn | undefined>;
     listRecentTurns(limit: number): Promise<BlackboardTurn[]>;
-    listTurns(sessionKey: string, limit: number): Promise<BlackboardTurn[]>;
-    releaseLease(sessionKey: string, turnId: string, now: string): Promise<BlackboardLease | undefined>;
+    listTurns(projectConstraintId: string, limit: number): Promise<BlackboardTurn[]>;
+    releaseLease(
+        projectConstraintId: string,
+        turnId: string,
+        now: string,
+    ): Promise<BlackboardLease | undefined>;
     updateTurnStatus(turnId: string, status: BlackboardTurnStatus, now: string): Promise<BlackboardTurn | undefined>;
 }

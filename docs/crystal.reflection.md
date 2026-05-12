@@ -59,7 +59,7 @@ interface Gem {
     contradictionCount: number;
     importance: number;
     sourceKind: GemSourceKind;
-    provenance: { sessionKey?: string; turnId?: string; projectId?: string };
+    provenance: { turnId?: string; episodeId?: string; projectId?: string };
     createdAt: string;
     updatedAt: string;
 }

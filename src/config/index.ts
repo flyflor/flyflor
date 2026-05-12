@@ -42,6 +42,7 @@ export interface FlyflorPaths {
     projectMcpDir: string;
     projectPluginDir: string;
     projectMemoryDir: string;
+    journalDir?: string;
     workspaceDir: string;
     logDir: string;
     memoryDir: string;
@@ -222,7 +223,6 @@ export interface MemoryConfig {
     sqlite: SQLiteMemoryConfig;
     embedding: MemoryEmbeddingConfig;
     retrieval: MemoryRetrievalConfig;
-    session: MemorySessionConfig;
     /** 生命体重构调参块（LF-P0）；详见 `MemoryTuningConfig` 注释。 */
     tuning: MemoryTuningConfig;
     weights: MemoryWeightConfig;
@@ -296,13 +296,6 @@ export interface MemoryRetrievalConfig {
     maxResults: number;
 }
 
-export interface MemorySessionConfig {
-    consolidationBatchSize: number;
-    maxHistoryEntryChars: number;
-    maxLiveMessages: number;
-    maxPromptMessages: number;
-}
-
 export interface MemoryWeightConfig {
     actionability: number;
     arousal: number;
@@ -320,14 +313,13 @@ export interface MemoryWeightConfig {
 
 /**
  * 生命体重构（LF-P0）配置块。所有字段都有默认值；缺省走 `createDefaultMemoryTuning()`。
- * 详见 `docs/proposals/life-form.md` 与 `docs/boundaries.md` R1-R4。
+ * 详见 `docs/proposals/life.form.md` 与 `docs/boundaries.md` R1-R4。
  *
  * R 红线提醒：本块属于内部行为调参，**禁止走环境变量**；必须落 `~/.flyflor/config.jsonc`。
  */
 export interface MemoryTuningConfig {
     identity: IdentityTuningConfig;
     summary: SummaryTuningConfig;
-    session: SessionTuningConfig;
     reconsolidation: ReconsolidationTuningConfig;
     inbox: InboxTuningConfig;
     dormant: DormantTuningConfig;
@@ -348,11 +340,6 @@ export interface SummaryTuningConfig {
     rollingWindowDays: number;
     /** 两次 summary 写入的最小间隔（小时），防止同日反复改写。 */
     minIntervalHours: number;
-}
-
-export interface SessionTuningConfig {
-    /** W4：legacySessionKey 双写期天数；到期后 phase-5 清理。 */
-    legacyDoubleWriteDays: number;
 }
 
 export interface ReconsolidationTuningConfig {
@@ -595,7 +582,7 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
 
     const merged = mergeConfig(defaults, override);
     // R red-line enforcement: `_keepGatewayListening` is an audit-only field;
-    // user edits are silently ignored (W2 behavior contract, see docs/proposals/life-form.md).
+    // user edits are silently ignored (W2 behavior contract, see docs/proposals/life.form.md).
     merged.tuning.dormant._keepGatewayListening = true;
     return merged;
 }
@@ -664,12 +651,6 @@ function createDefaultMemoryConfig(): MemoryConfig {
             maxPromptChars: 18_000,
             maxResults: 12,
         },
-        session: {
-            consolidationBatchSize: 24,
-            maxHistoryEntryChars: 8_000,
-            maxLiveMessages: 80,
-            maxPromptMessages: 16,
-        },
         tuning: createDefaultMemoryTuning(),
         weights: {
             actionability: 0.7,
@@ -689,7 +670,7 @@ function createDefaultMemoryConfig(): MemoryConfig {
 }
 
 /**
- * 生命体重构（LF-P0）默认调参。所有字段都经过设计讨论拍板，详见 `docs/proposals/life-form.md`。
+ * 生命体重构（LF-P0）默认调参。所有字段都经过设计讨论拍板，详见 `docs/proposals/life.form.md`。
  *
  * 配置覆盖规则：用户在 `~/.flyflor/config.jsonc` 的 `memory.tuning.*` 下显式覆盖即生效；
  * 类型不正确时由 doctor 表 `Memory tuning` 一行高亮（不报错）。
@@ -704,9 +685,6 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
             trigger: "rolling",
             rollingWindowDays: 7,
             minIntervalHours: 24,
-        },
-        session: {
-            legacyDoubleWriteDays: 30,
         },
         reconsolidation: {
             embeddingDriftThreshold: 0.25,
@@ -1012,6 +990,7 @@ function resolvePaths(): FlyflorPaths {
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),
         projectMemoryDir: join(projectFlyflorDir, "memory"),
+        journalDir: join(home, "journal"),
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(xdgData, "flyflor", "memory"),
@@ -1033,12 +1012,15 @@ async function ensureDirectories(paths: FlyflorPaths): Promise<void> {
             paths.workspaceDir,
             paths.logDir,
             paths.memoryDir,
+            paths.journalDir,
             paths.pluginDir,
             paths.promptDir,
             paths.skillDir,
             paths.templateDir,
             paths.mcpDir,
-        ].map((path) => mkdir(path, { recursive: true })),
+        ]
+            .filter((path): path is string => typeof path === "string")
+            .map((path) => mkdir(path, { recursive: true })),
     );
 }
 

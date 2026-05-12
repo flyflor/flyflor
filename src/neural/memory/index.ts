@@ -1,17 +1,26 @@
 import type { FlyflorConfig } from "../../config/index.ts";
+import { join } from "node:path";
 import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
 import {
     ArchitectureLayer,
+    AtomStage,
     ComponentKind,
     MarkdownMemoryFile,
     MemoryCandidateStatus,
     MemorySourceKind,
+    ModelRole,
 } from "../../protocol/contracts/index.ts";
-import type { GatewayMessage, GatewayReply, ModelClient, RuntimeContext } from "../../protocol/contracts/index.ts";
+import type {
+    AtomScore,
+    GatewayMessage,
+    GatewayReply,
+    MemoryAtom,
+    ModelClient,
+    RuntimeContext,
+} from "../../protocol/contracts/index.ts";
 import { Memory } from "../../agent/components.ts";
 import { Module, Provide } from "../../agent/di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import { SessionModule, scopeFor } from "../../agent/session/index.ts";
 import { loadPromptTemplates, renderMemoryContextPrompt } from "../../agent/prompts/index.ts";
 import { FeedbackCategory, classifyFeedback } from "../../agent/runtime/feedback.interpreter.ts";
 import { detectExplicitIntent, detectExplicitSkillIntent, ProjectTriggerKind } from "../../agent/project/index.ts";
@@ -21,6 +30,7 @@ import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
 import { ProjectMemoryStore } from "./project.memory.ts";
+import { JournalStore, type JournalAtomWrite } from "./journal.store.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
@@ -41,10 +51,10 @@ import type {
     MemoryWeights,
     TurnMemoryResult,
 } from "./types.ts";
-import type { HistoryEntry, SessionMessageRecord } from "../../agent/session/index.ts";
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
 export { MarkdownMemoryStore } from "./markdown.ts";
+export { JournalStore, type JournalAtomWrite, type JournalEpisodeInput } from "./journal.store.ts";
 export { ProjectMemoryStore } from "./project.memory.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
 export { SQLiteMemoryStore } from "./sqlite.ts";
@@ -63,12 +73,12 @@ export type {
 @Module({ name: "memory", tags: ["flyflor", "boundary"] })
 @Provide({ kind: ComponentKind.Memory, layer: ArchitectureLayer.Control, name: "memory", provider: true })
 export class MemoryModule extends Memory {
+    private readonly journal: JournalStore;
     private readonly markdown: MarkdownMemoryStore;
     private readonly projectMemory: ProjectMemoryStore;
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
     private readonly crystal: CrystalMemoryService;
-    private readonly session: SessionModule;
     private readonly redis: RedisMemoryStore | null;
     private readonly surreal: SurrealGraphStore | null;
     private readonly scheduler: BackgroundScheduler | null;
@@ -76,6 +86,7 @@ export class MemoryModule extends Memory {
     private readonly projectScaffolder: ProjectScaffolder;
     /** 单例 embedding provider；用于 context.embedding 缺省时降级计算。 */
     private readonly embeddings: LocalHashEmbeddingProvider;
+    private readonly assistantMemoryByFocus = new Map<string, { current?: string; previous?: string }>();
 
     constructor(
         private readonly config: FlyflorConfig,
@@ -85,12 +96,12 @@ export class MemoryModule extends Memory {
         super();
         this.model = model;
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
+        this.journal = new JournalStore({ journalRoot: config.paths.journalDir ?? join(config.paths.home, "journal") });
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
         this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         this.crystal = new CrystalMemoryService(config.memory.crystal);
-        this.session = new SessionModule(this.sqlite, config.memory.session);
         this.redis = config.memory.redis.enabled ? new RedisMemoryStore(config.memory.redis) : null;
         this.surreal = config.memory.crystal.surreal.enabled
             ? new SurrealGraphStore(config.memory.crystal.surreal)
@@ -108,10 +119,8 @@ export class MemoryModule extends Memory {
                       this.events,
                       {
                           dream: new DreamWorkerImpl(this.surreal, model, this.events),
-                          projectSweeper: (userId: string) =>
-                              this.sweepProjectClusters(userId).catch(() => false),
-                          skillSweeper: (userId: string) =>
-                              this.sweepSkillCandidates(userId).catch(() => false),
+                          projectSweeper: (userId: string) => this.sweepProjectClusters(userId).catch(() => false),
+                          skillSweeper: (userId: string) => this.sweepSkillCandidates(userId).catch(() => false),
                       },
                   )
                 : null;
@@ -140,8 +149,7 @@ export class MemoryModule extends Memory {
                     redisEnabled: this.config.memory.redis.enabled,
                     surrealEnabled: this.config.memory.crystal.surreal.enabled,
                     modelProvider: this.config.model.provider,
-                    impact:
-                        "consolidation/decay/dream 全部跳过；记忆只走当轮 markdown+sqlite 短期路径，不会自动整合到长期晶体层",
+                    impact: "consolidation/decay/dream 全部跳过；记忆只走当轮 markdown+sqlite 短期路径，不会自动整合到长期晶体层",
                 }),
             );
         }
@@ -189,38 +197,35 @@ export class MemoryModule extends Memory {
             return "Memory is disabled.";
         }
         await loadPromptTemplates(this.config.paths);
+        const projectConstraintId = INBOX_PROJECT_CONSTRAINT_ID;
 
         const request: MemorySearchRequest = {
             query: message.text,
-            scope: scopeFor(message),
+            scope: projectConstraintId,
             subjectId: message.user.id,
             channel: message.route.channel,
             chatId: message.route.chatId,
             limit: this.config.memory.retrieval.maxResults,
         };
 
-        const sessionKey = scopeFor(message);
-        const [sessionMessages, hippocampus, projectMemory, crystalResults, sqliteResults, markdown] =
-            await Promise.all([
-                this.session.recentMessagesFor(message),
-                this.assembleHippocampusContext(message, context),
-                this.projectMemory.snapshot({
-                    maxChars: this.config.memory.retrieval.maxPromptChars,
-                    query: message.text,
-                    requestId: context?.requestId,
-                    scope: request.scope,
-                }),
-                this.crystal.recall(request),
-                this.sqlite.search(request),
-                this.markdown.snapshot(),
-            ]);
+        const [hippocampus, projectMemory, crystalResults, sqliteResults, markdown] = await Promise.all([
+            this.assembleHippocampusContext(message, context),
+            this.projectMemory.snapshot({
+                maxChars: this.config.memory.retrieval.maxPromptChars,
+                query: message.text,
+                requestId: context?.requestId,
+                scope: request.scope,
+            }),
+            this.crystal.recall(request),
+            this.sqlite.search(request),
+            this.markdown.snapshot(),
+        ]);
         const results = dedupeResults([...projectMemory.results, ...crystalResults, ...sqliteResults]);
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
             projectMemory.prompt,
             hippocampus,
             results,
-            sessionMessages,
             this.config.memory.retrieval.maxPromptChars,
         );
 
@@ -239,9 +244,8 @@ export class MemoryModule extends Memory {
         this.events.publish(
             event(RuntimeEventType.MemoryPromptBuilt, {
                 recallResults: results.length,
-                sessionKey,
-                sessionMessages: sessionMessages.length,
                 hippocampusActivated: hippocampus ? true : false,
+                projectConstraintId,
                 projectMemoryActivated: projectMemory.prompt ? true : false,
                 projectMemoryManifestPath: projectMemory.manifest.paths.manifest,
                 projectMemoryRecallReceiptId: projectMemory.receipt?.id,
@@ -325,14 +329,19 @@ export class MemoryModule extends Memory {
     ): Promise<TurnMemoryResult> {
         if (!this.config.memory.enabled) {
             return {
-                sessionKey: scopeFor(message),
                 candidates: [],
                 promoted: [],
-                historyEntries: [],
             };
         }
 
-        // async-pipeline: redis episode 在拿到 session 之前就可以启动（不需要 session.key）。
+        const projectTrigger = detectExplicitIntent(actions);
+        const projectConstraintId = deriveProjectConstraintId(message, projectTrigger.kind);
+
+        // Journal 是生命事件事实层：每轮先按天落 episode，再从同轮结构化 memory action
+        // 派生 hot atom。失败不阻断回答，但必须发审计事件。
+        await this.writeTurnToJournal(message, reply, context, actions, provenance, projectConstraintId);
+
+        // async-pipeline: Redis 热记忆可以独立启动。
         // 用 actions 直接估 importance，避免等 candidates 构造完成。
         void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
@@ -340,10 +349,9 @@ export class MemoryModule extends Memory {
         this.scheduler?.noteUserTurn(message.user.id);
 
         // 项目脚手架触发（仅显式意图通道，幂等；cluster 通道由后台 sweep 触发，本路径不参与）。
-        const projectTrigger = detectExplicitIntent(actions);
         if (projectTrigger.kind !== ProjectTriggerKind.None) {
             void this.projectScaffolder.scaffold({
-                projectId: deriveProjectId(message),
+                projectId: projectConstraintId,
                 title: deriveProjectTitle(message),
                 goal: message.text.slice(0, 500),
                 userId: message.user.id,
@@ -352,10 +360,9 @@ export class MemoryModule extends Memory {
             });
         }
         // 项目候选 offer 生命周期：显式触发即消费，否则 ttl-1。
-        void this.noteProjectOfferTurn(
-            message.user.id,
-            projectTrigger.kind !== ProjectTriggerKind.None,
-        ).catch(() => undefined);
+        void this.noteProjectOfferTurn(message.user.id, projectTrigger.kind !== ProjectTriggerKind.None).catch(
+            () => undefined,
+        );
 
         // 技能候选 offer 生命周期：用户在本轮回复中明确同意（skillPromotionIntent ≥ 0.7）即
         // 立即从 pending_skill_offer 生成 SKILL.md；否则 ttl-1。完全与 project offer 解耦。
@@ -366,7 +373,7 @@ export class MemoryModule extends Memory {
             void this.noteSkillOfferTurn(message.user.id, false).catch(() => undefined);
         }
 
-        const session = await this.session.recordTurn(message, reply, context);
+        this.rememberAssistantForFocus(message, reply.text);
         const candidates = actions
             .map((action) =>
                 candidateFromAction(
@@ -374,14 +381,15 @@ export class MemoryModule extends Memory {
                     message,
                     reply,
                     context,
-                    session.key,
+                    projectConstraintId,
+                    turnEpisodeId(message, context),
                     this.config.memory.weights,
                     this.matrix,
                 ),
             )
             .slice(0, this.config.memory.candidates.maxCandidatesPerTurn);
 
-        // 三路并行：candidate 写入 / session consolidate→markdown history / Redis 已经 fire-and-forget。
+        // 三路并行：candidate 写入 / project memory / Redis 已经 fire-and-forget。
         const projectMemoryPipeline =
             projectTrigger.kind !== ProjectTriggerKind.None
                 ? this.projectMemory.recordTurn({
@@ -390,7 +398,7 @@ export class MemoryModule extends Memory {
                       context,
                       trigger: projectTrigger,
                       candidates,
-                      projectId: deriveProjectId(message),
+                      projectId: projectConstraintId,
                   })
                 : Promise.resolve([]);
         const candidatePipeline = Promise.all(
@@ -408,17 +416,8 @@ export class MemoryModule extends Memory {
                 return record;
             }),
         );
-        const historyPipeline = (async () => {
-            const entries = await this.session.consolidate(session.key, context.now);
-            await Promise.all(entries.map((entry) => this.markdown.appendHistory(entry)));
-            return entries;
-        })();
 
-        const [candidateResults, historyEntries, projectRecords] = await Promise.all([
-            candidatePipeline,
-            historyPipeline,
-            projectMemoryPipeline,
-        ]);
+        const [candidateResults, projectRecords] = await Promise.all([candidatePipeline, projectMemoryPipeline]);
         const promoted: MemoryRecord[] = candidateResults.filter((r): r is MemoryRecord => r !== undefined);
         const promotedRecords = [...promoted, ...projectRecords];
 
@@ -429,7 +428,7 @@ export class MemoryModule extends Memory {
                 now: context.now,
                 candidates,
                 promoted: promotedRecords,
-                historyEntries,
+                historyEntries: [],
                 reflectionCandidates: [],
             })
             .catch(() => {});
@@ -439,20 +438,18 @@ export class MemoryModule extends Memory {
                 RuntimeEventType.MemoryTurnRecorded,
                 {
                     candidates: candidates.length,
-                    historyEntries: historyEntries.length,
+                    journal: true,
+                    projectConstraintId,
                     projectPromoted: projectRecords.length,
                     promoted: promotedRecords.length,
-                    sessionKey: session.key,
                 },
                 context.requestId,
             ),
         );
 
         return {
-            sessionKey: session.key,
             candidates,
             promoted: promotedRecords,
-            historyEntries,
         };
     }
 
@@ -631,7 +628,7 @@ export class MemoryModule extends Memory {
 
     /**
      * 反馈分类入口（fire-and-forget）。Runtime 在主回答返回后调用：
-     *   1. 拉上一回合 assistant 文本（用 session.recentMessagesFor）；
+     *   1. 从当前 focus 的短期 assistant 滑窗取上一轮 assistant 文本；
      *   2. 喂给 LLM 结构化分类（feedback.interpreter）；
      *   3. 按 enum 分发给 applyFeedback。
      * 没有 model 或没有上一轮 assistant 文本时直接返回。
@@ -639,12 +636,10 @@ export class MemoryModule extends Memory {
     async classifyAndApplyFeedback(message: GatewayMessage, context: RuntimeContext): Promise<void> {
         if (!this.model || !this.config.memory.enabled) return;
         try {
-            // 取最近若干条 session 消息，找最后一条 assistant；若没有则视为首轮，无反馈可分类。
-            const recent = await this.session.recentMessagesFor(message, 4);
-            const previousAssistant = [...recent].reverse().find((m) => m.role === "assistant");
-            if (!previousAssistant) return;
+            const previousAssistantText = this.assistantMemoryByFocus.get(focusKeyForMessage(message))?.previous;
+            if (!previousAssistantText) return;
             const classification = await classifyFeedback(this.model, {
-                previousAssistantText: previousAssistant.content,
+                previousAssistantText,
                 currentUserText: message.text,
             });
             if (classification.category === FeedbackCategory.None) {
@@ -661,7 +656,7 @@ export class MemoryModule extends Memory {
                 userId: message.user.id,
                 category: classification.category,
                 extractedFact: classification.extractedFact,
-                previousAssistantText: previousAssistant.content,
+                previousAssistantText,
                 currentUserText: message.text,
                 recordedAt: new Date(context.now).toISOString(),
                 requestId: context.requestId,
@@ -678,6 +673,89 @@ export class MemoryModule extends Memory {
     }
 
     // ───── 内部 ──────────────────────────────────────────────────────
+
+    private rememberAssistantForFocus(message: GatewayMessage, assistantText: string): void {
+        const key = focusKeyForMessage(message);
+        const existing = this.assistantMemoryByFocus.get(key);
+        this.assistantMemoryByFocus.set(key, {
+            current: assistantText,
+            previous: existing?.current,
+        });
+    }
+
+    /**
+     * Journal 是生命事件事实层：按天写 episode，并从模型同轮结构化 memory action
+     * 派生 hot atom。这里不读取用户自然语言做语义判断。
+     */
+    private async writeTurnToJournal(
+        message: GatewayMessage,
+        reply: GatewayReply,
+        context: RuntimeContext,
+        actions: MemoryAction[],
+        provenance: MemoryEpisodeProvenance,
+        projectConstraintId: string,
+    ): Promise<void> {
+        try {
+            const normalizedProvenance = normalizeEpisodeProvenance(provenance);
+            const episodeId = turnEpisodeId(message, context);
+            const createdAt = new Date(context.now).toISOString();
+            const embedding =
+                actions.length > 0
+                    ? context.embedding && context.embedding.length > 0
+                        ? context.embedding
+                        : await this.embeddings.embed(message.text)
+                    : [];
+            const atoms = actions.slice(0, this.config.memory.candidates.maxCandidatesPerTurn).map((action, index) =>
+                journalAtomFromAction({
+                    action,
+                    embedding,
+                    episodeId,
+                    index,
+                    matrix: this.matrix,
+                    message,
+                    projectConstraintId,
+                    reply,
+                    defaultWeights: this.config.memory.weights,
+                    scoreWeights: this.config.memory.tuning.atomScore.weights,
+                    createdAt,
+                }),
+            );
+            const result = await this.journal.appendEpisode(
+                {
+                    id: episodeId,
+                    userId: message.user.id,
+                    channelId: message.route.channel,
+                    projectId: projectConstraintId,
+                    role: ModelRole.User,
+                    text: renderEpisodeText(message.text, reply.text, normalizedProvenance),
+                    createdAt,
+                },
+                atoms,
+            );
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryJournalWritten,
+                    {
+                        atomIds: result.atomIds,
+                        atoms: result.atomIds.length,
+                        dbPath: result.dbPath,
+                        episodeId: result.episodeId,
+                        projectConstraintId,
+                        week: result.week,
+                    },
+                    context.requestId,
+                ),
+            );
+        } catch (err) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryReflectionFailed,
+                    { stage: "journal-write", error: String(err) },
+                    context.requestId,
+                ),
+            );
+        }
+    }
 
     /**
      * 向 Redis 写入本轮 episode（工作记忆）。
@@ -715,7 +793,7 @@ export class MemoryModule extends Memory {
                 embedding,
                 importance,
                 stability,
-                sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.SessionTurn,
+                sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.JournalTurn,
                 createdAt: Date.now(),
                 ttlSeconds,
                 metadata: {
@@ -732,7 +810,7 @@ export class MemoryModule extends Memory {
                         importance,
                         mcpCalls: normalizedProvenance.mcpCalls?.length ?? 0,
                         skillNames: normalizedProvenance.skillNames ?? [],
-                        sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.SessionTurn,
+                        sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.JournalTurn,
                         ttlSeconds,
                     },
                     context.requestId,
@@ -1084,7 +1162,8 @@ async function materializeSkillFromOffer(skillDir: string, offer: PendingSkillOf
         "---",
         "",
     ].join("\n");
-    const tools = offer.mcpTools.length > 0 ? `\n## MCP tools\n${offer.mcpTools.map((t) => `- ${t}`).join("\n")}\n` : "";
+    const tools =
+        offer.mcpTools.length > 0 ? `\n## MCP tools\n${offer.mcpTools.map((t) => `- ${t}`).join("\n")}\n` : "";
     await Bun.write(join(dest, "SKILL.md"), `${frontmatter}\n${offer.summary}\n${tools}`);
     const manifest = {
         name: safeName,
@@ -1152,7 +1231,8 @@ function candidateFromAction(
     message: GatewayMessage,
     reply: GatewayReply,
     context: RuntimeContext,
-    sessionKey: string,
+    projectId: string,
+    sourceId: string,
     defaults: MemoryWeights,
     matrixAggregator: MemoryMatrixAggregator,
 ): MemoryCandidate {
@@ -1166,7 +1246,8 @@ function candidateFromAction(
         status: MemoryCandidateStatus.Candidate,
         sourceKind: MemorySourceKind.ExplicitUserIntent,
         content: action.content.replace(/\s+/g, " ").trim(),
-        sessionKey,
+        projectId,
+        sourceId,
         sourceMessageId: message.id,
         sourceReplyId: reply.messageId,
         createdAt: context.now,
@@ -1253,7 +1334,6 @@ function renderMemoryPrompt(
     projectMemory: string,
     hippocampus: string | undefined,
     results: MemorySearchResult[],
-    sessionMessages: SessionMessageRecord[],
     maxChars: number,
 ): string {
     const content = renderMemoryContextPrompt({
@@ -1261,18 +1341,8 @@ function renderMemoryPrompt(
         hippocampus: hippocampus ?? "",
         projectMemory,
         renderedResults: results.length > 0 ? renderResults(results) : "",
-        renderedSessionMessages: sessionMessages.length > 0 ? renderSessionMessages(sessionMessages) : "",
     });
     return content.length <= maxChars ? content : content.slice(0, maxChars).trimEnd();
-}
-
-function renderSessionMessages(messages: SessionMessageRecord[]): string {
-    return messages
-        .map((message) => {
-            const timestamp = message.createdAt;
-            return `- [session:${message.sequence} ${message.role} ${timestamp}] ${message.content.replace(/\s+/g, " ").trim()}`;
-        })
-        .join("\n");
 }
 
 function renderResults(results: MemorySearchResult[]): string {
@@ -1301,6 +1371,88 @@ function importanceFromActions(actions: MemoryAction[]): number {
         total += conf * 0.4 + dur * 0.25 + rel * 0.2 + act * 0.15;
     }
     return clamp01(total / actions.length);
+}
+
+const INBOX_PROJECT_CONSTRAINT_ID = "inbox";
+
+interface JournalAtomFromActionInput {
+    action: MemoryAction;
+    createdAt: string;
+    defaultWeights: MemoryWeights;
+    embedding: number[];
+    episodeId: string;
+    index: number;
+    matrix: MemoryMatrixAggregator;
+    message: GatewayMessage;
+    projectConstraintId: string;
+    reply: GatewayReply;
+    scoreWeights: {
+        access: number;
+        fanout: number;
+        recency: number;
+        successPrior: number;
+    };
+}
+
+function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWrite {
+    const baseWeights = weightsFromAction(input.defaultWeights, input.action);
+    const matrix = input.matrix.aggregate({
+        action: input.action,
+        message: input.message,
+        reply: input.reply,
+        weights: baseWeights,
+    });
+    const weights = applyMatrixImpact(baseWeights, matrix);
+    const recency = input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? 0.5 : 1;
+    const score: AtomScore = {
+        atomId: `${input.episodeId}:atom:${input.index}`,
+        access: clamp01(weights.recurrence),
+        fanout: clamp01(weights.sourceDiversity),
+        inboxDecayApplied: input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID,
+        recency,
+        successPrior: clamp01(weights.confidence * 0.5 + weights.durability * 0.3 + weights.validationCount * 0.2),
+        total: 0,
+        explain: input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? "inbox recency dampened" : undefined,
+    };
+    score.total =
+        score.recency * input.scoreWeights.recency +
+        score.access * input.scoreWeights.access +
+        score.successPrior * input.scoreWeights.successPrior +
+        score.fanout * input.scoreWeights.fanout;
+    const atom: MemoryAtom = {
+        id: score.atomId,
+        episodeIds: [input.episodeId],
+        userId: input.message.user.id,
+        channelId: input.message.route.channel,
+        projectId: input.projectConstraintId,
+        role: ModelRole.Assistant,
+        task: input.action.target,
+        context: input.action.reason ?? input.action.target,
+        action: input.action.content,
+        outcome: input.action.reason ?? input.action.content,
+        success: true,
+        confidence: clamp01(input.action.confidence ?? weights.confidence),
+        priorWeight: clamp01(weights.importance),
+        embedding: input.embedding,
+        text: input.action.content,
+        stage: AtomStage.Raw,
+        createdAt: input.createdAt,
+    };
+    return { atom, score };
+}
+
+function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string {
+    const hasher = new Bun.CryptoHasher("sha256");
+    hasher.update(`${context.requestId}:${message.id}:${context.now}`);
+    return `episode:${hasher.digest("hex").slice(0, 24)}`;
+}
+
+function deriveProjectConstraintId(message: GatewayMessage, triggerKind: ProjectTriggerKind): string {
+    return triggerKind === ProjectTriggerKind.None ? INBOX_PROJECT_CONSTRAINT_ID : deriveProjectId(message);
+}
+
+function focusKeyForMessage(message: GatewayMessage): string {
+    return `${message.user.id}:${message.route.channel}`;
 }
 
 /**

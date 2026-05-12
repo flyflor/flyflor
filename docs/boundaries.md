@@ -17,7 +17,7 @@
 app.ts            程序入口，只做版本/命令分派
 src/app.ts        FlyFlor composition root
 src/command/      CLI / TUI / 命令注册 / 终端渲染
-src/agent/        runtime / gateway / blackboard / session / sandbox / worker / mcp / project / plugin
+src/agent/        runtime / gateway / blackboard / focus / sandbox / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
 src/llm/          模型 provider
 src/crystal/      reflection / Gem / skill
@@ -59,7 +59,7 @@ flowchart LR
 
 - `llm` / `crystal` / `neural` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- `session` 是 session scope 的唯一计算入口；其他目录不得重新实现。
+- `focus` 是当前注意力指针的唯一计算入口；其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。
@@ -180,19 +180,20 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 用户当前指令优先级最高。
 - 长期记忆只保存稳定偏好、项目事实、明确结论、可复用方法。
 - 工具输出 / 日志 / stack trace / 大文件不能无筛选写入长期记忆。
-- 记忆写入必须记录来源、时间、focus pointer（替代 session key）和 schema version。
+- 记忆写入必须记录来源、时间、focus pointer、episode id、schema version 和必要证据链。
 - 删除任何范围的记忆必须能删除对应索引、摘要和向量记录。
 
 ## 11.1 生命体重构红线（LF-P0，与第 11 章并列硬约束）
 
-> 这四条红线规范了「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life-form.md`。
+> 这四条红线规范了「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life.form.md`。
 
 ### R1 — 无 session
 
-- 协议、提示词、存储、事件、日志中禁止出现 `sessionId` / `sessionKey` / `sessionScope` 等任何形式的会话标识。
-- 过渡期允许在数据结构中保留 `legacySessionKey?: string` 字段，仅用于双写期数据迁移；`memory.tuning.session.legacyDoubleWriteDays` 到期后必须清除。
-- 时间是唯一连续轴：所有"哪一段对话"问题改由 `(userId, channelId, projectId, ts)` + 焦点指针（`FocusPointer`）共同表达。
-- 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 清屏语义全部由 project 承担。
+- 协议、提示词、存储、事件、日志、CLI 中禁止出现 `sessionId` / `sessionKey` / `sessionScope` / `legacySessionKey` 等任何形式的会话标识。
+- 禁止把 session 改名为 legacy、scope、conversation、thread 等新容器继续表达会话；纯渠道协议字段（如外部 IM thread id）只能保留在 gateway 原始元数据边界，不能进入记忆连续性模型。
+- 时间是唯一事实连续轴：所有“哪一段经历”问题改由 `(userId, channelId, projectConstraint, ts)` + `FocusPointer` + hippocampus activation 共同表达。
+- Project 是从海马体 / 晶体智力中沉淀出来的内部约束，不是用户可感知会话；默认 CLI / TUI 不展示 project id，调试入口必须显式标注 internal / audit。
+- 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 当前焦点全部由内部 project constraint / turn / episode 审计 id 承担。
 
 ### R2 — Journal 目录是公开契约
 

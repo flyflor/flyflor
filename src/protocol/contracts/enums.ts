@@ -115,7 +115,7 @@ export const RuntimeMode = {
     /**
      * 生命体常驻态：无 user 输入超过 memory.dormant.idleMinutes 后进入。
      * 行为契约：gateway 监听不停（任意入站立即切回 Chat），后台 worker 主导节拍。
-     * 详见 docs/boundaries.md R1-R4 与 docs/proposals/life-form.md。
+     * 详见 docs/boundaries.md R1-R4 与 docs/proposals/life.form.md。
      */
     Dormant: "dormant",
     Gateway: "gateway",
@@ -232,7 +232,6 @@ export const ComponentKind = {
     Provider: "provider",
     Runtime: "runtime",
     Sandbox: "sandbox",
-    Session: "session",
     Skill: "skill",
     Tool: "tool",
     Worker: "worker",
@@ -280,7 +279,6 @@ export const MemoryKind = {
     History: "history",
     Profile: "profile",
     Rule: "rule",
-    SessionMessage: "session-message",
     Skill: "skill",
     Summary: "summary",
 } as const;
@@ -297,8 +295,7 @@ export type MemoryCandidateStatus = (typeof MemoryCandidateStatus)[keyof typeof 
 
 export const MemorySourceKind = {
     ExplicitUserIntent: "explicit-user-intent",
-    SessionConsolidation: "session-consolidation",
-    SessionTurn: "session-turn",
+    JournalTurn: "journal-turn",
     Reflection: "reflection",
     SignalAnalysis: "signal-analysis",
     BlackboardConverged: "blackboard-converged",

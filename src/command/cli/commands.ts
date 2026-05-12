@@ -1,7 +1,6 @@
 import { mkdir, rm, writeFile, stat as fsStat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";
 import { createHash } from "node:crypto";
-import { Database } from "bun:sqlite";
 import { Command, CommanderError } from "commander";
 import * as prompts from "@clack/prompts";
 import pc from "picocolors";
@@ -26,8 +25,7 @@ import {
     startGatewayDaemon,
     stopGatewayDaemon,
 } from "../../agent/gateway/index.ts";
-import { SessionModule, type SessionMessageRecord, type SessionSummary } from "../../agent/session/index.ts";
-import { RetrospectiveLog, SQLiteMemoryStore } from "../../neural/memory/index.ts";
+import { RetrospectiveLog } from "../../neural/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import {
     callMcpTool,
@@ -111,7 +109,7 @@ const GLOBAL_OPTIONS: OptionSpec[] = [
     ["--provider <provider>", "Provider override for this invocation"],
     ["-t, --toolsets <toolsets>", "Comma-separated toolsets to enable for this invocation"],
     ["--accept-hooks", "Auto-approve unseen shell hooks without a TTY prompt"],
-    ["-s, --skills <skills...>", "Preload one or more skills for the session"],
+    ["-s, --skills <skills...>", "Preload one or more skills for this turn"],
     ["--ignore-user-config", "Ignore user config and use built-in defaults"],
     ["--tui", "Launch the TUI instead of the classic chat loop"],
 ];
@@ -225,44 +223,6 @@ const COMMAND_SPECS: CommandSpec[] = [
         ],
     },
     {
-        name: "sessions",
-        help: "Inspect session history",
-        subcommands: [
-            {
-                name: "list",
-                help: "List recent sessions",
-                options: [
-                    ["--limit <n>", "Limit"],
-                    ["--json", "Emit JSON instead of a table"],
-                ],
-            },
-            {
-                name: "show",
-                argument: "<sessionKey>",
-                help: "Show recent messages for a session",
-                options: [
-                    ["--limit <n>", "Limit"],
-                    ["--json", "Emit JSON instead of a table"],
-                ],
-            },
-            { name: "export", argument: "<output>", help: "Export sessions" },
-            {
-                name: "delete",
-                argument: "<sessionId>",
-                help: "Delete a session",
-                options: [["-y, --yes", "Skip confirmation"]],
-            },
-            {
-                name: "prune",
-                help: "Delete old sessions",
-                options: [
-                    ["--days <days>", "Age in days"],
-                    ["-y, --yes", "Skip confirmation"],
-                ],
-            },
-        ],
-    },
-    {
         name: "blackboard",
         help: "Inspect blackboard turns",
         subcommands: [
@@ -271,7 +231,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                 help: "List recent blackboard turns",
                 options: [
                     ["--limit <n>", "Limit"],
-                    ["--session <sessionKey>", "Filter by session key"],
+                    ["--project-constraint <id>", "Filter by internal project constraint id"],
                     ["--json", "Emit JSON instead of a table"],
                 ],
             },
@@ -776,10 +736,22 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "setup") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "config");
+            return;
+        }
         await runSetup(command);
         return;
     }
     if (root === "status") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "overview");
+            return;
+        }
         const app = await cliApp();
         console.log(await renderStatus(app));
         if (command.opts<{ deep?: boolean }>().deep) {
@@ -789,6 +761,12 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "channels") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "overview");
+            return;
+        }
         const app = await cliApp();
         console.log(await renderChannels(app));
         return;
@@ -799,30 +777,61 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         if (opts.fix) {
             await runDoctorFix(app);
         }
+        if (process.stdin.isTTY) {
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "overview");
+            return;
+        }
         console.log(await renderDoctor(app));
         return;
     }
     if (root === "config") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "config");
+            return;
+        }
         await runConfig(sub, command);
         return;
     }
     if (root === "memory") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "memory");
+            return;
+        }
         await runMemory(sub, command);
         return;
     }
-    if (root === "sessions") {
-        await runSessions(sub, command);
-        return;
-    }
     if (root === "blackboard") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "blackboard");
+            return;
+        }
         await runBlackboard(sub, command);
         return;
     }
     if (root === "skills") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "skills");
+            return;
+        }
         await runSkills(sub, command);
         return;
     }
     if (root === "mcp") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "mcp");
+            return;
+        }
         await runMcp(sub, command);
         return;
     }
@@ -831,18 +840,42 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "sandbox") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "sandbox");
+            return;
+        }
         await runSandbox(sub, command);
         return;
     }
     if (root === "plugins") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "plugins");
+            return;
+        }
         await runPlugins(sub, command);
         return;
     }
     if (root === "dream") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "dream");
+            return;
+        }
         await runDream(sub, command);
         return;
     }
     if (root === "model") {
+        if (process.stdin.isTTY) {
+            const app = await cliApp();
+            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            await startCliTui(app, "config");
+            return;
+        }
         await runModelWizard(command);
         return;
     }
@@ -1195,99 +1228,15 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
     printPendingCommand(["memory", sub]);
 }
 
-async function runSessions(sub: string | undefined, command: Command): Promise<void> {
-    const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
-    const session = new SessionModule(new SQLiteMemoryStore(config.paths, config.memory.sqlite), config.memory.session);
-    if (!sub || sub === "list") {
-        const opts = command.opts<{ json?: boolean; limit?: string | number }>();
-        const limit = parseOptionalPositive(opts.limit) ?? 20;
-        const rows = await session.list(limit);
-        console.log(renderSessionList(rows, Boolean(opts.json)));
-        return;
-    }
-    if (sub === "show") {
-        const opts = command.opts<{ json?: boolean; limit?: string | number }>();
-        const sessionKey = command.args[0];
-        if (!sessionKey) {
-            throw new CommanderError(1, "flyflor.missingSession", "Missing session key");
-        }
-        const limit = parseOptionalPositive(opts.limit) ?? 40;
-        const messages = await session.timeline(sessionKey, limit);
-        console.log(renderSessionTimeline(sessionKey, messages, Boolean(opts.json)));
-        return;
-    }
-    if (sub === "export") {
-        const output = command.args[0];
-        if (!output) {
-            throw new CommanderError(1, "flyflor.missingOutput", "Missing export output path");
-        }
-        const sessions = await session.list(10_000);
-        const timelines = await Promise.all(
-            sessions.map(async (item) => ({
-                session: item,
-                messages: await session.timeline(item.key, 10_000),
-            })),
-        );
-        await mkdir(dirname(output), { recursive: true });
-        await writeFile(
-            output,
-            `${JSON.stringify({ exportedAt: new Date().toISOString(), sessions: timelines }, null, 2)}\n`,
-        );
-        console.log(`Exported ${timelines.length} sessions to ${output}`);
-        return;
-    }
-    if (sub === "delete") {
-        const sessionKey = command.args[0];
-        if (!sessionKey) {
-            throw new CommanderError(1, "flyflor.missingSession", "Missing session id");
-        }
-        const opts = command.opts<{ yes?: boolean }>();
-        if (!opts.yes && process.stdin.isTTY) {
-            const confirm = await prompts.confirm({ message: `Delete session ${sessionKey}?`, initialValue: false });
-            if (prompts.isCancel(confirm) || !confirm) {
-                prompts.cancel("Session delete cancelled");
-                return;
-            }
-        }
-        const deleted = deleteSessionRecords(config.paths.memoryDir, sessionKey);
-        console.log(
-            `Deleted session ${sessionKey}: messages=${deleted.messages} history=${deleted.history} sessions=${deleted.sessions}`,
-        );
-        return;
-    }
-    if (sub === "prune") {
-        const opts = command.opts<{ days?: string | number; yes?: boolean }>();
-        const days = parseOptionalPositive(opts.days) ?? 30;
-        if (!opts.yes && process.stdin.isTTY) {
-            const confirm = await prompts.confirm({
-                message: `Delete sessions older than ${days} days?`,
-                initialValue: false,
-            });
-            if (prompts.isCancel(confirm) || !confirm) {
-                prompts.cancel("Session prune cancelled");
-                return;
-            }
-        }
-        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        const pruned = pruneSessionRecords(config.paths.memoryDir, cutoff);
-        console.log(
-            `Pruned sessions older than ${cutoff}: sessions=${pruned.sessions} messages=${pruned.messages} history=${pruned.history}`,
-        );
-        return;
-    }
-    printPendingCommand(["sessions", sub]);
-}
-
 async function runBlackboard(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
     const blackboard = app.resolve(FlyFlorTokens.Blackboard);
     if (!sub || sub === "list") {
-        const opts = command.opts<{ json?: boolean; limit?: string | number; session?: string }>();
+        const opts = command.opts<{ json?: boolean; limit?: string | number; projectConstraint?: string }>();
         const limit = parseOptionalPositive(opts.limit) ?? 20;
         const turns =
-            typeof opts.session === "string" && opts.session.length > 0
-                ? await blackboard.listTurns(opts.session, limit)
+            typeof opts.projectConstraint === "string" && opts.projectConstraint.length > 0
+                ? await blackboard.listTurns(opts.projectConstraint, limit)
                 : await blackboard.listRecentTurns(limit);
         console.log(renderBlackboardTurnList(turns, Boolean(opts.json)));
         return;
@@ -1895,106 +1844,9 @@ async function resetBuiltInMemory(config: FlyflorConfig): Promise<string[]> {
     return removed;
 }
 
-function deleteSessionRecords(
-    memoryDir: string,
-    sessionKey: string,
-): { history: number; messages: number; memories: number; sessions: number } {
-    const db = new Database(join(memoryDir, "memory.sqlite"));
-    try {
-        return deleteSessionRecordsFromDb(db, sessionKey);
-    } catch {
-        return { history: 0, messages: 0, memories: 0, sessions: 0 };
-    } finally {
-        db.close();
-    }
-}
-
-function pruneSessionRecords(
-    memoryDir: string,
-    cutoffIso: string,
-): { history: number; messages: number; memories: number; sessions: number } {
-    const db = new Database(join(memoryDir, "memory.sqlite"));
-    try {
-        const rows = db.query("SELECT session_key FROM sessions WHERE updated_at < ?").all(cutoffIso) as Array<{
-            session_key: string;
-        }>;
-        const totals = { history: 0, messages: 0, memories: 0, sessions: 0 };
-        for (const row of rows) {
-            const deleted = deleteSessionRecordsFromDb(db, row.session_key);
-            totals.history += deleted.history;
-            totals.messages += deleted.messages;
-            totals.memories += deleted.memories;
-            totals.sessions += deleted.sessions;
-        }
-        return totals;
-    } catch {
-        return { history: 0, messages: 0, memories: 0, sessions: 0 };
-    } finally {
-        db.close();
-    }
-}
-
-function deleteSessionRecordsFromDb(
-    db: Database,
-    sessionKey: string,
-): { history: number; messages: number; memories: number; sessions: number } {
-    const messages = Number(
-        db.query("DELETE FROM session_messages WHERE session_key = ?").run(sessionKey).changes ?? 0,
-    );
-    const history = Number(db.query("DELETE FROM history_entries WHERE session_key = ?").run(sessionKey).changes ?? 0);
-    const memories = Number(db.query("DELETE FROM memories WHERE scope = ?").run(sessionKey).changes ?? 0);
-    db.query("DELETE FROM memories_fts WHERE id NOT IN (SELECT id FROM memories)").run();
-    const sessions = Number(db.query("DELETE FROM sessions WHERE session_key = ?").run(sessionKey).changes ?? 0);
-    return { history, messages, memories, sessions };
-}
-
 function printPendingCommand(path: string[]): void {
     console.log(pc.cyan(`flyflor ${path.join(" ")}`));
     console.log("This CLI route is registered, but its runtime behavior is not implemented yet.");
-}
-
-function renderSessionList(sessions: SessionSummary[], json: boolean): string {
-    if (json) {
-        return JSON.stringify(sessions, null, 2);
-    }
-    if (sessions.length === 0) {
-        return "No sessions yet.";
-    }
-    const table = new Table({
-        head: ["Session", "Channel", "Chat", "User", "Live", "Total", "Updated"],
-        style: { head: [] },
-        wordWrap: true,
-    });
-    for (const session of sessions) {
-        table.push([
-            session.key,
-            session.channel,
-            session.threadId ? `${session.chatId}/${session.threadId}` : session.chatId,
-            session.userId,
-            session.liveMessageCount,
-            session.totalMessageCount,
-            session.updatedAt,
-        ]);
-    }
-    return table.toString();
-}
-
-function renderSessionTimeline(sessionKey: string, messages: SessionMessageRecord[], json: boolean): string {
-    if (json) {
-        return JSON.stringify({ sessionKey, messages }, null, 2);
-    }
-    if (messages.length === 0) {
-        return `No messages found for session: ${sessionKey}`;
-    }
-    const table = new Table({
-        head: ["Seq", "Role", "Created", "Content"],
-        style: { head: [] },
-        wordWrap: true,
-    });
-    for (const message of messages) {
-        table.push([message.sequence, message.role, message.createdAt, truncate(message.content, 160)]);
-    }
-    return [`Session: ${sessionKey}`, table.toString()].join("\n");
 }
 
 function renderBlackboardTurnList(turns: BlackboardTurn[], json: boolean): string {
@@ -2005,7 +1857,7 @@ function renderBlackboardTurnList(turns: BlackboardTurn[], json: boolean): strin
         return "No blackboard turns yet.";
     }
     const table = new Table({
-        head: ["Turn", "Status", "Session", "Goal", "Steps", "Updated"],
+        head: ["Turn", "Status", "Project Constraint", "Goal", "Steps", "Updated"],
         style: { head: [] },
         wordWrap: true,
     });
@@ -2013,7 +1865,7 @@ function renderBlackboardTurnList(turns: BlackboardTurn[], json: boolean): strin
         table.push([
             turn.id,
             turn.status,
-            turn.sessionKey,
+            turn.projectConstraintId,
             truncate(turn.goal, 100),
             turn.steps.length,
             turn.updatedAt,
@@ -2038,7 +1890,7 @@ function renderBlackboardTurn(turn: BlackboardTurn, limit: number, json: boolean
     const summary = new Table({ style: { head: [] } });
     summary.push(["Turn", turn.id]);
     summary.push(["Status", turn.status]);
-    summary.push(["Session", turn.sessionKey]);
+    summary.push(["Project Constraint", turn.projectConstraintId]);
     summary.push(["Request", turn.requestId]);
     summary.push(["Goal", turn.goal]);
     summary.push(["Created", turn.createdAt]);
@@ -2419,7 +2271,7 @@ export function commandSummaryTable(config?: FlyflorConfig): string {
     const configuredChannels = config?.gateway.allowedChannels.join(", ") ?? "";
     return [
         "Core: chat, tui, setup, status, doctor, channels, config, version",
-        "Runtime: gateway, model, memory, dream, sessions, blackboard",
+        "Runtime: gateway, model, memory, dream, blackboard",
         "Extensions: skills, tools, mcp, plugins",
         "Lifecycle: update",
         configuredChannels ? `Configured channels: ${configuredChannels}` : "",

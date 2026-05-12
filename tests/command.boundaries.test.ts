@@ -37,7 +37,7 @@ describe("Command boundary", () => {
         expect(commandNames).toContain("doctor");
         expect(commandNames).toContain("config");
         expect(commandNames).toContain("memory");
-        expect(commandNames).toContain("sessions");
+        expect(commandNames).not.toContain("sessions");
         expect(commandNames).toContain("skills");
         expect(commandNames).toContain("tools");
         expect(commandNames).toContain("mcp");

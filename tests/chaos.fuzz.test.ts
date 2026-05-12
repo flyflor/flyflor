@@ -427,7 +427,7 @@ describe("chaos: project triggers", () => {
                 embedding: chaosVector(r, 4),
                 importance: chaosNumber(r),
                 stability: chaosNumber(r),
-                sourceKind: r() < 0.3 ? "blackboard-converged" : "session-turn",
+                sourceKind: r() < 0.3 ? "blackboard-converged" : "journal-turn",
                 createdAt: chaosNumber(r),
                 metadata: {},
             }));

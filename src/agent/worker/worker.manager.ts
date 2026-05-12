@@ -228,7 +228,7 @@ export class WorkerManager {
             workerName: registration.name,
             runtime: registration.runtime,
             requestId: task.options.requestId,
-            sessionKey: task.options.sessionKey,
+            projectConstraintId: task.options.projectConstraintId,
             turnId: task.options.turnId,
             createdAt: startedAt,
         };
@@ -380,29 +380,29 @@ export class PersistentJsonProcessWorkerAdapter<TInput, TOutput> implements Work
 > {
     readonly interaction = WorkerInteractionKind.Persistent;
     readonly runtime = WorkerRuntimeKind.PersistentJsonProcess;
-    private readonly sessions = new WeakMap<JsonProcessWorkerSpec, PersistentJsonSession>();
+    private readonly connections = new WeakMap<JsonProcessWorkerSpec, PersistentJsonConnection>();
 
     async dispose(target: JsonProcessWorkerSpec): Promise<void> {
-        const session = this.sessions.get(target);
-        if (!session) {
+        const connection = this.connections.get(target);
+        if (!connection) {
             return;
         }
-        this.sessions.delete(target);
-        await session.stop();
+        this.connections.delete(target);
+        await connection.stop();
     }
 
     async run(target: JsonProcessWorkerSpec, input: TInput, context: WorkerRunContext): Promise<TOutput> {
-        return this.sessionFor(target).request<TInput, TOutput>(input, context);
+        return this.connectionFor(target).request<TInput, TOutput>(input, context);
     }
 
-    private sessionFor(target: JsonProcessWorkerSpec): PersistentJsonSession {
-        const existing = this.sessions.get(target);
+    private connectionFor(target: JsonProcessWorkerSpec): PersistentJsonConnection {
+        const existing = this.connections.get(target);
         if (existing) {
             return existing;
         }
-        const session = new PersistentJsonSession(target);
-        this.sessions.set(target, session);
-        return session;
+        const connection = new PersistentJsonConnection(target);
+        this.connections.set(target, connection);
+        return connection;
     }
 }
 
@@ -531,7 +531,7 @@ interface PersistentJsonResponse {
     output?: unknown;
 }
 
-class PersistentJsonSession {
+class PersistentJsonConnection {
     private readonly child: ReturnType<typeof Bun.spawn>;
     private readonly pending = new Map<
         string,
@@ -558,7 +558,7 @@ class PersistentJsonSession {
 
     request<TInput, TOutput>(input: TInput, context: WorkerRunContext): Promise<TOutput> {
         if (this.stopped) {
-            throw new Error("Persistent worker session is stopped.");
+            throw new Error("Persistent worker connection is stopped.");
         }
         const stdin = this.child.stdin;
         if (!stdin || typeof stdin === "number") {

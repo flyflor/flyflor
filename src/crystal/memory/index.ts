@@ -61,23 +61,6 @@ export class CrystalMemoryService {
         const candidates = [
             ...input.promoted.map((record) => candidateFromPromotedMemory(record, input.now)),
             ...(input.reflectionCandidates ?? []).map((candidate) => buildReflectionCandidate(candidate)),
-            ...input.historyEntries.map((entry) =>
-                buildReflectionCandidate({
-                    id: `reflection-${hashText(`${entry.sessionKey}:${entry.cursor}`)}`,
-                    sourceId: `${entry.sessionKey}:${entry.cursor}`,
-                    sourceKind: "history",
-                    content: entry.content,
-                    createdAt: entry.timestamp,
-                    evidence: [
-                        evidence(
-                            "history",
-                            0,
-                            entry.sessionKey,
-                            "session history is source material, not crystallized skill",
-                        ),
-                    ],
-                }),
-            ),
         ];
         const atoms = [];
         const gems = [];

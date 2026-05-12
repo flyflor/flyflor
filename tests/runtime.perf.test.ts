@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/fast.route.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/memory/embedding.ts";
-import { MemoryModule } from "../src/neural/memory/index.ts";
+import { JournalStore, MemoryModule } from "../src/neural/memory/index.ts";
 import {
     BlackboardMode,
     Channel,
@@ -222,8 +222,37 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const reply = rep("hi");
         const ctx = withEmbedding(await embedFor(config, "hello world"));
         const result = await memory.rememberTurn(message, reply, ctx);
-        expect(result.sessionKey.length).toBeGreaterThan(0);
+        expect(result.candidates).toHaveLength(0);
         expect(events.countOf(RuntimeEventType.MemoryEpisodeWritten)).toBe(0);
+        expect(events.countOf(RuntimeEventType.MemoryJournalWritten)).toBe(1);
+        const journalEvent = events.findOf(RuntimeEventType.MemoryJournalWritten);
+        expect(await Bun.file(String(journalEvent?.payload?.dbPath)).exists()).toBe(true);
+    });
+
+    test("rememberTurn writes structured memory actions as journal atoms", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
+        const ctx = withEmbedding(await embedFor(config, "journal atom"));
+        await memory.rememberTurn(msg("journal atom"), rep("stored"), ctx, [
+            {
+                action: "add",
+                target: "memory",
+                content: "Journal atoms are driven by structured memory actions.",
+                confidence: 0.9,
+                signals: {
+                    durability: 0.9,
+                    relevance: 0.9,
+                },
+            },
+        ]);
+
+        const journal = new JournalStore({ journalRoot: join(config.paths.home, "journal") });
+        const visible = await journal.listVisibleAtoms(ctx.now, { minScore: 0.1, userId: "u1" });
+        expect(visible.map((entry) => entry.atom.text)).toContain(
+            "Journal atoms are driven by structured memory actions.",
+        );
+        expect(visible[0]?.score.total).toBeGreaterThan(0);
     });
 
     test("buildPrompt accepts optional context parameter without throwing", async () => {
@@ -252,7 +281,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const start = performance.now();
         const out = await memory.rememberTurn(message, reply, ctx, []);
         const elapsed = performance.now() - start;
-        expect(out.sessionKey.length).toBeGreaterThan(0);
+        expect(out.candidates).toHaveLength(0);
         expect(elapsed).toBeLessThan(1500);
     });
 

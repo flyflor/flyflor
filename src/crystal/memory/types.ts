@@ -6,7 +6,6 @@ import type {
     ReflectionAtom,
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
-import type { HistoryEntry } from "../../agent/session/index.ts";
 import type { MemoryCandidate, MemoryRecord } from "../../neural/memory/types.ts";
 
 export interface CrystalTurnInput {
@@ -14,7 +13,7 @@ export interface CrystalTurnInput {
     now: string;
     candidates: MemoryCandidate[];
     promoted: MemoryRecord[];
-    historyEntries: HistoryEntry[];
+    historyEntries?: unknown[];
     reflectionCandidates?: CrystalCandidateInput[];
 }
 

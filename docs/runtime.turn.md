@@ -112,13 +112,13 @@ stateDiagram-v2
 ```mermaid
 flowchart LR
     Q[GatewayMessage] --> Markdown[MarkdownMemoryStore.snapshot<br/>SELF/SOUL/USER/MEMORY]
-    Q --> Session[SessionModule.recentMessagesFor<br/>SQLite session_messages]
+    Q --> Journal[JournalStore<br/>按天 episode / atom]
     Q --> Hippo[Hippocampus context<br/>Redis ring + spreading activation]
     Q --> Project[ProjectMemoryStore.snapshot<br/>项目局部记忆]
     Q --> Crystal[CrystalMemoryService.recall<br/>SurrealDB Gem]
     Q --> SqliteSearch[SQLiteMemoryStore.search]
     Markdown --> Render[renderMemoryPrompt]
-    Session --> Render
+    Journal --> Render
     Hippo --> Render
     Project --> Render
     Crystal --> Render
@@ -185,8 +185,7 @@ flowchart LR
     Trig --> ScaffoldP[ProjectScaffolder<br/>fire-and-forget]
     Cand --> SqliteCand[sqlite.addCandidate<br/>autoPromote 时直接 markdown 写入]
     Trig --> ProjectMem[ProjectMemoryStore.recordTurn<br/>显式意图通道]
-    Action -.-> SessionRec[SessionModule.recordTurn]
-    SessionRec --> Hist[session.consolidate → markdown appendHistory]
+    Action -.-> JournalRec[JournalStore.writeTurn<br/>按天事实层]
     Cand -.-> CrystalAsync[CrystalMemoryService.recordTurn<br/>fire-and-forget]
 ```
 

@@ -27,7 +27,7 @@ import type {
 
 interface BlackboardTurnRow {
     id: string;
-    session_key: string;
+    project_constraint_id: string;
     request_id: string;
     mode: string;
     status: string;
@@ -78,7 +78,7 @@ interface BlackboardDecisionRow {
 }
 
 interface BlackboardLeaseRow {
-    session_key: string;
+    project_constraint_id: string;
     turn_id: string;
     request_id: string;
     acquired_at: string;
@@ -98,14 +98,15 @@ export class SQLiteBlackboardStore implements BlackboardStore {
 
         const dir = join(this.paths.storageDir, "blackboard");
         await mkdir(dir, { recursive: true });
-        const database = new Database(join(dir, "blackboard.sqlite"));
-        database.exec("PRAGMA journal_mode = WAL");
-        database.exec("PRAGMA synchronous = NORMAL");
-        database.exec("PRAGMA foreign_keys = ON");
+        let database = openBlackboardDatabase(join(dir, "blackboard.sqlite"));
+        if (hasIncompatibleBlackboardSchema(database)) {
+            database.close();
+            database = openBlackboardDatabase(join(dir, "blackboard.project.sqlite"));
+        }
         database.exec(`
             CREATE TABLE IF NOT EXISTS blackboard_turns (
                 id TEXT PRIMARY KEY,
-                session_key TEXT NOT NULL,
+                project_constraint_id TEXT NOT NULL,
                 request_id TEXT NOT NULL,
                 mode TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -160,7 +161,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         `);
         database.exec(`
             CREATE TABLE IF NOT EXISTS blackboard_leases (
-                session_key TEXT PRIMARY KEY,
+                project_constraint_id TEXT PRIMARY KEY,
                 turn_id TEXT NOT NULL,
                 request_id TEXT NOT NULL,
                 acquired_at TEXT NOT NULL,
@@ -168,7 +169,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
             );
         `);
         database.exec(
-            "CREATE INDEX IF NOT EXISTS idx_blackboard_turns_session ON blackboard_turns(session_key, updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_blackboard_turns_project_constraint ON blackboard_turns(project_constraint_id, updated_at DESC)",
         );
         database.exec(
             "CREATE INDEX IF NOT EXISTS idx_blackboard_messages_turn ON blackboard_messages(turn_id, created_at)",
@@ -189,8 +190,8 @@ export class SQLiteBlackboardStore implements BlackboardStore {
 
         database.query("DELETE FROM blackboard_leases WHERE expires_at <= ?").run(request.now);
         const existing = database
-            .query("SELECT * FROM blackboard_leases WHERE session_key = ?")
-            .get(request.sessionKey) as BlackboardLeaseRow | null;
+            .query("SELECT * FROM blackboard_leases WHERE project_constraint_id = ?")
+            .get(request.projectConstraintId) as BlackboardLeaseRow | null;
         if (existing) {
             return {
                 acquired: false,
@@ -199,7 +200,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         }
 
         const lease: BlackboardLease = {
-            sessionKey: request.sessionKey,
+            projectConstraintId: request.projectConstraintId,
             turnId: request.turnId,
             requestId: request.requestId,
             acquiredAt: request.now,
@@ -209,24 +210,26 @@ export class SQLiteBlackboardStore implements BlackboardStore {
             .query(
                 `
                 INSERT INTO blackboard_leases (
-                    session_key, turn_id, request_id, acquired_at, expires_at
+                    project_constraint_id, turn_id, request_id, acquired_at, expires_at
                 ) VALUES (?, ?, ?, ?, ?)
             `,
             )
-            .run(lease.sessionKey, lease.turnId, lease.requestId, lease.acquiredAt, lease.expiresAt);
+            .run(lease.projectConstraintId, lease.turnId, lease.requestId, lease.acquiredAt, lease.expiresAt);
         return { acquired: true, lease };
     }
 
-    async releaseLease(sessionKey: string, turnId: string, _now: string): Promise<BlackboardLease | undefined> {
+    async releaseLease(projectConstraintId: string, turnId: string, _now: string): Promise<BlackboardLease | undefined> {
         await this.initialize();
         const database = this.requiredDatabase();
         const existing = database
-            .query("SELECT * FROM blackboard_leases WHERE session_key = ? AND turn_id = ?")
-            .get(sessionKey, turnId) as BlackboardLeaseRow | null;
+            .query("SELECT * FROM blackboard_leases WHERE project_constraint_id = ? AND turn_id = ?")
+            .get(projectConstraintId, turnId) as BlackboardLeaseRow | null;
         if (!existing) {
             return undefined;
         }
-        database.query("DELETE FROM blackboard_leases WHERE session_key = ? AND turn_id = ?").run(sessionKey, turnId);
+        database
+            .query("DELETE FROM blackboard_leases WHERE project_constraint_id = ? AND turn_id = ?")
+            .run(projectConstraintId, turnId);
         return rowToLease(existing);
     }
 
@@ -236,14 +239,14 @@ export class SQLiteBlackboardStore implements BlackboardStore {
             .query(
                 `
                 INSERT INTO blackboard_turns (
-                    id, session_key, request_id, mode, status, goal, budget_json,
+                    id, project_constraint_id, request_id, mode, status, goal, budget_json,
                     workers_json, created_at, updated_at, completed_at, metadata_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 turn.id,
-                turn.sessionKey,
+                turn.projectConstraintId,
                 turn.requestId,
                 turn.mode,
                 turn.status,
@@ -395,7 +398,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return this.hydrateTurn(row);
     }
 
-    async listTurns(sessionKey: string, limit: number): Promise<BlackboardTurn[]> {
+    async listTurns(projectConstraintId: string, limit: number): Promise<BlackboardTurn[]> {
         await this.initialize();
         if (limit <= 0) {
             return [];
@@ -405,12 +408,12 @@ export class SQLiteBlackboardStore implements BlackboardStore {
                 `
                 SELECT *
                 FROM blackboard_turns
-                WHERE session_key = ?
+                WHERE project_constraint_id = ?
                 ORDER BY updated_at DESC
                 LIMIT ?
             `,
             )
-            .all(sessionKey, Math.max(1, limit)) as BlackboardTurnRow[];
+            .all(projectConstraintId, Math.max(1, limit)) as BlackboardTurnRow[];
         return rows.map((row) => this.hydrateTurn(row));
     }
 
@@ -456,7 +459,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
             .all(row.id) as BlackboardDecisionRow[];
         return {
             id: row.id,
-            sessionKey: row.session_key,
+            projectConstraintId: row.project_constraint_id,
             requestId: row.request_id,
             mode: BlackboardMode.Blackboard,
             status: row.status as BlackboardTurnStatusType,
@@ -479,6 +482,35 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         }
         return this.database;
     }
+}
+
+function openBlackboardDatabase(path: string): Database {
+    const database = new Database(path);
+    database.exec("PRAGMA journal_mode = WAL");
+    database.exec("PRAGMA synchronous = NORMAL");
+    database.exec("PRAGMA foreign_keys = ON");
+    return database;
+}
+
+function hasIncompatibleBlackboardSchema(database: Database): boolean {
+    return (
+        (tableExists(database, "blackboard_turns") &&
+            !tableHasColumn(database, "blackboard_turns", "project_constraint_id")) ||
+        (tableExists(database, "blackboard_leases") &&
+            !tableHasColumn(database, "blackboard_leases", "project_constraint_id"))
+    );
+}
+
+function tableExists(database: Database, table: string): boolean {
+    const row = database
+        .query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get(table) as { name: string } | null;
+    return Boolean(row);
+}
+
+function tableHasColumn(database: Database, table: string, column: string): boolean {
+    const rows = database.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return rows.some((row) => row.name === column);
 }
 
 function updateWorkerState(
@@ -521,7 +553,7 @@ function hasOpenStepIssues(input: BlackboardStepInput): boolean {
 
 function rowToLease(row: BlackboardLeaseRow): BlackboardLease {
     return {
-        sessionKey: row.session_key,
+        projectConstraintId: row.project_constraint_id,
         turnId: row.turn_id,
         requestId: row.request_id,
         acquiredAt: row.acquired_at,

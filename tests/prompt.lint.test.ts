@@ -55,7 +55,7 @@ async function seedAllValid(promptDir: string): Promise<void> {
         "feedback.classify.md": ["currentUserText", "previousAssistantText"],
         "memory.action.md": [],
         "memory.consolidation.md": ["episode"],
-        "memory.context.md": ["hippocampus", "markdownContent", "projectMemory", "retrievedResults", "sessionMessages"],
+        "memory.context.md": ["hippocampus", "markdownContent", "projectMemory", "retrievedResults"],
         "memory.dream.md": ["candidates", "userId"],
         "mcp.context.md": ["mcpEntries"],
         "runtime.system.md": [

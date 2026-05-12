@@ -33,7 +33,7 @@ flowchart LR
     end
 
     subgraph Index["审计与索引"]
-        SQLite[("SQLite<br/>sessions / session_messages /<br/>session_history / candidates / search")]
+        SQLite[("SQLite<br/>candidates / offers / search")]
     end
 
     subgraph LongTerm["长期记忆图（结晶）"]
@@ -98,7 +98,7 @@ sequenceDiagram
     participant RT as RuntimeModule
     participant Mem as MemoryModule
     participant MD as MarkdownStore
-    participant SS as SessionModule
+    participant J as JournalStore
     participant R as RedisStore
     participant PM as ProjectMemoryStore
     participant CR as CrystalMemoryService
@@ -107,7 +107,7 @@ sequenceDiagram
     RT->>Mem: buildPrompt(message, ctx)
     par 并发拉取
         Mem->>MD: snapshot()
-        Mem->>SS: recentMessagesFor(msg)
+        Mem->>J: day/week journal activation
         Mem->>R: readContextRing + hotConcepts
         Mem->>PM: snapshot()
         Mem->>CR: recall()
@@ -214,12 +214,10 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 - `config.memory.candidates.maxCandidatesPerTurn` — 每轮候选上限
 - `config.memory.candidates.autoPromoteExplicit` — 显式 action 直接 promote
 - `config.memory.retrieval.maxResults` / `maxPromptChars` — 上下文预算
-- `config.memory.session.maxLiveMessages` — session consolidate 阈值
 - `config.memory.matrix` — Memory Matrix 权重
 
 ## 风险点 / 已知缺口
 
-- `sessionKey` 仍嵌入 `MemoryCandidate` / `CrystalTurnInput` / `MemorySearchRequest`，「无 session」目标未完成。
 - `BackgroundScheduler` 仅在 Redis + Surreal + Model 三件齐备时启用；默认本地开发环境（无 Redis/Surreal）下静默 noop，没有降级告警。
 - Reflection 仍由 `RuntimeModule.scheduleReflection` 同进程驱动；独立 Reflection worker 未拆出。
 - Dream worker 压测缺失；候选选择策略未在大数据集下验证。

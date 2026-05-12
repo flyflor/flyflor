@@ -15,14 +15,14 @@
 7. [mcp.tools.md](mcp.tools.md) — MCP stdio / Streamable HTTP 与运行时 tool loop
 8. [crystal.reflection.md](crystal.reflection.md) — 反思候选 → atom → Gem 升格
 9. [skill.system.md](skill.system.md) — Skill manifest、选择、使用计数、promotion
-10. [project.session.md](project.session.md) — Session 审计层与 Project 三路径触发
-11. [prompt.templates.md](prompt.templates.md) — Markdown 模板装配与渲染入口
-12. [cli.commands.md](cli.commands.md) — CLI 命令现状清单
-13. [boundaries.md](boundaries.md) — 工程硬边界与红线
-14. 根目录 [TODO.md](../TODO.md) — 风险点、已知缺口与后续计划
+10. [prompt.templates.md](prompt.templates.md) — Markdown 模板装配与渲染入口
+11. [cli.commands.md](cli.commands.md) — CLI 命令现状清单
+12. [boundaries.md](boundaries.md) — 工程硬边界与红线
+13. 根目录 [TODO.md](../TODO.md) — 风险点、已知缺口与后续计划
 
 ## 提案区
 
 [proposals/](proposals/) 下是未落地的设计稿，仅作参考，不代表当前实现：
 
 - [proposals/eq.module.md](proposals/eq.module.md) — EQ 语气控制层提案
+- [proposals/life.form.md](proposals/life.form.md) — 生命体重构主线提案

@@ -131,7 +131,6 @@ abstract class Sandbox {}
 | `src/agent/runtime` | turn 编排、上下文装配、事件发布 | 持有渠道私有协议、储存驱动细节 |
 | `src/agent/blackboard` | turn/step/decision/lease | 执行工具、写长期记忆 |
 | `src/agent/worker` | registry / pool / adapter / 超时 | 动态扫描、动态 import、绕过 Sandbox |
-| `src/agent/session` | session key 计算、最近消息、history 固化 | 长期记忆 promotion、调用 LLM |
 | `src/agent/sandbox` | mcp-tool / shell-hook / plugin 审批 | 被业务模块绕过 |
 | `src/agent/mcp` | server/client 适配 | 跑非 MCP 工具、维护路由策略 |
 | `src/llm` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |
