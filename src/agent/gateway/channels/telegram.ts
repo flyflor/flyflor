@@ -1,7 +1,23 @@
-import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
+import type { GatewayAttachment, GatewayMessage } from "../../../protocol/contracts/index.ts";
 import { ChannelTransport } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
+
+interface TelegramPhotoSize {
+    file_id?: string;
+    file_size?: number;
+    file_unique_id?: string;
+    height?: number;
+    width?: number;
+}
+
+interface TelegramDocument {
+    file_id?: string;
+    file_name?: string;
+    file_size?: number;
+    file_unique_id?: string;
+    mime_type?: string;
+}
 
 interface TelegramMessage {
     caption?: string;
@@ -9,13 +25,17 @@ interface TelegramMessage {
         id?: number | string;
         type?: string;
     };
+    document?: TelegramDocument;
     from?: {
         first_name?: string;
         id?: number | string;
         username?: string;
     };
     message_id?: number;
+    message_thread_id?: number;
+    photo?: TelegramPhotoSize[];
     text?: string;
+    voice?: TelegramDocument;
 }
 
 interface TelegramUpdate {
@@ -69,6 +89,9 @@ export class TelegramAdapter implements ChannelAdapter {
         const text = message?.text ?? message?.caption ?? "";
         const chatId = message?.chat?.id ?? "unknown";
         const from = message?.from;
+        const attachments = readTelegramAttachments(message);
+        const threadId =
+            message?.message_thread_id !== undefined ? String(message.message_thread_id) : undefined;
 
         return {
             id: String(update.update_id ?? message?.message_id ?? crypto.randomUUID()),
@@ -76,12 +99,14 @@ export class TelegramAdapter implements ChannelAdapter {
                 channel: "telegram",
                 chatId: String(chatId),
                 chatType: normalizeTelegramChatType(message?.chat?.type),
+                threadId,
             },
             user: {
                 id: String(from?.id ?? "unknown"),
                 displayName: from?.username ?? from?.first_name,
             },
             text,
+            attachments: attachments.length > 0 ? attachments : undefined,
             raw: update,
             receivedAt: new Date().toISOString(),
         };
@@ -118,6 +143,42 @@ function normalizeTelegramChatType(value: string | undefined): GatewayMessage["r
         return "group";
     }
     return "unknown";
+}
+
+function readTelegramAttachments(message: TelegramMessage | undefined): GatewayAttachment[] {
+    if (!message) return [];
+    const out: GatewayAttachment[] = [];
+    if (Array.isArray(message.photo) && message.photo.length > 0) {
+        // Telegram 同一张图会以多种尺寸列出，取最后一个（通常最大）。
+        const biggest = message.photo[message.photo.length - 1]!;
+        if (biggest.file_id) {
+            out.push({
+                id: biggest.file_unique_id ?? biggest.file_id,
+                kind: "image",
+                mimeType: "image/jpeg",
+                size: typeof biggest.file_size === "number" ? biggest.file_size : undefined,
+            });
+        }
+    }
+    if (message.document?.file_id) {
+        const mimeType = message.document.mime_type;
+        out.push({
+            id: message.document.file_unique_id ?? message.document.file_id,
+            name: message.document.file_name,
+            mimeType,
+            kind: mimeType && mimeType.startsWith("image/") ? "image" : "file",
+            size: typeof message.document.file_size === "number" ? message.document.file_size : undefined,
+        });
+    }
+    if (message.voice?.file_id) {
+        out.push({
+            id: message.voice.file_unique_id ?? message.voice.file_id,
+            mimeType: message.voice.mime_type ?? "audio/ogg",
+            kind: "file",
+            size: typeof message.voice.file_size === "number" ? message.voice.file_size : undefined,
+        });
+    }
+    return out;
 }
 
 function json(payload: unknown, status = 200): Response {

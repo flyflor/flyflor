@@ -1,9 +1,11 @@
 import type { GatewayConfig } from "../../../config/index.ts";
 import { Channel, type ChannelName } from "../../../protocol/contracts/index.ts";
 import { ApiChannelAdapter } from "./api.ts";
+import { BlueBubblesAdapter } from "./bluebubbles.ts";
 import { DiscordInteractionAdapter } from "./discord.ts";
 import { FeishuAdapter } from "./feishu.ts";
 import { HttpPlatformAdapter } from "./http.platforms.ts";
+import { SlackAdapter } from "./slack.ts";
 import { StdioAdapter } from "./stdio.ts";
 import { TelegramAdapter } from "./telegram.ts";
 import type { ChannelAdapter } from "./types.ts";
@@ -56,6 +58,37 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
                 name,
                 new DiscordInteractionAdapter(config.channels.discord.applicationId, config.channels.discord.publicKey),
             );
+            continue;
+        }
+
+        if (name === Channel.Slack && typeof config.channels.slack.signingSecret === "string") {
+            adapters.set(
+                name,
+                new SlackAdapter({
+                    botToken: config.channels.slack.botToken,
+                    signingSecret: config.channels.slack.signingSecret,
+                }),
+            );
+            continue;
+        }
+
+        if (
+            (name === Channel.BlueBubbles || name === Channel.IMessage) &&
+            typeof (
+                name === Channel.BlueBubbles
+                    ? config.channels.bluebubbles.password
+                    : (config.channels.imessage.password ?? config.channels.bluebubbles.password)
+            ) === "string"
+        ) {
+            const password =
+                name === Channel.BlueBubbles
+                    ? (config.channels.bluebubbles.password as string)
+                    : ((config.channels.imessage.password ?? config.channels.bluebubbles.password) as string);
+            const apiBaseUrl =
+                name === Channel.BlueBubbles
+                    ? config.channels.bluebubbles.serverUrl
+                    : (config.channels.imessage.serverUrl ?? config.channels.bluebubbles.serverUrl);
+            adapters.set(name, new BlueBubblesAdapter(name, { apiBaseUrl, password }));
             continue;
         }
 
