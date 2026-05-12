@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | M-01 | `sessionKey` 仍贯穿 `MemoryCandidate / CrystalTurnInput / MemorySearchRequest`；session 溶解未完成 ⏸ blocked-needs-design — 涉及 SQLite 列重命名、blackboard lease 主键、crystal 反思 sourceId 拼接 + 历史数据迁移脚本，留待 EQ 阶段统一规划 | P1 |
 | ~~M-02~~ | ~~`BackgroundScheduler` 仅在 Redis+Surreal+Model 三件齐备时启用，默认开发环境**静默 noop**，缺降级告警~~ ✅ done — MemoryModule.warmup 在 scheduler=null 时发布 `MemoryBackgroundSchedulerSkipped` 事件（含 missing[] 与影响说明）；`doctor` 表新增「Background scheduler」一行，缺 redis/surreal/model 时 warn | P1 |
-| M-03 | Reflection 仍在 Runtime 同进程；独立 Reflection worker 未拆 | P2 |
+| ~~M-03~~ | ~~Reflection 仍在 Runtime 同进程；独立 Reflection worker 未拆~~ ✅ done — 抽出 `src/agent/runtime/reflection.normalize.ts` 纯函数模块（`normalizeReflectionRaw` / `renderReflectionEvidence`），新增 `reflection.worker.thread.ts` Worker entry + `ReflectionThreadRunner` 主线程伴生类（单例 Worker、自增 id 配对、`timeoutMs` 超时 / 异常 / postMessage 失败统一回退主线程），`extractRuntimeReflectionCandidates(model, source, runner?)` 在传入 runner 时把规范化挪到独立线程；4 个新测试覆盖 ok / fallback / timeout / 主线程同结果 | P2 |
 | M-04 | Dream worker 缺压测；候选选择策略未在大数据集下验证 | P2 |
 | ~~M-05~~ | ~~SurrealDB 旧表 `crystal_skill / skill_snapshot → gem / gem_snapshot` 迁移脚本待写~~ ✅ done — `scripts/surreal.migrate.ts`：HTTP `/sql` 端点；幂等（每条记录写入前 SELECT 跳过）；`--dry-run` 支持；写 `migratedFrom/migratedAt` 标记；不删旧表，留人工 `REMOVE TABLE` 收尾；统计 JSON 报表 | P1 |
 | ~~M-06~~ | ~~`ioredis` 兼容 `bun build --compile` 未真实验证；备选 RESP-over-Bun-TCP 未实现~~ ✅ done — `dist/redis.smoke` 二进制对真实 Redis 完整 CRUD（write/read/ring/queue/touch/drop）通过；`scripts/redis.smoke.ts` 保留作为回归手段 | P0 |
