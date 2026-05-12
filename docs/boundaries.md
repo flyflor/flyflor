@@ -185,7 +185,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 
 ## 11.1 生命体重构红线（LF-P0，与第 11 章并列硬约束）
 
-> 这四条红线规范了「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life-form.md`。
+> 这四条红线规范了「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life.form.md`。
 
 ### R1 — 无 session
 

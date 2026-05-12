@@ -320,7 +320,7 @@ export interface MemoryWeightConfig {
 
 /**
  * 生命体重构（LF-P0）配置块。所有字段都有默认值；缺省走 `createDefaultMemoryTuning()`。
- * 详见 `docs/proposals/life-form.md` 与 `docs/boundaries.md` R1-R4。
+ * 详见 `docs/proposals/life.form.md` 与 `docs/boundaries.md` R1-R4。
  *
  * R 红线提醒：本块属于内部行为调参，**禁止走环境变量**；必须落 `~/.flyflor/config.jsonc`。
  */
@@ -595,7 +595,7 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
 
     const merged = mergeConfig(defaults, override);
     // R red-line enforcement: `_keepGatewayListening` is an audit-only field;
-    // user edits are silently ignored (W2 behavior contract, see docs/proposals/life-form.md).
+    // user edits are silently ignored (W2 behavior contract, see docs/proposals/life.form.md).
     merged.tuning.dormant._keepGatewayListening = true;
     return merged;
 }
@@ -689,7 +689,7 @@ function createDefaultMemoryConfig(): MemoryConfig {
 }
 
 /**
- * 生命体重构（LF-P0）默认调参。所有字段都经过设计讨论拍板，详见 `docs/proposals/life-form.md`。
+ * 生命体重构（LF-P0）默认调参。所有字段都经过设计讨论拍板，详见 `docs/proposals/life.form.md`。
  *
  * 配置覆盖规则：用户在 `~/.flyflor/config.jsonc` 的 `memory.tuning.*` 下显式覆盖即生效；
  * 类型不正确时由 doctor 表 `Memory tuning` 一行高亮（不报错）。

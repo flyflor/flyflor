@@ -6,6 +6,7 @@ import { lintPromptTemplates } from "../../agent/prompts/index.ts";
 import { checkSkillSchemaCompatibility } from "../../crystal/skills/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
+import { createDefaultMemoryTuning } from "../../config/index.ts";
 import { ChannelLinkState } from "../../protocol/contracts/index.ts";
 import { getFlyflorConfigPath } from "./config.ts";
 
@@ -105,6 +106,9 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
                   .map((issue) => `${issue.name} (${issue.source}): v${issue.schemaVersion} ${issue.kind}`)
                   .join("; "),
     ]);
+
+    const tuningSummary = describeMemoryTuning(config);
+    rows.push(["Memory tuning", tuningSummary.status, tuningSummary.detail]);
 
     const table = new Table({
         head: ["Check", "Status", "Detail"],
@@ -234,6 +238,51 @@ function describeBackgroundScheduler(config: FlyflorConfig): { status: string; d
     };
 }
 
+/**
+ * Life-form 重构（LF-P0）配置侧可见性：列出 `memory.tuning.*` 中与默认值不一致的关键值。
+ * 红线 R3：identity append 频率 / R4：inbox 加速衰减 / D7：Dormant 阈值 都从这里一眼可读。
+ * 与默认值不一致时输出 "tuned"（不是 warn），仅高亮供 review；不报错。
+ */
+function describeMemoryTuning(config: FlyflorConfig): { status: string; detail: string } {
+    const tuning = config.memory.tuning;
+    const defaults = createDefaultMemoryTuning();
+    const changed: string[] = [];
+    if (tuning.identity.appendDailyLimitPerFile !== defaults.identity.appendDailyLimitPerFile) {
+        changed.push(`identity.appendDailyLimitPerFile=${tuning.identity.appendDailyLimitPerFile}`);
+    }
+    if (tuning.summary.trigger !== defaults.summary.trigger) {
+        changed.push(`summary.trigger=${tuning.summary.trigger}`);
+    }
+    if (tuning.summary.rollingWindowDays !== defaults.summary.rollingWindowDays) {
+        changed.push(`summary.rollingWindowDays=${tuning.summary.rollingWindowDays}`);
+    }
+    if (tuning.session.legacyDoubleWriteDays !== defaults.session.legacyDoubleWriteDays) {
+        changed.push(`session.legacyDoubleWriteDays=${tuning.session.legacyDoubleWriteDays}`);
+    }
+    if (tuning.reconsolidation.embeddingDriftThreshold !== defaults.reconsolidation.embeddingDriftThreshold) {
+        changed.push(`reconsolidation.embeddingDriftThreshold=${tuning.reconsolidation.embeddingDriftThreshold}`);
+    }
+    if (tuning.reconsolidation.driftHitCount !== defaults.reconsolidation.driftHitCount) {
+        changed.push(`reconsolidation.driftHitCount=${tuning.reconsolidation.driftHitCount}`);
+    }
+    if (tuning.inbox.decayMultiplier !== defaults.inbox.decayMultiplier) {
+        changed.push(`inbox.decayMultiplier=${tuning.inbox.decayMultiplier}`);
+    }
+    if (tuning.inbox.ttlDays !== defaults.inbox.ttlDays) {
+        changed.push(`inbox.ttlDays=${tuning.inbox.ttlDays}`);
+    }
+    if (tuning.dormant.idleMinutes !== defaults.dormant.idleMinutes) {
+        changed.push(`dormant.idleMinutes=${tuning.dormant.idleMinutes}`);
+    }
+    if (changed.length === 0) {
+        return {
+            status: "ok",
+            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d)`,
+        };
+    }
+    return { status: "tuned", detail: changed.join("; ") };
+}
+
 function section(title: string, content: string | string[]): string {
     const body = Array.isArray(content) ? content.join("\n") : content;
     return [pc.bold(pc.cyan(`◆ ${title}`)), body].filter(Boolean).join("\n");
@@ -359,6 +408,9 @@ function colorStatus(status: string): string {
     }
     if (status === "warn") {
         return pc.yellow(status);
+    }
+    if (status === "tuned") {
+        return pc.cyan(status);
     }
     return pc.red(status);
 }

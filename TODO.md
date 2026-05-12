@@ -10,7 +10,7 @@
 
 ## 生命体重构（Life-form 主线，正在进行）
 
-> 目标：把架构从「带记忆的智能体」推进为「在时间里持续活着的生命体」。完整设计见 `docs/proposals/life-form.md`（待建）与 session plan.md。
+> 目标：把架构从「带记忆的智能体」推进为「在时间里持续活着的生命体」。完整设计见 `docs/proposals/life.form.md`（待建）与 session plan.md。
 
 **核心决策**：
 - D1 完全删除 session 概念，时间成为唯一连续轴
@@ -43,7 +43,7 @@
 
 | ID | 阶段 | 描述 | 状态 |
 | --- | --- | --- | --- |
-| LF-P0 | 阶段 0 | 协议 + 边界 + 配置 schema：MemoryAtom / AtomScore / FocusPointer 类型；`RuntimeMode.Dormant` 等新枚举；`memory.*` 配置默认值；`boundaries.md` R1-R4；`docs/proposals/life-form.md`；不改运行时行为 | 进行中 |
+| LF-P0 | 阶段 0 | 协议 + 边界 + 配置 schema：MemoryAtom / AtomScore / FocusPointer 类型；`RuntimeMode.Dormant` 等新枚举；`memory.*` 配置默认值；`boundaries.md` R1-R4；`docs/proposals/life.form.md`；不改运行时行为 | 进行中 |
 | LF-P1 | 阶段 1 | 存储重构（向下兼容）：`journal/` 目录布局、按天 SQLite writer、`week.index.surreal`、Redis activation key；先写 `journal.smoke.ts` 压测 bun sqlite 多文件 open 行为 | pending |
 | LF-P2 | 阶段 2 | Session 溶解：blackboard lease 主键 → `(userId, projectId)` + requestId tie-breaker；reflection `sourceId` → `<projectId>/<turnId>`；Confirmation lookup 改造；`legacySessionKey` 30 天双写期 | pending |
 | LF-P3 | 阶段 3 | Atom 抽取 + 三层漏斗：热相（turn 结束零额外 LLM）/ 冷相（每日离线本地模型）；AtomScore 替换现 evidence gate；Gate A 量 / B 质 / C 信 接入 cluster sweeper（复用 project-offer / skill-offer 框架） | pending |
