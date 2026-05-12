@@ -115,6 +115,11 @@ export class MemoryModule extends Memory {
      * 预热：连接 Redis 并测 PING 往返延迟。
      * 失败时降级（redis = null 已经 guard），不抛出。
      */
+    /** 暴露底层 Redis 客户端，供同进程其他热路径组件（fastRoute 快照等）复用。 */
+    getRedisClient() {
+        return this.redis?.getClient();
+    }
+
     async warmup(): Promise<void> {
         if (this.scheduler) {
             this.scheduler.start();

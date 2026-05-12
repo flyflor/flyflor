@@ -52,6 +52,11 @@ import { loadSkills, recordSkillUsage, selectSkills, type Skill } from "../../cr
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 import { extractRuntimeReflectionCandidates } from "./reflection.ts";
 import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./fast.route.ts";
+import {
+    InMemoryFastRouteSnapshotStore,
+    RedisFastRouteSnapshotStore,
+    type FastRouteSnapshotStore,
+} from "./fast.route.store.ts";
 import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 
@@ -125,7 +130,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
      * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
      */
-    private readonly fastRouteSnapshots = new Map<string, FastRouteSnapshot>();
+    private fastRouteSnapshots: FastRouteSnapshotStore = new InMemoryFastRouteSnapshotStore();
 
     constructor(
         private readonly config: FlyflorConfig,
@@ -143,6 +148,11 @@ export class RuntimeModule extends RuntimeBoundary {
     /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
     async warmup(): Promise<void> {
         await this.memory.warmup();
+        const redisClient = this.memory.getRedisClient();
+        if (redisClient && this.fastRouteSnapshots instanceof InMemoryFastRouteSnapshotStore) {
+            // Redis 命中即升级为跨副本共享存储；保留 L1 内存以维持热路径 O(1)。
+            this.fastRouteSnapshots = new RedisFastRouteSnapshotStore({ redis: redisClient });
+        }
     }
 
     /** CLI 接口：dream 状态快照。 */
@@ -210,9 +220,10 @@ export class RuntimeModule extends RuntimeBoundary {
         const embedding = await this.embeddings.embed(message.text);
         const enrichedContext: RuntimeContext = { ...context, embedding };
         const snapshotKey = this.snapshotKeyFor(message);
+        const fastRouteSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const fastRoute = evaluateFastRoute({
             config: this.config.routing,
-            snapshot: this.fastRouteSnapshots.get(snapshotKey),
+            snapshot: fastRouteSnapshot,
             nowMs: Date.now(),
             currentEmbedding: embedding,
             messageChars: message.text.length,
@@ -276,7 +287,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const sandbox = createSandboxPolicy(this.config.sandbox);
         const mcpExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.McpTool);
 
-        const snapshotForEscalation = this.fastRouteSnapshots.get(snapshotKey);
+        const snapshotForEscalation = await this.fastRouteSnapshots.get(snapshotKey);
         const effectivePreRoute = this.applyRouteEscalation(
             preRoute,
             snapshotForEscalation,
@@ -422,7 +433,7 @@ export class RuntimeModule extends RuntimeBoundary {
         }).catch(() => undefined);
 
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
-        const previousSnapshot = this.fastRouteSnapshots.get(snapshotKey);
+        const previousSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const totalToolCalls = mcpCallProvenance.length;
         const toolFailureRatio =
             totalToolCalls > 0
@@ -437,7 +448,7 @@ export class RuntimeModule extends RuntimeBoundary {
             toolFailureRatio,
             toolFailureRatioTrigger: this.config.routing.toolFailureRatioTrigger ?? 0.5,
         });
-        this.fastRouteSnapshots.set(snapshotKey, {
+        await this.fastRouteSnapshots.set(snapshotKey, {
             recordedAt: Date.now(),
             embedding,
             lastMode,

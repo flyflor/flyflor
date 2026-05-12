@@ -73,6 +73,11 @@ export class RedisMemoryStore {
         return this.client.status === "ready";
     }
 
+    /** 暴露底层 ioredis 客户端，供同 namespace 的其他模块（fastRoute 快照等）共享。 */
+    getClient(): Redis {
+        return this.client;
+    }
+
     /**
      * 写入 episode + 同步刷新 ring buffer + consolidation 队列 + 强制遗忘。
      * 调用方必须先算好 stability/ttlSeconds（基于 importance × multiplier）。

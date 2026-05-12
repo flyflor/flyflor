@@ -13,7 +13,7 @@
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
 | ~~R-01~~ | ~~direct-with-watch 升级器仅看计数器，**未读「工具反复失败 / 上下文压力」语义信号**~~ ✅ done — 新增两路升级原因 `tool-failure-saturation` / `context-pressure`：runtime 在 persistTurn 计算 toolFailureRatio 写回 `consecutiveToolFailureTurns`；applyRouteEscalation 估算 messageChars→tokens 与 `routing.contextPressureBudgetTokens` 比值；新增 9 个升级器测试（全数值，零字符匹配） | P1 |
-| R-02 | `fastRouteSnapshots` 进程内 Map，重启即丢失；多 gateway 节点不共享 | P1 |
+| ~~R-02~~ | ~~`fastRouteSnapshots` 进程内 Map，重启即丢失；多 gateway 节点不共享~~ ✅ done — `src/agent/runtime/fast.route.store.ts`：`FastRouteSnapshotStore` 接口 + `InMemoryFastRouteSnapshotStore`（默认）+ `RedisFastRouteSnapshotStore`（L1 内存 + L2 Redis，`ff:fastroute:*` key，3600s TTL，写后回填，Redis 故障自动降级 L1-only）；RuntimeModule.warmup 在 MemoryModule 持有 ioredis 客户端时自动升级为双层存储；4 个新测试覆盖 hydration / 故障降级 / TTL 写入 | P1 |
 | R-03 | 黑板进程隔离（Bun Worker / 子进程）阶段未完成，目前 worker 大多 in-process | P1 |
 | R-04 | TUI 未实时订阅 `worker.step` / 黑板讨论流 | P2 |
 
