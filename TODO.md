@@ -98,7 +98,7 @@
 | --- | --- | --- |
 | ~~E-01~~ | ~~`RuntimeModule.handleMessage` 1300 行高度集中~~ ✅ done — 拆为 `prepareTurn` / `assembleTurnContext` / `generateTurnReply` / `persistTurn` / `dispatchAsyncTurnTasks` 五个 phase；handleMessage 现在仅 ~25 行编排，行为与事件序列保持一致（402 tests pass） | P1 |
 | ~~E-02~~ | ~~`MemoryModule` 由 RuntimeModule 内部 `new`，外部无法注入替代实现~~ ✅ done — RuntimeModule 构造函数新增可选 `memory` 入参；composition root 注入 `MemoryModule` 并注册 `FlyFlorTokens.Memory`，外部测试/装配可显式替换 | P1 |
-| E-03 | 模板 lint / 兼容性检查缺失（升级 runtime 后旧用户模板缺字段不报错） | P2 |
+| ~~E-03~~ | ~~模板 lint / 兼容性检查缺失（升级 runtime 后旧用户模板缺字段不报错）~~ ✅ done — `lintPromptTemplates(paths)` 校验所有模板存在/非空/含本版本必需占位符；`doctor` 表新增 `Prompt templates` 行，缺占位时输出 `N issue(s); run "bun run install:templates"` 提示；3 个新单测覆盖 ok / empty-file / missing-placeholder | P2 |
 
 ## 工作建议（不含时间估算）
 

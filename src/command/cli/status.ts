@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import Table from "cli-table3";
 import pc from "picocolors";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
+import { lintPromptTemplates } from "../../agent/prompts/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { ChannelLinkState } from "../../protocol/contracts/index.ts";
@@ -83,6 +84,15 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
 
     const schedulerStatus = describeBackgroundScheduler(config);
     rows.push(["Background scheduler", schedulerStatus.status, schedulerStatus.detail]);
+
+    const templateLint = await lintPromptTemplates(config.paths);
+    rows.push([
+        "Prompt templates",
+        templateLint.ok ? "ok" : "warn",
+        templateLint.ok
+            ? `${templateLint.checked.length} templates ok`
+            : `${templateLint.issues.length} issue(s); run "bun run install:templates"`,
+    ]);
 
     const table = new Table({
         head: ["Check", "Status", "Detail"],

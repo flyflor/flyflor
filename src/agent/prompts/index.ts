@@ -398,3 +398,90 @@ export function renderBlackboardDecisionOptions(): Array<{ id: string; label: st
 function renderTemplate(template: string, values: Record<string, string>): string {
     return template.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/gu, (match, key: string) => values[key] ?? match).trim();
 }
+
+/** 每个模板必须出现的占位符集合；任一缺失即视为旧模板，需提示用户升级。 */
+const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
+    blackboardAdvisory: ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
+    blackboardDecision: ["questionCount", "reason", "unresolvedIssues"],
+    blackboardRoute: ["request"],
+    blackboardWorkerSystem: ["participant"],
+    crystalReflection: ["evidence"],
+    feedbackClassify: ["currentUserText", "previousAssistantText"],
+    mcpContext: ["mcpEntries"],
+    memoryAction: [],
+    memoryConsolidation: ["episode"],
+    memoryContext: ["hippocampus", "markdownContent", "projectMemory", "retrievedResults", "sessionMessages"],
+    memoryDream: ["candidates", "userId"],
+    runtimeSystem: [
+        "blackboardContext",
+        "mcpContext",
+        "memoryActionInstructions",
+        "memoryContext",
+        "sandboxSummary",
+        "skillContext",
+    ],
+    skillContext: ["skillEntries"],
+};
+
+export interface PromptTemplateLintIssue {
+    key: PromptTemplateKey;
+    filename: string;
+    path: string;
+    kind: "missing-file" | "empty-file" | "missing-placeholder" | "unread-error";
+    detail: string;
+}
+
+export interface PromptTemplateLintReport {
+    ok: boolean;
+    promptDir: string;
+    issues: PromptTemplateLintIssue[];
+    checked: PromptTemplateKey[];
+}
+
+/**
+ * 校验 `<promptDir>` 下所有提示词模板：
+ *   - 存在；
+ *   - 非空；
+ *   - 包含本版本 runtime 渲染必需的占位符（`{{name}}`）。
+ *
+ * 任何一项不满足即返回 `ok=false` + 详细 issue 列表，供 `flyflor doctor` 或
+ * `bun run install:templates` 升级流程参考。本函数纯读，不修复任何文件。
+ */
+export async function lintPromptTemplates(paths: FlyflorPaths): Promise<PromptTemplateLintReport> {
+    const issues: PromptTemplateLintIssue[] = [];
+    const checked: PromptTemplateKey[] = [];
+    for (const key of Object.keys(PROMPT_TEMPLATE_FILES) as PromptTemplateKey[]) {
+        checked.push(key);
+        const filename = PROMPT_TEMPLATE_FILES[key];
+        const path = join(paths.promptDir, filename);
+        const file = Bun.file(path);
+        if (!(await file.exists())) {
+            issues.push({ key, filename, path, kind: "missing-file", detail: "file does not exist" });
+            continue;
+        }
+        let text = "";
+        try {
+            text = (await file.text()).trim();
+        } catch (err) {
+            issues.push({ key, filename, path, kind: "unread-error", detail: String(err) });
+            continue;
+        }
+        if (!text) {
+            issues.push({ key, filename, path, kind: "empty-file", detail: "file is empty after trim" });
+            continue;
+        }
+        for (const placeholder of REQUIRED_PLACEHOLDERS[key]) {
+            const pattern = new RegExp(`\\{\\{\\s*${placeholder}\\s*\\}\\}`, "u");
+            if (!pattern.test(text)) {
+                issues.push({
+                    key,
+                    filename,
+                    path,
+                    kind: "missing-placeholder",
+                    detail: `missing required placeholder {{${placeholder}}}`,
+                });
+            }
+        }
+    }
+    return { ok: issues.length === 0, promptDir: paths.promptDir, issues, checked };
+}
