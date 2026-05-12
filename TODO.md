@@ -25,9 +25,9 @@
 | ~~M-02~~ | ~~`BackgroundScheduler` 仅在 Redis+Surreal+Model 三件齐备时启用，默认开发环境**静默 noop**，缺降级告警~~ ✅ done — MemoryModule.warmup 在 scheduler=null 时发布 `MemoryBackgroundSchedulerSkipped` 事件（含 missing[] 与影响说明）；`doctor` 表新增「Background scheduler」一行，缺 redis/surreal/model 时 warn | P1 |
 | M-03 | Reflection 仍在 Runtime 同进程；独立 Reflection worker 未拆 | P2 |
 | M-04 | Dream worker 缺压测；候选选择策略未在大数据集下验证 | P2 |
-| M-05 | SurrealDB 旧表 `crystal_skill / skill_snapshot → gem / gem_snapshot` 迁移脚本待写 | P1 |
+| ~~M-05~~ | ~~SurrealDB 旧表 `crystal_skill / skill_snapshot → gem / gem_snapshot` 迁移脚本待写~~ ✅ done — `scripts/surreal.migrate.ts`：HTTP `/sql` 端点；幂等（每条记录写入前 SELECT 跳过）；`--dry-run` 支持；写 `migratedFrom/migratedAt` 标记；不删旧表，留人工 `REMOVE TABLE` 收尾；统计 JSON 报表 | P1 |
 | ~~M-06~~ | ~~`ioredis` 兼容 `bun build --compile` 未真实验证；备选 RESP-over-Bun-TCP 未实现~~ ✅ done — `dist/redis.smoke` 二进制对真实 Redis 完整 CRUD（write/read/ring/queue/touch/drop）通过；`scripts/redis.smoke.ts` 保留作为回归手段 | P0 |
-| M-07 | feedback 四分类（A/B/C/D）已分类但**写入 episode/preference/宪法/skill 的通道未全部打通** | P1 |
+| ~~M-07~~ | ~~feedback 四分类（A/B/C/D）已分类但**写入 episode/preference/宪法/skill 的通道未全部打通**~~ ✅ done — `Confirmation` 通道补齐：Redis 写一条 `concept=confirmation` 高稳定性 episode；若 Surreal 装配则用 `previousAssistantText` embedding 做 ANN top-1 召回，score≥0.75 时 `applyMemoryReinforce` 提升 importance + 刷 `lastVerifiedAt`；新增 `feedback.wire.test.ts > Confirmation without redis is a graceful no-op` 用例 | P1 |
 | M-08 | project cluster 路径触发完整，但「LLM 询问 → 用户确认 → 脚手架落地」闭环未跑通 | P1 |
 | M-09 | `RETROSPECTIVE.md` 自动归档入口缺失 | P2 |
 
@@ -54,8 +54,8 @@
 | ID | 描述 | 优先级 |
 | --- | --- | --- |
 | MCP-01 | 旧式 SSE 双端点（`GET /events` + `POST /messages`）未实现 | P2 |
-| MCP-02 | catalog 缓存进程内 Map，多副本不共享，缺 LRU 限制 | P1 |
-| MCP-03 | tool 调用结果无摘要 / 截断策略，长结果直接拼回模型 | P1 |
+| ~~MCP-02~~ | ~~catalog 缓存进程内 Map，多副本不共享，缺 LRU 限制~~ ✅ done — 新增 `MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES=64` 上限 + `cacheMcpToolEntries` 写时清理过期 + LRU 淘汰；命中时 `delete+set` 维护 recency。多副本共享留待 EQ 阶段考虑外置缓存 | P1 |
+| ~~MCP-03~~ | ~~tool 调用结果无摘要 / 截断策略，长结果直接拼回模型~~ ✅ done — `renderMcpToolResults` 走 `summarizeMcpResultPayload`：超过 4000 字符的结果保留 head 2400 + tail 1200 + originalChars 与 notice；不可序列化结果降级为占位（4 个新测试） | P1 |
 | MCP-04 | 客户端未做 `inputSchema` JSON-Schema 校验 | P2 |
 
 ## Skill

@@ -137,6 +137,21 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         const cls = sink.events.find((e) => e.type === RuntimeEventType.MemoryFeedbackClassified);
         expect(cls).toBeDefined();
     });
+    test("Confirmation without redis is a graceful no-op (publishes classified event)", async () => {
+        const config = await testConfig();
+        const sink = new CapturingSink();
+        const memory = new MemoryModule(config, sink, new StubModel("{}"));
+        await memory.applyFeedback({
+            userId: "u1",
+            category: FeedbackCategory.Confirmation,
+            extractedFact: "answer was correct",
+            previousAssistantText: "Use Tailwind for utility-first styling.",
+            currentUserText: "yes that worked",
+            recordedAt: new Date().toISOString(),
+        });
+        const cls = sink.events.find((e) => e.type === RuntimeEventType.MemoryFeedbackClassified);
+        expect(cls).toBeDefined();
+    });
 });
 
 async function testConfig() {

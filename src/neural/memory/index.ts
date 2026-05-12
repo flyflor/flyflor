@@ -531,6 +531,43 @@ export class MemoryModule extends Memory {
                 await this.markdown.appendFeedback(MarkdownMemoryFile.User, fact, input.recordedAt);
             } else if (input.category === FeedbackCategory.GlobalStrategy) {
                 await this.markdown.appendFeedback(MarkdownMemoryFile.Self, fact, input.recordedAt);
+            } else if (input.category === FeedbackCategory.Confirmation) {
+                // Confirmation：用户明确确认上一轮答案有效。
+                // 1) Redis 写一条高稳定性 episode（concept=confirmation，便于召回时识别正反馈）；
+                // 2) 若 Surreal 装配了，用 previousAssistantText 的 embedding 做 ANN top-1
+                //    召回最相关的 gem/memory_node，调用 applyMemoryReinforce 提升 importance + 刷 lastVerifiedAt。
+                if (this.redis) {
+                    const embedding = await this.embeddings.embed(input.previousAssistantText);
+                    await this.redis.writeEpisode({
+                        userId: input.userId,
+                        episodeId: crypto.randomUUID(),
+                        text: `confirmation: ${fact} (about: ${input.previousAssistantText.slice(0, 256)})`,
+                        concepts: ["confirmation"],
+                        embedding,
+                        importance: 0.85,
+                        stability: 0.9,
+                        sourceKind: MemorySourceKind.UserFeedback,
+                        createdAt: Date.now(),
+                        ttlSeconds: this.config.memory.redis.defaultTtlSeconds,
+                    });
+                    if (this.surreal) {
+                        const top = await this.surreal
+                            .recallMemoryNodes({ userId: input.userId, embedding, limit: 1 })
+                            .catch(() => []);
+                        const candidate = top[0];
+                        const score = (candidate as { score?: number } | undefined)?.score ?? 0;
+                        if (candidate && score >= 0.75) {
+                            await this.surreal
+                                .applyMemoryReinforce({
+                                    table: "memory_node",
+                                    id: candidate.id,
+                                    importanceMultiplier: 1.2,
+                                    nowMs: Date.now(),
+                                })
+                                .catch(() => false);
+                        }
+                    }
+                }
             }
             this.events.publish(
                 event(

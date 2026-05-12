@@ -80,6 +80,7 @@ interface CachedMcpToolCatalog {
 }
 
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
+const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 
 /** Phase 1 输出：被 phase 2~5 共享的“轮内不可变上下文”。 */
 interface PreparedTurn {
@@ -697,9 +698,13 @@ export class RuntimeModule extends RuntimeBoundary {
             const cacheKey = mcpCatalogCacheKey(server);
             const cached = this.mcpToolCatalogCache.get(cacheKey);
             if (cached && cached.expiresAt > Date.now()) {
+                // LRU touch：删后重 set，保持插入顺序近似 LRU。
+                this.mcpToolCatalogCache.delete(cacheKey);
+                this.mcpToolCatalogCache.set(cacheKey, cached);
                 entries.push(...cached.tools);
                 continue;
             }
+            if (cached) this.mcpToolCatalogCache.delete(cacheKey);
             try {
                 const tools = await listMcpTools(this.config.paths, server, {
                     events: this.events,
@@ -707,16 +712,35 @@ export class RuntimeModule extends RuntimeBoundary {
                     timeoutMs: 1_500,
                 });
                 const serverEntries = tools.map((tool) => ({ server: server.name, tool }));
-                this.mcpToolCatalogCache.set(cacheKey, {
-                    expiresAt: Date.now() + MCP_TOOL_CATALOG_CACHE_TTL_MS,
-                    tools: serverEntries,
-                });
+                this.cacheMcpToolEntries(cacheKey, serverEntries);
                 entries.push(...serverEntries);
             } catch {
                 // Tool discovery is best-effort; failed servers stay configured but are not offered this turn.
             }
         }
         return entries;
+    }
+
+    /**
+     * 把一组 catalog entry 写入 LRU 缓存：达到上限 (`MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES`)
+     * 时丢弃最久未访问的条目；同时在写入前清理已过期条目，避免缓存被冷数据撑满。
+     */
+    private cacheMcpToolEntries(cacheKey: string, entries: McpToolCatalogEntry[]): void {
+        const now = Date.now();
+        for (const [key, cached] of this.mcpToolCatalogCache) {
+            if (cached.expiresAt <= now) {
+                this.mcpToolCatalogCache.delete(key);
+            }
+        }
+        while (this.mcpToolCatalogCache.size >= MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES) {
+            const oldest = this.mcpToolCatalogCache.keys().next().value;
+            if (oldest === undefined) break;
+            this.mcpToolCatalogCache.delete(oldest);
+        }
+        this.mcpToolCatalogCache.set(cacheKey, {
+            expiresAt: now + MCP_TOOL_CATALOG_CACHE_TTL_MS,
+            tools: entries,
+        });
     }
 
     private async executeMcpToolCalls(

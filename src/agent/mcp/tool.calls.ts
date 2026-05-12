@@ -79,6 +79,35 @@ export function renderMcpToolCatalog(input: {
     return lines.join("\n");
 }
 
+/**
+ * 单条 MCP 工具结果回灌给模型时允许的最大字符数。
+ * 超过即截断（保留头部 + 尾部，省略中段并标注原始大小）。
+ * 长结果直接拼回模型既浪费 token 也会污染上下文。
+ */
+const MCP_RESULT_MAX_CHARS_PER_CALL = 4_000;
+const MCP_RESULT_TRUNCATE_HEAD = 2_400;
+const MCP_RESULT_TRUNCATE_TAIL = 1_200;
+
+function summarizeMcpResultPayload(raw: unknown): unknown {
+    if (raw === undefined || raw === null) return raw;
+    let serialized: string;
+    try {
+        serialized = typeof raw === "string" ? raw : JSON.stringify(raw);
+    } catch {
+        return { kind: "unserializable", message: "result not JSON-serializable" };
+    }
+    if (serialized.length <= MCP_RESULT_MAX_CHARS_PER_CALL) {
+        return raw;
+    }
+    return {
+        kind: "truncated",
+        originalChars: serialized.length,
+        head: serialized.slice(0, MCP_RESULT_TRUNCATE_HEAD),
+        tail: serialized.slice(-MCP_RESULT_TRUNCATE_TAIL),
+        notice: `result truncated to head ${MCP_RESULT_TRUNCATE_HEAD} + tail ${MCP_RESULT_TRUNCATE_TAIL} chars (original ${serialized.length})`,
+    };
+}
+
 export function renderMcpToolResults(executions: McpToolCallExecution[]): string {
     return [
         "MCP tool results:",
@@ -88,7 +117,7 @@ export function renderMcpToolResults(executions: McpToolCallExecution[]): string
                     server: execution.call.server,
                     tool: execution.call.tool,
                     ok: execution.ok,
-                    result: execution.result?.raw,
+                    result: summarizeMcpResultPayload(execution.result?.raw),
                     error: execution.error,
                 })),
             },
