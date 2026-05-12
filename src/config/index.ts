@@ -316,11 +316,20 @@ export interface MemoryWeightConfig {
     validationCount: number;
 }
 
+export type AuditSinkConfig =
+    | { kind: "file"; path?: string }
+    | { kind: "http"; url: string; headers?: Record<string, string>; timeoutMs?: number };
+
 export interface SandboxConfig {
     mode: SandboxMode;
     mcpToolApproval?: ToolApprovalModeType;
     pluginApproval?: ToolApprovalModeType;
     shellHookApproval?: ToolApprovalModeType;
+    /**
+     * 审计 sink 列表；未配置时默认装配 file sink（写入 `<logDir>/audit.jsonl`）。
+     * 多 sink 时按顺序 fan-out；任一失败 best-effort 不阻塞其它。
+     */
+    auditSinks?: AuditSinkConfig[];
 }
 
 /**

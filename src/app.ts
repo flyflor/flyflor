@@ -32,7 +32,7 @@ import {
     type RuntimeMode as RuntimeModeType,
 } from "./protocol/index.ts";
 import { CompositeEventSink } from "./protocol/events/index.ts";
-import { FileAuditSink } from "./agent/sandbox/audit.sink.ts";
+import { FileAuditSink, HttpAuditSink } from "./agent/sandbox/audit.sink.ts";
 import { join } from "node:path";
 
 export const FlyFlorTokens = {
@@ -148,7 +148,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
     const mode = normalizeRuntimeMode(options.mode ?? options.argv?.[2]);
     const config = options.config ?? (await loadConfig());
     await loadPromptTemplates(config.paths);
-    const events = options.events ?? createDefaultEventSink(mode, config.paths.logDir);
+    const events = options.events ?? createDefaultEventSink(mode, config);
     const model = options.model ?? createModelClient(config.model, events);
     const workers = options.workers ?? createDefaultWorkerManager(model, events);
     const blackboard =
@@ -212,11 +212,23 @@ function isInjectionToken(value: unknown): value is InjectionToken<unknown> {
     );
 }
 
-function createDefaultEventSink(mode: RuntimeModeType, logDir: string): EventSink {
-    // 审计 sink 始终启用：失败 best-effort，bun --compile 安全。
-    const audit = new FileAuditSink({ filePath: join(logDir, "audit.jsonl") });
+function createDefaultEventSink(mode: RuntimeModeType, config: FlyflorConfig): EventSink {
+    const logDir = config.paths.logDir;
+    const configured = config.sandbox.auditSinks ?? [];
+    const audits: EventSink[] = [];
+    if (configured.length === 0) {
+        audits.push(new FileAuditSink({ filePath: join(logDir, "audit.jsonl") }));
+    } else {
+        for (const entry of configured) {
+            if (entry.kind === "file") {
+                audits.push(new FileAuditSink({ filePath: entry.path ?? join(logDir, "audit.jsonl") }));
+            } else if (entry.kind === "http") {
+                audits.push(new HttpAuditSink({ url: entry.url, headers: entry.headers, timeoutMs: entry.timeoutMs }));
+            }
+        }
+    }
     const primary = mode === RuntimeMode.Gateway ? new ConsoleEventSink() : new NullEventSink();
-    return new CompositeEventSink([primary, audit]);
+    return new CompositeEventSink([primary, ...audits]);
 }
 
 function createDefaultWorkerManager(model: ModelClient, events: EventSink): WorkerManager {

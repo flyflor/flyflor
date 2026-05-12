@@ -89,3 +89,78 @@ export class FileAuditSink implements EventSink {
         }
     }
 }
+
+/** HTTP 审计 sink：把白名单事件 POST 到外部 SIEM / log collector。 */
+export interface HttpAuditSinkOptions {
+    /** 目标 URL（如 https://siem.example.com/ingest） */
+    url: string;
+    /** 自定义 header（Bearer / x-api-key 等通过 secrets provider 解析后传入） */
+    headers?: Record<string, string>;
+    /** content-type；默认 application/json，单 event = 单 POST。 */
+    contentType?: string;
+    /** 注入 fetch（测试用） */
+    fetchImpl?: typeof fetch;
+    /** 自定义白名单（默认 AUDITED_EVENTS） */
+    audited?: ReadonlySet<string>;
+    /** 注入 now（测试用） */
+    now?: () => number;
+    /** 单次请求超时（ms），默认 3000；超时静默丢弃。 */
+    timeoutMs?: number;
+}
+
+export class HttpAuditSink implements EventSink {
+    private readonly url: string;
+    private readonly headers: Record<string, string>;
+    private readonly contentType: string;
+    private readonly fetchImpl: typeof fetch;
+    private readonly audited: ReadonlySet<string>;
+    private readonly now: () => number;
+    private readonly timeoutMs: number;
+    private writeChain: Promise<void> = Promise.resolve();
+
+    constructor(options: HttpAuditSinkOptions) {
+        this.url = options.url;
+        this.headers = options.headers ?? {};
+        this.contentType = options.contentType ?? "application/json";
+        this.fetchImpl = options.fetchImpl ?? fetch;
+        this.audited = options.audited ?? AUDITED_EVENTS;
+        this.now = options.now ?? (() => Date.now());
+        this.timeoutMs = options.timeoutMs ?? 3_000;
+    }
+
+    publish(event: RuntimeEvent): void {
+        if (!this.audited.has(event.type)) return;
+        const record = {
+            ts: this.now(),
+            type: event.type,
+            requestId: event.requestId,
+            payload: event.payload,
+        };
+        const body = JSON.stringify(record);
+        this.writeChain = this.writeChain.then(() => this.postBestEffort(body));
+    }
+
+    async flush(): Promise<void> {
+        await this.writeChain;
+    }
+
+    private async postBestEffort(body: string): Promise<void> {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+            const response = await this.fetchImpl(this.url, {
+                method: "POST",
+                headers: { "content-type": this.contentType, ...this.headers },
+                body,
+                signal: controller.signal,
+            });
+            if (!response.ok) {
+                console.warn(`[audit-sink:http] non-2xx ${response.status} from ${this.url}`);
+            }
+        } catch (err) {
+            console.warn(`[audit-sink:http] post failed: ${String(err)}`);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+}

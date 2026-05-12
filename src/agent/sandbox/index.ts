@@ -15,7 +15,13 @@ export {
     type ShellHookSpawnFn,
     type ShellHookSpawnHandle,
 } from "./shell.hook.executor.ts";
-export { FileAuditSink, AUDITED_EVENTS, type FileAuditSinkOptions } from "./audit.sink.ts";
+export {
+    AUDITED_EVENTS,
+    FileAuditSink,
+    HttpAuditSink,
+    type FileAuditSinkOptions,
+    type HttpAuditSinkOptions,
+} from "./audit.sink.ts";
 export {
     addSandboxAllow,
     loadSandboxAllowlist,

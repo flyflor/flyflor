@@ -47,7 +47,7 @@
 | S-01 | ~~Plugin runtime / Shell hook 执行路径未**全部**经过 SandboxModule~~ → 已统一为 `gateCapabilityExecution`（plugin / shell-hook / MCP tool 同一闸门，事件白名单全覆盖） | done |
 | ~~S-02~~ | ~~`allowlist` 持久化仍写主 config，缺独立 `~/.flyflor/sandbox.allow.jsonc`~~ ✅ done — 新建 `src/agent/sandbox/allowlist.store.ts`，分 `pluginCommands/shellCommands/mcpTools` 三桶，项目层覆盖全局层（mergeUnique 去重）；CLI 新增 `flyflor sandbox list|allow|deny <kind> <value> [--global]`；`plugins run` 已合并持久化白名单到 `PluginRunner.allowedCommands`；4 个单测 | P2 |
 | S-03 | 无「逐次仅允许 N 次」quota；YOLO 模式无冷却 | P2 |
-| S-04 | 审计 sink 不可插拔，无法转发外部 SIEM | P2 |
+| ~~S-04~~ | ~~审计 sink 不可插拔，无法转发外部 SIEM~~ ✅ done — 新增 `HttpAuditSink`（同 publish 白名单+best-effort+chained writes，AbortController 超时），`SandboxConfig.auditSinks: AuditSinkConfig[]` 支持 `{kind:'file'\|'http', ...}` 任意组合；composition root `createDefaultEventSink` 按 config 装配，未配置时默认 single file sink 保持原行为；2 个新单测 | P2 |
 
 ## MCP
 
