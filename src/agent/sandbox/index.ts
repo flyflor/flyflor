@@ -16,3 +16,12 @@ export {
     type ShellHookSpawnHandle,
 } from "./shell.hook.executor.ts";
 export { FileAuditSink, AUDITED_EVENTS, type FileAuditSinkOptions } from "./audit.sink.ts";
+export {
+    addSandboxAllow,
+    loadSandboxAllowlist,
+    removeSandboxAllow,
+    sandboxAllowlistPath,
+    type SandboxAllowKind,
+    type SandboxAllowlistFile,
+    type SandboxAllowlistMerged,
+} from "./allowlist.store.ts";

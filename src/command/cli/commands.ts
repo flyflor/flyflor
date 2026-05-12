@@ -55,7 +55,14 @@ import {
     type PluginValidationResult,
 } from "../../agent/plugin/index.ts";
 import { promptApproveMcpToolCall, startHumanChat } from "../../agent/runtime/index.ts";
-import { createSandboxPolicy } from "../../agent/sandbox/index.ts";
+import {
+    addSandboxAllow,
+    createSandboxPolicy,
+    loadSandboxAllowlist,
+    removeSandboxAllow,
+    sandboxAllowlistPath,
+    type SandboxAllowKind,
+} from "../../agent/sandbox/index.ts";
 import {
     findSkill,
     installSkill,
@@ -502,6 +509,30 @@ const COMMAND_SPECS: CommandSpec[] = [
         ],
     },
     {
+        name: "sandbox",
+        help: "Manage persisted sandbox allowlist (sandbox.allow.jsonc)",
+        subcommands: [
+            {
+                name: "list",
+                aliases: ["ls"],
+                help: "List allowlist entries",
+                options: [["--json", "Emit JSON instead of a table"]],
+            },
+            {
+                name: "allow",
+                argument: "<kind> <value>",
+                help: "Add an allowlist entry (kind: plugin-command|shell-command|mcp-tool)",
+                options: [["--global", "Write to global sandbox.allow.jsonc"]],
+            },
+            {
+                name: "deny",
+                argument: "<kind> <value>",
+                help: "Remove an allowlist entry",
+                options: [["--global", "Write to global sandbox.allow.jsonc"]],
+            },
+        ],
+    },
+    {
         name: "update",
         help: "Update Flyflor",
         options: [
@@ -764,6 +795,10 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     }
     if (root === "tools") {
         await runTools(sub, command);
+        return;
+    }
+    if (root === "sandbox") {
+        await runSandbox(sub, command);
         return;
     }
     if (root === "plugins") {
@@ -1439,6 +1474,52 @@ async function runTools(sub: string | undefined, command: Command): Promise<void
     console.log(`Path: ${mcpConfigPath(config.paths, { global: opts.global })}`);
 }
 
+async function runSandbox(sub: string | undefined, command: Command): Promise<void> {
+    const app = await cliApp();
+    const config = app.resolve(FlyFlorTokens.Config);
+
+    if (!sub || sub === "list" || sub === "ls") {
+        const opts = command.opts<{ json?: boolean }>();
+        const merged = await loadSandboxAllowlist(config.paths);
+        if (opts.json) {
+            console.log(JSON.stringify(merged, null, 2));
+            return;
+        }
+        console.log(`global: ${sandboxAllowlistPath(config.paths, { global: true })}`);
+        console.log(`project: ${sandboxAllowlistPath(config.paths, { global: false })}`);
+        console.log("");
+        console.log(`plugin-command (${merged.pluginCommands.length}): ${merged.pluginCommands.join(", ") || "(none)"}`);
+        console.log(`shell-command  (${merged.shellCommands.length}): ${merged.shellCommands.join(", ") || "(none)"}`);
+        console.log(`mcp-tool       (${merged.mcpTools.length}): ${merged.mcpTools.join(", ") || "(none)"}`);
+        return;
+    }
+
+    if (sub !== "allow" && sub !== "deny") {
+        printPendingCommand(["sandbox", sub ?? ""]);
+        return;
+    }
+
+    const args = command.args.filter((arg): arg is string => typeof arg === "string" && arg.length > 0);
+    if (args.length < 2) {
+        throw new CommanderError(1, "flyflor.sandboxMissingArgs", "Usage: flyflor sandbox <allow|deny> <kind> <value>");
+    }
+    const [kindRaw, ...rest] = args;
+    const kind = (kindRaw ?? "") as SandboxAllowKind;
+    if (kind !== "plugin-command" && kind !== "shell-command" && kind !== "mcp-tool") {
+        throw new CommanderError(1, "flyflor.sandboxBadKind", `Unknown kind: ${kindRaw}. Use plugin-command|shell-command|mcp-tool.`);
+    }
+    const value = rest.join(" ");
+    const opts = command.opts<{ global?: boolean }>();
+    const next = sub === "allow"
+        ? await addSandboxAllow(config.paths, kind, value, { global: opts.global })
+        : await removeSandboxAllow(config.paths, kind, value, { global: opts.global });
+    const verb = sub === "allow" ? "Allowed" : "Removed";
+    console.log(`${verb} ${kind}=${value}`);
+    console.log(`Path: ${sandboxAllowlistPath(config.paths, { global: opts.global })}`);
+    const bucket = kind === "plugin-command" ? next.pluginCommands : kind === "shell-command" ? next.shellCommands : next.mcpTools;
+    console.log(`Now: ${bucket.length > 0 ? bucket.join(", ") : "(none)"}`);
+}
+
 async function runPlugins(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
     const config = app.resolve(FlyFlorTokens.Config);
@@ -1579,7 +1660,8 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
         const events = app.resolve(FlyFlorTokens.Events);
         const policy = createSandboxPolicy(config.sandbox);
         const command_ = opts.command?.trim() || "bun";
-        const allowed = new Set<string>(["bun", command_]);
+        const persisted = await loadSandboxAllowlist(config.paths);
+        const allowed = new Set<string>(["bun", command_, ...persisted.pluginCommands]);
         for (const extra of opts.allowCmd ?? []) {
             if (typeof extra === "string" && extra.length > 0) allowed.add(extra);
         }
