@@ -3,6 +3,7 @@ import Table from "cli-table3";
 import pc from "picocolors";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import { lintPromptTemplates } from "../../agent/prompts/index.ts";
+import { checkSkillSchemaCompatibility } from "../../crystal/skills/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { ChannelLinkState } from "../../protocol/contracts/index.ts";
@@ -92,6 +93,17 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
         templateLint.ok
             ? `${templateLint.checked.length} templates ok`
             : `${templateLint.issues.length} issue(s); run "bun run install:templates"`,
+    ]);
+
+    const skillCompat = await checkSkillSchemaCompatibility(config.paths);
+    rows.push([
+        "Skill schemas",
+        skillCompat.ok ? "ok" : "warn",
+        skillCompat.ok
+            ? "all skills compatible"
+            : skillCompat.issues
+                  .map((issue) => `${issue.name} (${issue.source}): v${issue.schemaVersion} ${issue.kind}`)
+                  .join("; "),
     ]);
 
     const table = new Table({

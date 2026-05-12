@@ -26,10 +26,13 @@ export interface SkillManifest {
     mcpServers: string[];
     name: string;
     permissions: string[];
+    schemaVersion: number;
     sourceFiles: string[];
     tags: string[];
     version?: string;
 }
+
+export const SKILL_MANIFEST_SCHEMA_VERSION = 1;
 
 export interface SkillValidationResult {
     ok: boolean;
@@ -88,6 +91,35 @@ export interface SkillUsageInput {
 export async function loadSkills(paths: FlyflorPaths): Promise<Skill[]> {
     const skills = await Promise.all(skillRoots(paths).map((root) => loadSkillsFromRoot(root)));
     return dedupeSkills(skills.flat());
+}
+
+export interface SkillSchemaCompatibilityIssue {
+    name: string;
+    source: SkillSource;
+    schemaVersion: number;
+    runtimeVersion: number;
+    kind: "older" | "newer";
+}
+
+export interface SkillSchemaCompatibilityReport {
+    ok: boolean;
+    issues: SkillSchemaCompatibilityIssue[];
+}
+
+export async function checkSkillSchemaCompatibility(paths: FlyflorPaths): Promise<SkillSchemaCompatibilityReport> {
+    const skills = await loadSkills(paths);
+    const issues: SkillSchemaCompatibilityIssue[] = [];
+    for (const skill of skills) {
+        if (skill.manifest.schemaVersion === SKILL_MANIFEST_SCHEMA_VERSION) continue;
+        issues.push({
+            name: skill.name,
+            source: skill.source,
+            schemaVersion: skill.manifest.schemaVersion,
+            runtimeVersion: SKILL_MANIFEST_SCHEMA_VERSION,
+            kind: skill.manifest.schemaVersion > SKILL_MANIFEST_SCHEMA_VERSION ? "newer" : "older",
+        });
+    }
+    return { ok: issues.length === 0, issues };
 }
 
 export async function findSkill(paths: FlyflorPaths, name: string): Promise<Skill | undefined> {
@@ -288,6 +320,15 @@ export async function validateSkill(paths: FlyflorPaths, name: string): Promise<
     if (skill.body.length > 24_000) {
         warnings.push("Skill body is large and may crowd the runtime prompt.");
     }
+    if (skill.manifest.schemaVersion > SKILL_MANIFEST_SCHEMA_VERSION) {
+        warnings.push(
+            `Skill manifest schemaVersion ${skill.manifest.schemaVersion} is newer than runtime ${SKILL_MANIFEST_SCHEMA_VERSION}; some fields may be ignored. Upgrade flyflor.`,
+        );
+    } else if (skill.manifest.schemaVersion < SKILL_MANIFEST_SCHEMA_VERSION) {
+        warnings.push(
+            `Skill manifest schemaVersion ${skill.manifest.schemaVersion} is older than runtime ${SKILL_MANIFEST_SCHEMA_VERSION}; consider re-installing the skill.`,
+        );
+    }
     return {
         ok: errors.length === 0,
         errors,
@@ -422,6 +463,7 @@ function buildSkillManifest(
             ...objectKeys(overlay.permissions),
             ...listValue(fm.permissions),
         ]),
+        schemaVersion: numberValue(overlay.schemaVersion) ?? numberValue(fm.schemaVersion) ?? SKILL_MANIFEST_SCHEMA_VERSION,
         sourceFiles: ["SKILL.md", ...manifestSourceFiles(overlay)],
         tags: uniqueStrings([...listValue(overlay.tags), ...listValue(fm.tags)]),
         version: stringValue(overlay.version) ?? stringValue(fm.version),
@@ -434,6 +476,17 @@ function manifestSourceFiles(overlay: Record<string, unknown>): string[] {
 
 function stringValue(value: unknown): string | undefined {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === "string") {
+        const parsed = Number.parseInt(value.trim(), 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
 }
 
 function listValue(value: unknown): string[] {

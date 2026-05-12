@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { selectSkills, type Skill, type SkillUsageSummary } from "../src/crystal/skills/index.ts";
+import { selectSkills, SKILL_MANIFEST_SCHEMA_VERSION, type Skill, type SkillUsageSummary } from "../src/crystal/skills/index.ts";
 
 function makeSkill(name: string, opts: Partial<Skill["manifest"]> = {}): Skill {
     return {
@@ -16,6 +16,7 @@ function makeSkill(name: string, opts: Partial<Skill["manifest"]> = {}): Skill {
             compatibility: [],
             mcpServers: [],
             permissions: [],
+            schemaVersion: SKILL_MANIFEST_SCHEMA_VERSION,
             sourceFiles: [],
             tags: [],
             ...opts,
