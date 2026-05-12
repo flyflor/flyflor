@@ -263,6 +263,7 @@ export type FpcLayer = ArchitectureLayer;
 
 export const MemoryLayer = {
     Crystal: "crystal",
+    Journal: "journal",
     Markdown: "markdown",
     Project: "project",
     Redis: "redis",

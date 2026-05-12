@@ -79,7 +79,6 @@ import {
     renderChannels,
     renderDoctor,
     renderMemorySummary,
-    renderSessionsSummary,
     renderStatus,
 } from "./index.ts";
 import { formatFlyflorVersion } from "../version.ts";

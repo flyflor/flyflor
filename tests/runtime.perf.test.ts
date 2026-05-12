@@ -255,6 +255,64 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(visible[0]?.score.total).toBeGreaterThan(0);
     });
 
+    test("buildPrompt only exposes journal atoms after the AtomScore visibility gate", async () => {
+        const config = await buildConfig();
+        config.memory.candidates.autoPromoteExplicit = false;
+        config.memory.tuning.atomScore.visibilityThreshold = 0.65;
+        const memory = new MemoryModule(config, new CapturingSink());
+        const ctx = withEmbedding(await embedFor(config, "atom visibility"));
+
+        await memory.rememberTurn(msg("atom visibility low"), rep("stored"), ctx, [
+            {
+                action: "add",
+                target: "memory",
+                content: "low atom must stay hidden from prompt",
+                confidence: 0.05,
+                signals: {
+                    durability: 0,
+                    recurrence: 0,
+                    sourceDiversity: 0,
+                    validationCount: 0,
+                },
+            },
+        ]);
+        await memory.rememberTurn(
+            msg("atom visibility high"),
+            rep("stored"),
+            { ...ctx, requestId: crypto.randomUUID(), now: "2026-05-09T02:01:00.000Z" },
+            [
+                {
+                    action: "add",
+                    target: "memory",
+                    content: "high atom passes visibility gate",
+                    confidence: 0.95,
+                    signals: {
+                        durability: 1,
+                        recurrence: 1,
+                        sourceDiversity: 1,
+                        validationCount: 1,
+                    },
+                },
+            ],
+        );
+
+        const prompt = await memory.buildPrompt(msg("atom visibility"), ctx);
+
+        expect(prompt).toContain("high atom passes visibility gate");
+        expect(prompt).not.toContain("low atom must stay hidden from prompt");
+    });
+
+    test("buildPrompt propagates journal read errors instead of silently dropping recall", async () => {
+        const config = await buildConfig();
+        const memory = new MemoryModule(config, new CapturingSink());
+        const ctx = withEmbedding(await embedFor(config, "broken journal"));
+        const journal = new JournalStore({ journalRoot: join(config.paths.home, "journal") });
+        const location = journal.locationFor(ctx.now);
+        await mkdir(location.dbPath, { recursive: true });
+
+        await expect(memory.buildPrompt(msg("broken journal"), ctx)).rejects.toThrow();
+    });
+
     test("buildPrompt accepts optional context parameter without throwing", async () => {
         const config = await buildConfig();
         const memory = new MemoryModule(config, new CapturingSink());

@@ -69,7 +69,7 @@ flowchart LR
 
 只保留：`@Module` / `@Provide` / `@Inject` / `@Service` / `@Component` / `@Worker` / `@Channel` / `@Plugin`。
 
-- `@Provide` 是注入底座；Gateway / Blackboard / Memory / Session / Runtime / Sandbox 用 `class XModule extends X` 表达边界语义。
+- `@Provide` 是注入底座；Gateway / Blackboard / Memory / Runtime / Sandbox 用 `class XModule extends X` 表达边界语义。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定。
 

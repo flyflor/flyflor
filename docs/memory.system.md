@@ -8,7 +8,7 @@ Flyflor 把记忆切成四层：Markdown 宪法层、Redis 工作记忆、SQLite
 
 - `src/neural/memory/markdown.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
 - `src/neural/memory/redis.ts` — episode buffer / ring / hot concepts
-- `src/neural/memory/sqlite.ts` — session / history / candidates / search
+- `src/neural/memory/sqlite.ts` — candidates / offers / search
 - `src/neural/memory/surreal.graph.ts` — episode / memory_node / gem / 边关系
 - `src/neural/memory/activation.ts` — spreading activation
 - `src/neural/memory/consolidation.worker.ts` — Redis → SurrealDB 升格

@@ -51,6 +51,14 @@ export interface JournalVisibleAtom {
     score: AtomScore;
 }
 
+export interface JournalVisibleAtomWindowInput {
+    days?: number;
+    limit?: number;
+    minScore: number;
+    projectId?: string;
+    userId?: string;
+}
+
 interface AtomRow {
     id: string;
     episode_ids_json: string;
@@ -83,8 +91,7 @@ interface AtomRow {
 /**
  * LF-P1 day-partitioned journal store.
  *
- * This is intentionally not wired into RuntimeModule yet. It proves and
- * encapsulates the public journal contract before session dissolution starts.
+ * This encapsulates the public journal contract used by the memory hot path.
  */
 export class JournalStore {
     constructor(private readonly options: JournalStoreOptions) {}
@@ -240,6 +247,30 @@ export class JournalStore {
         } finally {
             db.close();
         }
+    }
+
+    async listVisibleAtomsWindow(date: Date | string, input: JournalVisibleAtomWindowInput): Promise<JournalVisibleAtom[]> {
+        const days = Math.max(1, Math.min(31, Math.floor(input.days ?? 7)));
+        const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 20)));
+        const end = normalizeDate(date);
+        const all: JournalVisibleAtom[] = [];
+        for (let offset = 0; offset < days; offset += 1) {
+            const current = new Date(end.getTime() - offset * 86_400_000);
+            all.push(
+                ...(await this.listVisibleAtoms(current, {
+                    limit,
+                    minScore: input.minScore,
+                    projectId: input.projectId,
+                    userId: input.userId,
+                })),
+            );
+        }
+        all.sort((a, b) => {
+            const byScore = b.score.total - a.score.total;
+            if (byScore !== 0) return byScore;
+            return b.atom.createdAt.localeCompare(a.atom.createdAt);
+        });
+        return all.slice(0, limit);
     }
 }
 

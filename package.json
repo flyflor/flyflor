@@ -19,7 +19,6 @@
         "docker:templates": "bun run scripts/install.templates.ts --docker --force",
         "install:templates": "bun run scripts/install.templates.ts",
         "test": "bun test tests/activation.test.ts tests/background.scheduler.test.ts tests/blackboard.boundaries.test.ts tests/chaos.fuzz.test.ts tests/chat.boundaries.test.ts tests/command.boundaries.test.ts tests/config.view.test.ts tests/consolidation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/feedback.interpreter.test.ts tests/feedback.wire.test.ts tests/install.script.test.ts tests/installer.planner.test.ts tests/journal.store.test.ts tests/memory.boundaries.test.ts tests/memory.scheduler.wiring.test.ts tests/project.scaffolder.test.ts tests/reflection.boundaries.test.ts tests/route.escalation.test.ts tests/runtime.perf.test.ts tests/skill.mcp.test.ts tests/version.test.ts tests/workers.boundaries.test.ts",
-        "inspect:sessions": "bun run scripts/session.inspect.ts",
         "inspect:blackboard": "bun run scripts/blackboard.inspect.ts",
         "smoke:journal": "bun run scripts/journal.smoke.ts",
         "check": "bunx tsc --noEmit",

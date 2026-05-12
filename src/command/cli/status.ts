@@ -42,7 +42,7 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
         section("Gateway Service", renderGatewayLines(gateway)),
         "",
         section("Memory", [
-            line("Session", config.memory.enabled ? statusText("enabled", "ok") : statusText("disabled", "warn")),
+            line("Journal", config.memory.enabled ? statusText("enabled", "ok") : statusText("disabled", "warn")),
             line(
                 "Crystal",
                 config.memory.crystal.enabled ? statusText("enabled", "ok") : statusText("disabled", "warn"),

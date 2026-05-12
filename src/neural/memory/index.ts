@@ -7,6 +7,8 @@ import {
     ComponentKind,
     MarkdownMemoryFile,
     MemoryCandidateStatus,
+    MemoryKind,
+    MemoryLayer,
     MemorySourceKind,
     ModelRole,
 } from "../../protocol/contracts/index.ts";
@@ -30,7 +32,7 @@ import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
 import { ProjectMemoryStore } from "./project.memory.ts";
-import { JournalStore, type JournalAtomWrite } from "./journal.store.ts";
+import { JournalStore, type JournalAtomWrite, type JournalVisibleAtom } from "./journal.store.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
@@ -208,7 +210,7 @@ export class MemoryModule extends Memory {
             limit: this.config.memory.retrieval.maxResults,
         };
 
-        const [hippocampus, projectMemory, crystalResults, sqliteResults, markdown] = await Promise.all([
+        const [hippocampus, projectMemory, journalResults, markdown] = await Promise.all([
             this.assembleHippocampusContext(message, context),
             this.projectMemory.snapshot({
                 maxChars: this.config.memory.retrieval.maxPromptChars,
@@ -216,11 +218,10 @@ export class MemoryModule extends Memory {
                 requestId: context?.requestId,
                 scope: request.scope,
             }),
-            this.crystal.recall(request),
-            this.sqlite.search(request),
+            this.recallVisibleJournalMemory(message, context),
             this.markdown.snapshot(),
         ]);
-        const results = dedupeResults([...projectMemory.results, ...crystalResults, ...sqliteResults]);
+        const results = dedupeResults(journalResults);
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
             projectMemory.prompt,
@@ -233,8 +234,8 @@ export class MemoryModule extends Memory {
         // 复用 Path A：用户下一轮回复若给出明确意图，model 自然在 memory action 的 signals 中
         // 抬高 projectIntent，commitTurn 的 detectExplicitIntent 即触发 scaffolder。
         const [offer, skillOffer] = await Promise.all([
-            this.sqlite.getProjectOffer(message.user.id).catch(() => undefined),
-            this.sqlite.getSkillOffer(message.user.id).catch(() => undefined),
+            this.sqlite.getProjectOffer(message.user.id),
+            this.sqlite.getSkillOffer(message.user.id),
         ]);
         const nudges: string[] = [];
         if (offer) nudges.push(renderProjectOfferNudge(offer));
@@ -244,7 +245,9 @@ export class MemoryModule extends Memory {
         this.events.publish(
             event(RuntimeEventType.MemoryPromptBuilt, {
                 recallResults: results.length,
+                atomScoreThreshold: this.config.memory.tuning.atomScore.visibilityThreshold,
                 hippocampusActivated: hippocampus ? true : false,
+                journalAtomRecallResults: journalResults.length,
                 projectConstraintId,
                 projectMemoryActivated: projectMemory.prompt ? true : false,
                 projectMemoryManifestPath: projectMemory.manifest.paths.manifest,
@@ -258,7 +261,7 @@ export class MemoryModule extends Memory {
 
     /**
      * Hippocampus 上下文装配（Redis ring + spreading activation）。
-     * 仅在 Redis 启用且 ring 非空时有效；失败/空都返回 undefined（main path 自动降级）。
+     * 仅在 Redis 启用且 ring 非空时有效；异常必须向上传递，禁止静默吞掉记忆层错误。
      * 性能：限制 candidate ≤ ringSize，激活计算 O(N·D) 在 1ms 量级。
      */
     private async assembleHippocampusContext(
@@ -266,58 +269,60 @@ export class MemoryModule extends Memory {
         context?: RuntimeContext,
     ): Promise<string | undefined> {
         if (!this.redis) return undefined;
-        try {
-            const userId = message.user.id;
-            const ringSize = this.config.memory.retrieval.maxResults;
-            const [episodeIds, hotConcepts] = await Promise.all([
-                this.redis.readContextRing(userId, ringSize),
-                this.redis.hotConcepts(userId, 16),
-            ]);
-            if (episodeIds.length === 0) return undefined;
-            const records = await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)));
-            const candidates: ActivationCandidate[] = [];
-            for (const rec of records) {
-                if (!rec) continue;
+        const userId = message.user.id;
+        const ringSize = this.config.memory.retrieval.maxResults;
+        const [episodeIds, hotConcepts] = await Promise.all([
+            this.redis.readContextRing(userId, ringSize),
+            this.redis.hotConcepts(userId, 16),
+        ]);
+        if (episodeIds.length === 0) return undefined;
+        const records = await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)));
+        const visibleByEpisode = await this.visibleAtomsForEpisodes(userId, records);
+        const candidates: ActivationCandidate[] = [];
+        const visibleAtoms = new Map<string, JournalVisibleAtom>();
+        for (const rec of records) {
+            if (!rec) continue;
+            const entries = visibleByEpisode.get(rec.episodeId) ?? [];
+            for (const entry of entries) {
+                visibleAtoms.set(entry.atom.id, entry);
                 candidates.push({
-                    id: rec.episodeId,
-                    embedding: rec.embedding,
+                    id: entry.atom.id,
+                    embedding: entry.atom.embedding.length > 0 ? entry.atom.embedding : rec.embedding,
                     concepts: rec.concepts,
-                    importance: rec.importance,
-                    createdAt: rec.createdAt,
+                    importance: entry.score.total,
+                    createdAt: Date.parse(entry.atom.createdAt),
                 });
             }
-            if (candidates.length === 0) return undefined;
-            const queryEmbedding =
-                context?.embedding && context.embedding.length > 0
-                    ? context.embedding
-                    : await this.embeddings.embed(message.text);
-            const topK = Math.min(8, ringSize);
-            const activated = spreadActivation({
-                queryEmbedding,
-                hotConcepts,
-                candidates,
-                nowMs: Date.now(),
-                topK,
-            });
-            if (activated.length === 0) return undefined;
-            const lines = activated
-                .map((a) => {
-                    const rec = records.find((r) => r?.episodeId === a.id);
-                    if (!rec) return "";
-                    const text = rec.text.replace(/\s+/g, " ").trim().slice(0, 240);
-                    return `- [${a.score.toFixed(2)}] ${text}`;
-                })
-                .filter((l) => l.length > 0);
-            if (lines.length === 0) return undefined;
-            // reconstruction-mode：当激活节点 >= 3 时，注入提示让 LLM 重建关系而非死读片段。
-            const reconstructionHint =
-                activated.length >= 3
-                    ? "\n\nReconstruction hint: synthesise these episodes into an updated mental model — do not quote them verbatim."
-                    : "";
-            return `Hippocampus context (top ${lines.length} activated episodes):\n${lines.join("\n")}${reconstructionHint}`;
-        } catch {
-            return undefined;
         }
+        if (candidates.length === 0) return undefined;
+        const queryEmbedding =
+            context?.embedding && context.embedding.length > 0
+                ? context.embedding
+                : await this.embeddings.embed(message.text);
+        const topK = Math.min(8, ringSize);
+        const activated = spreadActivation({
+            queryEmbedding,
+            hotConcepts,
+            candidates,
+            nowMs: Date.now(),
+            topK,
+        });
+        if (activated.length === 0) return undefined;
+        const lines = activated
+            .map((a) => {
+                const entry = visibleAtoms.get(a.id);
+                if (!entry) return "";
+                const text = entry.atom.text.replace(/\s+/g, " ").trim().slice(0, 240);
+                return `- [${a.score.toFixed(2)}] ${text}`;
+            })
+            .filter((l) => l.length > 0);
+        if (lines.length === 0) return undefined;
+        // reconstruction-mode：当激活节点 >= 3 时，注入提示让 LLM 重建关系而非死读片段。
+        const reconstructionHint =
+            activated.length >= 3
+                ? "\n\nReconstruction hint: synthesise these episodes into an updated mental model — do not quote them verbatim."
+                : "";
+        return `Hippocampus context (top ${lines.length} activated episodes):\n${lines.join("\n")}${reconstructionHint}`;
     }
 
     async rememberTurn(
@@ -717,6 +722,7 @@ export class MemoryModule extends Memory {
                     reply,
                     defaultWeights: this.config.memory.weights,
                     scoreWeights: this.config.memory.tuning.atomScore.weights,
+                    inboxDecayMultiplier: this.config.memory.tuning.inbox.decayMultiplier,
                     createdAt,
                 }),
             );
@@ -755,6 +761,60 @@ export class MemoryModule extends Memory {
                 ),
             );
         }
+    }
+
+    private async recallVisibleJournalMemory(
+        message: GatewayMessage,
+        context?: RuntimeContext,
+    ): Promise<MemorySearchResult[]> {
+        const visible = await this.journal.listVisibleAtomsWindow(context?.now ?? message.receivedAt, {
+            days: 7,
+            limit: this.config.memory.retrieval.maxResults,
+            minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
+            userId: message.user.id,
+        });
+        if (visible.length === 0) return [];
+        const queryEmbedding =
+            context?.embedding && context.embedding.length > 0 ? context.embedding : await this.embeddings.embed(message.text);
+        return visible
+            .map((entry) => ({
+                entry,
+                rank: rankVisibleAtom(entry, queryEmbedding),
+            }))
+            .sort((a, b) => b.rank - a.rank)
+            .slice(0, this.config.memory.retrieval.maxResults)
+            .map(({ entry }) => visibleAtomToMemoryResult(entry));
+    }
+
+    private async visibleAtomsForEpisodes(
+        userId: string,
+        records: Array<Awaited<ReturnType<RedisMemoryStore["readEpisode"]>>>,
+    ): Promise<Map<string, JournalVisibleAtom[]>> {
+        const dates = uniqueStrings(
+            records
+                .filter((record): record is NonNullable<typeof record> => record != null)
+                .map((record) => new Date(record.createdAt).toISOString()),
+        );
+        const visible = (
+            await Promise.all(
+                dates.map((date) =>
+                    this.journal.listVisibleAtoms(date, {
+                        limit: this.config.memory.retrieval.maxResults,
+                        minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
+                        userId,
+                    }),
+                ),
+            )
+        ).flat();
+        const byEpisode = new Map<string, JournalVisibleAtom[]>();
+        for (const entry of visible) {
+            for (const episodeId of entry.atom.episodeIds) {
+                const existing = byEpisode.get(episodeId) ?? [];
+                existing.push(entry);
+                byEpisode.set(episodeId, existing);
+            }
+        }
+        return byEpisode;
     }
 
     /**
@@ -1392,6 +1452,7 @@ interface JournalAtomFromActionInput {
         recency: number;
         successPrior: number;
     };
+    inboxDecayMultiplier: number;
 }
 
 function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWrite {
@@ -1403,7 +1464,9 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
         weights: baseWeights,
     });
     const weights = applyMatrixImpact(baseWeights, matrix);
-    const recency = input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? 0.5 : 1;
+    const inboxDecayMultiplier = Math.max(1, input.inboxDecayMultiplier);
+    const recency =
+        input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? clamp01(1 / inboxDecayMultiplier) : 1;
     const score: AtomScore = {
         atomId: `${input.episodeId}:atom:${input.index}`,
         access: clamp01(weights.recurrence),
@@ -1412,7 +1475,10 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
         recency,
         successPrior: clamp01(weights.confidence * 0.5 + weights.durability * 0.3 + weights.validationCount * 0.2),
         total: 0,
-        explain: input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? "inbox recency dampened" : undefined,
+        explain:
+            input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID
+                ? `inbox recency dampened by ${inboxDecayMultiplier}`
+                : undefined,
     };
     score.total =
         score.recency * input.scoreWeights.recency +
@@ -1439,6 +1505,54 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
         createdAt: input.createdAt,
     };
     return { atom, score };
+}
+
+function visibleAtomToMemoryResult(entry: JournalVisibleAtom): MemorySearchResult {
+    return {
+        layer: MemoryLayer.Journal,
+        score: entry.score.total,
+        record: {
+            id: entry.atom.id,
+            kind: MemoryKind.Summary,
+            content: compactText([entry.atom.task, entry.atom.action, entry.atom.outcome].filter(Boolean).join(" | "), 640),
+            scope: entry.atom.projectId,
+            subjectId: entry.atom.userId,
+            channel: entry.atom.channelId,
+            importance: entry.score.total,
+            confidence: entry.atom.confidence,
+            createdAt: entry.atom.createdAt,
+            updatedAt: entry.atom.refinedAt ?? entry.atom.createdAt,
+            metadata: {
+                atomScore: entry.score,
+                episodeIds: entry.atom.episodeIds,
+                stage: entry.atom.stage,
+            },
+        },
+    };
+}
+
+function rankVisibleAtom(entry: JournalVisibleAtom, queryEmbedding: number[]): number {
+    const similarity =
+        queryEmbedding.length > 0 && entry.atom.embedding.length === queryEmbedding.length
+            ? Math.max(0, cosine(queryEmbedding, entry.atom.embedding))
+            : 0;
+    return entry.score.total * 0.75 + similarity * 0.25;
+}
+
+function cosine(a: number[], b: number[]): number {
+    if (a.length === 0 || a.length !== b.length) return 0;
+    let dot = 0;
+    let magA = 0;
+    let magB = 0;
+    for (let i = 0; i < a.length; i += 1) {
+        const av = Number.isFinite(a[i]) ? (a[i] as number) : 0;
+        const bv = Number.isFinite(b[i]) ? (b[i] as number) : 0;
+        dot += av * bv;
+        magA += av * av;
+        magB += bv * bv;
+    }
+    if (magA === 0 || magB === 0) return 0;
+    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
 }
 
 function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string {

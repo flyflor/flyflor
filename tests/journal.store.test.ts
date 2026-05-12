@@ -55,6 +55,57 @@ describe("JournalStore", () => {
         expect(visible[0]?.score.total).toBe(0.9);
     });
 
+    test("window recall keeps AtomScore ordering and threshold under load", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-journal-window-"));
+        const store = new JournalStore({ journalRoot: join(root, "journal") });
+        const r = rng(0x5150);
+        const expected: Array<{ createdAt: string; id: string; score: number }> = [];
+
+        for (let day = 0; day < 9; day += 1) {
+            const createdAt = new Date(Date.UTC(2026, 4, 12 - day, 8, 0, 0)).toISOString();
+            const writes: JournalAtomWrite[] = [];
+            for (let index = 0; index < 30; index += 1) {
+                const score = Math.round(r() * 1000) / 1000;
+                const id = `d${day}-a${index}`;
+                writes.push(atomWrite(id, `ep-${day}`, score, createdAt));
+                if (day < 7 && score >= 0.65) {
+                    expected.push({ createdAt, id, score });
+                }
+            }
+            await store.appendEpisode(
+                {
+                    id: `ep-${day}`,
+                    userId: "u1",
+                    channelId: "stdio",
+                    projectId: "p1",
+                    role: ModelRole.User,
+                    text: `day ${day}`,
+                    createdAt,
+                },
+                writes,
+            );
+        }
+
+        const visible = await store.listVisibleAtomsWindow("2026-05-12T08:00:00.000Z", {
+            days: 7,
+            limit: 50,
+            minScore: 0.65,
+            userId: "u1",
+        });
+        const expectedIds = expected
+            .sort((a, b) => b.score - a.score || b.createdAt.localeCompare(a.createdAt))
+            .slice(0, 50)
+            .map((entry) => entry.id);
+
+        expect(visible).toHaveLength(expectedIds.length);
+        expect(visible.map((entry) => entry.atom.id)).toEqual(expectedIds);
+        for (const entry of visible) {
+            expect(entry.score.total).toBeGreaterThanOrEqual(0.65);
+            expect(entry.atom.id.startsWith("d7-")).toBe(false);
+            expect(entry.atom.id.startsWith("d8-")).toBe(false);
+        }
+    });
+
     test("rejects atoms that do not reference the written episode", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-journal-reject-"));
         const store = new JournalStore({ journalRoot: join(root, "journal") });
@@ -107,4 +158,15 @@ function atomWrite(id: string, episodeId: string, total: number, createdAt: stri
         inboxDecayApplied: false,
     };
     return { atom, score };
+}
+
+function rng(seed: number): () => number {
+    let s = seed >>> 0;
+    return () => {
+        s = (s + 0x6d2b79f5) >>> 0;
+        let t = s;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
 }

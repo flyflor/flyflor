@@ -367,6 +367,8 @@ export interface DormantTuningConfig {
 }
 
 export interface AtomScoreTuningConfig {
+    /** Prompt 可见性阈值；所有 journal atom 召回必须先过此门。 */
+    visibilityThreshold: number;
     /**
      * 四分量权重；总和不强制为 1。
      * 默认值经内部实验调参；用户可覆盖但 CLI / README 不暴露此项。
@@ -699,6 +701,7 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
             _keepGatewayListening: true,
         },
         atomScore: {
+            visibilityThreshold: 0.65,
             weights: {
                 recency: 0.35,
                 access: 0.15,

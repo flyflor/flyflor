@@ -31,7 +31,7 @@ async function renderMemorySummary(app: FlyFlor): Promise<string> {
     return rows.toString();
 }
 
-async function renderSessionsSummary(app: FlyFlor): Promise<string> {
+async function renderBlackboardSummary(app: FlyFlor): Promise<string> {
     const blackboard = app.resolve(FlyFlorTokens.Blackboard);
     const turns = await blackboard.listRecentTurns(5);
     if (turns.length === 0) {
@@ -59,6 +59,6 @@ export {
     renderFlyflorBanner,
     renderMemorySummary,
     resolveGatewaySnapshot,
-    renderSessionsSummary,
+    renderBlackboardSummary,
     renderStatus,
 };
