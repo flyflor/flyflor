@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
 import { callHttpMcpTool, listHttpMcpTools } from "./http.client.ts";
+import { callSseMcpTool, listSseMcpTools } from "./sse.client.ts";
 import {
     callStdioMcpTool,
     listStdioMcpTools,
@@ -13,6 +14,7 @@ import {
 export * from "./tool.calls.ts";
 export { validateAgainstInputSchema, type SchemaValidationResult } from "./schema.validate.ts";
 export { callHttpMcpTool, listHttpMcpTools } from "./http.client.ts";
+export { callSseMcpTool, listSseMcpTools } from "./sse.client.ts";
 export {
     callStdioMcpTool,
     listStdioMcpTools,
@@ -20,6 +22,24 @@ export {
     type McpClientOptions,
     type McpToolDefinition,
 } from "./stdio.client.ts";
+
+/**
+ * MCP 传输标识。
+ *  - "stdio"：本地子进程；
+ *  - "http" / "streamable-http"：streamable HTTP（单端点，POST + 可选 SSE 响应，2025-06-18 协议）；
+ *  - "sse"：旧式双端点 SSE（GET 事件流 + POST 消息端点，2024-11-05 协议）。
+ */
+export const McpTransport = {
+    Stdio: "stdio",
+    Http: "http",
+    StreamableHttp: "streamable-http",
+    Sse: "sse",
+} as const;
+export type McpTransport = (typeof McpTransport)[keyof typeof McpTransport];
+
+export function isSseTransport(transport: string | undefined): boolean {
+    return transport === McpTransport.Sse;
+}
 
 export type McpSource = "project" | "global";
 
@@ -76,7 +96,10 @@ export async function listMcpTools(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpToolDefinition[]> {
-    return server.url ? listHttpMcpTools(paths, server, options) : listStdioMcpTools(paths, server, options);
+    if (!server.url) return listStdioMcpTools(paths, server, options);
+    return isSseTransport(server.transport)
+        ? listSseMcpTools(paths, server, options)
+        : listHttpMcpTools(paths, server, options);
 }
 
 export async function callMcpTool(
@@ -86,9 +109,10 @@ export async function callMcpTool(
     input: Record<string, unknown>,
     options: McpClientOptions = {},
 ): Promise<McpCallResult> {
-    return server.url
-        ? callHttpMcpTool(paths, server, toolName, input, options)
-        : callStdioMcpTool(paths, server, toolName, input, options);
+    if (!server.url) return callStdioMcpTool(paths, server, toolName, input, options);
+    return isSseTransport(server.transport)
+        ? callSseMcpTool(paths, server, toolName, input, options)
+        : callHttpMcpTool(paths, server, toolName, input, options);
 }
 
 export async function loadMcpServers(paths: FlyflorPaths): Promise<McpServerDefinition[]> {
