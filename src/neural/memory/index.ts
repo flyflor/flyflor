@@ -102,7 +102,11 @@ export class MemoryModule extends Memory {
                       new ConsolidationWorker(this.redis, this.surreal, model, this.events),
                       this.surreal,
                       this.events,
-                      { dream: new DreamWorkerImpl(this.surreal, model, this.events) },
+                      {
+                          dream: new DreamWorkerImpl(this.surreal, model, this.events),
+                          projectSweeper: (userId: string) =>
+                              this.sweepProjectClusters(userId).catch(() => false),
+                      },
                   )
                 : null;
     }

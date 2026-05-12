@@ -204,7 +204,7 @@ function describeBackgroundScheduler(config: FlyflorConfig): { status: string; d
     if (!config.memory.crystal.surreal.enabled) missing.push("surreal");
     if (config.model.provider === "mock") missing.push("model(non-mock)");
     if (missing.length === 0) {
-        return { status: "ok", detail: "consolidation+decay+dream enabled" };
+        return { status: "ok", detail: "consolidation+decay+dream+project-cluster enabled" };
     }
     return {
         status: "warn",

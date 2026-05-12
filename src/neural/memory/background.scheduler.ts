@@ -34,12 +34,19 @@ export interface BackgroundSchedulerOptions {
     decayBatchSize?: number;
     /** 用户空闲多久触发一次 dream（毫秒）；0 关闭。默认 5 分钟。 */
     idleDreamTriggerMs?: number;
+    /** 项目候选 cluster sweep 节拍（毫秒）。默认 15 分钟，0 关闭。 */
+    projectClusterIntervalMs?: number;
     /** 自定义衰减 profile（测试可注入更短半衰期）。 */
     profiles?: Partial<Record<DecayLayer, DecayProfile>>;
     /** 注入 now 函数（测试用）。 */
     now?: () => number;
     /** 可选 dream worker。未注入则跳过 dream tick。 */
     dream?: DreamWorker;
+    /**
+     * 可选 project cluster sweeper（避免 Scheduler 反向依赖 MemoryModule）。
+     * 由 MemoryModule 注入 `(userId) => this.sweepProjectClusters(userId)`。
+     */
+    projectSweeper?: (userId: string) => Promise<boolean>;
 }
 
 export class BackgroundScheduler {
@@ -47,13 +54,16 @@ export class BackgroundScheduler {
     private consolidationTimer: ReturnType<typeof setInterval> | undefined;
     private decayTimer: ReturnType<typeof setInterval> | undefined;
     private dreamTimer: ReturnType<typeof setInterval> | undefined;
+    private projectTimer: ReturnType<typeof setInterval> | undefined;
     /** 每用户 idle one-shot timer：每次 noteUserTurn 重置；命中后触发 dream。 */
     private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private consolidationBusy = false;
     private decayBusy = false;
     private dreamBusy = false;
+    private projectBusy = false;
     private readonly dream: DreamWorker | undefined;
-    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream">> & {
+    private readonly projectSweeper: ((userId: string) => Promise<boolean>) | undefined;
+    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper">> & {
         profiles: Record<DecayLayer, DecayProfile>;
         now: () => number;
     };
@@ -65,6 +75,7 @@ export class BackgroundScheduler {
         options: BackgroundSchedulerOptions = {},
     ) {
         this.dream = options.dream;
+        this.projectSweeper = options.projectSweeper;
         this.opts = {
             consolidationIntervalMs: options.consolidationIntervalMs ?? 10 * 60_000,
             decayIntervalMs: options.decayIntervalMs ?? 24 * 60 * 60_000,
@@ -72,6 +83,7 @@ export class BackgroundScheduler {
             dreamBatchSize: options.dreamBatchSize ?? 8,
             decayBatchSize: options.decayBatchSize ?? 200,
             idleDreamTriggerMs: options.idleDreamTriggerMs ?? 5 * 60_000,
+            projectClusterIntervalMs: options.projectClusterIntervalMs ?? 15 * 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
             now: options.now ?? (() => Date.now()),
         };
@@ -129,6 +141,11 @@ export class BackgroundScheduler {
                 void this.runDreamOnce();
             }, this.opts.dreamIntervalMs);
         }
+        if (this.projectSweeper && this.opts.projectClusterIntervalMs > 0) {
+            this.projectTimer = setInterval(() => {
+                void this.runProjectClusterOnce();
+            }, this.opts.projectClusterIntervalMs);
+        }
         // setInterval 在 bun 下不阻止退出
         if (typeof (this.consolidationTimer as { unref?: () => void })?.unref === "function") {
             (this.consolidationTimer as { unref: () => void }).unref();
@@ -138,6 +155,9 @@ export class BackgroundScheduler {
         }
         if (this.dreamTimer && typeof (this.dreamTimer as { unref?: () => void })?.unref === "function") {
             (this.dreamTimer as { unref: () => void }).unref();
+        }
+        if (this.projectTimer && typeof (this.projectTimer as { unref?: () => void })?.unref === "function") {
+            (this.projectTimer as { unref: () => void }).unref();
         }
     }
 
@@ -153,6 +173,10 @@ export class BackgroundScheduler {
         if (this.dreamTimer !== undefined) {
             clearInterval(this.dreamTimer);
             this.dreamTimer = undefined;
+        }
+        if (this.projectTimer !== undefined) {
+            clearInterval(this.projectTimer);
+            this.projectTimer = undefined;
         }
         for (const timer of this.idleTimers.values()) {
             clearTimeout(timer);
@@ -285,6 +309,28 @@ export class BackgroundScheduler {
         return totals;
     }
 
+    /** 立即跑一轮项目 cluster 扫描（测试与手动触发复用）。串行所有用户。 */
+    async runProjectClusterOnce(userId?: string): Promise<{ users: number; offers: number }> {
+        const totals = { users: 0, offers: 0 };
+        if (!this.projectSweeper || this.projectBusy) return totals;
+        this.projectBusy = true;
+        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        try {
+            for (const u of targets) {
+                try {
+                    const proposed = await this.projectSweeper(u);
+                    totals.users += 1;
+                    if (proposed) totals.offers += 1;
+                } catch (err) {
+                    this.publishFailure("project-cluster-tick", u, err);
+                }
+            }
+        } finally {
+            this.projectBusy = false;
+        }
+        return totals;
+    }
+
     /** 返回当前注册的活跃用户快照（CLI 诊断使用）。 */
     trackedUsers(): string[] {
         return [...this.users];
@@ -296,6 +342,8 @@ export class BackgroundScheduler {
         dreamBusy: boolean;
         consolidationBusy: boolean;
         decayBusy: boolean;
+        projectClusterEnabled: boolean;
+        projectClusterBusy: boolean;
         users: number;
     } {
         return {
@@ -303,6 +351,8 @@ export class BackgroundScheduler {
             dreamBusy: this.dreamBusy,
             consolidationBusy: this.consolidationBusy,
             decayBusy: this.decayBusy,
+            projectClusterEnabled: Boolean(this.projectSweeper) && this.opts.projectClusterIntervalMs > 0,
+            projectClusterBusy: this.projectBusy,
             users: this.users.size,
         };
     }

@@ -215,4 +215,39 @@ describe("BackgroundScheduler", () => {
         // Sanity check we did not accidentally extend the enum
         expect(Object.values(ConsolidationDecisionKind).sort()).toEqual(["consolidate", "discard", "reinforce"]);
     });
+
+    test("runProjectClusterOnce invokes injected sweeper for tracked users only", async () => {
+        const consolidation = new FakeConsolidation();
+        const graph = new FakeGraph();
+        const events = new FakeEvents();
+        const called: string[] = [];
+        const scheduler = new BackgroundScheduler(consolidation as never, graph as never, events, {
+            consolidationIntervalMs: 1_000,
+            decayIntervalMs: 1_000,
+            projectClusterIntervalMs: 1_000,
+            projectSweeper: async (userId: string) => {
+                called.push(userId);
+                return userId === "u2";
+            },
+        });
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u1");
+        scheduler.trackUser("u2");
+        const r = await scheduler.runProjectClusterOnce();
+        expect(called.sort()).toEqual(["u1", "u2"]);
+        expect(r.users).toBe(2);
+        expect(r.offers).toBe(1);
+        const snap = scheduler.snapshot();
+        expect(snap.projectClusterEnabled).toBe(true);
+        expect(snap.projectClusterBusy).toBe(false);
+    });
+
+    test("runProjectClusterOnce without sweeper is no-op", async () => {
+        const { scheduler } = build();
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u1");
+        const r = await scheduler.runProjectClusterOnce();
+        expect(r).toEqual({ users: 0, offers: 0 });
+        expect(scheduler.snapshot().projectClusterEnabled).toBe(false);
+    });
 });
