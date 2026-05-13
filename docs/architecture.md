@@ -8,7 +8,7 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 
 - `app.ts` — 程序入口，仅做版本输出与命令分派
 - `src/app.ts` — `FlyFlor` composition root，显式 DI 装配
-- `src/agent/components.ts` — 边界基类 `Gateway` / `Blackboard` / `Runtime` / `Session` / `Memory` / `Sandbox`
+- `src/agent/components.ts` — 边界基类 `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox`
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、事件、进程信封
 - `src/llm/`、`src/crystal/`、`src/neural/`、`src/agent/`、`src/command/`、`src/config/`
@@ -44,7 +44,7 @@ flowchart TB
 
     Memory --> Markdown["Markdown 宪法层<br/>~/.flyflor/workspace/*.md"]
     Memory --> Redis["Redis 工作记忆<br/>episode ring + hot concepts"]
-    Memory --> SQLite["SQLite 索引<br/>session/history/candidates"]
+    Memory --> SQLite["SQLite 索引<br/>candidates/offers/search"]
     Memory --> Surreal["SurrealDB 长期图<br/>episode/memory_node/gem"]
     Memory --> Crystal["CrystalMemoryService"]
 
@@ -104,7 +104,6 @@ sequenceDiagram
 abstract class Gateway {}
 abstract class Blackboard {}
 abstract class Runtime {}
-abstract class Session {}
 abstract class Memory {}
 abstract class Sandbox {}
 ```
@@ -131,7 +130,6 @@ abstract class Sandbox {}
 | `src/agent/runtime` | turn 编排、上下文装配、事件发布 | 持有渠道私有协议、储存驱动细节 |
 | `src/agent/blackboard` | turn/step/decision/lease | 执行工具、写长期记忆 |
 | `src/agent/worker` | registry / pool / adapter / 超时 | 动态扫描、动态 import、绕过 Sandbox |
-| `src/agent/session` | session key 计算、最近消息、history 固化 | 长期记忆 promotion、调用 LLM |
 | `src/agent/sandbox` | mcp-tool / shell-hook / plugin 审批 | 被业务模块绕过 |
 | `src/agent/mcp` | server/client 适配 | 跑非 MCP 工具、维护路由策略 |
 | `src/llm` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |

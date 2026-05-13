@@ -8,7 +8,7 @@ import { BlackboardWorkerOutcome, type BlackboardWorkerTask } from "../src/agent
 
 const baseTask: BlackboardWorkerTask = {
     turnId: "t1",
-    sessionKey: "sess",
+    projectConstraintId: "project-constraint",
     requestId: "req",
     workerRole: "analyst",
     round: 1,

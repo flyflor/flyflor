@@ -67,7 +67,6 @@ export interface MemoryContextPromptInput {
     markdown: string;
     projectMemory: string;
     renderedResults: string;
-    renderedSessionMessages: string;
 }
 
 export interface CrystalReflectionPromptInput {
@@ -323,7 +322,6 @@ export function renderMemoryContextPrompt(input: MemoryContextPromptInput): stri
         markdownContent: input.markdown,
         projectMemory: input.projectMemory,
         retrievedResults: input.renderedResults,
-        sessionMessages: input.renderedSessionMessages,
     });
 }
 
@@ -410,7 +408,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     mcpContext: ["mcpEntries"],
     memoryAction: [],
     memoryConsolidation: ["episode"],
-    memoryContext: ["hippocampus", "markdownContent", "projectMemory", "retrievedResults", "sessionMessages"],
+    memoryContext: ["hippocampus", "markdownContent", "projectMemory", "retrievedResults"],
     memoryDream: ["candidates", "userId"],
     runtimeSystem: [
         "blackboardContext",

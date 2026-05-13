@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import type { GatewayMessage, GatewayReply, RuntimeContext, RuntimeEvent } from "../../protocol/contracts/index.ts";
 import { Channel, ChatType } from "../../protocol/contracts/index.ts";
@@ -7,6 +7,8 @@ import type { BlackboardMessage, BlackboardModule, BlackboardStep, BlackboardTur
 import type { RuntimeModule } from "../../agent/runtime/index.ts";
 import type { McpToolCallRequest } from "../../agent/mcp/index.ts";
 import { renderMarkdownToPlainText } from "../render/index.ts";
+import { useAlternateScreen, useTerminalMouse, useTerminalScroll } from "./terminal.hooks.ts";
+import { globalEvents } from "../../protocol/events/bus.ts";
 
 type ToneColor = string;
 type Phase = "idle" | "blackboard" | "thinking" | "mcp" | "skill" | "streaming";
@@ -104,6 +106,8 @@ const SECTION_ORDER: Section[] = ["blackboard", "skills", "mcp", "metadata"];
 const BREAKPOINT_INSPECTOR = 140;
 const BREAKPOINT_COMPACT = 100;
 const BREAKPOINT_MINIMAL = 80;
+/** Cap on historical turns in the TUI to keep rendering fast. */
+const MAX_VISIBLE_TURNS = 128;
 
 const THEME = {
     bg: "#0B1020",
@@ -510,20 +514,26 @@ function wrapDisplayText(value: string, width: number): string[] {
     if (width <= 0) {
         return [""];
     }
+    // Fast path: ASCII-only text avoids per-codepoint width checks.
+    const asciiOnly = !/[^\x00-\x7F]/.test(value);
     const output: string[] = [];
     for (const rawLine of value.split("\n")) {
         if (rawLine.length === 0) {
             output.push("");
             continue;
         }
-        let remaining = rawLine;
-        while (remaining.length > 0) {
-            const next = sliceByDisplayWidth(remaining, width);
-            if (next.length === 0) {
-                break;
+        if (asciiOnly) {
+            for (let i = 0; i < rawLine.length; i += width) {
+                output.push(rawLine.slice(i, i + width));
             }
-            output.push(next);
-            remaining = remaining.slice(next.length);
+        } else {
+            let remaining = rawLine;
+            while (remaining.length > 0) {
+                const next = sliceByDisplayWidth(remaining, width);
+                if (next.length === 0) break;
+                output.push(next);
+                remaining = remaining.slice(next.length);
+            }
         }
     }
     return output.length > 0 ? output : [""];
@@ -695,7 +705,7 @@ function buildInspectorLines(
         );
         appendWrappedViewLines(
             lines,
-            `route ${turn.blackboard?.mode ?? "direct"} · session ${scrollOffset > 0 ? "SCROLLED" : "LIVE"}`,
+            `route ${turn.blackboard?.mode ?? "direct"} · view ${scrollOffset > 0 ? "SCROLLED" : "LIVE"}`,
             width,
             { color: THEME.muted, dim: true },
             "  ",
@@ -756,6 +766,42 @@ function buildInspectorLines(
     return lines;
 }
 
+/** Fast-path render for the in-flight turn during streaming. Skips markdown
+ *  parsing (expensive for growing text) and full turn-card machinery. Raw text
+ *  is shown during streaming; proper markdown rendering happens when the turn
+ *  completes and historicalLines rebuilds. */
+function buildStreamingLines(
+    turn: Turn,
+    streamingText: string,
+    width: number,
+    phase: Phase,
+): ViewLine[] {
+    const lines: ViewLine[] = [];
+    const phaseDef = PHASE_DEF[phase];
+    const text = streamingText || turn.assistantText;
+    const textWidth = Math.max(1, width - 2);
+
+    // User message (rendered once — user text is immutable during the turn)
+    lines.push({ bold: true, color: THEME.cyanSoft, text: `◈ You ${fmtTime(turn.startedAt)}` });
+    appendWrappedViewLines(lines, renderMarkdownToPlainText(turn.userMessage), width, { color: THEME.silver }, "  ");
+    lines.push({ color: THEME.muted, dim: true, text: `[think] [write] [route:${turn.blackboard?.mode ?? "direct"}]` });
+
+    // Assistant header with current phase
+    lines.push({ bold: true, color: phaseDef.color, text: `◆ Feihua ${fmtTime(turn.startedAt)} [${phaseDef.label}]` });
+
+    // Streaming text — raw, no markdown parse
+    if (text.length > 0) {
+        const wrapped = wrapDisplayText(text, textWidth);
+        for (const w of wrapped) {
+            lines.push({ color: THEME.silver, text: `  ${w}` });
+        }
+    } else {
+        lines.push({ color: THEME.muted, text: `  ${phaseDef.label.toLowerCase()}…` });
+    }
+
+    return lines;
+}
+
 function buildConversationLines(
     turns: Turn[],
     width: number,
@@ -769,7 +815,7 @@ function buildConversationLines(
 
     if (turns.length === 0) {
         return [
-            { bold: true, color: THEME.silver, text: "Start an agent session" },
+            { bold: true, color: THEME.silver, text: "Start a turn" },
             { color: THEME.muted, text: "Ask a question, request a task, or inspect runtime details with Tab." },
             { color: THEME.muted, text: "Press Enter to send • Ctrl+C to clear / confirm exit" },
         ];
@@ -1224,7 +1270,7 @@ function EmptyState(): React.ReactElement {
         <Box flexGrow={1} justifyContent="center" alignItems="center">
             <Box flexDirection="column" alignItems="center">
                 <Text color={THEME.silver} bold>
-                    Start an agent session
+                    Start a turn
                 </Text>
                 <Text color={THEME.muted}>Ask a question, request a task, or inspect runtime details with Tab.</Text>
                 <Text color={THEME.muted}>Press Enter to send • Ctrl+C to clear / confirm exit</Text>
@@ -1390,7 +1436,7 @@ function framedRowText(content: string, width: number, scrollbarChar?: string): 
     return `│${padDisplayText(truncateDisplayText(content, contentWidth), contentWidth)}${scrollbarChar ?? ""}│`;
 }
 
-function FrameLine({
+const FrameLine = React.memo(function FrameLine({
     borderColor,
     content,
     contentBold,
@@ -1417,7 +1463,7 @@ function FrameLine({
             ]}
         />
     );
-}
+});
 
 function HeaderPanel({
     agentName,
@@ -1442,7 +1488,7 @@ function HeaderPanel({
     }
     const raw = [left, rightParts.filter(Boolean).join(" ")].filter(Boolean).join("   ");
     return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" height={3}>
             <Text color={THEME.cyanSoft}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
             <FrameLine
                 borderColor={THEME.cyanSoft}
@@ -1478,13 +1524,13 @@ function StatusPanel({
         `[board:${boardMode}]`,
         `[skills:${skills}]`,
         `[tools:${tools}]`,
-        `[session:${scrollOffset > 0 ? "scrolled" : "live"}]`,
+        `[view:${scrollOffset > 0 ? "scrolled" : "live"}]`,
         error ? `[error:${truncate(error, 22)}]` : "",
     ]
         .filter(Boolean)
         .join(" ");
     return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" height={3}>
             <Text color={THEME.border}>{`┌${"─".repeat(Math.max(0, width - 2))}┐`}</Text>
             <FrameLine
                 borderColor={THEME.border}
@@ -1497,54 +1543,70 @@ function StatusPanel({
     );
 }
 
-function ScrollbarChars(total: number, viewport: number, start: number): string[] {
+function ScrollbarChars(total: number, viewport: number, start: number): { chars: string[]; thumbPos: number; thumbSize: number } {
     if (viewport <= 0) {
-        return [];
+        return { chars: [], thumbPos: 0, thumbSize: 0 };
     }
     if (total <= viewport) {
-        return Array.from({ length: viewport }, () => " ");
+        return { chars: Array.from({ length: viewport }, () => " "), thumbPos: 0, thumbSize: 0 };
     }
     const thumbSize = Math.max(1, Math.round((viewport * viewport) / total));
     const maxThumbStart = Math.max(0, viewport - thumbSize);
     const thumbStart = Math.round((start * maxThumbStart) / Math.max(1, total - viewport));
-    return Array.from({ length: viewport }, (_, index) => (index >= thumbStart && index < thumbStart + thumbSize ? "█" : "┆"));
+    const chars = Array.from({ length: viewport }, (_, index) =>
+        index >= thumbStart && index < thumbStart + thumbSize ? "█" : "·",
+    );
+    return { chars, thumbPos: thumbStart, thumbSize };
 }
 
 function ConversationViewport({
+    dragging,
     height,
     lines,
     scrollOffset,
     width,
 }: {
+    dragging?: boolean;
+    /** Total height including top/bottom borders. Content area = height - 2. */
     height: number;
     lines: ViewLine[];
     scrollOffset: number;
     width: number;
 }): React.ReactElement {
+    const contentHeight = Math.max(1, height - 2);
     const totalLines = lines.length;
-    const maxOffset = Math.max(0, totalLines - height);
+    const maxOffset = Math.max(0, totalLines - contentHeight);
     const safeOffset = Math.min(scrollOffset, maxOffset);
-    const start = Math.max(0, totalLines - height - safeOffset);
-    const viewportLines = lines.slice(start, start + height);
-    const scrollbar = ScrollbarChars(totalLines, height, start);
-    const contentWidth = Math.max(1, width - 3);
+    const start = Math.max(0, totalLines - contentHeight - safeOffset);
+    const viewportLines = lines.slice(start, start + contentHeight);
+
+    const { chars: scrollbar } = useMemo(
+        () => ScrollbarChars(totalLines, contentHeight, start),
+        [totalLines, contentHeight, start],
+    );
+
+    const textWidth = Math.max(1, width - 3);
+
+    const thumbChar = dragging ? "▓" : "█";
+    const thumbColor = dragging ? THEME.iris : THEME.cyanSoft;
 
     return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" height={height}>
             <Text color={THEME.border}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
-            {Array.from({ length: height }, (_, index) => {
+            {Array.from({ length: contentHeight }, (_, index) => {
                 const line = viewportLines[index] ?? { text: "" };
-                const content = padDisplayText(truncateDisplayText(line.text, contentWidth), contentWidth);
+                const content = padDisplayText(truncateDisplayText(line.text, textWidth), textWidth);
+                const isThumb = scrollbar[index] === "█";
                 return (
                     <FrameLine
-                        key={`viewport-${index}`}
+                        key={`vln-${index}`}
                         borderColor={THEME.border}
                         content={content}
                         contentBold={line.bold}
                         contentColor={line.color ?? THEME.silver}
                         contentDim={line.dim}
-                        scrollbarChar={scrollbar[index] ?? " "}
-                        scrollbarColor={scrollbar[index] === "█" ? THEME.cyanSoft : THEME.border}
+                        scrollbarChar={isThumb ? thumbChar : (scrollbar[index] ?? " ")}
+                        scrollbarColor={isThumb ? thumbColor : THEME.border}
                     />
                 );
             })}
@@ -1613,7 +1675,7 @@ function ComposerPanel({
         "Enter send · Ctrl+U clear line · Ctrl+W delete word · Ctrl+C clear / confirm exit · ↑↓ PgUp PgDn scroll";
 
     return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" height={4}>
             <Text color={THEME.cyanSoft}>{`╭${"─".repeat(Math.max(0, width - 2))}╮`}</Text>
             <FrameLine
                 borderColor={THEME.cyanSoft}
@@ -1642,11 +1704,17 @@ export function ChatTui({
     const { exit } = useApp();
     const { cols: termCols, rows: termRows } = useTermSize();
 
+    // Take over the terminal: alternate screen buffer prevents system scrollbar,
+    // hides cursor, and gives us full control over the display area.
+    useAlternateScreen();
+
     const showInspector = termCols >= BREAKPOINT_INSPECTOR;
     const minimalMode = termCols < BREAKPOINT_MINIMAL;
     const inspectorWidth = showInspector ? 38 : 0;
     const conversationWidth = showInspector ? Math.max(1, termCols - inspectorWidth - 1) : termCols;
-    const mainViewportHeight = Math.max(1, termRows - 12);
+    // Viewport total height = content + top/bottom borders.
+    // Total layout: header(3) + status(3) + viewport(mainViewportHeight) + composer(4) = termRows
+    const mainViewportHeight = Math.max(3, termRows - 10);
 
     const [turns, setTurns] = useState<Turn[]>([]);
     const [input, setInput] = useState("");
@@ -1658,6 +1726,12 @@ export function ChatTui({
     const [expanded, setExpanded] = useState<Map<string, SectionMap>>(new Map());
     const [exitArmed, setExitArmed] = useState(false);
     const [scrollOfs, setScrollOfs] = useState(0);
+    // Streaming text is kept in a separate state so that turns[] stays stable
+    // during streaming — avoiding a full conversation-lines rebuild on every chunk.
+    const [streamingText, setStreamingText] = useState("");
+    // Incremented when a turn is added or completed; used as the memo key for
+    // historical turn lines so they aren't rebuilt during streaming.
+    const [turnEpoch, setTurnEpoch] = useState(0);
 
     const inputRef = useRef("");
     const cursorRef = useRef(0);
@@ -1680,6 +1754,15 @@ export function ChatTui({
         setNotice((current) => (current?.kind === "exit" ? null : current));
     }, []);
 
+    // Helper: update turns and bump turnEpoch so memoized lines pick up the change.
+    const bumpTurns = useCallback(
+        (recipe: (current: Turn[]) => Turn[]) => {
+            setTurns(recipe);
+            setTurnEpoch((e) => e + 1);
+        },
+        [],
+    );
+
     const refreshBlackboardTurn = useCallback(
         async (chatTurnId: string, blackboardTurnId: string): Promise<void> => {
             if (!blackboard) {
@@ -1689,14 +1772,14 @@ export function ChatTui({
             if (!record) {
                 return;
             }
-            setTurns((current) =>
+            bumpTurns((current) =>
                 updateTurnById(current, chatTurnId, (turn) => ({
                     ...turn,
                     blackboardTurn: record,
                 })),
             );
         },
-        [blackboard],
+        [blackboard, bumpTurns],
     );
 
     const scheduleBlackboardRefresh = useCallback((): void => {
@@ -1728,7 +1811,7 @@ export function ChatTui({
                     if (blackboardTurnId) {
                         currentBlackboardTurnIdRef.current = blackboardTurnId;
                     }
-                    setTurns((current) =>
+                    bumpTurns((current) =>
                         updateTurnById(current, currentTurnId, (turn) => ({
                             ...turn,
                             blackboard: {
@@ -1748,7 +1831,7 @@ export function ChatTui({
                     const blackboardTurnId = readString(payload?.turnId);
                     const status = readString(payload?.status);
                     setPhase("thinking");
-                    setTurns((current) =>
+                    bumpTurns((current) =>
                         updateTurnById(current, currentTurnId, (turn) => ({
                             ...turn,
                             blackboard: turn.blackboard
@@ -1778,7 +1861,7 @@ export function ChatTui({
                         server: readString(payload?.server) ?? "",
                         tool: readString(payload?.tool) ?? "",
                     };
-                    setTurns((current) =>
+                    bumpTurns((current) =>
                         updateTurnById(current, currentTurnId, (turn) => ({
                             ...turn,
                             mcpCalls: mergeMcpTraces(turn.mcpCalls, [nextTrace]),
@@ -1809,7 +1892,7 @@ export function ChatTui({
                     if (skillNames.length === 0) {
                         return;
                     }
-                    setTurns((current) =>
+                    bumpTurns((current) =>
                         updateTurnById(current, currentTurnId, (turn) => ({
                             ...turn,
                             skills: uniqueStrings([...turn.skills, ...skillNames]),
@@ -1824,24 +1907,63 @@ export function ChatTui({
     }, [eventBus, refreshBlackboardTurn, scheduleBlackboardRefresh]);
 
     const latestTurn = turns.at(-1) ?? null;
-    const conversationLines = buildConversationLines(
-        turns,
-        Math.max(1, conversationWidth - 3),
-        latestTurn?.id ?? null,
-        expanded,
-        minimalMode,
-        phase,
-        processing,
-    );
+    const contentWidth = Math.max(1, conversationWidth - 3);
+
+    // Split conversation lines into two tiers:
+    // 1. Historical lines (all completed turns) — keyed by turnEpoch, so they
+    //    are NOT rebuilt when streamingText changes during streaming.
+    // 2. Active lines (the in-flight turn during streaming) — rebuilt on every
+    //    streamingText chunk, but this is cheap: it only processes one turn.
+    const historicalLines = useMemo(() => {
+        if (turns.length === 0) return [];
+        const source = processing ? turns.slice(0, -1) : turns;
+        if (source.length === 0) return [];
+        return buildConversationLines(source, contentWidth, null, expanded, minimalMode, "idle", false);
+    }, [turnEpoch, contentWidth, expanded, minimalMode]);
+
+    const activeLines = useMemo(() => {
+        if (!processing || turns.length === 0) return [];
+        const source = turns[turns.length - 1];
+        if (!source) return [];
+        return buildStreamingLines(source, streamingText, contentWidth, phase);
+    }, [turnEpoch, contentWidth, phase, streamingText]);
+
+    const conversationLines = useMemo(() => {
+        if (activeLines.length === 0) return historicalLines;
+        if (historicalLines.length === 0) return activeLines;
+        // Insert a separator between historical turns and the active streaming turn
+        const sep: ViewLine = { color: THEME.border, text: "─".repeat(Math.max(4, contentWidth)) };
+        return [...historicalLines, sep, ...activeLines];
+    }, [historicalLines, activeLines, contentWidth]);
+
     const maxScroll = Math.max(0, conversationLines.length - mainViewportHeight);
     const clampedScroll = Math.min(scrollOfs, maxScroll);
-    const inspectorLines = buildInspectorLines(
-        latestTurn,
-        error,
-        phase,
-        processing,
-        clampedScroll,
-        Math.max(1, inspectorWidth - 2),
+
+    // Mouse wheel and scrollbar drag support.
+    // viewport content starts at row 7 (header 3 + status 3 + viewport top border 1).
+    // viewport right edge is at conversationWidth - 1 (viewport starts at column 0).
+    const viewportTopRow = 7;
+    const viewportRightCol = conversationWidth - 1;
+    const { handleMouse, dragging } = useTerminalScroll(
+        viewportTopRow,
+        mainViewportHeight,
+        viewportRightCol,
+        maxScroll,
+        setScrollOfs,
+    );
+    useTerminalMouse(handleMouse);
+
+    const inspectorLines = useMemo(
+        () =>
+            buildInspectorLines(
+                latestTurn,
+                error,
+                phase,
+                processing,
+                clampedScroll,
+                Math.max(1, inspectorWidth - 2),
+            ),
+        [latestTurn, error, phase, processing, clampedScroll, inspectorWidth],
     );
 
     const setTurnSection = useCallback((section: Section | "all") => {
@@ -1896,7 +2018,11 @@ export function ChatTui({
         setProcessing(true);
         setPhase("thinking");
         setScrollOfs(0);
-        setTurns((current) => [...current, turn]);
+        setStreamingText("");
+        bumpTurns((current) => {
+            const next = [...current, turn];
+            return next.length > MAX_VISIBLE_TURNS ? next.slice(next.length - MAX_VISIBLE_TURNS) : next;
+        });
 
         const context: RuntimeContext = {
             now: startedAt,
@@ -1920,12 +2046,7 @@ export function ChatTui({
                 onTextDelta: (chunk: string) => {
                     streamedTextRef.current += chunk;
                     setPhase("streaming");
-                    setTurns((current) =>
-                        updateTurnById(current, turnId, (item) => ({
-                            ...item,
-                            assistantText: streamedTextRef.current,
-                        })),
-                    );
+                    setStreamingText(streamedTextRef.current);
                 },
             });
 
@@ -1933,7 +2054,8 @@ export function ChatTui({
             const blackboardTurnId = blackboardMeta?.turnId;
             const blackboardTurn = blackboardTurnId ? await blackboard?.getTurn(blackboardTurnId).catch(() => undefined) : undefined;
 
-            setTurns((current) =>
+            setStreamingText("");
+            bumpTurns((current) =>
                 updateTurnById(current, turnId, (item) => ({
                     ...item,
                     assistantText: reply.text,
@@ -1949,7 +2071,8 @@ export function ChatTui({
             const messageText = cause instanceof Error ? cause.message : String(cause);
             setError(messageText);
             setNotice({ color: THEME.error, kind: "runtime", text: "The last turn failed. Review the error block or retry." });
-            setTurns((current) =>
+            setStreamingText("");
+            bumpTurns((current) =>
                 updateTurnById(current, turnId, (item) => ({
                     ...item,
                     assistantText: item.assistantText || `Error: ${messageText}`,
@@ -2161,6 +2284,7 @@ export function ChatTui({
             {showInspector ? (
                 <Box flexDirection="row">
                     <ConversationViewport
+                        dragging={dragging}
                         height={mainViewportHeight}
                         lines={conversationLines}
                         scrollOffset={clampedScroll}
@@ -2172,6 +2296,7 @@ export function ChatTui({
                 </Box>
             ) : (
                 <ConversationViewport
+                    dragging={dragging}
                     height={mainViewportHeight}
                     lines={conversationLines}
                     scrollOffset={clampedScroll}
@@ -2202,12 +2327,36 @@ export function startChatTui(
         userId?: string;
     } = {},
 ): void {
+    // Pipe runtime events to globalEvents so the TUI can show live phase
+    // transitions (blackboard, mcp, skill) instead of just thinking→streaming.
+    // Accesses a private field via type-erasure — safe because Flyflor's
+    // composition root creates this instance immediately before calling us.
+    const rt = runtime as unknown as Record<string, unknown>;
+    const events = rt.events as { publish?: (e: unknown) => void; sinks?: unknown[] } | undefined;
+    if (events) {
+        // If the events sink is a CompositeEventSink (duck-typed via `sinks`),
+        // add globalEvents to the fan-out chain.
+        if (Array.isArray(events.sinks)) {
+            events.sinks.push(globalEvents as unknown);
+        } else {
+            // Otherwise, wrap the publish method to also forward to globalEvents.
+            const originalPublish = events.publish?.bind(events);
+            if (originalPublish) {
+                events.publish = (e: unknown) => {
+                    originalPublish(e);
+                    (globalEvents as { publish: (e: unknown) => void }).publish(e);
+                };
+            }
+        }
+    }
+
+    const eventBus = options.eventBus ?? globalEvents;
     render(
         <ChatTui
             approveMcpToolCall={options.approveMcpToolCall}
             agentName={options.agentName}
             blackboard={options.blackboard}
-            eventBus={options.eventBus}
+            eventBus={eventBus}
             runtime={runtime}
             userId={options.userId}
         />,

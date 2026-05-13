@@ -48,7 +48,6 @@ import {
     type BlackboardStep,
     type BlackboardTurn,
 } from "../blackboard/index.ts";
-import { scopeFor } from "../session/index.ts";
 import {
     loadSkills,
     loadSkillUsageSummary,
@@ -431,7 +430,7 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     /**
-     * Phase 4：同步落库 —— rememberTurn（session+candidates+episode）、skill usage，
+     * Phase 4：同步落库 —— rememberTurn（journal+candidates+episode）、skill usage，
      * 并按本轮实际模式 + 黑板状态刷新 fastRoute 快照（升级器计数器）。
      */
     private async persistTurn(
@@ -585,7 +584,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
     /**
      * fastRoute snapshot 的 key：(channel, chatId, user) 维度，
-     * 与 scopeFor 一致，但不引入 session 概念。
+     * 与 project constraint 复用同一条内部连续轴。
      */
     private snapshotKeyFor(message: GatewayMessage): string {
         return `${message.route.channel}:${message.route.chatId}:${message.user.id}`;
@@ -902,8 +901,9 @@ export class RuntimeModule extends RuntimeBoundary {
         await options.onTextDelta?.(`> 🤔 黑板讨论中 · 参与者：${workerNames}\n\n`);
 
         const started = performance.now();
+        const projectConstraintId = projectConstraintIdForMessage(message);
         const start = await this.blackboard.startTurn({
-            sessionKey: scopeFor(message),
+            projectConstraintId,
             requestId: context.requestId,
             goal: message.text,
             now: context.now,
@@ -926,7 +926,7 @@ export class RuntimeModule extends RuntimeBoundary {
             return {
                 elapsedMs: elapsed(started),
                 mode: BlackboardMode.Blackboard,
-                reason: "session-lease-conflict",
+                reason: "project-lease-conflict",
                 decisions: [],
                 metadata: {},
                 steps: [],
@@ -936,7 +936,7 @@ export class RuntimeModule extends RuntimeBoundary {
                         id: crypto.randomUUID(),
                         turnId: start.conflict.turnId,
                         role: "system",
-                        content: `A blackboard turn is already running for this session: ${start.conflict.turnId}`,
+                        content: `A blackboard turn is already running for this project constraint: ${projectConstraintId}`,
                         visibility: "public",
                         createdAt: context.now,
                         metadata: {
@@ -1527,4 +1527,10 @@ function renderDebateEpisodeText(userText: string, run: RuntimeBlackboardRun): s
         .filter((s) => s.length > 0)
         .join("\n");
     return summaries ? `${head}\n${summaries}` : head;
+}
+
+function projectConstraintIdForMessage(message: GatewayMessage): string {
+    return [message.route.channel, message.route.accountId, message.route.chatId, message.route.threadId]
+        .filter(Boolean)
+        .join(":");
 }

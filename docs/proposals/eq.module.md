@@ -44,7 +44,7 @@ interface EqState {
 
 - valence 衰减允许走纯资源指标（时间窗 / 计数器）。
 - 标签 / 强度变化必须由模型结构化字段产生，禁止文本匹配。
-- 数据落点：建议 SQLite 单表 `eq_state`，与 session 同 key。
+- 数据落点：建议 SQLite 单表 `eq_state`，与 `projectConstraintId` / `turnId` 审计键关联。
 
 ## 落地清单（如批准）
 

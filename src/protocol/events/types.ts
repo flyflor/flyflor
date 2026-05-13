@@ -31,6 +31,7 @@ export const RuntimeEventType = {
     PluginInvokeEnd: "plugin.invoke.end",
     PluginInvokeFailed: "plugin.invoke.failed",
     MemoryEpisodeWritten: "memory.episode.written",
+    MemoryJournalWritten: "memory.journal.written",
     MemoryConsolidationCompleted: "memory.consolidation.completed",
     MemoryConsolidationFailed: "memory.consolidation.failed",
     MemoryDecaySwept: "memory.decay.swept",

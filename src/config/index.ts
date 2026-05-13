@@ -42,6 +42,7 @@ export interface FlyflorPaths {
     projectMcpDir: string;
     projectPluginDir: string;
     projectMemoryDir: string;
+    journalDir?: string;
     workspaceDir: string;
     logDir: string;
     memoryDir: string;
@@ -222,7 +223,6 @@ export interface MemoryConfig {
     sqlite: SQLiteMemoryConfig;
     embedding: MemoryEmbeddingConfig;
     retrieval: MemoryRetrievalConfig;
-    session: MemorySessionConfig;
     /** 生命体重构调参块（LF-P0）；详见 `MemoryTuningConfig` 注释。 */
     tuning: MemoryTuningConfig;
     weights: MemoryWeightConfig;
@@ -296,13 +296,6 @@ export interface MemoryRetrievalConfig {
     maxResults: number;
 }
 
-export interface MemorySessionConfig {
-    consolidationBatchSize: number;
-    maxHistoryEntryChars: number;
-    maxLiveMessages: number;
-    maxPromptMessages: number;
-}
-
 export interface MemoryWeightConfig {
     actionability: number;
     arousal: number;
@@ -327,7 +320,6 @@ export interface MemoryWeightConfig {
 export interface MemoryTuningConfig {
     identity: IdentityTuningConfig;
     summary: SummaryTuningConfig;
-    session: SessionTuningConfig;
     reconsolidation: ReconsolidationTuningConfig;
     inbox: InboxTuningConfig;
     dormant: DormantTuningConfig;
@@ -348,11 +340,6 @@ export interface SummaryTuningConfig {
     rollingWindowDays: number;
     /** 两次 summary 写入的最小间隔（小时），防止同日反复改写。 */
     minIntervalHours: number;
-}
-
-export interface SessionTuningConfig {
-    /** W4：legacySessionKey 双写期天数；到期后 phase-5 清理。 */
-    legacyDoubleWriteDays: number;
 }
 
 export interface ReconsolidationTuningConfig {
@@ -380,6 +367,8 @@ export interface DormantTuningConfig {
 }
 
 export interface AtomScoreTuningConfig {
+    /** Prompt 可见性阈值；所有 journal atom 召回必须先过此门。 */
+    visibilityThreshold: number;
     /**
      * 四分量权重；总和不强制为 1。
      * 默认值经内部实验调参；用户可覆盖但 CLI / README 不暴露此项。
@@ -664,12 +653,6 @@ function createDefaultMemoryConfig(): MemoryConfig {
             maxPromptChars: 18_000,
             maxResults: 12,
         },
-        session: {
-            consolidationBatchSize: 24,
-            maxHistoryEntryChars: 8_000,
-            maxLiveMessages: 80,
-            maxPromptMessages: 16,
-        },
         tuning: createDefaultMemoryTuning(),
         weights: {
             actionability: 0.7,
@@ -705,9 +688,6 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
             rollingWindowDays: 7,
             minIntervalHours: 24,
         },
-        session: {
-            legacyDoubleWriteDays: 30,
-        },
         reconsolidation: {
             embeddingDriftThreshold: 0.25,
             driftHitCount: 2,
@@ -721,6 +701,7 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
             _keepGatewayListening: true,
         },
         atomScore: {
+            visibilityThreshold: 0.65,
             weights: {
                 recency: 0.35,
                 access: 0.15,
@@ -1012,6 +993,7 @@ function resolvePaths(): FlyflorPaths {
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),
         projectMemoryDir: join(projectFlyflorDir, "memory"),
+        journalDir: join(home, "journal"),
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(xdgData, "flyflor", "memory"),
@@ -1033,12 +1015,15 @@ async function ensureDirectories(paths: FlyflorPaths): Promise<void> {
             paths.workspaceDir,
             paths.logDir,
             paths.memoryDir,
+            paths.journalDir,
             paths.pluginDir,
             paths.promptDir,
             paths.skillDir,
             paths.templateDir,
             paths.mcpDir,
-        ].map((path) => mkdir(path, { recursive: true })),
+        ]
+            .filter((path): path is string => typeof path === "string")
+            .map((path) => mkdir(path, { recursive: true })),
     );
 }
 

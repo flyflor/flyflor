@@ -232,7 +232,6 @@ export const ComponentKind = {
     Provider: "provider",
     Runtime: "runtime",
     Sandbox: "sandbox",
-    Session: "session",
     Skill: "skill",
     Tool: "tool",
     Worker: "worker",
@@ -264,6 +263,7 @@ export type FpcLayer = ArchitectureLayer;
 
 export const MemoryLayer = {
     Crystal: "crystal",
+    Journal: "journal",
     Markdown: "markdown",
     Project: "project",
     Redis: "redis",
@@ -280,7 +280,6 @@ export const MemoryKind = {
     History: "history",
     Profile: "profile",
     Rule: "rule",
-    SessionMessage: "session-message",
     Skill: "skill",
     Summary: "summary",
 } as const;
@@ -297,8 +296,7 @@ export type MemoryCandidateStatus = (typeof MemoryCandidateStatus)[keyof typeof 
 
 export const MemorySourceKind = {
     ExplicitUserIntent: "explicit-user-intent",
-    SessionConsolidation: "session-consolidation",
-    SessionTurn: "session-turn",
+    JournalTurn: "journal-turn",
     Reflection: "reflection",
     SignalAnalysis: "signal-analysis",
     BlackboardConverged: "blackboard-converged",

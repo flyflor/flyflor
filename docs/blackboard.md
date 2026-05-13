@@ -65,8 +65,8 @@ sequenceDiagram
     participant Store as SQLiteBlackboardStore
     participant WM as WorkerManager
     participant W as Worker
-    RT->>BB: startTurn({sessionKey, goal, workers, budget})
-    BB->>Store: acquireLease(sessionKey, ttl)
+    RT->>BB: startTurn({projectConstraintId, goal, workers, budget})
+    BB->>Store: acquireLease(projectConstraintId, ttl)
     alt 已有 lease
         Store-->>BB: acquired=false
         BB-->>RT: 降级 direct 或拒绝
@@ -137,7 +137,7 @@ interface BlackboardWorkerResult {
 
 ```json
 // stdin：单行 JSON
-{ "context": { "taskId", "workerName", "runtime", "requestId", "sessionKey", "turnId" }, "input": {} }
+{ "context": { "taskId", "workerName", "runtime", "requestId", "projectConstraintId", "turnId" }, "input": {} }
 
 // stdout：单行 JSON（persistent 用 id 对齐）
 { "id": "task-id", "output": {} }
@@ -145,11 +145,11 @@ interface BlackboardWorkerResult {
 
 stderr 只做诊断，不进入模型上下文。
 
-## Session lease
+## Project constraint lease
 
 ```sql
 CREATE TABLE blackboard_leases (
-    session_key TEXT PRIMARY KEY,
+    project_constraint_id TEXT PRIMARY KEY,
     turn_id TEXT NOT NULL,
     request_id TEXT NOT NULL,
     acquired_at TEXT NOT NULL,
@@ -158,7 +158,7 @@ CREATE TABLE blackboard_leases (
 ```
 
 - TTL 默认 15 分钟；崩溃后到期自动释放。
-- 同 session 同时只允许一个 blackboard turn；冲突时降级 direct 或返回「已有任务运行中」。
+- 同 project constraint 同时只允许一个 blackboard turn；冲突时降级 direct 或返回「已有任务运行中」。
 
 ## Decision form 交还格式
 
@@ -207,7 +207,7 @@ CLI `flyflor blackboard list` / `show <turnId>` 直接消费这些表（见 `cli
 
 worker **不能**直接写长期记忆：
 
-- 允许：写 blackboard step / decision、写 session timeline、通过模型输出合法 `memory_action` 走 Memory Action 链路。
+- 允许：写 blackboard step / decision、写 journal episode、通过模型输出合法 `memory_action` 走 Memory Action 链路。
 - 禁止：worker prompt 改 Markdown、关键词把讨论自动晋升长期记忆、unresolved blocker 当长期事实。
 
 收敛黑板 → `recordDebateEpisode` 高权重 episode（`sourceKind = blackboard-converged`，evidence weight 0.8）。

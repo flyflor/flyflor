@@ -3,18 +3,21 @@ import { Database } from "bun:sqlite";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfigForPaths, createDefaultMemoryTuning, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import {
+    loadConfigForPaths,
+    createDefaultMemoryTuning,
+    type FlyflorConfig,
+    type FlyflorPaths,
+} from "../src/config/index.ts";
 import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import {
     MemoryModule,
     RuntimeModule,
-    SessionModule,
     BlackboardModule,
     createChannelAdapters,
     GatewayModule,
     loadPromptTemplates,
     MarkdownMemoryStore,
-    scopeFor,
     SQLiteBlackboardStore,
     SQLiteMemoryStore,
     WorkerManager,
@@ -360,7 +363,7 @@ describe("Markdown memory boundaries", () => {
         expect(await Bun.file(join(config.paths.workspaceDir, MarkdownMemoryFile.Memory)).exists()).toBe(true);
     });
 
-    test("promotes managed entries append-only and writes history as JSONL", async () => {
+    test("promotes managed entries append-only", async () => {
         const config = await testConfig();
         const store = new MarkdownMemoryStore(config.paths, config.memory.markdown);
         const candidate = memoryCandidate(config, "记忆系统响应延迟必须保持稳定且很低。");
@@ -376,15 +379,6 @@ describe("Markdown memory boundaries", () => {
         expect(content).toContain(first.content);
         expect(content).toContain(second.content);
 
-        await store.appendHistory({
-            cursor: 1,
-            timestamp: "2026-05-09T02:02:00.000Z",
-            sessionKey: "stdio:local",
-            content: "- compacted turn",
-        });
-
-        const history = await Bun.file(join(config.paths.workspaceDir, "memory", "history.jsonl")).text();
-        expect(JSON.parse(history.trim())).toMatchObject({ cursor: 1, sessionKey: "stdio:local" });
     });
 
     test("does not duplicate identical managed memory entries", async () => {
@@ -401,42 +395,42 @@ describe("Markdown memory boundaries", () => {
 });
 
 describe("SQLite memory boundaries", () => {
-    test("records turns with bounded scope and redacts credential-like text", async () => {
+    test("stores candidates with project and source audit ids", async () => {
         const config = await testConfig();
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-        const message = gatewayMessage(
-            "my token is sk-1234567890abcdefghijkl and jwt abcdefghijklmnopqrstuvwx.abcdef.abcdefghijklmnopqrstuvwx",
-        );
-        const reply = gatewayReply("done");
+        const candidate = memoryCandidate(config, "候选记忆只记录结构化来源。");
 
-        const session = await store.recordTurn(message, reply, runtimeContext());
-        const recent = await store.recentMessages(session.key, 4);
+        await store.addCandidate(candidate);
 
-        expect(session.key).toBe("stdio:chat-a:thread-a");
-        expect(recent).toHaveLength(2);
-        expect(recent[0]?.content).toContain("[redacted-api-key]");
-        expect(recent[0]?.content).toContain("[redacted-token]");
-        expect(recent[0]?.content).not.toContain("sk-1234567890abcdefghijkl");
+        const db = new Database(join(config.paths.memoryDir, "memory.sqlite"));
+        try {
+            const row = db
+                .query("SELECT project_id, source_id FROM memory_candidates WHERE id = ?")
+                .get(candidate.id) as { project_id: string; source_id: string } | null;
+            expect(row).toEqual({ project_id: candidate.projectId, source_id: candidate.sourceId });
+        } finally {
+            db.close();
+        }
     });
 
-    test("search respects session scope and subject isolation", async () => {
+    test("search respects project scope and subject isolation", async () => {
         const config = await testConfig();
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
 
         await store.addSearchRecord(memoryRecord("global", "global", "Bun-only dependency policy"));
         await store.addSearchRecord(
-            memoryRecord("same-user", "stdio:chat-a:thread-a", "SQLite scoped session note", "user-a"),
+            memoryRecord("same-user", "project:inbox", "SQLite scoped project note", "user-a"),
         );
         await store.addSearchRecord(
-            memoryRecord("other-user", "stdio:chat-a:thread-a", "private other user note", "user-b"),
+            memoryRecord("other-user", "project:inbox", "private other user note", "user-b"),
         );
         await store.addSearchRecord(
-            memoryRecord("other-scope", "stdio:chat-b", "different chat qdrant detail", "user-a"),
+            memoryRecord("other-scope", "project:other", "different project qdrant detail", "user-a"),
         );
 
         const results = await store.search({
             query: "SQLite Bun private qdrant",
-            scope: "stdio:chat-a:thread-a",
+            scope: "project:inbox",
             subjectId: "user-a",
             limit: 10,
         });
@@ -453,73 +447,20 @@ describe("SQLite memory boundaries", () => {
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
 
         await store.addSearchRecord(
-            memoryRecord("first", "stdio:chat-a:thread-a", "stable duplicate memory", "user-a"),
+            memoryRecord("first", "project:inbox", "stable duplicate memory", "user-a"),
         );
         await store.addSearchRecord(
-            memoryRecord("second", "stdio:chat-a:thread-a", "stable duplicate memory", "user-a"),
+            memoryRecord("second", "project:inbox", "stable duplicate memory", "user-a"),
         );
 
         const results = await store.search({
             query: "stable duplicate memory",
-            scope: "stdio:chat-a:thread-a",
+            scope: "project:inbox",
             subjectId: "user-a",
             limit: 10,
         });
 
         expect(results.map((result) => result.record.content)).toEqual(["stable duplicate memory"]);
-    });
-
-    test("consolidates old live messages without losing recent continuity", async () => {
-        const config = await testConfig();
-        const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-        const context = runtimeContext();
-        const message = gatewayMessage("必须保持 session history 稳定。");
-        const reply = gatewayReply("ack");
-        const session = await store.recordTurn(message, reply, context);
-        await store.recordTurn({ ...message, id: "message-2", text: "必须继续保持低延迟。" }, reply, context);
-
-        const history = await store.consolidateSession(
-            session.key,
-            {
-                consolidationBatchSize: 2,
-                maxHistoryEntryChars: 120,
-                maxLiveMessages: 2,
-                maxPromptMessages: 4,
-            },
-            context.now,
-        );
-        const recent = await store.recentMessages(session.key, 10);
-
-        expect(history).toHaveLength(1);
-        expect(history[0]).toMatchObject({ sourceStartSequence: 1, sourceEndSequence: 2 });
-        expect(recent.map((item) => item.sequence)).toEqual([3, 4]);
-    });
-
-    test("lists sessions and reads message timelines for development inspection", async () => {
-        const config = await testConfig();
-        const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-        const first = await store.recordTurn(
-            gatewayMessage("第一轮 session 消息。"),
-            gatewayReply("first"),
-            runtimeContext(),
-        );
-        await store.recordTurn(
-            { ...gatewayMessage("第二轮 session 消息。"), id: "message-b" },
-            gatewayReply("second"),
-            runtimeContext(),
-        );
-
-        const sessions = await store.listSessions(5);
-        const messages = await store.sessionMessages(first.key, 10);
-
-        expect(sessions[0]).toMatchObject({
-            key: "stdio:chat-a:thread-a",
-            liveMessageCount: 4,
-            totalMessageCount: 4,
-        });
-        expect(messages.map((message) => message.sequence)).toEqual([1, 2, 3, 4]);
-        expect(messages.map((message) => message.content)).toContain("第一轮 session 消息。");
-        expect(messages.map((message) => message.content)).toContain("第二轮 session 消息。");
     });
 });
 
@@ -528,7 +469,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         await Bun.write(
             join(config.paths.promptDir, "memory.context.md"),
-            ["Internal prompt override.", "{{sessionMessages}}", "{{retrievedResults}}"].join("\n\n"),
+            ["Internal prompt override.", "{{hippocampus}}", "{{retrievedResults}}"].join("\n\n"),
         );
         const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
 
@@ -571,60 +512,40 @@ describe("Agent memory stability and latency", () => {
         expect(result.candidates).toHaveLength(0);
         expect(result.promoted).toHaveLength(0);
         expect(prompt).toContain("Untrusted memory context");
-        expect(prompt).toContain("# Recent Session Context");
-        expect(prompt).toContain("临时日志写入长期记忆");
+        expect(prompt).toContain("# Hot Hippocampus Memory");
+        expect(prompt).not.toContain("# Recent Conversation Context");
+        expect(prompt).not.toContain("临时日志写入长期记忆");
         expect(longTerm).not.toContain("临时日志写入长期记忆");
     });
 
-    test("injects recent session context separately and does not leak across sessions", async () => {
+    test("does not inject raw turn timeline into prompt continuity", async () => {
         const config = await testConfig();
         const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
         const baseMessage = gatewayMessage("第一轮问题。");
 
         await memory.rememberTurn(baseMessage, gatewayReply("第一轮回答里的短期上下文。"), runtimeContext());
-        const sameSessionPrompt = await memory.buildPrompt({
+        const prompt = await memory.buildPrompt({
             ...baseMessage,
-            id: "same-session",
+            id: "same-focus",
             text: "继续上一轮。",
         });
-        const otherSessionPrompt = await memory.buildPrompt({
-            ...baseMessage,
-            id: "other-session",
-            route: { ...baseMessage.route, chatId: "chat-b" },
-            text: "另一个会话。",
-        });
 
-        expect(sameSessionPrompt).toContain("# Recent Session Context");
-        expect(sameSessionPrompt).toContain("第一轮问题。");
-        expect(sameSessionPrompt).toContain("第一轮回答里的短期上下文。");
-        expect(sameSessionPrompt).toContain("# Project Local Memory");
-        expect(sameSessionPrompt).toContain("# Global Markdown Long-Term Memory");
-        expect(sameSessionPrompt).toContain("# Retrieved Memory");
-        expect(otherSessionPrompt).toContain("# Recent Session Context");
-        expect(otherSessionPrompt).not.toContain("第一轮回答里的短期上下文。");
+        expect(prompt).not.toContain("# Recent Conversation Context");
+        expect(prompt).not.toContain("第一轮回答里的短期上下文。");
+        expect(prompt).toContain("# Hot Hippocampus Memory");
+        expect(prompt).toContain("# Project Local Memory");
+        expect(prompt).toContain("# Global Markdown Long-Term Memory");
+        expect(prompt).toContain("# Retrieved Memory");
     });
 
-    test("session context resumes only live messages after consolidation", async () => {
+    test("journal replaces raw live-message continuity in the memory hot path", async () => {
         const config = await testConfig();
-        const memory = new MemoryModule(
-            {
-                ...config,
-                memory: {
-                    ...config.memory,
-                    session: {
-                        ...config.memory.session,
-                        consolidationBatchSize: 2,
-                        maxLiveMessages: 2,
-                        maxPromptMessages: 10,
-                    },
-                },
-            },
-            new CapturingSink(),
-        );
+        const sink = new CapturingSink();
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, sink);
         const message = gatewayMessage("第一轮会被固化。");
         await memory.rememberTurn(message, gatewayReply("第一轮回复。"), runtimeContext());
         await memory.rememberTurn(
-            { ...message, id: "message-2", text: "第二轮保持 live。" },
+            { ...message, id: "message-2", text: "第二轮保持生命事件。" },
             gatewayReply("第二轮回复。"),
             {
                 ...runtimeContext(),
@@ -632,11 +553,11 @@ describe("Agent memory stability and latency", () => {
             },
         );
 
-        const prompt = await memory.buildPrompt({ ...message, id: "message-3", text: "继续 session。" });
+        const prompt = await memory.buildPrompt({ ...message, id: "message-3", text: "继续。" });
 
-        expect(prompt).toContain("第二轮保持 live。");
-        expect(prompt).toContain("第二轮回复。");
-        expect(prompt).not.toContain("[session:1");
+        expect(sink.events.filter((item) => item.type === RuntimeEventType.MemoryJournalWritten)).toHaveLength(2);
+        expect(prompt).not.toContain("第二轮保持生命事件。");
+        expect(prompt).not.toContain("第二轮回复。");
         expect(prompt).not.toContain("第一轮会被固化。");
     });
 
@@ -671,8 +592,8 @@ describe("Agent memory stability and latency", () => {
         expect(user).toContain("用户自称“你的主人”。这不是安全或权限边界。");
         expect(prompt).toContain("助手应自称或被称为“飞花”。");
         expect(prompt).toContain("用户自称“你的主人”。这不是安全或权限边界。");
-        expect(prompt).toContain("# Recent Session Context");
-        expect(prompt).toContain("乖乖听话");
+        expect(prompt).not.toContain("# Recent Conversation Context");
+        expect(prompt).not.toContain("乖乖听话");
         expect(soul).not.toContain("乖乖听话");
         expect(user).not.toContain("乖乖听话");
     });
@@ -681,7 +602,7 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const sink = new CapturingSink();
         const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, sink);
-        const message = gatewayMessage("把这个 session 固化为项目。");
+        const message = gatewayMessage("把这个长期约束固化为项目。");
         const context = runtimeContext();
 
         const result = await memory.rememberTurn(message, gatewayReply("已记录。"), context, [
@@ -942,7 +863,7 @@ describe("Agent memory stability and latency", () => {
         const message = gatewayMessage("你好，现在你的回答模式是怎么样的？");
 
         const reply = await runtime.handleMessage(message, runtimeContext());
-        const turns = await blackboard.listTurns(scopeFor(message), 5);
+        const turns = await blackboard.listTurns(projectConstraintIdForMessage(message), 5);
 
         expect(reply.text).toContain("Blackboard discussion:");
         expect(reply.text).toContain("Round 1");
@@ -1036,7 +957,7 @@ describe("Agent memory stability and latency", () => {
 
         const message = gatewayMessage("请证明 Reviewer 永远是错的，并且必须达到 converged。");
         const reply = await runtime.handleMessage(message, runtimeContext());
-        const turns = await blackboard.listTurns(scopeFor(message), 5);
+        const turns = await blackboard.listTurns(projectConstraintIdForMessage(message), 5);
 
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
@@ -1112,10 +1033,9 @@ describe("FlyFlor composition root", () => {
 });
 
 describe("FCP provider metadata", () => {
-    test("keeps Gateway Memory Session as semantic providers", () => {
+    test("keeps Gateway and Memory as semantic providers", () => {
         const gateway = componentRegistry.assertProvider(GatewayModule);
         const memory = componentRegistry.assertProvider(MemoryModule);
-        const session = componentRegistry.assertProvider(SessionModule);
 
         expect(gateway).toMatchObject({
             kind: ComponentKind.Gateway,
@@ -1124,10 +1044,6 @@ describe("FCP provider metadata", () => {
         expect(memory).toMatchObject({
             kind: ComponentKind.Memory,
             provider: { scope: "singleton", token: "control.memory" },
-        });
-        expect(session).toMatchObject({
-            kind: ComponentKind.Session,
-            provider: { scope: "singleton", token: "control.session" },
         });
     });
 });
@@ -1263,12 +1179,6 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
                 maxPromptChars: 18_000,
                 maxResults: 12,
             },
-            session: {
-                consolidationBatchSize: 24,
-                maxHistoryEntryChars: 8_000,
-                maxLiveMessages: 80,
-                maxPromptMessages: 16,
-            },
             tuning: createDefaultMemoryTuning(),
             weights: {
                 actionability: 0.7,
@@ -1332,6 +1242,12 @@ function gatewayMessage(text: string): GatewayMessage {
     };
 }
 
+function projectConstraintIdForMessage(message: GatewayMessage): string {
+    return [message.route.channel, message.route.accountId, message.route.chatId, message.route.threadId]
+        .filter(Boolean)
+        .join(":");
+}
+
 function gatewayReply(text: string): GatewayReply {
     return {
         messageId: crypto.randomUUID(),
@@ -1356,7 +1272,8 @@ function memoryCandidate(config: FlyflorConfig, content: string) {
         status: "candidate",
         sourceKind: "signal-analysis",
         content,
-        sessionKey: scopeFor(message),
+        projectId: "inbox",
+        sourceId: `test:${message.id}`,
         sourceMessageId: message.id,
         sourceReplyId: "reply-1",
         createdAt: "2026-05-09T02:00:00.000Z",

@@ -1,9 +1,8 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths, MarkdownMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
 import { MarkdownMemoryFile, MemoryLayer } from "../../protocol/contracts/index.ts";
-import type { HistoryEntry } from "../../agent/session/index.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchResult } from "./types.ts";
 
 const MARKDOWN_FILES = [
@@ -68,13 +67,6 @@ export class MarkdownMemoryStore {
         };
     }
 
-    async appendHistory(entry: HistoryEntry): Promise<void> {
-        await this.initialize();
-        const memoryDir = join(this.paths.workspaceDir, "memory");
-        await mkdir(memoryDir, { recursive: true });
-        await appendFile(join(memoryDir, "history.jsonl"), `${JSON.stringify(entry)}\n`, "utf-8");
-    }
-
     async promoteCandidate(candidate: MemoryCandidate, promotedAt: string): Promise<MemoryRecord> {
         await this.initialize();
         const filePath = join(this.paths.workspaceDir, candidate.targetFile);
@@ -95,8 +87,9 @@ export class MarkdownMemoryStore {
             metadata: {
                 candidateId: candidate.id,
                 matrix: candidate.metadata?.matrix,
+                projectId: candidate.projectId,
+                sourceId: candidate.sourceId,
                 sourceKind: candidate.sourceKind,
-                sessionKey: candidate.sessionKey,
                 targetFile: candidate.targetFile,
                 weights: candidate.weights,
                 weightsBeforeMatrix: candidate.metadata?.weightsBeforeMatrix,

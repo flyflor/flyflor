@@ -81,7 +81,7 @@ describe("detectSkillCandidate (cluster heuristic)", () => {
     });
 
     test("requires MCP-augmented evidence", () => {
-        const eps = Array.from({ length: 6 }, (_, i) => fakeEpisode(`e${i}`, 0.9, MemorySourceKind.SessionTurn));
+        const eps = Array.from({ length: 6 }, (_, i) => fakeEpisode(`e${i}`, 0.9, MemorySourceKind.JournalTurn));
         const r = detectSkillCandidate({ tools: ["fs.read"], episodes: eps });
         expect(r.kind).toBe(ProjectTriggerKind.None);
         expect(r.rationale).toBe("mcp-evidence-too-thin");

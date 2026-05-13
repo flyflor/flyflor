@@ -74,7 +74,7 @@ export class BlackboardModule extends Blackboard {
     async startTurn(request: BlackboardStartRequest): Promise<BlackboardStartResult> {
         const turnId = request.turnId ?? crypto.randomUUID();
         const lease = await this.store.acquireLease({
-            sessionKey: request.sessionKey,
+            projectConstraintId: request.projectConstraintId,
             turnId,
             requestId: request.requestId,
             now: request.now,
@@ -87,7 +87,7 @@ export class BlackboardModule extends Blackboard {
         const plannedWorkers = workersFromPlan(request.workers, request.now);
         const turn: BlackboardTurn = {
             id: turnId,
-            sessionKey: request.sessionKey,
+            projectConstraintId: request.projectConstraintId,
             requestId: request.requestId,
             mode: BlackboardMode.Blackboard,
             status: BlackboardTurnStatus.Running,
@@ -115,7 +115,7 @@ export class BlackboardModule extends Blackboard {
         try {
             await this.store.createTurn(turn);
         } catch (error) {
-            await this.store.releaseLease(request.sessionKey, turnId, request.now);
+            await this.store.releaseLease(request.projectConstraintId, turnId, request.now);
             throw error;
         }
 
@@ -124,7 +124,7 @@ export class BlackboardModule extends Blackboard {
                 RuntimeEventType.BlackboardLeaseAcquired,
                 {
                     expiresAt: lease.lease.expiresAt,
-                    sessionKey: request.sessionKey,
+                    projectConstraintId: request.projectConstraintId,
                     turnId,
                 },
                 request.requestId,
@@ -135,7 +135,7 @@ export class BlackboardModule extends Blackboard {
                 RuntimeEventType.BlackboardTurnStart,
                 {
                     goal: request.goal,
-                    sessionKey: request.sessionKey,
+                    projectConstraintId: request.projectConstraintId,
                     turnId,
                 },
                 request.requestId,
@@ -347,7 +347,7 @@ export class BlackboardModule extends Blackboard {
 
         const task: BlackboardWorkerTask = {
             turnId,
-            sessionKey: turn.sessionKey,
+            projectConstraintId: turn.projectConstraintId,
             requestId: turn.requestId,
             goal: turn.goal,
             contract: blackboardContractFor(turn),
@@ -386,7 +386,7 @@ export class BlackboardModule extends Blackboard {
             task,
             {
                 requestId: turn.requestId,
-                sessionKey: turn.sessionKey,
+                projectConstraintId: turn.projectConstraintId,
                 timeoutMs: input.timeoutMs,
                 turnId,
             },
@@ -462,13 +462,13 @@ export class BlackboardModule extends Blackboard {
             return undefined;
         }
         const updated = await this.store.updateTurnStatus(turnId, status, now);
-        const released = await this.store.releaseLease(existing.sessionKey, turnId, now);
+        const released = await this.store.releaseLease(existing.projectConstraintId, turnId, now);
         if (released) {
             this.events.publish(
                 event(
                     RuntimeEventType.BlackboardLeaseReleased,
                     {
-                        sessionKey: released.sessionKey,
+                        projectConstraintId: released.projectConstraintId,
                         turnId,
                     },
                     existing.requestId,
@@ -479,7 +479,7 @@ export class BlackboardModule extends Blackboard {
             event(
                 RuntimeEventType.BlackboardTurnEnd,
                 {
-                    sessionKey: existing.sessionKey,
+                    projectConstraintId: existing.projectConstraintId,
                     status,
                     turnId,
                 },
@@ -493,8 +493,8 @@ export class BlackboardModule extends Blackboard {
         return this.store.getTurn(turnId);
     }
 
-    async listTurns(sessionKey: string, limit = 20): Promise<BlackboardTurn[]> {
-        return this.store.listTurns(sessionKey, limit);
+    async listTurns(projectConstraintId: string, limit = 20): Promise<BlackboardTurn[]> {
+        return this.store.listTurns(projectConstraintId, limit);
     }
 
     async listRecentTurns(limit = 20): Promise<BlackboardTurn[]> {

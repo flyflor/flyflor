@@ -67,11 +67,6 @@ export interface MemoryAtom {
     stage: AtomStage;
     createdAt: string;
     refinedAt?: string;
-    /**
-     * R1 红线过渡字段：legacy 数据迁移期内允许携带，phase-5 强制删除。
-     * 新代码不得读写此字段（lint 规则在 phase-2 引入）。
-     */
-    legacySessionKey?: string;
 }
 
 /**
@@ -93,7 +88,7 @@ export interface AtomScore {
 }
 
 /**
- * 焦点指针：替代 sessionKey，表达"现在用户和 agent 在干什么"。
+ * 焦点指针：表达"现在用户和 agent 在干什么"。
  * 存于 Redis：flyflor:focus:<userId>:<channelId>。无活动超过 dormant.idleMinutes 后过期或回落 inbox。
  */
 export interface FocusPointer {

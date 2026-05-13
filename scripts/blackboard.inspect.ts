@@ -16,7 +16,7 @@ for (let index = 2; index < process.argv.length; index += 1) {
 const limit = numberArg("limit", 20);
 const dbPath = args.get("db") ?? join((await loadConfig()).paths.storageDir, "blackboard", "blackboard.sqlite");
 const turnId = args.get("turn");
-const sessionKey = args.get("session");
+const projectConstraintId = args.get("project-constraint-id");
 
 if (!existsSync(dbPath)) {
     console.log(`No blackboard database found at ${dbPath}`);
@@ -30,29 +30,29 @@ try {
     if (turnId) {
         printTurn(turnId, limit);
     } else {
-        printTurns(sessionKey, limit);
+        printTurns(projectConstraintId, limit);
     }
 } finally {
     db.close();
 }
 
-function printTurns(session: string | undefined, max: number): void {
-    const rows = session
+function printTurns(projectConstraint: string | undefined, max: number): void {
+    const rows = projectConstraint
         ? db
               .query(
                   `
-                  SELECT id, session_key AS sessionKey, status, goal, updated_at AS updatedAt
+                  SELECT id, project_constraint_id AS projectConstraintId, status, goal, updated_at AS updatedAt
                   FROM blackboard_turns
-                  WHERE session_key = ?
+                  WHERE project_constraint_id = ?
                   ORDER BY updated_at DESC
                   LIMIT ?
               `,
               )
-              .all(session, max)
+              .all(projectConstraint, max)
         : db
               .query(
                   `
-                  SELECT id, session_key AS sessionKey, status, goal, updated_at AS updatedAt
+                  SELECT id, project_constraint_id AS projectConstraintId, status, goal, updated_at AS updatedAt
                   FROM blackboard_turns
                   ORDER BY updated_at DESC
                   LIMIT ?
@@ -66,7 +66,7 @@ function printTurn(id: string, max: number): void {
     const turn = db
         .query(
             `
-            SELECT id, session_key AS sessionKey, request_id AS requestId, status, goal,
+            SELECT id, project_constraint_id AS projectConstraintId, request_id AS requestId, status, goal,
                    created_at AS createdAt, updated_at AS updatedAt
             FROM blackboard_turns
             WHERE id = ?

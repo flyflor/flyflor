@@ -17,7 +17,7 @@
 app.ts            程序入口，只做版本/命令分派
 src/app.ts        FlyFlor composition root
 src/command/      CLI / TUI / 命令注册 / 终端渲染
-src/agent/        runtime / gateway / blackboard / session / sandbox / worker / mcp / project / plugin
+src/agent/        runtime / gateway / blackboard / focus / sandbox / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
 src/llm/          模型 provider
 src/crystal/      reflection / Gem / skill
@@ -59,7 +59,7 @@ flowchart LR
 
 - `llm` / `crystal` / `neural` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- `session` 是 session scope 的唯一计算入口；其他目录不得重新实现。
+- `focus` 是当前注意力指针的唯一计算入口；其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。
@@ -69,7 +69,7 @@ flowchart LR
 
 只保留：`@Module` / `@Provide` / `@Inject` / `@Service` / `@Component` / `@Worker` / `@Channel` / `@Plugin`。
 
-- `@Provide` 是注入底座；Gateway / Blackboard / Memory / Session / Runtime / Sandbox 用 `class XModule extends X` 表达边界语义。
+- `@Provide` 是注入底座；Gateway / Blackboard / Memory / Runtime / Sandbox 用 `class XModule extends X` 表达边界语义。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定。
 
@@ -180,7 +180,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 用户当前指令优先级最高。
 - 长期记忆只保存稳定偏好、项目事实、明确结论、可复用方法。
 - 工具输出 / 日志 / stack trace / 大文件不能无筛选写入长期记忆。
-- 记忆写入必须记录来源、时间、focus pointer（替代 session key）和 schema version。
+- 记忆写入必须记录来源、时间、focus pointer、episode id、schema version 和必要证据链。
 - 删除任何范围的记忆必须能删除对应索引、摘要和向量记录。
 
 ## 11.1 生命体重构红线（LF-P0，与第 11 章并列硬约束）
@@ -189,10 +189,11 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 
 ### R1 — 无 session
 
-- 协议、提示词、存储、事件、日志中禁止出现 `sessionId` / `sessionKey` / `sessionScope` 等任何形式的会话标识。
-- 过渡期允许在数据结构中保留 `legacySessionKey?: string` 字段，仅用于双写期数据迁移；`memory.tuning.session.legacyDoubleWriteDays` 到期后必须清除。
-- 时间是唯一连续轴：所有"哪一段对话"问题改由 `(userId, channelId, projectId, ts)` + 焦点指针（`FocusPointer`）共同表达。
-- 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 清屏语义全部由 project 承担。
+- 协议、提示词、存储、事件、日志、CLI 中禁止出现 `sessionId` / `sessionKey` / `sessionScope` / `legacySessionKey` 等任何形式的会话标识。
+- 禁止把 session 改名为 legacy、scope、conversation、thread 等新容器继续表达会话；纯渠道协议字段（如外部 IM thread id）只能保留在 gateway 原始元数据边界，不能进入记忆连续性模型。
+- 时间是唯一事实连续轴：所有“哪一段经历”问题改由 `(userId, channelId, projectConstraint, ts)` + `FocusPointer` + hippocampus activation 共同表达。
+- Project 是从海马体 / 晶体智力中沉淀出来的内部约束，不是用户可感知会话；默认 CLI / TUI 不展示 project id，调试入口必须显式标注 internal / audit。
+- 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 当前焦点全部由内部 project constraint / turn / episode 审计 id 承担。
 
 ### R2 — Journal 目录是公开契约
 
@@ -212,7 +213,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 
 ### R4 — 分数决定可见性
 
-- 所有记忆召回入口必须先过 `AtomScore` 阈值；禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
+- 所有记忆召回入口必须先过 `AtomScore` 阈值；默认 prompt 可见性阈值为 `memory.tuning.atomScore.visibilityThreshold = 0.65`。禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
 - 唯一例外：`flyflor memory dump` / `doctor` / 调试 CLI 等显式调试入口，必须在日志中标注 `bypass-score: true`。
 - inbox project 内 atom 的 `recency` 分量必须乘以 `memory.tuning.inbox.decayMultiplier`（默认 2.0），实现"7 天加速淡出"。
 - `RuntimeMode.Dormant` 期间召回阈值不变；Dormant 不等于关闭召回，gateway 监听不停（W2 行为契约，不可配）。

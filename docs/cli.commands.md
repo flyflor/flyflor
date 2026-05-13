@@ -24,7 +24,6 @@ flowchart TB
     Root --> doctor
     Root --> config
     Root --> memory
-    Root --> sessions
     Root --> blackboard
     Root --> skills
     Root --> tools
@@ -45,11 +44,6 @@ flowchart TB
     memory --> mem_status["status"]
     memory --> mem_setup["setup"]
     memory --> mem_reset["reset"]
-    sessions --> ses_list["list"]
-    sessions --> ses_show["show"]
-    sessions --> ses_export["export"]
-    sessions --> ses_delete["delete"]
-    sessions --> ses_prune["prune"]
     blackboard --> bb_list["list"]
     blackboard --> bb_show["show"]
     skills --> sk_list["list"]
@@ -97,7 +91,6 @@ flowchart TB
 | `flyflor doctor` | ⚠️ 部分 | `--fix` 未实现 |
 | `flyflor config show/path/env-path` | ✅ | |
 | `flyflor memory status/setup/reset` | ✅ | reset 支持白名单文件清空 |
-| `flyflor sessions list/show/export/delete/prune` | ✅ | |
 | `flyflor blackboard list/show` | ✅ | 直接读 SQLite |
 | `flyflor skills *` | ✅ | install / reset / usage / validate |
 | `flyflor tools enable/disable` | ❌ 未实现 | 仅 spec 占位 |

@@ -6,7 +6,6 @@ import type {
     MemorySourceKind,
 } from "../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
-import type { HistoryEntry, SessionIdentity, SessionMessageRecord, SessionSummary } from "../../agent/session/index.ts";
 import type { MemoryAction } from "./actions.ts";
 
 export interface MemoryRecord {
@@ -74,7 +73,8 @@ export interface MemoryCandidate {
     status: MemoryCandidateStatus;
     sourceKind: MemorySourceKind;
     content: string;
-    sessionKey: string;
+    projectId: string;
+    sourceId: string;
     sourceMessageId?: string;
     sourceReplyId?: string;
     createdAt: string;
@@ -95,10 +95,8 @@ export interface MemoryEpisodeProvenance {
 }
 
 export interface TurnMemoryResult {
-    sessionKey: string;
     candidates: MemoryCandidate[];
     promoted: MemoryRecord[];
-    historyEntries: HistoryEntry[];
 }
 
 export interface MemorySearchRequest {

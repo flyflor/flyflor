@@ -267,7 +267,7 @@ function makeEpisode(id: string, userId: string, over: Partial<EpisodeRecord> = 
         embedding: [0.1, 0.2, 0.3, 0.4],
         importance: 0.5,
         stability: 0.5,
-        sourceKind: "session-turn",
+        sourceKind: "journal-turn",
         createdAt: 1_700_000_000_000,
         metadata: {},
         ...over,
