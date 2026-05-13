@@ -103,6 +103,37 @@ class AskingModel implements ModelClient {
     }
 }
 
+class MultiQuestionModel implements ModelClient {
+    async generate(): Promise<string> {
+        return [
+            "Need to confirm a few details.",
+            "<flyflor_agent_ask>",
+            JSON.stringify({
+                reason: AskReason.UserIntentUnclear,
+                prompt: "I need two confirmations.",
+                questions: [
+                    {
+                        prompt: "Which workspace should I use?",
+                        choices: [
+                            { label: "main", value: "main" },
+                            { label: "scratch", value: "scratch" },
+                        ],
+                    },
+                    {
+                        prompt: "Should I proceed now?",
+                        freeform: false,
+                        choices: [
+                            { label: "yes", value: "yes" },
+                            { label: "no", value: "no" },
+                        ],
+                    },
+                ],
+            }),
+            "</flyflor_agent_ask>",
+        ].join("\n");
+    }
+}
+
 describe("LF-R3 slice D — runtime cap enforcement", () => {
     test("model-emitted ask is dropped when chainDepth would exceed maxChainDepth", async () => {
         try {
@@ -133,6 +164,34 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                         e.type === RuntimeEventType.MemoryAskChainCapped &&
                         e.payload?.action === "dropped-by-runtime",
                 )).toBe(true);
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("multi-question ask renders numbered sub-questions and metadata counts them", async () => {
+        try {
+            const config = await makeConfig();
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const runtime = new RuntimeModule(config, new MultiQuestionModel(), events, undefined, memory);
+                const reply = await runtime.handleMessage(gwMsg("need guidance", "m-10"), ctx());
+                expect(reply.metadata?.kind).toBe("ask");
+                expect(reply.metadata?.behaviorSnapshotId).toMatch(/^behavior-/);
+                expect(reply.metadata?.ask).toMatchObject({
+                    choices: 0,
+                    questions: 2,
+                    snapshotId: reply.metadata?.behaviorSnapshotId,
+                });
+                expect(reply.text).toContain("I need two confirmations.");
+                expect(reply.text).toContain("1. Which workspace should I use?");
+                expect(reply.text).toContain("   1. main");
+                expect(reply.text).toContain("2. Should I proceed now?");
             } finally {
                 memory.dispose();
             }

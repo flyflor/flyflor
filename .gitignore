@@ -15,6 +15,9 @@ logs
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
+# local Flyflor runtime state at repo root
+/.flyflor/
+
 # dotenv environment variable files
 .env
 .env.development.local
@@ -37,6 +40,11 @@ docker/config/*
 !docker/config/.gitkeep
 docker/storage/*
 !docker/storage/.gitkeep
+docker/workspace/.flyflor/memory/events.jsonl
+docker/workspace/.flyflor/memory/manifest.json
+docker/workspace/.flyflor/memory/recalls.jsonl
+docker/workspace/.flyflor/skills/*
+!docker/workspace/.flyflor/skills/.gitkeep
 
 # IntelliJ based IDEs
 .idea

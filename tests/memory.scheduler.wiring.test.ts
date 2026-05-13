@@ -58,9 +58,12 @@ describe("MemoryModule background scheduler wiring", () => {
         config.memory.redis.enabled = true;
         config.memory.crystal.surreal.enabled = true;
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
-        const scheduler = (memory as unknown as { scheduler: { activeUsers(): number } | null }).scheduler;
+        const scheduler = (memory as unknown as {
+            scheduler: { activeUsers(): number; snapshot(): { brainArchiveEnabled: boolean } } | null;
+        }).scheduler;
         expect(scheduler).not.toBeNull();
         expect(scheduler?.activeUsers()).toBe(0);
+        expect(scheduler?.snapshot().brainArchiveEnabled).toBe(true);
         // dispose 必须可以多次调用
         memory.dispose();
         memory.dispose();

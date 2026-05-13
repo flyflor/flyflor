@@ -1,7 +1,5 @@
 # 黑板系统
 
-> **生命体重构（LF-R3）变更预告**：`needs-user` 出口（`flyflor-decision-form`）将退役，由 Ask 一等公民协议接管（`AskReason.BlackboardStalemate`）。本文档先反映当前实现，路线见 `docs/proposals/life.form.md`。
-
 ## 一句话定位
 
 黑板是复杂任务的「可观察、可收敛、可交还」工作台：simple 走 direct、灰区走 direct-with-watch、复杂走 blackboard；模型按 `blackboard.route.md` 生成 worker plan，WorkerManager 跑 turn，BlackboardModule 控制收敛与 lease。
@@ -88,9 +86,9 @@ sequenceDiagram
             BB->>BB: evaluateConvergence
             alt 全 final, 无 open / blocker
                 BB->>Store: status=converged
-            else 全 blocked
+            else 全 blocked / hard cap
                 BB->>BB: returnDecisionToUser
-                BB->>Store: status=needs-user + decision form
+                BB->>Store: status=needs-user + structured decision
             else continue
                 Note over BB: 下一轮
             end
@@ -104,7 +102,7 @@ sequenceDiagram
 
 - `BlackboardWorkerOutcome`：`final` / `continue` / `blocked`。
 - 全部 worker `outcome = final`、无 `openIssues` / blocker、无 `agreement: false` → **converged**。
-- 全部 worker `outcome = blocked`、存在 blocker / openIssues → **needs-user**（输出 `flyflor-decision-form`）。
+- 全部 worker `outcome = blocked`、存在 blocker / openIssues → **needs-user**（只写结构化 decision，不写用户可见 decision-form）。
 - 默认 `minRounds = 1` / `maxRounds = 3` / `hardMaxRounds = 5`；hardMax 触顶仍未收敛 → needs-user，附最多 8 条 unresolved issues。
 - 若 metadata 声明 `forceHardCap`（如「非收敛性 contract」），调度器跑到 hardMax 后再交还。
 - 仅口头 `agreement: true` 不能终止讨论，必须有 `outcome: final`。
@@ -162,21 +160,16 @@ CREATE TABLE blackboard_leases (
 - TTL 默认 15 分钟；崩溃后到期自动释放。
 - 同 project constraint 同时只允许一个 blackboard turn；冲突时降级 direct 或返回「已有任务运行中」。
 
-## Decision form 交还格式
+## Needs-user 交还格式
 
-````markdown
-```flyflor-decision-form
-{
-    "question": "需要你选择下一步",
-    "options": [
-        { "id": "narrow", "label": "缩小范围继续" },
-        { "id": "approve-risk", "label": "接受风险继续" }
-    ]
-}
-```
-````
+`needs-user` 是正常出口。`BlackboardModule.returnDecisionToUser` 会：
 
-`needs-user` 是正常出口；BlackboardModule 写 public message、创建 decision、释放 lease，由 chat 回复展示给用户。
+- 把 unresolved issues 收敛成 `BlackboardDecision`（`kind=single-choice`、`options[]`、`metadata.openQuestions`）。
+- 发布 `blackboard.livelock.detected` 事件。
+- 释放 project constraint lease。
+- 由 `RuntimeModule` 读取结构化 decision，合成 `AgentAsk`（`reason=blackboard-stalemate`）并向用户提问。
+
+旧 `flyflor-decision-form` 用户可见系统消息已退役；测试只保留 negative assertion，确保不再写入 transcript。
 
 ## 状态持久化表
 
@@ -202,7 +195,7 @@ CLI `flyflor blackboard list` / `show <turnId>` 直接消费这些表（见 `cli
 | `blackboard.worker.start` / `end` | 单个 worker 执行 |
 | `blackboard.message.appended` | 讨论消息落盘 |
 | `blackboard.livelock.detected` | 触顶 hardMax |
-| `blackboard.decision.requested` | 输出 decision-form |
+| `blackboard.decision.requested` | 写入结构化 decision，供 runtime 合成 Ask |
 | `worker.task.queued` / `start` / `end` / `failed` | WorkerManager 内事件 |
 
 ## 记忆边界
@@ -223,7 +216,7 @@ worker **不能**直接写长期记忆：
 
 ## 风险点 / 已知缺口
 
-- direct-with-watch 升级仅靠计数器，**未读取 worker 内部「重复失败工具 / 上下文压力」信号**。
+- direct-with-watch 升级已接入工具失败 / 上下文压力资源指标，但未读取 worker 内部复杂语义信号。
 - TUI 当前只展示已落盘 transcript，**未实时流式订阅 worker.step**。
 - 进程隔离（Bun Worker / 子进程）阶段未完成；当前 worker 大多 in-process。
 - `BlackboardWorkerRole` 仅类型别名 `string`，没有 enum 约束，靠模型生成 + capabilities 字段约束。

@@ -112,12 +112,14 @@ describe("LF-R3 Ask first-class wiring", () => {
         const memory = new MemoryModule(config, sink);
         await memory.warmup();
         try {
+            const context = runtimeContext();
+            const snapshotId = `behavior-${context.requestId}`;
             await memory.rememberTurn(
                 gatewayMessage("hi there"),
                 gatewayReply("Did you mean A or B?", "msg-1"),
-                runtimeContext(),
+                context,
                 [],
-                {},
+                { behaviorSnapshotId: snapshotId },
                 askA,
             );
             const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
@@ -127,13 +129,16 @@ describe("LF-R3 Ask first-class wiring", () => {
                     .all() as Array<{ id: string; type: string; parent_id: string | null; content: string }>;
                 expect(rows.length).toBe(1);
                 expect(rows[0]!.parent_id).toBeNull();
-                const c = JSON.parse(rows[0]!.content) as { chainDepth: number; ask: AgentAsk };
+                const c = JSON.parse(rows[0]!.content) as { chainDepth: number; ask: AgentAsk; snapshotId?: string };
                 expect(c.chainDepth).toBe(1);
                 expect(c.ask.reason).toBe(AskReason.UserIntentUnclear);
+                expect(c.snapshotId).toBe(snapshotId);
             } finally {
                 db.close();
             }
-            expect(sink.events.find((e) => e.type === RuntimeEventType.MemoryAskRecorded)?.payload?.chainDepth).toBe(1);
+            const askEvent = sink.events.find((e) => e.type === RuntimeEventType.MemoryAskRecorded);
+            expect(askEvent?.payload?.chainDepth).toBe(1);
+            expect(askEvent?.payload?.snapshotId).toBe(snapshotId);
         } finally {
             memory.dispose();
         }
@@ -173,7 +178,13 @@ describe("LF-R3 Ask first-class wiring", () => {
                     .all() as Array<{ parent_id: string; content: string }>;
                 expect(ans.length).toBe(1);
                 const askRow = db.query("SELECT id FROM memory_events WHERE type = 'ask'").get() as { id: string };
+                const askContentRow = db.query("SELECT content FROM memory_events WHERE type = 'ask'").get() as {
+                    content: string;
+                };
+                const askContent = JSON.parse(askContentRow.content) as { snapshotId: string };
                 expect(ans[0]!.parent_id).toBe(askRow.id);
+                const ansContent = JSON.parse(ans[0]!.content) as { snapshotId: string };
+                expect(ansContent.snapshotId).toBe(askContent.snapshotId);
                 const askState = db.query("SELECT status FROM memory_state WHERE event_id = ?").get(askRow.id) as
                     | { status: string }
                     | null;

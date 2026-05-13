@@ -27,6 +27,7 @@ export interface SummaryWorkerOptions {
 
 export interface SummaryRunResult {
     written: number;
+    writtenIds: string[];
     skippedByInterval: number;
     skippedEmpty: number;
 }
@@ -41,6 +42,8 @@ interface SummaryStats {
     ghostsRecorded: number;
     ghostReasons: Record<string, number>;
     identityAppends: number;
+    behaviorSnapshots: number;
+    behaviorCorrections: number;
     firstTs: number | null;
     lastTs: number | null;
 }
@@ -66,7 +69,7 @@ export class SummaryWorker {
      * - weekly：rolling 取 `now - rollingWindowDays`；calendar 取 ISO week
      */
     runOnceForUser(userId: string, nowMs = this.opts.now()): SummaryRunResult {
-        const result: SummaryRunResult = { written: 0, skippedByInterval: 0, skippedEmpty: 0 };
+        const result: SummaryRunResult = { written: 0, writtenIds: [], skippedByInterval: 0, skippedEmpty: 0 };
         const today = new Date(nowMs);
         const dayKey = toIsoDay(today);
         const dayRange = isoDayRange(today);
@@ -125,6 +128,7 @@ export class SummaryWorker {
             createdAt: nowMs,
         });
         result.written += 1;
+        result.writtenIds.push(id);
     }
 
     private collect(userId: string, startMs: number, endMs: number): SummaryStats {
@@ -149,6 +153,8 @@ export function aggregate(rows: MemoryEventRecord[]): SummaryStats {
         ghostsRecorded: 0,
         ghostReasons: {},
         identityAppends: 0,
+        behaviorSnapshots: 0,
+        behaviorCorrections: 0,
         firstTs: null,
         lastTs: null,
     };
@@ -169,6 +175,10 @@ export function aggregate(rows: MemoryEventRecord[]): SummaryStats {
             }
         } else if (row.type === MemoryEventType.IdentityAppend) {
             stats.identityAppends += 1;
+        } else if (row.type === MemoryEventType.BehaviorSnapshot) {
+            stats.behaviorSnapshots += 1;
+        } else if (row.type === MemoryEventType.BehaviorCorrection) {
+            stats.behaviorCorrections += 1;
         }
     }
     stats.codenamesTouched = [...codenameSet].sort();

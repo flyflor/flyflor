@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -30,6 +30,7 @@ function testPaths(root: string): FlyflorPaths {
 
 const FILES = [
     "ask.schema.md",
+    "behavior.priority.md",
     "blackboard.advisory.md",
     "blackboard.decision.md",
     "blackboard.route.md",
@@ -49,6 +50,7 @@ async function seedAllValid(promptDir: string): Promise<void> {
     await mkdir(promptDir, { recursive: true });
     const placeholdersByFile: Record<string, string[]> = {
         "ask.schema.md": [],
+        "behavior.priority.md": [],
         "blackboard.advisory.md": ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
         "blackboard.decision.md": ["questionCount", "reason", "unresolvedIssues"],
         "blackboard.route.md": ["request"],
@@ -62,6 +64,7 @@ async function seedAllValid(promptDir: string): Promise<void> {
         "mcp.context.md": ["mcpEntries"],
         "runtime.system.md": [
             "askSchemaInstructions",
+            "behaviorPriorityInstructions",
             "blackboardContext",
             "mcpContext",
             "memoryActionInstructions",
@@ -109,5 +112,46 @@ describe("lintPromptTemplates", () => {
         expect(report.ok).toBe(false);
         const ms = report.issues.filter((i) => i.kind === "missing-placeholder").map((i) => i.detail);
         expect(ms.some((d) => d.includes("memoryContext"))).toBe(true);
+    });
+
+    test("runtime prompt templates do not expose internal roadmap labels", async () => {
+        const promptDir = join(process.cwd(), "templates", "prompts");
+        const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
+        const offenders: string[] = [];
+        for (const file of files) {
+            const body = await readFile(join(promptDir, file), "utf8");
+            if (/\bLF-[A-Z0-9]+/.test(body)) offenders.push(file);
+        }
+        expect(offenders).toEqual([]);
+    });
+
+    test("runtime prompt template prose avoids unexplained internal metaphors", async () => {
+        const promptDir = join(process.cwd(), "templates", "prompts");
+        const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
+        const forbidden = [
+            /\bLF-[A-Z0-9]+/,
+            /\bHippocampus\b/i,
+            /海马体/,
+            /晶体/,
+            /结晶/,
+            /\bDream\b/,
+            /\bdream\b/,
+            /\bcrystal\b/i,
+            /\bGem\b/,
+            /\bgem\b/,
+            /\bmemory_node\b/,
+        ];
+        const offenders: string[] = [];
+        for (const file of files) {
+            const body = await readFile(join(promptDir, file), "utf8");
+            const prose = body
+                .split("\n")
+                .filter((line) => !line.includes("<!-- mock-id:"))
+                .join("\n")
+                .replace(/\{\{[^}]+\}\}/g, "");
+            const hit = forbidden.find((pattern) => pattern.test(prose));
+            if (hit) offenders.push(`${file}: ${String(hit)}`);
+        }
+        expect(offenders).toEqual([]);
     });
 });

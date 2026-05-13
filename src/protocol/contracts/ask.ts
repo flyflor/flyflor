@@ -39,6 +39,21 @@ export interface AgentAskChoice {
     description?: string;
 }
 
+export interface AgentAskQuestion {
+    /** 可选稳定 id，方便 TUI / 审计 / 回答回挂。 */
+    id?: string;
+    /** 单个子问题的用户可见文本。 */
+    prompt: string;
+    /** 该子问题的候选项。 */
+    choices?: AgentAskChoice[];
+    /** 是否允许自由文本回答。默认 true。 */
+    freeform?: boolean;
+    /** 可选关联标识。 */
+    relatedIds?: string[];
+    /** 短理由，仅供审计。 */
+    rationale?: string;
+}
+
 export interface AgentAsk {
     /** 触发反问的语义类别（受 AskReason 枚举约束）。 */
     reason: AskReason;
@@ -46,6 +61,8 @@ export interface AgentAsk {
     prompt: string;
     /** 可选的多选项，按模型给出的顺序展示。 */
     choices?: AgentAskChoice[];
+    /** 多问题数组：当一次需要问多个点时，按顺序列出。 */
+    questions?: AgentAskQuestion[];
     /** 是否允许自由文本回答。默认 true。 */
     freeform?: boolean;
     /** 可选关联标识（codenameId / blackboardTurnId / projectId 等），便于回填上下文。 */
@@ -79,6 +96,8 @@ export type ModelTurnOutput =
  */
 export interface AskEventContent {
     askId: string;
+    /** 与 behavior snapshot / answer pair 共用的 turn snapshot id。 */
+    snapshotId: string;
     ask: AgentAsk;
     /** 触发本次 ask 的请求 / turn 标识，便于审计。 */
     requestId?: string;
@@ -91,6 +110,8 @@ export interface AskEventContent {
  */
 export interface AskAnswerPairContent {
     askId: string;
+    /** 回挂到发起该 ask 的 turn snapshot id。 */
+    snapshotId: string;
     answerText: string;
     /** 用户的原 message id，便于跨表回查。 */
     answerMessageId?: string;

@@ -1,14 +1,17 @@
 # 记忆系统
 
-> **生命体重构（LF-R1）变更预告**：按天 `journal/<yyyy>/W<ww>/day_*.db` 将被 `~/.flyflor/brain.db` 单库取代（event/state 分离 + append-only），旧 journal 进只读过渡期 60 天。本文档描述当前实现，目标态见 `docs/proposals/life.form.md`。
+> 当前实现处于 LF-R14 收口态：`~/.flyflor/brain.db` 是 prompt atom recall 与 turn event write 的权威源；legacy `JournalStore` 仅保留为 best-effort 审计副本，不再参与 prompt 召回；月级冷归档已自动化。
 
 ## 一句话定位
 
-Flyflor 把记忆切成四层：Markdown 宪法层、Redis 工作记忆、SQLite 索引与审计、SurrealDB 长期图；升格走双质量门，遗忘走双轨衰减，结晶在 Dream worker 离线维护。
+Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、Redis 工作记忆、SQLite 辅助索引与审计、SurrealDB 长期晶体图；升格走证据门，遗忘走 AtomScore / decayScore / Gem 衰减，Dream worker 只放大已有信号，不凭空创造记忆。
 
 ## 相关代码路径
 
 - `src/neural/memory/markdown.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
+- `src/neural/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/eq）
+- `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
+- `src/neural/memory/journal.store.ts` — legacy atom journal（best-effort 审计副本，不参与 prompt recall）
 - `src/neural/memory/redis.ts` — episode buffer / ring / hot concepts
 - `src/neural/memory/sqlite.ts` — candidates / offers / search
 - `src/neural/memory/surreal.graph.ts` — episode / memory_node / gem / 边关系
@@ -17,12 +20,12 @@ Flyflor 把记忆切成四层：Markdown 宪法层、Redis 工作记忆、SQLite
 - `src/neural/memory/decay.ts` — 双轨衰减
 - `src/neural/memory/anti.bloat.ts` — 容量阀门
 - `src/neural/memory/project.memory.ts` — 项目局部记忆
-- `src/neural/memory/background.scheduler.ts` — consolidation / decay / dream 节拍
+- `src/neural/memory/background.scheduler.ts` — consolidation / summary / decay / dream / dormant 节拍
 - `src/agent/runtime/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
 - `src/crystal/memory/index.ts` / `src/crystal/memory/surreal.ts` — Crystal Memory 适配
 
-## 四层结构
+## 分层结构
 
 ```mermaid
 flowchart LR
@@ -34,24 +37,53 @@ flowchart LR
         Redis[("Redis<br/>ff:ep / ff:ctx / ff:cq / ff:act / ff:dream")]
     end
 
-    subgraph Index["审计与索引"]
-        SQLite[("SQLite<br/>candidates / offers / search")]
+    subgraph Life["生命事件层（单文件大脑）"]
+        Brain[("~/.flyflor/brain.db<br/>memory_events / state / summary / links / codenames")]
+        Archive[("~/.flyflor/archive/<br/>brain.YYYY-MM.db")]
+        Journal[("legacy journal<br/>best-effort audit copy")]
+    end
+
+    subgraph Index["辅助索引与审计"]
+        SQLite[("SQLite<br/>blackboard / candidates / offers / search")]
     end
 
     subgraph LongTerm["长期记忆图（结晶）"]
         Surreal[("SurrealDB<br/>episode / memory_node /<br/>gem / gem_snapshot")]
     end
 
-    User["用户 turn"] --> Redis
+    User["用户 turn"] --> Brain
+    Brain -- archived state + cutoff --> Archive
+    User --> Journal
+    User --> Redis
     Redis -- ConsolidationWorker --> Surreal
     Surreal -- DreamWorker --> Surreal
     User --> Markdown
     User --> SQLite
     Markdown --> Prompt["buildPrompt"]
+    Brain --> Prompt
     Redis --> Prompt
     Surreal --> Prompt
     SQLite --> Prompt
 ```
+
+## brain.db 单库契约
+
+`brain.db` 是 LF-R1 之后的单文件大脑，当前已包含：
+
+| 表 | 职责 |
+| --- | --- |
+| `memory_events` | append-only 事实事件；turn、ask、ghost、identity 等都以事件表达 |
+| `memory_state` | 可变状态层；visibility、decay、status、accessCount 等 |
+| `memory_summary` | day / week / rolling summary；`embedding_id` 指向长期图 `summary_embedding` 节点 |
+| `memory_links` | contradicts / causal / derived / supersedes 等证据关系 |
+| `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
+| `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT |
+
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，legacy journal 只做 best-effort 复制。当前读路径：prompt atom recall 走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。
+
+月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 Redis、SurrealDB 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
+
+Ghost Context 不被压平成普通 prompt atom。它以 `[ghost-hint]` 单独注入，让模型同轮用 `<flyflor_ghost_decisions>` 决定 `resume` / `fork` / `fresh`；`fork` 或 `fresh` 只更新 ghost 的结构化 evidence，不删除 ghost，后续仍可像分支回归主线一样重新激活。
 
 ## 升格双质量门
 
@@ -91,7 +123,9 @@ erDiagram
     GEM ||--o{ GEM_SNAPSHOT : "snapshot"
 ```
 
-主表：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）。
+主表：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。
+
+`summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后 best-effort 维护：对 summary content 计算 embedding，写入 SurrealDB 节点，再回填 `memory_summary.embedding_id`。该链路失败只发布 `memory.brain.write.failed(op="summary.embed")`，不影响 `memory_summary` 主记录。
 
 ## 上下文装配
 
@@ -100,7 +134,7 @@ sequenceDiagram
     participant RT as RuntimeModule
     participant Mem as MemoryModule
     participant MD as MarkdownStore
-    participant J as JournalStore
+    participant B as BrainStore
     participant R as RedisStore
     participant PM as ProjectMemoryStore
     participant CR as CrystalMemoryService
@@ -109,7 +143,7 @@ sequenceDiagram
     RT->>Mem: buildPrompt(message, ctx)
     par 并发拉取
         Mem->>MD: snapshot()
-        Mem->>J: day/week journal activation
+        Mem->>B: prompt atoms + ask/ghost/identity/codename/eq state
         Mem->>R: readContextRing + hotConcepts
         Mem->>PM: snapshot()
         Mem->>CR: recall()
@@ -141,17 +175,23 @@ sequenceDiagram
 
 ```mermaid
 flowchart TB
-    Sched["BackgroundScheduler<br/>仅在 Redis+Surreal+Model 三件齐备时启用"]
+    Sched["BackgroundScheduler<br/>按可用后端启用对应 sweep"]
     Sched -- 10 min --> Cons["ConsolidationWorker<br/>Redis 到 SurrealDB 升格"]
+    Sched -- 6 h --> Summary["SummaryWorker<br/>brain events → summary"]
     Sched -- 24 h --> Decay["decay sweep<br/>双轨衰减"]
+    Sched -- 60 s --> Dormant["DormantSupervisor<br/>idle → dormant"]
     Sched -- 容量超额 --> Bloat["anti-bloat<br/>强制遗忘 / 归档"]
     Sched -- 30 min + 10 min 静默 --> Dream["DreamWorkerImpl"]
+    Sched -- 24 h --> Archive["brain archive<br/>archived events → archive/brain.YYYY-MM.db"]
+    Root["MemoryModule root timer<br/>scheduler 不可用时"] -- 24 h --> Archive
     Dream --> DR["drift-repair<br/>先写 gem_snapshot 再收窄 scope"]
     Dream --> RR["recall-reinforce<br/>importance × 1.1"]
     Dream --> CA["contradiction-audit<br/>弱侧 contradictionCount++"]
 ```
 
-Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择仅用资源指标（counter / age / cosine）。
+Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择仅用资源指标（counter / age / cosine / contradictionCount）。无 negative 信号源时一轮 0 写、0 LLM call；Dream 只能放大已有纠错/失败/矛盾信号，不能凭语义相似度凭空创造新事件。
+
+Brain archive 单轮约束：不调模型、不读 content 语义；只看状态、月份和配置阈值。默认 `archiveAfterMonths=3`、`archiveIntervalHours=24`、`vacuumIntervalDays=14`；`archiveIntervalHours=0` 关闭 runtime 自动归档但不影响 admin 脚本。
 
 ## 记忆动作协议
 
@@ -161,16 +201,24 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 [
   {
     "action": "add",
-    "target": "soul | self | user | memory | project",
-    "kind": "fact | preference | identity | event | project",
+    "target": "soul | self | user | memory",
+    "kind": "fact | profile | rule",
     "content": "...",
     "confidence": 0.85,
-    "signals": { "projectIntent": 0.0, "eventIntent": 0.0 }
+    "signals": { "projectIntent": 0.0, "eventIntent": 0.0, "skillPromotionIntent": 0.0 },
+    "codename": { "name": "fly", "workingDir": "/abs/path", "description": "..." },
+    "eq": { "label": "neutral", "valence": 0, "arousal": 0, "dominance": 0, "confidence": 0.8 }
   }
 ]
 ```
 
 代码只做枚举 / shape 校验；不做关键词推断。
+
+相关结构化块：
+
+- `<flyflor_agent_ask>`：reply / ask 互斥，Ask 事件写 brain；pending ask 通过 `[continuation]` 注入。
+- `<flyflor_ghost_decisions>`：resume / fork / fresh Ghost Context。
+- `<flyflor_identity_append>`：identity 自写 append-only，用户可 `identity revert`。
 
 ## Markdown 文件用途
 
@@ -199,7 +247,7 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 - 当前 turn 命中 codename → `projectId = "inbox:cn-<codenameId>"`（同一 codename 子桶聚集）
 - codename 升格为真实 project 后，`bindCodenameProject` 写 `project_id`；后续 atom 走 `project-<hex>` 路径，旧 inbox atom 留在原桶不追溯
 
-**召回偏变**：`recallVisibleJournalMemory` 调 `BrainStore.getMostRecentTouchedCodename(userId, sinceTs)` 取窗口内最近触达且未升格的 codename，命中其子桶的候选 atom 加 `inbox.codenameRecallBoost`（默认 0.15）。零字符匹配——只看 `codenameId` enum + projectId 字面量。
+**召回偏变**：`recallVisibleBrainMemory` 调 `BrainStore.getMostRecentTouchedCodename(userId, sinceTs)` 取窗口内最近触达且未升格的 codename，命中其子桶的候选 atom 加 `inbox.codenameRecallBoost`（默认 0.15）。零字符匹配——只看 `codenameId` enum + projectId 字面量。
 
 **配置**：`memory.tuning.inbox.activeCodenameWindowMinutes`（默认 60）/ `inbox.codenameRecallBoost`（默认 0.15）。
 
@@ -212,7 +260,10 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 | `memory.episode.written` | Redis episode 写入完成 |
 | `memory.consolidation.completed` / `failed` | 升格 worker |
 | `memory.decay.swept` | 一轮衰减 sweep |
+| `memory.summary.written` | daily / weekly summary 写入 |
+| `memory.summary.embedding.written` | summary embedding 写入长期图并回填 `embedding_id` |
 | `memory.dream.completed` / `failed` | Dream pass 完成 |
+| `memory.brain.archive.completed` / `failed` | brain.db 月级冷归档完成 / 失败 |
 | `memory.drift.repaired` | drift-repair 动作 |
 | `memory.recall.reinforced` | recall-reinforce 动作 |
 | `memory.contradiction.flagged` | contradiction-audit 动作 |
@@ -231,14 +282,16 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 - `config.memory.candidates.autoPromoteExplicit` — 显式 action 直接 promote
 - `config.memory.retrieval.maxResults` / `maxPromptChars` — 上下文预算
 - `config.memory.matrix` — Memory Matrix 权重
+- `config.memory.tuning.brainDb.archiveAfterMonths` — 归档 cutoff 月数，默认 3
+- `config.memory.tuning.brainDb.archiveIntervalHours` — runtime 自动归档检查间隔，默认 24；0 表示关闭
+- `config.memory.tuning.brainDb.vacuumIntervalDays` — 自动 VACUUM 最小间隔，默认 14；0 表示关闭自动 VACUUM
 
 ## 风险点 / 已知缺口
 
-- `BackgroundScheduler` 仅在 Redis + Surreal + Model 三件齐备时启用；默认本地开发环境（无 Redis/Surreal）下静默 noop，没有降级告警。
+- legacy journal 仍保留 best-effort 审计写入；任何新召回能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
+- `BackgroundScheduler` 按后端可用性降级；默认本地开发环境缺 Redis/Surreal 时长期图相关 sweep noop，但 brain archive 已由 `MemoryModule` 根 timer 保底。
 - Reflection 仍由 `RuntimeModule.scheduleReflection` 同进程驱动；独立 Reflection worker 未拆出。
-- Dream worker 压测缺失；候选选择策略未在大数据集下验证。
-- Gem 表当前在代码内叫 `gem`，旧数据库可能仍是 `crystal_skill / skill_snapshot`，迁移脚本待补。
-- `ioredis` 兼容 `bun build --compile` 未真实验证；备选 RESP-over-Bun-TCP 尚未实现。
+- Redis 路径已完成真实二进制 smoke；后续还需要把 release artifact + 真实 Redis 的回归检查纳入发布流程。
 
 ## 相关测试
 
@@ -250,4 +303,6 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 - `tests/memory.boundaries.test.ts`
 - `tests/memory.scheduler.wiring.test.ts`
 - `tests/background.scheduler.test.ts`
+- `tests/brain.archive.test.ts`
+- `tests/config.memory.tuning.test.ts`
 - `tests/reflection.gem.consolidation.test.ts`

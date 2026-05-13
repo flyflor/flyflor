@@ -2,15 +2,17 @@
 
 ## 一句话定位
 
-Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / Streamable HTTP，目录预拉取走 catalog 缓存，运行时调用走 `<flyflor_mcp_calls>` 协议并经 Sandbox 决策。
+Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / Streamable HTTP / 旧式 SSE 双端点，目录预拉取走 catalog 缓存，运行时调用走 `<flyflor_mcp_calls>` 协议并经 Sandbox 决策。
 
 ## 相关代码路径
 
-- `src/agent/mcp/client.ts` — stdio / HTTP 客户端
-- `src/agent/mcp/catalog.ts` — `buildMcpToolCatalog` + TTL 缓存
+- `src/agent/mcp/stdio.client.ts` — stdio 客户端
+- `src/agent/mcp/http.client.ts` — Streamable HTTP 客户端
+- `src/agent/mcp/sse.client.ts` — 旧式 SSE 双端点客户端
+- `src/agent/mcp/index.ts` — 传输分派、结果渲染、公共类型
 - `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
-- `src/agent/mcp/server.config.ts` — `McpServerConfig` 解析
-- `src/agent/runtime/runtime.module.ts` — 工具循环
+- `src/agent/mcp/schema.validate.ts` — tool inputSchema 轻量校验
+- `src/agent/runtime/runtime.module.ts` — catalog TTL/LRU 缓存 + 工具循环
 - `src/agent/prompts/index.ts` — `renderMcpContextPrompt`
 - `templates/prompts/mcp.tool.protocol.md` — 模型协议提示
 
@@ -20,7 +22,7 @@ Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / S
 | --- | --- | --- |
 | stdio | 派生子进程 + stdin/stdout JSON-RPC | ✅ |
 | Streamable HTTP (新) | `POST /mcp` + `GET /mcp` SSE | ✅ |
-| SSE 双端点（旧式） | `GET /events` + `POST /messages` | ⚠️ 未实现 |
+| SSE 双端点（旧式） | `GET /events` + `POST /messages` | ✅ |
 
 ## 调用循环
 
@@ -74,14 +76,14 @@ sequenceDiagram
 ```
 ````
 
-代码只校验 `server / tool` 是否在 catalog；`args` 是否符合 tool 的 JSON Schema 由 server 负责。
+代码校验 `server / tool` 是否在 catalog，并在调用前对 `args` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。
 
 ## 数据结构
 
 ```ts
 interface McpServerConfig {
     name: string;
-    transport: "stdio" | "http";
+    transport: "stdio" | "http" | "streamable-http" | "sse";
     command?: string;        // stdio
     args?: string[];
     env?: Record<string, string>;
@@ -129,14 +131,17 @@ interface McpCallResult {
 
 ## 风险点 / 已知缺口
 
-- 旧式 SSE 双端点未实现（兼容老 MCP server）。
-- catalog 缓存为进程内 Map，**多副本不共享**，且没有 LRU 限制（极端场景内存增长）。
-- tool 调用结果直接拼回模型上下文，长结果**未做摘要 / 截断的可观察策略**。
+- 旧式 SSE 双端点已有客户端兼容，但还缺真实第三方 MCP server 的长连接 / 断线重连烟测。
+- catalog 缓存为进程内 Map，**多副本不共享**；已有 TTL/LRU，但跨 gateway 节点仍依赖各自预拉取。
+- tool 调用结果已有 head/tail 截断和原始大小标记；还缺语义摘要与大结果可观察策略。
 - 调用失败的重试策略只是 0-1 次，无指数退避。
-- `McpToolCatalogEntry.inputSchema` 没有在客户端做 JSON-Schema 校验，依赖 server 端拒绝。
+- inputSchema 只做轻量 JSON Schema 子集校验；复杂 schema 仍依赖 server 端拒绝。
 
 ## 相关测试
 
 - `tests/mcp.boundaries.test.ts`
 - `tests/mcp.tool.calls.test.ts`
-- `tests/mcp.catalog.test.ts`
+- `tests/mcp.schema.validate.test.ts`
+- `tests/mcp.http.transport.test.ts`
+- `tests/mcp.sse.test.ts`
+- `tests/mcp.long.results.test.ts`

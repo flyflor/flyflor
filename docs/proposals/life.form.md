@@ -1,6 +1,6 @@
 # 生命体重构（Life-form Architecture）
 
-> Status: **active — phase R0 (docs & boundaries) 进行中**。本文档与 `TODO.md` 「生命体重构」章节、`docs/boundaries.md` §11.1 联动。
+> Status: **aligned — LF-R0~R14 已落地。** 本文档与 `TODO.md` 「生命体重构」章节、`docs/boundaries.md` §11.1 联动。
 
 ## 一句话定位
 
@@ -12,7 +12,7 @@
 
 | # | 维度 | 工程实现 |
 | --- | --- | --- |
-| 1 | 单文件大脑 | `~/.flyflor/brain.db`：event/state 分离、append-only、单库 + 时间字段 + 索引；月级冷归档可选 |
+| 1 | 单文件大脑 | `~/.flyflor/brain.db`：event/state 分离、append-only、单库 + 时间字段 + 索引；月级冷归档自动运行 |
 | 2 | 显式协作 | Ask 是一等公民：模型在不确定时**中断式**反问；reply / ask 在同轮二选一 |
 | 3 | 思维边界 | Codename：用户显式 `@代号` 锚点；频次 + 衰减自然上浮为常驻；可升格为 Project |
 | 4 | 不丢失的未完事项 | Ghost Context：Ask 中断时落 brain.db 的一种特殊 episode；用户可见、可主动 resume、自然衰减 |
@@ -31,6 +31,8 @@
 | D7 | identity 自写：直接 append + 可 revert | `revert.log.jsonl` 是契约，不是日志 |
 | D8 | `RuntimeMode.Dormant` | 无输入 10min 进入；gateway 监听不停（行为契约，不可配） |
 | D9 | Dream 只放大、不创造修正 | 候选选择只用已记录的 negative 信号；无信号源时 pass 0 写操作 |
+| D10 | 行为快照 | 每轮写 append-only behavior snapshot，保存输入、触发、输出的结构化预览；后续用户纠正写 correction 证据 |
+| D11 | 提示词优先级冲突表 | system prompt 明确告诉模型：用户指令 > 追问状态 > 稳定身份偏好 > 当前工作区事实 > 未完成旧上下文 > 长期记忆/技能/摘要 > 情绪与休眠提示 |
 
 > 与上一版差异：旧 D2「按天 journal 分文件」**作废**，按 ChatGPT 与作者 2026-05-13 对话结论改为单库结构进化；旧 D3 冷相离线 refine **作废**，由 summary 表 + 同轮结构化输出替代。
 
@@ -48,7 +50,7 @@
       "atomScore":      { "weights": { "recency": 0.35, "access": 0.15, "successPrior": 0.35, "fanout": 0.15 },
                           "visibilityThreshold": 0.65 },
       "ghost":          { "maxChainDepth": 5, "pinHalflifeMultiplier": 3.0 },
-      "brainDb":        { "archiveAfterMonths": 3, "vacuumIntervalDays": 14 }
+      "brainDb":        { "archiveAfterMonths": 3, "archiveIntervalHours": 24, "vacuumIntervalDays": 14 }
     }
   }
 }
@@ -57,6 +59,7 @@
 - 全部走 `~/.flyflor/config.jsonc`，**禁走环境变量**（AGENTS.md 红线）。
 - `_keepGatewayListening` 是审计字段，编辑无效（merge 后强制为 `true`）。
 - AtomScore 权重 / brainDb / ghost 调参属内部参数，**不在 CLI / README 文档化**，避免误调。
+- `brainDb.archiveIntervalHours=0` 表示关闭 runtime 自动归档；admin 脚本仍可手动执行。
 - 缺字段静默 fallback；类型不正确时由 doctor 表「Memory tuning」一行高亮。
 
 ## 目录契约（生平）
@@ -153,7 +156,7 @@ CREATE INDEX idx_codename_user_used ON codenames(user_id, last_used_at DESC);
 > 关键点：
 > - **Ghost 不是新概念，是 `memory_events.type = 'ghost-context'`** 的一种。复用 AtomScore / decay / 召回 / gem 升格通路，零新机制。
 > - **Ask-Answer pair 也是 events**，`type = 'ask-answer-pair'`，`parent_id` 指向触发它的 ghost。
-> - 冷归档：超过 `archiveAfterMonths` 的 `memory_events` 行批量 `INSERT OR REPLACE INTO archive.memory_events` + 主库 `DELETE`。读路径通过 `ATTACH DATABASE archive.brain.YYYY-MM.db` 按需挂载。
+> - 冷归档：超过 `archiveAfterMonths` 的 `memory_events` 行批量 `INSERT OR REPLACE INTO archive.memory_events` + 主库 `DELETE`。runtime 每 `archiveIntervalHours` 检查一次；有完整后台调度器时避开 summary / dream busy，缺 Redis / Surreal / Model 时由 MemoryModule 根 timer 独立运行。读路径通过 `ATTACH DATABASE archive.brain.YYYY-MM.db` 按需挂载。
 
 ## AtomScore（不变）
 
@@ -303,13 +306,18 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 | 阶段 | 交付 |
 | --- | --- |
 | **R0 文档 + 红线** | ✅ done — 重写 `life.form.md`；`boundaries.md` §11.1 替换 R2、新增 R5/R6/R7；`TODO.md` 主线重排 |
-| R1 brain.db 单库 | ✅ done<br>① ✅ 协议类型 `src/protocol/contracts/brain.ts`（`MemoryEventType` / `MemoryEventStatus` / `MemoryLinkType` / `SummaryRange` 枚举 + 5 个 Record 接口）<br>② ✅ `src/neural/memory/brain.store.ts` `BrainStore` 骨架 + 5 张表 schema + 单测（5/5）<br>③ ✅ `MemoryModule` 双写：warmup `brain.open()` / dispose `close()` / `persistJournal` 后台 `dualWriteBrainEvent` + 2 个事件类型 `MemoryBrainEventWritten` / `MemoryBrainWriteFailed`（brain 缺失静默降级，不影响 journal）<br>④ ✅ `flyflor doctor` 表新增 `Brain.db` 行：显示主文件大小 + archive 文件数<br>⑤ ✅ 月级冷归档脚本 `scripts/brain.archive.ts`：把 `status='archived'` 且月份 < cutoff 的 events / states / 当月 summaries 搬到 `archive/brain.YYYY-MM.db`，admin 工具不受 R7 Dream 删除禁令约束（1/1 集成测试）<br>⑥ ✅ 召回 shadow read：`buildPrompt` 与 journal 召回并行查 brain，发 `MemoryBrainShadowRecall` 事件携 `userId`/`hits`/`sinceTs`，journal 保持权威路径，brain 仅用于灰度校验（1/1 集成测试）<br>⑦ ✅ 旧 `journal/` read-only 60 天 grace：`JournalStore.legacyGraceDays`（默认 60）+ `JournalWriteRejectedError`，`MemoryModule.persistJournal` 捕获后发 `MemoryJournalRejectedLegacy` 事件并继续 brain 双写（3/3 单测） |
-| R2 Codename 接管 | 🚧 in-progress<br>① ✅ `MemoryAction.codename` 字段 + 同轮模型结构化输出（零字符匹配，2/2 单测）<br>② ✅ `MemoryModule.persistCodenamesFromActions` 双写 brain.codenames + `useCount` 自增 + `memory_events.codename_id` tagging + `MemoryCodenameCreated`/`MemoryCodenameTouched` 事件（1/1 集成测试）<br>③ ✅ CLI `flyflor codename list [--user --limit --json]`（`handlers/codename.handler.ts`）<br>④ ✅ 提示词模板（zh + en）追加 codename 字段说明与"绝不要从对话里猜代号"红线<br>⑤ ✅ 升格 ProjectScaffolder：`detectCodenamePromotion`（useCount + age 阈值，零字符匹配）+ `promoteCodename` helper（`agent/project/codename.promote.ts`）+ `MemoryModule.promoteCodename` + 自动 touch 路径触发 + 事件 `MemoryCodenamePromoted` / `MemoryCodenamePromotionFailed`（8/8 单测）<br>⑥ ✅ AtomScore 上浮：`journalAtomFromAction` 增 `codenameUseCount` 入参，`min(1, log2(1+useCount)/4)` 加到 `score_total`，explain 含说明（仅资源指标，零字符匹配）<br>⑦ ✅ CLI 子命令补齐：`flyflor codename promote <name> [--force --json]` + `flyflor codename use <name>`（写 `~/.flyflor/state/active-codename.json` 提示文件，runtime 后续接入）<br>⑧ pending：多候选 → Ask（依赖 R3）、inbox project 容器收口 |
+| R1 brain.db 单库 | ✅ done<br>① ✅ 协议类型 `src/protocol/contracts/brain.ts`（`MemoryEventType` / `MemoryEventStatus` / `MemoryLinkType` / `SummaryRange` 枚举 + 5 个 Record 接口）<br>② ✅ `src/neural/memory/brain.store.ts` `BrainStore` 骨架 + 5 张表 schema + 单测（5/5）<br>③ ✅ LF-R10 后写路径为 brain-first：`memory_events` 是 turn event 权威，prompt atoms 封在 `event.content.atoms`；legacy journal 仅 best-effort 审计副本<br>④ ✅ `flyflor doctor` 表新增 `Brain.db` 行：显示主文件大小 + archive 文件数<br>⑤ ✅ 月级冷归档脚本 `scripts/brain.archive.ts`：把 `status='archived'` 且月份 < cutoff 的 events / states / 当月 summaries 搬到 `archive/brain.YYYY-MM.db`，admin 工具不受 R7 Dream 删除禁令约束（1/1 集成测试）<br>⑥ ✅ prompt recall 由 `BrainStore.listPromptAtomsWindow` 展开 brain events，发 `MemoryBrainPromptRecall` 事件携 `userId`/`hits`/`sinceTs`<br>⑦ ✅ 旧 `journal/` read-only 60 天 grace：`JournalStore.legacyGraceDays`（默认 60）+ `JournalWriteRejectedError`，legacy 写失败不影响 brain event |
+| R2 Codename 接管 | ✅ done<br>① ✅ `MemoryAction.codename` 字段 + 同轮模型结构化输出（零字符匹配，2/2 单测）<br>② ✅ `MemoryModule.persistCodenamesFromActions` 双写 brain.codenames + `useCount` 自增 + `memory_events.codename_id` tagging + `MemoryCodenameCreated`/`MemoryCodenameTouched` 事件（1/1 集成测试）<br>③ ✅ CLI `flyflor codename list [--user --limit --json]`（`handlers/codename.handler.ts`）<br>④ ✅ 提示词模板（zh + en）追加 codename 字段说明与"绝不要从对话里猜代号"红线<br>⑤ ✅ 升格 ProjectScaffolder：`detectCodenamePromotion`（useCount + age 阈值，零字符匹配）+ `promoteCodename` helper（`agent/project/codename.promote.ts`）+ `MemoryModule.promoteCodename` + 自动 touch 路径触发 + 事件 `MemoryCodenamePromoted` / `MemoryCodenamePromotionFailed`（8/8 单测）<br>⑥ ✅ AtomScore 上浮：`journalAtomFromAction` 增 `codenameUseCount` 入参，`min(1, log2(1+useCount)/4)` 加到 `score_total`，explain 含说明（仅资源指标，零字符匹配）<br>⑦ ✅ CLI 子命令补齐：`flyflor codename promote <name> [--force --json]` + `flyflor codename use <name>`（写 `~/.flyflor/state/active-codename.json` 提示文件）<br>⑧ ✅ 多候选 → Ask 由 R3/R9 的 `reason=codename-ambiguity` 结构化 ask 承接；inbox project 容器收口已由 P2 inbox 三 slice 完成 |
 | R3 Ask 一等公民 | ✅ done<br>① ✅ 协议 `src/protocol/contracts/ask.ts`（`AgentAsk` / `AskReason` × 6 / `AskEventContent` / `AskAnswerPairContent`）<br>② ✅ 解析器 `src/neural/memory/ask.ts`：`<flyflor_agent_ask>` 块只取首个、reason 在枚举内、prompt 非空，dropped 计数（零字符匹配，5/5 单测）<br>③ ✅ `BrainStore.getLatestPendingAsk`（`NOT EXISTS ask-answer-pair` 子事件判定 pending）+ `countAskChainDepth`（沿 `parent_id` 反追，硬上限 32 跳）<br>④ ✅ `MemoryModule.rememberTurn` 第 6 参 `ask?: AgentAsk`，顺序 pendingAskBefore → ask-answer-pair（state=resumed）→ journal → 新 ask 事件（chainDepth = parent+1）；新增 `MemoryModule.peekActiveAsk` 公开方法供 runtime 做 cap 强制<br>⑤ ✅ `buildPrompt` 注入 `[continuation]` 块到 nudges 顶部<br>⑥ ✅ 配置 `tuning.ghost.maxChainDepth=5`；超 cap 发 `MemoryAskChainCapped` 事件<br>⑦ ✅ 4 个新事件 `MemoryAskRecorded` / `MemoryAskAnswered` / `MemoryAskChainCapped` / `MemoryAskMutexViolation`<br>⑧ ✅ `RuntimeModule.generateTurnReply`：解析 ask、`renderAskReplyText`、`reply.metadata.kind: 'ask'\|'reply'`、ask 透传 memory<br>⑨ ✅ **slice D**：`buildBlackboardStalemateAsk`（黑板 NeedsUser → `AgentAsk(reason=blackboard-stalemate)`，仅消费 status + decisions 两个结构化资源指标）+ `replyFromAsk` 短路 LLM、跳过 mcp/memory_actions；`returnDecisionToUser` 不再写 `flyflor-decision-form` 系统消息（只保留结构化 decisions[]），`renderDecisionForm` / `isDecisionFormMessage` 删除；runtime 用户面 cap 强制：模型 ask 而 chainDepth+1 > maxChainDepth 时抛弃 ask 改走 reply、发 `MemoryAskChainCapped` action=`dropped-by-runtime`<br>⑩ ✅ 集成测试 `tests/ask.parse.test.ts`（5/5）+ `tests/ask.wire.test.ts`（3/3）+ `tests/ask.cap.runtime.test.ts`（1/1，runtime cap 强制）；blackboard / memory boundaries 改写为短路 ask 行为（5 测全过）|
 | R4 Ghost Context | ✅ done<br>① 协议 `src/protocol/contracts/ghost.ts`：`GhostContextReason` 枚举 4 值 + `GhostUserFacing` / `GhostSnapshot` / `GhostContextEventContent`（含 `continuationCompleted` / `lastKind`）+ `GhostDecisionKind` 枚举 + `GhostDecision`；`AgentAsk.ghostHint?: { title?, contextHint? }`<br>② `BrainStore.listActiveGhosts` + `hasAskBeenAnswered` + `patchGhostContent`<br>③ `MemoryModule.recordAskEvent` 自动 sibling ghost；公开 `listActiveGhosts/getGhost/resumeGhost/dropGhost/pinGhost/recordGhostFromReason/applyGhostDecisions`<br>④ 5 个事件 `MemoryGhostRecorded/Resumed/Dropped/Pinned/DecisionApplied`<br>⑤ `GhostTuningConfig.pinHalflifeMultiplier=3.0` + `evidenceWeight={askAnswered:0.85, continuationCompleted:0.75, abandoned:0, default:1}`<br>⑥ CLI `flyflor ghost list/show/resume/drop/pin`<br>⑦ **Prompt 注入**：`templates/prompts/ask.schema.md`(en+zh)，`buildPrompt` 注入 `[ghost-hint]` 块（高分 ghost top-3 + `evidence=` 标签）<br>⑧ **Runtime triggers**：(a) tool-failure：`runtime.persistTurn` 扫 `mcpCallProvenance` 失败聚合；(b) blackboard-cap：enum→enum 映射；(c) process-restart：`InFlightTracker` sentinel + `warmup.recoverProcessRestartGhosts`<br>⑨ **TUI 侧栏**：`Ghosts` 页（按 codename 分组 + reason 着色）<br>⑩ **Evidence weight**：4 档（abandoned > continuation-completed > ask-answered > default）参与 `decayScore` 重排序<br>⑪ **Fork/Fresh hint**：`<flyflor_ghost_decisions>` 结构化块 + `parseGhostDecisions`（dedupe / maxDecisions=8 / 非法 kind 丢弃）+ `applyGhostDecisions`（resume → resumeGhost；fork/fresh → patchGhostContent 写 continuationCompleted=true 切换 evidence 权重 0.75）；runtime `prepareTurn` 解析顺序 memoryActions → ghostDecisions → ask 逐层剥离<br>**测试**：`tests/ghost.wire.test.ts` 13/13 + `tests/ghost.decisions.parse.test.ts` 6/6 + `tests/inflight.tracker.test.ts` 4/4 + `tests/process.restart.ghost.test.ts` 1/1 + `tests/ghost.list.handler.test.ts` 2/2 + `tests/ask.parse.test.ts` 6/6 |
-| R5 生命体能力 | ✅ done<br>**slice A identity 自写 + revert** ✅：协议/parser/MemoryModule API/BrainStore/事件/buildPrompt 注入/CLI/Prompt 模板/runtime parse 链/测试 7+5。<br>**slice B summary worker** ✅：`summary.worker.ts` 纯结构化聚合（type/role/codenameId/ask reason/ghost reason/identityAppends + firstTs/lastTs）；daily=`YYYY-MM-DD` + weekly rolling=`rolling-…-Nd` / calendar=`YYYY-Www`；`minIntervalHours` 资源指标短路；`MemoryModule.runSummaryOnce`；`BackgroundScheduler.summarySweeper` 6h；事件 `MemorySummaryWritten`；测试 6+2。<br>**slice C Dream reconsolidation** ✅：`DreamActionKind.Reconsolidation` 第 4 类动作（winner=left/right/merge + mergedSummary/Symbols/scopeNote）；`SurrealGraphStore.applyReconsolidation`（winner UPDATE → loser `supersededBy` → RELATE `supersedes`）；资源指标短路（contradictionCount≥1 或 cosine≥0.85）；事件 `MemoryReconsolidated`；Prompt 模板 (en+zh) 同步；测试 16。<br>**slice D Dormant 实装** ✅：① `src/neural/memory/dormant.supervisor.ts`：per-user `lastInputAt` + `mode` 状态机；`touch()` 注册/唤醒、`sweepOnce()` 把超过 `idleMinutes` 的 Chat 用户切到 Dormant；零字符匹配，只用 `now - lastInputAt` 资源指标；② `MemoryModule.dormant` 实例 + `rememberTurn` 调 `touch`；公开 `runtimeModeOf` / `sweepDormantOnce` / `dormantSnapshot`；③ `BackgroundScheduler.dormantSweeper` + `dormantIntervalMs`（默认 60s）+ unref + stop 清理；④ 事件 `RuntimeModeEntered` / `RuntimeModeAwakened`；⑤ 测试 `tests/dormant.supervisor.test.ts` 5/5 + `tests/dormant.wire.test.ts` 2/2；全套 610 pass / 1 baseline。 |
+| R5 生命体能力 | ✅ done<br>**slice A identity 自写 + revert** ✅：协议/parser/MemoryModule API/BrainStore/事件/buildPrompt 注入/CLI/Prompt 模板/runtime parse 链/测试 7+5。<br>**slice B summary worker** ✅：`summary.worker.ts` 纯结构化聚合（type/role/codenameId/ask reason/ghost reason/identityAppends + firstTs/lastTs）；daily=`YYYY-MM-DD` + weekly rolling=`rolling-…-Nd` / calendar=`YYYY-Www`；`minIntervalHours` 资源指标短路；`MemoryModule.runSummaryOnce`；`BackgroundScheduler.summarySweeper` 6h；事件 `MemorySummaryWritten`；测试 6+2。<br>**slice C Dream reconsolidation** ✅：`DreamActionKind.Reconsolidation` 第 4 类动作（winner=left/right/merge + mergedSummary/Symbols/scopeNote）；`SurrealGraphStore.applyReconsolidation`（winner UPDATE → loser `supersededBy` → RELATE `supersedes`）；资源指标短路（contradictionCount≥1 或 cosine≥0.85）；事件 `MemoryReconsolidated`；Prompt 模板 (en+zh) 同步；测试 16。<br>**slice D Dormant 实装** ✅：① `src/neural/memory/dormant.supervisor.ts`：per-user `lastInputAt` + `mode` 状态机；`touch()` 注册/唤醒、`sweepOnce()` 把超过 `idleMinutes` 的 Chat 用户切到 Dormant；零字符匹配，只用 `now - lastInputAt` 资源指标；② `MemoryModule.dormant` 实例 + `rememberTurn` 调 `touch`；公开 `runtimeModeOf` / `sweepDormantOnce` / `dormantSnapshot`；③ `BackgroundScheduler.dormantSweeper` + `dormantIntervalMs`（默认 60s）+ unref + stop 清理；④ 事件 `RuntimeModeEntered` / `RuntimeModeAwakened`；⑤ 测试 `tests/dormant.supervisor.test.ts` 5/5 + `tests/dormant.wire.test.ts` 2/2；阶段测试通过。 |
 | R6 Dream 收紧 | ✅ done — `DreamWorkerImpl.runOnce` candidates.length===0 短路（0 LLM、0 graph 写）；候选源已资源指标分桶（drift-repair / recall extremes / contradiction-pair cosine≥0.78 / reconsolidation contradictionCount≥1 或 cosine≥0.85）；新增 `tests/dream.zero.write.test.ts` 3 项覆盖 |
-| R7 清理 | ✅ done — `legacySessionKey` 字段 / 旧 `journal/` 读路径已无代码引用；`MemoryTuningConfig.session` 字段已删；`status.ts` / `tests/config.memory.tuning.test.ts` 引用清掉；删废弃 `src/command/tui/native/cli.entry.ts` + 导出；注释 (`memory.atom.ts`) 提及"旧 journal 分文件路径"统一改为"brain.db 单库"；614 pass / 0 fail / 0 typecheck error；解锁 EQ-01 |
+| R7 清理 | ✅ done — `legacySessionKey` 字段 / `flyflor-decision-form` 用户可见系统消息均已无正向代码引用，仅在测试中作为 negative assertion 出现；`MemoryTuningConfig.session` 字段已删；`status.ts` / `tests/config.memory.tuning.test.ts` 引用清掉；删废弃 `src/command/tui/native/cli.entry.ts` + 导出；注释 (`memory.atom.ts`) 提及"旧 journal 分文件路径"统一改为"brain.db 单库"；legacy journal prompt path 已由 LF-R10 下线 |
+| R10 brain.db 权威源切换 | ✅ done — prompt atom recall 从 `brain_events.content.atoms` 展开；turn event 写入改为 brain-first；legacy journal 仅 best-effort audit；Ghost Context 保持独立 `[ghost-hint]` 分支，不被普通 atom recall 吞掉，`resume` / `fork` / `fresh` 仍可让分支回归主线 |
+| R11 Behavior Snapshot | ✅ done — 每轮写 `behavior-snapshot`，后续用户纠正写 `behavior-correction`；ask / ask-answer / reply metadata 共用 `snapshotId`，用于回放行为原因 |
+| R12 提示词优先级冲突表 | ✅ done — `behavior.priority.md` 注入 runtime system；模型看到的是可执行来源优先级和 ask 多问题结构，不暴露路线编号或内部隐喻 |
+| R13 Summary embeddingId 补全 | ✅ done — `SummaryWorker` 写 daily / weekly summary 后，`MemoryModule` best-effort 计算 summary content embedding，写入 SurrealDB `summary_embedding` 节点并回填 `memory_summary.embedding_id`；失败不阻断 summary 主写入 |
+| R14 brain.db 月度归档自动化 | ✅ done — `src/neural/memory/brain.archive.ts` 统一 admin 脚本与 runtime；`MemoryModule.runBrainArchiveOnce` 只搬 `state=archived` 且早于 cutoff 的事件和同月 summary，发布 `MemoryBrainArchiveCompleted/Failed`；`BackgroundScheduler` 场景避开 summary / dream busy，降级场景由根 timer 继续维护 |
 
 ## 与上一版的作废清单
 
@@ -323,7 +331,7 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 
 ## 风险记录
 
-1. **brain.db 单文件膨胀**：依赖 R1 月级冷归档 + 周级 vacuum；首批 30 天观测增长曲线，doctor 表新增 `brain.db size`。
+1. **brain.db 单文件膨胀**：R14 已接入月级冷归档与最小间隔 vacuum；仍需观测首批 30 天增长曲线，doctor 表已展示 `brain.db size` 与 archive 文件数。
 2. **Ghost 链深度爆炸**：硬上限 `ghost.maxChainDepth=5` 兜底；超过时落 `excessive_clarification_loop` 反馈给 Dream。
 3. **Ask 触发过频 → 用户疲劳**：不设硬预算，仅在连续 N 轮无任务推进时事件告警 `AskLoopSuspected`；用户主动反馈是最终校正。
 4. **identity 自写漂移**：每条 append 必须带 `atomIds` 证据链，Dream reconsolidation 必须能复盘合并 / 收回 identity 行。

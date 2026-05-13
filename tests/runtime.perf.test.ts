@@ -255,11 +255,12 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(visible[0]?.score.total).toBeGreaterThan(0);
     });
 
-    test("buildPrompt only exposes journal atoms after the AtomScore visibility gate", async () => {
+    test("buildPrompt only exposes brain prompt atoms after the AtomScore visibility gate", async () => {
         const config = await buildConfig();
         config.memory.candidates.autoPromoteExplicit = false;
         config.memory.tuning.atomScore.visibilityThreshold = 0.65;
         const memory = new MemoryModule(config, new CapturingSink());
+        await memory.warmup();
         const ctx = withEmbedding(await embedFor(config, "atom visibility"));
 
         await memory.rememberTurn(msg("atom visibility low"), rep("stored"), ctx, [
@@ -302,16 +303,16 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(prompt).not.toContain("low atom must stay hidden from prompt");
     });
 
-    test("buildPrompt propagates journal read errors instead of silently dropping recall", async () => {
+    test("buildPrompt propagates brain prompt recall errors instead of silently dropping recall", async () => {
         const config = await buildConfig();
         const memory = new MemoryModule(config, new CapturingSink());
+        await memory.warmup();
+        const brain = memory as unknown as { brain: { listPromptAtomsWindow: () => never } };
+        brain.brain.listPromptAtomsWindow = () => {
+            throw new Error("broken brain prompt recall");
+        };
         const ctx = withEmbedding(await embedFor(config, "broken journal"));
-        const journal = new JournalStore({ journalRoot: join(config.paths.home, "journal") });
-        const location = journal.locationFor(ctx.now);
-        await mkdir(location.weekDir, { recursive: true });
-        await Bun.write(location.dbPath, "not a sqlite database");
-
-        await expect(memory.buildPrompt(msg("broken journal"), ctx)).rejects.toThrow();
+        await expect(memory.buildPrompt(msg("broken journal"), ctx)).rejects.toThrow("broken brain prompt recall");
     });
 
     test("buildPrompt accepts optional context parameter without throwing", async () => {

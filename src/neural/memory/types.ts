@@ -84,6 +84,7 @@ export interface MemoryCandidate {
 }
 
 export interface MemoryEpisodeProvenance {
+    behaviorSnapshotId?: string;
     mcpCalls?: Array<{
         error?: string;
         ok: boolean;

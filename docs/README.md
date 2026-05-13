@@ -22,7 +22,7 @@
 
 ## 提案区
 
-[proposals/](proposals/) 下是未落地的设计稿，仅作参考，不代表当前实现：
+[proposals/](proposals/) 下记录设计主线与落地历史；其中部分内容已经实现，具体状态以文档内进度表和根目录 [TODO.md](../TODO.md) 为准：
 
-- [proposals/eq.module.md](proposals/eq.module.md) — EQ 语气控制层提案
-- [proposals/life.form.md](proposals/life.form.md) — 生命体重构主线提案
+- [proposals/eq.module.md](proposals/eq.module.md) — EQ 语气控制层设计与落地记录
+- [proposals/life.form.md](proposals/life.form.md) — 无 session / brain.db / Codename / Ask / Ghost / Dream 生命体重构主线

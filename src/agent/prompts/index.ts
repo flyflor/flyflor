@@ -5,6 +5,7 @@ import type { BlackboardMode } from "../../protocol/contracts/index.ts";
 
 export interface RuntimeSystemPromptInput {
     askSchemaInstructions: string;
+    behaviorPriorityInstructions: string;
     blackboardContext: string;
     mcpContext: string;
     memoryActionInstructions: string;
@@ -100,6 +101,7 @@ interface PromptTemplate {
 
 type PromptTemplateKey =
     | "askSchema"
+    | "behaviorPriority"
     | "blackboardAdvisory"
     | "blackboardDecision"
     | "blackboardRoute"
@@ -118,6 +120,7 @@ type PromptTemplateMap = Record<PromptTemplateKey, PromptTemplate>;
 
 const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = {
     askSchema: "ask.schema.md",
+    behaviorPriority: "behavior.priority.md",
     blackboardAdvisory: "blackboard.advisory.md",
     blackboardDecision: "blackboard.decision.md",
     blackboardRoute: "blackboard.route.md",
@@ -196,6 +199,7 @@ export function renderRuntimeSystemPrompt(input: RuntimeSystemPromptInput): stri
     // 必要提示词：这里是模型上下文唯一装配口；业务控制仍由 schema、枚举和状态机完成。
     return renderTemplate(requiredTemplates().runtimeSystem.content, {
         askSchemaInstructions: input.askSchemaInstructions,
+        behaviorPriorityInstructions: input.behaviorPriorityInstructions,
         blackboardContext: input.blackboardContext,
         mcpContext: input.mcpContext,
         memoryActionInstructions: input.memoryActionInstructions,
@@ -211,8 +215,13 @@ export function renderMemoryActionInstructions(): string {
 }
 
 export function renderAskSchemaInstructions(): string {
-    // 必要提示词：LF-R3 Ask 一等公民 + LF-R4 ghostHint。同 memory.action 一样走块协议承载结构化输出。
+    // 必要提示词：澄清问题 + 未完成事项元数据。同 memory.action 一样走块协议承载结构化输出。
     return requiredTemplates().askSchema.content;
+}
+
+export function renderBehaviorPriorityInstructions(): string {
+    // 提示词优先级冲突表。这里只注入声明式优先级；runtime 仍不做业务语义字符串判断。
+    return requiredTemplates().behaviorPriority.content;
 }
 
 export function renderSkillContextPrompt(input: SkillContextPromptInput): string {
@@ -342,14 +351,14 @@ export function renderCrystalReflectionPrompt(input: CrystalReflectionPromptInpu
 }
 
 export function renderMemoryConsolidationPrompt(input: MemoryConsolidationPromptInput): string {
-    // 必要提示词：海马体整合分类器；决策由结构化 JSON 输出承载，代码只做枚举校验，不做语义匹配。
+    // 必要提示词：工作记忆候选分类器；决策由结构化 JSON 输出承载，代码只做枚举校验，不做语义匹配。
     return renderTemplate(requiredTemplates().memoryConsolidation.content, {
         episode: input.episode,
     });
 }
 
 export function renderMemoryDreamPrompt(input: MemoryDreamPromptInput): string {
-    // 必要提示词：dream 晶体层维护 worker；drift-repair / recall-reinforce / contradiction-audit / skip
+    // 必要提示词：长期概念图维护 worker；drift-repair / recall-reinforce / contradiction-audit / skip
     // 由结构化 JSON 输出承载，代码不做语义匹配，只校验 enum + JSON shape（README.md §12）。
     return renderTemplate(requiredTemplates().memoryDream.content, {
         userId: input.userId,
@@ -409,6 +418,7 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 /** 每个模板必须出现的占位符集合；任一缺失即视为旧模板，需提示用户升级。 */
 const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     askSchema: [],
+    behaviorPriority: [],
     blackboardAdvisory: ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
     blackboardDecision: ["questionCount", "reason", "unresolvedIssues"],
     blackboardRoute: ["request"],
@@ -422,6 +432,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     memoryDream: ["candidates", "userId"],
     runtimeSystem: [
         "askSchemaInstructions",
+        "behaviorPriorityInstructions",
         "blackboardContext",
         "mcpContext",
         "memoryActionInstructions",

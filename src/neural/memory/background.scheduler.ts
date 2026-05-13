@@ -68,6 +68,10 @@ export interface BackgroundSchedulerOptions {
     dormantSweeper?: () => { entered: number };
     /** Dormant sweep 节拍。默认 60s，0 关闭。 */
     dormantIntervalMs?: number;
+    /** brain.db 冷归档 sweep。全局任务，不按 userId 分片。 */
+    brainArchiveSweeper?: () => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>;
+    /** brain.db 冷归档检查节拍。默认 24h，0 关闭。 */
+    brainArchiveIntervalMs?: number;
 }
 
 export class BackgroundScheduler {
@@ -86,13 +90,16 @@ export class BackgroundScheduler {
     private projectBusy = false;
     private skillBusy = false;
     private summaryBusy = false;
+    private brainArchiveBusy = false;
     private readonly dream: DreamWorker | undefined;
     private readonly projectSweeper: ((userId: string) => Promise<boolean>) | undefined;
     private readonly skillSweeper: ((userId: string) => Promise<boolean>) | undefined;
     private readonly summarySweeper: ((userId: string) => Promise<{ written: number }>) | undefined;
     private readonly dormantSweeper: (() => { entered: number }) | undefined;
+    private readonly brainArchiveSweeper: (() => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>) | undefined;
     private dormantTimer: ReturnType<typeof setInterval> | undefined;
-    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper" | "summarySweeper" | "dormantSweeper">> & {
+    private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
+    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper" | "summarySweeper" | "dormantSweeper" | "brainArchiveSweeper">> & {
         profiles: Record<DecayLayer, DecayProfile>;
         now: () => number;
     };
@@ -108,6 +115,7 @@ export class BackgroundScheduler {
         this.skillSweeper = options.skillSweeper;
         this.summarySweeper = options.summarySweeper;
         this.dormantSweeper = options.dormantSweeper;
+        this.brainArchiveSweeper = options.brainArchiveSweeper;
         this.opts = {
             consolidationIntervalMs: options.consolidationIntervalMs ?? 10 * 60_000,
             decayIntervalMs: options.decayIntervalMs ?? 24 * 60 * 60_000,
@@ -119,6 +127,7 @@ export class BackgroundScheduler {
             skillClusterIntervalMs: options.skillClusterIntervalMs ?? 20 * 60_000,
             summaryIntervalMs: options.summaryIntervalMs ?? 6 * 60 * 60_000,
             dormantIntervalMs: options.dormantIntervalMs ?? 60_000,
+            brainArchiveIntervalMs: options.brainArchiveIntervalMs ?? 24 * 60 * 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
             now: options.now ?? (() => Date.now()),
         };
@@ -200,6 +209,11 @@ export class BackgroundScheduler {
                 }
             }, this.opts.dormantIntervalMs);
         }
+        if (this.brainArchiveSweeper && this.opts.brainArchiveIntervalMs > 0) {
+            this.brainArchiveTimer = setInterval(() => {
+                void this.runBrainArchiveOnce();
+            }, this.opts.brainArchiveIntervalMs);
+        }
         // setInterval 在 bun 下不阻止退出
         if (typeof (this.consolidationTimer as { unref?: () => void })?.unref === "function") {
             (this.consolidationTimer as { unref: () => void }).unref();
@@ -221,6 +235,9 @@ export class BackgroundScheduler {
         }
         if (this.dormantTimer && typeof (this.dormantTimer as { unref?: () => void })?.unref === "function") {
             (this.dormantTimer as { unref: () => void }).unref();
+        }
+        if (this.brainArchiveTimer && typeof (this.brainArchiveTimer as { unref?: () => void })?.unref === "function") {
+            (this.brainArchiveTimer as { unref: () => void }).unref();
         }
     }
 
@@ -252,6 +269,10 @@ export class BackgroundScheduler {
         if (this.dormantTimer !== undefined) {
             clearInterval(this.dormantTimer);
             this.dormantTimer = undefined;
+        }
+        if (this.brainArchiveTimer !== undefined) {
+            clearInterval(this.brainArchiveTimer);
+            this.brainArchiveTimer = undefined;
         }
         for (const timer of this.idleTimers.values()) {
             clearTimeout(timer);
@@ -452,6 +473,30 @@ export class BackgroundScheduler {
         return totals;
     }
 
+    /** LF-R14：全局 brain.db 冷归档。若 summary/dream 正在跑，本 tick 跳过，避免同库维护互相抢锁。 */
+    async runBrainArchiveOnce(): Promise<{ eventsCopied: number; months: number; skippedBusy: boolean; vacuumed: boolean }> {
+        const empty = { eventsCopied: 0, months: 0, skippedBusy: false, vacuumed: false };
+        if (!this.brainArchiveSweeper) return empty;
+        if (this.brainArchiveBusy || this.summaryBusy || this.dreamBusy) {
+            return { ...empty, skippedBusy: true };
+        }
+        this.brainArchiveBusy = true;
+        try {
+            const r = await this.brainArchiveSweeper();
+            return {
+                eventsCopied: r.eventsCopied,
+                months: r.months,
+                skippedBusy: false,
+                vacuumed: r.vacuumed,
+            };
+        } catch (err) {
+            this.publishFailure("brain-archive-tick", "", err);
+            return empty;
+        } finally {
+            this.brainArchiveBusy = false;
+        }
+    }
+
     /** 返回当前注册的活跃用户快照（CLI 诊断使用）。 */
     trackedUsers(): string[] {
         return [...this.users];
@@ -467,6 +512,8 @@ export class BackgroundScheduler {
         projectClusterBusy: boolean;
         skillClusterEnabled: boolean;
         skillClusterBusy: boolean;
+        brainArchiveEnabled: boolean;
+        brainArchiveBusy: boolean;
         users: number;
     } {
         return {
@@ -478,6 +525,8 @@ export class BackgroundScheduler {
             projectClusterBusy: this.projectBusy,
             skillClusterEnabled: Boolean(this.skillSweeper) && this.opts.skillClusterIntervalMs > 0,
             skillClusterBusy: this.skillBusy,
+            brainArchiveEnabled: Boolean(this.brainArchiveSweeper) && this.opts.brainArchiveIntervalMs > 0,
+            brainArchiveBusy: this.brainArchiveBusy,
             users: this.users.size,
         };
     }

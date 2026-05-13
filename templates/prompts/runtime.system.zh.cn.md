@@ -4,6 +4,8 @@
 
 沙箱策略：{{sandboxSummary}}
 
+{{behaviorPriorityInstructions}}
+
 记忆上下文：
 
 {{memoryContext}}

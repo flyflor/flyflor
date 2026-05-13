@@ -4,6 +4,8 @@ Reply to the user directly, in the user's language. Do not claim to have execute
 
 Sandbox policy: {{sandboxSummary}}
 
+{{behaviorPriorityInstructions}}
+
 Memory context:
 
 {{memoryContext}}

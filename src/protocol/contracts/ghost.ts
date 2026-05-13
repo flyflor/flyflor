@@ -64,6 +64,8 @@ export interface GhostSnapshot {
  */
 export interface GhostContextEventContent {
     ghostId: string;
+    /** Shared LF-R11 behavior snapshot anchor for audit / later gem crystallization. */
+    snapshotId?: string;
     reason: GhostContextReason;
     userFacing: GhostUserFacing;
     snapshot?: GhostSnapshot;

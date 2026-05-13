@@ -848,7 +848,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "setup") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "config");
             return;
         }
@@ -858,7 +858,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "status") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "overview");
             return;
         }
@@ -873,7 +873,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "channels") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "overview");
             return;
         }
@@ -888,7 +888,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             await runDoctorFix(app);
         }
         if (process.stdin.isTTY) {
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "overview");
             return;
         }
@@ -898,7 +898,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "config") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "config");
             return;
         }
@@ -908,7 +908,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "memory") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "memory");
             return;
         }
@@ -918,7 +918,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "blackboard") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "blackboard");
             return;
         }
@@ -948,7 +948,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "skills") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "skills");
             return;
         }
@@ -958,7 +958,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "mcp") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "mcp");
             return;
         }
@@ -972,7 +972,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "sandbox") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "sandbox");
             return;
         }
@@ -982,7 +982,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "plugins") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "plugins");
             return;
         }
@@ -992,7 +992,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "dream") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "dream");
             return;
         }
@@ -1002,7 +1002,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "model") {
         if (process.stdin.isTTY) {
             const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/cli.tui.tsx");
+            const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "config");
             return;
         }

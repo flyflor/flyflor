@@ -35,6 +35,10 @@ export const MemoryEventType = {
     AskAnswerPair: "ask-answer-pair",
     /** Identity self-write append。 */
     IdentityAppend: "identity-append",
+    /** LF-R11：单轮行为快照，用于回放输入、触发源、输出与后续纠正证据。 */
+    BehaviorSnapshot: "behavior-snapshot",
+    /** LF-R11：用户后续反馈 / 纠正对某条 behavior-snapshot 的结构化证据。 */
+    BehaviorCorrection: "behavior-correction",
 } as const;
 
 export type MemoryEventType = (typeof MemoryEventType)[keyof typeof MemoryEventType];
@@ -126,6 +130,57 @@ export interface MemorySummaryRecord {
     content: string;
     embeddingId?: string;
     createdAt: number;
+}
+
+/**
+ * LF-R11 Behavior Snapshot：每轮完成后写入一条 append-only event。
+ * 只保存结构化触发面和短文本预览；不把完整 prompt、工具输出或日志塞进 brain.db。
+ */
+export interface BehaviorSnapshotContent {
+    snapshotId: string;
+    requestId?: string;
+    input: {
+        messageId: string;
+        textPreview: string;
+        channel: string;
+        chatId: string;
+        chatType?: string;
+        receivedAt?: string;
+    };
+    triggers: {
+        memoryActions: number;
+        ask?: {
+            reason: string;
+            choices: number;
+            questions?: number;
+        };
+        blackboard?: {
+            mode: string;
+            reason: string;
+            status?: string;
+            turnId?: string;
+        };
+        mcpToolCalls: number;
+        mcpToolFailures: number;
+        skills: string[];
+        sandboxMode?: string;
+    };
+    output: {
+        kind: "reply" | "ask";
+        textPreview: string;
+        visibleTextPreview?: string;
+    };
+}
+
+/** 用户后续纠正 / 确认对 behavior snapshot 的证据。 */
+export interface BehaviorCorrectionContent {
+    snapshotId: string;
+    requestId?: string;
+    category: string;
+    hasFact: boolean;
+    factPreview?: string;
+    currentUserTextPreview: string;
+    previousAssistantTextPreview: string;
 }
 
 /**

@@ -45,6 +45,7 @@ import { createSandboxPolicy, decideCapabilityExecution, gateCapabilityExecution
 import {
     loadPromptTemplates,
     renderAskSchemaInstructions,
+    renderBehaviorPriorityInstructions,
     renderBlackboardAdvisoryPrompt,
     renderMcpContextPrompt,
     renderRuntimeSystemPrompt,
@@ -135,6 +136,7 @@ interface AssembledTurnContext {
 
 /** Phase 3 输出：完整 GatewayReply + persist/async 阶段需要的中间值。 */
 interface GeneratedTurn {
+    behaviorSnapshotId: string;
     reply: GatewayReply;
     parsed: ReturnType<typeof parseMemoryActions>;
     visibleText: string;
@@ -418,6 +420,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const { context } = prepared;
         const { selectedSkills, mcpServers, memoryPrompt, sandbox, mcpExecution, blackboardRun, mcpToolCatalog } =
             assembled;
+        const behaviorSnapshotId = `behavior-${context.requestId}`;
 
         // LF-R3 slice D：黑板封顶（NeedsUser）→ 直接合成 AgentAsk 短路返回，不再调用 LLM。
         // 黑板已经穷尽 round 没有定论，由 runtime 把"需要用户决断"的语义透传给用户。
@@ -430,6 +433,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 selectedSkills,
                 mcpServers,
                 sandbox,
+                behaviorSnapshotId,
             });
         }
 
@@ -438,6 +442,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 role: ModelRole.System,
                 content: renderRuntimeSystemPrompt({
                     askSchemaInstructions: renderAskSchemaInstructions(),
+                    behaviorPriorityInstructions: renderBehaviorPriorityInstructions(),
                     blackboardContext: renderBlackboardPrompt(blackboardRun),
                     mcpContext: renderMcpContextPrompt({
                         servers: mcpServers,
@@ -557,8 +562,17 @@ export class RuntimeModule extends RuntimeBoundary {
             text: ask ? renderAskReplyText(ask) : renderReplyText(visibleText, blackboardRun),
             metadata: {
                 ...(ask
-                    ? { kind: "ask" as const, ask: { reason: ask.reason, choices: ask.choices?.length ?? 0 } }
+                    ? {
+                          kind: "ask" as const,
+                          ask: {
+                              choices: ask.choices?.length ?? 0,
+                              questions: ask.questions?.length ?? 0,
+                              reason: ask.reason,
+                              snapshotId: behaviorSnapshotId,
+                          },
+                      }
                     : { kind: "reply" as const }),
+                behaviorSnapshotId,
                 blackboard: blackboardRun
                     ? {
                           elapsedMs: blackboardRun.elapsedMs,
@@ -581,7 +595,7 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         };
 
-        return { reply, parsed, visibleText, mcpCallProvenance, selectedSkillNames, ask };
+        return { behaviorSnapshotId, reply, parsed, visibleText, mcpCallProvenance, selectedSkillNames, ask };
     }
 
     /**
@@ -596,8 +610,9 @@ export class RuntimeModule extends RuntimeBoundary {
         selectedSkills: AssembledTurnContext["selectedSkills"];
         mcpServers: AssembledTurnContext["mcpServers"];
         sandbox: AssembledTurnContext["sandbox"];
+        behaviorSnapshotId: string;
     }): GeneratedTurn {
-        const { ask, message, blackboardRun, selectedSkills, mcpServers, sandbox } = input;
+        const { ask, message, blackboardRun, selectedSkills, mcpServers, sandbox, behaviorSnapshotId } = input;
         const selectedSkillNames = selectedSkills.map((skill) => skill.name);
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
@@ -605,7 +620,13 @@ export class RuntimeModule extends RuntimeBoundary {
             text: renderAskReplyText(ask),
             metadata: {
                 kind: "ask" as const,
-                ask: { reason: ask.reason, choices: ask.choices?.length ?? 0 },
+                ask: {
+                    choices: ask.choices?.length ?? 0,
+                    questions: ask.questions?.length ?? 0,
+                    reason: ask.reason,
+                    snapshotId: behaviorSnapshotId,
+                },
+                behaviorSnapshotId,
                 blackboard: blackboardRun
                     ? {
                           elapsedMs: blackboardRun.elapsedMs,
@@ -628,6 +649,7 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         };
         return {
+            behaviorSnapshotId,
             reply,
             parsed: { actions: [], text: "" },
             visibleText: ask.prompt,
@@ -649,12 +671,33 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<void> {
         const { context, enrichedContext, embedding, snapshotKey } = prepared;
         const { blackboardRun } = assembled;
-        const { reply, parsed, mcpCallProvenance, selectedSkillNames, ask } = generated;
+        const { behaviorSnapshotId, reply, parsed, mcpCallProvenance, selectedSkillNames, ask } = generated;
 
         await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions, {
+            behaviorSnapshotId,
             mcpCalls: mcpCallProvenance,
             skillNames: selectedSkillNames,
         }, ask);
+        this.memory.recordBehaviorSnapshot({
+            snapshotId: behaviorSnapshotId,
+            ask,
+            blackboard: blackboardRun
+                ? {
+                      mode: blackboardRun.mode,
+                      reason: blackboardRun.reason,
+                      status: blackboardRun.status,
+                      turnId: blackboardRun.turnId,
+                  }
+                : undefined,
+            context: enrichedContext,
+            mcpCalls: mcpCallProvenance,
+            memoryActions: parsed.actions.length,
+            message,
+            reply,
+            sandboxMode: assembled.sandbox.mode,
+            skills: selectedSkillNames,
+            visibleText: generated.visibleText,
+        });
         // LF-R4 ghost：MCP 工具失败 → 把"in-flight 上下文"写一条 reason='tool-failure' 的 ghost。
         // 触发条件是布尔字段 `call.ok === false`（资源指标，非字符匹配）；
         // userFacing.title 由 server/tool/error 三段结构化字段拼接，不解析对话文本。
@@ -1337,11 +1380,29 @@ function renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefi
  */
 function renderAskReplyText(ask: AgentAsk): string {
     const lines: string[] = [ask.prompt.trim()];
+    const questions = ask.questions ?? [];
     if (ask.choices && ask.choices.length > 0) {
         lines.push("");
         ask.choices.forEach((choice, idx) => {
             const tail = choice.description ? ` — ${choice.description}` : "";
             lines.push(`${idx + 1}. ${choice.label}${tail}`);
+        });
+    }
+    if (questions.length > 0) {
+        if (ask.choices && ask.choices.length > 0) {
+            lines.push("");
+        }
+        questions.forEach((question, idx) => {
+            lines.push(`${idx + 1}. ${question.prompt.trim()}`);
+            if (question.choices && question.choices.length > 0) {
+                question.choices.forEach((choice, choiceIdx) => {
+                    const tail = choice.description ? ` — ${choice.description}` : "";
+                    lines.push(`   ${choiceIdx + 1}. ${choice.label}${tail}`);
+                });
+            }
+            if (idx < questions.length - 1) {
+                lines.push("");
+            }
         });
     }
     return lines.join("\n");

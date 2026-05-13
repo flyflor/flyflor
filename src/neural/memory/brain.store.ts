@@ -2,11 +2,13 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import {
+    type AtomScore,
+    type MemoryAtom,
     type CodenameRecord,
     type EqLabel,
     type EqState,
     type MemoryEventRecord,
-    type MemoryEventType,
+    MemoryEventType,
     MemoryEventStatus,
     type MemoryLinkRecord,
     type MemoryLinkType,
@@ -54,6 +56,13 @@ export interface BrainEventListInput {
     untilTs?: number;
     limit?: number;
     statusIn?: MemoryEventRecord extends never ? never : MemoryStateRecord["status"][];
+}
+
+export interface BrainPromptAtomWindowInput {
+    days?: number;
+    limit?: number;
+    minScore: number;
+    userId: string;
 }
 
 export interface BrainStateMutation {
@@ -128,6 +137,13 @@ interface EqStateRow {
     label: string;
     confidence: number;
     updated_at: number;
+}
+
+export interface BrainVisibleAtom {
+    atom: MemoryAtom;
+    score: AtomScore;
+    sourceEventId: string;
+    sourceEventTs: number;
 }
 
 export class BrainStore {
@@ -241,6 +257,39 @@ export class BrainStore {
             )
             .all(...values, limit) as EventRow[];
         return rows.map(rowToEvent);
+    }
+
+    /**
+     * prompt recall 的 brain 权威窗口：从 `memory_events` 展开结构化 `content.atoms`。
+     * 不做字符匹配，只按时间窗、状态层与 JSON shape 过滤。
+     */
+    listPromptAtomsWindow(date: Date | string, input: BrainPromptAtomWindowInput): BrainVisibleAtom[] {
+        const days = Math.max(1, Math.min(31, Math.floor(input.days ?? 7)));
+        const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
+        const sinceTs = normalizeTimestamp(date) - days * 86_400_000;
+        const events = this.listEvents({
+            userId: input.userId,
+            type: MemoryEventType.Event,
+            sinceTs,
+            limit,
+            statusIn: [MemoryEventStatus.Live, MemoryEventStatus.Resumed],
+        });
+        const visible: BrainVisibleAtom[] = [];
+        for (const event of events) {
+            const atoms = readPromptAtomEntries(event);
+            for (const entry of atoms) {
+                if (entry.score.total < input.minScore) continue;
+                visible.push(entry);
+            }
+        }
+        visible.sort((a, b) => {
+            const byScore = b.score.total - a.score.total;
+            if (byScore !== 0) return byScore;
+            const byTime = b.sourceEventTs - a.sourceEventTs;
+            if (byTime !== 0) return byTime;
+            return b.atom.createdAt.localeCompare(a.atom.createdAt);
+        });
+        return visible.slice(0, limit);
     }
 
     getState(eventId: string): MemoryStateRecord | null {
@@ -780,6 +829,119 @@ function rowToEvent(row: EventRow): MemoryEventRecord {
     };
 }
 
+function readPromptAtomEntries(event: MemoryEventRecord): BrainVisibleAtom[] {
+    const content = isRecord(event.content) ? event.content : null;
+    const rawAtoms = content && Array.isArray(content.atoms) ? content.atoms : [];
+    const visible: BrainVisibleAtom[] = [];
+    for (const raw of rawAtoms) {
+        const entry = parsePromptAtomEntry(raw, event);
+        if (entry) visible.push(entry);
+    }
+    return visible;
+}
+
+function parsePromptAtomEntry(raw: unknown, event: MemoryEventRecord): BrainVisibleAtom | null {
+    if (!isRecord(raw)) return null;
+    const atom = parseMemoryAtom(raw.atom, event);
+    const score = parseAtomScore(raw.score, atom?.id ?? event.id);
+    if (!atom || !score) return null;
+    return {
+        atom,
+        score,
+        sourceEventId: event.id,
+        sourceEventTs: event.ts,
+    };
+}
+
+function parseMemoryAtom(raw: unknown, event: MemoryEventRecord): MemoryAtom | null {
+    if (!isRecord(raw)) return null;
+    const id = readString(raw.id);
+    const episodeIds = readStringArray(raw.episodeIds);
+    const userId = readString(raw.userId) ?? event.userId;
+    const channelId = readString(raw.channelId) ?? event.channelId ?? null;
+    const projectId = readString(raw.projectId);
+    const role = readString(raw.role);
+    const task = readString(raw.task);
+    const context = readString(raw.context);
+    const action = readString(raw.action);
+    const outcome = readString(raw.outcome);
+    const confidence = readNumber(raw.confidence);
+    const priorWeight = readNumber(raw.priorWeight);
+    const embedding = readNumberArray(raw.embedding);
+    const text = readString(raw.text);
+    const stage = readString(raw.stage);
+    const createdAt = readString(raw.createdAt) ?? new Date(event.ts).toISOString();
+    if (
+        !id ||
+        episodeIds.length === 0 ||
+        !userId ||
+        !channelId ||
+        !projectId ||
+        !role ||
+        !task ||
+        !context ||
+        !action ||
+        !outcome ||
+        confidence === null ||
+        priorWeight === null ||
+        !text ||
+        !stage
+    ) {
+        return null;
+    }
+    return {
+        id,
+        episodeIds,
+        userId,
+        channelId,
+        projectId,
+        role: role as MemoryAtom["role"],
+        task,
+        context,
+        problem: readString(raw.problem) ?? undefined,
+        action,
+        outcome,
+        success: readBoolean(raw.success) ?? undefined,
+        confidence,
+        priorWeight,
+        embedding,
+        text,
+        stage: stage as MemoryAtom["stage"],
+        createdAt,
+        refinedAt: readString(raw.refinedAt) ?? undefined,
+    };
+}
+
+function parseAtomScore(raw: unknown, atomId: string): AtomScore | null {
+    if (!isRecord(raw)) return null;
+    const recency = readNumber(raw.recency);
+    const access = readNumber(raw.access);
+    const successPrior = readNumber(raw.successPrior);
+    const fanout = readNumber(raw.fanout);
+    const total = readNumber(raw.total);
+    const inboxDecayApplied = readBoolean(raw.inboxDecayApplied);
+    if (
+        recency === null ||
+        access === null ||
+        successPrior === null ||
+        fanout === null ||
+        total === null ||
+        inboxDecayApplied === null
+    ) {
+        return null;
+    }
+    return {
+        atomId: readString(raw.atomId) ?? atomId,
+        recency,
+        access,
+        successPrior,
+        fanout,
+        total,
+        inboxDecayApplied,
+        explain: readString(raw.explain) ?? undefined,
+    };
+}
+
 function rowToState(row: StateRow): MemoryStateRecord {
     return {
         eventId: row.event_id,
@@ -850,4 +1012,40 @@ function parseContent(value: string): Record<string, unknown> {
         // fallthrough
     }
     return { raw: value };
+}
+
+function readString(value: unknown): string | null {
+    return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readBoolean(value: unknown): boolean | null {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") {
+        if (value === 1) return true;
+        if (value === 0) return false;
+    }
+    return null;
+}
+
+function readNumber(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+}
+
+function readNumberArray(value: unknown): number[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is number => typeof item === "number" && Number.isFinite(item));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeTimestamp(date: Date | string): number {
+    const parsed = date instanceof Date ? date.getTime() : Date.parse(date);
+    return Number.isFinite(parsed) ? parsed : Date.now();
 }

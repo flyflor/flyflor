@@ -34,14 +34,18 @@ flowchart TB
     J -- direct-with-watch --> M
     J -- blackboard --> K["BlackboardModule.startTurn"]
     K --> L["BlackboardModule.runUntilConverged"]
-    L --> M
+    L --> AskGate{"NeedsUser / hard cap?"}
+    AskGate -- 是 --> Ask["runtime 合成 AgentAsk<br/>reason=blackboard-stalemate"]
+    AskGate -- 否 --> M
     M --> N["buildMcpToolCatalog<br/>TTL 30s 缓存"]
     N --> O["model.generate 首轮"]
     O --> P{"含 flyflor_mcp_calls？"}
     P -- 是 --> Q["执行工具 + 结果回灌"]
     P -- 否 --> R["流式输出最终回复"]
     Q --> R
-    R --> S["GatewayReply 返回调用方"]
+    R --> Parse["剥离 memory_actions / ghost_decisions / identity / ask"]
+    Parse --> S["GatewayReply 返回调用方"]
+    Ask --> S
     S --> T["rememberTurn / recordSkillUsage<br/>aware-of-await"]
     T --> U["scheduleReflection 后台 fire-and-forget"]
     T --> V["classifyAndApplyFeedback 后台"]
@@ -70,6 +74,7 @@ interface FastRouteSnapshot {
     nextRouteHint?: BlackboardMode;
     consecutiveWatchTurns?: number;
     consecutiveBlackboardFailures?: number;
+    consecutiveToolFailureTurns?: number;
 }
 ```
 
@@ -112,13 +117,15 @@ stateDiagram-v2
 ```mermaid
 flowchart LR
     Q[GatewayMessage] --> Markdown[MarkdownMemoryStore.snapshot<br/>SELF/SOUL/USER/MEMORY]
-    Q --> Journal[JournalStore<br/>按天 episode / atom]
+    Q --> Brain[BrainStore<br/>brain event prompt recall + ask/ghost/identity/codename/eq state]
     Q --> Hippo[Hippocampus context<br/>Redis ring + spreading activation]
     Q --> Project[ProjectMemoryStore.snapshot<br/>项目局部记忆]
     Q --> Crystal[CrystalMemoryService.recall<br/>SurrealDB Gem]
     Q --> SqliteSearch[SQLiteMemoryStore.search]
     Markdown --> Render[renderMemoryPrompt]
-    Journal --> Render
+    Brain --> Render
+    Brain --> Nudge[continuation / ghost-hint / identity / eq / dormant resume]
+    Nudge --> Render
     Hippo --> Render
     Project --> Render
     Crystal --> Render
@@ -134,6 +141,9 @@ flowchart LR
 - `skillContext`：`renderSkillContextPrompt`
 - `mcpContext`：`renderMcpContextPrompt`（含可用工具 catalog）
 - `blackboardContext`：`renderBlackboardAdvisoryPrompt`
+- `askSchemaInstructions`：Ask / Ghost / Identity 结构化块协议
+
+Ghost Context 不是普通 retrieved memory：active / resumed ghost 通过 `[ghost-hint]` 单独进入 prompt，模型用结构化 `resume` / `fork` / `fresh` 决策让分支继续、降权或回到主线。
 
 ## MCP 工具循环
 
@@ -174,26 +184,31 @@ sequenceDiagram
 
 ## 记忆写回（`rememberTurn`）
 
-并行三条管道，全部完成后才结束 `rememberTurn`：
+同步落库 + 异步管道，全部必要写入完成后才结束 `rememberTurn`：
 
 ```mermaid
 flowchart LR
     Action[memory_actions JSON] --> Cand[candidates 构造]
+    Action --> Codename[codename 写 brain.codenames<br/>inbox projectId 命名空间化]
+    Action --> Eq[eq 写 memory_eq_state]
     Action --> Trig[detectExplicitIntent → ProjectTrigger]
     Action --> Imp[importanceFromActions]
+    Ask[AgentAsk?] --> BrainAsk[ask / ask-answer-pair 事件]
     Imp --> RedisEp[writeEpisodeToRedis<br/>fire-and-forget]
     Trig --> ScaffoldP[ProjectScaffolder<br/>fire-and-forget]
     Cand --> SqliteCand[sqlite.addCandidate<br/>autoPromote 时直接 markdown 写入]
     Trig --> ProjectMem[ProjectMemoryStore.recordTurn<br/>显式意图通道]
-    Action -.-> JournalRec[JournalStore.writeTurn<br/>按天事实层]
+    Action --> BrainEvent[BrainStore.appendEvent<br/>brain.db memory_events + content.atoms]
+    Action -.-> JournalRec[JournalStore.writeTurn<br/>legacy best-effort audit]
     Cand -.-> CrystalAsync[CrystalMemoryService.recordTurn<br/>fire-and-forget]
 ```
 
 随后 fire-and-forget 启动：
 
 - `scheduleReflection` — LLM 抽取 symbols/bucket/coordinates → `MemoryModule.applyReflection` → Crystal 候选
-- `classifyAndApplyFeedback` — A/B/C/D 分类（结构已就位，写入路径未完整打通）
+- `classifyAndApplyFeedback` — A/B/C/D 分类，由模型 JSON 驱动；Preference / GlobalStrategy / 部分 correction/confirmation 已接入记忆事件
 - 收敛黑板 → `recordDebateEpisode` 高权重 episode
+- MCP 工具失败 → `ghost-context`，process restart → warmup 恢复 ghost
 
 ## 性能事件
 
@@ -242,11 +257,11 @@ interface GatewayReply {
 
 ## 风险点 / 已知缺口
 
-- `handleMessage` 文件约 1300 行，热路径逻辑高度集中，未来需要按「路由 / 装配 / 工具循环 / 记忆写回」拆出独立 service。
-- direct-with-watch 升级器只计数，**未引入「工具反复失败 / context pressure」语义信号**。
-- `classifyAndApplyFeedback` 分类已落实，**写入 episode / preference / 宪法 / skill 的四条通道未全部打通**。
-- `MemoryModule` 由 `RuntimeModule` 内部构造，外部无法注入替代实现。
-- `fastRouteSnapshots` 是进程内 Map，**重启即丢失**；多 gateway 节点不共享。
+- `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一文件，后续可继续抽 service。
+- `brain.db` 已成为 prompt recall / turn event write 权威；后续改动必须避免把 legacy journal 重新接回 prompt path。
+- direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
+- `fastRouteSnapshots` 有 Redis store 路径，Redis 不可用时退回进程内 Map；多 gateway 节点仍依赖 Redis 可用性。
+- 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；后续重点是围绕这些证据做诊断展示。
 
 ## 相关测试
 

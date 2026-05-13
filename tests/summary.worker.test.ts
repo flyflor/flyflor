@@ -98,6 +98,7 @@ describe("SummaryWorker.runOnceForUser", () => {
             const w = new SummaryWorker(store, { trigger: "rolling", rollingWindowDays: 7, minIntervalHours: 24, now: () => now });
             const r = w.runOnceForUser("u1");
             expect(r.written).toBe(2);
+            expect(r.writtenIds).toEqual(["summary-u1-day-2026-05-13", "summary-u1-week-rolling-2026-05-13-7d"]);
             expect(r.skippedEmpty).toBe(0);
             const day = store.getSummary("summary-u1-day-2026-05-13");
             expect(day).not.toBeNull();
@@ -130,6 +131,7 @@ describe("SummaryWorker.runOnceForUser", () => {
             expect(first.written).toBe(2);
             const second = w.runOnceForUser("u1", now + 60_000);
             expect(second.written).toBe(0);
+            expect(second.writtenIds).toEqual([]);
             expect(second.skippedByInterval).toBe(2);
         } finally {
             store.close();

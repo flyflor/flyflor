@@ -22,6 +22,10 @@ flowchart TB
     Root --> status
     Root --> channels
     Root --> doctor
+    Root --> codename
+    Root --> inbox
+    Root --> ghost
+    Root --> identity
     Root --> config
     Root --> memory
     Root --> blackboard
@@ -30,7 +34,6 @@ flowchart TB
     Root --> mcp
     Root --> plugins
     Root --> dream
-    Root --> inbox
     Root --> update
     Root --> version
     gateway --> gw_run["run"]
@@ -42,6 +45,17 @@ flowchart TB
     config --> cfg_show["show"]
     config --> cfg_path["path"]
     config --> cfg_env["env-path"]
+    codename --> cn_list["list"]
+    codename --> cn_use["use"]
+    codename --> cn_promote["promote"]
+    inbox --> ib_list["list"]
+    ghost --> gh_list["list"]
+    ghost --> gh_show["show"]
+    ghost --> gh_resume["resume"]
+    ghost --> gh_drop["drop"]
+    ghost --> gh_pin["pin"]
+    identity --> id_list["list"]
+    identity --> id_revert["revert"]
     memory --> mem_status["status"]
     memory --> mem_setup["setup"]
     memory --> mem_reset["reset"]
@@ -71,36 +85,39 @@ flowchart TB
     plugins --> pl_enable["enable"]
     plugins --> pl_disable["disable"]
     plugins --> pl_remove["remove"]
+    plugins --> pl_run["run"]
     dream --> dr_status["status"]
     dream --> dr_run["run"]
-    inbox --> ib_list["list"]
 ```
 
 ## 实现状态
 
 | 命令 | 状态 | 备注 |
 | --- | --- | --- |
-| `flyflor chat` | ✅ 基本可用 | `--image` / `--toolsets` / `--max-turns` / `--tui` 标记 blocked |
-| `flyflor tui` | ⚠️ stub | 未与 GatewayModule 完整接线 |
+| `flyflor chat` | ✅ | 支持 `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui` |
+| `flyflor tui` | ✅ | 与 `chat --tui` 进入同一 TUI bootstrap |
 | `flyflor gateway run` | ✅ | 前台运行 |
-| `flyflor gateway start/stop/restart` | ❌ 未实现 | 需后台服务管理 |
+| `flyflor gateway start/stop/restart` | ✅ | 通过 gateway daemon helpers 管理后台服务 |
 | `flyflor gateway status [--deep]` | ✅ | 调用 `buildGatewayStatusSnapshot` |
 | `flyflor gateway setup` | ✅ | 交互式配置 |
 | `flyflor model` | ✅ | 列 / 设默认 provider+model |
 | `flyflor setup` | ✅ | 初始化向导 |
 | `flyflor status` | ✅ | `renderStatus` |
 | `flyflor channels` | ✅ | 列 channel adapter 状态 |
-| `flyflor doctor` | ⚠️ 部分 | `--fix` 未实现 |
+| `flyflor doctor` | ✅ | `--fix` 会创建缺失目录 |
+| `flyflor codename list/use/promote` | ✅ | brain.db codename 锚点与 project 升格 |
+| `flyflor inbox list` | ✅ | 按 codename 分桶可视化 inbox atom |
+| `flyflor ghost list/show/resume/drop/pin` | ✅ | Ghost Context 管理 |
+| `flyflor identity list/revert` | ✅ | identity 自写条目审计与回滚 |
 | `flyflor config show/path/env-path` | ✅ | |
 | `flyflor memory status/setup/reset` | ✅ | reset 支持白名单文件清空 |
 | `flyflor blackboard list/show` | ✅ | 直接读 SQLite |
 | `flyflor skills *` | ✅ | install / reset / usage / validate |
-| `flyflor tools enable/disable` | ❌ 未实现 | 仅 spec 占位 |
+| `flyflor tools enable/disable` | ✅ | 按 MCP server 精确启停工具名 |
 | `flyflor mcp *` | ✅ | list/show/validate/add/enable/disable/remove/tools/call |
-| `flyflor plugins *` | ⚠️ 部分 | list/show/validate/add/enable/disable/remove 多为骨架 |
+| `flyflor plugins *` | ✅ | list/show/validate/add/enable/disable/remove/run |
 | `flyflor dream status/run` | ✅ | 手动触发 Dream pass |
-| `flyflor inbox list` | ✅ | 按 codename 分桶可视化 inbox 容器（`--user/--days/--limit/--json`），含 `(uncoded)` 桶；已升格 project 自动排除 |
-| `flyflor update` | ⚠️ 部分 | 仅自检 / 提示，未做下载升级 |
+| `flyflor update` | ✅ | `--check` 版本比对；`-y` 调用 install.sh 更新 |
 | `flyflor version` | ✅ | |
 
 ## 退出码约定
@@ -111,10 +128,8 @@ flowchart TB
 
 ## 风险点 / 已知缺口
 
-- `tools` / `plugins` / `update` 子命令未完全落地。
-- 后台服务管理（gateway start/stop/restart、daemon mode）整体缺失。
-- `doctor --fix` 没有自动修复路径。
-- `chat --tui` 与 `flyflor tui` 重复职责未对齐。
+- 命令面增长较快，CLI 文档仍靠手动维护，容易再次漂移。
+- daemon mode 已有 helper，但跨平台 launchd/systemd 安装体验仍需真实环境验证。
 - CLI 命令的契约**没有自动 spec 文档生成**，靠手动维护本表。
 
 ## 相关测试

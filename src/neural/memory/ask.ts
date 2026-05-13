@@ -11,7 +11,7 @@
  * `parsed.ask !== undefined` → 切换到 ask 渲染分支。
  */
 
-import type { AgentAsk, AgentAskChoice, AskReason } from "../../protocol/contracts/index.ts";
+import type { AgentAsk, AgentAskChoice, AgentAskQuestion, AskReason } from "../../protocol/contracts/index.ts";
 import { AskReason as AskReasonEnum } from "../../protocol/contracts/index.ts";
 
 const ASK_BLOCK = /<flyflor_agent_ask>\s*([\s\S]*?)\s*<\/flyflor_agent_ask>/g;
@@ -60,6 +60,7 @@ function readAsk(rawJson: string): AgentAsk | undefined {
     const prompt = typeof obj.prompt === "string" ? obj.prompt.trim() : "";
     if (!prompt) return undefined;
     const choices = normalizeChoices(obj.choices);
+    const questions = normalizeQuestions(obj.questions);
     const freeform = typeof obj.freeform === "boolean" ? obj.freeform : true;
     const relatedIds = normalizeStringArray(obj.relatedIds);
     const rationale = typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 500) : undefined;
@@ -70,6 +71,7 @@ function readAsk(rawJson: string): AgentAsk | undefined {
         freeform,
     };
     if (choices && choices.length > 0) ask.choices = choices;
+    if (questions && questions.length > 0) ask.questions = questions;
     if (relatedIds && relatedIds.length > 0) ask.relatedIds = relatedIds;
     if (rationale) ask.rationale = rationale;
     if (ghostHint) ask.ghostHint = ghostHint;
@@ -110,6 +112,30 @@ function normalizeChoices(value: unknown): AgentAskChoice[] | undefined {
         }
         out.push(choice);
         if (out.length >= 12) break;
+    }
+    return out;
+}
+
+function normalizeQuestions(value: unknown): AgentAskQuestion[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const out: AgentAskQuestion[] = [];
+    for (const raw of value) {
+        if (!raw || typeof raw !== "object") continue;
+        const obj = raw as Record<string, unknown>;
+        const prompt = typeof obj.prompt === "string" ? obj.prompt.trim().slice(0, 500) : "";
+        if (!prompt) continue;
+        const question: AgentAskQuestion = { prompt };
+        if (typeof obj.id === "string" && obj.id.trim()) question.id = obj.id.trim().slice(0, 100);
+        const choices = normalizeChoices(obj.choices);
+        if (choices && choices.length > 0) question.choices = choices;
+        if (typeof obj.freeform === "boolean") question.freeform = obj.freeform;
+        const relatedIds = normalizeStringArray(obj.relatedIds);
+        if (relatedIds && relatedIds.length > 0) question.relatedIds = relatedIds;
+        if (typeof obj.rationale === "string" && obj.rationale.trim()) {
+            question.rationale = obj.rationale.trim().slice(0, 500);
+        }
+        out.push(question);
+        if (out.length >= 8) break;
     }
     return out;
 }

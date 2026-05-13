@@ -76,6 +76,12 @@ export class SurrealGraphStore {
         await this.query(`UPSERT gem:${ident(input.id)} CONTENT ${literal({ ...input, id: undefined })};`);
     }
 
+    async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
+        if (!this.config.enabled) return;
+        await this.initialize();
+        await this.query(`UPSERT summary_embedding:${ident(input.id)} CONTENT ${literal({ ...input, id: undefined })};`);
+    }
+
     /**
      * 衰减扫描：把 memory_node / gem 的 importance 按时间衰减写回。
      * decayFn 由调用方注入（来自 decay.ts 的纯函数），本方法只负责拉数据 / 写回。
@@ -587,6 +593,18 @@ const SCHEMA_DDL = [
     "DEFINE INDEX IF NOT EXISTS gem_user ON gem COLUMNS userId;",
     "DEFINE INDEX IF NOT EXISTS gem_symbols ON gem COLUMNS symbols;",
 
+    // ─── summary embedding 节点（LF-R13） ───
+    "DEFINE TABLE IF NOT EXISTS summary_embedding SCHEMALESS;",
+    "DEFINE FIELD IF NOT EXISTS userId ON summary_embedding TYPE string;",
+    "DEFINE FIELD IF NOT EXISTS summaryId ON summary_embedding TYPE string;",
+    "DEFINE FIELD IF NOT EXISTS timeRange ON summary_embedding TYPE string;",
+    "DEFINE FIELD IF NOT EXISTS bucketKey ON summary_embedding TYPE string;",
+    "DEFINE FIELD IF NOT EXISTS embedding ON summary_embedding TYPE array<float>;",
+    "DEFINE FIELD IF NOT EXISTS createdAt ON summary_embedding TYPE number;",
+    "DEFINE INDEX IF NOT EXISTS summary_embedding_user ON summary_embedding COLUMNS userId;",
+    "DEFINE INDEX IF NOT EXISTS summary_embedding_summary ON summary_embedding COLUMNS summaryId;",
+    `DEFINE INDEX IF NOT EXISTS summary_embedding_vector ON summary_embedding FIELDS embedding MTREE DIMENSION ${EMBEDDING_DIMENSIONS} DIST COSINE;`,
+
     // ─── 关系表（DEFINE TABLE TYPE RELATION 让 RELATE 严格化） ───
     "DEFINE TABLE IF NOT EXISTS next_context TYPE RELATION FROM episode TO episode SCHEMALESS;",
     "DEFINE TABLE IF NOT EXISTS similar_ep TYPE RELATION FROM episode TO episode SCHEMALESS;",
@@ -649,6 +667,16 @@ export interface GemNodeInput {
     support: number;
     protected: boolean;
     updatedAt: number;
+}
+
+export interface SummaryEmbeddingInput {
+    id: string;
+    userId: string;
+    summaryId: string;
+    timeRange: string;
+    bucketKey: string;
+    embedding: number[];
+    createdAt: number;
 }
 
 export interface GraphRecallInput {

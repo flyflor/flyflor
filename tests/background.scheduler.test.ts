@@ -250,4 +250,25 @@ describe("BackgroundScheduler", () => {
         expect(r).toEqual({ users: 0, offers: 0 });
         expect(scheduler.snapshot().projectClusterEnabled).toBe(false);
     });
+
+    test("runBrainArchiveOnce invokes global sweeper without requiring users", async () => {
+        const consolidation = new FakeConsolidation();
+        const graph = new FakeGraph();
+        const events = new FakeEvents();
+        let called = 0;
+        const scheduler = new BackgroundScheduler(consolidation as never, graph as never, events, {
+            consolidationIntervalMs: 1_000,
+            decayIntervalMs: 1_000,
+            brainArchiveIntervalMs: 1_000,
+            brainArchiveSweeper: async () => {
+                called += 1;
+                return { eventsCopied: 3, months: 1, vacuumed: true };
+            },
+        });
+        SCHEDULERS.push(scheduler);
+        const r = await scheduler.runBrainArchiveOnce();
+        expect(called).toBe(1);
+        expect(r).toEqual({ eventsCopied: 3, months: 1, skippedBusy: false, vacuumed: true });
+        expect(scheduler.snapshot().brainArchiveEnabled).toBe(true);
+    });
 });

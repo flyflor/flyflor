@@ -57,6 +57,9 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(tuning.inbox.ttlDays).toBe(7);
             expect(tuning.dormant.idleMinutes).toBe(10);
             expect(tuning.dormant._keepGatewayListening).toBe(true);
+            expect(tuning.brainDb.archiveAfterMonths).toBe(3);
+            expect(tuning.brainDb.archiveIntervalHours).toBe(24);
+            expect(tuning.brainDb.vacuumIntervalDays).toBe(14);
             expect(tuning.atomScore.weights.recency).toBeCloseTo(0.35);
             expect(tuning.atomScore.weights.access).toBeCloseTo(0.15);
             expect(tuning.atomScore.weights.successPrior).toBeCloseTo(0.35);
@@ -75,6 +78,7 @@ describe("LF-P0 memory tuning defaults", () => {
                     memory: {
                         tuning: {
                             identity: { appendDailyLimitPerFile: 7 },
+                            brainDb: { archiveAfterMonths: 6 },
                             inbox: { ttlDays: 14 },
                         },
                     },
@@ -85,6 +89,9 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(config.memory.tuning.identity.appendOverflowQueue).toBe("dream");
             expect(config.memory.tuning.inbox.ttlDays).toBe(14);
             expect(config.memory.tuning.inbox.decayMultiplier).toBeCloseTo(2.0);
+            expect(config.memory.tuning.brainDb.archiveAfterMonths).toBe(6);
+            expect(config.memory.tuning.brainDb.archiveIntervalHours).toBe(24);
+            expect(config.memory.tuning.brainDb.vacuumIntervalDays).toBe(14);
             // unrelated blocks keep defaults
             expect(config.memory.tuning.summary.trigger).toBe(SummaryTrigger.Rolling);
             expect(config.memory.tuning.dormant.idleMinutes).toBe(10);

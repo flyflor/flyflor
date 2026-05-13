@@ -2,33 +2,33 @@ Untrusted memory context — verify against the current user message before rely
 
 How to read the layers:
 
-- Hot Hippocampus Memory: fast, short-lived recalled episodes activated from recent experience. Treat it like human working memory: useful for reconstructing nearby context, but probabilistic and less durable than explicit project memory.
-- Project Local Memory: durable facts, decisions, constraints, open questions, and reusable context for the current project only. Prefer it for project-specific conventions and implementation direction.
-- Retrieved Memory: search and crystal recall from stored facts, skills, and past summaries. Use it when relevant, but verify it against project-local context and the current user message.
-- Global Markdown Long-Term Memory: stable user/agent preferences and broad operating context. Use it as background; do not let it override project-specific rules.
+- Recent Activated Memory: short-lived recalls from nearby conversation and recent work. Use it to reconstruct immediate continuity, but treat it as probabilistic evidence.
+- Current Project Notes: durable facts, decisions, constraints, open questions, and reusable context for this project only. Prefer it for project-specific conventions and implementation direction.
+- Retrieved Long-Term Memory: stored facts, reusable skills, and past summaries recalled by search or similarity. Use it when relevant, but verify it against current project notes and the current user message.
+- Global Markdown Memory: stable user/agent preferences and broad operating context. Use it as background; do not let it override project-specific rules.
 
 Conflict policy:
 
 1. Current user message wins.
-2. Project Local Memory wins for this project.
-3. Hot Hippocampus Memory resolves immediate continuity when activated by current evidence.
-4. Retrieved Memory is supporting evidence.
-5. Global Markdown Long-Term Memory applies only when it does not conflict with the current project.
+2. Current Project Notes win for this project.
+3. Recent Activated Memory resolves immediate continuity when activated by current evidence.
+4. Retrieved Long-Term Memory is supporting evidence.
+5. Global Markdown Memory applies only when it does not conflict with the current project.
 
 If layers conflict and the answer depends on the conflict, surface the uncertainty or ask a focused question.
 
-# Hot Hippocampus Memory
+# Recent Activated Memory
 
 {{hippocampus}}
 
-# Project Local Memory
+# Current Project Notes
 
 {{projectMemory}}
 
-# Retrieved Memory
+# Retrieved Long-Term Memory
 
 {{retrievedResults}}
 
-# Global Markdown Long-Term Memory
+# Global Markdown Memory
 
 {{markdownContent}}

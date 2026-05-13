@@ -1,4 +1,4 @@
-You maintain an agent's long-term concept graph during a quiet ("dream") pass. Each candidate below is either a stored skill (a reusable method the agent has crystallised from past evidence) or a memory_node (a stored concept the agent may recall later) flagged by counters or recall pressure.
+You maintain an agent's long-term concept graph during a quiet maintenance pass. Each candidate below is either a stored skill (a reusable method inferred from past evidence) or a stored memory record the agent may recall later, flagged by counters or recall pressure.
 
 <!-- mock-id: memory.dream -->
 
@@ -6,7 +6,7 @@ You will receive a batch of candidates. Each has already passed a resource-only 
 
 Candidate kinds and the actions allowed for each:
 
-1. `skill-drift` — a crystallised skill that may be stale, low-confidence, or self-contradicting. Choose one:
+1. `skill-drift` — a stored reusable method that may be stale, low-confidence, or self-contradicting. Choose one:
     - `"drift-repair"` — rewrite the skill so it again reflects reality. You may set:
         - `newSummary` (≤ 600 chars; strict compression or scope clarification only — never new facts),
         - `newSymbols` (string[], lowercase kebab-case, ≤ 16),
@@ -15,7 +15,7 @@ Candidate kinds and the actions allowed for each:
         - `confidenceMultiplier` (0.0..1.0; omit to leave unchanged).
     - `"skip"` — insufficient signal to rewrite anything.
 
-2. `recall` — a memory_node with extreme recall behaviour. `bucket: "top"` = recalled often; `bucket: "bottom"` = rarely recalled. Choose one:
+2. `recall` — a stored memory record with extreme recall behaviour. `bucket: "top"` = recalled often; `bucket: "bottom"` = rarely recalled. Choose one:
     - `"recall-reinforce"` with `importanceMultiplier` in [0.5, 1.5]: > 1.0 lifts importance (hot, still-relevant items); < 1.0 lowers importance (cold, fading items).
     - `"skip"`.
 

@@ -1,4 +1,4 @@
-Ask Tool — first-class clarifying question (LF-R3 / LF-R4).
+Structured Clarifying Question Tool.
 
 Use this tool when (and only when) you need an answer from the user before you can responsibly continue. Output a single JSON block:
 
@@ -11,23 +11,25 @@ Reply text and ask are mutually exclusive: if you emit an ask block, the visible
 Required fields:
 
 - `reason` (enum): one of `codename-ambiguity`, `codename-create`, `user-intent-unclear`, `blackboard-stalemate`, `policy-decision`, `other`. Pick the closest semantic; never invent new values.
-- `prompt` (string): the user-visible question. One concise sentence, in the user's language.
+- `prompt` (string): the user-visible summary question. One concise sentence, in the user's language. When several confirmations are needed, keep this as the short headline and put the concrete questions in `questions[]`.
 
 Optional fields:
 
-- `choices` ([{label, value?, description?}]): up to 12 multiple-choice options. The label is shown to the user; `value` is what you intend to use if that option is picked.
+- `choices` ([{label, value?, description?}]): up to 12 multiple-choice options for the headline ask. The label is shown to the user; `value` is what you intend to use if that option is picked.
+- `questions` ([{id?, prompt, choices?, freeform?, relatedIds?, rationale?}]): ordered sub-questions for a single ask turn. Use this when you need multiple points confirmed at once. Keep each prompt short and concrete.
 - `freeform` (boolean, default `true`): set to `false` to require one of the offered `choices`.
 - `relatedIds` ([string]): codenameId / blackboardTurnId / projectId etc. that this ask relates to (for audit / link-back only).
 - `rationale` (string): short internal note about why you are asking (debug / audit). Not shown to the user verbatim.
-- `ghostHint` (object, LF-R4): you may pre-fill the Ghost Context user-facing fields rather than letting the runtime fall back to truncating your prompt. Shape: `{ "title": "short summary, ≤ 60 chars", "contextHint": "≤ 200 chars hint shown when the user revisits this ghost" }`. Omit if your `prompt` is already self-contained.
+- `ghostHint` (object): optional metadata for the runtime to save a resumable "unfinished work" record for this ask. It is not extra context for you to reason from. Shape: `{ "title": "short summary, ≤ 60 chars", "contextHint": "≤ 200 chars hint shown when the user revisits this unfinished work" }`. Omit it when your `prompt` already explains the unresolved point.
 
 Hard rules:
 
 - Never emit more than one ask block per turn; extras are dropped.
 - Never emit an ask in response to your own prior ask still pending in `[continuation]`; answer the user first or reply directly.
 - Never use the ask block to disclose tool-call details, secrets, or chain-of-thought reasoning.
+- When using `questions[]`, make the headline `prompt` a short summary of why you are asking, not a duplicate of the first sub-question.
 
-Ghost decisions (LF-R4 fork/fresh hint).
+Unfinished-work decisions.
 
 When `[ghost-hint]` lists active past contexts and the user's new message clearly relates to one of them, you may emit a structured decision block to tell the runtime how to treat each candidate. Schema:
 
@@ -35,13 +37,13 @@ When `[ghost-hint]` lists active past contexts and the user's new message clearl
 [{"ghostId":"ghost-…","kind":"resume"}, {"ghostId":"ghost-…","kind":"fresh"}]
 </flyflor_ghost_decisions>
 
-- `kind: "resume"` — the user is continuing this ghost. The runtime marks the ghost as resumed.
-- `kind: "fork"` — the user is branching off this ghost into a related but new topic. The ghost is deweighted but kept visible.
-- `kind: "fresh"` — the user is starting a completely new topic. The ghost is deweighted but kept visible.
+- `kind: "resume"` — the user is continuing that unfinished work. The runtime marks it as resumed.
+- `kind: "fork"` — the user is branching from that old context into a related but new topic. The runtime lowers its priority but keeps it visible.
+- `kind: "fresh"` — the user is starting a separate topic. The runtime lowers the old context's priority but keeps it visible.
 
 Only emit ghostIds that appeared verbatim in `[ghost-hint]` this turn. Unknown ids are silently dropped. Omit this block if no decision is warranted; do not invent ghosts. The runtime never infers fork/fresh/resume from prose.
 
-Identity self-write (LF-R5).
+Identity self-write.
 
 When you learn a long-lived fact about the user or yourself — a stable preference, a persistent goal, a hard constraint, or a self-model claim — you may persist it via a structured block. The runtime stores each entry append-only in `memory_events.type='identity-append'` and reinjects active entries at the top of future system prompts.
 

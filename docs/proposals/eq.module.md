@@ -6,7 +6,7 @@
 > - EQ-02：决策侧消费 — `EqDirective` 封闭枚举（calm-down / match-energy / steady）+ `deriveEqDirective(state)` 纯函数阈值映射 + `[eq-context]` 块尾结构化 directive 行（`confidence < 0.3` 抑制）。
 > - EQ-03：runtime 实际消费 — `runtime.module` 在 ask 强制段调用 `peekEqState + deriveEqDirective`；CalmDown 时把 effective ask cap 临时压为 1（防止对怒/悲用户继续堆问题）；新增 `RuntimeEqDirectiveApplied` 事件审计 + `MemoryAskChainCapped.reason=eq-calm-down`；`tests/eq.runtime.cap.test.ts` 双路径覆盖。
 >
-> `docs/boundaries.md` 零字符匹配红线全程坚守：`EqLabel` / `EqDirective` 都是封闭枚举，`runtime` 严禁基于消息文本派生；`tests/eq.decision.test.ts` 内含红线审计扫描 src/，对 5 个 label + 2 个非平凡 directive 值禁止 `includes/indexOf/match/test/split` 关键词派生路径。下一步候选见 `TODO.md`「下一阶段候选」表（P2 inbox project 容器收口、blocked 的 LF-R10/R11）。
+> `docs/boundaries.md` 零字符匹配红线全程坚守：`EqLabel` / `EqDirective` 都是封闭枚举，`runtime` 严禁基于消息文本派生；`tests/eq.decision.test.ts` 内含红线审计扫描 src/，对 5 个 label + 2 个非平凡 directive 值禁止 `includes/indexOf/match/test/split` 关键词派生路径。下一步候选见 `TODO.md`「下一阶段候选」表（`LF-R11 Behavior Snapshot`、`LF-R12 优先级冲突表`，以及 blocked 的 LF-R13/R14）。
 
 ## 目标
 
@@ -26,39 +26,43 @@
 
 ```mermaid
 flowchart LR
-    Turn["完成 turn"] --> Classify["eq.classify.md<br/>模型返回 {valence, arousal, dominance, label}"]
-    Classify --> Store["EQStore（待设计）"]
-    Store --> Decay["valence 指数衰减（资源指标）"]
-    Store --> Prompt["renderEqContextPrompt"]
+    Turn["完成 turn"] --> Action["MemoryAction.eq<br/>模型同轮结构化字段"]
+    Action --> Brain["BrainStore.memory_eq_state<br/>latest-only UPSERT"]
+    Brain --> Decay["decayEq<br/>时间半衰期资源指标"]
+    Decay --> Prompt["[eq-context] + directive"]
     Prompt --> Sys["runtime.system.md"]
+    Decay --> Runtime["runtime ask cap<br/>CalmDown => cap=1"]
 ```
 
-## 数据结构（草稿）
+## 数据结构（已落地）
 
 ```ts
 interface EqState {
+    userId: string;
     valence: number;        // -1..1
     arousal: number;        // 0..1
     dominance: number;      // 0..1
     label: "neutral" | "joy" | "anger" | "sadness" | "fear" | "surprise";
     confidence: number;
-    updatedAt: string;
+    updatedAt: number;      // ms
 }
+
+type EqDirective = "calm-down" | "match-energy" | "steady";
 ```
 
 ## 与边界的关系
 
 - valence 衰减允许走纯资源指标（时间窗 / 计数器）。
 - 标签 / 强度变化必须由模型结构化字段产生，禁止文本匹配。
-- 数据落点：建议 SQLite 单表 `eq_state`，与 `projectConstraintId` / `turnId` 审计键关联。
+- 数据落点：`brain.db` 的 `memory_eq_state` 表，按 `userId` latest-only UPSERT；事件用 `MemoryEqStateUpdated` / `RuntimeEqDirectiveApplied` 审计。
 
-## 落地清单（如批准）
+## 落地清单
 
-1. 加 `eq.classify.md` 模板，约束模型返回 schema。
-2. `src/agent/eq/` 模块（继承 `Service` decorator）。
-3. `MemoryModule.buildPrompt` 注入 `eqContext`。
-4. 决策点（skill 选择 / 回复策略）只读模型结构化字段，不读文本。
-5. 测试覆盖：分类 schema、衰减、与 USER.md 偏好不冲突。
+1. `MemoryAction.eq` 字段已加入 `templates/prompts/memory.action.md` / `memory.action.zh.cn.md`。
+2. `BrainStore.upsertEqState/getEqState` 已写入 `memory_eq_state`。
+3. `MemoryModule.buildPrompt` 已注入 `[eq-context]`，并通过 `deriveEqDirective` 追加 directive。
+4. `RuntimeModule` 已在 Ask cap 强制段消费 `EqDirective.CalmDown`。
+5. 测试覆盖：`tests/eq.contracts.test.ts`、`tests/eq.wire.test.ts`、`tests/eq.prompt.test.ts`、`tests/eq.decision.test.ts`、`tests/eq.runtime.cap.test.ts`。
 
 ## 风险点
 

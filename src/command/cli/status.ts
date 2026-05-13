@@ -310,10 +310,19 @@ function describeMemoryTuning(config: FlyflorConfig): { status: string; detail: 
     if (tuning.dormant.idleMinutes !== defaults.dormant.idleMinutes) {
         changed.push(`dormant.idleMinutes=${tuning.dormant.idleMinutes}`);
     }
+    if (tuning.brainDb.archiveAfterMonths !== defaults.brainDb.archiveAfterMonths) {
+        changed.push(`brainDb.archiveAfterMonths=${tuning.brainDb.archiveAfterMonths}`);
+    }
+    if (tuning.brainDb.archiveIntervalHours !== defaults.brainDb.archiveIntervalHours) {
+        changed.push(`brainDb.archiveIntervalHours=${tuning.brainDb.archiveIntervalHours}`);
+    }
+    if (tuning.brainDb.vacuumIntervalDays !== defaults.brainDb.vacuumIntervalDays) {
+        changed.push(`brainDb.vacuumIntervalDays=${tuning.brainDb.vacuumIntervalDays}`);
+    }
     if (changed.length === 0) {
         return {
             status: "ok",
-            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d)`,
+            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d, brain archive ${tuning.brainDb.archiveAfterMonths}mo/${tuning.brainDb.archiveIntervalHours}h)`,
         };
     }
     return { status: "tuned", detail: changed.join("; ") };

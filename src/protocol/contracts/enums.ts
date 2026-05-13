@@ -262,6 +262,7 @@ export const FpcLayer = ArchitectureLayer;
 export type FpcLayer = ArchitectureLayer;
 
 export const MemoryLayer = {
+    Brain: "brain",
     Crystal: "crystal",
     Journal: "journal",
     Markdown: "markdown",

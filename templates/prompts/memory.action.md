@@ -1,6 +1,6 @@
 Durable Markdown memory tool.
 
-**Default behaviour: omit the block.** The agent's episode log already captures the conversation automatically. Only append the block when a stable Markdown-layer update is clearly warranted (durable user identity, persistent project convention, explicit user correction, or an explicit user request to crystallise the work as a project or record it as a project event).
+**Default behaviour: omit the block.** The agent's episode log already captures the conversation automatically. Only append the block when a stable Markdown-layer update is clearly warranted (durable user identity, persistent project convention, explicit user correction, or an explicit user request to save the current work as a project or record it as a project event).
 
 Never emit the block for: transient task progress, raw transcripts, secrets, tool outputs, obedience claims, routine chit-chat, or "the user just said X this turn" content. When in doubt, omit it.
 
@@ -34,7 +34,7 @@ Optional refinement (omit unless you have explicit evidence):
 
 - affect (valence -1..1, arousal 0..1, dominance 0..1) — semantic emotion judgement.
 - signals.actionability / certainty / recurrence / sourceDiversity / validationCount — finer-grained durability evidence.
-- signals.projectIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to crystallise the current work as a project (this creates `.flyflor/` scaffolding).
+- signals.projectIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to save the current work as a project (this creates `.flyflor/` scaffolding).
 - signals.eventIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to record this turn as a project event.
 - signals.skillPromotionIntent — 0..1; set ≥ 0.7 ONLY when a `[skill-offer]` nudge is active AND the user explicitly agrees to save the recurring workflow as a Skill (this writes `~/.flyflor/skills/<name>/SKILL.md`).
 - codename — explicit working-context anchor named by the user (e.g. "let's call it fly", "let's continue the fly thread"). Shape: `{ "name": "fly", "workingDir": "/abs/path", "description": "one-liner" }`. `name` is required and must not contain whitespace; `workingDir` and `description` are optional. **Never guess a codename from the conversation** — only fill this when the user explicitly names a working directory or theme.

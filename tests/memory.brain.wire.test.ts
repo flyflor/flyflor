@@ -63,13 +63,14 @@ describe("MemoryModule + BrainStore (LF-R1 dual-write)", () => {
         }
     });
 
-    test("brain failure does not break journal write path", async () => {
+    test("brain closed is reported while legacy journal still writes", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
-        // Intentionally skip warmup so brainOpened stays false → dual-write is a no-op.
+        // Intentionally skip warmup so brainOpened stays false.
         await memory.rememberTurn(gatewayMessage("hi"), gatewayReply("hello", "msg-2"), runtimeContext());
         expect(sink.types).toContain(RuntimeEventType.MemoryJournalWritten);
+        expect(sink.types).toContain(RuntimeEventType.MemoryBrainWriteFailed);
         expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainEventWritten);
         memory.dispose();
     });
@@ -141,7 +142,7 @@ describe("MemoryModule + BrainStore (LF-R1 dual-write)", () => {
         }
     });
 
-    test("buildPrompt shadow-reads brain.db and emits MemoryBrainShadowRecall", async () => {
+    test("buildPrompt reads brain.db prompt atoms and emits MemoryBrainPromptRecall", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
@@ -149,23 +150,38 @@ describe("MemoryModule + BrainStore (LF-R1 dual-write)", () => {
         try {
             const ctx = runtimeContext();
             await memory.rememberTurn(
-                gatewayMessage("shadow recall fixture turn"),
-                gatewayReply("ok", "msg-shadow-1"),
+                gatewayMessage("brain recall fixture turn"),
+                gatewayReply("ok", "msg-brain-1"),
                 ctx,
+                [
+                    {
+                        action: "add",
+                        target: "memory",
+                        content: "brain prompt recall fixture atom",
+                        confidence: 0.95,
+                        signals: {
+                            durability: 1,
+                            recurrence: 1,
+                            sourceDiversity: 1,
+                            validationCount: 1,
+                        },
+                    },
+                ],
             );
             sink.events.length = 0;
-            await memory.buildPrompt(gatewayMessage("what did we say earlier?"), runtimeContext());
-            const shadow = sink.events.find((e) => e.type === RuntimeEventType.MemoryBrainShadowRecall) as
+            const prompt = await memory.buildPrompt(gatewayMessage("what did we say earlier?"), runtimeContext());
+            const recall = sink.events.find((e) => e.type === RuntimeEventType.MemoryBrainPromptRecall) as
                 | { type: string; payload?: { hits?: number; userId?: string } }
                 | undefined;
             const failed = sink.events.filter((e) => e.type === RuntimeEventType.MemoryBrainWriteFailed);
-            if (!shadow) {
+            if (!recall) {
                 throw new Error(
-                    `shadow event missing. events: ${sink.events.map((e) => e.type).join(",")}; failed: ${JSON.stringify(failed)}`,
+                    `brain prompt recall event missing. events: ${sink.events.map((e) => e.type).join(",")}; failed: ${JSON.stringify(failed)}`,
                 );
             }
-            expect(shadow.payload?.userId).toBe("user-1");
-            expect(shadow.payload?.hits ?? 0).toBeGreaterThanOrEqual(1);
+            expect(recall.payload?.userId).toBe("user-1");
+            expect(recall.payload?.hits ?? 0).toBeGreaterThanOrEqual(1);
+            expect(prompt).toContain("brain prompt recall fixture atom");
         } finally {
             memory.dispose();
         }

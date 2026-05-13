@@ -10,14 +10,14 @@
     "memory": "/root/.flyflor/workspace/.flyflor/memory/project.memory.md",
     "recalls": "/root/.flyflor/workspace/.flyflor/memory/recalls.jsonl"
   },
-  "createdAt": "2026-05-11T17:29:31.978Z",
-  "updatedAt": "2026-05-12T15:33:02.750Z",
+  "createdAt": "2026-05-13T17:28:51.645Z",
+  "updatedAt": "2026-05-13T17:28:51.660Z",
   "counts": {
     "candidates": 0,
     "episodes": 0,
-    "events": 18,
-    "recalls": 18,
+    "events": 1,
+    "recalls": 1,
     "writes": 0
   },
-  "lastRecalledAt": "2026-05-12T15:33:02.750Z"
+  "lastRecalledAt": "2026-05-13T17:28:51.660Z"
 }

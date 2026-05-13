@@ -47,7 +47,7 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
     const app = await getFlyFlor({ argv, mode: parsed });
 
     if (parsed === RuntimeMode.Chat && process.stdin.isTTY) {
-        const { startChatEntry } = await import("./tui/native/chat.entry.ts");
+        const { startChatEntry } = await import("./tui/chat/index.ts");
         const { FlyFlorTokens } = await import("../app.ts");
         const runtime = app.resolve(FlyFlorTokens.Runtime);
         const blackboard = app.resolve(FlyFlorTokens.Blackboard);

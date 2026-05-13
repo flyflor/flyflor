@@ -45,7 +45,7 @@ flowchart TB
     Memory --> Markdown["Markdown 宪法层<br/>~/.flyflor/workspace/*.md"]
     Memory --> Redis["Redis 工作记忆<br/>episode ring + hot concepts"]
     Memory --> SQLite["SQLite 索引<br/>candidates/offers/search"]
-    Memory --> Surreal["SurrealDB 长期图<br/>episode/memory_node/gem"]
+    Memory --> Surreal["SurrealDB 长期图<br/>episode/memory_node/gem/summary_embedding"]
     Memory --> Crystal["CrystalMemoryService"]
 
     Blackboard --> BlackboardSqlite["SQLite 黑板存储<br/>turn/step/decision/lease"]
@@ -169,6 +169,7 @@ interface FlyFlorDependencies {
     container: DependencyContainer;
     events: EventSink;
     gateway: GatewayModule;
+    memory: MemoryModule;
     mode: RuntimeMode;       // chat | cli | gateway | tui
     model: ModelClient;
     runtime: RuntimeModule;
@@ -176,11 +177,11 @@ interface FlyFlorDependencies {
 }
 ```
 
-`MemoryModule` 当前未进入 `FlyFlorDependencies`：它由 `RuntimeModule` 构造函数内部 `new`。这是已知的边界缺口，见根目录 [TODO.md](../TODO.md)（条目 E-02）。
+`MemoryModule` 已在 composition root 中显式构造并注入 `RuntimeModule`，测试可通过 `FlyFlor.create({ memory })` 替换实现。
 
 ## 风险点 / 已知缺口
 
-- `MemoryModule` 未在 composition root 注入，无法被外部替换或裸 mock。
-- `RuntimeModule` 文件 1300+ 行，热路径职责堆叠（路由、prompt、工具 loop、记忆写回、后台调度）。
+- `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
 - `Sandbox` 仅在 `RuntimeModule` 内决策 mcp-tool；shell-hook / plugin 执行器有独立路径，但未统一从 DI 容器拿 `SandboxPolicy`。
-- 三层智能模型在代码上是「弱依赖」：Crystal 不见 Neural、Neural 反向 import Crystal 用于反思（`crystal/memory/index.ts` ←→ `neural/memory/index.ts`），导入方向需要复审。
+- 三层智能模型在代码上仍有回流依赖：`neural/memory` 会 import prompt/project/runtime dream worker，`crystal/index.ts` re-export runtime reflection helper；导入方向需要继续收敛。
+- `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot 与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

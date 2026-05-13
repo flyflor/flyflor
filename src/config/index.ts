@@ -323,9 +323,19 @@ export interface MemoryTuningConfig {
     reconsolidation: ReconsolidationTuningConfig;
     inbox: InboxTuningConfig;
     dormant: DormantTuningConfig;
+    brainDb: BrainDbTuningConfig;
     atomScore: AtomScoreTuningConfig;
     /** LF-R3/R4 ghost & ask 调参；详见 GhostTuningConfig 注释。 */
     ghost: GhostTuningConfig;
+}
+
+export interface BrainDbTuningConfig {
+    /** 月级冷归档 cutoff：只移动早于 now - N months 且 state=archived 的事件。 */
+    archiveAfterMonths: number;
+    /** 自动归档检查节拍。0 表示关闭 runtime 自动归档，admin 脚本仍可手动执行。 */
+    archiveIntervalHours: number;
+    /** VACUUM 最小间隔。0 表示自动归档不做 VACUUM。 */
+    vacuumIntervalDays: number;
 }
 
 export interface GhostTuningConfig {
@@ -746,6 +756,11 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
         dormant: {
             idleMinutes: 10,
             _keepGatewayListening: true,
+        },
+        brainDb: {
+            archiveAfterMonths: 3,
+            archiveIntervalHours: 24,
+            vacuumIntervalDays: 14,
         },
         atomScore: {
             visibilityThreshold: 0.65,

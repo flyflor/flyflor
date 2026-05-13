@@ -37,6 +37,35 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(r.ask?.rationale).toBe("two cn rows match user's text");
     });
 
+    test("normalizes nested questions with choices", () => {
+        const ask = {
+            reason: AskReason.UserIntentUnclear,
+            prompt: "I need two confirmations.",
+            questions: [
+                {
+                    id: "scope",
+                    prompt: "Which workspace?",
+                    choices: [
+                        { label: "main", value: "main" },
+                        { label: "sandbox", value: "sandbox", description: "throwaway area" },
+                    ],
+                },
+                {
+                    prompt: "Should I proceed now?",
+                    freeform: false,
+                    relatedIds: ["project-1"],
+                    rationale: "needs timing confirmation",
+                },
+            ],
+        };
+        const r = parseAgentAsk(wrap(JSON.stringify(ask)));
+        expect(r.ask?.questions?.length).toBe(2);
+        expect(r.ask?.questions?.[0]?.id).toBe("scope");
+        expect(r.ask?.questions?.[0]?.choices?.length).toBe(2);
+        expect(r.ask?.questions?.[1]?.freeform).toBe(false);
+        expect(r.ask?.questions?.[1]?.relatedIds).toEqual(["project-1"]);
+    });
+
     test("rejects unknown reason / missing prompt", () => {
         const r1 = parseAgentAsk(wrap(JSON.stringify({ reason: "made-up", prompt: "?" })));
         const r2 = parseAgentAsk(wrap(JSON.stringify({ reason: AskReason.Other })));

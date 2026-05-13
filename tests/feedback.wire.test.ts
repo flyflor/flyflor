@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -151,6 +152,50 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         });
         const cls = sink.events.find((e) => e.type === RuntimeEventType.MemoryFeedbackClassified);
         expect(cls).toBeDefined();
+    });
+
+    test("behavior correction records reuse the latest behavior snapshot anchor", async () => {
+        const config = await testConfig();
+        const sink = new CapturingSink();
+        const memory = new MemoryModule(config, sink, new StubModel("{}"));
+        await memory.warmup();
+        try {
+            const snapshotId = "behavior-r1";
+            await memory.recordBehaviorSnapshot({
+                snapshotId,
+                context: { requestId: "r1", now: new Date().toISOString() } as RuntimeContext,
+                memoryActions: 0,
+                message: buildMessage("assistant turn"),
+                reply: {
+                    messageId: "reply-1",
+                    route: buildMessage("assistant turn").route,
+                    text: "assistant turn",
+                },
+                visibleText: "assistant turn",
+            });
+            await memory.applyFeedback({
+                userId: "u1",
+                category: FeedbackCategory.Preference,
+                extractedFact: "prefers short answers",
+                previousAssistantText: "assistant turn",
+                currentUserText: "please keep it short",
+                recordedAt: new Date().toISOString(),
+                requestId: "r2",
+            });
+            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            try {
+                const correction = db
+                    .query("SELECT content FROM memory_events WHERE type = 'behavior-correction' ORDER BY ts DESC LIMIT 1")
+                    .get() as { content: string } | null;
+                expect(correction).not.toBeNull();
+                const parsed = JSON.parse(correction!.content) as { snapshotId: string };
+                expect(parsed.snapshotId).toBe(snapshotId);
+            } finally {
+                db.close();
+            }
+        } finally {
+            memory.dispose();
+        }
     });
 });
 

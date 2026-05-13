@@ -1,4 +1,4 @@
-You classify one candidate episode for an agent's memory system. The "hippocampus" framing here only labels the storage stage (working memory vs. long-term store); your only operational job is to pick exactly one of the three actions below.
+You classify one candidate episode for an agent's memory system. Your only operational job is to pick exactly one of the three actions below.
 
 Decide one action for the given candidate episode:
 

@@ -82,7 +82,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `app.ts`          | 薄入口，启动 FlyFlor 主类                                      |
 | `src/app.ts`      | FlyFlor composition root，显式 DI 容器                        |
 | `src/command`     | CLI、TUI、命令注册、终端渲染                                   |
-| `src/agent`       | runtime、gateway、blackboard、session、sandbox、worker、MCP    |
+| `src/agent`       | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin |
 | `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
 | `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
 | `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
@@ -102,27 +102,28 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 1. 渠道、消息、用户身份归一为 `GatewayMessage`
 2. 路由判断：fastRoute 启发式（~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
-3. 上下文装配（热路径）：宪法层 Markdown + Redis 最近交流 ring + SurrealDB 概念激活（memory_node + Gem ANN）
-4. LLM 主循环：流式生成，TTFB 目标 < 350ms
-5. 异步收尾：episode 写 Redis、ring buffer 更新、Markdown 显式动作处理（不阻塞 stream）
-6. 后台 worker：consolidation（10 min）、decay（24h）、dream（空闲触发）
+3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + Redis 海马体激活 + project/codename 局部记忆 + SurrealDB Gem 召回
+4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append；TTFB 目标 < 350ms
+5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
+6. 后台 worker：consolidation、summary、decay、dormant、dream、feedback classify、reflection
 
 ## 记忆系统
 
 | 层               | 后端      | 职责                                                             |
 | ---------------- | --------- | ---------------------------------------------------------------- |
-| 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑，慢变）                         |
+| 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
+| 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；prompt recall/write authority 已切到 brain events |
 | 工作记忆         | Redis     | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer            |
-| 长期记忆图       | SurrealDB | episode → memory_node → Gem，RELATE 边 + MTREE ANN              |
-| 审计日志         | SQLite    | 黑板状态 + 回放调试                                              |
+| 长期记忆图       | SurrealDB | episode → memory_node → Gem，summary_embedding，RELATE 边 + MTREE ANN |
+| 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
 
-**SurrealDB 主表：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）
+**SurrealDB 主表：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`
 
 **图边：** `next_context`、`similar_ep`、`consolidated_into`、`similar_concept`、`proven_as`、`proven_by`
 
 ### Gem（晶体智力固化产物）升格流程
 
-候选三来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升 (`promoted-memory`)、session history（evidence weight=0，不结晶）。
+候选来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升、黑板收敛 / MCP 增强证据、skill promotion 与 brain 事件状态。
 
 **双质量门：**
 - 门 1：episode cluster sourceKind weight gate
@@ -173,11 +174,11 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 - `blackboard`：动态 worker 多轮讨论
 
 黑板特性：
-- 同 session 同时只能一个 turn（lease 机制）
+- 同 project constraint 同时只能一个 turn（lease 机制）
 - 目标 3 轮收敛，5 轮硬上限
 - livelock 检测（两轮无新事实、重复争议、重复失败工具）
 - 流式输出 worker 讨论步骤
-- 无法收敛时返回 `flyflor-decision-form` 让用户决策
+- 无法收敛时由 runtime 合成 Ask（`reason=blackboard-stalemate`），交还用户选择；旧 `flyflor-decision-form` 已退役
 
 ## CLI 参考
 
@@ -194,9 +195,14 @@ flyflor config show          # 查看配置
 flyflor config path          # 配置文件路径
 flyflor memory status        # 记忆状态
 flyflor blackboard list      # 黑板 turn 列表
+flyflor codename list        # 代号锚点列表
+flyflor inbox list           # inbox/codename 桶中的 atom
+flyflor ghost list --user me # 未完事项 / 可恢复上下文
+flyflor identity list --user me # identity 自写条目
 flyflor gem list             # 晶体列表（`skills` 子命令已更名为 `gem`）
 flyflor mcp list             # MCP 服务列表
 flyflor plugins list         # 插件列表
+flyflor plugins run <name>   # 沙箱审批后运行插件
 flyflor dream status         # Dream 队列状态
 flyflor dream run            # 手动触发 dream pass
 flyflor model                # 模型配置向导
@@ -246,7 +252,7 @@ flyflor gateway status       # 网关状态
 | [docs/mcp.tools.md](docs/mcp.tools.md) | MCP 工具循环 |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection → Gem |
 | [docs/skill.system.md](docs/skill.system.md) | Skill 加载与升格 |
-| [docs/project.session.md](docs/project.session.md) | Session 与 Project |
+| [docs/proposals/life.form.md](docs/proposals/life.form.md) | 无 session / brain.db / Codename / Ask / Ghost / Dream 主线 |
 | [docs/prompt.templates.md](docs/prompt.templates.md) | 提示词模板 |
 | [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
 | [TODO.md](TODO.md) | 风险点 / 后续计划 |

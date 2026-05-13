@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { MemoryModule } from "../src/agent/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import { SurrealGraphStore, type SummaryEmbeddingInput } from "../src/neural/memory/surreal.graph.ts";
 import {
     Channel,
     ChatType,
@@ -48,6 +50,38 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         expect(res).toBeNull();
         memory.dispose();
     });
+
+    test("runSummaryOnce best-effort writes summary embeddings and backfills embeddingId", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const graph = new FakeSummaryGraph(config);
+        const memory = new MemoryModule(config, sink, undefined, { surreal: graph });
+        await memory.warmup();
+        try {
+            await memory.rememberTurn(
+                gatewayMessage("summary embedding fixture"),
+                gatewayReply("收到", "msg-embed"),
+                runtimeContext(),
+            );
+            const res = memory.runSummaryOnce("user-1");
+            expect(res?.written).toBeGreaterThan(0);
+            await waitFor(() => graph.inputs.length > 0);
+            expect(graph.inputs[0]?.summaryId).toMatch(/^summary-user-1-/);
+            expect(sink.types).toContain(RuntimeEventType.MemorySummaryEmbeddingWritten);
+            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            try {
+                const rows = db
+                    .query("SELECT embedding_id FROM memory_summary WHERE embedding_id IS NOT NULL")
+                    .all() as Array<{ embedding_id: string }>;
+                expect(rows.length).toBeGreaterThan(0);
+                expect(rows[0]?.embedding_id).toMatch(/^summary-embedding-summary-user-1-/);
+            } finally {
+                db.close();
+            }
+        } finally {
+            memory.dispose();
+        }
+    });
 });
 
 class RecordingSink implements EventSink {
@@ -58,6 +92,27 @@ class RecordingSink implements EventSink {
     publish(event: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(event);
     }
+}
+
+class FakeSummaryGraph extends SurrealGraphStore {
+    readonly inputs: SummaryEmbeddingInput[] = [];
+    constructor(config: FlyflorConfig) {
+        super({ ...config.memory.crystal.surreal, enabled: true });
+    }
+    override async initialize(): Promise<void> {
+        return;
+    }
+    override async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
+        this.inputs.push(input);
+    }
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+    for (let i = 0; i < 20; i += 1) {
+        if (predicate()) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error("condition not met");
 }
 
 async function tempRoot(): Promise<string> {

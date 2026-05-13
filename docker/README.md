@@ -22,6 +22,26 @@
 - `./dist/flyflor-linux` → 容器内 `/mounted/flyflor-linux:ro`（已编译的 Linux 二进制）。
 - 具名卷 `flyflor_data` → `/root/.local/share/flyflor`（会话/记忆持久数据）。
 
+`docker/workspace/.flyflor` 只保留目录占位和 `project.memory.md` 模板；运行时生成的 `events.jsonl`、`recalls.jsonl`、`manifest.json`、skill usage summary 等本地状态已被 `.gitignore` 排除，避免 dev compose 启动后污染仓库。
+
+## Dev 配置要点
+
+`docker/config/config.jsonc` 是本地 ignored 配置，容器会按 `~/.flyflor/config.jsonc` 读取它。Compose 会启动 Redis 和 SurrealDB，但 Flyflor 是否使用它们仍以 config 为准：
+
+```jsonc
+{
+  "memory": {
+    "redis": { "enabled": true, "internalUrl": "redis://redis:6379" },
+    "crystal": {
+      "enabled": true,
+      "surreal": { "enabled": true, "internalUrl": "http://surrealdb:8000" }
+    }
+  }
+}
+```
+
+如果 Redis 未启用，启动日志会出现 `memory.background.scheduler.skipped`，consolidation / decay / dream / project-cluster 会降级。正常状态可用 `docker exec flyflor-dev flyflor doctor` 确认，`Background scheduler` 应为 `ok`。
+
 ## 常用命令
 
 ```bash

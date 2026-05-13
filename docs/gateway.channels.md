@@ -123,10 +123,10 @@ interface GatewayReply {
 ## 风险点 / 已知缺口
 
 - 大量 channel 适配器只是 `HttpPlatformAdapter` 占位，**未实现签名校验 / 富媒体 / 群组识别**。
-- TUI `flyflor chat --tui` 通道未与 GatewayModule 完整对接。
-- `gateway start/stop/restart` 子命令（后台服务模式）未实现。
+- TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；后续仍需补真实 gateway 事件订阅。
+- `gateway start/stop/restart` 已有 daemon helper；跨平台服务安装和长期运行仍需真实环境验证。
 - `MessageDispatcher` 仅是单进程；多副本部署时缺消息去重与幂等键。
-- 入站消息 `attachments` 类型已存在，runtime 未消费（chat --image blocked）。
+- 入站消息 `attachments` 已由 runtime 渲染为 `[attachments]` 摘要；下一步是渠道富媒体下载 / 缓存 / 安全扫描。
 
 ## 相关测试
 
