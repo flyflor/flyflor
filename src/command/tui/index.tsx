@@ -1,15 +1,31 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Box, render, Text, useApp, useInput } from "ink";
-import pc from "picocolors";
-import type { FlyflorConfig } from "../../config/index.ts";
-import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
-import type { BlackboardMessage, BlackboardStep, BlackboardTurn } from "../../agent/blackboard/index.ts";
-import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
-import { BlackboardTurnStatus, BlackboardWorkerOutcome, ChannelLinkState } from "../../protocol/contracts/index.ts";
-import { renderFlyflorBanner, resolveGatewaySnapshot } from "../cli/status.ts";
-import { renderMarkdownToPlainText } from "../render/index.ts";
+/**
+ * Flyflor Dashboard TUI — 基于 @opentui/core + @opentui/solid
+ *
+ * 简化版：显示 Overview / Channels / Blackboard 三个标签页。
+ */
 
-type TuiView = "overview" | "channels" | "blackboard";
+import { createCliRenderer, Box, Text, ScrollBox, RGBA, TextAttributes, type CliRenderer } from "@opentui/core";
+import { render } from "@opentui/solid";
+import { createSignal, createMemo, onCleanup } from "solid-js";
+import type { FlyFlor } from "../../app.ts";
+import { FlyFlorTokens } from "../../app.ts";
+import { resolveGatewaySnapshot } from "../../command/cli/status.ts";
+import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
+import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
+import type { FlyflorConfig } from "../../config/index.ts";
+
+const THEME = {
+    bg: RGBA.fromInts(15, 15, 15),
+    fg: RGBA.fromInts(220, 220, 220),
+    fgMuted: RGBA.fromInts(120, 120, 120),
+    cyan: RGBA.fromInts(100, 200, 255),
+    green: RGBA.fromInts(100, 255, 150),
+    yellow: RGBA.fromInts(255, 200, 100),
+    red: RGBA.fromInts(255, 80, 80),
+    border: RGBA.fromInts(60, 60, 60),
+};
+
+type ViewTab = "overview" | "channels" | "blackboard";
 
 interface TuiSnapshot {
     blackboardTurns: BlackboardTurn[];
@@ -19,478 +35,174 @@ interface TuiSnapshot {
 }
 
 export async function startTui(app: FlyFlor): Promise<void> {
-    const loadSnapshot = () => readSnapshot(app);
-    const initialSnapshot = await loadSnapshot();
-    const instance = render(<FlyflorTui initialSnapshot={initialSnapshot} loadSnapshot={loadSnapshot} />);
-    await instance.waitUntilExit();
-}
-
-interface FlyflorTuiProps {
-    initialSnapshot: TuiSnapshot;
-    loadSnapshot: () => Promise<TuiSnapshot>;
-}
-
-function FlyflorTui({ initialSnapshot, loadSnapshot }: FlyflorTuiProps): React.ReactElement {
-    const app = useApp();
-    const [view, setView] = useState<TuiView>("overview");
-    const [snapshot, setSnapshot] = useState<TuiSnapshot>(initialSnapshot);
-    const [error, setError] = useState<string | undefined>();
-
-    useInput((input, key) => {
-        if (key.escape || input === "q") {
-            app.exit();
-        }
-        if (key.leftArrow || input === "h") {
-            setView((current) => cycleView(current, -1));
-        }
-        if (key.rightArrow || input === "l") {
-            setView((current) => cycleView(current, 1));
-        }
-        if (key.upArrow || input === "k") {
-            setView((current) => cycleView(current, -1));
-        }
-        if (key.downArrow || input === "j") {
-            setView((current) => cycleView(current, 1));
-        }
-        if (input === "r") {
-            void refreshSnapshot(loadSnapshot, setSnapshot, setError);
-        }
+    const renderer = await createCliRenderer({
+        targetFps: 30,
+        exitOnCtrlC: false,
+        useMouse: true,
+        externalOutputMode: "passthrough",
+        consoleOptions: {
+            onCopySelection: (text) => {
+                try {
+                    Bun.write(Bun.stdout, text);
+                } catch {}
+            },
+        },
     });
 
-    useEffect(() => {
-        let active = true;
-        const refresh = async () => {
-            try {
-                const next = await loadSnapshot();
-                if (!active) {
-                    return;
-                }
-                setSnapshot(next);
-                setError(undefined);
-            } catch (cause) {
-                if (!active) {
-                    return;
-                }
-                setError(errorMessage(cause));
-            }
-        };
-
-        void refresh();
-        const timer = setInterval(refresh, 1000);
-        return () => {
-            active = false;
-            clearInterval(timer);
-        };
-    }, [loadSnapshot]);
-
-    const tabs = useMemo(
-        () =>
-            [
-                { id: "overview" as const, label: "Overview" },
-                { id: "channels" as const, label: "Channels" },
-                { id: "blackboard" as const, label: "Blackboard" },
-            ] satisfies Array<{ id: TuiView; label: string }>,
-        [],
-    );
-
-    return (
-        <Box flexDirection="column" gap={1}>
-            <Box borderStyle="round" borderColor="cyan" flexDirection="column" paddingX={1}>
-                <Text color="cyan" bold>
-                    {stripAnsi(renderFlyflorBanner())}
-                </Text>
-                <Text>
-                    {pc.green("●")} {snapshot.config.model.providerId}/{snapshot.config.model.model}{" "}
-                    {snapshot.gateway.gatewayRunning ? pc.green("gateway running") : pc.yellow("gateway stopped")}
-                    {"  "}channels {snapshot.gateway.connectedCount}/{snapshot.gateway.channels.length}
-                </Text>
-                <Text dimColor>
-                    refreshed {formatRelativeTime(snapshot.loadedAt)} • q/Esc quit • h/l or arrows switch • r refresh
-                </Text>
-                {error ? <Text color="red">{error}</Text> : null}
-            </Box>
-
-            <Box gap={1} flexGrow={1}>
-                <Box borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1} width={24}>
-                    <Text color="yellow">Views</Text>
-                    {tabs.map((tab) => (
-                        <Text key={tab.id} color={tab.id === view ? "cyan" : undefined}>
-                            {tab.id === view ? "▶ " : "  "}
-                            {tab.label}
-                        </Text>
-                    ))}
-                </Box>
-
-                <Box borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1} flexGrow={1}>
-                    {view === "overview" ? <OverviewView snapshot={snapshot} /> : null}
-                    {view === "channels" ? <ChannelsView snapshot={snapshot} /> : null}
-                    {view === "blackboard" ? <BlackboardView snapshot={snapshot} /> : null}
-                </Box>
-            </Box>
-        </Box>
-    );
-}
-
-function OverviewView({ snapshot }: { snapshot: TuiSnapshot }): React.ReactElement {
-    const latest = snapshot.blackboardTurns[0];
-    return (
-        <Box flexDirection="column" gap={1}>
-            <SectionTitle title="Runtime" />
-            <Text>Config: {snapshot.config.paths.home}/config.jsonc</Text>
-            <Text>
-                Gateway: {snapshot.gateway.host}:{snapshot.gateway.port}
-            </Text>
-            <Text>API mode: {snapshot.config.model.apiMode}</Text>
-            <Text>Sandbox: {snapshot.config.sandbox.mode}</Text>
-            <Text>
-                Memory: {snapshot.config.memory.enabled ? "enabled" : "disabled"} • Crystal{" "}
-                {snapshot.config.memory.crystal.enabled ? "enabled" : "disabled"}
-            </Text>
-
-            <SectionTitle title="Latest Blackboard" />
-            {latest ? <BlackboardCompact turn={latest} /> : <Text dimColor>No blackboard turn yet.</Text>}
-        </Box>
-    );
-}
-
-function ChannelsView({ snapshot }: { snapshot: TuiSnapshot }): React.ReactElement {
-    return (
-        <Box flexDirection="column" gap={1}>
-            <SectionTitle title="Messaging Platforms" />
-            <Text dimColor>Stable links show state, transport, recent activity, and the latest error if any.</Text>
-            <Box flexDirection="column" gap={1}>
-                {snapshot.gateway.channels.map((channel) => (
-                    <ChannelRow key={channel.name} channel={channel} />
-                ))}
-            </Box>
-        </Box>
-    );
-}
-
-function BlackboardView({ snapshot }: { snapshot: TuiSnapshot }): React.ReactElement {
-    const turn = snapshot.blackboardTurns[0];
-    return (
-        <Box flexDirection="column" gap={1}>
-            <SectionTitle title="Blackboard" />
-            {!turn ? <Text dimColor>No blackboard turn yet.</Text> : <BlackboardDetail turn={turn} />}
-        </Box>
-    );
-}
-
-function SectionTitle({ title }: { title: string }): React.ReactElement {
-    return (
-        <Text color="cyan" bold>
-            {`◆ ${title}`}
-        </Text>
-    );
-}
-
-function ChannelRow({ channel }: { channel: GatewayStatusSnapshot["channels"][number] }): React.ReactElement {
-    const state = channel.state ?? ChannelLinkState.Unknown;
-    return (
-        <Box flexDirection="column">
-            <Box justifyContent="space-between">
-                <Text color={stateColor(state)}>
-                    {stateSymbol(state)} {channel.name}
-                </Text>
-                <Text color={stateColor(state)}>{state}</Text>
-            </Box>
-            <Text dimColor>
-                {channel.transport}
-                {"  "}
-                {renderActivity(channel)}
-            </Text>
-            <Text>{channel.lastError ? pc.red(truncate(channel.lastError, 120)) : (channel.detail ?? "")}</Text>
-        </Box>
-    );
-}
-
-function BlackboardCompact({ turn }: { turn: BlackboardTurn }): React.ReactElement {
-    const latestStep = turn.steps.at(-1);
-    return (
-        <Box flexDirection="column">
-            <Text color={turnStatusColor(turn.status)}>
-                {stateSymbolForBlackboard(turn.status)} {turn.status} • {turn.steps.length} steps •{" "}
-                {turn.decisions.length} decisions
-            </Text>
-            <Text dimColor>{renderMarkdownToPlainText(turn.goal)}</Text>
-            {latestStep ? (
-                <Text>
-                    latest: round {latestStep.round} / {latestStep.workerRole} / {formatStepOutcome(latestStep)}
-                </Text>
-            ) : null}
-        </Box>
-    );
-}
-
-function BlackboardDetail({ turn }: { turn: BlackboardTurn }): React.ReactElement {
-    return (
-        <Box flexDirection="column" gap={1}>
-            <Text color={turnStatusColor(turn.status)}>
-                {stateSymbolForBlackboard(turn.status)} {turn.status} • {turn.steps.length} steps •{" "}
-                {turn.decisions.length} decisions
-            </Text>
-            <Text>Goal: {renderMarkdownToPlainText(turn.goal)}</Text>
-            <Text dimColor>
-                Updated: {turn.updatedAt} • Started: {turn.createdAt}
-            </Text>
-
-            <SectionTitle title="Transcript" />
-            {turn.messages
-                .filter(isReadableTranscriptMessage)
-                .slice(-8)
-                .map((message) => (
-                    <Text key={message.id}>
-                        {messageSymbol(message.role)} {messageSpeaker(turn, message)}:{" "}
-                        {renderMarkdownToPlainText(message.content)}
-                    </Text>
-                ))}
-
-            <SectionTitle title="Steps" />
-            {turn.steps.map((step) => (
-                <Box key={step.id} flexDirection="column" marginBottom={1}>
-                    <Text>
-                        {stepSymbol(step)} round {step.round} {step.workerRole} {formatStepOutcome(step)}
-                    </Text>
-                    <Text dimColor>↘ {renderMarkdownToPlainText(step.inputSummary)}</Text>
-                    <Text dimColor>↗ {renderMarkdownToPlainText(step.outputSummary)}</Text>
-                    {step.blockers.length > 0 ? <Text color="yellow">! {step.blockers.join(" · ")}</Text> : null}
-                    {step.newFacts.length > 0 ? <Text color="green">+ {step.newFacts.join(" · ")}</Text> : null}
-                </Box>
-            ))}
-
-            {turn.decisions.length > 0 ? (
-                <>
-                    <SectionTitle title="Decisions" />
-                    {turn.decisions.map((decision) => (
-                        <Box key={decision.id} flexDirection="column" marginBottom={1}>
-                            <Text>
-                                {decision.kind} • {decision.reason}
-                            </Text>
-                            <Text dimColor>{renderMarkdownToPlainText(decision.prompt)}</Text>
-                            <Text dimColor>
-                                {decision.options.map((option) => `${option.id}:${option.label}`).join(" · ")}
-                            </Text>
-                        </Box>
-                    ))}
-                </>
-            ) : null}
-        </Box>
-    );
-}
-
-function isReadableTranscriptMessage(message: BlackboardMessage): boolean {
-    return message.visibility === "public" && !message.content.includes("flyflor-decision-form");
-}
-
-function messageSpeaker(turn: BlackboardTurn, message: BlackboardMessage): string {
-    if (!message.workerRole) {
-        return message.role === "system" ? "Blackboard" : titleCase(message.role);
-    }
-    const participant = turn.workers.find((worker) => worker.role === message.workerRole);
-    return participant?.name || titleCase(message.workerRole.replace(/[-_.]+/gu, " "));
-}
-
-function titleCase(value: string): string {
-    return value
-        .split(/\s+/u)
-        .filter(Boolean)
-        .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-        .join(" ");
-}
-
-function renderActivity(channel: GatewayStatusSnapshot["channels"][number]): string {
-    const parts: string[] = [];
-    if (channel.streaming) {
-        parts.push(pc.cyan("… thinking"));
-    }
-    if (channel.lastInboundAt) {
-        parts.push(`↘ ${formatRelativeTime(channel.lastInboundAt)}`);
-    }
-    if (channel.lastOutboundAt) {
-        parts.push(`↗ ${formatRelativeTime(channel.lastOutboundAt)}`);
-    }
-    if (channel.lastErrorAt) {
-        parts.push(pc.red(`△ ${formatRelativeTime(channel.lastErrorAt)}`));
-    }
-    return parts.length > 0 ? parts.join("  ") : "◌ idle";
-}
-
-function formatStepOutcome(step: BlackboardStep): string {
-    const outcome = step.metadata.qaOutcome;
-    if (outcome === BlackboardWorkerOutcome.Final) {
-        return pc.green("final");
-    }
-    if (outcome === BlackboardWorkerOutcome.Blocked) {
-        return pc.red("blocked");
-    }
-    if (outcome === BlackboardWorkerOutcome.Continue) {
-        return pc.yellow("continue");
-    }
-    return "unknown";
-}
-
-function stepSymbol(step: BlackboardStep): string {
-    const outcome = step.metadata.qaOutcome;
-    if (outcome === BlackboardWorkerOutcome.Final) {
-        return "●";
-    }
-    if (outcome === BlackboardWorkerOutcome.Blocked) {
-        return "△";
-    }
-    return "…";
-}
-
-function messageSymbol(role: BlackboardTurn["messages"][number]["role"]): string {
-    if (role === "system") {
-        return "◦";
-    }
-    if (role === "assistant") {
-        return "↩";
-    }
-    if (role === "critic") {
-        return "❝";
-    }
-    if (role === "worker") {
-        return "…";
-    }
-    return "↘";
-}
-
-function stateSymbolForBlackboard(status: BlackboardTurn["status"]): string {
-    if (status === BlackboardTurnStatus.Running) {
-        return "…";
-    }
-    if (status === BlackboardTurnStatus.NeedsUser) {
-        return "⚑";
-    }
-    if (status === BlackboardTurnStatus.Converged) {
-        return "●";
-    }
-    return "×";
-}
-
-function turnStatusColor(status: BlackboardTurn["status"]): string {
-    if (status === BlackboardTurnStatus.Converged) {
-        return "green";
-    }
-    if (status === BlackboardTurnStatus.NeedsUser) {
-        return "yellow";
-    }
-    if (status === BlackboardTurnStatus.Running) {
-        return "cyan";
-    }
-    return "red";
-}
-
-function stateColor(state: string): string {
-    if (state === ChannelLinkState.Connected) {
-        return "green";
-    }
-    if (
-        state === ChannelLinkState.Polling ||
-        state === ChannelLinkState.Replying ||
-        state === ChannelLinkState.Processing
-    ) {
-        return "cyan";
-    }
-    if (state === ChannelLinkState.NeedsBinding || state === ChannelLinkState.Waiting) {
-        return "yellow";
-    }
-    if (state === ChannelLinkState.Degraded || state === ChannelLinkState.NeedsSetup) {
-        return "red";
-    }
-    return "gray";
-}
-
-function stateSymbol(state: string): string {
-    if (state === ChannelLinkState.Connected) {
-        return "●";
-    }
-    if (state === ChannelLinkState.Polling) {
-        return "↻";
-    }
-    if (state === ChannelLinkState.Processing) {
-        return "…";
-    }
-    if (state === ChannelLinkState.Replying) {
-        return "↩";
-    }
-    if (state === ChannelLinkState.NeedsBinding || state === ChannelLinkState.Waiting) {
-        return "◌";
-    }
-    if (state === ChannelLinkState.Degraded) {
-        return "△";
-    }
-    return "×";
-}
-
-function cycleView(current: TuiView, delta: -1 | 1): TuiView {
-    const order: TuiView[] = ["overview", "channels", "blackboard"];
-    const index = order.indexOf(current);
-    return order[(index + delta + order.length) % order.length] ?? "overview";
-}
-
-async function refreshSnapshot(
-    loadSnapshot: () => Promise<TuiSnapshot>,
-    setSnapshot: React.Dispatch<React.SetStateAction<TuiSnapshot>>,
-    setError: React.Dispatch<React.SetStateAction<string | undefined>>,
-): Promise<void> {
-    try {
-        const next = await loadSnapshot();
-        setSnapshot(next);
-        setError(undefined);
-    } catch (cause) {
-        setError(errorMessage(cause));
-    }
-}
-
-async function readSnapshot(app: FlyFlor): Promise<TuiSnapshot> {
-    const config = app.resolve(FlyFlorTokens.Config);
-    const gateway = await resolveGatewaySnapshot(app);
-    const blackboardTurns = await app.resolve(FlyFlorTokens.Blackboard).listRecentTurns(3);
-    return {
-        blackboardTurns,
-        config,
-        gateway,
-        loadedAt: new Date().toISOString(),
+    const loadSnapshot = async (): Promise<TuiSnapshot> => {
+        const config = app.resolve(FlyFlorTokens.Config);
+        const gateway = await resolveGatewaySnapshot(app);
+        const blackboard = app.resolve(FlyFlorTokens.Blackboard);
+        const blackboardTurns = await blackboard.listRecentTurns(3);
+        return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString() };
     };
-}
 
-function formatRelativeTime(value: string): string {
-    const time = Date.parse(value);
-    if (!Number.isFinite(time)) {
-        return value;
-    }
-    const delta = Date.now() - time;
-    if (Math.abs(delta) < 1000) {
-        return "now";
-    }
-    const abs = Math.abs(delta);
-    const suffix = delta >= 0 ? "ago" : "from now";
-    if (abs < 60_000) {
-        return `${Math.round(abs / 1000)}s ${suffix}`;
-    }
-    if (abs < 3_600_000) {
-        return `${Math.round(abs / 60_000)}m ${suffix}`;
-    }
-    if (abs < 86_400_000) {
-        return `${Math.round(abs / 3_600_000)}h ${suffix}`;
-    }
-    return `${Math.round(abs / 86_400_000)}d ${suffix}`;
-}
+    const initialSnapshot = await loadSnapshot();
+    const [view, setView] = createSignal<ViewTab>("overview");
+    const [snapshot, setSnapshot] = createSignal<TuiSnapshot>(initialSnapshot);
+    const [err, setErr] = createSignal<string | null>(null);
 
-function truncate(value: string, limit: number): string {
-    if (value.length <= limit) {
-        return value;
-    }
-    return `${value.slice(0, Math.max(0, limit - 1))}…`;
-}
+    const refresh = async () => {
+        try {
+            setSnapshot(await loadSnapshot());
+            setErr(null);
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+        }
+    };
 
-function stripAnsi(value: string): string {
-    return value.replace(/\x1b\[[0-9;]*m/g, "");
-}
+    const timer = setInterval(() => void refresh(), 2000);
+    onCleanup(() => clearInterval(timer));
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    const tabs: { id: ViewTab; label: string }[] = [
+        { id: "overview", label: "Overview" },
+        { id: "channels", label: "Channels" },
+        { id: "blackboard", label: "Blackboard" },
+    ];
+
+    const cycleView = (delta: number) => {
+        const order: ViewTab[] = ["overview", "channels", "blackboard"];
+        const idx = order.indexOf(view());
+        setView(order[(idx + delta + order.length) % order.length] ?? "overview");
+    };
+
+    const header = createMemo(() => {
+        const s = snapshot();
+        return Box(
+            { flexDirection: "column", border: ["bottom"], borderColor: THEME.border, padding: 1, flexShrink: 0 },
+            Text({ content: "Flyflor Dashboard", fg: THEME.cyan, attributes: TextAttributes.BOLD }),
+            Text({
+                content: `${s.config.model.providerId}/${s.config.model.model}  ·  ${s.gateway.gatewayRunning ? "gateway running" : "gateway stopped"}  ·  channels ${s.gateway.connectedCount}/${s.gateway.channels.length}`,
+                fg: THEME.fgMuted,
+            }),
+            Text({ content: "q/Esc quit  ·  h/l arrows switch  ·  r refresh", fg: THEME.fgMuted }),
+            err() ? Text({ content: `Error: ${err()}`, fg: THEME.red }) : undefined,
+        );
+    });
+
+    const sidebar = createMemo(() => {
+        return Box(
+            { flexDirection: "column", border: ["right"], borderColor: THEME.border, padding: 1, width: 20, flexShrink: 0 },
+            Text({ content: "Views", fg: THEME.yellow, attributes: TextAttributes.BOLD }),
+            ...tabs.map((tab) =>
+                Text({
+                    content: `${tab.id === view() ? "▶ " : "  "}${tab.label}`,
+                    fg: tab.id === view() ? THEME.cyan : THEME.fg,
+                }),
+            ),
+        );
+    });
+
+    const content = createMemo(() => {
+        const s = snapshot();
+        const lines: ReturnType<typeof Text>[] = [];
+        if (view() === "overview") {
+            lines.push(Text({ content: "◆ Runtime", fg: THEME.cyan, attributes: TextAttributes.BOLD }));
+            lines.push(Text({ content: `Config: ${s.config.paths.home}/config.jsonc`, fg: THEME.fg }));
+            lines.push(Text({ content: `Gateway: ${s.gateway.host}:${s.gateway.port}`, fg: THEME.fg }));
+            lines.push(Text({ content: `API mode: ${s.config.model.apiMode}`, fg: THEME.fg }));
+            lines.push(Text({ content: `Sandbox: ${s.config.sandbox.mode}`, fg: THEME.fg }));
+            lines.push(Text({ content: `Memory: ${s.config.memory.enabled ? "enabled" : "disabled"} · Crystal ${s.config.memory.crystal.enabled ? "enabled" : "disabled"}`, fg: THEME.fg }));
+            lines.push(Text({ content: "" }));
+            lines.push(Text({ content: "◆ Latest Blackboard", fg: THEME.cyan, attributes: TextAttributes.BOLD }));
+            const turn = s.blackboardTurns[0];
+            if (turn) {
+                lines.push(Text({ content: `${turn.status} · ${turn.steps.length} steps · ${turn.decisions.length} decisions`, fg: THEME.fg }));
+                lines.push(Text({ content: turn.goal.slice(0, 200), fg: THEME.fgMuted }));
+            } else {
+                lines.push(Text({ content: "No blackboard turn yet.", fg: THEME.fgMuted }));
+            }
+        } else if (view() === "channels") {
+            lines.push(Text({ content: "◆ Channels", fg: THEME.cyan, attributes: TextAttributes.BOLD }));
+            for (const ch of s.gateway.channels) {
+                const stateColor = ch.state === "connected" ? THEME.green : ch.state === "degraded" ? THEME.red : THEME.yellow;
+                lines.push(Text({ content: `${ch.name} · ${ch.state ?? "unknown"}`, fg: stateColor }));
+                lines.push(Text({ content: `  ${ch.transport} · ${ch.detail ?? ""}`, fg: THEME.fgMuted }));
+                if (ch.lastError) {
+                    lines.push(Text({ content: `  ⚠ ${ch.lastError.slice(0, 120)}`, fg: THEME.red }));
+                }
+            }
+        } else {
+            lines.push(Text({ content: "◆ Blackboard", fg: THEME.cyan, attributes: TextAttributes.BOLD }));
+            const turn = s.blackboardTurns[0];
+            if (!turn) {
+                lines.push(Text({ content: "No blackboard turn yet.", fg: THEME.fgMuted }));
+            } else {
+                lines.push(Text({ content: `${turn.status} · ${turn.steps.length} steps · ${turn.decisions.length} decisions`, fg: THEME.fg }));
+                lines.push(Text({ content: `Goal: ${turn.goal.slice(0, 200)}`, fg: THEME.fgMuted }));
+                lines.push(Text({ content: "" }));
+                lines.push(Text({ content: "Transcript", fg: THEME.yellow, attributes: TextAttributes.BOLD }));
+                for (const msg of turn.messages.filter((m) => m.visibility === "public").slice(-8)) {
+                    const symbol = msg.role === "system" ? "◦" : msg.role === "assistant" ? "↩" : "↘";
+                    lines.push(Text({ content: `${symbol} ${msg.role}: ${msg.content.slice(0, 200)}`, fg: THEME.fg }));
+                }
+            }
+        }
+        return ScrollBox(
+            { flexGrow: 1, flexDirection: "column", padding: 1 },
+            ...lines,
+        );
+    });
+
+    void render(() => {
+        const width = renderer.width;
+        const height = renderer.height;
+
+        return Box(
+            {
+                flexDirection: "column",
+                width,
+                height,
+                backgroundColor: THEME.bg,
+            },
+            header(),
+            Box(
+                { flexDirection: "row", flexGrow: 1 },
+                sidebar(),
+                content(),
+            ),
+        );
+    }, renderer);
+
+    const keyHandler = (event: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; sequence?: string }) => {
+        const name = event.name ?? "";
+        if (name === "q" || name === "escape") {
+            renderer.destroy();
+            return;
+        }
+        if (name === "left" || name === "h") cycleView(-1);
+        if (name === "right" || name === "l") cycleView(1);
+        if (name === "r") void refresh();
+    };
+
+    renderer.keyInput.on("keypress", keyHandler);
+
+    return new Promise<void>((resolve) => {
+        renderer.once("destroy", () => {
+            renderer.keyInput.off("keypress", keyHandler);
+            clearInterval(timer);
+            renderer.destroy();
+            resolve();
+        });
+    });
 }

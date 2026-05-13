@@ -3,7 +3,7 @@
  * Reads stderr logs and verifies basic rendering works.
  */
 import { getFlyFlor } from "../src/app.ts";
-import { startCliTui } from "../src/command/tui/cli/cli.tui.tsx";
+import { startCliTui } from "../src/command/tui/cli/index.ts";
 
 async function main() {
     const app = await getFlyFlor({ argv: ["bun", "app.ts", "status"], mode: "tui" });
