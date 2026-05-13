@@ -27,7 +27,8 @@ import {
 } from "../../../protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
 import type { ChatEntryOptions } from "./index.ts";
-import type { BlackboardMeta, ChatMessage, McpTrace, Phase } from "./types.ts";
+import { readAskMeta, readBlackboardMeta, readMcpTrace, readRecord, readStringArray } from "./metadata.parse.ts";
+import type { ChatMessage, McpTrace, Phase } from "./types.ts";
 
 const PHASE_DEF: Record<
     Phase,
@@ -82,54 +83,12 @@ const THEME = {
     header: RGBA.fromInts(100, 200, 255),
 };
 
-function readRecord(value: unknown): Record<string, unknown> | null {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-        return value as Record<string, unknown>;
-    }
-    return null;
-}
-
-function readString(value: unknown): string | undefined {
-    if (typeof value === "string") return value;
-    return undefined;
-}
-
-function readStringArray(value: unknown): string[] {
-    if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
-    return [];
-}
-
-function readBlackboardMeta(meta: Record<string, unknown> | null): BlackboardMeta | null {
-    if (!meta) return null;
-    const record = readRecord(meta);
-    if (!record) return null;
-    const mode = readString(record.blackboardMode);
-    if (!mode) return null;
-    return {
-        mode,
-        elapsedMs: typeof record.blackboardElapsedMs === "number" ? record.blackboardElapsedMs : undefined,
-        messages: typeof record.blackboardMessages === "number" ? record.blackboardMessages : undefined,
-        reason: readString(record.blackboardReason) ?? undefined,
-        status: readString(record.blackboardStatus) ?? undefined,
-        turnId: readString(record.blackboardTurnId) ?? undefined,
-    };
-}
-
-function readMcpTrace(entry: unknown): McpTrace | null {
-    const record = readRecord(entry);
-    if (!record) return null;
-    return {
-        ok: record.ok === true,
-        resultText: readString(record.resultSummary) ?? readString(record.resultText) ?? "",
-        server: readString(record.server) ?? "",
-        tool: readString(record.tool) ?? "",
-    };
-}
-
 interface MsgRenderable {
     id: string;
     box: BoxRenderable;
+    content: string;
     contentText: TextRenderable;
+    extrasKey: string;
     extraBox?: BoxRenderable;
 }
 
@@ -259,16 +218,19 @@ export function createChatApp(
                 },
             });
 
-            const blackboardMeta = readBlackboardMeta((reply.metadata ?? null) as Record<string, unknown> | null);
+            const metadata = readRecord(reply.metadata) ?? null;
+            const askMeta = readAskMeta(metadata);
+            const blackboardMeta = readBlackboardMeta(metadata);
 
             setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (last && last.id === turnId && last.role === "assistant") {
                     last.content = reply.text;
                     last.status = "done";
+                    last.ask = askMeta;
                     last.blackboard = blackboardMeta;
-                    last.metadata = reply.metadata ?? null;
-                    const executions = readRecord(reply.metadata)?.mcpToolExecutions;
+                    last.metadata = metadata;
+                    const executions = metadata?.mcpToolExecutions;
                     if (Array.isArray(executions)) {
                         const newTraces = executions
                             .map((e) => readMcpTrace(e))
@@ -282,7 +244,7 @@ export function createChatApp(
                         }
                         last.mcpCalls = merged;
                     }
-                    const skills = readStringArray(readRecord(reply.metadata)?.skills);
+                    const skills = readStringArray(metadata?.skills);
                     if (skills.length > 0) {
                         last.skills = Array.from(new Set([...(last.skills ?? []), ...skills]));
                     }
@@ -480,7 +442,19 @@ export function createChatApp(
             box.add(extraBox);
         }
 
-        return { id: msg.id, box, contentText, extraBox };
+        return { id: msg.id, box, content: msg.content, contentText, extrasKey: messageExtrasKey(msg), extraBox };
+    }
+
+    function messageExtrasKey(msg: ChatMessage): string {
+        return JSON.stringify({
+            ask: msg.ask ?? null,
+            blackboard: msg.blackboard ?? null,
+            mcpCalls: msg.mcpCalls ?? [],
+            phase: msg.status === "streaming" && !msg.content ? phase() : undefined,
+            skills: msg.skills ?? [],
+            status: msg.status,
+            tick: msg.status === "streaming" && !msg.content ? frameTick() : undefined,
+        });
     }
 
     function buildExtras(msg: ChatMessage): BoxRenderable | undefined {
@@ -498,7 +472,7 @@ export function createChatApp(
 
         if (msg.mcpCalls && msg.mcpCalls.length > 0) {
             for (const call of msg.mcpCalls) {
-                const icon = call.ok ? "✓" : "✗";
+                const icon = call.ok ? "ok" : "fail";
                 const color = call.ok ? RGBA.fromInts(100, 255, 150) : THEME.error;
                 extras.push(new TextRenderable(renderer, {
                     content: `  ${icon} ${call.server}.${call.tool}`,
@@ -509,15 +483,36 @@ export function createChatApp(
 
         if (msg.skills && msg.skills.length > 0) {
             extras.push(new TextRenderable(renderer, {
-                content: `  ⚡ ${msg.skills.join(", ")}`,
+                content: `  skills: ${msg.skills.join(", ")}`,
+                fg: RGBA.fromInts(255, 200, 100),
+            }));
+        }
+
+        if (msg.ask) {
+            const ask = msg.ask;
+            const detail = [
+                ask.reason ? `reason=${ask.reason}` : undefined,
+                ask.questions ? `questions=${ask.questions}` : undefined,
+                ask.choices ? `choices=${ask.choices}` : undefined,
+                ask.snapshotId ? `snapshot=${ask.snapshotId}` : undefined,
+            ].filter(Boolean).join(" · ");
+            extras.push(new TextRenderable(renderer, {
+                content: `  ask: ${detail || "pending user clarification"}`,
                 fg: RGBA.fromInts(255, 200, 100),
             }));
         }
 
         if (msg.blackboard) {
             const bb = msg.blackboard;
+            const detail = [
+                bb.mode,
+                bb.status,
+                bb.messages !== undefined ? `${bb.messages} messages` : undefined,
+                bb.elapsedMs !== undefined ? `${bb.elapsedMs}ms` : undefined,
+                bb.turnId ? `turn=${bb.turnId}` : undefined,
+            ].filter(Boolean).join(" · ");
             extras.push(new TextRenderable(renderer, {
-                content: `  📝 blackboard: ${bb.mode}${bb.elapsedMs ? ` · ${bb.elapsedMs}ms` : ""}`,
+                content: `  blackboard: ${detail}`,
                 fg: RGBA.fromInts(180, 140, 255),
             }));
         }
@@ -529,6 +524,8 @@ export function createChatApp(
     }
 
     function updateMessageExtras(renderable: MsgRenderable, msg: ChatMessage) {
+        const nextKey = messageExtrasKey(msg);
+        if (renderable.extrasKey === nextKey) return;
         if (renderable.extraBox) {
             renderable.box.remove(renderable.extraBox.id);
             renderable.extraBox = undefined;
@@ -538,6 +535,7 @@ export function createChatApp(
             renderable.extraBox = extraBox;
             renderable.box.add(extraBox);
         }
+        renderable.extrasKey = nextKey;
     }
 
     // ── 响应式同步：Header ───────────────────────────────
@@ -577,7 +575,9 @@ export function createChatApp(
 
         // 添加新消息
         for (let i = messageRenderables.length; i < msgs.length; i++) {
-            const r = buildMessageBox(msgs[i]);
+            const msg = msgs[i];
+            if (!msg) continue;
+            const r = buildMessageBox(msg);
             messageRenderables.push(r);
             content.add(r.box);
         }
@@ -586,6 +586,7 @@ export function createChatApp(
         for (let i = 0; i < msgs.length && i < messageRenderables.length; i++) {
             const msg = msgs[i];
             const renderable = messageRenderables[i];
+            if (!msg || !renderable) continue;
             if (renderable.id !== msg.id) {
                 // ID 不匹配，重建该位置
                 content.remove(renderable.box.id);
@@ -594,7 +595,8 @@ export function createChatApp(
                 content.add(newR.box);
             } else {
                 // 更新内容文本
-                if (renderable.contentText.content !== msg.content) {
+                if (renderable.content !== msg.content) {
+                    renderable.content = msg.content;
                     renderable.contentText.content = msg.content;
                 }
                 // 更新 extras（简化：总是重建 extras box）

@@ -16,11 +16,19 @@ export interface BlackboardMeta {
     turnId?: string;
 }
 
+export interface AskMeta {
+    choices?: number;
+    questions?: number;
+    reason?: string;
+    snapshotId?: string;
+}
+
 export interface ChatMessage {
     id: string;
     role: "user" | "assistant";
     content: string;
     status: "streaming" | "done" | "error";
+    ask?: AskMeta | null;
     mcpCalls?: McpTrace[];
     skills?: string[];
     blackboard?: BlackboardMeta | null;
