@@ -191,6 +191,20 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 
 每条写入必须能反查模型 action、trigger 评分、目标文件、写入状态、召回回执和 Crystal provenance（projectId、project dir、memory path、memory layer）。
 
+## Inbox 容器与 codename 命名空间（P2）
+
+未显式触发 project 的轮次，atom 落在虚拟 inbox 容器，走 7-day 加速衰减（`isInboxProjectId` 谓词决定）：
+
+- 无 codename → `projectId = "inbox"`
+- 当前 turn 命中 codename → `projectId = "inbox:cn-<codenameId>"`（同一 codename 子桶聚集）
+- codename 升格为真实 project 后，`bindCodenameProject` 写 `project_id`；后续 atom 走 `project-<hex>` 路径，旧 inbox atom 留在原桶不追溯
+
+**召回偏变**：`recallVisibleJournalMemory` 调 `BrainStore.getMostRecentTouchedCodename(userId, sinceTs)` 取窗口内最近触达且未升格的 codename，命中其子桶的候选 atom 加 `inbox.codenameRecallBoost`（默认 0.15）。零字符匹配——只看 `codenameId` enum + projectId 字面量。
+
+**配置**：`memory.tuning.inbox.activeCodenameWindowMinutes`（默认 60）/ `inbox.codenameRecallBoost`（默认 0.15）。
+
+**可视化**：`flyflor inbox list` 按 codename 分桶展示，`(uncoded)` 桶聚合无 codename 的 inbox atom。
+
 ## 事件清单
 
 | 事件 | 触发点 |

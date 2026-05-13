@@ -1,4 +1,5 @@
 import { MarkdownMemoryFile, MemoryKind } from "../../protocol/contracts/index.ts";
+import { normalizeEqClassification, type EqClassification } from "../../protocol/contracts/eq.ts";
 import { renderMemoryActionInstructions } from "../../agent/prompts/index.ts";
 
 export interface MemoryAction {
@@ -15,6 +16,12 @@ export interface MemoryAction {
      * `@xxx` 字符串匹配（零字符匹配红线），代号只能由模型显式给出。
      */
     codename?: MemoryActionCodename;
+    /**
+     * EQ-01 slice A：模型同轮结构化输出的情绪分类（PAD 三轴 + 封闭 label 枚举）。
+     * runtime 严禁基于消息文本派生 label / valence；本字段为零字符匹配红线下
+     * 唯一合法来源。缺失或非法时丢弃，不做猜测。
+     */
+    eq?: EqClassification;
 }
 
 export interface MemoryActionCodename {
@@ -144,6 +151,7 @@ function normalizeAction(action: MemoryAction): MemoryAction {
         reason: typeof action.reason === "string" ? action.reason.replace(/\s+/g, " ").trim().slice(0, 240) : undefined,
         signals: normalizeSignals(action.signals),
         codename: normalizeCodename(action.codename),
+        eq: normalizeEqClassification(action.eq) ?? undefined,
     };
 }
 

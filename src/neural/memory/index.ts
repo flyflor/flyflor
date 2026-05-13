@@ -37,7 +37,7 @@ import { ProjectMemoryStore } from "./project.memory.ts";
 import { JournalStore, JournalWriteRejectedError, type JournalAtomWrite, type JournalVisibleAtom } from "./journal.store.ts";
 import { BrainStore } from "./brain.store.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
-import { AskReason, MemoryEventStatus, MemoryEventType, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type CodenameRecord, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type CodenameRecord, type EqClassification, type EqDirective, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
@@ -295,6 +295,20 @@ export class MemoryModule extends Memory {
         const identityBlock = this.renderIdentityBlock(message.user.id);
         if (identityBlock) nudges.unshift(identityBlock);
 
+        // LF-R8 Dormant 行为联动：若上一轮该用户被 sweep 进 Dormant，
+        // 本轮 user 输入会触发 awaken，但此时 touch() 还未发生（在 persistTurn
+        // 阶段才执行），所以 peekResumeHint 仍能返回旧 mode 的 idleMs。
+        // 仅注入资源指标 idleMinutes，让模型对长时间未互动的用户更 graceful。
+        // 零字符匹配——不读消息文本，只用 (now - lastInputAt) 资源指标。
+        const resumeBlock = this.renderDormantResumeBlock(message.user.id);
+        if (resumeBlock) nudges.unshift(resumeBlock);
+
+        // EQ-01 slice B：把当前 EQ state 渲染为 `[eq-context]` 块注入 prompt 顶部。
+        // 零字符匹配——只读 brain.memory_eq_state 结构化字段 + 资源指标 decay；
+        // 不解析消息文本，不基于文本派生 label。
+        const eqBlock = this.renderEqContextBlock(message.user.id);
+        if (eqBlock) nudges.unshift(eqBlock);
+
         const body = nudges.length > 0 ? `${nudges.join("\n\n")}\n\n${memoryBody}` : memoryBody;
 
         this.events.publish(
@@ -404,11 +418,15 @@ export class MemoryModule extends Memory {
         }
 
         const projectTrigger = detectExplicitIntent(actions);
-        const projectConstraintId = deriveProjectConstraintId(message, projectTrigger.kind);
+        const createdAt = new Date(context.now).toISOString();
+        // P2 inbox 收口：把 codename 持久化提前到 atom 写之前，使 inbox projectId
+        // 能命名空间化为 "inbox:cn-<codenameId>"。零字符匹配——只读结构化 action.codename。
+        const codenameId = this.persistCodenamesFromActions(message.user.id, actions, createdAt);
+        const projectConstraintId = deriveProjectConstraintId(message, projectTrigger.kind, codenameId);
 
         // Journal 是生命事件事实层：每轮先按天落 episode，再从同轮结构化 memory action
         // 派生 hot atom。失败不阻断回答，但必须发审计事件。
-        await this.writeTurnToJournal(message, reply, context, actions, provenance, projectConstraintId);
+        await this.writeTurnToJournal(message, reply, context, actions, provenance, projectConstraintId, codenameId);
 
         // 模型本轮如果发起新的 ask（kind='ask'），落 brain.memory_events.type='ask'。
         // chainDepth 由前序 ask 是否存在 + countAskChainDepth 决定；超过 maxChainDepth
@@ -424,6 +442,11 @@ export class MemoryModule extends Memory {
         // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
         this.scheduler?.noteUserTurn(message.user.id);
         this.dormant.touch(message.user.id);
+
+        // EQ-01 slice A：若本轮模型同轮在 memoryAction.eq 给出情绪分类，
+        // 落 brain.memory_eq_state（latest-only UPSERT）。零字符匹配——
+        // runtime 不读消息文本派生 label，只读已规范化的结构化字段。
+        this.persistEqFromActions(message.user.id, actions);
 
         // 项目脚手架触发（仅显式意图通道，幂等；cluster 通道由后台 sweep 触发，本路径不参与）。
         if (projectTrigger.kind !== ProjectTriggerKind.None) {
@@ -771,6 +794,7 @@ export class MemoryModule extends Memory {
         actions: MemoryAction[],
         provenance: MemoryEpisodeProvenance,
         projectConstraintId: string,
+        codenameId?: string,
     ): Promise<void> {
         try {
             const normalizedProvenance = normalizeEpisodeProvenance(provenance);
@@ -863,7 +887,7 @@ export class MemoryModule extends Memory {
                 projectConstraintId,
                 requestId: context.requestId,
                 atomIds: result?.atomIds ?? [],
-                codenameId: this.persistCodenamesFromActions(message.user.id, actions, createdAt),
+                codenameId,
             });
         } catch (err) {
             this.events.publish(
@@ -1000,6 +1024,48 @@ export class MemoryModule extends Memory {
     }
 
     /**
+     * EQ-01 slice A：把同轮 memoryAction.eq 落到 brain.memory_eq_state（latest-only UPSERT）。
+     * 零字符匹配——只读结构化字段，runtime 严禁基于消息文本派生 label。
+     */
+    private persistEqFromActions(userId: string, actions: MemoryAction[]): void {
+        if (!this.brainOpened) return;
+        let last: EqClassification | undefined;
+        for (const action of actions) {
+            const candidate = normalizeEqClassification(action.eq);
+            if (candidate) last = candidate;
+        }
+        if (!last) return;
+        try {
+            const updatedAt = Date.now();
+            this.brain.upsertEqState({
+                userId,
+                valence: last.valence,
+                arousal: last.arousal,
+                dominance: last.dominance,
+                label: last.label,
+                confidence: last.confidence,
+                updatedAt,
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryEqStateUpdated, {
+                    userId,
+                    label: last.label,
+                    valence: last.valence,
+                    arousal: last.arousal,
+                    confidence: last.confidence,
+                }),
+            );
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "eq.persist",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+        }
+    }
+
+    /**
      * LF-R2: codename 升格通路。useCount + age 满足阈值且尚未绑定 projectId 时，
      * 调用 ProjectScaffolder 在 workspace/projects/<projectId>/ 生成骨架，并把
      * projectId 写回 codenames 表。完全幂等；失败发事件不抛错。
@@ -1051,6 +1117,23 @@ export class MemoryModule extends Memory {
         return { askId: pending.id, chainDepth: pending.chainDepth, ask: pending.ask };
     }
 
+    /**
+     * EQ-01 slice C：决策侧（runtime / skill router）按当前 EQ state 调整语气或
+     * skill 优先级的唯一读路径。返回已 decay 的最新状态（资源指标 dt = now - updatedAt）。
+     * 零字符匹配——只读 brain 行 + 数字衰减，runtime 严禁基于消息文本派生 label。
+     * 没有 state 或 brain 未开则返回 null（决策侧应优雅降级，不要 fallback 到关键词）。
+     */
+    peekEqState(userId: string, nowMs: number = Date.now()): EqState | null {
+        if (!this.brainOpened) return null;
+        try {
+            const state = this.brain.getEqState(userId);
+            if (!state) return null;
+            return decayEq(state, nowMs);
+        } catch {
+            return null;
+        }
+    }
+
     /** brain 缺失时 best-effort 返回 null；不抛错。 */
     private findPendingAsk(userId: string): { id: string; chainDepth: number; ask: AgentAsk } | null {
         if (!this.brainOpened) return null;
@@ -1071,6 +1154,73 @@ export class MemoryModule extends Memory {
             );
             return null;
         }
+    }
+
+    /**
+     * LF-R8：若该用户上一轮被 sweep 进 Dormant，把 idle 时长以 `[runtime-resume]`
+     * 块注入 prompt 顶部。零字符匹配——只读 dormant supervisor 的资源指标。
+     */
+    private renderDormantResumeBlock(userId: string): string | undefined {
+        const hint = this.dormant.peekResumeHint(userId);
+        if (!hint) return undefined;
+        const idleMinutes = Math.max(1, Math.round(hint.idleMs / 60000));
+        const idleHours = idleMinutes / 60;
+        const bucket = idleMinutes < 60
+            ? `${idleMinutes}m`
+            : idleHours < 48
+                ? `${idleHours.toFixed(1)}h`
+                : `${(idleHours / 24).toFixed(1)}d`;
+        return [
+            "[runtime-resume]",
+            `User just returned after ${bucket} of inactivity (runtime mode: dormant → chat).`,
+            "Acknowledge briefly only if natural; do not over-apologize or restart context unless the user asks.",
+        ].join("\n");
+    }
+
+    /**
+     * EQ-01 slice B：把 brain.memory_eq_state 中的最新情绪状态渲染为 `[eq-context]` 块。
+     * - decay 在读时计算（资源指标 dt = now - updatedAt），label / dominance 不衰减；
+     * - 衰减后 |valence| < 0.05 且 arousal < 0.05 时视为已平复，跳过注入（避免噪音）；
+     * - 注入内容只包含结构化字段（label、衰减后 valence/arousal/dominance、confidence、age 分桶）；
+     * - 严守红线：runtime 不基于消息文本派生 label，下一轮由模型在 `memoryAction.eq` 显式刷新。
+     */
+    private renderEqContextBlock(userId: string): string | undefined {
+        if (!this.brainOpened) return undefined;
+        let state: EqState | null;
+        try {
+            state = this.brain.getEqState(userId);
+        } catch {
+            return undefined;
+        }
+        if (!state) return undefined;
+        const now = Date.now();
+        const decayed = decayEq(state, now);
+        if (Math.abs(decayed.valence) < 0.05 && decayed.arousal < 0.05) return undefined;
+        const ageMs = Math.max(0, now - state.updatedAt);
+        const ageMinutes = ageMs / 60_000;
+        const ageBucket = ageMinutes < 60
+            ? `${Math.max(1, Math.round(ageMinutes))}m`
+            : ageMinutes < 60 * 48
+                ? `${(ageMinutes / 60).toFixed(1)}h`
+                : `${(ageMinutes / 1440).toFixed(1)}d`;
+        const lines = [
+            "[eq-context]",
+            `Last observed user emotion (decayed by elapsed time, ${ageBucket} ago):`,
+            `- label=${decayed.label}`,
+            `- valence=${decayed.valence.toFixed(2)} (range -1..1, 0=neutral)`,
+            `- arousal=${decayed.arousal.toFixed(2)} (range 0..1)`,
+            `- dominance=${decayed.dominance.toFixed(2)} (range 0..1)`,
+            `- confidence=${decayed.confidence.toFixed(2)}`,
+            "Adapt tone to be appropriate for this baseline; never quote these numbers back to the user. Refresh the state by emitting a `memoryAction.eq` block this turn if your observation differs — never derive a label from keywords in the user's text.",
+        ];
+        // EQ-02：runtime 决策侧从结构化 EQ 状态派生方向性 directive，并附在块尾。
+        // 派生纯由 label + 数值阈值决定，零字符匹配。directive 只指方向，
+        // 模型仍然自由表达；directive 为 null（confidence 太低）时不追加。
+        const directive = deriveEqDirective(decayed);
+        if (directive) {
+            lines.push(`- directive=${directive} (${describeDirective(directive)})`);
+        }
+        return lines.join("\n");
     }
 
     /**
@@ -1818,14 +1968,35 @@ export class MemoryModule extends Memory {
         if (visible.length === 0) return [];
         const queryEmbedding =
             context?.embedding && context.embedding.length > 0 ? context.embedding : await this.embeddings.embed(message.text);
+        // P2 inbox 收口：peek 用户当前正在用的 codename，召回时给同 codename 桶 atom 加 boost。
+        // 零字符匹配——只看 codenames.last_used_at 资源指标 + projectId 字面量比较。
+        const activeInboxProjectId = this.peekActiveInboxProjectId(message.user.id, context);
+        const boost = this.config.memory.tuning.inbox.codenameRecallBoost;
         return visible
             .map((entry) => ({
                 entry,
-                rank: rankVisibleAtom(entry, queryEmbedding),
+                rank: rankVisibleAtom(entry, queryEmbedding, activeInboxProjectId, boost),
             }))
             .sort((a, b) => b.rank - a.rank)
             .slice(0, this.config.memory.retrieval.maxResults)
             .map(({ entry }) => visibleAtomToMemoryResult(entry));
+    }
+
+    /**
+     * P2：算"用户当前活跃的 codename" → 对应的 inbox 命名空间 projectId。
+     * 不可用（brain 未开/无 touch 命中）返回 null，rank 函数会跳过 boost。
+     */
+    private peekActiveInboxProjectId(userId: string, context?: RuntimeContext): string | null {
+        if (!this.brainOpened) return null;
+        try {
+            const nowMs = context?.now ? Date.parse(context.now) : Date.now();
+            const windowMs = Math.max(0, this.config.memory.tuning.inbox.activeCodenameWindowMinutes) * 60_000;
+            const sinceTs = (Number.isFinite(nowMs) ? nowMs : Date.now()) - windowMs;
+            const cn = this.brain.getMostRecentTouchedCodename(userId, sinceTs);
+            return cn ? inboxProjectIdFor(cn.id) : null;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -2378,8 +2549,10 @@ function buildScoreExplain(
     codenameUseCount: number,
 ): string | undefined {
     const parts: string[] = [];
-    if (projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID) {
-        parts.push(`inbox recency dampened by ${inboxDecayMultiplier}`);
+    if (isInboxProjectId(projectConstraintId)) {
+        const cn = extractCodenameIdFromInboxProjectId(projectConstraintId);
+        const namespace = cn ? `inbox:${cn}` : "inbox";
+        parts.push(`${namespace} recency dampened by ${inboxDecayMultiplier}`);
     }
     if (codenameBoost > 0) {
         parts.push(`codename boost +${codenameBoost.toFixed(3)} (uses=${codenameUseCount})`);
@@ -2473,6 +2646,23 @@ function clamp01(value: number): number {
     return Math.max(0, Math.min(1, value));
 }
 
+/**
+ * EQ-02：把 EqDirective 转成附在 [eq-context] 块尾的简短指引文。
+ * 文本内容是声明式的方向（不替模型决定具体话术）。
+ */
+function describeDirective(directive: EqDirective): string {
+    switch (directive) {
+        case "calm-down":
+            return "stay calm and concise; do not pile on questions; lower the cognitive load before resuming complex flows";
+        case "match-energy":
+            return "briefly match the user's positive energy, then return to your normal tone";
+        case "steady":
+            return "user appears settled; keep the current baseline tone";
+        default:
+            return "";
+    }
+}
+
 function clampSigned(value: number): number {
     if (!Number.isFinite(value)) {
         return 0;
@@ -2535,6 +2725,37 @@ function importanceFromActions(actions: MemoryAction[]): number {
 }
 
 const INBOX_PROJECT_CONSTRAINT_ID = "inbox";
+const INBOX_CODENAME_PROJECT_PREFIX = "inbox:cn-";
+
+/**
+ * P2 inbox 收口：把 inbox 单一虚拟桶扩成"按 codename 命名空间化"的子桶集合。
+ * - 无 codename → "inbox"（保持后向兼容）
+ * - 有 codename → "inbox:cn-<codenameId>"
+ *
+ * 命名空间内仍走 inbox 7-day 加速衰减；项目升格后改用真实 project-<hex> 路径。
+ */
+export function inboxProjectIdFor(codenameId?: string | null): string {
+    if (!codenameId) return INBOX_PROJECT_CONSTRAINT_ID;
+    return `${INBOX_CODENAME_PROJECT_PREFIX}${codenameId}`;
+}
+
+/**
+ * 谓词：projectId 是否属于 inbox 容器（含 codename 子桶）。
+ * 决定 atom 是否走 inbox decay multiplier；零字符匹配——只看 projectId 字面量前缀。
+ */
+export function isInboxProjectId(id: string): boolean {
+    return id === INBOX_PROJECT_CONSTRAINT_ID || id.startsWith(INBOX_CODENAME_PROJECT_PREFIX);
+}
+
+/**
+ * 从命名空间化的 inbox projectId 中抽取 codenameId；非 codename 桶返回 null。
+ * 单一来源 — 任何需要反解的 caller 都用这个，不要本地再 slice 前缀。
+ */
+export function extractCodenameIdFromInboxProjectId(id: string): string | null {
+    if (!id.startsWith(INBOX_CODENAME_PROJECT_PREFIX)) return null;
+    const tail = id.slice(INBOX_CODENAME_PROJECT_PREFIX.length);
+    return tail.length > 0 ? tail : null;
+}
 
 interface JournalAtomFromActionInput {
     action: MemoryAction;
@@ -2573,7 +2794,7 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
     const weights = applyMatrixImpact(baseWeights, matrix);
     const inboxDecayMultiplier = Math.max(1, input.inboxDecayMultiplier);
     const recency =
-        input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? clamp01(1 / inboxDecayMultiplier) : 1;
+        isInboxProjectId(input.projectConstraintId) ? clamp01(1 / inboxDecayMultiplier) : 1;
     const codenameUseCount = Math.max(0, Math.floor(input.codenameUseCount ?? 0));
     const codenameBoost =
         codenameUseCount > 0 ? clamp01(Math.log2(1 + codenameUseCount) / 4) : 0;
@@ -2581,7 +2802,7 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
         atomId: `${input.episodeId}:atom:${input.index}`,
         access: clamp01(weights.recurrence),
         fanout: clamp01(weights.sourceDiversity),
-        inboxDecayApplied: input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID,
+        inboxDecayApplied: isInboxProjectId(input.projectConstraintId),
         recency,
         successPrior: clamp01(weights.confidence * 0.5 + weights.durability * 0.3 + weights.validationCount * 0.2),
         total: 0,
@@ -2640,12 +2861,21 @@ function visibleAtomToMemoryResult(entry: JournalVisibleAtom): MemorySearchResul
     };
 }
 
-function rankVisibleAtom(entry: JournalVisibleAtom, queryEmbedding: number[]): number {
+function rankVisibleAtom(
+    entry: JournalVisibleAtom,
+    queryEmbedding: number[],
+    activeInboxProjectId?: string | null,
+    codenameBoost?: number,
+): number {
     const similarity =
         queryEmbedding.length > 0 && entry.atom.embedding.length === queryEmbedding.length
             ? Math.max(0, cosine(queryEmbedding, entry.atom.embedding))
             : 0;
-    return entry.score.total * 0.75 + similarity * 0.25;
+    const inboxBoost =
+        activeInboxProjectId && entry.atom.projectId === activeInboxProjectId
+            ? Math.max(0, codenameBoost ?? 0)
+            : 0;
+    return entry.score.total * 0.75 + similarity * 0.25 + inboxBoost;
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -2670,8 +2900,9 @@ function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string
     return `episode:${hasher.digest("hex").slice(0, 24)}`;
 }
 
-function deriveProjectConstraintId(message: GatewayMessage, triggerKind: ProjectTriggerKind): string {
-    return triggerKind === ProjectTriggerKind.None ? INBOX_PROJECT_CONSTRAINT_ID : deriveProjectId(message);
+function deriveProjectConstraintId(message: GatewayMessage, triggerKind: ProjectTriggerKind, codenameId?: string): string {
+    if (triggerKind !== ProjectTriggerKind.None) return deriveProjectId(message);
+    return inboxProjectIdFor(codenameId);
 }
 
 function focusKeyForMessage(message: GatewayMessage): string {

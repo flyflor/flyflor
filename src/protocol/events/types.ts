@@ -58,6 +58,8 @@ export const RuntimeEventType = {
     MemoryDreamCompleted: "memory.dream.completed",
     MemoryDreamFailed: "memory.dream.failed",
     MemoryDriftRepaired: "memory.drift.repaired",
+    MemoryEqStateUpdated: "memory.eq.state.updated",
+    RuntimeEqDirectiveApplied: "runtime.eq.directive.applied",
     MemoryRecallReinforced: "memory.recall.reinforced",
     MemoryContradictionFlagged: "memory.contradiction.flagged",
     MemoryReconsolidated: "memory.reconsolidated",

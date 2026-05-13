@@ -63,6 +63,18 @@ export class DormantSupervisor {
         return this.states.get(userId)?.mode ?? RuntimeMode.Chat;
     }
 
+    /**
+     * LF-R8：peek 当前是否处于 Dormant，若是返回 idleMs 资源指标。
+     * 调用方在 `touch()` 之前读取，便于在新一轮 turn 的 prompt 中注入
+     * `[runtime-resume]` hint。零字符匹配——只暴露 idleMs，不读消息文本。
+     */
+    peekResumeHint(userId: string): { idleMs: number } | null {
+        if (!userId) return null;
+        const s = this.states.get(userId);
+        if (!s || s.mode !== RuntimeMode.Dormant) return null;
+        return { idleMs: this.now() - s.lastInputAt };
+    }
+
     /** 已知用户快照（CLI / 诊断）。 */
     snapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
         const nowMs = this.now();

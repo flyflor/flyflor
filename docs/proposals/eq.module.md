@@ -1,6 +1,12 @@
 # EQ 模块（提案）
 
-> Status: **proposal — 未落地**。本文是设计稿，不代表当前代码状态。代码内尚无 `eq` 目录，runtime 也未引用情绪建模。下面所有约定一律视为「等待评审」。
+> Status: **done**（含 EQ-01 + EQ-02 + EQ-03）。
+>
+> - EQ-01 三 slice：协议层 + brain.db 持久化 + `[eq-context]` prompt 注入 + 决策侧 `peekEqState` 公共读 API + 红线审计。
+> - EQ-02：决策侧消费 — `EqDirective` 封闭枚举（calm-down / match-energy / steady）+ `deriveEqDirective(state)` 纯函数阈值映射 + `[eq-context]` 块尾结构化 directive 行（`confidence < 0.3` 抑制）。
+> - EQ-03：runtime 实际消费 — `runtime.module` 在 ask 强制段调用 `peekEqState + deriveEqDirective`；CalmDown 时把 effective ask cap 临时压为 1（防止对怒/悲用户继续堆问题）；新增 `RuntimeEqDirectiveApplied` 事件审计 + `MemoryAskChainCapped.reason=eq-calm-down`；`tests/eq.runtime.cap.test.ts` 双路径覆盖。
+>
+> `docs/boundaries.md` 零字符匹配红线全程坚守：`EqLabel` / `EqDirective` 都是封闭枚举，`runtime` 严禁基于消息文本派生；`tests/eq.decision.test.ts` 内含红线审计扫描 src/，对 5 个 label + 2 个非平凡 directive 值禁止 `includes/indexOf/match/test/split` 关键词派生路径。下一步候选见 `TODO.md`「下一阶段候选」表（P2 inbox project 容器收口、blocked 的 LF-R10/R11）。
 
 ## 目标
 

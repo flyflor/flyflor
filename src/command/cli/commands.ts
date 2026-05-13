@@ -217,6 +217,22 @@ const COMMAND_SPECS: CommandSpec[] = [
         ],
     },
     {
+        name: "inbox",
+        help: "Inspect inbox project (un-promoted codename buckets) atoms (P2)",
+        subcommands: [
+            {
+                name: "list",
+                help: "Group recent inbox atoms by codename (un-promoted buckets) + uncoded bucket",
+                options: [
+                    ["--user <id>", "Filter by user id"],
+                    ["--days <n>", "Window in days (default 7, max 31)"],
+                    ["--limit <n>", "Atom row limit (default 100, max 500)"],
+                    ["--json", "Emit JSON"],
+                ],
+            },
+        ],
+    },
+    {
         name: "ghost",
         help: "Inspect / manage Ghost Context snapshots stored in brain.db (LF-R4)",
         subcommands: [
@@ -912,6 +928,11 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     if (root === "codename") {
         const { runCodename } = await import("./handlers/codename.handler.ts");
         await runCodename(sub, command);
+        return;
+    }
+    if (root === "inbox") {
+        const { runInbox } = await import("./handlers/inbox.handler.ts");
+        await runInbox(sub, command);
         return;
     }
     if (root === "ghost") {

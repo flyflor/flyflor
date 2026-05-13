@@ -30,6 +30,7 @@ flowchart TB
     Root --> mcp
     Root --> plugins
     Root --> dream
+    Root --> inbox
     Root --> update
     Root --> version
     gateway --> gw_run["run"]
@@ -72,6 +73,7 @@ flowchart TB
     plugins --> pl_remove["remove"]
     dream --> dr_status["status"]
     dream --> dr_run["run"]
+    inbox --> ib_list["list"]
 ```
 
 ## 实现状态
@@ -97,6 +99,7 @@ flowchart TB
 | `flyflor mcp *` | ✅ | list/show/validate/add/enable/disable/remove/tools/call |
 | `flyflor plugins *` | ⚠️ 部分 | list/show/validate/add/enable/disable/remove 多为骨架 |
 | `flyflor dream status/run` | ✅ | 手动触发 Dream pass |
+| `flyflor inbox list` | ✅ | 按 codename 分桶可视化 inbox 容器（`--user/--days/--limit/--json`），含 `(uncoded)` 桶；已升格 project 自动排除 |
 | `flyflor update` | ⚠️ 部分 | 仅自检 / 提示，未做下载升级 |
 | `flyflor version` | ✅ | |
 

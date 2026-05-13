@@ -387,6 +387,18 @@ export interface InboxTuningConfig {
     decayMultiplier: number;
     /** atom 在 inbox 内的 TTL 天数；过期 → 自然淡出（仍可被 cluster sweeper 抢救升格）。 */
     ttlDays: number;
+    /**
+     * P2：召回侧偏变窗口（分钟）。在此时间窗内被 touch 过的最新 codename 被视为
+     * "用户当前正在用的 codename"，召回时给同 codename 桶内 atom 加 boost。
+     * 零字符匹配——只取 codenames.last_used_at 资源指标。
+     */
+    activeCodenameWindowMinutes: number;
+    /**
+     * P2：rank 函数对同 codename inbox atom 的加分（0..1）。
+     * 默认 0.15，与现有 atom score (0.75) + similarity (0.25) 同量级；
+     * 不引入字符匹配，仅靠 projectId 字面量比较。
+     */
+    codenameRecallBoost: number;
 }
 
 export interface DormantTuningConfig {
@@ -728,6 +740,8 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
         inbox: {
             decayMultiplier: 2.0,
             ttlDays: 7,
+            activeCodenameWindowMinutes: 60,
+            codenameRecallBoost: 0.15,
         },
         dormant: {
             idleMinutes: 10,

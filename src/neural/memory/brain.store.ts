@@ -3,6 +3,8 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import {
     type CodenameRecord,
+    type EqLabel,
+    type EqState,
     type MemoryEventRecord,
     type MemoryEventType,
     MemoryEventStatus,
@@ -116,6 +118,16 @@ interface CodenameRow {
     last_used_at: number;
     use_count: number;
     project_id: string | null;
+}
+
+interface EqStateRow {
+    user_id: string;
+    valence: number;
+    arousal: number;
+    dominance: number;
+    label: string;
+    confidence: number;
+    updated_at: number;
 }
 
 export class BrainStore {
@@ -421,6 +433,62 @@ export class BrainStore {
     }
 
     /**
+     * P2 inbox 收口：取用户最近被 touch 过且仍未升格（projectId IS NULL）的 codename，
+     * 用于召回侧偏变（让 inbox 召回向"用户当前正在用的那个 codename"倾斜）。
+     * 零字符匹配——只看 last_used_at >= sinceTs 资源指标 + project_id IS NULL 结构化字段。
+     */
+    getMostRecentTouchedCodename(userId: string, sinceTs: number): CodenameRecord | null {
+        const db = this.requireDb();
+        const row = db
+            .query(
+                `SELECT * FROM codenames
+                 WHERE user_id = ? AND project_id IS NULL AND last_used_at >= ?
+                 ORDER BY last_used_at DESC
+                 LIMIT 1`,
+            )
+            .get(userId, sinceTs) as CodenameRow | null;
+        return row ? rowToCodename(row) : null;
+    }
+
+    /**
+     * EQ-01 slice A：写入 / 覆盖某用户最新情绪状态（latest-only UPSERT）。
+     * append-only 历史轨迹由 `memory_events` 中模型同轮记录的对话事件携带，
+     * 此处只保留"现在的样子"以便快速取读 + 衰减。
+     */
+    upsertEqState(state: EqState): void {
+        const db = this.requireDb();
+        db.run(
+            `INSERT INTO memory_eq_state (user_id, valence, arousal, dominance, label, confidence, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+                valence = excluded.valence,
+                arousal = excluded.arousal,
+                dominance = excluded.dominance,
+                label = excluded.label,
+                confidence = excluded.confidence,
+                updated_at = excluded.updated_at`,
+            [
+                state.userId,
+                state.valence,
+                state.arousal,
+                state.dominance,
+                state.label,
+                state.confidence,
+                state.updatedAt,
+            ],
+        );
+    }
+
+    /** 取某用户最新 EQ 状态。无记录返回 null。 */
+    getEqState(userId: string): EqState | null {
+        const db = this.requireDb();
+        const row = db
+            .query("SELECT * FROM memory_eq_state WHERE user_id = ?")
+            .get(userId) as EqStateRow | null;
+        return row ? rowToEq(row) : null;
+    }
+
+    /**
      * LF-R3：取该用户最近一次未答复的 ask 事件。"未答复"= 既不是 Abandoned/Archived，
      * 也没有任何 ask-answer-pair 子事件（parent_id 指向它）。
      */
@@ -674,6 +742,16 @@ function createSchema(db: Database): void {
             UNIQUE (user_id, name)
         );
         CREATE INDEX IF NOT EXISTS idx_codename_user_used ON codenames(user_id, last_used_at DESC);
+
+        CREATE TABLE IF NOT EXISTS memory_eq_state (
+            user_id     TEXT PRIMARY KEY,
+            valence     REAL NOT NULL,
+            arousal     REAL NOT NULL,
+            dominance   REAL NOT NULL,
+            label       TEXT NOT NULL,
+            confidence  REAL NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
     `);
 }
 
@@ -747,6 +825,18 @@ function rowToCodename(row: CodenameRow): CodenameRecord {
         lastUsedAt: row.last_used_at,
         useCount: row.use_count,
         projectId: row.project_id ?? undefined,
+    };
+}
+
+function rowToEq(row: EqStateRow): EqState {
+    return {
+        userId: row.user_id,
+        valence: row.valence,
+        arousal: row.arousal,
+        dominance: row.dominance,
+        label: row.label as EqLabel,
+        confidence: row.confidence,
+        updatedAt: row.updated_at,
     };
 }
 

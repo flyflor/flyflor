@@ -15,6 +15,8 @@ import {
     BlackboardTurnStatus,
     CapabilityExecutionKind,
     ComponentKind,
+    deriveEqDirective,
+    EqDirective,
     GhostContextReason,
     ModelRole,
 } from "../../protocol/contracts/index.ts";
@@ -505,10 +507,29 @@ export class RuntimeModule extends RuntimeBoundary {
 
         // LF-R3 slice C：runtime 用户面 cap 强制——若模型本轮要 ask 但当前 chain 已达上限，
         // 抛弃 ask 改走 reply。Memory 内部的 cap 检查是后台兜底，这里负责对外封顶。
+        // EQ-03：若用户当前处于 CalmDown 状态（高唤醒 + 负 valence + anger/sadness/fear），
+        // 把 cap 临时降为 1（只允许首问，不允许追问链），避免对怒/悲用户继续堆问题。
+        // 派生 100% 由结构化 EqState + 阈值决定，零字符匹配。
         let modelAsk: AgentAsk | undefined = askParsed.ask;
         if (modelAsk) {
             const pending = this.memory.peekActiveAsk(message.user.id);
-            const maxChainDepth = Math.max(1, this.config.memory.tuning.ghost.maxChainDepth);
+            const baseCap = Math.max(1, this.config.memory.tuning.ghost.maxChainDepth);
+            const eqState = this.memory.peekEqState(message.user.id);
+            const directive = eqState ? deriveEqDirective(eqState) : null;
+            const calmDownCap = directive === EqDirective.CalmDown ? 1 : baseCap;
+            const maxChainDepth = Math.min(baseCap, calmDownCap);
+            if (calmDownCap < baseCap) {
+                this.events.publish(
+                    event(RuntimeEventType.RuntimeEqDirectiveApplied, {
+                        requestId: context.requestId,
+                        userId: message.user.id,
+                        directive,
+                        action: "ask-cap-overridden",
+                        baseCap,
+                        effectiveCap: maxChainDepth,
+                    }),
+                );
+            }
             const projectedDepth = pending ? pending.chainDepth + 1 : 1;
             if (projectedDepth > maxChainDepth) {
                 this.events.publish(
@@ -518,6 +539,7 @@ export class RuntimeModule extends RuntimeBoundary {
                         chainDepth: projectedDepth,
                         maxChainDepth,
                         action: "dropped-by-runtime",
+                        ...(directive === EqDirective.CalmDown ? { reason: "eq-calm-down" } : {}),
                     }),
                 );
                 modelAsk = undefined;

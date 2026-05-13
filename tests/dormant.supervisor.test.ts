@@ -65,4 +65,34 @@ describe("DormantSupervisor", () => {
         const sup = new DormantSupervisor(sink, { idleMinutes: 5 });
         expect(sup.modeOf("nobody")).toBe(RuntimeMode.Chat);
     });
+
+    test("LF-R8 peekResumeHint returns null when not Dormant", () => {
+        let now = 1_000_000_000;
+        const sup = new DormantSupervisor(new CapturingSink(), { idleMinutes: 5, now: () => now });
+        expect(sup.peekResumeHint("u1")).toBeNull();
+        sup.touch("u1");
+        expect(sup.peekResumeHint("u1")).toBeNull();
+    });
+
+    test("LF-R8 peekResumeHint returns idleMs after sweep into Dormant", () => {
+        let now = 1_000_000_000;
+        const sup = new DormantSupervisor(new CapturingSink(), { idleMinutes: 5, now: () => now });
+        sup.touch("u1");
+        now += 12 * 60_000;
+        sup.sweepOnce();
+        const hint = sup.peekResumeHint("u1");
+        expect(hint).not.toBeNull();
+        expect(hint!.idleMs).toBe(12 * 60_000);
+    });
+
+    test("LF-R8 peekResumeHint cleared after touch (awaken)", () => {
+        let now = 1_000_000_000;
+        const sup = new DormantSupervisor(new CapturingSink(), { idleMinutes: 5, now: () => now });
+        sup.touch("u1");
+        now += 12 * 60_000;
+        sup.sweepOnce();
+        expect(sup.peekResumeHint("u1")).not.toBeNull();
+        sup.touch("u1");
+        expect(sup.peekResumeHint("u1")).toBeNull();
+    });
 });

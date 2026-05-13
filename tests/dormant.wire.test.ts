@@ -42,6 +42,43 @@ describe("MemoryModule.dormant (LF-R5 slice D)", () => {
         expect(r.entered).toBe(0);
         memory.dispose();
     });
+
+    test("LF-R8 buildPrompt injects [runtime-resume] when user is Dormant before touch", async () => {
+        const config = await makeConfig();
+        const memory = new MemoryModule(config, new NoopSink());
+        await memory.warmup();
+        try {
+            await memory.rememberTurn(gatewayMessage("first turn"), gatewayReply("ok", "m1"), runtimeContext());
+            // 强制把该用户切到 Dormant（不真等 60s）
+            (memory as unknown as { dormant: { sweepOnce: () => unknown; touch: (u: string) => void } }).dormant;
+            // 取出 supervisor 内部状态：把 lastInputAt 拨到 1 小时前，sweep 切换
+            const sup = (memory as unknown as { dormant: { sweepOnce: () => { entered: number }; modeOf: (u: string) => string } }).dormant;
+            // 直接通过 protected 路径：访问 states map（cast）
+            const internal = sup as unknown as { states: Map<string, { lastInputAt: number; mode: string }>; idleMs: number };
+            const cur = internal.states.get("user-1");
+            if (cur) cur.lastInputAt = Date.now() - 75 * 60_000;
+            sup.sweepOnce();
+            expect(sup.modeOf("user-1")).toBe(RuntimeMode.Dormant);
+            const prompt = await memory.buildPrompt(gatewayMessage("hi after dormant"), runtimeContext());
+            expect(prompt).toContain("[runtime-resume]");
+            expect(prompt).toMatch(/User just returned after [^\n]*of inactivity/);
+        } finally {
+            memory.dispose();
+        }
+    });
+
+    test("LF-R8 buildPrompt does NOT inject [runtime-resume] when user is in Chat", async () => {
+        const config = await makeConfig();
+        const memory = new MemoryModule(config, new NoopSink());
+        await memory.warmup();
+        try {
+            await memory.rememberTurn(gatewayMessage("hi"), gatewayReply("hello", "m1"), runtimeContext());
+            const prompt = await memory.buildPrompt(gatewayMessage("hi again"), runtimeContext());
+            expect(prompt).not.toContain("[runtime-resume]");
+        } finally {
+            memory.dispose();
+        }
+    });
 });
 
 class NoopSink implements EventSink {
