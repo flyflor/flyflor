@@ -110,6 +110,9 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
     const tuningSummary = describeMemoryTuning(config);
     rows.push(["Memory tuning", tuningSummary.status, tuningSummary.detail]);
 
+    const brainSummary = await describeBrainDb(config);
+    rows.push(["Brain.db", brainSummary.status, brainSummary.detail]);
+
     const table = new Table({
         head: ["Check", "Status", "Detail"],
         style: { head: [] },
@@ -224,6 +227,42 @@ function describeIlinkState(config: FlyflorConfig): string {
  * 任一缺失都会让 MemoryModule.scheduler = null，导致长期记忆链路完全停摆。
  * 本函数从配置侧静态判断，给 doctor 一行可见性。
  */
+/**
+ * LF-R1：brain.db 单文件大脑可见性。展示当前主文件大小 + 月级冷归档数量。
+ * 缺失（warmup 前 / 未启用记忆）显示为 "not-yet"，不报错。
+ */
+async function describeBrainDb(config: FlyflorConfig): Promise<{ status: string; detail: string }> {
+    const { join } = await import("node:path");
+    const brainPath = join(config.paths.home, "brain.db");
+    let mainSize = 0;
+    try {
+        const info = await stat(brainPath);
+        mainSize = info.size;
+    } catch {
+        return { status: "warn", detail: "brain.db not initialized yet (will appear after first turn warmup)" };
+    }
+    const archiveDir = join(config.paths.home, "archive");
+    let archiveCount = 0;
+    try {
+        const { readdir } = await import("node:fs/promises");
+        const entries = await readdir(archiveDir);
+        archiveCount = entries.filter((name) => name.startsWith("brain.") && name.endsWith(".db")).length;
+    } catch {
+        archiveCount = 0;
+    }
+    return {
+        status: "ok",
+        detail: `${formatBytes(mainSize)} main, ${archiveCount} archive file(s)`,
+    };
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 function describeBackgroundScheduler(config: FlyflorConfig): { status: string; detail: string } {
     const missing: string[] = [];
     if (!config.memory.redis.enabled) missing.push("redis");
@@ -255,9 +294,6 @@ function describeMemoryTuning(config: FlyflorConfig): { status: string; detail: 
     }
     if (tuning.summary.rollingWindowDays !== defaults.summary.rollingWindowDays) {
         changed.push(`summary.rollingWindowDays=${tuning.summary.rollingWindowDays}`);
-    }
-    if (tuning.session.legacyDoubleWriteDays !== defaults.session.legacyDoubleWriteDays) {
-        changed.push(`session.legacyDoubleWriteDays=${tuning.session.legacyDoubleWriteDays}`);
     }
     if (tuning.reconsolidation.embeddingDriftThreshold !== defaults.reconsolidation.embeddingDriftThreshold) {
         changed.push(`reconsolidation.embeddingDriftThreshold=${tuning.reconsolidation.embeddingDriftThreshold}`);

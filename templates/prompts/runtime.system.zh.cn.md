@@ -10,6 +10,8 @@
 
 {{memoryActionInstructions}}
 
+{{askSchemaInstructions}}
+
 已加载技能：
 
 {{skillContext}}

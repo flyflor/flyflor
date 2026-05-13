@@ -4,6 +4,7 @@ import type { BlackboardDiscussionPlan } from "../../protocol/contracts/index.ts
 import type { BlackboardMode } from "../../protocol/contracts/index.ts";
 
 export interface RuntimeSystemPromptInput {
+    askSchemaInstructions: string;
     blackboardContext: string;
     mcpContext: string;
     memoryActionInstructions: string;
@@ -98,6 +99,7 @@ interface PromptTemplate {
 }
 
 type PromptTemplateKey =
+    | "askSchema"
     | "blackboardAdvisory"
     | "blackboardDecision"
     | "blackboardRoute"
@@ -115,6 +117,7 @@ type PromptTemplateKey =
 type PromptTemplateMap = Record<PromptTemplateKey, PromptTemplate>;
 
 const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = {
+    askSchema: "ask.schema.md",
     blackboardAdvisory: "blackboard.advisory.md",
     blackboardDecision: "blackboard.decision.md",
     blackboardRoute: "blackboard.route.md",
@@ -192,6 +195,7 @@ async function readSignature(promptDir: string): Promise<string> {
 export function renderRuntimeSystemPrompt(input: RuntimeSystemPromptInput): string {
     // 必要提示词：这里是模型上下文唯一装配口；业务控制仍由 schema、枚举和状态机完成。
     return renderTemplate(requiredTemplates().runtimeSystem.content, {
+        askSchemaInstructions: input.askSchemaInstructions,
         blackboardContext: input.blackboardContext,
         mcpContext: input.mcpContext,
         memoryActionInstructions: input.memoryActionInstructions,
@@ -204,6 +208,11 @@ export function renderRuntimeSystemPrompt(input: RuntimeSystemPromptInput): stri
 export function renderMemoryActionInstructions(): string {
     // 必要提示词：当前模型 API 没有独立 memory tool 调用通道，临时用英文块协议承载结构化写入请求。
     return requiredTemplates().memoryAction.content;
+}
+
+export function renderAskSchemaInstructions(): string {
+    // 必要提示词：LF-R3 Ask 一等公民 + LF-R4 ghostHint。同 memory.action 一样走块协议承载结构化输出。
+    return requiredTemplates().askSchema.content;
 }
 
 export function renderSkillContextPrompt(input: SkillContextPromptInput): string {
@@ -399,6 +408,7 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 
 /** 每个模板必须出现的占位符集合；任一缺失即视为旧模板，需提示用户升级。 */
 const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
+    askSchema: [],
     blackboardAdvisory: ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
     blackboardDecision: ["questionCount", "reason", "unresolvedIssues"],
     blackboardRoute: ["request"],
@@ -411,6 +421,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     memoryContext: ["hippocampus", "markdownContent", "projectMemory", "retrievedResults"],
     memoryDream: ["candidates", "userId"],
     runtimeSystem: [
+        "askSchemaInstructions",
         "blackboardContext",
         "mcpContext",
         "memoryActionInstructions",

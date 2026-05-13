@@ -1,5 +1,7 @@
 # 记忆系统
 
+> **生命体重构（LF-R1）变更预告**：按天 `journal/<yyyy>/W<ww>/day_*.db` 将被 `~/.flyflor/brain.db` 单库取代（event/state 分离 + append-only），旧 journal 进只读过渡期 60 天。本文档描述当前实现，目标态见 `docs/proposals/life.form.md`。
+
 ## 一句话定位
 
 Flyflor 把记忆切成四层：Markdown 宪法层、Redis 工作记忆、SQLite 索引与审计、SurrealDB 长期图；升格走双质量门，遗忘走双轨衰减，结晶在 Dream worker 离线维护。

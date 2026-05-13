@@ -54,6 +54,20 @@ export interface BackgroundSchedulerOptions {
      * 由 MemoryModule 注入 `(userId) => this.sweepSkillCandidates(userId)`。
      */
     skillSweeper?: (userId: string) => Promise<boolean>;
+    /**
+     * LF-R5 slice B：summary worker tick。注入后调度器按 `summaryIntervalMs` 节拍调用。
+     * 与 dream 同样：未注入则关掉本条 timer。
+     */
+    summarySweeper?: (userId: string) => Promise<{ written: number }>;
+    /** Summary worker 节拍。默认 6 小时，0 关闭。 */
+    summaryIntervalMs?: number;
+    /**
+     * LF-R5 slice D：dormant sweep。注入后调度器按 `dormantIntervalMs` 节拍调用。
+     * 未注入则关掉本条 timer；MemoryModule 仍可手动触发 sweepDormantOnce。
+     */
+    dormantSweeper?: () => { entered: number };
+    /** Dormant sweep 节拍。默认 60s，0 关闭。 */
+    dormantIntervalMs?: number;
 }
 
 export class BackgroundScheduler {
@@ -63,6 +77,7 @@ export class BackgroundScheduler {
     private dreamTimer: ReturnType<typeof setInterval> | undefined;
     private projectTimer: ReturnType<typeof setInterval> | undefined;
     private skillTimer: ReturnType<typeof setInterval> | undefined;
+    private summaryTimer: ReturnType<typeof setInterval> | undefined;
     /** 每用户 idle one-shot timer：每次 noteUserTurn 重置；命中后触发 dream。 */
     private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private consolidationBusy = false;
@@ -70,10 +85,14 @@ export class BackgroundScheduler {
     private dreamBusy = false;
     private projectBusy = false;
     private skillBusy = false;
+    private summaryBusy = false;
     private readonly dream: DreamWorker | undefined;
     private readonly projectSweeper: ((userId: string) => Promise<boolean>) | undefined;
     private readonly skillSweeper: ((userId: string) => Promise<boolean>) | undefined;
-    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper">> & {
+    private readonly summarySweeper: ((userId: string) => Promise<{ written: number }>) | undefined;
+    private readonly dormantSweeper: (() => { entered: number }) | undefined;
+    private dormantTimer: ReturnType<typeof setInterval> | undefined;
+    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper" | "summarySweeper" | "dormantSweeper">> & {
         profiles: Record<DecayLayer, DecayProfile>;
         now: () => number;
     };
@@ -87,6 +106,8 @@ export class BackgroundScheduler {
         this.dream = options.dream;
         this.projectSweeper = options.projectSweeper;
         this.skillSweeper = options.skillSweeper;
+        this.summarySweeper = options.summarySweeper;
+        this.dormantSweeper = options.dormantSweeper;
         this.opts = {
             consolidationIntervalMs: options.consolidationIntervalMs ?? 10 * 60_000,
             decayIntervalMs: options.decayIntervalMs ?? 24 * 60 * 60_000,
@@ -96,6 +117,8 @@ export class BackgroundScheduler {
             idleDreamTriggerMs: options.idleDreamTriggerMs ?? 5 * 60_000,
             projectClusterIntervalMs: options.projectClusterIntervalMs ?? 15 * 60_000,
             skillClusterIntervalMs: options.skillClusterIntervalMs ?? 20 * 60_000,
+            summaryIntervalMs: options.summaryIntervalMs ?? 6 * 60 * 60_000,
+            dormantIntervalMs: options.dormantIntervalMs ?? 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
             now: options.now ?? (() => Date.now()),
         };
@@ -163,6 +186,20 @@ export class BackgroundScheduler {
                 void this.runSkillSweepOnce();
             }, this.opts.skillClusterIntervalMs);
         }
+        if (this.summarySweeper && this.opts.summaryIntervalMs > 0) {
+            this.summaryTimer = setInterval(() => {
+                void this.runSummarySweepOnce();
+            }, this.opts.summaryIntervalMs);
+        }
+        if (this.dormantSweeper && this.opts.dormantIntervalMs > 0) {
+            this.dormantTimer = setInterval(() => {
+                try {
+                    this.dormantSweeper?.();
+                } catch (err) {
+                    this.publishFailure("dormant-tick", "", err);
+                }
+            }, this.opts.dormantIntervalMs);
+        }
         // setInterval 在 bun 下不阻止退出
         if (typeof (this.consolidationTimer as { unref?: () => void })?.unref === "function") {
             (this.consolidationTimer as { unref: () => void }).unref();
@@ -178,6 +215,12 @@ export class BackgroundScheduler {
         }
         if (this.skillTimer && typeof (this.skillTimer as { unref?: () => void })?.unref === "function") {
             (this.skillTimer as { unref: () => void }).unref();
+        }
+        if (this.summaryTimer && typeof (this.summaryTimer as { unref?: () => void })?.unref === "function") {
+            (this.summaryTimer as { unref: () => void }).unref();
+        }
+        if (this.dormantTimer && typeof (this.dormantTimer as { unref?: () => void })?.unref === "function") {
+            (this.dormantTimer as { unref: () => void }).unref();
         }
     }
 
@@ -201,6 +244,14 @@ export class BackgroundScheduler {
         if (this.skillTimer !== undefined) {
             clearInterval(this.skillTimer);
             this.skillTimer = undefined;
+        }
+        if (this.summaryTimer !== undefined) {
+            clearInterval(this.summaryTimer);
+            this.summaryTimer = undefined;
+        }
+        if (this.dormantTimer !== undefined) {
+            clearInterval(this.dormantTimer);
+            this.dormantTimer = undefined;
         }
         for (const timer of this.idleTimers.values()) {
             clearTimeout(timer);
@@ -307,9 +358,10 @@ export class BackgroundScheduler {
         driftRepaired: number;
         recallReinforced: number;
         contradictionsFlagged: number;
+        reconsolidated: number;
         skipped: number;
     }> {
-        const totals = { users: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, skipped: 0 };
+        const totals = { users: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, reconsolidated: 0, skipped: 0 };
         if (!this.dream || this.dreamBusy) return totals;
         this.dreamBusy = true;
         const batchSize = limit && limit > 0 ? limit : this.opts.dreamBatchSize;
@@ -322,6 +374,7 @@ export class BackgroundScheduler {
                     totals.driftRepaired += r.driftRepaired;
                     totals.recallReinforced += r.recallReinforced;
                     totals.contradictionsFlagged += r.contradictionsFlagged;
+                    totals.reconsolidated += r.reconsolidated;
                     totals.skipped += r.skipped;
                 } catch (err) {
                     this.publishFailure("dream-tick", u, err);
@@ -373,6 +426,28 @@ export class BackgroundScheduler {
             }
         } finally {
             this.skillBusy = false;
+        }
+        return totals;
+    }
+
+    /** LF-R5 slice B：跑一次 summary sweep。串行所有用户。 */
+    async runSummarySweepOnce(userId?: string): Promise<{ users: number; written: number }> {
+        const totals = { users: 0, written: 0 };
+        if (!this.summarySweeper || this.summaryBusy) return totals;
+        this.summaryBusy = true;
+        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        try {
+            for (const u of targets) {
+                try {
+                    const r = await this.summarySweeper(u);
+                    totals.users += 1;
+                    totals.written += r.written;
+                } catch (err) {
+                    this.publishFailure("summary-tick", u, err);
+                }
+            }
+        } finally {
+            this.summaryBusy = false;
         }
         return totals;
     }

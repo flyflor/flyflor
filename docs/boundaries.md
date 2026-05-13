@@ -183,24 +183,25 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 记忆写入必须记录来源、时间、focus pointer、episode id、schema version 和必要证据链。
 - 删除任何范围的记忆必须能删除对应索引、摘要和向量记录。
 
-## 11.1 生命体重构红线（LF-P0，与第 11 章并列硬约束）
+## 11.1 生命体重构红线（与第 11 章并列硬约束）
 
-> 这四条红线规范了「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life.form.md`。
+> 这些红线规范「从智能体到生命体」重构期间不可妥协的边界。详细背景见 `docs/proposals/life.form.md`。
 
 ### R1 — 无 session
 
 - 协议、提示词、存储、事件、日志、CLI 中禁止出现 `sessionId` / `sessionKey` / `sessionScope` / `legacySessionKey` 等任何形式的会话标识。
 - 禁止把 session 改名为 legacy、scope、conversation、thread 等新容器继续表达会话；纯渠道协议字段（如外部 IM thread id）只能保留在 gateway 原始元数据边界，不能进入记忆连续性模型。
-- 时间是唯一事实连续轴：所有“哪一段经历”问题改由 `(userId, channelId, projectConstraint, ts)` + `FocusPointer` + hippocampus activation 共同表达。
-- Project 是从海马体 / 晶体智力中沉淀出来的内部约束，不是用户可感知会话；默认 CLI / TUI 不展示 project id，调试入口必须显式标注 internal / audit。
+- 时间是唯一事实连续轴：所有"哪一段经历"问题改由 `(userId, channelId, codenameId, ts)` + `FocusPointer` + hippocampus activation 共同表达。
+- Project 是从海马体 / 晶体智力中沉淀出来的内部约束 + 由 codename 升格而来的可感知容器；默认 CLI / TUI 不展示 project id，调试入口必须显式标注 internal / audit。
 - 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 当前焦点全部由内部 project constraint / turn / episode 审计 id 承担。
 
-### R2 — Journal 目录是公开契约
+### R2 — Brain.db 是单文件大脑契约
 
-- `~/.flyflor/journal/<yyyy>/W<ww>/day_YYYY_MM_DD.db` 的目录布局是用户可见、可手动 inspect 的"生平"。
-- 禁止"为性能"把每天的 SQLite 文件合并、压缩或迁出该目录；归档只能在分区内做（同分区内 vacuum / 冷链 attach 允许）。
-- 同目录下的 `week.index.surreal`、`week.summary.md` 是周级语义聚合；不允许跨周生成"月/年级"压缩态去替换原日记。
-- 任何工具（CLI / TUI / sandbox plugin）写入此目录必须 append-only，删除操作只能通过显式 CLI `flyflor memory forget` 触发并审计。
+- `~/.flyflor/brain.db` 是用户可见、可手动 inspect 的"生平"，唯一权威记忆库。结构契约：**event / state 分离 + append-only + 时间字段索引**。
+- 禁止把 event 表改成可变行（任何"更新内容"操作必须新写一行 + 状态层指向）；可变性只允许出现在 `memory_state` / `memory_summary` / `codenames` 这类显式状态表。
+- 月级冷归档落 `~/.flyflor/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
+- 删除操作只能通过显式 CLI（如 `flyflor memory forget`）触发并审计；Dream / sweeper 一律只能改 `memory_state` 字段，不得 DELETE event 行。
+- 旧 `~/.flyflor/journal/<yyyy>/W<ww>/day_*.db` 目录在重构过渡期内只读保留 60 天，期满下线；过渡期内禁止反向写入旧目录。
 
 ### R3 — Identity 自写：append-only + revertable
 
@@ -216,7 +217,30 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 所有记忆召回入口必须先过 `AtomScore` 阈值；默认 prompt 可见性阈值为 `memory.tuning.atomScore.visibilityThreshold = 0.65`。禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
 - 唯一例外：`flyflor memory dump` / `doctor` / 调试 CLI 等显式调试入口，必须在日志中标注 `bypass-score: true`。
 - inbox project 内 atom 的 `recency` 分量必须乘以 `memory.tuning.inbox.decayMultiplier`（默认 2.0），实现"7 天加速淡出"。
-- `RuntimeMode.Dormant` 期间召回阈值不变；Dormant 不等于关闭召回，gateway 监听不停（W2 行为契约，不可配）。
+- `RuntimeMode.Dormant` 期间召回阈值不变；Dormant 不等于关闭召回，gateway 监听不停（行为契约，不可配）。
+
+### R5 — Ask 是一等公民（中断模型）
+
+- 模型同轮输出 `{ kind: 'reply' | 'ask' }` **互斥**：要么回答，要么反问。禁止用 reply 文本中嵌入问句"模拟"反问；只有 `kind === 'ask'` 携带的 `AgentAsk` 才是 ask。
+- Ask 不引入新的暂停 / 等待状态机：pending ask 仅是 `memory_events` 中一条 `type='ask-answer-pair'` 的事件 + `memory_state.status` 字段。用户**任意新输入**自动 cancel pending ask（标记 `abandoned`），不超时。
+- ask 链深度硬上限 `memory.tuning.ghost.maxChainDepth`（默认 5）。超过 → runtime 强制 reply 并落 `excessive_clarification_loop` 信号。
+- Ask 的触发面（reason / choices / freeform）必须完全由模型同轮结构化字段决定。禁止 runtime 用 `text.includes` / 正则 / 关键词列表 / 句末标点判断是否要 ask（**业务语义判断零字符匹配红线 — 见全局红线章节**）。
+- 黑板内部 worker 之间的讨论与 Ask 无关：worker 不能 ask 用户、不调工具、不写记忆。**只有黑板 cap（5 轮硬顶）后** runtime 接管，复用 Ask 协议向用户求助（`AskReason.BlackboardStalemate`）。`flyflor-decision-form` 等独立黑板决策表单退役。
+- Sandbox approval 与 Ask 正交，不走 Ask 协议；同一 turn 可同时出现一个 ask 和一个 sandbox approval。
+
+### R6 — Ghost Context 是 events 的子型
+
+- Ghost 不是新存储 / 新状态机：仅是 `memory_events.type = 'ghost-context'` 的一行。所有"未完事项 / 可恢复副本"必须复用 events + state + AtomScore + decay 通路。
+- 默认对用户可见：通过 `memory.tuning.atomScore.visibilityThreshold` 过滤后渲染。任何 ghost 渲染面（TUI 侧栏、CLI `flyflor ghost list`、渠道 `/ghosts`）禁止绕过分数门。
+- `userFacing.{ title, askPrompt, contextHint }` 必须由模型同轮生成；runtime 不得用规则拼接（零字符匹配）。
+- `ghost pin` 只允许把半衰期乘以 `memory.tuning.ghost.pinHalflifeMultiplier`（默认 3.0），**不允许永久冻结分数**；pin 不绕过 AtomScore 衰减，仅放慢。
+- `ghost resume <id>` 是用户显式意图，跳过模型 fork/fresh 自决；成功 resume 的 ghost `importance` 拉回峰值并保留作为 gem 升格证据。被 cancel 的 ghost 标 `abandoned`，`evidence weight = 0`，不参与晶体升格。
+
+### R7 — Dream 只放大、不创造
+
+- Dream worker 的写操作（merge / contradiction-audit / reconsolidation / drift-repair）必须有**已记录的 negative 信号源**：用户显式纠正、连续工具失败计数、`memory_links.type ∈ { contradicts, causal, derived }`、ghost abandoned 计数。
+- 无信号源时 Dream 一轮**写 0 条**。禁止 Dream 基于"两条 atom 语义相似"作出无证据的合并 / 改写。
+- Dream 不得新增 `memory_events`（事件层）以外的状态轨道；改写只能落 `memory_state` / `memory_links`，并附 `atomIds` + `linkIds` 证据链。
 
 ## 12. 可观察性
 

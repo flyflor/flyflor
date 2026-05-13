@@ -65,6 +65,7 @@ class FakeSurrealGraph {
     readonly drift: Array<Record<string, unknown>> = [];
     readonly reinforce: Array<Record<string, unknown>> = [];
     readonly contradiction: Array<Record<string, unknown>> = [];
+    readonly reconsolidation: Array<Record<string, unknown>> = [];
 
     constructor(private readonly state: FakeSurrealOpts = {}) {}
 
@@ -94,6 +95,10 @@ class FakeSurrealGraph {
     }
     async applyContradictionAudit(input: Record<string, unknown>): Promise<boolean> {
         this.contradiction.push(input);
+        return true;
+    }
+    async applyReconsolidation(input: Record<string, unknown>): Promise<boolean> {
+        this.reconsolidation.push(input);
         return true;
     }
 }
@@ -215,6 +220,30 @@ describe("parseDreamDecisions", () => {
         expect(d.confidenceMultiplier).toBe(0.3);
         expect(d.contradictionDelta).toBe(5);
     });
+
+    test("reconsolidation requires winner enum and sanitizes fields", () => {
+        const raw = JSON.stringify({
+            decisions: [
+                { candidateId: "p1", action: "reconsolidation", winner: "bogus" },
+                {
+                    candidateId: "p2",
+                    action: "reconsolidation",
+                    winner: "merge",
+                    mergedSummary: "  hello  ",
+                    mergedSymbols: ["A", "B", "a"],
+                    scopeNote: "scope",
+                },
+            ],
+        });
+        const out = parseDreamDecisions(raw);
+        expect(out).toHaveLength(1);
+        const d = out[0]!;
+        if (d.action !== DreamActionKind.Reconsolidation) throw new Error("expected reconsolidation");
+        expect(d.winner).toBe("merge");
+        expect(d.mergedSummary).toBe("hello");
+        expect(d.mergedSymbols).toEqual(["a", "b"]);
+        expect(d.scopeNote).toBe("scope");
+    });
 });
 
 describe("NullDreamWorker", () => {
@@ -226,6 +255,7 @@ describe("NullDreamWorker", () => {
             driftRepaired: 0,
             recallReinforced: 0,
             contradictionsFlagged: 0,
+            reconsolidated: 0,
             skipped: 0,
         });
     });
@@ -307,6 +337,50 @@ describe("DreamWorkerImpl.runOnce", () => {
         const r = await w.runOnce("u1");
         expect(r.contradictionsFlagged).toBe(1);
         expect(graph.contradiction).toHaveLength(2);
+    });
+
+    test("reconsolidation (winner=left): fires MemoryReconsolidated with strong signal", async () => {
+        const graph = new FakeSurrealGraph({
+            pairs: [{ left: mkMem({ id: "L", contradictionCount: 2 }), right: mkMem({ id: "R" }), cosine: 0.92 }],
+        });
+        const model = new StubModel([
+            JSON.stringify({
+                decisions: [
+                    {
+                        candidateId: "contra:L:R",
+                        action: "reconsolidation",
+                        winner: "left",
+                        mergedSummary: "merged",
+                        mergedSymbols: ["X"],
+                        scopeNote: "merged the two notes",
+                    },
+                ],
+            }),
+        ]);
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(graph), model, sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.reconsolidated).toBe(1);
+        expect(graph.reconsolidation).toHaveLength(1);
+        expect(graph.reconsolidation[0]).toMatchObject({ winner: "left", mergedSummary: "merged" });
+        expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryReconsolidated);
+    });
+
+    test("reconsolidation: weak signal (low contradictionCount, low cosine) is short-circuited to skip", async () => {
+        const graph = new FakeSurrealGraph({
+            pairs: [{ left: mkMem({ id: "L", contradictionCount: 0 }), right: mkMem({ id: "R", contradictionCount: 0 }), cosine: 0.79 }],
+        });
+        const model = new StubModel([
+            JSON.stringify({
+                decisions: [{ candidateId: "contra:L:R", action: "reconsolidation", winner: "merge" }],
+            }),
+        ]);
+        const sink = new CapturingSink();
+        const w = new DreamWorkerImpl(fakeAs(graph), model, sink, { now });
+        const r = await w.runOnce("u1");
+        expect(r.reconsolidated).toBe(0);
+        expect(r.skipped).toBe(1);
+        expect(graph.reconsolidation).toHaveLength(0);
     });
 
     test("kind mismatch (drift-repair on a recall candidate) → skip, no writes", async () => {

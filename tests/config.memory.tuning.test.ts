@@ -51,7 +51,6 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(tuning.summary.trigger).toBe(SummaryTrigger.Rolling);
             expect(tuning.summary.rollingWindowDays).toBe(7);
             expect(tuning.summary.minIntervalHours).toBe(24);
-            expect(tuning.session.legacyDoubleWriteDays).toBe(30);
             expect(tuning.reconsolidation.embeddingDriftThreshold).toBeCloseTo(0.25);
             expect(tuning.reconsolidation.driftHitCount).toBe(2);
             expect(tuning.inbox.decayMultiplier).toBeCloseTo(2.0);

@@ -1,5 +1,7 @@
 # 黑板系统
 
+> **生命体重构（LF-R3）变更预告**：`needs-user` 出口（`flyflor-decision-form`）将退役，由 Ask 一等公民协议接管（`AskReason.BlackboardStalemate`）。本文档先反映当前实现，路线见 `docs/proposals/life.form.md`。
+
 ## 一句话定位
 
 黑板是复杂任务的「可观察、可收敛、可交还」工作台：simple 走 direct、灰区走 direct-with-watch、复杂走 blackboard；模型按 `blackboard.route.md` 生成 worker plan，WorkerManager 跑 turn，BlackboardModule 控制收敛与 lease。

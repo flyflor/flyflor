@@ -35,6 +35,7 @@ export const ProjectTriggerKind = {
     ClusterCandidate: "cluster-candidate",
     SkillCandidate: "skill-candidate",
     SkillPromotion: "skill-promotion",
+    CodenamePromotion: "codename-promotion",
     None: "none",
 } as const;
 export type ProjectTriggerKind = (typeof ProjectTriggerKind)[keyof typeof ProjectTriggerKind];
@@ -52,6 +53,10 @@ export interface ProjectTriggerConfig {
     clusterEvidenceMin?: number;
     skillSupportMin?: number;
     skillConfidenceMin?: number;
+    /** LF-R2 codename promotion: useCount threshold (default 5). */
+    codenameUseCountMin?: number;
+    /** LF-R2 codename promotion: minimum age in ms before auto-promotion (default 1h). */
+    codenameMinAgeMs?: number;
 }
 
 const DEFAULTS: Required<ProjectTriggerConfig> = {
@@ -60,6 +65,8 @@ const DEFAULTS: Required<ProjectTriggerConfig> = {
     clusterEvidenceMin: 0.5,
     skillSupportMin: 5,
     skillConfidenceMin: 0.7,
+    codenameUseCountMin: 5,
+    codenameMinAgeMs: 60 * 60 * 1000,
 };
 
 // ─── 路径 A: 显式意图 ──────────────────────────────────────────────
@@ -253,6 +260,43 @@ export function detectSkillCandidate(
         score: clamp01(meanImportance * 0.5 + Math.min(1, cluster.episodes.length / (supportMin * 2)) * 0.5),
         relatedIds: cluster.episodes.map((e) => e.episodeId),
         rationale: "skill-cluster-meets-criteria",
+    };
+}
+
+// ─── 路径 E: codename 升格 (LF-R2) ────────────────────────────────
+
+export interface CodenamePromotionInput {
+    id: string;
+    name: string;
+    useCount: number;
+    createdAt: number;
+    lastUsedAt: number;
+    /** 已经升格过的 codename 不再触发，由调用方传入。 */
+    projectId?: string;
+}
+
+export function detectCodenamePromotion(
+    record: CodenamePromotionInput,
+    config: ProjectTriggerConfig = {},
+    nowMs: number = Date.now(),
+): ProjectTriggerResult {
+    if (record.projectId) {
+        return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [], rationale: "already-promoted" };
+    }
+    const useMin = config.codenameUseCountMin ?? DEFAULTS.codenameUseCountMin;
+    const ageMin = config.codenameMinAgeMs ?? DEFAULTS.codenameMinAgeMs;
+    if (record.useCount < useMin) {
+        return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [record.id], rationale: "use-count-too-low" };
+    }
+    const ageMs = nowMs - record.createdAt;
+    if (ageMs < ageMin) {
+        return { kind: ProjectTriggerKind.None, score: 0, relatedIds: [record.id], rationale: "too-young" };
+    }
+    return {
+        kind: ProjectTriggerKind.CodenamePromotion,
+        score: clamp01(record.useCount / (useMin * 2)),
+        relatedIds: [record.id],
+        rationale: "codename-meets-promotion-thresholds",
     };
 }
 

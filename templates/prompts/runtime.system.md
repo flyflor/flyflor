@@ -10,6 +10,8 @@ Memory context:
 
 {{memoryActionInstructions}}
 
+{{askSchemaInstructions}}
+
 Loaded skills:
 
 {{skillContext}}

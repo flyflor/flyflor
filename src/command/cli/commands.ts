@@ -183,6 +183,101 @@ const COMMAND_SPECS: CommandSpec[] = [
         options: [["--deep", "Run deep checks"]],
     },
     { name: "channels", help: "List registered channel adapters" },
+    {
+        name: "codename",
+        help: "Inspect codename anchors stored in brain.db (LF-R2)",
+        subcommands: [
+            {
+                name: "list",
+                help: "List codenames sorted by recent use",
+                options: [
+                    ["--user <id>", "Filter by user id"],
+                    ["--limit <n>", "Limit rows (default 50)"],
+                    ["--json", "Emit JSON"],
+                ],
+            },
+            {
+                name: "promote",
+                help: "Promote a codename to a project scaffold (workspace/projects/<projectId>/)",
+                argument: "<name>",
+                options: [
+                    ["--force", "Skip useCount/age thresholds"],
+                    ["--json", "Emit JSON"],
+                ],
+            },
+            {
+                name: "use",
+                help: "Mark a codename as active (writes ~/.flyflor/state/active-codename.json)",
+                argument: "<name>",
+                options: [
+                    ["--user <id>", "Filter by user id"],
+                    ["--json", "Emit JSON"],
+                ],
+            },
+        ],
+    },
+    {
+        name: "ghost",
+        help: "Inspect / manage Ghost Context snapshots stored in brain.db (LF-R4)",
+        subcommands: [
+            {
+                name: "list",
+                help: "List active ghost-context entries (live + resumed) sorted by recency",
+                options: [
+                    ["--user <id>", "Filter by user id (required)"],
+                    ["--codename <id>", "Filter by codename id"],
+                    ["--limit <n>", "Limit rows (default 20)"],
+                    ["--json", "Emit JSON"],
+                ],
+            },
+            {
+                name: "show",
+                help: "Show a single ghost-context entry (id from `ghost list`)",
+                argument: "<ghostEventId>",
+                options: [["--json", "Emit JSON"]],
+            },
+            {
+                name: "resume",
+                help: "Mark a ghost as resumed (status=resumed, pulls importance back to peak)",
+                argument: "<ghostEventId>",
+                options: [["--json", "Emit JSON"]],
+            },
+            {
+                name: "drop",
+                help: "Drop a ghost (status=abandoned, hidden from list)",
+                argument: "<ghostEventId>",
+                options: [["--json", "Emit JSON"]],
+            },
+            {
+                name: "pin",
+                help: "Pin a ghost (decay halflife × ghost.pinHalflifeMultiplier, default 3x)",
+                argument: "<ghostEventId>",
+                options: [["--json", "Emit JSON"]],
+            },
+        ],
+    },
+    {
+        name: "identity",
+        help: "Inspect / revert agent identity self-write entries stored in brain.db (LF-R5)",
+        subcommands: [
+            {
+                name: "list",
+                help: "List active identity-append entries (live only by default; pass --all for full history)",
+                options: [
+                    ["--user <id>", "Filter by user id (required)"],
+                    ["--limit <n>", "Limit rows (default 32)"],
+                    ["--all", "Include reverted / archived entries"],
+                    ["--json", "Emit JSON"],
+                ],
+            },
+            {
+                name: "revert",
+                help: "Revert an identity-append entry (state.status=abandoned; content keeps a revertedAt audit field)",
+                argument: "<eventId>",
+                options: [["--json", "Emit JSON"]],
+            },
+        ],
+    },
     { name: "doctor", help: "Check configuration and dependencies", options: [["--fix", "Attempt to fix issues"]] },
     {
         name: "config",
@@ -812,6 +907,21 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             return;
         }
         await runBlackboard(sub, command);
+        return;
+    }
+    if (root === "codename") {
+        const { runCodename } = await import("./handlers/codename.handler.ts");
+        await runCodename(sub, command);
+        return;
+    }
+    if (root === "ghost") {
+        const { runGhost } = await import("./handlers/ghost.handler.ts");
+        await runGhost(sub, command);
+        return;
+    }
+    if (root === "identity") {
+        const { runIdentity } = await import("./handlers/identity.handler.ts");
+        await runIdentity(sub, command);
         return;
     }
     if (root === "skills") {

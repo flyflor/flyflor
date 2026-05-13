@@ -11,6 +11,7 @@ import {
     MemoryLayer,
     MemorySourceKind,
     ModelRole,
+    RuntimeMode,
 } from "../../protocol/contracts/index.ts";
 import type {
     AtomScore,
@@ -26,13 +27,17 @@ import { event, RuntimeEventType, type EventSink } from "../../protocol/events/i
 import { loadPromptTemplates, renderMemoryContextPrompt } from "../../agent/prompts/index.ts";
 import { FeedbackCategory, classifyFeedback } from "../../agent/runtime/feedback.interpreter.ts";
 import { detectExplicitIntent, detectExplicitSkillIntent, ProjectTriggerKind } from "../../agent/project/index.ts";
+import { promoteCodename as promoteCodenameHelper } from "../../agent/project/codename.promote.ts";
 import { ProjectScaffolder } from "../../agent/project/scaffolder.ts";
 import { spreadActivation, type ActivationCandidate } from "./activation.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
 import { ProjectMemoryStore } from "./project.memory.ts";
-import { JournalStore, type JournalAtomWrite, type JournalVisibleAtom } from "./journal.store.ts";
+import { JournalStore, JournalWriteRejectedError, type JournalAtomWrite, type JournalVisibleAtom } from "./journal.store.ts";
+import { BrainStore } from "./brain.store.ts";
+import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type CodenameRecord, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
@@ -42,6 +47,7 @@ import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { RetrospectiveLog } from "./retrospective.ts";
 import { BackgroundScheduler } from "./background.scheduler.ts";
+import { DormantSupervisor } from "./dormant.supervisor.ts";
 import { DreamWorkerImpl } from "../../agent/runtime/dream.worker.ts";
 import type {
     MemoryAction,
@@ -76,6 +82,9 @@ export type {
 @Provide({ kind: ComponentKind.Memory, layer: ArchitectureLayer.Control, name: "memory", provider: true })
 export class MemoryModule extends Memory {
     private readonly journal: JournalStore;
+    /** LF-R1 brain.db 单库（与 journal 双写过渡期）。warmup 时 open；失败不影响主路径。 */
+    private readonly brain: BrainStore;
+    private brainOpened = false;
     private readonly markdown: MarkdownMemoryStore;
     private readonly projectMemory: ProjectMemoryStore;
     private readonly matrix: MemoryMatrixAggregator;
@@ -84,6 +93,7 @@ export class MemoryModule extends Memory {
     private readonly redis: RedisMemoryStore | null;
     private readonly surreal: SurrealGraphStore | null;
     private readonly scheduler: BackgroundScheduler | null;
+    private readonly dormant: DormantSupervisor;
     private readonly model: ModelClient | undefined;
     private readonly projectScaffolder: ProjectScaffolder;
     /** 单例 embedding provider；用于 context.embedding 缺省时降级计算。 */
@@ -99,6 +109,7 @@ export class MemoryModule extends Memory {
         this.model = model;
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.journal = new JournalStore({ journalRoot: config.paths.journalDir ?? join(config.paths.home, "journal") });
+        this.brain = new BrainStore({ dbPath: join(config.paths.home, "brain.db") });
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
         this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
@@ -123,9 +134,17 @@ export class MemoryModule extends Memory {
                           dream: new DreamWorkerImpl(this.surreal, model, this.events),
                           projectSweeper: (userId: string) => this.sweepProjectClusters(userId).catch(() => false),
                           skillSweeper: (userId: string) => this.sweepSkillCandidates(userId).catch(() => false),
+                          summarySweeper: async (userId: string) => {
+                              const r = this.runSummaryOnce(userId);
+                              return { written: r?.written ?? 0 };
+                          },
+                          dormantSweeper: () => this.dormant.sweepOnce(),
                       },
                   )
                 : null;
+        this.dormant = new DormantSupervisor(this.events, {
+            idleMinutes: config.memory.tuning.dormant.idleMinutes,
+        });
     }
 
     /**
@@ -138,6 +157,14 @@ export class MemoryModule extends Memory {
     }
 
     async warmup(): Promise<void> {
+        try {
+            await this.brain.open();
+            this.brainOpened = true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, { stage: "warmup-open", error: String(err) }),
+            );
+        }
         if (this.scheduler) {
             this.scheduler.start();
         } else {
@@ -167,6 +194,14 @@ export class MemoryModule extends Memory {
     /** 关停：停止后台调度器，让 bun --compile 二进制可以干净退出。 */
     dispose(): void {
         this.scheduler?.stop();
+        if (this.brainOpened) {
+            try {
+                this.brain.close();
+            } catch {
+                // best-effort：close 失败不阻断退出
+            }
+            this.brainOpened = false;
+        }
     }
 
     /** CLI / 诊断接口：dream 后台状态。无 scheduler 时返回禁用快照。 */
@@ -187,10 +222,11 @@ export class MemoryModule extends Memory {
         driftRepaired: number;
         recallReinforced: number;
         contradictionsFlagged: number;
+        reconsolidated: number;
         skipped: number;
     }> {
         if (!this.scheduler)
-            return { users: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, skipped: 0 };
+            return { users: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, reconsolidated: 0, skipped: 0 };
         return this.scheduler.runDreamOnce(limit, userId);
     }
 
@@ -210,7 +246,7 @@ export class MemoryModule extends Memory {
             limit: this.config.memory.retrieval.maxResults,
         };
 
-        const [hippocampus, projectMemory, journalResults, markdown] = await Promise.all([
+        const [hippocampus, projectMemory, journalResults, markdown, brainShadow] = await Promise.all([
             this.assembleHippocampusContext(message, context),
             this.projectMemory.snapshot({
                 maxChars: this.config.memory.retrieval.maxPromptChars,
@@ -220,6 +256,7 @@ export class MemoryModule extends Memory {
             }),
             this.recallVisibleJournalMemory(message, context),
             this.markdown.snapshot(),
+            this.recallBrainShadow(message, context),
         ]);
         const results = dedupeResults(journalResults);
         const memoryBody = renderMemoryPrompt(
@@ -240,6 +277,24 @@ export class MemoryModule extends Memory {
         const nudges: string[] = [];
         if (offer) nudges.push(renderProjectOfferNudge(offer));
         if (skillOffer) nudges.push(renderSkillOfferNudge(skillOffer));
+
+        // LF-R3 Ask 一等公民：若 brain 中存在 pending ask，把 [continuation] 块拼到顶部，
+        // 让模型把用户下一条消息当作对该 ask 的答复处理。零字符匹配——是否注入只看
+        // brain 是否有未答复的 ask 事件，runtime 不解析任何对话文本。
+        const continuation = this.renderPendingAskContinuation(message.user.id);
+        if (continuation) nudges.unshift(continuation);
+
+        // LF-R4 Ghost Context：把活跃的高分 ghost-context 拼成 [ghost-hint] 块注入
+        // prompt。零字符匹配——是否注入只看 brain 的 status + decayScore 资源指标，
+        // 不解析任何对话文本。用户可在回复里显式 resume / fork / fresh。
+        const ghostHint = this.renderGhostHint(message.user.id);
+        if (ghostHint) nudges.push(ghostHint);
+
+        // LF-R5 Identity：把当前 live identity append 拼成 [identity] 块注入 prompt 顶部。
+        // 零字符匹配——是否注入只看 brain 行的 status，runtime 不解析 content 语义。
+        const identityBlock = this.renderIdentityBlock(message.user.id);
+        if (identityBlock) nudges.unshift(identityBlock);
+
         const body = nudges.length > 0 ? `${nudges.join("\n\n")}\n\n${memoryBody}` : memoryBody;
 
         this.events.publish(
@@ -248,6 +303,7 @@ export class MemoryModule extends Memory {
                 atomScoreThreshold: this.config.memory.tuning.atomScore.visibilityThreshold,
                 hippocampusActivated: hippocampus ? true : false,
                 journalAtomRecallResults: journalResults.length,
+                brainShadowRecallResults: brainShadow,
                 projectConstraintId,
                 projectMemoryActivated: projectMemory.prompt ? true : false,
                 projectMemoryManifestPath: projectMemory.manifest.paths.manifest,
@@ -331,12 +387,20 @@ export class MemoryModule extends Memory {
         context: RuntimeContext,
         actions: MemoryAction[] = [],
         provenance: MemoryEpisodeProvenance = {},
+        ask?: AgentAsk,
     ): Promise<TurnMemoryResult> {
         if (!this.config.memory.enabled) {
             return {
                 candidates: [],
                 promoted: [],
             };
+        }
+
+        // LF-R3 Ask 一等公民：先把"用户对上一轮 ask 的答复"落到 brain（ask-answer-pair 事件），
+        // 再处理本轮可能新发起的 ask。两个写入顺序固定，避免 chain 被错误跨轮接续。
+        const pendingAskBefore = this.findPendingAsk(message.user.id);
+        if (pendingAskBefore) {
+            this.recordAskAnswerPair(pendingAskBefore.id, message);
         }
 
         const projectTrigger = detectExplicitIntent(actions);
@@ -346,12 +410,20 @@ export class MemoryModule extends Memory {
         // 派生 hot atom。失败不阻断回答，但必须发审计事件。
         await this.writeTurnToJournal(message, reply, context, actions, provenance, projectConstraintId);
 
+        // 模型本轮如果发起新的 ask（kind='ask'），落 brain.memory_events.type='ask'。
+        // chainDepth 由前序 ask 是否存在 + countAskChainDepth 决定；超过 maxChainDepth
+        // 时仅记审计事件，runtime 由调用方决定是否强制 reply（见 RuntimeModule）。
+        if (ask) {
+            this.recordAskEvent(message, context, ask, pendingAskBefore?.id);
+        }
+
         // async-pipeline: Redis 热记忆可以独立启动。
         // 用 actions 直接估 importance，避免等 candidates 构造完成。
         void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
         this.scheduler?.noteUserTurn(message.user.id);
+        this.dormant.touch(message.user.id);
 
         // 项目脚手架触发（仅显式意图通道，幂等；cluster 通道由后台 sweep 触发，本路径不参与）。
         if (projectTrigger.kind !== ProjectTriggerKind.None) {
@@ -710,8 +782,17 @@ export class MemoryModule extends Memory {
                         ? context.embedding
                         : await this.embeddings.embed(message.text)
                     : [];
-            const atoms = actions.slice(0, this.config.memory.candidates.maxCandidatesPerTurn).map((action, index) =>
-                journalAtomFromAction({
+            const atoms = actions.slice(0, this.config.memory.candidates.maxCandidatesPerTurn).map((action, index) => {
+                let codenameUseCount = 0;
+                if (this.brainOpened && action.codename?.name) {
+                    try {
+                        const existing = this.brain.getCodenameByName(message.user.id, action.codename.name);
+                        codenameUseCount = existing?.useCount ?? 0;
+                    } catch {
+                        codenameUseCount = 0;
+                    }
+                }
+                return journalAtomFromAction({
                     action,
                     embedding,
                     episodeId,
@@ -724,8 +805,9 @@ export class MemoryModule extends Memory {
                     scoreWeights: this.config.memory.tuning.atomScore.weights,
                     inboxDecayMultiplier: this.config.memory.tuning.inbox.decayMultiplier,
                     createdAt,
-                }),
-            );
+                    codenameUseCount,
+                });
+            });
             const result = await this.journal.appendEpisode(
                 {
                     id: episodeId,
@@ -737,21 +819,52 @@ export class MemoryModule extends Memory {
                     createdAt,
                 },
                 atoms,
-            );
-            this.events.publish(
-                event(
-                    RuntimeEventType.MemoryJournalWritten,
-                    {
-                        atomIds: result.atomIds,
-                        atoms: result.atomIds.length,
-                        dbPath: result.dbPath,
-                        episodeId: result.episodeId,
-                        projectConstraintId,
-                        week: result.week,
-                    },
-                    context.requestId,
-                ),
-            );
+            ).catch((err: unknown) => {
+                if (err instanceof JournalWriteRejectedError) {
+                    this.events.publish(
+                        event(
+                            RuntimeEventType.MemoryJournalRejectedLegacy,
+                            {
+                                code: err.code,
+                                dateKey: err.dateKey,
+                                ageDays: err.ageDays,
+                                graceDays: err.graceDays,
+                                episodeId,
+                            },
+                            context.requestId,
+                        ),
+                    );
+                    return null;
+                }
+                throw err;
+            });
+            if (result) {
+                this.events.publish(
+                    event(
+                        RuntimeEventType.MemoryJournalWritten,
+                        {
+                            atomIds: result.atomIds,
+                            atoms: result.atomIds.length,
+                            dbPath: result.dbPath,
+                            episodeId: result.episodeId,
+                            projectConstraintId,
+                            week: result.week,
+                        },
+                        context.requestId,
+                    ),
+                );
+            }
+            this.dualWriteBrainEvent({
+                episodeId,
+                message,
+                reply,
+                provenance: normalizedProvenance,
+                createdAt,
+                projectConstraintId,
+                requestId: context.requestId,
+                atomIds: result?.atomIds ?? [],
+                codenameId: this.persistCodenamesFromActions(message.user.id, actions, createdAt),
+            });
         } catch (err) {
             this.events.publish(
                 event(
@@ -759,6 +872,935 @@ export class MemoryModule extends Memory {
                     { stage: "journal-write", error: String(err) },
                     context.requestId,
                 ),
+            );
+        }
+    }
+
+    /**
+     * LF-R1 双写：把每条 episode 同步落到 brain.db `memory_events`。
+     * 与 journal 写入并行的过渡期实现，read path 仍走 journal；brain 不可用时静默吞错并发事件，
+     * 不影响主链路（R2 红线允许 brain 缺失时 journal 继续作为唯一权威）。
+     */
+    private dualWriteBrainEvent(input: {
+        episodeId: string;
+        message: GatewayMessage;
+        reply: GatewayReply;
+        provenance: MemoryEpisodeProvenance;
+        createdAt: string;
+        projectConstraintId: string;
+        requestId: string;
+        atomIds: string[];
+        codenameId?: string;
+    }): void {
+        if (!this.brainOpened) return;
+        const ts = Date.parse(input.createdAt);
+        const tsValue = Number.isFinite(ts) ? ts : Date.now();
+        try {
+            this.brain.appendEvent({
+                id: input.episodeId,
+                ts: tsValue,
+                userId: input.message.user.id,
+                channelId: input.message.route.channel,
+                codenameId: input.codenameId ?? input.projectConstraintId,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    userText: input.message.text,
+                    assistantText: input.reply.text,
+                    provenance: input.provenance,
+                    atomIds: input.atomIds,
+                },
+                importance: 0.5,
+            });
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryBrainEventWritten,
+                    {
+                        episodeId: input.episodeId,
+                        codenameId: input.codenameId ?? input.projectConstraintId,
+                        atoms: input.atomIds.length,
+                    },
+                    input.requestId,
+                ),
+            );
+        } catch (err) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryBrainWriteFailed,
+                    { stage: "dual-write", error: String(err), episodeId: input.episodeId },
+                    input.requestId,
+                ),
+            );
+        }
+    }
+
+    /**
+     * LF-R2: persist any codename anchors emitted by the model in this turn's
+     * memory actions. Returns the first codename id (used to tag the brain
+     * event). All identification is model-driven; runtime never inspects user
+     * text for `@xxx` (zero-character-match red line).
+     */
+    private persistCodenamesFromActions(
+        userId: string,
+        actions: MemoryAction[],
+        createdAt: string,
+    ): string | undefined {
+        if (!this.brainOpened) return undefined;
+        const ts = Date.parse(createdAt);
+        const nowMs = Number.isFinite(ts) ? ts : Date.now();
+        let firstId: string | undefined;
+        for (const action of actions) {
+            const codename = action.codename;
+            if (!codename) continue;
+            try {
+                const existing = this.brain.getCodenameByName(userId, codename.name);
+                if (existing) {
+                    this.brain.touchCodename(existing.id, nowMs);
+                    firstId = firstId ?? existing.id;
+                    const refreshed = this.brain.getCodename(existing.id);
+                    this.events.publish(
+                        event(RuntimeEventType.MemoryCodenameTouched, {
+                            id: existing.id,
+                            name: existing.name,
+                            useCount: refreshed?.useCount ?? existing.useCount + 1,
+                        }),
+                    );
+                    if (refreshed) void this.maybePromoteCodename(refreshed, createdAt);
+                    continue;
+                }
+                const id = `cn-${crypto.randomUUID()}`;
+                const record = this.brain.upsertCodename({
+                    id,
+                    name: codename.name,
+                    workingDir: codename.workingDir,
+                    description: codename.description,
+                    userId,
+                    createdAt: nowMs,
+                    lastUsedAt: nowMs,
+                    useCount: 1,
+                });
+                firstId = firstId ?? record.id;
+                this.events.publish(
+                    event(RuntimeEventType.MemoryCodenameCreated, {
+                        id: record.id,
+                        name: record.name,
+                        workingDir: record.workingDir,
+                    }),
+                );
+            } catch (err) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryBrainWriteFailed, {
+                        op: "codename.persist",
+                        message: err instanceof Error ? err.message : String(err),
+                    }),
+                );
+            }
+        }
+        return firstId;
+    }
+
+    /**
+     * LF-R2: codename 升格通路。useCount + age 满足阈值且尚未绑定 projectId 时，
+     * 调用 ProjectScaffolder 在 workspace/projects/<projectId>/ 生成骨架，并把
+     * projectId 写回 codenames 表。完全幂等；失败发事件不抛错。
+     */
+    async promoteCodename(
+        codenameId: string,
+        opts: { force?: boolean; createdAt?: string } = {},
+    ): Promise<{ promoted: boolean; projectId?: string; rationale: string }> {
+        if (!this.brainOpened) return { promoted: false, rationale: "brain-closed" };
+        try {
+            const result = await promoteCodenameHelper(this.brain, this.projectScaffolder, codenameId, opts);
+            if (result.promoted && result.record && result.projectId) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryCodenamePromoted, {
+                        id: result.record.id,
+                        name: result.record.name,
+                        projectId: result.projectId,
+                        useCount: result.record.useCount,
+                    }),
+                );
+            }
+            return { promoted: result.promoted, projectId: result.projectId, rationale: result.rationale };
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryCodenamePromotionFailed, {
+                    id: codenameId,
+                    error: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return { promoted: false, rationale: "scaffold-failed" };
+        }
+    }
+
+    private async maybePromoteCodename(record: CodenameRecord, createdAt: string): Promise<void> {
+        if (record.projectId) return;
+        await this.promoteCodename(record.id, { createdAt }).catch(() => undefined);
+    }
+
+    // ─── LF-R3 Ask 一等公民 ────────────────────────────────────────
+
+    /**
+     * Runtime 用来查询当前用户是否有未答复的 ask、对应链深度。
+     * 用于 cap enforcement：模型若要继续 ask 而 chainDepth+1 > maxChainDepth，
+     * runtime 抛弃 ask 改走 reply。零字符匹配。
+     */
+    peekActiveAsk(userId: string): { askId: string; chainDepth: number; ask: AgentAsk } | null {
+        const pending = this.findPendingAsk(userId);
+        if (!pending) return null;
+        return { askId: pending.id, chainDepth: pending.chainDepth, ask: pending.ask };
+    }
+
+    /** brain 缺失时 best-effort 返回 null；不抛错。 */
+    private findPendingAsk(userId: string): { id: string; chainDepth: number; ask: AgentAsk } | null {
+        if (!this.brainOpened) return null;
+        try {
+            const row = this.brain.getLatestPendingAsk(userId);
+            if (!row) return null;
+            const content = row.content as Partial<AskEventContent> | undefined;
+            const ask = content?.ask as AgentAsk | undefined;
+            if (!ask) return null;
+            const chainDepth = typeof content?.chainDepth === "number" ? content.chainDepth : 1;
+            return { id: row.id, chainDepth, ask };
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ask.findPending",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return null;
+        }
+    }
+
+    /**
+     * 把 pending ask 拼成可注入 prompt 的 [continuation] 块。零字符匹配——
+     * 是否注入只看 brain 是否存在 pending ask，runtime 不做任何文本判断。
+     */
+    private renderPendingAskContinuation(userId: string): string | undefined {
+        const pending = this.findPendingAsk(userId);
+        if (!pending) return undefined;
+        const ask = pending.ask;
+        const lines: string[] = [
+            "[continuation]",
+            `You previously asked the user (reason=${ask.reason}, chainDepth=${pending.chainDepth}):`,
+            `> ${ask.prompt.replace(/\n+/g, " ").slice(0, 600)}`,
+        ];
+        if (ask.choices && ask.choices.length > 0) {
+            lines.push("Choices you offered:");
+            for (const c of ask.choices.slice(0, 8)) {
+                lines.push(`- ${c.label}${c.value ? ` (value=${c.value})` : ""}`);
+            }
+        }
+        lines.push(
+            "Treat the user's next message as their answer. If the answer resolves your question, reply directly; do NOT emit another <flyflor_agent_ask> unless strictly required.",
+        );
+        return lines.join("\n");
+    }
+
+    /**
+     * LF-R4：把活跃的高分 ghost-context 渲染为 `[ghost-hint]` 块。仅按
+     * decayScore 资源指标排序（不解析任何文本语义），最多展示 3 条。pending ask
+     * 的 sibling ghost 已通过 `[continuation]` 单独注入，这里跳过避免重复。
+     *
+     * 模型可显式输出 `kind: 'fork' | 'fresh' | 'resume'` 的处理方式（slice D 后续完善），
+     * 当前仅暴露候选清单，由模型同轮自行判断是否需要 fork / fresh。
+     */
+    private renderGhostHint(userId: string): string | undefined {
+        if (!this.brainOpened) return undefined;
+        let ghosts: MemoryEventRecord[];
+        try {
+            ghosts = this.brain.listActiveGhosts(userId, { limit: 12 });
+        } catch {
+            return undefined;
+        }
+        if (ghosts.length === 0) return undefined;
+
+        const pending = this.findPendingAsk(userId);
+        const pendingAskId = pending?.id;
+        const weightTable = this.config.memory.tuning.ghost.evidenceWeight;
+
+        type Scored = { row: MemoryEventRecord; score: number; tag: string };
+        const scored: Scored[] = [];
+        for (const row of ghosts) {
+            if (pendingAskId && row.parentId === pendingAskId) continue;
+            const state = this.brain.getState(row.id);
+            const base = state?.decayScore ?? 1;
+            const { weight, tag } = this.resolveGhostEvidenceWeight(row, weightTable);
+            const score = base * weight;
+            const threshold = this.config.memory.tuning.atomScore.visibilityThreshold ?? 0;
+            if (score < threshold) continue;
+            scored.push({ row, score, tag });
+        }
+        if (scored.length === 0) return undefined;
+        scored.sort((a, b) => b.score - a.score);
+        const top = scored.slice(0, 3);
+
+        const lines: string[] = [
+            "[ghost-hint]",
+            "The following past contexts are still active for this user (sorted by weighted decay score, highest first):",
+        ];
+        for (const { row, score, tag } of top) {
+            const c = row.content as Partial<GhostContextEventContent>;
+            const title = c.userFacing?.title?.slice(0, 120) ?? `ghost:${c.reason ?? "unknown"}`;
+            const hint = c.userFacing?.contextHint?.slice(0, 200);
+            const ageHours = Math.max(0, Math.round((Date.now() - row.ts) / 36e5));
+            lines.push(
+                `- id=${row.id} reason=${c.reason ?? "-"} evidence=${tag} score=${score.toFixed(2)} age=${ageHours}h :: ${title}${hint ? ` (${hint})` : ""}`,
+            );
+        }
+        lines.push(
+            "If the user's new message clearly continues one of these contexts, reuse it (no need to ask). If it starts a fresh topic, ignore them. Never invent ghosts the user did not name.",
+        );
+        return lines.join("\n");
+    }
+
+    /**
+     * LF-R5：把当前 live identity append 渲染为 `[identity]` 块。仅根据 brain 的状态层
+     * （`status='live'`）过滤；runtime 不读 content 文本派生 kind / 排序。
+     * 单条 content 来自模型已结构化截断的 `<=240` 字段；整块再做长度上限保护（约 1200 字）。
+     */
+    private renderIdentityBlock(userId: string): string | undefined {
+        if (!this.brainOpened) return undefined;
+        let rows: MemoryEventRecord[];
+        try {
+            rows = this.brain.listActiveIdentity(userId, { limit: 16 });
+        } catch {
+            return undefined;
+        }
+        if (rows.length === 0) return undefined;
+        const lines: string[] = [
+            "[identity]",
+            "The following self-described facts about this user and yourself were recorded in earlier turns and remain active. Honor them in your reply when relevant; do not contradict them silently.",
+        ];
+        let budget = 1200;
+        for (const row of rows) {
+            const c = row.content as Partial<IdentityEventContent>;
+            const kind = typeof c.kind === "string" ? c.kind : "other";
+            const content = typeof c.content === "string" ? c.content : "";
+            if (!content) continue;
+            const line = `- (${kind}) ${content}`;
+            if (line.length > budget) break;
+            lines.push(line);
+            budget -= line.length + 1;
+        }
+        if (lines.length <= 2) return undefined;
+        return lines.join("\n");
+    }
+
+    /**
+     * LF-R4 evidence weight：根据 ghost 当前结构化状态选权重。
+     * - state.status === 'abandoned' → 0（不应出现在 listActiveGhosts，但兜底）
+     * - content.continuationCompleted === true（模型已在某轮标记 fork/fresh）→ continuationCompleted（0.75）
+     * - sibling ask 已收到答复（存在 ask-answer-pair 事件）→ askAnswered（0.85）
+     * - 其它 → default
+     * 仅消费结构化字段（state.status + content flag + parent_id + 子事件类型），
+     * 不解析任何对话文本。
+     */
+    private resolveGhostEvidenceWeight(
+        row: MemoryEventRecord,
+        table: typeof this.config.memory.tuning.ghost.evidenceWeight,
+    ): { weight: number; tag: string } {
+        const state = this.brain.getState(row.id);
+        if (state?.status === MemoryEventStatus.Abandoned) {
+            return { weight: table.abandoned, tag: "abandoned" };
+        }
+        const c = row.content as Partial<GhostContextEventContent>;
+        if (c.continuationCompleted === true) {
+            return { weight: table.continuationCompleted, tag: "continuation-completed" };
+        }
+        if (row.parentId) {
+            const parent = this.brain.getEvent(row.parentId);
+            if (parent && parent.type === MemoryEventType.Ask && this.brain.hasAskBeenAnswered(row.parentId)) {
+                return { weight: table.askAnswered, tag: "ask-answered" };
+            }
+        }
+        return { weight: table.default, tag: "default" };
+    }
+
+    private recordAskAnswerPair(askEventId: string, message: GatewayMessage): void {
+        if (!this.brainOpened) return;
+        const ts = Date.parse(message.receivedAt);
+        const nowMs = Number.isFinite(ts) ? ts : Date.now();
+        const content: AskAnswerPairContent = {
+            askId: askEventId,
+            answerText: message.text.slice(0, 4000),
+            answerMessageId: message.id,
+        };
+        try {
+            this.brain.appendEvent({
+                id: `ask-ans-${crypto.randomUUID()}`,
+                ts: nowMs,
+                userId: message.user.id,
+                channelId: message.route.channel,
+                type: MemoryEventType.AskAnswerPair,
+                content: content as unknown as Record<string, unknown>,
+                parentId: askEventId,
+                importance: 0.85,
+            });
+            this.brain.upsertState(askEventId, { status: MemoryEventStatus.Resumed, resumedAt: nowMs });
+            this.events.publish(
+                event(RuntimeEventType.MemoryAskAnswered, {
+                    askEventId,
+                    userId: message.user.id,
+                }),
+            );
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ask.answer",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+        }
+    }
+
+    private recordAskEvent(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        ask: AgentAsk,
+        parentAskId: string | undefined,
+    ): void {
+        if (!this.brainOpened) return;
+        const ts = Date.parse(context.now);
+        const nowMs = Number.isFinite(ts) ? ts : Date.now();
+        const askId = `ask-${crypto.randomUUID()}`;
+        const chainDepth = parentAskId ? this.brain.countAskChainDepth(parentAskId) + 1 : 1;
+        const maxChainDepth = Math.max(1, this.config.memory.tuning.ghost.maxChainDepth);
+        const content: AskEventContent = {
+            askId,
+            ask,
+            requestId: context.requestId,
+            chainDepth,
+        };
+        try {
+            this.brain.appendEvent({
+                id: askId,
+                ts: nowMs,
+                userId: message.user.id,
+                channelId: message.route.channel,
+                type: MemoryEventType.Ask,
+                content: content as unknown as Record<string, unknown>,
+                parentId: parentAskId,
+                importance: 0.9,
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryAskRecorded, {
+                    askEventId: askId,
+                    userId: message.user.id,
+                    reason: ask.reason,
+                    chainDepth,
+                }),
+            );
+            if (chainDepth > maxChainDepth) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryAskChainCapped, {
+                        askEventId: askId,
+                        userId: message.user.id,
+                        chainDepth,
+                        maxChainDepth,
+                    }),
+                );
+            }
+            // LF-R4：每条 ask 同步写一条 ghost-context 事件（parent_id 指向 ask），
+            // 用户可见 + 可 resume / drop / pin。userFacing.title 缺省 fallback 到
+            // ask.prompt 首行（短路降级，不算字符匹配——纯结构化字段）。
+            this.recordGhostFromAsk({
+                askId,
+                ask,
+                message,
+                context,
+                nowMs,
+            });
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ask.record",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+        }
+    }
+
+    // ─── LF-R4 Ghost Context（与 LF-R3 Ask 同根）──────────────────
+
+    /**
+     * 列出当前用户的活跃 ghost-context 事件（live/resumed），ts 倒序。
+     * `codenameId === null` 显式查询无 codename 的 ghost；`undefined` 不限定。
+     */
+    listActiveGhosts(
+        userId: string,
+        options: { codenameId?: string | null; limit?: number } = {},
+    ): MemoryEventRecord[] {
+        if (!this.brainOpened) return [];
+        try {
+            return this.brain.listActiveGhosts(userId, options);
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.list",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return [];
+        }
+    }
+
+    /** 取单个 ghost 详情；找不到或非 ghost-context 类型则返回 null。 */
+    getGhost(ghostEventId: string): MemoryEventRecord | null {
+        if (!this.brainOpened) return null;
+        try {
+            const row = this.brain.getEvent(ghostEventId);
+            return row?.type === MemoryEventType.GhostContext ? row : null;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.get",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return null;
+        }
+    }
+
+    /** 用户主动 resume：拉回峰值，state=resumed + resumedAt。runtime 后续按 ghost 重建上下文。 */
+    resumeGhost(ghostEventId: string, nowMs = Date.now()): boolean {
+        const ghost = this.getGhost(ghostEventId);
+        if (!ghost) return false;
+        try {
+            this.brain.upsertState(ghost.id, {
+                status: MemoryEventStatus.Resumed,
+                resumedAt: nowMs,
+                lastAccessed: nowMs,
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryGhostResumed, {
+                    ghostEventId: ghost.id,
+                    userId: ghost.userId,
+                }),
+            );
+            return true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.resume",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return false;
+        }
+    }
+
+    /** 用户主动 drop：state=abandoned，不再展示，evidence weight=0。 */
+    dropGhost(ghostEventId: string): boolean {
+        const ghost = this.getGhost(ghostEventId);
+        if (!ghost) return false;
+        try {
+            this.brain.upsertState(ghost.id, { status: MemoryEventStatus.Abandoned });
+            this.events.publish(
+                event(RuntimeEventType.MemoryGhostDropped, {
+                    ghostEventId: ghost.id,
+                    userId: ghost.userId,
+                }),
+            );
+            return true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.drop",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return false;
+        }
+    }
+
+    /**
+     * 用户 pin：把 decay_score 半衰期乘以 `tuning.ghost.pinHalflifeMultiplier`（默认 3.0）。
+     * 实装层面：直接把 decayScore 上调到 current * multiplier，仍走衰减管道（不冻结）。
+     */
+    pinGhost(ghostEventId: string): boolean {
+        const ghost = this.getGhost(ghostEventId);
+        if (!ghost) return false;
+        try {
+            const state = this.brain.getState(ghost.id);
+            const multiplier = Math.max(1, this.config.memory.tuning.ghost.pinHalflifeMultiplier);
+            const baseScore = state?.decayScore ?? 1;
+            this.brain.upsertState(ghost.id, { decayScore: baseScore * multiplier });
+            this.events.publish(
+                event(RuntimeEventType.MemoryGhostPinned, {
+                    ghostEventId: ghost.id,
+                    userId: ghost.userId,
+                    multiplier,
+                }),
+            );
+            return true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.pin",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return false;
+        }
+    }
+
+    /**
+     * LF-R4 fork/fresh hint：把模型同轮输出的 ghost 决策落库。
+     * 仅消费 `{ghostId, kind}` 结构化字段，不读文本语义。
+     * - `resume`：调 resumeGhost（state → resumed）。
+     * - `fork` / `fresh`：在 ghost-context content 上挂 `continuationCompleted=true` + `lastKind=kind`，
+     *   评分阶段 `resolveGhostEvidenceWeight` 走 `continuationCompleted` 权重（默认 0.75）。
+     * 未命中的 ghostId 直接忽略（不抛错）。返回成功应用的条数。
+     */
+    applyGhostDecisions(decisions: GhostDecision[]): number {
+        if (!this.brainOpened || decisions.length === 0) return 0;
+        let applied = 0;
+        for (const decision of decisions) {
+            const ghost = this.getGhost(decision.ghostId);
+            if (!ghost) continue;
+            try {
+                if (decision.kind === GhostDecisionKind.Resume) {
+                    this.resumeGhost(decision.ghostId);
+                } else {
+                    this.brain.patchGhostContent(decision.ghostId, {
+                        continuationCompleted: true,
+                        lastKind: decision.kind,
+                    });
+                }
+                applied += 1;
+                this.events.publish(
+                    event(RuntimeEventType.MemoryGhostDecisionApplied, {
+                        ghostEventId: decision.ghostId,
+                        userId: ghost.userId,
+                        kind: decision.kind,
+                    }),
+                );
+            } catch (err) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryBrainWriteFailed, {
+                        op: "ghost.decision",
+                        message: err instanceof Error ? err.message : String(err),
+                    }),
+                );
+            }
+        }
+        return applied;
+    }
+
+    /**
+     * LF-R5 identity 自写：把模型同轮输出的 identity append 候选落库。
+     * 只做 enum + 长度校验（已在 parser 完成），不解析 content 语义。
+     * 返回新写入的 eventId 列表（按输入顺序，跳过写入失败）。
+     */
+    applyIdentityAppends(input: {
+        userId: string;
+        candidates: IdentityAppendCandidate[];
+        codenameId?: string;
+        channelId?: string;
+        requestId?: string;
+        nowMs?: number;
+    }): string[] {
+        if (!this.brainOpened || input.candidates.length === 0) return [];
+        const ts = input.nowMs ?? Date.now();
+        const writtenIds: string[] = [];
+        for (const candidate of input.candidates) {
+            const eventId = `identity-${crypto.randomUUID()}`;
+            const content: IdentityEventContent = {
+                kind: candidate.kind,
+                content: candidate.content,
+                confidence: candidate.confidence ?? 1,
+                ...(input.requestId ? { sourceRequestId: input.requestId } : {}),
+            };
+            try {
+                this.brain.appendEvent({
+                    id: eventId,
+                    ts,
+                    userId: input.userId,
+                    channelId: input.channelId,
+                    codenameId: input.codenameId,
+                    type: MemoryEventType.IdentityAppend,
+                    content: content as unknown as Record<string, unknown>,
+                    importance: 0.6 + 0.3 * Math.max(0, Math.min(1, content.confidence)),
+                });
+                writtenIds.push(eventId);
+                this.events.publish(
+                    event(RuntimeEventType.MemoryIdentityAppended, {
+                        eventId,
+                        userId: input.userId,
+                        kind: candidate.kind,
+                    }),
+                );
+            } catch (err) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryBrainWriteFailed, {
+                        op: "identity.append",
+                        message: err instanceof Error ? err.message : String(err),
+                    }),
+                );
+            }
+        }
+        return writtenIds;
+    }
+
+    /**
+     * LF-R5 identity 列举：默认只返回 live（未 revert / 未冷归档）行；
+     * 传 `includeReverted=true` 时拉全部历史用于 CLI / TUI 审计。
+     */
+    listIdentity(
+        userId: string,
+        options: { limit?: number; includeReverted?: boolean } = {},
+    ): MemoryEventRecord[] {
+        if (!this.brainOpened) return [];
+        try {
+            return options.includeReverted
+                ? this.brain.listAllIdentity(userId, { limit: options.limit })
+                : this.brain.listActiveIdentity(userId, { limit: options.limit });
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "identity.list",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return [];
+        }
+    }
+
+    /**
+     * LF-R5 identity revert：把 `identity-append` 行的 state.status 置 abandoned。
+     * 仅对 `type='identity-append'` 生效；其他类型返回 false。
+     * 不删除底层 event，保留审计 / reconsolidation 证据。
+     */
+    revertIdentity(eventId: string, nowMs = Date.now()): boolean {
+        if (!this.brainOpened) return false;
+        try {
+            const row = this.brain.getEvent(eventId);
+            if (!row || row.type !== MemoryEventType.IdentityAppend) return false;
+            this.brain.upsertState(eventId, {
+                status: MemoryEventStatus.Abandoned,
+                lastAccessed: nowMs,
+            });
+            // Patch event content with revertedAt for audit reconstruction.
+            const nextContent: IdentityEventContent = {
+                ...(row.content as unknown as IdentityEventContent),
+                revertedAt: nowMs,
+            };
+            // Lightweight in-place patch shares the ghost path's UPDATE semantics.
+            // Reuse low-level update by reusing patchGhostContent? It's ghost-typed only;
+            // use a dedicated brain helper to keep the type check clean.
+            this.brain.updateEventContent(eventId, nextContent as unknown as Record<string, unknown>);
+            this.events.publish(
+                event(RuntimeEventType.MemoryIdentityReverted, {
+                    eventId,
+                    userId: row.userId,
+                }),
+            );
+            return true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "identity.revert",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return false;
+        }
+    }
+
+    /**
+     * LF-R5 slice B：跑一次该用户的 daily + weekly summary 聚合。
+     * 纯结构化字段聚合（type / role / codenameId / ask reason / ghost reason 计数），
+     * 不调 LLM、不读 content 文本。返回 `null` 表示 brain 未开。
+     */
+    runSummaryOnce(userId: string, nowMs?: number): SummaryRunResult | null {
+        if (!this.brainOpened) return null;
+        try {
+            const worker = new SummaryWorker(this.brain, {
+                rollingWindowDays: this.config.memory.tuning.summary.rollingWindowDays,
+                trigger: this.config.memory.tuning.summary.trigger,
+                minIntervalHours: this.config.memory.tuning.summary.minIntervalHours,
+            });
+            const result = worker.runOnceForUser(userId, nowMs);
+            this.events.publish(
+                event(RuntimeEventType.MemorySummaryWritten, {
+                    userId,
+                    written: result.written,
+                    skippedByInterval: result.skippedByInterval,
+                    skippedEmpty: result.skippedEmpty,
+                }),
+            );
+            return result;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "summary.run",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return null;
+        }
+    }
+
+    /** LF-R5 slice D：Dormant 当前态查询。 */
+    runtimeModeOf(userId: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Dormant {
+        return this.dormant.modeOf(userId);
+    }
+
+    /** LF-R5 slice D：手动触发一次 dormant sweep（测试 / CLI）。 */
+    sweepDormantOnce(): { entered: number } {
+        return this.dormant.sweepOnce();
+    }
+
+    /** LF-R5 slice D：dormant 状态快照（CLI / 诊断）。 */
+    dormantSnapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
+        return this.dormant.snapshot();
+    }
+
+    /**
+     * LF-R4：runtime 在非 ask 路径触发的 ghost-context 写入。
+     * 适用于 `tool-failure` / `blackboard-cap` / `process-restart` 三种 reason；
+     * 调用方必须显式给出 `userFacing` 字段（不做 prompt fallback，runtime 不解析文本语义）。
+     * `ask` reason 的 ghost 仍由 `recordGhostFromAsk` 自动写入，不要走本入口。
+     */
+    recordGhostFromReason(input: {
+        userId: string;
+        reason: Exclude<GhostContextReason, typeof GhostContextReason.Ask>;
+        userFacing: { title: string; contextHint?: string };
+        snapshot?: {
+            originalUserMessage?: string;
+            blackboardTurnId?: string;
+            mcpCallProgress?: Array<{ tool: string; status: string; lastError?: string }>;
+        };
+        parentEventId?: string;
+        codenameId?: string;
+        channelId?: string;
+        requestId?: string;
+        importance?: number;
+        nowMs?: number;
+    }): string | null {
+        if (!this.brainOpened) return null;
+        const ghostId = `ghost-${crypto.randomUUID()}`;
+        const ts = input.nowMs ?? Date.now();
+        const title = input.userFacing.title.trim().slice(0, 120);
+        if (!title) return null;
+        const contextHint = input.userFacing.contextHint?.trim().slice(0, 500);
+        const snapshot: GhostSnapshot = {};
+        if (input.snapshot?.originalUserMessage) snapshot.originalUserMessage = input.snapshot.originalUserMessage;
+        if (input.snapshot?.blackboardTurnId) snapshot.blackboardTurnId = input.snapshot.blackboardTurnId;
+        if (input.snapshot?.mcpCallProgress && input.snapshot.mcpCallProgress.length > 0) {
+            snapshot.mcpCallProgress = input.snapshot.mcpCallProgress;
+        }
+        const content: GhostContextEventContent = {
+            ghostId,
+            reason: input.reason,
+            userFacing: contextHint ? { title, contextHint } : { title },
+            ...(Object.keys(snapshot).length > 0 ? { snapshot } : {}),
+            ...(input.codenameId ? { codenameId: input.codenameId } : {}),
+            ...(input.requestId ? { requestId: input.requestId } : {}),
+        };
+        try {
+            this.brain.appendEvent({
+                id: ghostId,
+                ts,
+                userId: input.userId,
+                channelId: input.channelId,
+                codenameId: input.codenameId,
+                type: MemoryEventType.GhostContext,
+                content: content as unknown as Record<string, unknown>,
+                parentId: input.parentEventId,
+                importance: input.importance ?? 0.6,
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryGhostRecorded, {
+                    ghostEventId: ghostId,
+                    userId: input.userId,
+                    reason: input.reason,
+                }),
+            );
+            return ghostId;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.record",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return null;
+        }
+    }
+
+    /**
+     * LF-R4：每次 recordAskEvent 完毕后写一条 ghost-context 事件。
+     * userFacing.title 缺省 fallback 到 ask.prompt 首行（短路降级，非字符匹配）。
+     */
+    private recordGhostFromAsk(input: {
+        askId: string;
+        ask: AgentAsk;
+        message: GatewayMessage;
+        context: RuntimeContext;
+        nowMs: number;
+    }): void {
+        const { askId, ask, message, context, nowMs } = input;
+        const hintTitle = ask.ghostHint?.title?.trim();
+        const hintContext = ask.ghostHint?.contextHint?.trim();
+        let title: string;
+        if (hintTitle) {
+            title = hintTitle.slice(0, 120);
+        } else {
+            const firstLine = (ask.prompt.split(/\r?\n/, 1)[0] ?? ask.prompt).trim();
+            title = firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || `ask:${ask.reason}`;
+        }
+        const contextHint = hintContext ?? ask.rationale;
+        // LF-R4：ask.reason 是结构化枚举字段，结构化 → 结构化的映射不算字符匹配。
+        // 黑板封顶的 ask 是 runtime 合成而非模型表达，单独标记为 reason='blackboard-cap'，
+        // 列表 / 召回 / fork 决策时可与普通 ask ghost 区分。
+        const ghostReason: GhostContextReason =
+            ask.reason === AskReason.BlackboardStalemate
+                ? GhostContextReason.BlackboardCap
+                : GhostContextReason.Ask;
+        const ghostId = `ghost-${crypto.randomUUID()}`;
+        const content: GhostContextEventContent = {
+            ghostId,
+            reason: ghostReason,
+            userFacing: {
+                title,
+                askPrompt: ask.prompt,
+                ...(contextHint ? { contextHint } : {}),
+            },
+            snapshot: {
+                originalUserMessage: message.text,
+                askedQuestion: ask,
+            },
+            requestId: context.requestId,
+        };
+        try {
+            this.brain.appendEvent({
+                id: ghostId,
+                ts: nowMs,
+                userId: message.user.id,
+                channelId: message.route.channel,
+                type: MemoryEventType.GhostContext,
+                content: content as unknown as Record<string, unknown>,
+                parentId: askId,
+                importance: 0.7,
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryGhostRecorded, {
+                    ghostEventId: ghostId,
+                    askEventId: askId,
+                    userId: message.user.id,
+                    reason: ghostReason,
+                    askReason: ask.reason,
+                }),
+            );
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.record",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
             );
         }
     }
@@ -784,6 +1826,49 @@ export class MemoryModule extends Memory {
             .sort((a, b) => b.rank - a.rank)
             .slice(0, this.config.memory.retrieval.maxResults)
             .map(({ entry }) => visibleAtomToMemoryResult(entry));
+    }
+
+    /**
+     * LF-R1 shadow read: query brain.db memory_events for the same user window
+     * in parallel with the journal recall. Journal remains authoritative for
+     * the prompt body — this path only emits a metrics event so we can validate
+     * dual-write parity before flipping the read source. Errors are swallowed
+     * (best-effort), brain unavailable returns 0.
+     */
+    private async recallBrainShadow(
+        message: GatewayMessage,
+        context?: RuntimeContext,
+    ): Promise<number> {
+        if (!this.brainOpened) return 0;
+        try {
+            const nowMs = Date.parse(context?.now ?? message.receivedAt);
+            const sinceTs = Number.isFinite(nowMs)
+                ? nowMs - 7 * 24 * 60 * 60 * 1000
+                : Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const events = this.brain.listEvents({
+                userId: message.user.id,
+                type: MemoryEventType.Event,
+                sinceTs,
+                limit: this.config.memory.retrieval.maxResults,
+                statusIn: [MemoryEventStatus.Live, MemoryEventStatus.Resumed],
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainShadowRecall, {
+                    userId: message.user.id,
+                    sinceTs,
+                    hits: events.length,
+                }),
+            );
+            return events.length;
+        } catch (error) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "shadow.recall",
+                    message: error instanceof Error ? error.message : String(error),
+                }),
+            );
+            return 0;
+        }
     }
 
     private async visibleAtomsForEpisodes(
@@ -1286,6 +2371,22 @@ export function createMemory(config: FlyflorConfig, events: EventSink, model?: M
     return new MemoryModule(config, events, model);
 }
 
+function buildScoreExplain(
+    projectConstraintId: string,
+    inboxDecayMultiplier: number,
+    codenameBoost: number,
+    codenameUseCount: number,
+): string | undefined {
+    const parts: string[] = [];
+    if (projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID) {
+        parts.push(`inbox recency dampened by ${inboxDecayMultiplier}`);
+    }
+    if (codenameBoost > 0) {
+        parts.push(`codename boost +${codenameBoost.toFixed(3)} (uses=${codenameUseCount})`);
+    }
+    return parts.length > 0 ? parts.join("; ") : undefined;
+}
+
 function candidateFromAction(
     action: MemoryAction,
     message: GatewayMessage,
@@ -1453,6 +2554,12 @@ interface JournalAtomFromActionInput {
         successPrior: number;
     };
     inboxDecayMultiplier: number;
+    /**
+     * LF-R2 codename boost：当 atom 来自带 codename 的 action 时，把 codename 的
+     * useCount 视作"反复出现的工作锚点"信号，按对数曲线（min(1, log2(1+useCount)/4)）
+     * 把它叠加到 score.total。零字符匹配——只用 useCount 资源指标。
+     */
+    codenameUseCount?: number;
 }
 
 function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWrite {
@@ -1467,6 +2574,9 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
     const inboxDecayMultiplier = Math.max(1, input.inboxDecayMultiplier);
     const recency =
         input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID ? clamp01(1 / inboxDecayMultiplier) : 1;
+    const codenameUseCount = Math.max(0, Math.floor(input.codenameUseCount ?? 0));
+    const codenameBoost =
+        codenameUseCount > 0 ? clamp01(Math.log2(1 + codenameUseCount) / 4) : 0;
     const score: AtomScore = {
         atomId: `${input.episodeId}:atom:${input.index}`,
         access: clamp01(weights.recurrence),
@@ -1475,16 +2585,15 @@ function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWr
         recency,
         successPrior: clamp01(weights.confidence * 0.5 + weights.durability * 0.3 + weights.validationCount * 0.2),
         total: 0,
-        explain:
-            input.projectConstraintId === INBOX_PROJECT_CONSTRAINT_ID
-                ? `inbox recency dampened by ${inboxDecayMultiplier}`
-                : undefined,
+        explain: buildScoreExplain(input.projectConstraintId, inboxDecayMultiplier, codenameBoost, codenameUseCount),
     };
-    score.total =
+    score.total = clamp01(
         score.recency * input.scoreWeights.recency +
-        score.access * input.scoreWeights.access +
-        score.successPrior * input.scoreWeights.successPrior +
-        score.fanout * input.scoreWeights.fanout;
+            score.access * input.scoreWeights.access +
+            score.successPrior * input.scoreWeights.successPrior +
+            score.fanout * input.scoreWeights.fanout +
+            codenameBoost,
+    );
     const atom: MemoryAtom = {
         id: score.atomId,
         episodeIds: [input.episodeId],

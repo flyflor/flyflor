@@ -843,7 +843,7 @@ describe("Agent memory stability and latency", () => {
         expect(reply.text).toBe("一次性回答。");
     });
 
-    test("runtime returns visible blackboard transcript before the final model answer", async () => {
+    test("blackboard NeedsUser short-circuits to AgentAsk reply (LF-R3 slice D)", async () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
@@ -856,7 +856,8 @@ describe("Agent memory stability and latency", () => {
         const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
         const model = new SequencedModel([
             routeDecision("blackboard", 0.82, "model selected blackboard"),
-            "这是主脑综合黑板后的最终回答。",
+            // 第二个槽位（最终回答）不应被消费，因为短路。
+            "本不应出现在 reply 里的最终回答。",
             "[]",
         ]);
         const runtime = new RuntimeModule(runtimeConfig, model, events, blackboard);
@@ -865,27 +866,22 @@ describe("Agent memory stability and latency", () => {
         const reply = await runtime.handleMessage(message, runtimeContext());
         const turns = await blackboard.listTurns(projectConstraintIdForMessage(message), 5);
 
-        expect(reply.text).toContain("Blackboard discussion:");
-        expect(reply.text).toContain("Round 1");
-        expect(reply.text).toContain("Analysis worker: analysis worker continues.");
-        expect(reply.text).toContain("Review worker: review worker continues.");
-        expect(reply.text).not.toContain("--------------1--------------------");
-        expect(reply.text).not.toContain("metadata:");
-        expect(reply.text).not.toContain("previousSteps");
-        expect(reply.text).not.toContain("inputSummary");
-        expect(reply.text).toContain("Final answer:");
-        expect(reply.text).toContain("这是主脑综合黑板后的最终回答。");
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.ask).toMatchObject({ reason: "blackboard-stalemate" });
+        expect(reply.text).not.toContain("Blackboard discussion:");
+        expect(reply.text).not.toContain("Final answer:");
+        expect(reply.text).not.toContain("本不应出现在 reply 里的最终回答");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
             status: BlackboardTurnStatus.NeedsUser,
         });
-        expect(model.messages[1]?.[0]?.content).toContain("Use the blackboard discussion transcript");
-        expect(model.messages[1]?.[0]?.content).toContain("Blackboard discussion:");
         expect(turns[0]?.status).toBe(BlackboardTurnStatus.NeedsUser);
-        expect(turns[0]?.messages.some((item) => item.content.includes("flyflor-decision-form"))).toBe(true);
+        // 黑板封顶不再写 `flyflor-decision-form` 系统消息。
+        expect(turns[0]?.messages.some((item) => item.content.includes("flyflor-decision-form"))).toBe(false);
+        expect(turns[0]?.decisions[0]?.reason).toBeDefined();
     });
 
-    test("runtime streams blackboard dialogue prefix before streamed final answer", async () => {
+    test("blackboard NeedsUser short-circuit produces ask delta in streaming mode (LF-R3 slice D)", async () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
@@ -898,7 +894,7 @@ describe("Agent memory stability and latency", () => {
         const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
         const model = new SequencedStreamingModel(
             [routeDecision("blackboard", 0.82, "model selected blackboard"), "[]"],
-            ["流式", "最终", "回答。"],
+            ["不应被消费的", "流式", "最终回答。"],
         );
         const runtime = new RuntimeModule(runtimeConfig, model, events, blackboard);
         const deltas: string[] = [];
@@ -910,16 +906,12 @@ describe("Agent memory stability and latency", () => {
         });
         const streamed = deltas.join("");
 
-        expect(streamed).toContain("黑板讨论中");
-        expect(streamed).toContain("Analysis worker：");
-        expect(streamed).toContain("Review worker：");
-        expect(streamed).toContain("Final answer:");
-        expect(streamed.endsWith("流式最终回答。")).toBe(true);
-        expect(reply.text).toContain("Blackboard discussion:");
-        expect(reply.text).toContain("Analysis worker: analysis worker continues.");
-        expect(reply.text).toContain("Review worker: review worker continues.");
-        expect(reply.text).toContain("Final answer:");
-        expect(reply.text.endsWith("流式最终回答。")).toBe(true);
+        // 短路下不应该流式输出"最终回答"，但 ask reply 仍应作为单帧 delta 直接落给用户。
+        expect(streamed).not.toContain("流式");
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.ask).toMatchObject({ reason: "blackboard-stalemate" });
+        expect(reply.text).not.toContain("Final answer:");
+        expect(reply.text.length).toBeGreaterThan(0);
     });
 
     test("runtime sends route-declared non-convergent work to the hard cap", async () => {
@@ -968,7 +960,10 @@ describe("Agent memory stability and latency", () => {
         expect(turns[0]?.steps).toHaveLength(5);
         expect(turns[0]?.steps.every((step) => step.metadata.qaOutcome === BlackboardWorkerOutcome.Final)).toBe(true);
         expect(turns[0]?.decisions[0]?.reason).toBe("hard-round-budget-exhausted:self-referential-proof-game");
-        expect(reply.text).toContain("Final answer:");
+        // LF-R3 slice D：硬封顶 → AgentAsk(reason=blackboard-stalemate)，不再写"Final answer:"。
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.ask).toMatchObject({ reason: "blackboard-stalemate" });
+        expect(reply.text).not.toContain("Final answer:");
     });
 
     test("runtime routes short greeting turns directly", async () => {

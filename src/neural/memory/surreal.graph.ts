@@ -440,6 +440,42 @@ export class SurrealGraphStore {
         return ok;
     }
 
+    /**
+     * LF-R5 slice C：reconsolidation。
+     * - winner=left|right：在 winner→loser 建 `supersedes` 边，loser 标记 `supersededBy`；
+     *   可选在 winner 上写 mergedSummary / mergedSymbols / scopeNote。
+     * - winner=merge：在 left 上写 mergedSummary 并把 right 标记为 supersededBy=left。
+     * 调用方在确认资源指标（contradictionCount/cosine）后再触发；本方法不读 text 也不识别意图。
+     */
+    async applyReconsolidation(input: {
+        left: { table: "memory_node" | "gem"; id: string };
+        right: { table: "memory_node" | "gem"; id: string };
+        winner: "left" | "right" | "merge";
+        nowMs: number;
+        mergedSummary?: string;
+        mergedSymbols?: string[];
+        scopeNote?: string;
+    }): Promise<boolean> {
+        if (!this.config.enabled) return false;
+        await this.initialize();
+        const winnerRef = input.winner === "right" ? input.right : input.left;
+        const loserRef = input.winner === "right" ? input.left : input.right;
+        const winnerSet: string[] = [`updatedAt = ${input.nowMs}`];
+        if (typeof input.mergedSummary === "string") winnerSet.push(`summary = ${literal(input.mergedSummary)}`);
+        if (Array.isArray(input.mergedSymbols)) winnerSet.push(`symbols = ${literal(input.mergedSymbols)}`);
+        if (typeof input.scopeNote === "string") winnerSet.push(`scopeNote = ${literal(input.scopeNote)}`);
+        const winnerSql = `UPDATE ${winnerRef.table}:${ident(winnerRef.id)} SET ${winnerSet.join(", ")};`;
+        const result = await this.query<unknown[]>(winnerSql);
+        const ok = Array.isArray(result) && result.length > 0;
+        if (!ok) return false;
+        const loserSql = `UPDATE ${loserRef.table}:${ident(loserRef.id)} SET supersededBy = ${literal(`${winnerRef.table}:${winnerRef.id}`)}, updatedAt = ${input.nowMs};`;
+        await this.query(loserSql);
+        await this.relate(winnerRef.table, winnerRef.id, "supersedes", loserRef.table, loserRef.id, {
+            at: input.nowMs,
+        });
+        return true;
+    }
+
     // ───── 内部 ───────────────────────────────────────────────────
 
     private async relate(

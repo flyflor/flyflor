@@ -13,59 +13,76 @@
 ---
 
 > 目标：把架构从「带记忆的智能体」推进为「在时间里持续活着的生命体」。完整设计见 `docs/proposals/life.form.md`。
+>
+> **2026-05-14 修正**：旧 LF-P0~P5 路线已被新路线 LF-R0~R7 取代。核心调整：① journal 按天分文件 → **brain.db 单库**；② 新增 Codename 显式工作目录锚点；③ Ask 升格为一等公民（中断式 + 与 reply 互斥）；④ 新增 Ghost Context 作为未完事项的可视副本；⑤ Dream 收紧为"只放大不创造"。旧 P0/P1/P2 已交付的能力以"superseded"形式留痕，落地路径见 LF-R 段。
 
-**核心决策**：
+### 核心决策（D1-D9）
 
 - D1 完全删除 session 概念；系统语义里不存在 session key / session id / 旧会话兼容字段
-- D2 SQLite 按天分文件 + 周级语义索引（`journal/<yyyy>/W<ww>/`）
-- D3 Memory Atom 作为 episode 的 derived view（schema 可独立演化）
-- D4 Project 不是用户可感知会话，而是从海马体 / 晶体智力沉淀出的内部约束
-- D5 inbox project 7 天加速衰减（×2）→ 自然淡出
-- D6 identity 自写：agent 直接 append + 用户可 revert（`revert.log.jsonl`）
-- D7 新增 `RuntimeMode.Dormant`，无输入 10min 进入；gateway 监听不停（行为契约，不可配）
+- D2 **brain.db 单库**：`~/.flyflor/brain.db` event/state 分离 + append-only + 时间字段索引；月级冷归档到 `archive/brain.YYYY-MM.db`
+- D3 Atom 作为 episode 的视图字段，由模型同轮结构化输出派生；**取消冷相离线 refine**
+- D4 **Codename**：用户显式 `@xxx` 锚点；频次衰减自然上浮；可升格 Project
+- D5 **Ask 一等公民 + 中断模型**：模型同轮 `{kind: 'reply' | 'ask'}` 互斥；任意新输入自动 cancel pending ask（abandoned）
+- D6 **Ghost Context**：Ask / 工具失败 / 黑板 cap / 进程崩后的快照副本；落 `memory_events.type='ghost-context'`；用户可见、可 resume / drop / pin
+- D7 identity 自写：agent 直接 append + 用户可 revert（`revert.log.jsonl`）
+- D8 `RuntimeMode.Dormant`：无输入 10min 进入；gateway 监听不停（行为契约，不可配）
+- D9 **Dream 只放大、不创造**：写操作必须基于已记录 negative 信号（用户纠正 / 工具失败 / contradicts 链 / abandoned 计数）；无信号源时 0 写入
 
 ### 红线（已写入 `docs/boundaries.md` §11.1）
 
-| 路径                                             | 默认                                                         |
-| ------------------------------------------------ | ------------------------------------------------------------ |
-| `memory.identity.appendDailyLimitPerFile`        | 3                                                            |
-| `memory.summary.trigger`                         | `"rolling"`（7 天滚动）                                      |
-| `memory.summary.minIntervalHours`                | 24                                                           |
-| `memory.reconsolidation.embeddingDriftThreshold` | 0.25                                                         |
-| `memory.reconsolidation.driftHitCount`           | 2                                                            |
-| `memory.inbox.{decayMultiplier,ttlDays}`         | 2.0 / 7                                                      |
-| `memory.dormant.idleMinutes`                     | 10                                                           |
-| `memory.atomScore.visibilityThreshold`            | 0.65                                                         |
-| `memory.atomScore.weights`                       | recency 0.35 / access 0.15 / successPrior 0.35 / fanout 0.15 |
+- R1 无 session
+- R2 **Brain.db 单文件大脑契约**（替换原"journal 目录公开契约"）：event/state 分离 + append-only + 月级冷归档；旧 `journal/` 只读保留 60 天后下线
+- R3 identity append-only + revert
+- R4 分数决定可见性（AtomScore 阈值）
+- R5 **Ask 一等公民**：reply/ask 互斥、链深度硬上限 5、任意新输入自动 cancel、零字符匹配触发面
+- R6 **Ghost Context**：`memory_events.type='ghost-context'` 子型；默认可见且过 AtomScore 阈值；pin 仅延长半衰期不冻结；resume 成功保留作为 gem 升格证据
+- R7 **Dream 只放大不创造**：无 negative 信号源时一轮 0 写入
 
-**红线**（已写入 `docs/boundaries.md`）：
+### 配置（`memory.tuning.*`）
 
-- R1 无 session：协议 / 提示词 / 存储 / 事件 / CLI 禁用 `sessionId/sessionKey/sessionScope/legacySessionKey`
-- R2 journal 目录是公开契约，不得为性能合并 `day.db`
-- R3 identity append-only + revert，禁覆盖式重写，必须带证据链
-- R4 分数决定可见性：召回必须先过 AtomScore 阈值，绕过 = 边界违规
+| 路径                                                      | 默认                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| `memory.tuning.identity.appendDailyLimitPerFile`          | 3                                                            |
+| `memory.tuning.summary.trigger`                           | `"rolling"`（7 天滚动 → 落 `memory_summary` 表）             |
+| `memory.tuning.summary.minIntervalHours`                  | 24                                                           |
+| `memory.tuning.reconsolidation.embeddingDriftThreshold`   | 0.25                                                         |
+| `memory.tuning.reconsolidation.driftHitCount`             | 2                                                            |
+| `memory.tuning.inbox.{decayMultiplier,ttlDays}`           | 2.0 / 7                                                      |
+| `memory.tuning.dormant.idleMinutes`                       | 10                                                           |
+| `memory.tuning.atomScore.visibilityThreshold`             | 0.65                                                         |
+| `memory.tuning.atomScore.weights`                         | recency 0.35 / access 0.15 / successPrior 0.35 / fanout 0.15 |
+| `memory.tuning.ghost.maxChainDepth`                       | 5                                                            |
+| `memory.tuning.ghost.pinHalflifeMultiplier`               | 3.0                                                          |
+| `memory.tuning.brainDb.archiveAfterMonths`                | 3                                                            |
+| `memory.tuning.brainDb.vacuumIntervalDays`                | 14                                                           |
 
-| ID    | 阶段   | 描述                                                                                                                                                                                               | 状态    |
-| ----- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| LF-P0 | 阶段 0 | 协议 + 边界 + 配置 schema：MemoryAtom / AtomScore / FocusPointer 类型；`RuntimeMode.Dormant` 等新枚举；`memory.*` 配置默认值；`boundaries.md` R1-R4；`docs/proposals/life.form.md`；不改运行时行为 | done    |
-| LF-P1 | 阶段 1 | Journal 主链路：`journal/` 目录布局、按天 SQLite writer、`week.index.surreal`、`week.summary.md`；turn 结束写 episode / atom；`journal.smoke.ts` 压测 bun sqlite 多文件 open 行为                  | done    |
-| LF-P2 | 阶段 2 | 无 session 清理：已删除 `SessionModule` / `scopeFor` / `sessionKey` 正常路径 / `flyflor sessions *`；Blackboard lease 已切到内部 `projectConstraintId` + request/turn 审计 id；Memory SQLite 仅保留 candidates / offers / search | done |
-| LF-P3 | 阶段 3 | Atom 抽取 + 三层漏斗：热相（turn 结束零额外 LLM）/ 冷相（每日离线本地模型）；AtomScore 替换现 evidence gate；Gate A 量 / B 质 / C 信 接入 cluster sweeper（复用 project-offer / skill-offer 框架） | 进行中 |
-| LF-P4 | 阶段 4 | 生命体能力：identity 自写 + `revert.log.jsonl` + `flyflor identity revert <id>`；weekly summary worker（rolling 7d）；Dream worker 新增 reconsolidation 第 4 类动作；`RuntimeMode.Dormant` 实装    | pending |
-| LF-P5 | 阶段 5 | 文档 / CLI / 测试全量收束；所有正常路径禁词扫描：`sessionKey/sessionId/sessionScope/legacySessionKey/SessionModule` 为 0；EQ-01 解锁前置                                                           | pending |
+### 阶段路线（LF-R0 ~ LF-R7）
 
-**作废条目**：M-01（旧会话语义 blocked-needs-design）→ 由 LF-P2 替代；但 LF-P2 不是迁移兼容期，而是删除 session 语义。
+| ID     | 阶段                  | 描述                                                                                                                                                                                                                                                                                                                                                                | 状态        |
+| ------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| LF-R0  | 文档 + 红线           | 重写 `docs/proposals/life.form.md`（D1-D9 决策、brain.db schema、Codename/Ask/Ghost 协议、阶段路线）；`boundaries.md` §11.1 替换 R2、新增 R5/R6/R7；本表重排                                                                                                                                                                                                          | **done**    |
+| LF-R1  | brain.db 单库         | schema：`memory_events` / `memory_state` / `memory_summary` / `memory_links` / `codenames`；`BrainStore` 写读路径替换 `JournalStore`；旧 `journal/<yyyy>/W<ww>/day_*.db` 改为 read-only 兼容层（60 天下线）；月级冷归档脚本 + `ATTACH DATABASE` 读路径；doctor 表新增 `brain.db size` / `archive months`<br>**进展**：① 协议类型 `src/protocol/contracts/brain.ts` 已落地；② `BrainStore`（`src/neural/memory/brain.store.ts`）骨架完整，5 张表 schema + CRUD + 5/5 单测；③ `MemoryModule` 双写：warmup open / dispose close / `dualWriteBrainEvent` 在 journal 写入成功后追加 brain event，新增事件 `MemoryBrainEventWritten` / `MemoryBrainWriteFailed`，brain 缺失静默降级；2 个新集成测试通过；④ `flyflor doctor` 表新增 `Brain.db` 行（主文件大小 + archive 文件数）；⑤ 月级冷归档脚本 `scripts/brain.archive.ts`（admin 工具，按 `status='archived'` + 月份 < cutoff 搬运 events/state/当月 summary 到 `archive/brain.YYYY-MM.db`，1/1 集成测试）；⑥ 召回 shadow read：`buildPrompt` 并行查 brain，发 `MemoryBrainShadowRecall` 事件（userId/hits/sinceTs），journal 仍为权威，brain 用于灰度校验（1/1 集成测试）；⑦ 旧 `journal/` read-only 60 天 grace：`JournalStore.legacyGraceDays` 默认 60、`JournalWriteRejectedError` + `MemoryJournalRejectedLegacy` 事件，被拒后 brain 双写继续（3/3 单测）。<br>**LF-R1 收尾完成**，下一步切到 LF-R2 Codename 接管。 | **完成** |
+| LF-R2  | Codename 接管         | `codenames` 表 + 协议（`codenameProposal` / `codenameAmbiguity` 结构化字段，零字符匹配）；显式 `@xxx` 强绑定；多候选触发 Ask；`use_count` 累计 → AtomScore 上浮；升格 → 复用 `ProjectScaffolder`；CLI `flyflor codename list/use/promote`；inbox project → 未升格 codename 容器<br>**进展**：① `MemoryAction.codename` 字段（`name` / `workingDir` / `description`），由模型同轮结构化输出，runtime 不做 `@xxx` 文本匹配（零字符匹配红线，2/2 单测）；② `MemoryModule.persistCodenamesFromActions` 把 codename 写入 brain.codenames，重复出现 `touchCodename` 累加 `useCount`，并把 `codenameId` 注入 `memory_events.codename_id`，发 `MemoryCodenameCreated` / `MemoryCodenameTouched` 事件（1/1 集成测试）；③ CLI `flyflor codename list [--user --limit --json]`；④ 提示词模板（zh + en）追加 `codename` 字段说明与"绝不要从对话里猜代号"红线；⑤ **升格通路**：`detectCodenamePromotion`（useCount ≥ 5 + age ≥ 1h，纯资源指标）+ `promoteCodename` helper（agent/project/codename.promote.ts）= 复用 ProjectScaffolder 落 `workspace/projects/cn-<name>/` 骨架并 `bindCodenameProject` 写回；touch 后自动尝试 + 模型 force=true 强制；事件 `MemoryCodenamePromoted` / `MemoryCodenamePromotionFailed`；⑥ **AtomScore 上浮**：`journalAtomFromAction` 增 `codenameUseCount` 入参，按 `min(1, log2(1+useCount)/4)` 把 codename 当持续锚点信号叠加到 `score_total`，explain 含 boost 说明（零字符匹配，仅看 useCount 资源指标）；⑦ CLI 子命令补齐：`flyflor codename promote <name> [--force --json]`（手动触发升格）+ `flyflor codename use <name> [--user --json]`（写 `~/.flyflor/state/active-codename.json` 提示文件，runtime 后续 LF-R3 接入）；新增 8/8 集成测试 `tests/codename.promote.test.ts`。<br>**pending**：多候选 → Ask（依赖 LF-R3）、inbox project 容器收口 | **进行中** |
+| LF-R3  | Ask 一等公民          | `ModelTurnOutput.kind: 'reply'\|'ask'` 互斥 schema；`AgentAsk` 协议 + `AskReason` 枚举；prompt 注入 `[continuation]` 块；用户下条消息自动 ask-answer-pair；链深度硬上限 5；黑板 cap 后接 Ask；`flyflor-decision-form` 退役<br>**进展**：① 协议 `src/protocol/contracts/ask.ts`；② 解析器 `src/neural/memory/ask.ts`（零字符匹配）；③ `BrainStore.getLatestPendingAsk` + `countAskChainDepth`；④ `MemoryModule.rememberTurn` 第 6 参 `ask?: AgentAsk` + `peekActiveAsk` 公开方法；⑤ `buildPrompt` 注入 `[continuation]`；⑥ 配置 `tuning.ghost.maxChainDepth=5`；⑦ 4 个 `MemoryAsk*` 事件；⑧ `RuntimeModule.generateTurn` 解析 ask、`renderAskReplyText`、`reply.metadata.kind`；⑨ **slice D**：`buildBlackboardStalemateAsk`（黑板 NeedsUser → reason=blackboard-stalemate AgentAsk）+ `replyFromAsk` 短路 LLM；`returnDecisionToUser` 不再写 `flyflor-decision-form`，删除 `renderDecisionForm`/`isDecisionFormMessage`；runtime cap 强制：模型 ask 但 chainDepth+1 > maxChainDepth 时抛弃 ask 走 reply、发 `MemoryAskChainCapped` action=`dropped-by-runtime`；⑩ 测试：`tests/ask.parse.test.ts`（5/5）+ `tests/ask.wire.test.ts`（3/3）+ `tests/ask.cap.runtime.test.ts`（1/1）+ blackboard / memory boundaries 改写为短路 ask 行为（5 测全部通过）。 | **完成** |
+| LF-R4  | Ghost Context         | `memory_events.type='ghost-context'` 写读路径；`content.userFacing.{title,askPrompt,contextHint}` 由模型同轮生成（零字符匹配）；TUI 侧栏按 codename 分组；CLI `flyflor ghost list/show/resume/drop/pin`；渠道 `/ghosts` 指令；fork/fresh prompt hint；evidence weight 表更新（`ask-answered=0.85` / `continuation-completed=0.75` / `abandoned=0.0`）<br>**进展**：① 协议 `src/protocol/contracts/ghost.ts`（`GhostContextReason` 枚举 4 值 / `GhostUserFacing` / `GhostSnapshot` / `GhostContextEventContent` + `continuationCompleted`/`lastKind` + `GhostDecisionKind` enum + `GhostDecision`）；② `BrainStore.listActiveGhosts(userId, {codenameId?, limit?})` 只看 `status ∈ {live, resumed}`；③ `MemoryModule.recordAskEvent` 末尾自动 `recordGhostFromAsk`：每条 ask 写一条 sibling ghost-context（`parent_id=ask.id`，`userFacing.title` 取 `AgentAsk.ghostHint.title` 优先、缺省 fallback 到 ask.prompt 首行截断 60 字，纯结构化降级非字符匹配）；④ 公开 API `listActiveGhosts/getGhost/resumeGhost/dropGhost/pinGhost/recordGhostFromReason`（后者面向 tool-failure / blackboard-cap / process-restart 三种 reason，userFacing 必须由调用方显式提供）；⑤ 4 个 `MemoryGhost*` 事件（Recorded/Resumed/Dropped/Pinned）；⑥ `GhostTuningConfig.pinHalflifeMultiplier=3.0` 默认值（pin 时 `decayScore *= multiplier`，不冻结仍走衰减管道）；⑦ CLI `flyflor ghost list/show/resume/drop/pin`（handler `ghost.handler.ts`，--json 支持）；⑧ **prompt 注入**：`AgentAsk.ghostHint?: { title?, contextHint? }` schema 扩展 + parser；新增 `templates/prompts/ask.schema.md`（en + zh）+ `renderAskSchemaInstructions` + `runtime.system.md` 占位符 `{{askSchemaInstructions}}`；`MemoryModule.buildPrompt` 注入 `[ghost-hint]` 块（高分 ghost top-3，pending ask sibling 自动跳过避免与 `[continuation]` 冲突）；⑨ runtime triggers：tool-failure（`runtime.persistTurn` 扫 `mcpCallProvenance` 失败项聚合）/ blackboard-cap（`recordGhostFromAsk` 内 enum→enum 映射）/ process-restart（`InFlightTracker` sentinel 文件 + `recoverProcessRestartGhosts`）；⑩ **TUI 侧栏**：新增 `Ghosts` 页（按 codename 分组 + reason 着色）；⑪ **Evidence weight 表**：`GhostTuningConfig.evidenceWeight` 4 档（abandoned > continuation-completed > ask-answered > default）参与 `decayScore` 重排序，`[ghost-hint]` 输出 `evidence=` 标签；⑫ **fork/fresh prompt hint**：新增 `<flyflor_ghost_decisions>` 结构化块（en+zh schema 文档）+ `parseGhostDecisions`（dedupe / maxDecisions=8 / 非法 kind 丢弃，零字符匹配纯结构化）+ `MemoryModule.applyGhostDecisions`（resume → `resumeGhost`；fork/fresh → `patchGhostContent` 写 `continuationCompleted=true` + `lastKind`，evidence 走 `continuation-completed=0.75`）；runtime `prepareTurn` 解析顺序 memoryActions → ghostDecisions → ask，每层剥离自身块；新增 `MemoryGhostDecisionApplied` 事件。<br>**测试**：`tests/ghost.wire.test.ts`（13/13：sibling 写入 + 状态机 + pin multiplier + getGhost 类型保护 + ghostHint 覆盖 fallback + ghost-hint 注入 + drop 后不注入 + tool-failure reason + blackboard-cap 映射 + evidence=ask-answered + applyGhostDecisions fresh/resume/unknown）+ `tests/ghost.decisions.parse.test.ts`（6/6）+ `tests/inflight.tracker.test.ts`（4/4）+ `tests/process.restart.ghost.test.ts`（1/1）+ `tests/ghost.list.handler.test.ts`（2/2）+ `tests/ask.parse.test.ts` ghostHint trim/cap/empty drop（6/6）。 | **完成** |
+| LF-R5  | 生命体能力            | ✅ done — 全部 4 个 slice 完成：① slice A identity 自写 + revert（CLI + Prompt + 测试 12）；② slice B summary worker（纯结构化日/周聚合 + `BackgroundScheduler.summarySweeper` 6h + 测试 8）；③ slice C Dream reconsolidation（第 4 类动作 winner+merge + 资源指标短路 + Prompt + 测试 16）；④ slice D Dormant 实装（`DormantSupervisor` + `MemoryModule.runtimeModeOf/sweepDormantOnce` + `BackgroundScheduler.dormantSweeper` 60s + 事件 `RuntimeModeEntered/Awakened` + 测试 7）；全套 610 pass / 1 baseline。 | **done** |
+| LF-R6  | Dream 收紧            | ✅ done — "无信号源 → 0 写入"硬约束已在 `DreamWorkerImpl.runOnce` 落实（candidates.length===0 直接 publishCompleted、不调 LLM、不写 graph）。新增 `tests/dream.zero.write.test.ts` 3 项：① 三类候选全空 → 0 LLM call + 0 graph 写 + `MemoryDreamCompleted`；② collect 抛错 → 0 LLM call + 0 graph 写 + `MemoryDreamFailed`；③ 空 userId → 0 graph 方法调用；全套 613 pass / 1 baseline。<br>**候选源约束**：reconsolidation 至少一侧 contradictionCount≥1 或 cosine≥0.85（slice C 已落地）；drift-repair 候选已被 `listGemDriftCandidates` 资源指标过滤；recall reinforce 仅取 top/bottom 桶；contradiction-audit 候选 cosine≥0.78。 | **done** |
+| LF-R7  | 清理                  | ✅ done — `legacySessionKey` 字段 / 旧 journal 写读路径 / `flyflor-decision-form` 系统消息均已无正向代码引用，仅在测试中作为 negative assertion 出现；`MemoryTuningConfig.session.legacyDoubleWriteDays` 字段 + status.ts / tests 引用清掉；废弃 `src/command/tui/native/cli.entry.ts` 删除（导致 7 个 baseline TS error）；注释 (`memory.atom.ts`) 修正为"brain.db 单库"；**bun run check 0 error, bun test 614 pass / 0 fail**；EQ-01 解锁前置达成 | **done**    |
 
-**LF-P3 当前进展（2026-05-13）**：
+### Superseded（旧 LF-P 留痕）
 
-- done：热相 atom 已由同轮结构化 `MemoryAction` 派生，落入按天 `journal/<yyyy>/W<ww>/day_YYYY_MM_DD.db`。
-- done：`memory.atomScore.visibilityThreshold=0.65` 已接入 prompt 可见性；`buildPrompt` 只消费通过阈值的 journal atom，不再把 SQLite search / crystal recall 绕过 AtomScore 注入 `Retrieved Memory`。
-- done：Redis 热海马体只作为激活源；最终注入 prompt 的文本来自已过 AtomScore 的 journal atom，避免 raw episode 绕过分数门。
-- done：本段链路不吞 journal 读取错误；损坏 day DB 会向上抛出，测试覆盖 `buildPrompt propagates journal read errors`。
-- done：新增 `JournalStore.listVisibleAtomsWindow`，按天/周目录窗口召回并保持 `score_total DESC, created_at DESC` 排序；`tests/journal.store.test.ts` 和 `tests/chaos.fuzz.test.ts` 覆盖阈值、跨日窗口、随机分数暴力数据。
-- pending：冷相每日本地模型 refine（补 `outcome/success/refinedAt`）未做。
-- pending：Gate A 量 / B 质 / C 信尚未接入 project / skill sweeper；目前 cluster sweeper 仍复用旧 evidence/importance 路径。
-- pending：全局“无静默兜底”还未系统性清理；本次只保证 LF-P3 prompt 可见性链路不隐藏异常。历史 best-effort/no-op 测试仍存在，应作为 LF-P5 前置质量门处理。
+| 旧 ID   | 描述                                                                                                  | 处置                                                                          |
+| ------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| LF-P0   | 协议 + 边界 + 配置 schema：MemoryAtom / AtomScore / FocusPointer / RuntimeMode.Dormant / `boundaries.md` R1-R4 | done → **被 LF-R0 重写**（红线变 R1-R7，新增 ghost/brainDb 配置）           |
+| LF-P1   | journal 按天 SQLite + 周索引 + `journal.smoke.ts`                                                       | done → **superseded by LF-R1**；旧实现读路径过渡期保留，不再扩展             |
+| LF-P2   | 无 session 清理（删 SessionModule / scopeFor / `flyflor sessions *`）                                  | done → 在新路线继续保留，无变更                                              |
+| LF-P3   | Atom 抽取 + 三层漏斗：热相已 done / 冷相 pending                                                       | partial → 热相能力并入 LF-R1（brain.db schema 重新落点）；**冷相离线 refine 砍掉**（Atom 字段由同轮结构化输出派生） |
+| LF-P3.5 | Gate A 量 / B 质 / C 信 接入 cluster sweeper                                                            | pending → 移至 **LF-R4 之后**（依赖 brain.db schema）                          |
+| LF-P4   | identity 自写 + weekly summary + Dream reconsolidation + Dormant                                       | pending → 拆为 **LF-R5**（生命体能力）+ **LF-R6**（Dream 收紧）              |
+| LF-P5   | 文档 / CLI / 测试全量收束 + 禁词扫描                                                                    | pending → **LF-R7**                                                            |
+| M-01    | 旧会话语义 blocked-needs-design                                                                       | superseded by LF-P2（无 session 清理已完成）                                  |
+| 自动 project propose | inbox cluster sweeper 自动提议项目脚手架                                                  | 弱化 → 由"等待 codename 升格"接管；自动 propose 不删但权重下调               |
+| `flyflor-decision-form` 黑板决策表单 | 黑板独立向用户求助路径                                                                   | 退役 → 由 Ask `reason='blackboard-stalemate'` 接管                          |
 
 ## 路由与黑板
 
@@ -149,71 +166,37 @@
 
 | ID    | 描述                                 | 状态                                                                                                              |
 | ----- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| EQ-01 | EQ 模块（情绪 / 情感建模）仅有设计稿 | proposal（见 `docs/proposals/eq.module.md`），**前置依赖：LF-P4 完成**（EQ 需要 atom outcome / success 作为输入） |
+| EQ-01 | EQ 模块（情绪 / 情感建模）仅有设计稿 | proposal（见 `docs/proposals/eq.module.md`），**前置已就绪**：LF-R5 atom outcome / success 字段已经稳定，可启动落地 |
 
 ---
 
-### LF-P1：存储重构（向下兼容）
+### LF-R0 ~ LF-R7 阶段路线汇总
 
-> 目标：journal 目录布局落地，按天 SQLite + 周级 Surreal 索引可用，旧路径仍可写（双写）。
-
-| ID | 子任务 | 验收 |
+| 阶段 | 概述 | 状态 |
 | --- | --- | --- |
-| LF-P1.1 | `scripts/journal.smoke.ts`：bun sqlite 多文件 open 行为压测（并发开关 30 个 daily DB + 跨日切换 + WAL checkpoint），输出 P50/P95 延迟与 fd 上限观测 | smoke 在本机跑通，报告写入 `docs/proposals/life.form.md` 附录 |
-| LF-P1.2 | `src/neural/memory/journal/paths.ts`：路径解析（`<memoryDir>/journal/<yyyy>/W<ww>/<yyyy-mm-dd>.db`），周号统一 ISO-8601 | 单测覆盖跨年周（W01/W52/W53） |
-| LF-P1.3 | `journal.writer.module.ts`：按 `at: Date` 路由到当日 DB，含 schema migration（`episodes` / `atoms_view`）、open cache（LRU N=14）、graceful close | 写入 -> 立即读 + 跨日写两条 + 重启后读取一致 |
-| LF-P1.4 | `journal.reader.service.ts`：跨日范围查询（`[from,to)`），返回流式游标，按 day DB 顺序 merge | 7 天 / 30 天范围查询单测 |
-| LF-P1.5 | `week.index.surreal.ts`：周级语义索引表（`week_index` 含 `weekKey / atomIds[] / centroid / topics[]`），写入由 LF-P3 cold pass 驱动，本阶段只建表 + 健康检查 | doctor 表新增 `Journal index` 行 |
-| LF-P1.6 | Redis activation key：`ff:journal:active:<userId>` 记录当前活跃 day key + 焦点指针；与 fast.route 共享连接 | 单测覆盖断连降级 |
-| LF-P1.7 | 双写桥：旧 `episodes` 表 + 新 journal 同时写，读以新路径优先，旧路径仅查询保留 | 配置 `memory.session.legacyDoubleWriteDays` 控制时长 |
+| LF-R0 文档 + 红线 | `life.form.md` D1-D9 + `boundaries.md` §11.1 R1-R7 重写；本表重排 | ✅ done |
+| LF-R1 brain.db 单库 | 5 张表 schema、`BrainStore`、双写、月归档、shadow recall、journal 60 天 grace | ✅ done |
+| LF-R2 Codename 接管 | 协议 codename 字段 + DAO + AtomScore 上浮 + CLI list/use/promote + 复用 ProjectScaffolder 升格 | ✅ done |
+| LF-R3 Ask 一等公民 | reply/ask 互斥 + AgentAsk + AskReason + 链深度 cap=5 + 黑板 stalemate Ask + decision-form 退役 | ✅ done |
+| LF-R4 Ghost Context | `ghost-context` 子型 + 4 reasons + ghostHint prompt 注入 + fork/fresh decisions + evidence weight + TUI sidebar | ✅ done |
+| LF-R5 生命体能力 | identity 自写+revert / summary worker / Dream reconsolidation / DormantSupervisor 四 slice 全完结 | ✅ done |
+| LF-R6 Dream 收紧 | 「无信号源 → 0 写入」硬约束 + 候选源资源指标分桶 + 3 项零写测试 | ✅ done |
+| LF-R7 清理 | `legacySessionKey` / 旧 `journal/` / `flyflor-decision-form` / 废弃 `cli.entry.ts` 全清；614 pass / 0 fail / 0 typecheck error | ✅ done |
 
-### LF-P2：Session 溶解
+> 旧 LF-P1~P5 详细子任务规划已被 LF-R0~R7 取代；其落地状态以 git log 与 `docs/proposals/life.form.md` 「变更记录」为准，本文件不再保留旧规划详规。
 
-> 目标：彻底删除 `sessionId / sessionKey` 在协议层与运行时的存在；Project 接管所有语义边界。
+---
 
-| ID | 子任务 | 验收 |
-| --- | --- | --- |
-| LF-P2.1 | 协议侧：从 `MemoryCandidate / CrystalTurnInput / MemorySearchRequest / BlackboardLease / ReflectionSource` 移除 sessionId 字段，新增 `focusPointer: FocusPointer`；旧字段标 `@deprecated` 仅做反序列化兼容 | tsc + 既有测试全绿（候选删除时 fallback 到 projectId+userId） |
-| LF-P2.2 | Blackboard lease 主键改造：`(userId, projectId)` + `requestId` tie-breaker；并发抢锁单测 | 多并发请求只一份 lease |
-| LF-P2.3 | Reflection `sourceId` 重构：`<projectId>/<turnId>`；旧 sourceId 在 LF-P1.7 双写窗口内仍可读 | reflection.boundaries.test 更新 |
-| LF-P2.4 | Confirmation lookup：从「按 sessionKey 取 previousAssistantText」改为「按 `focusPointer.turnId` 直接 read journal」 | feedback.wire.test 更新 |
-| LF-P2.5 | `legacySessionKey?: string` 过渡字段进 `MemoryAtom`，LF-P5 删除 | merge 测试覆盖 |
-| LF-P2.6 | 提示词模板审查：grep `session` 出现处，全部换 `project` / `focus` | naming.boundaries 扩 case |
+## 下一阶段候选（按依赖先后）
 
-### LF-P3：Atom 抽取 + 三层漏斗
-
-> 目标：MemoryAtom 作为 episode 的 view 真正运转；AtomScore 替换现 evidence gate；Gate A/B/C 复用 cluster sweeper。
-
-| ID | 子任务 | 验收 |
-| --- | --- | --- |
-| LF-P3.1 | 热相抽取（turn 结束零额外 LLM）：从 `BlackboardWorker` outcome + reflection 直接 derive atom（task/context/action/outcome 由黑板已有结构化字段拼接） | turn 流水线无额外延迟 |
-| LF-P3.2 | 冷相抽取（每日离线本地模型）：`AtomColdPass` worker，扫 journal 当日新增 episode → 调本地 model 补 `problem / success / priorWeight` → 写回 atom view | 200 turn 数据集冷处理 < 60s（本地 7B 量级） |
-| LF-P3.3 | `AtomScore` 计算器：`Σ weight × component`，weights 走 `memory.tuning.atomScore.weights`；inbox atom recency 分量额外乘 `decayMultiplier` | 数值单测覆盖 8 个边界值 |
-| LF-P3.4 | 召回链路接 AtomScore：现 `MemoryModule.search` 候选先过 AtomScore 阈值再做 ANN | 既有 recall 行为不下降（基准用 chaos.fuzz 套件） |
-| LF-P3.5 | Gate A 量 / B 质 / C 信 接入 cluster sweeper：复用 project-offer / skill-offer 框架，新增 `atom-cluster-offer` | 3 个新单测覆盖 promotion 全链路 |
-| LF-P3.6 | `priorWeight` 表迁移：现 `evidence_weight` 表合入 atom view 字段 | 迁移脚本 + 幂等回滚 |
-
-### LF-P4：生命体能力
-
-> 目标：identity 自写、weekly summary、reconsolidation、Dormant 模式全部上线。
-
-| ID | 子任务 | 验收 |
-| --- | --- | --- |
-| LF-P4.1 | identity 自写：`identity.append.service.ts`，agent 直接 append `soul.md / user.md / persona.md`，每文件每天最多 `appendDailyLimitPerFile`（默认 3）次，超限入 dream 队列 | append 配额单测 |
-| LF-P4.2 | `revert.log.jsonl`：每次 append 同步写一条；`flyflor identity revert <id>` CLI 命令；revert 写一条「inverse append」而非删除 | revert + revert-of-revert 单测 |
-| LF-P4.3 | weekly summary worker：默认 `rolling`（7d 滚动窗口），最短间隔 `minIntervalHours=24`；写 `<memoryDir>/summary/W<ww>.md` | rolling vs calendar 切换测试 |
-| LF-P4.4 | Dream worker 新增第 4 类动作 reconsolidation：embedding cosine ≥ `embeddingDriftThreshold` 且命中 `driftHitCount` 次 → 合并/分裂 gem | dream.stress 扩用例 |
-| LF-P4.5 | `RuntimeMode.Dormant` 实装：无 user 输入 `dormant.idleMinutes`（默认 10）进入；gateway 监听不停（`_keepGatewayListening: true` 硬约束）；进入/退出广播事件 | 状态机单测 + 任意入站立即切回 Chat |
-| LF-P4.6 | inbox 加速衰减 ×2：在 AtomScore recency 分量打折，TTL 到期由 decay worker 移出 | 7 天后 inbox atom score 趋近 0 |
-
-### LF-P5：清理
-
-| ID | 子任务 | 验收 |
-| --- | --- | --- |
-| LF-P5.1 | 删 `legacySessionKey` / `sessionId` 反序列化兼容字段 | 全仓 grep 无残留 |
-| LF-P5.2 | 删 LF-P1.7 双写桥 | journal 单写 |
-| LF-P5.3 | 文档全量更新：`memory.system.md / project.session.md / runtime.turn.md / architecture.md` 与新模型对齐 | 文档 review |
-| LF-P5.4 | 解锁 EQ-01：把 atom outcome / success 作为 EQ 模块输入接口暴露 | EQ 设计稿提 PR |
+| 优先级 | 主题 | 依赖 | 备注 |
+| --- | --- | --- | --- |
+| P1 | **Dormant 行为联动** | LF-R5 done | 当前 `MemoryModule.runtimeModeOf` 已落地，但 runtime / gateway / blackboard 尚未读 mode 做行为分支（Dormant 期间是否短路 prompt 构建、是否抑制非紧急 ask、是否只调 worker 等） |
+| P1 | **EQ-01 落地** | LF-R5 done（已解锁） | atom outcome / success 已稳定，可按 `docs/proposals/eq.module.md` 起步 |
+| P2 | **Codename 多候选 → Ask** | LF-R3 done | LF-R2 遗留 pending：`codenameAmbiguity` 触发 Ask 路径（依赖 R3 已就绪） |
+| P2 | **inbox project 容器收口** | LF-R2 done | LF-R2 遗留 pending：未升格 codename 进 inbox project 容器 |
+| P2 | **Summary worker embeddingId 补全** | LF-R5 slice B done | 当前 summary 行 embeddingId 留空；若 R6+ Dream 想消费 summary 当证据需补 |
+| P2 | **brain.db 月度归档自动化** | LF-R1 done | `scripts/brain.archive.ts` 仍是手动 admin 工具；可包入 BackgroundScheduler |
 
 ---
 
@@ -229,6 +212,6 @@
 
 ### 未落地的设计稿
 
-1. **当前主线：生命体重构 LF-P1 → LF-P5**，按依赖顺序串行推进。
-2. P0/P1 历史堵点已清零；LF 主线进行期间，零散 P2（如 G-01 长尾渠道）按需穿插。
-3. EQ-01 待 LF-P4 完成后解锁。
+1. **生命体重构 LF-R0 → LF-R7 主线全部 done**（2026-05-13 收尾，614 pass / 0 fail / 0 typecheck error）。
+2. P0/P1 历史堵点已清零；下一阶段优先级见上方「下一阶段候选」。
+3. EQ-01 前置达成（LF-R5 atom outcome / success 已稳定），可启动落地。

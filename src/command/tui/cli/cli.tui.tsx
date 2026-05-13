@@ -29,6 +29,7 @@ import {
     type BlackboardTurnDetail,
 } from "../../cli/handlers/blackboard.handler.ts";
 import { fetchMemoryData, type MemoryData } from "../../cli/handlers/memory.handler.ts";
+import { fetchGhostList, type GhostListData } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData, runDreamPass, type DreamData } from "../../cli/handlers/dream.handler.ts";
 import { Shell, type CliPage } from "./shell.tsx";
 import { OverviewPage } from "./pages/overview.page.tsx";
@@ -39,6 +40,7 @@ import { PluginsPage } from "./pages/plugins.page.tsx";
 import { SandboxPage } from "./pages/sandbox.page.tsx";
 import { BlackboardPage } from "./pages/blackboard.page.tsx";
 import { MemoryPage } from "./pages/memory.page.tsx";
+import { GhostsPage } from "./pages/ghosts.page.tsx";
 import { DreamPage } from "./pages/dream.page.tsx";
 
 interface CliTuiProps {
@@ -95,6 +97,7 @@ function CliTui({ app, initialPage }: CliTuiProps): React.ReactElement {
 
     // Memory state
     const [memoryData, setMemoryData] = useState<MemoryData | undefined>();
+    const [ghostData, setGhostData] = useState<GhostListData | undefined>();
 
     // Dream state
     const [dreamData, setDreamData] = useState<DreamData | undefined>();
@@ -166,6 +169,11 @@ function CliTui({ app, initialPage }: CliTuiProps): React.ReactElement {
                 case "memory": {
                     const data = await fetchMemoryData(app);
                     setMemoryData(data);
+                    break;
+                }
+                case "ghosts": {
+                    const data = await fetchGhostList(app, "human", 60);
+                    setGhostData(data);
                     break;
                 }
                 case "dream": {
@@ -507,6 +515,12 @@ function CliTui({ app, initialPage }: CliTuiProps): React.ReactElement {
                         {memoryData ? <MemoryPage data={memoryData} /> : <Placeholder text="No data" />}
                     </Shell>
                 );
+            case "ghosts":
+                return (
+                    <Shell activePage={activePage}>
+                        <GhostsPage data={ghostData} />
+                    </Shell>
+                );
             case "dream":
                 return (
                     <Shell activePage={activePage} pageHints={dreamRunning ? ["Running..."] : ["r run dream pass"]}>
@@ -553,6 +567,7 @@ function cyclePage(current: CliPage, delta: number): CliPage {
         "sandbox",
         "blackboard",
         "memory",
+        "ghosts",
         "dream",
         "config",
     ];

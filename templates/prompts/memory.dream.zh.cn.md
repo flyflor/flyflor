@@ -19,8 +19,9 @@
     - `"recall-reinforce"`，`importanceMultiplier` ∈ [0.5, 1.5]：> 1.0 抬高重要性（仍然热门相关），< 1.0 压低重要性（降温淡出）。
     - `"skip"`。
 
-3. `contradiction-pair` —— 两个语义相近的项目（附带 cosine），可能冲突。二选一：
+3. `contradiction-pair` —— 两个语义相近的项目（附带 cosine），可能冲突。三选一：
     - `"contradiction-audit"`，用 `weaker: "left" | "right" | "both"` 标注更不可靠的一侧。可选：`confidenceMultiplier`（0.3..1.0；默认 0.7）、`contradictionDelta`（0..5；默认 1）、`relate`（boolean；默认 true，会创建 `contradicts` 边）。
+    - `"reconsolidation"`，用 `winner: "left" | "right" | "merge"`。仅当一侧明显取代另一侧或两者应当合并为一个规范节点时使用。可选：`mergedSummary`（≤600 字符；严格调和已有内容，不能新增事实）、`mergedSymbols`（string[]≤16，小写）、`scopeNote`（≤200 字符）。败方会被标记为 `supersededBy=<winner>` 并新增 `supersedes` 边。Reconsolidation 比 `contradiction-audit` 更重，除非确信合并/取代必要，请优先 audit。
     - `"skip"`，如果这对其实并不冲突。
 
 硬性规则：
@@ -36,6 +37,7 @@
 { "candidateId": "<id>", "action": "drift-repair", "newSummary": "...", "newSymbols": ["..."], "scopeNote": "...", "newStatus": "active", "confidenceMultiplier": 0.8 },
 { "candidateId": "<id>", "action": "recall-reinforce", "importanceMultiplier": 1.1 },
 { "candidateId": "<id>", "action": "contradiction-audit", "weaker": "left", "confidenceMultiplier": 0.7, "contradictionDelta": 1, "relate": true },
+{ "candidateId": "<id>", "action": "reconsolidation", "winner": "merge", "mergedSummary": "...", "mergedSymbols": ["..."], "scopeNote": "..." },
 { "candidateId": "<id>", "action": "skip" }
 ]
 }

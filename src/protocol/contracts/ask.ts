@@ -1,0 +1,99 @@
+/**
+ * AgentAsk 协议（生命体重构 LF-R3）。
+ *
+ * 设计要点（详见 `docs/proposals/life.form.md` §R3 & `docs/boundaries.md` §R5）：
+ * - 模型同轮输出 `ModelTurnOutput.kind: 'reply' | 'ask'`，**互斥**。
+ *   `ask` 不再"模拟"暂停态——它就是一次正常 turn 输出，落 `memory_events.type='ask'`，
+ *   下一轮 prompt 通过 `[continuation]` 段把它注入回 system 顶部，
+ *   用户的下一条消息天然即"答复"，记一条 `ask-answer-pair`。
+ * - `AskReason` 枚举固定可枚举触发面，**严禁** runtime 用任何字符匹配 / 关键词推断
+ *   是否要 ask；ask 的 reason / choices / freeform 全由模型同轮结构化字段决定
+ *   （业务语义零字符匹配红线）。
+ * - 沙箱审批与 Ask 正交：sandbox approval 不走 Ask 协议（保持已有审批入口）。
+ *   同一 turn 可同时出现一个 ask 和一个 sandbox approval。
+ */
+
+export const AskReason = {
+    /** 工作目录代号歧义，模型识别出多候选无法决断。 */
+    CodenameAmbiguity: "codename-ambiguity",
+    /** 模型即将创建新代号、需要用户确认（`@xxx`）。 */
+    CodenameCreate: "codename-create",
+    /** 用户意图本身不清晰、需要澄清。 */
+    UserIntentUnclear: "user-intent-unclear",
+    /** 黑板 5 轮硬顶后由 runtime 接管，`flyflor-decision-form` 退役通道。 */
+    BlackboardStalemate: "blackboard-stalemate",
+    /** 安全性 / 风险性决策需要用户拍板（不是 sandbox approval，而是设计取舍）。 */
+    PolicyDecision: "policy-decision",
+    /** 其他模型显式声明的反问场景（例如多步任务边界判断）。 */
+    Other: "other",
+} as const;
+
+export type AskReason = (typeof AskReason)[keyof typeof AskReason];
+
+export interface AgentAskChoice {
+    /** 用户回答时可见的简短标签。模型必须显式给出，禁止 runtime 派生。 */
+    label: string;
+    /** 该选项被选中时模型期望沿用的代号 / 项目 / 行动等结构化标识。 */
+    value?: string;
+    /** 可选辅助说明，给用户更多上下文。 */
+    description?: string;
+}
+
+export interface AgentAsk {
+    /** 触发反问的语义类别（受 AskReason 枚举约束）。 */
+    reason: AskReason;
+    /** 反问主体文本（用户可读）。runtime 不解析本字段语义。 */
+    prompt: string;
+    /** 可选的多选项，按模型给出的顺序展示。 */
+    choices?: AgentAskChoice[];
+    /** 是否允许自由文本回答。默认 true。 */
+    freeform?: boolean;
+    /** 可选关联标识（codenameId / blackboardTurnId / projectId 等），便于回填上下文。 */
+    relatedIds?: string[];
+    /** 模型给出的简短理由（debug / 审计用，不影响展示）。 */
+    rationale?: string;
+    /**
+     * Ghost Context hint（LF-R4）。模型同轮显式提供 ghost 的用户可见字段，
+     * 避免 runtime 用 ask.prompt 首行做 fallback 截断。runtime 不解析、不推断；
+     * 缺省则走 fallback 路径（结构化降级，非字符匹配）。
+     */
+    ghostHint?: {
+        title?: string;
+        contextHint?: string;
+    };
+}
+
+/**
+ * 模型同轮输出抽象（reply | ask 互斥）。
+ * - `kind === 'reply'`：常规回答。`text` 为模型给出的可见正文。
+ * - `kind === 'ask'`：反问。`ask` 必填；`text` 字段保留作降级 fallback（runtime 渲染时
+ *   优先使用 `ask.prompt`）。
+ */
+export type ModelTurnOutput =
+    | { kind: "reply"; text: string }
+    | { kind: "ask"; ask: AgentAsk; text?: string };
+
+/**
+ * Pending ask 在 brain.db 的 content payload 形态。
+ * `memory_events.type === 'ask'` 行写入 `JSON.stringify(askEvent)`。
+ */
+export interface AskEventContent {
+    askId: string;
+    ask: AgentAsk;
+    /** 触发本次 ask 的请求 / turn 标识，便于审计。 */
+    requestId?: string;
+    /** Ask 链深度（首次=1，每次接续 ask 累加）。runtime 用于强制 reply 阈值检查。 */
+    chainDepth: number;
+}
+
+/**
+ * Ask-Answer 配对 payload。`parent_id` 指向触发的 ask event。
+ */
+export interface AskAnswerPairContent {
+    askId: string;
+    answerText: string;
+    /** 用户的原 message id，便于跨表回查。 */
+    answerMessageId?: string;
+    /** 是否被新输入 cancel（abandoned）。默认 false（正常答复）。 */
+    abandoned?: boolean;
+}

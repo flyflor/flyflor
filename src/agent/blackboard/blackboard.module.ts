@@ -512,13 +512,8 @@ export class BlackboardModule extends Blackboard {
             reason: input.reason,
             unresolvedIssues,
         });
-        const form = renderDecisionForm({
-            openQuestions: unresolvedIssues,
-            question: prompt,
-            options,
-            reason: input.reason,
-            turnId: turn.id,
-        });
+        // LF-R3 slice D：黑板封顶后只发结构化 decision + livelock 事件；
+        // 不再写 `flyflor-decision-form` 系统消息，runtime 读 decisions[] 自行合成 AgentAsk。
         this.events.publish(
             event(
                 RuntimeEventType.BlackboardLivelockDetected,
@@ -531,17 +526,6 @@ export class BlackboardModule extends Blackboard {
                 turn.requestId,
             ),
         );
-        await this.appendMessage(turn.id, {
-            round: input.round,
-            role: "system",
-            content: form,
-            visibility: "public",
-            createdAt: now,
-            metadata: {
-                event: "blackboard.needs-user",
-                reason: input.reason,
-            },
-        });
         await this.requestDecision(turn.id, {
             kind: BlackboardDecisionKind.SingleChoice,
             prompt,
@@ -549,7 +533,6 @@ export class BlackboardModule extends Blackboard {
             reason: input.reason,
             createdAt: now,
             metadata: {
-                form,
                 openQuestions: unresolvedIssues,
                 round: input.round,
             },
@@ -914,30 +897,6 @@ function normalizedUnique(values: string[]): string[] {
 
 function normalizeText(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/gu, " ");
-}
-
-function renderDecisionForm(input: {
-    openQuestions: string[];
-    question: string;
-    options: Array<{ id: string; label: string; description?: string }>;
-    reason: string;
-    turnId: string;
-}): string {
-    return [
-        "```flyflor-decision-form",
-        JSON.stringify(
-            {
-                openQuestions: input.openQuestions,
-                question: input.question,
-                options: input.options,
-                reason: input.reason,
-                turnId: input.turnId,
-            },
-            null,
-            2,
-        ),
-        "```",
-    ].join("\n");
 }
 
 function appendStepToTurn(turn: BlackboardTurn, step: BlackboardStep): BlackboardTurn {

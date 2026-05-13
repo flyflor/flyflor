@@ -324,6 +324,39 @@ export interface MemoryTuningConfig {
     inbox: InboxTuningConfig;
     dormant: DormantTuningConfig;
     atomScore: AtomScoreTuningConfig;
+    /** LF-R3/R4 ghost & ask 调参；详见 GhostTuningConfig 注释。 */
+    ghost: GhostTuningConfig;
+}
+
+export interface GhostTuningConfig {
+    /**
+     * Ask 链深度硬上限（LF-R3）。pending ask 接续 ask 时累加，超过阈值 runtime
+     * 强制 reply 并发 `MemoryAskChainCapped` 事件。同时作为 ghost 链固化深度上限。
+     */
+    maxChainDepth: number;
+    /**
+     * Ghost pin 时把 decay_score 半衰期乘以本系数（LF-R4）。
+     * 不冻结、仍参与衰减管道，只是延缓被自然衰减抛弃。
+     */
+    pinHalflifeMultiplier: number;
+    /**
+     * LF-R4 evidence weight 表：在 buildPrompt 渲染 `[ghost-hint]` 时按 ghost 当前结构化
+     * 状态（已回答的 ask sibling / continuation 已完成 / 已被 drop）乘到 decayScore 上，
+     * 用于排序与可见性判定。**全部由结构化字段（ask-answer 配对存在与否、memory_state.status）
+     * 驱动，禁止任何对话文本语义匹配**。
+     */
+    evidenceWeight: GhostEvidenceWeightTable;
+}
+
+export interface GhostEvidenceWeightTable {
+    /** Ask 已收到答复（存在 ask-answer-pair 记录）：仍保留参考价值但权重略降。 */
+    askAnswered: number;
+    /** Ghost sibling 对应的 ask 仍 pending，但 continuation 已经回过一轮：再次回顾权重下降。 */
+    continuationCompleted: number;
+    /** 用户/Dream 显式 drop：state=abandoned，直接 0（不应出现在 listActiveGhosts，但作 belt-and-suspenders）。 */
+    abandoned: number;
+    /** 默认（live / resumed 且 ask 未回答）：满权重。 */
+    default: number;
 }
 
 export interface IdentityTuningConfig {
@@ -707,6 +740,16 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
                 access: 0.15,
                 successPrior: 0.35,
                 fanout: 0.15,
+            },
+        },
+        ghost: {
+            maxChainDepth: 5,
+            pinHalflifeMultiplier: 3,
+            evidenceWeight: {
+                askAnswered: 0.85,
+                continuationCompleted: 0.75,
+                abandoned: 0,
+                default: 1,
             },
         },
     };

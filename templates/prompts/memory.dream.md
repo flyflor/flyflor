@@ -21,6 +21,7 @@ Candidate kinds and the actions allowed for each:
 
 3. `contradiction-pair` — two semantically similar items (cosine attached) that may conflict. Choose one:
     - `"contradiction-audit"` with `weaker: "left" | "right" | "both"` flagging the less reliable side. Optional: `confidenceMultiplier` (0.3..1.0; default 0.7), `contradictionDelta` (0..5; default 1), `relate` (boolean; default true — creates a `contradicts` edge).
+    - `"reconsolidation"` with `winner: "left" | "right" | "merge"`. Use ONLY when one side clearly supersedes the other or both should be merged into one canonical node. Optional: `mergedSummary` (≤ 600 chars; strict reconciliation only, no new facts), `mergedSymbols` (string[]≤16, lowercase), `scopeNote` (≤ 200 chars). The loser is linked as `supersededBy=<winner>` and a `supersedes` edge is created. Reconsolidation is heavier than `contradiction-audit`; prefer `contradiction-audit` unless one side is obviously wrong or a true merge is needed.
     - `"skip"` if the pair is not actually contradictory.
 
 Hard rules:
@@ -36,6 +37,7 @@ Output one JSON object. The `decisions` array shown below is **illustrative only
 { "candidateId": "<id>", "action": "drift-repair", "newSummary": "...", "newSymbols": ["..."], "scopeNote": "...", "newStatus": "active", "confidenceMultiplier": 0.8 },
 { "candidateId": "<id>", "action": "recall-reinforce", "importanceMultiplier": 1.1 },
 { "candidateId": "<id>", "action": "contradiction-audit", "weaker": "left", "confidenceMultiplier": 0.7, "contradictionDelta": 1, "relate": true },
+{ "candidateId": "<id>", "action": "reconsolidation", "winner": "merge", "mergedSummary": "...", "mergedSymbols": ["..."], "scopeNote": "..." },
 { "candidateId": "<id>", "action": "skip" }
 ]
 }

@@ -540,7 +540,8 @@ describe("Blackboard control boundary", () => {
         expect(finished?.decisions[0]?.reason).toBe("peer-qa-open-issues");
         expect(finished?.decisions[0]?.prompt).toContain("Please confirm these 1 open questions:");
         expect(finished?.decisions[0]?.prompt).toContain("1. 缺少目标仓库路径");
-        expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(true);
+        // LF-R3 slice D：`flyflor-decision-form` 系统消息退役，结构化 decisions 才是契约。
+        expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(false);
         expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.BlackboardLivelockDetected);
     });
 
@@ -732,7 +733,9 @@ describe("Blackboard control boundary", () => {
         expect(finished?.steps.every((step) => step.metadata.qaOutcome === BlackboardWorkerOutcome.Continue)).toBe(
             true,
         );
-        expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(true);
+        // LF-R3 slice D：黑板封顶不再写 `flyflor-decision-form` 系统消息，只保留结构化 decision。
+        expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(false);
+        expect(finished?.decisions[0]?.metadata?.openQuestions).toBeDefined();
     });
 });
 

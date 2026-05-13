@@ -15,7 +15,7 @@ Schema (full form):
 Minimal valid form — only the required fields, used when there is nothing extra to score:
 
 <flyflor_memory_actions>
-[{"action":"add","target":"user","kind":"profile","content":"Prefers Chinese replies.","confidence":0.9}]
+[{"action":"add","target":"user","kind":"profile","content":"User's timezone is UTC+8.","confidence":0.9}]
 </flyflor_memory_actions>
 
 Required fields (always present):
@@ -37,5 +37,6 @@ Optional refinement (omit unless you have explicit evidence):
 - signals.projectIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to crystallise the current work as a project (this creates `.flyflor/` scaffolding).
 - signals.eventIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to record this turn as a project event.
 - signals.skillPromotionIntent — 0..1; set ≥ 0.7 ONLY when a `[skill-offer]` nudge is active AND the user explicitly agrees to save the recurring workflow as a Skill (this writes `~/.flyflor/skills/<name>/SKILL.md`).
+- codename — explicit working-context anchor named by the user (e.g. "let's call it fly", "let's continue the fly thread"). Shape: `{ "name": "fly", "workingDir": "/abs/path", "description": "one-liner" }`. `name` is required and must not contain whitespace; `workingDir` and `description` are optional. **Never guess a codename from the conversation** — only fill this when the user explicitly names a working directory or theme.
 
 projectIntent, eventIntent and skillPromotionIntent trigger filesystem side-effects — leave them at 0 unless the user's intent is unambiguous.

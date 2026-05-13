@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { TopBar, BottomHint } from "./components/layout.tsx";
 
-export type CliPage = "overview" | "skills" | "mcp" | "plugins" | "sandbox" | "blackboard" | "memory" | "dream" | "config";
+export type CliPage = "overview" | "skills" | "mcp" | "plugins" | "sandbox" | "blackboard" | "memory" | "ghosts" | "dream" | "config";
 
 export const CLI_PAGES: Array<{ id: CliPage; label: string }> = [
     { id: "overview", label: "Overview" },
@@ -12,6 +12,7 @@ export const CLI_PAGES: Array<{ id: CliPage; label: string }> = [
     { id: "sandbox", label: "Sandbox" },
     { id: "blackboard", label: "Blackboard" },
     { id: "memory", label: "Memory" },
+    { id: "ghosts", label: "Ghosts" },
     { id: "dream", label: "Dream" },
     { id: "config", label: "Config" },
 ];

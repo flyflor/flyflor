@@ -209,6 +209,7 @@ async function main(): Promise<void> {
         driftRepaired: 0,
         recallReinforced: 0,
         contradictionsFlagged: 0,
+        reconsolidated: 0,
         skipped: 0,
     };
 
@@ -221,6 +222,7 @@ async function main(): Promise<void> {
         totals.driftRepaired += result.driftRepaired;
         totals.recallReinforced += result.recallReinforced;
         totals.contradictionsFlagged += result.contradictionsFlagged;
+        totals.reconsolidated += result.reconsolidated;
         totals.skipped += result.skipped;
         const tps = result.scanned > 0 ? Math.round((result.scanned / elapsed) * 1000) : 0;
         console.log(
@@ -236,6 +238,7 @@ async function main(): Promise<void> {
     console.log(`  drift repaired      : ${totals.driftRepaired}`);
     console.log(`  recall reinforced   : ${totals.recallReinforced}`);
     console.log(`  contradictions      : ${totals.contradictionsFlagged}`);
+    console.log(`  reconsolidated      : ${totals.reconsolidated}`);
     console.log(`  skipped             : ${totals.skipped}`);
     console.log(`  graph.snapshots     : ${graph.snapshots}`);
     console.log(`  pass duration p50   : ${percentile(passDurations, 50).toFixed(1)}ms`);

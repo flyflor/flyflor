@@ -15,7 +15,7 @@ Markdown 长期记忆工具。
 最小有效格式 —— 只填必填字段，当没有额外信号可打分时使用：
 
 <flyflor_memory_actions>
-[{"action":"add","target":"user","kind":"profile","content":"偏好使用中文回复。","confidence":0.9}]
+[{"action":"add","target":"user","kind":"profile","content":"用户所在时区为 UTC+8。","confidence":0.9}]
 </flyflor_memory_actions>
 
 必填字段（始终存在）：
@@ -37,5 +37,6 @@ Markdown 长期记忆工具。
 - signals.projectIntent —— 0..1；**仅当**用户明确要求把当前工作固化为项目时设为 ≥ 0.7（会生成 `.flyflor/` 脚手架）。
 - signals.eventIntent —— 0..1；**仅当**用户明确要求把当前轮记入项目事件时设为 ≥ 0.7。
 - signals.skillPromotionIntent —— 0..1；**仅当** system prompt 中已有 `[skill-offer]` 自我笔记，且用户明确同意把这套反复出现的工具组合固化为 Skill 时设为 ≥ 0.7（会写入 `~/.flyflor/skills/<name>/SKILL.md`）。
+- codename —— 用户**明确**给出的工作上下文锚点（"叫它 fly"、"我们继续 fly 这条线"）。结构：`{ "name": "fly", "workingDir": "/abs/path", "description": "一句话摘要" }`。`name` 必填且不含空白；`workingDir` / `description` 可选。**绝不要从对话里猜代号**——只在用户用自然语言明确命名某个工作目录或主题时才填。
 
 projectIntent、eventIntent 和 skillPromotionIntent 涉及文件系统副作用——在用户意图毫不含糊之前，保持为 0。

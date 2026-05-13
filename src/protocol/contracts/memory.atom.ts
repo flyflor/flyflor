@@ -36,7 +36,7 @@ export type IdentityFile = (typeof IdentityFile)[keyof typeof IdentityFile];
 
 /**
  * 单条 Memory Atom：source-of-truth 是 episodeIds 指向的 SQLite 当日记录。
- * Atom 本身落在 `journal/<yyyy>/W<ww>/day_YYYY_MM_DD.db` 的 `memory_atom` 表中。
+ * Atom 本身落在 `brain.db` 的 `memory_atom` 表中（LF-R1 单库；旧 journal 分文件路径已废）。
  */
 export interface MemoryAtom {
     id: string;

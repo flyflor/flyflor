@@ -10,6 +10,17 @@ export interface MemoryAction {
     confidence?: number;
     reason?: string;
     signals?: MemoryActionSignals;
+    /**
+     * LF-R2 Codename：模型同轮结构化输出的工作目录锚点。runtime 不做任何
+     * `@xxx` 字符串匹配（零字符匹配红线），代号只能由模型显式给出。
+     */
+    codename?: MemoryActionCodename;
+}
+
+export interface MemoryActionCodename {
+    name: string;
+    workingDir?: string;
+    description?: string;
 }
 
 export interface MemoryActionAffect {
@@ -132,7 +143,23 @@ function normalizeAction(action: MemoryAction): MemoryAction {
         confidence: clamp01(action.confidence ?? 0.9),
         reason: typeof action.reason === "string" ? action.reason.replace(/\s+/g, " ").trim().slice(0, 240) : undefined,
         signals: normalizeSignals(action.signals),
+        codename: normalizeCodename(action.codename),
     };
+}
+
+function normalizeCodename(value: unknown): MemoryActionCodename | undefined {
+    if (!isRecord(value)) return undefined;
+    const name = typeof value.name === "string" ? value.name.replace(/\s+/g, "").trim() : "";
+    if (name.length === 0 || name.length > 64) return undefined;
+    const workingDir =
+        typeof value.workingDir === "string" && value.workingDir.trim().length > 0
+            ? value.workingDir.trim().slice(0, 500)
+            : undefined;
+    const description =
+        typeof value.description === "string" && value.description.trim().length > 0
+            ? value.description.replace(/\s+/g, " ").trim().slice(0, 240)
+            : undefined;
+    return { name, workingDir, description };
 }
 
 function normalizeAffect(value: unknown): MemoryActionAffect {

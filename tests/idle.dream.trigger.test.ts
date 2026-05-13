@@ -8,6 +8,7 @@ const ZERO: DreamRunResult = {
     driftRepaired: 0,
     recallReinforced: 0,
     contradictionsFlagged: 0,
+    reconsolidated: 0,
     skipped: 0,
 };
 

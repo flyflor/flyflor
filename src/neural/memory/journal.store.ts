@@ -5,6 +5,27 @@ import type { AtomScore, MemoryAtom, ModelRole } from "../../protocol/contracts/
 
 export interface JournalStoreOptions {
     journalRoot: string;
+    /**
+     * LF-R1 read-only grace: refuse appendEpisode targeting day partitions
+     * whose dateKey is older than (now - graceDays). brain.db is canonical
+     * after the grace expires; this guard prevents accidental backfills into
+     * legacy day partitions. Set to <= 0 or omit to disable (default 60).
+     */
+    legacyGraceDays?: number;
+}
+
+export class JournalWriteRejectedError extends Error {
+    readonly code = "JOURNAL_LEGACY_GRACE";
+    constructor(
+        readonly dateKey: string,
+        readonly ageDays: number,
+        readonly graceDays: number,
+    ) {
+        super(
+            `journal write rejected: day=${dateKey} age=${ageDays}d > grace=${graceDays}d (LF-R1 brain.db is canonical)`,
+        );
+        this.name = "JournalWriteRejectedError";
+    }
 }
 
 export interface JournalEpisodeInput {
@@ -96,6 +117,17 @@ interface AtomRow {
 export class JournalStore {
     constructor(private readonly options: JournalStoreOptions) {}
 
+    private assertWritable(dateKey: string, createdAt: string): void {
+        const grace = this.options.legacyGraceDays ?? 60;
+        if (grace <= 0) return;
+        const target = Date.parse(createdAt);
+        if (!Number.isFinite(target)) return;
+        const ageDays = (Date.now() - target) / 86_400_000;
+        if (ageDays > grace) {
+            throw new JournalWriteRejectedError(dateKey, Math.floor(ageDays), grace);
+        }
+    }
+
     locationFor(date: Date | string): JournalDayLocation {
         const day = normalizeDate(date);
         const { year, week } = isoWeek(day);
@@ -114,6 +146,7 @@ export class JournalStore {
 
     async appendEpisode(input: JournalEpisodeInput, atoms: JournalAtomWrite[] = []): Promise<JournalWriteResult> {
         const location = this.locationFor(input.createdAt);
+        this.assertWritable(location.dateKey, input.createdAt);
         await ensureWeekFiles(location);
         const db = openWritable(location.dbPath);
         try {

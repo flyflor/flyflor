@@ -39,6 +39,7 @@ export interface DreamRunResult {
     driftRepaired: number;
     recallReinforced: number;
     contradictionsFlagged: number;
+    reconsolidated: number;
     skipped: number;
 }
 
@@ -124,6 +125,7 @@ export class DreamWorkerImpl implements DreamWorker {
                 if (applied === "drift") result.driftRepaired += 1;
                 else if (applied === "recall") result.recallReinforced += 1;
                 else if (applied === "contradiction") result.contradictionsFlagged += 1;
+                else if (applied === "reconsolidation") result.reconsolidated += 1;
                 else result.skipped += 1;
             } catch (err) {
                 this.publishFailure(userId, "apply", err);
@@ -139,7 +141,7 @@ export class DreamWorkerImpl implements DreamWorker {
         candidate: DreamCandidate,
         decision: DreamDecision,
         nowMs: number,
-    ): Promise<"drift" | "recall" | "contradiction" | "skip"> {
+    ): Promise<"drift" | "recall" | "contradiction" | "reconsolidation" | "skip"> {
         if (decision.action === DreamActionKind.Skip) return "skip";
 
         if (decision.action === DreamActionKind.DriftRepair) {
@@ -245,6 +247,36 @@ export class DreamWorkerImpl implements DreamWorker {
             return "skip";
         }
 
+        if (decision.action === DreamActionKind.Reconsolidation) {
+            if (candidate.kind !== DreamCandidateKind.ContradictionPair) return "skip";
+            // 资源指标短路：至少一侧 contradictionCount ≥ 1 或 cosine ≥ 0.85，避免在弱信号上做合并。
+            const lc = candidate.signalsLeft.contradictionCount ?? 0;
+            const rc = candidate.signalsRight.contradictionCount ?? 0;
+            if (lc < 1 && rc < 1 && candidate.cosine < 0.85) return "skip";
+            const ok = await this.graph.applyReconsolidation({
+                left: { table: candidate.left.table, id: candidate.left.id },
+                right: { table: candidate.right.table, id: candidate.right.id },
+                winner: decision.winner,
+                nowMs,
+                mergedSummary: decision.mergedSummary,
+                mergedSymbols: decision.mergedSymbols,
+                scopeNote: decision.scopeNote,
+            });
+            if (ok) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryReconsolidated, {
+                        userId,
+                        left: candidate.left,
+                        right: candidate.right,
+                        winner: decision.winner,
+                        cosine: candidate.cosine,
+                    }),
+                );
+                return "reconsolidation";
+            }
+            return "skip";
+        }
+
         return "skip";
     }
 
@@ -264,7 +296,7 @@ export class DreamWorkerImpl implements DreamWorker {
 }
 
 function zeroResult(): DreamRunResult {
-    return { scanned: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, skipped: 0 };
+    return { scanned: 0, driftRepaired: 0, recallReinforced: 0, contradictionsFlagged: 0, reconsolidated: 0, skipped: 0 };
 }
 
 /** 把候选集合渲染成 LLM 可读的紧凑文本块；不包含任何业务语义指令。 */

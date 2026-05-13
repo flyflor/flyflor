@@ -9,6 +9,7 @@ export const DreamActionKind = {
     DriftRepair: "drift-repair",
     RecallReinforce: "recall-reinforce",
     ContradictionAudit: "contradiction-audit",
+    Reconsolidation: "reconsolidation",
     Skip: "skip",
 } as const;
 export type DreamActionKind = (typeof DreamActionKind)[keyof typeof DreamActionKind];
@@ -54,6 +55,19 @@ export interface DreamContradictionAuditDecision {
     relate?: boolean;
 }
 
+export interface DreamReconsolidationDecision {
+    candidateId: string;
+    action: typeof DreamActionKind.Reconsolidation;
+    /** "left" | "right"：保留方；"merge" = 在 left 上写合并摘要并把 right 标记为 supersededBy=left。 */
+    winner: "left" | "right" | "merge";
+    /** 合并/重写后摘要；空则不改 summary。 */
+    mergedSummary?: string;
+    /** 合并后的 symbols（小写、去重、≤16）。 */
+    mergedSymbols?: string[];
+    /** scope 注记或保留侧的来源标签。 */
+    scopeNote?: string;
+}
+
 export interface DreamSkipDecision {
     candidateId: string;
     action: typeof DreamActionKind.Skip;
@@ -63,6 +77,7 @@ export type DreamDecision =
     | DreamDriftRepairDecision
     | DreamRecallReinforceDecision
     | DreamContradictionAuditDecision
+    | DreamReconsolidationDecision
     | DreamSkipDecision;
 
 /** LLM 返回原始字符串 → 校验过的决策数组（未识别项一律丢弃）。 */
@@ -135,6 +150,26 @@ export function parseDreamDecisions(raw: string, maxSummaryChars = 600): DreamDe
             case DreamActionKind.Skip:
                 out.push({ candidateId, action: DreamActionKind.Skip });
                 break;
+            case DreamActionKind.Reconsolidation: {
+                const winner = entry.winner;
+                if (winner !== "left" && winner !== "right" && winner !== "merge") break;
+                const dec: DreamReconsolidationDecision = {
+                    candidateId,
+                    action: DreamActionKind.Reconsolidation,
+                    winner,
+                };
+                if (typeof entry.mergedSummary === "string" && entry.mergedSummary.trim().length > 0) {
+                    dec.mergedSummary = entry.mergedSummary.trim().slice(0, maxSummaryChars);
+                }
+                if (Array.isArray(entry.mergedSymbols)) {
+                    dec.mergedSymbols = sanitizeSymbols(entry.mergedSymbols);
+                }
+                if (typeof entry.scopeNote === "string" && entry.scopeNote.trim().length > 0) {
+                    dec.scopeNote = entry.scopeNote.trim().slice(0, 200);
+                }
+                out.push(dec);
+                break;
+            }
             default:
                 // 未知动作直接丢弃，绝不做字符串相似度回退。
                 break;

@@ -1,5 +1,6 @@
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
+    AgentAsk,
     BlackboardTurnStatus as BlackboardTurnStatusType,
     GatewayMessage,
     GatewayReply,
@@ -9,16 +10,21 @@ import type {
 } from "../../protocol/contracts/index.ts";
 import {
     ArchitectureLayer,
+    AskReason,
     BlackboardMode,
     BlackboardTurnStatus,
     CapabilityExecutionKind,
     ComponentKind,
+    GhostContextReason,
     ModelRole,
 } from "../../protocol/contracts/index.ts";
 import { Runtime as RuntimeBoundary } from "../components.ts";
 import { Module, Provide } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions, renderMemoryActionPrompt } from "../../neural/memory/actions.ts";
+import { parseAgentAsk } from "../../neural/memory/ask.ts";
+import { parseGhostDecisions } from "../../neural/memory/ghost.decisions.ts";
+import { parseIdentityAppends } from "../../neural/memory/identity.ts";
 import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
 import { LocalHashEmbeddingProvider } from "../../neural/memory/embedding.ts";
 import {
@@ -36,6 +42,7 @@ import {
 import { createSandboxPolicy, decideCapabilityExecution, gateCapabilityExecution, SandboxQuotaTracker } from "../sandbox/index.ts";
 import {
     loadPromptTemplates,
+    renderAskSchemaInstructions,
     renderBlackboardAdvisoryPrompt,
     renderMcpContextPrompt,
     renderRuntimeSystemPrompt,
@@ -66,6 +73,7 @@ import {
 } from "./fast.route.store.ts";
 import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
+import { InFlightTracker } from "./inflight.tracker.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -130,6 +138,8 @@ interface GeneratedTurn {
     visibleText: string;
     mcpCallProvenance: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
     selectedSkillNames: string[];
+    /** LF-R3 Ask 一等公民：模型本轮显式输出的 ask 块（kind='ask'）。 */
+    ask?: AgentAsk;
 }
 
 @Module({ name: "runtime", tags: ["flyflor", "boundary"] })
@@ -141,6 +151,7 @@ export class RuntimeModule extends RuntimeBoundary {
     private readonly perf: PerfMetrics;
     private readonly mcpToolCatalogCache = new Map<string, CachedMcpToolCatalog>();
     private readonly sandboxQuota: SandboxQuotaTracker;
+    private readonly inflight: InFlightTracker;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
      * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
@@ -162,6 +173,7 @@ export class RuntimeModule extends RuntimeBoundary {
             perKindPerRequest: config.sandbox.quota?.perKindPerRequest,
             yoloCooldownMs: config.sandbox.quota?.yoloCooldownMs,
         });
+        this.inflight = new InFlightTracker(config.paths.storageDir);
     }
 
     /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
@@ -171,6 +183,42 @@ export class RuntimeModule extends RuntimeBoundary {
         if (redisClient && this.fastRouteSnapshots instanceof InMemoryFastRouteSnapshotStore) {
             // Redis 命中即升级为跨副本共享存储；保留 L1 内存以维持热路径 O(1)。
             this.fastRouteSnapshots = new RedisFastRouteSnapshotStore({ redis: redisClient });
+        }
+        await this.recoverProcessRestartGhosts();
+    }
+
+    /**
+     * LF-R4：冷启动时扫遗留 inflight sentinel → 为每条写一条 process-restart ghost。
+     * 来源全部是结构化 JSON 字段（不消费对话文本语义）。
+     */
+    private async recoverProcessRestartGhosts(): Promise<void> {
+        let orphans: Awaited<ReturnType<InFlightTracker["recoverOrphans"]>>;
+        try {
+            orphans = await this.inflight.recoverOrphans();
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "inflight.recover",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            return;
+        }
+        if (orphans.length === 0) return;
+        for (const record of orphans) {
+            this.memory.recordGhostFromReason({
+                userId: record.userId,
+                reason: GhostContextReason.ProcessRestart,
+                userFacing: {
+                    title: "Interrupted by process restart",
+                    contextHint: record.originalUserMessage.slice(0, 200),
+                },
+                snapshot: { originalUserMessage: record.originalUserMessage.slice(0, 500) },
+                channelId: record.channelId,
+                requestId: record.requestId,
+                ...(record.codenameId ? { codenameId: record.codenameId } : {}),
+                importance: 0.6,
+            });
         }
     }
 
@@ -207,19 +255,30 @@ export class RuntimeModule extends RuntimeBoundary {
         context: RuntimeContext,
         options: RuntimeStreamOptions = {},
     ): Promise<GatewayReply> {
-        const prepared = await this.prepareTurn(message, context);
-        const assembled = await this.assembleTurnContext(message, prepared, options);
-        const generated = await this.generateTurnReply(message, prepared, assembled, options);
+        await this.inflight.markStart({
+            requestId: context.requestId,
+            userId: message.user.id,
+            channelId: message.route.channel,
+            originalUserMessage: message.text.slice(0, 500),
+            startedAtMs: Date.now(),
+        });
+        try {
+            const prepared = await this.prepareTurn(message, context);
+            const assembled = await this.assembleTurnContext(message, prepared, options);
+            const generated = await this.generateTurnReply(message, prepared, assembled, options);
 
-        await this.persistTurn(message, prepared, assembled, generated);
-        this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
+            await this.persistTurn(message, prepared, assembled, generated);
+            this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
 
-        prepared.ttfbDone();
-        this.events.publish(
-            event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
-        );
-        this.sandboxQuota.forgetRequest(context.requestId);
-        return generated.reply;
+            prepared.ttfbDone();
+            this.events.publish(
+                event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
+            );
+            this.sandboxQuota.forgetRequest(context.requestId);
+            return generated.reply;
+        } finally {
+            await this.inflight.markEnd(context.requestId);
+        }
     }
 
     /**
@@ -358,10 +417,25 @@ export class RuntimeModule extends RuntimeBoundary {
         const { selectedSkills, mcpServers, memoryPrompt, sandbox, mcpExecution, blackboardRun, mcpToolCatalog } =
             assembled;
 
+        // LF-R3 slice D：黑板封顶（NeedsUser）→ 直接合成 AgentAsk 短路返回，不再调用 LLM。
+        // 黑板已经穷尽 round 没有定论，由 runtime 把"需要用户决断"的语义透传给用户。
+        const stalemateAsk = buildBlackboardStalemateAsk(blackboardRun);
+        if (stalemateAsk) {
+            return this.replyFromAsk({
+                ask: stalemateAsk,
+                message,
+                blackboardRun,
+                selectedSkills,
+                mcpServers,
+                sandbox,
+            });
+        }
+
         const modelMessages: ModelMessage[] = [
             {
                 role: ModelRole.System,
                 content: renderRuntimeSystemPrompt({
+                    askSchemaInstructions: renderAskSchemaInstructions(),
                     blackboardContext: renderBlackboardPrompt(blackboardRun),
                     mcpContext: renderMcpContextPrompt({
                         servers: mcpServers,
@@ -398,12 +472,71 @@ export class RuntimeModule extends RuntimeBoundary {
         const mcpCallProvenance = mcpExecutionsToProvenance(generated.mcpToolCalls);
         const rawText = generated.rawText;
         const parsed = parseMemoryActions(rawText, this.config.memory.candidates.maxCandidatesPerTurn);
-        const visibleText = parseMcpToolCalls(parsed.text || rawText).text || parsed.text || rawText;
+        // LF-R4 fork/fresh hint：先剥离 <flyflor_ghost_decisions> 块，再交给 ask 解析。
+        // 仅消费结构化 {ghostId, kind}，runtime 不读 ghost 关联的自然语言语义。
+        const ghostDecisions = parseGhostDecisions(parsed.text);
+        if (ghostDecisions.decisions.length > 0) {
+            this.memory.applyGhostDecisions(ghostDecisions.decisions);
+        }
+        // LF-R5 identity 自写：从剩余文本里剥离 <flyflor_identity_append> 块。
+        // 仅消费结构化 {kind, content, confidence}，runtime 不读 content 文本含义。
+        const identityParsed = parseIdentityAppends(ghostDecisions.text);
+        if (identityParsed.candidates.length > 0) {
+            this.memory.applyIdentityAppends({
+                userId: message.user.id,
+                candidates: identityParsed.candidates,
+                channelId: message.route.chatId,
+                requestId: context.requestId,
+            });
+        }
+        // LF-R3 Ask 一等公民：从剥离 memory_actions + ghost_decisions + identity 后的剩余文本里解析
+        // <flyflor_agent_ask> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
+        // 渲染，原模型 reply 文本忽略。
+        const askParsed = parseAgentAsk(identityParsed.text);
+        const visibleSource = parseMcpToolCalls(askParsed.text || rawText).text || askParsed.text || rawText;
+        if (askParsed.dropped > 0) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryAskMutexViolation, {
+                    requestId: context.requestId,
+                    dropped: askParsed.dropped,
+                }),
+            );
+        }
+
+        // LF-R3 slice C：runtime 用户面 cap 强制——若模型本轮要 ask 但当前 chain 已达上限，
+        // 抛弃 ask 改走 reply。Memory 内部的 cap 检查是后台兜底，这里负责对外封顶。
+        let modelAsk: AgentAsk | undefined = askParsed.ask;
+        if (modelAsk) {
+            const pending = this.memory.peekActiveAsk(message.user.id);
+            const maxChainDepth = Math.max(1, this.config.memory.tuning.ghost.maxChainDepth);
+            const projectedDepth = pending ? pending.chainDepth + 1 : 1;
+            if (projectedDepth > maxChainDepth) {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryAskChainCapped, {
+                        requestId: context.requestId,
+                        userId: message.user.id,
+                        chainDepth: projectedDepth,
+                        maxChainDepth,
+                        action: "dropped-by-runtime",
+                    }),
+                );
+                modelAsk = undefined;
+            }
+        }
+
+        // LF-R3 slice D：模型本轮显式 ask（不含黑板 stalemate 那条 fallback——
+        // 那条已经在函数顶部短路返回过了）。
+        const ask: AgentAsk | undefined = modelAsk;
+
+        const visibleText = ask ? ask.prompt : visibleSource;
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
-            text: renderReplyText(visibleText, blackboardRun),
+            text: ask ? renderAskReplyText(ask) : renderReplyText(visibleText, blackboardRun),
             metadata: {
+                ...(ask
+                    ? { kind: "ask" as const, ask: { reason: ask.reason, choices: ask.choices?.length ?? 0 } }
+                    : { kind: "reply" as const }),
                 blackboard: blackboardRun
                     ? {
                           elapsedMs: blackboardRun.elapsedMs,
@@ -426,7 +559,60 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         };
 
-        return { reply, parsed, visibleText, mcpCallProvenance, selectedSkillNames };
+        return { reply, parsed, visibleText, mcpCallProvenance, selectedSkillNames, ask };
+    }
+
+    /**
+     * LF-R3 slice D：黑板封顶短路。把合成的 AgentAsk 直接包成 GatewayReply，
+     * 跳过 LLM 调用 + memory_actions 解析 + mcp 工具执行。persistTurn 仍会接到 ask
+     * 走完 brain 写入 / 链深度跟踪，与模型主动 ask 走同一通路。
+     */
+    private replyFromAsk(input: {
+        ask: AgentAsk;
+        message: GatewayMessage;
+        blackboardRun: RuntimeBlackboardRun | undefined;
+        selectedSkills: AssembledTurnContext["selectedSkills"];
+        mcpServers: AssembledTurnContext["mcpServers"];
+        sandbox: AssembledTurnContext["sandbox"];
+    }): GeneratedTurn {
+        const { ask, message, blackboardRun, selectedSkills, mcpServers, sandbox } = input;
+        const selectedSkillNames = selectedSkills.map((skill) => skill.name);
+        const reply: GatewayReply = {
+            messageId: crypto.randomUUID(),
+            route: message.route,
+            text: renderAskReplyText(ask),
+            metadata: {
+                kind: "ask" as const,
+                ask: { reason: ask.reason, choices: ask.choices?.length ?? 0 },
+                blackboard: blackboardRun
+                    ? {
+                          elapsedMs: blackboardRun.elapsedMs,
+                          messages: blackboardRun.transcript.length,
+                          mode: blackboardRun.mode,
+                          reason: blackboardRun.reason,
+                          status: blackboardRun.status,
+                          turnId: blackboardRun.turnId,
+                      }
+                    : {
+                          mode: "direct",
+                          reason: "blackboard-controller-not-configured",
+                      },
+                memoryActions: 0,
+                mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
+                mcpToolCalls: 0,
+                mcpToolExecutions: [],
+                sandboxMode: sandbox.mode,
+                skills: selectedSkillNames,
+            },
+        };
+        return {
+            reply,
+            parsed: { actions: [], text: "" },
+            visibleText: ask.prompt,
+            mcpCallProvenance: [],
+            selectedSkillNames,
+            ask,
+        };
     }
 
     /**
@@ -441,12 +627,16 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<void> {
         const { context, enrichedContext, embedding, snapshotKey } = prepared;
         const { blackboardRun } = assembled;
-        const { reply, parsed, mcpCallProvenance, selectedSkillNames } = generated;
+        const { reply, parsed, mcpCallProvenance, selectedSkillNames, ask } = generated;
 
         await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions, {
             mcpCalls: mcpCallProvenance,
             skillNames: selectedSkillNames,
-        });
+        }, ask);
+        // LF-R4 ghost：MCP 工具失败 → 把"in-flight 上下文"写一条 reason='tool-failure' 的 ghost。
+        // 触发条件是布尔字段 `call.ok === false`（资源指标，非字符匹配）；
+        // userFacing.title 由 server/tool/error 三段结构化字段拼接，不解析对话文本。
+        this.recordToolFailureGhosts(message, context.requestId, mcpCallProvenance);
         await recordSkillUsage(this.config.paths, assembled.selectedSkills, {
             mcpCallCount: mcpCallProvenance.length,
             mcpSuccessCount: mcpCallProvenance.filter((call) => call.ok).length,
@@ -478,6 +668,47 @@ export class RuntimeModule extends RuntimeBoundary {
             consecutiveWatchTurns: counters.watch,
             consecutiveBlackboardFailures: counters.failure,
             consecutiveToolFailureTurns: counters.toolFailure,
+        });
+    }
+
+    /**
+     * LF-R4：把本轮 MCP 工具失败写入 ghost-context（reason='tool-failure'）。
+     * 触发条件仅消费布尔字段 `call.ok` 与 `requestId`、`channelId` 等结构化资源指标；
+     * userFacing.title 由 `server/tool` 字段拼接，contextHint 直传原始错误串（来自工具自身的结构化输出，
+     * 不是对话文本语义判断 → 不违反零字符匹配红线）。
+     */
+    private recordToolFailureGhosts(
+        message: GatewayMessage,
+        requestId: string,
+        mcpCalls: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>,
+    ): void {
+        if (!this.memory) return;
+        const failures = mcpCalls.filter((c) => !c.ok);
+        if (failures.length === 0) return;
+        // 同轮多失败聚合为一条 ghost，避免列表淹没。
+        const head = failures[0]!;
+        const title = `MCP tool failed: ${head.server}/${head.tool}`;
+        const contextHint = head.error
+            ? head.error.slice(0, 200)
+            : failures.length > 1
+              ? `${failures.length - 1} more failure(s) in this turn`
+              : undefined;
+        const mcpCallProgress = failures.slice(0, 8).map((c) => ({
+            tool: `${c.server}/${c.tool}`,
+            status: "error",
+            lastError: c.error ? c.error.slice(0, 200) : undefined,
+        }));
+        this.memory.recordGhostFromReason({
+            userId: message.user.id,
+            reason: GhostContextReason.ToolFailure,
+            userFacing: contextHint ? { title, contextHint } : { title },
+            snapshot: {
+                originalUserMessage: message.text.slice(0, 500),
+                mcpCallProgress,
+            },
+            channelId: message.route.channel,
+            requestId,
+            importance: 0.6,
         });
     }
 
@@ -1078,6 +1309,22 @@ function renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefi
     return `${renderReplyPrefix(run)}${finalAnswer}`;
 }
 
+/**
+ * LF-R3 Ask 一等公民：把 AgentAsk 渲染成可见 reply 文本。
+ * 不混入黑板 transcript 前缀——ask 是面向用户的纯反问，不展示中间推理。
+ */
+function renderAskReplyText(ask: AgentAsk): string {
+    const lines: string[] = [ask.prompt.trim()];
+    if (ask.choices && ask.choices.length > 0) {
+        lines.push("");
+        ask.choices.forEach((choice, idx) => {
+            const tail = choice.description ? ` — ${choice.description}` : "";
+            lines.push(`${idx + 1}. ${choice.label}${tail}`);
+        });
+    }
+    return lines.join("\n");
+}
+
 function renderUserContentWithAttachments(message: GatewayMessage): string {
     const summary = renderAttachmentSummary(message.attachments);
     if (!summary) return message.text;
@@ -1223,9 +1470,7 @@ function renderBlackboardTranscript(run: RuntimeBlackboardRun): string[] {
 
 function renderRoundDialogue(run: RuntimeBlackboardRun, round: number): string[] {
     const steps = run.steps.filter((step) => step.round === round);
-    const messages = run.transcript.filter(
-        (message) => message.round === round && message.visibility === "public" && !isDecisionFormMessage(message),
-    );
+    const messages = run.transcript.filter((message) => message.round === round && message.visibility === "public");
     const dialogue = messages.length > 0 ? messages.map((message) => renderDialogueMessage(run, message)) : [];
     const fallback = dialogue.length > 0 ? [] : steps.map((step) => renderStepAsDialogue(run, step));
     return [
@@ -1247,8 +1492,27 @@ function renderStepAsDialogue(run: RuntimeBlackboardRun, step: BlackboardStep): 
     return `${displayNameForWorker(run, step.workerRole)}: ${compactStepOutput(step)}`;
 }
 
-function isDecisionFormMessage(message: BlackboardMessage): boolean {
-    return message.metadata.event === "blackboard.needs-user" || message.content.includes("flyflor-decision-form");
+/**
+ * LF-R3 slice D：把黑板封顶（NeedsUser）状态合成为 AgentAsk(reason=blackboard-stalemate)。
+ * 仅消费 blackboard.status + 最新 decision（结构化资源指标），不做任何文本启发。
+ * 模型本轮已显式 ask 时不调用本函数（model-ask 优先）。
+ */
+function buildBlackboardStalemateAsk(run: RuntimeBlackboardRun | undefined): AgentAsk | undefined {
+    if (!run || run.status !== BlackboardTurnStatus.NeedsUser) return undefined;
+    const decision = run.decisions[run.decisions.length - 1];
+    if (!decision) return undefined;
+    const choices = decision.options.map((option) => ({
+        value: option.id,
+        label: option.label,
+        ...(option.description ? { description: option.description } : {}),
+    }));
+    return {
+        reason: AskReason.BlackboardStalemate,
+        prompt: decision.prompt,
+        ...(choices.length > 0 ? { choices } : {}),
+        freeform: true,
+        rationale: `blackboard:${decision.reason}`,
+    };
 }
 
 function compactDialogueText(value: string): string {

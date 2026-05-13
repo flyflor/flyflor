@@ -29,6 +29,7 @@ function testPaths(root: string): FlyflorPaths {
 }
 
 const FILES = [
+    "ask.schema.md",
     "blackboard.advisory.md",
     "blackboard.decision.md",
     "blackboard.route.md",
@@ -47,6 +48,7 @@ const FILES = [
 async function seedAllValid(promptDir: string): Promise<void> {
     await mkdir(promptDir, { recursive: true });
     const placeholdersByFile: Record<string, string[]> = {
+        "ask.schema.md": [],
         "blackboard.advisory.md": ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
         "blackboard.decision.md": ["questionCount", "reason", "unresolvedIssues"],
         "blackboard.route.md": ["request"],
@@ -59,6 +61,7 @@ async function seedAllValid(promptDir: string): Promise<void> {
         "memory.dream.md": ["candidates", "userId"],
         "mcp.context.md": ["mcpEntries"],
         "runtime.system.md": [
+            "askSchemaInstructions",
             "blackboardContext",
             "mcpContext",
             "memoryActionInstructions",
