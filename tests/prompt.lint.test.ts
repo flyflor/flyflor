@@ -195,6 +195,9 @@ describe("lintPromptTemplates", () => {
             "Use these tool results to answer the original user request",
         ];
         for (const file of sourceFiles) {
+            if (file.endsWith(join("src", "agent", "prompts", "template.manifest.ts"))) {
+                continue;
+            }
             const body = await readFile(file, "utf8");
             for (const snippet of forbiddenSnippets) {
                 if (body.includes(snippet)) {

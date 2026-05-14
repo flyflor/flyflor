@@ -107,7 +107,7 @@ describe("LF-P0 memory tuning defaults", () => {
         }
     });
 
-    test("_keepGatewayListening is audit-only: user edits are silently ignored", async () => {
+    test("_keepGatewayListening is audit-only: user edits fail fast", async () => {
         const { paths, root } = await makePaths();
         try {
             await writeFile(
@@ -120,9 +120,7 @@ describe("LF-P0 memory tuning defaults", () => {
                     },
                 }),
             );
-            const config = await loadConfigForPaths(paths);
-            // R behavior contract: never false, regardless of user override.
-            expect(config.memory.tuning.dormant._keepGatewayListening).toBe(true);
+            await expect(loadConfigForPaths(paths)).rejects.toThrow("_keepGatewayListening");
         } finally {
             await rm(root, { recursive: true, force: true });
         }

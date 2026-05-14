@@ -35,7 +35,7 @@ describe("HttpAuditSink", () => {
         });
     });
 
-    test("swallows non-2xx and network errors", async () => {
+    test("surfaces non-2xx and network errors", async () => {
         const sink = new HttpAuditSink({
             url: "https://example.invalid/x",
             fetchImpl: (async () => {
@@ -43,13 +43,12 @@ describe("HttpAuditSink", () => {
             }) as unknown as typeof fetch,
         });
         sink.publish(event(RuntimeEventType.SandboxToolDenied));
-        await sink.flush();
+        await expect(sink.flush()).rejects.toThrow("network down");
         const sink2 = new HttpAuditSink({
             url: "https://example.invalid/y",
             fetchImpl: (async () => new Response("nope", { status: 500 })) as unknown as typeof fetch,
         });
         sink2.publish(event(RuntimeEventType.SandboxToolDenied));
-        await sink2.flush();
-        // no throw == pass
+        await expect(sink2.flush()).rejects.toThrow("non-2xx 500");
     });
 });

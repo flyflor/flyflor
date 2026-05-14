@@ -111,6 +111,7 @@ export interface ChannelConfigs {
     mattermost: {
         baseUrl?: string;
         botToken?: string;
+        webhookToken?: SecretRef | string;
     };
     matrix: {
         accessToken?: string;
@@ -183,8 +184,6 @@ export interface ModelConfig {
     model: string;
     temperature: number;
     timeoutMs: number;
-    /** 主 provider 调用失败（瞬时错误 / 凭据缺失）时按顺序尝试的备用 provider 配置；不参与流式分支。 */
-    fallbacks?: ModelConfig[];
 }
 
 export type ModelProviderType = ModelProviderKindType;
@@ -204,8 +203,6 @@ export interface ModelProviderConfig {
 export interface ModelRegistryConfig {
     activeModel?: string;
     activeProvider?: string;
-    /** 主 provider 失败时按顺序尝试的备用 provider id 列表。 */
-    fallbackProviderIds?: string[];
     providers?: Record<string, ModelProviderConfig>;
     secrets?: Record<string, string>;
     temperature?: number;
@@ -464,7 +461,7 @@ export interface SandboxConfig {
     shellHookApproval?: ToolApprovalModeType;
     /**
      * 审计 sink 列表；未配置时默认装配 file sink（写入 `<logDir>/audit.jsonl`）。
-     * 多 sink 时按顺序 fan-out；任一失败 best-effort 不阻塞其它。
+     * 多 sink 时按顺序 fan-out；任一失败必须暴露到对应 sink 的 flush / 调用链。
      */
     auditSinks?: AuditSinkConfig[];
     /** quota 配置：限频与 YOLO 冷却；缺省不限制。 */
@@ -646,10 +643,15 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
     if (!override) {
         return defaults;
     }
+    if (
+        override.tuning?.dormant?._keepGatewayListening !== undefined &&
+        override.tuning.dormant._keepGatewayListening !== true
+    ) {
+        throw new Error("memory.tuning.dormant._keepGatewayListening is audit-only and must stay true.");
+    }
 
     const merged = mergeConfig(defaults, override);
-    // R red-line enforcement: `_keepGatewayListening` is an audit-only field;
-    // user edits are silently ignored (W2 behavior contract, see docs/proposals/life.form.md).
+    // R red-line enforcement: `_keepGatewayListening` is an audit-only field.
     merged.tuning.dormant._keepGatewayListening = true;
     return merged;
 }
@@ -802,19 +804,7 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
 function resolveModelConfig(config: ModelRegistryConfig | undefined): ModelConfig {
     const providers = mergeConfig(createDefaultModelProviders(), config?.providers ?? {});
     const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.OpenAI;
-    const primary = buildModelConfig(providers, providerId, config);
-    const seen = new Set<string>([providerId]);
-    const fallbacks: ModelConfig[] = [];
-    for (const fallbackId of config?.fallbackProviderIds ?? []) {
-        if (seen.has(fallbackId)) continue;
-        if (!providers[fallbackId]) continue;
-        seen.add(fallbackId);
-        fallbacks.push(buildModelConfig(providers, fallbackId, config));
-    }
-    if (fallbacks.length > 0) {
-        primary.fallbacks = fallbacks;
-    }
-    return primary;
+    return buildModelConfig(providers, providerId, config);
 }
 
 function buildModelConfig(

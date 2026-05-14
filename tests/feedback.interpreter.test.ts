@@ -60,16 +60,14 @@ describe("FeedbackInterpreter (LLM-driven, no string match)", () => {
         expect(result.confidence).toBe(0.6);
     });
 
-    test("returns none + parse-failed rationale for malformed output", () => {
-        const result = parseClassification("definitely not json");
-        expect(result.category).toBe(FeedbackCategory.None);
-        expect(result.rationale).toBe("parse-failed");
-        expect(result.confidence).toBe(0);
+    test("throws for malformed output", () => {
+        expect(() => parseClassification("definitely not json")).toThrow("JSON object");
     });
 
-    test("returns none for unknown category string", () => {
-        const result = parseClassification(JSON.stringify({ category: "frobnicate", confidence: 0.9, rationale: "x" }));
-        expect(result.category).toBe(FeedbackCategory.None);
+    test("throws for unknown category string", () => {
+        expect(() =>
+            parseClassification(JSON.stringify({ category: "frobnicate", confidence: 0.9, rationale: "x" })),
+        ).toThrow("unknown category");
     });
 
     test("clamps out-of-range confidence", () => {
@@ -93,10 +91,8 @@ describe("FeedbackInterpreter (LLM-driven, no string match)", () => {
         expect(result.extractedFact).toBeUndefined();
     });
 
-    test("rejects non-object JSON (e.g., array)", () => {
-        const result = parseClassification("[1,2,3]");
-        // array is still a record; category missing → none
-        expect(result.category).toBe(FeedbackCategory.None);
+    test("throws for non-object JSON (e.g., array)", () => {
+        expect(() => parseClassification("[1,2,3]")).toThrow("JSON object");
     });
 
     test("ignores non-string rationale", () => {

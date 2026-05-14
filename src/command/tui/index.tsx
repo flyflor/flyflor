@@ -42,9 +42,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
         externalOutputMode: "passthrough",
         consoleOptions: {
             onCopySelection: (text) => {
-                try {
-                    Bun.write(Bun.stdout, text);
-                } catch {}
+                void Bun.write(Bun.stdout, text);
             },
         },
     });

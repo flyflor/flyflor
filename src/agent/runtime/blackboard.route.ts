@@ -40,7 +40,7 @@ export function parseBlackboardRouteDecision(raw: string): RuntimeBlackboardRout
     return {
         mode,
         score,
-        reason: readString(parsed.reason, "model-route"),
+        reason: readRequiredString(parsed.reason, "reason"),
         signals: readStringArray(parsed.signals),
         needsReflectionCandidate: parsed.needsReflectionCandidate === true,
         blackboardContract: readBlackboardContract(parsed.blackboardContract, mode),
@@ -83,8 +83,11 @@ function readScore(value: unknown): number {
     return value;
 }
 
-function readString(value: unknown, fallback: string): string {
-    return typeof value === "string" && value.trim() ? value.trim() : fallback;
+function readRequiredString(value: unknown, field: string): string {
+    if (typeof value !== "string" || !value.trim()) {
+        throw new Error(`Blackboard route model returned invalid ${field}.`);
+    }
+    return value.trim();
 }
 
 function readStringArray(value: unknown): string[] {
@@ -158,8 +161,8 @@ function readBlackboardContract(value: unknown, mode: BlackboardMode): Blackboar
         mode: contractMode,
         policyReason:
             contractMode === "non-convergent"
-                ? readString(candidate.policyReason, "route-declared-non-convergent")
-                : readString(candidate.policyReason, "default-convergence"),
+                ? readRequiredString(candidate.policyReason, "blackboardContract.policyReason")
+                : readOptionalString(candidate.policyReason) ?? "default-convergence",
         proposition: readOptionalString(candidate.proposition),
         reviewerTrigger: readOptionalString(candidate.reviewerTrigger),
     };
@@ -181,17 +184,16 @@ function readContradictions(value: unknown): BlackboardContract["contradictions"
     return value
         .filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
         .map((item) => ({
-            left: readString(item.left, ""),
-            reason: readString(item.reason, ""),
-            right: readString(item.right, ""),
+            left: readRequiredString(item.left, "blackboardContract.contradictions.left"),
+            reason: readRequiredString(item.reason, "blackboardContract.contradictions.reason"),
+            right: readRequiredString(item.right, "blackboardContract.contradictions.right"),
         }))
         .filter((item) => item.left && item.right && item.reason)
         .slice(0, 8);
 }
 
 function readOptionalString(value: unknown): string | undefined {
-    const text = readString(value, "");
-    return text || undefined;
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function normalizeWorkerPlan(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {

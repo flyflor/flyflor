@@ -279,7 +279,7 @@ describe("ShellHookExecutor", () => {
         expect(spawnCalled).toBe(0);
     });
 
-    test("[chaos] approve callback throwing is treated as denial (no crash)", async () => {
+    test("[chaos] approve callback throwing surfaces the error", async () => {
         const sink = new CollectSink();
         const exec = new ShellHookExecutor({
             policy: policyAsk(),
@@ -290,12 +290,10 @@ describe("ShellHookExecutor", () => {
             },
             spawn: () => fakeSpawn(0),
         });
-        const result = await exec.execute(SPEC);
-        expect(result.ok).toBe(false);
-        expect(sink.types()).toContain(RuntimeEventType.SandboxToolApprovalDenied);
+        await expect(exec.execute(SPEC)).rejects.toThrow("approve-boom");
     });
 
-    test("[chaos] events sink throwing does not break execution", async () => {
+    test("[chaos] events sink throwing surfaces the error", async () => {
         const exec = new ShellHookExecutor({
             policy: policyAllow(),
             events: {
@@ -306,9 +304,7 @@ describe("ShellHookExecutor", () => {
             allowedCommands: ["echo"],
             spawn: () => fakeSpawn(0, "ok"),
         });
-        const result = await exec.execute(SPEC);
-        expect(result.ok).toBe(true);
-        expect(result.stdout).toBe("ok");
+        await expect(exec.execute(SPEC)).rejects.toThrow("sink-boom");
     });
 
     test("[chaos] concurrent executions are independent", async () => {

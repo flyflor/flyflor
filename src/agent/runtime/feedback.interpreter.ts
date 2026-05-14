@@ -46,23 +46,19 @@ export async function classifyFeedback(
 }
 
 export function parseClassification(raw: string): FeedbackClassification {
-    const fallback: FeedbackClassification = {
-        category: FeedbackCategory.None,
-        confidence: 0,
-        rationale: "parse-failed",
-    };
     const json = extractJsonObject(raw);
-    if (!json) return fallback;
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(json);
-    } catch {
-        return fallback;
+    if (!json) {
+        throw new Error("Feedback classifier output did not contain a JSON object.");
     }
-    if (!isRecord(parsed)) return fallback;
+    const parsed = JSON.parse(json) as unknown;
+    if (!isRecord(parsed)) {
+        throw new Error("Feedback classifier output JSON must be an object.");
+    }
     const category = normaliseCategory(parsed.category);
-    if (!category) return fallback;
-    const confidence = clamp01(toNumber(parsed.confidence, 0));
+    if (!category) {
+        throw new Error("Feedback classifier output has an unknown category.");
+    }
+    const confidence = clamp01(readNumber(parsed.confidence, "confidence"));
     const rationale = typeof parsed.rationale === "string" ? parsed.rationale.trim().slice(0, 200) : "";
     const extractedFact =
         typeof parsed.extractedFact === "string" && parsed.extractedFact.trim().length > 0
@@ -88,13 +84,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
-function toNumber(value: unknown, fallback: number): number {
+function readNumber(value: unknown, field: string): number {
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
         const n = Number(value);
-        return Number.isFinite(n) ? n : fallback;
+        if (Number.isFinite(n)) return n;
     }
-    return fallback;
+    throw new Error(`Feedback classifier output ${field} must be a finite number.`);
 }
 
 function clamp01(value: number): number {

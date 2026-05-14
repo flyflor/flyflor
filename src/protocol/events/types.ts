@@ -18,7 +18,6 @@ export const RuntimeEventType = {
     ChannelError: "channel.error",
     McpToolCallExecuted: "mcp.tool.call.executed",
     McpToolCatalogBuilt: "mcp.tool.catalog.built",
-    ProviderFallbackTriggered: "provider.fallback.triggered",
     ProviderCredentialMissing: "provider.credential.missing",
     ProviderRequestFailed: "provider.request.failed",
     SandboxToolApprovalRequested: "sandbox.tool.approval.requested",

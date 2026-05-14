@@ -6,6 +6,7 @@ import { DiscordInteractionAdapter } from "./discord.ts";
 import { FeishuAdapter } from "./feishu.ts";
 import { HttpPlatformAdapter } from "./http.platforms.ts";
 import { LineAdapter } from "./line.ts";
+import { MattermostAdapter } from "./mattermost.ts";
 import { SlackAdapter } from "./slack.ts";
 import { StdioAdapter } from "./stdio.ts";
 import { TelegramAdapter } from "./telegram.ts";
@@ -83,6 +84,20 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
                 new LineAdapter({
                     channelAccessToken: config.channels.line.channelAccessToken,
                     channelSecret: config.channels.line.channelSecret,
+                }),
+            );
+            continue;
+        }
+
+        if (name === Channel.Mattermost && typeof config.channels.mattermost.webhookToken === "string") {
+            adapters.set(
+                name,
+                new MattermostAdapter({
+                    botToken:
+                        typeof config.channels.mattermost.botToken === "string"
+                            ? config.channels.mattermost.botToken
+                            : undefined,
+                    webhookToken: config.channels.mattermost.webhookToken,
                 }),
             );
             continue;
@@ -233,6 +248,10 @@ function createHttpPlatformAdapter(name: ChannelName, config: GatewayConfig): Ch
                 baseUrl: config.channels.mattermost.baseUrl,
                 botToken: config.channels.mattermost.botToken,
                 replyUrl,
+                token:
+                    typeof config.channels.mattermost.webhookToken === "string"
+                        ? config.channels.mattermost.webhookToken
+                        : undefined,
             });
         case Channel.Matrix:
             return new HttpPlatformAdapter(name, {

@@ -6,9 +6,8 @@
  *             lastMode / 升级计数器，避免漂移导致 fastRoute 误判。
  *
  * 设计约束：
- * - 热路径只允许「O(1) L1 内存读 + best-effort 异步 Redis 落盘」，绝不能让 Redis
- *   往返阻塞首轮路由判定（首轮 L1 miss 才走 await get，单 key 一次）。
- * - 失败一律降级：Redis 不可用时退化为 L1 only，保持运行时绿色。
+ * - 热路径只允许「O(1) L1 内存读 + Redis 单 key 读写」。
+ * - Redis 异常直接抛出，避免跨副本快照悄悄退化为进程内状态。
  * - 不解析 snapshot 内容做语义判断，纯透传序列化。
  */
 import type Redis from "ioredis";
@@ -47,7 +46,7 @@ export interface RedisFastRouteSnapshotStoreOptions {
 /**
  * L1（进程内 Map） + L2（Redis）双层存储。
  * - get：L1 命中直接返回；miss 则 await Redis GET，反序列化后填回 L1。
- * - set：同步写 L1，fire-and-forget 写 Redis（带 TTL）；Redis 失败仅吞掉。
+ * - set：同步写 L1，再写 Redis（带 TTL）；Redis 失败直接抛出。
  */
 export class RedisFastRouteSnapshotStore implements FastRouteSnapshotStore {
     private readonly l1 = new Map<string, FastRouteSnapshot>();
@@ -68,24 +67,16 @@ export class RedisFastRouteSnapshotStore implements FastRouteSnapshotStore {
     async get(key: string): Promise<FastRouteSnapshot | undefined> {
         const cached = this.l1.get(key);
         if (cached) return cached;
-        try {
-            const raw = await this.redis.get(this.keyFor(key));
-            if (!raw) return undefined;
-            const parsed = JSON.parse(raw) as FastRouteSnapshot;
-            this.l1.set(key, parsed);
-            return parsed;
-        } catch {
-            return undefined;
-        }
+        const raw = await this.redis.get(this.keyFor(key));
+        if (!raw) return undefined;
+        const parsed = JSON.parse(raw) as FastRouteSnapshot;
+        this.l1.set(key, parsed);
+        return parsed;
     }
 
     async set(key: string, snapshot: FastRouteSnapshot): Promise<void> {
         this.l1.set(key, snapshot);
-        try {
-            const payload = JSON.stringify(snapshot);
-            await this.redis.set(this.keyFor(key), payload, "EX", this.ttlSeconds);
-        } catch {
-            // swallow: L1 already updated, next get will still work locally.
-        }
+        const payload = JSON.stringify(snapshot);
+        await this.redis.set(this.keyFor(key), payload, "EX", this.ttlSeconds);
     }
 }

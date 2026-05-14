@@ -8,7 +8,7 @@
  *  - 模板源文件使用小写点分名，由 install.templates.ts 拷贝到 paths.templateDir/projects；
  *  - 路径用 paths.workspaceDir/projects/{projectId}，每个 projectId 单独目录；
  *  - 文件已存在时不覆盖（幂等），便于多轮触发；
- *  - 失败发事件不抛错，调用方按 best-effort 处理。
+ *  - 失败发事件后继续抛出，调用方必须处理。
  */
 
 import { mkdir } from "node:fs/promises";
@@ -106,6 +106,7 @@ export class ProjectScaffolder {
                     error: String(err),
                 }),
             );
+            throw err;
         }
         return result;
     }

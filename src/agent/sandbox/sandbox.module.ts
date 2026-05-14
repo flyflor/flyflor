@@ -229,9 +229,5 @@ export async function gateCapabilityExecution(
 
 async function runApprover(approve?: () => boolean | Promise<boolean>): Promise<boolean> {
     if (!approve) return false;
-    try {
-        return await approve();
-    } catch {
-        return false;
-    }
+    return await approve();
 }

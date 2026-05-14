@@ -58,7 +58,7 @@ export class RedisMemoryStore {
 
     /**
      * 预热：connect + PING 往返确认。
-     * 返回 RTT（ms）；失败抛出以便调用方决策是否 degrade。
+     * 返回 RTT（ms）；失败抛出。
      */
     async ping(): Promise<number> {
         await this.connect();
@@ -68,9 +68,7 @@ export class RedisMemoryStore {
     }
 
     async disconnect(): Promise<void> {
-        await this.client.quit().catch(() => {
-            this.client.disconnect();
-        });
+        await this.client.quit();
     }
 
     dispose(): void {
@@ -310,32 +308,27 @@ export interface EpisodeRecord {
 
 function safeJsonArray(value: string | undefined): string[] {
     if (!value) return [];
-    try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed.map(String) : [];
-    } catch {
-        return [];
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+        throw new Error("Redis episode field expected a JSON array.");
     }
+    return parsed.map(String);
 }
 
 function safeJsonNumberArray(value: string | undefined): number[] {
     if (!value) return [];
-    try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed.map((n) => Number(n)).filter((n) => Number.isFinite(n)) : [];
-    } catch {
-        return [];
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+        throw new Error("Redis episode field expected a JSON number array.");
     }
+    return parsed.map((n) => Number(n)).filter((n) => Number.isFinite(n));
 }
 
 function safeJsonObject(value: string | undefined): Record<string, unknown> {
     if (!value) return {};
-    try {
-        const parsed = JSON.parse(value);
-        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-            ? (parsed as Record<string, unknown>)
-            : {};
-    } catch {
-        return {};
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Redis episode field expected a JSON object.");
     }
+    return parsed as Record<string, unknown>;
 }

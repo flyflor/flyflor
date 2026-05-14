@@ -66,7 +66,7 @@ export class HotMemoryCompressionWorker {
             );
         } catch (err) {
             this.publishFailure(userId, "list-candidates", err);
-            return result;
+            throw err;
         }
         result.scanned = candidateIds.length;
         if (candidateIds.length === 0) return result;
@@ -84,24 +84,18 @@ export class HotMemoryCompressionWorker {
                 }
             } catch (err) {
                 this.publishFailure(userId, "read-episode", err);
-                result.skipped += 1;
+                throw err;
             }
         }
         result.missing = missingEpisodeIds.length;
         if (episodes.length === 0) return result;
 
-        let decision: HotMemoryCompressionDecision | null = null;
+        let decision: HotMemoryCompressionDecision;
         try {
             decision = await this.compress(userId, episodes);
         } catch (err) {
             this.publishFailure(userId, "compress", err);
-            result.skipped += episodes.length;
-            return result;
-        }
-        if (!decision) {
-            this.publishFailure(userId, "parse-decision", new Error("hot memory compression output was not valid JSON"));
-            result.skipped += episodes.length;
-            return result;
+            throw err;
         }
 
         const deletedEpisodeIds: string[] = [];
@@ -111,7 +105,7 @@ export class HotMemoryCompressionWorker {
                 deletedEpisodeIds.push(episode.episodeId);
             } catch (err) {
                 this.publishFailure(userId, "drop-episode", err);
-                result.skipped += 1;
+                throw err;
             }
         }
         if (deletedEpisodeIds.length === 0) return result;
@@ -160,12 +154,12 @@ export class HotMemoryCompressionWorker {
             );
         } catch (err) {
             this.publishFailure(userId, "brain-append", err);
-            result.skipped += deletedEpisodeIds.length;
+            throw err;
         }
         return result;
     }
 
-    async compress(userId: string, episodes: EpisodeRecord[]): Promise<HotMemoryCompressionDecision | null> {
+    async compress(userId: string, episodes: EpisodeRecord[]): Promise<HotMemoryCompressionDecision> {
         const prompt = renderHotMemoryCompressionPrompt({
             episodes: renderEpisodesBlock(userId, episodes),
         });
@@ -184,29 +178,30 @@ export class HotMemoryCompressionWorker {
     }
 }
 
-export function parseHotMemoryCompressionDecision(raw: string): HotMemoryCompressionDecision | null {
+export function parseHotMemoryCompressionDecision(raw: string): HotMemoryCompressionDecision {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) return null;
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-        return null;
+    if (start < 0 || end <= start) {
+        throw new Error("Hot memory compression output did not contain a JSON object.");
     }
-    if (!isRecord(parsed)) return null;
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    if (!isRecord(parsed)) {
+        throw new Error("Hot memory compression output JSON must be an object.");
+    }
     const compressedText =
         typeof parsed.compressedText === "string" && parsed.compressedText.trim().length > 0
             ? parsed.compressedText.trim().slice(0, 2000)
             : "";
-    if (!compressedText) return null;
+    if (!compressedText) {
+        throw new Error("Hot memory compression output missing compressedText.");
+    }
     const retainedSignals = Array.isArray(parsed.retainedSignals)
         ? parsed.retainedSignals
               .filter((signal): signal is string => typeof signal === "string" && signal.trim().length > 0)
               .map((signal) => signal.trim().slice(0, 120))
               .slice(0, 16)
         : [];
-    const confidence = clamp01(toNumber(parsed.confidence, 0));
+    const confidence = clamp01(readNumber(parsed.confidence, "confidence"));
     const rationale =
         typeof parsed.rationale === "string" && parsed.rationale.trim().length > 0
             ? parsed.rationale.trim().slice(0, 300)
@@ -250,13 +245,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
-function toNumber(value: unknown, fallback: number): number {
+function readNumber(value: unknown, field: string): number {
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
         const n = Number(value);
-        return Number.isFinite(n) ? n : fallback;
+        if (Number.isFinite(n)) return n;
     }
-    return fallback;
+    throw new Error(`Hot memory compression output ${field} must be a finite number.`);
 }
 
 function clamp01(value: number): number {

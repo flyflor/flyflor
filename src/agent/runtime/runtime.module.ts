@@ -216,18 +216,15 @@ export class RuntimeModule extends RuntimeBoundary {
      * 来源全部是结构化 JSON 字段（不消费对话文本语义）。
      */
     private async recoverProcessRestartGhosts(): Promise<void> {
-        let orphans: Awaited<ReturnType<InFlightTracker["recoverOrphans"]>>;
-        try {
-            orphans = await this.inflight.recoverOrphans();
-        } catch (err) {
+        const orphans = await this.inflight.recoverOrphans().catch((err) => {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
                     op: "inflight.recover",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return;
-        }
+            throw err;
+        });
         if (orphans.length === 0) return;
         for (const record of orphans) {
             this.memory.recordGhostFromReason({
@@ -271,7 +268,7 @@ export class RuntimeModule extends RuntimeBoundary {
      *   2) assembleTurnContext —— 并行装配 skills/mcp/memory/route，再跑黑板与 mcp catalog；
      *   3) generateTurnReply —— 拼 prompt、LLM+MCP 循环、解析记忆动作、构造 GatewayReply；
      *   4) persistTurn —— 同步落 episode/skill usage 并刷新 fastRoute 快照；
-     *   5) dispatchAsyncTurnTasks —— fire-and-forget 反思 / 反馈分类 / 辩论 episode；
+     *   5) dispatchAsyncTurnTasks —— 反思 / 反馈分类 / 辩论 episode；
      *   6) finalize —— ttfbDone + AgentTurnEnd。
      */
     async handleMessage(
@@ -292,7 +289,7 @@ export class RuntimeModule extends RuntimeBoundary {
             const generated = await this.generateTurnReply(message, prepared, assembled, options);
 
             await this.persistTurn(message, prepared, assembled, generated);
-            this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
+            await this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
 
             prepared.ttfbDone();
             this.events.publish(
@@ -359,7 +356,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const [skills, skillUsage, mcpServersAll, memoryPrompt, preRoute] = await Promise.all([
             loadSkills(this.config.paths),
-            loadSkillUsageSummary(this.config.paths).catch(() => undefined),
+            loadSkillUsageSummary(this.config.paths),
             loadMcpServers(this.config.paths),
             this.memory.buildPrompt(message, enrichedContext).then((p) => {
                 buildPromptDone();
@@ -699,7 +696,7 @@ export class RuntimeModule extends RuntimeBoundary {
             mcpSuccessCount: mcpCallProvenance.filter((call) => call.ok).length,
             now: context.now,
             requestId: context.requestId,
-        }).catch(() => undefined);
+        });
 
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
         const previousSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
@@ -770,20 +767,20 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     /**
-     * Phase 5：fire-and-forget —— 反思（LLM 抽取 → crystal）、反馈四分类、
-     * 黑板辩论收敛后写入高权重 episode。失败由各自模块发布事件。
+     * Phase 5：反思（LLM 抽取 → crystal）、反馈四分类、
+     * 黑板辩论收敛后写入高权重 episode。失败由各自模块发布事件并继续抛出。
      */
-    private dispatchAsyncTurnTasks(
+    private async dispatchAsyncTurnTasks(
         message: GatewayMessage,
         prepared: PreparedTurn,
         assembled: AssembledTurnContext,
         generated: GeneratedTurn,
-    ): void {
+    ): Promise<void> {
         const { context, enrichedContext, embedding } = prepared;
         const { blackboardRun } = assembled;
         const { visibleText, mcpCallProvenance, selectedSkillNames } = generated;
 
-        void this.reflection.dispatch({
+        await this.reflection.dispatch({
             message,
             context: enrichedContext,
             visibleText,
@@ -793,9 +790,9 @@ export class RuntimeModule extends RuntimeBoundary {
                 skillNames: selectedSkillNames,
             },
         });
-        void this.memory.classifyAndApplyFeedback(message, enrichedContext);
+        await this.memory.classifyAndApplyFeedback(message, enrichedContext);
         if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
-            void this.memory.recordDebateEpisode({
+            await this.memory.recordDebateEpisode({
                 userId: message.user.id,
                 text: renderDebateEpisodeText(message.text, blackboardRun),
                 embedding,
@@ -910,12 +907,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 }
             }
         } catch (error) {
-            if (rawText) {
-                throw error;
-            }
-            const fallback = await this.model.generate(messages);
-            await options.onTextDelta(filterVisibleMemoryActionText(fallback));
-            return fallback;
+            throw error;
         }
 
         const tail = visibility.finish();
@@ -1006,20 +998,16 @@ export class RuntimeModule extends RuntimeBoundary {
                 continue;
             }
             if (cached) this.mcpToolCatalogCache.delete(cacheKey);
-            try {
-                const tools = await listMcpTools(this.config.paths, server, {
-                    events: this.events,
-                    requestId,
-                    timeoutMs: 1_500,
-                });
-                const disabled = new Set(server.disabledTools ?? []);
-                const allowedTools = disabled.size > 0 ? tools.filter((t) => !disabled.has(t.name)) : tools;
-                const serverEntries = allowedTools.map((tool) => ({ server: server.name, tool }));
-                this.cacheMcpToolEntries(cacheKey, serverEntries);
-                entries.push(...serverEntries);
-            } catch {
-                // Tool discovery is best-effort; failed servers stay configured but are not offered this turn.
-            }
+            const tools = await listMcpTools(this.config.paths, server, {
+                events: this.events,
+                requestId,
+                timeoutMs: 1_500,
+            });
+            const disabled = new Set(server.disabledTools ?? []);
+            const allowedTools = disabled.size > 0 ? tools.filter((t) => !disabled.has(t.name)) : tools;
+            const serverEntries = allowedTools.map((tool) => ({ server: server.name, tool }));
+            this.cacheMcpToolEntries(cacheKey, serverEntries);
+            entries.push(...serverEntries);
         }
         return entries;
     }
@@ -1232,7 +1220,10 @@ export class RuntimeModule extends RuntimeBoundary {
                 createdAt: context.now,
                 onWorkerDone,
             });
-            return blackboardRunFromTurn(finished ?? (await this.blackboard.getTurn(start.turn.id)), started, route);
+            if (!finished) {
+                throw new Error(`Blackboard turn disappeared before convergence: ${start.turn.id}`);
+            }
+            return blackboardRunFromTurn(finished, started, route);
         } catch (error) {
             await this.blackboard.finishTurn(start.turn.id, BlackboardTurnStatus.Failed, context.now);
             const loaded = await this.blackboard.getTurn(start.turn.id);

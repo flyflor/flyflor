@@ -17,11 +17,11 @@ import { AskReason as AskReasonEnum } from "../../protocol/contracts/index.ts";
 const ASK_BLOCK = /<flyflor_agent_ask>\s*([\s\S]*?)\s*<\/flyflor_agent_ask>/g;
 
 export interface ParsedAgentAsk {
-    /** 同轮第一段合法 ask 块；多余的 ask 块会被丢弃且记入 `dropped`。 */
+    /** 同轮第一段合法 ask 块；多余的 ask 块会直接报错。 */
     ask?: AgentAsk;
     /** 文本中剥离 ask 块后剩下的 visible reply 文本（仍是 raw model output）。 */
     text: string;
-    /** 解析过程被丢弃的非法 / 多余块数量，便于调用方做事件埋点。 */
+    /** 兼容旧事件字段；严格模式下始终为 0。 */
     dropped: number;
 }
 
@@ -32,13 +32,8 @@ export function parseAgentAsk(rawText: string): ParsedAgentAsk {
     let dropped = 0;
     const text = rawText.replace(ASK_BLOCK, (_block, rawJson: string) => {
         const candidate = readAsk(rawJson);
-        if (!candidate) {
-            dropped += 1;
-            return "";
-        }
         if (firstAsk) {
-            dropped += 1;
-            return "";
+            throw new Error("Model returned multiple flyflor_agent_ask blocks.");
         }
         firstAsk = candidate;
         return "";
@@ -46,19 +41,16 @@ export function parseAgentAsk(rawText: string): ParsedAgentAsk {
     return { ask: firstAsk, text: text.trim(), dropped };
 }
 
-function readAsk(rawJson: string): AgentAsk | undefined {
-    let payload: unknown;
-    try {
-        payload = JSON.parse(rawJson);
-    } catch {
-        return undefined;
+function readAsk(rawJson: string): AgentAsk {
+    const payload = JSON.parse(rawJson) as unknown;
+    if (!payload || typeof payload !== "object") {
+        throw new Error("flyflor_agent_ask must be a JSON object.");
     }
-    if (!payload || typeof payload !== "object") return undefined;
     const obj = payload as Record<string, unknown>;
     const reason = normalizeReason(obj.reason);
-    if (!reason) return undefined;
+    if (!reason) throw new Error(`flyflor_agent_ask has invalid reason: ${String(obj.reason)}`);
     const prompt = typeof obj.prompt === "string" ? obj.prompt.trim() : "";
-    if (!prompt) return undefined;
+    if (!prompt) throw new Error("flyflor_agent_ask requires non-empty prompt.");
     const choices = normalizeChoices(obj.choices);
     const questions = normalizeQuestions(obj.questions);
     const freeform = typeof obj.freeform === "boolean" ? obj.freeform : true;
@@ -74,18 +66,21 @@ function readAsk(rawJson: string): AgentAsk | undefined {
     if (questions && questions.length > 0) ask.questions = questions;
     if (relatedIds && relatedIds.length > 0) ask.relatedIds = relatedIds;
     if (rationale) ask.rationale = rationale;
-    if (ghostHint) ask.ghostHint = ghostHint;
+    ask.ghostHint = ghostHint;
     return ask;
 }
 
-function normalizeGhostHint(value: unknown): { title?: string; contextHint?: string } | undefined {
-    if (!value || typeof value !== "object") return undefined;
+function normalizeGhostHint(value: unknown): { title: string; contextHint?: string } {
+    if (!value || typeof value !== "object") {
+        throw new Error("flyflor_agent_ask requires ghostHint.");
+    }
     const obj = value as Record<string, unknown>;
     const title = typeof obj.title === "string" ? obj.title.trim().slice(0, 120) : undefined;
     const contextHint = typeof obj.contextHint === "string" ? obj.contextHint.trim().slice(0, 500) : undefined;
-    if (!title && !contextHint) return undefined;
-    const out: { title?: string; contextHint?: string } = {};
-    if (title) out.title = title;
+    if (!title) {
+        throw new Error("flyflor_agent_ask requires ghostHint.title.");
+    }
+    const out: { title: string; contextHint?: string } = { title };
     if (contextHint) out.contextHint = contextHint;
     return out;
 }

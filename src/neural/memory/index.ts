@@ -186,7 +186,7 @@ export class MemoryModule extends Memory {
                 : null;
         this.projectScaffolder = new ProjectScaffolder(config.paths, this.events);
         // 后台调度器仅在三件依赖（Redis 短期 + Surreal 长期 + 模型）齐备时启用；
-        // 任一缺失即降级为 null，rememberTurn / warmup / dispose 全部跳过即可。
+        // 任一缺失时不启动 scheduler，并通过 warmup 事件显式暴露缺口。
         this.scheduler =
             this.redis && this.surreal && model
                 ? new BackgroundScheduler(
@@ -197,10 +197,10 @@ export class MemoryModule extends Memory {
                       this.events,
                       {
                           dream: new DreamWorkerImpl(this.surreal, model, this.events),
-                          projectSweeper: (userId: string) => this.sweepProjectClusters(userId).catch(() => false),
-                          skillSweeper: (userId: string) => this.sweepSkillCandidates(userId).catch(() => false),
+                          projectSweeper: (userId: string) => this.sweepProjectClusters(userId),
+                          skillSweeper: (userId: string) => this.sweepSkillCandidates(userId),
                           summarySweeper: async (userId: string) => {
-                              const r = this.runSummaryOnce(userId);
+                              const r = await this.runSummaryOnce(userId);
                               return { written: r?.written ?? 0 };
                           },
                           hotMemoryCompression: this.hotMemoryCompression ?? undefined,
@@ -225,10 +225,7 @@ export class MemoryModule extends Memory {
         });
     }
 
-    /**
-     * 预热：连接 Redis 并测 PING 往返延迟。
-     * 失败时降级（redis = null 已经 guard），不抛出。
-     */
+    /** 预热：打开 brain.db，并在 Redis 启用时测 PING 往返延迟。 */
     /** 暴露底层 Redis 客户端，供同进程其他热路径组件（fastRoute 快照等）复用。 */
     getRedisClient() {
         return this.redis?.getClient();
@@ -242,6 +239,7 @@ export class MemoryModule extends Memory {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, { stage: "warmup-open", error: String(err) }),
             );
+            throw err;
         }
         if (this.scheduler) {
             this.scheduler.start();
@@ -270,6 +268,7 @@ export class MemoryModule extends Memory {
             this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs }));
         } catch (err) {
             this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs: -1, error: String(err) }));
+            throw err;
         }
     }
 
@@ -286,11 +285,7 @@ export class MemoryModule extends Memory {
         }
         this.redis?.dispose();
         if (this.brainOpened) {
-            try {
-                this.brain.close();
-            } catch {
-                // best-effort：close 失败不阻断退出
-            }
+            this.brain.close();
             this.brainOpened = false;
         }
     }
@@ -303,7 +298,15 @@ export class MemoryModule extends Memory {
         const intervalMs = Math.max(0, this.config.memory.tuning.brainDb.archiveIntervalHours) * 60 * 60_000;
         if (!this.brainOpened || intervalMs <= 0) return;
         this.brainArchiveTimer = setInterval(() => {
-            void this.runBrainArchiveOnce();
+            void this.runBrainArchiveOnce().catch((err) => {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryBrainWriteFailed, {
+                        op: "brain.archive.timer",
+                        message: err instanceof Error ? err.message : String(err),
+                    }),
+                );
+                throw err;
+            });
         }, intervalMs);
         if (typeof (this.brainArchiveTimer as { unref?: () => void })?.unref === "function") {
             (this.brainArchiveTimer as { unref: () => void }).unref();
@@ -318,7 +321,15 @@ export class MemoryModule extends Memory {
         const intervalMs = Math.max(0, this.config.memory.tuning.hotMemoryCompression.intervalMinutes) * 60_000;
         if (!this.brainOpened || !this.hotMemoryCompression || intervalMs <= 0) return;
         this.hotMemoryCompressionTimer = setInterval(() => {
-            void this.runHotMemoryCompressionRootOnce();
+            void this.runHotMemoryCompressionRootOnce().catch((err) => {
+                this.events.publish(
+                    event(RuntimeEventType.MemoryBrainWriteFailed, {
+                        op: "hot.memory.compression.timer",
+                        message: err instanceof Error ? err.message : String(err),
+                    }),
+                );
+                throw err;
+            });
         }, intervalMs);
         if (typeof (this.hotMemoryCompressionTimer as { unref?: () => void })?.unref === "function") {
             (this.hotMemoryCompressionTimer as { unref: () => void }).unref();
@@ -330,7 +341,7 @@ export class MemoryModule extends Memory {
         this.brainMaintenanceBusy = true;
         try {
             for (const userId of [...this.activeMemoryUsers]) {
-                await this.hotMemoryCompression.drain(userId).catch(() => undefined);
+                await this.hotMemoryCompression.drain(userId);
             }
         } finally {
             this.brainMaintenanceBusy = false;
@@ -449,7 +460,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         }
     }
 
@@ -479,7 +490,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return [];
+            throw err;
         }
     }
 
@@ -675,8 +686,8 @@ export class MemoryModule extends Memory {
         const codenameId = this.persistCodenamesFromActions(message.user.id, actions, createdAt);
         const projectConstraintId = deriveProjectConstraintId(message, projectTrigger.kind, codenameId);
 
-        // Journal 是生命事件事实层：每轮先按天落 episode，再从同轮结构化 memory action
-        // 派生 hot atom。失败不阻断回答，但必须发审计事件。
+        // brain.db 是生命事件事实层：每轮先写权威事件，再从同轮结构化 memory action
+        // 派生 atom。失败直接抛出，避免半状态继续运行。
         await this.writeTurnToBrainAndLegacyJournal(message, reply, context, actions, provenance, projectConstraintId, codenameId);
 
         // 模型本轮如果发起新的 ask（kind='ask'），落 brain.memory_events.type='ask'。
@@ -686,9 +697,7 @@ export class MemoryModule extends Memory {
             this.recordAskEvent(message, context, ask, pendingAskBefore?.id, provenance.behaviorSnapshotId);
         }
 
-        // async-pipeline: Redis 热记忆可以独立启动。
-        // 用 actions 直接估 importance，避免等 candidates 构造完成。
-        void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
+        await this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
         this.activeMemoryUsers.add(message.user.id);
@@ -702,7 +711,7 @@ export class MemoryModule extends Memory {
 
         // 项目脚手架触发（仅显式意图通道，幂等；cluster 通道由后台 sweep 触发，本路径不参与）。
         if (projectTrigger.kind !== ProjectTriggerKind.None) {
-            void this.projectScaffolder.scaffold({
+            await this.projectScaffolder.scaffold({
                 projectId: projectConstraintId,
                 title: deriveProjectTitle(message),
                 goal: message.text.slice(0, 500),
@@ -712,17 +721,15 @@ export class MemoryModule extends Memory {
             });
         }
         // 项目候选 offer 生命周期：显式触发即消费，否则 ttl-1。
-        void this.noteProjectOfferTurn(message.user.id, projectTrigger.kind !== ProjectTriggerKind.None).catch(
-            () => undefined,
-        );
+        await this.noteProjectOfferTurn(message.user.id, projectTrigger.kind !== ProjectTriggerKind.None);
 
         // 技能候选 offer 生命周期：用户在本轮回复中明确同意（skillPromotionIntent ≥ 0.7）即
         // 立即从 pending_skill_offer 生成 SKILL.md；否则 ttl-1。完全与 project offer 解耦。
         const skillTrigger = detectExplicitSkillIntent(actions);
         if (skillTrigger.kind !== ProjectTriggerKind.None) {
-            void this.consumeSkillOffer(message.user.id).catch(() => undefined);
+            await this.consumeSkillOffer(message.user.id);
         } else {
-            void this.noteSkillOfferTurn(message.user.id, false).catch(() => undefined);
+            await this.noteSkillOfferTurn(message.user.id, false);
         }
 
         this.rememberAssistantForFocus(message, reply.text);
@@ -741,7 +748,7 @@ export class MemoryModule extends Memory {
             )
             .slice(0, this.config.memory.candidates.maxCandidatesPerTurn);
 
-        // 三路并行：candidate 写入 / project memory / Redis 已经 fire-and-forget。
+        // 三路并行：candidate 写入 / project memory / crystal 记录，任一失败都向上抛出。
         const projectMemoryPipeline =
             projectTrigger.kind !== ProjectTriggerKind.None
                 ? this.projectMemory.recordTurn({
@@ -773,17 +780,14 @@ export class MemoryModule extends Memory {
         const promoted: MemoryRecord[] = candidateResults.filter((r): r is MemoryRecord => r !== undefined);
         const promotedRecords = [...promoted, ...projectRecords];
 
-        // 晶体记忆（fire-and-forget，不阻塞回答返回）
-        void this.crystal
-            .recordTurn({
-                requestId: context.requestId,
-                now: context.now,
-                candidates,
-                promoted: promotedRecords,
-                historyEntries: [],
-                reflectionCandidates: [],
-            })
-            .catch(() => {});
+        await this.crystal.recordTurn({
+            requestId: context.requestId,
+            now: context.now,
+            candidates,
+            promoted: promotedRecords,
+            historyEntries: [],
+            reflectionCandidates: [],
+        });
 
         this.events.publish(
             event(
@@ -806,8 +810,8 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 异步反思入口：由 RuntimeModule 在回答已返回后 fire-and-forget 调用。
-     * 不阻塞主链路；失败发布 MemoryReflectionFailed 事件后静默。
+     * 反思入口：由 RuntimeModule 调用。
+     * 失败发布 MemoryReflectionFailed 事件后继续抛出。
      */
     async applyReflection(candidates: CrystalCandidateInput[], context: RuntimeContext): Promise<void> {
         if (!this.config.memory.enabled || candidates.length === 0) return;
@@ -824,13 +828,14 @@ export class MemoryModule extends Memory {
             this.events.publish(
                 event(RuntimeEventType.MemoryReflectionFailed, { error: String(err) }, context.requestId),
             );
+            throw err;
         }
     }
 
     /**
      * 黑板辩论收敛后由 RuntimeModule 调用，将整轮辩论沉淀为 Redis episode；
      * sourceKind=blackboard-converged，weight 0.8（高于普通对话）。
-     * best-effort，失败发布事件后静默。
+     * 失败发布事件后继续抛出。
      */
     async recordDebateEpisode(input: {
         userId: string;
@@ -878,6 +883,7 @@ export class MemoryModule extends Memory {
                     input.requestId,
                 ),
             );
+            throw err;
         }
     }
 
@@ -889,7 +895,7 @@ export class MemoryModule extends Memory {
      *   - GlobalStrategy  → self.md 追加 (managed block)；
      *   - Confirmation    → 仅发事件，由 reinforce 通道（ConsolidationWorker）拾取；
      *   - None            → no-op。
-     * 失败只发事件，不抛出。
+     * 失败发事件后继续抛出。
      */
     async applyFeedback(input: {
         userId: string;
@@ -942,20 +948,16 @@ export class MemoryModule extends Memory {
                         ttlSeconds: this.config.memory.redis.defaultTtlSeconds,
                     });
                     if (this.surreal) {
-                        const top = await this.surreal
-                            .recallMemoryNodes({ userId: input.userId, embedding, limit: 1 })
-                            .catch(() => []);
+                        const top = await this.surreal.recallMemoryNodes({ userId: input.userId, embedding, limit: 1 });
                         const candidate = top[0];
                         const score = (candidate as { score?: number } | undefined)?.score ?? 0;
                         if (candidate && score >= 0.75) {
-                            await this.surreal
-                                .applyMemoryReinforce({
-                                    table: "memory_node",
-                                    id: candidate.id,
-                                    importanceMultiplier: 1.2,
-                                    nowMs: Date.now(),
-                                })
-                                .catch(() => false);
+                            await this.surreal.applyMemoryReinforce({
+                                table: "memory_node",
+                                id: candidate.id,
+                                importanceMultiplier: 1.2,
+                                nowMs: Date.now(),
+                            });
                         }
                     }
                 }
@@ -983,6 +985,7 @@ export class MemoryModule extends Memory {
                     input.requestId,
                 ),
             );
+            throw err;
         }
     }
 
@@ -1029,6 +1032,7 @@ export class MemoryModule extends Memory {
                     context.requestId,
                 ),
             );
+            throw err;
         }
     }
 
@@ -1088,7 +1092,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         }
     }
 
@@ -1111,7 +1115,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         }
     }
 
@@ -1129,7 +1133,7 @@ export class MemoryModule extends Memory {
     /**
      * brain.db 是生命事件事实层：每轮先写 `memory_events`，并把模型同轮结构化
      * memory action 派生的 prompt atom 一并封进 event.content.atoms。
-     * legacy journal 仅作为过渡审计副本 best-effort 写入；不再决定 brain 写入成败。
+     * legacy journal 仅作为过渡审计副本写入；不可写时显式失败，避免审计链断裂。
      */
     private async writeTurnToBrainAndLegacyJournal(
         message: GatewayMessage,
@@ -1153,12 +1157,8 @@ export class MemoryModule extends Memory {
             const atoms = actions.slice(0, this.config.memory.candidates.maxCandidatesPerTurn).map((action, index) => {
                 let codenameUseCount = 0;
                 if (this.brainOpened && action.codename?.name) {
-                    try {
-                        const existing = this.brain.getCodenameByName(message.user.id, action.codename.name);
-                        codenameUseCount = existing?.useCount ?? 0;
-                    } catch {
-                        codenameUseCount = 0;
-                    }
+                    const existing = this.brain.getCodenameByName(message.user.id, action.codename.name);
+                    codenameUseCount = existing?.useCount ?? 0;
                 }
                 return journalAtomFromAction({
                     action,
@@ -1245,6 +1245,7 @@ export class MemoryModule extends Memory {
                         context.requestId,
                     ),
                 );
+                throw err;
             }
         } catch (err) {
             this.events.publish(
@@ -1254,6 +1255,7 @@ export class MemoryModule extends Memory {
                     context.requestId,
                 ),
             );
+            throw err;
         }
     }
 
@@ -1274,14 +1276,7 @@ export class MemoryModule extends Memory {
         codenameId?: string;
     }): void {
         if (!this.brainOpened) {
-            this.events.publish(
-                event(
-                    RuntimeEventType.MemoryBrainWriteFailed,
-                    { stage: "brain-not-opened", episodeId: input.episodeId },
-                    input.requestId,
-                ),
-            );
-            return;
+            throw new Error(`Cannot write brain event ${input.episodeId}: brain.db is not opened.`);
         }
         const ts = Date.parse(input.createdAt);
         const tsValue = Number.isFinite(ts) ? ts : Date.now();
@@ -1325,6 +1320,7 @@ export class MemoryModule extends Memory {
                     input.requestId,
                 ),
             );
+            throw err;
         }
     }
 
@@ -1388,6 +1384,7 @@ export class MemoryModule extends Memory {
                         message: err instanceof Error ? err.message : String(err),
                     }),
                 );
+                throw err;
             }
         }
         return firstId;
@@ -1432,13 +1429,14 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
+            throw err;
         }
     }
 
     /**
      * LF-R2: codename 升格通路。useCount + age 满足阈值且尚未绑定 projectId 时，
      * 调用 ProjectScaffolder 在 workspace/projects/<projectId>/ 生成骨架，并把
-     * projectId 写回 codenames 表。完全幂等；失败发事件不抛错。
+     * projectId 写回 codenames 表。完全幂等；失败发事件后抛出。
      */
     async promoteCodename(
         codenameId: string,
@@ -1465,13 +1463,13 @@ export class MemoryModule extends Memory {
                     error: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return { promoted: false, rationale: "scaffold-failed" };
+            throw err;
         }
     }
 
     private async maybePromoteCodename(record: CodenameRecord, createdAt: string): Promise<void> {
         if (record.projectId) return;
-        await this.promoteCodename(record.id, { createdAt }).catch(() => undefined);
+        await this.promoteCodename(record.id, { createdAt });
     }
 
     // ─── LF-R3 Ask 一等公民 ────────────────────────────────────────
@@ -1514,12 +1512,18 @@ export class MemoryModule extends Memory {
             const state = this.brain.getEqState(userId);
             if (!state) return null;
             return decayEq(state, nowMs);
-        } catch {
-            return null;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "eq.peek",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            throw err;
         }
     }
 
-    /** brain 缺失时 best-effort 返回 null；不抛错。 */
+    /** brain 缺失时返回 null；读库失败时抛错。 */
     private findPendingAsk(
         userId: string,
     ): { id: string; chainDepth: number; ask: AgentAsk; snapshotId?: string } | null {
@@ -1540,7 +1544,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         }
     }
 
@@ -1573,8 +1577,14 @@ export class MemoryModule extends Memory {
         let state: EqState | null;
         try {
             state = this.brain.getEqState(userId);
-        } catch {
-            return undefined;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "eq.render",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            throw err;
         }
         if (!state) return undefined;
         const now = Date.now();
@@ -1634,8 +1644,14 @@ export class MemoryModule extends Memory {
         let ghosts: MemoryEventRecord[];
         try {
             ghosts = this.brain.listActiveGhosts(userId, { limit: 12 });
-        } catch {
-            return undefined;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "ghost.render",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            throw err;
         }
         if (ghosts.length === 0) return undefined;
 
@@ -1682,8 +1698,14 @@ export class MemoryModule extends Memory {
         let rows: MemoryEventRecord[];
         try {
             rows = this.brain.listActiveIdentity(userId, { limit: 16 });
-        } catch {
-            return undefined;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "identity.render",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            throw err;
         }
         if (rows.length === 0) return undefined;
         const entries: string[] = [];
@@ -1768,6 +1790,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
+            throw err;
         }
     }
 
@@ -1840,6 +1863,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
+            throw err;
         }
     }
 
@@ -1863,7 +1887,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return [];
+            throw err;
         }
     }
 
@@ -1880,7 +1904,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         }
     }
 
@@ -1908,7 +1932,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return false;
+            throw err;
         }
     }
 
@@ -1932,7 +1956,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return false;
+            throw err;
         }
     }
 
@@ -1963,7 +1987,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return false;
+            throw err;
         }
     }
 
@@ -1973,17 +1997,21 @@ export class MemoryModule extends Memory {
      * - `resume`：调 resumeGhost（state → resumed）。
      * - `fork` / `fresh`：在 ghost-context content 上挂 `continuationCompleted=true` + `lastKind=kind`，
      *   评分阶段 `resolveGhostEvidenceWeight` 走 `continuationCompleted` 权重（默认 0.75）。
-     * 未命中的 ghostId 直接忽略（不抛错）。返回成功应用的条数。
+     * 未命中的 ghostId 视为模型结构化输出引用错误，直接抛错。返回成功应用的条数。
      */
     applyGhostDecisions(decisions: GhostDecision[]): number {
         if (!this.brainOpened || decisions.length === 0) return 0;
         let applied = 0;
         for (const decision of decisions) {
             const ghost = this.getGhost(decision.ghostId);
-            if (!ghost) continue;
+            if (!ghost) {
+                throw new Error(`Ghost decision referenced unknown ghostId: ${decision.ghostId}`);
+            }
             try {
                 if (decision.kind === GhostDecisionKind.Resume) {
-                    this.resumeGhost(decision.ghostId);
+                    if (!this.resumeGhost(decision.ghostId)) {
+                        throw new Error(`Ghost decision resume failed for ghostId: ${decision.ghostId}`);
+                    }
                 } else {
                     this.brain.patchGhostContent(decision.ghostId, {
                         continuationCompleted: true,
@@ -2005,6 +2033,7 @@ export class MemoryModule extends Memory {
                         message: err instanceof Error ? err.message : String(err),
                     }),
                 );
+                throw err;
             }
         }
         return applied;
@@ -2013,7 +2042,7 @@ export class MemoryModule extends Memory {
     /**
      * LF-R5 identity 自写：把模型同轮输出的 identity append 候选落库。
      * 只做 enum + 长度校验（已在 parser 完成），不解析 content 语义。
-     * 返回新写入的 eventId 列表（按输入顺序，跳过写入失败）。
+     * 返回新写入的 eventId 列表（按输入顺序）；写入失败立即抛错。
      */
     applyIdentityAppends(input: {
         userId: string;
@@ -2060,6 +2089,7 @@ export class MemoryModule extends Memory {
                         message: err instanceof Error ? err.message : String(err),
                     }),
                 );
+                throw err;
             }
         }
         return writtenIds;
@@ -2085,7 +2115,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return [];
+            throw err;
         }
     }
 
@@ -2126,16 +2156,16 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return false;
+            throw err;
         }
     }
 
     /**
      * LF-R5 slice B：跑一次该用户的 daily + weekly summary 聚合。
      * 纯结构化字段聚合（type / role / codenameId / ask reason / ghost reason 计数），
-     * 不调 LLM、不读 content 文本。返回 `null` 表示 brain 未开。
+     * 不调 LLM、不读 content 文本。返回 `null` 表示 brain 未开或当前维护锁忙。
      */
-    runSummaryOnce(userId: string, nowMs?: number): SummaryRunResult | null {
+    async runSummaryOnce(userId: string, nowMs?: number): Promise<SummaryRunResult | null> {
         if (!this.brainOpened || this.brainMaintenanceBusy) return null;
         this.brainMaintenanceBusy = true;
         try {
@@ -2145,14 +2175,7 @@ export class MemoryModule extends Memory {
                 minIntervalHours: this.config.memory.tuning.summary.minIntervalHours,
             });
             const result = worker.runOnceForUser(userId, nowMs);
-            void this.embedWrittenSummaries(userId, result.writtenIds).catch((err) => {
-                this.events.publish(
-                    event(RuntimeEventType.MemoryBrainWriteFailed, {
-                        op: "summary.embed",
-                        message: err instanceof Error ? err.message : String(err),
-                    }),
-                );
-            });
+            await this.embedWrittenSummaries(userId, result.writtenIds);
             this.events.publish(
                 event(RuntimeEventType.MemorySummaryWritten, {
                     userId,
@@ -2169,7 +2192,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         } finally {
             this.brainMaintenanceBusy = false;
         }
@@ -2208,7 +2231,7 @@ export class MemoryModule extends Memory {
                     error: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         } finally {
             this.brainMaintenanceBusy = false;
         }
@@ -2331,13 +2354,13 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
-            return null;
+            throw err;
         }
     }
 
     /**
      * LF-R4：每次 recordAskEvent 完毕后写一条 ghost-context 事件。
-     * userFacing.title 缺省 fallback 到 ask.prompt 首行（短路降级，非字符匹配）。
+     * userFacing.title 必须由模型同轮结构化 `ask.ghostHint.title` 给出。
      */
     private recordGhostFromAsk(input: {
         askId: string;
@@ -2350,13 +2373,10 @@ export class MemoryModule extends Memory {
         const { askId, snapshotId, ask, message, context, nowMs } = input;
         const hintTitle = ask.ghostHint?.title?.trim();
         const hintContext = ask.ghostHint?.contextHint?.trim();
-        let title: string;
-        if (hintTitle) {
-            title = hintTitle.slice(0, 120);
-        } else {
-            const firstLine = (ask.prompt.split(/\r?\n/, 1)[0] ?? ask.prompt).trim();
-            title = firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine || `ask:${ask.reason}`;
+        if (!hintTitle) {
+            throw new Error("Ask ghost context requires ask.ghostHint.title.");
         }
+        const title = hintTitle.slice(0, 120);
         const contextHint = hintContext ?? ask.rationale;
         // LF-R4：ask.reason 是结构化枚举字段，结构化 → 结构化的映射不算字符匹配。
         // 黑板封顶的 ask 是 runtime 合成而非模型表达，单独标记为 reason='blackboard-cap'，
@@ -2408,6 +2428,7 @@ export class MemoryModule extends Memory {
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
+            throw err;
         }
     }
 
@@ -2455,15 +2476,11 @@ export class MemoryModule extends Memory {
      */
     private peekActiveInboxProjectId(userId: string, context?: RuntimeContext): string | null {
         if (!this.brainOpened) return null;
-        try {
-            const nowMs = context?.now ? Date.parse(context.now) : Date.now();
-            const windowMs = Math.max(0, this.config.memory.tuning.inbox.activeCodenameWindowMinutes) * 60_000;
-            const sinceTs = (Number.isFinite(nowMs) ? nowMs : Date.now()) - windowMs;
-            const cn = this.brain.getMostRecentTouchedCodename(userId, sinceTs);
-            return cn ? inboxProjectIdFor(cn.id) : null;
-        } catch {
-            return null;
-        }
+        const nowMs = context?.now ? Date.parse(context.now) : Date.now();
+        const windowMs = Math.max(0, this.config.memory.tuning.inbox.activeCodenameWindowMinutes) * 60_000;
+        const sinceTs = (Number.isFinite(nowMs) ? nowMs : Date.now()) - windowMs;
+        const cn = this.brain.getMostRecentTouchedCodename(userId, sinceTs);
+        return cn ? inboxProjectIdFor(cn.id) : null;
     }
 
     private async visibleAtomsForEpisodes(
@@ -2499,8 +2516,7 @@ export class MemoryModule extends Memory {
 
     /**
      * 向 Redis 写入本轮 episode（工作记忆）。
-     * best-effort：失败只记录事件，不影响主链路。
-     * embedding 优先复用 context.embedding；缺省时本地降级计算。
+     * 失败记录事件后继续抛出。embedding 优先复用 context.embedding；缺省时使用本地 embedding provider。
      */
     private async writeEpisodeToRedis(
         message: GatewayMessage,
@@ -2565,6 +2581,7 @@ export class MemoryModule extends Memory {
                     context.requestId,
                 ),
             );
+            throw err;
         }
     }
 
@@ -2577,15 +2594,15 @@ export class MemoryModule extends Memory {
      */
     async sweepProjectClusters(userId: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
         if (!this.redis) return false;
-        const existing = await this.sqlite.getProjectOffer(userId).catch(() => undefined);
+        const existing = await this.sqlite.getProjectOffer(userId);
         if (existing) return false;
 
         const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
-        const episodeIds = await this.redis.readContextRing(userId, ringLimit).catch(() => [] as string[]);
+        const episodeIds = await this.redis.readContextRing(userId, ringLimit);
         if (episodeIds.length === 0) return false;
-        const episodes = (
-            await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id).catch(() => undefined)))
-        ).filter((e): e is NonNullable<typeof e> => Boolean(e));
+        const episodes = (await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)))).filter(
+            (e): e is NonNullable<typeof e> => Boolean(e),
+        );
         if (episodes.length === 0) return false;
 
         // 按 concept 聚合，找出出现次数最高的概念作为 seed。
@@ -2642,7 +2659,7 @@ export class MemoryModule extends Memory {
      * 否则 ttl-1，0 时自动过期。
      */
     async noteProjectOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
-        const offer = await this.sqlite.getProjectOffer(userId).catch(() => undefined);
+        const offer = await this.sqlite.getProjectOffer(userId);
         if (!offer) return;
         if (explicitTriggered) {
             await this.sqlite.deleteProjectOffer(userId);
@@ -2676,15 +2693,15 @@ export class MemoryModule extends Memory {
      */
     async sweepSkillCandidates(userId: string): Promise<boolean> {
         if (!this.redis) return false;
-        const existing = await this.sqlite.getSkillOffer(userId).catch(() => undefined);
+        const existing = await this.sqlite.getSkillOffer(userId);
         if (existing) return false;
 
         const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
-        const episodeIds = await this.redis.readContextRing(userId, ringLimit).catch(() => [] as string[]);
+        const episodeIds = await this.redis.readContextRing(userId, ringLimit);
         if (episodeIds.length === 0) return false;
-        const episodes = (
-            await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id).catch(() => undefined)))
-        ).filter((e): e is NonNullable<typeof e> => Boolean(e));
+        const episodes = (await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)))).filter(
+            (e): e is NonNullable<typeof e> => Boolean(e),
+        );
         if (episodes.length === 0) return false;
 
         const { detectSkillCandidate } = await import("../../agent/project/index.ts");
@@ -2745,7 +2762,7 @@ export class MemoryModule extends Memory {
 
     /** 显式同意：把 pending offer 物化为 SKILL.md，并写 RETROSPECTIVE。 */
     async consumeSkillOffer(userId: string): Promise<boolean> {
-        const offer = await this.sqlite.getSkillOffer(userId).catch(() => undefined);
+        const offer = await this.sqlite.getSkillOffer(userId);
         if (!offer) return false;
         try {
             const skillDir = await materializeSkillFromOffer(this.config.paths.skillDir, offer);
@@ -2766,19 +2783,15 @@ export class MemoryModule extends Memory {
                     name: offer.name,
                 }),
             );
-            try {
-                const retrospective = new RetrospectiveLog({ projectMemoryDir: this.config.paths.projectMemoryDir });
-                await retrospective.append({
-                    kind: "skill-promoted",
-                    userId,
-                    summary: offer.description,
-                    symbols: offer.mcpTools,
-                    rationale: `User confirmed promotion of recurring MCP workflow (support=${offer.support}, confidence=${offer.confidence.toFixed(2)}).`,
-                    extra: { skillId: offer.skillId, name: offer.name, path: skillDir },
-                });
-            } catch {
-                // retrospective is audit-only; never fail consume
-            }
+            const retrospective = new RetrospectiveLog({ projectMemoryDir: this.config.paths.projectMemoryDir });
+            await retrospective.append({
+                kind: "skill-promoted",
+                userId,
+                summary: offer.description,
+                symbols: offer.mcpTools,
+                rationale: `User confirmed promotion of recurring MCP workflow (support=${offer.support}, confidence=${offer.confidence.toFixed(2)}).`,
+                extra: { skillId: offer.skillId, name: offer.name, path: skillDir },
+            });
             return true;
         } catch (err) {
             this.events.publish(
@@ -2789,13 +2802,13 @@ export class MemoryModule extends Memory {
                     error: String(err),
                 }),
             );
-            return false;
+            throw err;
         }
     }
 
     /** 用户未显式同意 → ttl-1；归零即过期。 */
     async noteSkillOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
-        const offer = await this.sqlite.getSkillOffer(userId).catch(() => undefined);
+        const offer = await this.sqlite.getSkillOffer(userId);
         if (!offer) return;
         if (explicitTriggered) {
             // consumeSkillOffer 已处理；这里幂等保护

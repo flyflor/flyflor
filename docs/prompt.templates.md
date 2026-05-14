@@ -18,36 +18,37 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; `*
 - Version: `v2`
 - Manifest file: `template.manifest.json`
 - Runtime checks the manifest version first, then reads each template by filename; missing files, empty files, and stale versions all fail with a reinstall hint.
-- The manifest also records each template key, runtime filename, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.
+- The manifest also records each template key, runtime filename, protocol metadata, protocol-specific envelope data, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.
+- `blackboard.worker.envelope.md` keeps its output schema and constraints in manifest metadata, then renders them into the JSON envelope at runtime.
 
 ## Template Catalog
 
-| Template | Runtime File | Caller | Purpose | Required Placeholders |
-| --- | --- | --- | --- | --- |
-| `ask.schema.md` | `ask.schema.md` | `renderAskSchemaInstructions` | Structured clarifying questions, ghost decisions, and identity append blocks. | — |
-| `behavior.priority.md` | `behavior.priority.md` | `renderBehaviorPriorityInstructions` | Prompt source ordering and conflict resolution rules. | — |
-| `blackboard.advisory.md` | `blackboard.advisory.md` | `renderBlackboardAdvisoryPrompt` | Advisory transcript for direct-path turns that need blackboard context. | `compactRounds` / `elapsedMs` / `reason` / `status` / `turnId` |
-| `blackboard.decision.md` | `blackboard.decision.md` | `BlackboardModule.returnDecisionToUser` | Decision prompt when the board needs user confirmation to close a loop. | `questionCount` / `reason` / `unresolvedIssues` |
-| `blackboard.route.md` | `blackboard.route.md` | `decideBlackboardRoute` | Route planner prompt for the blackboard front door. | `request` |
-| `blackboard.worker.envelope.md` | `blackboard.worker.envelope.md` | `renderBlackboardWorkerEnvelope` | User task envelope for a single blackboard worker participant. | `contractJson` / `convergencePolicyJson` / `currentRoundStepsJson` / `discussionPlanJson` / `goalJson` / `minRoundsJson` / `participantJson` / `phaseJson` / `previousStepsJson` / `roundJson` |
-| `blackboard.worker.system.md` | `blackboard.worker.system.md` | `renderBlackboardWorkerSystemPrompt` | System prompt for a single blackboard worker participant. | `participant` |
-| `crystal.reflection.md` | `crystal.reflection.md` | `ReflectionWorker.dispatch` | Reflection prompt that extracts reusable methods from evidence. | `evidence` |
-| `feedback.classify.md` | `feedback.classify.md` | `classifyAndApplyFeedback` | Feedback classifier that buckets the latest user message. | `currentUserText` / `previousAssistantText` |
-| `memory.action.md` | `memory.action.md` | `renderMemoryActionInstructions` | Durable Markdown memory tool block schema. | — |
-| `memory.consolidation.md` | `memory.consolidation.md` | `ConsolidationWorker` | Episode classification prompt for consolidation. | `episode` |
-| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | Audit-only compression prompt for expiring Redis working memory. | `episodes` |
-| `memory.context.md` | `memory.context.md` | `renderMemoryPrompt` | Memory context wrapper for recent, project, long-term, and global layers. | `hippocampus` / `markdownContent` / `projectMemory` / `retrievedResults` |
-| `memory.dream.md` | `memory.dream.md` | `DreamWorker` | Quiet maintenance prompt for long-term drift, recall, and contradiction work. | `candidates` / `userId` |
-| `memory.project.offer.md` | `memory.project.offer.md` | `renderProjectOfferPrompt` | Runtime nudge for a project candidate awaiting user confirmation. | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
-| `memory.skill.offer.md` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | Runtime nudge for a reusable skill candidate awaiting user confirmation. | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
-| `mcp.context.md` | `mcp.context.md` | `renderMcpContextPrompt` | MCP capability wrapper and tool-context listing. | `mcpEntries` |
-| `runtime.ask.continuation.md` | `runtime.ask.continuation.md` | `renderRuntimeAskContinuationPrompt` | Runtime continuation hint for an active pending ask. | `chainDepth` / `choices` / `prompt` / `reason` |
-| `runtime.dormant.resume.md` | `runtime.dormant.resume.md` | `renderRuntimeDormantResumePrompt` | Runtime resume hint after a dormant interval. | `idleBucket` |
-| `runtime.eq.context.md` | `runtime.eq.context.md` | `renderRuntimeEqContextPrompt` | Tone-only emotional context hint. | `ageBucket` / `arousal` / `confidence` / `directive` / `dominance` / `label` / `valence` |
-| `runtime.ghost.hint.md` | `runtime.ghost.hint.md` | `renderRuntimeGhostHintPrompt` | Runtime hint for active unfinished contexts. | `ghostEntries` |
-| `runtime.identity.context.md` | `runtime.identity.context.md` | `renderRuntimeIdentityContextPrompt` | Runtime identity context assembled from live identity entries. | `identityEntries` |
-| `runtime.system.md` | `runtime.system.md` | `renderRuntimeSystemPrompt` | Top-level runtime system prompt assembled for every turn. | `askSchemaInstructions` / `behaviorPriorityInstructions` / `blackboardContext` / `mcpContext` / `memoryActionInstructions` / `memoryContext` / `sandboxSummary` / `skillContext` |
-| `skill.context.md` | `skill.context.md` | `renderSkillContextPrompt` | Skill wrapper prompt that formats loaded SKILL.md entries. | `skillEntries` |
+| Template | Runtime File | Caller | Protocol | Purpose | Required Placeholders |
+| --- | --- | --- | --- | --- | --- |
+| `ask.schema.md` | `ask.schema.md` | `renderAskSchemaInstructions` | — | Structured clarifying questions, ghost decisions, and identity append blocks. | — |
+| `behavior.priority.md` | `behavior.priority.md` | `renderBehaviorPriorityInstructions` | — | Prompt source ordering and conflict resolution rules. | — |
+| `blackboard.advisory.md` | `blackboard.advisory.md` | `renderBlackboardAdvisoryPrompt` | — | Advisory transcript for direct-path turns that need blackboard context. | `compactRounds` / `elapsedMs` / `reason` / `status` / `turnId` |
+| `blackboard.decision.md` | `blackboard.decision.md` | `BlackboardModule.returnDecisionToUser` | — | Decision prompt when the board needs user confirmation to close a loop. | `questionCount` / `reason` / `unresolvedIssues` |
+| `blackboard.route.md` | `blackboard.route.md` | `decideBlackboardRoute` | — | Route planner prompt for the blackboard front door. | `request` |
+| `blackboard.worker.envelope.md` | `blackboard.worker.envelope.md` | `renderBlackboardWorkerEnvelope` | `flyflor.blackboard.worker.v1` | User task envelope for a single blackboard worker participant. | `constraintsJson` / `contractJson` / `convergencePolicyJson` / `currentRoundStepsJson` / `discussionPlanJson` / `goalJson` / `expectedOutputJson` / `minRoundsJson` / `participantJson` / `phaseJson` / `previousStepsJson` / `roundJson` |
+| `blackboard.worker.system.md` | `blackboard.worker.system.md` | `renderBlackboardWorkerSystemPrompt` | — | System prompt for a single blackboard worker participant. | `participant` |
+| `crystal.reflection.md` | `crystal.reflection.md` | `ReflectionWorker.dispatch` | — | Reflection prompt that extracts reusable methods from evidence. | `evidence` |
+| `feedback.classify.md` | `feedback.classify.md` | `classifyAndApplyFeedback` | — | Feedback classifier that buckets the latest user message. | `currentUserText` / `previousAssistantText` |
+| `memory.action.md` | `memory.action.md` | `renderMemoryActionInstructions` | — | Durable Markdown memory tool block schema. | — |
+| `memory.consolidation.md` | `memory.consolidation.md` | `ConsolidationWorker` | — | Episode classification prompt for consolidation. | `episode` |
+| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | — | Audit-only compression prompt for expiring Redis working memory. | `episodes` |
+| `memory.context.md` | `memory.context.md` | `renderMemoryPrompt` | — | Memory context wrapper for recent, project, long-term, and global layers. | `hippocampus` / `markdownContent` / `projectMemory` / `retrievedResults` |
+| `memory.dream.md` | `memory.dream.md` | `DreamWorker` | — | Quiet maintenance prompt for long-term drift, recall, and contradiction work. | `candidates` / `userId` |
+| `memory.project.offer.md` | `memory.project.offer.md` | `renderProjectOfferPrompt` | — | Runtime nudge for a project candidate awaiting user confirmation. | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memory.skill.offer.md` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | — | Runtime nudge for a reusable skill candidate awaiting user confirmation. | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
+| `mcp.context.md` | `mcp.context.md` | `renderMcpContextPrompt` | — | MCP capability wrapper and tool-context listing. | `mcpEntries` |
+| `runtime.ask.continuation.md` | `runtime.ask.continuation.md` | `renderRuntimeAskContinuationPrompt` | — | Runtime continuation hint for an active pending ask. | `chainDepth` / `choices` / `prompt` / `reason` |
+| `runtime.dormant.resume.md` | `runtime.dormant.resume.md` | `renderRuntimeDormantResumePrompt` | — | Runtime resume hint after a dormant interval. | `idleBucket` |
+| `runtime.eq.context.md` | `runtime.eq.context.md` | `renderRuntimeEqContextPrompt` | — | Tone-only emotional context hint. | `ageBucket` / `arousal` / `confidence` / `directive` / `dominance` / `label` / `valence` |
+| `runtime.ghost.hint.md` | `runtime.ghost.hint.md` | `renderRuntimeGhostHintPrompt` | — | Runtime hint for active unfinished contexts. | `ghostEntries` |
+| `runtime.identity.context.md` | `runtime.identity.context.md` | `renderRuntimeIdentityContextPrompt` | — | Runtime identity context assembled from live identity entries. | `identityEntries` |
+| `runtime.system.md` | `runtime.system.md` | `renderRuntimeSystemPrompt` | — | Top-level runtime system prompt assembled for every turn. | `askSchemaInstructions` / `behaviorPriorityInstructions` / `blackboardContext` / `mcpContext` / `memoryActionInstructions` / `memoryContext` / `sandboxSummary` / `skillContext` |
+| `skill.context.md` | `skill.context.md` | `renderSkillContextPrompt` | — | Skill wrapper prompt that formats loaded SKILL.md entries. | `skillEntries` |
 
 ## Assembly Flow
 
@@ -71,7 +72,7 @@ flowchart LR
 flowchart LR
     Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/prompts/"]
     Userdir -- runtime override --> Render["render functions"]
-    Builtin -- fallback --> Render
+    Builtin -- canonical --> Render
 ```
 
 - A same-named file in the user directory overrides the built-in template; the install script syncs the bundle and manifest together.

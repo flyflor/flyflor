@@ -4,7 +4,7 @@
  * 的纯解析/规范化工作，避免长 JSON 在主线程阻塞事件循环。
  */
 import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
-import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./reflection.normalize.ts";
+import type { ReflectionNormalizeSource } from "./reflection.normalize.ts";
 
 export interface ReflectionThreadWorkerLike {
     postMessage(data: unknown): void;
@@ -24,7 +24,6 @@ interface PendingEntry {
     resolve(result: CrystalCandidateInput[]): void;
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
-    fallback: () => CrystalCandidateInput[];
 }
 
 const DEFAULT_TIMEOUT_MS = 2_000;
@@ -44,29 +43,20 @@ export class ReflectionThreadRunner {
     async normalize(raw: string, source: ReflectionNormalizeSource): Promise<CrystalCandidateInput[]> {
         const worker = this.ensureWorker();
         const id = this.nextId++;
-        const fallback = () => normalizeReflectionRaw(raw, source);
         return new Promise<CrystalCandidateInput[]>((resolve, reject) => {
             const timer = setTimeout(() => {
                 const entry = this.pending.get(id);
                 if (!entry) return;
                 this.pending.delete(id);
-                try {
-                    resolve(entry.fallback());
-                } catch (error) {
-                    reject(error instanceof Error ? error : new Error(String(error)));
-                }
+                reject(new Error(`Reflection normalization worker timed out after ${this.timeoutMs}ms`));
             }, this.timeoutMs);
-            this.pending.set(id, { resolve, reject, timer, fallback });
+            this.pending.set(id, { resolve, reject, timer });
             try {
                 worker.postMessage({ kind: "normalize", id, raw, source });
-            } catch {
+            } catch (error) {
                 clearTimeout(timer);
                 this.pending.delete(id);
-                try {
-                    resolve(fallback());
-                } catch (error) {
-                    reject(error instanceof Error ? error : new Error(String(error)));
-                }
+                reject(error instanceof Error ? error : new Error(String(error)));
             }
         });
     }
@@ -78,11 +68,7 @@ export class ReflectionThreadRunner {
             this.pending.delete(id);
             entry.reject(new Error("ReflectionThreadRunner disposed"));
         }
-        try {
-            this.worker.terminate();
-        } catch {
-            // ignore
-        }
+        this.worker.terminate();
         this.worker = null;
     }
 
@@ -104,22 +90,14 @@ export class ReflectionThreadRunner {
             if (data.ok && data.result) {
                 entry.resolve(data.result);
             } else {
-                try {
-                    entry.resolve(entry.fallback());
-                } catch (error) {
-                    entry.reject(error instanceof Error ? error : new Error(String(error)));
-                }
+                entry.reject(new Error(data.error ?? "Reflection normalization worker failed"));
             }
         };
         worker.onerror = () => {
             for (const [id, entry] of this.pending) {
                 clearTimeout(entry.timer);
                 this.pending.delete(id);
-                try {
-                    entry.resolve(entry.fallback());
-                } catch (error) {
-                    entry.reject(error instanceof Error ? error : new Error(String(error)));
-                }
+                entry.reject(new Error("Reflection normalization worker crashed"));
             }
             this.worker = null;
         };

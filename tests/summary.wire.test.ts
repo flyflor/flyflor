@@ -36,7 +36,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 gatewayReply("收到", "msg-1"),
                 runtimeContext(),
             );
-            const res = memory.runSummaryOnce("user-1");
+            const res = await memory.runSummaryOnce("user-1");
             expect(res).not.toBeNull();
             expect(res!.written).toBeGreaterThan(0);
             expect(sink.types).toContain(RuntimeEventType.MemorySummaryWritten);
@@ -49,7 +49,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
-        const res = memory.runSummaryOnce("user-1");
+        const res = await memory.runSummaryOnce("user-1");
         expect(res).toBeNull();
         memory.dispose();
     });
@@ -61,7 +61,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         await memory.warmup();
         try {
             (memory as unknown as { brainMaintenanceBusy: boolean }).brainMaintenanceBusy = true;
-            expect(memory.runSummaryOnce("user-1")).toBeNull();
+            expect(await memory.runSummaryOnce("user-1")).toBeNull();
             expect(await memory.runBrainArchiveOnce()).toBeNull();
             expect(sink.types).not.toContain(RuntimeEventType.MemorySummaryWritten);
             expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainArchiveCompleted);
@@ -117,7 +117,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 importance: 0.2,
             });
 
-            const res = memory.runSummaryOnce("user-1", now);
+            const res = await memory.runSummaryOnce("user-1", now);
             expect(res?.written).toBe(2);
 
             const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
@@ -152,7 +152,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 gatewayReply("收到", "msg-embed"),
                 runtimeContext(),
             );
-            const res = memory.runSummaryOnce("user-1");
+            const res = await memory.runSummaryOnce("user-1");
             expect(res?.written).toBeGreaterThan(0);
             await waitFor(() => graph.inputs.length > 0);
             expect(graph.inputs[0]?.summaryId).toMatch(/^summary-user-1-/);

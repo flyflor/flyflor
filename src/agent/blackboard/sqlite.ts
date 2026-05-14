@@ -604,15 +604,11 @@ function rowToDecision(row: BlackboardDecisionRow): BlackboardDecision {
     };
 }
 
-function parseJson<TValue>(value: string | undefined, fallback: TValue): TValue {
+function parseJson<TValue>(value: string | undefined, defaultValue: TValue): TValue {
     if (!value) {
-        return fallback;
+        return defaultValue;
     }
-    try {
-        return JSON.parse(value) as TValue;
-    } catch {
-        return fallback;
-    }
+    return JSON.parse(value) as TValue;
 }
 
 function defaultBudget(startedAt: string) {

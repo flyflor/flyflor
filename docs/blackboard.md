@@ -54,7 +54,7 @@ stateDiagram-v2
 
 - 默认只注册一个通用模型型 blackboard worker（`BLACKBOARD_MODEL_WORKER_NAME`）。
 - 若 role 没有显式外部 worker，`WorkerManager` 路由到通用模型 worker，并把 role 写入任务信封。
-- 任务信封走 `blackboard.worker.envelope.md` 模板渲染；代码只填入 JSON 数据，不内嵌 worker 可读约束正文。
+- 任务信封走 `blackboard.worker.envelope.md` 模板渲染；协议版本与协议级输出 schema / constraints 收口在 `template.manifest.json` 元数据，代码只填入 JSON 数据，不内嵌 worker 可读约束正文。
 - `workers` 数量上限 5；不强制角色名集合，由当前请求语义决定。
 
 ## 一轮黑板的时序

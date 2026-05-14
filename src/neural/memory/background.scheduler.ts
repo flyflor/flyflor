@@ -155,7 +155,7 @@ export class BackgroundScheduler {
      * idle 阈值到点未被再次重置时，触发一轮该用户的 dream pass。
      * - dream 未注入或 idleDreamTriggerMs <= 0 时无副作用；
      * - 同一 userId 重复调用会 clear 旧 timer，避免 timer 堆积；
-     * - 失败完全静默（dream.runOnce 内部已发事件）。
+     * - 失败不吞掉；异常通过 returned promise / unhandled rejection 暴露。
      */
     noteUserTurn(userId: string): void {
         if (typeof userId !== "string" || userId.length === 0) return;
@@ -167,9 +167,7 @@ export class BackgroundScheduler {
         }
         const timer = setTimeout(() => {
             this.idleTimers.delete(userId);
-            void this.runDreamOnce(this.opts.dreamBatchSize, userId).catch(() => {
-                // runDreamOnce 内部已 publish 失败事件；这里只是兜底吞错。
-            });
+            void this.runDreamOnce(this.opts.dreamBatchSize, userId);
         }, this.opts.idleDreamTriggerMs);
         if (typeof (timer as { unref?: () => void })?.unref === "function") {
             (timer as { unref: () => void }).unref();

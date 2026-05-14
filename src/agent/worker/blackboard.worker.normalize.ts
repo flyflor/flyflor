@@ -24,14 +24,14 @@ export function normalizeBlackboardWorkerOutput(
         const blockers = stringArray(parsed.blockers);
         const questions = stringArray(parsed.questions);
         return {
-            inputSummary: stringValue(parsed.inputSummary) || compactInputSummary(input),
-            outputSummary: stringValue(parsed.outputSummary) || truncate(raw, 600),
+            inputSummary: requiredString(parsed.inputSummary, "inputSummary"),
+            outputSummary: requiredString(parsed.outputSummary, "outputSummary"),
             newFacts: stringArray(parsed.newFacts),
             blockers,
             risk: riskValue(parsed.risk),
             agreement: booleanValue(parsed.agreement),
             answers: stringArray(parsed.answers),
-            discussion: discussionArray(parsed.discussion, participant, stringValue(parsed.outputSummary) || raw),
+            discussion: discussionArray(parsed.discussion, participant),
             metadata: {
                 modelBacked: true,
                 worker: input.workerRole,
@@ -42,31 +42,7 @@ export function normalizeBlackboardWorkerOutput(
             questions,
         };
     }
-    return {
-        inputSummary: compactInputSummary(input),
-        outputSummary: truncate(raw.replace(/\s+/g, " ").trim(), 600),
-        newFacts: [],
-        blockers: [],
-        risk: "medium",
-        agreement: false,
-        discussion: [{ role: "worker", content: raw.trim(), visibility: "public" }],
-        metadata: {
-            modelBacked: true,
-            parseStatus: "raw-text",
-            worker: input.workerRole,
-        },
-        openIssues: ["model_worker_result_was_not_structured"],
-        outcome: BlackboardWorkerOutcome.Continue,
-        questions: [],
-    };
-}
-
-function truncate(value: string, maxChars: number): string {
-    return value.length <= maxChars ? value : `${value.slice(0, maxChars)}...`;
-}
-
-function compactInputSummary(input: BlackboardWorkerTask): string {
-    return `round=${input.round}; worker=${input.workerRole}; goal=${truncate(input.goal, 120)}`;
+    throw new Error("Blackboard worker model did not return the required JSON object.");
 }
 
 function parseModelWorkerJson(raw: string): unknown {
@@ -75,17 +51,13 @@ function parseModelWorkerJson(raw: string): unknown {
     const candidate = fenced?.[1] ?? text;
     try {
         return JSON.parse(candidate);
-    } catch {
+    } catch (error) {
         const start = candidate.indexOf("{");
         const end = candidate.lastIndexOf("}");
         if (start >= 0 && end > start) {
-            try {
-                return JSON.parse(candidate.slice(start, end + 1));
-            } catch {
-                return undefined;
-            }
+            return JSON.parse(candidate.slice(start, end + 1));
         }
-        return undefined;
+        throw error;
     }
 }
 
@@ -97,6 +69,14 @@ function isBlackboardWorkerResultLike(value: unknown): value is Record<string, u
 
 function stringValue(value: unknown): string {
     return typeof value === "string" ? value.trim() : "";
+}
+
+function requiredString(value: unknown, field: string): string {
+    const text = stringValue(value);
+    if (!text) {
+        throw new Error(`Blackboard worker model returned invalid ${field}.`);
+    }
+    return text;
 }
 
 function stringArray(value: unknown): string[] {
@@ -115,7 +95,10 @@ function booleanValue(value: unknown): boolean | undefined {
 }
 
 function riskValue(value: unknown): "low" | "medium" | "high" {
-    return value === "low" || value === "medium" || value === "high" ? value : "medium";
+    if (value === "low" || value === "medium" || value === "high") {
+        return value;
+    }
+    throw new Error(`Blackboard worker model returned invalid risk: ${String(value)}`);
 }
 
 function outcomeValue(
@@ -135,12 +118,15 @@ function outcomeValue(
     ) {
         return BlackboardWorkerOutcome.Final;
     }
-    return BlackboardWorkerOutcome.Continue;
+    if (value === BlackboardWorkerOutcome.Continue) {
+        return BlackboardWorkerOutcome.Continue;
+    }
+    throw new Error(`Blackboard worker model returned invalid outcome: ${String(value)}`);
 }
 
-function discussionArray(value: unknown, participant: string, fallback: string): BlackboardWorkerResult["discussion"] {
+function discussionArray(value: unknown, participant: string): BlackboardWorkerResult["discussion"] {
     if (!Array.isArray(value)) {
-        return [{ role: discussionRole(undefined, participant), content: fallback, visibility: "public" }];
+        throw new Error("Blackboard worker model returned invalid discussion.");
     }
     const discussion = value
         .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
@@ -151,9 +137,10 @@ function discussionArray(value: unknown, participant: string, fallback: string):
         }))
         .filter((item) => item.content)
         .slice(0, 6);
-    return discussion.length > 0
-        ? discussion
-        : [{ role: discussionRole(undefined, participant), content: fallback, visibility: "public" }];
+    if (discussion.length === 0) {
+        throw new Error("Blackboard worker model returned empty discussion.");
+    }
+    return discussion;
 }
 
 function discussionRole(value: unknown, participant: string): string {

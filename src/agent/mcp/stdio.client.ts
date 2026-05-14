@@ -202,7 +202,7 @@ class McpStdioSession {
         this.stopped = true;
         this.rejectAll(new Error("MCP session stopped."));
         this.child?.kill();
-        await this.child?.exited.catch(() => undefined);
+        await this.child?.exited;
     }
 
     private writeMessage(message: Record<string, unknown>): void {
@@ -330,7 +330,7 @@ class McpStdioSession {
 
 function normalizeTools(result: unknown): McpToolDefinition[] {
     if (!isRecord(result) || !Array.isArray(result.tools)) {
-        return [];
+        throw new Error("MCP stdio tools/list returned invalid tools payload.");
     }
     return result.tools.filter(isToolDefinition).map((tool) => ({
         name: tool.name,

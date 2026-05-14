@@ -3,8 +3,8 @@
  *
  * Supports a deliberately small subset: type (single string or array),
  * required, properties (recursive), items, enum, additionalProperties:false.
- * Tools may declare arbitrary JSON Schemas; anything we do not recognize is
- * skipped silently so we never block a valid call on an unsupported keyword.
+ * Unsupported schema shapes are reported as validation errors instead of being
+ * skipped, so malformed tool schemas do not silently loosen the sandbox.
  */
 
 export interface SchemaValidationResult {
@@ -51,7 +51,10 @@ function walk(schema: JsonSchema, value: unknown, path: string, errors: string[]
         if (properties) {
             for (const [key, childSchema] of Object.entries(properties)) {
                 if (!(key in (value as Record<string, unknown>))) continue;
-                if (!isObject(childSchema)) continue;
+                if (!isObject(childSchema)) {
+                    errors.push(`${path ? `${path}.` : ""}${key} schema must be an object`);
+                    continue;
+                }
                 walk(
                     childSchema as JsonSchema,
                     (value as Record<string, unknown>)[key],
@@ -67,6 +70,11 @@ function walk(schema: JsonSchema, value: unknown, path: string, errors: string[]
                 }
             }
         }
+    }
+
+    if (matchesType("array", value) && Array.isArray(value) && schema.items !== undefined && !isObject(schema.items)) {
+        errors.push(`${path || "input"} items schema must be an object`);
+        return;
     }
 
     if (matchesType("array", value) && Array.isArray(value) && isObject(schema.items)) {
@@ -89,7 +97,7 @@ function matchesType(type: string, value: unknown): boolean {
     if (type === "integer") return typeof value === "number" && Number.isInteger(value);
     if (type === "null") return value === null;
     if (PRIMITIVE_TYPES.has(type)) return typeof value === type;
-    return true;
+    return false;
 }
 
 function describe(value: unknown): string {

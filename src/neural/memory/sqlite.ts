@@ -489,12 +489,11 @@ function tableHasColumn(database: Database, table: string, column: string): bool
 }
 
 function safeParseArray(raw: string): string[] {
-    try {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
-    } catch {
-        return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+        throw new Error("Memory sqlite row expected a JSON array.");
     }
+    return parsed.filter((v): v is string => typeof v === "string");
 }
 
 function toFtsQuery(input: string): string {
@@ -540,9 +539,9 @@ function parseMetadata(value: string | undefined): Record<string, unknown> | und
     if (!value) {
         return undefined;
     }
-    try {
-        return JSON.parse(value) as Record<string, unknown>;
-    } catch {
-        return undefined;
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Memory sqlite metadata expected a JSON object.");
     }
+    return parsed as Record<string, unknown>;
 }

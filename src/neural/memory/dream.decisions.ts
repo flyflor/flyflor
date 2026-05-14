@@ -80,25 +80,22 @@ export type DreamDecision =
     | DreamReconsolidationDecision
     | DreamSkipDecision;
 
-/** LLM 返回原始字符串 → 校验过的决策数组（未识别项一律丢弃）。 */
+/** LLM 返回原始字符串 → 校验过的决策数组；结构错误直接抛出。 */
 export function parseDreamDecisions(raw: string, maxSummaryChars = 600): DreamDecision[] {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) return [];
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-        return [];
+    if (start < 0 || end <= start) {
+        throw new Error("Dream model did not return a JSON object.");
     }
-    if (!isRecord(parsed)) return [];
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    if (!isRecord(parsed)) throw new Error("Dream model returned invalid JSON.");
     const list = (parsed as { decisions?: unknown }).decisions;
-    if (!Array.isArray(list)) return [];
+    if (!Array.isArray(list)) throw new Error("Dream model must return decisions[].");
     const out: DreamDecision[] = [];
-    for (const entry of list) {
-        if (!isRecord(entry)) continue;
+    for (const [index, entry] of list.entries()) {
+        if (!isRecord(entry)) throw new Error(`Dream decision ${index + 1} must be an object.`);
         const candidateId = typeof entry.candidateId === "string" ? entry.candidateId.trim() : "";
-        if (candidateId.length === 0) continue;
+        if (candidateId.length === 0) throw new Error(`Dream decision ${index + 1} requires candidateId.`);
         const action = entry.action;
         switch (action) {
             case DreamActionKind.DriftRepair: {
@@ -171,8 +168,7 @@ export function parseDreamDecisions(raw: string, maxSummaryChars = 600): DreamDe
                 break;
             }
             default:
-                // 未知动作直接丢弃，绝不做字符串相似度回退。
-                break;
+                throw new Error(`Dream decision ${index + 1} returned unsupported action: ${String(action)}`);
         }
     }
     return out;

@@ -302,10 +302,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         externalOutputMode: "passthrough",
         consoleOptions: {
             onCopySelection: (text) => {
-                try {
-                    Bun.write(Bun.stdout, text);
-                } catch {}
-                
+                void Bun.write(Bun.stdout, text);
             },
         },
     });

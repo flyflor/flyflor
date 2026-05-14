@@ -158,9 +158,7 @@ export class ShellHookExecutor {
         let timedOut = false;
         const killTimer = setTimeout(() => {
             timedOut = true;
-            try {
-                handle.kill("SIGKILL");
-            } catch {}
+            handle.kill("SIGKILL");
         }, timeoutMs);
         if (typeof (killTimer as { unref?: () => void }).unref === "function") {
             (killTimer as { unref: () => void }).unref();
@@ -169,7 +167,7 @@ export class ShellHookExecutor {
         const [stdoutBuf, stderrBuf, exitCode] = await Promise.all([
             collectBounded(handle.stdout, this.maxOutputBytes),
             collectBounded(handle.stderr, this.maxOutputBytes),
-            handle.exited.catch(() => null),
+            handle.exited,
         ]);
         clearTimeout(killTimer);
 
@@ -215,11 +213,7 @@ export class ShellHookExecutor {
 
     private async safeApprove(spec: ShellHookSpec): Promise<boolean> {
         if (!this.approve) return false;
-        try {
-            return Boolean(await this.approve(spec));
-        } catch {
-            return false;
-        }
+        return Boolean(await this.approve(spec));
     }
 
     private fail(spec: ShellHookSpec, started: number, error: string): ShellHookResult {
@@ -239,9 +233,7 @@ export class ShellHookExecutor {
         type: (typeof RuntimeEventType)[keyof typeof RuntimeEventType],
         payload: Record<string, unknown>,
     ): void {
-        try {
-            this.events.publish(event(type, payload));
-        } catch {}
+        this.events.publish(event(type, payload));
     }
 }
 
@@ -275,20 +267,16 @@ async function collectBounded(
                     total = maxBytes;
                 }
                 truncated = true;
-                try {
-                    await reader.cancel();
-                } catch {}
+                await reader.cancel();
                 break;
             }
             chunks.push(value);
             total += value.byteLength;
         }
-    } catch {
-        // best-effort; partial output kept
+    } catch (error) {
+        throw error instanceof Error ? error : new Error(String(error));
     } finally {
-        try {
-            reader.releaseLock();
-        } catch {}
+        reader.releaseLock();
     }
     const merged = new Uint8Array(total);
     let off = 0;
@@ -316,19 +304,15 @@ function defaultSpawn(input: {
     if (input.stdin !== undefined && child.stdin) {
         const writer = child.stdin;
         const enc = new TextEncoder();
-        try {
-            writer.write(enc.encode(input.stdin));
-            writer.end?.();
-        } catch {}
+        writer.write(enc.encode(input.stdin));
+        writer.end?.();
     }
     return {
         exited: child.exited.then((code) => (typeof code === "number" ? code : null)),
         stdout: child.stdout instanceof ReadableStream ? child.stdout : null,
         stderr: child.stderr instanceof ReadableStream ? child.stderr : null,
         kill: (signal) => {
-            try {
-                child.kill(signal as never);
-            } catch {}
+            child.kill(signal as never);
         },
     };
 }

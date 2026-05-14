@@ -10,6 +10,7 @@ import {
     PROMPT_TEMPLATE_MANIFEST_FILE,
     PROMPT_TEMPLATE_ORDER,
 } from "../src/agent/prompts/template.manifest.ts";
+import { BlackboardWorkerProtocol } from "../src/protocol/contracts/index.ts";
 
 describe("prompt template docs generator", () => {
     test("matches the checked-in docs file", async () => {
@@ -23,6 +24,32 @@ describe("prompt template docs generator", () => {
         const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as typeof PROMPT_TEMPLATE_BUNDLE_MANIFEST;
         expect(manifest.schemaVersion).toBe(PROMPT_TEMPLATE_BUNDLE_VERSION);
         expect(manifest).toEqual(PROMPT_TEMPLATE_BUNDLE_MANIFEST);
+        expect(manifest.templates.find((entry) => entry.key === "blackboardWorkerEnvelope")?.protocol).toBe(
+            BlackboardWorkerProtocol.V1,
+        );
+        expect(manifest.templates.find((entry) => entry.key === "blackboardWorkerEnvelope")?.protocolSpec).toEqual({
+            expectedOutput: [
+                "inputSummary",
+                "outputSummary",
+                "newFacts",
+                "blockers",
+                "risk",
+                "questions",
+                "answers",
+                "agreement",
+                "outcome",
+                "openIssues",
+                "proposal",
+                "discussion",
+            ],
+            constraints: [
+                "no-tool-execution",
+                "no-long-term-memory-write",
+                "surface-blockers",
+                "write-public-discussion-as-dialogue",
+                "answer-current-round-peer-questions",
+            ],
+        });
     });
 
     test("prompt directory canonical templates match manifest definitions", async () => {

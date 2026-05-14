@@ -9,7 +9,7 @@
  * 实现要点：
  *  - 单次会话级别：每次 listSseMcpTools / callSseMcpTool 都新开一条 SSE，结束即关；
  *  - 不读 text、不做关键词匹配；id 严格按 number 比对；
- *  - 任何超时 / 流终止 / endpoint 缺失都抛错，由调用方降级处理；
+ *  - 任何超时 / 流终止 / endpoint 缺失都抛错，由调用方处理；
  *  - 纯 fetch / ReadableStream，无 native 依赖，bun --compile 安全。
  */
 
@@ -152,11 +152,7 @@ class McpSseSession {
     }
 
     close(): void {
-        try {
-            this.controller.abort();
-        } catch {
-            // ignore
-        }
+        this.controller.abort();
         for (const p of this.pending.values()) {
             p.reject(new Error("MCP SSE session closed"));
         }
@@ -239,11 +235,7 @@ class McpSseSession {
             }
         } finally {
             this.streamDone = true;
-            try {
-                reader.releaseLock();
-            } catch {
-                // ignore
-            }
+            reader.releaseLock();
         }
     }
 
@@ -259,10 +251,15 @@ class McpSseSession {
             let parsed: unknown;
             try {
                 parsed = JSON.parse(evt.data);
-            } catch {
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                this.failStream(new Error(`MCP SSE invalid JSON-RPC message: ${message}`));
                 return;
             }
-            if (!isRecord(parsed)) return;
+            if (!isRecord(parsed)) {
+                this.failStream(new Error(`MCP SSE non-object JSON-RPC message: ${this.server.name}`));
+                return;
+            }
             const msg = parsed as JsonRpcMessage;
             if (typeof msg.id === "number") {
                 const p = this.pending.get(msg.id);
@@ -272,6 +269,20 @@ class McpSseSession {
                 }
             }
         }
+    }
+
+    private failStream(error: Error): void {
+        this.streamError = error;
+        this.streamDone = true;
+        for (const waiter of this.endpointWaiters) {
+            waiter.reject(error);
+        }
+        this.endpointWaiters.length = 0;
+        for (const pending of this.pending.values()) {
+            pending.reject(error);
+        }
+        this.pending.clear();
+        this.controller.abort();
     }
 }
 
@@ -308,7 +319,9 @@ async function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promi
 }
 
 function normalizeTools(result: unknown): McpToolDefinition[] {
-    if (!isRecord(result) || !Array.isArray(result.tools)) return [];
+    if (!isRecord(result) || !Array.isArray(result.tools)) {
+        throw new Error("MCP SSE tools/list returned invalid tools payload.");
+    }
     return result.tools.filter(isToolDefinition).map((tool) => ({
         name: tool.name,
         description: typeof tool.description === "string" ? tool.description : undefined,

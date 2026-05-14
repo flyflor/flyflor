@@ -33,8 +33,15 @@ export function parseMcpToolCalls(rawText: string, limit = 4): ParsedMcpToolCall
         calls.push(...readCalls(rawJson));
         return "";
     });
+    if (calls.length > limit) {
+        throw new Error(`MCP tool call count ${calls.length} exceeds limit ${limit}.`);
+    }
+    const unsafe = calls.find((call) => !isSafeCall(call));
+    if (unsafe) {
+        throw new Error(`Unsafe MCP tool call: ${unsafe.server}/${unsafe.tool}.`);
+    }
     return {
-        calls: calls.filter(isSafeCall).slice(0, Math.max(0, limit)),
+        calls,
         text: text.trim(),
     };
 }
@@ -123,15 +130,22 @@ function readCalls(rawJson: string): McpToolCallRequest[] {
     try {
         const payload = JSON.parse(rawJson.trim()) as unknown;
         if (Array.isArray(payload)) {
-            return payload.filter(isMcpToolCall).map(normalizeCall);
+            return payload.map(readMcpToolCall);
         }
         if (isRecord(payload) && Array.isArray(payload.calls)) {
-            return payload.calls.filter(isMcpToolCall).map(normalizeCall);
+            return payload.calls.map(readMcpToolCall);
         }
-    } catch {
-        return [];
+    } catch (error) {
+        throw error instanceof Error ? error : new Error(String(error));
     }
-    return [];
+    throw new Error("MCP tool call block must be an array or an object with calls[].");
+}
+
+function readMcpToolCall(value: unknown): McpToolCallRequest {
+    if (!isMcpToolCall(value)) {
+        throw new Error("MCP tool call block contains an invalid call.");
+    }
+    return normalizeCall(value);
 }
 
 function isMcpToolCall(value: unknown): value is McpToolCallRequest {

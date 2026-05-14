@@ -4,12 +4,11 @@
  * 设计：
  *  - 进程内单 Worker 实例（懒创建），所有黑板规范化请求复用同一线程，避免反复
  *    cold-start；测试可注入 `WorkerFactory` 替换为同步实现以保持确定性。
- *  - 自增 id 关联 postMessage / message 回调；超时回退到主线程同步规范化（best-effort）。
+ *  - 自增 id 关联 postMessage / message 回调；超时或 Worker 失败直接抛错。
  *  - dispose() 关闭 Worker，pending Promise 全部 reject。
  *
  * 注意：本运行器**不调用模型**，只负责把 raw 文本送进 Worker 并取回结构化结果。
  */
-import { normalizeBlackboardWorkerOutput } from "./blackboard.worker.normalize.ts";
 import type { BlackboardWorkerResult, BlackboardWorkerTask } from "../di/index.ts";
 
 export interface BlackboardThreadWorkerLike {
@@ -24,7 +23,7 @@ export type BlackboardWorkerFactory = () => BlackboardThreadWorkerLike;
 export interface BlackboardThreadRunnerOptions {
     /** Worker 构造工厂；默认走 Bun 内置 `new Worker(import.meta.url-relative)`。 */
     workerFactory?: BlackboardWorkerFactory;
-    /** 单次 normalize 超时（ms）。超时后回退到主线程同步执行。默认 2000。 */
+    /** 单次 normalize 超时（ms）。超时后直接失败。默认 2000。 */
     timeoutMs?: number;
 }
 
@@ -32,7 +31,6 @@ interface PendingEntry {
     resolve(result: BlackboardWorkerResult): void;
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
-    fallback: () => BlackboardWorkerResult;
 }
 
 const DEFAULT_TIMEOUT_MS = 2_000;
@@ -56,22 +54,20 @@ export class BlackboardThreadRunner {
     ): Promise<BlackboardWorkerResult> {
         const worker = this.ensureWorker();
         const id = this.nextId++;
-        const fallback = () => normalizeBlackboardWorkerOutput(input, participant, raw);
         return new Promise<BlackboardWorkerResult>((resolve, reject) => {
             const timer = setTimeout(() => {
                 const entry = this.pending.get(id);
                 if (!entry) return;
                 this.pending.delete(id);
-                resolve(entry.fallback());
+                reject(new Error(`Blackboard normalization worker timed out after ${this.timeoutMs}ms`));
             }, this.timeoutMs);
-            this.pending.set(id, { resolve, reject, timer, fallback });
+            this.pending.set(id, { resolve, reject, timer });
             try {
                 worker.postMessage({ kind: "normalize", id, input, participant, raw });
             } catch (error) {
                 clearTimeout(timer);
                 this.pending.delete(id);
-                // postMessage 失败立即回退；不让上层报错。
-                resolve(fallback());
+                reject(error instanceof Error ? error : new Error(String(error)));
             }
         });
     }
@@ -83,11 +79,7 @@ export class BlackboardThreadRunner {
             this.pending.delete(id);
             entry.reject(new Error("BlackboardThreadRunner disposed"));
         }
-        try {
-            this.worker.terminate();
-        } catch {
-            // ignore
-        }
+        this.worker.terminate();
         this.worker = null;
     }
 
@@ -104,16 +96,14 @@ export class BlackboardThreadRunner {
             if (data.ok && data.result) {
                 entry.resolve(data.result);
             } else {
-                // 线程内异常：回退到主线程规范化，保持 best-effort 行为。
-                entry.resolve(entry.fallback());
+                entry.reject(new Error(data.error ?? "Blackboard normalization worker failed"));
             }
         };
         worker.onerror = () => {
-            // Worker 整体崩溃：丢弃实例，让下一次 normalize 重新创建。
             for (const [id, entry] of this.pending) {
                 clearTimeout(entry.timer);
                 this.pending.delete(id);
-                entry.resolve(entry.fallback());
+                entry.reject(new Error("Blackboard normalization worker crashed"));
             }
             this.worker = null;
         };

@@ -17,7 +17,7 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 
 | 层 | 目录 | 角色 | 后端 |
 | --- | --- | --- | --- |
-| 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI 兼容 / Anthropic 兼容 / Provider fallback |
+| 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI 兼容 / Anthropic 兼容 |
 | 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、Skill 与方法论沉淀 | SurrealDB |
 | 海马体 Neural | `src/neural/memory` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计 | Redis + Markdown + SQLite + SurrealDB |
 

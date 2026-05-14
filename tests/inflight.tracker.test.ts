@@ -27,12 +27,9 @@ describe("LF-R4 InFlightTracker", () => {
             originalUserMessage: "hello",
             startedAtMs: Date.now(),
         });
-        const orphansBeforeEnd = await new InFlightTracker(root).recoverOrphans();
-        // recoverOrphans also deletes; after it the dir is empty, but ensure file existed via the count.
-        expect(orphansBeforeEnd.length).toBe(1);
-        expect(orphansBeforeEnd[0]?.requestId).toBe("req-1");
-        // markEnd on already-cleaned file should not throw.
         await t.markEnd("req-1");
+        const orphansAfterEnd = await new InFlightTracker(root).recoverOrphans();
+        expect(orphansAfterEnd.length).toBe(0);
     });
 
     test("recoverOrphans returns leftover records and clears them", async () => {
@@ -59,16 +56,13 @@ describe("LF-R4 InFlightTracker", () => {
         expect(second.length).toBe(0);
     });
 
-    test("recoverOrphans skips corrupted JSON but still removes the file", async () => {
+    test("recoverOrphans fails fast on corrupted JSON", async () => {
         const root = await mkRoot();
         const dir = join(root, "inflight");
         await mkdir(dir, { recursive: true });
         await writeFile(join(dir, "bad.json"), "{not json", "utf8");
         const t = new InFlightTracker(root);
-        const orphans = await t.recoverOrphans();
-        expect(orphans.length).toBe(0);
-        const again = await t.recoverOrphans();
-        expect(again.length).toBe(0);
+        await expect(t.recoverOrphans()).rejects.toThrow();
     });
 
     test("recoverOrphans returns empty when dir does not exist", async () => {

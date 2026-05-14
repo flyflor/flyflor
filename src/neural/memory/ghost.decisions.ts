@@ -23,7 +23,7 @@ export interface ParsedGhostDecisions {
     decisions: GhostDecision[];
     /** 剥离决策块后剩余的文本。 */
     text: string;
-    /** 被丢弃的非法条目数（用于事件埋点）。 */
+    /** 兼容旧事件字段；严格模式下始终为 0。 */
     dropped: number;
 }
 
@@ -33,18 +33,12 @@ export function parseGhostDecisions(rawText: string, maxDecisions = 8): ParsedGh
     let dropped = 0;
     const text = rawText.replace(DECISION_BLOCK, (_block, rawJson: string) => {
         const parsed = readDecisions(rawJson);
-        if (!parsed) {
-            dropped += 1;
-            return "";
-        }
         for (const item of parsed) {
             if (decisions.length >= maxDecisions) {
-                dropped += 1;
-                continue;
+                throw new Error(`flyflor_ghost_decisions exceeds max decisions: ${maxDecisions}.`);
             }
             if (seen.has(item.ghostId)) {
-                dropped += 1;
-                continue;
+                throw new Error(`flyflor_ghost_decisions contains duplicate ghostId: ${item.ghostId}`);
             }
             seen.add(item.ghostId);
             decisions.push(item);
@@ -54,21 +48,22 @@ export function parseGhostDecisions(rawText: string, maxDecisions = 8): ParsedGh
     return { decisions, text: text.trim(), dropped };
 }
 
-function readDecisions(rawJson: string): GhostDecision[] | undefined {
-    let payload: unknown;
-    try {
-        payload = JSON.parse(rawJson);
-    } catch {
-        return undefined;
+function readDecisions(rawJson: string): GhostDecision[] {
+    const payload = JSON.parse(rawJson) as unknown;
+    if (!Array.isArray(payload)) {
+        throw new Error("flyflor_ghost_decisions must be a JSON array.");
     }
-    if (!Array.isArray(payload)) return undefined;
     const out: GhostDecision[] = [];
-    for (const item of payload) {
-        if (!item || typeof item !== "object") continue;
+    for (const [index, item] of payload.entries()) {
+        if (!item || typeof item !== "object") {
+            throw new Error(`flyflor_ghost_decisions item ${index + 1} must be an object.`);
+        }
         const record = item as Record<string, unknown>;
         const ghostId = typeof record.ghostId === "string" ? record.ghostId.trim() : "";
         const kind = typeof record.kind === "string" ? record.kind.trim() : "";
-        if (!ghostId || !VALID_KINDS.has(kind)) continue;
+        if (!ghostId || !VALID_KINDS.has(kind)) {
+            throw new Error(`flyflor_ghost_decisions item ${index + 1} is invalid.`);
+        }
         out.push({ ghostId, kind: kind as GhostDecision["kind"] });
     }
     return out;

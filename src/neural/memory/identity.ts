@@ -22,14 +22,9 @@ export function parseIdentityAppends(rawText: string, maxAppends = 4): IdentityA
     let dropped = 0;
     const text = rawText.replace(APPEND_BLOCK, (_block, rawJson: string) => {
         const parsed = readAppends(rawJson);
-        if (!parsed) {
-            dropped += 1;
-            return "";
-        }
         for (const item of parsed) {
             if (candidates.length >= maxAppends) {
-                dropped += 1;
-                continue;
+                throw new Error(`flyflor_identity_append exceeds max appends: ${maxAppends}.`);
             }
             candidates.push(item);
         }
@@ -38,24 +33,30 @@ export function parseIdentityAppends(rawText: string, maxAppends = 4): IdentityA
     return { candidates, text: text.trim(), dropped };
 }
 
-function readAppends(rawJson: string): IdentityAppendCandidate[] | undefined {
-    let payload: unknown;
-    try {
-        payload = JSON.parse(rawJson);
-    } catch {
-        return undefined;
+function readAppends(rawJson: string): IdentityAppendCandidate[] {
+    const payload = JSON.parse(rawJson) as unknown;
+    if (!Array.isArray(payload)) {
+        throw new Error("flyflor_identity_append must be a JSON array.");
     }
-    if (!Array.isArray(payload)) return undefined;
     const out: IdentityAppendCandidate[] = [];
-    for (const item of payload) {
-        if (!item || typeof item !== "object") continue;
+    for (const [index, item] of payload.entries()) {
+        if (!item || typeof item !== "object") {
+            throw new Error(`flyflor_identity_append item ${index + 1} must be an object.`);
+        }
         const record = item as Record<string, unknown>;
         const kind = typeof record.kind === "string" ? record.kind.trim() : "";
         const contentRaw = typeof record.content === "string" ? record.content.trim() : "";
-        if (!VALID_KINDS.has(kind) || !contentRaw) continue;
-        const content = contentRaw.length > MAX_CONTENT_LEN ? contentRaw.slice(0, MAX_CONTENT_LEN) : contentRaw;
-        const confidenceRaw =
-            typeof record.confidence === "number" && Number.isFinite(record.confidence) ? record.confidence : 1;
+        if (!VALID_KINDS.has(kind) || !contentRaw) {
+            throw new Error(`flyflor_identity_append item ${index + 1} is invalid.`);
+        }
+        if (contentRaw.length > MAX_CONTENT_LEN) {
+            throw new Error(`flyflor_identity_append item ${index + 1} exceeds ${MAX_CONTENT_LEN} characters.`);
+        }
+        const content = contentRaw;
+        if (typeof record.confidence !== "number" || !Number.isFinite(record.confidence)) {
+            throw new Error(`flyflor_identity_append item ${index + 1} requires numeric confidence.`);
+        }
+        const confidenceRaw = record.confidence;
         const confidence = Math.max(0, Math.min(1, confidenceRaw));
         out.push({ kind: kind as IdentityKind, content, confidence });
     }

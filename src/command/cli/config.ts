@@ -916,8 +916,8 @@ const CHANNEL_SETUP_SPECS: ChannelSetupSpec[] = [
         configKey: Channel.Mattermost,
         label: "Mattermost",
         intro: [
-            "1. Copy the Mattermost base URL and bot token.",
-            "2. Flyflor uses the bot token to push replies back to the channel.",
+            "1. Copy the Mattermost base URL, bot token, and outgoing webhook token.",
+            "2. Flyflor validates the webhook token before dispatching inbound messages.",
         ],
         fields: [
             {
@@ -934,14 +934,22 @@ const CHANNEL_SETUP_SPECS: ChannelSetupSpec[] = [
                 required: true,
                 help: "The Mattermost bot token.",
             },
+            {
+                key: "webhookToken",
+                kind: "password",
+                message: "Outgoing webhook token",
+                required: true,
+                help: "The token configured on the Mattermost outgoing webhook or slash command.",
+            },
         ],
         toConfig(values) {
             const baseUrl = asString(values.baseUrl);
             const botToken = asString(values.botToken);
-            if (!baseUrl || !botToken) {
+            const webhookToken = asString(values.webhookToken);
+            if (!baseUrl || !botToken || !webhookToken) {
                 return undefined;
             }
-            return { baseUrl, botToken };
+            return { baseUrl, botToken, webhookToken };
         },
     },
     {

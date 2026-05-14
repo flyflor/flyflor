@@ -149,9 +149,7 @@ export class PluginRunner {
         try {
             await handle.writeStdin(`${JSON.stringify(spec.request)}\n`);
         } catch (err) {
-            try {
-                handle.kill("SIGKILL");
-            } catch {}
+            killHandle(handle, "SIGKILL");
             const msg = err instanceof Error ? err.message : String(err);
             this.publish(RuntimeEventType.PluginInvokeFailed, {
                 plugin: spec.plugin.name,
@@ -163,9 +161,7 @@ export class PluginRunner {
         let timedOut = false;
         const killTimer = setTimeout(() => {
             timedOut = true;
-            try {
-                handle.kill("SIGKILL");
-            } catch {}
+            killHandle(handle, "SIGKILL");
         }, timeoutMs);
         if (typeof (killTimer as { unref?: () => void }).unref === "function") {
             (killTimer as { unref: () => void }).unref();
@@ -174,7 +170,7 @@ export class PluginRunner {
         const [stdoutBuf, stderrBuf, exitCode] = await Promise.all([
             collectBounded(handle.stdout, this.maxOutputBytes),
             collectBounded(handle.stderr, this.maxOutputBytes),
-            handle.exited.catch(() => null),
+            handle.exited,
         ]);
         clearTimeout(killTimer);
 
@@ -270,11 +266,7 @@ export class PluginRunner {
 
     private async safeApprove(spec: PluginInvocationSpec): Promise<boolean> {
         if (!this.approve) return false;
-        try {
-            return Boolean(await this.approve(spec));
-        } catch {
-            return false;
-        }
+        return Boolean(await this.approve(spec));
     }
 
     private fail(started: number, error: string): PluginInvocationResult {
@@ -293,9 +285,7 @@ export class PluginRunner {
         type: (typeof RuntimeEventType)[keyof typeof RuntimeEventType],
         payload: Record<string, unknown>,
     ): void {
-        try {
-            this.events.publish(event(type, payload));
-        } catch {}
+        this.events.publish(event(type, payload));
     }
 }
 
@@ -350,20 +340,16 @@ async function collectBounded(
                     total = maxBytes;
                 }
                 truncated = true;
-                try {
-                    await reader.cancel();
-                } catch {}
+                await reader.cancel();
                 break;
             }
             chunks.push(value);
             total += value.byteLength;
         }
-    } catch {
-        // best-effort
+    } catch (error) {
+        throw error instanceof Error ? error : new Error(String(error));
     } finally {
-        try {
-            reader.releaseLock();
-        } catch {}
+        reader.releaseLock();
     }
     const merged = new Uint8Array(total);
     let off = 0;
@@ -372,6 +358,10 @@ async function collectBounded(
         off += c.byteLength;
     }
     return { text: new TextDecoder().decode(merged), truncated };
+}
+
+function killHandle(handle: PluginSpawnHandle, signal?: string | number): void {
+    handle.kill(signal);
 }
 
 function defaultSpawn(input: {
@@ -400,9 +390,7 @@ function defaultSpawn(input: {
             stdinSink.end?.();
         },
         kill: (signal) => {
-            try {
-                child.kill(signal as never);
-            } catch {}
+            child.kill(signal as never);
         },
     };
 }

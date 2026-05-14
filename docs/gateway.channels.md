@@ -10,7 +10,7 @@ Gateway 是 Flyflor 对外通讯的唯一入口：归一化 22 种 channel 入�
 - `src/agent/gateway/channels/index.ts` — channel adapter 工厂
 - `src/agent/gateway/channels/types.ts` — `ChannelAdapter` 与 `MessageDispatcher` 接口
 - `src/agent/gateway/channels/status.ts` — registry / status snapshot
-- `src/agent/gateway/channels/api.ts` / `stdio.ts` / `webhook.ts` / `weixin.ilink.ts` / `telegram.ts` / `discord.ts` / `feishu.ts` / `line.ts` / `http.platforms.ts`
+- `src/agent/gateway/channels/api.ts` / `stdio.ts` / `webhook.ts` / `weixin.ilink.ts` / `telegram.ts` / `discord.ts` / `feishu.ts` / `bluebubbles.ts` / `slack.ts` / `line.ts` / `mattermost.ts` / `http.platforms.ts`
 - `src/protocol/contracts/enums.ts` — `Channel` enum
 - `src/protocol/messages/types.ts` — `GatewayMessage` / `GatewayReply`
 
@@ -26,16 +26,16 @@ Gateway 是 Flyflor 对外通讯的唯一入口：归一化 22 种 channel 入�
 | Telegram | `telegram` | `TelegramAdapter` | ✅ webhook + bot |
 | Discord | `discord` | `DiscordInteractionAdapter` | ✅ interactions |
 | Feishu | `feishu` | `FeishuAdapter` | ✅ webhook |
-| BlueBubbles / iMessage | `bluebubbles` / `imessage` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| BlueBubbles / iMessage | `bluebubbles` / `imessage` | `BlueBubblesAdapter` | ✅ password 校验 + attachments + 群组识别 |
 | DingTalk | `dingtalk` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | Email | `email` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | Home Assistant | `homeassistant` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | Line | `line` | `LineAdapter` | ✅ HMAC 签名 + replyToken 回注 |
-| Mattermost | `mattermost` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Mattermost | `mattermost` | `MattermostAdapter` | ✅ outgoing webhook / slash command token 校验 + response JSON |
 | Matrix | `matrix` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | QQ | `qq` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | Signal | `signal` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
-| Slack | `slack` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Slack | `slack` | `SlackAdapter` | ✅ HMAC 签名 + challenge + files |
 | SMS | `sms` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | WeCom | `wecom` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 | WhatsApp | `whatsapp` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
@@ -122,7 +122,7 @@ interface GatewayReply {
 
 ## 风险点 / 已知缺口
 
-- 大量 channel 仍共用 `HttpPlatformAdapter` 通用骨架，**未完成厂商签名校验 / 富媒体 / 群组识别**；Line 已独立适配。
+- 大量 channel 仍共用 `HttpPlatformAdapter` 通用骨架，**未完成厂商签名校验 / 富媒体 / 群组识别**；Line 与 Mattermost 已独立适配。
 - TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；后续仍需补真实 gateway 事件订阅。
 - `gateway start/stop/restart` 已有 daemon helper；跨平台服务安装和长期运行仍需真实环境验证。
 - `MessageDispatcher` 仅是单进程；多副本部署时缺消息去重与幂等键。
@@ -134,5 +134,6 @@ interface GatewayReply {
 - `tests/gateway.daemon.test.ts`
 - `tests/gateway.dedup.test.ts`
 - `tests/channels.bluebubbles.test.ts`
+- `tests/channels.mattermost.test.ts`
 - `tests/channels.slack.test.ts`
 - `tests/channels.telegram.test.ts`

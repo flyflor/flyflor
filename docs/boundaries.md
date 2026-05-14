@@ -250,6 +250,8 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 事件必须 JSON 可序列化；payload 不携带密钥 / `.env` / 未脱敏 header。
 - 大 payload 必须摘要化并提供 debug 开关。
 - 事件必须在无 UI 环境可消费。
+- 禁止吞错：不得写空 `catch`、不得把异常静默转换为默认结果、不得在 provider / MCP / plugin / shell / worker / memory parse 链路里自动 fallback 到另一条路径。确有兼容分支时必须是显式配置、显式事件、显式错误边界，不能掩盖原始异常。
+- 审计、后台任务、清理任务也必须暴露失败：可以发布失败事件，但发布后仍需抛出或让 `flush()` / 调用方拿到 rejected promise。遇到坏数据、坏 schema、坏 JSON，直接修提示词、协议或数据，不生成默认业务判断。
 
 ## 13. 开发检查
 

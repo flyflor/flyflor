@@ -37,45 +37,31 @@ export class InFlightTracker {
     }
 
     async markEnd(requestId: string): Promise<void> {
-        try {
-            await unlink(this.fileFor(requestId));
-        } catch {
-            // best-effort：文件已被清理或从未写入都不阻断主流程。
-        }
+        await unlink(this.fileFor(requestId));
     }
 
     async recoverOrphans(): Promise<InFlightRecord[]> {
-        let entries: string[];
-        try {
-            entries = await readdir(this.dir);
-        } catch {
-            return [];
-        }
+        await mkdir(this.dir, { recursive: true });
+        const entries = await readdir(this.dir);
         const out: InFlightRecord[] = [];
         for (const name of entries) {
             if (!name.endsWith(".json")) continue;
             const path = join(this.dir, name);
-            try {
-                const text = await readFile(path, "utf8");
-                const parsed = JSON.parse(text) as InFlightRecord;
-                if (
-                    parsed &&
-                    typeof parsed.requestId === "string" &&
-                    typeof parsed.userId === "string" &&
-                    typeof parsed.channelId === "string" &&
-                    typeof parsed.originalUserMessage === "string" &&
-                    typeof parsed.startedAtMs === "number"
-                ) {
-                    out.push(parsed);
-                }
-            } catch {
-                // 损坏文件直接跳过；下面 unlink 会清掉。
+            const text = await readFile(path, "utf8");
+            const parsed = JSON.parse(text) as InFlightRecord;
+            if (
+                parsed &&
+                typeof parsed.requestId === "string" &&
+                typeof parsed.userId === "string" &&
+                typeof parsed.channelId === "string" &&
+                typeof parsed.originalUserMessage === "string" &&
+                typeof parsed.startedAtMs === "number"
+            ) {
+                out.push(parsed);
+            } else {
+                throw new Error(`Malformed inflight record: ${path}`);
             }
-            try {
-                await unlink(path);
-            } catch {
-                // ignore
-            }
+            await unlink(path);
         }
         return out;
     }

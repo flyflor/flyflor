@@ -325,12 +325,15 @@ export function renderBlackboardRoutePrompt(input: BlackboardRoutePromptInput): 
 }
 
 export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeInput): string {
-    // 必要提示词：worker 会把该 JSON 作为 ModelRole.User 输入；字段说明与约束必须留在模板。
+    // 必要提示词：worker 会把该 JSON 作为 ModelRole.User 输入；字段说明由模板承载，输出 schema 与约束由 manifest metadata 供给。
+    const protocolSpec = requiredBlackboardWorkerEnvelopeProtocolSpec();
     return renderTemplate(requiredTemplates().blackboardWorkerEnvelope.content, {
+        constraintsJson: promptJson(protocolSpec.constraints),
         contractJson: promptJson(input.contract),
         convergencePolicyJson: promptJson(input.convergencePolicy),
         currentRoundStepsJson: promptJson(input.currentRoundSteps),
         discussionPlanJson: promptJson(input.discussionPlan),
+        expectedOutputJson: promptJson(protocolSpec.expectedOutput),
         goalJson: promptJson(input.goal),
         minRoundsJson: promptJson(input.minRounds),
         participantJson: promptJson(input.participant),
@@ -338,6 +341,14 @@ export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeIn
         previousStepsJson: promptJson(input.previousSteps),
         roundJson: promptJson(input.round),
     });
+}
+
+function requiredBlackboardWorkerEnvelopeProtocolSpec() {
+    const spec = PROMPT_TEMPLATE_DEFINITIONS.blackboardWorkerEnvelope.protocolSpec;
+    if (!spec) {
+        throw new Error("Missing blackboard worker protocol spec.");
+    }
+    return spec;
 }
 
 export function renderBlackboardWorkerSystemPrompt(input: BlackboardWorkerSystemPromptInput): string {
@@ -732,6 +743,8 @@ function diffPromptTemplateManifest(actual: PromptTemplateBundleManifest): strin
         if (
             actualEntry.key !== expectedEntry.key ||
             actualEntry.filename !== expectedEntry.filename ||
+            actualEntry.protocol !== expectedEntry.protocol ||
+            !sameProtocolSpec(actualEntry.protocolSpec, expectedEntry.protocolSpec) ||
             !sameStringArray(actualEntry.requiredPlaceholders, expectedEntry.requiredPlaceholders)
         ) {
             return `manifest template entry ${index} does not match runtime definition for ${expectedEntry.key}`;
@@ -745,6 +758,16 @@ function sameStringArray(left: readonly string[] | undefined, right: readonly st
         return false;
     }
     return left.every((item, index) => item === right[index]);
+}
+
+function sameProtocolSpec(
+    left: { constraints: readonly string[]; expectedOutput: readonly string[] } | undefined,
+    right: { constraints: readonly string[]; expectedOutput: readonly string[] } | undefined,
+): boolean {
+    if (!left || !right) {
+        return left === right;
+    }
+    return sameStringArray(left.expectedOutput, right.expectedOutput) && sameStringArray(left.constraints, right.constraints);
 }
 
 function promptJson(value: unknown): string {

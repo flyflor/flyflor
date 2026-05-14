@@ -102,7 +102,7 @@ interface SkillUsage {
 
 - 自动选择仍主要依赖本地 `skill_usage.summary.json`，还没有 embedding / 向量召回参与。
 - promotion 主要消费显式意图和 cluster 证据，尚未做更细粒度的人机协同确认流。
-- skill 模板虽然已有 schema 兼容检查，但安装包的内容漂移仍需靠 `validate` / `doctor` 兜底。
+- skill 模板已有 schema 兼容检查；安装包内容漂移必须由 `validate` / `doctor` 明示报错。
 
 ## 相关测试
 

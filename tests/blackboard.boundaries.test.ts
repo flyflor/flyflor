@@ -186,7 +186,7 @@ describe("Blackboard control boundary", () => {
                 previousSteps: [],
                 round: 1,
             }),
-        ) as { constraints: string[]; expectedOutput: string[]; phase: string };
+        ) as { constraints: string[]; expectedOutput: string[]; phase: string; protocol?: string };
 
         expect(routePrompt).toContain("Treat worker selection as a small game");
         expect(routePrompt).toContain("Do not rely on any built-in role catalog");
@@ -199,6 +199,7 @@ describe("Blackboard control boundary", () => {
         expect(workerPrompt).toContain("Read currentRoundSteps before writing");
         expect(workerPrompt).toContain("1–3 public entries");
         expect(workerPrompt).toContain("not a log line");
+        expect(envelope.protocol).toBeUndefined();
         expect(envelope.phase).toBe("respond-to-upstream-and-propose");
         expect(envelope.expectedOutput).toContain("proposal");
         expect(envelope.constraints).toEqual(

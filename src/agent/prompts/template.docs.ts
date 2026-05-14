@@ -42,16 +42,21 @@ export function renderPromptTemplatesDoc(): string {
     lines.push(
         "- Runtime checks the manifest version first, then reads each template by filename; missing files, empty files, and stale versions all fail with a reinstall hint.",
     );
-    lines.push("- The manifest also records each template key, runtime filename, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.");
+    lines.push(
+        "- The manifest also records each template key, runtime filename, protocol metadata, protocol-specific envelope data, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.",
+    );
+    lines.push(
+        "- `blackboard.worker.envelope.md` keeps its output schema and constraints in manifest metadata, then renders them into the JSON envelope at runtime.",
+    );
     lines.push("");
     lines.push("## Template Catalog");
     lines.push("");
-    lines.push("| Template | Runtime File | Caller | Purpose | Required Placeholders |");
-    lines.push("| --- | --- | --- | --- | --- |");
+    lines.push("| Template | Runtime File | Caller | Protocol | Purpose | Required Placeholders |");
+    lines.push("| --- | --- | --- | --- | --- | --- |");
     for (const key of PROMPT_TEMPLATE_ORDER) {
         const spec = PROMPT_TEMPLATE_DEFINITIONS[key];
         lines.push(
-            `| \`${spec.filename}\` | \`${spec.filename}\` | \`${spec.callSite}\` | ${escapeTableCell(spec.summary)} | ${formatPlaceholders(spec.requiredPlaceholders)} |`,
+            `| \`${spec.filename}\` | \`${spec.filename}\` | \`${spec.callSite}\` | ${formatProtocol(spec.protocol)} | ${escapeTableCell(spec.summary)} | ${formatPlaceholders(spec.requiredPlaceholders)} |`,
         );
     }
     lines.push("");
@@ -77,7 +82,7 @@ export function renderPromptTemplatesDoc(): string {
     lines.push("flowchart LR");
     lines.push('    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/prompts/"]');
     lines.push('    Userdir -- runtime override --> Render["render functions"]');
-    lines.push('    Builtin -- fallback --> Render');
+    lines.push('    Builtin -- canonical --> Render');
     lines.push("```");
     lines.push("");
     lines.push("- A same-named file in the user directory overrides the built-in template; the install script syncs the bundle and manifest together.");
@@ -135,6 +140,10 @@ function formatPlaceholders(placeholders: readonly string[]): string {
         return "—";
     }
     return placeholders.map((item) => `\`${item}\``).join(" / ");
+}
+
+function formatProtocol(protocol: string | undefined): string {
+    return protocol ? `\`${protocol}\`` : "—";
 }
 
 function escapeTableCell(text: string): string {

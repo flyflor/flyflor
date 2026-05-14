@@ -206,24 +206,20 @@ function renderEpisodeBlock(episode: EpisodeRecord): string {
 }
 
 export function parseConsolidationDecision(raw: string): ConsolidationDecision {
-    const fallback: ConsolidationDecision = {
-        decision: ConsolidationDecisionKind.Reinforce,
-        confidence: 0,
-        rationale: "parse-failed",
-    };
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) return fallback;
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-        return fallback;
+    if (start < 0 || end <= start) {
+        throw new Error("Consolidation output did not contain a JSON object.");
     }
-    if (!isRecord(parsed)) return fallback;
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    if (!isRecord(parsed)) {
+        throw new Error("Consolidation output JSON must be an object.");
+    }
     const decision = normaliseDecision(parsed.decision);
-    if (!decision) return fallback;
-    const confidence = clamp01(toNumber(parsed.confidence, 0));
+    if (!decision) {
+        throw new Error("Consolidation output has an unknown decision.");
+    }
+    const confidence = clamp01(readNumber(parsed.confidence, "confidence"));
     const summary =
         typeof parsed.summary === "string" && parsed.summary.trim().length > 0
             ? parsed.summary.trim().slice(0, 500)
@@ -245,13 +241,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
-function toNumber(value: unknown, fallback: number): number {
+function readNumber(value: unknown, field: string): number {
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
         const n = Number(value);
-        return Number.isFinite(n) ? n : fallback;
+        if (Number.isFinite(n)) return n;
     }
-    return fallback;
+    throw new Error(`Consolidation output ${field} must be a finite number.`);
 }
 
 function clamp01(value: number): number {

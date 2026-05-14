@@ -310,7 +310,7 @@ describe("PluginRunner", () => {
         expect(r.error).toBe("spawn-died");
     });
 
-    test("[chaos] approve callback throws → treated as denial", async () => {
+    test("[chaos] approve callback throws → surfaces the error", async () => {
         const sink = new CollectSink();
         const runner = new PluginRunner({
             policy: policy(ToolApprovalMode.Ask),
@@ -321,12 +321,10 @@ describe("PluginRunner", () => {
             },
             spawn: () => fakeSpawn(),
         });
-        const r = await runner.invoke(SPEC);
-        expect(r.ok).toBe(false);
-        expect(sink.types()).toContain(RuntimeEventType.SandboxToolApprovalDenied);
+        await expect(runner.invoke(SPEC)).rejects.toThrow("approve-boom");
     });
 
-    test("[chaos] events sink throws → invocation still completes", async () => {
+    test("[chaos] events sink throws → surfaces the error", async () => {
         const runner = new PluginRunner({
             policy: policy(),
             events: {
@@ -337,9 +335,7 @@ describe("PluginRunner", () => {
             allowedCommands: ["bun"],
             spawn: () => fakeSpawn({ stdout: `${JSON.stringify({ ok: 1 })}\n` }),
         });
-        const r = await runner.invoke(SPEC);
-        expect(r.ok).toBe(true);
-        expect(r.response).toEqual({ ok: 1 });
+        await expect(runner.invoke(SPEC)).rejects.toThrow("sink-down");
     });
 
     test("[chaos] enormous stdout is truncated", async () => {

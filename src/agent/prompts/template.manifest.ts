@@ -1,6 +1,13 @@
+import { BlackboardWorkerProtocol } from "../../protocol/contracts/index.ts";
+
 export const PROMPT_TEMPLATE_BUNDLE_VERSION = 2;
 
 export const PROMPT_TEMPLATE_MANIFEST_FILE = "template.manifest.json";
+
+export interface PromptTemplateProtocolSpec {
+    expectedOutput: readonly string[];
+    constraints: readonly string[];
+}
 
 export const PROMPT_TEMPLATE_ORDER = [
     "askSchema",
@@ -34,6 +41,8 @@ export type PromptTemplateKey = (typeof PROMPT_TEMPLATE_ORDER)[number];
 export interface PromptTemplateDefinition {
     callSite: string;
     filename: string;
+    protocol?: string;
+    protocolSpec?: PromptTemplateProtocolSpec;
     requiredPlaceholders: readonly string[];
     summary: string;
 }
@@ -41,6 +50,8 @@ export interface PromptTemplateDefinition {
 export interface PromptTemplateManifestEntry {
     key: PromptTemplateKey;
     filename: string;
+    protocol?: string;
+    protocolSpec?: PromptTemplateProtocolSpec;
     requiredPlaceholders: readonly string[];
 }
 
@@ -83,12 +94,38 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
     blackboardWorkerEnvelope: {
         callSite: "renderBlackboardWorkerEnvelope",
         filename: "blackboard.worker.envelope.md",
+        protocol: BlackboardWorkerProtocol.V1,
+        protocolSpec: {
+            expectedOutput: [
+                "inputSummary",
+                "outputSummary",
+                "newFacts",
+                "blockers",
+                "risk",
+                "questions",
+                "answers",
+                "agreement",
+                "outcome",
+                "openIssues",
+                "proposal",
+                "discussion",
+            ],
+            constraints: [
+                "no-tool-execution",
+                "no-long-term-memory-write",
+                "surface-blockers",
+                "write-public-discussion-as-dialogue",
+                "answer-current-round-peer-questions",
+            ],
+        },
         requiredPlaceholders: [
+            "constraintsJson",
             "contractJson",
             "convergencePolicyJson",
             "currentRoundStepsJson",
             "discussionPlanJson",
             "goalJson",
+            "expectedOutputJson",
             "minRoundsJson",
             "participantJson",
             "phaseJson",
@@ -223,6 +260,8 @@ export const PROMPT_TEMPLATE_BUNDLE_MANIFEST: PromptTemplateBundleManifest = {
         return {
             key,
             filename: spec.filename,
+            ...(spec.protocol ? { protocol: spec.protocol } : {}),
+            ...(spec.protocolSpec ? { protocolSpec: spec.protocolSpec } : {}),
             requiredPlaceholders: [...spec.requiredPlaceholders],
         };
     }),

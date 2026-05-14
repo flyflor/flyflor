@@ -2,7 +2,7 @@
  * 审计日志事件 sink：把关键 sandbox / mcp / route 事件追加写入 JSONL 文件。
  *
  * 设计约束：
- * - **best-effort**：写入失败只 warn 不 throw（审计是辅助，不能阻塞运行时）；
+ * - 写入失败必须抛错；审计不可静默丢失。
  * - **append-only**：每行一条 JSON，便于离线 grep / tail；
  * - **零依赖**：仅用 Bun.write 和 node:fs.appendFile，bun --compile 安全；
  * - **白名单驱动**：只持久化关键事件（详见 AUDITED_EVENTS），噪声事件丢弃；
@@ -26,7 +26,6 @@ export const AUDITED_EVENTS: ReadonlySet<string> = new Set([
     RuntimeEventType.PluginInvokeEnd,
     RuntimeEventType.PluginInvokeFailed,
     RuntimeEventType.McpToolCallExecuted,
-    RuntimeEventType.ProviderFallbackTriggered,
     RuntimeEventType.ProviderCredentialMissing,
     RuntimeEventType.ProviderRequestFailed,
     RuntimeEventType.ChannelLinkChanged,
@@ -71,8 +70,8 @@ export class FileAuditSink implements EventSink {
             payload: event.payload,
         };
         const line = `${JSON.stringify(record)}\n`;
-        // 链式串行追加：保证写入顺序与发布顺序一致，且不阻塞调用方。
-        this.writeChain = this.writeChain.then(() => this.appendBestEffort(line));
+        // 链式串行追加：保证写入顺序与发布顺序一致；失败保留在 flush() 可见的 promise 上。
+        this.writeChain = this.writeChain.then(() => this.appendStrict(line));
     }
 
     /** 等待当前所有挂起写入完成（测试用 / 优雅停机用）。 */
@@ -80,13 +79,9 @@ export class FileAuditSink implements EventSink {
         await this.writeChain;
     }
 
-    private async appendBestEffort(line: string): Promise<void> {
-        try {
-            await mkdir(dirname(this.filePath), { recursive: true });
-            await appendFile(this.filePath, line, "utf8");
-        } catch (err) {
-            console.warn(`[audit-sink] failed to append: ${String(err)}`);
-        }
+    private async appendStrict(line: string): Promise<void> {
+        await mkdir(dirname(this.filePath), { recursive: true });
+        await appendFile(this.filePath, line, "utf8");
     }
 }
 
@@ -104,7 +99,7 @@ export interface HttpAuditSinkOptions {
     audited?: ReadonlySet<string>;
     /** 注入 now（测试用） */
     now?: () => number;
-    /** 单次请求超时（ms），默认 3000；超时静默丢弃。 */
+    /** 单次请求超时（ms），默认 3000；超时抛错。 */
     timeoutMs?: number;
 }
 
@@ -137,14 +132,14 @@ export class HttpAuditSink implements EventSink {
             payload: event.payload,
         };
         const body = JSON.stringify(record);
-        this.writeChain = this.writeChain.then(() => this.postBestEffort(body));
+        this.writeChain = this.writeChain.then(() => this.postStrict(body));
     }
 
     async flush(): Promise<void> {
         await this.writeChain;
     }
 
-    private async postBestEffort(body: string): Promise<void> {
+    private async postStrict(body: string): Promise<void> {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), this.timeoutMs);
         try {
@@ -155,10 +150,8 @@ export class HttpAuditSink implements EventSink {
                 signal: controller.signal,
             });
             if (!response.ok) {
-                console.warn(`[audit-sink:http] non-2xx ${response.status} from ${this.url}`);
+                throw new Error(`[audit-sink:http] non-2xx ${response.status} from ${this.url}`);
             }
-        } catch (err) {
-            console.warn(`[audit-sink:http] post failed: ${String(err)}`);
         } finally {
             clearTimeout(timer);
         }

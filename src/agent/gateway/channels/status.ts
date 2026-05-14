@@ -179,7 +179,10 @@ function isChannelConfigured(config: GatewayConfig, name: ChannelName, adapter: 
         return hasSecret(config.channels.line.channelAccessToken) && hasSecret(config.channels.line.channelSecret);
     }
     if (name === Channel.Mattermost) {
-        return hasText(config.channels.mattermost.baseUrl) && hasText(config.channels.mattermost.botToken);
+        return (
+            hasText(config.channels.mattermost.webhookToken) ||
+            (hasText(config.channels.mattermost.baseUrl) && hasText(config.channels.mattermost.botToken))
+        );
     }
     if (name === Channel.Matrix) {
         return hasText(config.channels.matrix.homeserverUrl) && hasText(config.channels.matrix.accessToken);
@@ -298,6 +301,7 @@ function missingChannelRequirements(config: GatewayConfig, name: ChannelName): s
             });
         case Channel.Mattermost:
             return missing({
+                webhookToken: config.channels.mattermost.webhookToken,
                 baseUrl: config.channels.mattermost.baseUrl,
                 botToken: config.channels.mattermost.botToken,
             });

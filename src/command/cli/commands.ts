@@ -1953,12 +1953,8 @@ async function resetBuiltInMemory(config: FlyflorConfig): Promise<string[]> {
     ];
     const removed: string[] = [];
     for (const target of targets) {
-        try {
-            await rm(target, { force: true, recursive: true });
-            removed.push(target);
-        } catch {
-            // Best-effort reset; non-removable paths are ignored so the CLI stays non-interactive after confirmation.
-        }
+        await rm(target, { force: true, recursive: true });
+        removed.push(target);
     }
     return removed;
 }

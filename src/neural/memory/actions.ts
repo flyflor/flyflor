@@ -72,10 +72,13 @@ export function parseMemoryActions(rawText: string, maxActions: number): ParsedM
         return "";
     });
 
-    return {
-        actions: actions.filter(isSafeAction).slice(0, Math.max(0, maxActions)),
-        text: text.trim(),
-    };
+    if (actions.length > maxActions) {
+        throw new Error(`flyflor_memory_actions returned ${actions.length} items, max is ${maxActions}.`);
+    }
+    for (const [index, action] of actions.entries()) {
+        assertSafeAction(action, index);
+    }
+    return { actions, text: text.trim() };
 }
 
 export function targetFileForMemoryAction(action: MemoryAction): MarkdownMemoryFile {
@@ -105,18 +108,17 @@ export function kindForMemoryAction(action: MemoryAction): MemoryKind {
 }
 
 function readActions(rawJson: string): MemoryAction[] {
-    try {
-        const payload = JSON.parse(rawJson.trim()) as unknown;
-        if (Array.isArray(payload)) {
-            return payload.filter(isMemoryAction).map(normalizeAction);
-        }
-        if (isRecord(payload) && Array.isArray(payload.actions)) {
-            return payload.actions.filter(isMemoryAction).map(normalizeAction);
-        }
-    } catch {
-        return [];
+    const payload = JSON.parse(rawJson.trim()) as unknown;
+    const items = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.actions) ? payload.actions : null;
+    if (!items) {
+        throw new Error("flyflor_memory_actions must be a JSON array or an object with actions[].");
     }
-    return [];
+    return items.map((item, index) => {
+        if (!isMemoryAction(item)) {
+            throw new Error(`flyflor_memory_actions item ${index + 1} is invalid.`);
+        }
+        return normalizeAction(item);
+    });
 }
 
 function isMemoryAction(value: unknown): value is MemoryAction {
@@ -133,14 +135,13 @@ function isMemoryAction(value: unknown): value is MemoryAction {
     );
 }
 
-function isSafeAction(action: MemoryAction): boolean {
+function assertSafeAction(action: MemoryAction, index: number): void {
     if (action.content.length < 2 || action.content.length > 500) {
-        return false;
+        throw new Error(`flyflor_memory_actions item ${index + 1} has invalid content length.`);
     }
     if (action.content.includes(MEMORY_ACTION_OPEN) || action.content.includes(MEMORY_ACTION_CLOSE)) {
-        return false;
+        throw new Error(`flyflor_memory_actions item ${index + 1} contains nested action tags.`);
     }
-    return true;
 }
 
 function normalizeAction(action: MemoryAction): MemoryAction {

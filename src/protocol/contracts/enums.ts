@@ -168,6 +168,12 @@ export const BlackboardWorkerRole = {} as const;
 
 export type BlackboardWorkerRole = string;
 
+export const BlackboardWorkerProtocol = {
+    V1: "flyflor.blackboard.worker.v1",
+} as const;
+
+export type BlackboardWorkerProtocol = (typeof BlackboardWorkerProtocol)[keyof typeof BlackboardWorkerProtocol];
+
 export const BlackboardWorkerOutcome = {
     Blocked: "blocked",
     Continue: "continue",

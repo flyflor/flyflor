@@ -127,10 +127,7 @@ describe("HotMemoryCompressionWorker", () => {
                 events,
             );
 
-            const result = await worker.drain("u1");
-
-            expect(result.deleted).toBe(0);
-            expect(result.skipped).toBe(1);
+            await expect(worker.drain("u1")).rejects.toThrow("JSON object");
             expect(redis.dropped).toEqual([]);
             expect(brain.listEvents({ userId: "u1", type: MemoryEventType.HotMemoryCompression })).toEqual([]);
             expect(events.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryHotCompressionFailed);

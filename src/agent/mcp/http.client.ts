@@ -184,7 +184,7 @@ function parseSseJson(text: string, expectedId: number): unknown {
 
 function normalizeTools(result: unknown): McpToolDefinition[] {
     if (!isRecord(result) || !Array.isArray(result.tools)) {
-        return [];
+        throw new Error("MCP HTTP tools/list returned invalid tools payload.");
     }
     return result.tools.filter(isToolDefinition).map((tool) => ({
         name: tool.name,
