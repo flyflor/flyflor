@@ -13,7 +13,7 @@
 - `src/agent/worker/blackboard.worker.ts` — 通用模型 worker 注册
 - `src/agent/worker/types.ts` — runtime kind / interaction kind
 - `src/agent/runtime/blackboard.route.ts` — `blackboard.route.md` 调用与 JSON 校验
-- `templates/prompts/blackboard.route.md` / `blackboard.worker.system.md` / `blackboard.decision.md` / `blackboard.advisory.md`
+- `templates/prompts/blackboard.route.md` / `blackboard.worker.envelope.md` / `blackboard.worker.system.md` / `blackboard.decision.md` / `blackboard.advisory.md`
 
 ## 执行模式
 
@@ -54,6 +54,7 @@ stateDiagram-v2
 
 - 默认只注册一个通用模型型 blackboard worker（`BLACKBOARD_MODEL_WORKER_NAME`）。
 - 若 role 没有显式外部 worker，`WorkerManager` 路由到通用模型 worker，并把 role 写入任务信封。
+- 任务信封走 `blackboard.worker.envelope.md` 模板渲染；代码只填入 JSON 数据，不内嵌 worker 可读约束正文。
 - `workers` 数量上限 5；不强制角色名集合，由当前请求语义决定。
 
 ## 一轮黑板的时序

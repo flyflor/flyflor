@@ -94,7 +94,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 运行时不依赖用户机器存在 `node_modules`。
 - 不从依赖包目录读取 schema / wasm / 二进制 / 模板，除非构建明确把它们复制到产物旁。
 - 内部提示词模板必须由安装脚本复制到 `~/.flyflor/prompts` 与 `~/.flyflor/templates/*`；缺失即报错，不写兜底。
-- 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。
+- 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
 - 禁止要求安装 Node.js；开发与发布都以 Bun 为准。
 - 必须启用 `--reject-unresolved`。

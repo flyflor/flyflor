@@ -176,7 +176,7 @@ function isChannelConfigured(config: GatewayConfig, name: ChannelName, adapter: 
         return hasText(config.channels.homeassistant.url) && hasSecret(config.channels.homeassistant.accessToken);
     }
     if (name === Channel.Line) {
-        return hasSecret(config.channels.line.channelAccessToken);
+        return hasSecret(config.channels.line.channelAccessToken) && hasSecret(config.channels.line.channelSecret);
     }
     if (name === Channel.Mattermost) {
         return hasText(config.channels.mattermost.baseUrl) && hasText(config.channels.mattermost.botToken);
@@ -292,7 +292,10 @@ function missingChannelRequirements(config: GatewayConfig, name: ChannelName): s
                 accessToken: config.channels.homeassistant.accessToken,
             });
         case Channel.Line:
-            return missing({ channelAccessToken: config.channels.line.channelAccessToken });
+            return missing({
+                channelAccessToken: config.channels.line.channelAccessToken,
+                channelSecret: config.channels.line.channelSecret,
+            });
         case Channel.Mattermost:
             return missing({
                 baseUrl: config.channels.mattermost.baseUrl,

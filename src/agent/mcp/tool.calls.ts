@@ -44,39 +44,28 @@ export function renderMcpToolCatalog(input: {
     tools: McpToolCatalogEntry[];
     canExecuteTools: boolean;
 }): string {
-    const lines: string[] = [];
     const enabled = input.servers.filter((server) => server.enabled);
-    if (enabled.length === 0) {
-        return "No MCP servers configured.";
-    }
-    lines.push("Enabled MCP servers:");
-    for (const server of enabled) {
-        const target = server.url ?? [server.command, ...(server.args ?? [])].filter(Boolean).join(" ");
-        lines.push(`- ${server.name}: ${target}`);
-    }
-    if (!input.canExecuteTools) {
-        lines.push("");
-        lines.push("MCP tool execution is disabled by sandbox policy.");
-        return lines.join("\n");
-    }
-    if (input.tools.length === 0) {
-        lines.push("");
-        lines.push("No executable MCP tools were discovered.");
-        return lines.join("\n");
-    }
-    lines.push("");
-    lines.push("Available MCP tools:");
-    for (const entry of input.tools) {
-        const description = entry.tool.description ? ` - ${entry.tool.description.replace(/\s+/g, " ")}` : "";
-        lines.push(`- ${entry.server}.${entry.tool.name}${description}`);
-        if (entry.tool.inputSchema !== undefined) {
-            lines.push(`  inputSchema: ${JSON.stringify(entry.tool.inputSchema)}`);
-        }
-    }
-    lines.push("");
-    lines.push("To request MCP execution, return only this structured block and wait for tool results:");
-    lines.push(`${MCP_CALL_OPEN}{"calls":[{"server":"server-name","tool":"tool-name","input":{}}]}${MCP_CALL_CLOSE}`);
-    return lines.join("\n");
+    return JSON.stringify(
+        {
+            mcpCatalog: {
+                canExecuteTools: input.canExecuteTools,
+                servers: enabled.map((server) => ({
+                    name: server.name,
+                    target: server.url ?? [server.command, ...(server.args ?? [])].filter(Boolean).join(" "),
+                })),
+                tools: input.canExecuteTools
+                    ? input.tools.map((entry) => ({
+                          server: entry.server,
+                          name: entry.tool.name,
+                          description: entry.tool.description?.replace(/\s+/g, " "),
+                          inputSchema: entry.tool.inputSchema,
+                      }))
+                    : [],
+            },
+        },
+        null,
+        2,
+    );
 }
 
 /**
@@ -109,10 +98,9 @@ function summarizeMcpResultPayload(raw: unknown): unknown {
 }
 
 export function renderMcpToolResults(executions: McpToolCallExecution[]): string {
-    return [
-        "MCP tool results:",
-        JSON.stringify(
-            {
+    return JSON.stringify(
+        {
+            mcpToolResults: {
                 results: executions.map((execution) => ({
                     server: execution.call.server,
                     tool: execution.call.tool,
@@ -121,11 +109,10 @@ export function renderMcpToolResults(executions: McpToolCallExecution[]): string
                     error: execution.error,
                 })),
             },
-            null,
-            2,
-        ),
-        "Use these tool results to answer the original user request. Do not request the same tool again unless needed.",
-    ].join("\n");
+        },
+        null,
+        2,
+    );
 }
 
 export function hasMcpCallProtocolText(text: string): boolean {

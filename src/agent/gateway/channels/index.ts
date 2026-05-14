@@ -5,6 +5,7 @@ import { BlueBubblesAdapter } from "./bluebubbles.ts";
 import { DiscordInteractionAdapter } from "./discord.ts";
 import { FeishuAdapter } from "./feishu.ts";
 import { HttpPlatformAdapter } from "./http.platforms.ts";
+import { LineAdapter } from "./line.ts";
 import { SlackAdapter } from "./slack.ts";
 import { StdioAdapter } from "./stdio.ts";
 import { TelegramAdapter } from "./telegram.ts";
@@ -67,6 +68,21 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
                 new SlackAdapter({
                     botToken: config.channels.slack.botToken,
                     signingSecret: config.channels.slack.signingSecret,
+                }),
+            );
+            continue;
+        }
+
+        if (
+            name === Channel.Line &&
+            typeof config.channels.line.channelAccessToken === "string" &&
+            typeof config.channels.line.channelSecret === "string"
+        ) {
+            adapters.set(
+                name,
+                new LineAdapter({
+                    channelAccessToken: config.channels.line.channelAccessToken,
+                    channelSecret: config.channels.line.channelSecret,
                 }),
             );
             continue;
@@ -211,13 +227,7 @@ function createHttpPlatformAdapter(name: ChannelName, config: GatewayConfig): Ch
                 replyUrl,
             });
         case Channel.Line:
-            return new HttpPlatformAdapter(name, {
-                channelAccessToken:
-                    typeof config.channels.line.channelAccessToken === "string"
-                        ? config.channels.line.channelAccessToken
-                        : undefined,
-                replyUrl,
-            });
+            return new HttpPlatformAdapter(name, { replyUrl });
         case Channel.Mattermost:
             return new HttpPlatformAdapter(name, {
                 baseUrl: config.channels.mattermost.baseUrl,

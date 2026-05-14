@@ -14,7 +14,7 @@ Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / S
 - `src/agent/mcp/schema.validate.ts` — tool inputSchema 轻量校验
 - `src/agent/runtime/runtime.module.ts` — catalog TTL/LRU 缓存 + 工具循环
 - `src/agent/prompts/index.ts` — `renderMcpContextPrompt`
-- `templates/prompts/mcp.tool.protocol.md` — 模型协议提示
+- `templates/prompts/mcp.context.md` — 模型协议提示与工具目录说明
 
 ## 传输形态
 
@@ -71,12 +71,10 @@ sequenceDiagram
 模型在同一轮回复内插入：
 
 ````markdown
-```flyflor_mcp_calls
-[{ "server": "filesystem", "tool": "read", "args": { "path": "./README.md" } }]
-```
+<flyflor_mcp_calls>{"calls":[{"server":"filesystem","tool":"read","input":{"path":"./README.md"}}]}</flyflor_mcp_calls>
 ````
 
-代码校验 `server / tool` 是否在 catalog，并在调用前对 `args` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。
+代码校验 `server / tool` 是否在 catalog，并在调用前对 `input` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。工具目录和工具结果回灌只由代码输出 JSON 数据；调用规则和结果使用说明统一写在 `mcp.context.md` 模板里。
 
 ## 数据结构
 

@@ -189,6 +189,10 @@ describe("lintPromptTemplates", () => {
             "The following self-described facts about this user and yourself",
             "This is a candidate that may be worth turning into a durable project",
             "This is a repeated MCP tool combination that may be worth turning into a reusable Skill",
+            "write-public-discussion-as-dialogue",
+            "answer-current-round-peer-questions",
+            "To request MCP execution",
+            "Use these tool results to answer the original user request",
         ];
         for (const file of sourceFiles) {
             const body = await readFile(file, "utf8");
