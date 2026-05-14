@@ -148,7 +148,7 @@ describe("Command boundary", () => {
         error.mockRestore();
     });
 
-    test("placeholder commands return success", async () => {
+    test("version command returns success", async () => {
         const log = spyOn(console, "log").mockImplementation(() => {});
 
         const result = await runFlyflorUtilityCommand(["bun", "flyflor", "version"]);
@@ -156,6 +156,20 @@ describe("Command boundary", () => {
         expect(result?.exitCode).toBe(0);
         expect(log).toHaveBeenCalled();
         log.mockRestore();
+    });
+
+    test("memory command surface does not expose provider setup without persistence", () => {
+        const memory = listFlyflorCommandSpecs().find((spec) => spec.name === "memory");
+        const subcommands = memory?.subcommands?.map((spec) => spec.name) ?? [];
+
+        expect(subcommands).toContain("status");
+        expect(subcommands).toContain("reset");
+        expect(subcommands).toContain("retrospective");
+        expect(subcommands).not.toContain("setup");
+
+        const error = spyOn(console, "error").mockImplementation(() => {});
+        expect(parseFlyflorCommand(["bun", "flyflor", "memory", "setup"])).toBe(1);
+        error.mockRestore();
     });
 
     test("root oneshot forwards global chat overrides", async () => {
@@ -191,7 +205,6 @@ describe("Command boundary", () => {
         const providerIds = listProviderChoices().map((choice) => choice.provider);
 
         expect(providerIds).toContain(ModelProviderId.Custom);
-        expect(providerIds).not.toContain(ModelProviderId.Mock);
     });
 
     test("relay protocol choices include openai and anthropic compatibility", () => {

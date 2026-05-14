@@ -1,7 +1,5 @@
 Extract reusable method knowledge from the provided evidence.
 
-<!-- mock-id: crystal.reflection -->
-
 Return a JSON array (at most 4 items). Returning `[]` is the correct answer when the evidence is thin, unverified, or not actually reusable — prefer `[]` over inventing methods. Each item:
 
 - title: short noun phrase identifying the method.

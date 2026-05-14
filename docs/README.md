@@ -16,9 +16,11 @@
 8. [crystal.reflection.md](crystal.reflection.md) — 反思候选 → atom → Gem 升格
 9. [skill.system.md](skill.system.md) — Skill manifest、选择、使用计数、promotion
 10. [prompt.templates.md](prompt.templates.md) — Markdown 模板装配与渲染入口
-11. [cli.commands.md](cli.commands.md) — CLI 命令现状清单
+11. [cli.commands.md](cli.commands.md) — CLI 命令现状清单（含 blackboard TTY 浏览器）
 12. [boundaries.md](boundaries.md) — 工程硬边界与红线
-13. 根目录 [TODO.md](../TODO.md) — 风险点、已知缺口与后续计划
+13. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
+14. [storage.degradation.md](storage.degradation.md) — Redis / SurrealDB 降级为纯本地存储的草案
+15. 根目录 [TODO.md](../TODO.md) — 风险点、已知缺口与后续计划
 
 ## 提案区
 

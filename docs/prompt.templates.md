@@ -1,37 +1,55 @@
-# Prompt 模板系统
+# Prompt Template System
 
-## 一句话定位
+## One-line Summary
 
-所有「让模型按规则做事」的提示词都集中在 `templates/prompts/`，按主题命名 + 语言后缀（`*.md` 英文 / `*.zh.cn.md` 中文）；运行时通过 `src/agent/prompts/index.ts` 的 render 函数装配。
+All model-facing instructions live in `templates/prompts/`, grouped by topic; `*.md` files are the runtime canonical templates.
 
-## 相关代码路径
+## Related Paths
 
-- `src/agent/prompts/index.ts` — 所有 render 入口
-- `templates/prompts/` — 内置模板
-- `scripts/install.templates.ts` — 安装到用户目录
-- `~/.flyflor/prompts/` — 用户覆盖目录
+- `src/agent/prompts/index.ts` - all render entry points
+- `src/agent/prompts/template.manifest.ts` - template bundle version and file contract
+- `src/agent/prompts/template.docs.ts` - docs generator
+- `templates/prompts/` - built-in templates
+- `scripts/install.templates.ts` - install into the user directory
+- `~/.flyflor/prompts/` - user override directory
 
-## 模板清单
+## Bundle Version
 
-| 模板 | 用途 | 调用方 |
-| --- | --- | --- |
-| `runtime.system.md` | runtime 主 system prompt | `renderRuntimeSystemPrompt` |
-| `behavior.priority.md` | 提示词优先级与冲突处理规则（含多问 ask 约定） | `renderBehaviorPriorityInstructions` |
-| `memory.context.md` | 记忆上下文外壳 | `renderMemoryPrompt` |
-| `memory.action.md` | `<flyflor_memory_actions>` 写法 | runtime system 拼接 |
-| `ask.schema.md` | `<flyflor_agent_ask>`、`questions[]`、`<flyflor_ghost_decisions>`、`<flyflor_identity_append>` 写法 | runtime system 拼接 |
-| `memory.consolidation.md` | Consolidation worker 让模型抽 cluster 摘要 | `ConsolidationWorker` |
-| `memory.dream.md` | Dream pass 候选评估 + 三类动作 | `DreamWorker` |
-| `crystal.reflection.md` | 单轮反思抽 symbols / bucket / coordinates | `scheduleReflection` |
-| `feedback.classify.md` | A/B/C/D feedback 分类 | `classifyAndApplyFeedback` |
-| `skill.context.md` | skill 上下文外壳 | `renderSkillContextPrompt` |
-| `mcp.context.md` | MCP catalog 外壳 + 调用协议 | `renderMcpContextPrompt` |
-| `blackboard.route.md` | 路由 LLM：mode + workers + signals | `decideBlackboardRoute` |
-| `blackboard.advisory.md` | 给直接路径加黑板上下文 advisory | `renderBlackboardAdvisoryPrompt` |
-| `blackboard.worker.system.md` | 通用模型 worker system prompt | `BlackboardWorker` |
-| `blackboard.decision.md` | needs-user 结构化 decision prompt | `BlackboardModule.returnDecisionToUser`，runtime 再合成 Ask |
+- Version: `v2`
+- Manifest file: `template.manifest.json`
+- Runtime checks the manifest version first, then reads each template by filename; missing files, empty files, and stale versions all fail with a reinstall hint.
+- The manifest also records each template key, runtime filename, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.
 
-## 装配流程
+## Template Catalog
+
+| Template | Runtime File | Caller | Purpose | Required Placeholders |
+| --- | --- | --- | --- | --- |
+| `ask.schema.md` | `ask.schema.md` | `renderAskSchemaInstructions` | Structured clarifying questions, ghost decisions, and identity append blocks. | — |
+| `behavior.priority.md` | `behavior.priority.md` | `renderBehaviorPriorityInstructions` | Prompt source ordering and conflict resolution rules. | — |
+| `blackboard.advisory.md` | `blackboard.advisory.md` | `renderBlackboardAdvisoryPrompt` | Advisory transcript for direct-path turns that need blackboard context. | `compactRounds` / `elapsedMs` / `reason` / `status` / `turnId` |
+| `blackboard.decision.md` | `blackboard.decision.md` | `BlackboardModule.returnDecisionToUser` | Decision prompt when the board needs user confirmation to close a loop. | `questionCount` / `reason` / `unresolvedIssues` |
+| `blackboard.route.md` | `blackboard.route.md` | `decideBlackboardRoute` | Route planner prompt for the blackboard front door. | `request` |
+| `blackboard.worker.envelope.md` | `blackboard.worker.envelope.md` | `renderBlackboardWorkerEnvelope` | User task envelope for a single blackboard worker participant. | `contractJson` / `convergencePolicyJson` / `currentRoundStepsJson` / `discussionPlanJson` / `goalJson` / `minRoundsJson` / `participantJson` / `phaseJson` / `previousStepsJson` / `roundJson` |
+| `blackboard.worker.system.md` | `blackboard.worker.system.md` | `renderBlackboardWorkerSystemPrompt` | System prompt for a single blackboard worker participant. | `participant` |
+| `crystal.reflection.md` | `crystal.reflection.md` | `ReflectionWorker.dispatch` | Reflection prompt that extracts reusable methods from evidence. | `evidence` |
+| `feedback.classify.md` | `feedback.classify.md` | `classifyAndApplyFeedback` | Feedback classifier that buckets the latest user message. | `currentUserText` / `previousAssistantText` |
+| `memory.action.md` | `memory.action.md` | `renderMemoryActionInstructions` | Durable Markdown memory tool block schema. | — |
+| `memory.consolidation.md` | `memory.consolidation.md` | `ConsolidationWorker` | Episode classification prompt for consolidation. | `episode` |
+| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | Audit-only compression prompt for expiring Redis working memory. | `episodes` |
+| `memory.context.md` | `memory.context.md` | `renderMemoryPrompt` | Memory context wrapper for recent, project, long-term, and global layers. | `hippocampus` / `markdownContent` / `projectMemory` / `retrievedResults` |
+| `memory.dream.md` | `memory.dream.md` | `DreamWorker` | Quiet maintenance prompt for long-term drift, recall, and contradiction work. | `candidates` / `userId` |
+| `memory.project.offer.md` | `memory.project.offer.md` | `renderProjectOfferPrompt` | Runtime nudge for a project candidate awaiting user confirmation. | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memory.skill.offer.md` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | Runtime nudge for a reusable skill candidate awaiting user confirmation. | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
+| `mcp.context.md` | `mcp.context.md` | `renderMcpContextPrompt` | MCP capability wrapper and tool-context listing. | `mcpEntries` |
+| `runtime.ask.continuation.md` | `runtime.ask.continuation.md` | `renderRuntimeAskContinuationPrompt` | Runtime continuation hint for an active pending ask. | `chainDepth` / `choices` / `prompt` / `reason` |
+| `runtime.dormant.resume.md` | `runtime.dormant.resume.md` | `renderRuntimeDormantResumePrompt` | Runtime resume hint after a dormant interval. | `idleBucket` |
+| `runtime.eq.context.md` | `runtime.eq.context.md` | `renderRuntimeEqContextPrompt` | Tone-only emotional context hint. | `ageBucket` / `arousal` / `confidence` / `directive` / `dominance` / `label` / `valence` |
+| `runtime.ghost.hint.md` | `runtime.ghost.hint.md` | `renderRuntimeGhostHintPrompt` | Runtime hint for active unfinished contexts. | `ghostEntries` |
+| `runtime.identity.context.md` | `runtime.identity.context.md` | `renderRuntimeIdentityContextPrompt` | Runtime identity context assembled from live identity entries. | `identityEntries` |
+| `runtime.system.md` | `runtime.system.md` | `renderRuntimeSystemPrompt` | Top-level runtime system prompt assembled for every turn. | `askSchemaInstructions` / `behaviorPriorityInstructions` / `blackboardContext` / `mcpContext` / `memoryActionInstructions` / `memoryContext` / `sandboxSummary` / `skillContext` |
+| `skill.context.md` | `skill.context.md` | `renderSkillContextPrompt` | Skill wrapper prompt that formats loaded SKILL.md entries. | `skillEntries` |
+
+## Assembly Flow
 
 ```mermaid
 flowchart LR
@@ -44,50 +62,58 @@ flowchart LR
     R2 --> Sys
     R3 --> Sys
     R4 --> Sys
-    Sys --> Out["最终 system prompt"]
+    Sys --> Out["Final system prompt"]
 ```
 
-## 安装路径
+## Install Flow
 
 ```mermaid
 flowchart LR
     Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/prompts/"]
-    Userdir -- 运行时优先 --> Render["render 函数"]
-    Builtin -- 兜底 --> Render
+    Userdir -- runtime override --> Render["render functions"]
+    Builtin -- fallback --> Render
 ```
 
-- 用户目录存在同名文件即覆盖内置；运行时模板缺失或缺必需占位会由 `lintPromptTemplates` / `doctor` 报告，安装脚本负责同步内置模板。
-- 中文 locale 自动选 `*.zh.cn.md`，否则回落到 `*.md`。
+- A same-named file in the user directory overrides the built-in template; the install script syncs the bundle and manifest together.
+- Runtime only loads canonical `.md` template files.
+- `*.zh.cn.md` files are audit-only mirrors synced by the install script; they do not enter the runtime bundle, manifest, or lint contract.
 
-## 语言与 locale
+## Data Contract
 
-- locale 来源：`config.runtime.locale` → 操作系统环境（仅识别 `zh*` 视为中文）。
-- locale 不参与业务语义判断，只决定模板文件名。
+Every template must guarantee:
 
-## 数据契约
+1. The model emits structured JSON sections by schema (routing, reflection, feedback, memory actions, dream evaluation, cluster summaries, and so on), while code only validates shape, enums, and ranges.
+2. Template-facing enum values come from `src/protocol/contracts/enums.ts`; add new enums there before updating templates.
+3. Templates must not allow the model to invent undeclared fields; extra fields are always discarded.
 
-每个模板必须保证：
+## Prompt-facing Enums
 
-1. **结构化 JSON 段** 由模型按 schema 输出（路由、反思、feedback、记忆动作、dream 评估、cluster 摘要等），代码只校验 shape / 枚举 / 范围。
-2. 模板对模型说明**枚举值**取自 `src/protocol/contracts/enums.ts`；新增枚举必须先动 enum，再改模板。
-3. 模板**不得**让模型自由扩展未声明字段；冗余字段一律丢弃。
+- `MemoryActionTarget`: `memory` / `self` / `soul` / `user`
+- `MemoryKind`: `candidate` / `conversation-turn` / `fact` / `history` / `profile` / `rule` / `skill` / `summary`
+- `MarkdownMemoryFile`: `MEMORY.md` / `SELF.md` / `SOUL.md` / `USER.md`
+- `AskReason`: `codename-ambiguity` / `codename-create` / `user-intent-unclear` / `blackboard-stalemate` / `policy-decision` / `other`
+- `GhostContextReason`: `ask` / `tool-failure` / `blackboard-cap` / `process-restart`
+- `GhostDecisionKind`: `resume` / `fork` / `fresh`
+- `EqLabel`: `neutral` / `joy` / `anger` / `sadness` / `fear` / `surprise`
 
-## 模型可理解性
+## Model Readability
 
-运行时注入给模型的模板只写模型能直接执行的说明：什么时候使用、输出什么结构、字段含义、冲突时怎么处理。内部路线编号、TODO 编号、阶段名和实现隐喻不得出现在 runtime prompt 中，例如 `LF-R*`、只供工程讨论的“海马体 / 晶体 / Dream”说法。
+Runtime-injected templates should only contain instructions the model can act on directly: when to use them, what structure to emit, what each field means, and how to resolve conflicts. Internal route ids, TODO ids, phase names, and implementation metaphors must not appear in runtime prompts, including `LF-R*` or engineering-only labels such as “hippocampus / crystal / Dream / Gem.”
 
-允许内部编号保留在 `TODO.md`、设计文档、代码注释和测试名里；模型侧模板必须把它们翻译成普通来源名和行为说明，例如“近期激活记忆”“当前项目笔记”“未完成事项”“安静维护阶段”。
+Internal identifiers may stay in `TODO.md`, design docs, code comments, and test names; model-facing templates must translate them into plain source labels and behavior descriptions such as “recently activated memory,” “current project notes,” “open items,” and “quiet maintenance phase.”
 
-## 风险点 / 已知缺口
+## Risks / Known Gaps
 
-- 模板已有 lint：检查必需文件、非空、必需 placeholder，并阻止 runtime prompt 正文暴露内部路线编号或未解释的工程隐喻；仍缺 schema version 和枚举 golden test。
-- 用户模板与内置模板仍可能语义版本不一致；当前只能通过 lint 缺字段，不能判断旧模板是否保留新协议说明。
-- locale 推断仍用环境变量字符串，不走 config provider（与 boundaries「业务配置走 config」原则的边界案例：locale 视为运行时偏好，但仍建议显式配置）。
+- Template lint already checks required files, non-empty content, required placeholders, and unknown prompt files, and it blocks runtime prompt bodies that expose internal route ids or unexplained engineering metaphors; the bundle manifest version and template catalog are validated too.
+- The manifest integrity test compares the canonical templates under `templates/prompts/`; unregistered runtime prompt files must not appear in the directory, and `lintPromptTemplates` performs the same checks in the user directory.
+- `*.zh.cn.md` mirrors do not participate in runtime assembly or manifest comparison; they are for human review and audit only.
+- `template.docs.ts` renders the template matrix and prompt-facing enum snapshot into reviewable documentation, while `scripts/prompt.templates.docs.ts` can generate or check the same output and sync the prompt bundle manifest.
+- Runtime only assembles canonical `.md` files.
 
-## 相关测试
+## Related Tests
 
 - `tests/prompt.lint.test.ts`
-- `tests/prompt.lint.test.ts` 会阻止 `templates/prompts/*.md` 再暴露 `LF-*` 路线编号，以及“海马体 / 晶体 / Dream / Gem”等只供工程讨论的隐喻。
+- `tests/prompt.templates.docs.test.ts`
 - `tests/blackboard.boundaries.test.ts`
 - `tests/eq.prompt.test.ts`
 - `tests/ask.parse.test.ts`

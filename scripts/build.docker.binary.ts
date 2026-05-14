@@ -17,6 +17,7 @@ const subprocess = Bun.spawn(
         "--compile",
         `--target=${target}`,
         "--packages=bundle",
+        "--conditions=browser",
         "--reject-unresolved",
         "--outfile",
         "dist/flyflor-linux",

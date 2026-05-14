@@ -39,9 +39,23 @@ export const MemoryEventType = {
     BehaviorSnapshot: "behavior-snapshot",
     /** LF-R11：用户后续反馈 / 纠正对某条 behavior-snapshot 的结构化证据。 */
     BehaviorCorrection: "behavior-correction",
+    /** Redis 热记忆到期清理前的隔离压缩审计；不进 prompt recall / summary / SurrealDB。 */
+    HotMemoryCompression: "hot-memory-compression",
 } as const;
 
 export type MemoryEventType = (typeof MemoryEventType)[keyof typeof MemoryEventType];
+
+/**
+ * 热记忆压缩触发原因。只描述资源/调度来源，不承载业务语义判断。
+ */
+export const HotMemoryCompressionReason = {
+    ReviewDue: "review-due",
+    CapacityPressure: "capacity-pressure",
+    Manual: "manual",
+} as const;
+
+export type HotMemoryCompressionReason =
+    (typeof HotMemoryCompressionReason)[keyof typeof HotMemoryCompressionReason];
 
 /**
  * `memory_state.status`。状态层的可变枚举，限定 Dream / sweeper 写入面。
@@ -181,6 +195,37 @@ export interface BehaviorCorrectionContent {
     factPreview?: string;
     currentUserTextPreview: string;
     previousAssistantTextPreview: string;
+}
+
+/**
+ * Redis 热记忆压缩审计事件内容。
+ *
+ * 约束：这是短期工作记忆清理记录，不是长期摘要，不生成 prompt atoms，也不作为
+ * SurrealDB / candidate 的默认输入。未来若要把它升为证据，必须走显式 gate。
+ */
+export interface HotMemoryCompressionContent {
+    batchId: string;
+    userId: string;
+    reason: HotMemoryCompressionReason;
+    sourceEpisodeIds: string[];
+    deletedEpisodeIds: string[];
+    missingEpisodeIds: string[];
+    compressedText: string;
+    retainedSignals: string[];
+    sourceStats: {
+        count: number;
+        oldestCreatedAt?: number;
+        newestCreatedAt?: number;
+        minImportance?: number;
+        maxImportance?: number;
+    };
+    isolation: {
+        promptVisible: false;
+        memorySummary: false;
+        surrealCandidate: false;
+        gemCandidate: false;
+    };
+    createdAt: number;
 }
 
 /**

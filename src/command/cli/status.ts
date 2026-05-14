@@ -64,16 +64,16 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
     rows.push(["Config file", (await exists(getFlyflorConfigPath())) ? "ok" : "missing", getFlyflorConfigPath()]);
     rows.push(["Config home", (await exists(config.paths.home)) ? "ok" : "missing", config.paths.home]);
     rows.push(["Workspace", (await exists(config.paths.workspaceDir)) ? "ok" : "missing", config.paths.workspaceDir]);
-    rows.push(["Model provider", config.model.providerId === "mock" ? "warn" : "ok", config.model.providerId]);
+    rows.push(["Model provider", config.model.providerId ? "ok" : "warn", config.model.providerId]);
     rows.push(["Model name", config.model.model ? "ok" : "warn", config.model.model || "empty"]);
     rows.push([
         "Base URL",
-        config.model.provider === "mock" || config.model.baseUrl ? "ok" : "warn",
+        config.model.baseUrl ? "ok" : "warn",
         config.model.baseUrl || "empty",
     ]);
     rows.push([
         "API key",
-        config.model.provider === "mock" || config.model.apiKey ? "ok" : "warn",
+        config.model.apiKey ? "ok" : "warn",
         config.model.apiKey ? "configured" : "empty",
     ]);
     rows.push(["Gateway port", config.gateway.port > 0 ? "ok" : "warn", String(config.gateway.port)]);
@@ -267,7 +267,6 @@ function describeBackgroundScheduler(config: FlyflorConfig): { status: string; d
     const missing: string[] = [];
     if (!config.memory.redis.enabled) missing.push("redis");
     if (!config.memory.crystal.surreal.enabled) missing.push("surreal");
-    if (config.model.provider === "mock") missing.push("model(non-mock)");
     if (missing.length === 0) {
         return { status: "ok", detail: "consolidation+decay+dream+project-cluster enabled" };
     }
@@ -294,6 +293,15 @@ function describeMemoryTuning(config: FlyflorConfig): { status: string; detail: 
     }
     if (tuning.summary.rollingWindowDays !== defaults.summary.rollingWindowDays) {
         changed.push(`summary.rollingWindowDays=${tuning.summary.rollingWindowDays}`);
+    }
+    if (tuning.hotMemoryCompression.enabled !== defaults.hotMemoryCompression.enabled) {
+        changed.push(`hotMemoryCompression.enabled=${tuning.hotMemoryCompression.enabled}`);
+    }
+    if (tuning.hotMemoryCompression.intervalMinutes !== defaults.hotMemoryCompression.intervalMinutes) {
+        changed.push(`hotMemoryCompression.intervalMinutes=${tuning.hotMemoryCompression.intervalMinutes}`);
+    }
+    if (tuning.hotMemoryCompression.batchSize !== defaults.hotMemoryCompression.batchSize) {
+        changed.push(`hotMemoryCompression.batchSize=${tuning.hotMemoryCompression.batchSize}`);
     }
     if (tuning.reconsolidation.embeddingDriftThreshold !== defaults.reconsolidation.embeddingDriftThreshold) {
         changed.push(`reconsolidation.embeddingDriftThreshold=${tuning.reconsolidation.embeddingDriftThreshold}`);
@@ -322,7 +330,7 @@ function describeMemoryTuning(config: FlyflorConfig): { status: string; detail: 
     if (changed.length === 0) {
         return {
             status: "ok",
-            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d, brain archive ${tuning.brainDb.archiveAfterMonths}mo/${tuning.brainDb.archiveIntervalHours}h)`,
+            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d, hot compression ${tuning.hotMemoryCompression.intervalMinutes}m/${tuning.hotMemoryCompression.batchSize}, brain archive ${tuning.brainDb.archiveAfterMonths}mo/${tuning.brainDb.archiveIntervalHours}h)`,
         };
     }
     return { status: "tuned", detail: changed.join("; ") };

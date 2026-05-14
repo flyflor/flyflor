@@ -67,13 +67,29 @@ export class SurrealGraphStore {
     async upsertMemoryNode(input: MemoryNodeInput): Promise<void> {
         if (!this.config.enabled) return;
         await this.initialize();
-        await this.query(`UPSERT memory_node:${ident(input.id)} CONTENT ${literal({ ...input, id: undefined })};`);
+        const content = {
+            recallCount: 0,
+            contradictionCount: 0,
+            lastAccessedAt: input.updatedAt,
+            ...input,
+            id: undefined,
+        };
+        await this.query(`UPSERT memory_node:${ident(input.id)} CONTENT ${literal(content)};`);
     }
 
     async upsertGem(input: GemNodeInput): Promise<void> {
         if (!this.config.enabled) return;
         await this.initialize();
-        await this.query(`UPSERT gem:${ident(input.id)} CONTENT ${literal({ ...input, id: undefined })};`);
+        const content = {
+            recallCount: 0,
+            contradictionCount: 0,
+            lastVerifiedAt: input.updatedAt,
+            status: "active",
+            scopeNote: "",
+            ...input,
+            id: undefined,
+        };
+        await this.query(`UPSERT gem:${ident(input.id)} CONTENT ${literal(content)};`);
     }
 
     async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
@@ -655,6 +671,9 @@ export interface MemoryNodeInput {
     evidenceCount: number;
     importance: number;
     updatedAt: number;
+    recallCount?: number;
+    contradictionCount?: number;
+    lastAccessedAt?: number;
 }
 
 export interface GemNodeInput {
@@ -667,6 +686,11 @@ export interface GemNodeInput {
     support: number;
     protected: boolean;
     updatedAt: number;
+    recallCount?: number;
+    contradictionCount?: number;
+    lastVerifiedAt?: number;
+    status?: "active" | "deprecated";
+    scopeNote?: string;
 }
 
 export interface SummaryEmbeddingInput {
@@ -689,18 +713,10 @@ export interface GraphRecallInput {
 
 export interface MemoryNodeRecord extends MemoryNodeInput {
     score?: number;
-    recallCount?: number;
-    contradictionCount?: number;
-    lastAccessedAt?: number;
 }
 
 export interface GemRecord extends GemNodeInput {
     score?: number;
-    recallCount?: number;
-    contradictionCount?: number;
-    lastVerifiedAt?: number;
-    status?: "active" | "deprecated";
-    scopeNote?: string;
 }
 
 export interface GraphCounts {

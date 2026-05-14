@@ -3,7 +3,6 @@ import type { ModelClient } from "../protocol/index.ts";
 import { ModelProviderKind, type EventSink } from "../protocol/index.ts";
 import { AnthropicCompatibleClient } from "./anthropic.client.ts";
 import { FallbackModelClient } from "./fallback.client.ts";
-import { MockModelClient } from "./mock.client.ts";
 import { OpenAICompatibleClient } from "./openai.client.ts";
 
 export function createModelClient(config: ModelConfig, events?: EventSink): ModelClient {
@@ -26,5 +25,5 @@ function instantiateClient(config: ModelConfig): ModelClient {
     if (config.provider === ModelProviderKind.AnthropicCompatible) {
         return new AnthropicCompatibleClient(config);
     }
-    return new MockModelClient();
+    throw new Error(`Unsupported model provider kind: ${config.provider}`);
 }

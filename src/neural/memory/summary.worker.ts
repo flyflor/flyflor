@@ -143,8 +143,9 @@ export class SummaryWorker {
 }
 
 export function aggregate(rows: MemoryEventRecord[]): SummaryStats {
+    const summaryRows = rows.filter((row) => row.type !== MemoryEventType.HotMemoryCompression);
     const stats: SummaryStats = {
-        totalEvents: rows.length,
+        totalEvents: summaryRows.length,
         byType: {},
         byRole: {},
         codenamesTouched: [],
@@ -159,7 +160,7 @@ export function aggregate(rows: MemoryEventRecord[]): SummaryStats {
         lastTs: null,
     };
     const codenameSet = new Set<string>();
-    for (const row of rows) {
+    for (const row of summaryRows) {
         stats.byType[row.type] = (stats.byType[row.type] ?? 0) + 1;
         if (row.role) stats.byRole[row.role] = (stats.byRole[row.role] ?? 0) + 1;
         if (row.codenameId) codenameSet.add(row.codenameId);

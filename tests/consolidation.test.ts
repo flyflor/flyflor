@@ -164,6 +164,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         };
         const drops: string[] = [];
         const touches: string[][] = [];
+        const reinforced: Array<{ id: string; ttl: number }> = [];
         const memNodeUpserts: unknown[] = [];
         const epUpserts: unknown[] = [];
         const relateCalls: Array<[string, string]> = [];
@@ -175,6 +176,10 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             },
             touchConcepts: async (_uid: string, c: string[]) => {
                 touches.push(c);
+            },
+            reinforceEpisode: async (_uid: string, id: string, ttl: number) => {
+                reinforced.push({ id, ttl });
+                return true;
             },
         } as unknown as RedisMemoryStore;
         const fakeGraph = {
@@ -207,6 +212,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         expect(drops).toContain("e1");
         expect(drops).toContain("e3");
         expect(touches[0]).toEqual(["redis"]);
+        expect(reinforced).toEqual([{ id: "e2", ttl: 7 * 24 * 3600 }]);
         expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationCompleted)).toBe(true);
     });
 
@@ -216,6 +222,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             readEpisode: async () => undefined,
             dropEpisode: async () => {},
             touchConcepts: async () => {},
+            reinforceEpisode: async () => true,
         } as unknown as RedisMemoryStore;
         const fakeGraph = {} as SurrealGraphStore;
         const model = new StubModel(["{}"]);
@@ -248,6 +255,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             },
             dropEpisode: async () => {},
             touchConcepts: async () => {},
+            reinforceEpisode: async () => true,
         } as unknown as RedisMemoryStore;
         const fakeGraph = {} as SurrealGraphStore;
         const events = new CapturingSink();

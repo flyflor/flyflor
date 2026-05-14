@@ -316,7 +316,6 @@ const COMMAND_SPECS: CommandSpec[] = [
         help: "Manage agent memory",
         subcommands: [
             { name: "status", help: "Show current memory state" },
-            { name: "setup", help: "Interactive provider selection" },
             {
                 name: "reset",
                 help: "Erase built-in memory",
@@ -756,19 +755,27 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         const maxToolTurns = parseMaxTurns(opts.maxTurns);
         if (typeof opts.query === "string" && opts.query.trim().length > 0) {
             const imagePaths = typeof opts.image === "string" && opts.image.trim().length > 0 ? [opts.image] : [];
-            await runChatQuery(app, opts.query, opts.skills, Boolean(opts.quiet), imagePaths, {
-                toolsetAllowlist,
-                maxToolTurns,
-            });
+            try {
+                await runChatQuery(app, opts.query, opts.skills, Boolean(opts.quiet), imagePaths, {
+                    toolsetAllowlist,
+                    maxToolTurns,
+                });
+            } finally {
+                app.dispose();
+            }
             return;
         }
         if (Array.isArray(opts.skills) && opts.skills.length > 0) {
-            await startHumanChat(app.resolve(FlyFlorTokens.Runtime), {
-                approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
-                skillNames: opts.skills,
-                toolsetAllowlist,
-                maxToolTurns,
-            });
+            try {
+                await startHumanChat(app.resolve(FlyFlorTokens.Runtime), {
+                    approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+                    skillNames: opts.skills,
+                    toolsetAllowlist,
+                    maxToolTurns,
+                });
+            } finally {
+                app.dispose();
+            }
             return;
         }
         await app.start();
@@ -842,7 +849,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             );
             return;
         }
-        printPendingCommand(path);
+        throwUnsupportedCommand(path);
         return;
     }
     if (root === "setup") {
@@ -916,7 +923,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "blackboard") {
-        if (process.stdin.isTTY) {
+        if (!sub && process.stdin.isTTY) {
             const app = await cliApp();
             const { startCliTui } = await import("../tui/cli/index.ts");
             await startCliTui(app, "blackboard");
@@ -1021,7 +1028,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }
         return;
     }
-    printPendingCommand(path);
+    throwUnsupportedCommand(path);
 }
 
 async function runDoctorFix(app: FlyFlor): Promise<void> {
@@ -1077,6 +1084,7 @@ async function runChatQuery(
     runtimeOptions: { toolsetAllowlist?: string[]; maxToolTurns?: number } = {},
 ): Promise<void> {
     const runtime = app.resolve(FlyFlorTokens.Runtime);
+    await runtime.warmup();
     const now = new Date().toISOString();
     const context: RuntimeContext = {
         requestId: crypto.randomUUID(),
@@ -1288,32 +1296,13 @@ async function runConfig(sub: string | undefined, command: Command): Promise<voi
         console.log(`${config.paths.home}/secrets.jsonc`);
         return;
     }
-    printPendingCommand(["config", sub]);
+    throwUnsupportedCommand(["config", sub]);
 }
 
 async function runMemory(sub: string | undefined, command: Command): Promise<void> {
     if (!sub || sub === "status") {
         const app = await cliApp();
         console.log(await renderMemorySummary(app));
-        return;
-    }
-    if (sub === "setup") {
-        prompts.intro(pc.cyan("Memory Provider Setup"));
-        const provider = await prompts.select({
-            message: "Memory provider setup",
-            options: [
-                { label: "Built-in only", value: "builtin" },
-                { label: "Honcho", value: "honcho" },
-                { label: "Mem0", value: "mem0" },
-                { label: "Holographic", value: "holographic" },
-                { label: "RetainDB", value: "retaindb" },
-                { label: "ByteRover", value: "byterover" },
-            ],
-        });
-        if (!prompts.isCancel(provider)) {
-            prompts.note(`Selected provider=${provider}. Persistence is not implemented yet.`, "Memory");
-        }
-        prompts.outro(pc.green("Memory setup staged"));
         return;
     }
     if (sub === "reset" && !command.opts<{ yes?: boolean }>().yes) {
@@ -1355,7 +1344,7 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
         console.log(await log.read({ tail }));
         return;
     }
-    printPendingCommand(["memory", sub]);
+    throwUnsupportedCommand(["memory", sub]);
 }
 
 async function runBlackboard(sub: string | undefined, command: Command): Promise<void> {
@@ -1385,7 +1374,7 @@ async function runBlackboard(sub: string | undefined, command: Command): Promise
         console.log(renderBlackboardTurn(turn, limit, Boolean(opts.json)));
         return;
     }
-    printPendingCommand(["blackboard", sub]);
+    throwUnsupportedCommand(["blackboard", sub]);
 }
 
 async function runDream(sub: string | undefined, command: Command): Promise<void> {
@@ -1412,7 +1401,7 @@ async function runDream(sub: string | undefined, command: Command): Promise<void
         );
         return;
     }
-    printPendingCommand(["dream", sub]);
+    throwUnsupportedCommand(["dream", sub]);
 }
 
 async function runSkills(sub: string | undefined, command: Command): Promise<void> {
@@ -1505,7 +1494,7 @@ async function runSkills(sub: string | undefined, command: Command): Promise<voi
         console.log(`Path: ${result.path}`);
         return;
     }
-    printPendingCommand(["skills", sub]);
+    throwUnsupportedCommand(["skills", sub]);
 }
 
 async function runMcp(sub: string | undefined, command: Command): Promise<void> {
@@ -1655,14 +1644,14 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
         console.log(renderMcpCallResult(result, Boolean(opts.json)));
         return;
     }
-    printPendingCommand(["mcp", sub]);
+    throwUnsupportedCommand(["mcp", sub]);
 }
 
 async function runTools(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
     const config = app.resolve(FlyFlorTokens.Config);
     if (sub !== "enable" && sub !== "disable") {
-        printPendingCommand(["tools", sub ?? ""]);
+        throwUnsupportedCommand(["tools", sub ?? ""]);
         return;
     }
     const tools = command.args.filter((arg): arg is string => typeof arg === "string" && arg.length > 0);
@@ -1703,7 +1692,7 @@ async function runSandbox(sub: string | undefined, command: Command): Promise<vo
     }
 
     if (sub !== "allow" && sub !== "deny") {
-        printPendingCommand(["sandbox", sub ?? ""]);
+        throwUnsupportedCommand(["sandbox", sub ?? ""]);
         return;
     }
 
@@ -1903,7 +1892,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
         }
         return;
     }
-    printPendingCommand(["plugins", sub]);
+    throwUnsupportedCommand(["plugins", sub]);
 }
 
 function renderPluginList(plugins: PluginDefinition[], json: boolean): string {
@@ -1974,9 +1963,9 @@ async function resetBuiltInMemory(config: FlyflorConfig): Promise<string[]> {
     return removed;
 }
 
-function printPendingCommand(path: string[]): void {
-    console.log(pc.cyan(`flyflor ${path.join(" ")}`));
-    console.log("This CLI route is registered, but its runtime behavior is not implemented yet.");
+function throwUnsupportedCommand(path: string[]): never {
+    const command = path.filter(Boolean).join(" ");
+    throw new CommanderError(1, "flyflor.unsupportedCommand", `Unsupported command: flyflor ${command}`);
 }
 
 function renderBlackboardTurnList(turns: BlackboardTurn[], json: boolean): string {

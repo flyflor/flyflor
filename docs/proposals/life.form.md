@@ -1,6 +1,6 @@
 # 生命体重构（Life-form Architecture）
 
-> Status: **aligned — LF-R0~R14 已落地。** 本文档与 `TODO.md` 「生命体重构」章节、`docs/boundaries.md` §11.1 联动。
+> Status: **aligned — LF-R0~R15 已落地。** 本文档与 `TODO.md` 「生命体重构」章节、`docs/boundaries.md` §11.1 联动。
 
 ## 一句话定位
 
@@ -44,6 +44,7 @@
     "tuning": {
       "identity":       { "appendDailyLimitPerFile": 3, "appendOverflowQueue": "dream" },
       "summary":        { "trigger": "rolling", "rollingWindowDays": 7, "minIntervalHours": 24 },
+      "hotMemoryCompression": { "enabled": true, "intervalMinutes": 30, "batchSize": 16 },
       "reconsolidation":{ "embeddingDriftThreshold": 0.25, "driftHitCount": 2 },
       "inbox":          { "decayMultiplier": 2.0, "ttlDays": 7 },
       "dormant":        { "idleMinutes": 10, "_keepGatewayListening": true },
@@ -60,6 +61,7 @@
 - `_keepGatewayListening` 是审计字段，编辑无效（merge 后强制为 `true`）。
 - AtomScore 权重 / brainDb / ghost 调参属内部参数，**不在 CLI / README 文档化**，避免误调。
 - `brainDb.archiveIntervalHours=0` 表示关闭 runtime 自动归档；admin 脚本仍可手动执行。
+- `hotMemoryCompression.intervalMinutes=0` 表示关闭 runtime 自动压缩；Redis TTL 仍会自然删除工作记忆。
 - 缺字段静默 fallback；类型不正确时由 doctor 表「Memory tuning」一行高亮。
 
 ## 目录契约（生平）
@@ -318,6 +320,7 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 | R12 提示词优先级冲突表 | ✅ done — `behavior.priority.md` 注入 runtime system；模型看到的是可执行来源优先级和 ask 多问题结构，不暴露路线编号或内部隐喻 |
 | R13 Summary embeddingId 补全 | ✅ done — `SummaryWorker` 写 daily / weekly summary 后，`MemoryModule` best-effort 计算 summary content embedding，写入 SurrealDB `summary_embedding` 节点并回填 `memory_summary.embedding_id`；失败不阻断 summary 主写入 |
 | R14 brain.db 月度归档自动化 | ✅ done — `src/neural/memory/brain.archive.ts` 统一 admin 脚本与 runtime；`MemoryModule.runBrainArchiveOnce` 只搬 `state=archived` 且早于 cutoff 的事件和同月 summary，发布 `MemoryBrainArchiveCompleted/Failed`；`BackgroundScheduler` 场景避开 summary / dream busy，降级场景由根 timer 继续维护 |
+| R15 热记忆隔离压缩 | ✅ done — `HotMemoryCompressionWorker` 对 Redis 到期 episode 调用专用模板输出结构化压缩审计，写 `memory_events.type='hot-memory-compression'` 后删除 Redis episode；事件固定声明不进入 prompt recall，`SummaryWorker` 跳过该事件，不进入 SurrealDB 或 Gem 候选；scheduler 与 `MemoryModule` root timer 两层都和 summary / brain archive 串行化；Consolidation reinforce 会延长 Redis TTL 并后移 reviewAt，避免仍有价值的工作记忆被立刻压缩；有完整 `BackgroundScheduler` 时随调度器运行，缺 SurrealDB 时由 `MemoryModule` 根 timer 保底 |
 
 ## 与上一版的作废清单
 

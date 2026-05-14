@@ -289,6 +289,12 @@ function getLoader(page: CliPage): PageLoader {
 }
 
 export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<void> {
+    if (initialPage === "blackboard") {
+        const { startBlackboardBrowser } = await import("./blackboard.browser.tsx");
+        await startBlackboardBrowser(app);
+        return;
+    }
+
     const renderer = await createCliRenderer({
         targetFps: 30,
         exitOnCtrlC: false,

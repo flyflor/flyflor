@@ -49,24 +49,65 @@ describe("TUI chat metadata parsing", () => {
         });
     });
 
-    test("reads ask metadata without parsing ask prompt text", () => {
+    test("reads ask metadata without parsing visible reply text", () => {
         expect(
             readAskMeta({
                 kind: "ask",
                 ask: {
-                    choices: 2,
-                    questions: 3,
+                    choiceCount: 2,
+                    choices: [
+                        { label: "main", value: "main" },
+                        { label: "scratch", value: "scratch", description: "throwaway area" },
+                    ],
+                    freeform: true,
+                    prompt: "Which workspace should I use?",
+                    questionCount: 3,
+                    questions: [
+                        {
+                            prompt: "Which workspace?",
+                            choices: [{ label: "main", value: "main" }],
+                        },
+                    ],
                     reason: "blackboard-stalemate",
                     snapshotId: "behavior-1",
                 },
             }),
         ).toEqual({
-            choices: 2,
-            questions: 3,
+            choiceCount: 2,
+            choices: [
+                { label: "main", value: "main" },
+                { label: "scratch", value: "scratch", description: "throwaway area" },
+            ],
+            freeform: true,
+            prompt: "Which workspace should I use?",
+            questionCount: 3,
+            questions: [
+                {
+                    prompt: "Which workspace?",
+                    choices: [{ label: "main", value: "main" }],
+                },
+            ],
             reason: "blackboard-stalemate",
             snapshotId: "behavior-1",
         });
         expect(readAskMeta({ kind: "reply" })).toBeNull();
+    });
+
+    test("throws on malformed ask metadata instead of silently falling back", () => {
+        expect(() =>
+            readAskMeta({
+                kind: "ask",
+                ask: {
+                    choiceCount: 1,
+                    choices: [{ value: "missing-label" }],
+                    prompt: "Pick one.",
+                    questionCount: 0,
+                    questions: [],
+                    reason: "user-intent-unclear",
+                    snapshotId: "behavior-1",
+                },
+            }),
+        ).toThrow("Invalid ask metadata at ask.choices[0].label: missing string");
     });
 
     test("reads MCP trace and filters skill names", () => {

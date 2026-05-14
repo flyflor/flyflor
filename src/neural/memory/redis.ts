@@ -27,6 +27,7 @@ export class RedisMemoryStore {
     private readonly defaultTtlSeconds: number;
     private readonly maxEpisodesPerUser: number;
     private readonly contextRingSize: number;
+    private connectPromise: Promise<void> | undefined;
 
     constructor(private readonly config: RedisMemoryConfig) {
         this.client = new Redis(config.internalUrl, {
@@ -46,10 +47,13 @@ export class RedisMemoryStore {
     }
 
     async connect(): Promise<void> {
-        if (this.client.status === "ready" || this.client.status === "connecting") {
+        if (this.client.status === "ready") {
             return;
         }
-        await this.client.connect();
+        this.connectPromise ??= this.client.connect().finally(() => {
+            this.connectPromise = undefined;
+        });
+        await this.connectPromise;
     }
 
     /**
@@ -69,6 +73,10 @@ export class RedisMemoryStore {
         });
     }
 
+    dispose(): void {
+        this.client.disconnect();
+    }
+
     isReady(): boolean {
         return this.client.status === "ready";
     }
@@ -83,6 +91,7 @@ export class RedisMemoryStore {
      * 调用方必须先算好 stability/ttlSeconds（基于 importance × multiplier）。
      */
     async writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult> {
+        await this.connect();
         const epKey = this.episodeKey(input.userId, input.episodeId);
         const cqKey = this.consolidationKey(input.userId);
         const ctxKey = this.contextKey(input.userId);
@@ -107,6 +116,7 @@ export class RedisMemoryStore {
     }
 
     async readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
+        await this.connect();
         const data = await this.client.hgetall(this.episodeKey(userId, episodeId));
         if (!data || Object.keys(data).length === 0) {
             return undefined;
@@ -115,21 +125,39 @@ export class RedisMemoryStore {
     }
 
     async readContextRing(userId: string, limit: number): Promise<string[]> {
+        await this.connect();
         // ring buffer 从 head 读取最近 N 条 episodeId（按写入新→旧）
         return await this.client.lrange(this.contextKey(userId), 0, Math.max(0, limit - 1));
     }
 
     async listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]> {
+        await this.connect();
         // 整合 worker 用：取所有 reviewAt <= now 的 episode
         return await this.client.zrangebyscore(this.consolidationKey(userId), 0, until, "LIMIT", 0, limit);
     }
 
     async dropEpisode(userId: string, episodeId: string): Promise<void> {
+        await this.connect();
         // CONSOLIDATE / DISCARD 决策完毕后回收 Redis 占用
         const pipeline = this.client.pipeline();
         pipeline.del(this.episodeKey(userId, episodeId));
         pipeline.zrem(this.consolidationKey(userId), episodeId);
         await pipeline.exec();
+    }
+
+    async reinforceEpisode(userId: string, episodeId: string, ttlSeconds: number): Promise<boolean> {
+        await this.connect();
+        const epKey = this.episodeKey(userId, episodeId);
+        const exists = await this.client.exists(epKey);
+        if (!exists) return false;
+        const ttl = Math.max(1, Math.floor(ttlSeconds));
+        const reviewAt = Math.floor(Date.now() / 1000) + Math.floor(ttl * 0.8);
+        const pipeline = this.client.pipeline();
+        pipeline.expire(epKey, ttl);
+        pipeline.zadd(this.consolidationKey(userId), reviewAt, episodeId);
+        pipeline.expire(this.contextKey(userId), ttl * 2);
+        await pipeline.exec();
+        return true;
     }
 
     /** 原地改写 episode（dream rewrite 决策）：保留 id 与 createdAt，重写 text/concepts/importance。 */
@@ -138,6 +166,7 @@ export class RedisMemoryStore {
         episodeId: string,
         patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
     ): Promise<boolean> {
+        await this.connect();
         const existing = await this.readEpisode(userId, episodeId);
         if (!existing) return false;
         const fields: Record<string, string> = {};
@@ -158,6 +187,7 @@ export class RedisMemoryStore {
         if (concepts.length === 0) {
             return;
         }
+        await this.connect();
         const now = Date.now();
         const args: (string | number)[] = [];
         for (const concept of concepts) {
@@ -169,6 +199,7 @@ export class RedisMemoryStore {
     }
 
     async hotConcepts(userId: string, limit: number): Promise<string[]> {
+        await this.connect();
         // 返回最近激活的 top N 概念（按时间戳倒序）
         return await this.client.zrevrange(this.activationKey(userId), 0, Math.max(0, limit - 1));
     }

@@ -1,8 +1,14 @@
-import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { lintPromptTemplates } from "../src/agent/prompts/index.ts";
+import {
+    PROMPT_TEMPLATE_BUNDLE_MANIFEST,
+    PROMPT_TEMPLATE_BUNDLE_VERSION,
+    PROMPT_TEMPLATE_DEFINITIONS,
+    PROMPT_TEMPLATE_ORDER,
+} from "../src/agent/prompts/template.manifest.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 
 function testPaths(root: string): FlyflorPaths {
@@ -28,55 +34,17 @@ function testPaths(root: string): FlyflorPaths {
     };
 }
 
-const FILES = [
-    "ask.schema.md",
-    "behavior.priority.md",
-    "blackboard.advisory.md",
-    "blackboard.decision.md",
-    "blackboard.route.md",
-    "blackboard.worker.system.md",
-    "crystal.reflection.md",
-    "feedback.classify.md",
-    "memory.action.md",
-    "memory.consolidation.md",
-    "memory.context.md",
-    "memory.dream.md",
-    "mcp.context.md",
-    "runtime.system.md",
-    "skill.context.md",
-];
+const TEMPLATE_SPECS = PROMPT_TEMPLATE_ORDER.map((key) => PROMPT_TEMPLATE_DEFINITIONS[key]);
 
 async function seedAllValid(promptDir: string): Promise<void> {
     await mkdir(promptDir, { recursive: true });
-    const placeholdersByFile: Record<string, string[]> = {
-        "ask.schema.md": [],
-        "behavior.priority.md": [],
-        "blackboard.advisory.md": ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
-        "blackboard.decision.md": ["questionCount", "reason", "unresolvedIssues"],
-        "blackboard.route.md": ["request"],
-        "blackboard.worker.system.md": ["participant"],
-        "crystal.reflection.md": ["evidence"],
-        "feedback.classify.md": ["currentUserText", "previousAssistantText"],
-        "memory.action.md": [],
-        "memory.consolidation.md": ["episode"],
-        "memory.context.md": ["hippocampus", "markdownContent", "projectMemory", "retrievedResults"],
-        "memory.dream.md": ["candidates", "userId"],
-        "mcp.context.md": ["mcpEntries"],
-        "runtime.system.md": [
-            "askSchemaInstructions",
-            "behaviorPriorityInstructions",
-            "blackboardContext",
-            "mcpContext",
-            "memoryActionInstructions",
-            "memoryContext",
-            "sandboxSummary",
-            "skillContext",
-        ],
-        "skill.context.md": ["skillEntries"],
-    };
-    for (const file of FILES) {
-        const placeholders = placeholdersByFile[file]!.map((p) => `{{${p}}}`).join(" ");
-        await writeFile(join(promptDir, file), `template body ${placeholders}\n`);
+    await writeFile(
+        join(promptDir, "template.manifest.json"),
+        JSON.stringify(PROMPT_TEMPLATE_BUNDLE_MANIFEST, null, 2),
+    );
+    for (const spec of TEMPLATE_SPECS) {
+        const placeholders = spec.requiredPlaceholders.map((p) => `{{${p}}}`).join(" ");
+        await writeFile(join(promptDir, spec.filename), `template body ${placeholders}\n`);
     }
 }
 
@@ -114,6 +82,62 @@ describe("lintPromptTemplates", () => {
         expect(ms.some((d) => d.includes("memoryContext"))).toBe(true);
     });
 
+    test("ignores zh.cn copy files", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-lint-copy-"));
+        const paths = testPaths(root);
+        await seedAllValid(paths.promptDir);
+        await writeFile(join(paths.promptDir, "runtime.system.zh.cn.md"), "");
+        const report = await lintPromptTemplates(paths);
+        expect(report.ok).toBe(true);
+        expect(report.issues).toEqual([]);
+    });
+
+    test("detects unregistered prompt files", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-lint-orphan-"));
+        const paths = testPaths(root);
+        await seedAllValid(paths.promptDir);
+        await writeFile(join(paths.promptDir, "memory.legacy.md"), "old prompt\n");
+        const report = await lintPromptTemplates(paths);
+        expect(report.ok).toBe(false);
+        expect(report.issues).toContainEqual(
+            expect.objectContaining({
+                filename: "memory.legacy.md",
+                kind: "unknown-file",
+                key: "directory",
+            }),
+        );
+    });
+
+    test("detects missing manifest", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-lint-manifest-"));
+        const paths = testPaths(root);
+        await seedAllValid(paths.promptDir);
+        await rm(join(paths.promptDir, "template.manifest.json"));
+        const report = await lintPromptTemplates(paths);
+        expect(report.ok).toBe(false);
+        expect(report.issues.some((i) => i.kind === "missing-manifest")).toBe(true);
+    });
+
+    test("detects manifest template drift", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-lint-manifest-drift-"));
+        const paths = testPaths(root);
+        await seedAllValid(paths.promptDir);
+        await writeFile(
+            join(paths.promptDir, "template.manifest.json"),
+            JSON.stringify(
+                {
+                    schemaVersion: PROMPT_TEMPLATE_BUNDLE_VERSION,
+                    templates: PROMPT_TEMPLATE_BUNDLE_MANIFEST.templates.slice(1),
+                },
+                null,
+                2,
+            ),
+        );
+        const report = await lintPromptTemplates(paths);
+        expect(report.ok).toBe(false);
+        expect(report.issues.some((i) => i.kind === "manifest-template-mismatch")).toBe(true);
+    });
+
     test("runtime prompt templates do not expose internal roadmap labels", async () => {
         const promptDir = join(process.cwd(), "templates", "prompts");
         const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
@@ -146,7 +170,6 @@ describe("lintPromptTemplates", () => {
             const body = await readFile(join(promptDir, file), "utf8");
             const prose = body
                 .split("\n")
-                .filter((line) => !line.includes("<!-- mock-id:"))
                 .join("\n")
                 .replace(/\{\{[^}]+\}\}/g, "");
             const hit = forbidden.find((pattern) => pattern.test(prose));
@@ -154,4 +177,42 @@ describe("lintPromptTemplates", () => {
         }
         expect(offenders).toEqual([]);
     });
+
+    test("runtime prompt prose is not embedded in TypeScript source", async () => {
+        const offenders: string[] = [];
+        const sourceFiles = await listTypeScriptFiles(join(process.cwd(), "src"));
+        const forbiddenSnippets = [
+            "Acknowledge briefly only if natural",
+            "Use this only to adjust tone, warmth, and pacing",
+            "Treat the user's next message as their answer",
+            "The following past contexts are still active for this user",
+            "The following self-described facts about this user and yourself",
+            "This is a candidate that may be worth turning into a durable project",
+            "This is a repeated MCP tool combination that may be worth turning into a reusable Skill",
+        ];
+        for (const file of sourceFiles) {
+            const body = await readFile(file, "utf8");
+            for (const snippet of forbiddenSnippets) {
+                if (body.includes(snippet)) {
+                    offenders.push(`${file}:${snippet}`);
+                }
+            }
+        }
+        expect(offenders).toEqual([]);
+    });
 });
+
+async function listTypeScriptFiles(dir: string): Promise<string[]> {
+    const out: string[] = [];
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+            out.push(...(await listTypeScriptFiles(path)));
+            continue;
+        }
+        if (entry.isFile() && entry.name.endsWith(".ts")) {
+            out.push(path);
+        }
+    }
+    return out;
+}

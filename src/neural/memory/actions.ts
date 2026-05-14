@@ -1,10 +1,10 @@
-import { MarkdownMemoryFile, MemoryKind } from "../../protocol/contracts/index.ts";
+import { MarkdownMemoryFile, MemoryActionTarget, MemoryKind } from "../../protocol/contracts/index.ts";
 import { normalizeEqClassification, type EqClassification } from "../../protocol/contracts/eq.ts";
 import { renderMemoryActionInstructions } from "../../agent/prompts/index.ts";
 
 export interface MemoryAction {
     action: "add";
-    target: "memory" | "self" | "soul" | "user";
+    target: MemoryActionTarget;
     content: string;
     affect?: MemoryActionAffect;
     kind?: MemoryKind;
@@ -79,13 +79,13 @@ export function parseMemoryActions(rawText: string, maxActions: number): ParsedM
 }
 
 export function targetFileForMemoryAction(action: MemoryAction): MarkdownMemoryFile {
-    if (action.target === "user") {
+    if (action.target === MemoryActionTarget.User) {
         return MarkdownMemoryFile.User;
     }
-    if (action.target === "soul") {
+    if (action.target === MemoryActionTarget.Soul) {
         return MarkdownMemoryFile.Soul;
     }
-    if (action.target === "self") {
+    if (action.target === MemoryActionTarget.Self) {
         return MarkdownMemoryFile.Self;
     }
     return MarkdownMemoryFile.Memory;
@@ -95,10 +95,10 @@ export function kindForMemoryAction(action: MemoryAction): MemoryKind {
     if (action.kind && Object.values(MemoryKind).includes(action.kind)) {
         return action.kind;
     }
-    if (action.target === "user") {
+    if (action.target === MemoryActionTarget.User) {
         return MemoryKind.Profile;
     }
-    if (action.target === "soul") {
+    if (action.target === MemoryActionTarget.Soul) {
         return MemoryKind.Rule;
     }
     return MemoryKind.Fact;
@@ -125,7 +125,10 @@ function isMemoryAction(value: unknown): value is MemoryAction {
     }
     return (
         value.action === "add" &&
-        (value.target === "memory" || value.target === "self" || value.target === "soul" || value.target === "user") &&
+        (value.target === MemoryActionTarget.Memory ||
+            value.target === MemoryActionTarget.Self ||
+            value.target === MemoryActionTarget.Soul ||
+            value.target === MemoryActionTarget.User) &&
         typeof value.content === "string"
     );
 }

@@ -1,7 +1,17 @@
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
 import type { BlackboardDiscussionPlan } from "../../protocol/contracts/index.ts";
 import type { BlackboardMode } from "../../protocol/contracts/index.ts";
+import {
+    PROMPT_TEMPLATE_BUNDLE_MANIFEST,
+    PROMPT_TEMPLATE_BUNDLE_VERSION,
+    PROMPT_TEMPLATE_DEFINITIONS,
+    PROMPT_TEMPLATE_MANIFEST_FILE,
+    PROMPT_TEMPLATE_ORDER,
+    type PromptTemplateBundleManifest,
+    type PromptTemplateKey,
+} from "./template.manifest.ts";
 
 export interface RuntimeSystemPromptInput {
     askSchemaInstructions: string;
@@ -79,6 +89,10 @@ export interface MemoryConsolidationPromptInput {
     episode: string;
 }
 
+export interface HotMemoryCompressionPromptInput {
+    episodes: string;
+}
+
 export interface MemoryDreamPromptInput {
     userId: string;
     candidates: string;
@@ -94,47 +108,60 @@ export interface BlackboardDecisionPromptInput {
     unresolvedIssues: string[];
 }
 
+export interface RuntimeDormantResumePromptInput {
+    idleBucket: string;
+}
+
+export interface RuntimeEqContextPromptInput {
+    ageBucket: string;
+    arousal: string;
+    confidence: string;
+    directive: string;
+    dominance: string;
+    label: string;
+    valence: string;
+}
+
+export interface RuntimeAskContinuationPromptInput {
+    chainDepth: string;
+    choices: string;
+    prompt: string;
+    reason: string;
+}
+
+export interface RuntimeGhostHintPromptInput {
+    ghostEntries: string;
+}
+
+export interface RuntimeIdentityContextPromptInput {
+    identityEntries: string;
+}
+
+export interface ProjectOfferPromptInput {
+    evidenceScore: string;
+    relatedCount: string;
+    remainingTurns: string;
+    title: string;
+}
+
+export interface SkillOfferPromptInput {
+    confidence: string;
+    name: string;
+    remainingTurns: string;
+    support: string;
+    tools: string;
+}
+
 interface PromptTemplate {
     content: string;
     filename: string;
 }
 
-type PromptTemplateKey =
-    | "askSchema"
-    | "behaviorPriority"
-    | "blackboardAdvisory"
-    | "blackboardDecision"
-    | "blackboardRoute"
-    | "blackboardWorkerSystem"
-    | "crystalReflection"
-    | "feedbackClassify"
-    | "memoryAction"
-    | "memoryConsolidation"
-    | "memoryContext"
-    | "memoryDream"
-    | "mcpContext"
-    | "runtimeSystem"
-    | "skillContext";
-
 type PromptTemplateMap = Record<PromptTemplateKey, PromptTemplate>;
 
-const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = {
-    askSchema: "ask.schema.md",
-    behaviorPriority: "behavior.priority.md",
-    blackboardAdvisory: "blackboard.advisory.md",
-    blackboardDecision: "blackboard.decision.md",
-    blackboardRoute: "blackboard.route.md",
-    blackboardWorkerSystem: "blackboard.worker.system.md",
-    crystalReflection: "crystal.reflection.md",
-    feedbackClassify: "feedback.classify.md",
-    memoryAction: "memory.action.md",
-    memoryConsolidation: "memory.consolidation.md",
-    memoryContext: "memory.context.md",
-    memoryDream: "memory.dream.md",
-    mcpContext: "mcp.context.md",
-    runtimeSystem: "runtime.system.md",
-    skillContext: "skill.context.md",
-};
+const PROMPT_TEMPLATE_FILES: Record<PromptTemplateKey, string> = Object.fromEntries(
+    PROMPT_TEMPLATE_ORDER.map((key) => [key, PROMPT_TEMPLATE_DEFINITIONS[key].filename]),
+) as Record<PromptTemplateKey, string>;
 
 let promptTemplates: PromptTemplateMap | undefined;
 let promptTemplatesDir: string | undefined;
@@ -154,8 +181,14 @@ export async function loadPromptTemplates(paths: FlyflorPaths, options: { force?
     ) {
         return;
     }
+    const manifest = await readPromptTemplateManifest(paths.promptDir);
+    if (manifest.schemaVersion !== PROMPT_TEMPLATE_BUNDLE_VERSION) {
+        throw new Error(
+            `Prompt template bundle schemaVersion ${manifest.schemaVersion} does not match runtime ${PROMPT_TEMPLATE_BUNDLE_VERSION}. Run "bun run install:templates" to refresh templates/prompts.`,
+        );
+    }
     const loaded = {} as PromptTemplateMap;
-    for (const key of Object.keys(PROMPT_TEMPLATE_FILES) as PromptTemplateKey[]) {
+    for (const key of PROMPT_TEMPLATE_ORDER) {
         const filename = PROMPT_TEMPLATE_FILES[key];
         const path = join(paths.promptDir, filename);
         const file = Bun.file(path);
@@ -182,7 +215,14 @@ async function readSignature(promptDir: string): Promise<string> {
     // 用所有模板文件的 mtime + size 拼接出 fingerprint；任何编辑都会改变 signature。
     // 比 fs.watch 简单可靠（同步快照），命中失败时只是退回完整加载，开销可忽略。
     const parts: string[] = [];
-    for (const key of Object.keys(PROMPT_TEMPLATE_FILES) as PromptTemplateKey[]) {
+    const manifestPath = join(promptDir, PROMPT_TEMPLATE_MANIFEST_FILE);
+    try {
+        const stat = await Bun.file(manifestPath).stat();
+        parts.push(`${PROMPT_TEMPLATE_MANIFEST_FILE}:${stat.mtimeMs}:${stat.size}`);
+    } catch {
+        parts.push(`${PROMPT_TEMPLATE_MANIFEST_FILE}:missing`);
+    }
+    for (const key of PROMPT_TEMPLATE_ORDER) {
         const filename = PROMPT_TEMPLATE_FILES[key];
         const path = join(promptDir, filename);
         try {
@@ -285,45 +325,19 @@ export function renderBlackboardRoutePrompt(input: BlackboardRoutePromptInput): 
 }
 
 export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeInput): string {
-    // 必要提示词：外部 worker/进程只收到英文 JSON 协议信封；调度和收敛只读取结构化 result 字段。
-    return JSON.stringify(
-        {
-            protocol: "flyflor.blackboard.worker.v1",
-            goal: input.goal,
-            round: input.round,
-            minRounds: input.minRounds,
-            phase: input.phase,
-            participant: input.participant,
-            contract: input.contract,
-            discussionPlan: input.discussionPlan,
-            convergencePolicy: input.convergencePolicy,
-            currentRoundSteps: input.currentRoundSteps,
-            previousSteps: input.previousSteps,
-            expectedOutput: [
-                "inputSummary",
-                "outputSummary",
-                "newFacts",
-                "blockers",
-                "risk",
-                "questions",
-                "answers",
-                "agreement",
-                "outcome",
-                "openIssues",
-                "proposal",
-                "discussion",
-            ],
-            constraints: [
-                "no-tool-execution",
-                "no-long-term-memory-write",
-                "surface-blockers",
-                "write-public-discussion-as-dialogue",
-                "answer-current-round-peer-questions",
-            ],
-        },
-        null,
-        2,
-    );
+    // 必要提示词：worker 会把该 JSON 作为 ModelRole.User 输入；字段说明与约束必须留在模板。
+    return renderTemplate(requiredTemplates().blackboardWorkerEnvelope.content, {
+        contractJson: promptJson(input.contract),
+        convergencePolicyJson: promptJson(input.convergencePolicy),
+        currentRoundStepsJson: promptJson(input.currentRoundSteps),
+        discussionPlanJson: promptJson(input.discussionPlan),
+        goalJson: promptJson(input.goal),
+        minRoundsJson: promptJson(input.minRounds),
+        participantJson: promptJson(input.participant),
+        phaseJson: promptJson(input.phase),
+        previousStepsJson: promptJson(input.previousSteps),
+        roundJson: promptJson(input.round),
+    });
 }
 
 export function renderBlackboardWorkerSystemPrompt(input: BlackboardWorkerSystemPromptInput): string {
@@ -357,6 +371,13 @@ export function renderMemoryConsolidationPrompt(input: MemoryConsolidationPrompt
     });
 }
 
+export function renderHotMemoryCompressionPrompt(input: HotMemoryCompressionPromptInput): string {
+    // 必要提示词：到期工作记忆压缩器；输出仅用于隔离审计，不进入长期记忆或召回。
+    return renderTemplate(requiredTemplates().memoryHotCompress.content, {
+        episodes: input.episodes,
+    });
+}
+
 export function renderMemoryDreamPrompt(input: MemoryDreamPromptInput): string {
     // 必要提示词：长期概念图维护 worker；drift-repair / recall-reinforce / contradiction-audit / skip
     // 由结构化 JSON 输出承载，代码不做语义匹配，只校验 enum + JSON shape（README.md §12）。
@@ -380,6 +401,64 @@ export function renderBlackboardDecisionPrompt(input: BlackboardDecisionPromptIn
         questionCount: String(input.unresolvedIssues.length),
         reason: input.reason,
         unresolvedIssues: input.unresolvedIssues.map((issue, index) => `${index + 1}. ${issue}`).join("\n"),
+    });
+}
+
+export function renderRuntimeDormantResumePrompt(input: RuntimeDormantResumePromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeDormantResume.content, {
+        idleBucket: input.idleBucket,
+    });
+}
+
+export function renderRuntimeEqContextPrompt(input: RuntimeEqContextPromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeEqContext.content, {
+        ageBucket: input.ageBucket,
+        arousal: input.arousal,
+        confidence: input.confidence,
+        directive: input.directive,
+        dominance: input.dominance,
+        label: input.label,
+        valence: input.valence,
+    });
+}
+
+export function renderRuntimeAskContinuationPrompt(input: RuntimeAskContinuationPromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeAskContinuation.content, {
+        chainDepth: input.chainDepth,
+        choices: input.choices,
+        prompt: input.prompt,
+        reason: input.reason,
+    });
+}
+
+export function renderRuntimeGhostHintPrompt(input: RuntimeGhostHintPromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeGhostHint.content, {
+        ghostEntries: input.ghostEntries,
+    });
+}
+
+export function renderRuntimeIdentityContextPrompt(input: RuntimeIdentityContextPromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeIdentityContext.content, {
+        identityEntries: input.identityEntries,
+    });
+}
+
+export function renderProjectOfferPrompt(input: ProjectOfferPromptInput): string {
+    return renderTemplate(requiredTemplates().memoryProjectOffer.content, {
+        evidenceScore: input.evidenceScore,
+        relatedCount: input.relatedCount,
+        remainingTurns: input.remainingTurns,
+        title: input.title,
+    });
+}
+
+export function renderSkillOfferPrompt(input: SkillOfferPromptInput): string {
+    return renderTemplate(requiredTemplates().memorySkillOffer.content, {
+        confidence: input.confidence,
+        name: input.name,
+        remainingTurns: input.remainingTurns,
+        support: input.support,
+        tools: input.tools,
     });
 }
 
@@ -422,14 +501,34 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     blackboardAdvisory: ["compactRounds", "elapsedMs", "reason", "status", "turnId"],
     blackboardDecision: ["questionCount", "reason", "unresolvedIssues"],
     blackboardRoute: ["request"],
+    blackboardWorkerEnvelope: [
+        "contractJson",
+        "convergencePolicyJson",
+        "currentRoundStepsJson",
+        "discussionPlanJson",
+        "goalJson",
+        "minRoundsJson",
+        "participantJson",
+        "phaseJson",
+        "previousStepsJson",
+        "roundJson",
+    ],
     blackboardWorkerSystem: ["participant"],
     crystalReflection: ["evidence"],
     feedbackClassify: ["currentUserText", "previousAssistantText"],
     mcpContext: ["mcpEntries"],
     memoryAction: [],
     memoryConsolidation: ["episode"],
+    memoryHotCompress: ["episodes"],
     memoryContext: ["hippocampus", "markdownContent", "projectMemory", "retrievedResults"],
     memoryDream: ["candidates", "userId"],
+    memoryProjectOffer: ["evidenceScore", "relatedCount", "remainingTurns", "title"],
+    memorySkillOffer: ["confidence", "name", "remainingTurns", "support", "tools"],
+    runtimeAskContinuation: ["chainDepth", "choices", "prompt", "reason"],
+    runtimeDormantResume: ["idleBucket"],
+    runtimeEqContext: ["ageBucket", "arousal", "confidence", "directive", "dominance", "label", "valence"],
+    runtimeGhostHint: ["ghostEntries"],
+    runtimeIdentityContext: ["identityEntries"],
     runtimeSystem: [
         "askSchemaInstructions",
         "behaviorPriorityInstructions",
@@ -444,10 +543,18 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
 };
 
 export interface PromptTemplateLintIssue {
-    key: PromptTemplateKey;
+    key: PromptTemplateKey | "manifest" | "directory";
     filename: string;
     path: string;
-    kind: "missing-file" | "empty-file" | "missing-placeholder" | "unread-error";
+    kind:
+        | "missing-file"
+        | "empty-file"
+        | "missing-placeholder"
+        | "unknown-file"
+        | "missing-manifest"
+        | "outdated-manifest"
+        | "manifest-template-mismatch"
+        | "unread-error";
     detail: string;
 }
 
@@ -462,7 +569,8 @@ export interface PromptTemplateLintReport {
  * 校验 `<promptDir>` 下所有提示词模板：
  *   - 存在；
  *   - 非空；
- *   - 包含本版本 runtime 渲染必需的占位符（`{{name}}`）。
+ *   - 包含本版本 runtime 渲染必需的占位符（`{{name}}`）；
+ *   - 目录内没有未登记的 Markdown prompt 文件。
  *
  * 任何一项不满足即返回 `ok=false` + 详细 issue 列表，供 `flyflor doctor` 或
  * `bun run install:templates` 升级流程参考。本函数纯读，不修复任何文件。
@@ -470,7 +578,50 @@ export interface PromptTemplateLintReport {
 export async function lintPromptTemplates(paths: FlyflorPaths): Promise<PromptTemplateLintReport> {
     const issues: PromptTemplateLintIssue[] = [];
     const checked: PromptTemplateKey[] = [];
-    for (const key of Object.keys(PROMPT_TEMPLATE_FILES) as PromptTemplateKey[]) {
+    await lintUnknownPromptFiles(paths.promptDir, issues);
+    const manifestPath = join(paths.promptDir, PROMPT_TEMPLATE_MANIFEST_FILE);
+    const manifestFile = Bun.file(manifestPath);
+    if (!(await manifestFile.exists())) {
+        issues.push({
+            key: "manifest",
+            filename: PROMPT_TEMPLATE_MANIFEST_FILE,
+            path: manifestPath,
+            kind: "missing-manifest",
+            detail: "prompt bundle manifest does not exist",
+        });
+    } else {
+        try {
+            const manifest = await readPromptTemplateManifest(paths.promptDir);
+            if (manifest.schemaVersion !== PROMPT_TEMPLATE_BUNDLE_VERSION) {
+                issues.push({
+                    key: "manifest",
+                    filename: PROMPT_TEMPLATE_MANIFEST_FILE,
+                    path: manifestPath,
+                    kind: "outdated-manifest",
+                    detail: `schemaVersion ${String(manifest.schemaVersion)} does not match runtime ${PROMPT_TEMPLATE_BUNDLE_VERSION}`,
+                });
+            }
+            const mismatch = diffPromptTemplateManifest(manifest);
+            if (mismatch) {
+                issues.push({
+                    key: "manifest",
+                    filename: PROMPT_TEMPLATE_MANIFEST_FILE,
+                    path: manifestPath,
+                    kind: "manifest-template-mismatch",
+                    detail: mismatch,
+                });
+            }
+        } catch (err) {
+            issues.push({
+                key: "manifest",
+                filename: PROMPT_TEMPLATE_MANIFEST_FILE,
+                path: manifestPath,
+                kind: "unread-error",
+                detail: String(err),
+            });
+        }
+    }
+    for (const key of PROMPT_TEMPLATE_ORDER) {
         checked.push(key);
         const filename = PROMPT_TEMPLATE_FILES[key];
         const path = join(paths.promptDir, filename);
@@ -504,4 +655,98 @@ export async function lintPromptTemplates(paths: FlyflorPaths): Promise<PromptTe
         }
     }
     return { ok: issues.length === 0, promptDir: paths.promptDir, issues, checked };
+}
+
+async function lintUnknownPromptFiles(promptDir: string, issues: PromptTemplateLintIssue[]): Promise<void> {
+    const expected = new Set<string>([
+        PROMPT_TEMPLATE_MANIFEST_FILE,
+        ...PROMPT_TEMPLATE_ORDER.flatMap((key) => {
+            const spec = PROMPT_TEMPLATE_DEFINITIONS[key];
+            return [spec.filename];
+        }),
+    ]);
+    let entries: Array<{ isFile: () => boolean; name: string }> = [];
+    try {
+        entries = await readdir(promptDir, { withFileTypes: true });
+    } catch (err) {
+        issues.push({
+            key: "directory",
+            filename: ".",
+            path: promptDir,
+            kind: "unread-error",
+            detail: String(err),
+        });
+        return;
+    }
+    for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        if (entry.name.endsWith(".zh.cn.md")) continue;
+        if (!entry.name.endsWith(".md") && entry.name !== PROMPT_TEMPLATE_MANIFEST_FILE) continue;
+        if (expected.has(entry.name)) continue;
+        issues.push({
+            key: "directory",
+            filename: entry.name,
+            path: join(promptDir, entry.name),
+            kind: "unknown-file",
+            detail: "prompt file is not registered in template manifest",
+        });
+    }
+}
+
+async function readPromptTemplateManifest(promptDir: string): Promise<PromptTemplateBundleManifest> {
+    const path = join(promptDir, PROMPT_TEMPLATE_MANIFEST_FILE);
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+        throw new Error(
+            `Missing prompt bundle manifest: ${path}. Run "bun run install:templates" or copy templates/prompts.`,
+        );
+    }
+    const text = await file.text();
+    const parsed = JSON.parse(text) as Partial<PromptTemplateBundleManifest>;
+    if (typeof parsed.schemaVersion !== "number" || !Number.isFinite(parsed.schemaVersion)) {
+        throw new Error(`Invalid prompt bundle manifest: ${path}`);
+    }
+    if (!Array.isArray(parsed.templates) && parsed.schemaVersion !== PROMPT_TEMPLATE_BUNDLE_VERSION) {
+        return { schemaVersion: parsed.schemaVersion, templates: [] };
+    }
+    if (!Array.isArray(parsed.templates)) {
+        throw new Error(`Invalid prompt bundle manifest templates: ${path}`);
+    }
+    return { schemaVersion: parsed.schemaVersion, templates: parsed.templates };
+}
+
+function diffPromptTemplateManifest(actual: PromptTemplateBundleManifest): string | undefined {
+    const expected = PROMPT_TEMPLATE_BUNDLE_MANIFEST;
+    if (actual.templates.length !== expected.templates.length) {
+        return `manifest templates length ${actual.templates.length} does not match runtime ${expected.templates.length}`;
+    }
+    for (let index = 0; index < expected.templates.length; index += 1) {
+        const expectedEntry = expected.templates[index];
+        const actualEntry = actual.templates[index];
+        if (!expectedEntry) {
+            return `runtime manifest template entry ${index} is missing`;
+        }
+        if (!actualEntry) {
+            return `manifest template entry ${index} is missing`;
+        }
+        if (
+            actualEntry.key !== expectedEntry.key ||
+            actualEntry.filename !== expectedEntry.filename ||
+            !sameStringArray(actualEntry.requiredPlaceholders, expectedEntry.requiredPlaceholders)
+        ) {
+            return `manifest template entry ${index} does not match runtime definition for ${expectedEntry.key}`;
+        }
+    }
+    return undefined;
+}
+
+function sameStringArray(left: readonly string[] | undefined, right: readonly string[]): boolean {
+    if (!left || left.length !== right.length) {
+        return false;
+    }
+    return left.every((item, index) => item === right[index]);
+}
+
+function promptJson(value: unknown): string {
+    return JSON.stringify(value, null, 2);
 }

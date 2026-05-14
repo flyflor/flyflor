@@ -17,7 +17,7 @@ Optional fields:
 
 - `choices` ([{label, value?, description?}]): up to 12 multiple-choice options for the headline ask. The label is shown to the user; `value` is what you intend to use if that option is picked.
 - `questions` ([{id?, prompt, choices?, freeform?, relatedIds?, rationale?}]): ordered sub-questions for a single ask turn. Use this when you need multiple points confirmed at once. Keep each prompt short and concrete.
-- `freeform` (boolean, default `true`): set to `false` to require one of the offered `choices`.
+- `freeform` (boolean, default `true`): set to `false` when you strongly prefer one of the offered `choices`. Client UIs may still show an `Other` option so the user can type a custom answer; if they do, handle it normally on the next turn.
 - `relatedIds` ([string]): codenameId / blackboardTurnId / projectId etc. that this ask relates to (for audit / link-back only).
 - `rationale` (string): short internal note about why you are asking (debug / audit). Not shown to the user verbatim.
 - `ghostHint` (object): optional metadata for the runtime to save a resumable "unfinished work" record for this ask. It is not extra context for you to reason from. Shape: `{ "title": "short summary, ≤ 60 chars", "contextHint": "≤ 200 chars hint shown when the user revisits this unfinished work" }`. Omit it when your `prompt` already explains the unresolved point.

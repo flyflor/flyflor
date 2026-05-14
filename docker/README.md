@@ -51,6 +51,11 @@ bun run docker:chat      # 同 docker:up + 进入交互 chat
 bun run docker:logs      # 仅跟踪日志（已启动情况下）
 bun run docker:down      # 停服务，保留数据
 bun run docker:nuke      # 停服务并清空具名卷（重置记忆）
+bun run smoke:docker     # 不启动容器，检查 compose / Linux binary 挂载 / prompt bundle
+bun run smoke:runtime    # 已启动 compose 后，检查 Redis / SurrealDB / 真实配置模型 chat 主路径
+bun run smoke:release    # docs + type + tests + binary + docker smoke
+bun run ci               # 本地确定性门禁：docs/type/tests/binary + docker 静态烟测，不读取真实模型凭据
+bun run release:check    # 本地发布门禁：完整 release smoke，包含真实模型 chat 主路径
 ```
 
 容器外手动控制：

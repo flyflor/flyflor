@@ -1,7 +1,5 @@
 判断智能体应该如何处理当前用户请求。
 
-<!-- mock-id: blackboard.route -->
-
 只返回一个 JSON 对象：
 {
 "mode": "direct" | "direct-with-watch" | "blackboard",

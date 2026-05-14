@@ -309,7 +309,7 @@ export class JournalStore {
 
 async function ensureWeekFiles(location: JournalDayLocation): Promise<void> {
     await mkdir(dirname(location.dbPath), { recursive: true });
-    await writeFile(location.weekIndexPath, "-- Flyflor week semantic index placeholder\n", { flag: "a" });
+    await writeFile(location.weekIndexPath, "-- Flyflor legacy week semantic index\n", { flag: "a" });
     await writeFile(location.weekSummaryPath, "# Week Summary\n\n", { flag: "a" });
 }
 

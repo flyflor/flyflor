@@ -182,7 +182,7 @@ erDiagram
     BLACKBOARD_TURNS ||--o{ BLACKBOARD_WORKER_STATES : tracks
 ```
 
-CLI `flyflor blackboard list` / `show <turnId>` 直接消费这些表（见 `cli.commands.md`）。
+CLI `flyflor blackboard` 在 TTY 下进入黑板浏览 TUI，可搜索、上下选择并进入 turn 详情；`flyflor blackboard list` / `show <turnId>` 继续直接消费这些表，保留脚本化排查入口（见 `cli.commands.md`）。
 
 ## 事件清单
 
@@ -217,7 +217,7 @@ worker **不能**直接写长期记忆：
 ## 风险点 / 已知缺口
 
 - direct-with-watch 升级已接入工具失败 / 上下文压力资源指标，但未读取 worker 内部复杂语义信号。
-- TUI 当前只展示已落盘 transcript，**未实时流式订阅 worker.step**。
+- chat TUI 已能在 assistant 消息下回填 `BlackboardModule.getTurn(turnId)` 的快照并展示 workers / steps / public messages / decision；但仍**未实时流式订阅 worker.step**。
 - 进程隔离（Bun Worker / 子进程）阶段未完成；当前 worker 大多 in-process。
 - `BlackboardWorkerRole` 仅类型别名 `string`，没有 enum 约束，靠模型生成 + capabilities 字段约束。
 

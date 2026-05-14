@@ -8,6 +8,7 @@
  * - 衰减只用资源指标（now - updatedAt 的 valence 指数衰减），不读 label。
  * - 与 `MemoryActionAffect` 的关系：Affect 只用于 memory candidate 权重；EQ 是
  *   独立的短期状态轨道，互不污染。
+ * - EQ 只允许影响语气、暖度和节奏，不得用于路由、工具选择、问答链深度或其他决策。
  */
 
 export const EqLabel = {
@@ -45,10 +46,10 @@ export interface EqClassification {
 export const EQ_DEFAULT_HALFLIFE_MS = 6 * 60 * 60_000;
 
 /**
- * EQ-02：runtime 决策侧消费 EQ 状态时使用的封闭枚举 directive。
+ * EQ-02：语气提示枚举。
  * - 派生 100% 由 label + 数值阈值决定，零字符匹配；
- * - runtime 把 directive 透传给模型（不替模型决定具体话术）；
- * - 模型仍然自由表达，directive 只指方向。
+ * - 仅供 prompt 文本使用，不得驱动路由、工具、ask cap 或其他决策；
+ * - 模型仍然自由表达，directive 只指语气方向。
  */
 export const EqDirective = {
     /** 高唤醒 + 负 valence（怒/悲/恐）→ 降速、简短、不堆问题。 */
@@ -62,7 +63,7 @@ export const EqDirective = {
 export type EqDirective = (typeof EqDirective)[keyof typeof EqDirective];
 
 /**
- * 纯函数：从 EqState 派生 EqDirective。零字符匹配——只看 label + 数值阈值。
+ * 纯函数：从 EqState 派生语气提示。零字符匹配——只看 label + 数值阈值。
  * 阈值取保守值，避免 directive 频繁切换：
  * - confidence < 0.3：不下结论（返回 null，让模型按 [eq-context] 自由判断）；
  * - 已平复（|valence| < 0.15 且 arousal < 0.15）→ Steady；

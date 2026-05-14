@@ -24,6 +24,8 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
     const pasteSettleMs = options.pasteSettleMs ?? 35;
     const userId = options.userId ?? "human";
 
+    await runtime.warmup();
+
     console.log(`${agentName} chat mode. Type /exit to quit.`);
     process.stdout.write("> ");
 

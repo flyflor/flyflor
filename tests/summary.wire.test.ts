@@ -5,10 +5,13 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { MemoryModule } from "../src/agent/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import { BrainStore } from "../src/neural/memory/brain.store.ts";
 import { SurrealGraphStore, type SummaryEmbeddingInput } from "../src/neural/memory/surreal.graph.ts";
 import {
     Channel,
     ChatType,
+    MemoryEventType,
+    ModelRole,
     type GatewayMessage,
     type GatewayReply,
     type RuntimeContext,
@@ -49,6 +52,92 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const res = memory.runSummaryOnce("user-1");
         expect(res).toBeNull();
         memory.dispose();
+    });
+
+    test("brain.db maintenance lock skips summary and archive", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const memory = new MemoryModule(config, sink);
+        await memory.warmup();
+        try {
+            (memory as unknown as { brainMaintenanceBusy: boolean }).brainMaintenanceBusy = true;
+            expect(memory.runSummaryOnce("user-1")).toBeNull();
+            expect(await memory.runBrainArchiveOnce()).toBeNull();
+            expect(sink.types).not.toContain(RuntimeEventType.MemorySummaryWritten);
+            expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainArchiveCompleted);
+        } finally {
+            (memory as unknown as { brainMaintenanceBusy: boolean }).brainMaintenanceBusy = false;
+            memory.dispose();
+        }
+    });
+
+    test("runSummaryOnce ignores hot memory compression audit events end to end", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const memory = new MemoryModule(config, sink);
+        await memory.warmup();
+        try {
+            const now = Date.UTC(2026, 4, 13, 12, 0, 0);
+            const brain = (memory as unknown as { brain: BrainStore }).brain;
+            brain.appendEvent({
+                id: "turn-1",
+                ts: now - 120_000,
+                userId: "user-1",
+                channelId: "stdio",
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: { text: "hello" },
+                importance: 0.5,
+            });
+            brain.appendEvent({
+                id: "hot-1",
+                ts: now - 60_000,
+                userId: "user-1",
+                channelId: "stdio",
+                type: MemoryEventType.HotMemoryCompression,
+                role: ModelRole.System,
+                content: {
+                    batchId: "hot-batch-1",
+                    userId: "user-1",
+                    reason: "review-due",
+                    sourceEpisodeIds: ["ep-1"],
+                    deletedEpisodeIds: ["ep-1"],
+                    missingEpisodeIds: [],
+                    compressedText: "temporary cache cleanup",
+                    retainedSignals: ["temporary cache cleanup"],
+                    sourceStats: { count: 1 },
+                    isolation: {
+                        promptVisible: false,
+                        memorySummary: false,
+                        surrealCandidate: false,
+                        gemCandidate: false,
+                    },
+                    createdAt: now - 60_000,
+                },
+                importance: 0.2,
+            });
+
+            const res = memory.runSummaryOnce("user-1", now);
+            expect(res?.written).toBe(2);
+
+            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            try {
+                const dayId = "summary-user-1-day-2026-05-13";
+                const row = db.query("SELECT content FROM memory_summary WHERE id = ?").get(dayId) as
+                    | { content: string }
+                    | null;
+                expect(row).not.toBeNull();
+                const parsed = JSON.parse(row!.content) as { stats?: { byType?: Record<string, number>; totalEvents?: number } };
+                expect(parsed.stats?.totalEvents).toBe(1);
+                expect(parsed.stats?.byType?.[MemoryEventType.HotMemoryCompression]).toBeUndefined();
+            } finally {
+                db.close();
+            }
+
+            expect(sink.types).toContain(RuntimeEventType.MemorySummaryWritten);
+        } finally {
+            memory.dispose();
+        }
     });
 
     test("runSummaryOnce best-effort writes summary embeddings and backfills embeddingId", async () => {

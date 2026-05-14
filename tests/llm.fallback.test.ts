@@ -82,14 +82,14 @@ describe("FallbackModelClient", () => {
             },
             [
                 {
-                    providerId: "mock",
-                    config: makeConfig("mock", { provider: ModelProviderKind.Mock, apiKey: undefined }),
-                    client: new StubClient(async () => "mock-ok"),
+                    providerId: "local",
+                    config: makeConfig("local", { provider: ModelProviderKind.OpenAICompatible }),
+                    client: new StubClient(async () => "local-ok"),
                 },
             ],
             sink,
         );
-        await expect(client.generate([])).resolves.toBe("mock-ok");
+        await expect(client.generate([])).resolves.toBe("local-ok");
         const types = sink.events.map((e) => e.type);
         expect(types).toContain(RuntimeEventType.ProviderCredentialMissing);
         expect(types).toContain(RuntimeEventType.ProviderFallbackTriggered);

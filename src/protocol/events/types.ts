@@ -57,6 +57,8 @@ export const RuntimeEventType = {
     MemoryBehaviorCorrectionRecorded: "memory.behavior.correction.recorded",
     MemorySummaryWritten: "memory.summary.written",
     MemorySummaryEmbeddingWritten: "memory.summary.embedding.written",
+    MemoryHotCompressionWritten: "memory.hot.compression.written",
+    MemoryHotCompressionFailed: "memory.hot.compression.failed",
     MemoryConsolidationCompleted: "memory.consolidation.completed",
     MemoryConsolidationFailed: "memory.consolidation.failed",
     MemoryDecaySwept: "memory.decay.swept",

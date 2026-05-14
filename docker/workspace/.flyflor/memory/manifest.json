@@ -11,13 +11,13 @@
     "recalls": "/root/.flyflor/workspace/.flyflor/memory/recalls.jsonl"
   },
   "createdAt": "2026-05-13T17:28:51.645Z",
-  "updatedAt": "2026-05-13T17:28:51.660Z",
+  "updatedAt": "2026-05-14T09:15:43.767Z",
   "counts": {
     "candidates": 0,
     "episodes": 0,
-    "events": 1,
-    "recalls": 1,
+    "events": 49,
+    "recalls": 49,
     "writes": 0
   },
-  "lastRecalledAt": "2026-05-13T17:28:51.660Z"
+  "lastRecalledAt": "2026-05-14T09:15:43.767Z"
 }

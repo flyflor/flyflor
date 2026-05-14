@@ -17,6 +17,7 @@
         "picocolors": "^1.1.1",
       },
       "devDependencies": {
+        "@opentui/core-linux-arm64": "0.2.8",
         "@opentui/core-linux-x64": "0.2.8",
         "@types/bun": "latest",
         "@types/lodash-es": "^4.17.12",

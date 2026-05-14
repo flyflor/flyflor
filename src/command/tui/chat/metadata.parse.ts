@@ -1,4 +1,4 @@
-import type { AskMeta, BlackboardMeta, McpTrace } from "./types.ts";
+import type { AskChoiceMeta, AskMeta, AskQuestionMeta, BlackboardMeta, McpTrace } from "./types.ts";
 
 export function readRecord(value: unknown): Record<string, unknown> | null {
     if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -41,13 +41,80 @@ export function readBlackboardMeta(meta: Record<string, unknown> | null): Blackb
 export function readAskMeta(meta: Record<string, unknown> | null): AskMeta | null {
     if (!meta || meta.kind !== "ask") return null;
     const record = readRecord(meta.ask);
-    if (!record) return { reason: "ask" };
+    if (!record) throw invalidAskMeta("ask", "missing object");
+    const choiceArray = readAskChoices(record.choices, "ask.choices");
+    const questionArray = readAskQuestions(record.questions, "ask.questions");
+    const choiceCount = readStrictNumber(record.choiceCount, "ask.choiceCount");
+    const questionCount = readStrictNumber(record.questionCount, "ask.questionCount");
+    const prompt = readStrictString(record.prompt, "ask.prompt");
+    const freeform = typeof record.freeform === "boolean" ? record.freeform : undefined;
     return {
-        choices: readNumber(record.choices),
-        questions: readNumber(record.questions),
-        reason: readString(record.reason),
-        snapshotId: readString(record.snapshotId),
+        choiceCount,
+        choices: choiceArray,
+        freeform,
+        prompt,
+        questionCount,
+        questions: questionArray,
+        reason: readStrictString(record.reason, "ask.reason"),
+        snapshotId: readStrictString(record.snapshotId, "ask.snapshotId"),
     };
+}
+
+function readAskChoices(value: unknown, path: string): AskChoiceMeta[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) throw invalidAskMeta(path, "expected array");
+    const out: AskChoiceMeta[] = [];
+    value.forEach((raw, index) => {
+        const record = readRecord(raw);
+        if (!record) throw invalidAskMeta(`${path}[${index}]`, "expected object");
+        const label = readStrictString(record.label, `${path}[${index}].label`);
+        const choice: AskChoiceMeta = { label: label.slice(0, 200) };
+        const choiceValue = readString(record.value)?.trim();
+        if (choiceValue) choice.value = choiceValue.slice(0, 200);
+        const description = readString(record.description)?.trim();
+        if (description) choice.description = description.slice(0, 500);
+        out.push(choice);
+    });
+    return out;
+}
+
+function readAskQuestions(value: unknown, path: string): AskQuestionMeta[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) throw invalidAskMeta(path, "expected array");
+    const out: AskQuestionMeta[] = [];
+    value.forEach((raw, index) => {
+        const record = readRecord(raw);
+        if (!record) throw invalidAskMeta(`${path}[${index}]`, "expected object");
+        const prompt = readStrictString(record.prompt, `${path}[${index}].prompt`);
+        const question: AskQuestionMeta = { prompt: prompt.slice(0, 500) };
+        const id = readString(record.id)?.trim();
+        if (id) question.id = id.slice(0, 100);
+        const choices = readAskChoices(record.choices, `${path}[${index}].choices`);
+        if (choices !== undefined) question.choices = choices;
+        if (typeof record.freeform === "boolean") question.freeform = record.freeform;
+        const relatedIds = readStringArray(record.relatedIds);
+        if (relatedIds.length > 0) question.relatedIds = relatedIds.slice(0, 16);
+        const rationale = readString(record.rationale)?.trim();
+        if (rationale) question.rationale = rationale.slice(0, 500);
+        out.push(question);
+    });
+    return out;
+}
+
+function readStrictString(value: unknown, path: string): string {
+    const text = readString(value)?.trim();
+    if (!text) throw invalidAskMeta(path, "missing string");
+    return text;
+}
+
+function readStrictNumber(value: unknown, path: string): number {
+    const number = readNumber(value);
+    if (number === undefined) throw invalidAskMeta(path, "missing number");
+    return number;
+}
+
+function invalidAskMeta(path: string, reason: string): Error {
+    return new Error(`Invalid ask metadata at ${path}: ${reason}`);
 }
 
 export function readMcpTrace(entry: unknown): McpTrace | null {

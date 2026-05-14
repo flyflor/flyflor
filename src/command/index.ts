@@ -52,12 +52,16 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
         const runtime = app.resolve(FlyFlorTokens.Runtime);
         const blackboard = app.resolve(FlyFlorTokens.Blackboard);
         const events = app.resolve(FlyFlorTokens.Events);
-        await startChatEntry({
-            runtime,
-            eventBus: events instanceof RuntimeEventBus ? events : undefined,
-            agentName: "flyflor",
-            blackboard,
-        });
+        try {
+            await startChatEntry({
+                runtime,
+                eventBus: events instanceof RuntimeEventBus ? events : undefined,
+                agentName: "flyflor",
+                blackboard,
+            });
+        } finally {
+            app.dispose();
+        }
         return { exitCode: 0 };
     }
 

@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-Skill 是可重用、可热加载的「做事方式」工件：manifest.json 描述能力，loader 把 markdown 拼进 prompt，usage 计数推动 promotion。
+Skill 是可重用、可热加载的「做事方式」工件：manifest.json 描述能力，loader 把 markdown 拼进 prompt，usage 统计会影响自动选择，promotion 已接到 pending skill offer 的物化闭环。
 
 ## 相关代码路径
 
@@ -34,7 +34,7 @@ flowchart LR
     Install --> Userdir["~/.flyflor/skills/<id>/"]
     Userdir --> Loader["SkillLoader.scan"]
     Loader --> Memo["skills: SkillManifest[]"]
-    Memo --> Select["selectSkillsForTurn"]
+    Memo --> Select["selectSkills / runtime.selectRuntimeSkills"]
     Select --> Prompt["renderSkillContextPrompt"]
     Prompt --> Model["拼入 system prompt"]
 ```
@@ -45,12 +45,13 @@ flowchart LR
 flowchart TB
     Req["RuntimeContext.skillNames?"] --> Explicit{显式指定？}
     Explicit -- 是 --> Pick["按 id 精确取"]
-    Explicit -- 否 --> All["loadAll → slice(0, maxAuto)"]
+    Explicit -- 否 --> All["loadAll → usage 排序 → slice(0, 4)"]
     Pick --> Out["注入 prompt"]
     All --> Out
 ```
 
-> 当前没有 embedding / usage 排序；命中范围由 `RuntimeContext.skillNames`（CLI `--skills`）或默认前 N 决定。
+- 显式命中的技能优先，其余自动池按 `skill_usage.summary.json` 排序。
+- 排序信号是 `useCount`、最近使用时间和 MCP 成功率；`activation.auto=false` 的技能不进自动池。
 
 ## 使用计数
 
@@ -65,17 +66,17 @@ interface SkillUsage {
 }
 ```
 
-落到 SQLite `skill_usage` 表；后续 promotion / 选择排序所需的数据已经在采集。
+落到 SQLite `skill_usage` 表，并汇总到 `skill.usage.summary.json`；后续选择排序和 promotion 已会消费这些数据。
 
-## Promotion（待落地）
+## Promotion（已落地）
 
-`crystal/skills` 已留出接口：
+`pending_skill_offer` + `MemoryModule.consumeSkillOffer` 已把 promotion 闭环跑通：
 
-- 候选来源：reflection 抽出的复用模式
-- 触发：cluster size + confidence 双门
-- 输出：在 `~/.flyflor/skills/<id>/` 写 `manifest.json` + `system.md`
+- 候选来源：reflection 聚合 / explicit skill intent / 现有 skill offer 计时器。
+- 触发：cluster support + confidence，或显式 `skillPromotionIntent`。
+- 输出：在 `~/.flyflor/skills/<name>/` 写 `SKILL.md` + `skill.json`，并补 `RETROSPECTIVE.md` 的 `skill-promoted` 记录。
 
-完整闭环（cluster → LLM 写作 → 用户确认 → 安装）当前未跑通。
+- 过期路径：`noteSkillOfferTurn` 会递减 ttl，确认不了就自动过期。
 
 ## 配置
 
@@ -91,17 +92,21 @@ interface SkillUsage {
 | `skill.loaded` | scan 完成 |
 | `skill.context.built` | renderSkillContextPrompt |
 | `skill.usage.recorded` | recordSkillUsage |
-| `skill.promoted` | promotion 完成（未落） |
+| `memory.skill.offer.proposed` | 生成 pending skill offer |
+| `memory.skill.offer.consumed` | `consumeSkillOffer` 物化 SKILL.md |
+| `memory.skill.offer.expired` | ttl 归零过期 |
+| `memory.skill.installed` | skill 包安装完成 |
+| `memory.skill.install.failed` | 安装失败 |
 
 ## 风险点 / 已知缺口
 
-- 选择仍是 `slice(0, maxAuto)`，**未按 embedding 相似度 / usage 频次排序**。
-- promotion 路径未跑通：cluster → LLM 询问 → 安装 → 反向回填 manifest。
-- skill 模板缺少版本兼容声明（runtime 升级后旧模板失败处理弱）。
-- usage 计数未被任何决策环节消费。
+- 自动选择仍主要依赖本地 `skill_usage.summary.json`，还没有 embedding / 向量召回参与。
+- promotion 主要消费显式意图和 cluster 证据，尚未做更细粒度的人机协同确认流。
+- skill 模板虽然已有 schema 兼容检查，但安装包的内容漂移仍需靠 `validate` / `doctor` 兜底。
 
 ## 相关测试
 
-- `tests/skill.loader.test.ts`
-- `tests/skill.usage.test.ts`
-- `tests/skill.context.test.ts`
+- `tests/skill.mcp.test.ts`
+- `tests/skill.offer.test.ts`
+- `tests/skill.schema.compat.test.ts`
+- `tests/skill.select.test.ts`

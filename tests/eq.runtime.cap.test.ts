@@ -100,17 +100,16 @@ class AskingModel implements ModelClient {
     }
 }
 
-describe("EQ-03 — runtime ask cap dynamic override under CalmDown directive", () => {
-    test("CalmDown 状态下，cap 临时降为 1：已存在 pending ask 时新 ask 被 runtime 抛弃", async () => {
+describe("EQ-03 — runtime keeps EQ as a tone-only hint", () => {
+    test("高唤醒负向 EQ 只影响语气，不影响 ask-cap；base cap 允许时 ask 继续通过", async () => {
         try {
             const config = await makeConfig();
-            // baseline cap = 5（足以让常规 chain 走过去），由 CalmDown 临时压到 1
+            // baseline cap = 5（足以让常规 chain 走过去）；EQ 只应影响语气，不该压缩链深度
             config.memory.tuning.ghost.maxChainDepth = 5;
             const events = new CapturingSink();
             const memory = new MemoryModule(config, events);
             await memory.warmup();
             try {
-                // 一次 rememberTurn 同时写入 ask + EQ（CalmDown 触发条件）
                 const askA = { reason: AskReason.UserIntentUnclear, prompt: "first?", freeform: true } as const;
                 await memory.rememberTurn(
                     gwMsg("hi", "m-1"),
@@ -142,25 +141,9 @@ describe("EQ-03 — runtime ask cap dynamic override under CalmDown directive", 
                 events.events.length = 0;
                 const reply = await runtime.handleMessage(gwMsg("user follow-up", "m-2"), ctx());
 
-                // baseline cap=5 本应允许 chainDepth=2 通过；但 CalmDown 把 effective cap 压到 1
-                // → projectedDepth=2 > 1 → ask 被 runtime 抛弃，走 reply
-                expect(reply.metadata?.kind).toBe("reply");
-                const directiveEvent = events.events.find(
-                    (e) => e.type === RuntimeEventType.RuntimeEqDirectiveApplied,
-                );
-                expect(directiveEvent).toBeTruthy();
-                expect(directiveEvent!.payload?.directive).toBe("calm-down");
-                expect(directiveEvent!.payload?.action).toBe("ask-cap-overridden");
-                expect(directiveEvent!.payload?.baseCap).toBe(5);
-                expect(directiveEvent!.payload?.effectiveCap).toBe(1);
-
-                const cappedEvent = events.events.find(
-                    (e) =>
-                        e.type === RuntimeEventType.MemoryAskChainCapped &&
-                        e.payload?.reason === "eq-calm-down",
-                );
-                expect(cappedEvent).toBeTruthy();
-                expect(cappedEvent!.payload?.maxChainDepth).toBe(1);
+                // baseline cap=5 允许 chainDepth=2 通过；EQ 不该把它压回去
+                expect(reply.metadata?.kind).toBe("ask");
+                expect(events.events.some((e) => e.type === RuntimeEventType.RuntimeEqDirectiveApplied)).toBe(false);
             } finally {
                 memory.dispose();
             }
@@ -169,7 +152,7 @@ describe("EQ-03 — runtime ask cap dynamic override under CalmDown directive", 
         }
     });
 
-    test("非 CalmDown（neutral / steady）时不覆盖 cap，也不发 RuntimeEqDirectiveApplied", async () => {
+    test("非 CalmDown（neutral / steady）时同样只影响语气，不影响 ask 路由", async () => {
         try {
             const config = await makeConfig();
             config.memory.tuning.ghost.maxChainDepth = 5;
@@ -205,7 +188,7 @@ describe("EQ-03 — runtime ask cap dynamic override under CalmDown directive", 
                 events.events.length = 0;
                 const reply = await runtime.handleMessage(gwMsg("user follow-up", "m-2"), ctx());
 
-                // baseline cap=5；Steady 不覆盖；projectedDepth=2 < 5 → ask 通过
+                // baseline cap=5；EQ 不参与路由，ask 仍通过
                 expect(reply.metadata?.kind).toBe("ask");
                 expect(
                     events.events.some((e) => e.type === RuntimeEventType.RuntimeEqDirectiveApplied),

@@ -10,14 +10,14 @@ Crystal 子系统负责把单轮证据「结晶」为长期可复用的 Gem：�
 - `src/crystal/memory/index.ts` — `CrystalMemoryService` / `SurrealCrystalMemoryStore`
 - `src/crystal/memory/surreal.ts` — SurrealDB 实现
 - `src/crystal/skills/index.ts` — Skill 升格（见 `skill.system.md`）
-- `src/agent/runtime/reflection.ts` — runtime 侧调用方
+- `src/agent/runtime/reflection.worker.ts` — 反思 worker 调度
 - `templates/prompts/reflection.candidate.md` — 反思抽取提示
 
 ## 数据流
 
 ```mermaid
 flowchart LR
-    Turn["完成的 turn"] --> RT["RuntimeModule.scheduleReflection"]
+    Turn["完成的 turn"] --> RT["ReflectionWorker.dispatch"]
     RT --> LLM["reflection.candidate.md<br/>抽 symbols / bucket / coordinates"]
     LLM --> Cand["ReflectionCandidate[]"]
     Cand --> Apply["MemoryModule.applyReflection"]
@@ -120,13 +120,14 @@ sequenceDiagram
 
 ## 风险点 / 已知缺口
 
-- Reflection 仍在 `RuntimeModule.scheduleReflection` 同进程，**独立 Reflection worker 没拆**。
-- 旧版 SurrealDB 表名可能仍为 `crystal_skill / skill_snapshot`，迁移到 `gem / gem_snapshot` 的脚本待写。
+- Reflection 已拆为独立 `ReflectionWorker`；Runtime 只投递异步任务，worker 自己处理抽取、规范化与失败事件。
+- 旧版 SurrealDB 表名 `crystal_skill / skill_snapshot` 的迁移脚本已落地为 `scripts/surreal.migrate.ts`；脚本幂等写入 `gem / gem_snapshot`，保留旧表供人工复核后清理。
 - gate 2 是定值阈值，没有按 sourceKind 动态调整。
 - contradictionCount 只在 dream pass 修复，runtime 路径不会清零（即便后续有大量正向证据）。
 
 ## 相关测试
 
 - `tests/reflection.gem.consolidation.test.ts`
-- `tests/crystal.gem.test.ts`
-- `tests/memory.candidates.test.ts`
+- `tests/reflection.boundaries.test.ts`
+- `tests/reflection.thread.test.ts`
+- `tests/dream.worker.test.ts`

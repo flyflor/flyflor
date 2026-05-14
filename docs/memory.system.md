@@ -1,10 +1,10 @@
 # 记忆系统
 
-> 当前实现处于 LF-R14 收口态：`~/.flyflor/brain.db` 是 prompt atom recall 与 turn event write 的权威源；legacy `JournalStore` 仅保留为 best-effort 审计副本，不再参与 prompt 召回；月级冷归档已自动化。
+> 当前实现处于 LF-R15 收口态：`~/.flyflor/brain.db` 是 prompt atom recall 与 turn event write 的权威源；legacy `JournalStore` 仅保留为 best-effort 审计副本，不再参与 prompt 召回；月级冷归档与热记忆隔离压缩已自动化。
 
 ## 一句话定位
 
-Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、Redis 工作记忆、SQLite 辅助索引与审计、SurrealDB 长期晶体图；升格走证据门，遗忘走 AtomScore / decayScore / Gem 衰减，Dream worker 只放大已有信号，不凭空创造记忆。
+Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、Redis 工作记忆、SQLite 辅助索引与审计、SurrealDB 长期晶体图；升格走证据门，遗忘走 Redis TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与 SurrealDB 漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
 
 ## 相关代码路径
 
@@ -13,6 +13,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/neural/memory/journal.store.ts` — legacy atom journal（best-effort 审计副本，不参与 prompt recall）
 - `src/neural/memory/redis.ts` — episode buffer / ring / hot concepts
+- `src/neural/memory/hot.memory.compression.worker.ts` — Redis 到期工作记忆隔离压缩审计
 - `src/neural/memory/sqlite.ts` — candidates / offers / search
 - `src/neural/memory/surreal.graph.ts` — episode / memory_node / gem / 边关系
 - `src/neural/memory/activation.ts` — spreading activation
@@ -20,7 +21,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/decay.ts` — 双轨衰减
 - `src/neural/memory/anti.bloat.ts` — 容量阀门
 - `src/neural/memory/project.memory.ts` — 项目局部记忆
-- `src/neural/memory/background.scheduler.ts` — consolidation / summary / decay / dream / dormant 节拍
+- `src/neural/memory/background.scheduler.ts` — consolidation / hot compression / summary / decay / dream / dormant 节拍
 - `src/agent/runtime/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
 - `src/crystal/memory/index.ts` / `src/crystal/memory/surreal.ts` — Crystal Memory 适配
@@ -56,6 +57,7 @@ flowchart LR
     User --> Journal
     User --> Redis
     Redis -- ConsolidationWorker --> Surreal
+    Redis -- HotMemoryCompressionWorker --> Brain
     Surreal -- DreamWorker --> Surreal
     User --> Markdown
     User --> SQLite
@@ -72,18 +74,23 @@ flowchart LR
 
 | 表 | 职责 |
 | --- | --- |
-| `memory_events` | append-only 事实事件；turn、ask、ghost、identity 等都以事件表达 |
+| `memory_events` | append-only 事实事件；turn、ask、ghost、identity、热记忆压缩审计等都以事件表达 |
 | `memory_state` | 可变状态层；visibility、decay、status、accessCount 等 |
 | `memory_summary` | day / week / rolling summary；`embedding_id` 指向长期图 `summary_embedding` 节点 |
 | `memory_links` | contradicts / causal / derived / supersedes 等证据关系 |
 | `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
-| `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT |
+| `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示 |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，legacy journal 只做 best-effort 复制。当前读路径：prompt atom recall 走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，legacy journal 只做 best-effort 复制。当前读路径：prompt atom recall 走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+
+chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。
 
 月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 Redis、SurrealDB 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
 
 Ghost Context 不被压平成普通 prompt atom。它以 `[ghost-hint]` 单独注入，让模型同轮用 `<flyflor_ghost_decisions>` 决定 `resume` / `fork` / `fresh`；`fork` 或 `fresh` 只更新 ghost 的结构化 evidence，不删除 ghost，后续仍可像分支回归主线一样重新激活。
+
+热记忆压缩同样不被压平成普通 prompt atom。`HotMemoryCompressionWorker` 只把 Redis 到期 episode 批次压缩为 `memory_events.type='hot-memory-compression'` 审计事件，`content.isolation` 固定声明 `promptVisible=false`、`memorySummary=false`、`surrealCandidate=false`、`gemCandidate=false`。这条记录不是 `memory_summary`，`SummaryWorker` 也会跳过该审计事件；它不写 SurrealDB。未来如果要把它作为证据，必须走显式 gate。
+调度层和 `MemoryModule` 降级 root timer 都把热压缩与 summary / brain archive 视为同一条 brain.db 维护通道，默认串行，避免同库写入互撞。
 
 ## 升格双质量门
 
@@ -177,6 +184,7 @@ sequenceDiagram
 flowchart TB
     Sched["BackgroundScheduler<br/>按可用后端启用对应 sweep"]
     Sched -- 10 min --> Cons["ConsolidationWorker<br/>Redis 到 SurrealDB 升格"]
+    Sched -- 30 min --> HotCompress["HotMemoryCompressionWorker<br/>Redis 到期批次 → 隔离审计"]
     Sched -- 6 h --> Summary["SummaryWorker<br/>brain events → summary"]
     Sched -- 24 h --> Decay["decay sweep<br/>双轨衰减"]
     Sched -- 60 s --> Dormant["DormantSupervisor<br/>idle → dormant"]
@@ -192,6 +200,9 @@ flowchart TB
 Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择仅用资源指标（counter / age / cosine / contradictionCount）。无 negative 信号源时一轮 0 写、0 LLM call；Dream 只能放大已有纠错/失败/矛盾信号，不能凭语义相似度凭空创造新事件。
 
 Brain archive 单轮约束：不调模型、不读 content 语义；只看状态、月份和配置阈值。默认 `archiveAfterMonths=3`、`archiveIntervalHours=24`、`vacuumIntervalDays=14`；`archiveIntervalHours=0` 关闭 runtime 自动归档但不影响 admin 脚本。
+
+热记忆压缩单轮约束：只扫描已到 review 时间的 Redis episode id；模型只输出结构化 JSON 压缩审计，不允许决定长期写入。压缩成功后删除对应 Redis episode；模型输出无效时不删除，发布 `MemoryHotCompressionFailed`。
+Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 review 时间后移，避免刚被判定仍有工作记忆价值的 episode 立刻进入热压缩清理。
 
 ## 记忆动作协议
 
@@ -262,6 +273,7 @@ Brain archive 单轮约束：不调模型、不读 content 语义；只看状态
 | `memory.decay.swept` | 一轮衰减 sweep |
 | `memory.summary.written` | daily / weekly summary 写入 |
 | `memory.summary.embedding.written` | summary embedding 写入长期图并回填 `embedding_id` |
+| `memory.hot.compression.written` / `failed` | Redis 到期工作记忆压缩审计写入 / 失败 |
 | `memory.dream.completed` / `failed` | Dream pass 完成 |
 | `memory.brain.archive.completed` / `failed` | brain.db 月级冷归档完成 / 失败 |
 | `memory.drift.repaired` | drift-repair 动作 |
@@ -285,13 +297,16 @@ Brain archive 单轮约束：不调模型、不读 content 语义；只看状态
 - `config.memory.tuning.brainDb.archiveAfterMonths` — 归档 cutoff 月数，默认 3
 - `config.memory.tuning.brainDb.archiveIntervalHours` — runtime 自动归档检查间隔，默认 24；0 表示关闭
 - `config.memory.tuning.brainDb.vacuumIntervalDays` — 自动 VACUUM 最小间隔，默认 14；0 表示关闭自动 VACUUM
+- `config.memory.tuning.hotMemoryCompression.enabled` — 是否启用热记忆压缩审计，默认 true
+- `config.memory.tuning.hotMemoryCompression.intervalMinutes` — 自动检查间隔，默认 30；0 表示关闭
+- `config.memory.tuning.hotMemoryCompression.batchSize` — 单用户单轮压缩上限，默认 16
 
 ## 风险点 / 已知缺口
 
 - legacy journal 仍保留 best-effort 审计写入；任何新召回能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
-- `BackgroundScheduler` 按后端可用性降级；默认本地开发环境缺 Redis/Surreal 时长期图相关 sweep noop，但 brain archive 已由 `MemoryModule` 根 timer 保底。
-- Reflection 仍由 `RuntimeModule.scheduleReflection` 同进程驱动；独立 Reflection worker 未拆出。
-- Redis 路径已完成真实二进制 smoke；后续还需要把 release artifact + 真实 Redis 的回归检查纳入发布流程。
+- `BackgroundScheduler` 按后端可用性降级；默认本地开发环境缺 Redis/Surreal 时长期图相关 sweep noop，但 brain archive 与热记忆压缩已由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
+- Reflection 已拆为 `ReflectionWorker`；Runtime 仅投递异步任务，抽取与落库不再挂在 `RuntimeModule` 私有方法里。
+- Redis / SurrealDB 路径已纳入 `smoke:runtime` 与本地 `release:check`；不配置 GitHub Actions 跑仓库侧 CI，真实模型 + Docker runtime smoke 只由本地发布门禁覆盖。
 
 ## 相关测试
 
@@ -300,6 +315,7 @@ Brain archive 单轮约束：不调模型、不读 content 语义；只看状态
 - `tests/decay.anti.bloat.project.test.ts`
 - `tests/activation.test.ts`
 - `tests/idle.dream.trigger.test.ts`
+- `tests/hot.memory.compression.worker.test.ts`
 - `tests/memory.boundaries.test.ts`
 - `tests/memory.scheduler.wiring.test.ts`
 - `tests/background.scheduler.test.ts`

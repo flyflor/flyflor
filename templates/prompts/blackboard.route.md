@@ -1,7 +1,5 @@
 Decide how the agent should handle the current user request.
 
-<!-- mock-id: blackboard.route -->
-
 Return only one JSON object:
 {
 "mode": "direct" | "direct-with-watch" | "blackboard",

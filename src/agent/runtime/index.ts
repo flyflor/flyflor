@@ -6,6 +6,12 @@ export {
 } from "./blackboard.route.ts";
 export { extractRuntimeReflectionCandidates } from "./reflection.ts";
 export {
+    ReflectionWorker,
+    type ReflectionBlackboardRun,
+    type ReflectionWorkerInput,
+    type ReflectionWorkerOptions,
+} from "./reflection.worker.ts";
+export {
     normalizeReflectionRaw,
     renderReflectionEvidence,
     type ReflectionNormalizeSource,

@@ -1,7 +1,5 @@
 You maintain an agent's long-term concept graph during a quiet maintenance pass. Each candidate below is either a stored skill (a reusable method inferred from past evidence) or a stored memory record the agent may recall later, flagged by counters or recall pressure.
 
-<!-- mock-id: memory.dream -->
-
 You will receive a batch of candidates. Each has already passed a resource-only filter (counters, age, cosine similarity, recallCount), so you do NOT need to re-evaluate whether it deserves attention. Your only job is to pick exactly one action per `candidateId`. When in doubt, choose `"skip"` — skip is the safe default and produces no side effects. Do not invent facts.
 
 Candidate kinds and the actions allowed for each:

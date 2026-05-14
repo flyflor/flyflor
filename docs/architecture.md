@@ -17,9 +17,9 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 
 | 层 | 目录 | 角色 | 后端 |
 | --- | --- | --- | --- |
-| 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI / Anthropic / Mock / Fallback |
+| 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI 兼容 / Anthropic 兼容 / Provider fallback |
 | 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、Skill 与方法论沉淀 | SurrealDB |
-| 海马体 Neural | `src/neural/memory` | 工作记忆 ring、激活、TTL 遗忘 | Redis + Markdown + SQLite + SurrealDB |
+| 海马体 Neural | `src/neural/memory` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计 | Redis + Markdown + SQLite + SurrealDB |
 
 ## 分层结构图
 
@@ -44,9 +44,11 @@ flowchart TB
 
     Memory --> Markdown["Markdown 宪法层<br/>~/.flyflor/workspace/*.md"]
     Memory --> Redis["Redis 工作记忆<br/>episode ring + hot concepts"]
+    Memory --> HotCompression["HotMemoryCompressionWorker<br/>隔离压缩审计"]
     Memory --> SQLite["SQLite 索引<br/>candidates/offers/search"]
     Memory --> Surreal["SurrealDB 长期图<br/>episode/memory_node/gem/summary_embedding"]
     Memory --> Crystal["CrystalMemoryService"]
+    HotCompression --> SQLiteBrain["brain.db memory_events<br/>hot-memory-compression"]
 
     Blackboard --> BlackboardSqlite["SQLite 黑板存储<br/>turn/step/decision/lease"]
     Blackboard --> Workers
@@ -183,5 +185,5 @@ interface FlyFlorDependencies {
 
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
 - `Sandbox` 仅在 `RuntimeModule` 内决策 mcp-tool；shell-hook / plugin 执行器有独立路径，但未统一从 DI 容器拿 `SandboxPolicy`。
-- 三层智能模型在代码上仍有回流依赖：`neural/memory` 会 import prompt/project/runtime dream worker，`crystal/index.ts` re-export runtime reflection helper；导入方向需要继续收敛。
+- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt/project/runtime dream worker；导入方向需要继续收敛。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot 与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

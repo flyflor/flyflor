@@ -117,6 +117,9 @@ interface SandboxDecisionResult {
 
 ## 相关测试
 
-- `tests/sandbox.boundaries.test.ts`
-- `tests/sandbox.tools.test.ts`
+- `tests/sandbox.allowlist.test.ts`
+- `tests/sandbox.audit.test.ts`
+- `tests/sandbox.gate.test.ts`
+- `tests/sandbox.quota.test.ts`
+- `tests/shell.hook.executor.test.ts`
 - `tests/chat.boundaries.test.ts`

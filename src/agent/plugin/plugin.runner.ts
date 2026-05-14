@@ -11,7 +11,7 @@
  * - **bun --compile 安全**：仅 Bun.spawn + 普通 pipe；
  * - **零字符语义匹配**：不解析子进程文本做意图判断；
  * - **审批闭环**：使用 CapabilityExecutionKind.Plugin 决策；
- * - **可注入 spawn**：测试用 fake spawn 避免真子进程。
+ * - **可注入 spawn**：测试可替换子进程执行器。
  */
 import { CapabilityExecutionKind } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";

@@ -19,7 +19,6 @@
 import type { ModelClient, ModelMessage } from "../protocol/index.ts";
 import { RuntimeEventType, type EventSink } from "../protocol/events/index.ts";
 import { createRuntimeEvent as event } from "../protocol/events/runtime.event.ts";
-import { ModelProviderKind } from "../protocol/index.ts";
 import type { ModelConfig } from "../config/index.ts";
 
 export interface FallbackEntry {
@@ -97,8 +96,6 @@ export class FallbackModelClient implements ModelClient {
     }
 
     private isCredentialMissing(config: ModelConfig): boolean {
-        // Mock provider 不需要凭据；其他类型若 apiKey 字段为空字符串视为缺失。
-        if (config.provider === ModelProviderKind.Mock) return false;
         const key = config.apiKey;
         if (key === undefined || key === null) return true;
         if (typeof key === "string") return key.trim() === "";

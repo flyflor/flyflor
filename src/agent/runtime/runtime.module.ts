@@ -1,6 +1,7 @@
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
+    AgentAskChoice,
     BlackboardTurnStatus as BlackboardTurnStatusType,
     GatewayMessage,
     GatewayReply,
@@ -15,8 +16,6 @@ import {
     BlackboardTurnStatus,
     CapabilityExecutionKind,
     ComponentKind,
-    deriveEqDirective,
-    EqDirective,
     GhostContextReason,
     ModelRole,
 } from "../../protocol/contracts/index.ts";
@@ -67,7 +66,7 @@ import {
     type SkillUsageSummary,
 } from "../../crystal/skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
-import { extractRuntimeReflectionCandidates } from "./reflection.ts";
+import { ReflectionWorker } from "./reflection.worker.ts";
 import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./fast.route.ts";
 import {
     InMemoryFastRouteSnapshotStore,
@@ -153,9 +152,11 @@ export class RuntimeModule extends RuntimeBoundary {
     /** Shared embedding provider — compute once per turn, reused by memory recall + episode write. */
     private readonly embeddings: LocalHashEmbeddingProvider;
     private readonly perf: PerfMetrics;
+    private readonly reflection: ReflectionWorker;
     private readonly mcpToolCatalogCache = new Map<string, CachedMcpToolCatalog>();
     private readonly sandboxQuota: SandboxQuotaTracker;
     private readonly inflight: InFlightTracker;
+    private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
      * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
@@ -168,9 +169,11 @@ export class RuntimeModule extends RuntimeBoundary {
         private readonly events: EventSink,
         private readonly blackboard?: BlackboardModule,
         memory?: MemoryModule,
+        reflection?: ReflectionWorker,
     ) {
         super();
         this.memory = memory ?? createMemory(config, events, model);
+        this.reflection = reflection ?? new ReflectionWorker({ config, events, memory: this.memory, model });
         this.embeddings = new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
         this.perf = new PerfMetrics(config.metrics, events);
         this.sandboxQuota = new SandboxQuotaTracker({
@@ -182,6 +185,23 @@ export class RuntimeModule extends RuntimeBoundary {
 
     /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
     async warmup(): Promise<void> {
+        this.warmupPromise ??= this.performWarmup().catch((error) => {
+            this.warmupPromise = undefined;
+            throw error;
+        });
+        await this.warmupPromise;
+    }
+
+    dispose(): void {
+        this.reflection.dispose();
+        this.memory.dispose();
+    }
+
+    listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}) {
+        return this.memory.listChatHistory(userId, options);
+    }
+
+    private async performWarmup(): Promise<void> {
         await this.memory.warmup();
         const redisClient = this.memory.getRedisClient();
         if (redisClient && this.fastRouteSnapshots instanceof InMemoryFastRouteSnapshotStore) {
@@ -512,29 +532,12 @@ export class RuntimeModule extends RuntimeBoundary {
 
         // LF-R3 slice C：runtime 用户面 cap 强制——若模型本轮要 ask 但当前 chain 已达上限，
         // 抛弃 ask 改走 reply。Memory 内部的 cap 检查是后台兜底，这里负责对外封顶。
-        // EQ-03：若用户当前处于 CalmDown 状态（高唤醒 + 负 valence + anger/sadness/fear），
-        // 把 cap 临时降为 1（只允许首问，不允许追问链），避免对怒/悲用户继续堆问题。
-        // 派生 100% 由结构化 EqState + 阈值决定，零字符匹配。
+        // 仅由 ask 链深度决定，不再让 EQ 参与路由或 ask cap。
         let modelAsk: AgentAsk | undefined = askParsed.ask;
         if (modelAsk) {
             const pending = this.memory.peekActiveAsk(message.user.id);
             const baseCap = Math.max(1, this.config.memory.tuning.ghost.maxChainDepth);
-            const eqState = this.memory.peekEqState(message.user.id);
-            const directive = eqState ? deriveEqDirective(eqState) : null;
-            const calmDownCap = directive === EqDirective.CalmDown ? 1 : baseCap;
-            const maxChainDepth = Math.min(baseCap, calmDownCap);
-            if (calmDownCap < baseCap) {
-                this.events.publish(
-                    event(RuntimeEventType.RuntimeEqDirectiveApplied, {
-                        requestId: context.requestId,
-                        userId: message.user.id,
-                        directive,
-                        action: "ask-cap-overridden",
-                        baseCap,
-                        effectiveCap: maxChainDepth,
-                    }),
-                );
-            }
+            const maxChainDepth = baseCap;
             const projectedDepth = pending ? pending.chainDepth + 1 : 1;
             if (projectedDepth > maxChainDepth) {
                 this.events.publish(
@@ -544,7 +547,6 @@ export class RuntimeModule extends RuntimeBoundary {
                         chainDepth: projectedDepth,
                         maxChainDepth,
                         action: "dropped-by-runtime",
-                        ...(directive === EqDirective.CalmDown ? { reason: "eq-calm-down" } : {}),
                     }),
                 );
                 modelAsk = undefined;
@@ -564,12 +566,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ...(ask
                     ? {
                           kind: "ask" as const,
-                          ask: {
-                              choices: ask.choices?.length ?? 0,
-                              questions: ask.questions?.length ?? 0,
-                              reason: ask.reason,
-                              snapshotId: behaviorSnapshotId,
-                          },
+                          ask: buildAskMetadata(ask, behaviorSnapshotId),
                       }
                     : { kind: "reply" as const }),
                 behaviorSnapshotId,
@@ -620,12 +617,7 @@ export class RuntimeModule extends RuntimeBoundary {
             text: renderAskReplyText(ask),
             metadata: {
                 kind: "ask" as const,
-                ask: {
-                    choices: ask.choices?.length ?? 0,
-                    questions: ask.questions?.length ?? 0,
-                    reason: ask.reason,
-                    snapshotId: behaviorSnapshotId,
-                },
+                ask: buildAskMetadata(ask, behaviorSnapshotId),
                 behaviorSnapshotId,
                 blackboard: blackboardRun
                     ? {
@@ -791,9 +783,15 @@ export class RuntimeModule extends RuntimeBoundary {
         const { blackboardRun } = assembled;
         const { visibleText, mcpCallProvenance, selectedSkillNames } = generated;
 
-        void this.scheduleReflection(message, enrichedContext, visibleText, blackboardRun, {
-            mcpCalls: mcpCallProvenance,
-            skillNames: selectedSkillNames,
+        void this.reflection.dispatch({
+            message,
+            context: enrichedContext,
+            visibleText,
+            blackboardRun,
+            provenance: {
+                mcpCalls: mcpCallProvenance,
+                skillNames: selectedSkillNames,
+            },
         });
         void this.memory.classifyAndApplyFeedback(message, enrichedContext);
         if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
@@ -806,10 +804,6 @@ export class RuntimeModule extends RuntimeBoundary {
         }
     }
 
-    /**
-     * 后台反思调度：LLM 提取 → memory.applyReflection → crystal write。
-     * 不阻塞主回答；失败由 applyReflection 内部发布 MemoryReflectionFailed 事件。
-     */
     /**
      * fastRoute 命中时直接返回 bypass 决策（不发起 LLM 调用）；
      * 未命中时才调用 decideBlackboardRoute（仅当 blackboard 装配可用）。
@@ -884,29 +878,6 @@ export class RuntimeModule extends RuntimeBoundary {
      */
     private snapshotKeyFor(message: GatewayMessage): string {
         return `${message.route.channel}:${message.route.chatId}:${message.user.id}`;
-    }
-
-    private async scheduleReflection(
-        message: GatewayMessage,
-        context: RuntimeContext,
-        visibleText: string,
-        blackboardRun: RuntimeBlackboardRun | undefined,
-        provenance: MemoryEpisodeProvenance,
-    ): Promise<void> {
-        try {
-            const candidates = await this.extractReflectionCandidates(
-                message,
-                context,
-                visibleText,
-                blackboardRun,
-                provenance,
-            );
-            if (candidates.length > 0) {
-                await this.memory.applyReflection(candidates, context);
-            }
-        } catch {
-            // reflection failures are observable via MemoryReflectionFailed events; never surface to user
-        }
     }
 
     private async generateModelText(
@@ -1291,44 +1262,6 @@ export class RuntimeModule extends RuntimeBoundary {
         }
     }
 
-    private async extractReflectionCandidates(
-        message: GatewayMessage,
-        context: RuntimeContext,
-        visibleText: string,
-        blackboardRun: RuntimeBlackboardRun | undefined,
-        provenance: MemoryEpisodeProvenance,
-    ) {
-        if (!shouldExtractReflection(blackboardRun, provenance.mcpCalls)) {
-            return [];
-        }
-        return extractRuntimeReflectionCandidates(this.model, {
-            answer: visibleText,
-            blackboard: blackboardRun
-                ? {
-                      decisions: blackboardRun.decisions.map((decision) => ({
-                          prompt: decision.prompt,
-                          reason: decision.reason,
-                      })),
-                      mode: blackboardRun.mode,
-                      reason: blackboardRun.reason,
-                      status: blackboardRun.status,
-                      steps: blackboardRun.steps.map((step) => ({
-                          blockers: step.blockers,
-                          newFacts: step.newFacts,
-                          outputSummary: step.outputSummary,
-                          workerRole: step.workerRole,
-                      })),
-                      turnId: blackboardRun.turnId,
-                  }
-                : undefined,
-            now: context.now,
-            request: message.text,
-            requestId: context.requestId,
-            route: readRouteMetadata(blackboardRun?.metadata),
-            mcpCalls: provenance.mcpCalls,
-            skillNames: provenance.skillNames,
-        });
-    }
 }
 
 function blackboardRunFromTurn(
@@ -1383,10 +1316,7 @@ function renderAskReplyText(ask: AgentAsk): string {
     const questions = ask.questions ?? [];
     if (ask.choices && ask.choices.length > 0) {
         lines.push("");
-        ask.choices.forEach((choice, idx) => {
-            const tail = choice.description ? ` — ${choice.description}` : "";
-            lines.push(`${idx + 1}. ${choice.label}${tail}`);
-        });
+        renderAskChoiceLines(ask.choices).forEach((line) => lines.push(line));
     }
     if (questions.length > 0) {
         if (ask.choices && ask.choices.length > 0) {
@@ -1394,11 +1324,9 @@ function renderAskReplyText(ask: AgentAsk): string {
         }
         questions.forEach((question, idx) => {
             lines.push(`${idx + 1}. ${question.prompt.trim()}`);
-            if (question.choices && question.choices.length > 0) {
-                question.choices.forEach((choice, choiceIdx) => {
-                    const tail = choice.description ? ` — ${choice.description}` : "";
-                    lines.push(`   ${choiceIdx + 1}. ${choice.label}${tail}`);
-                });
+            const questionChoices = renderAskChoiceLines(question.choices);
+            if (questionChoices.length > 0) {
+                questionChoices.forEach((line) => lines.push(`   ${line}`));
             }
             if (idx < questions.length - 1) {
                 lines.push("");
@@ -1408,10 +1336,36 @@ function renderAskReplyText(ask: AgentAsk): string {
     return lines.join("\n");
 }
 
+function renderAskChoiceLines(choices: AgentAskChoice[] | undefined): string[] {
+    if (!choices || choices.length === 0) {
+        return [];
+    }
+    const lines: string[] = [];
+    choices.forEach((choice, idx) => {
+        const tail = choice.description ? ` — ${choice.description}` : "";
+        lines.push(`${idx + 1}. ${choice.label}${tail}`);
+    });
+    lines.push(`${choices.length + 1}. Other — type your own answer`);
+    return lines;
+}
+
 function renderUserContentWithAttachments(message: GatewayMessage): string {
     const summary = renderAttachmentSummary(message.attachments);
     if (!summary) return message.text;
     return message.text ? `${message.text}\n\n${summary}` : summary;
+}
+
+function buildAskMetadata(ask: AgentAsk, snapshotId: string): Record<string, unknown> {
+    return {
+        choiceCount: ask.choices?.length ?? 0,
+        choices: ask.choices ?? [],
+        freeform: ask.freeform ?? true,
+        prompt: ask.prompt,
+        questionCount: ask.questions?.length ?? 0,
+        questions: ask.questions ?? [],
+        reason: ask.reason,
+        snapshotId,
+    };
 }
 
 export function filterMcpServersByToolset<T extends { name: string }>(
@@ -1515,18 +1469,6 @@ function normalBlackboardContract(): RuntimeBlackboardRouteDecision["blackboardC
         mode: "normal",
         policyReason: "default-convergence",
     };
-}
-
-function shouldExtractReflection(
-    run: RuntimeBlackboardRun | undefined,
-    mcpCalls: MemoryEpisodeProvenance["mcpCalls"] = [],
-): boolean {
-    if ((mcpCalls ?? []).some((call) => call.ok)) {
-        return true;
-    }
-    if (!run) return false;
-    const route = readRouteMetadata(run.metadata);
-    return run.mode === BlackboardMode.Blackboard || route?.needsReflectionCandidate === true;
 }
 
 function renderBlackboardTranscript(run: RuntimeBlackboardRun): string[] {

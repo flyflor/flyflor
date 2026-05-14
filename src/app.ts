@@ -121,9 +121,17 @@ export class FlyFlor {
             return;
         }
 
-        await startHumanChat(this.dependencies.runtime, {
-            approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
-        });
+        try {
+            await startHumanChat(this.dependencies.runtime, {
+                approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+            });
+        } finally {
+            this.dispose();
+        }
+    }
+
+    dispose(): void {
+        this.dependencies.runtime.dispose();
     }
 
     resolve<TValue>(token: InjectionToken<TValue>): TValue {

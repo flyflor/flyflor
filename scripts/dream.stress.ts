@@ -3,7 +3,7 @@
  * Dream worker 压测脚本（M-04）。
  *
  * 目标：在真实 LLM / SurrealDB 不可用的开发环境中，验证 DreamWorkerImpl
- * 在大批量候选下的吞吐与稳定性。完全基于内存 fake 实现，不接 Surreal、不接外网。
+ * 在大批量候选下的吞吐与稳定性。完全基于内存驱动，不接 Surreal、不接外网。
  *
  * 用法：
  *   bun run scripts/dream.stress.ts [--candidates N] [--passes P] [--mix drift,recall,contradiction]

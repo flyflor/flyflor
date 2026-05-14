@@ -24,7 +24,17 @@ import type {
 import { Memory } from "../../agent/components.ts";
 import { Module, Provide } from "../../agent/di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import { loadPromptTemplates, renderMemoryContextPrompt } from "../../agent/prompts/index.ts";
+import {
+    loadPromptTemplates,
+    renderMemoryContextPrompt,
+    renderProjectOfferPrompt,
+    renderRuntimeAskContinuationPrompt,
+    renderRuntimeDormantResumePrompt,
+    renderRuntimeEqContextPrompt,
+    renderRuntimeGhostHintPrompt,
+    renderRuntimeIdentityContextPrompt,
+    renderSkillOfferPrompt,
+} from "../../agent/prompts/index.ts";
 import { FeedbackCategory, classifyFeedback } from "../../agent/runtime/feedback.interpreter.ts";
 import { detectExplicitIntent, detectExplicitSkillIntent, ProjectTriggerKind } from "../../agent/project/index.ts";
 import { promoteCodename as promoteCodenameHelper } from "../../agent/project/codename.promote.ts";
@@ -37,7 +47,7 @@ import { ProjectMemoryStore } from "./project.memory.ts";
 import { JournalStore, JournalWriteRejectedError, type JournalAtomWrite, type JournalVisibleAtom } from "./journal.store.ts";
 import { BrainStore } from "./brain.store.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
-import { AskReason, MemoryEventStatus, MemoryEventType, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type EqClassification, type EqDirective, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
@@ -45,6 +55,7 @@ import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
 import { RedisMemoryStore } from "./redis.ts";
 import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
+import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
 import { RetrospectiveLog } from "./retrospective.ts";
 import { BackgroundScheduler } from "./background.scheduler.ts";
 import { runBrainArchive, type BrainArchiveRunResult } from "./brain.archive.ts";
@@ -66,6 +77,7 @@ export { MarkdownMemoryStore } from "./markdown.ts";
 export { JournalStore, type JournalAtomWrite, type JournalEpisodeInput } from "./journal.store.ts";
 export { ProjectMemoryStore } from "./project.memory.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
+export { HotMemoryCompressionWorker, parseHotMemoryCompressionDecision } from "./hot.memory.compression.worker.ts";
 export { SQLiteMemoryStore } from "./sqlite.ts";
 export type {
     MemoryAction,
@@ -82,6 +94,13 @@ export type {
 export interface BehaviorSnapshotRecord {
     corrections: MemoryEventRecord[];
     snapshot: MemoryEventRecord;
+}
+
+export interface ChatHistoryTurn {
+    assistantText: string;
+    eventId: string;
+    ts: number;
+    userText: string;
 }
 
 export interface BehaviorSnapshotInput {
@@ -123,8 +142,12 @@ export class MemoryModule extends Memory {
     private readonly crystal: CrystalMemoryService;
     private readonly redis: RedisMemoryStore | null;
     private readonly surreal: SurrealGraphStore | null;
+    private readonly hotMemoryCompression: HotMemoryCompressionWorker | null;
     private readonly scheduler: BackgroundScheduler | null;
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
+    private hotMemoryCompressionTimer: ReturnType<typeof setInterval> | undefined;
+    private brainMaintenanceBusy = false;
+    private readonly activeMemoryUsers = new Set<string>();
     private readonly dormant: DormantSupervisor;
     private readonly model: ModelClient | undefined;
     private readonly projectScaffolder: ProjectScaffolder;
@@ -155,6 +178,12 @@ export class MemoryModule extends Memory {
                 : config.memory.crystal.surreal.enabled
                   ? new SurrealGraphStore(config.memory.crystal.surreal)
                   : null;
+        this.hotMemoryCompression =
+            this.redis && model && config.memory.tuning.hotMemoryCompression.enabled
+                ? new HotMemoryCompressionWorker(this.redis, this.brain, model, this.events, {
+                      batchSize: config.memory.tuning.hotMemoryCompression.batchSize,
+                  })
+                : null;
         this.projectScaffolder = new ProjectScaffolder(config.paths, this.events);
         // 后台调度器仅在三件依赖（Redis 短期 + Surreal 长期 + 模型）齐备时启用；
         // 任一缺失即降级为 null，rememberTurn / warmup / dispose 全部跳过即可。
@@ -174,6 +203,9 @@ export class MemoryModule extends Memory {
                               const r = this.runSummaryOnce(userId);
                               return { written: r?.written ?? 0 };
                           },
+                          hotMemoryCompression: this.hotMemoryCompression ?? undefined,
+                          hotMemoryCompressionIntervalMs:
+                              Math.max(0, config.memory.tuning.hotMemoryCompression.intervalMinutes) * 60_000,
                           dormantSweeper: () => this.dormant.sweepOnce(),
                           brainArchiveSweeper: async () => {
                               const r = await this.runBrainArchiveOnce();
@@ -230,6 +262,7 @@ export class MemoryModule extends Memory {
         }
         if (!this.scheduler) {
             this.startBrainArchiveTimer();
+            this.startHotMemoryCompressionTimer();
         }
         if (!this.redis) return;
         try {
@@ -247,6 +280,11 @@ export class MemoryModule extends Memory {
             clearInterval(this.brainArchiveTimer);
             this.brainArchiveTimer = undefined;
         }
+        if (this.hotMemoryCompressionTimer !== undefined) {
+            clearInterval(this.hotMemoryCompressionTimer);
+            this.hotMemoryCompressionTimer = undefined;
+        }
+        this.redis?.dispose();
         if (this.brainOpened) {
             try {
                 this.brain.close();
@@ -269,6 +307,33 @@ export class MemoryModule extends Memory {
         }, intervalMs);
         if (typeof (this.brainArchiveTimer as { unref?: () => void })?.unref === "function") {
             (this.brainArchiveTimer as { unref: () => void }).unref();
+        }
+    }
+
+    private startHotMemoryCompressionTimer(): void {
+        if (this.hotMemoryCompressionTimer !== undefined) {
+            clearInterval(this.hotMemoryCompressionTimer);
+            this.hotMemoryCompressionTimer = undefined;
+        }
+        const intervalMs = Math.max(0, this.config.memory.tuning.hotMemoryCompression.intervalMinutes) * 60_000;
+        if (!this.brainOpened || !this.hotMemoryCompression || intervalMs <= 0) return;
+        this.hotMemoryCompressionTimer = setInterval(() => {
+            void this.runHotMemoryCompressionRootOnce();
+        }, intervalMs);
+        if (typeof (this.hotMemoryCompressionTimer as { unref?: () => void })?.unref === "function") {
+            (this.hotMemoryCompressionTimer as { unref: () => void }).unref();
+        }
+    }
+
+    private async runHotMemoryCompressionRootOnce(): Promise<void> {
+        if (!this.brainOpened || !this.hotMemoryCompression || this.brainMaintenanceBusy) return;
+        this.brainMaintenanceBusy = true;
+        try {
+            for (const userId of [...this.activeMemoryUsers]) {
+                await this.hotMemoryCompression.drain(userId).catch(() => undefined);
+            }
+        } finally {
+            this.brainMaintenanceBusy = false;
         }
     }
 
@@ -626,6 +691,7 @@ export class MemoryModule extends Memory {
         void this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
+        this.activeMemoryUsers.add(message.user.id);
         this.scheduler?.noteUserTurn(message.user.id);
         this.dormant.touch(message.user.id);
 
@@ -1421,11 +1487,26 @@ export class MemoryModule extends Memory {
         return { askId: pending.id, chainDepth: pending.chainDepth, ask: pending.ask };
     }
 
+    listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}): ChatHistoryTurn[] {
+        if (!this.config.memory.enabled) {
+            throw new Error("Chat history is unavailable because memory is disabled.");
+        }
+        if (!this.brainOpened) {
+            throw new Error("Chat history is unavailable because brain.db is not opened.");
+        }
+        const rows = this.brain.listEvents({
+            userId,
+            type: MemoryEventType.Event,
+            untilTs: options.beforeTs,
+            limit: options.limit ?? 20,
+        });
+        return rows.map(historyTurnFromEvent).reverse();
+    }
+
     /**
-     * EQ-01 slice C：决策侧（runtime / skill router）按当前 EQ state 调整语气或
-     * skill 优先级的唯一读路径。返回已 decay 的最新状态（资源指标 dt = now - updatedAt）。
-     * 零字符匹配——只读 brain 行 + 数字衰减，runtime 严禁基于消息文本派生 label。
-     * 没有 state 或 brain 未开则返回 null（决策侧应优雅降级，不要 fallback 到关键词）。
+     * EQ-01 slice C：EQ 的唯一读路径。返回已 decay 的最新状态（资源指标 dt = now - updatedAt）。
+     * 零字符匹配——只读 brain 行 + 数字衰减，不基于消息文本派生 label。
+     * 没有 state 或 brain 未开则返回 null（只作为语气提示；不参与路由、工具或 ask 决策）。
      */
     peekEqState(userId: string, nowMs: number = Date.now()): EqState | null {
         if (!this.brainOpened) return null;
@@ -1477,11 +1558,7 @@ export class MemoryModule extends Memory {
             : idleHours < 48
                 ? `${idleHours.toFixed(1)}h`
                 : `${(idleHours / 24).toFixed(1)}d`;
-        return [
-            "[runtime-resume]",
-            `User just returned after ${bucket} of inactivity (runtime mode: dormant → chat).`,
-            "Acknowledge briefly only if natural; do not over-apologize or restart context unless the user asks.",
-        ].join("\n");
+        return renderRuntimeDormantResumePrompt({ idleBucket: bucket });
     }
 
     /**
@@ -1489,7 +1566,7 @@ export class MemoryModule extends Memory {
      * - decay 在读时计算（资源指标 dt = now - updatedAt），label / dominance 不衰减；
      * - 衰减后 |valence| < 0.05 且 arousal < 0.05 时视为已平复，跳过注入（避免噪音）；
      * - 注入内容只包含结构化字段（label、衰减后 valence/arousal/dominance、confidence、age 分桶）；
-     * - 严守红线：runtime 不基于消息文本派生 label，下一轮由模型在 `memoryAction.eq` 显式刷新。
+     * - 只用于语气、暖度和节奏提示，不参与路由、工具选择、问答链深度或其他决策。
      */
     private renderEqContextBlock(userId: string): string | undefined {
         if (!this.brainOpened) return undefined;
@@ -1510,24 +1587,15 @@ export class MemoryModule extends Memory {
             : ageMinutes < 60 * 48
                 ? `${(ageMinutes / 60).toFixed(1)}h`
                 : `${(ageMinutes / 1440).toFixed(1)}d`;
-        const lines = [
-            "[eq-context]",
-            `Last observed user emotion (decayed by elapsed time, ${ageBucket} ago):`,
-            `- label=${decayed.label}`,
-            `- valence=${decayed.valence.toFixed(2)} (range -1..1, 0=neutral)`,
-            `- arousal=${decayed.arousal.toFixed(2)} (range 0..1)`,
-            `- dominance=${decayed.dominance.toFixed(2)} (range 0..1)`,
-            `- confidence=${decayed.confidence.toFixed(2)}`,
-            "Adapt tone to be appropriate for this baseline; never quote these numbers back to the user. Refresh the state by emitting a `memoryAction.eq` block this turn if your observation differs — never derive a label from keywords in the user's text.",
-        ];
-        // EQ-02：runtime 决策侧从结构化 EQ 状态派生方向性 directive，并附在块尾。
-        // 派生纯由 label + 数值阈值决定，零字符匹配。directive 只指方向，
-        // 模型仍然自由表达；directive 为 null（confidence 太低）时不追加。
-        const directive = deriveEqDirective(decayed);
-        if (directive) {
-            lines.push(`- directive=${directive} (${describeDirective(directive)})`);
-        }
-        return lines.join("\n");
+        return renderRuntimeEqContextPrompt({
+            ageBucket,
+            arousal: decayed.arousal.toFixed(2),
+            confidence: decayed.confidence.toFixed(2),
+            directive: renderEqDirectiveLine(deriveEqDirective(decayed)),
+            dominance: decayed.dominance.toFixed(2),
+            label: decayed.label,
+            valence: decayed.valence.toFixed(2),
+        });
     }
 
     /**
@@ -1538,21 +1606,19 @@ export class MemoryModule extends Memory {
         const pending = this.findPendingAsk(userId);
         if (!pending) return undefined;
         const ask = pending.ask;
-        const lines: string[] = [
-            "[continuation]",
-            `You previously asked the user (reason=${ask.reason}, chainDepth=${pending.chainDepth}):`,
-            `> ${ask.prompt.replace(/\n+/g, " ").slice(0, 600)}`,
-        ];
+        const choices: string[] = [];
         if (ask.choices && ask.choices.length > 0) {
-            lines.push("Choices you offered:");
+            choices.push("Choices you offered:");
             for (const c of ask.choices.slice(0, 8)) {
-                lines.push(`- ${c.label}${c.value ? ` (value=${c.value})` : ""}`);
+                choices.push(`- ${c.label}${c.value ? ` (value=${c.value})` : ""}`);
             }
         }
-        lines.push(
-            "Treat the user's next message as their answer. If the answer resolves your question, reply directly; do NOT emit another <flyflor_agent_ask> unless strictly required.",
-        );
-        return lines.join("\n");
+        return renderRuntimeAskContinuationPrompt({
+            chainDepth: String(pending.chainDepth),
+            choices: choices.join("\n"),
+            prompt: ask.prompt.replace(/\n+/g, " ").slice(0, 600),
+            reason: ask.reason,
+        });
     }
 
     /**
@@ -1593,23 +1659,17 @@ export class MemoryModule extends Memory {
         scored.sort((a, b) => b.score - a.score);
         const top = scored.slice(0, 3);
 
-        const lines: string[] = [
-            "[ghost-hint]",
-            "The following past contexts are still active for this user (sorted by weighted decay score, highest first):",
-        ];
+        const entries: string[] = [];
         for (const { row, score, tag } of top) {
             const c = row.content as Partial<GhostContextEventContent>;
             const title = c.userFacing?.title?.slice(0, 120) ?? `ghost:${c.reason ?? "unknown"}`;
             const hint = c.userFacing?.contextHint?.slice(0, 200);
             const ageHours = Math.max(0, Math.round((Date.now() - row.ts) / 36e5));
-            lines.push(
+            entries.push(
                 `- id=${row.id} reason=${c.reason ?? "-"} evidence=${tag} score=${score.toFixed(2)} age=${ageHours}h :: ${title}${hint ? ` (${hint})` : ""}`,
             );
         }
-        lines.push(
-            "If the user's new message clearly continues one of these contexts, reuse it (no need to ask). If it starts a fresh topic, ignore them. Never invent ghosts the user did not name.",
-        );
-        return lines.join("\n");
+        return renderRuntimeGhostHintPrompt({ ghostEntries: entries.join("\n") });
     }
 
     /**
@@ -1626,10 +1686,7 @@ export class MemoryModule extends Memory {
             return undefined;
         }
         if (rows.length === 0) return undefined;
-        const lines: string[] = [
-            "[identity]",
-            "The following self-described facts about this user and yourself were recorded in earlier turns and remain active. Honor them in your reply when relevant; do not contradict them silently.",
-        ];
+        const entries: string[] = [];
         let budget = 1200;
         for (const row of rows) {
             const c = row.content as Partial<IdentityEventContent>;
@@ -1638,11 +1695,11 @@ export class MemoryModule extends Memory {
             if (!content) continue;
             const line = `- (${kind}) ${content}`;
             if (line.length > budget) break;
-            lines.push(line);
+            entries.push(line);
             budget -= line.length + 1;
         }
-        if (lines.length <= 2) return undefined;
-        return lines.join("\n");
+        if (entries.length === 0) return undefined;
+        return renderRuntimeIdentityContextPrompt({ identityEntries: entries.join("\n") });
     }
 
     /**
@@ -2079,7 +2136,8 @@ export class MemoryModule extends Memory {
      * 不调 LLM、不读 content 文本。返回 `null` 表示 brain 未开。
      */
     runSummaryOnce(userId: string, nowMs?: number): SummaryRunResult | null {
-        if (!this.brainOpened) return null;
+        if (!this.brainOpened || this.brainMaintenanceBusy) return null;
+        this.brainMaintenanceBusy = true;
         try {
             const worker = new SummaryWorker(this.brain, {
                 rollingWindowDays: this.config.memory.tuning.summary.rollingWindowDays,
@@ -2112,6 +2170,8 @@ export class MemoryModule extends Memory {
                 }),
             );
             return null;
+        } finally {
+            this.brainMaintenanceBusy = false;
         }
     }
 
@@ -2120,7 +2180,8 @@ export class MemoryModule extends Memory {
      * 只移动 state=archived 且早于 cutoff 的事件；live/resumed 事件不动。
      */
     async runBrainArchiveOnce(nowMs?: number): Promise<BrainArchiveRunResult | null> {
-        if (!this.brainOpened) return null;
+        if (!this.brainOpened || this.brainMaintenanceBusy) return null;
+        this.brainMaintenanceBusy = true;
         try {
             const result = await runBrainArchive({
                 brainPath: join(this.config.paths.home, "brain.db"),
@@ -2148,6 +2209,8 @@ export class MemoryModule extends Memory {
                 }),
             );
             return null;
+        } finally {
+            this.brainMaintenanceBusy = false;
         }
     }
 
@@ -2752,30 +2815,26 @@ export class MemoryModule extends Memory {
 }
 
 function renderProjectOfferNudge(offer: PendingProjectOffer): string {
-    // Hermes-style 自我 nudge：把候选项目以"自我笔记"形式注入 system prompt，
-    // 由 LLM 在自然对话中向用户提议确认；用户明确同意时，模型会在 memory action
-    // signals 中抬高 projectIntent，commitTurn Path A 自动触发 scaffolder。
-    return [
-        "[project-offer]",
-        `  title: ${offer.title}`,
-        `  evidence: ${offer.evidenceScore.toFixed(2)} from ${offer.relatedIds.length} related episodes`,
-        `  remaining_turns: ${offer.ttlTurns}`,
-        `  hint: 这是一个可能值得固化为长期项目的候选。如果对话主题确实在持续聚焦，可以主动询问用户是否希望把它升格为长期项目；用户明确同意时再固化。不要凭空创建，也不要重复询问。`,
-    ].join("\n");
+    return renderProjectOfferPrompt({
+        evidenceScore: offer.evidenceScore.toFixed(2),
+        relatedCount: String(offer.relatedIds.length),
+        remainingTurns: String(offer.ttlTurns),
+        title: offer.title,
+    });
 }
 
 function renderSkillOfferNudge(offer: PendingSkillOffer): string {
-    // 与 project-offer 同构：以自我笔记注入 system prompt。用户在自然对话中明确同意
-    // 后，模型抬高 memory action 的 signals.skillPromotionIntent ≥ 0.7，commitTurn 自动
-    // 调用 consumeSkillOffer 物化为 SKILL.md。
-    return [
-        "[skill-offer]",
-        `  name: ${offer.name}`,
-        `  tools: ${offer.mcpTools.join(", ")}`,
-        `  support: ${offer.support} episodes, confidence ${offer.confidence.toFixed(2)}`,
-        `  remaining_turns: ${offer.ttlTurns}`,
-        `  hint: 这是一个反复出现的 MCP 工具组合，可能值得固化为可复用 Skill（写入 ~/.flyflor/skills/）。若用户表达过想"保存为技能/把这套流程留下来"等明确意图，再设置 signals.skillPromotionIntent ≥ 0.7。否则保持 0，不要凭空提议或重复询问。`,
-    ].join("\n");
+    return renderSkillOfferPrompt({
+        confidence: offer.confidence.toFixed(2),
+        name: offer.name,
+        remainingTurns: String(offer.ttlTurns),
+        support: String(offer.support),
+        tools: offer.mcpTools.join(", "),
+    });
+}
+
+function renderEqDirectiveLine(directive: string | null): string {
+    return directive ? `- directive=${directive}` : "";
 }
 
 function extractEpisodeMcpTools(metadata: Record<string, unknown> | undefined): string[] {
@@ -3005,23 +3064,6 @@ function clamp01(value: number): number {
         return 0;
     }
     return Math.max(0, Math.min(1, value));
-}
-
-/**
- * EQ-02：把 EqDirective 转成附在 [eq-context] 块尾的简短指引文。
- * 文本内容是声明式的方向（不替模型决定具体话术）。
- */
-function describeDirective(directive: EqDirective): string {
-    switch (directive) {
-        case "calm-down":
-            return "stay calm and concise; do not pile on questions; lower the cognitive load before resuming complex flows";
-        case "match-energy":
-            return "briefly match the user's positive energy, then return to your normal tone";
-        case "steady":
-            return "user appears settled; keep the current baseline tone";
-        default:
-            return "";
-    }
 }
 
 function clampSigned(value: number): number {
@@ -3264,6 +3306,24 @@ function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string
     const hasher = new Bun.CryptoHasher("sha256");
     hasher.update(`${context.requestId}:${message.id}:${context.now}`);
     return `episode:${hasher.digest("hex").slice(0, 24)}`;
+}
+
+function historyTurnFromEvent(row: MemoryEventRecord): ChatHistoryTurn {
+    const userText = strictHistoryString(row.content.userText, row.id, "userText");
+    const assistantText = strictHistoryString(row.content.assistantText, row.id, "assistantText");
+    return {
+        assistantText,
+        eventId: row.id,
+        ts: row.ts,
+        userText,
+    };
+}
+
+function strictHistoryString(value: unknown, eventId: string, field: string): string {
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new Error(`Invalid chat history event ${eventId}: missing ${field}`);
+    }
+    return value;
 }
 
 function deriveProjectConstraintId(message: GatewayMessage, triggerKind: ProjectTriggerKind, codenameId?: string): string {

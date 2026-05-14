@@ -10,7 +10,7 @@
 - `src/agent/runtime/fast.route.ts` — 资源指标短路
 - `src/agent/runtime/blackboard.route.ts` — LLM 路由模板调用
 - `src/agent/runtime/route.escalation.ts` — direct-with-watch 升级器
-- `src/agent/runtime/reflection.ts` — 反思候选提取
+- `src/agent/runtime/reflection.worker.ts` — 反思调度 worker
 - `src/agent/runtime/perf.metrics.ts` — 性能事件采集
 - `src/agent/runtime/chat.ts` — TTY 交互入口
 - `src/neural/memory/index.ts` — `MemoryModule.buildPrompt` / `rememberTurn`
@@ -47,7 +47,7 @@ flowchart TB
     Parse --> S["GatewayReply 返回调用方"]
     Ask --> S
     S --> T["rememberTurn / recordSkillUsage<br/>aware-of-await"]
-    T --> U["scheduleReflection 后台 fire-and-forget"]
+    T --> U["ReflectionWorker.dispatch 后台 fire-and-forget"]
     T --> V["classifyAndApplyFeedback 后台"]
     T --> W{"黑板收敛？"}
     W -- 是 --> X["recordDebateEpisode"]
@@ -145,6 +145,8 @@ flowchart LR
 
 Ghost Context 不是普通 retrieved memory：active / resumed ghost 通过 `[ghost-hint]` 单独进入 prompt，模型用结构化 `resume` / `fork` / `fresh` 决策让分支继续、降权或回到主线。
 
+RuntimeModule 另外暴露 `listChatHistory(userId, options)` 给 chat TUI 做 out-of-band 历史回放；这条路径只读 `brain.db` 事件，不进入 prompt 装配。
+
 ## MCP 工具循环
 
 ```mermaid
@@ -205,7 +207,7 @@ flowchart LR
 
 随后 fire-and-forget 启动：
 
-- `scheduleReflection` — LLM 抽取 symbols/bucket/coordinates → `MemoryModule.applyReflection` → Crystal 候选
+- `ReflectionWorker.dispatch` — LLM 抽取 symbols/bucket/coordinates → `MemoryModule.applyReflection` → Crystal 候选
 - `classifyAndApplyFeedback` — A/B/C/D 分类，由模型 JSON 驱动；Preference / GlobalStrategy / 部分 correction/confirmation 已接入记忆事件
 - 收敛黑板 → `recordDebateEpisode` 高权重 episode
 - MCP 工具失败 → `ghost-context`，process restart → warmup 恢复 ghost

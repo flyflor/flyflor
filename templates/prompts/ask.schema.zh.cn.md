@@ -17,7 +17,7 @@ reply 与 ask 互斥：一旦发出 ask 块，对外可见的回复会基于 `as
 
 - `choices`（`[{label, value?, description?}]`）：最多 12 个候选项，用于整条 ask 的标题问题。`label` 给用户看，`value` 是你打算在该项被选中时沿用的结构化值。
 - `questions`（`[{id?, prompt, choices?, freeform?, relatedIds?, rationale?}]`）：按顺序排列的子问题。一次需要问多个点时用这个数组；每个 prompt 保持短、具体。
-- `freeform`（布尔，默认 `true`）：置为 `false` 表示必须从 `choices` 中选一个。
+- `freeform`（布尔，默认 `true`）：置为 `false` 表示你强烈偏好用户从 `choices` 中选一个。客户端界面仍可能显示 `Other` 选项，让用户输入自定义回答；如果用户这样回答，下一轮照常处理。
 - `relatedIds`（`[string]`）：codenameId / blackboardTurnId / projectId 等关联标识，仅供审计回查。
 - `rationale`（字符串）：你内部的简短理由（调试 / 审计用），不会原样展示给用户。
 - `ghostHint`（对象）：给运行时的可选元数据，用来保存一条“未完成事项 / 可恢复上下文”。它不是给你推理用的额外上下文。形态：`{ "title": "≤60 字的简短标题", "contextHint": "≤200 字、用户重新打开这个未完成事项时看到的提示" }`。如果 `prompt` 已经把未解决点说明清楚，可以省略。

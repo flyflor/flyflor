@@ -26,22 +26,22 @@ Gateway 是 Flyflor 对外通讯的唯一入口：归一化 22 种 channel 入�
 | Telegram | `telegram` | `TelegramAdapter` | ✅ webhook + bot |
 | Discord | `discord` | `DiscordInteractionAdapter` | ✅ interactions |
 | Feishu | `feishu` | `FeishuAdapter` | ✅ webhook |
-| BlueBubbles / iMessage | `bluebubbles` / `imessage` | `HttpPlatformAdapter` | ⚠️ HTTP 框架 stub |
-| DingTalk | `dingtalk` | `HttpPlatformAdapter` | ⚠️ stub |
-| Email | `email` | `HttpPlatformAdapter` | ⚠️ stub |
-| Home Assistant | `homeassistant` | `HttpPlatformAdapter` | ⚠️ stub |
-| Line | `line` | `HttpPlatformAdapter` | ⚠️ stub |
-| Mattermost | `mattermost` | `HttpPlatformAdapter` | ⚠️ stub |
-| Matrix | `matrix` | `HttpPlatformAdapter` | ⚠️ stub |
-| QQ | `qq` | `HttpPlatformAdapter` | ⚠️ stub |
-| Signal | `signal` | `HttpPlatformAdapter` | ⚠️ stub |
-| Slack | `slack` | `HttpPlatformAdapter` | ⚠️ stub |
-| SMS | `sms` | `HttpPlatformAdapter` | ⚠️ stub |
-| WeCom | `wecom` | `HttpPlatformAdapter` | ⚠️ stub |
-| WhatsApp | `whatsapp` | `HttpPlatformAdapter` | ⚠️ stub |
-| Zalo | `zalo` | `HttpPlatformAdapter` | ⚠️ stub |
+| BlueBubbles / iMessage | `bluebubbles` / `imessage` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| DingTalk | `dingtalk` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Email | `email` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Home Assistant | `homeassistant` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Line | `line` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Mattermost | `mattermost` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Matrix | `matrix` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| QQ | `qq` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Signal | `signal` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Slack | `slack` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| SMS | `sms` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| WeCom | `wecom` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| WhatsApp | `whatsapp` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
+| Zalo | `zalo` | `HttpPlatformAdapter` | ⚠️ 通用 HTTP 骨架，待厂商细化 |
 
-> 「stub」指框架就绪、配置占位完整，但缺少真实 webhook 验签 / 回放 / 富文本格式化等业务细节。
+> 通用 HTTP 骨架只表示入站 / 出站协议框架已接入；真实厂商验签、事件回放、富文本 / 富媒体和群组语义仍按渠道逐个补齐。
 
 ## 注册与状态时序
 
@@ -122,7 +122,7 @@ interface GatewayReply {
 
 ## 风险点 / 已知缺口
 
-- 大量 channel 适配器只是 `HttpPlatformAdapter` 占位，**未实现签名校验 / 富媒体 / 群组识别**。
+- 大量 channel 仍共用 `HttpPlatformAdapter` 通用骨架，**未完成厂商签名校验 / 富媒体 / 群组识别**。
 - TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；后续仍需补真实 gateway 事件订阅。
 - `gateway start/stop/restart` 已有 daemon helper；跨平台服务安装和长期运行仍需真实环境验证。
 - `MessageDispatcher` 仅是单进程；多副本部署时缺消息去重与幂等键。
@@ -130,7 +130,9 @@ interface GatewayReply {
 
 ## 相关测试
 
-- `tests/gateway.boundaries.test.ts`
-- `tests/dispatcher.test.ts`
-- `tests/weixin.ilink.test.ts`
-- `tests/stdio.gateway.test.ts`
+- `tests/gateway.channel.events.test.ts`
+- `tests/gateway.daemon.test.ts`
+- `tests/gateway.dedup.test.ts`
+- `tests/channels.bluebubbles.test.ts`
+- `tests/channels.slack.test.ts`
+- `tests/channels.telegram.test.ts`

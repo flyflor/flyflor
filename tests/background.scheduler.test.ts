@@ -62,6 +62,14 @@ class FakeDream {
     async enqueue() {}
 }
 
+class FakeHotCompression {
+    readonly drained: string[] = [];
+    async drain(userId: string) {
+        this.drained.push(userId);
+        return { scanned: 2, compressed: 1, deleted: 2, missing: 0, skipped: 0 };
+    }
+}
+
 function build(extra?: { dream?: FakeDream }): {
     scheduler: BackgroundScheduler;
     consolidation: FakeConsolidation;
@@ -270,5 +278,54 @@ describe("BackgroundScheduler", () => {
         expect(called).toBe(1);
         expect(r).toEqual({ eventsCopied: 3, months: 1, skippedBusy: false, vacuumed: true });
         expect(scheduler.snapshot().brainArchiveEnabled).toBe(true);
+    });
+
+    test("runHotMemoryCompressionOnce invokes injected worker for tracked users", async () => {
+        const consolidation = new FakeConsolidation();
+        const graph = new FakeGraph();
+        const events = new FakeEvents();
+        const hot = new FakeHotCompression();
+        const scheduler = new BackgroundScheduler(consolidation as never, graph as never, events, {
+            consolidationIntervalMs: 1_000,
+            decayIntervalMs: 1_000,
+            hotMemoryCompressionIntervalMs: 1_000,
+            hotMemoryCompression: hot as never,
+        });
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u1");
+        scheduler.trackUser("u2");
+        const r = await scheduler.runHotMemoryCompressionOnce();
+        expect(hot.drained.sort()).toEqual(["u1", "u2"]);
+        expect(r).toEqual({ users: 2, compressed: 2, deleted: 4, missing: 0, skipped: 0 });
+        expect(scheduler.snapshot().hotMemoryCompressionEnabled).toBe(true);
+        expect(scheduler.snapshot().hotMemoryCompressionBusy).toBe(false);
+    });
+
+    test("runHotMemoryCompressionOnce waits for brain.db maintenance to clear", async () => {
+        const consolidation = new FakeConsolidation();
+        const graph = new FakeGraph();
+        const events = new FakeEvents();
+        const hot = new FakeHotCompression();
+        let releaseSummary!: () => void;
+        const summaryHold = new Promise<{ written: number }>((resolve) => {
+            releaseSummary = () => resolve({ written: 1 });
+        });
+        const scheduler = new BackgroundScheduler(consolidation as never, graph as never, events, {
+            consolidationIntervalMs: 1_000,
+            decayIntervalMs: 1_000,
+            summaryIntervalMs: 1_000,
+            hotMemoryCompressionIntervalMs: 1_000,
+            summarySweeper: async () => summaryHold,
+            hotMemoryCompression: hot as never,
+        });
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("u1");
+        const summaryRun = scheduler.runSummarySweepOnce();
+        const hotRun = await scheduler.runHotMemoryCompressionOnce();
+        expect(hotRun).toEqual({ users: 0, compressed: 0, deleted: 0, missing: 0, skipped: 0 });
+        releaseSummary();
+        await summaryRun;
+        expect(hot.drained).toEqual([]);
+        expect(scheduler.snapshot().hotMemoryCompressionBusy).toBe(false);
     });
 });

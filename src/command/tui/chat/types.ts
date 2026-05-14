@@ -1,3 +1,5 @@
+import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
+
 export type Phase = "idle" | "thinking" | "blackboard" | "mcp" | "skill" | "streaming";
 
 export interface McpTrace {
@@ -17,10 +19,29 @@ export interface BlackboardMeta {
 }
 
 export interface AskMeta {
-    choices?: number;
-    questions?: number;
+    choiceCount?: number;
+    questionCount?: number;
+    choices?: AskChoiceMeta[];
+    questions?: AskQuestionMeta[];
+    prompt?: string;
+    freeform?: boolean;
     reason?: string;
     snapshotId?: string;
+}
+
+export interface AskChoiceMeta {
+    label: string;
+    value?: string;
+    description?: string;
+}
+
+export interface AskQuestionMeta {
+    id?: string;
+    prompt: string;
+    choices?: AskChoiceMeta[];
+    freeform?: boolean;
+    relatedIds?: string[];
+    rationale?: string;
 }
 
 export interface ChatMessage {
@@ -32,5 +53,9 @@ export interface ChatMessage {
     mcpCalls?: McpTrace[];
     skills?: string[];
     blackboard?: BlackboardMeta | null;
+    blackboardTurn?: BlackboardTurn | null;
+    history?: boolean;
+    historyEventId?: string;
+    historyTs?: number;
     metadata?: Record<string, unknown> | null;
 }

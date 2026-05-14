@@ -1,142 +1,152 @@
-# CLI 命令现状
+# CLI Command Status
 
-## 一句话定位
+## One-line Summary
 
-`flyflor` CLI 由 `commander` 装配；命令规范从 `src/command/cli/commands.ts` 的 `buildSpecs` 中按 spec 树展开，下表给出当前已落地 / 部分落地 / 未实现的命令视图。
+`flyflor` CLI is assembled with `commander`; the command spec is expanded from the `buildSpecs` tree in `src/command/cli/commands.ts`, and the table below shows the commands currently implemented.
 
-## 相关代码路径
+## Related Paths
 
-- `src/command/index.ts` — CLI 主入口
-- `src/command/cli/commands.ts` — spec 树 + handler
+- `src/command/index.ts` - CLI entrypoint
+- `src/command/cli/commands.ts` - spec tree and handlers
 - `src/command/cli/index.ts` / `status.ts` / `config.ts` / `update.ts`
 
-## 命令树
+## Command Tree
 
 ```mermaid
 flowchart TB
-    Root["flyflor"] --> chat
-    Root --> tui
-    Root --> gateway
-    Root --> model
-    Root --> setup
-    Root --> status
-    Root --> channels
-    Root --> doctor
-    Root --> codename
-    Root --> inbox
-    Root --> ghost
-    Root --> identity
-    Root --> config
-    Root --> memory
-    Root --> blackboard
-    Root --> skills
-    Root --> tools
-    Root --> mcp
-    Root --> plugins
-    Root --> dream
-    Root --> update
-    Root --> version
-    gateway --> gw_run["run"]
-    gateway --> gw_start["start"]
-    gateway --> gw_stop["stop"]
-    gateway --> gw_restart["restart"]
-    gateway --> gw_status["status --deep"]
-    gateway --> gw_setup["setup"]
-    config --> cfg_show["show"]
-    config --> cfg_path["path"]
-    config --> cfg_env["env-path"]
-    codename --> cn_list["list"]
-    codename --> cn_use["use"]
-    codename --> cn_promote["promote"]
-    inbox --> ib_list["list"]
-    ghost --> gh_list["list"]
-    ghost --> gh_show["show"]
-    ghost --> gh_resume["resume"]
-    ghost --> gh_drop["drop"]
-    ghost --> gh_pin["pin"]
-    identity --> id_list["list"]
-    identity --> id_revert["revert"]
-    memory --> mem_status["status"]
-    memory --> mem_setup["setup"]
-    memory --> mem_reset["reset"]
-    blackboard --> bb_list["list"]
-    blackboard --> bb_show["show"]
-    skills --> sk_list["list"]
-    skills --> sk_show["show"]
-    skills --> sk_validate["validate"]
-    skills --> sk_usage["usage"]
-    skills --> sk_install["install"]
-    skills --> sk_reset["reset"]
-    tools --> tl_enable["enable"]
-    tools --> tl_disable["disable"]
+    Root["flyflor"]
+    Root --> chat["chat"]
+    Root --> tui["tui"]
+    Root --> gateway["gateway"]
+    gateway --> gateway_run["run"]
+    gateway --> gateway_start["start"]
+    gateway --> gateway_stop["stop"]
+    gateway --> gateway_restart["restart"]
+    gateway --> gateway_status["status"]
+    gateway --> gateway_setup["setup"]
+    Root --> model["model"]
+    Root --> setup["setup [section]"]
+    Root --> status["status"]
+    Root --> channels["channels"]
+    Root --> codename["codename"]
+    codename --> codename_list["list"]
+    codename --> codename_promote["promote <name>"]
+    codename --> codename_use["use <name>"]
+    Root --> inbox["inbox"]
+    inbox --> inbox_list["list"]
+    Root --> ghost["ghost"]
+    ghost --> ghost_list["list"]
+    ghost --> ghost_show["show <ghostEventId>"]
+    ghost --> ghost_resume["resume <ghostEventId>"]
+    ghost --> ghost_drop["drop <ghostEventId>"]
+    ghost --> ghost_pin["pin <ghostEventId>"]
+    Root --> identity["identity"]
+    identity --> identity_list["list"]
+    identity --> identity_revert["revert <eventId>"]
+    Root --> doctor["doctor"]
+    Root --> config["config"]
+    config --> config_show["show"]
+    config --> config_path["path"]
+    config --> config_env_path["env-path"]
+    Root --> memory["memory"]
+    memory --> memory_status["status"]
+    memory --> memory_reset["reset"]
+    memory --> memory_retrospective["retrospective"]
+    Root --> blackboard["blackboard"]
+    blackboard --> blackboard_browser["(TTY browser)"]
+    blackboard --> blackboard_list["list"]
+    blackboard --> blackboard_show["show <turnId>"]
+    Root --> skills["skills"]
+    skills --> skills_list["list"]
+    skills --> skills_show["show <name>"]
+    skills --> skills_validate["validate [name]"]
+    skills --> skills_usage["usage [name]"]
+    skills --> skills_install["install <identifier>"]
+    skills --> skills_reset["reset <name>"]
+    Root --> tools["tools"]
+    tools --> tools_enable["enable <toolsets...>"]
+    tools --> tools_disable["disable <toolsets...>"]
+    Root --> mcp["mcp"]
     mcp --> mcp_list["list"]
-    mcp --> mcp_show["show"]
-    mcp --> mcp_validate["validate"]
-    mcp --> mcp_add["add"]
-    mcp --> mcp_enable["enable"]
-    mcp --> mcp_disable["disable"]
-    mcp --> mcp_remove["remove"]
-    mcp --> mcp_tools["tools"]
-    mcp --> mcp_call["call"]
-    plugins --> pl_list["list"]
-    plugins --> pl_show["show"]
-    plugins --> pl_validate["validate"]
-    plugins --> pl_add["add"]
-    plugins --> pl_enable["enable"]
-    plugins --> pl_disable["disable"]
-    plugins --> pl_remove["remove"]
-    plugins --> pl_run["run"]
-    dream --> dr_status["status"]
-    dream --> dr_run["run"]
+    mcp --> mcp_show["show <name>"]
+    mcp --> mcp_validate["validate [name]"]
+    mcp --> mcp_add["add <name>"]
+    mcp --> mcp_enable["enable <name>"]
+    mcp --> mcp_disable["disable <name>"]
+    mcp --> mcp_remove["remove <name>"]
+    mcp --> mcp_tools["tools <name>"]
+    mcp --> mcp_call["call <name> <tool>"]
+    Root --> plugins["plugins"]
+    plugins --> plugins_list["list"]
+    plugins --> plugins_show["show <name>"]
+    plugins --> plugins_validate["validate [name]"]
+    plugins --> plugins_add["add <name>"]
+    plugins --> plugins_enable["enable <name>"]
+    plugins --> plugins_disable["disable <name>"]
+    plugins --> plugins_remove["remove <name>"]
+    plugins --> plugins_run["run <name>"]
+    Root --> dream["dream"]
+    dream --> dream_status["status"]
+    dream --> dream_run["run"]
+    Root --> sandbox["sandbox"]
+    sandbox --> sandbox_list["list"]
+    sandbox --> sandbox_allow["allow <kind> <value>"]
+    sandbox --> sandbox_deny["deny <kind> <value>"]
+    Root --> update["update"]
+    Root --> version["version"]
 ```
 
-## 实现状态
+## Implementation Status
 
-| 命令 | 状态 | 备注 |
+| Command | Status | Note |
 | --- | --- | --- |
-| `flyflor chat` | ✅ | 支持 `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui` |
-| `flyflor tui` | ✅ | 与 `chat --tui` 进入同一 TUI bootstrap |
-| `flyflor gateway run` | ✅ | 前台运行 |
-| `flyflor gateway start/stop/restart` | ✅ | 通过 gateway daemon helpers 管理后台服务 |
-| `flyflor gateway status [--deep]` | ✅ | 调用 `buildGatewayStatusSnapshot` |
-| `flyflor gateway setup` | ✅ | 交互式配置 |
-| `flyflor model` | ✅ | 列 / 设默认 provider+model |
-| `flyflor setup` | ✅ | 初始化向导 |
-| `flyflor status` | ✅ | `renderStatus` |
-| `flyflor channels` | ✅ | 列 channel adapter 状态 |
-| `flyflor doctor` | ✅ | `--fix` 会创建缺失目录 |
-| `flyflor codename list/use/promote` | ✅ | brain.db codename 锚点与 project 升格 |
-| `flyflor inbox list` | ✅ | 按 codename 分桶可视化 inbox atom |
-| `flyflor ghost list/show/resume/drop/pin` | ✅ | Ghost Context 管理 |
-| `flyflor identity list/revert` | ✅ | identity 自写条目审计与回滚 |
-| `flyflor config show/path/env-path` | ✅ | |
-| `flyflor memory status/setup/reset` | ✅ | reset 支持白名单文件清空 |
-| `flyflor blackboard list/show` | ✅ | 直接读 SQLite |
-| `flyflor skills *` | ✅ | install / reset / usage / validate |
-| `flyflor tools enable/disable` | ✅ | 按 MCP server 精确启停工具名 |
-| `flyflor mcp *` | ✅ | list/show/validate/add/enable/disable/remove/tools/call |
-| `flyflor plugins *` | ✅ | list/show/validate/add/enable/disable/remove/run |
-| `flyflor dream status/run` | ✅ | 手动触发 Dream pass |
-| `flyflor update` | ✅ | `--check` 版本比对；`-y` 调用 install.sh 更新 |
-| `flyflor version` | ✅ | |
+| `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render as Markdown, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and blackboard text can be copied after selection, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
+| `flyflor tui` | ✅ | Uses the same TUI bootstrap as `chat --tui`. |
+| `flyflor gateway run` | ✅ | Runs in the foreground. |
+| `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
+| `flyflor gateway status [--deep]` | ✅ | Calls `buildGatewayStatusSnapshot`. |
+| `flyflor gateway setup` | ✅ | Interactive configuration. |
+| `flyflor model` | ✅ | Lists or sets the default provider and model. |
+| `flyflor setup` | ✅ | Initialization wizard. |
+| `flyflor status` | ✅ | Uses `renderStatus`. |
+| `flyflor channels` | ✅ | Lists channel adapter status. |
+| `flyflor doctor` | ✅ | `--fix` creates missing directories. |
+| `flyflor codename list/use/promote` | ✅ | Brain.db codename anchors and project promotion. |
+| `flyflor inbox list` | ✅ | Visualizes inbox atoms by codename bucket. |
+| `flyflor ghost list/show/resume/drop/pin` | ✅ | Ghost Context management. |
+| `flyflor identity list/revert` | ✅ | Audit and revert user-authored identity entries. |
+| `flyflor config show/path/env-path` | ✅ |  |
+| `flyflor memory status/reset/retrospective` | ✅ | Reset supports clearing allowlisted files; retrospective shows consolidation audit logs. |
+| `flyflor blackboard` | ✅ | Opens the blackboard browser TUI in a terminal: it lists recent turns by default, supports `/` search, up/down selection, Enter to open details, and Esc/q to go back or quit. |
+| `flyflor blackboard list/show` | ✅ | Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted debugging. |
+| `flyflor skills *` | ✅ | install / reset / usage / validate. |
+| `flyflor tools enable/disable` | ✅ | Enables or disables tool names per MCP server. |
+| `flyflor mcp *` | ✅ | list / show / validate / add / enable / disable / remove / tools / call. |
+| `flyflor plugins *` | ✅ | list / show / validate / add / enable / disable / remove / run. |
+| `flyflor dream status/run` | ✅ | Manually triggers a Dream pass. |
+| `flyflor sandbox list/allow/deny` | ✅ | Persistent sandbox allowlist management. |
+| `flyflor update` | ✅ | `--check` compares versions; `-y` runs `install.sh` to update. |
+| `flyflor version` | ✅ |  |
 
-## 退出码约定
+## Exit Code Convention
 
-- `0` 成功
-- `1` 业务错误（`CommanderError` 抛出，常见 missing 参数 / not found）
-- 其它 `commander` 内置错误
+- `0` success
+- `1` business error (`CommanderError`, commonly missing arguments or not found)
+- other built-in `commander` errors
 
-## 风险点 / 已知缺口
+## Risks / Known Gaps
 
-- 命令面增长较快，CLI 文档仍靠手动维护，容易再次漂移。
-- daemon mode 已有 helper，但跨平台 launchd/systemd 安装体验仍需真实环境验证。
-- CLI 命令的契约**没有自动 spec 文档生成**，靠手动维护本表。
+- The command surface is growing quickly, so the CLI docs are now generated from the command spec, but cross-document indexes and TODOs still need to converge to avoid drift.
+- Daemon mode already has helpers, but the cross-platform launchd/systemd install experience still needs real-world validation.
+- The implementation status table now has spec coverage checks; we can also add checks that keep TODO and core docs in sync.
 
-## 相关测试
+## Related Tests
 
-- `tests/cli.commands.boundaries.test.ts`
-- `tests/cli.config.test.ts`
-- `tests/cli.status.test.ts`
-- `tests/cli.dream.test.ts`
-- `tests/cli.mcp.test.ts`
-- `tests/cli.skills.test.ts`
+- `tests/cli.commands.docs.test.ts`
+- `tests/command.boundaries.test.ts`
+- `tests/config.view.test.ts`
+- `tests/update.command.test.ts`
+- `tests/runtime.toolset.test.ts`
+- `tests/tools.toggle.test.ts`
+- `tests/plugin.runner.test.ts`
+- `tests/skill.mcp.test.ts`

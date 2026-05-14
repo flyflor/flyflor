@@ -320,6 +320,7 @@ export interface MemoryWeightConfig {
 export interface MemoryTuningConfig {
     identity: IdentityTuningConfig;
     summary: SummaryTuningConfig;
+    hotMemoryCompression: HotMemoryCompressionTuningConfig;
     reconsolidation: ReconsolidationTuningConfig;
     inbox: InboxTuningConfig;
     dormant: DormantTuningConfig;
@@ -383,6 +384,15 @@ export interface SummaryTuningConfig {
     rollingWindowDays: number;
     /** 两次 summary 写入的最小间隔（小时），防止同日反复改写。 */
     minIntervalHours: number;
+}
+
+export interface HotMemoryCompressionTuningConfig {
+    /** 是否启用 Redis 热记忆到期压缩清理。关闭后自然 TTL 仍会生效，但不会写压缩审计。 */
+    enabled: boolean;
+    /** 后台检查节拍（分钟）。0 表示关闭自动检查。 */
+    intervalMinutes: number;
+    /** 单用户单轮最多压缩多少条 episode。 */
+    batchSize: number;
 }
 
 export interface ReconsolidationTuningConfig {
@@ -743,6 +753,11 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
             rollingWindowDays: 7,
             minIntervalHours: 24,
         },
+        hotMemoryCompression: {
+            enabled: true,
+            intervalMinutes: 30,
+            batchSize: 16,
+        },
         reconsolidation: {
             embeddingDriftThreshold: 0.25,
             driftHitCount: 2,
@@ -786,7 +801,7 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
 
 function resolveModelConfig(config: ModelRegistryConfig | undefined): ModelConfig {
     const providers = mergeConfig(createDefaultModelProviders(), config?.providers ?? {});
-    const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.Mock;
+    const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.OpenAI;
     const primary = buildModelConfig(providers, providerId, config);
     const seen = new Set<string>([providerId]);
     const fallbacks: ModelConfig[] = [];
@@ -807,8 +822,14 @@ function buildModelConfig(
     providerId: string,
     config: ModelRegistryConfig | undefined,
 ): ModelConfig {
-    const provider = providers[providerId] ?? { type: ModelProviderKind.Mock };
-    const model = config?.activeModel ?? provider.defaultModel ?? provider.models?.[0] ?? ModelProviderId.Mock;
+    const provider = providers[providerId];
+    if (!provider) {
+        throw new Error(`Unknown model provider: ${providerId}`);
+    }
+    const model = config?.activeModel ?? provider.defaultModel ?? provider.models?.[0];
+    if (!model || model.trim().length === 0) {
+        throw new Error(`Model provider ${providerId} does not define a default model.`);
+    }
     return {
         apiMode: provider.apiMode ?? ModelApiMode.ChatCompletions,
         providerId,
@@ -869,9 +890,6 @@ function mergeProviderProfiles(
 }
 
 function inferProviderKind(id: string, baseUrl: string | undefined): ModelProviderType {
-    if (id === ModelProviderId.Mock) {
-        return ModelProviderKind.Mock;
-    }
     if (baseUrl) {
         return ModelProviderKind.OpenAICompatible;
     }
@@ -880,11 +898,6 @@ function inferProviderKind(id: string, baseUrl: string | undefined): ModelProvid
 
 function createDefaultModelProviders(): Record<string, ModelProviderConfig> {
     return {
-        [ModelProviderId.Mock]: {
-            type: ModelProviderKind.Mock,
-            defaultModel: ModelProviderId.Mock,
-            models: [ModelProviderId.Mock],
-        },
         [ModelProviderId.OpenAI]: {
             type: ModelProviderKind.OpenAICompatible,
             baseUrl: "https://api.openai.com/v1",

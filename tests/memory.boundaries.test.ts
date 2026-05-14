@@ -92,7 +92,7 @@ describe("config JSONC boundaries", () => {
                 '    "retrieval": { "maxResults": 3, },',
                 "  },",
                 '  "model": {',
-                '    "activeProvider": "mock",',
+                '    "activeProvider": "openai",',
                 "  },",
                 "}",
             ].join("\n"),
@@ -102,7 +102,7 @@ describe("config JSONC boundaries", () => {
 
         expect(config.gateway.allowedChannels).toEqual([Channel.Stdio]);
         expect(config.memory.retrieval.maxResults).toBe(3);
-        expect(config.model.providerId).toBe("mock");
+        expect(config.model.providerId).toBe("openai");
     });
 
     test("resolves provider apiKey string references from model secrets", async () => {
@@ -512,7 +512,7 @@ describe("Agent memory stability and latency", () => {
         expect(result.candidates).toHaveLength(0);
         expect(result.promoted).toHaveLength(0);
         expect(prompt).toContain("Untrusted memory context");
-        expect(prompt).toContain("# Hot Hippocampus Memory");
+        expect(prompt).toContain("# Recent Activated Memory");
         expect(prompt).not.toContain("# Recent Conversation Context");
         expect(prompt).not.toContain("临时日志写入长期记忆");
         expect(longTerm).not.toContain("临时日志写入长期记忆");
@@ -532,10 +532,10 @@ describe("Agent memory stability and latency", () => {
 
         expect(prompt).not.toContain("# Recent Conversation Context");
         expect(prompt).not.toContain("第一轮回答里的短期上下文。");
-        expect(prompt).toContain("# Hot Hippocampus Memory");
-        expect(prompt).toContain("# Project Local Memory");
-        expect(prompt).toContain("# Global Markdown Long-Term Memory");
-        expect(prompt).toContain("# Retrieved Memory");
+        expect(prompt).toContain("# Recent Activated Memory");
+        expect(prompt).toContain("# Current Project Notes");
+        expect(prompt).toContain("# Global Markdown Memory");
+        expect(prompt).toContain("# Retrieved Long-Term Memory");
     });
 
     test("journal replaces raw live-message continuity in the memory hot path", async () => {
@@ -666,9 +666,7 @@ describe("Agent memory stability and latency", () => {
         expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.MemoryProjectCandidateRecorded);
         expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.MemoryProjectMemoryWritten);
         expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.MemoryProjectMemoryRecalled);
-        expect(prompt.indexOf("# Project Local Memory")).toBeLessThan(
-            prompt.indexOf("# Global Markdown Long-Term Memory"),
-        );
+        expect(prompt.indexOf("# Current Project Notes")).toBeLessThan(prompt.indexOf("# Global Markdown Memory"));
         expect(prompt).toContain("项目必须维护局部技能和局部记忆。");
     });
 
@@ -1192,12 +1190,12 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
         },
         model: {
             apiMode: "chat-completions",
-            providerId: "mock",
-            provider: "mock",
-            baseUrl: "",
+            providerId: "openai",
+            provider: "openai-compatible",
+            baseUrl: "https://api.openai.com/v1",
             headers: {},
             maxTokens: 4096,
-            model: "mock",
+            model: "gpt-5.5",
             temperature: 0.2,
             timeoutMs: 60_000,
         },

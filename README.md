@@ -55,6 +55,11 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 ```bash
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 直接进入 chat TUI
+bun run smoke:docker                      # 不启动容器，检查 compose / binary / prompt bundle
+bun run smoke:runtime                     # 已启动 compose 后，检查 Redis / Surreal / 真实配置模型 chat 主路径
+bun run smoke:release                     # docs + type + tests + binary + docker smoke
+bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/docker 静态烟测
+bun run release:check                     # 本地发布门禁：完整 release smoke，包含真实模型 Docker chat 主路径
 curl http://127.0.0.1:18790/health        # 健康检查
 docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```
@@ -86,7 +91,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
 | `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
 | `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
-| `src/neural`      | 海马体工作记忆：Redis episodes、召回、最近交流 ring            |
+| `src/neural`      | 海马体工作记忆：Redis episodes、召回、最近交流 ring、热记忆压缩 |
 | `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
 | `templates`       | 提示词和记忆 Markdown 模板                                     |
 
@@ -94,7 +99,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 - **LLM = 流体智力**：当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策。
 - **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格。
-- **Neural = 海马体**：工作记忆（Redis）+ 长期记忆图（SurrealDB），支持 TTL 遗忘曲线、概念激活、记忆重建。
+- **Neural = 海马体**：工作记忆（Redis）+ 长期记忆图（SurrealDB），支持 TTL 遗忘曲线、热记忆压缩审计、概念激活、记忆重建。
 
 **核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
@@ -105,7 +110,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + Redis 海马体激活 + project/codename 局部记忆 + SurrealDB Gem 召回
 4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append；TTFB 目标 < 350ms
 5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
-6. 后台 worker：consolidation、summary、decay、dormant、dream、feedback classify、reflection
+6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
 
 ## 记忆系统
 
@@ -113,7 +118,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | ---------------- | --------- | ---------------------------------------------------------------- |
 | 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
 | 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；prompt recall/write authority 已切到 brain events |
-| 工作记忆         | Redis     | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer            |
+| 工作记忆         | Redis     | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计 |
 | 长期记忆图       | SurrealDB | episode → memory_node → Gem，summary_embedding，RELATE 边 + MTREE ANN |
 | 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
 
@@ -142,6 +147,7 @@ Evidence Weight 裁判表：
 
 - **双轨衰减**：episode 5%/天、memory_node 2%/天、Gem 0.5%/天；lastVerifiedAt 超 30 天额外打折。
 - **矛盾检测**：`contradictionCount ≥ 2` → drift-repair；confidence < 0.1 → deprecated 归档。
+- **热记忆压缩**：Redis 到期 episode 可压缩成 `memory_events.type='hot-memory-compression'` 审计事件；不进入 prompt recall / `memory_summary` / SurrealDB / Gem 候选。
 - **容量阀门**：Redis `maxEpisodesPerUser=200`；SurrealDB episode 500 / memory_node 100 / Gem 50。
 - **Gem 去重**：symbols IoU ≥ 0.7 且 cosine ≥ 0.85 → merge（`dedupeGems`，纯函数，无字符匹配）。
 
@@ -152,6 +158,7 @@ Dream 是长期晶体层的主动维护 worker，仅读写 SurrealDB（`gem / me
 | Worker        | 作用层             | 唯一职责                                                       |
 | ------------- | ------------------ | -------------------------------------------------------------- |
 | Consolidation | Redis → SurrealDB  | 升格通道：到期 episode → reinforce / consolidate / discard     |
+| Hot compression | Redis → brain.db | 清理通道：到期 episode → 隔离压缩审计 → 删除 Redis episode     |
 | Decay         | SurrealDB（纯函数）| 被动衰减：importance × 时间 / verification age                 |
 | Anti-bloat    | Redis & SurrealDB  | 容量阀门：超额强制遗忘 / 归档                                  |
 | Dream         | SurrealDB only     | 晶体维护：drift-repair / recall-reinforce / contradiction-audit|
@@ -194,6 +201,7 @@ flyflor version              # 版本信息
 flyflor config show          # 查看配置
 flyflor config path          # 配置文件路径
 flyflor memory status        # 记忆状态
+flyflor blackboard           # 黑板浏览 TUI：搜索、选择、进入详情
 flyflor blackboard list      # 黑板 turn 列表
 flyflor codename list        # 代号锚点列表
 flyflor inbox list           # inbox/codename 桶中的 atom
@@ -252,7 +260,9 @@ flyflor gateway status       # 网关状态
 | [docs/mcp.tools.md](docs/mcp.tools.md) | MCP 工具循环 |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection → Gem |
 | [docs/skill.system.md](docs/skill.system.md) | Skill 加载与升格 |
+| [docs/proposals/eq.module.md](docs/proposals/eq.module.md) | EQ 语气控制层 |
 | [docs/proposals/life.form.md](docs/proposals/life.form.md) | 无 session / brain.db / Codename / Ask / Ghost / Dream 主线 |
 | [docs/prompt.templates.md](docs/prompt.templates.md) | 提示词模板 |
 | [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
+| [docs/storage.degradation.md](docs/storage.degradation.md) | Redis / SurrealDB 纯本地降级草案 |
 | [TODO.md](TODO.md) | 风险点 / 后续计划 |

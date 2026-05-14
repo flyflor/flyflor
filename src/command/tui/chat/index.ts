@@ -6,13 +6,14 @@
  * 兼容 bun build --compile，不依赖 @opentui/solid。
  */
 
-import { createCliRenderer, type CliRendererConfig } from "@opentui/core";
+import { addDefaultParsers, createCliRenderer, type CliRendererConfig } from "@opentui/core";
 
 import type { RuntimeModule } from "../../../agent/runtime/index.ts";
 import type { BlackboardModule } from "../../../agent/blackboard/index.ts";
 import type { McpToolCallRequest } from "../../../agent/mcp/index.ts";
 import { RuntimeEventBus, type EventSink } from "../../../protocol/events/index.ts";
 import { createChatApp } from "./app.tsx";
+import { loadChatParsers } from "./parsers.config.ts";
 
 export interface ChatEntryOptions {
     runtime: RuntimeModule;
@@ -24,6 +25,9 @@ export interface ChatEntryOptions {
 }
 
 export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
+    await options.runtime.warmup();
+    addDefaultParsers(await loadChatParsers());
+
     const renderer = await createCliRenderer({
         targetFps: 60,
         exitOnCtrlC: false,
@@ -31,16 +35,14 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
         externalOutputMode: "passthrough",
         autoFocus: false,
         consoleOptions: {
-            onCopySelection: (text) => {
-                try {
-                    Bun.write(Bun.stdout, text);
-                } catch {}
-            },
-            keyBindings: [
-                { name: "y", ctrl: true, action: "copy-selection" },
-            ],
+            keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
         },
     } satisfies CliRendererConfig);
+    renderer.console.onCopySelection = (text) => {
+        if (text.trim().length > 0) {
+            renderer.copyToClipboardOSC52(text);
+        }
+    };
 
     const dispose = createChatApp(renderer, options);
 

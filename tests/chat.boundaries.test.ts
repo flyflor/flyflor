@@ -2,6 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { coalesceChatInput } from "../src/agent/runtime/chat.ts";
 
 describe("Human chat input boundary", () => {
+    test("chat entrypoints warm runtime before first turn", async () => {
+        const humanChatSource = await Bun.file("src/agent/runtime/chat.ts").text();
+        const tuiChatSource = await Bun.file("src/command/tui/chat/index.ts").text();
+        const commandSource = await Bun.file("src/command/cli/commands.ts").text();
+
+        expect(humanChatSource).toContain("await runtime.warmup()");
+        expect(tuiChatSource).toContain("await options.runtime.warmup()");
+        expect(commandSource).toContain("await runtime.warmup()");
+    });
+
     test("coalesces pasted multiline content into one turn before /exit", async () => {
         const inputs = await collect(
             coalesceChatInput(

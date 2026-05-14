@@ -139,9 +139,8 @@ interface McpCallResult {
 
 ## 相关测试
 
-- `tests/mcp.boundaries.test.ts`
-- `tests/mcp.tool.calls.test.ts`
 - `tests/mcp.schema.validate.test.ts`
 - `tests/mcp.http.transport.test.ts`
 - `tests/mcp.sse.test.ts`
 - `tests/mcp.long.results.test.ts`
+- `tests/tools.toggle.test.ts`

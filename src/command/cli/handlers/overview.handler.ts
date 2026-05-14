@@ -144,7 +144,7 @@ async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Pr
     });
     checks.push({
         name: "Model provider",
-        status: config.model.providerId === "mock" ? "warn" : "ok",
+        status: config.model.providerId ? "ok" : "warn",
         detail: config.model.providerId,
     });
     checks.push({
@@ -154,12 +154,12 @@ async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Pr
     });
     checks.push({
         name: "Base URL",
-        status: config.model.provider === "mock" || config.model.baseUrl ? "ok" : "warn",
+        status: config.model.baseUrl ? "ok" : "warn",
         detail: config.model.baseUrl || "empty",
     });
     checks.push({
         name: "API key",
-        status: config.model.provider === "mock" || config.model.apiKey ? "ok" : "warn",
+        status: config.model.apiKey ? "ok" : "warn",
         detail: config.model.apiKey ? "configured" : "empty",
     });
     checks.push({
@@ -208,7 +208,6 @@ function describeBackgroundScheduler(config: FlyflorConfig): {
     const missing: string[] = [];
     if (!config.memory.redis.enabled) missing.push("redis");
     if (!config.memory.crystal.surreal.enabled) missing.push("surreal");
-    if (config.model.provider === "mock") missing.push("model(non-mock)");
     if (missing.length === 0) {
         return { status: "ok", detail: "consolidation+decay+dream+project-cluster enabled" };
     }

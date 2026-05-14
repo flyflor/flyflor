@@ -184,13 +184,14 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                 expect(reply.metadata?.kind).toBe("ask");
                 expect(reply.metadata?.behaviorSnapshotId).toMatch(/^behavior-/);
                 expect(reply.metadata?.ask).toMatchObject({
-                    choices: 0,
-                    questions: 2,
+                    choiceCount: 0,
+                    questionCount: 2,
                     snapshotId: reply.metadata?.behaviorSnapshotId,
                 });
                 expect(reply.text).toContain("I need two confirmations.");
                 expect(reply.text).toContain("1. Which workspace should I use?");
                 expect(reply.text).toContain("   1. main");
+                expect(reply.text).toContain("   3. Other — type your own answer");
                 expect(reply.text).toContain("2. Should I proceed now?");
             } finally {
                 memory.dispose();

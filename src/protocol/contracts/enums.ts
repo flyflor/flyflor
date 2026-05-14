@@ -46,7 +46,6 @@ export type ModelRole = (typeof ModelRole)[keyof typeof ModelRole];
 
 export const ModelProviderKind = {
     AnthropicCompatible: "anthropic-compatible",
-    Mock: "mock",
     OpenAICompatible: "openai-compatible",
 } as const;
 
@@ -74,7 +73,6 @@ export const ModelProviderId = {
     Minimax: "minimax",
     MinimaxCn: "minimax-cn",
     Mistral: "mistral",
-    Mock: "mock",
     Ollama: "ollama",
     OpenAI: "openai",
     OpenRouter: "openrouter",
@@ -286,6 +284,15 @@ export const MemoryKind = {
 } as const;
 
 export type MemoryKind = (typeof MemoryKind)[keyof typeof MemoryKind];
+
+export const MemoryActionTarget = {
+    Memory: "memory",
+    Self: "self",
+    Soul: "soul",
+    User: "user",
+} as const;
+
+export type MemoryActionTarget = (typeof MemoryActionTarget)[keyof typeof MemoryActionTarget];
 
 export const MemoryCandidateStatus = {
     Candidate: "candidate",

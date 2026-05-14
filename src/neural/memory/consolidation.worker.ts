@@ -121,6 +121,7 @@ export class ConsolidationWorker {
                     });
                 } else if (decision.decision === ConsolidationDecisionKind.Reinforce) {
                     await this.redis.touchConcepts(userId, episode.concepts ?? []);
+                    await this.redis.reinforceEpisode(userId, id, this.reinforceTtl);
                     result.reinforced += 1;
                 } else if (decision.decision === ConsolidationDecisionKind.Consolidate) {
                     await this.consolidateEpisode(episode, decision);

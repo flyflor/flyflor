@@ -10,16 +10,19 @@
  * 用法：
  *   docker run --rm --network flyflor_flyflor-internal -v "$PWD":/w -w /w \
  *     oven/bun:1.3.10-alpine sh -c "FLYFLOR_SURREAL_URL=http://surrealdb:8000 bun run scripts/surreal.smoke.ts"
+ *
+ * 默认每轮使用唯一 namespace/database，避免旧 smoke schema 污染当前关系定义。
  */
 import { SurrealGraphStore } from "../src/neural/memory/surreal.graph.ts";
 
 const url = process.env.FLYFLOR_SURREAL_URL ?? "http://127.0.0.1:8000";
+const smokeId = process.env.FLYFLOR_SURREAL_SMOKE_ID ?? `${Date.now()}`;
 
 const store = new SurrealGraphStore({
     enabled: true,
     internalUrl: url,
-    namespace: "flyflor-smoke",
-    database: "flyflor-smoke",
+    namespace: process.env.FLYFLOR_SURREAL_NS ?? `flyflor-smoke-${smokeId}`,
+    database: process.env.FLYFLOR_SURREAL_DB ?? `flyflor-smoke-${smokeId}`,
     username: "root",
     password: "root",
     timeoutMs: 5000,

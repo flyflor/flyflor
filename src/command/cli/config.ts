@@ -1387,10 +1387,6 @@ function buildProviderOverride(
     providerKind: ModelProviderKindType,
     apiMode: ModelApiModeType | undefined,
 ): string {
-    if (provider === ModelProviderId.Mock) {
-        return `"${provider}": {}`;
-    }
-
     const useStandaloneProfile = Boolean(baseUrl) || provider === ModelProviderId.Custom;
     const commonLines = [`"apiKey": ${JSON.stringify(secretId)}`];
     if (useStandaloneProfile) {
@@ -1880,10 +1876,6 @@ function buildProviderProfile(
     },
     secretId: string,
 ): Record<string, unknown> {
-    if (input.provider === ModelProviderId.Mock) {
-        return {};
-    }
-
     const profile: Record<string, unknown> = {
         apiKey: secretId,
     };

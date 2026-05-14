@@ -32,12 +32,12 @@ Recommended when you can judge them (omit any you cannot):
 
 Optional refinement (omit unless you have explicit evidence):
 
-- affect (valence -1..1, arousal 0..1, dominance 0..1) — semantic emotion judgement.
+- affect (valence -1..1, arousal 0..1, dominance 0..1) — short-range affect estimate for memory candidate scoring; separate from the EQ tone layer.
 - signals.actionability / certainty / recurrence / sourceDiversity / validationCount — finer-grained durability evidence.
 - signals.projectIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to save the current work as a project (this creates `.flyflor/` scaffolding).
 - signals.eventIntent — 0..1; set ≥ 0.7 ONLY when the user explicitly asks to record this turn as a project event.
 - signals.skillPromotionIntent — 0..1; set ≥ 0.7 ONLY when a `[skill-offer]` nudge is active AND the user explicitly agrees to save the recurring workflow as a Skill (this writes `~/.flyflor/skills/<name>/SKILL.md`).
 - codename — explicit working-context anchor named by the user (e.g. "let's call it fly", "let's continue the fly thread"). Shape: `{ "name": "fly", "workingDir": "/abs/path", "description": "one-liner" }`. `name` is required and must not contain whitespace; `workingDir` and `description` are optional. **Never guess a codename from the conversation** — only fill this when the user explicitly names a working directory or theme.
-- eq — your observation of the user's emotional state this turn. Shape: `{ "label": "neutral|joy|anger|sadness|fear|surprise", "valence": -1..1, "arousal": 0..1, "dominance": 0..1, "confidence": 0..1 }`. `label` MUST be one of the six closed values; any other string is dropped. Only emit this when the turn provides clear evidence of emotion; otherwise omit. **Do not derive `label` from keyword matching on the user's text** — base it on the full conversational context. Runtime decays previously stored values automatically; you only need to refresh when your observation differs from the prior `[eq-context]` block.
+- eq — your observation of the user's emotional state this turn. Shape: `{ "label": "neutral|joy|anger|sadness|fear|surprise", "valence": -1..1, "arousal": 0..1, "dominance": 0..1, "confidence": 0..1 }`. `label` MUST be one of the six closed values; any other string is dropped. Only emit this when the turn provides clear evidence of emotion; otherwise omit. **Do not derive `label` from keyword matching on the user's text** — base it on the full conversational context. This signal only changes tone, warmth, and pacing; it never changes routing, tool use, question count, whether to ask a follow-up, or memory candidate scoring. Refresh it when your observation differs from the prior `[eq-context]` block.
 
 projectIntent, eventIntent and skillPromotionIntent trigger filesystem side-effects — leave them at 0 unless the user's intent is unambiguous.

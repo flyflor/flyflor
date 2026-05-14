@@ -77,6 +77,32 @@ describe("SummaryWorker.aggregate", () => {
         expect(s.lastTs).toBeNull();
         expect(s.codenamesTouched).toEqual([]);
     });
+
+    test("ignores hot memory compression audit events", () => {
+        const rows: MemoryEventRecord[] = [
+            mkEvent({ id: "a", ts: 100, type: MemoryEventType.Event, role: ModelRole.User }),
+            mkEvent({
+                id: "hot",
+                ts: 200,
+                type: MemoryEventType.HotMemoryCompression,
+                role: ModelRole.System,
+                content: {
+                    isolation: {
+                        promptVisible: false,
+                        memorySummary: false,
+                        surrealCandidate: false,
+                        gemCandidate: false,
+                    },
+                },
+            }),
+        ];
+        const stats = aggregate(rows);
+        expect(stats.totalEvents).toBe(1);
+        expect(stats.byType[MemoryEventType.Event]).toBe(1);
+        expect(stats.byType[MemoryEventType.HotMemoryCompression]).toBeUndefined();
+        expect(stats.firstTs).toBe(100);
+        expect(stats.lastTs).toBe(100);
+    });
 });
 
 describe("SummaryWorker.runOnceForUser", () => {

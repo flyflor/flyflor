@@ -18,6 +18,7 @@
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { DecayLayer, DEFAULT_DECAY_PROFILES, decayImportance, type DecayProfile } from "./decay.ts";
 import type { ConsolidationWorker } from "./consolidation.worker.ts";
+import type { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
 import type { SurrealGraphStore } from "./surreal.graph.ts";
 import type { DreamWorker } from "../../agent/runtime/dream.worker.ts";
 
@@ -61,6 +62,10 @@ export interface BackgroundSchedulerOptions {
     summarySweeper?: (userId: string) => Promise<{ written: number }>;
     /** Summary worker 节拍。默认 6 小时，0 关闭。 */
     summaryIntervalMs?: number;
+    /** Redis 热记忆压缩 worker。未注入则跳过。 */
+    hotMemoryCompression?: HotMemoryCompressionWorker;
+    /** 热记忆压缩检查节拍。默认 30 分钟，0 关闭。 */
+    hotMemoryCompressionIntervalMs?: number;
     /**
      * LF-R5 slice D：dormant sweep。注入后调度器按 `dormantIntervalMs` 节拍调用。
      * 未注入则关掉本条 timer；MemoryModule 仍可手动触发 sweepDormantOnce。
@@ -82,6 +87,7 @@ export class BackgroundScheduler {
     private projectTimer: ReturnType<typeof setInterval> | undefined;
     private skillTimer: ReturnType<typeof setInterval> | undefined;
     private summaryTimer: ReturnType<typeof setInterval> | undefined;
+    private hotMemoryCompressionTimer: ReturnType<typeof setInterval> | undefined;
     /** 每用户 idle one-shot timer：每次 noteUserTurn 重置；命中后触发 dream。 */
     private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private consolidationBusy = false;
@@ -90,16 +96,19 @@ export class BackgroundScheduler {
     private projectBusy = false;
     private skillBusy = false;
     private summaryBusy = false;
+    private hotMemoryCompressionBusy = false;
     private brainArchiveBusy = false;
+    private brainMaintenanceBusy = false;
     private readonly dream: DreamWorker | undefined;
     private readonly projectSweeper: ((userId: string) => Promise<boolean>) | undefined;
     private readonly skillSweeper: ((userId: string) => Promise<boolean>) | undefined;
     private readonly summarySweeper: ((userId: string) => Promise<{ written: number }>) | undefined;
+    private readonly hotMemoryCompression: HotMemoryCompressionWorker | undefined;
     private readonly dormantSweeper: (() => { entered: number }) | undefined;
     private readonly brainArchiveSweeper: (() => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>) | undefined;
     private dormantTimer: ReturnType<typeof setInterval> | undefined;
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
-    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper" | "summarySweeper" | "dormantSweeper" | "brainArchiveSweeper">> & {
+    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper" | "summarySweeper" | "hotMemoryCompression" | "dormantSweeper" | "brainArchiveSweeper">> & {
         profiles: Record<DecayLayer, DecayProfile>;
         now: () => number;
     };
@@ -114,6 +123,7 @@ export class BackgroundScheduler {
         this.projectSweeper = options.projectSweeper;
         this.skillSweeper = options.skillSweeper;
         this.summarySweeper = options.summarySweeper;
+        this.hotMemoryCompression = options.hotMemoryCompression;
         this.dormantSweeper = options.dormantSweeper;
         this.brainArchiveSweeper = options.brainArchiveSweeper;
         this.opts = {
@@ -126,6 +136,7 @@ export class BackgroundScheduler {
             projectClusterIntervalMs: options.projectClusterIntervalMs ?? 15 * 60_000,
             skillClusterIntervalMs: options.skillClusterIntervalMs ?? 20 * 60_000,
             summaryIntervalMs: options.summaryIntervalMs ?? 6 * 60 * 60_000,
+            hotMemoryCompressionIntervalMs: options.hotMemoryCompressionIntervalMs ?? 30 * 60_000,
             dormantIntervalMs: options.dormantIntervalMs ?? 60_000,
             brainArchiveIntervalMs: options.brainArchiveIntervalMs ?? 24 * 60 * 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
@@ -200,6 +211,11 @@ export class BackgroundScheduler {
                 void this.runSummarySweepOnce();
             }, this.opts.summaryIntervalMs);
         }
+        if (this.hotMemoryCompression && this.opts.hotMemoryCompressionIntervalMs > 0) {
+            this.hotMemoryCompressionTimer = setInterval(() => {
+                void this.runHotMemoryCompressionOnce();
+            }, this.opts.hotMemoryCompressionIntervalMs);
+        }
         if (this.dormantSweeper && this.opts.dormantIntervalMs > 0) {
             this.dormantTimer = setInterval(() => {
                 try {
@@ -233,6 +249,12 @@ export class BackgroundScheduler {
         if (this.summaryTimer && typeof (this.summaryTimer as { unref?: () => void })?.unref === "function") {
             (this.summaryTimer as { unref: () => void }).unref();
         }
+        if (
+            this.hotMemoryCompressionTimer &&
+            typeof (this.hotMemoryCompressionTimer as { unref?: () => void })?.unref === "function"
+        ) {
+            (this.hotMemoryCompressionTimer as { unref: () => void }).unref();
+        }
         if (this.dormantTimer && typeof (this.dormantTimer as { unref?: () => void })?.unref === "function") {
             (this.dormantTimer as { unref: () => void }).unref();
         }
@@ -265,6 +287,10 @@ export class BackgroundScheduler {
         if (this.summaryTimer !== undefined) {
             clearInterval(this.summaryTimer);
             this.summaryTimer = undefined;
+        }
+        if (this.hotMemoryCompressionTimer !== undefined) {
+            clearInterval(this.hotMemoryCompressionTimer);
+            this.hotMemoryCompressionTimer = undefined;
         }
         if (this.dormantTimer !== undefined) {
             clearInterval(this.dormantTimer);
@@ -454,8 +480,9 @@ export class BackgroundScheduler {
     /** LF-R5 slice B：跑一次 summary sweep。串行所有用户。 */
     async runSummarySweepOnce(userId?: string): Promise<{ users: number; written: number }> {
         const totals = { users: 0, written: 0 };
-        if (!this.summarySweeper || this.summaryBusy) return totals;
+        if (!this.summarySweeper || this.summaryBusy || this.brainMaintenanceBusy) return totals;
         this.summaryBusy = true;
+        this.brainMaintenanceBusy = true;
         const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
         try {
             for (const u of targets) {
@@ -469,6 +496,46 @@ export class BackgroundScheduler {
             }
         } finally {
             this.summaryBusy = false;
+            this.brainMaintenanceBusy = false;
+        }
+        return totals;
+    }
+
+    /** Redis 热记忆压缩清理：只写隔离审计事件，不进入 summary / prompt recall / SurrealDB。 */
+    async runHotMemoryCompressionOnce(userId?: string): Promise<{
+        users: number;
+        compressed: number;
+        deleted: number;
+        missing: number;
+        skipped: number;
+    }> {
+        const totals = { users: 0, compressed: 0, deleted: 0, missing: 0, skipped: 0 };
+        if (!this.hotMemoryCompression || this.hotMemoryCompressionBusy || this.consolidationBusy || this.brainMaintenanceBusy) return totals;
+        this.hotMemoryCompressionBusy = true;
+        this.brainMaintenanceBusy = true;
+        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        try {
+            for (const u of targets) {
+                try {
+                    const r = await this.hotMemoryCompression.drain(u);
+                    totals.users += 1;
+                    totals.compressed += r.compressed;
+                    totals.deleted += r.deleted;
+                    totals.missing += r.missing;
+                    totals.skipped += r.skipped;
+                } catch (err) {
+                    this.events.publish(
+                        event(RuntimeEventType.MemoryHotCompressionFailed, {
+                            userId: u,
+                            stage: "hot-memory-compression-tick",
+                            error: String(err),
+                        }),
+                    );
+                }
+            }
+        } finally {
+            this.hotMemoryCompressionBusy = false;
+            this.brainMaintenanceBusy = false;
         }
         return totals;
     }
@@ -477,10 +544,11 @@ export class BackgroundScheduler {
     async runBrainArchiveOnce(): Promise<{ eventsCopied: number; months: number; skippedBusy: boolean; vacuumed: boolean }> {
         const empty = { eventsCopied: 0, months: 0, skippedBusy: false, vacuumed: false };
         if (!this.brainArchiveSweeper) return empty;
-        if (this.brainArchiveBusy || this.summaryBusy || this.dreamBusy) {
+        if (this.brainArchiveBusy || this.summaryBusy || this.dreamBusy || this.brainMaintenanceBusy) {
             return { ...empty, skippedBusy: true };
         }
         this.brainArchiveBusy = true;
+        this.brainMaintenanceBusy = true;
         try {
             const r = await this.brainArchiveSweeper();
             return {
@@ -494,6 +562,7 @@ export class BackgroundScheduler {
             return empty;
         } finally {
             this.brainArchiveBusy = false;
+            this.brainMaintenanceBusy = false;
         }
     }
 
@@ -512,6 +581,8 @@ export class BackgroundScheduler {
         projectClusterBusy: boolean;
         skillClusterEnabled: boolean;
         skillClusterBusy: boolean;
+        hotMemoryCompressionEnabled: boolean;
+        hotMemoryCompressionBusy: boolean;
         brainArchiveEnabled: boolean;
         brainArchiveBusy: boolean;
         users: number;
@@ -525,6 +596,9 @@ export class BackgroundScheduler {
             projectClusterBusy: this.projectBusy,
             skillClusterEnabled: Boolean(this.skillSweeper) && this.opts.skillClusterIntervalMs > 0,
             skillClusterBusy: this.skillBusy,
+            hotMemoryCompressionEnabled:
+                Boolean(this.hotMemoryCompression) && this.opts.hotMemoryCompressionIntervalMs > 0,
+            hotMemoryCompressionBusy: this.hotMemoryCompressionBusy,
             brainArchiveEnabled: Boolean(this.brainArchiveSweeper) && this.opts.brainArchiveIntervalMs > 0,
             brainArchiveBusy: this.brainArchiveBusy,
             users: this.users.size,
