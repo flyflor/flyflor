@@ -60,7 +60,6 @@ import {
 } from "../src/agent/di/index.ts";
 
 const tempRoots: string[] = [];
-const demoInjectionToken = createInjectionToken<{ value: string }>("test.demo");
 const TEST_ANALYSIS_ROLE = "analysis-worker";
 const TEST_REVIEW_ROLE = "review-worker";
 
@@ -68,7 +67,7 @@ const TEST_REVIEW_ROLE = "review-worker";
 class TestService {}
 
 class TestConsumer {
-    constructor(@Inject(demoInjectionToken) readonly dependency: { value: string }) {}
+    constructor(@Inject(TestService) readonly dependency: TestService) {}
 }
 
 afterEach(async () => {
@@ -138,20 +137,23 @@ describe("config JSONC boundaries", () => {
 });
 
 describe("Internal infrastructure deployment boundaries", () => {
-    test("docker dev keeps Redis internal and does not publish host ports", async () => {
+    test("docker dev defaults to local working memory without Redis service", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
-        const redis = serviceBlock(compose, "redis");
+        const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();
 
-        expect(redis).not.toMatch(/^\s+ports:/m);
-        expect(redis).toMatch(/networks:\s*\n\s*-\s*flyflor-internal/);
+        expect(compose).not.toContain("redis:7.4-alpine");
+        expect(config).toContain('"backend": "local"');
+        expect(config).toContain('"redis":');
+        expect(config).toContain('"enabled": false');
     });
 
-    test("docker dev keeps SurrealDB internal and does not publish host ports", async () => {
+    test("docker dev defaults to optional crystal graph without SurrealDB service", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
-        const surrealdb = serviceBlock(compose, "surrealdb");
+        const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();
 
-        expect(surrealdb).not.toMatch(/^\s+ports:/m);
-        expect(surrealdb).toMatch(/networks:\s*\n\s*-\s*flyflor-internal/);
+        expect(compose).not.toContain("surrealdb/surrealdb");
+        expect(config).toContain('"surreal":');
+        expect(config).toContain('"enabled": false');
     });
 
     test("docker dev keeps the flyflor agent itself off the host network", async () => {
@@ -179,9 +181,37 @@ describe("Gateway channel boundaries", () => {
             allowedChannels: Object.values(Channel),
             channels: {
                 ...config.gateway.channels,
+                bluebubbles: {
+                    password: "bluebubbles-password",
+                    serverUrl: "https://bluebubbles.test",
+                },
+                dingtalk: {
+                    accessToken: "dingtalk-token",
+                    webhookUrl: "https://dingtalk.test/webhook",
+                },
                 telegram: { botToken: "telegram-token" },
                 discord: { applicationId: "discord-app", publicKey: "00" },
                 feishu: { appId: "feishu-app", appSecret: "feishu-secret" },
+                imessage: {
+                    password: "imessage-password",
+                    serverUrl: "https://bluebubbles.test",
+                },
+                line: {
+                    channelAccessToken: "line-access-token",
+                    channelSecret: "line-secret",
+                },
+                mattermost: { webhookToken: "mattermost-token" },
+                slack: {
+                    botToken: "slack-bot-token",
+                    signingSecret: "slack-signing-secret",
+                },
+                wechat: { token: "wechat-token" },
+                wecomCallback: { corpId: "corp-1", token: "wecom-token" },
+                whatsapp: {
+                    accessToken: "whatsapp-token",
+                    phoneNumberId: "phone-1",
+                    verifyToken: "whatsapp-verify-token",
+                },
                 weixinIlink: {
                     apiBaseUrl: "https://ilinkai.weixin.qq.com",
                     baseInfo: { channel_version: "2.2.0" },
@@ -197,7 +227,9 @@ describe("Gateway channel boundaries", () => {
         expect([...adapters.values()].map((adapter) => adapter.constructor.name)).not.toContain(
             "UnsupportedChannelAdapter",
         );
-        expect(adapters.get(Channel.WeChat)?.constructor.name).toBe("WeixinIlinkAdapter");
+        expect(adapters.get(Channel.WeChat)?.constructor.name).toBe("WeChatOfficialAccountAdapter");
+        expect(adapters.get(Channel.WeComCallback)?.constructor.name).toBe("WeComCallbackAdapter");
+        expect(adapters.get(Channel.WeixinIlink)?.constructor.name).toBe("WeixinIlinkAdapter");
     });
 
     test("does not mark WeChat iLink as connected before binding credentials exist", async () => {
@@ -1053,29 +1085,33 @@ describe("FCP dependency container", () => {
         expect(injections).toEqual([
             expect.objectContaining({
                 parameterIndex: 0,
-                token: demoInjectionToken,
+                token: TestService,
             }),
         ]);
     });
 
-    test("resolves singleton and provider bindings for plugin-style composition", () => {
+    test("resolves class-token singleton and provider bindings for plugin-style composition", () => {
         const container = new DependencyContainer();
         const configToken = createInjectionToken<{ mode: string }>("plugin.config");
-        const serviceToken = createInjectionToken<{ id: string }>("plugin.service");
         let created = 0;
 
         container.bindSingleton(configToken, { mode: "stable" });
-        container.bindProvider(serviceToken, (scope) => {
+        class PluginService {
+            constructor(readonly id: string) {}
+        }
+
+        container.bindProvider(PluginService, (scope) => {
             created += 1;
             const config = scope.resolve(configToken);
-            return { id: `${config.mode}-service` };
+            return new PluginService(`${config.mode}-service`);
         });
 
         expect(container.resolve(configToken)).toEqual({ mode: "stable" });
-        expect(container.resolve(serviceToken)).toEqual({ id: "stable-service" });
-        expect(container.resolve(serviceToken)).toEqual({ id: "stable-service" });
+        expect(container.resolve(PluginService)).toEqual({ id: "stable-service" });
+        expect(container.resolve(PluginService)).toEqual({ id: "stable-service" });
         expect(created).toBe(1);
         expect(container.has(configToken)).toBe(true);
+        expect(container.has(PluginService)).toBe(true);
     });
 });
 

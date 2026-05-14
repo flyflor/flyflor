@@ -1,5 +1,5 @@
 /**
- * Memory Atom 协议（生命体重构 LF-P0 协议层，未消费）
+ * Memory Atom 协议（生命体记忆 atom / AtomScore 的公共契约）
  *
  * 设计要点：
  * - Atom 是 episode 的 derived view，episodeIds 至少 1 项；schema 可独立演化，不改写历史。
@@ -7,7 +7,8 @@
  * - 三阶段压缩对应 stage 字段：raw / compressed / fuzzy；原文保留在 SQLite 历史层。
  * - LLM 只负责"表达结晶"，是否升格由 AtomScore + Gate A/B/C 系统决定。
  *
- * 阶段 0 仅声明类型，runtime / store / worker 不引用本文件。
+ * 这些类型已被 MemoryModule、BrainStore prompt recall 与旧 journal 审计路径共同消费；
+ * 新增字段必须保持 JSON 可序列化，并经 `src/protocol/contracts/index.ts` 对外暴露。
  */
 
 import type { ModelRole } from "./enums.ts";

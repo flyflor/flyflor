@@ -106,7 +106,9 @@ export class ProjectScaffolder {
                     error: String(err),
                 }),
             );
-            throw err;
+            // Scaffolding is a side effect of explicit memory intent; failure must be visible by event,
+            // but the caller should keep the turn alive instead of losing the whole interaction.
+            return result;
         }
         return result;
     }

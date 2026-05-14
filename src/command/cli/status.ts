@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { Database } from "bun:sqlite";
 import Table from "cli-table3";
 import pc from "picocolors";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
@@ -7,7 +8,7 @@ import { checkSkillSchemaCompatibility } from "../../crystal/skills/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { createDefaultMemoryTuning } from "../../config/index.ts";
-import { ChannelLinkState } from "../../protocol/contracts/index.ts";
+import { ChannelLinkState, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
 import { getFlyflorConfigPath } from "./config.ts";
 
 export function renderFlyflorBanner(): string {
@@ -82,7 +83,8 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
         gateway.connectedCount > 0 ? "ok" : "warn",
         `${gateway.connectedCount}/${gateway.channels.length} connected, ${gateway.degradedCount} degraded`,
     ]);
-    rows.push(["iLink channel", hasIlinkBinding(config) ? "ok" : "warn", describeIlinkState(config)]);
+    rows.push(["WeChat official", hasWeChatBinding(config) ? "ok" : "warn", describeWeChatState(config)]);
+    rows.push(["Weixin iLink", hasIlinkBinding(config) ? "ok" : "warn", describeIlinkState(config)]);
 
     const schedulerStatus = describeBackgroundScheduler(config);
     rows.push(["Background scheduler", schedulerStatus.status, schedulerStatus.detail]);
@@ -214,24 +216,31 @@ function renderChannelState(channel: ChannelStatusSnapshot): string {
     return pc.green(`${symbol} ${label}`);
 }
 
+function describeWeChatState(config: FlyflorConfig): string {
+    if (!hasWeChatBinding(config)) {
+        return "official WeChat callback token is not set";
+    }
+    return "official WeChat callback is ready";
+}
+
 function describeIlinkState(config: FlyflorConfig): string {
     if (!hasIlinkBinding(config)) {
-        return "wechat uses iLink and is not bound yet";
+        return "weixin iLink is not bound yet";
     }
     const baseUrl = config.gateway.channels.weixinIlink.apiBaseUrl ?? "https://ilinkai.weixin.qq.com";
-    return `wechat uses iLink via ${baseUrl}`;
+    return `weixin iLink via ${baseUrl}`;
 }
 
 /**
- * 后台调度器（consolidation / decay / dream）需要 Redis + Surreal + 真实 model 三件齐备。
- * 任一缺失都会让 MemoryModule.scheduler = null，导致长期记忆链路完全停摆。
+ * 后台调度器（consolidation / decay / dream）需要 working memory + crystal graph + model 三件齐备。
+ * 本地 working memory 可替代 Redis；晶体图仍需要显式打开 memory.crystal 与 surreal。
  * 本函数从配置侧静态判断，给 doctor 一行可见性。
  */
 /**
- * LF-R1：brain.db 单文件大脑可见性。展示当前主文件大小 + 月级冷归档数量。
+ * LF-R1：brain.db 单文件大脑可见性。展示当前主文件大小、核心表行数 + 月级冷归档数量。
  * 缺失（warmup 前 / 未启用记忆）显示为 "not-yet"，不报错。
  */
-async function describeBrainDb(config: FlyflorConfig): Promise<{ status: string; detail: string }> {
+export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: string; detail: string }> {
     const { join } = await import("node:path");
     const brainPath = join(config.paths.home, "brain.db");
     let mainSize = 0;
@@ -250,10 +259,34 @@ async function describeBrainDb(config: FlyflorConfig): Promise<{ status: string;
     } catch {
         archiveCount = 0;
     }
+    const counts = readBrainDbCounts(brainPath);
     return {
         status: "ok",
-        detail: `${formatBytes(mainSize)} main, ${archiveCount} archive file(s)`,
+        detail: `${formatBytes(mainSize)} main, ${archiveCount} archive file(s), ${counts}`,
     };
+}
+
+function readBrainDbCounts(brainPath: string): string {
+    try {
+        const db = new Database(brainPath, { readonly: true });
+        try {
+            const events = readCount(db, "memory_events");
+            const states = readCount(db, "memory_state");
+            const summaries = readCount(db, "memory_summary");
+            const links = readCount(db, "memory_links");
+            const codenames = readCount(db, "codenames");
+            return `events=${events}, state=${states}, summaries=${summaries}, links=${links}, codenames=${codenames}`;
+        } finally {
+            db.close();
+        }
+    } catch {
+        return "events=?, state=?, summaries=?, links=?, codenames=?";
+    }
+}
+
+function readCount(db: Database, table: string): number {
+    const row = db.query(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count?: number } | null;
+    return typeof row?.count === "number" ? row.count : 0;
 }
 
 function formatBytes(bytes: number): string {
@@ -265,10 +298,16 @@ function formatBytes(bytes: number): string {
 
 function describeBackgroundScheduler(config: FlyflorConfig): { status: string; detail: string } {
     const missing: string[] = [];
-    if (!config.memory.redis.enabled) missing.push("redis");
-    if (!config.memory.crystal.surreal.enabled) missing.push("surreal");
+    const workingBackend =
+        config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
+    if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
+        missing.push("redis working memory");
+    }
+    if (!config.memory.crystal.enabled || !config.memory.crystal.surreal.enabled) {
+        missing.push("crystal graph");
+    }
     if (missing.length === 0) {
-        return { status: "ok", detail: "consolidation+decay+dream+project-cluster enabled" };
+        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working memory)` };
     }
     return {
         status: "warn",
@@ -453,6 +492,10 @@ function readString(value: unknown): string | undefined {
 function hasIlinkBinding(config: FlyflorConfig): boolean {
     const ilink = config.gateway.channels.weixinIlink;
     return Boolean(ilink?.apiBaseUrl && ilink?.token);
+}
+
+function hasWeChatBinding(config: FlyflorConfig): boolean {
+    return Boolean(config.gateway.channels.wechat?.token);
 }
 
 function colorStatus(status: string): string {

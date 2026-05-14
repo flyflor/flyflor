@@ -80,22 +80,27 @@ export type DreamDecision =
     | DreamReconsolidationDecision
     | DreamSkipDecision;
 
-/** LLM 返回原始字符串 → 校验过的决策数组；结构错误直接抛出。 */
+/** LLM 返回原始字符串 → 校验过的决策数组；坏 JSON / 坏条目跳过，避免 dream 维护链断开。 */
 export function parseDreamDecisions(raw: string, maxSummaryChars = 600): DreamDecision[] {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start < 0 || end <= start) {
-        throw new Error("Dream model did not return a JSON object.");
+        return [];
     }
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
-    if (!isRecord(parsed)) throw new Error("Dream model returned invalid JSON.");
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    } catch {
+        return [];
+    }
+    if (!isRecord(parsed)) return [];
     const list = (parsed as { decisions?: unknown }).decisions;
-    if (!Array.isArray(list)) throw new Error("Dream model must return decisions[].");
+    if (!Array.isArray(list)) return [];
     const out: DreamDecision[] = [];
-    for (const [index, entry] of list.entries()) {
-        if (!isRecord(entry)) throw new Error(`Dream decision ${index + 1} must be an object.`);
+    for (const entry of list) {
+        if (!isRecord(entry)) continue;
         const candidateId = typeof entry.candidateId === "string" ? entry.candidateId.trim() : "";
-        if (candidateId.length === 0) throw new Error(`Dream decision ${index + 1} requires candidateId.`);
+        if (candidateId.length === 0) continue;
         const action = entry.action;
         switch (action) {
             case DreamActionKind.DriftRepair: {
@@ -168,7 +173,7 @@ export function parseDreamDecisions(raw: string, maxSummaryChars = 600): DreamDe
                 break;
             }
             default:
-                throw new Error(`Dream decision ${index + 1} returned unsupported action: ${String(action)}`);
+                continue;
         }
     }
     return out;

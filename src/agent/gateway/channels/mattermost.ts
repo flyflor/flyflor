@@ -6,9 +6,10 @@
  * dispatch and is stripped before the payload is kept as GatewayMessage.raw.
  */
 
-import type { ChannelName, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType } from "../../../protocol/contracts/index.ts";
+import type { ChannelName, GatewayDeliveryMetadata, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { isRecord, json, readString } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 export interface MattermostAdapterConfig {
@@ -49,6 +50,7 @@ export class MattermostAdapter implements ChannelAdapter {
 
         const reply = await dispatch(message);
         if (reply.text.trim()) {
+            await this.sendTyping(message.route, buildDeliveryMetadata(message));
             return json({ response_type: "in_channel", text: reply.text.trim() });
         }
         return json({ response_type: "ephemeral", text: "" });
@@ -75,10 +77,21 @@ export class MattermostAdapter implements ChannelAdapter {
                 id: payload.userId ?? "unknown",
                 displayName: payload.userName,
             },
+            messageKind: payload.command ? GatewayMessageKind.Command : GatewayMessageKind.Text,
+            source: {
+                chatName: payload.channelName,
+                messageId: payload.postId,
+                guildId: payload.teamId,
+            },
+            replyTo: payload.postId ? { messageId: payload.postId } : undefined,
             text: normalizeMattermostText(payload),
             raw: stripMattermostSecret(payload),
             receivedAt: new Date().toISOString(),
         };
+    }
+
+    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // Mattermost slash/outgoing webhooks do not expose a durable typing API.
     }
 }
 

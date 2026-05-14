@@ -310,8 +310,9 @@ describe("PluginRunner", () => {
         expect(r.error).toBe("spawn-died");
     });
 
-    test("[chaos] approve callback throws → surfaces the error", async () => {
+    test("[chaos] approve callback throws → sandbox denies without spawning", async () => {
         const sink = new CollectSink();
+        let spawned = false;
         const runner = new PluginRunner({
             policy: policy(ToolApprovalMode.Ask),
             events: sink,
@@ -319,9 +320,16 @@ describe("PluginRunner", () => {
             approve: () => {
                 throw new Error("approve-boom");
             },
-            spawn: () => fakeSpawn(),
+            spawn: () => {
+                spawned = true;
+                return fakeSpawn();
+            },
         });
-        await expect(runner.invoke(SPEC)).rejects.toThrow("approve-boom");
+        const r = await runner.invoke(SPEC);
+        expect(r.ok).toBe(false);
+        expect(r.error).toBe("plugin demo was not approved");
+        expect(spawned).toBe(false);
+        expect(sink.types()).toContain(RuntimeEventType.SandboxToolApprovalDenied);
     });
 
     test("[chaos] events sink throws → surfaces the error", async () => {

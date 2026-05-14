@@ -14,11 +14,18 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type {
     ChannelName,
     ChatType,
+    GatewayDeliveryMetadata,
     GatewayAttachment,
     GatewayMessage,
     GatewayRoute,
 } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType as ChatTypeValue } from "../../../protocol/contracts/index.ts";
+import {
+    Channel,
+    ChannelTransport,
+    ChatType as ChatTypeValue,
+    GatewayMessageAction,
+    GatewayMessageKind,
+} from "../../../protocol/contracts/index.ts";
 import {
     assertPlatformResponse,
     dispatchWithDelivery,
@@ -26,6 +33,7 @@ import {
     json,
     readString,
 } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const SLACK_SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
@@ -81,7 +89,8 @@ export class SlackAdapter implements ChannelAdapter {
         await dispatchWithDelivery({
             dispatch,
             message,
-            deliver: (text) => this.send(message.route, text),
+            deliver: (text) => this.send(message.route, text, buildDeliveryMetadata(message)),
+            typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
     }
@@ -110,10 +119,12 @@ export class SlackAdapter implements ChannelAdapter {
     }
 
     private normalize(event: Record<string, unknown>, payload: Record<string, unknown>): GatewayMessage {
-        const userId = readString(event.user) ?? "unknown";
-        const chatId = readString(event.channel) ?? userId;
-        const chatType = readSlackChatType(event);
-        const threadId = readString(event.thread_ts);
+        const nested = isRecord(event.message) ? event.message : undefined;
+        const source = nested ?? event;
+        const userId = readString(source.user ?? event.user) ?? "unknown";
+        const chatId = readString(source.channel ?? event.channel) ?? userId;
+        const chatType = readSlackChatType(source, event);
+        const threadId = readString(source.thread_ts ?? event.thread_ts);
         const route: GatewayRoute = {
             channel: this.name,
             chatId,
@@ -121,25 +132,39 @@ export class SlackAdapter implements ChannelAdapter {
             threadId,
             accountId: readString(payload.team_id),
         };
-        const attachments = readSlackFiles(event.files);
+        const attachments = readSlackFiles(source.files);
+        const text = readString(source.text) ?? "";
         return {
-            id: readString(event.client_msg_id) ?? readString(event.event_ts) ?? readString(event.ts) ?? crypto.randomUUID(),
+            id:
+                readString(source.client_msg_id) ??
+                readString(event.event_ts) ??
+                readString(source.ts ?? event.ts) ??
+                crypto.randomUUID(),
             route,
             user: {
                 id: userId,
-                displayName: readString(event.user_name),
+                displayName: readString(source.user_name ?? event.user_name),
             },
-            text: readString(event.text) ?? "",
+            text,
+            messageAction: readSlackAction(event),
+            messageKind: attachments.length > 0 ? GatewayMessageKind.Document : GatewayMessageKind.Text,
             attachments: attachments.length > 0 ? attachments : undefined,
+            mentions: readSlackMentions(text),
+            source: {
+                chatName: readString(source.channel_name ?? event.channel_name),
+                guildId: readString(payload.team_id),
+                messageId: readString(source.ts ?? event.ts),
+            },
+            replyTo: threadId ? { messageId: threadId } : undefined,
             raw: event,
             receivedAt: new Date().toISOString(),
         };
     }
 
-    private async send(route: GatewayRoute, text: string): Promise<void> {
+    private async send(route: GatewayRoute, text: string, metadata?: GatewayDeliveryMetadata): Promise<void> {
         if (!this.config.botToken) return;
         const body: Record<string, unknown> = { channel: route.chatId, text };
-        if (route.threadId) body.thread_ts = route.threadId;
+        if (metadata?.threadId ?? route.threadId) body.thread_ts = metadata?.threadId ?? route.threadId;
         const response = await fetch("https://slack.com/api/chat.postMessage", {
             method: "POST",
             headers: {
@@ -150,13 +175,37 @@ export class SlackAdapter implements ChannelAdapter {
         });
         await assertPlatformResponse(response, "Slack");
     }
+
+    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // Slack Web API has no durable native "typing" call for bot messages.
+        // Keeping this no-op makes lifecycle support explicit and consistent.
+    }
 }
 
-function readSlackChatType(event: Record<string, unknown>): ChatType {
-    const channelType = readString(event.channel_type);
+function readSlackChatType(...events: Array<Record<string, unknown>>): ChatType {
+    const channelType = events.map((event) => readString(event.channel_type)).find(Boolean);
     if (channelType === "im") return ChatTypeValue.Direct;
     if (channelType === "channel" || channelType === "group" || channelType === "mpim") return ChatTypeValue.Group;
     return ChatTypeValue.Unknown;
+}
+
+function readSlackAction(event: Record<string, unknown>): GatewayMessage["messageAction"] {
+    if (event.type === "reaction_added" || event.type === "reaction_removed") return GatewayMessageAction.Reaction;
+    if (event.subtype === "message_changed") return GatewayMessageAction.Edit;
+    if (event.subtype === "message_deleted") return GatewayMessageAction.Delete;
+    return GatewayMessageAction.Create;
+}
+
+function readSlackMentions(text: string): GatewayMessage["mentions"] {
+    // Slack delivers mentions as protocol tokens. Parsing this syntax is
+    // boundary normalization, not business-intent recognition.
+    const mentions = [...text.matchAll(/<@([^>|]+)(?:\|([^>]+))?>/g)].map((match) => ({
+        id: match[1],
+        kind: "user",
+        displayName: match[2],
+        text: match[0],
+    }));
+    return mentions.length > 0 ? mentions : undefined;
 }
 
 function readSlackFiles(input: unknown): GatewayAttachment[] {

@@ -15,6 +15,13 @@ describe("cli command docs generator", () => {
         expect(renderCliCommandsDoc()).toContain("flyflor blackboard");
     });
 
+    test("command docs mention scoped TUI copy and the CLI navigator", () => {
+        const doc = renderCliCommandsDoc();
+
+        expect(doc).toContain("copied within the panel where selection starts");
+        expect(doc).toContain("CLI TUI navigator");
+    });
+
     test("implementation status rows cover every command spec leaf", () => {
         expect(findUncoveredCliStatusPaths()).toEqual([]);
     });

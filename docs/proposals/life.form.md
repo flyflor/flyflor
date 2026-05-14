@@ -334,7 +334,7 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 
 ## 风险记录
 
-1. **brain.db 单文件膨胀**：R14 已接入月级冷归档与最小间隔 vacuum；仍需观测首批 30 天增长曲线，doctor 表已展示 `brain.db size` 与 archive 文件数。
+1. **brain.db 单文件膨胀**：live 记忆坚持单 `brain.db`，不拆按日 / 按项目 shard；R14 已接入月级只读冷归档与最小间隔 vacuum；热路径通过 `user_id + type + ts` / `parent_id + type` 复合索引和 query-plan 测试守住。仍需观测首批 30 天增长曲线，doctor 表已展示 `brain.db size`、核心表行数与 archive 文件数。
 2. **Ghost 链深度爆炸**：硬上限 `ghost.maxChainDepth=5` 兜底；超过时落 `excessive_clarification_loop` 反馈给 Dream。
 3. **Ask 触发过频 → 用户疲劳**：不设硬预算，仅在连续 N 轮无任务推进时事件告警 `AskLoopSuspected`；用户主动反馈是最终校正。
 4. **identity 自写漂移**：每条 append 必须带 `atomIds` 证据链，Dream reconsolidation 必须能复盘合并 / 收回 identity 行。

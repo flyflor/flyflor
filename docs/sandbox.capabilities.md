@@ -2,118 +2,159 @@
 
 ## 一句话定位
 
-Sandbox 为三类可观察操作（MCP 工具、Plugin、Shell hook）提供 `deny / ask / allow` 三态决策；YOLO 全开模式只对人类用户可见，自动化流程默认走严格模式。
+Sandbox 是 MCP 工具、Plugin、Shell hook 三类可执行能力的统一闸门：全局模式只负责默认姿态，具体能力用 `allow / ask / deny` 显式配置；所有执行点都走 `gateCapabilityExecution`，并接入 quota、YOLO 冷却、allowlist 与审计 sink。
 
 ## 相关代码路径
 
-- `src/agent/sandbox/sandbox.module.ts` — 决策核心
-- `src/agent/sandbox/policy.ts` — 默认策略
-- `src/agent/sandbox/audit.ts` — 审计 sink
-- `src/protocol/contracts/enums.ts` — `SandboxMode` / `SandboxCapabilityKind`
+- `src/agent/sandbox/sandbox.module.ts` — `SandboxModule`、策略解析与统一 capability gate
+- `src/agent/sandbox/allowlist.store.ts` — 项目 / 全局 `sandbox.allow.jsonc`
+- `src/agent/sandbox/quota.ts` — 单请求 quota 与 YOLO 冷却
+- `src/agent/sandbox/audit.sink.ts` — file / http 审计 sink
+- `src/protocol/contracts/enums.ts` — `SandboxMode` / `CapabilityExecutionKind` / `ToolApprovalMode`
 - `src/agent/mcp/tool.calls.ts` — MCP 调用接入点
 - `src/agent/plugins/*` — Plugin 执行入口
-- `src/agent/runtime/runtime.module.ts` — `decideCapabilityExecution` 使用点
+- `src/agent/runtime/runtime.module.ts` — MCP tool gate 与 request quota 清理
 
 ## 能力枚举
 
-| `SandboxCapabilityKind` | 来源 | 说明 |
+| `CapabilityExecutionKind` | 来源 | 说明 |
 | --- | --- | --- |
-| `mcp-tool` | RuntimeModule 调 MCP 工具 | catalog 中每个 tool 走一次决策 |
-| `plugin` | Plugin runtime | 子进程 / 二进制启动 |
-| `shell-hook` | 模板渲染 / git hook 安装 | 命令行执行 |
+| `mcp-tool` | RuntimeModule 调 MCP 工具 | catalog 中每个 tool 调用前走一次 gate |
+| `plugin` | Plugin runner | 插件命令 / 二进制启动前走 gate |
+| `shell-hook` | Shell hook executor | hook 命令执行前走 gate |
 
-## 决策矩阵
+## 决策模型
 
-| `SandboxMode` | mcp-tool | plugin | shell-hook |
-| --- | --- | --- | --- |
-| `strict` | ask（高敏感 deny） | ask | deny |
-| `interactive` | ask | ask | ask |
-| `allowlist` | 名单内 allow，其他 ask | 同 | 同 |
-| `yolo` | allow | allow | allow |
+| 配置 | 取值 | 说明 |
+| --- | --- | --- |
+| `config.sandbox.mode` | `off` / `yolo` | `off` 默认 deny；`yolo` 默认 allow |
+| `config.sandbox.mcpToolApproval` | `allow` / `ask` / `deny` | 覆盖 MCP tool 的默认决策 |
+| `config.sandbox.pluginApproval` | `allow` / `ask` / `deny` | 覆盖 plugin 的默认决策 |
+| `config.sandbox.shellHookApproval` | `allow` / `ask` / `deny` | 覆盖 shell hook 的默认决策 |
 
-> `allowlist` 由配置定义：`config.sandbox.allowList.tools[]` / `plugins[]` / `shellHooks[]`。
+`SandboxModule.policy()` 会把 mode 与三个 per-capability approval 归一成 `SandboxPolicy.approvals`。默认值在 `src/config/index.ts` 中固定为 `mode=off` 且三类能力均 `deny`；用户显式改为 `yolo` 时，未单独覆盖的能力才默认 `allow`。
 
 ## 决策时序
 
 ```mermaid
 sequenceDiagram
-    participant Caller as RuntimeModule / Plugin / Hook
-    participant SB as SandboxModule
-    participant Pol as PolicyEvaluator
-    participant Audit as AuditSink
-    participant User as 用户(TTY/CLI)
-    Caller->>SB: decide({ kind, identifier, payload })
-    SB->>Pol: evaluate(mode, kind, identifier)
-    Pol-->>SB: decision = allow|ask|deny
-    alt allow
-        SB->>Audit: record(allow)
-        SB-->>Caller: { allowed: true }
-    else deny
-        SB->>Audit: record(deny)
-        SB-->>Caller: { allowed: false, reason }
-    else ask
-        SB->>User: 提示审批
-        User-->>SB: yes / no / 持久化
-        SB->>Audit: record(ask + outcome)
-        SB-->>Caller: { allowed: outcome === yes }
+    participant Caller as MCP / Plugin / Shell hook
+    participant Gate as gateCapabilityExecution
+    participant Quota as SandboxQuotaTracker
+    participant Audit as EventSink / AuditSink
+    participant User as 审批回调
+    Caller->>Gate: { kind, descriptor, policy, requestId }
+    alt preDeny
+        Gate->>Audit: SandboxToolDenied(reason)
+        Gate-->>Caller: denied
+    else policy deny
+        Gate->>Audit: SandboxToolDenied(kind-denied-by-policy)
+        Gate-->>Caller: denied
+    else quota / yolo cooldown exceeded
+        Gate->>Quota: checkBeforeAllow(kind, requestId)
+        Gate->>Audit: SandboxToolDenied(quota/yolo-cooldown)
+        Gate-->>Caller: denied
+    else approval required
+        Gate->>Audit: SandboxToolApprovalRequested
+        Gate->>User: approve()
+        alt approved
+            Gate->>Quota: recordAllow
+            Gate-->>Caller: allowed
+        else denied / callback failed
+            Gate->>Audit: SandboxToolApprovalDenied
+            Gate-->>Caller: denied
+        end
+    else allow
+        Gate->>Quota: recordAllow
+        Gate-->>Caller: allowed
     end
 ```
 
-非交互场景（gateway 后台、batch）下 `ask` 自动降级为 `deny`，并写审计 `auto-denied`。
+非交互场景下调用方不传 `approve`，`ask` 会按未批准处理并发布 approval denied 事件；这让 gateway、batch、后台任务默认失败关闭。
 
 ## 数据结构
 
 ```ts
-interface SandboxDecisionRequest {
-    kind: SandboxCapabilityKind;
-    identifier: string;     // tool name / plugin id / hook id
-    summary?: string;       // 给人看的一句话
-    payload?: unknown;      // 上下文（不入 prompt）
+interface SandboxPolicy {
+    mode: "off" | "yolo";
+    approvals: Record<"mcp-tool" | "plugin" | "shell-hook", "allow" | "ask" | "deny">;
+    mcpToolApproval: "allow" | "ask" | "deny";
+    pluginApproval: "allow" | "ask" | "deny";
+    shellHookApproval: "allow" | "ask" | "deny";
+    canExecuteTools: boolean;
+    requiresApproval: boolean;
+    summary: string;
 }
 
-interface SandboxDecisionResult {
-    allowed: boolean;
-    decision: "allow" | "ask" | "deny";
-    reason?: string;
-    persisted?: boolean;    // 是否记入 allowlist
+interface CapabilityGateInput {
+    policy: SandboxPolicy;
+    kind: "mcp-tool" | "plugin" | "shell-hook";
+    descriptor: Record<string, unknown>;
+    preDeny?: { reason: string; message: string };
+    approve?: () => boolean | Promise<boolean>;
+    quota?: SandboxQuotaTracker;
 }
 ```
+
+## Allowlist
+
+`sandbox.allow.jsonc` 与主配置解耦，记录用户运行时显式允许的可执行项：
+
+```jsonc
+{
+    "pluginCommands": ["bun"],
+    "shellCommands": ["git"],
+    "mcpTools": ["filesystem.read"]
+}
+```
+
+- 全局文件：`~/.flyflor/sandbox.allow.jsonc`
+- 项目文件：`<project>/.flyflor/sandbox.allow.jsonc`
+- 合并规则：项目层与全局层取并集，严格精确等值匹配，不做关键词或语义判断
+- CLI：`flyflor sandbox list/allow/deny`
+
+## Quota 与 YOLO 冷却
+
+`SandboxQuotaTracker` 是进程内请求级保护：
+
+- `config.sandbox.quota.perKindPerRequest`：同一个 `requestId` 下每种 capability 最多放行 N 次；超出发布 `quota-exceeded`
+- `config.sandbox.quota.yoloCooldownMs`：YOLO 自动放行的同类 capability 最小间隔；冷却未到发布 `yolo-cooldown`
+- `RuntimeModule` 在请求结束后调用 `forgetRequest(requestId)` 释放计数器
 
 ## 审计
 
-每条决策落到 `config.sandbox.auditPath`（默认 `~/.flyflor/sandbox-audit.jsonl`）：
+默认未配置时装配 file sink，写入 `<logDir>/audit.jsonl`；也可以配置多个 sink fan-out：
 
-```json
-{ "ts": "...", "kind": "mcp-tool", "identifier": "filesystem.read",
-  "decision": "allow", "mode": "interactive", "requestId": "...", "user": "..." }
+```jsonc
+{
+    "sandbox": {
+        "auditSinks": [
+            { "kind": "file", "path": "~/.flyflor/logs/audit.jsonl" },
+            { "kind": "http", "url": "https://siem.example.com/ingest", "timeoutMs": 3000 }
+        ]
+    }
+}
 ```
 
-## 配置
-
-- `config.sandbox.mode` — 全局默认模式（strict / interactive / allowlist / yolo）
-- `config.sandbox.allowList` — 三类 capability 各自的允许列表
-- `config.sandbox.askPromptFormat` — TTY 审批提示模板
-- `config.sandbox.auditPath` — 审计落盘路径
-- `config.sandbox.escalation.timeout` — 提问超时（超时按 deny）
+`FileAuditSink` 与 `HttpAuditSink` 只持久化 `AUDITED_EVENTS` 白名单内的关键事件，追加写失败会暴露到 `flush()` / 调用链，不静默吞审计错误。
 
 ## 事件清单
 
 | 事件 | 触发点 |
 | --- | --- |
-| `sandbox.decision.evaluated` | 每次 decide |
-| `sandbox.tool.approval.requested` | mcp-tool ask 弹窗 |
-| `sandbox.tool.approval.denied` | mcp-tool 拒绝 |
-| `sandbox.plugin.blocked` | plugin deny |
-| `sandbox.shell.blocked` | shell-hook deny |
-| `sandbox.audit.written` | 审计落盘 |
+| `sandbox.tool.approval.requested` | capability 需要审批 |
+| `sandbox.tool.approval.denied` | 审批拒绝、审批回调失败或非交互 ask |
+| `sandbox.tool.denied` | policy / preDeny / quota / YOLO 冷却拒绝 |
+| `sandbox.shell_hook.start/end/failed` | shell hook 子进程生命周期 |
+| `plugin.invoke.start/end/failed` | plugin runner 生命周期 |
+| `mcp.tool.call.executed` | MCP tool 实际执行 |
 
-## 风险点 / 已知缺口
+## 运行边界
 
-- Plugin runtime 与 Shell hook 执行链未**全部**经过 SandboxModule（部分早期入口直连）。
-- `allowlist` 持久化形式仍写在主 config，缺独立的 `~/.flyflor/sandbox.allow.jsonc`。
-- 没有「逐次仅允许 N 次」的 quota 机制；只能 once / persistent。
-- 审计 sink 不可插拔，无法转发到外部 SIEM。
-- `yolo` 模式没有冷却或时间窗保护（一旦开启即长期生效）。
+- Sandbox 只判断执行权限，不判断业务语义；业务意图、路由、记忆动作仍只能来自模型结构化输出或专用提示词 JSON。
+- `ask` 是否弹出交互 UI 由调用方提供审批回调决定；后台入口不提供回调时按失败关闭。
+- allowlist 是可执行项的精确等值名单，不是安全沙箱本体；真正的文件 / 网络 / 进程隔离仍由宿主环境与具体 runner 负责。
+- quota 是进程内保护；多副本部署需要每个副本各自维护，或在未来引入共享 quota store。
 
 ## 相关测试
 
@@ -122,4 +163,5 @@ interface SandboxDecisionResult {
 - `tests/sandbox.gate.test.ts`
 - `tests/sandbox.quota.test.ts`
 - `tests/shell.hook.executor.test.ts`
-- `tests/chat.boundaries.test.ts`
+- `tests/plugin.runner.test.ts`
+- `tests/skill.mcp.test.ts`

@@ -280,7 +280,14 @@ describe("Command boundary", () => {
         const output = buildConfigJsonc({
             apiKey: "test-key",
             gateway: {
-                allowedChannels: [Channel.Api, Channel.Webhook, Channel.Stdio, Channel.Telegram, Channel.WeChat],
+                allowedChannels: [
+                    Channel.Api,
+                    Channel.Webhook,
+                    Channel.Stdio,
+                    Channel.Telegram,
+                    Channel.WeChat,
+                    Channel.WeixinIlink,
+                ],
                 channelReplyUrls: {
                     webhook: "https://example.invalid/reply",
                 },
@@ -288,6 +295,9 @@ describe("Command boundary", () => {
                     telegram: {
                         botToken: "telegram-token",
                         secretToken: "telegram-secret",
+                    },
+                    wechat: {
+                        token: "wechat-token",
                     },
                     weixinIlink: {
                         apiBaseUrl: "https://ilink.example/v1",
@@ -306,6 +316,8 @@ describe("Command boundary", () => {
         expect(output).toContain('"allowedChannels": [');
         expect(output).toContain('"telegram": {');
         expect(output).toContain('"botToken": "telegram-token"');
+        expect(output).toContain('"wechat": {');
+        expect(output).toContain('"token": "wechat-token"');
         expect(output).toContain('"weixinIlink": {');
         expect(output).toContain('"apiBaseUrl": "https://ilink.example/v1"');
         expect(output).toContain('"pollIntervalMs": 2000');

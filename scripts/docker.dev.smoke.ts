@@ -28,22 +28,20 @@ export async function runDockerDevSmoke(options: DockerDevSmokeOptions = {}): Pr
     const buildScript = await Bun.file(join(root, "scripts", "build.docker.binary.ts")).text();
     const entrypoint = await Bun.file(join(root, "docker", "entrypoint.sh")).text();
 
-    push(checks, "compose defines redis service", compose.includes("redis:") && compose.includes("redis:7.4-alpine"));
-    push(checks, "compose defines surrealdb service", compose.includes("surrealdb:") && compose.includes("surrealdb/surrealdb:v2.1.4"));
+    push(checks, "compose omits redis baseline service", !compose.includes("redis:7.4-alpine"));
+    push(checks, "compose omits surrealdb baseline service", !compose.includes("surrealdb/surrealdb"));
     push(checks, "compose defines flyflor dev service", compose.includes("flyflor:") && compose.includes("flyflor-dev"));
     push(checks, "compose exposes no host ports", !/^\s*ports\s*:/mu.test(compose));
     push(checks, "compose mounts compiled linux binary", compose.includes("./dist/flyflor-linux:/mounted/flyflor-linux:ro"));
     push(checks, "compose mounts docker config as home", compose.includes("./docker/config:/root/.flyflor"));
     push(checks, "compose mounts docker workspace", compose.includes("./docker/workspace:/root/.flyflor/workspace"));
-    push(checks, "compose waits for redis health", compose.includes("redis:") && compose.includes("condition: service_healthy"));
-    push(checks, "compose waits for surrealdb health", compose.includes("surrealdb:") && compose.includes("condition: service_healthy"));
-    push(checks, "redis keeps working memory volatile", compose.includes("--appendonly") && compose.includes("allkeys-lru"));
-    push(checks, "docker config points redis at compose DNS", config.includes('"internalUrl": "redis://redis:6379"'));
-    push(checks, "docker config points surreal at compose DNS", config.includes('"internalUrl": "ws://surrealdb:8000/rpc"'));
-    push(checks, "docker config enables redis", config.includes('"redis"') && config.includes('"enabled": true'));
-    push(checks, "docker config enables surreal crystal store", config.includes('"surreal"') && config.includes('"enabled": true'));
+    push(checks, "compose has no external backend health dependency", !compose.includes("condition: service_healthy"));
+    push(checks, "docker config uses local working memory", backendConfigured(config, "working", "\"backend\"\\s*:\\s*\"local\""));
+    push(checks, "docker config disables redis by default", backendConfigured(config, "redis", "\"enabled\"\\s*:\\s*false"));
+    push(checks, "docker config disables surreal by default", backendConfigured(config, "surreal", "\"enabled\"\\s*:\\s*false"));
     push(checks, "docker binary build uses browser conditions", buildScript.includes('"--conditions=browser"'));
-    push(checks, "docker binary build rejects unresolved imports", buildScript.includes('"--reject-unresolved"'));
+    // Docker and local binary builds share the same OpenTUI dynamic-import compatibility flag.
+    push(checks, "docker binary build allows OpenTUI dynamic imports", buildScript.includes('"--allow-unresolved="'));
     push(checks, "docker binary build writes expected artifact", buildScript.includes('"dist/flyflor-linux"'));
     push(checks, "entrypoint runs mounted binary copy", entrypoint.includes('SOURCE_BIN="/mounted/flyflor-linux"'));
 
@@ -103,4 +101,16 @@ async function checkCompiledDockerBinary(root: string): Promise<SmokeCheck> {
 
 function push(checks: SmokeCheck[], name: string, ok: boolean, detail?: string): void {
     checks.push({ detail, name, ok });
+}
+
+function backendConfigured(config: string, key: string, pattern: string): boolean {
+    const escapedKey = escapeRegex(key);
+    return new RegExp(
+        `"${escapedKey}"\\s*:\\s*\\{[^}]*${pattern}`,
+        "u",
+    ).test(config);
+}
+
+function escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

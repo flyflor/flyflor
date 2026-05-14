@@ -2,8 +2,10 @@ import type {
     ChannelLinkState,
     ChannelName,
     ChannelTransport,
+    GatewayDeliveryMetadata,
     GatewayMessage,
     GatewayReply,
+    GatewayRoute,
 } from "../../../protocol/contracts/index.ts";
 
 export type StreamingMessageDispatcher = (
@@ -27,6 +29,8 @@ export interface ChannelAdapter {
     readonly name: ChannelName;
     readonly transport?: ChannelTransport;
     handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response>;
+    /** Optional native typing indicator. Callers treat failures as observable but non-fatal. */
+    sendTyping?(route: GatewayRoute, metadata?: GatewayDeliveryMetadata): Promise<void>;
     start?(dispatch: StreamingMessageDispatcher): void | Promise<void>;
     snapshot?(): ChannelAdapterSnapshot;
 }

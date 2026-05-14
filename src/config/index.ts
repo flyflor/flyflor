@@ -5,6 +5,8 @@ import mergeWith from "lodash-es/mergeWith.js";
 import {
     Channel,
     ModelApiMode,
+    MemoryWorkingBackend,
+    type MemoryWorkingBackend as MemoryWorkingBackendType,
     type ModelApiMode as ModelApiModeType,
     ModelProviderId,
     ModelProviderKind,
@@ -71,6 +73,9 @@ export interface ChannelConfigs {
     api: {
         token?: SecretRef | string;
     };
+    apiServer?: {
+        token?: SecretRef | string;
+    };
     bluebubbles: {
         password?: SecretRef | string;
         serverUrl?: string;
@@ -95,6 +100,11 @@ export interface ChannelConfigs {
         encryptKey?: SecretRef | string;
         verificationToken?: SecretRef | string;
     };
+    googleChat?: {
+        projectId?: string;
+        serviceAccountJson?: SecretRef | string;
+        subscriptionName?: string;
+    };
     homeassistant: {
         accessToken?: SecretRef | string;
         token?: SecretRef | string;
@@ -103,6 +113,13 @@ export interface ChannelConfigs {
     imessage: {
         password?: SecretRef | string;
         serverUrl?: string;
+    };
+    irc?: {
+        channel?: string;
+        nickname?: string;
+        port?: number;
+        server?: string;
+        useTls?: boolean;
     };
     line: {
         channelAccessToken?: SecretRef | string;
@@ -118,9 +135,18 @@ export interface ChannelConfigs {
         homeserverUrl?: string;
         userId?: string;
     };
+    msgraphWebhook?: {
+        clientState?: SecretRef | string;
+        replyUrl?: string;
+    };
     qq: {
         appId?: string;
         appSecret?: SecretRef | string;
+        sandbox: boolean;
+    };
+    qqbot?: {
+        appId?: string;
+        clientSecret?: SecretRef | string;
         sandbox: boolean;
     };
     signal: {
@@ -134,6 +160,12 @@ export interface ChannelConfigs {
     sms: {
         accessToken?: SecretRef | string;
         replyUrl?: string;
+        webhookUrl?: string;
+    };
+    teams?: {
+        clientId?: string;
+        clientSecret?: SecretRef | string;
+        tenantId?: string;
         webhookUrl?: string;
     };
     telegram: {
@@ -150,6 +182,13 @@ export interface ChannelConfigs {
         corpSecret?: string;
         token?: string;
     };
+    wecomCallback?: {
+        aesKey?: SecretRef | string;
+        agentId?: string;
+        corpId?: string;
+        corpSecret?: SecretRef | string;
+        token?: SecretRef | string;
+    };
     whatsapp: {
         accessToken?: string;
         appSecret?: string;
@@ -164,6 +203,11 @@ export interface ChannelConfigs {
         syncBuf?: string;
         token?: SecretRef | string;
         userId?: string;
+    };
+    yuanbao?: {
+        accessToken?: SecretRef | string;
+        replyUrl?: string;
+        webhookUrl?: string;
     };
     zalo: {
         accessToken?: SecretRef | string;
@@ -216,6 +260,7 @@ export interface MemoryConfig {
     crystal: CrystalMemoryConfig;
     matrix: MemoryMatrixConfig;
     markdown: MarkdownMemoryConfig;
+    working?: WorkingMemoryConfig;
     redis: RedisMemoryConfig;
     sqlite: SQLiteMemoryConfig;
     embedding: MemoryEmbeddingConfig;
@@ -267,6 +312,21 @@ export interface RedisMemoryConfig {
     contextRingSize: number;
     // socket 超时；Redis 不可达时所有 best-effort 调用必须在此时间内 timeout。
     timeoutMs: number;
+}
+
+export interface WorkingMemoryConfig {
+    backend: MemoryWorkingBackendType;
+    local: LocalWorkingMemoryConfig;
+}
+
+export interface LocalWorkingMemoryConfig {
+    contextRingSize: number;
+    defaultTtlSeconds: number;
+    maxEpisodesPerUser: number;
+    maxWalBytes: number;
+    snapshotEveryWrites: number;
+    snapshotFile: string;
+    walFile: string;
 }
 
 export interface MemoryEmbeddingConfig {
@@ -545,17 +605,21 @@ export async function loadConfigForPaths(
 
     const model = resolveModelConfig(applyModelOverrides(normalizeModelRegistryConfig(configFile), options.model));
     const memory = mergeMemoryConfig(createDefaultMemoryConfig(), configFile.memory);
+    const secrets = configFile.model?.secrets ?? {};
 
-    const gateway = mergeGatewayConfig(
-        {
-            host: "0.0.0.0",
-            port: 8787,
-            stdio: false,
-            allowedChannels: [Channel.Api, Channel.Webhook, Channel.Stdio],
-            channelReplyUrls: {},
-            channels: createDefaultChannelConfigs(),
-        },
-        configFile.gateway,
+    const gateway = resolveGatewaySecrets(
+        mergeGatewayConfig(
+            {
+                host: "0.0.0.0",
+                port: 8787,
+                stdio: false,
+                allowedChannels: [Channel.Api, Channel.Webhook, Channel.Stdio],
+                channelReplyUrls: {},
+                channels: createDefaultChannelConfigs(),
+            },
+            configFile.gateway,
+        ),
+        secrets,
     );
 
     const sandbox: SandboxConfig = {
@@ -604,29 +668,39 @@ function applyModelOverrides(
 function createDefaultChannelConfigs(): ChannelConfigs {
     return {
         api: {},
+        apiServer: {},
         bluebubbles: {},
         dingtalk: {},
         discord: {},
         email: {},
         feishu: {},
+        googleChat: {},
         homeassistant: {},
         imessage: {},
+        irc: {},
         line: {},
         mattermost: {},
         matrix: {},
+        msgraphWebhook: {},
         qq: {
+            sandbox: false,
+        },
+        qqbot: {
             sandbox: false,
         },
         signal: {},
         slack: {},
         sms: {},
+        teams: {},
         telegram: {},
         wechat: {},
         wecom: {},
+        wecomCallback: {},
         whatsapp: {},
         weixinIlink: {
             pollIntervalMs: 1500,
         },
+        yuanbao: {},
         zalo: {},
     };
 }
@@ -637,6 +711,17 @@ function mergeGatewayConfig(defaults: GatewayConfig, override: Partial<GatewayCo
     }
 
     return mergeConfig(defaults, override);
+}
+
+/**
+ * Channel adapters are constructed from concrete protocol credentials. Resolve
+ * config-provider SecretRef objects at load time so every adapter sees strings.
+ */
+function resolveGatewaySecrets(gateway: GatewayConfig, secrets: Record<string, string>): GatewayConfig {
+    return {
+        ...gateway,
+        channels: resolveSecretTree(gateway.channels, secrets) as GatewayConfig["channels"],
+    };
 }
 
 function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfig> | undefined): MemoryConfig {
@@ -651,6 +736,13 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
     }
 
     const merged = mergeConfig(defaults, override);
+    // Backward compatibility: older configs only toggled memory.redis.enabled.
+    // If no explicit working backend is present, honor that switch and keep Redis behavior.
+    if (!override.working && override.redis?.enabled) {
+        if (merged.working) {
+            merged.working.backend = MemoryWorkingBackend.Redis;
+        }
+    }
     // R red-line enforcement: `_keepGatewayListening` is an audit-only field.
     merged.tuning.dormant._keepGatewayListening = true;
     return merged;
@@ -699,6 +791,18 @@ function createDefaultMemoryConfig(): MemoryConfig {
         markdown: {
             enabled: true,
             maxPromptChars: 12_000,
+        },
+        working: {
+            backend: MemoryWorkingBackend.Local,
+            local: {
+                contextRingSize: 12,
+                defaultTtlSeconds: 86_400,
+                maxEpisodesPerUser: 200,
+                maxWalBytes: 4 * 1024 * 1024,
+                snapshotEveryWrites: 64,
+                snapshotFile: "working.snapshot.json",
+                walFile: "working.wal.jsonl",
+            },
         },
         sqlite: {
             enabled: true,
@@ -1044,6 +1148,39 @@ function resolveSecret(
         return secrets?.[value.id];
     }
     return undefined;
+}
+
+function resolveSecretTree<T>(value: T, secrets: Record<string, string>): T {
+    if (Array.isArray(value)) {
+        return value.map((item) => resolveSecretTree(item, secrets)) as T;
+    }
+    if (isSecretRef(value)) {
+        return resolveSecret(value, secrets) as T;
+    }
+    if (isPlainObject(value)) {
+        const resolved: Record<string, unknown> = {};
+        for (const [key, child] of Object.entries(value)) {
+            resolved[key] = resolveSecretTree(child, secrets);
+        }
+        return resolved as T;
+    }
+    return value;
+}
+
+function isSecretRef(value: unknown): value is SecretRef {
+    return (
+        isPlainObject(value) &&
+        typeof value.id === "string" &&
+        typeof value.provider === "string" &&
+        (value.provider === "config" ||
+            value.provider === "file" ||
+            value.provider === "keychain" ||
+            value.provider === "vault")
+    );
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function firstKey(record: Record<string, unknown>): string | undefined {

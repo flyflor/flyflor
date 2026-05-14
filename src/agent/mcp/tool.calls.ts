@@ -1,4 +1,5 @@
 import type { McpCallResult, McpServerDefinition, McpToolDefinition } from "./index.ts";
+import { extractStructuredBlocks, parseStructuredJson, structuredBlock, StructuredBlockProtocol } from "../../protocol/index.ts";
 
 export interface McpToolCatalogEntry {
     server: string;
@@ -23,16 +24,15 @@ export interface McpToolCallExecution {
     error?: string;
 }
 
-const MCP_CALL_OPEN = "<flyflor_mcp_calls>";
-const MCP_CALL_CLOSE = "</flyflor_mcp_calls>";
-const MCP_CALL_BLOCK = /<flyflor_mcp_calls>\s*([\s\S]*?)\s*<\/flyflor_mcp_calls>/g;
+const MCP_CALL_BLOCK = structuredBlock(StructuredBlockProtocol.McpCalls);
 
 export function parseMcpToolCalls(rawText: string, limit = 4): ParsedMcpToolCalls {
     const calls: McpToolCallRequest[] = [];
-    const text = rawText.replace(MCP_CALL_BLOCK, (_block, rawJson: string) => {
-        calls.push(...readCalls(rawJson));
-        return "";
-    });
+    // MCP 调用也走统一内部块 registry；本文件只负责工具调用 payload 的安全校验。
+    const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.McpCalls);
+    for (const block of extracted.blocks) {
+        calls.push(...readCalls(block.content));
+    }
     if (calls.length > limit) {
         throw new Error(`MCP tool call count ${calls.length} exceeds limit ${limit}.`);
     }
@@ -42,7 +42,7 @@ export function parseMcpToolCalls(rawText: string, limit = 4): ParsedMcpToolCall
     }
     return {
         calls,
-        text: text.trim(),
+        text: extracted.text,
     };
 }
 
@@ -123,12 +123,12 @@ export function renderMcpToolResults(executions: McpToolCallExecution[]): string
 }
 
 export function hasMcpCallProtocolText(text: string): boolean {
-    return text.includes(MCP_CALL_OPEN) || text.includes(MCP_CALL_CLOSE);
+    return text.includes(MCP_CALL_BLOCK.open) || text.includes(MCP_CALL_BLOCK.close);
 }
 
 function readCalls(rawJson: string): McpToolCallRequest[] {
     try {
-        const payload = JSON.parse(rawJson.trim()) as unknown;
+        const payload = parseStructuredJson(rawJson);
         if (Array.isArray(payload)) {
             return payload.map(readMcpToolCall);
         }
@@ -169,8 +169,8 @@ function isSafeCall(call: McpToolCallRequest): boolean {
     return (
         /^[A-Za-z0-9_.-]+$/.test(call.server) &&
         /^[A-Za-z0-9_.-]+$/.test(call.tool) &&
-        !JSON.stringify(call.input).includes(MCP_CALL_OPEN) &&
-        !JSON.stringify(call.input).includes(MCP_CALL_CLOSE)
+        !JSON.stringify(call.input).includes(MCP_CALL_BLOCK.open) &&
+        !JSON.stringify(call.input).includes(MCP_CALL_BLOCK.close)
     );
 }
 

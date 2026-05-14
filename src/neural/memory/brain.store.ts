@@ -741,6 +741,12 @@ function createSchema(db: Database): void {
         CREATE INDEX IF NOT EXISTS idx_events_codename ON memory_events(codename_id, ts);
         CREATE INDEX IF NOT EXISTS idx_events_type     ON memory_events(type, ts);
         CREATE INDEX IF NOT EXISTS idx_events_user     ON memory_events(user_id, ts);
+        -- Hot prompt / identity / ghost recall always starts from one user's typed time window.
+        -- Keep this as a composite index so a large single brain.db does not degrade into broad scans.
+        CREATE INDEX IF NOT EXISTS idx_events_user_type_ts ON memory_events(user_id, type, ts DESC);
+        -- Ask pending checks and ghost evidence checks are relationship lookups, not semantic text reads.
+        -- Index parent_id + type together because these checks sit on the interactive turn path.
+        CREATE INDEX IF NOT EXISTS idx_events_parent_type ON memory_events(parent_id, type);
 
         CREATE TABLE IF NOT EXISTS memory_state (
             event_id TEXT PRIMARY KEY,

@@ -9,7 +9,7 @@ import {
 } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { Sandbox } from "../components.ts";
-import { Module, Provide } from "../di/decorators/index.ts";
+import { Module } from "../di/decorators/index.ts";
 import { SandboxQuotaTracker } from "./quota.ts";
 
 export interface SandboxPolicy {
@@ -32,7 +32,6 @@ export interface CapabilityExecutionDecision {
 }
 
 @Module({ name: "sandbox", tags: ["flyflor", "boundary"] })
-@Provide({ kind: ComponentKind.Sandbox, layer: ArchitectureLayer.Control, name: "sandbox", provider: true })
 export class SandboxModule extends Sandbox {
     constructor(private readonly config: SandboxConfig) {
         super();
@@ -229,5 +228,10 @@ export async function gateCapabilityExecution(
 
 async function runApprover(approve?: () => boolean | Promise<boolean>): Promise<boolean> {
     if (!approve) return false;
-    return await approve();
+    try {
+        return await approve();
+    } catch {
+        // 审批 UI / 回调失败时按未批准处理，保持 capability gate 默认安全。
+        return false;
+    }
 }

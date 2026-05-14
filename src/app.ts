@@ -13,13 +13,14 @@ import {
     type ChannelAdapter,
 } from "./agent/index.ts";
 import { loadConfig, type FlyflorConfig } from "./config/index.ts";
-import { createMemory, type MemoryModule } from "./neural/memory/index.ts";
+import { createMemory, MemoryModule } from "./neural/memory/index.ts";
 import {
     assertModuleMetadata,
     createInjectionToken,
     DependencyContainer,
+    isInjectionToken,
     Module,
-    type InjectionToken,
+    type DependencyToken,
 } from "./agent/di/index.ts";
 import { createModelClient } from "./llm/index.ts";
 import {
@@ -37,16 +38,16 @@ import { join } from "node:path";
 
 export const FlyFlorTokens = {
     Adapters: createInjectionToken<Map<ChannelName, ChannelAdapter>>("flyflor.adapters"),
-    Blackboard: createInjectionToken<BlackboardModule>("flyflor.blackboard"),
+    Blackboard: BlackboardModule,
     Config: createInjectionToken<FlyflorConfig>("flyflor.config"),
     Container: createInjectionToken<DependencyContainer>("flyflor.container"),
     Events: createInjectionToken<EventSink>("flyflor.events"),
-    Gateway: createInjectionToken<GatewayModule>("flyflor.gateway"),
+    Gateway: GatewayModule,
     Mode: createInjectionToken<RuntimeModeType>("flyflor.mode"),
     Model: createInjectionToken<ModelClient>("flyflor.model"),
-    Memory: createInjectionToken<MemoryModule>("flyflor.memory"),
-    Runtime: createInjectionToken<RuntimeModule>("flyflor.runtime"),
-    Workers: createInjectionToken<WorkerManager>("flyflor.workers"),
+    Memory: MemoryModule,
+    Runtime: RuntimeModule,
+    Workers: WorkerManager,
 } as const;
 
 @Module({
@@ -134,7 +135,7 @@ export class FlyFlor {
         this.dependencies.runtime.dispose();
     }
 
-    resolve<TValue>(token: InjectionToken<TValue>): TValue {
+    resolve<TValue>(token: DependencyToken<TValue>): TValue {
         return this.dependencies.container.resolve(token);
     }
 }
@@ -184,7 +185,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
 
 function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies: FlyFlorDependencies): void {
     const metadata = assertModuleMetadata(FlyFlorModule);
-    const values = new Map<InjectionToken<unknown>, unknown>([
+    const values = new Map<DependencyToken<unknown>, unknown>([
         [FlyFlorTokens.Container, container],
         [FlyFlorTokens.Mode, dependencies.mode],
         [FlyFlorTokens.Config, dependencies.config],
@@ -199,26 +200,20 @@ function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies
     ]);
 
     for (const provider of metadata.providers) {
-        if (isInjectionToken(provider)) {
+        if (isInjectionToken(provider) || typeof provider === "function") {
             const value = values.get(provider);
             if (value === undefined) {
-                throw new Error(`Missing FlyFlor module provider value: ${provider.name}`);
+                throw new Error(`Missing FlyFlor module provider value: ${providerName(provider)}`);
             }
             container.bindSingleton(provider, value);
         }
     }
 }
 
-function isInjectionToken(value: unknown): value is InjectionToken<unknown> {
-    return (
-        typeof value === "object" &&
-        value !== null &&
-        "key" in value &&
-        "name" in value &&
-        typeof (value as { key?: unknown }).key === "symbol" &&
-        typeof (value as { name?: unknown }).name === "string"
-    );
+function providerName(provider: DependencyToken<unknown>): string {
+    return isInjectionToken(provider) ? provider.name : provider.name;
 }
+
 
 function createDefaultEventSink(mode: RuntimeModeType, config: FlyflorConfig): EventSink {
     const logDir = config.paths.logDir;

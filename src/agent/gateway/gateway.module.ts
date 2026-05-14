@@ -11,13 +11,12 @@ import {
 } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { Gateway } from "../components.ts";
-import { Module, Provide } from "../di/decorators/index.ts";
+import { Module } from "../di/decorators/index.ts";
 import { buildGatewayStatusSnapshot, type ChannelRuntimeState } from "./channels/status.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./channels/types.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.ts";
 
 @Module({ name: "gateway", tags: ["flyflor", "boundary"] })
-@Provide({ kind: ComponentKind.Gateway, layer: ArchitectureLayer.Control, name: "gateway", provider: true })
 export class GatewayModule extends Gateway {
     private readonly channelRuntime = new Map<ChannelName, ChannelRuntimeState>();
     private running = false;
@@ -139,29 +138,10 @@ export class GatewayModule extends Gateway {
 
         const payload = await request.json().catch(() => undefined);
         const message = normalizer.normalize(payload);
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream<Uint8Array>({
-            start: (controller) => {
-                let wroteDelta = false;
-                void this.createTrackedDispatcher(channel)(message, {
-                    onTextDelta: (text) => {
-                        wroteDelta = true;
-                        controller.enqueue(encoder.encode(text));
-                    },
-                })
-                    .then((reply) => {
-                        if (!wroteDelta && reply.text) {
-                            controller.enqueue(encoder.encode(reply.text));
-                        }
-                        controller.close();
-                    })
-                    .catch((error) => {
-                        controller.enqueue(encoder.encode(`Flyflor gateway error: ${errorMessage(error)}\n`));
-                        controller.close();
-                    });
-            },
-        });
-        return new Response(stream, {
+        // Historical channel stream URLs are kept for client compatibility, but
+        // channel delivery is final-only: no model deltas leave the gateway.
+        const reply = await this.createTrackedDispatcher(channel)(message);
+        return new Response(reply.text, {
             headers: {
                 "cache-control": "no-cache",
                 "content-type": "text/plain; charset=utf-8",

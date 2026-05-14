@@ -1,6 +1,7 @@
 import { MarkdownMemoryFile, MemoryActionTarget, MemoryKind } from "../../protocol/contracts/index.ts";
 import { normalizeEqClassification, type EqClassification } from "../../protocol/contracts/eq.ts";
 import { renderMemoryActionInstructions } from "../../agent/prompts/index.ts";
+import { extractStructuredBlocks, parseStructuredJson, structuredBlock, StructuredBlockProtocol } from "../../protocol/index.ts";
 
 export interface MemoryAction {
     action: "add";
@@ -57,9 +58,7 @@ export interface ParsedMemoryActions {
     text: string;
 }
 
-const MEMORY_ACTION_OPEN = "<flyflor_memory_actions>";
-const MEMORY_ACTION_CLOSE = "</flyflor_memory_actions>";
-const MEMORY_ACTION_BLOCK = /<flyflor_memory_actions>\s*([\s\S]*?)\s*<\/flyflor_memory_actions>/g;
+const MEMORY_ACTION_BLOCK = structuredBlock(StructuredBlockProtocol.MemoryActions);
 
 export function renderMemoryActionPrompt(): string {
     return renderMemoryActionInstructions();
@@ -67,10 +66,11 @@ export function renderMemoryActionPrompt(): string {
 
 export function parseMemoryActions(rawText: string, maxActions: number): ParsedMemoryActions {
     const actions: MemoryAction[] = [];
-    const text = rawText.replace(MEMORY_ACTION_BLOCK, (_block, rawJson: string) => {
-        actions.push(...readActions(rawJson));
-        return "";
-    });
+    // 统一从 protocol registry 剥离块，避免 memory action 与其它内部协议各自维护 tag。
+    const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.MemoryActions);
+    for (const block of extracted.blocks) {
+        actions.push(...readActions(block.content));
+    }
 
     if (actions.length > maxActions) {
         throw new Error(`flyflor_memory_actions returned ${actions.length} items, max is ${maxActions}.`);
@@ -78,7 +78,7 @@ export function parseMemoryActions(rawText: string, maxActions: number): ParsedM
     for (const [index, action] of actions.entries()) {
         assertSafeAction(action, index);
     }
-    return { actions, text: text.trim() };
+    return { actions, text: extracted.text };
 }
 
 export function targetFileForMemoryAction(action: MemoryAction): MarkdownMemoryFile {
@@ -108,7 +108,7 @@ export function kindForMemoryAction(action: MemoryAction): MemoryKind {
 }
 
 function readActions(rawJson: string): MemoryAction[] {
-    const payload = JSON.parse(rawJson.trim()) as unknown;
+    const payload = parseStructuredJson(rawJson);
     const items = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.actions) ? payload.actions : null;
     if (!items) {
         throw new Error("flyflor_memory_actions must be a JSON array or an object with actions[].");
@@ -139,7 +139,7 @@ function assertSafeAction(action: MemoryAction, index: number): void {
     if (action.content.length < 2 || action.content.length > 500) {
         throw new Error(`flyflor_memory_actions item ${index + 1} has invalid content length.`);
     }
-    if (action.content.includes(MEMORY_ACTION_OPEN) || action.content.includes(MEMORY_ACTION_CLOSE)) {
+    if (action.content.includes(MEMORY_ACTION_BLOCK.open) || action.content.includes(MEMORY_ACTION_BLOCK.close)) {
         throw new Error(`flyflor_memory_actions item ${index + 1} contains nested action tags.`);
     }
 }

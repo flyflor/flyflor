@@ -1,6 +1,6 @@
-import type { InjectionToken } from "../factory/dependency.container.ts";
+import type { DependencyToken } from "../factory/dependency.container.ts";
 
-export type ModuleProviderToken = Function | InjectionToken<unknown> | string | symbol;
+export type ModuleProviderToken = DependencyToken<unknown> | string | symbol;
 
 export interface ModuleDecoratorOptions {
     exports?: ModuleProviderToken[];

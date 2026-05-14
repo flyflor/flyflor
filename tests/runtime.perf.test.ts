@@ -206,15 +206,16 @@ describe("PerfMetrics event emission", () => {
 });
 
 describe("Memory module warmup, embedding reuse, episode capture", () => {
-    test("warmup is a no-op when redis is disabled (publishes nothing)", async () => {
+    test("warmup opens the default local working memory when redis is disabled", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
         await memory.warmup();
-        expect(events.countOf(RuntimeEventType.MemoryWarmupComplete)).toBe(0);
+        expect(events.countOf(RuntimeEventType.MemoryWarmupComplete)).toBe(1);
+        expect(events.findOf(RuntimeEventType.MemoryWarmupComplete)?.payload?.backend).toBe("local");
     });
 
-    test("rememberTurn writes episode best-effort when redis disabled (no event)", async () => {
+    test("rememberTurn writes episode to local working memory when redis is disabled", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
@@ -223,7 +224,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const ctx = withEmbedding(await embedFor(config, "hello world"));
         const result = await memory.rememberTurn(message, reply, ctx);
         expect(result.candidates).toHaveLength(0);
-        expect(events.countOf(RuntimeEventType.MemoryEpisodeWritten)).toBe(0);
+        expect(events.countOf(RuntimeEventType.MemoryEpisodeWritten)).toBe(1);
         expect(events.countOf(RuntimeEventType.MemoryJournalWritten)).toBe(1);
         const journalEvent = events.findOf(RuntimeEventType.MemoryJournalWritten);
         expect(await Bun.file(String(journalEvent?.payload?.dbPath)).exists()).toBe(true);
@@ -345,7 +346,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(elapsed).toBeLessThan(1500);
     });
 
-    test("recordDebateEpisode no-ops when redis is disabled (no event published)", async () => {
+    test("recordDebateEpisode writes to local working memory when redis is disabled", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
@@ -355,7 +356,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             embedding: await embedFor(config, "x"),
             requestId: "r1",
         });
-        expect(events.countOf(RuntimeEventType.MemoryEpisodeWritten)).toBe(0);
+        expect(events.countOf(RuntimeEventType.MemoryEpisodeWritten)).toBe(1);
         expect(events.countOf(RuntimeEventType.MemoryReflectionFailed)).toBe(0);
     });
 });

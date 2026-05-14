@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
-import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
-import { ChannelTransport } from "../../../protocol/contracts/index.ts";
+import { createHash, timingSafeEqual } from "node:crypto";
+import type { GatewayAttachment, GatewayMessage } from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import type { ChannelAdapter, MessageDispatcher } from "./types.ts";
 
 export class WeChatOfficialAccountAdapter implements ChannelAdapter {
-    readonly name = "wechat";
+    readonly name = Channel.WeChat;
     readonly transport = ChannelTransport.Http;
 
     constructor(private readonly token: string) {}
@@ -12,6 +12,8 @@ export class WeChatOfficialAccountAdapter implements ChannelAdapter {
     async handle(request: Request, dispatch: MessageDispatcher): Promise<Response> {
         const url = new URL(request.url);
         if (request.method === "GET") {
+            // Official WeChat callback verification uses the same signature
+            // tuple as the platform docs: token + timestamp + nonce.
             const signature = url.searchParams.get("signature") ?? "";
             const timestamp = url.searchParams.get("timestamp") ?? "";
             const nonce = url.searchParams.get("nonce") ?? "";
@@ -31,10 +33,6 @@ export class WeChatOfficialAccountAdapter implements ChannelAdapter {
             return new Response("invalid signature", { status: 401 });
         }
 
-        if (payload.MsgType !== "text") {
-            return xmlResponse(payload.FromUserName, payload.ToUserName, "");
-        }
-
         const reply = await dispatch(this.normalize(payload, rawBody));
         return xmlResponse(payload.FromUserName, payload.ToUserName, reply.text);
     }
@@ -43,14 +41,20 @@ export class WeChatOfficialAccountAdapter implements ChannelAdapter {
         return {
             id: payload.MsgId ?? crypto.randomUUID(),
             route: {
-                channel: "wechat",
+                channel: Channel.WeChat,
                 chatId: payload.FromUserName ?? "unknown",
-                chatType: "direct",
+                chatType: ChatType.Direct,
             },
             user: {
                 id: payload.FromUserName ?? "unknown",
             },
-            text: payload.Content ?? "",
+            messageKind: normalizeMsgType(payload.MsgType),
+            attachments: normalizeAttachments(payload),
+            source: {
+                messageId: payload.MsgId,
+            },
+            text: normalizeText(payload),
+            metadata: normalizeMetadata(payload),
             raw: rawBody,
             receivedAt: new Date().toISOString(),
         };
@@ -58,7 +62,7 @@ export class WeChatOfficialAccountAdapter implements ChannelAdapter {
 
     private verifySignature(signature: string, timestamp: string, nonce: string): boolean {
         const expected = createHash("sha1").update([this.token, timestamp, nonce].sort().join("")).digest("hex");
-        return expected === signature;
+        return safeEqual(expected, signature);
     }
 }
 
@@ -76,6 +80,7 @@ function xmlResponse(toUser: string | undefined, fromUser: string | undefined, c
         return new Response("success");
     }
 
+    // WeChat expects a plain XML envelope for text replies in callback mode.
     const body = `<xml>
 <ToUserName><![CDATA[${escapeCdata(toUser ?? "")}]]></ToUserName>
 <FromUserName><![CDATA[${escapeCdata(fromUser ?? "")}]]></FromUserName>
@@ -91,4 +96,75 @@ function xmlResponse(toUser: string | undefined, fromUser: string | undefined, c
 
 function escapeCdata(value: string): string {
     return value.replaceAll("]]>", "]]]]><![CDATA[>");
+}
+
+function normalizeMsgType(type: string | undefined): GatewayMessage["messageKind"] {
+    if (type === "image") return GatewayMessageKind.Photo;
+    if (type === "video") return GatewayMessageKind.Video;
+    if (type === "voice") return GatewayMessageKind.Voice;
+    if (type === "shortvideo") return GatewayMessageKind.Video;
+    if (type === "location") return GatewayMessageKind.Location;
+    if (type === "link") return GatewayMessageKind.Document;
+    if (type === "event") return GatewayMessageKind.Unknown;
+    return GatewayMessageKind.Text;
+}
+
+function normalizeText(payload: Record<string, string>): string {
+    return (
+        payload.Content ??
+        payload.Recognition ??
+        payload.Title ??
+        payload.Description ??
+        payload.Event ??
+        ""
+    );
+}
+
+function normalizeAttachments(payload: Record<string, string>): GatewayAttachment[] | undefined {
+    const mediaId = payload.MediaId;
+    const msgType = payload.MsgType;
+    if (!mediaId) {
+        if (payload.Url && msgType === "link") {
+            return [{ kind: "file", path: payload.Url, name: payload.Title }];
+        }
+        return undefined;
+    }
+    return [
+        {
+            kind: msgType === "image" ? "image" : "file",
+            id: mediaId,
+            name: payload.Title,
+        },
+    ];
+}
+
+function normalizeMetadata(payload: Record<string, string>): Record<string, unknown> | undefined {
+    const metadata: Record<string, unknown> = {};
+    for (const key of [
+        "CreateTime",
+        "Event",
+        "EventKey",
+        "Format",
+        "Label",
+        "Latitude",
+        "Location_X",
+        "Location_Y",
+        "Longitude",
+        "PicUrl",
+        "Precision",
+        "Scale",
+        "ThumbMediaId",
+        "Url",
+    ]) {
+        if (payload[key] !== undefined) {
+            metadata[key] = payload[key];
+        }
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function safeEqual(left: string, right: string): boolean {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }

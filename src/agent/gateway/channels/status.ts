@@ -146,8 +146,30 @@ function isChannelConfigured(config: GatewayConfig, name: ChannelName, adapter: 
     if (name === Channel.Api || name === Channel.Stdio || name === Channel.Webhook) {
         return true;
     }
-    if (name === Channel.WeChat || name === Channel.WeixinIlink) {
+    // Official WeChat and Weixin iLink are intentionally separate channels:
+    // one is XML callback, the other is polling/binding.
+    if (name === Channel.WeChat) {
+        return hasSecret(config.channels.wechat.token);
+    }
+    if (name === Channel.WeixinIlink) {
         return hasIlinkBinding(config);
+    }
+    if (name === Channel.ApiServer) {
+        return hasSecret(config.channels.apiServer?.token);
+    }
+    if (name === Channel.GoogleChat) {
+        return (
+            hasText(config.channels.googleChat?.projectId) ||
+            hasSecret(config.channels.googleChat?.serviceAccountJson) ||
+            hasText(config.channels.googleChat?.subscriptionName)
+        );
+    }
+    if (name === Channel.Irc) {
+        return (
+            hasText(config.channels.irc?.server) ||
+            hasText(config.channels.irc?.nickname) ||
+            typeof config.channels.irc?.port === "number"
+        );
     }
     if (name === Channel.Telegram) {
         return (
@@ -161,10 +183,13 @@ function isChannelConfigured(config: GatewayConfig, name: ChannelName, adapter: 
         return Boolean(config.channels.feishu.appId && config.channels.feishu.appSecret);
     }
     if (name === Channel.BlueBubbles) {
-        return hasText(config.channels.bluebubbles.serverUrl);
+        return hasText(config.channels.bluebubbles.serverUrl) && hasSecret(config.channels.bluebubbles.password);
     }
     if (name === Channel.IMessage) {
-        return hasText(config.channels.imessage.serverUrl ?? config.channels.bluebubbles.serverUrl);
+        return (
+            hasText(config.channels.imessage.serverUrl ?? config.channels.bluebubbles.serverUrl) &&
+            hasSecret(config.channels.imessage.password ?? config.channels.bluebubbles.password)
+        );
     }
     if (name === Channel.DingTalk) {
         return hasText(config.channels.dingtalk.webhookUrl) || hasText(config.channels.dingtalk.accessToken);
@@ -190,11 +215,14 @@ function isChannelConfigured(config: GatewayConfig, name: ChannelName, adapter: 
     if (name === Channel.QQ) {
         return hasSecret(config.channels.qq.appSecret);
     }
+    if (name === Channel.QQBot) {
+        return hasSecret(config.channels.qqbot?.clientSecret) || hasText(config.channels.qqbot?.appId);
+    }
     if (name === Channel.Signal) {
         return hasText(config.channels.signal.restUrl) && hasText(config.channels.signal.number);
     }
     if (name === Channel.Slack) {
-        return hasText(config.channels.slack.botToken);
+        return hasText(config.channels.slack.botToken) && hasSecret(config.channels.slack.signingSecret);
     }
     if (name === Channel.Sms) {
         return (
@@ -206,8 +234,28 @@ function isChannelConfigured(config: GatewayConfig, name: ChannelName, adapter: 
     if (name === Channel.WeCom) {
         return hasText(config.channels.wecom.token ?? config.channels.wecom.corpSecret);
     }
+    if (name === Channel.WeComCallback) {
+        return hasSecret(config.channels.wecomCallback?.token) && hasText(config.channels.wecomCallback?.corpId);
+    }
+    if (name === Channel.Teams) {
+        return hasSecret(config.channels.teams?.clientSecret) || hasText(config.channels.teams?.webhookUrl);
+    }
+    if (name === Channel.MsGraphWebhook) {
+        return hasSecret(config.channels.msgraphWebhook?.clientState) || hasText(config.channels.msgraphWebhook?.replyUrl);
+    }
     if (name === Channel.WhatsApp) {
-        return hasText(config.channels.whatsapp.accessToken) && hasText(config.channels.whatsapp.phoneNumberId);
+        return (
+            hasSecret(config.channels.whatsapp.accessToken) &&
+            hasText(config.channels.whatsapp.phoneNumberId) &&
+            hasSecret(config.channels.whatsapp.verifyToken)
+        );
+    }
+    if (name === Channel.Yuanbao) {
+        return (
+            hasSecret(config.channels.yuanbao?.accessToken) ||
+            hasText(config.channels.yuanbao?.replyUrl) ||
+            hasText(config.channels.yuanbao?.webhookUrl)
+        );
     }
     if (name === Channel.Zalo) {
         return (
@@ -253,14 +301,17 @@ function hasIlinkBinding(config: GatewayConfig): boolean {
 }
 
 function needsBindingState(name: ChannelName): ChannelLinkState {
-    if (name === Channel.WeChat || name === Channel.WeixinIlink) {
+    if (name === Channel.WeixinIlink) {
         return ChannelLinkState.NeedsBinding;
     }
     return ChannelLinkState.NeedsSetup;
 }
 
 function needsBindingDetail(config: GatewayConfig, name: ChannelName): string {
-    if (name === Channel.WeChat || name === Channel.WeixinIlink) {
+    if (name === Channel.WeChat) {
+        return "missing WeChat official account token";
+    }
+    if (name === Channel.WeixinIlink) {
         return "waiting for iLink binding";
     }
     const missing = missingChannelRequirements(config, name);
@@ -272,10 +323,29 @@ function needsBindingDetail(config: GatewayConfig, name: ChannelName): string {
 
 function missingChannelRequirements(config: GatewayConfig, name: ChannelName): string[] {
     switch (name) {
+        case Channel.ApiServer:
+            return missing({ token: config.channels.apiServer?.token });
+        case Channel.GoogleChat:
+            return missing({
+                projectId: config.channels.googleChat?.projectId,
+                serviceAccountJson: config.channels.googleChat?.serviceAccountJson,
+                subscriptionName: config.channels.googleChat?.subscriptionName,
+            });
         case Channel.BlueBubbles:
-            return missing({ serverUrl: config.channels.bluebubbles.serverUrl });
+            return missing({
+                serverUrl: config.channels.bluebubbles.serverUrl,
+                password: config.channels.bluebubbles.password,
+            });
+        case Channel.Irc:
+            return missing({
+                server: config.channels.irc?.server,
+                nickname: config.channels.irc?.nickname,
+            });
         case Channel.IMessage:
-            return missing({ serverUrl: config.channels.imessage.serverUrl ?? config.channels.bluebubbles.serverUrl });
+            return missing({
+                serverUrl: config.channels.imessage.serverUrl ?? config.channels.bluebubbles.serverUrl,
+                password: config.channels.imessage.password ?? config.channels.bluebubbles.password,
+            });
         case Channel.DingTalk:
             return hasText(config.channels.dingtalk.webhookUrl) || hasText(config.channels.dingtalk.accessToken)
                 ? []
@@ -312,10 +382,23 @@ function missingChannelRequirements(config: GatewayConfig, name: ChannelName): s
             });
         case Channel.QQ:
             return missing({ appSecret: config.channels.qq.appSecret });
+        case Channel.QQBot:
+            return missing({
+                clientSecret: config.channels.qqbot?.clientSecret,
+                appId: config.channels.qqbot?.appId,
+            });
+        case Channel.MsGraphWebhook:
+            return missing({
+                clientState: config.channels.msgraphWebhook?.clientState,
+                replyUrl: config.channels.msgraphWebhook?.replyUrl,
+            });
         case Channel.Signal:
             return missing({ restUrl: config.channels.signal.restUrl, number: config.channels.signal.number });
         case Channel.Slack:
-            return missing({ botToken: config.channels.slack.botToken });
+            return missing({
+                botToken: config.channels.slack.botToken,
+                signingSecret: config.channels.slack.signingSecret,
+            });
         case Channel.Sms:
             return hasSecret(config.channels.sms.accessToken) ||
                 hasText(config.channels.sms.replyUrl) ||
@@ -326,11 +409,28 @@ function missingChannelRequirements(config: GatewayConfig, name: ChannelName): s
             return missing({ botToken: config.channels.telegram.botToken });
         case Channel.WeCom:
             return missing({ token: config.channels.wecom.token ?? config.channels.wecom.corpSecret });
+        case Channel.WeComCallback:
+            return missing({
+                token: config.channels.wecomCallback?.token,
+                corpId: config.channels.wecomCallback?.corpId,
+            });
+        case Channel.Teams:
+            return missing({
+                clientSecret: config.channels.teams?.clientSecret,
+                webhookUrl: config.channels.teams?.webhookUrl,
+            });
         case Channel.WhatsApp:
             return missing({
                 accessToken: config.channels.whatsapp.accessToken,
                 phoneNumberId: config.channels.whatsapp.phoneNumberId,
+                verifyToken: config.channels.whatsapp.verifyToken,
             });
+        case Channel.Yuanbao:
+            return hasSecret(config.channels.yuanbao?.accessToken) ||
+                hasText(config.channels.yuanbao?.replyUrl) ||
+                hasText(config.channels.yuanbao?.webhookUrl)
+                ? []
+                : ["accessToken or replyUrl or webhookUrl"];
         case Channel.Zalo:
             return hasSecret(config.channels.zalo.accessToken) ||
                 hasText(config.channels.zalo.replyUrl) ||

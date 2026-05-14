@@ -1,6 +1,20 @@
-import type { ChannelName, ChatType, ModelRole } from "./enums.ts";
+import type {
+    ChannelName,
+    ChatType,
+    GatewayMessageAction,
+    GatewayMessageKind,
+    GatewayProcessingOutcome,
+    ModelRole,
+} from "./enums.ts";
 
-export type { ChannelName, ChatType, ModelRole } from "./enums.ts";
+export type {
+    ChannelName,
+    ChatType,
+    GatewayMessageAction,
+    GatewayMessageKind,
+    GatewayProcessingOutcome,
+    ModelRole,
+} from "./enums.ts";
 
 export interface GatewayUser {
     id: string;
@@ -11,8 +25,11 @@ export interface GatewayRoute {
     channel: ChannelName;
     chatId: string;
     chatType: ChatType;
+    /** Thread/topic/lane id. It stays at gateway boundary and is not a memory continuity id. */
     threadId?: string;
     accountId?: string;
+    /** Parent channel id for platforms where chatId points at a thread. */
+    parentChatId?: string;
 }
 
 export interface GatewayAttachment {
@@ -32,12 +49,106 @@ export interface GatewayAttachment {
     sha256?: string;
 }
 
+export interface GatewaySource {
+    /** Human label from the platform; display/audit only. */
+    chatName?: string;
+    /** Platform-specific topic/description, never inferred from user text. */
+    chatTopic?: string;
+    /** Platform alternate stable id, such as Feishu union_id or Signal UUID. */
+    userIdAlt?: string;
+    /** Platform alternate room/group id. */
+    chatIdAlt?: string;
+    /** Discord guild / Slack workspace / Matrix server style scope. */
+    guildId?: string;
+    /** Triggering platform message id used for reply anchors, pin/reaction and dedup audits. */
+    messageId?: string;
+    /** True when the author is a bot/webhook and the adapter deliberately lets it through. */
+    isBot?: boolean;
+}
+
+export interface GatewayReplyContext {
+    /** Full-message reply target supplied by the platform. */
+    messageId?: string;
+    /** Quoted or replied-to text. Runtime may render it as context; adapters do not infer semantics from it. */
+    text?: string;
+    /** Native quote id/range when the platform exposes partial quotes. */
+    quoteId?: string;
+    quoteText?: string;
+}
+
+export interface GatewayCommentContext {
+    /** Native comment id for doc/comment platforms such as Feishu document comments. */
+    id?: string;
+    /** Document/file token or url that owns the comment thread. */
+    documentId?: string;
+    /** Comment thread id, separate from chat thread id. */
+    threadId?: string;
+}
+
+export interface GatewayMention {
+    /** Platform native mentioned user/channel id. */
+    id?: string;
+    /** User / channel / role / bot, copied from native entity type when available. */
+    kind?: string;
+    /** Human display label supplied by the platform; never inferred from message text. */
+    displayName?: string;
+    /** Raw mention token or structured range text, useful for audit and reply rendering. */
+    text?: string;
+}
+
+export interface GatewayReaction {
+    /** Native emoji/reaction key such as 👍, "+1", "eyes" or a custom emoji id. */
+    key: string;
+    /** Native target message id that received or lost the reaction. */
+    targetMessageId?: string;
+    /** True for add/update, false for remove when the platform exposes removal. */
+    added?: boolean;
+    count?: number;
+}
+
+export interface GatewayDeliveryMetadata {
+    /** Adapter-facing thread id copied from the inbound source when replies should stay in-lane. */
+    threadId?: string;
+    /** Adapter-facing reply anchor. For Telegram DM topics this must travel with threadId. */
+    replyToMessageId?: string;
+    /** Telegram DM topics route through reply anchors, not thread-only sends. */
+    telegramDmTopicReplyFallback?: boolean;
+    /** Native direct message topic id for Telegram-compatible senders. */
+    directMessagesTopicId?: string;
+    /** Comment target when the outbound response is a document comment reply. */
+    comment?: GatewayCommentContext;
+}
+
 export interface GatewayMessage {
     id: string;
     route: GatewayRoute;
     user: GatewayUser;
     text: string;
+    /** Native lifecycle action; adapters copy platform event types, runtime must not infer it from text. */
+    messageAction?: GatewayMessageAction;
+    /** Native message kind; adapters set it from platform protocol fields, not text heuristics. */
+    messageKind?: GatewayMessageKind;
     attachments?: GatewayAttachment[];
+    /** Structured mentions copied from platform protocol fields or protocol-level entity ranges. */
+    mentions?: GatewayMention[];
+    /** Structured reactions copied from platform protocol events. */
+    reactions?: GatewayReaction[];
+    /** Native update id, kept distinct from message id so redelivery offsets can be audited. */
+    platformUpdateId?: number;
+    /** Platform source context for routing/audit only; it must not become a session continuity id. */
+    source?: GatewaySource;
+    /** Native reply / quote context from the incoming event. */
+    replyTo?: GatewayReplyContext;
+    /** Native document/comment context. */
+    comment?: GatewayCommentContext;
+    /** Ordered skill bindings explicitly configured on channel/topic, never inferred from natural language. */
+    autoSkill?: string | string[];
+    /** Ephemeral channel prompt configured on the channel/topic; not persisted to memory. */
+    channelPrompt?: string;
+    /** Synthetic/internal events can bypass external authorization at the gateway boundary only. */
+    internal?: boolean;
+    /** JSON-serializable platform metadata that has no stable public field yet. */
+    metadata?: Record<string, unknown>;
     raw?: unknown;
     receivedAt: string;
 }
@@ -46,6 +157,14 @@ export interface GatewayReply {
     messageId: string;
     route: GatewayRoute;
     text: string;
+    /** Machine-readable send result, including platform ids and retry hints. */
+    delivery?: {
+        messageId?: string;
+        continuationMessageIds?: string[];
+        outcome?: GatewayProcessingOutcome;
+        rawResponse?: unknown;
+        retryable?: boolean;
+    };
     metadata?: Record<string, unknown>;
 }
 

@@ -301,7 +301,7 @@ Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 re
 - `config.memory.tuning.hotMemoryCompression.intervalMinutes` — 自动检查间隔，默认 30；0 表示关闭
 - `config.memory.tuning.hotMemoryCompression.batchSize` — 单用户单轮压缩上限，默认 16
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - legacy journal 仍保留 best-effort 审计写入；任何新召回能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
 - `BackgroundScheduler` 按后端可用性降级；默认本地开发环境缺 Redis/Surreal 时长期图相关 sweep noop，但 brain archive 与热记忆压缩已由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。

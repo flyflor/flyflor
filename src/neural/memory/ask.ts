@@ -13,15 +13,14 @@
 
 import type { AgentAsk, AgentAskChoice, AgentAskQuestion, AskReason } from "../../protocol/contracts/index.ts";
 import { AskReason as AskReasonEnum } from "../../protocol/contracts/index.ts";
-
-const ASK_BLOCK = /<flyflor_agent_ask>\s*([\s\S]*?)\s*<\/flyflor_agent_ask>/g;
+import { extractStructuredBlocks, parseStructuredJson, StructuredBlockProtocol } from "../../protocol/index.ts";
 
 export interface ParsedAgentAsk {
-    /** 同轮第一段合法 ask 块；多余的 ask 块会直接报错。 */
+    /** 同轮第一段合法 ask 块；多余或坏掉的 ask 块会计入 dropped，避免模型格式漂移打断本轮。 */
     ask?: AgentAsk;
     /** 文本中剥离 ask 块后剩下的 visible reply 文本（仍是 raw model output）。 */
     text: string;
-    /** 兼容旧事件字段；严格模式下始终为 0。 */
+    /** 被丢弃的坏块或额外块数量，用于观察模型协议漂移。 */
     dropped: number;
 }
 
@@ -30,19 +29,25 @@ const VALID_REASONS: ReadonlySet<string> = new Set(Object.values(AskReasonEnum))
 export function parseAgentAsk(rawText: string): ParsedAgentAsk {
     let firstAsk: AgentAsk | undefined;
     let dropped = 0;
-    const text = rawText.replace(ASK_BLOCK, (_block, rawJson: string) => {
-        const candidate = readAsk(rawJson);
-        if (firstAsk) {
-            throw new Error("Model returned multiple flyflor_agent_ask blocks.");
+    // 协议边界统一从 protocol registry 提取；本模块只负责 AgentAsk payload 的结构化校验。
+    const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.AgentAsk);
+    for (const block of extracted.blocks) {
+        try {
+            const candidate = readAsk(block.content);
+            if (firstAsk) {
+                dropped += 1;
+                continue;
+            }
+            firstAsk = candidate;
+        } catch {
+            dropped += 1;
         }
-        firstAsk = candidate;
-        return "";
-    });
-    return { ask: firstAsk, text: text.trim(), dropped };
+    }
+    return { ask: firstAsk, text: extracted.text, dropped };
 }
 
 function readAsk(rawJson: string): AgentAsk {
-    const payload = JSON.parse(rawJson) as unknown;
+    const payload = parseStructuredJson(rawJson);
     if (!payload || typeof payload !== "object") {
         throw new Error("flyflor_agent_ask must be a JSON object.");
     }
@@ -66,19 +71,19 @@ function readAsk(rawJson: string): AgentAsk {
     if (questions && questions.length > 0) ask.questions = questions;
     if (relatedIds && relatedIds.length > 0) ask.relatedIds = relatedIds;
     if (rationale) ask.rationale = rationale;
-    ask.ghostHint = ghostHint;
+    if (ghostHint) ask.ghostHint = ghostHint;
     return ask;
 }
 
-function normalizeGhostHint(value: unknown): { title: string; contextHint?: string } {
+function normalizeGhostHint(value: unknown): { title: string; contextHint?: string } | undefined {
     if (!value || typeof value !== "object") {
-        throw new Error("flyflor_agent_ask requires ghostHint.");
+        return undefined;
     }
     const obj = value as Record<string, unknown>;
     const title = typeof obj.title === "string" ? obj.title.trim().slice(0, 120) : undefined;
     const contextHint = typeof obj.contextHint === "string" ? obj.contextHint.trim().slice(0, 500) : undefined;
     if (!title) {
-        throw new Error("flyflor_agent_ask requires ghostHint.title.");
+        return undefined;
     }
     const out: { title: string; contextHint?: string } = { title };
     if (contextHint) out.contextHint = contextHint;

@@ -5,7 +5,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 import { SlackAdapter } from "../src/agent/gateway/channels/slack.ts";
-import { Channel, ChatType } from "../src/protocol/contracts/index.ts";
+import { Channel, ChatType, GatewayMessageAction } from "../src/protocol/contracts/index.ts";
 import type { GatewayReply } from "../src/protocol/contracts/index.ts";
 
 const SECRET = "test-signing-secret";
@@ -141,6 +141,42 @@ describe("SlackAdapter event normalize", () => {
         await adapter.handle(signedRequest(payload), dispatch);
         expect(route?.chatType).toBe(ChatType.Group);
         expect(route?.threadId).toBe("1700000000.001");
+    });
+
+    test("message_changed carries edit action and structured mentions", async () => {
+        const adapter = buildAdapter();
+        const payload = JSON.stringify({
+            event: {
+                subtype: "message_changed",
+                channel: "C5",
+                channel_type: "channel",
+                message: {
+                    user: "U2",
+                    channel: "C5",
+                    text: "updated <@U3|Mina>",
+                    ts: "1700000001.002",
+                },
+            },
+        });
+        let captured:
+            | {
+                  action?: string;
+                  mentions?: Array<{ displayName?: string; id?: string; kind?: string; text?: string }>;
+                  text: string;
+              }
+            | undefined;
+        const dispatch = async (message: import("../src/protocol/contracts/index.ts").GatewayMessage) => {
+            captured = {
+                action: message.messageAction,
+                mentions: message.mentions,
+                text: message.text,
+            };
+            return { messageId: "test", route: message.route, text: "", metadata: { engine: "test" } } as GatewayReply;
+        };
+        await adapter.handle(signedRequest(payload), dispatch);
+        expect(captured?.action).toBe(GatewayMessageAction.Edit);
+        expect(captured?.text).toBe("updated <@U3|Mina>");
+        expect(captured?.mentions).toEqual([{ id: "U3", kind: "user", displayName: "Mina", text: "<@U3|Mina>" }]);
     });
 
     test("skips bot echo events", async () => {

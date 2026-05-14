@@ -13,9 +13,10 @@ import {
 import { BlackboardWorkerProtocol } from "../src/protocol/contracts/index.ts";
 
 describe("prompt template docs generator", () => {
-    test("matches the checked-in docs file", async () => {
+    test("matches the checked-in README section", async () => {
         const generated = renderPromptTemplatesDoc().trimEnd();
-        const checkedIn = (await readFile(join(import.meta.dir, "..", "docs", "prompt.templates.md"), "utf8")).trimEnd();
+        const readme = await readFile(join(import.meta.dir, "..", "README.md"), "utf8");
+        const checkedIn = extractPromptTemplateSection(readme);
         expect(generated).toBe(checkedIn);
     });
 
@@ -94,3 +95,14 @@ describe("prompt template docs generator", () => {
         }
     });
 });
+
+function extractPromptTemplateSection(readme: string): string {
+    const startMarker = "<!-- flyflor:prompt-templates:start -->";
+    const endMarker = "<!-- flyflor:prompt-templates:end -->";
+    const start = readme.indexOf(startMarker);
+    const end = readme.indexOf(endMarker);
+    if (start === -1 || end === -1 || end < start) {
+        throw new Error("README prompt template section markers are missing.");
+    }
+    return readme.slice(start + startMarker.length, end).trim();
+}

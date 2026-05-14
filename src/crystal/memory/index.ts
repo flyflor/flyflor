@@ -1,5 +1,6 @@
 import type { CrystalMemoryConfig } from "../../config/index.ts";
-import { Component, Service } from "../../agent/di/decorators/index.ts";
+import { CrystalComponent } from "../../agent/components.ts";
+import { Component } from "../../agent/di/decorators/index.ts";
 import {
     buildReflectionCandidate,
     crystallizeCandidate,
@@ -7,7 +8,7 @@ import {
     mergeCrystalGem,
     recallCrystalGems,
 } from "../reflection/index.ts";
-import { MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
+import { MemoryKind, MemoryLayer, ProviderScope } from "../../protocol/contracts/index.ts";
 import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
 import { SurrealCrystalMemoryStore } from "./surreal.ts";
 import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
@@ -15,14 +16,20 @@ import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./
 export { SurrealCrystalMemoryStore } from "./surreal.ts";
 export type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
-@Service({ name: "crystal-memory-service", tags: ["crystal", "memory"] })
-export class CrystalMemoryService {
-    constructor(
+@Component({
+    name: "crystal-memory-service",
+    provider: { scope: ProviderScope.Singleton },
+    tags: ["crystal", "memory"],
+})
+export class CrystalMemoryService extends CrystalComponent {
+    public constructor(
         private readonly config: CrystalMemoryConfig,
         private readonly store: CrystalMemoryStore = new SurrealCrystalMemoryStore(config.surreal),
-    ) {}
+    ) {
+        super();
+    }
 
-    async recall(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
+    public async recall(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
         if (!this.config.enabled) {
             return [];
         }
@@ -53,7 +60,7 @@ export class CrystalMemoryService {
         }));
     }
 
-    async recordTurn(input: CrystalTurnInput): Promise<CrystalTurnResult> {
+    public async recordTurn(input: CrystalTurnInput): Promise<CrystalTurnResult> {
         if (!this.config.enabled) {
             return { candidates: [], atoms: [], gems: [] };
         }
@@ -82,30 +89,30 @@ export class CrystalMemoryService {
 }
 
 @Component({ name: "in-memory-crystal-memory-store", tags: ["database", "crystal", "test"] })
-export class InMemoryCrystalMemoryStore implements CrystalMemoryStore {
-    readonly candidates = new Map<string, Awaited<CrystalTurnResult["candidates"][number]>>();
-    readonly atoms = new Map<string, Awaited<CrystalTurnResult["atoms"][number]>>();
-    readonly gems = new Map<string, Awaited<CrystalTurnResult["gems"][number]>>();
+export class InMemoryCrystalMemoryStore extends CrystalComponent implements CrystalMemoryStore {
+    public readonly candidates = new Map<string, Awaited<CrystalTurnResult["candidates"][number]>>();
+    public readonly atoms = new Map<string, Awaited<CrystalTurnResult["atoms"][number]>>();
+    public readonly gems = new Map<string, Awaited<CrystalTurnResult["gems"][number]>>();
 
-    async initialize(): Promise<void> {}
+    public async initialize(): Promise<void> {}
 
-    async findGem(id: string): Promise<Awaited<CrystalTurnResult["gems"][number]> | undefined> {
+    public async findGem(id: string): Promise<Awaited<CrystalTurnResult["gems"][number]> | undefined> {
         return this.gems.get(id);
     }
 
-    async listGems(): Promise<Awaited<CrystalTurnResult["gems"][number]>[]> {
+    public async listGems(): Promise<Awaited<CrystalTurnResult["gems"][number]>[]> {
         return [...this.gems.values()];
     }
 
-    async upsertCandidate(candidate: Awaited<CrystalTurnResult["candidates"][number]>): Promise<void> {
+    public async upsertCandidate(candidate: Awaited<CrystalTurnResult["candidates"][number]>): Promise<void> {
         this.candidates.set(candidate.id, candidate);
     }
 
-    async upsertAtom(atom: Awaited<CrystalTurnResult["atoms"][number]>): Promise<void> {
+    public async upsertAtom(atom: Awaited<CrystalTurnResult["atoms"][number]>): Promise<void> {
         this.atoms.set(atom.id, atom);
     }
 
-    async upsertGem(gem: Awaited<CrystalTurnResult["gems"][number]>): Promise<void> {
+    public async upsertGem(gem: Awaited<CrystalTurnResult["gems"][number]>): Promise<void> {
         this.gems.set(gem.id, gem);
     }
 }

@@ -127,7 +127,7 @@ interface McpCallResult {
 | `mcp.tool.succeeded` / `failed` / `timeout` | 调用结果 |
 | `mcp.tool.denied` | sandbox 拒绝 |
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - 旧式 SSE 双端点已有客户端兼容，但还缺真实第三方 MCP server 的长连接 / 断线重连烟测。
 - catalog 缓存为进程内 Map，**多副本不共享**；已有 TTL/LRU，但跨 gateway 节点仍依赖各自预拉取。

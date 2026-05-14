@@ -1,7 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ChannelName, GatewayAttachment, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType } from "../../../protocol/contracts/index.ts";
+import type {
+    ChannelName,
+    GatewayAttachment,
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, json, readString } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const LINE_SIGNATURE_HEADER = "x-line-signature";
@@ -76,6 +83,7 @@ export class LineAdapter implements ChannelAdapter {
             if (event.replyToken && reply.text.trim()) {
                 await this.reply(event.replyToken, reply.text);
             }
+            await this.sendTyping(message.route, buildDeliveryMetadata(message));
         }
         return json({ ok: true, processed });
     }
@@ -129,6 +137,12 @@ export class LineAdapter implements ChannelAdapter {
             id: readString(event.webhookEventId ?? message.id ?? event.replyToken) ?? crypto.randomUUID(),
             route,
             user: { id: readString(source.userId) ?? "unknown" },
+            messageKind: normalizeLineMessageKind(message.type),
+            source: {
+                chatName: readString(source.groupId ?? source.roomId ?? source.userId),
+                messageId: readString(message.id),
+            },
+            replyTo: event.replyToken ? { messageId: event.replyToken } : undefined,
             text: readString(message.text) ?? "",
             attachments: readLineAttachments(message),
             raw: event,
@@ -153,6 +167,10 @@ export class LineAdapter implements ChannelAdapter {
         });
         await assertPlatformResponse(response, "LINE");
     }
+
+    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // LINE has no bot typing endpoint for webhook bots.
+    }
 }
 
 function lineChatType(sourceType: string | undefined): GatewayMessage["route"]["chatType"] {
@@ -173,4 +191,20 @@ function readLineAttachments(message: LineMessage): GatewayAttachment[] {
         return [{ id: message.id, kind: "file", name: message.fileName }];
     }
     return [];
+}
+
+function normalizeLineMessageKind(type: string | undefined): GatewayMessage["messageKind"] {
+    if (type === "image") {
+        return GatewayMessageKind.Photo;
+    }
+    if (type === "video") {
+        return GatewayMessageKind.Video;
+    }
+    if (type === "audio") {
+        return GatewayMessageKind.Audio;
+    }
+    if (type === "file") {
+        return GatewayMessageKind.Document;
+    }
+    return GatewayMessageKind.Text;
 }

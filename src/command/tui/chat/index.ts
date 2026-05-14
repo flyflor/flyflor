@@ -28,19 +28,43 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
     await options.runtime.warmup();
     addDefaultParsers(await loadChatParsers());
 
-    const renderer = await createCliRenderer({
-        targetFps: 60,
-        exitOnCtrlC: false,
-        useMouse: true,
-        externalOutputMode: "passthrough",
-        autoFocus: false,
-        consoleOptions: {
-            keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
-        },
-    } satisfies CliRendererConfig);
+    // OpenTUI lets OTUI_USE_ALTERNATE_SCREEN override screenMode. Chat must stay in
+    // alternate screen so terminal scrollback/native scrollbars never become the chat viewport.
+    const previousAlternateScreen = process.env.OTUI_USE_ALTERNATE_SCREEN;
+    process.env.OTUI_USE_ALTERNATE_SCREEN = "1";
+    const renderer = await (async () => {
+        try {
+            const instance = await createCliRenderer({
+                targetFps: 60,
+                exitOnCtrlC: false,
+                screenMode: "alternate-screen",
+                clearOnShutdown: true,
+                consoleMode: "disabled",
+                // Chat uses OpenTUI selection so the in-app scrollbar and Ctrl+Y copy path work together.
+                useMouse: true,
+                enableMouseMovement: true,
+                externalOutputMode: "passthrough",
+                autoFocus: false,
+                consoleOptions: {
+                    keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
+                },
+            } satisfies CliRendererConfig);
+            if (instance.screenMode !== "alternate-screen") {
+                instance.screenMode = "alternate-screen";
+            }
+            return instance;
+        } finally {
+            if (previousAlternateScreen === undefined) {
+                delete process.env.OTUI_USE_ALTERNATE_SCREEN;
+            } else {
+                process.env.OTUI_USE_ALTERNATE_SCREEN = previousAlternateScreen;
+            }
+        }
+    })();
     renderer.console.onCopySelection = (text) => {
         if (text.trim().length > 0) {
             renderer.copyToClipboardOSC52(text);
+            renderer.clearSelection();
         }
     };
 

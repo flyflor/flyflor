@@ -4,7 +4,10 @@ export {
     DependencyContainer as FcpDependencyContainer,
     DependencyContainer as FpcDependencyContainer,
     createInjectionToken,
+    isInjectionToken,
     type InjectionFactory,
     type InjectionScope,
     type InjectionToken,
+    type ClassToken,
+    type DependencyToken,
 } from "./dependency.container.ts";

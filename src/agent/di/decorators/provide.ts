@@ -11,8 +11,7 @@ export interface ProvideDecoratorOptions extends ComponentDecoratorOptions {
 
 export function Provide(options: ProvideDecoratorOptions | string = {}): ClassDecorator {
     const normalized = typeof options === "string" ? { name: options } : options;
-    const kind = normalized.kind ?? ComponentKind.Provider;
-    return registerComponentMetadata(kind, normalized, {
+    return registerComponentMetadata(normalized.kind ?? ComponentKind.Provider, normalized, {
         layer: ArchitectureLayer.Capability,
         provider: true,
     });

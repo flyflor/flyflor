@@ -15,8 +15,8 @@
  */
 
 import { GhostDecisionKind, type GhostDecision } from "../../protocol/contracts/index.ts";
+import { extractStructuredBlocks, parseStructuredJson, StructuredBlockProtocol } from "../../protocol/index.ts";
 
-const DECISION_BLOCK = /<flyflor_ghost_decisions>\s*([\s\S]*?)\s*<\/flyflor_ghost_decisions>/g;
 const VALID_KINDS: ReadonlySet<string> = new Set(Object.values(GhostDecisionKind));
 
 export interface ParsedGhostDecisions {
@@ -31,39 +31,44 @@ export function parseGhostDecisions(rawText: string, maxDecisions = 8): ParsedGh
     const seen = new Set<string>();
     const decisions: GhostDecision[] = [];
     let dropped = 0;
-    const text = rawText.replace(DECISION_BLOCK, (_block, rawJson: string) => {
-        const parsed = readDecisions(rawJson);
+    // tag 与剥离规则由 protocol registry 统一管理；这里仅消费 {ghostId, kind} 结构字段。
+    const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.GhostDecisions);
+    for (const block of extracted.blocks) {
+        let parsed: GhostDecision[];
+        try {
+            parsed = readDecisions(block.content);
+        } catch {
+            dropped += 1;
+            continue;
+        }
         for (const item of parsed) {
             if (decisions.length >= maxDecisions) {
-                throw new Error(`flyflor_ghost_decisions exceeds max decisions: ${maxDecisions}.`);
+                dropped += 1;
+                continue;
             }
             if (seen.has(item.ghostId)) {
-                throw new Error(`flyflor_ghost_decisions contains duplicate ghostId: ${item.ghostId}`);
+                dropped += 1;
+                continue;
             }
             seen.add(item.ghostId);
             decisions.push(item);
         }
-        return "";
-    });
-    return { decisions, text: text.trim(), dropped };
+    }
+    return { decisions, text: extracted.text, dropped };
 }
 
 function readDecisions(rawJson: string): GhostDecision[] {
-    const payload = JSON.parse(rawJson) as unknown;
+    const payload = parseStructuredJson(rawJson);
     if (!Array.isArray(payload)) {
         throw new Error("flyflor_ghost_decisions must be a JSON array.");
     }
     const out: GhostDecision[] = [];
-    for (const [index, item] of payload.entries()) {
-        if (!item || typeof item !== "object") {
-            throw new Error(`flyflor_ghost_decisions item ${index + 1} must be an object.`);
-        }
+    for (const item of payload) {
+        if (!item || typeof item !== "object") continue;
         const record = item as Record<string, unknown>;
         const ghostId = typeof record.ghostId === "string" ? record.ghostId.trim() : "";
         const kind = typeof record.kind === "string" ? record.kind.trim() : "";
-        if (!ghostId || !VALID_KINDS.has(kind)) {
-            throw new Error(`flyflor_ghost_decisions item ${index + 1} is invalid.`);
-        }
+        if (!ghostId || !VALID_KINDS.has(kind)) continue;
         out.push({ ghostId, kind: kind as GhostDecision["kind"] });
     }
     return out;

@@ -9,7 +9,7 @@ import {
 } from "../../protocol/contracts/index.ts";
 import { BLACKBOARD_MODEL_WORKER_NAME, WorkerManager } from "../worker/index.ts";
 import { Blackboard } from "../components.ts";
-import { Module, Provide } from "../di/decorators/index.ts";
+import { Module } from "../di/decorators/index.ts";
 import { event, type EventSink, RuntimeEventType, NullEventSink } from "../../protocol/events/index.ts";
 import {
     renderBlackboardDecisionOptions,
@@ -61,7 +61,6 @@ export interface BlackboardRunUntilConvergedInput {
 }
 
 @Module({ name: "blackboard", tags: ["flyflor", "boundary"] })
-@Provide({ kind: ComponentKind.Blackboard, layer: ArchitectureLayer.Control, name: "blackboard", provider: true })
 export class BlackboardModule extends Blackboard {
     constructor(
         private readonly store: BlackboardStore,

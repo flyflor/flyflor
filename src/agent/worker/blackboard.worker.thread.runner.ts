@@ -4,12 +4,14 @@
  * 设计：
  *  - 进程内单 Worker 实例（懒创建），所有黑板规范化请求复用同一线程，避免反复
  *    cold-start；测试可注入 `WorkerFactory` 替换为同步实现以保持确定性。
- *  - 自增 id 关联 postMessage / message 回调；超时或 Worker 失败直接抛错。
+ *  - 自增 id 关联 postMessage / message 回调；超时或 Worker 失败时回落到主线程
+ *    纯函数，避免规范化线程故障中断黑板讨论。
  *  - dispose() 关闭 Worker，pending Promise 全部 reject。
  *
  * 注意：本运行器**不调用模型**，只负责把 raw 文本送进 Worker 并取回结构化结果。
  */
 import type { BlackboardWorkerResult, BlackboardWorkerTask } from "../di/index.ts";
+import { normalizeBlackboardWorkerOutput } from "./blackboard.worker.normalize.ts";
 
 export interface BlackboardThreadWorkerLike {
     postMessage(data: unknown): void;
@@ -31,6 +33,9 @@ interface PendingEntry {
     resolve(result: BlackboardWorkerResult): void;
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
+    input: BlackboardWorkerTask;
+    participant: string;
+    raw: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 2_000;
@@ -59,15 +64,15 @@ export class BlackboardThreadRunner {
                 const entry = this.pending.get(id);
                 if (!entry) return;
                 this.pending.delete(id);
-                reject(new Error(`Blackboard normalization worker timed out after ${this.timeoutMs}ms`));
+                resolve(fallbackNormalize(entry));
             }, this.timeoutMs);
-            this.pending.set(id, { resolve, reject, timer });
+            this.pending.set(id, { input, participant, raw, resolve, reject, timer });
             try {
                 worker.postMessage({ kind: "normalize", id, input, participant, raw });
             } catch (error) {
                 clearTimeout(timer);
                 this.pending.delete(id);
-                reject(error instanceof Error ? error : new Error(String(error)));
+                resolve(normalizeBlackboardWorkerOutput(input, participant, raw));
             }
         });
     }
@@ -96,14 +101,14 @@ export class BlackboardThreadRunner {
             if (data.ok && data.result) {
                 entry.resolve(data.result);
             } else {
-                entry.reject(new Error(data.error ?? "Blackboard normalization worker failed"));
+                entry.resolve(fallbackNormalize(entry));
             }
         };
         worker.onerror = () => {
             for (const [id, entry] of this.pending) {
                 clearTimeout(entry.timer);
                 this.pending.delete(id);
-                entry.reject(new Error("Blackboard normalization worker crashed"));
+                entry.resolve(fallbackNormalize(entry));
             }
             this.worker = null;
         };
@@ -119,4 +124,8 @@ function defaultWorkerFactory(): BlackboardThreadWorkerLike {
     // biome-ignore lint/suspicious/noExplicitAny: Bun Worker constructor types differ across runtimes
     const worker = new (globalThis as any).Worker(url.href, { type: "module" }) as BlackboardThreadWorkerLike;
     return worker;
+}
+
+function fallbackNormalize(entry: PendingEntry): BlackboardWorkerResult {
+    return normalizeBlackboardWorkerOutput(entry.input, entry.participant, entry.raw);
 }

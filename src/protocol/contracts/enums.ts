@@ -1,26 +1,34 @@
 export const Channel = {
     Api: "api",
+    ApiServer: "api_server",
     BlueBubbles: "bluebubbles",
     Discord: "discord",
     DingTalk: "dingtalk",
     Email: "email",
     Feishu: "feishu",
+    GoogleChat: "google_chat",
     HomeAssistant: "homeassistant",
     IMessage: "imessage",
+    Irc: "irc",
     Line: "line",
     Mattermost: "mattermost",
     Matrix: "matrix",
+    MsGraphWebhook: "msgraph_webhook",
     QQ: "qq",
+    QQBot: "qqbot",
     Signal: "signal",
     Slack: "slack",
     Sms: "sms",
     Stdio: "stdio",
+    Teams: "teams",
     Telegram: "telegram",
     WeCom: "wecom",
+    WeComCallback: "wecom_callback",
     WeChat: "wechat",
     Webhook: "webhook",
     WhatsApp: "whatsapp",
     WeixinIlink: "weixin-ilink",
+    Yuanbao: "yuanbao",
     Zalo: "zalo",
 } as const;
 
@@ -34,6 +42,48 @@ export const ChatType = {
 } as const;
 
 export type ChatType = (typeof ChatType)[keyof typeof ChatType];
+
+export const GatewayMessageKind = {
+    Audio: "audio",
+    Command: "command",
+    Comment: "comment",
+    Document: "document",
+    Location: "location",
+    Photo: "photo",
+    Sticker: "sticker",
+    Text: "text",
+    Unknown: "unknown",
+    Video: "video",
+    Voice: "voice",
+} as const;
+
+export type GatewayMessageKind = (typeof GatewayMessageKind)[keyof typeof GatewayMessageKind];
+
+export const GatewayMessageAction = {
+    Create: "create",
+    Delete: "delete",
+    Edit: "edit",
+    Reaction: "reaction",
+    Unknown: "unknown",
+} as const;
+
+export type GatewayMessageAction = (typeof GatewayMessageAction)[keyof typeof GatewayMessageAction];
+
+export const GatewayProcessingOutcome = {
+    Cancelled: "cancelled",
+    Failure: "failure",
+    Success: "success",
+} as const;
+
+export type GatewayProcessingOutcome = (typeof GatewayProcessingOutcome)[keyof typeof GatewayProcessingOutcome];
+
+export const GatewayReplyToMode = {
+    All: "all",
+    First: "first",
+    Off: "off",
+} as const;
+
+export type GatewayReplyToMode = (typeof GatewayReplyToMode)[keyof typeof GatewayReplyToMode];
 
 export const ModelRole = {
     Assistant: "assistant",
@@ -226,6 +276,7 @@ export const ComponentKind = {
     Channel: "channel",
     Command: "command",
     Component: "component",
+    Crystal: "crystal",
     FlyFlor: "flyflor",
     Gateway: "gateway",
     Llm: "llm",
@@ -277,6 +328,23 @@ export const MemoryLayer = {
 } as const;
 
 export type MemoryLayer = (typeof MemoryLayer)[keyof typeof MemoryLayer];
+
+export const MemoryWorkingBackend = {
+    Local: "local",
+    Redis: "redis",
+} as const;
+
+export type MemoryWorkingBackend = (typeof MemoryWorkingBackend)[keyof typeof MemoryWorkingBackend];
+
+export const WorkingMemoryWalOperation = {
+    DropEpisode: "drop-episode",
+    ReinforceEpisode: "reinforce-episode",
+    RewriteEpisode: "rewrite-episode",
+    TouchConcepts: "touch-concepts",
+    WriteEpisode: "write-episode",
+} as const;
+
+export type WorkingMemoryWalOperation = (typeof WorkingMemoryWalOperation)[keyof typeof WorkingMemoryWalOperation];
 
 export const MemoryKind = {
     Candidate: "candidate",

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,6 +41,98 @@ describe("BrainStore", () => {
             const listed = store.listEvents({ userId: "u1", limit: 10 });
             expect(listed).toHaveLength(1);
             expect(listed[0]?.codenameId).toBe("c1");
+        } finally {
+            store.close();
+        }
+    });
+
+    test("schema keeps interactive recall paths on composite indexes", async () => {
+        const { store, dir } = await freshStore();
+        const brainPath = join(dir, "brain.db");
+        try {
+            store.close();
+            const db = new Database(brainPath);
+            try {
+                const promptPlan = queryPlan(
+                    db,
+                    `EXPLAIN QUERY PLAN
+                     SELECT e.* FROM memory_events e
+                     LEFT JOIN memory_state s ON s.event_id = e.id
+                     WHERE e.user_id = ? AND e.type = ? AND e.ts >= ?
+                     ORDER BY e.ts DESC
+                     LIMIT ?`,
+                    ["u1", MemoryEventType.Event, 0, 100],
+                );
+                const pendingAskPlan = queryPlan(
+                    db,
+                    `EXPLAIN QUERY PLAN
+                     SELECT e.* FROM memory_events e
+                     LEFT JOIN memory_state s ON s.event_id = e.id
+                     WHERE e.user_id = ? AND e.type = 'ask'
+                       AND NOT EXISTS (
+                         SELECT 1 FROM memory_events c
+                         WHERE c.parent_id = e.id AND c.type = 'ask-answer-pair'
+                       )
+                     ORDER BY e.ts DESC
+                     LIMIT 1`,
+                    ["u1"],
+                );
+
+                // These are lifecycle-critical reads for prompt recall / pending ask checks.
+                // The test pins index intent, not micro-benchmark timing, so it stays stable on CI.
+                expect(promptPlan).toContain("idx_events_user_type_ts");
+                expect(pendingAskPlan).toContain("idx_events_user_type_ts");
+                expect(pendingAskPlan).toContain("idx_events_parent_type");
+            } finally {
+                db.close();
+            }
+        } finally {
+            store.close();
+        }
+    });
+
+    test("ask and ghost turn paths stay on indexed lookups", async () => {
+        const { store, dir } = await freshStore();
+        const brainPath = join(dir, "brain.db");
+        try {
+            store.close();
+            const db = new Database(brainPath);
+            try {
+                const askPlan = queryPlan(
+                    db,
+                    `EXPLAIN QUERY PLAN
+                     SELECT e.* FROM memory_events e
+                     LEFT JOIN memory_state s ON s.event_id = e.id
+                     WHERE e.user_id = ? AND e.type = 'ask'
+                       AND COALESCE(s.status, 'live') IN ('live', 'resumed')
+                       AND NOT EXISTS (
+                         SELECT 1 FROM memory_events c
+                         WHERE c.parent_id = e.id AND c.type = 'ask-answer-pair'
+                       )
+                     ORDER BY e.ts DESC
+                     LIMIT 1`,
+                    ["u1"],
+                );
+                const ghostPlan = queryPlan(
+                    db,
+                    `EXPLAIN QUERY PLAN
+                     SELECT e.* FROM memory_events e
+                     LEFT JOIN memory_state s ON s.event_id = e.id
+                     WHERE e.user_id = ? AND e.type = 'ghost-context'
+                       AND COALESCE(s.status, 'live') IN ('live', 'resumed')
+                     ORDER BY e.ts DESC
+                     LIMIT ?`,
+                    ["u1", 12],
+                );
+
+                // Pending ask resolution and active ghost listing both drive the user's next turn.
+                // Keep them on indexed reads so a larger single brain.db still behaves predictably.
+                expect(askPlan).toContain("idx_events_user_type_ts");
+                expect(askPlan).toContain("idx_events_parent_type");
+                expect(ghostPlan).toContain("idx_events_user_type_ts");
+            } finally {
+                db.close();
+            }
         } finally {
             store.close();
         }
@@ -182,3 +275,8 @@ describe("BrainStore", () => {
         ).toThrow(/not opened/);
     });
 });
+
+function queryPlan(db: Database, sql: string, values: Array<string | number | null>): string {
+    const rows = db.query(sql).all(...values) as Array<{ detail: string }>;
+    return rows.map((row) => row.detail).join("\n");
+}

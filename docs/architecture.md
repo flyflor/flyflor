@@ -110,14 +110,23 @@ abstract class Memory {}
 abstract class Sandbox {}
 ```
 
-实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`。继承关系只用于身份标识，不在基类放任何逻辑；注入语义由 `@Module` + `@Provide` 元数据承载，运行期连线由 `DependencyContainer` 完成。
+实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryService extends CrystalComponent`。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。
+
+默认推断规则：
+
+- core 基类推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox → control layer`，其他 component → capability layer。
+- 类名推断 `name`：去掉 `Module/Component/Service/Store` 后转 kebab-case。
+- provider 默认 singleton；需要重新 `new` 的组件显式使用 `ProviderScope.Factory`。
+- 只有默认推断不够表达边界时才写 `kind/layer/name/provider`，避免装饰器参数变成重复配置。
+- DI token 优先是 class 对象本身，例如 `@Inject(RuntimeModule)`；非 class 值才用 `createInjectionToken()` 生成对象 token。禁止新增裸字符串 token。
 
 ## DI 容器
 
 - `DependencyContainer`（`src/agent/di/factory/dependency.container.ts`）只暴露三种绑定：
   - `bindSingleton(token, value)` — 已构造的稳定依赖
   - `bindProvider(token, factory)` — 懒加载单例
-  - `bindFactory(token, factory)` — 每次 resolve 创建新实例
+  - `bindFactory(token, factory)` / `bindTransient(token, factory)` — 每次 resolve 创建新实例
+  - `bindComponent(token, factory, metadata)` — 按 `@Module` / `@Component` 的 provider scope 绑定
 - 仅在 composition root 注入；运行时只 `resolve` 已注册 token。
 - `@Module` / `@Provide` / `@Inject` / `@Service` / `@Component` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
 - `FlyFlorTokens` 列出 10 个对外 token：`Container / Mode / Config / Events / Model / Workers / Blackboard / Runtime / Adapters / Gateway`。
@@ -181,9 +190,9 @@ interface FlyFlorDependencies {
 
 `MemoryModule` 已在 composition root 中显式构造并注入 `RuntimeModule`，测试可通过 `FlyFlor.create({ memory })` 替换实现。
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
-- `Sandbox` 仅在 `RuntimeModule` 内决策 mcp-tool；shell-hook / plugin 执行器有独立路径，但未统一从 DI 容器拿 `SandboxPolicy`。
+- `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；后续如果新增可执行能力，必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
 - 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt/project/runtime dream worker；导入方向需要继续收敛。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot 与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

@@ -1,4 +1,5 @@
 import type { FlyflorConfig } from "../../config/index.ts";
+import type { WorkingMemoryConfig } from "../../config/index.ts";
 import { join } from "node:path";
 import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
 import {
@@ -10,6 +11,7 @@ import {
     MemoryKind,
     MemoryLayer,
     MemorySourceKind,
+    MemoryWorkingBackend,
     ModelRole,
     RuntimeMode,
 } from "../../protocol/contracts/index.ts";
@@ -22,7 +24,7 @@ import type {
     RuntimeContext,
 } from "../../protocol/contracts/index.ts";
 import { Memory } from "../../agent/components.ts";
-import { Module, Provide } from "../../agent/di/decorators/index.ts";
+import { Module } from "../../agent/di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import {
     loadPromptTemplates,
@@ -53,6 +55,8 @@ import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
 import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
 import { RedisMemoryStore } from "./redis.ts";
+import { LocalWorkingMemoryStore } from "./local.working.store.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
 import { SurrealGraphStore } from "./surreal.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
@@ -129,7 +133,6 @@ export interface MemoryModuleOverrides {
 }
 
 @Module({ name: "memory", tags: ["flyflor", "boundary"] })
-@Provide({ kind: ComponentKind.Memory, layer: ArchitectureLayer.Control, name: "memory", provider: true })
 export class MemoryModule extends Memory {
     private readonly journal: JournalStore;
     /** LF-R10 brain.db 权威源。warmup 时 open；legacy journal 仅做 best-effort audit。 */
@@ -140,7 +143,11 @@ export class MemoryModule extends Memory {
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
     private readonly crystal: CrystalMemoryService;
-    private readonly redis: RedisMemoryStore | null;
+    /** Working-memory backend. Kept as `redis` internally while migration is staged to avoid widening the patch. */
+    private readonly redis: WorkingMemoryStore | null;
+    private readonly redisClientStore: RedisMemoryStore | null;
+    private readonly workingMemoryBackend: MemoryWorkingBackend;
+    private readonly workingMemoryDefaultTtlSeconds: number;
     private readonly surreal: SurrealGraphStore | null;
     private readonly hotMemoryCompression: HotMemoryCompressionWorker | null;
     private readonly scheduler: BackgroundScheduler | null;
@@ -164,6 +171,9 @@ export class MemoryModule extends Memory {
         super();
         this.model = model;
         this.embeddings = overrides.embeddings ?? new LocalHashEmbeddingProvider(config.memory.embedding.dimensions);
+        const working = resolveWorkingMemoryConfig(config);
+        this.workingMemoryBackend = working.backend;
+        this.workingMemoryDefaultTtlSeconds = working.local.defaultTtlSeconds;
         this.journal = new JournalStore({ journalRoot: config.paths.journalDir ?? join(config.paths.home, "journal") });
         this.brain = new BrainStore({ dbPath: join(config.paths.home, "brain.db") });
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
@@ -171,11 +181,17 @@ export class MemoryModule extends Memory {
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         this.crystal = new CrystalMemoryService(config.memory.crystal);
-        this.redis = config.memory.redis.enabled ? new RedisMemoryStore(config.memory.redis) : null;
+        this.redisClientStore =
+            working.backend === MemoryWorkingBackend.Redis ? new RedisMemoryStore(config.memory.redis) : null;
+        this.redis =
+            this.redisClientStore ??
+            (working.backend === MemoryWorkingBackend.Local
+                ? new LocalWorkingMemoryStore(config.paths.memoryDir, working.local)
+                : null);
         this.surreal =
             overrides.surreal !== undefined
                 ? overrides.surreal
-                : config.memory.crystal.surreal.enabled
+                : config.memory.crystal.enabled && config.memory.crystal.surreal.enabled
                   ? new SurrealGraphStore(config.memory.crystal.surreal)
                   : null;
         this.hotMemoryCompression =
@@ -228,19 +244,11 @@ export class MemoryModule extends Memory {
     /** 预热：打开 brain.db，并在 Redis 启用时测 PING 往返延迟。 */
     /** 暴露底层 Redis 客户端，供同进程其他热路径组件（fastRoute 快照等）复用。 */
     getRedisClient() {
-        return this.redis?.getClient();
+        return this.redisClientStore?.getClient();
     }
 
     async warmup(): Promise<void> {
-        try {
-            await this.brain.open();
-            this.brainOpened = true;
-        } catch (err) {
-            this.events.publish(
-                event(RuntimeEventType.MemoryBrainWriteFailed, { stage: "warmup-open", error: String(err) }),
-            );
-            throw err;
-        }
+        await this.ensureBrainOpen("warmup-open");
         if (this.scheduler) {
             this.scheduler.start();
         } else {
@@ -252,9 +260,10 @@ export class MemoryModule extends Memory {
                 event(RuntimeEventType.MemoryBackgroundSchedulerSkipped, {
                     missing,
                     redisEnabled: this.config.memory.redis.enabled,
-                    surrealEnabled: this.config.memory.crystal.surreal.enabled,
+                    workingMemoryBackend: this.workingMemoryBackend,
+                    surrealEnabled: this.config.memory.crystal.enabled && this.config.memory.crystal.surreal.enabled,
                     modelProvider: this.config.model.provider,
-                    impact: "consolidation/decay/dream 全部跳过；记忆只走当轮 markdown+sqlite 短期路径，不会自动整合到长期晶体层",
+                    impact: "consolidation/decay/dream 跳过缺失依赖；工作记忆仍按 configured backend 写入，长期晶体层需要 graph store",
                 }),
             );
         }
@@ -265,9 +274,37 @@ export class MemoryModule extends Memory {
         if (!this.redis) return;
         try {
             const latencyMs = await this.redis.ping();
-            this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs }));
+            this.events.publish(
+                event(RuntimeEventType.MemoryWarmupComplete, {
+                    backend: this.workingMemoryBackend,
+                    latencyMs,
+                }),
+            );
         } catch (err) {
-            this.events.publish(event(RuntimeEventType.MemoryWarmupComplete, { latencyMs: -1, error: String(err) }));
+            this.events.publish(
+                event(RuntimeEventType.MemoryWarmupComplete, {
+                    backend: this.workingMemoryBackend,
+                    latencyMs: -1,
+                    error: String(err),
+                }),
+            );
+            throw err;
+        }
+    }
+
+    /**
+     * brain.db 是事件写入和 prompt recall 的权威源，不能只依赖 runtime/gateway 先调用 warmup。
+     * MemoryModule 的直接调用者（测试、CLI、后台 worker）进入写路径前也必须能安全打开 brain.db。
+     */
+    private async ensureBrainOpen(stage: string): Promise<void> {
+        if (this.brainOpened) return;
+        try {
+            await this.brain.open();
+            this.brainOpened = true;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, { stage, error: String(err) }),
+            );
             throw err;
         }
     }
@@ -672,6 +709,10 @@ export class MemoryModule extends Memory {
             };
         }
 
+        // Direct MemoryModule callers bypass RuntimeModule.handleMessage(); open brain.db here so
+        // rememberTurn keeps the same lifecycle guarantee as runtime-managed turns.
+        await this.ensureBrainOpen("remember-turn");
+
         // LF-R3 Ask 一等公民：先把"用户对上一轮 ask 的答复"落到 brain（ask-answer-pair 事件），
         // 再处理本轮可能新发起的 ask。两个写入顺序固定，避免 chain 被错误跨轮接续。
         const pendingAskBefore = this.findPendingAsk(message.user.id);
@@ -849,7 +890,7 @@ export class MemoryModule extends Memory {
             const stability = 0.9;
             const ttlSeconds = Math.max(
                 300,
-                Math.floor(this.config.memory.redis.defaultTtlSeconds * (0.5 + importance)),
+                Math.floor(this.workingMemoryDefaultTtlSeconds * (0.5 + importance)),
             );
             const embedding =
                 input.embedding && input.embedding.length > 0
@@ -922,7 +963,7 @@ export class MemoryModule extends Memory {
                     stability: 0.95,
                     sourceKind: MemorySourceKind.UserFeedback,
                     createdAt: Date.now(),
-                    ttlSeconds: this.config.memory.redis.defaultTtlSeconds,
+                    ttlSeconds: this.workingMemoryDefaultTtlSeconds,
                 });
             } else if (input.category === FeedbackCategory.Preference) {
                 await this.markdown.appendFeedback(MarkdownMemoryFile.User, fact, input.recordedAt);
@@ -945,7 +986,7 @@ export class MemoryModule extends Memory {
                         stability: 0.9,
                         sourceKind: MemorySourceKind.UserFeedback,
                         createdAt: Date.now(),
-                        ttlSeconds: this.config.memory.redis.defaultTtlSeconds,
+                        ttlSeconds: this.workingMemoryDefaultTtlSeconds,
                     });
                     if (this.surreal) {
                         const top = await this.surreal.recallMemoryNodes({ userId: input.userId, embedding, limit: 1 });
@@ -1997,16 +2038,15 @@ export class MemoryModule extends Memory {
      * - `resume`：调 resumeGhost（state → resumed）。
      * - `fork` / `fresh`：在 ghost-context content 上挂 `continuationCompleted=true` + `lastKind=kind`，
      *   评分阶段 `resolveGhostEvidenceWeight` 走 `continuationCompleted` 权重（默认 0.75）。
-     * 未命中的 ghostId 视为模型结构化输出引用错误，直接抛错。返回成功应用的条数。
+     * 未命中的 ghostId 视为模型结构化输出引用漂移，跳过该项并继续应用其它决策。
+     * 返回成功应用的条数。
      */
     applyGhostDecisions(decisions: GhostDecision[]): number {
         if (!this.brainOpened || decisions.length === 0) return 0;
         let applied = 0;
         for (const decision of decisions) {
             const ghost = this.getGhost(decision.ghostId);
-            if (!ghost) {
-                throw new Error(`Ghost decision referenced unknown ghostId: ${decision.ghostId}`);
-            }
+            if (!ghost) continue;
             try {
                 if (decision.kind === GhostDecisionKind.Resume) {
                     if (!this.resumeGhost(decision.ghostId)) {
@@ -2243,22 +2283,34 @@ export class MemoryModule extends Memory {
         for (const summaryId of summaryIds) {
             const summary = this.brain.getSummary(summaryId);
             if (!summary) continue;
-            const embeddingId = `summary-embedding-${summary.id}`;
-            const embedding = await this.embeddings.embed(summary.content);
-            await this.surreal.upsertSummaryEmbedding({
-                id: embeddingId,
-                userId,
-                summaryId: summary.id,
-                timeRange: summary.timeRange,
-                bucketKey: summary.bucketKey,
-                embedding,
-                createdAt: summary.createdAt,
-            });
-            this.brain.writeSummary({
-                ...summary,
-                embeddingId,
-            });
-            written += 1;
+            try {
+                const embeddingId = `summary-embedding-${summary.id}`;
+                const embedding = await this.embeddings.embed(summary.content);
+                await this.surreal.upsertSummaryEmbedding({
+                    id: embeddingId,
+                    userId,
+                    summaryId: summary.id,
+                    timeRange: summary.timeRange,
+                    bucketKey: summary.bucketKey,
+                    embedding,
+                    createdAt: summary.createdAt,
+                });
+                this.brain.writeSummary({
+                    ...summary,
+                    embeddingId,
+                });
+                written += 1;
+            } catch (err) {
+                // Summary 本体已经写入 brain.db；Surreal embedding 是晶体层索引，
+                // 失败只能丢索引并上报，不能回滚生平摘要。
+                this.events.publish(
+                    event(RuntimeEventType.MemoryBrainWriteFailed, {
+                        op: "summary.embedding",
+                        summaryId,
+                        message: err instanceof Error ? err.message : String(err),
+                    }),
+                );
+            }
         }
         if (written > 0) {
             this.events.publish(
@@ -2373,10 +2425,7 @@ export class MemoryModule extends Memory {
         const { askId, snapshotId, ask, message, context, nowMs } = input;
         const hintTitle = ask.ghostHint?.title?.trim();
         const hintContext = ask.ghostHint?.contextHint?.trim();
-        if (!hintTitle) {
-            throw new Error("Ask ghost context requires ask.ghostHint.title.");
-        }
-        const title = hintTitle.slice(0, 120);
+        const title = (hintTitle || firstLine(ask.prompt)).slice(0, 120);
         const contextHint = hintContext ?? ask.rationale;
         // LF-R4：ask.reason 是结构化枚举字段，结构化 → 结构化的映射不算字符匹配。
         // 黑板封顶的 ask 是 runtime 合成而非模型表达，单独标记为 reason='blackboard-cap'，
@@ -2485,7 +2534,7 @@ export class MemoryModule extends Memory {
 
     private async visibleAtomsForEpisodes(
         userId: string,
-        records: Array<Awaited<ReturnType<RedisMemoryStore["readEpisode"]>>>,
+        records: Array<EpisodeRecord | undefined>,
     ): Promise<Map<string, JournalVisibleAtom[]>> {
         const dates = uniqueStrings(
             records
@@ -2528,7 +2577,7 @@ export class MemoryModule extends Memory {
         if (!this.redis) return;
         try {
             const stability = Math.min(1, importance * 1.2);
-            const ttlMultiplier = this.config.memory.redis.defaultTtlSeconds;
+            const ttlMultiplier = this.workingMemoryDefaultTtlSeconds;
             const ttlSeconds = Math.max(60, Math.floor(ttlMultiplier * (0.5 + importance)));
 
             const embedding =
@@ -3348,6 +3397,26 @@ function focusKeyForMessage(message: GatewayMessage): string {
     return `${message.user.id}:${message.route.channel}`;
 }
 
+function resolveWorkingMemoryConfig(config: FlyflorConfig): WorkingMemoryConfig {
+    if (config.memory.working) {
+        return config.memory.working;
+    }
+    // Older tests and user configs predate `memory.working`; preserve the old
+    // `redis.enabled` switch while keeping local WAL-backed memory as the new default.
+    return {
+        backend: config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local,
+        local: {
+            contextRingSize: config.memory.redis.contextRingSize,
+            defaultTtlSeconds: config.memory.redis.defaultTtlSeconds,
+            maxEpisodesPerUser: config.memory.redis.maxEpisodesPerUser,
+            maxWalBytes: 4 * 1024 * 1024,
+            snapshotEveryWrites: 64,
+            snapshotFile: "working.snapshot.json",
+            walFile: "working.wal.jsonl",
+        },
+    };
+}
+
 /**
  * Project id 派生：来自 (channel, chatId, user) 的稳定 hash，便于多次显式触发命中同一目录（幂等）。
  * 不依赖 GUID，避免每轮重新 scaffold 一个新目录。
@@ -3362,4 +3431,9 @@ function deriveProjectId(message: GatewayMessage): string {
 function deriveProjectTitle(message: GatewayMessage): string {
     const text = message.text.trim().split("\n")[0] ?? "Untitled project";
     return text.slice(0, 80);
+}
+
+function firstLine(value: string): string {
+    // UI 标题只承载一行可扫读摘要；完整 ask.prompt 仍保存在 askPrompt 字段。
+    return value.trim().split(/\r?\n/u)[0]?.trim() ?? "";
 }

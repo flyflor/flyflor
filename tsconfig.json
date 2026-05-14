@@ -31,5 +31,5 @@
         "noPropertyAccessFromIndexSignature": false
     },
     "include": ["app.ts", "src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts"],
-    "exclude": ["hermes-agent", "node_modules", "dist", "docker"]
+    "exclude": ["node_modules", "dist", "docker"]
 }

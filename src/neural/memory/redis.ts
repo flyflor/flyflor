@@ -1,6 +1,10 @@
 import { Redis } from "ioredis";
 import type { RedisMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { MemoryComponent } from "../../agent/components.ts";
+import type { EpisodeRecord, EpisodeWriteInput, EpisodeWriteResult, RedisBackedWorkingMemoryStore } from "./working.store.ts";
+
+export type { EpisodeRecord, EpisodeWriteInput, EpisodeWriteResult } from "./working.store.ts";
 
 /**
  * 海马体工作记忆 Redis 客户端：封装 ff:* 四类 key 的 CRUD。
@@ -20,7 +24,7 @@ import { Component } from "../../agent/di/decorators/index.ts";
  *   `ff:` 前缀本身可改写成 `<namespace>:` 形式，但默认就用 ff（FlyFlor）。
  */
 @Component({ name: "redis-memory-store", tags: ["database", "memory", "hippocampus"] })
-export class RedisMemoryStore {
+export class RedisMemoryStore extends MemoryComponent implements RedisBackedWorkingMemoryStore {
     private readonly client: Redis;
     private readonly prefix: string;
     private readonly timeoutMs: number;
@@ -29,7 +33,8 @@ export class RedisMemoryStore {
     private readonly contextRingSize: number;
     private connectPromise: Promise<void> | undefined;
 
-    constructor(private readonly config: RedisMemoryConfig) {
+    public constructor(private readonly config: RedisMemoryConfig) {
+        super();
         this.client = new Redis(config.internalUrl, {
             lazyConnect: true,
             maxRetriesPerRequest: 1,
@@ -46,7 +51,7 @@ export class RedisMemoryStore {
         this.contextRingSize = config.contextRingSize;
     }
 
-    async connect(): Promise<void> {
+    public async connect(): Promise<void> {
         if (this.client.status === "ready") {
             return;
         }
@@ -60,27 +65,27 @@ export class RedisMemoryStore {
      * 预热：connect + PING 往返确认。
      * 返回 RTT（ms）；失败抛出。
      */
-    async ping(): Promise<number> {
+    public async ping(): Promise<number> {
         await this.connect();
         const start = Date.now();
         await this.client.ping();
         return Date.now() - start;
     }
 
-    async disconnect(): Promise<void> {
+    public async disconnect(): Promise<void> {
         await this.client.quit();
     }
 
-    dispose(): void {
+    public dispose(): void {
         this.client.disconnect();
     }
 
-    isReady(): boolean {
+    public isReady(): boolean {
         return this.client.status === "ready";
     }
 
     /** 暴露底层 ioredis 客户端，供同 namespace 的其他模块（fastRoute 快照等）共享。 */
-    getClient(): Redis {
+    public getClient(): Redis {
         return this.client;
     }
 
@@ -88,7 +93,7 @@ export class RedisMemoryStore {
      * 写入 episode + 同步刷新 ring buffer + consolidation 队列 + 强制遗忘。
      * 调用方必须先算好 stability/ttlSeconds（基于 importance × multiplier）。
      */
-    async writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult> {
+    public async writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult> {
         await this.connect();
         const epKey = this.episodeKey(input.userId, input.episodeId);
         const cqKey = this.consolidationKey(input.userId);
@@ -113,7 +118,7 @@ export class RedisMemoryStore {
         return { episodeId: input.episodeId, ttlSeconds: ttl, reviewAt, forcedForgotten: forced };
     }
 
-    async readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
+    public async readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
         await this.connect();
         const data = await this.client.hgetall(this.episodeKey(userId, episodeId));
         if (!data || Object.keys(data).length === 0) {
@@ -122,19 +127,19 @@ export class RedisMemoryStore {
         return this.decodeEpisodeFields(episodeId, data);
     }
 
-    async readContextRing(userId: string, limit: number): Promise<string[]> {
+    public async readContextRing(userId: string, limit: number): Promise<string[]> {
         await this.connect();
         // ring buffer 从 head 读取最近 N 条 episodeId（按写入新→旧）
         return await this.client.lrange(this.contextKey(userId), 0, Math.max(0, limit - 1));
     }
 
-    async listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]> {
+    public async listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]> {
         await this.connect();
         // 整合 worker 用：取所有 reviewAt <= now 的 episode
         return await this.client.zrangebyscore(this.consolidationKey(userId), 0, until, "LIMIT", 0, limit);
     }
 
-    async dropEpisode(userId: string, episodeId: string): Promise<void> {
+    public async dropEpisode(userId: string, episodeId: string): Promise<void> {
         await this.connect();
         // CONSOLIDATE / DISCARD 决策完毕后回收 Redis 占用
         const pipeline = this.client.pipeline();
@@ -143,7 +148,7 @@ export class RedisMemoryStore {
         await pipeline.exec();
     }
 
-    async reinforceEpisode(userId: string, episodeId: string, ttlSeconds: number): Promise<boolean> {
+    public async reinforceEpisode(userId: string, episodeId: string, ttlSeconds: number): Promise<boolean> {
         await this.connect();
         const epKey = this.episodeKey(userId, episodeId);
         const exists = await this.client.exists(epKey);
@@ -159,7 +164,7 @@ export class RedisMemoryStore {
     }
 
     /** 原地改写 episode（dream rewrite 决策）：保留 id 与 createdAt，重写 text/concepts/importance。 */
-    async rewriteEpisode(
+    public async rewriteEpisode(
         userId: string,
         episodeId: string,
         patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
@@ -181,7 +186,7 @@ export class RedisMemoryStore {
         return true;
     }
 
-    async touchConcepts(userId: string, concepts: string[]): Promise<void> {
+    public async touchConcepts(userId: string, concepts: string[]): Promise<void> {
         if (concepts.length === 0) {
             return;
         }
@@ -196,7 +201,7 @@ export class RedisMemoryStore {
         await this.client.expire(this.activationKey(userId), this.defaultTtlSeconds * 2);
     }
 
-    async hotConcepts(userId: string, limit: number): Promise<string[]> {
+    public async hotConcepts(userId: string, limit: number): Promise<string[]> {
         await this.connect();
         // 返回最近激活的 top N 概念（按时间戳倒序）
         return await this.client.zrevrange(this.activationKey(userId), 0, Math.max(0, limit - 1));
@@ -270,40 +275,6 @@ export class RedisMemoryStore {
     private activationKey(userId: string): string {
         return `${this.prefix}:act:${userId}`;
     }
-}
-
-export interface EpisodeWriteInput {
-    userId: string;
-    episodeId: string;
-    text: string;
-    concepts: string[];
-    embedding?: number[];
-    importance: number;
-    stability: number;
-    sourceKind: string;
-    createdAt?: number;
-    ttlSeconds?: number;
-    metadata?: Record<string, unknown>;
-}
-
-export interface EpisodeWriteResult {
-    episodeId: string;
-    ttlSeconds: number;
-    reviewAt: number;
-    forcedForgotten: string[];
-}
-
-export interface EpisodeRecord {
-    episodeId: string;
-    userId: string;
-    text: string;
-    concepts: string[];
-    embedding: number[];
-    importance: number;
-    stability: number;
-    sourceKind: string;
-    createdAt: number;
-    metadata: Record<string, unknown>;
 }
 
 function safeJsonArray(value: string | undefined): string[] {

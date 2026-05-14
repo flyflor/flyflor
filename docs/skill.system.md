@@ -98,7 +98,7 @@ interface SkillUsage {
 | `memory.skill.installed` | skill 包安装完成 |
 | `memory.skill.install.failed` | 安装失败 |
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - 自动选择仍主要依赖本地 `skill_usage.summary.json`，还没有 embedding / 向量召回参与。
 - promotion 主要消费显式意图和 cluster 证据，尚未做更细粒度的人机协同确认流。

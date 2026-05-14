@@ -5,5 +5,6 @@ describe("Docker binary build", () => {
         const script = await Bun.file("scripts/build.docker.binary.ts").text();
 
         expect(script).toContain('"--conditions=browser"');
+        expect(script).toContain('"--allow-unresolved="');
     });
 });

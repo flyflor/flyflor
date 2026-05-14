@@ -6,7 +6,7 @@
 
 ## 1. 项目定位
 
-- 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --reject-unresolved`。
+- 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --allow-unresolved=""`。
 - 输入渠道统一归一化为 `GatewayMessage`。
 - 智能体执行可观察、可中断、可恢复、可审计。
 - 工具 / MCP / 插件 / 技能 / 记忆都有显式边界。
@@ -69,9 +69,14 @@ flowchart LR
 
 只保留：`@Module` / `@Provide` / `@Inject` / `@Service` / `@Component` / `@Worker` / `@Channel` / `@Plugin`。
 
-- `@Provide` 是注入底座；Gateway / Blackboard / Memory / Runtime / Sandbox 用 `class XModule extends X` 表达边界语义。
+- `@Provide` 是注入底座；`@Module` / `@Component` 必须复用 `Provide` 的 metadata 注册路径，禁止各自维护第二套注入协议。
+- Gateway / Blackboard / Memory / Runtime / Sandbox / Crystal 等边界必须优先用 core 基类表达：`class MemoryModule extends Memory`、`class CrystalMemoryService extends CrystalComponent`。
+- `kind` / `layer` / `name` / `provider` 默认由 core 基类与类名推断；只有偏离默认值（例如非默认 token、factory scope、channel 特例）时才显式写。
+- `@Component` 默认是可注入单例组件；需要每次 `resolve` 重新构造时必须显式写 `provider: { scope: ProviderScope.Factory }`。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定。
+- DI token 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。只有非 class 值（config、events、mode、adapter map 等）才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
+- 公开 API 必须显式写 `public`；内部状态和 helper 保持 `private` / `protected`，避免隐式可见性漂移。
 
 ## 5. 类型与协议
 
@@ -80,11 +85,13 @@ flowchart LR
 - 外部输入进入核心前必须 schema 校验；`unknown` / `any` 只能在第三方边界短暂存在，必须在同一函数收敛。
 - 错误必须保留机器可读 `code`，用户文案与调试信息分离。
 - 协议值使用枚举或常量对象，不裸写字符串。新增协议值先放 `src/protocol/contracts/enums.ts`。
+- 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。
+- 新增代码必须带必要注释解释边界、生命周期、副作用或协议意图；修改旧代码时补齐被触碰路径的关键注释。注释应解释“为什么/边界是什么”，避免机械复述代码。
 
 ## 6. Bun 与二进制编译
 
 ```bash
-bun build --compile --target=bun --packages=bundle --reject-unresolved \
+bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
   --define process.env.FLYFLOR_BUILD_COMMIT="'$(git rev-parse --short HEAD)'" \
   --outfile dist/flyflor app.ts
 ```
@@ -97,7 +104,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
 - 禁止要求安装 Node.js；开发与发布都以 Bun 为准。
-- 必须启用 `--reject-unresolved`。
+- 当前必须启用 `--allow-unresolved=""` 兼容 OpenTUI 的 opaque dynamic import；新增依赖仍不得引入新的运行时动态加载要求。
 - 不把 `.env`、本地日志、会话数据库、密钥、测试 fixture 编译进二进制。
 
 ## 7. 依赖准入
@@ -200,6 +207,7 @@ bun build --compile --target=bun --packages=bundle --reject-unresolved \
 
 - `~/.flyflor/brain.db` 是用户可见、可手动 inspect 的"生平"，唯一权威记忆库。结构契约：**event / state 分离 + append-only + 时间字段索引**。
 - 禁止把 event 表改成可变行（任何"更新内容"操作必须新写一行 + 状态层指向）；可变性只允许出现在 `memory_state` / `memory_summary` / `codenames` 这类显式状态表。
+- 性能优化必须保持单主库契约：`brain.db` 是唯一 live DB，热路径通过复合索引和 query-plan 测试守住；历史数据只通过月级只读归档外迁。禁止把 live 主库拆成按日 / 按项目 shard。
 - 月级冷归档落 `~/.flyflor/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
 - Redis 热记忆压缩只能写 `memory_events.type='hot-memory-compression'` 审计事件；不得写入 `memory_summary`、不得生成 prompt atom、不得默认进入 SurrealDB / Gem 候选。若未来要把压缩结果转为长期证据，必须新增显式 gate。
 - 删除操作只能通过显式 CLI（如 `flyflor memory forget`）触发并审计；Dream / sweeper 一律只能改 `memory_state` 字段，不得 DELETE event 行。

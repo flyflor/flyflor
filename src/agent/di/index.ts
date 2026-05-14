@@ -1,9 +1,12 @@
 export {
     DependencyContainer,
     createInjectionToken,
+    isInjectionToken,
     type InjectionFactory,
     type InjectionScope,
     type InjectionToken,
+    type ClassToken,
+    type DependencyToken,
 } from "./factory/index.ts";
 export {
     Channel as ChannelDecorator,

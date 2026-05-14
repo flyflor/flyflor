@@ -2,6 +2,7 @@ import type { GatewayConfig } from "../../../config/index.ts";
 import { Channel, type ChannelName } from "../../../protocol/contracts/index.ts";
 import { ApiChannelAdapter } from "./api.ts";
 import { BlueBubblesAdapter } from "./bluebubbles.ts";
+import { DingTalkAdapter } from "./dingtalk.ts";
 import { DiscordInteractionAdapter } from "./discord.ts";
 import { FeishuAdapter } from "./feishu.ts";
 import { HttpPlatformAdapter } from "./http.platforms.ts";
@@ -12,6 +13,8 @@ import { StdioAdapter } from "./stdio.ts";
 import { TelegramAdapter } from "./telegram.ts";
 import type { ChannelAdapter } from "./types.ts";
 import { GenericWebhookAdapter } from "./webhook.ts";
+import { WeChatOfficialAccountAdapter } from "./wechat.ts";
+import { WeComCallbackAdapter } from "./wecom.callback.ts";
 import { WeixinIlinkAdapter } from "./weixin.ilink.ts";
 
 export type { ChannelAdapter, MessageDispatcher } from "./types.ts";
@@ -25,6 +28,11 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
         const name = channel as ChannelName;
         if (name === Channel.Api) {
             adapters.set(name, new ApiChannelAdapter());
+            continue;
+        }
+
+        if (name === Channel.ApiServer) {
+            adapters.set(name, createHttpPlatformAdapter(name, config));
             continue;
         }
 
@@ -146,21 +154,72 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
             continue;
         }
 
+        if (
+            name === Channel.DingTalk &&
+            (typeof config.channels.dingtalk.accessToken === "string" ||
+                typeof config.channels.dingtalk.webhookUrl === "string")
+        ) {
+            adapters.set(
+                name,
+                new DingTalkAdapter({
+                    accessToken:
+                        typeof config.channels.dingtalk.accessToken === "string"
+                            ? config.channels.dingtalk.accessToken
+                            : undefined,
+                    secret:
+                        typeof config.channels.dingtalk.secret === "string"
+                            ? config.channels.dingtalk.secret
+                            : undefined,
+                    webhookUrl:
+                        typeof config.channels.dingtalk.webhookUrl === "string"
+                            ? config.channels.dingtalk.webhookUrl
+                            : undefined,
+                }),
+            );
+            continue;
+        }
+
         if (name === Channel.WeChat) {
-            if (hasIlinkToken(config)) {
-                adapters.set(name, createIlinkAdapter(config, Channel.WeChat));
+            // WeChat is the official account XML callback protocol. Missing
+            // token means "not registered"; it must not fall back to generic HTTP.
+            if (typeof config.channels.wechat.token === "string") {
+                adapters.set(name, new WeChatOfficialAccountAdapter(config.channels.wechat.token));
             }
             continue;
         }
 
         if (name === Channel.WeixinIlink) {
             if (hasIlinkToken(config)) {
-                adapters.set(name, createIlinkAdapter(config, Channel.WeixinIlink));
+                adapters.set(name, createIlinkAdapter(config));
             }
             continue;
         }
 
-        adapters.set(name, createHttpPlatformAdapter(name, config));
+        if (name === Channel.WeComCallback) {
+            if (typeof config.channels.wecomCallback?.token === "string" && config.channels.wecomCallback.corpId) {
+                adapters.set(
+                    name,
+                    new WeComCallbackAdapter({
+                        aesKey:
+                            typeof config.channels.wecomCallback.aesKey === "string"
+                                ? config.channels.wecomCallback.aesKey
+                                : undefined,
+                        agentId: config.channels.wecomCallback.agentId,
+                        corpId: config.channels.wecomCallback.corpId,
+                        corpSecret:
+                            typeof config.channels.wecomCallback.corpSecret === "string"
+                                ? config.channels.wecomCallback.corpSecret
+                                : undefined,
+                        token: config.channels.wecomCallback.token,
+                    }),
+                );
+            }
+            continue;
+        }
+
+        if (isSharedHttpPlatformChannel(name)) {
+            adapters.set(name, createHttpPlatformAdapter(name, config));
+        }
     }
 
     return adapters;
@@ -170,10 +229,7 @@ function hasIlinkToken(config: GatewayConfig): boolean {
     return typeof config.channels.weixinIlink.token === "string" && Boolean(config.channels.weixinIlink.token.trim());
 }
 
-function createIlinkAdapter(
-    config: GatewayConfig,
-    name: typeof Channel.WeChat | typeof Channel.WeixinIlink,
-): WeixinIlinkAdapter {
+function createIlinkAdapter(config: GatewayConfig): WeixinIlinkAdapter {
     return new WeixinIlinkAdapter(
         {
             accountId:
@@ -189,7 +245,7 @@ function createIlinkAdapter(
             userId:
                 typeof config.channels.weixinIlink.userId === "string" ? config.channels.weixinIlink.userId : undefined,
         },
-        name,
+        Channel.WeixinIlink,
     );
 }
 
@@ -241,6 +297,28 @@ function createHttpPlatformAdapter(name: ChannelName, config: GatewayConfig): Ch
                 apiBaseUrl: config.channels.homeassistant.url,
                 replyUrl,
             });
+        case Channel.ApiServer:
+            return new HttpPlatformAdapter(name, {
+                accessToken:
+                    typeof config.channels.apiServer?.token === "string"
+                        ? config.channels.apiServer.token
+                        : undefined,
+                replyUrl,
+            });
+        case Channel.GoogleChat:
+            return new HttpPlatformAdapter(name, {
+                accessToken:
+                    typeof config.channels.googleChat?.serviceAccountJson === "string"
+                        ? config.channels.googleChat.serviceAccountJson
+                        : undefined,
+                replyUrl,
+            });
+        case Channel.Irc:
+            return new HttpPlatformAdapter(name, {
+                apiBaseUrl: config.channels.irc?.server,
+                replyUrl,
+                token: config.channels.irc?.nickname,
+            });
         case Channel.Line:
             return new HttpPlatformAdapter(name, { replyUrl });
         case Channel.Mattermost:
@@ -259,10 +337,24 @@ function createHttpPlatformAdapter(name: ChannelName, config: GatewayConfig): Ch
                 apiBaseUrl: config.channels.matrix.homeserverUrl,
                 replyUrl,
             });
+        case Channel.MsGraphWebhook:
+            return new HttpPlatformAdapter(name, {
+                token:
+                    typeof config.channels.msgraphWebhook?.clientState === "string"
+                        ? config.channels.msgraphWebhook.clientState
+                        : undefined,
+                replyUrl: config.channels.msgraphWebhook?.replyUrl ?? replyUrl,
+            });
         case Channel.QQ:
             return new HttpPlatformAdapter(name, {
                 accessToken:
                     typeof config.channels.qq.appSecret === "string" ? config.channels.qq.appSecret : undefined,
+                replyUrl,
+            });
+        case Channel.QQBot:
+            return new HttpPlatformAdapter(name, {
+                accessToken:
+                    typeof config.channels.qqbot?.clientSecret === "string" ? config.channels.qqbot.clientSecret : undefined,
                 replyUrl,
             });
         case Channel.Signal:
@@ -283,16 +375,41 @@ function createHttpPlatformAdapter(name: ChannelName, config: GatewayConfig): Ch
                 replyUrl: config.channels.sms.replyUrl ?? replyUrl,
                 webhookUrl: config.channels.sms.webhookUrl,
             });
+        case Channel.Teams:
+            return new HttpPlatformAdapter(name, {
+                accessToken:
+                    typeof config.channels.teams?.clientSecret === "string" ? config.channels.teams.clientSecret : undefined,
+                replyUrl,
+                webhookUrl: config.channels.teams?.webhookUrl,
+            });
         case Channel.WeCom:
             return new HttpPlatformAdapter(name, {
                 accessToken: config.channels.wecom.token ?? config.channels.wecom.corpSecret,
+                replyUrl,
+            });
+        case Channel.WeComCallback:
+            return new HttpPlatformAdapter(name, {
+                accessToken:
+                    typeof (config.channels.wecomCallback?.token ?? config.channels.wecomCallback?.corpSecret) === "string"
+                        ? ((config.channels.wecomCallback?.token ?? config.channels.wecomCallback?.corpSecret) as string)
+                        : undefined,
                 replyUrl,
             });
         case Channel.WhatsApp:
             return new HttpPlatformAdapter(name, {
                 accessToken: config.channels.whatsapp.accessToken,
                 phoneNumberId: config.channels.whatsapp.phoneNumberId,
+                token: config.channels.whatsapp.verifyToken,
                 replyUrl,
+            });
+        case Channel.Yuanbao:
+            return new HttpPlatformAdapter(name, {
+                accessToken:
+                    typeof config.channels.yuanbao?.accessToken === "string"
+                        ? config.channels.yuanbao.accessToken
+                        : undefined,
+                replyUrl: config.channels.yuanbao?.replyUrl ?? replyUrl,
+                webhookUrl: config.channels.yuanbao?.webhookUrl,
             });
         case Channel.Zalo:
             return new HttpPlatformAdapter(name, {
@@ -304,4 +421,25 @@ function createHttpPlatformAdapter(name: ChannelName, config: GatewayConfig): Ch
         default:
             return new GenericWebhookAdapter(name, replyUrl);
     }
+}
+
+function isSharedHttpPlatformChannel(name: ChannelName): boolean {
+    return (
+        name === Channel.ApiServer ||
+        name === Channel.Email ||
+        name === Channel.GoogleChat ||
+        name === Channel.HomeAssistant ||
+        name === Channel.Irc ||
+        name === Channel.Matrix ||
+        name === Channel.MsGraphWebhook ||
+        name === Channel.QQ ||
+        name === Channel.QQBot ||
+        name === Channel.Signal ||
+        name === Channel.Sms ||
+        name === Channel.Teams ||
+        name === Channel.WeCom ||
+        name === Channel.WhatsApp ||
+        name === Channel.Yuanbao ||
+        name === Channel.Zalo
+    );
 }

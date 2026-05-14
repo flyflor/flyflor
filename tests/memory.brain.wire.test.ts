@@ -63,15 +63,16 @@ describe("MemoryModule + BrainStore (LF-R1 dual-write)", () => {
         }
     });
 
-    test("brain closed is reported while legacy journal still writes", async () => {
+    test("rememberTurn opens brain.db for direct callers and still writes legacy journal", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
-        // Intentionally skip warmup so brainOpened stays false.
+        // Direct MemoryModule callers can bypass RuntimeModule.warmup(); rememberTurn owns
+        // the lazy-open boundary so CLI/tests/background jobs still hit the single brain.db.
         await memory.rememberTurn(gatewayMessage("hi"), gatewayReply("hello", "msg-2"), runtimeContext());
         expect(sink.types).toContain(RuntimeEventType.MemoryJournalWritten);
-        expect(sink.types).toContain(RuntimeEventType.MemoryBrainWriteFailed);
-        expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainEventWritten);
+        expect(sink.types).toContain(RuntimeEventType.MemoryBrainEventWritten);
+        expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainWriteFailed);
         memory.dispose();
     });
 

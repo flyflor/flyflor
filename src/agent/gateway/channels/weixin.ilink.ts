@@ -1,6 +1,7 @@
-import type { GatewayMessage, GatewayReply } from "../../../protocol/contracts/index.ts";
-import { ChannelLinkState, ChannelTransport } from "../../../protocol/contracts/index.ts";
+import type { GatewayDeliveryMetadata, GatewayMessage, GatewayReply } from "../../../protocol/contracts/index.ts";
+import { ChannelLinkState, ChannelTransport, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery, isRecord } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, ChannelAdapterSnapshot, StreamingMessageDispatcher } from "./types.ts";
 
 interface IlinkConfig {
@@ -125,6 +126,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
                             });
                             this.lastOutboundAt = new Date().toISOString();
                         },
+                        typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
                     });
                 }
             } catch (error) {
@@ -173,7 +175,13 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
                 id: userId,
                 displayName: update.nick_name,
             },
+            messageKind: inferIlinkMessageKind(update),
             text: update.text ?? update.content ?? extractIlinkText(update.item_list),
+            source: {
+                chatName: update.room_id,
+                messageId: String(update.id ?? update.message_id ?? update.msg_id ?? ""),
+            },
+            replyTo: update.context_token ? { messageId: update.context_token } : undefined,
             raw: update,
             receivedAt: new Date().toISOString(),
         };
@@ -213,6 +221,10 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
             body,
         });
         await assertPlatformResponse(response, "iLink sendmessage");
+    }
+
+    async sendTyping(_route: import("../../../protocol/contracts/index.ts").GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // The iLink bot API surface does not expose typing lifecycle calls.
     }
 
     private headers(body: string): Record<string, string> {
@@ -311,6 +323,19 @@ function extractIlinkText(items: IlinkUpdate["item_list"]): string {
         .filter(Boolean)
         .join("\n");
     return text.trim();
+}
+
+function inferIlinkMessageKind(update: IlinkUpdate): GatewayMessage["messageKind"] {
+    if (update.msg_type === 2) {
+        return GatewayMessageKind.Voice;
+    }
+    if (update.msg_type === 3) {
+        return GatewayMessageKind.Video;
+    }
+    if (update.msg_type === 4) {
+        return GatewayMessageKind.Document;
+    }
+    return GatewayMessageKind.Text;
 }
 
 function assertIlinkOk(payload: unknown, platform: string): void {

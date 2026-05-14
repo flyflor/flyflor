@@ -279,8 +279,9 @@ describe("ShellHookExecutor", () => {
         expect(spawnCalled).toBe(0);
     });
 
-    test("[chaos] approve callback throwing surfaces the error", async () => {
+    test("[chaos] approve callback throwing denies without spawning", async () => {
         const sink = new CollectSink();
+        let spawned = false;
         const exec = new ShellHookExecutor({
             policy: policyAsk(),
             events: sink,
@@ -288,9 +289,16 @@ describe("ShellHookExecutor", () => {
             approve: () => {
                 throw new Error("approve-boom");
             },
-            spawn: () => fakeSpawn(0),
+            spawn: () => {
+                spawned = true;
+                return fakeSpawn(0);
+            },
         });
-        await expect(exec.execute(SPEC)).rejects.toThrow("approve-boom");
+        const result = await exec.execute(SPEC);
+        expect(result.ok).toBe(false);
+        expect(result.error).toBe("shell-hook test-hook was not approved");
+        expect(spawned).toBe(false);
+        expect(sink.types()).toContain(RuntimeEventType.SandboxToolApprovalDenied);
     });
 
     test("[chaos] events sink throwing surfaces the error", async () => {

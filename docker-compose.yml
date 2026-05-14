@@ -1,96 +1,22 @@
 name: flyflor
 
-# Flyflor 本地 dev 与未来一键安装通用 compose。
+# Flyflor local dev compose.
 #
-# 设计原则：
-# 1. 所有服务都只在内部网络通信；不向宿主机暴露任何端口（无 ports:）。
-#    需要进入交互式 chat 用 `docker exec -it flyflor-dev flyflor`，
-#    需要看日志用 `docker compose logs -f` 或 `bun run docker:logs`。
-# 2. 服务名即 DNS：flyflor 容器内通过 redis://redis:6379、ws://surrealdb:8000/rpc
-#    访问后端，无需 host/IP 配置。
-# 3. 数据卷使用具名卷（flyflor_redis / flyflor_surreal / flyflor_data），
-#    让未来 `curl https://flyflor.dev/install.sh | bash` 一键安装时可以
-#    直接复用同一份 compose，不依赖 git 仓库目录结构。
-# 4. 仅 dev 才挂载 `./` 源码与本地编译产物；生产/安装态使用预构建镜像
-#    `ghcr.io/flyflor/flyflor:<tag>`，由 `FLYFLOR_IMAGE` 环境变量切换。
+# Default dev now runs as a single Flyflor container: working memory uses the
+# local WAL-backed MemoryComponent and crystal storage is optional. Redis and
+# SurrealDB can still be added through a local docker-compose.override.yml when
+# testing external backends, but they are no longer part of the baseline stack.
 
 networks:
     flyflor-internal:
         driver: bridge
         internal: false
-        # internal: true 会切断容器到外网（LLM/MCP 调用不通），所以保留 false；
-        # 同时不在任何服务上发布端口，等价于"对宿主机不可见"。
+        # Keep outbound access for LLM/MCP providers while publishing no host ports.
 
 volumes:
-    flyflor_redis:
-    flyflor_surreal:
     flyflor_data:
 
 services:
-    redis:
-        image: redis:7.4-alpine
-        container_name: flyflor-redis
-        restart: unless-stopped
-        # 工作记忆：海马体 TTL/遗忘曲线层。
-        # 关闭持久化以保留"工作记忆"语义；长期记忆走 SurrealDB。
-        # maxmemory-policy=allkeys-lru 配合 TTL 实现自然遗忘兜底。
-        command:
-            - redis-server
-            - --save
-            - ""
-            - --appendonly
-            - "no"
-            - --maxmemory
-            - 256mb
-            - --maxmemory-policy
-            - allkeys-lru
-            - --bind
-            - 0.0.0.0
-            - --protected-mode
-            - "no"
-        volumes:
-            - flyflor_redis:/data
-        networks:
-            - flyflor-internal
-        healthcheck:
-            test: ["CMD", "redis-cli", "ping"]
-            interval: 5s
-            timeout: 3s
-            retries: 10
-
-    surrealdb:
-        image: surrealdb/surrealdb:v2.1.4
-        container_name: flyflor-surrealdb
-        restart: unless-stopped
-        # surrealdb v2 镜像默认非 root 用户，对具名卷无写权限；
-        # 改用 root 解决 RocksDB 创建目录失败问题（dev 简化）。
-        user: root
-        # 长期记忆图数据库：episode → memory_node → skill 关系图 + MTREE 向量索引。
-        # 仅内部访问，root/root 仅用于 dev；生产模式由安装脚本注入随机凭据。
-        command:
-            - start
-            - --user
-            - root
-            - --pass
-            - root
-            - --bind
-            - 0.0.0.0:8000
-            - rocksdb:/data/flyflor.db
-        volumes:
-            - flyflor_surreal:/data
-        networks:
-            - flyflor-internal
-        healthcheck:
-            test:
-                - CMD
-                - /surreal
-                - is-ready
-                - --endpoint
-                - http://127.0.0.1:8000
-            interval: 5s
-            timeout: 3s
-            retries: 20
-
     flyflor:
         image: debian:bookworm-slim
         container_name: flyflor-dev
@@ -98,8 +24,8 @@ services:
         working_dir: /root/.flyflor/workspace
         entrypoint: ["/bin/sh", "/workspace/docker/entrypoint.sh"]
         command: ["gateway"]
-        # dev 挂载：源码、配置、工作区、技能、MCP 配置、本地状态目录、已编译 Linux 二进制。
-        # 生产/安装态会替换 image 为预构建版本，并去掉源码挂载。
+        # Dev mounts are explicit and stable: source tree, JSONC config,
+        # workspace, global skills/MCP dirs, local durable data, and binary.
         volumes:
             - .:/workspace
             - ./docker/config:/root/.flyflor
@@ -110,13 +36,7 @@ services:
             - ./dist/flyflor-linux:/mounted/flyflor-linux:ro
         networks:
             - flyflor-internal
-        depends_on:
-            redis:
-                condition: service_healthy
-            surrealdb:
-                condition: service_healthy
         stdin_open: true
         tty: true
-        # 注意：故意不写 ports，gateway 仅对 internal 网络监听。
-        # 需要从宿主机调试 gateway 时，可临时 `docker compose run --service-ports flyflor`
-        # 或在本仓库根添加 docker-compose.override.yml 暴露端口（不要提交）。
+        # Intentionally no ports. Use docker-compose.override.yml locally when
+        # host-side gateway debugging needs a temporary published port.

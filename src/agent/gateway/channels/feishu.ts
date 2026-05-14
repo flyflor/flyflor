@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import type { GatewayMessage, GatewayReply } from "../../../protocol/contracts/index.ts";
-import { ChannelTransport } from "../../../protocol/contracts/index.ts";
+import type { GatewayDeliveryMetadata, GatewayMessage, GatewayReply, GatewayRoute } from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 interface FeishuConfig {
@@ -20,6 +21,8 @@ interface FeishuPayload {
             content?: string;
             message_id?: string;
             message_type?: string;
+            parent_id?: string;
+            root_id?: string;
         };
         sender?: {
             sender_id?: {
@@ -38,7 +41,7 @@ interface FeishuPayload {
 }
 
 export class FeishuAdapter implements ChannelAdapter {
-    readonly name = "feishu";
+    readonly name = Channel.Feishu;
     readonly transport = ChannelTransport.Http;
     private tenantToken?: { expiresAt: number; value: string };
 
@@ -46,7 +49,12 @@ export class FeishuAdapter implements ChannelAdapter {
 
     async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const rawBody = await request.text();
-        const payload = JSON.parse(rawBody) as FeishuPayload;
+        let payload: FeishuPayload;
+        try {
+            payload = JSON.parse(rawBody) as FeishuPayload;
+        } catch {
+            return json({ error: "invalid_json" }, 400);
+        }
 
         if (payload.type === "url_verification" && payload.challenge) {
             return json({ challenge: payload.challenge });
@@ -73,13 +81,15 @@ export class FeishuAdapter implements ChannelAdapter {
                     messageId: crypto.randomUUID(),
                     route: message.route,
                     text,
-                }),
+                }, buildDeliveryMetadata(message)),
+            typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
     }
 
     private verifyRequest(request: Request, rawBody: string, payload: FeishuPayload): boolean {
-        if (this.config.verificationToken && payload.token && payload.token !== this.config.verificationToken) {
+        // 配置了 verificationToken 就必须匹配；缺失 token 也拒绝，避免无凭据 payload 误入站。
+        if (this.config.verificationToken && payload.token !== this.config.verificationToken) {
             return false;
         }
 
@@ -108,22 +118,41 @@ export class FeishuAdapter implements ChannelAdapter {
         return {
             id: payload.header?.event_id ?? event?.message?.message_id ?? crypto.randomUUID(),
             route: {
-                channel: "feishu",
+                channel: Channel.Feishu,
                 chatId: event?.message?.chat_id ?? senderId,
-                chatType: event?.message?.chat_type === "p2p" ? "direct" : "group",
+                chatType: event?.message?.chat_type === "p2p" ? ChatType.Direct : ChatType.Group,
+                threadId: event?.message?.root_id,
             },
             user: {
                 id: senderId,
             },
             text: content,
+            messageKind: normalizeFeishuMessageKind(event?.message?.message_type),
+            source: {
+                messageId: event?.message?.message_id,
+            },
+            replyTo:
+                event?.message?.parent_id || event?.message?.root_id
+                    ? {
+                          messageId: event?.message?.parent_id ?? event?.message?.root_id,
+                      }
+                    : undefined,
             raw: payload,
             receivedAt: new Date().toISOString(),
         };
     }
 
-    private async sendReply(reply: GatewayReply): Promise<void> {
+    private async sendReply(reply: GatewayReply, metadata?: GatewayDeliveryMetadata): Promise<void> {
         const token = await this.getTenantAccessToken();
         const receiveIdType = reply.route.chatId.startsWith("ou_") ? "open_id" : "chat_id";
+        const body: Record<string, unknown> = {
+            receive_id: reply.route.chatId,
+            msg_type: "text",
+            content: JSON.stringify({ text: reply.text }),
+        };
+        if (metadata?.replyToMessageId) {
+            body.reply_in_thread = true;
+        }
 
         const response = await fetch(
             `https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`,
@@ -133,14 +162,16 @@ export class FeishuAdapter implements ChannelAdapter {
                     authorization: `Bearer ${token}`,
                     "content-type": "application/json",
                 },
-                body: JSON.stringify({
-                    receive_id: reply.route.chatId,
-                    msg_type: "text",
-                    content: JSON.stringify({ text: reply.text }),
-                }),
+                body: JSON.stringify(body),
             },
         );
         await assertPlatformResponse(response, "Feishu");
+    }
+
+    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // Feishu open platform does not expose a generic bot typing endpoint for
+        // ordinary IM messages; the method exists so the gateway lifecycle has
+        // a uniform channel contract.
     }
 
     private async getTenantAccessToken(): Promise<string> {
@@ -182,6 +213,13 @@ function parseFeishuContent(content: string | undefined): string {
     } catch {
         return content;
     }
+}
+
+function normalizeFeishuMessageKind(kind: string | undefined): GatewayMessage["messageKind"] {
+    if (kind === "image") return GatewayMessageKind.Photo;
+    if (kind === "file") return GatewayMessageKind.Document;
+    if (kind === "audio") return GatewayMessageKind.Audio;
+    return GatewayMessageKind.Text;
 }
 
 function timingSafeEqualString(a: string, b: string): boolean {

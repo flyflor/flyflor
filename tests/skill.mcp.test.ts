@@ -167,7 +167,7 @@ describe("Skill and MCP capability config", () => {
                 {
                     version: "1.2.3",
                     author: "flyflor",
-                    compatibleWith: ["hermes-agent"],
+                    compatibleWith: ["flyflor"],
                     capabilities: ["code-review"],
                     mcpServers: { filesystem: {} },
                     permissions: { "mcp-tool": true },
@@ -181,7 +181,7 @@ describe("Skill and MCP capability config", () => {
         const skill = await findSkill(paths, "portable");
 
         expect(skill?.manifest.version).toBe("1.2.3");
-        expect(skill?.manifest.compatibility).toEqual(["hermes-agent", "claude", "openclaw"]);
+        expect(skill?.manifest.compatibility).toEqual(["flyflor", "claude", "openclaw"]);
         expect(skill?.manifest.capabilities).toEqual(["code-review"]);
         expect(skill?.manifest.mcpServers).toEqual(["filesystem"]);
         expect(skill?.manifest.permissions).toEqual(["mcp-tool"]);
@@ -199,7 +199,7 @@ describe("Skill and MCP capability config", () => {
                 "---",
                 "name: portable",
                 "description: Portable skill",
-                "compatibility: claude, hermes-agent",
+                "compatibility: claude, flyflor",
                 "---",
                 "",
                 "Follow portable instructions.",
@@ -226,7 +226,7 @@ describe("Skill and MCP capability config", () => {
         expect(first.skills.portable?.useCount).toBe(1);
         expect(second.skills.portable?.useCount).toBe(2);
         expect(loaded.skills.portable).toMatchObject({
-            compatibility: ["claude", "hermes-agent"],
+            compatibility: ["claude", "flyflor"],
             mcpCallCount: 3,
             mcpSuccessCount: 2,
             source: "project",

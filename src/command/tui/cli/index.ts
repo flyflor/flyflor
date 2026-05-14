@@ -6,7 +6,7 @@
 
 import { createCliRenderer, Box, Text, ScrollBox, RGBA, TextAttributes, type CliRenderer } from "@opentui/core";
 import { render } from "@opentui/solid";
-import { createSignal, createMemo, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import type { FlyFlor } from "../../../app.ts";
 import { FlyFlorTokens } from "../../../app.ts";
 import { fetchOverviewData } from "../../cli/handlers/overview.handler.ts";
@@ -20,16 +20,20 @@ import { fetchBlackboardTurnList } from "../../cli/handlers/blackboard.handler.t
 import { fetchMemoryData } from "../../cli/handlers/memory.handler.ts";
 import { fetchGhostList } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
+import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
 
 const THEME = {
-    bg: RGBA.fromInts(15, 15, 15),
-    fg: RGBA.fromInts(220, 220, 220),
-    fgMuted: RGBA.fromInts(120, 120, 120),
-    cyan: RGBA.fromInts(100, 200, 255),
-    green: RGBA.fromInts(100, 255, 150),
-    yellow: RGBA.fromInts(255, 200, 100),
-    red: RGBA.fromInts(255, 80, 80),
-    border: RGBA.fromInts(60, 60, 60),
+    bg: RGBA.fromInts(13, 19, 29),
+    fg: RGBA.fromInts(235, 244, 246),
+    fgMuted: RGBA.fromInts(132, 154, 169),
+    cyan: RGBA.fromInts(126, 232, 218),
+    green: RGBA.fromInts(123, 229, 180),
+    yellow: RGBA.fromInts(255, 203, 116),
+    pink: RGBA.fromInts(255, 151, 190),
+    purple: RGBA.fromInts(188, 171, 255),
+    red: RGBA.fromInts(255, 111, 127),
+    border: RGBA.fromInts(76, 106, 126),
+    selectedBg: RGBA.fromInts(24, 34, 47),
 };
 
 export type CliPage =
@@ -47,6 +51,23 @@ export type CliPage =
 interface PageLoader {
     title: string;
     load: (app: FlyFlor) => Promise<string[]>;
+}
+
+const PAGE_ITEMS: Array<{ page: CliPage; title: string; detail: string }> = [
+    { page: "overview", title: "Overview", detail: "status + doctor" },
+    { page: "config", title: "Config", detail: "model + paths" },
+    { page: "skills", title: "Skills", detail: "installed skills" },
+    { page: "mcp", title: "MCP", detail: "servers + tools" },
+    { page: "plugins", title: "Plugins", detail: "local plugins" },
+    { page: "sandbox", title: "Sandbox", detail: "allowlists" },
+    { page: "blackboard", title: "Blackboard", detail: "recent turns" },
+    { page: "memory", title: "Memory", detail: "brain status" },
+    { page: "ghosts", title: "Ghosts", detail: "pending continuations" },
+    { page: "dream", title: "Dream", detail: "background pass" },
+];
+
+export function listCliTuiPages(): Array<{ page: CliPage; title: string; detail: string }> {
+    return PAGE_ITEMS.map((item) => ({ ...item }));
 }
 
 function overviewLoader(): PageLoader {
@@ -298,29 +319,47 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     const renderer = await createCliRenderer({
         targetFps: 30,
         exitOnCtrlC: false,
+        screenMode: "alternate-screen",
+        consoleMode: "disabled",
         useMouse: true,
+        enableMouseMovement: true,
         externalOutputMode: "passthrough",
         consoleOptions: {
             onCopySelection: (text) => {
-                void Bun.write(Bun.stdout, text);
+                copyTextToTerminalClipboard(text);
+                renderer.clearSelection();
             },
         },
     });
 
-    const loader = getLoader(initialPage);
+    const [activePage, setActivePage] = createSignal<CliPage>(initialPage);
+    const loader = createMemo(() => getLoader(activePage()));
     const [lines, setLines] = createSignal<string[]>([]);
     const [err, setErr] = createSignal<string | null>(null);
+    const [status, setStatus] = createSignal("Ready");
+    let refreshToken = 0;
 
     const refresh = async () => {
+        const token = ++refreshToken;
+        const currentLoader = loader();
+        setStatus(`Loading ${currentLoader.title}...`);
         try {
-            setLines(await loader.load(app));
+            const nextLines = await currentLoader.load(app);
+            if (token !== refreshToken) return;
+            setLines(nextLines);
             setErr(null);
+            setStatus(`Loaded ${currentLoader.title}`);
         } catch (e) {
+            if (token !== refreshToken) return;
             setErr(e instanceof Error ? e.message : String(e));
+            setStatus("Load failed");
         }
     };
 
-    await refresh();
+    createEffect(() => {
+        activePage();
+        void refresh();
+    });
 
     const lineNodes = createMemo(() =>
         lines().map((line) =>
@@ -335,6 +374,9 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     void render(() => {
         const width = renderer.width;
         const height = renderer.height;
+        const navWidth = Math.min(30, Math.max(22, Math.floor(width * 0.22)));
+        const currentPage = activePage();
+        const currentLoader = loader();
 
         return Box(
             {
@@ -345,13 +387,71 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             },
             Box(
                 { flexDirection: "column", border: ["bottom"], borderColor: THEME.border, padding: 1, flexShrink: 0 },
-                Text({ content: `Flyflor · ${loader.title}`, fg: THEME.cyan, attributes: TextAttributes.BOLD }),
-                Text({ content: "q/Esc quit · r refresh", fg: THEME.fgMuted }),
+                Text({ content: `Flyflor · ${currentLoader.title}`, fg: THEME.cyan, attributes: TextAttributes.BOLD }),
+                Text({
+                    content: "↑/↓ select page · r refresh · q/Esc quit · Cmd/Ctrl+C copy selection",
+                    fg: THEME.fgMuted,
+                    selectable: false,
+                }),
                 err() ? Text({ content: `Error: ${err()}`, fg: THEME.red }) : undefined,
             ),
-            ScrollBox(
-                { flexGrow: 1, flexDirection: "column", padding: 1 },
-                ...lineNodes(),
+            Box(
+                { flexDirection: "row", flexGrow: 1, flexShrink: 1 },
+                Box(
+                    {
+                        flexDirection: "column",
+                        width: navWidth,
+                        flexShrink: 0,
+                        border: ["right"],
+                        borderColor: THEME.border,
+                        paddingTop: 1,
+                        paddingLeft: 1,
+                        paddingRight: 1,
+                    },
+                    ...PAGE_ITEMS.map((item, index) => {
+                        const active = item.page === currentPage;
+                        return Box(
+                            {
+                                flexDirection: "column",
+                                backgroundColor: active ? THEME.selectedBg : undefined,
+                                paddingLeft: 1,
+                                paddingRight: 1,
+                                paddingTop: index === 0 ? 0 : 1,
+                                paddingBottom: 0,
+                            },
+                            Text({
+                                content: `${active ? ">" : " "} ${item.title}`,
+                                fg: active ? THEME.pink : THEME.fg,
+                                attributes: active ? TextAttributes.BOLD : undefined,
+                                selectable: false,
+                            }),
+                            Text({ content: `  ${item.detail}`, fg: THEME.fgMuted, selectable: false }),
+                        );
+                    }),
+                ),
+                ScrollBox(
+                    {
+                        flexGrow: 1,
+                        flexShrink: 1,
+                        flexDirection: "column",
+                        padding: 1,
+                        horizontalScrollbarOptions: { height: 0, visible: false },
+                        verticalScrollbarOptions: {
+                            visible: true,
+                            width: 2,
+                            showArrows: false,
+                            trackOptions: {
+                                backgroundColor: THEME.selectedBg,
+                                foregroundColor: THEME.purple,
+                            },
+                        },
+                    },
+                    ...lineNodes(),
+                ),
+            ),
+            Box(
+                { height: 1, backgroundColor: THEME.selectedBg, paddingLeft: 1, paddingRight: 1, flexShrink: 0 },
+                Text({ content: status(), fg: THEME.fgMuted, selectable: false, truncate: true }),
             ),
         );
     }, renderer);
@@ -362,8 +462,22 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             renderer.destroy();
             return;
         }
+        if (name === "up" || name === "k") {
+            movePage(-1);
+            return;
+        }
+        if (name === "down" || name === "j") {
+            movePage(1);
+            return;
+        }
         if (name === "r") void refresh();
     };
+
+    function movePage(delta: -1 | 1): void {
+        const index = PAGE_ITEMS.findIndex((item) => item.page === activePage());
+        const next = PAGE_ITEMS[Math.max(0, Math.min(PAGE_ITEMS.length - 1, index + delta))];
+        if (next) setActivePage(next.page);
+    }
 
     renderer.keyInput.on("keypress", keyHandler);
 

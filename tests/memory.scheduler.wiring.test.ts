@@ -36,26 +36,26 @@ class StubModel implements ModelClient {
 }
 
 describe("MemoryModule background scheduler wiring", () => {
-    test("scheduler is null when Redis is disabled (default)", async () => {
+    test("scheduler is null when crystal graph is disabled by default", async () => {
         const config = await testConfig();
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
-        // 默认 Redis disabled → scheduler 为 null；warmup/dispose 必须无副作用
+        // 默认本地 working memory 可写入，但长期晶体图未启用时不启动后台聚合。
         await memory.warmup();
         memory.dispose();
         expect((memory as unknown as { scheduler: unknown }).scheduler).toBeNull();
     });
 
-    test("scheduler is null without a model even if Redis+Surreal would qualify", async () => {
+    test("scheduler is null without a model even if working memory and crystal graph would qualify", async () => {
         const config = await testConfig();
-        config.memory.redis.enabled = true;
+        config.memory.crystal.enabled = true;
         config.memory.crystal.surreal.enabled = true;
         const memory = new MemoryModule(config, new CapturingSink());
         expect((memory as unknown as { scheduler: unknown }).scheduler).toBeNull();
     });
 
-    test("scheduler is instantiated when redis + surreal + model all present", async () => {
+    test("scheduler is instantiated when working memory + crystal graph + model all present", async () => {
         const config = await testConfig();
-        config.memory.redis.enabled = true;
+        config.memory.crystal.enabled = true;
         config.memory.crystal.surreal.enabled = true;
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
         const scheduler = (memory as unknown as {

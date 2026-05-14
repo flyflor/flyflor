@@ -183,9 +183,12 @@ function parseSseJson(text: string, expectedId: number): unknown {
 }
 
 function normalizeTools(result: unknown): McpToolDefinition[] {
-    if (!isRecord(result) || !Array.isArray(result.tools)) {
+    if (!isRecord(result)) {
         throw new Error("MCP HTTP tools/list returned invalid tools payload.");
     }
+    // MCP 远端有时返回空 result；工具列表是发现路径，缺失 tools 降级为空表，
+    // 但 JSON-RPC result 本身仍必须是 object。
+    if (!Array.isArray(result.tools)) return [];
     return result.tools.filter(isToolDefinition).map((tool) => ({
         name: tool.name,
         description: typeof tool.description === "string" ? tool.description : undefined,

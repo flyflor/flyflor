@@ -1,6 +1,14 @@
-import type { ChannelName, GatewayMessage, GatewayRoute, GatewayUser } from "../../../protocol/contracts/index.ts";
-import { ChannelTransport } from "../../../protocol/contracts/index.ts";
-import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
+import type {
+    ChannelName,
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayRoute,
+    GatewayUser,
+} from "../../../protocol/contracts/index.ts";
+import { ChannelTransport, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
+import { GatewayMessageAction } from "../../../protocol/contracts/index.ts";
+import { assertPlatformResponse, dispatchWithDelivery, readString } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 interface GenericWebhookPayload {
@@ -11,6 +19,10 @@ interface GenericWebhookPayload {
     from?: string | { id?: string; name?: string; username?: string };
     id?: string;
     message?: string | { text?: string };
+    messageAction?: string;
+    mentions?: Array<{ id?: string; kind?: string; name?: string; text?: string; type?: string; username?: string }>;
+    reaction?: string | { added?: boolean; count?: number; emoji?: string; key?: string; messageId?: string; name?: string };
+    reactions?: Array<string | { added?: boolean; count?: number; emoji?: string; key?: string; messageId?: string; name?: string }>;
     sender?: string | { id?: string; name?: string; username?: string };
     text?: string;
     thread_id?: string;
@@ -34,6 +46,7 @@ export class GenericWebhookAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send({ route: message.route, text }),
+            typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ reply });
     }
@@ -53,6 +66,15 @@ export class GenericWebhookAdapter implements ChannelAdapter {
             id: String(payload.id ?? crypto.randomUUID()),
             route,
             user,
+            messageAction: normalizeMessageAction(payload.messageAction ?? payload.type),
+            messageKind: inferWebhookMessageKind(payload),
+            mentions: normalizeMentions(payload.mentions),
+            reactions: normalizeReactions(payload.reactions ?? (payload.reaction ? [payload.reaction] : undefined)),
+            replyTo: payload.threadId || payload.thread_id ? { messageId: String(payload.threadId ?? payload.thread_id) } : undefined,
+            source: {
+                chatName: readString(payload.chatId ?? payload.chat_id),
+                messageId: readString(payload.id),
+            },
             text: normalizeText(payload),
             raw: input,
             receivedAt: new Date().toISOString(),
@@ -76,6 +98,48 @@ export class GenericWebhookAdapter implements ChannelAdapter {
         });
         await assertPlatformResponse(response, "Webhook reply");
     }
+
+    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // Generic webhook delivery has no native typing signal.
+    }
+}
+
+function normalizeMessageAction(value: unknown): GatewayMessage["messageAction"] {
+    if (value === "edit" || value === "edited") return GatewayMessageAction.Edit;
+    if (value === "delete" || value === "deleted") return GatewayMessageAction.Delete;
+    if (value === "reaction") return GatewayMessageAction.Reaction;
+    return GatewayMessageAction.Create;
+}
+
+function normalizeMentions(input: GenericWebhookPayload["mentions"]): GatewayMessage["mentions"] {
+    if (!Array.isArray(input)) return undefined;
+    const mentions = input.map((mention) => ({
+        id: readString(mention.id),
+        kind: readString(mention.kind ?? mention.type),
+        displayName: readString(mention.name ?? mention.username),
+        text: readString(mention.text),
+    }));
+    return mentions.length > 0 ? mentions : undefined;
+}
+
+function normalizeReactions(input: GenericWebhookPayload["reactions"]): GatewayMessage["reactions"] {
+    if (!Array.isArray(input)) return undefined;
+    const reactions = input
+        .map((reaction) => {
+            if (typeof reaction === "string") return { key: reaction };
+            if (!isRecord(reaction)) return undefined;
+            const key = readString(reaction.key ?? reaction.name ?? reaction.emoji);
+            return key
+                ? {
+                      key,
+                      targetMessageId: readString(reaction.messageId),
+                      added: typeof reaction.added === "boolean" ? reaction.added : undefined,
+                      count: typeof reaction.count === "number" ? reaction.count : undefined,
+                  }
+                : undefined;
+        })
+        .filter((reaction): reaction is NonNullable<typeof reaction> => Boolean(reaction));
+    return reactions.length > 0 ? reactions : undefined;
 }
 
 function json(payload: unknown, status = 200): Response {
@@ -120,4 +184,14 @@ function normalizeChatType(value: unknown): GatewayRoute["chatType"] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
+}
+
+function inferWebhookMessageKind(payload: GenericWebhookPayload): GatewayMessage["messageKind"] {
+    if (payload.type === "command") {
+        return GatewayMessageKind.Command;
+    }
+    if (payload.type === "comment") {
+        return GatewayMessageKind.Comment;
+    }
+    return GatewayMessageKind.Text;
 }

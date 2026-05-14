@@ -5,23 +5,35 @@ export interface DispatchDeliveryOptions {
     deliver: (text: string, reply?: GatewayReply) => Promise<void>;
     dispatch: StreamingMessageDispatcher;
     message: GatewayMessage;
+    /**
+     * Best-effort platform typing indicator. This is intentionally adapter
+     * supplied because channel protocols differ and failures must not change
+     * the runtime reply semantics.
+     */
+    typing?: () => Promise<void>;
 }
 
 export async function dispatchWithDelivery(input: DispatchDeliveryOptions): Promise<GatewayReply> {
-    let delivered = false;
-    const reply = await input.dispatch(input.message, {
-        onTextDelta: async (text) => {
-            if (!text) {
-                return;
-            }
-            delivered = true;
-            await input.deliver(text);
-        },
-    });
-    if (!delivered && reply.text) {
+    // Channel adapters must not push model deltas as separate platform messages.
+    // They can emit a typing signal while the runtime works, then send one
+    // complete reply after the turn reaches its final text.
+    await emitTyping(input.typing);
+    const reply = await input.dispatch(input.message);
+    if (reply.text) {
         await input.deliver(reply.text, reply);
     }
     return reply;
+}
+
+async function emitTyping(typing: DispatchDeliveryOptions["typing"]): Promise<void> {
+    if (!typing) {
+        return;
+    }
+    try {
+        await typing();
+    } catch (error) {
+        console.error(JSON.stringify({ type: "gateway.typing.failed", error: String(error) }));
+    }
 }
 
 export function json(payload: unknown, status = 200): Response {

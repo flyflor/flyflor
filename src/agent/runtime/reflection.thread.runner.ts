@@ -4,7 +4,7 @@
  * 的纯解析/规范化工作，避免长 JSON 在主线程阻塞事件循环。
  */
 import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
-import type { ReflectionNormalizeSource } from "./reflection.normalize.ts";
+import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./reflection.normalize.ts";
 
 export interface ReflectionThreadWorkerLike {
     postMessage(data: unknown): void;
@@ -24,6 +24,8 @@ interface PendingEntry {
     resolve(result: CrystalCandidateInput[]): void;
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
+    raw: string;
+    source: ReflectionNormalizeSource;
 }
 
 const DEFAULT_TIMEOUT_MS = 2_000;
@@ -48,15 +50,15 @@ export class ReflectionThreadRunner {
                 const entry = this.pending.get(id);
                 if (!entry) return;
                 this.pending.delete(id);
-                reject(new Error(`Reflection normalization worker timed out after ${this.timeoutMs}ms`));
+                settleWithFallback(entry);
             }, this.timeoutMs);
-            this.pending.set(id, { resolve, reject, timer });
+            this.pending.set(id, { raw, source, resolve, reject, timer });
             try {
                 worker.postMessage({ kind: "normalize", id, raw, source });
             } catch (error) {
                 clearTimeout(timer);
                 this.pending.delete(id);
-                reject(error instanceof Error ? error : new Error(String(error)));
+                resolve(normalizeReflectionRaw(raw, source));
             }
         });
     }
@@ -90,14 +92,14 @@ export class ReflectionThreadRunner {
             if (data.ok && data.result) {
                 entry.resolve(data.result);
             } else {
-                entry.reject(new Error(data.error ?? "Reflection normalization worker failed"));
+                settleWithFallback(entry);
             }
         };
         worker.onerror = () => {
             for (const [id, entry] of this.pending) {
                 clearTimeout(entry.timer);
                 this.pending.delete(id);
-                entry.reject(new Error("Reflection normalization worker crashed"));
+                settleWithFallback(entry);
             }
             this.worker = null;
         };
@@ -111,4 +113,14 @@ function defaultWorkerFactory(): ReflectionThreadWorkerLike {
     // biome-ignore lint/suspicious/noExplicitAny: Bun Worker constructor types differ across runtimes
     const worker = new (globalThis as any).Worker(url.href, { type: "module" }) as ReflectionThreadWorkerLike;
     return worker;
+}
+
+function settleWithFallback(entry: PendingEntry): void {
+    try {
+        entry.resolve(normalizeReflectionRaw(entry.raw, entry.source));
+    } catch (error) {
+        // 主线程 fallback 只替代 worker transport；如果模型本身不是合法
+        // reflection JSON，仍要 reject，让 ReflectionWorker 记录失败事件。
+        entry.reject(error instanceof Error ? error : new Error(String(error)));
+    }
 }

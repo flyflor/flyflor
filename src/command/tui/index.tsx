@@ -15,14 +15,14 @@ import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 
 const THEME = {
-    bg: RGBA.fromInts(15, 15, 15),
-    fg: RGBA.fromInts(220, 220, 220),
-    fgMuted: RGBA.fromInts(120, 120, 120),
-    cyan: RGBA.fromInts(100, 200, 255),
-    green: RGBA.fromInts(100, 255, 150),
-    yellow: RGBA.fromInts(255, 200, 100),
-    red: RGBA.fromInts(255, 80, 80),
-    border: RGBA.fromInts(60, 60, 60),
+    bg: RGBA.fromInts(13, 19, 29),
+    fg: RGBA.fromInts(235, 244, 246),
+    fgMuted: RGBA.fromInts(132, 154, 169),
+    cyan: RGBA.fromInts(126, 232, 218),
+    green: RGBA.fromInts(123, 229, 180),
+    yellow: RGBA.fromInts(255, 203, 116),
+    red: RGBA.fromInts(255, 111, 127),
+    border: RGBA.fromInts(76, 106, 126),
 };
 
 type ViewTab = "overview" | "channels" | "blackboard";

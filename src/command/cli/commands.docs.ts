@@ -16,7 +16,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
         path: "chat",
         status: "✅",
         note:
-            "Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render as Markdown, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and blackboard text can be copied after selection, and the Docker binary keeps Solid reactive updates through `--conditions=browser`.",
+            "Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`.",
     },
     { path: "tui", status: "✅", note: "Uses the same TUI bootstrap as `chat --tui`." },
     { path: "gateway run", status: "✅", note: "Runs in the foreground." },
@@ -30,9 +30,9 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     { path: "gateway setup", status: "✅", note: "Interactive configuration." },
     { path: "model", status: "✅", note: "Lists or sets the default provider and model." },
     { path: "setup", status: "✅", note: "Initialization wizard." },
-    { path: "status", status: "✅", note: "Uses `renderStatus`." },
-    { path: "channels", status: "✅", note: "Lists channel adapter status." },
-    { path: "doctor", status: "✅", note: "`--fix` creates missing directories." },
+    { path: "status", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus`." },
+    { path: "channels", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode lists channel adapter status." },
+    { path: "doctor", status: "✅", note: "`--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward." },
     {
         path: "codename list/use/promote",
         status: "✅",
@@ -55,7 +55,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     {
         path: "config show/path/env-path",
         status: "✅",
-        note: "",
+        note: "TTY mode opens the CLI TUI navigator on Config; non-interactive mode prints the requested value.",
         covers: ["config show", "config path", "config env-path"],
     },
     {
@@ -78,7 +78,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     {
         path: "skills *",
         status: "✅",
-        note: "install / reset / usage / validate.",
+        note: "TTY mode opens the CLI TUI navigator on Skills; non-interactive mode supports install / reset / usage / validate.",
         covers: childCommandPaths("skills"),
     },
     {
@@ -87,23 +87,23 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
         note: "Enables or disables tool names per MCP server.",
         covers: ["tools enable", "tools disable"],
     },
-    { path: "mcp *", status: "✅", note: "list / show / validate / add / enable / disable / remove / tools / call.", covers: childCommandPaths("mcp") },
+    { path: "mcp *", status: "✅", note: "TTY mode opens the CLI TUI navigator on MCP; non-interactive mode supports list / show / validate / add / enable / disable / remove / tools / call.", covers: childCommandPaths("mcp") },
     {
         path: "plugins *",
         status: "✅",
-        note: "list / show / validate / add / enable / disable / remove / run.",
+        note: "TTY mode opens the CLI TUI navigator on Plugins; non-interactive mode supports list / show / validate / add / enable / disable / remove / run.",
         covers: childCommandPaths("plugins"),
     },
     {
         path: "dream status/run",
         status: "✅",
-        note: "Manually triggers a Dream pass.",
+        note: "TTY mode opens the CLI TUI navigator on Dream; non-interactive mode manually triggers a Dream pass.",
         covers: ["dream status", "dream run"],
     },
     {
         path: "sandbox list/allow/deny",
         status: "✅",
-        note: "Persistent sandbox allowlist management.",
+        note: "TTY mode opens the CLI TUI navigator on Sandbox; non-interactive mode manages persistent sandbox allowlists.",
         covers: ["sandbox list", "sandbox allow", "sandbox deny"],
     },
     { path: "update", status: "✅", note: "`--check` compares versions; `-y` runs `install.sh` to update." },
@@ -159,9 +159,9 @@ export function renderCliCommandsDoc(): string {
     lines.push("");
     lines.push("## Risks / Known Gaps");
     lines.push("");
-    lines.push("- The command surface is growing quickly, so the CLI docs are now generated from the command spec, but cross-document indexes and TODOs still need to converge to avoid drift.");
+    lines.push("- The command surface is growing quickly, so the CLI docs are generated from the command spec and checked for drift by `docs:check`.");
     lines.push("- Daemon mode already has helpers, but the cross-platform launchd/systemd install experience still needs real-world validation.");
-    lines.push("- The implementation status table now has spec coverage checks; we can also add checks that keep TODO and core docs in sync.");
+    lines.push("- The implementation status table has spec coverage checks; newly added command leaves must be documented before tests pass.");
     lines.push("");
     lines.push("## Related Tests");
     lines.push("");

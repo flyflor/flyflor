@@ -574,61 +574,6 @@ const CHANNEL_SETUP_SPECS: ChannelSetupSpec[] = [
         },
     },
     {
-        allowedChannel: Channel.WeChat,
-        configKey: "weixinIlink",
-        label: "WeChat / iLink",
-        intro: [
-            "1. Complete the iLink login/binding flow in the official client.",
-            "2. Copy the returned base URL and token into this wizard.",
-            "3. Flyflor uses the same iLink configuration for both WeChat aliases.",
-        ],
-        fields: [
-            {
-                key: "apiBaseUrl",
-                message: "iLink base URL",
-                placeholder: "https://ilinkai.weixin.qq.com",
-                required: true,
-                help: "The iLink service base URL returned by the binding flow.",
-            },
-            {
-                key: "token",
-                kind: "password",
-                message: "iLink token",
-                required: true,
-                help: "The iLink bot token or session token.",
-            },
-            {
-                key: "baseInfo",
-                message: "Base info JSON (optional)",
-                placeholder: '{"channel_version":"2.2.0"}',
-                parse: parseJsonField,
-                help: "Optional JSON object for iLink base_info; leave empty to use the default.",
-            },
-            {
-                key: "pollIntervalMs",
-                message: "Poll interval in ms",
-                defaultValue: 1500,
-                help: "How often Flyflor polls iLink for new messages.",
-                parse: parseNumberField,
-            },
-        ],
-        toConfig(values) {
-            const apiBaseUrl = asString(values.apiBaseUrl);
-            const token = asString(values.token);
-            if (!apiBaseUrl || !token) {
-                return undefined;
-            }
-            return {
-                apiBaseUrl,
-                token,
-                ...(asString(values.accountId) ? { accountId: asString(values.accountId) } : {}),
-                ...(asString(values.userId) ? { userId: asString(values.userId) } : {}),
-                ...(values.baseInfo !== undefined ? { baseInfo: values.baseInfo } : {}),
-                pollIntervalMs: typeof values.pollIntervalMs === "number" ? values.pollIntervalMs : 1500,
-            };
-        },
-    },
-    {
         allowedChannel: Channel.WeixinIlink,
         configKey: "weixinIlink",
         label: "Weixin iLink",
@@ -681,6 +626,32 @@ const CHANNEL_SETUP_SPECS: ChannelSetupSpec[] = [
                 ...(values.baseInfo !== undefined ? { baseInfo: values.baseInfo } : {}),
                 pollIntervalMs: typeof values.pollIntervalMs === "number" ? values.pollIntervalMs : 1500,
             };
+        },
+    },
+    {
+        allowedChannel: Channel.WeChat,
+        configKey: Channel.WeChat,
+        label: "WeChat official account",
+        intro: [
+            "1. Create a WeChat official account and copy the callback token.",
+            "2. Keep the callback in plaintext mode unless you also add encryption support.",
+            "3. This channel is separate from iLink and uses the official XML callback protocol.",
+        ],
+        fields: [
+            {
+                key: "token",
+                kind: "password",
+                message: "Callback token",
+                required: true,
+                help: "The token configured in the official account callback settings.",
+            },
+        ],
+        toConfig(values) {
+            const token = asString(values.token);
+            if (!token) {
+                return undefined;
+            }
+            return { token };
         },
     },
     {
@@ -1598,7 +1569,7 @@ async function configureChannel(spec: ChannelSetupSpec): Promise<GatewaySetup | 
     }
 
     const values: Record<string, unknown> = {};
-    if (spec.allowedChannel === Channel.WeChat || spec.allowedChannel === Channel.WeixinIlink) {
+    if (spec.allowedChannel === Channel.WeixinIlink) {
         const bind = await prompts.confirm({
             initialValue: true,
             message: "Use the iLink QR binding flow now?",
@@ -1642,7 +1613,7 @@ async function configureChannel(spec: ChannelSetupSpec): Promise<GatewaySetup | 
     if (spec.configKey) {
         setup.channels[spec.configKey] = channelConfig;
     }
-    if (spec.allowedChannel === Channel.WeChat || spec.allowedChannel === Channel.WeixinIlink) {
+    if (spec.allowedChannel === Channel.WeixinIlink) {
         setup.channels.weixinIlink = channelConfig;
     }
     spec.applySetup?.(setup, values, channelConfig);
@@ -1919,29 +1890,39 @@ function buildGatewayConfig(gateway: GatewaySetup | undefined, gatewayPort: numb
 function buildDefaultChannelConfigs(): Record<string, Record<string, unknown>> {
     return {
         api: {},
+        apiServer: {},
         bluebubbles: {},
         dingtalk: {},
         discord: {},
         email: {},
         feishu: {},
+        googleChat: {},
         homeassistant: {},
         imessage: {},
+        irc: {},
         line: {},
         mattermost: {},
         matrix: {},
+        msgraphWebhook: {},
         qq: {
+            sandbox: false,
+        },
+        qqbot: {
             sandbox: false,
         },
         signal: {},
         slack: {},
         sms: {},
+        teams: {},
         telegram: {},
         wechat: {},
         wecom: {},
+        wecomCallback: {},
         whatsapp: {},
         weixinIlink: {
             pollIntervalMs: 1500,
         },
+        yuanbao: {},
         zalo: {},
     };
 }

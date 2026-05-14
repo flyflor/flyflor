@@ -6,6 +6,15 @@ import {
     type ArchitectureLayer as ArchitectureLayerType,
     type ProviderScope as ProviderScopeType,
 } from "../../../protocol/contracts/index.ts";
+import {
+    Blackboard,
+    CoreComponent,
+    CrystalComponent,
+    Gateway,
+    Memory,
+    Runtime,
+    Sandbox,
+} from "../../components.ts";
 
 export interface ComponentCompatibility {
     protocol?: string;
@@ -51,12 +60,12 @@ export interface ComponentProviderMetadata {
 const componentMetadata = new WeakMap<Function, ComponentMetadata>();
 
 export function registerComponentMetadata(
-    kind: ComponentKindType,
+    kind: ComponentKindType | undefined,
     options?: ComponentDecoratorOptions | string,
     defaults: ComponentDecoratorOptions = {},
 ): ClassDecorator {
     return (target) => {
-        const metadata = normalizeComponentMetadata(kind, target.name, options, defaults);
+        const metadata = normalizeComponentMetadata(kind, target, options, defaults);
         componentMetadata.set(target, {
             ...metadata,
         });
@@ -72,23 +81,61 @@ export function isComponentKind(value: unknown): value is ComponentKindType {
 }
 
 function normalizeComponentMetadata(
-    kind: ComponentKindType,
-    fallbackName: string,
+    kind: ComponentKindType | undefined,
+    target: Function,
     options: ComponentDecoratorOptions | string | undefined,
     defaults: ComponentDecoratorOptions,
 ): ComponentMetadata {
     const normalized = typeof options === "string" ? { name: options } : (options ?? {});
-    const name = normalized.name ?? defaults.name ?? fallbackName;
-    const layer = normalized.layer ?? defaults.layer ?? ArchitectureLayer.Capability;
+    const inferredKind = inferComponentKind(target);
+    const inferredLayer = inferComponentLayer(target);
+    const name = normalized.name ?? defaults.name ?? inferComponentName(target);
+    const layer = normalized.layer ?? defaults.layer ?? inferredLayer;
     const provider = normalizeProviderMetadata(name, layer, normalized.provider ?? defaults.provider);
     return {
-        kind,
+        kind: kind ?? inferredKind,
         layer,
         name,
         compatibility: normalized.compatibility ?? defaults.compatibility,
         provider,
         tags: [...(defaults.tags ?? []), ...(normalized.tags ?? [])],
     };
+}
+
+function inferComponentKind(target: Function): ComponentKindType {
+    const prototype = target.prototype;
+    if (prototype instanceof Gateway) return ComponentKind.Gateway;
+    if (prototype instanceof Blackboard) return ComponentKind.Blackboard;
+    if (prototype instanceof Runtime) return ComponentKind.Runtime;
+    if (prototype instanceof Memory) return ComponentKind.Memory;
+    if (prototype instanceof Sandbox) return ComponentKind.Sandbox;
+    if (prototype instanceof CrystalComponent) return ComponentKind.Crystal;
+    if (prototype instanceof CoreComponent) return ComponentKind.Component;
+    return ComponentKind.Component;
+}
+
+function inferComponentLayer(target: Function): ArchitectureLayerType {
+    const prototype = target.prototype;
+    if (prototype instanceof Runtime) return ArchitectureLayer.Runtime;
+    if (
+        prototype instanceof Gateway ||
+        prototype instanceof Blackboard ||
+        prototype instanceof Memory ||
+        prototype instanceof Sandbox
+    ) {
+        return ArchitectureLayer.Control;
+    }
+    return ArchitectureLayer.Capability;
+}
+
+function inferComponentName(target: Function): string {
+    return target.name
+        .replace(/Module$/u, "")
+        .replace(/Component$/u, "")
+        .replace(/Service$/u, "")
+        .replace(/Store$/u, "")
+        .replace(/([a-z0-9])([A-Z])/gu, "$1-$2")
+        .toLowerCase();
 }
 
 function normalizeProviderMetadata(

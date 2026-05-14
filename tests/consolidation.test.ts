@@ -136,14 +136,16 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         expect(d.summary).toBe("user is allergic to peanuts");
     });
 
-    test("throws on malformed output", () => {
-        expect(() => parseConsolidationDecision("not json")).toThrow("JSON object");
+    test("malformed output safely falls back to discard", () => {
+        const d = parseConsolidationDecision("not json");
+        expect(d.decision).toBe(ConsolidationDecisionKind.Discard);
+        expect(d.confidence).toBe(0);
     });
 
-    test("throws on unknown decision string", () => {
-        expect(() => parseConsolidationDecision(JSON.stringify({ decision: "frobnicate", confidence: 1 }))).toThrow(
-            "unknown decision",
-        );
+    test("unknown decision string safely falls back to discard", () => {
+        const d = parseConsolidationDecision(JSON.stringify({ decision: "frobnicate", confidence: 1 }));
+        expect(d.decision).toBe(ConsolidationDecisionKind.Discard);
+        expect(d.confidence).toBe(0);
     });
 
     test("filters non-string symbols", () => {

@@ -100,7 +100,7 @@ flowchart TB
 
 | Command | Status | Note |
 | --- | --- | --- |
-| `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render as Markdown, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and blackboard text can be copied after selection, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
+| `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
 | `flyflor tui` | ✅ | Uses the same TUI bootstrap as `chat --tui`. |
 | `flyflor gateway run` | ✅ | Runs in the foreground. |
 | `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
@@ -108,23 +108,23 @@ flowchart TB
 | `flyflor gateway setup` | ✅ | Interactive configuration. |
 | `flyflor model` | ✅ | Lists or sets the default provider and model. |
 | `flyflor setup` | ✅ | Initialization wizard. |
-| `flyflor status` | ✅ | Uses `renderStatus`. |
-| `flyflor channels` | ✅ | Lists channel adapter status. |
-| `flyflor doctor` | ✅ | `--fix` creates missing directories. |
+| `flyflor status` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus`. |
+| `flyflor channels` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode lists channel adapter status. |
+| `flyflor doctor` | ✅ | `--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward. |
 | `flyflor codename list/use/promote` | ✅ | Brain.db codename anchors and project promotion. |
 | `flyflor inbox list` | ✅ | Visualizes inbox atoms by codename bucket. |
 | `flyflor ghost list/show/resume/drop/pin` | ✅ | Ghost Context management. |
 | `flyflor identity list/revert` | ✅ | Audit and revert user-authored identity entries. |
-| `flyflor config show/path/env-path` | ✅ |  |
+| `flyflor config show/path/env-path` | ✅ | TTY mode opens the CLI TUI navigator on Config; non-interactive mode prints the requested value. |
 | `flyflor memory status/reset/retrospective` | ✅ | Reset supports clearing allowlisted files; retrospective shows consolidation audit logs. |
 | `flyflor blackboard` | ✅ | Opens the blackboard browser TUI in a terminal: it lists recent turns by default, supports `/` search, up/down selection, Enter to open details, and Esc/q to go back or quit. |
 | `flyflor blackboard list/show` | ✅ | Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted debugging. |
-| `flyflor skills *` | ✅ | install / reset / usage / validate. |
+| `flyflor skills *` | ✅ | TTY mode opens the CLI TUI navigator on Skills; non-interactive mode supports install / reset / usage / validate. |
 | `flyflor tools enable/disable` | ✅ | Enables or disables tool names per MCP server. |
-| `flyflor mcp *` | ✅ | list / show / validate / add / enable / disable / remove / tools / call. |
-| `flyflor plugins *` | ✅ | list / show / validate / add / enable / disable / remove / run. |
-| `flyflor dream status/run` | ✅ | Manually triggers a Dream pass. |
-| `flyflor sandbox list/allow/deny` | ✅ | Persistent sandbox allowlist management. |
+| `flyflor mcp *` | ✅ | TTY mode opens the CLI TUI navigator on MCP; non-interactive mode supports list / show / validate / add / enable / disable / remove / tools / call. |
+| `flyflor plugins *` | ✅ | TTY mode opens the CLI TUI navigator on Plugins; non-interactive mode supports list / show / validate / add / enable / disable / remove / run. |
+| `flyflor dream status/run` | ✅ | TTY mode opens the CLI TUI navigator on Dream; non-interactive mode manually triggers a Dream pass. |
+| `flyflor sandbox list/allow/deny` | ✅ | TTY mode opens the CLI TUI navigator on Sandbox; non-interactive mode manages persistent sandbox allowlists. |
 | `flyflor update` | ✅ | `--check` compares versions; `-y` runs `install.sh` to update. |
 | `flyflor version` | ✅ |  |
 
@@ -136,9 +136,9 @@ flowchart TB
 
 ## Risks / Known Gaps
 
-- The command surface is growing quickly, so the CLI docs are now generated from the command spec, but cross-document indexes and TODOs still need to converge to avoid drift.
+- The command surface is growing quickly, so the CLI docs are generated from the command spec and checked for drift by `docs:check`.
 - Daemon mode already has helpers, but the cross-platform launchd/systemd install experience still needs real-world validation.
-- The implementation status table now has spec coverage checks; we can also add checks that keep TODO and core docs in sync.
+- The implementation status table has spec coverage checks; newly added command leaves must be documented before tests pass.
 
 ## Related Tests
 

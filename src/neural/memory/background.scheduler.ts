@@ -164,7 +164,11 @@ export class BackgroundScheduler {
         const existing = this.idleTimers.get(userId);
         if (existing !== undefined) {
             clearTimeout(existing);
+            this.idleTimers.delete(userId);
         }
+        // Dream 是全局串行维护任务；已有 pass 在跑时只记录 active user，
+        // 不再安排新的 idle one-shot，避免慢 pass 结束边界上补打一轮重复 dream。
+        if (this.dreamBusy) return;
         const timer = setTimeout(() => {
             this.idleTimers.delete(userId);
             void this.runDreamOnce(this.opts.dreamBatchSize, userId);

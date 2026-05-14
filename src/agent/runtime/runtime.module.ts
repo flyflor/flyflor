@@ -20,7 +20,7 @@ import {
     ModelRole,
 } from "../../protocol/contracts/index.ts";
 import { Runtime as RuntimeBoundary } from "../components.ts";
-import { Module, Provide } from "../di/decorators/index.ts";
+import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions, renderMemoryActionPrompt } from "../../neural/memory/actions.ts";
 import { parseAgentAsk } from "../../neural/memory/ask.ts";
@@ -146,7 +146,6 @@ interface GeneratedTurn {
 }
 
 @Module({ name: "runtime", tags: ["flyflor", "boundary"] })
-@Provide({ kind: ComponentKind.Runtime, layer: ArchitectureLayer.Runtime, name: "runtime", provider: true })
 export class RuntimeModule extends RuntimeBoundary {
     private readonly memory: MemoryModule;
     /** Shared embedding provider — compute once per turn, reused by memory recall + episode write. */
@@ -276,6 +275,7 @@ export class RuntimeModule extends RuntimeBoundary {
         context: RuntimeContext,
         options: RuntimeStreamOptions = {},
     ): Promise<GatewayReply> {
+        await this.warmup();
         await this.inflight.markStart({
             requestId: context.requestId,
             userId: message.user.id,

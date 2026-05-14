@@ -257,7 +257,7 @@ interface GatewayReply {
 - `config.memory.embedding.dimensions` 决定 embedding 向量长度；`LocalHashEmbeddingProvider` 不联网。
 - `config.metrics.enabled` 关闭时所有 perf 事件不发布。
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一文件，后续可继续抽 service。
 - `brain.db` 已成为 prompt recall / turn event write 权威；后续改动必须避免把 legacy journal 重新接回 prompt path。

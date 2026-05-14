@@ -118,7 +118,7 @@ sequenceDiagram
 | `memory.crystal.gem.deprecated` | 矛盾归档 |
 | `memory.reflection.failed` | LLM 抽取失败 |
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - Reflection 已拆为独立 `ReflectionWorker`；Runtime 只投递异步任务，worker 自己处理抽取、规范化与失败事件。
 - 旧版 SurrealDB 表名 `crystal_skill / skill_snapshot` 的迁移脚本已落地为 `scripts/surreal.migrate.ts`；脚本幂等写入 `gem / gem_snapshot`，保留旧表供人工复核后清理。

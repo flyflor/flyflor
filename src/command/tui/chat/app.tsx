@@ -9,11 +9,12 @@ import {
     MarkdownRenderable,
     TextRenderable,
     ScrollBoxRenderable,
-    SyntaxStyle,
     TextareaRenderable,
     type CliRenderer,
+    type Renderable,
     RGBA,
     TextAttributes,
+    SyntaxStyle,
 } from "@opentui/core";
 import { createSignal, createEffect, createRoot, batch } from "solid-js";
 import {
@@ -34,64 +35,95 @@ import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
 const PHASE_DEF: Record<Phase, { label: string; color: RGBA; done: string; frames: string[] }> = {
     idle: {
         label: "ready",
-        color: RGBA.fromInts(100, 200, 255),
+        color: RGBA.fromInts(126, 232, 218),
         done: "▪",
         frames: ["▪"],
     },
     thinking: {
         label: "thinking",
-        color: RGBA.fromInts(255, 200, 100),
+        color: RGBA.fromInts(255, 203, 116),
         done: "●",
         frames: ["◐", "◓", "◑", "◒"],
     },
     blackboard: {
         label: "blackboard",
-        color: RGBA.fromInts(180, 140, 255),
+        color: RGBA.fromInts(188, 171, 255),
         done: "●",
         frames: ["◐", "◓", "◑", "◒"],
     },
     mcp: {
         label: "mcp",
-        color: RGBA.fromInts(100, 255, 150),
+        color: RGBA.fromInts(123, 229, 180),
         done: "●",
         frames: ["◐", "◓", "◑", "◒"],
     },
     skill: {
         label: "skill",
-        color: RGBA.fromInts(255, 150, 100),
+        color: RGBA.fromInts(255, 151, 190),
         done: "●",
         frames: ["◐", "◓", "◑", "◒"],
     },
     streaming: {
         label: "streaming",
-        color: RGBA.fromInts(100, 200, 255),
+        color: RGBA.fromInts(126, 232, 218),
         done: "●",
         frames: ["◐", "◓", "◑", "◒"],
     },
 };
 
 const THEME = {
-    bg: RGBA.fromInts(15, 15, 15),
-    fg: RGBA.fromInts(220, 220, 220),
-    fgMuted: RGBA.fromInts(120, 120, 120),
-    user: RGBA.fromInts(100, 200, 255),
-    assistant: RGBA.fromInts(220, 220, 220),
-    error: RGBA.fromInts(255, 80, 80),
-    border: RGBA.fromInts(60, 60, 60),
-    header: RGBA.fromInts(100, 200, 255),
+    bg: RGBA.fromInts(13, 19, 29),
+    fg: RGBA.fromInts(235, 244, 246),
+    fgMuted: RGBA.fromInts(132, 154, 169),
+    user: RGBA.fromInts(98, 207, 255),
+    assistant: RGBA.fromInts(241, 248, 248),
+    error: RGBA.fromInts(255, 111, 127),
+    border: RGBA.fromInts(76, 106, 126),
+    header: RGBA.fromInts(126, 232, 218),
+    pink: RGBA.fromInts(255, 151, 190),
+    purple: RGBA.fromInts(188, 171, 255),
+    violetBg: RGBA.fromInts(24, 34, 47),
 };
 
-const DEFAULT_STATUS_TEXT = "Enter to send · Ctrl+C to exit · /clear to reset";
+const DEFAULT_STATUS_TEXT = "Enter send · / commands · PageUp/Down scroll · End bottom · Input Ctrl+C clears · Cmd/Ctrl+C copies selection";
 const HISTORY_BATCH_SIZE = 20;
+const SIDE_PANEL_MIN_WIDTH = 24;
+const SIDE_PANEL_MAX_WIDTH = 46;
+
+const CHAT_COMMANDS = [
+    { name: "/history", detail: "open history" },
+    { name: "/bottom", detail: "jump to latest" },
+    { name: "/thinking", detail: "show process panel" },
+    { name: "/blackboard", detail: "show blackboard panel" },
+    { name: "/clear", detail: "clear screen" },
+    { name: "/exit", detail: "quit" },
+] as const;
 
 interface MsgRenderable {
     id: string;
     box: BoxRenderable;
-    content: string;
-    contentText: TextRenderable | MarkdownRenderable;
+    contentBox: BoxRenderable;
+    contentRenderable: TextRenderable | MarkdownRenderable;
+    contentKey: string;
     extrasKey: string;
     extraBox?: BoxRenderable;
 }
+
+interface PanelLine {
+    attributes?: number;
+    bg?: RGBA;
+    content: string;
+    fg: RGBA;
+}
+
+type SidePanelMode = "blackboard" | "thinking";
+type CommandMenuMode = SidePanelMode | null;
+type SelectionScope = "chat" | "side" | null;
+
+type SelectionScopedRenderer = CliRenderer & {
+    clearSelection: () => void;
+    startSelection: (renderable: Renderable, x: number, y: number) => void;
+};
 
 export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions): () => void {
     return createRoot((disposeSolid) => {
@@ -103,24 +135,37 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const [processing, setProcessing] = createSignal(false);
         const [error, setError] = createSignal<string | null>(null);
         const [frameTick, setFrameTick] = createSignal(0);
+        const [inputText, setInputText] = createSignal("");
         const [statusNotice, setStatusNotice] = createSignal<string | null>(null);
         const [blackboardTurns, setBlackboardTurns] = createSignal<Record<string, BlackboardTurn>>(
             {},
             { equals: false },
         );
+        const [activeReplyId, setActiveReplyId] = createSignal<string | null>(null);
+        const [focusedBlackboardTurnId, setFocusedBlackboardTurnId] = createSignal<string | null>(null);
+        const [selectedQuestionIndex, setSelectedQuestionIndex] = createSignal<number | null>(null);
+        const [sidePanelMode, setSidePanelMode] = createSignal<SidePanelMode>("thinking");
+        const [commandMenuMode, setCommandMenuMode] = createSignal<CommandMenuMode>(null);
 
         let currentTurnId: string | null = null;
         let inputRef: TextareaRenderable | undefined;
-        let exitArmed = false;
         let destroyed = false;
+        // Shared markdown syntax style for assistant replies; destroyed with the chat root.
+        const markdownSyntaxStyle = createMarkdownSyntaxStyle();
         let statusNoticeTimer: ReturnType<typeof setTimeout> | undefined;
-        const markdownSyntax = SyntaxStyle.create();
         const messageRenderables: MsgRenderable[] = [];
+        const sideLineRenderables: TextRenderable[] = [];
         const pendingBlackboardRefreshes = new Set<string>();
         const loadedHistoryEventIds = new Set<string>();
+        let historyOpen = false;
         let historyExhausted = false;
         let historyLoading = false;
         let oldestHistoryTs: number | undefined;
+        const selectionRenderer = renderer as SelectionScopedRenderer;
+        const originalStartSelection = selectionRenderer.startSelection?.bind(renderer);
+        const originalClearSelection = selectionRenderer.clearSelection.bind(renderer);
+        let selectionScope: SelectionScope = null;
+        let suppressSelectionReset = false;
 
         // ── 动画帧 ────────────────────────────────────────────
         const animTimer = setInterval(() => {
@@ -213,6 +258,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (text.trim().length === 0) return false;
             try {
                 copyTextToTerminalClipboard(text);
+                renderer.clearSelection();
                 showStatusNotice(`Copied ${text.length} chars`);
                 return true;
             } catch (cause) {
@@ -223,6 +269,30 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             }
         }
 
+        function createMarkdownSyntaxStyle(): SyntaxStyle {
+            return SyntaxStyle.fromTheme([
+                { scope: ["default"], style: { foreground: THEME.assistant } },
+                { scope: ["markup.heading"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.heading.1"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.heading.2"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.heading.3"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.heading.4"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.heading.5"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.heading.6"], style: { foreground: THEME.header, bold: true } },
+                { scope: ["markup.bold", "markup.strong"], style: { foreground: THEME.assistant, bold: true } },
+                { scope: ["markup.italic"], style: { foreground: THEME.purple, italic: true } },
+                { scope: ["markup.list"], style: { foreground: THEME.pink } },
+                { scope: ["markup.quote"], style: { foreground: THEME.fgMuted, italic: true } },
+                { scope: ["markup.raw", "markup.raw.block"], style: { foreground: THEME.user } },
+                { scope: ["markup.raw.inline"], style: { foreground: THEME.user, background: THEME.violetBg } },
+                { scope: ["markup.link"], style: { foreground: THEME.user, underline: true } },
+                { scope: ["markup.link.label"], style: { foreground: THEME.header, underline: true } },
+                { scope: ["markup.link.url"], style: { foreground: THEME.user, underline: true } },
+                { scope: ["conceal"], style: { foreground: THEME.fgMuted } },
+                { scope: ["label", "spell", "nospell"], style: { foreground: THEME.assistant } },
+            ]);
+        }
+
         function stringValue(value: unknown): string | undefined {
             return typeof value === "string" ? value : undefined;
         }
@@ -231,6 +301,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const turnId = stringValue(payload?.turnId);
             if (!turnId) return;
 
+            setFocusedBlackboardTurnId(turnId);
             setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (!last || last.id !== currentTurnId || last.role !== "assistant") return prev;
@@ -304,6 +375,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         }
 
         async function loadOlderHistory(reason: "initial" | "scroll"): Promise<void> {
+            if (!historyOpen) return;
             if (historyLoading || historyExhausted) return;
             historyLoading = true;
             const previousHeight = scrollBox.scrollHeight;
@@ -329,13 +401,19 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     return;
                 }
                 setMessages((prev) => [...nextMessages, ...prev]);
+                if (reason === "initial") {
+                    showStatusNotice(`Loaded ${nextMessages.length / 2} history turns`);
+                }
                 queueMicrotask(() => {
                     if (reason === "scroll") {
                         const delta = scrollBox.scrollHeight - previousHeight;
                         scrollBox.scrollTop = previousTop + Math.max(0, delta);
                         return;
                     }
-                    scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: Math.max(0, scrollBox.scrollHeight - scrollBox.viewport.height) });
+                    scrollBox.scrollTo({
+                        x: scrollBox.scrollLeft,
+                        y: Math.max(0, scrollBox.scrollHeight - scrollBox.viewport.height),
+                    });
                 });
             } catch (cause) {
                 const messageText = describeError(cause);
@@ -365,6 +443,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             });
 
             currentTurnId = turnId;
+            setActiveReplyId(turnId);
 
             const context: RuntimeContext = {
                 now: startedAt,
@@ -401,6 +480,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 const askMeta = readAskMeta(metadata);
                 const blackboardMeta = readBlackboardMeta(metadata);
                 if (blackboardMeta?.turnId) {
+                    setFocusedBlackboardTurnId(blackboardMeta.turnId);
                     void refreshBlackboardTurn(blackboardMeta.turnId);
                 }
 
@@ -448,6 +528,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 });
             } finally {
                 currentTurnId = null;
+                setActiveReplyId(null);
                 batch(() => {
                     setProcessing(false);
                     setPhase("idle");
@@ -463,17 +544,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             }
             if (inputRef && inputRef.plainText.length > 0) {
                 inputRef.clear();
-                setError("Input cleared. Press Ctrl+C again to exit.");
-                exitArmed = true;
+                setError("Input cleared. Type /exit to quit.");
                 return;
             }
-            if (!exitArmed) {
-                setError("Press Ctrl+C again to exit Flyflor chat.");
-                exitArmed = true;
-                return;
-            }
-            destroyed = true;
-            renderer.destroy();
+            setError("Type /exit to quit Flyflor chat.");
         }
 
         // ── 提交处理 ──────────────────────────────────────────
@@ -481,23 +555,95 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (!inputRef) return;
             const text = inputRef.plainText.trim();
             if (!text) return;
+            const command = commandForText(text);
             if (text === "/clear" || text === "/reset") {
                 batch(() => {
                     setMessages([]);
                     setError(null);
+                    setCommandMenuMode(null);
+                    historyOpen = false;
+                    historyExhausted = false;
+                    historyLoading = false;
+                    oldestHistoryTs = undefined;
+                    loadedHistoryEventIds.clear();
+                    setBlackboardTurns({});
+                    setFocusedBlackboardTurnId(null);
                 });
                 inputRef.clear();
                 return;
             }
-            if (text === "/exit" || text === "/quit") {
+            if (command === "/history") {
+                inputRef.clear();
+                historyOpen = true;
+                historyExhausted = false;
+                historyLoading = false;
+                oldestHistoryTs = undefined;
+                loadedHistoryEventIds.clear();
+                showStatusNotice("History mode opened");
+                void loadOlderHistory("initial");
+                return;
+            }
+            if (command === "/bottom") {
+                inputRef.clear();
+                scrollToBottom();
+                showStatusNotice("Jumped to latest");
+                return;
+            }
+            if (command === "/thinking") {
+                inputRef.clear();
+                openQuestionMenu("thinking", text);
+                return;
+            }
+            if (command === "/blackboard") {
+                inputRef.clear();
+                openQuestionMenu("blackboard", text);
+                return;
+            }
+            if (command === "/exit" || command === "/quit") {
                 destroyed = true;
                 renderer.destroy();
                 return;
             }
+            if (text.startsWith("/")) {
+                setError(
+                    `Unknown command: ${text}. Press Tab to complete or use /history, /bottom, /thinking, /blackboard.`,
+                );
+                return;
+            }
             inputRef.clear();
-            exitArmed = false;
             setError(null);
             void sendMessage(text);
+        }
+
+        function commandForText(text: string): string {
+            return text.split(/\s+/u)[0] ?? text;
+        }
+
+        function selectQuestionFromCommand(text: string): void {
+            const rawIndex = text.split(/\s+/u)[1];
+            if (!rawIndex) return;
+            const index = Number.parseInt(rawIndex, 10);
+            if (!Number.isFinite(index)) return;
+            setSelectedQuestionIndex(clamp(index - 1, 0, Math.max(0, turnPairs().length - 1)));
+        }
+
+        function openQuestionMenu(mode: SidePanelMode, text: string): void {
+            setSidePanelMode(mode);
+            const hasExplicitSelection = text.trim().split(/\s+/u).length > 1;
+            selectQuestionFromCommand(text);
+            const pairs = turnPairs();
+            if (pairs.length === 0) {
+                setCommandMenuMode(null);
+                showStatusNotice(`/${mode} has no sent questions yet`);
+                return;
+            }
+            if (selectedQuestionIndex() === null) {
+                setSelectedQuestionIndex(pairs.length - 1);
+            }
+            setCommandMenuMode(hasExplicitSelection ? null : mode);
+            showStatusNotice(
+                hasExplicitSelection ? `Showing /${mode}` : `/${mode}: Up/Down choose a question, Enter open`,
+            );
         }
 
         // ── 命令式 UI 树 ──────────────────────────────────────
@@ -538,17 +684,54 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         errorText.visible = false;
         mainBox.add(errorText);
 
-        // Messages scroll box
+        const contentRow = new BoxRenderable(renderer, {
+            flexDirection: "row",
+            flexGrow: 1,
+            flexShrink: 1,
+        });
+        mainBox.add(contentRow);
+
+        const chatPane = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            flexGrow: 1,
+            flexShrink: 1,
+        });
+        contentRow.add(chatPane);
+
+        const messagesRow = new BoxRenderable(renderer, {
+            flexDirection: "row",
+            flexGrow: 1,
+            flexShrink: 1,
+            minHeight: 1,
+        });
+        chatPane.add(messagesRow);
+
+        // Messages viewport owns scroll state; OpenTUI's bar stays coupled to viewport geometry.
         const scrollBox = new ScrollBoxRenderable(renderer, {
+            contentOptions: {
+                paddingRight: 1,
+            },
             flexGrow: 1,
             flexShrink: 1,
             flexDirection: "column",
             paddingLeft: 1,
-            paddingRight: 1,
+            paddingRight: 0,
             stickyScroll: true,
             stickyStart: "bottom",
+            horizontalScrollbarOptions: { height: 0, visible: false },
+            verticalScrollbarOptions: {
+                visible: true,
+                width: 2,
+                showArrows: false,
+                trackOptions: {
+                    backgroundColor: THEME.violetBg,
+                    foregroundColor: THEME.pink,
+                },
+            },
         });
-        mainBox.add(scrollBox);
+        scrollBox.horizontalScrollBar.visible = false;
+        scrollBox.horizontalScrollBar.height = 0;
+        messagesRow.add(scrollBox);
 
         // Input area
         const inputBox = new BoxRenderable(renderer, {
@@ -556,6 +739,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             border: ["top"],
             borderColor: THEME.border,
             flexShrink: 0,
+            paddingLeft: 2,
+            paddingRight: 1,
+            paddingTop: 1,
         });
         const input = new TextareaRenderable(renderer, {
             placeholder: "Ask anything...",
@@ -570,6 +756,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             minHeight: 1,
             maxHeight: 6,
             wrapMode: "word",
+            onContentChange: () => {
+                setInputText(input.plainText);
+            },
             keyBindings: [
                 { name: "return", action: "submit" },
                 { name: "linefeed", action: "submit" },
@@ -584,20 +773,106 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
         // Status bar
         const statusBox = new BoxRenderable(renderer, {
+            backgroundColor: THEME.violetBg,
+            height: 1,
             paddingLeft: 1,
             paddingRight: 1,
-            paddingBottom: 1,
         });
         const statusText = new TextRenderable(renderer, {
             content: DEFAULT_STATUS_TEXT,
             fg: THEME.fgMuted,
-            selectable: true,
+            selectable: false,
+            truncate: true,
+            width: "100%",
         });
         statusBox.add(statusText);
         inputBox.add(statusBox);
-        mainBox.add(inputBox);
+        chatPane.add(inputBox);
+
+        // 右侧栏只展示结构化运行态和黑板事件，不从回复文本推断“思考过程”。
+        const sidePanel = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            border: ["left"],
+            borderColor: THEME.border,
+            flexShrink: 0,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: 1,
+            paddingBottom: 1,
+            width: rightPanelWidth(renderer.width),
+        });
+        const sideTitle = new TextRenderable(renderer, {
+            content: "Thinking / Blackboard",
+            fg: THEME.header,
+            attributes: TextAttributes.BOLD,
+            selectable: true,
+        });
+        const sideScrollBox = new ScrollBoxRenderable(renderer, {
+            flexDirection: "column",
+            flexGrow: 1,
+            flexShrink: 1,
+            horizontalScrollbarOptions: { height: 0, visible: false },
+            verticalScrollbarOptions: { visible: false, width: 0 },
+        });
+        sideScrollBox.horizontalScrollBar.visible = false;
+        sideScrollBox.horizontalScrollBar.height = 0;
+        sideScrollBox.verticalScrollBar.visible = false;
+        sideScrollBox.verticalScrollBar.width = 0;
+        sidePanel.add(sideTitle);
+        sidePanel.add(sideScrollBox);
+        contentRow.add(sidePanel);
 
         root.add(mainBox);
+
+        function isWithin(renderable: Renderable | undefined, container: Renderable): boolean {
+            let current: Renderable | null | undefined = renderable;
+            while (current) {
+                if (current === container) return true;
+                current = current.parent;
+            }
+            return false;
+        }
+
+        function setSelectableDeep(renderable: Renderable, selectable: boolean): void {
+            renderable.selectable = selectable;
+            for (const child of renderable.getChildren()) {
+                setSelectableDeep(child, selectable);
+            }
+        }
+
+        function applySelectionScope(scope: SelectionScope): void {
+            selectionScope = scope;
+            setSelectableDeep(scrollBox.content, scope !== "side");
+            setSelectableDeep(sideScrollBox.content, scope !== "chat");
+            sideTitle.selectable = scope !== "chat";
+        }
+
+        function scopeForRenderable(renderable: Renderable | undefined): SelectionScope {
+            if (isWithin(renderable, sidePanel)) return "side";
+            if (isWithin(renderable, scrollBox.content)) return "chat";
+            return null;
+        }
+
+        if (originalStartSelection) {
+            // OpenTUI expands a drag selection to parent containers when the pointer leaves
+            // the starting renderable. Locking the non-origin panel out before selection starts
+            // keeps copied text inside the panel where the drag began.
+            selectionRenderer.startSelection = (renderable, x, y) => {
+                applySelectionScope(scopeForRenderable(renderable));
+                suppressSelectionReset = true;
+                try {
+                    originalStartSelection(renderable, x, y);
+                } finally {
+                    suppressSelectionReset = false;
+                }
+            };
+        }
+        selectionRenderer.clearSelection = () => {
+            originalClearSelection();
+            if (!suppressSelectionReset && selectionScope !== null) {
+                applySelectionScope(null);
+            }
+        };
 
         // Wire input events directly
         input.focus();
@@ -605,9 +880,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         input.showCursor = true;
         input.cursorColor = THEME.fg;
         input.cursorStyle = { style: "line", blinking: true };
-        void loadOlderHistory("initial");
+        const resizeHandler = () => {
+            mainBox.width = renderer.width;
+            mainBox.height = renderer.height;
+            sidePanel.width = rightPanelWidth(renderer.width);
+        };
+        renderer.on(CliRenderEvents.RESIZE, resizeHandler);
         historyPollTimer = setInterval(() => {
-            if (destroyed || historyLoading || historyExhausted) return;
+            if (destroyed) return;
+            if (!historyOpen || historyLoading || historyExhausted) return;
             if (scrollBox.scrollTop <= 1 && messages().length > 0) {
                 void loadOlderHistory("scroll");
             }
@@ -623,23 +904,70 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             stopPropagation?: () => void;
             sequence?: string;
         }) => {
+            const isMac = process.platform === "darwin";
             const name = event.name ?? "";
-            if (event.ctrl && name === "c" && renderer.hasSelection) {
+            if (event.ctrl && name === "c" && inputRef?.focused) {
+                handleExit();
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
+            }
+            if (((isMac && event.meta) || (!isMac && event.ctrl)) && name === "c" && !inputRef?.focused) {
                 if (copySelectionToClipboard()) {
                     event.preventDefault?.();
                     event.stopPropagation?.();
+                    return;
                 }
+                event.preventDefault?.();
+                event.stopPropagation?.();
                 return;
             }
             if ((event.ctrl && event.shift && name === "c") || (event.ctrl && name === "y")) {
                 if (copySelectionToClipboard()) {
                     event.preventDefault?.();
                     event.stopPropagation?.();
+                    return;
                 }
+            }
+            if (handleQuestionMenuKey(name, event.sequence)) {
+                event.preventDefault?.();
+                event.stopPropagation?.();
                 return;
             }
-            if (event.ctrl && event.name === "c") {
-                handleExit();
+            if (name === "tab" && completeCommandInput()) {
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
+            }
+            if (name === "pageup" || event.sequence === "\u001b[5~") {
+                scrollMessages(-1);
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
+            }
+            if (name === "pagedown" || event.sequence === "\u001b[6~") {
+                scrollMessages(1);
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
+            }
+            if (name === "home" || event.sequence === "\u001b[H" || event.sequence === "\u001b[1~") {
+                scrollBox.scrollTop = 0;
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
+            }
+            if (name === "end" || event.sequence === "\u001b[F" || event.sequence === "\u001b[4~") {
+                scrollToBottom();
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
+            }
+            if (event.ctrl && name === "b") {
+                setSidePanelMode(sidePanelMode() === "blackboard" ? "thinking" : "blackboard");
+                setCommandMenuMode(null);
+                event.preventDefault?.();
+                event.stopPropagation?.();
                 return;
             }
             if (
@@ -656,6 +984,73 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             }
         };
         renderer.keyInput.on("keypress", keyHandler);
+
+        function handleQuestionMenuKey(name: string, sequence?: string): boolean {
+            if (!commandMenuMode()) return false;
+            const pairs = turnPairs();
+            if (pairs.length === 0) {
+                setCommandMenuMode(null);
+                return false;
+            }
+            const selected = selectedQuestionIndex() ?? pairs.length - 1;
+            if (name === "up" || name === "k" || sequence === "\u001b[A") {
+                setSelectedQuestionIndex(clamp(selected - 1, 0, pairs.length - 1));
+                return true;
+            }
+            if (name === "down" || name === "j" || sequence === "\u001b[B") {
+                setSelectedQuestionIndex(clamp(selected + 1, 0, pairs.length - 1));
+                return true;
+            }
+            if (
+                name === "return" ||
+                name === "enter" ||
+                name === "linefeed" ||
+                name === "right" ||
+                name === "o" ||
+                sequence === "\n" ||
+                sequence === "\r" ||
+                sequence === "\u001b[C"
+            ) {
+                const mode = commandMenuMode();
+                setCommandMenuMode(null);
+                if (mode) showStatusNotice(`Showing /${mode} for selected question`);
+                return true;
+            }
+            if (name === "escape" || sequence === "\u001b") {
+                setCommandMenuMode(null);
+                showStatusNotice("Question menu closed");
+                return true;
+            }
+            return false;
+        }
+
+        function scrollMessages(direction: -1 | 1): void {
+            const page = Math.max(4, scrollBox.viewport.height - 2);
+            scrollBox.scrollTop = Math.max(0, scrollBox.scrollTop + direction * page);
+        }
+
+        function scrollToBottom(): void {
+            scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: scrollBox.scrollHeight });
+        }
+
+        function completeCommandInput(): boolean {
+            if (!inputRef) return false;
+            const text = inputRef.plainText.trim();
+            if (!text.startsWith("/")) return false;
+            const matches = commandSuggestions(text);
+            const selected = matches[0];
+            if (!selected) return false;
+            inputRef.clear();
+            inputRef.insertText(selected.name);
+            setInputText(selected.name);
+            showStatusNotice(`${selected.name} — ${selected.detail}`);
+            return true;
+        }
+
+        function commandSuggestions(prefix: string): Array<(typeof CHAT_COMMANDS)[number]> {
+            if (!prefix.startsWith("/")) return [];
+            return CHAT_COMMANDS.filter((command) => command.name.startsWith(prefix));
+        }
 
         const selectionHandler = () => {
             const text = renderer.getSelection()?.getSelectedText() ?? "";
@@ -683,36 +1078,98 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             });
             box.add(roleText);
 
-            const contentText =
-                msg.role === "assistant"
-                    ? new MarkdownRenderable(renderer, {
-                          content: msg.content,
-                          fg: THEME.fg,
-                          syntaxStyle: markdownSyntax,
-                          streaming: msg.status === "streaming",
-                          width: "100%",
-                      })
-                    : new TextRenderable(renderer, {
-                          content: msg.content,
-                          fg: THEME.fg,
-                          selectable: true,
-                          width: "100%",
-                      });
-            box.add(contentText);
+            const contentBox = new BoxRenderable(renderer, {
+                flexDirection: "column",
+                width: "100%",
+            });
+            const contentRenderable = createMessageContentRenderable(msg);
+            contentBox.add(contentRenderable);
+            box.add(contentBox);
 
             const extraBox = buildExtras(msg);
             if (extraBox) {
                 box.add(extraBox);
             }
 
-            return { id: msg.id, box, content: msg.content, contentText, extrasKey: messageExtrasKey(msg), extraBox };
+            return {
+                id: msg.id,
+                box,
+                contentBox,
+                contentKey: messageContentKey(msg),
+                contentRenderable,
+                extrasKey: messageExtrasKey(msg),
+                extraBox,
+            };
+        }
+
+        function createMessageContentRenderable(msg: ChatMessage): TextRenderable | MarkdownRenderable {
+            if (msg.role === "assistant") {
+                // Let OpenTUI own markdown parsing so tables, rules, code blocks, and links stay intact.
+                return new MarkdownRenderable(renderer, {
+                    content: msg.content,
+                    syntaxStyle: markdownSyntaxStyle,
+                    fg: THEME.assistant,
+                    bg: THEME.bg,
+                    width: "100%",
+                    conceal: true,
+                    concealCode: false,
+                    streaming: msg.status === "streaming",
+                    internalBlockMode: "top-level",
+                    tableOptions: {
+                        style: "grid",
+                        widthMode: "full",
+                        wrapMode: "word",
+                        cellPaddingX: 1,
+                        cellPaddingY: 0,
+                        selectable: true,
+                        borders: true,
+                        outerBorder: true,
+                        borderColor: THEME.border,
+                    },
+                });
+            }
+
+            return new TextRenderable(renderer, {
+                content: msg.content,
+                fg: THEME.fg,
+                selectable: true,
+                width: "100%",
+                wrapMode: "word",
+            });
+        }
+
+        function messageContentKey(msg: ChatMessage): string {
+            return `${msg.role}:${msg.status}:${msg.content}`;
+        }
+
+        function updateMessageContent(renderable: MsgRenderable, msg: ChatMessage): void {
+            const nextKey = messageContentKey(msg);
+            const nextIsMarkdown = msg.role === "assistant";
+            if (renderable.contentKey === nextKey && (renderable.contentRenderable instanceof MarkdownRenderable) === nextIsMarkdown) {
+                return;
+            }
+            if (nextIsMarkdown && renderable.contentRenderable instanceof MarkdownRenderable) {
+                renderable.contentRenderable.content = msg.content;
+                renderable.contentRenderable.streaming = msg.status === "streaming";
+                renderable.contentKey = nextKey;
+                return;
+            }
+            if (!nextIsMarkdown && renderable.contentRenderable instanceof TextRenderable) {
+                renderable.contentRenderable.content = msg.content;
+                renderable.contentKey = nextKey;
+                return;
+            }
+
+            renderable.contentBox.remove(renderable.contentRenderable.id);
+            renderable.contentRenderable.destroy();
+            renderable.contentRenderable = createMessageContentRenderable(msg);
+            renderable.contentBox.add(renderable.contentRenderable);
+            renderable.contentKey = nextKey;
         }
 
         function messageExtrasKey(msg: ChatMessage): string {
             return JSON.stringify({
                 ask: msg.ask ?? null,
-                blackboard: msg.blackboard ?? null,
-                blackboardTurn: blackboardTurnKey(msg),
                 mcpCalls: msg.mcpCalls ?? [],
                 phase: msg.status === "streaming" && !msg.content ? phase() : undefined,
                 skills: msg.skills ?? [],
@@ -740,7 +1197,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (msg.mcpCalls && msg.mcpCalls.length > 0) {
                 for (const call of msg.mcpCalls) {
                     const icon = call.ok ? "ok" : "fail";
-                    const color = call.ok ? RGBA.fromInts(100, 255, 150) : THEME.error;
+                    const color = call.ok ? THEME.user : THEME.error;
                     extras.push(
                         new TextRenderable(renderer, {
                             content: `  ${icon} ${call.server}.${call.tool}`,
@@ -755,7 +1212,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 extras.push(
                     new TextRenderable(renderer, {
                         content: `  skills: ${msg.skills.join(", ")}`,
-                        fg: RGBA.fromInts(255, 200, 100),
+                        fg: THEME.pink,
                         selectable: true,
                     }),
                 );
@@ -774,43 +1231,13 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 extras.push(
                     new TextRenderable(renderer, {
                         content: `  ask: ${detail}`,
-                        fg: RGBA.fromInts(255, 200, 100),
+                        fg: THEME.pink,
                         selectable: true,
                     }),
                 );
                 for (const line of formatAskSummaryLines(ask)) {
-                    extras.push(
-                        extraLine(line, RGBA.fromInts(255, 200, 100)),
-                    );
+                    extras.push(extraLine(line, THEME.pink));
                 }
-            }
-
-            if (msg.blackboard) {
-                const bb = msg.blackboard;
-                const turn = blackboardTurnFor(msg);
-                const detail = [
-                    bb.mode,
-                    turn?.status ?? bb.status,
-                    turn
-                        ? `${turn.messages.length} messages`
-                        : bb.messages !== undefined
-                          ? `${bb.messages} messages`
-                          : undefined,
-                    turn ? `${turn.steps.length} steps` : undefined,
-                    turn ? `${turn.decisions.length} decisions` : undefined,
-                    bb.elapsedMs !== undefined ? `${bb.elapsedMs}ms` : undefined,
-                    bb.turnId ? `turn=${bb.turnId}` : undefined,
-                ]
-                    .filter(Boolean)
-                    .join(" · ");
-                extras.push(
-                    new TextRenderable(renderer, {
-                        content: `  blackboard: ${detail}`,
-                        fg: RGBA.fromInts(180, 140, 255),
-                        selectable: true,
-                    }),
-                );
-                appendBlackboardDetails(extras, turn);
             }
 
             if (extras.length === 0) return undefined;
@@ -825,31 +1252,160 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             return turnId ? blackboardTurns()[turnId] : undefined;
         }
 
-        function blackboardTurnKey(msg: ChatMessage): string | undefined {
-            const turn = blackboardTurnFor(msg);
-            if (!turn) return undefined;
-            return JSON.stringify({
-                decisions: turn.decisions.map((decision) => decision.id),
-                messages: turn.messages.length,
-                status: turn.status,
-                steps: turn.steps.map((step) => step.id),
-                updatedAt: turn.updatedAt,
-                workers: turn.workers.map((worker) => [worker.role, worker.status, worker.updatedAt]),
-            });
+        function activeReply(): ChatMessage | undefined {
+            const selected = selectedTurnPair();
+            if (selected?.assistant) return selected.assistant;
+            const id = activeReplyId();
+            if (id) {
+                const active = messages().find((msg) => msg.id === id);
+                if (active) return active;
+            }
+            return [...messages()].reverse().find((msg) => msg.role === "assistant" && !msg.history);
         }
 
-        function appendBlackboardDetails(extras: TextRenderable[], turn: BlackboardTurn | undefined): void {
-            if (!turn) return;
-            const detailColor = RGBA.fromInts(180, 140, 255);
-            if (turn.workers.length > 0) {
-                extras.push(
-                    extraLine(
-                        `    workers: ${turn.workers.map((w) => `${w.name}:${w.status}`).join(", ")}`,
-                        detailColor,
+        function focusedBlackboardTurn(): BlackboardTurn | undefined {
+            const selected = selectedTurnPair();
+            if (selected?.assistant) {
+                const turn = blackboardTurnFor(selected.assistant);
+                if (turn) return turn;
+            }
+            const turnId = focusedBlackboardTurnId();
+            if (turnId) {
+                const turn = blackboardTurns()[turnId];
+                if (turn) return turn;
+            }
+            const msg = [...messages()]
+                .reverse()
+                .find((entry) => entry.role === "assistant" && entry.blackboard?.turnId);
+            return msg ? blackboardTurnFor(msg) : undefined;
+        }
+
+        function turnPairs(): Array<{ assistant?: ChatMessage; question: string; user: ChatMessage }> {
+            const out: Array<{ assistant?: ChatMessage; question: string; user: ChatMessage }> = [];
+            const msgs = messages();
+            for (let i = 0; i < msgs.length; i += 1) {
+                const msg = msgs[i];
+                if (!msg || msg.role !== "user" || msg.history) continue;
+                const assistant = msgs.slice(i + 1).find((entry) => entry.role === "assistant" && !entry.history);
+                out.push({ assistant, question: msg.content, user: msg });
+            }
+            return out;
+        }
+
+        function selectedTurnPair(): { assistant?: ChatMessage; question: string; user: ChatMessage } | undefined {
+            const pairs = turnPairs();
+            if (pairs.length === 0) return undefined;
+            const selected = selectedQuestionIndex();
+            if (selected === null) return pairs[pairs.length - 1];
+            return pairs[clamp(selected, 0, pairs.length - 1)];
+        }
+
+        function appendQuestionMenu(lines: PanelLine[]): void {
+            const pairs = turnPairs();
+            if (pairs.length === 0) return;
+            const selected = selectedTurnPair();
+            const menuOpen = commandMenuMode() === sidePanelMode();
+            lines.push(
+                panelLine(
+                    menuOpen ? "Choose Question  ↑/↓ Enter" : "Questions",
+                    THEME.header,
+                    TextAttributes.BOLD,
+                ),
+            );
+            if (menuOpen) {
+                lines.push(panelLine("  Esc closes · j/k also works", THEME.fgMuted));
+            }
+            const visibleCount = menuOpen ? 12 : 8;
+            pairs.slice(-visibleCount).forEach((pair, idx) => {
+                const absoluteIndex = pairs.length - Math.min(visibleCount, pairs.length) + idx;
+                const active = pair.user.id === selected?.user.id;
+                lines.push(
+                    panelLine(
+                        `${active ? ">" : " "} ${summarizeQuestion(pair.question, absoluteIndex + 1, menuOpen ? 38 : 34)}`,
+                        active ? THEME.pink : THEME.fgMuted,
+                        active ? TextAttributes.BOLD : undefined,
                     ),
                 );
+            });
+            lines.push(panelLine("", THEME.fg));
+        }
+
+        function sidePanelLines(): PanelLine[] {
+            return sidePanelMode() === "thinking" ? thinkingPanelLines() : blackboardPanelLines();
+        }
+
+        function thinkingPanelLines(): PanelLine[] {
+            const lines: PanelLine[] = [];
+            appendQuestionMenu(lines);
+            const msg = activeReply();
+            const ph = phase();
+            const def = PHASE_DEF[ph];
+            const running = processing();
+            const frame = running ? (def.frames[frameTick() % def.frames.length] ?? def.done) : def.done;
+            lines.push(panelLine(`${frame} ${running ? def.label : "ready"}`, running ? def.color : THEME.fgMuted));
+
+            if (msg?.skills && msg.skills.length > 0) {
+                lines.push(panelLine("Skills", THEME.pink, TextAttributes.BOLD));
+                for (const skill of msg.skills) {
+                    lines.push(panelLine(`  ${skill}`, THEME.fg));
+                }
             }
-            for (const step of turn.steps.slice(-4)) {
+
+            if (msg?.mcpCalls && msg.mcpCalls.length > 0) {
+                lines.push(panelLine("MCP", THEME.user, TextAttributes.BOLD));
+                for (const call of msg.mcpCalls.slice(-8)) {
+                    lines.push(
+                        panelLine(
+                            `  ${call.ok ? "ok" : "fail"} ${call.server}.${call.tool}`,
+                            call.ok ? THEME.fg : THEME.error,
+                        ),
+                    );
+                }
+            }
+
+            if (!msg) {
+                lines.push(panelLine("No active reply yet.", THEME.fgMuted));
+            } else {
+                lines.push(panelLine("Reply", THEME.header, TextAttributes.BOLD));
+                lines.push(
+                    panelLine(`  ${msg.status}${msg.content ? ` · ${msg.content.length} chars` : ""}`, THEME.fg),
+                );
+            }
+            return lines;
+        }
+
+        function blackboardPanelLines(): PanelLine[] {
+            const lines: PanelLine[] = [];
+            appendQuestionMenu(lines);
+            const turn = focusedBlackboardTurn();
+            if (!turn) {
+                lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
+                lines.push(panelLine("  no turn yet", THEME.fgMuted));
+                return lines;
+            }
+
+            lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
+            lines.push(
+                panelLine(
+                    `  ${turn.status} · ${turn.steps.length} steps · ${turn.decisions.length} decisions`,
+                    THEME.fg,
+                ),
+            );
+            if (turn.goal.trim()) {
+                lines.push(panelLine(`  goal: ${clipText(turn.goal, 160)}`, THEME.fgMuted));
+            }
+            appendBlackboardPanelLines(lines, turn);
+            return lines;
+        }
+
+        function appendBlackboardPanelLines(lines: PanelLine[], turn: BlackboardTurn): void {
+            const detailColor = THEME.purple;
+            if (turn.workers.length > 0) {
+                lines.push(
+                    panelLine(`  workers: ${turn.workers.map((w) => `${w.name}:${w.status}`).join(", ")}`, detailColor),
+                );
+            }
+            for (const step of turn.steps) {
                 const factCount = step.newFacts.length;
                 const blockerCount = step.blockers.length;
                 const suffix = [
@@ -859,31 +1415,35 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 ]
                     .filter(Boolean)
                     .join(" · ");
-                extras.push(
-                    extraLine(
-                        `    r${step.round} ${step.workerRole}: ${clipText(step.outputSummary)}${suffix ? ` (${suffix})` : ""}`,
+                lines.push(
+                    panelLine(
+                        `  r${step.round} ${step.workerRole}: ${clipText(step.outputSummary)}${suffix ? ` (${suffix})` : ""}`,
                         detailColor,
                     ),
                 );
             }
-            const publicMessages = turn.messages.filter((message) => message.visibility === "public").slice(-3);
+            const publicMessages = turn.messages.filter((message) => message.visibility === "public");
             for (const message of publicMessages) {
                 const speaker = message.workerRole ?? message.role;
                 const round = message.round !== undefined ? `r${message.round} ` : "";
-                extras.push(extraLine(`    ${round}${speaker}: ${clipText(message.content)}`, detailColor));
+                lines.push(panelLine(`  ${round}${speaker}: ${clipText(message.content)}`, detailColor));
             }
             const decision = turn.decisions[turn.decisions.length - 1];
             if (decision) {
-                extras.push(extraLine(`    decision: ${clipText(decision.prompt, 180)}`, RGBA.fromInts(255, 200, 100)));
+                lines.push(panelLine(`  decision: ${clipText(decision.prompt, 180)}`, THEME.pink));
                 if (decision.options.length > 0) {
-                    extras.push(
-                        extraLine(
-                            `    options: ${decision.options.map((option) => option.label).join(" / ")}`,
-                            RGBA.fromInts(255, 200, 100),
+                    lines.push(
+                        panelLine(
+                            `  options: ${decision.options.map((option) => option.label).join(" / ")}`,
+                            THEME.pink,
                         ),
                     );
                 }
             }
+        }
+
+        function panelLine(content: string, fg: RGBA, attributes?: number, bg?: RGBA): PanelLine {
+            return { attributes, bg, content, fg };
         }
 
         function extraLine(content: string, fg: RGBA): TextRenderable {
@@ -900,6 +1460,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             return text.length > max ? `${text.slice(0, max - 1)}…` : text;
         }
 
+        function summarizeQuestion(question: string, ordinal: number, max: number): string {
+            return `${ordinal}. ${clipText(question, max)}`;
+        }
+
         function updateMessageExtras(renderable: MsgRenderable, msg: ChatMessage) {
             const nextKey = messageExtrasKey(msg);
             if (renderable.extrasKey === nextKey) return;
@@ -913,6 +1477,27 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 renderable.box.add(extraBox);
             }
             renderable.extrasKey = nextKey;
+        }
+
+        function hasMessageOrderChanged(msgs: ChatMessage[]): boolean {
+            const sharedLength = Math.min(msgs.length, messageRenderables.length);
+            for (let i = 0; i < sharedLength; i += 1) {
+                if (msgs[i]?.id !== messageRenderables[i]?.id) return true;
+            }
+            return false;
+        }
+
+        function rebuildMessageList(msgs: ChatMessage[]): void {
+            const content = scrollBox.content;
+            while (messageRenderables.length > 0) {
+                const item = messageRenderables.pop()!;
+                content.remove(item.box.id);
+            }
+            for (const msg of msgs) {
+                const item = buildMessageBox(msg);
+                messageRenderables.push(item);
+                content.add(item.box);
+            }
         }
 
         // ── 响应式同步：Header ───────────────────────────────
@@ -938,13 +1523,83 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         });
 
         createEffect(() => {
-            statusText.content = statusNotice() ?? DEFAULT_STATUS_TEXT;
+            statusText.content = statusNotice() ?? commandHintText(inputText()) ?? DEFAULT_STATUS_TEXT;
+        });
+
+        function commandHintText(text: string): string | undefined {
+            const trimmed = text.trim();
+            if (!trimmed.startsWith("/")) return undefined;
+            if (trimmed === "/blackboard" || trimmed.startsWith("/blackboard "))
+                return questionCommandHint("/blackboard");
+            if (trimmed === "/thinking" || trimmed.startsWith("/thinking ")) return questionCommandHint("/thinking");
+            const suggestions = commandSuggestions(trimmed);
+            if (suggestions.length === 0) return "Unknown command · Tab cannot complete";
+            return suggestions.map((command) => `${command.name} ${command.detail}`).join(" · ");
+        }
+
+        function questionCommandHint(command: "/blackboard" | "/thinking"): string {
+            const pairs = turnPairs();
+            const items = pairs.slice(-4);
+            if (items.length === 0) return `${command} has no sent questions yet`;
+            if (inputText().trim() === command) return `${command}: Enter opens a question menu · Up/Down select`;
+            return items
+                .map(
+                    (item, idx) =>
+                        `${command} ${summarizeQuestion(item.question, pairs.length - items.length + idx + 1, 24)}`,
+                )
+                .join(" · ");
+        }
+
+        // ── 响应式同步：右侧思考 / 黑板面板 ────────────────────
+        createEffect(() => {
+            const panelVisible = renderer.width >= 88;
+            sidePanel.visible = panelVisible;
+            if (!panelVisible) return;
+
+            const menuOpen = commandMenuMode() === sidePanelMode();
+            sideTitle.content = menuOpen
+                ? `${sidePanelMode() === "thinking" ? "Thinking" : "Blackboard"}  [question menu]`
+                : sidePanelMode() === "thinking"
+                  ? "Thinking  [Ctrl+B Blackboard]"
+                  : "Blackboard  [Ctrl+B Thinking]";
+            const lines = sidePanelLines();
+            const content = sideScrollBox.content;
+            while (sideLineRenderables.length > lines.length) {
+                const stale = sideLineRenderables.pop()!;
+                content.remove(stale.id);
+            }
+            for (let i = sideLineRenderables.length; i < lines.length; i += 1) {
+                const line = lines[i]!;
+                const item = new TextRenderable(renderer, {
+                    attributes: line.attributes,
+                    bg: line.bg,
+                    content: line.content,
+                    fg: line.fg,
+                    selectable: true,
+                    width: "100%",
+                });
+                sideLineRenderables.push(item);
+                content.add(item);
+            }
+            for (let i = 0; i < lines.length; i += 1) {
+                const line = lines[i]!;
+                const item = sideLineRenderables[i]!;
+                item.content = line.content;
+                item.fg = line.fg;
+                item.bg = line.bg;
+                item.attributes = line.attributes ?? TextAttributes.NONE;
+            }
         });
 
         // ── 响应式同步：消息列表（增量更新）────────────────────
         createEffect(() => {
             const msgs = messages();
             const content = scrollBox.content;
+
+            if (hasMessageOrderChanged(msgs)) {
+                rebuildMessageList(msgs);
+                return;
+            }
 
             // 移除多余的消息 renderables
             while (messageRenderables.length > msgs.length) {
@@ -966,24 +1621,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 const msg = msgs[i];
                 const renderable = messageRenderables[i];
                 if (!msg || !renderable) continue;
-                if (renderable.id !== msg.id) {
-                    // ID 不匹配，重建该位置
-                    content.remove(renderable.box.id);
-                    const newR = buildMessageBox(msg);
-                    messageRenderables[i] = newR;
-                    content.add(newR.box);
-                } else {
-                    // 更新内容文本
-                    if (renderable.content !== msg.content) {
-                        renderable.content = msg.content;
-                        renderable.contentText.content = msg.content;
-                    }
-                    if (renderable.contentText instanceof MarkdownRenderable) {
-                        renderable.contentText.streaming = msg.status === "streaming";
-                    }
-                    // 更新 extras（简化：总是重建 extras box）
-                    updateMessageExtras(renderable, msg);
-                }
+                updateMessageContent(renderable, msg);
+                updateMessageExtras(renderable, msg);
             }
         });
 
@@ -994,12 +1633,26 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (historyPollTimer) clearInterval(historyPollTimer);
             if (statusNoticeTimer) clearTimeout(statusNoticeTimer);
             renderer.keyInput.off("keypress", keyHandler);
+            renderer.off(CliRenderEvents.RESIZE, resizeHandler);
             renderer.off(CliRenderEvents.SELECTION, selectionHandler);
+            if (originalStartSelection) {
+                selectionRenderer.startSelection = originalStartSelection;
+            }
+            selectionRenderer.clearSelection = originalClearSelection;
             unsubscribeEvents?.();
-            markdownSyntax.destroy();
             // remove main tree
             root.remove(mainBox.id);
+            markdownSyntaxStyle.destroy();
             disposeSolid();
         };
     });
+}
+
+function rightPanelWidth(totalWidth: number): number {
+    if (totalWidth < 88) return 0;
+    return Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(SIDE_PANEL_MIN_WIDTH, Math.floor(totalWidth * 0.32)));
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
 }

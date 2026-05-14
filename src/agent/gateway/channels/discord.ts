@@ -1,5 +1,5 @@
 import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
-import { ChannelTransport } from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
@@ -32,7 +32,7 @@ interface DiscordUser {
 }
 
 export class DiscordInteractionAdapter implements ChannelAdapter {
-    readonly name = "discord";
+    readonly name = Channel.Discord;
     readonly transport = ChannelTransport.Http;
 
     constructor(
@@ -105,15 +105,20 @@ export class DiscordInteractionAdapter implements ChannelAdapter {
         return {
             id: interaction.id ?? crypto.randomUUID(),
             route: {
-                channel: "discord",
+                channel: Channel.Discord,
                 chatId: interaction.channel_id ?? interaction.guild_id ?? user?.id ?? "unknown",
-                chatType: interaction.guild_id ? "group" : "direct",
+                chatType: interaction.guild_id ? ChatType.Group : ChatType.Direct,
             },
             user: {
                 id: user?.id ?? "unknown",
                 displayName: user?.global_name ?? user?.username,
             },
             text,
+            messageKind: GatewayMessageKind.Command,
+            source: {
+                guildId: interaction.guild_id,
+                messageId: interaction.id,
+            },
             raw: interaction,
             receivedAt: new Date().toISOString(),
         };

@@ -1,5 +1,5 @@
 /**
- * Brain.db 协议（生命体重构 LF-R1 协议层，未消费）
+ * Brain.db 协议（单文件大脑 event/state/summary/link/codename 公共契约）
  *
  * 设计要点（详见 `docs/proposals/life.form.md` §brain.db Schema）：
  * - `~/.flyflor/brain.db` 是单文件大脑：event/state 分离 + append-only。
@@ -9,7 +9,8 @@
  * - `memory_links`：dream / reflection 形成的隐含链接（contradicts / causal / derived / similarity）。
  * - `codenames`：用户显式工作目录锚点；频次衰减自然上浮，可升格为 Project。
  *
- * 本文件只声明类型与枚举常量，runtime / store / worker 不在本阶段引用。
+ * 本文件是 memory runtime、BrainStore、doctor/status 与归档工具共享的协议边界；
+ * 新增事件类型必须仍可 JSON 序列化，且不得通过字符串语义解析派生。
  */
 
 import type { ModelRole } from "./enums.ts";

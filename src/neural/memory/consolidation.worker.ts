@@ -1,5 +1,5 @@
 import { ModelRole, type ModelClient } from "../../protocol/contracts/index.ts";
-import type { EpisodeRecord, RedisMemoryStore } from "./redis.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
 import type { SurrealGraphStore } from "./surreal.graph.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderMemoryConsolidationPrompt } from "../../agent/prompts/index.ts";
@@ -45,6 +45,12 @@ export interface ConsolidationRunResult {
     skipped: number;
 }
 
+const FALLBACK_CONSOLIDATION_DECISION: ConsolidationDecision = {
+    decision: ConsolidationDecisionKind.Discard,
+    confidence: 0,
+    rationale: "invalid consolidation output",
+};
+
 export interface ConsolidationWorkerOptions {
     /** 每轮 drain 的最大候选数（默认 32） */
     batchSize?: number;
@@ -65,7 +71,7 @@ export class ConsolidationWorker {
     private readonly retrospective?: RetrospectiveLog;
 
     constructor(
-        private readonly redis: RedisMemoryStore,
+        private readonly redis: WorkingMemoryStore,
         private readonly graph: SurrealGraphStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
@@ -209,17 +215,22 @@ export function parseConsolidationDecision(raw: string): ConsolidationDecision {
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
     if (start < 0 || end <= start) {
-        throw new Error("Consolidation output did not contain a JSON object.");
+        return fallbackConsolidationDecision();
     }
-    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    } catch {
+        return fallbackConsolidationDecision();
+    }
     if (!isRecord(parsed)) {
-        throw new Error("Consolidation output JSON must be an object.");
+        return fallbackConsolidationDecision();
     }
     const decision = normaliseDecision(parsed.decision);
     if (!decision) {
-        throw new Error("Consolidation output has an unknown decision.");
+        return fallbackConsolidationDecision();
     }
-    const confidence = clamp01(readNumber(parsed.confidence, "confidence"));
+    const confidence = clamp01(readNumber(parsed.confidence));
     const summary =
         typeof parsed.summary === "string" && parsed.summary.trim().length > 0
             ? parsed.summary.trim().slice(0, 500)
@@ -229,6 +240,11 @@ export function parseConsolidationDecision(raw: string): ConsolidationDecision {
         : undefined;
     const rationale = typeof parsed.rationale === "string" ? parsed.rationale.trim().slice(0, 200) : "";
     return { decision, confidence, summary, symbols, rationale };
+}
+
+function fallbackConsolidationDecision(): ConsolidationDecision {
+    // Bad maintenance output should drop the candidate for this pass, not crash the background chain.
+    return { ...FALLBACK_CONSOLIDATION_DECISION };
 }
 
 function normaliseDecision(value: unknown): ConsolidationDecisionKind | undefined {
@@ -241,13 +257,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
-function readNumber(value: unknown, field: string): number {
+function readNumber(value: unknown): number {
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
         const n = Number(value);
         if (Number.isFinite(n)) return n;
     }
-    throw new Error(`Consolidation output ${field} must be a finite number.`);
+    return 0;
 }
 
 function clamp01(value: number): number {

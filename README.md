@@ -4,6 +4,27 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进
 
 核心设计：LLM 负责流体智力，反思沉淀晶体智力（Gem），海马体负责工作记忆与长期记忆图，黑板协作处理复杂任务。
 
+## 设计哲学
+
+- LLM 负责当下推理与生成，记忆系统只负责沉淀、召回和偏移修正。
+- 不靠单轮堆叠上下文，而靠三层记忆、遗忘曲线和反思把经验压成稳定能力。
+- 简单问题直接回，复杂问题走黑板，保证复杂度和协作成本只在必要时上升。
+- 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
+
+## 支持的渠道
+
+Flyflor 当前支持 31 个 channel，分为三类：
+
+| 类别 | 渠道 |
+| --- | --- |
+| 核心入口 | API、STDIO、Webhook |
+| 官方协议 / 独立适配 | WeChat official account、WeCom Callback、Weixin iLink、Telegram、Discord、Feishu、Slack、Line、Mattermost、DingTalk、BlueBubbles / iMessage |
+| 共享 HTTP 协议适配 | API Server、Google Chat、IRC、Email、Home Assistant、Matrix、MS Graph Webhook、QQ、QQBot、Signal、SMS、Teams、WeCom、WhatsApp、Yuanbao、Zalo |
+
+Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。
+
+完整矩阵和每个 channel 的配置要求见 [docs/gateway.channels.md](docs/gateway.channels.md)。
+
 ## 快速开始
 
 ### 安装（curl-pipe，无需克隆源码）
@@ -44,7 +65,7 @@ bun run app.ts gateway
 
 ```bash
 bun run check        # TypeScript 类型检查
-bun test             # 运行所有测试
+bun run test         # 运行本仓库测试
 bun run build:binary # 编译本机二进制
 ```
 
@@ -56,11 +77,10 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 直接进入 chat TUI
 bun run smoke:docker                      # 不启动容器，检查 compose / binary / prompt bundle
-bun run smoke:runtime                     # 已启动 compose 后，检查 Redis / Surreal / 真实配置模型 chat 主路径
+bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / 真实配置模型 chat 主路径
 bun run smoke:release                     # docs + type + tests + binary + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 release smoke，包含真实模型 Docker chat 主路径
-curl http://127.0.0.1:18790/health        # 健康检查
 docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```
 
@@ -72,7 +92,7 @@ docker exec -it flyflor-dev flyflor       # 进入容器交互
 | `./docker/workspace`   | `/root/.flyflor/workspace`     | 工作区数据              |
 | `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor`| 编译好的二进制          |
 
-Redis 和 SurrealDB 为内部 compose 服务，不向宿主机暴露端口。架构变更后重新编译 + 重启：
+默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆会落到 `flyflor_data` 卷。Redis / SurrealDB 是可选外部后端，需要时通过本地 override 打开。架构变更后重新编译 + 重启：
 
 ```bash
 bun run docker:up   # = 重编 binary + force-recreate compose
@@ -111,6 +131,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append；TTFB 目标 < 350ms
 5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
+
+外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成和驱动 TUI/API SSE，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。
 
 ## 记忆系统
 
@@ -222,7 +244,10 @@ flyflor gateway status       # 网关状态
 ### DI 与命名
 
 - 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`
-- 边界模块用继承表达：`class RuntimeModule extends Runtime`，不新增专用 decorator
+- 边界模块用 core 继承表达：`class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`；`kind/layer/name/provider` 默认由基类和类名推断
+- `@Module` / `@Component` 复用 `Provide` 注入元数据；默认单例，需要每次重新 `new` 时显式使用 `ProviderScope.Factory`
+- DI token 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
+- 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
 - 实现文件使用点分后缀：`*.module.ts`、`*.service.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
 
@@ -262,7 +287,129 @@ flyflor gateway status       # 网关状态
 | [docs/skill.system.md](docs/skill.system.md) | Skill 加载与升格 |
 | [docs/proposals/eq.module.md](docs/proposals/eq.module.md) | EQ 语气控制层 |
 | [docs/proposals/life.form.md](docs/proposals/life.form.md) | 无 session / brain.db / Codename / Ask / Ghost / Dream 主线 |
-| [docs/prompt.templates.md](docs/prompt.templates.md) | 提示词模板 |
 | [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
 | [docs/storage.degradation.md](docs/storage.degradation.md) | Redis / SurrealDB 纯本地降级草案 |
-| [TODO.md](TODO.md) | 风险点 / 后续计划 |
+| [TODO.md](TODO.md) | 运行边界 / 后续计划 |
+
+<!-- flyflor:prompt-templates:start -->
+# Prompt Template System
+
+## One-line Summary
+
+All model-facing instructions live in `templates/prompts/`, grouped by topic; `*.md` files are the runtime canonical templates.
+
+## Related Paths
+
+- `src/agent/prompts/index.ts` - all render entry points
+- `src/agent/prompts/template.manifest.ts` - template bundle version and file contract
+- `src/agent/prompts/template.docs.ts` - docs generator
+- `templates/prompts/` - built-in templates
+- `scripts/install.templates.ts` - install into the user directory
+- `~/.flyflor/prompts/` - user override directory
+
+## Bundle Version
+
+- Version: `v2`
+- Manifest file: `template.manifest.json`
+- Runtime checks the manifest version first, then reads each template by filename; missing files, empty files, and stale versions all fail with a reinstall hint.
+- The manifest also records each template key, runtime filename, protocol metadata, protocol-specific envelope data, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.
+- `blackboard.worker.envelope.md` keeps its output schema and constraints in manifest metadata, then renders them into the JSON envelope at runtime.
+
+## Template Catalog
+
+| Template | Runtime File | Caller | Protocol | Purpose | Required Placeholders |
+| --- | --- | --- | --- | --- | --- |
+| `ask.schema.md` | `ask.schema.md` | `renderAskSchemaInstructions` | — | Structured clarifying questions, ghost decisions, and identity append blocks. | — |
+| `behavior.priority.md` | `behavior.priority.md` | `renderBehaviorPriorityInstructions` | — | Prompt source ordering and conflict resolution rules. | — |
+| `blackboard.advisory.md` | `blackboard.advisory.md` | `renderBlackboardAdvisoryPrompt` | — | Advisory transcript for direct-path turns that need blackboard context. | `compactRounds` / `elapsedMs` / `reason` / `status` / `turnId` |
+| `blackboard.decision.md` | `blackboard.decision.md` | `BlackboardModule.returnDecisionToUser` | — | Decision prompt when the board needs user confirmation to close a loop. | `questionCount` / `reason` / `unresolvedIssues` |
+| `blackboard.route.md` | `blackboard.route.md` | `decideBlackboardRoute` | — | Route planner prompt for the blackboard front door. | `request` |
+| `blackboard.worker.envelope.md` | `blackboard.worker.envelope.md` | `renderBlackboardWorkerEnvelope` | `flyflor.blackboard.worker.v1` | User task envelope for a single blackboard worker participant. | `constraintsJson` / `contractJson` / `convergencePolicyJson` / `currentRoundStepsJson` / `discussionPlanJson` / `goalJson` / `expectedOutputJson` / `minRoundsJson` / `participantJson` / `phaseJson` / `previousStepsJson` / `roundJson` |
+| `blackboard.worker.system.md` | `blackboard.worker.system.md` | `renderBlackboardWorkerSystemPrompt` | — | System prompt for a single blackboard worker participant. | `participant` |
+| `crystal.reflection.md` | `crystal.reflection.md` | `ReflectionWorker.dispatch` | — | Reflection prompt that extracts reusable methods from evidence. | `evidence` |
+| `feedback.classify.md` | `feedback.classify.md` | `classifyAndApplyFeedback` | — | Feedback classifier that buckets the latest user message. | `currentUserText` / `previousAssistantText` |
+| `memory.action.md` | `memory.action.md` | `renderMemoryActionInstructions` | — | Durable Markdown memory tool block schema. | — |
+| `memory.consolidation.md` | `memory.consolidation.md` | `ConsolidationWorker` | — | Episode classification prompt for consolidation. | `episode` |
+| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | — | Audit-only compression prompt for expiring Redis working memory. | `episodes` |
+| `memory.context.md` | `memory.context.md` | `renderMemoryPrompt` | — | Memory context wrapper for recent, project, long-term, and global layers. | `hippocampus` / `markdownContent` / `projectMemory` / `retrievedResults` |
+| `memory.dream.md` | `memory.dream.md` | `DreamWorker` | — | Quiet maintenance prompt for long-term drift, recall, and contradiction work. | `candidates` / `userId` |
+| `memory.project.offer.md` | `memory.project.offer.md` | `renderProjectOfferPrompt` | — | Runtime nudge for a project candidate awaiting user confirmation. | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memory.skill.offer.md` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | — | Runtime nudge for a reusable skill candidate awaiting user confirmation. | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
+| `mcp.context.md` | `mcp.context.md` | `renderMcpContextPrompt` | — | MCP capability wrapper and tool-context listing. | `mcpEntries` |
+| `runtime.ask.continuation.md` | `runtime.ask.continuation.md` | `renderRuntimeAskContinuationPrompt` | — | Runtime continuation hint for an active pending ask. | `chainDepth` / `choices` / `prompt` / `reason` |
+| `runtime.dormant.resume.md` | `runtime.dormant.resume.md` | `renderRuntimeDormantResumePrompt` | — | Runtime resume hint after a dormant interval. | `idleBucket` |
+| `runtime.eq.context.md` | `runtime.eq.context.md` | `renderRuntimeEqContextPrompt` | — | Tone-only emotional context hint. | `ageBucket` / `arousal` / `confidence` / `directive` / `dominance` / `label` / `valence` |
+| `runtime.ghost.hint.md` | `runtime.ghost.hint.md` | `renderRuntimeGhostHintPrompt` | — | Runtime hint for active unfinished contexts. | `ghostEntries` |
+| `runtime.identity.context.md` | `runtime.identity.context.md` | `renderRuntimeIdentityContextPrompt` | — | Runtime identity context assembled from live identity entries. | `identityEntries` |
+| `runtime.system.md` | `runtime.system.md` | `renderRuntimeSystemPrompt` | — | Top-level runtime system prompt assembled for every turn. | `askSchemaInstructions` / `behaviorPriorityInstructions` / `blackboardContext` / `mcpContext` / `memoryActionInstructions` / `memoryContext` / `sandboxSummary` / `skillContext` |
+| `skill.context.md` | `skill.context.md` | `renderSkillContextPrompt` | — | Skill wrapper prompt that formats loaded SKILL.md entries. | `skillEntries` |
+
+## Assembly Flow
+
+```mermaid
+flowchart LR
+    Turn["RuntimeModule.handleMessage"] --> Build["buildPrompt"]
+    Build --> R1["renderMemoryPrompt(memory.context.md)"]
+    Build --> R2["renderSkillContextPrompt(skill.context.md)"]
+    Build --> R3["renderMcpContextPrompt(mcp.context.md)"]
+    Build --> R4["renderBlackboardAdvisoryPrompt(blackboard.advisory.md)"]
+    R1 --> Sys["renderRuntimeSystemPrompt(runtime.system.md)"]
+    R2 --> Sys
+    R3 --> Sys
+    R4 --> Sys
+    Sys --> Out["Final system prompt"]
+```
+
+## Install Flow
+
+```mermaid
+flowchart LR
+    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/prompts/"]
+    Userdir -- runtime override --> Render["render functions"]
+    Builtin -- canonical --> Render
+```
+
+- A same-named file in the user directory overrides the built-in template; the install script syncs the bundle and manifest together.
+- Runtime only loads canonical `.md` template files.
+- `*.zh.cn.md` files are audit-only mirrors synced by the install script; they do not enter the runtime bundle, manifest, or lint contract.
+
+## Data Contract
+
+Every template must guarantee:
+
+1. The model emits structured JSON sections by schema (routing, reflection, feedback, memory actions, dream evaluation, cluster summaries, and so on), while code only validates shape, enums, and ranges.
+2. Template-facing enum values come from `src/protocol/contracts/enums.ts`; add new enums there before updating templates.
+3. Templates must not allow the model to invent undeclared fields; extra fields are always discarded.
+
+## Prompt-facing Enums
+
+- `MemoryActionTarget`: `memory` / `self` / `soul` / `user`
+- `MemoryKind`: `candidate` / `conversation-turn` / `fact` / `history` / `profile` / `rule` / `skill` / `summary`
+- `MarkdownMemoryFile`: `MEMORY.md` / `SELF.md` / `SOUL.md` / `USER.md`
+- `AskReason`: `codename-ambiguity` / `codename-create` / `user-intent-unclear` / `blackboard-stalemate` / `policy-decision` / `other`
+- `GhostContextReason`: `ask` / `tool-failure` / `blackboard-cap` / `process-restart`
+- `GhostDecisionKind`: `resume` / `fork` / `fresh`
+- `EqLabel`: `neutral` / `joy` / `anger` / `sadness` / `fear` / `surprise`
+
+## Model Readability
+
+Runtime-injected templates should only contain instructions the model can act on directly: when to use them, what structure to emit, what each field means, and how to resolve conflicts. Internal route ids, TODO ids, phase names, and implementation metaphors must not appear in runtime prompts, including `LF-R*` or engineering-only labels such as “hippocampus / crystal / Dream / Gem.”
+
+Internal identifiers may stay in `TODO.md`, design docs, code comments, and test names; model-facing templates must translate them into plain source labels and behavior descriptions such as “recently activated memory,” “current project notes,” “open items,” and “quiet maintenance phase.”
+
+## Risks / Known Gaps
+
+- Template lint already checks required files, non-empty content, required placeholders, and unknown prompt files, and it blocks runtime prompt bodies that expose internal route ids or unexplained engineering metaphors; the bundle manifest version and template catalog are validated too.
+- The manifest integrity test compares the canonical templates under `templates/prompts/`; unregistered runtime prompt files must not appear in the directory, and `lintPromptTemplates` performs the same checks in the user directory.
+- `*.zh.cn.md` mirrors do not participate in runtime assembly or manifest comparison; they are for human review and audit only.
+- `template.docs.ts` renders the template matrix and prompt-facing enum snapshot into reviewable documentation, while `scripts/prompt.templates.docs.ts` can generate or check the same output and sync the prompt bundle manifest.
+- Runtime only assembles canonical `.md` files.
+
+## Related Tests
+
+- `tests/prompt.lint.test.ts`
+- `tests/prompt.templates.docs.test.ts`
+- `tests/blackboard.boundaries.test.ts`
+- `tests/eq.prompt.test.ts`
+- `tests/ask.parse.test.ts`
+<!-- flyflor:prompt-templates:end -->

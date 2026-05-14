@@ -9,7 +9,7 @@ import {
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderHotMemoryCompressionPrompt } from "../../agent/prompts/index.ts";
 import type { BrainStore } from "./brain.store.ts";
-import type { EpisodeRecord, RedisMemoryStore } from "./redis.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
 
 export interface HotMemoryCompressionRunResult {
     scanned: number;
@@ -38,7 +38,7 @@ export class HotMemoryCompressionWorker {
     private readonly now: () => number;
 
     constructor(
-        private readonly redis: RedisMemoryStore,
+        private readonly redis: WorkingMemoryStore,
         private readonly brain: BrainStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,

@@ -18,7 +18,9 @@ const subprocess = Bun.spawn(
         `--target=${target}`,
         "--packages=bundle",
         "--conditions=browser",
-        "--reject-unresolved",
+        // @opentui/core still contains opaque dynamic import() paths; Bun compile needs the
+        // same unresolved-import allowance as the primary build script until upstream removes them.
+        "--allow-unresolved=",
         "--outfile",
         "dist/flyflor-linux",
         "app.ts",

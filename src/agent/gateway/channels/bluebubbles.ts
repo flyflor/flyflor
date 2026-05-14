@@ -15,11 +15,13 @@ import type {
     ChannelName,
     ChatType,
     GatewayAttachment,
+    GatewayDeliveryMetadata,
     GatewayMessage,
     GatewayRoute,
 } from "../../../protocol/contracts/index.ts";
-import { ChannelTransport, ChatType as ChatTypeValue } from "../../../protocol/contracts/index.ts";
+import { ChannelTransport, ChatType as ChatTypeValue, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery, isRecord, json, readString } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 export interface BlueBubblesAdapterConfig {
@@ -61,6 +63,7 @@ export class BlueBubblesAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send(message.route, text),
+            typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
     }
@@ -100,6 +103,11 @@ export class BlueBubblesAdapter implements ChannelAdapter {
                 id: userId,
                 displayName: readString(handle?.firstName ?? handle?.nickname),
             },
+            messageKind: attachments.length > 0 ? GatewayMessageKind.Document : GatewayMessageKind.Text,
+            source: {
+                chatName: readString(firstChat?.displayName ?? firstChat?.name),
+                messageId: readString(data.guid ?? data.id),
+            },
             text: readString(data.text) ?? "",
             attachments: attachments.length > 0 ? attachments : undefined,
             raw: envelope,
@@ -117,6 +125,11 @@ export class BlueBubblesAdapter implements ChannelAdapter {
             body: JSON.stringify({ chatGuid: route.chatId, message: text }),
         });
         await assertPlatformResponse(response, "BlueBubbles");
+    }
+
+    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        // BlueBubbles does not expose a stable bot typing endpoint in the
+        // current gateway surface.
     }
 }
 

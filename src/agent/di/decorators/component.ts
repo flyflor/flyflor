@@ -1,6 +1,9 @@
-import { ComponentKind } from "../../../protocol/contracts/index.ts";
+import { ProviderScope } from "../../../protocol/contracts/index.ts";
 import { type ComponentDecoratorOptions, registerComponentMetadata } from "../composition/index.ts";
 
 export function Component(options?: ComponentDecoratorOptions | string): ClassDecorator {
-    return registerComponentMetadata(ComponentKind.Component, options);
+    const normalized = typeof options === "string" ? { name: options } : (options ?? {});
+    return registerComponentMetadata(undefined, normalized, {
+        provider: normalized.provider ?? { scope: ProviderScope.Singleton },
+    });
 }

@@ -215,11 +215,14 @@ worker **不能**直接写长期记忆：
 - 黑板 budget 来自 `BlackboardStartRequest.budget`，默认 `minRounds=1 / maxRounds=3 / hardMaxRounds=5 / maxWorkerContextChars=12_000`
 - lease TTL 默认 `DEFAULT_LEASE_TTL_MS = 15 * 60 * 1000`
 
-## 风险点 / 已知缺口
+## 运行边界 / 后续增强
 
 - direct-with-watch 升级已接入工具失败 / 上下文压力资源指标，但未读取 worker 内部复杂语义信号。
-- chat TUI 已能在 assistant 消息下回填 `BlackboardModule.getTurn(turnId)` 的快照并展示 workers / steps / public messages / decision；但仍**未实时流式订阅 worker.step**。
-- 进程隔离（Bun Worker / 子进程）阶段未完成；当前 worker 大多 in-process。
+- chat TUI 已订阅 `BlackboardWorkerStart` / `BlackboardWorkerEnd` / `BlackboardMessageAppended`，并在 assistant 消息下回填 `BlackboardModule.getTurn(turnId)` 的快照展示 workers / steps / public messages / decision；后续可继续把更细粒度的 step delta 渲染成实时讨论流。
+- 线程 / 进程隔离已分层落地：blackboard 与 reflection 的 raw → structured 规范化走 Bun Worker
+  线程；`WorkerManager.registerRawStdioProcess` 可把外部 agent-cli 包成子进程 worker。模型调用本身仍由
+  runtime 主进程发起，默认 blackboard worker 仍以 in-process 注册为主，后续若把模型 worker 完整迁到
+  agent-cli / persistent process，需要继续走显式 sandbox 与 WorkerManager 协议。
 - `BlackboardWorkerRole` 仅类型别名 `string`，没有 enum 约束，靠模型生成 + capabilities 字段约束。
 
 ## 相关测试

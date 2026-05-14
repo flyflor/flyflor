@@ -1,6 +1,6 @@
 # 存储降级方案：Redis + SurrealDB → 纯本地方案
 
-> Status: **草案 — 待审阅**
+> Status: **阶段 1 已落地 — local working memory 默认启用；crystal.db 仍为后续项**
 >
 > 从智能生命体的设计哲学出发，评估将 Redis（海马体工作记忆）和 SurrealDB（晶体长期图）两个外部服务降级为进程内实现。
 
@@ -12,7 +12,7 @@ Flyflor 是一个在时间里持续活着的智能生命体。它的记忆系统
 
 Redis 和 SurrealDB 是这三层中的存储介质。本文评估用进程内 TypeScript 组件替换这两个介质，不改变三层记忆的**流转逻辑**——只换存储载体，不换认知模型。
 
-目标：将 docker-compose 从 3 容器降为 1 容器，零外部运行时依赖，同时确保智能生命体的记忆机制不受损。
+目标：将 docker-compose 从 3 容器降为 1 容器，零外部运行时依赖，同时确保智能生命体的记忆机制不受损。当前已完成工作记忆 local backend 和 Docker 单容器默认配置；SurrealDB 晶体图仍保留为可选外部后端。
 
 ---
 
@@ -34,7 +34,7 @@ Redis 和 SurrealDB 是这三层中的存储介质。本文评估用进程内 Ty
 | ID | 决策 | 认知对应 | 理论基础 |
 |----|------|---------|---------|
 | D1 | Redis → 进程内存 | 海马体工作记忆 | TTL 遗忘 + consolidation 升格 + 衰减降权，三条核心通道进程内等价 |
-| D2 | SurrealDB 图关系 → SQLite crystal.db | 晶体知识图 | 1-hop 图遍历，SQL JOIN 等价；crystal.db 独立于 brain.db |
+| D2 | SurrealDB 图关系 → SQLite crystal.db | 晶体知识图 | 计划项；当前保留 SurrealDB 可选后端，默认 Docker 不启用 |
 | D3 | SurrealDB 向量搜索 → brute-force cosine | 记忆召回 | 召回面受衰减阈值约束，搜索规模天然受限 |
 | D4 | 搜索与持久化分离 | 热/冷路径 | 热路径（每请求 recall）走内存索引，冷路径（dream/consolidation）走 SQLite |
 | D5 | 文件级别解耦 | 生平 vs 知识 | brain.db = 自传体记忆（发生了什么），crystal.db = 晶体智力（学到了什么） |
@@ -316,11 +316,11 @@ semantic overlap 的 gem 合并为一条。纯函数，替换后不变。
 ## 8. 切换策略
 
 ```
-config.memory.working.backend = "memory" | "redis"
+config.memory.working.backend = "local"  | "redis"
 config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 ```
 
-开发默认 `memory + flat`，可随时切回 `redis + surreal`。
+开发默认 `local` working memory，可随时通过 config/compose override 切回 `redis + surreal`。
 
 ---
 
@@ -340,7 +340,7 @@ config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 | 阶段 | 内容 |
 |------|------|
 | 1 | `VectorIndex` 接口 + `FlatBruteForceIndex` |
-| 2 | `MemoryComponent`（替代 Redis） |
+| 2 | `MemoryComponent`（替代 Redis）✅ local WAL + snapshot |
 | 3 | `SqliteGraphStore`（替代 SurrealGraphStore） |
 | 4 | DI 切换 + 配置开关 |
 | 5 | 更新 docker-compose.yml |
