@@ -4,7 +4,7 @@
 
 ## 一句话定位
 
-Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、Redis 工作记忆、SQLite 辅助索引与审计、SurrealDB 长期晶体图；升格走证据门，遗忘走 Redis TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与 SurrealDB 漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
+Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、local/Redis 工作记忆、SQLite 辅助索引与审计、`crystal.db`/SurrealDB 长期晶体图；升格走证据门，遗忘走工作记忆 TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与晶体图漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
 
 ## 相关代码路径
 
@@ -12,12 +12,13 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/eq）
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/neural/memory/journal.store.ts` — legacy atom journal（best-effort 审计副本，不参与 prompt recall）
-- `src/neural/memory/redis.ts` — episode buffer / ring / hot concepts
-- `src/neural/memory/hot.memory.compression.worker.ts` — Redis 到期工作记忆隔离压缩审计
+- `src/neural/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
+- `src/neural/memory/redis.ts` — Redis 兼容 episode buffer / ring / hot concepts 后端
+- `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
 - `src/neural/memory/sqlite.ts` — candidates / offers / search
 - `src/neural/memory/surreal.graph.ts` — episode / memory_node / gem / 边关系
 - `src/neural/memory/activation.ts` — spreading activation
-- `src/neural/memory/consolidation.worker.ts` — Redis → SurrealDB 升格
+- `src/neural/memory/consolidation.worker.ts` — working memory → crystal graph 升格
 - `src/neural/memory/decay.ts` — 双轨衰减
 - `src/neural/memory/anti.bloat.ts` — 容量阀门
 - `src/neural/memory/project.memory.ts` — 项目局部记忆
@@ -35,7 +36,7 @@ flowchart LR
     end
 
     subgraph Working["工作记忆（短期，TTL 遗忘）"]
-        Redis[("Redis<br/>ff:ep / ff:ctx / ff:cq / ff:act / ff:dream")]
+        Work[("Local WAL/snapshot（默认）<br/>或 Redis ff:* 兼容后端")]
     end
 
     subgraph Life["生命事件层（单文件大脑）"]
@@ -49,22 +50,22 @@ flowchart LR
     end
 
     subgraph LongTerm["长期记忆图（结晶）"]
-        Surreal[("SurrealDB<br/>episode / memory_node /<br/>gem / gem_snapshot")]
+        Crystal[("crystal.db + VectorIndex（默认）<br/>或 SurrealDB<br/>episode / memory_node / gem / gem_snapshot")]
     end
 
     User["用户 turn"] --> Brain
     Brain -- archived state + cutoff --> Archive
     User --> Journal
-    User --> Redis
-    Redis -- ConsolidationWorker --> Surreal
-    Redis -- HotMemoryCompressionWorker --> Brain
-    Surreal -- DreamWorker --> Surreal
+    User --> Work
+    Work -- ConsolidationWorker --> Crystal
+    Work -- HotMemoryCompressionWorker --> Brain
+    Crystal -- DreamWorker --> Crystal
     User --> Markdown
     User --> SQLite
     Markdown --> Prompt["buildPrompt"]
     Brain --> Prompt
-    Redis --> Prompt
-    Surreal --> Prompt
+    Work --> Prompt
+    Crystal --> Prompt
     SQLite --> Prompt
 ```
 
@@ -89,16 +90,16 @@ chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { bef
 
 Ghost Context 不被压平成普通 prompt atom。它以 `[ghost-hint]` 单独注入，让模型同轮用 `<flyflor_ghost_decisions>` 决定 `resume` / `fork` / `fresh`；`fork` 或 `fresh` 只更新 ghost 的结构化 evidence，不删除 ghost，后续仍可像分支回归主线一样重新激活。
 
-热记忆压缩同样不被压平成普通 prompt atom。`HotMemoryCompressionWorker` 只把 Redis 到期 episode 批次压缩为 `memory_events.type='hot-memory-compression'` 审计事件，`content.isolation` 固定声明 `promptVisible=false`、`memorySummary=false`、`surrealCandidate=false`、`gemCandidate=false`。这条记录不是 `memory_summary`，`SummaryWorker` 也会跳过该审计事件；它不写 SurrealDB。未来如果要把它作为证据，必须走显式 gate。
+热记忆压缩同样不被压平成普通 prompt atom。`HotMemoryCompressionWorker` 只把到期 working-memory episode 批次压缩为 `memory_events.type='hot-memory-compression'` 审计事件，`content.isolation` 固定声明 `promptVisible=false`、`memorySummary=false`、`surrealCandidate=false`、`gemCandidate=false`。这条记录不是 `memory_summary`，`SummaryWorker` 也会跳过该审计事件；它不写长期图。未来如果要把它作为证据，必须走显式 gate。
 调度层和 `MemoryModule` 降级 root timer 都把热压缩与 summary / brain archive 视为同一条 brain.db 维护通道，默认串行，避免同库写入互撞。
 
 ## 升格双质量门
 
 ```mermaid
 stateDiagram-v2
-    [*] --> episode_redis: writeEpisodeToRedis
-    episode_redis --> cluster_redis: ConsolidationWorker drain
-    cluster_redis --> gate1{"门 1<br/>sourceKind weight gate"}
+    [*] --> episode_working: writeEpisodeToWorkingMemory
+    episode_working --> cluster_working: ConsolidationWorker drain
+    cluster_working --> gate1{"门 1<br/>sourceKind weight gate"}
     gate1 -- weight >= 0.65 --> memory_node
     gate1 -- weight < 0.65 --> discard
     memory_node --> gate2{"门 2<br/>confidence > 0.5 AND<br/>evidenceCount >= 3"}
@@ -117,7 +118,7 @@ Evidence weight 裁判：
 | `blackboard-converged` / `mcp-augmented` | 0.8 |
 | `explicit` | 0.9 |
 
-## SurrealDB 图
+## 晶体图后端
 
 ```mermaid
 erDiagram
@@ -130,9 +131,9 @@ erDiagram
     GEM ||--o{ GEM_SNAPSHOT : "snapshot"
 ```
 
-主表：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。
+主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。默认后端是本地 `crystal.db` + VectorIndex + SQLiteGraphStore；SurrealDB 保留为兼容后端。
 
-`summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后 best-effort 维护：对 summary content 计算 embedding，写入 SurrealDB 节点，再回填 `memory_summary.embedding_id`。该链路失败只发布 `memory.brain.write.failed(op="summary.embed")`，不影响 `memory_summary` 主记录。
+`summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后 best-effort 维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。该链路失败只发布 `memory.brain.write.failed(op="summary.embed")`，不影响 `memory_summary` 主记录。
 
 ## 上下文装配
 
@@ -142,7 +143,7 @@ sequenceDiagram
     participant Mem as MemoryModule
     participant MD as MarkdownStore
     participant B as BrainStore
-    participant R as RedisStore
+    participant R as WorkingStore
     participant PM as ProjectMemoryStore
     participant CR as CrystalMemoryService
     participant SQ as SQLiteStore
@@ -174,8 +175,8 @@ sequenceDiagram
 
 ## 防膨胀
 
-- Redis：`maxEpisodesPerUser = 200`
-- SurrealDB：episode 500 / memory_node 100 / gem 50
+- Working memory：`maxEpisodesPerUser = 200`
+- Crystal graph：episode 500 / memory_node 100 / gem 50
 - Gem 去重：`symbols IoU ≥ 0.7` 且 `cosine ≥ 0.85` → merge（`dedupeGems` 纯函数）
 
 ## 后台 worker
@@ -183,8 +184,8 @@ sequenceDiagram
 ```mermaid
 flowchart TB
     Sched["BackgroundScheduler<br/>按可用后端启用对应 sweep"]
-    Sched -- 10 min --> Cons["ConsolidationWorker<br/>Redis 到 SurrealDB 升格"]
-    Sched -- 30 min --> HotCompress["HotMemoryCompressionWorker<br/>Redis 到期批次 → 隔离审计"]
+    Sched -- 10 min --> Cons["ConsolidationWorker<br/>working memory 到 crystal graph 升格"]
+    Sched -- 30 min --> HotCompress["HotMemoryCompressionWorker<br/>到期 working-memory 批次 → 隔离审计"]
     Sched -- 6 h --> Summary["SummaryWorker<br/>brain events → summary"]
     Sched -- 24 h --> Decay["decay sweep<br/>双轨衰减"]
     Sched -- 60 s --> Dormant["DormantSupervisor<br/>idle → dormant"]
@@ -201,8 +202,8 @@ Dream pass 单轮约束：`≤ 1` 次 LLM 调用，`≤ 8K` token，候选选择
 
 Brain archive 单轮约束：不调模型、不读 content 语义；只看状态、月份和配置阈值。默认 `archiveAfterMonths=3`、`archiveIntervalHours=24`、`vacuumIntervalDays=14`；`archiveIntervalHours=0` 关闭 runtime 自动归档但不影响 admin 脚本。
 
-热记忆压缩单轮约束：只扫描已到 review 时间的 Redis episode id；模型只输出结构化 JSON 压缩审计，不允许决定长期写入。压缩成功后删除对应 Redis episode；模型输出无效时不删除，发布 `MemoryHotCompressionFailed`。
-Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 review 时间后移，避免刚被判定仍有工作记忆价值的 episode 立刻进入热压缩清理。
+热记忆压缩单轮约束：只扫描已到 review 时间的 working-memory episode id；模型只输出结构化 JSON 压缩审计，不允许决定长期写入。压缩成功后删除对应 episode；模型输出无效时不删除，发布 `MemoryHotCompressionFailed`。
+Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下一次 review 时间后移，避免刚被判定仍有工作记忆价值的 episode 立刻进入热压缩清理。
 
 ## 记忆动作协议
 
@@ -268,12 +269,12 @@ Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 re
 
 | 事件 | 触发点 |
 | --- | --- |
-| `memory.episode.written` | Redis episode 写入完成 |
+| `memory.episode.written` | working-memory episode 写入完成 |
 | `memory.consolidation.completed` / `failed` | 升格 worker |
 | `memory.decay.swept` | 一轮衰减 sweep |
 | `memory.summary.written` | daily / weekly summary 写入 |
 | `memory.summary.embedding.written` | summary embedding 写入长期图并回填 `embedding_id` |
-| `memory.hot.compression.written` / `failed` | Redis 到期工作记忆压缩审计写入 / 失败 |
+| `memory.hot.compression.written` / `failed` | 到期工作记忆压缩审计写入 / 失败 |
 | `memory.dream.completed` / `failed` | Dream pass 完成 |
 | `memory.brain.archive.completed` / `failed` | brain.db 月级冷归档完成 / 失败 |
 | `memory.drift.repaired` | drift-repair 动作 |
@@ -283,7 +284,7 @@ Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 re
 | `memory.reflection.failed` | reflection 异步失败 |
 | `memory.feedback.classified` / `failed` | feedback interpreter |
 | `memory.project.candidate.recorded` / `memory.written` / `memory.recalled` | 项目记忆闭环 |
-| `memory.warmup.complete` | Redis warmup |
+| `memory.warmup.complete` | working-memory warmup |
 
 ## 配置要点
 
@@ -305,9 +306,9 @@ Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 re
 ## 运行边界 / 后续增强
 
 - legacy journal 仍保留 best-effort 审计写入；任何新召回能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
-- `BackgroundScheduler` 按后端可用性降级；默认本地开发环境缺 Redis/Surreal 时长期图相关 sweep noop，但 brain archive 与热记忆压缩已由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
+- `BackgroundScheduler` 按后端可用性降级；默认本地开发环境可运行 local working memory 与 local crystal graph，brain archive 与热记忆压缩由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
 - Reflection 已拆为 `ReflectionWorker`；Runtime 仅投递异步任务，抽取与落库不再挂在 `RuntimeModule` 私有方法里。
-- Redis / SurrealDB 路径已纳入 `smoke:runtime` 与本地 `release:check`；不配置 GitHub Actions 跑仓库侧 CI，真实模型 + Docker runtime smoke 只由本地发布门禁覆盖。
+- 本地 working memory 恢复与 MCP transport 恢复已纳入 `smoke:recovery`；`status` / `doctor` / TUI Overview 只读取 snapshot / backup / WAL 文件元数据展示恢复状态，不解析热数据；Docker doctor/status/recovery 纳入 `smoke:runtime` 与本地 `release:check`。真实模型 chat probe 需要真实 API key，单独由 `smoke:runtime:live` 覆盖；不配置 GitHub Actions 跑仓库侧 CI。
 
 ## 相关测试
 

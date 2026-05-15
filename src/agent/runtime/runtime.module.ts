@@ -27,15 +27,18 @@ import { parseAgentAsk } from "../../neural/memory/ask.ts";
 import { parseGhostDecisions } from "../../neural/memory/ghost.decisions.ts";
 import { parseIdentityAppends } from "../../neural/memory/identity.ts";
 import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
+import { redisKeyPrefixForNamespace } from "../../neural/memory/redis.ts";
 import { LocalHashEmbeddingProvider } from "../../neural/memory/embedding.ts";
 import {
     callMcpTool,
+    describeMcpResult,
     listMcpTools,
     loadMcpServers,
     parseMcpToolCalls,
     renderMcpToolCatalog,
     renderMcpToolResults,
     validateAgainstInputSchema,
+    type McpResultSummary,
     type McpToolCallExecution,
     type McpToolCatalogEntry,
     type McpToolCallRequest,
@@ -105,11 +108,14 @@ export interface RuntimeStreamOptions {
 
 interface CachedMcpToolCatalog {
     expiresAt: number;
+    lastError?: string;
+    stale?: boolean;
     tools: McpToolCatalogEntry[];
 }
 
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
+const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
 
 /** Phase 1 输出：被 phase 2~5 共享的“轮内不可变上下文”。 */
 interface PreparedTurn {
@@ -204,8 +210,11 @@ export class RuntimeModule extends RuntimeBoundary {
         await this.memory.warmup();
         const redisClient = this.memory.getRedisClient();
         if (redisClient && this.fastRouteSnapshots instanceof InMemoryFastRouteSnapshotStore) {
-            // Redis 命中即升级为跨副本共享存储；保留 L1 内存以维持热路径 O(1)。
-            this.fastRouteSnapshots = new RedisFastRouteSnapshotStore({ redis: redisClient });
+            // Redis 命中即升级为跨副本共享存储；namespace 复用工作记忆前缀，避免多 agent 共用 Redis 时串快照。
+            this.fastRouteSnapshots = new RedisFastRouteSnapshotStore({
+                prefix: `${redisKeyPrefixForNamespace(this.config.memory.redis.namespace)}:fastroute`,
+                redis: redisClient,
+            });
         }
         await this.recoverProcessRestartGhosts();
     }
@@ -398,14 +407,17 @@ export class RuntimeModule extends RuntimeBoundary {
             message.text.length,
         );
         const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
-        const mcpToolCatalog = await this.buildMcpToolCatalog(mcpServers, mcpExecution.canExecute, context.requestId);
+        const mcpCatalogBuild = await this.buildMcpToolCatalog(mcpServers, mcpExecution.canExecute, context.requestId);
+        const mcpToolCatalog = mcpCatalogBuild.entries;
         this.events.publish(
             event(
                 RuntimeEventType.McpToolCatalogBuilt,
                 {
                     canExecute: mcpExecution.canExecute,
+                    failedServers: mcpCatalogBuild.failedServers,
                     requiresApproval: mcpExecution.requiresApproval,
                     servers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
+                    staleServers: mcpCatalogBuild.staleServers,
                     tools: mcpToolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
                 },
                 context.requestId,
@@ -979,11 +991,13 @@ export class RuntimeModule extends RuntimeBoundary {
         servers: Awaited<ReturnType<typeof loadMcpServers>>,
         canExecuteTools: boolean,
         requestId: string,
-    ): Promise<McpToolCatalogEntry[]> {
+    ): Promise<{ entries: McpToolCatalogEntry[]; failedServers: string[]; staleServers: string[] }> {
         if (!canExecuteTools) {
-            return [];
+            return { entries: [], failedServers: [], staleServers: [] };
         }
         const entries: McpToolCatalogEntry[] = [];
+        const failedServers: string[] = [];
+        const staleServers: string[] = [];
         for (const server of servers) {
             if (!server.enabled || (!server.url && !server.command)) {
                 continue;
@@ -994,22 +1008,44 @@ export class RuntimeModule extends RuntimeBoundary {
                 // LRU touch：删后重 set，保持插入顺序近似 LRU。
                 this.mcpToolCatalogCache.delete(cacheKey);
                 this.mcpToolCatalogCache.set(cacheKey, cached);
+                if (cached.stale) {
+                    staleServers.push(server.name);
+                    failedServers.push(server.name);
+                }
                 entries.push(...cached.tools);
                 continue;
             }
             if (cached) this.mcpToolCatalogCache.delete(cacheKey);
-            const tools = await listMcpTools(this.config.paths, server, {
-                events: this.events,
-                requestId,
-                timeoutMs: 1_500,
-            });
+            let tools;
+            try {
+                tools = await listMcpTools(this.config.paths, server, {
+                    events: this.events,
+                    requestId,
+                    timeoutMs: 1_500,
+                });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                failedServers.push(server.name);
+                if (cached && cached.tools.length > 0) {
+                    staleServers.push(server.name);
+                    this.mcpToolCatalogCache.set(cacheKey, {
+                        expiresAt: Date.now() + MCP_TOOL_CATALOG_STALE_GRACE_MS,
+                        lastError: message.slice(0, 240),
+                        stale: true,
+                        tools: cached.tools,
+                    });
+                    entries.push(...cached.tools);
+                    continue;
+                }
+                throw error;
+            }
             const disabled = new Set(server.disabledTools ?? []);
             const allowedTools = disabled.size > 0 ? tools.filter((t) => !disabled.has(t.name)) : tools;
             const serverEntries = allowedTools.map((tool) => ({ server: server.name, tool }));
             this.cacheMcpToolEntries(cacheKey, serverEntries);
             entries.push(...serverEntries);
         }
-        return entries;
+        return { entries, failedServers, staleServers };
     }
 
     /**
@@ -1030,6 +1066,7 @@ export class RuntimeModule extends RuntimeBoundary {
         }
         this.mcpToolCatalogCache.set(cacheKey, {
             expiresAt: now + MCP_TOOL_CATALOG_CACHE_TTL_MS,
+            stale: false,
             tools: entries,
         });
     }
@@ -1114,6 +1151,7 @@ export class RuntimeModule extends RuntimeBoundary {
         requestId: string,
         requiresApproval: boolean,
     ): void {
+        const resultDescription = execution.result ? describeMcpResult(execution.result.raw) : undefined;
         this.events.publish(
             event(
                 RuntimeEventType.McpToolCallExecuted,
@@ -1121,6 +1159,12 @@ export class RuntimeModule extends RuntimeBoundary {
                     error: execution.error,
                     ok: execution.ok,
                     requiresApproval,
+                    ...(resultDescription
+                        ? {
+                              resultSummary: formatMcpResultSummary(resultDescription.summary, execution.result?.raw),
+                              resultSummaryMeta: resultDescription.summary,
+                          }
+                        : {}),
                     server: execution.call.server,
                     tool: execution.call.tool,
                 },
@@ -1690,20 +1734,40 @@ function mcpCatalogCacheKey(server: Awaited<ReturnType<typeof loadMcpServers>>[n
 function mcpExecutionsToProvenance(
     executions: McpToolCallExecution[],
 ): NonNullable<MemoryEpisodeProvenance["mcpCalls"]> {
-    return executions.map((execution) => ({
-        error: execution.error ? execution.error.slice(0, 240) : undefined,
-        ok: execution.ok,
-        resultSummary: execution.result ? summarizeMcpResult(execution.result.raw) : undefined,
-        server: execution.call.server,
-        tool: execution.call.tool,
-    }));
+    return executions.map((execution) => {
+        const summary = execution.result ? describeMcpResult(execution.result.raw).summary : undefined;
+        return {
+            error: execution.error ? execution.error.slice(0, 240) : undefined,
+            ok: execution.ok,
+            resultSummary: summary ? formatMcpResultSummary(summary, execution.result?.raw) : undefined,
+            resultSummaryMeta: summary,
+            server: execution.call.server,
+            tool: execution.call.tool,
+        };
+    });
 }
 
-function summarizeMcpResult(value: unknown): string {
-    if (typeof value === "string") {
-        return value.replace(/\s+/g, " ").trim().slice(0, 500);
+function formatMcpResultSummary(summary: McpResultSummary, raw?: unknown): string {
+    const parts = [`kind=${summary.kind}`];
+    if (typeof summary.chars === "number") parts.push(`chars=${summary.chars}`);
+    if (typeof summary.originalChars === "number") parts.push(`originalChars=${summary.originalChars}`);
+    if (typeof summary.items === "number") parts.push(`items=${summary.items}`);
+    if (typeof summary.lines === "number") parts.push(`lines=${summary.lines}`);
+    if (typeof summary.keyCount === "number") parts.push(`keys=${summary.keyCount}`);
+    if (summary.keys && summary.keys.length > 0) parts.push(`sampleKeys=${summary.keys.join(",")}`);
+    if (summary.valueType) parts.push(`valueType=${summary.valueType}`);
+    const preview = previewMcpResult(raw);
+    if (preview) parts.push(`preview=${preview}`);
+    return parts.join(" ").slice(0, 500);
+}
+
+function previewMcpResult(value: unknown): string {
+    if (value === undefined || value === null) return "";
+    try {
+        return (typeof value === "string" ? value : JSON.stringify(value)).replace(/\s+/g, " ").trim().slice(0, 180);
+    } catch {
+        return "";
     }
-    return JSON.stringify(value).replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
 function selectRuntimeSkills(

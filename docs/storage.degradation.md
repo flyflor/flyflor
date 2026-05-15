@@ -1,6 +1,6 @@
 # 存储降级方案：Redis + SurrealDB → 纯本地方案
 
-> Status: **阶段 3 已落地 — local working memory 默认启用；crystal.db + VectorIndex + SQLiteGraphStore 已实现，Surreal 保留兼容后端**
+> Status: **阶段 3+ 已落地 — local working memory 默认启用；WAL/snapshot/backup 恢复、恢复可见性、crystal.db + VectorIndex + SQLiteGraphStore 已实现，Surreal 保留兼容后端**
 >
 > 从智能生命体的设计哲学出发，评估将 Redis（海马体工作记忆）和 SurrealDB（晶体长期图）两个外部服务降级为进程内实现。
 
@@ -14,7 +14,7 @@ Redis 和 SurrealDB 是这三层中的存储介质。本文评估用进程内 Ty
 
 目标：将 docker-compose 从 3 容器降为 1 容器，零外部运行时依赖，同时确保智能生命体的记忆机制不受损。当前已完成工作记忆 local backend、Docker 单容器默认配置、晶体层 local backend，以及长期图的 SQLite 本地后端；SurrealDB 仅保留兼容后端。
 
-配套门禁已经补上 `bun run smoke:recovery`：它会在临时 `HOME` 下复跑本地 working memory 的首次 warmup、WAL 撕裂尾部恢复、再启动后的 `memory.warmup.complete` 摘要，并顺带验证 MCP 传输短暂失败后的 session 重开与长结果回灌，确保恢复路径可重复验证且不污染现有数据。
+配套门禁已经补上 `bun run smoke:recovery`：它会在临时 `HOME` 下复跑本地 working memory 的首次 warmup、WAL 撕裂尾部恢复、主 snapshot 损坏时的 `.bak` 快照恢复，以及再启动后的 `memory.warmup.complete` 摘要，并顺带验证 MCP 传输短暂失败后的 session 重开与长结果回灌，确保恢复路径可重复验证且不污染现有数据。`doctor`、`status`、CLI navigator 和 Dashboard TUI 现在都会展示恢复状态；实现只做 `stat` 文件元数据读取，不打开或解析热数据。
 
 ---
 
@@ -104,6 +104,8 @@ crystal.db 独立于 brain.db，因为「生平事件」和「晶体知识」是
 | fastRoute 快照 | L2 跨进程共享 | `InMemoryFastRouteSnapshotStore`（已有） |
 | gateway 去重 | 消息幂等 | `InMemoryDedupStore`（已有） |
 | FocusPointer | 用户当前注意力指针 | MemoryComponent 内 `Map<userId, pointer>` |
+
+Redis 重新启用时，working memory 与 fastRoute 共享同一 namespace 前缀：默认 `memory.redis.namespace="flyflor"` 保持历史 `ff:*` key；自定义 namespace 会被无损 URL 编码后作为 Redis key 前缀，避免多 agent / 多环境共用 Redis 时串写热数据。
 
 ---
 
@@ -304,7 +306,7 @@ semantic overlap 的 gem 合并为一条。纯函数，替换后不变。
 
 ### 7.6 MemoryComponent 持续机制
 
-工作记忆的语义是「临时的、时间窗口内的」。进程重启后丢失工作记忆是正常行为——Redis 当前也不持久化。
+工作记忆的语义是「临时的、时间窗口内的」。它不能替代 brain.db / crystal.db 的长期记忆，但默认 local backend 必须能在进程重启、断电或 snapshot 损坏后薄恢复热窗口，避免一次基础设施毛刺造成整段热上下文丢失。
 
 但作为智能生命体，热数据仍必须具备**持续加载**能力：
 
@@ -314,6 +316,7 @@ semantic overlap 的 gem 合并为一条。纯函数，替换后不变。
 - Redis 兼容后端也保留薄 circuit breaker：命令失败后短时间快失败，冷却后下一次命令作为探针恢复
 - 后台 consolidation / hot compression 在 breaker 冷却期只读健康快照并跳过整轮；探针窗口到达后才重新触发一次真实命令，避免维护任务反复冲击降级中的热存储
 - 恢复成功后，下一次可恢复写入；不替代晶体层，晶体知识始终在 `crystal.db`
+- `describeWorkingMemoryRecoveryFiles` 是状态层唯一恢复探针：local backend 展示 snapshot / backup / WAL 大小，Redis backend 只报告恢复责任归外部 working-memory 服务；该探针不参与请求热路径
 
 ---
 
@@ -332,7 +335,7 @@ config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 
 | 风险 | 缓解 |
 |------|------|
-| 进程重启或断电影响工作记忆 | 本地 working memory 通过 WAL + snapshot + backup 兜底；晶体知识在 crystal.db 不受影响 |
+| 进程重启或断电影响工作记忆 | 本地 working memory 通过 WAL + snapshot + backup 薄恢复；`doctor` / `status` / TUI 展示恢复文件元数据；晶体知识在 crystal.db 不受影响 |
 | 搜索规模扩大 | AtomScore 阈值 + anti-bloat 控制；VectorIndex 接口可换 HNSW |
 | 图遍历升级 | SQLite 递归 CTE 可覆盖 |
 | 文件膨胀 | 月级冷归档 + vacuum |
@@ -344,11 +347,11 @@ config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 | 阶段 | 内容 |
 |------|------|
 | 1 | `VectorIndex` 接口 + `FlatBruteForceIndex` |
-| 2 | `MemoryComponent`（替代 Redis）✅ local WAL + snapshot |
+| 2 | `MemoryComponent`（替代 Redis）✅ local WAL + snapshot + backup + circuit breaker + 状态可见性 |
 | 3 | `SQLiteGraphStore`（替代 SurrealGraphStore）✅ |
 | 4 | DI 切换 + 配置开关 |
 | 5 | 更新 docker-compose.yml |
-| 6 | 全量测试回归 |
+| 6 | 全量测试回归 ✅ `docs:check` / `check` / `smoke:recovery` / `smoke:runtime` |
 
 ---
 

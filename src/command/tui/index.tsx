@@ -9,7 +9,7 @@ import { render } from "@opentui/solid";
 import { createSignal, createMemo, onCleanup } from "solid-js";
 import type { FlyFlor } from "../../app.ts";
 import { FlyFlorTokens } from "../../app.ts";
-import { describeWorkingMemoryHealth, resolveGatewaySnapshot } from "../../command/cli/status.ts";
+import { describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles, resolveGatewaySnapshot } from "../../command/cli/status.ts";
 import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
@@ -33,6 +33,7 @@ interface TuiSnapshot {
     gateway: GatewayStatusSnapshot;
     loadedAt: string;
     workingMemory: ReturnType<typeof describeWorkingMemoryHealth>;
+    workingRecovery: Awaited<ReturnType<typeof describeWorkingMemoryRecoveryFiles>>;
 }
 
 export async function startTui(app: FlyFlor): Promise<void> {
@@ -54,7 +55,9 @@ export async function startTui(app: FlyFlor): Promise<void> {
         const blackboard = app.resolve(FlyFlorTokens.Blackboard);
         const blackboardTurns = await blackboard.listRecentTurns(3);
         const workingMemory = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
-        return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString(), workingMemory };
+        // Recovery visibility intentionally reads only file metadata, so the dashboard stays cheap to refresh.
+        const workingRecovery = await describeWorkingMemoryRecoveryFiles(config);
+        return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString(), workingMemory, workingRecovery };
     };
 
     const initialSnapshot = await loadSnapshot();
@@ -124,6 +127,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
             lines.push(Text({ content: `Sandbox: ${s.config.sandbox.mode}`, fg: THEME.fg }));
             lines.push(Text({ content: `Memory: ${s.config.memory.enabled ? "enabled" : "disabled"} · Crystal ${s.config.memory.crystal.enabled ? "enabled" : "disabled"} · ${s.config.memory.crystal.backend}`, fg: THEME.fg }));
             lines.push(Text({ content: `Working: ${s.workingMemory.status} · ${s.workingMemory.detail}`, fg: s.workingMemory.status === "warn" ? THEME.yellow : THEME.fg }));
+            lines.push(Text({ content: `Recovery: ${s.workingRecovery.status} · ${s.workingRecovery.detail}`, fg: THEME.fg }));
             lines.push(Text({ content: "" }));
             lines.push(Text({ content: "◆ Latest Blackboard", fg: THEME.cyan, attributes: TextAttributes.BOLD }));
             const turn = s.blackboardTurns[0];

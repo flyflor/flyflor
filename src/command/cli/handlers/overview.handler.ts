@@ -6,7 +6,7 @@ import { getFlyflorConfigPath } from "../config.ts";
 import type { FlyflorConfig } from "../../../config/index.ts";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../../agent/gateway/index.ts";
 import { ChannelLinkState, CrystalMemoryBackend, MemoryWorkingBackend } from "../../../protocol/contracts/index.ts";
-import { describeWorkingMemoryHealth } from "../status.ts";
+import { describeModelApiKey, describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles } from "../status.ts";
 
 export interface OverviewData {
     runtime: RuntimeSummary;
@@ -60,6 +60,10 @@ export interface MemorySummary {
         status: "ok" | "warn";
         detail: string;
     };
+    workingRecoveryStatus: {
+        status: "ok";
+        detail: string;
+    };
 }
 
 export interface DoctorCheck {
@@ -78,7 +82,7 @@ export async function fetchOverviewData(app: FlyFlor): Promise<OverviewData> {
         runtime: extractRuntime(config),
         gateway: extractGateway(gateway),
         channels: extractChannels(gateway),
-        memory: extractMemory(config, workingMemorySnapshot),
+        memory: await extractMemory(config, workingMemorySnapshot),
         doctor: await runDoctorChecks(app, gateway),
     };
 }
@@ -123,7 +127,7 @@ function extractChannels(gateway: GatewayStatusSnapshot): ChannelRow[] {
     }));
 }
 
-function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unknown): MemorySummary {
+async function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unknown): Promise<MemorySummary> {
     return {
         memoryEnabled: config.memory.enabled,
         crystalEnabled: config.memory.crystal.enabled,
@@ -131,6 +135,7 @@ function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unknown): M
         storageDir: config.paths.storageDir,
         crystalDbFile: config.memory.crystal.local.dbFile ?? "",
         workingMemoryStatus: describeWorkingMemoryHealth(workingMemorySnapshot),
+        workingRecoveryStatus: await describeWorkingMemoryRecoveryFiles(config),
     };
 }
 
@@ -170,8 +175,8 @@ async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Pr
     });
     checks.push({
         name: "API key",
-        status: config.model.apiKey ? "ok" : "warn",
-        detail: config.model.apiKey ? "configured" : "empty",
+        status: describeModelApiKey(config.model.apiKey).status,
+        detail: describeModelApiKey(config.model.apiKey).detail,
     });
     checks.push({
         name: "Gateway port",

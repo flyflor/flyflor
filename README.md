@@ -77,11 +77,12 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 直接进入 chat TUI
 bun run smoke:docker                      # 不启动容器，检查 compose / binary / prompt bundle
-bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / 真实配置模型 chat 主路径
-bun run smoke:recovery                    # 临时 HOME 下检查 local working memory + MCP transport 恢复
+bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
+bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
+bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:release                     # docs + type + tests + binary + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/docker 静态烟测
-bun run release:check                     # 本地发布门禁：完整 release smoke，包含真实模型 Docker chat 主路径
+bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```
 
@@ -112,7 +113,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
 | `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
 | `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
-| `src/neural`      | 海马体工作记忆：Redis episodes、召回、最近交流 ring、热记忆压缩 |
+| `src/neural`      | 海马体工作记忆：local/Redis episodes、召回、最近交流 ring、热记忆压缩 |
 | `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
 | `templates`       | 提示词和记忆 Markdown 模板                                     |
 
@@ -120,7 +121,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 - **LLM = 流体智力**：当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策。
 - **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格。
-- **Neural = 海马体**：工作记忆（Redis）+ 长期记忆图（SurrealDB），支持 TTL 遗忘曲线、热记忆压缩审计、概念激活、记忆重建。
+- **Neural = 海马体**：默认本地工作记忆（WAL + snapshot）+ 本地晶体图（`crystal.db` + VectorIndex）；Redis / SurrealDB 作为兼容外部后端保留，认知流转不变。
 
 **核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
@@ -128,7 +129,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 1. 渠道、消息、用户身份归一为 `GatewayMessage`
 2. 路由判断：fastRoute 启发式（~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
-3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + Redis 海马体激活 + project/codename 局部记忆 + SurrealDB Gem 召回
+3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + working-memory 热激活 + project/codename 局部记忆 + local/Surreal Gem 召回
 4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append；TTFB 目标 < 350ms
 5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
@@ -141,11 +142,11 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | ---------------- | --------- | ---------------------------------------------------------------- |
 | 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
 | 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；prompt recall/write authority 已切到 brain events |
-| 工作记忆         | Redis     | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计 |
-| 长期记忆图       | SurrealDB | episode → memory_node → Gem，summary_embedding，RELATE 边 + MTREE ANN |
+| 工作记忆         | Local WAL/snapshot（默认）或 Redis | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
+| 长期记忆图       | `crystal.db` + VectorIndex（默认）或 SurrealDB | episode → memory_node → Gem，summary_embedding，本地图 mirror / Surreal RELATE 边 |
 | 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
 
-**SurrealDB 主表：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`
+**长期图主实体：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`
 
 **图边：** `next_context`、`similar_ep`、`consolidated_into`、`similar_concept`、`proven_as`、`proven_by`
 
@@ -170,21 +171,21 @@ Evidence Weight 裁判表：
 
 - **双轨衰减**：episode 5%/天、memory_node 2%/天、Gem 0.5%/天；lastVerifiedAt 超 30 天额外打折。
 - **矛盾检测**：`contradictionCount ≥ 2` → drift-repair；confidence < 0.1 → deprecated 归档。
-- **热记忆压缩**：Redis 到期 episode 可压缩成 `memory_events.type='hot-memory-compression'` 审计事件；不进入 prompt recall / `memory_summary` / SurrealDB / Gem 候选。
-- **容量阀门**：Redis `maxEpisodesPerUser=200`；SurrealDB episode 500 / memory_node 100 / Gem 50。
+- **热记忆压缩**：到期 working-memory episode 可压缩成 `memory_events.type='hot-memory-compression'` 审计事件；不进入 prompt recall / `memory_summary` / SurrealDB / Gem 候选。
+- **容量阀门**：working memory `maxEpisodesPerUser=200`；长期图 episode 500 / memory_node 100 / Gem 50。
 - **Gem 去重**：symbols IoU ≥ 0.7 且 cosine ≥ 0.85 → merge（`dedupeGems`，纯函数，无字符匹配）。
 
 ### Dream 模式（晶体层离线维护）
 
-Dream 是长期晶体层的主动维护 worker，仅读写 SurrealDB（`gem / memory_node / episode / gem_snapshot`），不触碰 Redis 工作记忆。
+Dream 是长期晶体层的主动维护 worker，读写本地 `crystal.db` 或兼容 SurrealDB 后端（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
 
 | Worker        | 作用层             | 唯一职责                                                       |
 | ------------- | ------------------ | -------------------------------------------------------------- |
-| Consolidation | Redis → SurrealDB  | 升格通道：到期 episode → reinforce / consolidate / discard     |
-| Hot compression | Redis → brain.db | 清理通道：到期 episode → 隔离压缩审计 → 删除 Redis episode     |
-| Decay         | SurrealDB（纯函数）| 被动衰减：importance × 时间 / verification age                 |
-| Anti-bloat    | Redis & SurrealDB  | 容量阀门：超额强制遗忘 / 归档                                  |
-| Dream         | SurrealDB only     | 晶体维护：drift-repair / recall-reinforce / contradiction-audit|
+| Consolidation | Working memory → Crystal graph | 升格通道：到期 episode → reinforce / consolidate / discard     |
+| Hot compression | Working memory → brain.db | 清理通道：到期 episode → 隔离压缩审计 → 删除热窗口 episode     |
+| Decay         | Crystal graph（纯函数）| 被动衰减：importance × 时间 / verification age                 |
+| Anti-bloat    | Working memory & Crystal graph | 容量阀门：超额强制遗忘 / 归档                                  |
+| Dream         | Crystal graph only | 晶体维护：drift-repair / recall-reinforce / contradiction-audit|
 
 三类动作：
 - `drift-repair`：先写 `gem_snapshot` 存档，再收窄 scope/precondition 或转 deprecated
@@ -289,7 +290,7 @@ flyflor gateway status       # 网关状态
 | [docs/proposals/eq.module.md](docs/proposals/eq.module.md) | EQ 语气控制层 |
 | [docs/proposals/life.form.md](docs/proposals/life.form.md) | 无 session / brain.db / Codename / Ask / Ghost / Dream 主线 |
 | [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
-| [docs/storage.degradation.md](docs/storage.degradation.md) | Redis / SurrealDB 纯本地降级草案 |
+| [docs/storage.degradation.md](docs/storage.degradation.md) | Redis / SurrealDB 纯本地降级现状 |
 | [TODO.md](TODO.md) | 运行边界 / 后续计划 |
 
 <!-- flyflor:prompt-templates:start -->
@@ -331,7 +332,7 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; `*
 | `feedback.classify.md` | `feedback.classify.md` | `classifyAndApplyFeedback` | — | Feedback classifier that buckets the latest user message. | `currentUserText` / `previousAssistantText` |
 | `memory.action.md` | `memory.action.md` | `renderMemoryActionInstructions` | — | Durable Markdown memory tool block schema. | — |
 | `memory.consolidation.md` | `memory.consolidation.md` | `ConsolidationWorker` | — | Episode classification prompt for consolidation. | `episode` |
-| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | — | Audit-only compression prompt for expiring Redis working memory. | `episodes` |
+| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | — | Audit-only compression prompt for expiring working-memory episodes. | `episodes` |
 | `memory.context.md` | `memory.context.md` | `renderMemoryPrompt` | — | Memory context wrapper for recent, project, long-term, and global layers. | `hippocampus` / `markdownContent` / `projectMemory` / `retrievedResults` |
 | `memory.dream.md` | `memory.dream.md` | `DreamWorker` | — | Quiet maintenance prompt for long-term drift, recall, and contradiction work. | `candidates` / `userId` |
 | `memory.project.offer.md` | `memory.project.offer.md` | `renderProjectOfferPrompt` | — | Runtime nudge for a project candidate awaiting user confirmation. | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |

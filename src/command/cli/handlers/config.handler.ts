@@ -1,5 +1,6 @@
 import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
 import type { FlyflorConfig } from "../../../config/index.ts";
+import { describeModelApiKey } from "../status.ts";
 
 export interface ConfigData {
     configPath: string;
@@ -72,7 +73,7 @@ function extractModel(config: FlyflorConfig): ModelConfigView {
         apiMode: config.model.apiMode,
         providerKind: config.model.provider,
         baseUrl: config.model.baseUrl || undefined,
-        apiKeyConfigured: Boolean(config.model.apiKey),
+        apiKeyConfigured: describeModelApiKey(config.model.apiKey).configured,
     };
 }
 

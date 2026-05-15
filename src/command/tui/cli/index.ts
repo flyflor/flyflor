@@ -99,6 +99,7 @@ function overviewLoader(): PageLoader {
             lines.push(`  Enabled: ${data.memory.memoryEnabled ? "yes" : "no"}`);
             lines.push(`  Crystal: ${data.memory.crystalEnabled ? "yes" : "no"}`);
             lines.push(`  Working: ${data.memory.workingMemoryStatus.status} · ${data.memory.workingMemoryStatus.detail}`);
+            lines.push(`  Recovery: ${data.memory.workingRecoveryStatus.status} · ${data.memory.workingRecoveryStatus.detail}`);
             lines.push("");
             lines.push("◆ Doctor");
             for (const check of data.doctor) {
@@ -244,6 +245,7 @@ function memoryLoader(): PageLoader {
             lines.push(`  SQLite: ${data.sqliteEnabled ? "yes" : "no"}`);
             lines.push(`  Embedding: ${data.embeddingDimensions}d`);
             lines.push(`  Working: ${data.workingMemoryStatus.status} · ${data.workingMemoryStatus.detail}`);
+            lines.push(`  Recovery: ${data.workingRecoveryStatus.status} · ${data.workingRecoveryStatus.detail}`);
             lines.push(`  Retrospective: ${data.retrospectiveEntryCount} entries`);
             return lines;
         },

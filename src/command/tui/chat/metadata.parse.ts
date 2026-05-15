@@ -120,10 +120,26 @@ function invalidAskMeta(path: string, reason: string): Error {
 export function readMcpTrace(entry: unknown): McpTrace | null {
     const record = readRecord(entry);
     if (!record) return null;
+    const resultSummaryMeta = readRecord(record.resultSummaryMeta) ?? readRecord(record.summary);
     return {
         ok: record.ok === true,
-        resultText: readString(record.resultSummary) ?? readString(record.resultText) ?? "",
+        resultText: readString(record.resultSummary) ?? readString(record.resultText) ?? renderMcpSummaryMeta(resultSummaryMeta),
+        ...(resultSummaryMeta ? { resultSummaryMeta } : {}),
         server: readString(record.server) ?? "",
         tool: readString(record.tool) ?? "",
     };
+}
+
+function renderMcpSummaryMeta(meta: Record<string, unknown> | null): string {
+    if (!meta) return "";
+    const kind = readString(meta.kind);
+    const chars = readNumber(meta.originalChars) ?? readNumber(meta.chars);
+    const keys = readNumber(meta.keyCount);
+    const items = readNumber(meta.items);
+    return [
+        kind ? `kind=${kind}` : undefined,
+        chars !== undefined ? `chars=${chars}` : undefined,
+        keys !== undefined ? `keys=${keys}` : undefined,
+        items !== undefined ? `items=${items}` : undefined,
+    ].filter((part): part is string => Boolean(part)).join(" ");
 }

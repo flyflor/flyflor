@@ -23,6 +23,10 @@ describe("memory CLI handler", () => {
             expect(data.workingMemoryStatus.detail).toContain("local circuit open");
             expect(data.workingMemoryStatus.detail).toContain("disk outage");
             expect(data.workingMemoryStatus.detail).toContain("next probe");
+            expect(data.workingRecoveryStatus.detail).toContain("local");
+            expect(data.workingRecoveryStatus.detail).toContain("snapshot=missing");
+            expect(data.workingRecoveryStatus.detail).toContain("backup=missing");
+            expect(data.workingRecoveryStatus.detail).toContain("wal=missing");
         } finally {
             await rm(root, { recursive: true, force: true });
         }

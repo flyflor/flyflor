@@ -3008,6 +3008,7 @@ function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): Memory
             error: call.error ? call.error.slice(0, 240) : undefined,
             ok: call.ok,
             resultSummary: call.resultSummary ? compactText(call.resultSummary, 500) : undefined,
+            resultSummaryMeta: call.resultSummaryMeta,
             server: call.server.trim(),
             tool: call.tool.trim(),
         }));

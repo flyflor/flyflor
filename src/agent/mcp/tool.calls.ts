@@ -24,6 +24,19 @@ export interface McpToolCallExecution {
     error?: string;
 }
 
+export interface McpResultSummary {
+    [key: string]: unknown;
+    kind: string;
+    chars?: number;
+    lines?: number;
+    items?: number;
+    keys?: string[];
+    keyCount?: number;
+    valueType?: string;
+    originalChars?: number;
+    previewChars?: number;
+}
+
 const MCP_CALL_BLOCK = structuredBlock(StructuredBlockProtocol.McpCalls);
 
 export function parseMcpToolCalls(rawText: string, limit = 4): ParsedMcpToolCalls {
@@ -84,7 +97,7 @@ const MCP_RESULT_MAX_CHARS_PER_CALL = 4_000;
 const MCP_RESULT_TRUNCATE_HEAD = 2_400;
 const MCP_RESULT_TRUNCATE_TAIL = 1_200;
 
-function summarizeMcpResultPayload(raw: unknown): { summary: Record<string, unknown>; result: unknown } {
+export function describeMcpResult(raw: unknown): { summary: McpResultSummary; result: unknown } {
     if (raw === undefined || raw === null) {
         return {
             summary: { kind: "empty", valueType: raw === null ? "null" : "undefined" },
@@ -121,7 +134,7 @@ function summarizeMcpResultPayload(raw: unknown): { summary: Record<string, unkn
     };
 }
 
-function buildMcpResultSummary(raw: unknown, serialized: string): Record<string, unknown> {
+function buildMcpResultSummary(raw: unknown, serialized: string): McpResultSummary {
     if (typeof raw === "string") {
         return { kind: "string", chars: serialized.length, lines: countLines(raw) };
     }
@@ -152,7 +165,7 @@ export function renderMcpToolResults(executions: McpToolCallExecution[]): string
                     server: execution.call.server,
                     tool: execution.call.tool,
                     ok: execution.ok,
-                    ...summarizeMcpResultPayload(execution.result?.raw),
+                    ...describeMcpResult(execution.result?.raw),
                     error: execution.error,
                 })),
             },

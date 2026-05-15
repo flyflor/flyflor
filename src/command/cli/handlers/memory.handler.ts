@@ -1,6 +1,6 @@
 import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
 import { RetrospectiveLog } from "../../../neural/memory/index.ts";
-import { describeWorkingMemoryHealth } from "../status.ts";
+import { describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles } from "../status.ts";
 
 export interface MemoryData {
     enabled: boolean;
@@ -15,6 +15,10 @@ export interface MemoryData {
     memoryDir: string;
     workingMemoryStatus: {
         status: "ok" | "warn";
+        detail: string;
+    };
+    workingRecoveryStatus: {
+        status: "ok";
         detail: string;
     };
     retrospectivePath: string;
@@ -43,6 +47,7 @@ export async function fetchMemoryData(app: FlyFlor): Promise<MemoryData> {
         storageDir: config.paths.storageDir,
         memoryDir: config.paths.memoryDir,
         workingMemoryStatus: describeWorkingMemoryHealth(workingMemorySnapshot),
+        workingRecoveryStatus: await describeWorkingMemoryRecoveryFiles(config),
         retrospectivePath: path,
         retrospectiveExists: exists,
         retrospectiveEntryCount: Math.max(entryCount, 0),

@@ -36,7 +36,7 @@
 }
 ```
 
-本地 working memory 的热视图在进程内，所有 mutation 先写 `working.wal.jsonl`，再周期 compact 到 `working.snapshot.json`。断电最多丢最后一条撕裂 JSONL，不会整段失忆。
+本地 working memory 的热视图在进程内，所有 mutation 先写 `working.wal.jsonl`，再周期 compact 到 `working.snapshot.json`。断电最多丢最后一条撕裂 JSONL，不会整段失忆；`flyflor doctor`、`flyflor status` 和 TUI Overview 会用轻量文件元数据展示 snapshot / backup / WAL 的恢复状态。
 
 ## 常用命令
 
@@ -48,8 +48,9 @@ bun run docker:logs      # 仅跟踪日志（已启动情况下）
 bun run docker:down      # 停服务，保留数据
 bun run docker:nuke      # 停服务并清空具名卷（重置本地持久状态）
 bun run smoke:docker     # 不启动容器，检查 compose / Linux binary 挂载 / prompt bundle
-bun run smoke:runtime    # 已启动 compose 后，检查 doctor / 真实配置模型 chat 主路径
-bun run smoke:recovery   # 临时 HOME 下验证 local working memory + MCP transport 恢复
+bun run smoke:runtime    # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示，不跑真实模型
+bun run smoke:runtime:live # 已配置真实 API key 后，额外跑一次真实模型 chat probe
+bun run smoke:recovery   # 临时 HOME 下验证 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:release    # docs + type + tests + binary + docker smoke
 bun run ci               # 本地确定性门禁：docs/type/tests/binary + docker 静态烟测
 ```

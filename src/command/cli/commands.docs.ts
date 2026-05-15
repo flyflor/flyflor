@@ -18,7 +18,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
         note:
             "Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`.",
     },
-    { path: "tui", status: "✅", note: "Uses the same TUI bootstrap as `chat --tui`." },
+    { path: "tui", status: "✅", note: "Uses the same TUI bootstrap as `chat --tui`; the dashboard Overview shows working-memory health and recovery file metadata." },
     { path: "gateway run", status: "✅", note: "Runs in the foreground." },
     {
         path: "gateway start/stop/restart",
@@ -30,9 +30,9 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     { path: "gateway setup", status: "✅", note: "Interactive configuration." },
     { path: "model", status: "✅", note: "Lists or sets the default provider and model." },
     { path: "setup", status: "✅", note: "Initialization wizard." },
-    { path: "status", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus`." },
+    { path: "status", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus` and reports working-memory recovery visibility." },
     { path: "channels", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode lists channel adapter status." },
-    { path: "doctor", status: "✅", note: "`--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward." },
+    { path: "doctor", status: "✅", note: "`--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward; diagnostics include lightweight working-memory recovery metadata." },
     {
         path: "codename list/use/promote",
         status: "✅",
@@ -61,7 +61,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     {
         path: "memory status/reset/retrospective",
         status: "✅",
-        note: "Reset supports clearing allowlisted files; retrospective shows consolidation audit logs.",
+        note: "Status shows working-memory health and recovery metadata; reset supports clearing allowlisted files; retrospective shows consolidation audit logs.",
         covers: ["memory status", "memory reset", "memory retrospective"],
     },
     {

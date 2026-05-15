@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import Table from "cli-table3";
 import pc from "picocolors";
@@ -8,7 +9,7 @@ import { checkSkillSchemaCompatibility } from "../../crystal/skills/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { createDefaultMemoryTuning } from "../../config/index.ts";
-import { ChannelLinkState, CrystalMemoryBackend, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
+import { ChannelLinkState, CrystalMemoryBackend, MemoryEventStatus, MemoryEventType, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
 import { getFlyflorConfigPath } from "./config.ts";
 
 export function renderFlyflorBanner(): string {
@@ -28,6 +29,7 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
     const config = app.resolve(FlyFlorTokens.Config);
     const gateway = await resolveGatewaySnapshot(app);
     const workingHealth = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
+    const workingRecovery = await describeWorkingMemoryRecoveryFiles(config);
     return [
         section("Runtime", [
             line("Config", getFlyflorConfigPath()),
@@ -53,6 +55,7 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
             line("Crystal backend", config.memory.crystal.backend),
             line("Crystal DB", config.memory.crystal.local.dbFile ?? "(unset)"),
             line("Working", `${statusText(workingHealth.status, workingHealth.status)} ${workingHealth.detail}`),
+            line("Recovery", `${statusText(workingRecovery.status, workingRecovery.status)} ${workingRecovery.detail}`),
             line("Storage", config.paths.storageDir),
         ]),
     ].join("\n");
@@ -78,8 +81,8 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
     ]);
     rows.push([
         "API key",
-        config.model.apiKey ? "ok" : "warn",
-        config.model.apiKey ? "configured" : "empty",
+        describeModelApiKey(config.model.apiKey).status,
+        describeModelApiKey(config.model.apiKey).detail,
     ]);
     rows.push(["Gateway port", config.gateway.port > 0 ? "ok" : "warn", String(config.gateway.port)]);
     rows.push([
@@ -115,12 +118,19 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
 
     const tuningSummary = describeMemoryTuning(config);
     rows.push(["Memory tuning", tuningSummary.status, tuningSummary.detail]);
+    rows.push(["Memory debug", "ok", "bypass-score=true (doctor diagnostics only)"]);
 
     const brainSummary = await describeBrainDb(config);
     rows.push(["Brain.db", brainSummary.status, brainSummary.detail]);
 
+    const identitySummary = await describeIdentityActivity(config);
+    rows.push(["Identity activity", identitySummary.status, identitySummary.detail]);
+
     const workingMemorySummary = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
     rows.push(["Working memory", workingMemorySummary.status, workingMemorySummary.detail]);
+
+    const workingRecoverySummary = await describeWorkingMemoryRecoveryFiles(config);
+    rows.push(["Working recovery", workingRecoverySummary.status, workingRecoverySummary.detail]);
 
     const table = new Table({
         head: ["Check", "Status", "Detail"],
@@ -148,6 +158,28 @@ export function renderChannelTable(channels: ChannelStatusSnapshot[]): string {
         ]);
     }
     return table.toString();
+}
+
+export function describeModelApiKey(apiKey: unknown): { configured: boolean; detail: string; status: "ok" | "warn" } {
+    if (typeof apiKey !== "string" || !apiKey.trim()) {
+        return { configured: false, detail: "empty", status: "warn" };
+    }
+    if (isPlaceholderSecret(apiKey)) {
+        return { configured: false, detail: "placeholder", status: "warn" };
+    }
+    return { configured: true, detail: "configured", status: "ok" };
+}
+
+function isPlaceholderSecret(value: string): boolean {
+    const normalized = value.trim().toUpperCase();
+    return (
+        normalized === "REPLACE_ME" ||
+        normalized.startsWith("REPLACE_ME_") ||
+        normalized === "CHANGE_ME" ||
+        normalized === "CHANGEME" ||
+        normalized.startsWith("YOUR_") ||
+        normalized.endsWith("_HERE")
+    );
 }
 
 export async function resolveGatewaySnapshot(app: FlyFlor): Promise<GatewayStatusSnapshot> {
@@ -273,6 +305,38 @@ export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: 
     };
 }
 
+/**
+ * R3 doctor visibility：identity 自写必须能被用户审计。
+ * 这里只消费 brain.db 的结构化 type/status/ts 字段，不读取 identity 文本内容。
+ */
+export async function describeIdentityActivity(
+    config: FlyflorConfig,
+    options: { nowMs?: number; windowDays?: number } = {},
+): Promise<{ status: string; detail: string }> {
+    const { join } = await import("node:path");
+    const brainPath = join(config.paths.home, "brain.db");
+    try {
+        await stat(brainPath);
+    } catch {
+        return { status: "warn", detail: "brain.db not initialized yet" };
+    }
+    const nowMs = options.nowMs ?? Date.now();
+    const windowDays = Math.max(1, Math.floor(options.windowDays ?? 7));
+    const sinceTs = nowMs - windowDays * 24 * 60 * 60_000;
+    try {
+        const db = new Database(brainPath, { readonly: true });
+        try {
+            const recent = readIdentityRecentCount(db, sinceTs);
+            const pending = readIdentityPendingReviewCount(db);
+            return { status: "ok", detail: `last${windowDays}d=${recent}, pendingReview=${pending}` };
+        } finally {
+            db.close();
+        }
+    } catch {
+        return { status: "warn", detail: "identity activity unavailable" };
+    }
+}
+
 function readBrainDbCounts(brainPath: string): string {
     try {
         const db = new Database(brainPath, { readonly: true });
@@ -289,6 +353,25 @@ function readBrainDbCounts(brainPath: string): string {
     } catch {
         return "events=?, state=?, summaries=?, links=?, codenames=?";
     }
+}
+
+function readIdentityRecentCount(db: Database, sinceTs: number): number {
+    const row = db
+        .query("SELECT COUNT(*) AS count FROM memory_events WHERE type = ? AND ts >= ?")
+        .get(MemoryEventType.IdentityAppend, sinceTs) as { count?: number } | null;
+    return typeof row?.count === "number" ? row.count : 0;
+}
+
+function readIdentityPendingReviewCount(db: Database): number {
+    const row = db
+        .query(
+            `SELECT COUNT(*) AS count
+             FROM memory_events e
+             LEFT JOIN memory_state s ON s.event_id = e.id
+             WHERE e.type = ? AND COALESCE(s.status, ?) = ?`,
+        )
+        .get(MemoryEventType.IdentityAppend, MemoryEventStatus.Live, MemoryEventStatus.Live) as { count?: number } | null;
+    return typeof row?.count === "number" ? row.count : 0;
 }
 
 function readCount(db: Database, table: string): number {
@@ -360,6 +443,27 @@ export function describeWorkingMemoryHealth(snapshot: unknown): { status: "ok" |
         detail.push(`torn=${torn}`);
     }
     return { status: "ok", detail: detail.join(", ") };
+}
+
+/**
+ * 本地 working memory 的恢复文件可见性。
+ * 只读文件元数据，不打开或解析热数据，避免 doctor 给正常请求路径增加额外成本。
+ */
+export async function describeWorkingMemoryRecoveryFiles(
+    config: FlyflorConfig,
+): Promise<{ status: "ok"; detail: string }> {
+    const backend =
+        config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
+    if (backend !== MemoryWorkingBackend.Local) {
+        return { status: "ok", detail: `${backend} backend; recovery handled by configured working-memory service` };
+    }
+    const local = config.memory.working?.local;
+    const snapshotFile = local?.snapshotFile ?? "working.snapshot.json";
+    const walFile = local?.walFile ?? "working.wal.jsonl";
+    const snapshot = await describeFileSize(join(config.paths.memoryDir, snapshotFile));
+    const backup = await describeFileSize(join(config.paths.memoryDir, `${snapshotFile}.bak`));
+    const wal = await describeFileSize(join(config.paths.memoryDir, walFile));
+    return { status: "ok", detail: `local snapshot=${snapshot}, backup=${backup}, wal=${wal}` };
 }
 
 /**
@@ -564,5 +668,14 @@ async function exists(path: string): Promise<boolean> {
         return true;
     } catch {
         return false;
+    }
+}
+
+async function describeFileSize(path: string): Promise<string> {
+    try {
+        const info = await stat(path);
+        return formatBytes(info.size);
+    } catch {
+        return "missing";
     }
 }

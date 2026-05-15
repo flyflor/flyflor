@@ -7,6 +7,7 @@ export interface McpTrace {
     tool: string;
     ok: boolean;
     resultText: string;
+    resultSummaryMeta?: Record<string, unknown>;
 }
 
 export interface BlackboardMeta {

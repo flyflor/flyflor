@@ -65,9 +65,8 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
             connectTimeout: config.timeoutMs,
             commandTimeout: config.timeoutMs,
         });
-        // namespace 默认 "flyflor"；Redis key 实际前缀使用 "ff:" 缩写以省网络带宽。
-        // 多租户/多 agent 共享同一 Redis 时，可改 namespace 切分逻辑。
-        this.prefix = `ff`;
+        // namespace 默认 "flyflor"；默认 key 保持历史短前缀 "ff:"，自定义 namespace 隔离多 agent / 多环境。
+        this.prefix = redisKeyPrefixForNamespace(config.namespace);
         this.timeoutMs = config.timeoutMs;
         this.defaultTtlSeconds = config.defaultTtlSeconds;
         this.maxEpisodesPerUser = config.maxEpisodesPerUser;
@@ -375,6 +374,14 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
     private activationKey(userId: string): string {
         return `${this.prefix}:act:${userId}`;
     }
+}
+
+export function redisKeyPrefixForNamespace(namespace: string | undefined): string {
+    const normalized = typeof namespace === "string" ? namespace.trim() : "";
+    if (!normalized || normalized === "flyflor") {
+        return "ff";
+    }
+    return encodeURIComponent(normalized);
 }
 
 function safeJsonArray(value: string | undefined): string[] {

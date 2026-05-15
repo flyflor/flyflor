@@ -35,6 +35,7 @@ export interface ReflectionNormalizeSource {
         error?: string;
         ok: boolean;
         resultSummary?: string;
+        resultSummaryMeta?: Record<string, unknown>;
         server: string;
         tool: string;
     }>;

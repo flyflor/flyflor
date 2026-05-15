@@ -168,7 +168,7 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
         callSite: "HotMemoryCompressionWorker",
         filename: "memory.hot.compress.md",
         requiredPlaceholders: ["episodes"],
-        summary: "Audit-only compression prompt for expiring Redis working memory.",
+        summary: "Audit-only compression prompt for expiring working-memory episodes.",
     },
     memoryContext: {
         callSite: "renderMemoryPrompt",

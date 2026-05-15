@@ -372,6 +372,42 @@ describe("Skill and MCP capability config", () => {
         });
     });
 
+    test("runtime reuses stale MCP catalog when refresh fails", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-mcp-catalog-stale-"));
+        const paths = testPaths(root);
+        await withControllableHttpMcpServer(async (url, control) => {
+            const server = await upsertMcpServer(paths, { name: "remote", url });
+            const baseConfig = await loadConfigForPaths(paths);
+            const runtime = new RuntimeModule(baseConfig, new SequencedModel([]), new CapturingSink());
+            const build = (
+                runtime as unknown as {
+                    buildMcpToolCatalog: (
+                        servers: unknown[],
+                        canExecuteTools: boolean,
+                        requestId: string,
+                    ) => Promise<{ entries: Array<{ server: string; tool: { name: string } }>; failedServers: string[]; staleServers: string[] }>;
+                    mcpToolCatalogCache: Map<string, { expiresAt: number }>;
+                }
+            ).buildMcpToolCatalog.bind(runtime);
+
+            const first = await build([server], true, "req-catalog-1");
+            expect(first.entries.map((entry) => `${entry.server}.${entry.tool.name}`)).toEqual(["remote.echo"]);
+            expect(first.staleServers).toEqual([]);
+
+            for (const cached of (
+                runtime as unknown as { mcpToolCatalogCache: Map<string, { expiresAt: number }> }
+            ).mcpToolCatalogCache.values()) {
+                cached.expiresAt = 0;
+            }
+            control.failToolsList = true;
+
+            const second = await build([server], true, "req-catalog-2");
+            expect(second.entries.map((entry) => `${entry.server}.${entry.tool.name}`)).toEqual(["remote.echo"]);
+            expect(second.failedServers).toEqual(["remote"]);
+            expect(second.staleServers).toEqual(["remote"]);
+        });
+    });
+
     test("runtime executes structured MCP tool calls and uses tool results in the final answer", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-"));
         const paths = testPaths(root);
@@ -760,6 +796,89 @@ async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promis
     }
     try {
         return await fn(`http://127.0.0.1:${address.port}/mcp`);
+    } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+}
+
+async function withControllableHttpMcpServer<T>(
+    fn: (url: string, control: { failToolsList: boolean }) => Promise<T>,
+): Promise<T> {
+    const control = { failToolsList: false };
+    let sessionId = "";
+    const server = createServer((request, response) => {
+        const chunks: Buffer[] = [];
+        request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        request.on("end", () => {
+            const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+                id?: number | string;
+                method?: string;
+                params?: Record<string, unknown>;
+            };
+            const writeJson = (body: unknown, headers: Record<string, string> = {}) => {
+                response.writeHead(200, { "content-type": "application/json", ...headers });
+                response.end(JSON.stringify(body));
+            };
+            if (payload.method === "initialize") {
+                sessionId = crypto.randomUUID();
+                writeJson(
+                    { jsonrpc: "2.0", id: payload.id, result: { capabilities: {} } },
+                    { "Mcp-Session-Id": sessionId },
+                );
+                return;
+            }
+            if (payload.method === "notifications/initialized") {
+                response.writeHead(202);
+                response.end();
+                return;
+            }
+            if (request.headers["mcp-session-id"] !== sessionId) {
+                writeJson({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
+                return;
+            }
+            if (payload.method === "tools/list") {
+                if (control.failToolsList) {
+                    response.writeHead(503);
+                    response.end("catalog unavailable");
+                    return;
+                }
+                writeJson({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    result: {
+                        tools: [
+                            {
+                                name: "echo",
+                                description: "Echo input text",
+                                inputSchema: { type: "object", properties: { text: { type: "string" } } },
+                            },
+                        ],
+                    },
+                });
+                return;
+            }
+            if (payload.method === "tools/call") {
+                const args = payload.params?.arguments as { text?: unknown } | undefined;
+                writeJson({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    result: {
+                        isError: false,
+                        content: [{ type: "text", text: String(args?.text ?? "") }],
+                    },
+                });
+                return;
+            }
+            writeJson({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
+        });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") {
+        throw new Error("controllable HTTP MCP server did not bind a TCP port");
+    }
+    try {
+        return await fn(`http://127.0.0.1:${address.port}/mcp`, control);
     } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()));
     }

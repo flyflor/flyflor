@@ -32,6 +32,7 @@ export interface RuntimeReflectionSource {
         error?: string;
         ok: boolean;
         resultSummary?: string;
+        resultSummaryMeta?: Record<string, unknown>;
         server: string;
         tool: string;
     }>;

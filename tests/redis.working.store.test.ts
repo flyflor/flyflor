@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { RedisMemoryStore } from "../src/neural/memory/redis.ts";
+import { RedisMemoryStore, redisKeyPrefixForNamespace } from "../src/neural/memory/redis.ts";
 import type { RedisMemoryConfig } from "../src/config/index.ts";
 
 describe("RedisMemoryStore circuit breaker", () => {
@@ -36,9 +36,23 @@ describe("RedisMemoryStore circuit breaker", () => {
         expect(await store.readEpisode("u1", "ep1")).toBeUndefined();
         expect(store.getHealthSnapshot().circuitState).toBe("closed");
     });
+
+    test("uses namespace-aware key prefixes while preserving the default ff prefix", () => {
+        expect(redisKeyPrefixForNamespace("flyflor")).toBe("ff");
+        expect(redisKeyPrefixForNamespace("team.alpha")).toBe("team.alpha");
+        expect(redisKeyPrefixForNamespace("team alpha/dev")).toBe("team%20alpha%2Fdev");
+
+        const custom = new RedisMemoryStore(config({ namespace: "team alpha/dev" }));
+        expect((custom as unknown as { episodeKey: (userId: string, episodeId: string) => string }).episodeKey("u1", "ep1")).toBe(
+            "team%20alpha%2Fdev:ep:u1:ep1",
+        );
+
+        const defaults = new RedisMemoryStore(config());
+        expect((defaults as unknown as { contextKey: (userId: string) => string }).contextKey("u1")).toBe("ff:ctx:u1");
+    });
 });
 
-function config(): RedisMemoryConfig {
+function config(overrides: Partial<RedisMemoryConfig> = {}): RedisMemoryConfig {
     return {
         contextRingSize: 4,
         defaultTtlSeconds: 3600,
@@ -47,5 +61,6 @@ function config(): RedisMemoryConfig {
         maxEpisodesPerUser: 8,
         namespace: "flyflor",
         timeoutMs: 10,
+        ...overrides,
     };
 }

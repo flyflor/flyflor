@@ -101,22 +101,22 @@ flowchart TB
 | Command | Status | Note |
 | --- | --- | --- |
 | `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
-| `flyflor tui` | ✅ | Uses the same TUI bootstrap as `chat --tui`. |
+| `flyflor tui` | ✅ | Uses the same TUI bootstrap as `chat --tui`; the dashboard Overview shows working-memory health and recovery file metadata. |
 | `flyflor gateway run` | ✅ | Runs in the foreground. |
 | `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
 | `flyflor gateway status [--deep]` | ✅ | Calls `buildGatewayStatusSnapshot`. |
 | `flyflor gateway setup` | ✅ | Interactive configuration. |
 | `flyflor model` | ✅ | Lists or sets the default provider and model. |
 | `flyflor setup` | ✅ | Initialization wizard. |
-| `flyflor status` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus`. |
+| `flyflor status` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus` and reports working-memory recovery visibility. |
 | `flyflor channels` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode lists channel adapter status. |
-| `flyflor doctor` | ✅ | `--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward. |
+| `flyflor doctor` | ✅ | `--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward; diagnostics include lightweight working-memory recovery metadata. |
 | `flyflor codename list/use/promote` | ✅ | Brain.db codename anchors and project promotion. |
 | `flyflor inbox list` | ✅ | Visualizes inbox atoms by codename bucket. |
 | `flyflor ghost list/show/resume/drop/pin` | ✅ | Ghost Context management. |
 | `flyflor identity list/revert` | ✅ | Audit and revert user-authored identity entries. |
 | `flyflor config show/path/env-path` | ✅ | TTY mode opens the CLI TUI navigator on Config; non-interactive mode prints the requested value. |
-| `flyflor memory status/reset/retrospective` | ✅ | Reset supports clearing allowlisted files; retrospective shows consolidation audit logs. |
+| `flyflor memory status/reset/retrospective` | ✅ | Status shows working-memory health and recovery metadata; reset supports clearing allowlisted files; retrospective shows consolidation audit logs. |
 | `flyflor blackboard` | ✅ | Opens the blackboard browser TUI in a terminal: it lists recent turns by default, supports `/` search, up/down selection, Enter to open details, and Esc/q to go back or quit. |
 | `flyflor blackboard list/show` | ✅ | Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted debugging. |
 | `flyflor skills *` | ✅ | TTY mode opens the CLI TUI navigator on Skills; non-interactive mode supports install / reset / usage / validate. |

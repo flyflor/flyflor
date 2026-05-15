@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 
 interface RecoverySmokeReport {
+    backupWarmup: WorkingMemoryWarmupEvent;
     firstWarmup: WorkingMemoryWarmupEvent;
     ok: boolean;
     recoveryWarmup: WorkingMemoryWarmupEvent;
@@ -16,6 +17,7 @@ interface WorkingMemoryWarmupEvent {
     backend?: string;
     loaded?: boolean;
     loadedFrom?: string;
+    recoveredFromBackup?: boolean;
     replayedWalRecords?: number;
     tornWalLines?: number;
     latencyMs?: number;
@@ -54,13 +56,23 @@ async function main(): Promise<void> {
         const recoveryWarmup = extractWarmup(secondOutput);
         assertWarmup(recoveryWarmup, "recovery warmup");
 
+        await writeRecoveryBackupSnapshot(tempMemoryDir);
+
+        const thirdStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
+        const thirdOutput = await settleAndCollect(thirdStart, 1200);
+        const backupWarmup = extractWarmup(thirdOutput);
+        assertWarmup(backupWarmup, "backup recovery warmup");
+
         const report: RecoverySmokeReport = {
+            backupWarmup,
             firstWarmup,
             ok:
                 firstWarmup.loadedFrom === "empty" &&
                 recoveryWarmup.loadedFrom === "wal" &&
                 recoveryWarmup.replayedWalRecords === 1 &&
-                recoveryWarmup.tornWalLines === 1,
+                recoveryWarmup.tornWalLines === 1 &&
+                backupWarmup.loadedFrom === "backup" &&
+                backupWarmup.recoveredFromBackup === true,
             recoveryWarmup,
             tempHome,
             usedBinary: gatewayCommand.join(" "),
@@ -152,6 +164,35 @@ async function writeRecoveryWal(memoryDir: string): Promise<void> {
     };
     const wal = `${JSON.stringify(goodRecord)}\n{"op":"write-episode"`;
     await writeFile(join(memoryDir, "working.wal.jsonl"), wal, "utf8");
+}
+
+async function writeRecoveryBackupSnapshot(memoryDir: string): Promise<void> {
+    const backupPayload = {
+        activation: [],
+        context: [["smoke-user", ["smoke-backup-episode"]]],
+        episodes: [
+            {
+                expiresAt: 9999999999999,
+                record: {
+                    concepts: ["backup-recovery"],
+                    createdAt: 1700000000000,
+                    embedding: [0.3, 0.4],
+                    episodeId: "smoke-backup-episode",
+                    importance: 0.8,
+                    metadata: {},
+                    sourceKind: "smoke",
+                    stability: 0.9,
+                    text: "backup recovery smoke",
+                    userId: "smoke-user",
+                },
+                reviewAt: 9999999999,
+            },
+        ],
+        schemaVersion: 1,
+    };
+    await writeFile(join(memoryDir, "working.snapshot.json"), "{broken", "utf8");
+    await writeFile(join(memoryDir, "working.snapshot.json.bak"), `${JSON.stringify(backupPayload)}\n`, "utf8");
+    await writeFile(join(memoryDir, "working.wal.jsonl"), "", "utf8");
 }
 
 function extractWarmup(output: string): WorkingMemoryWarmupEvent {

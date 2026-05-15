@@ -2,20 +2,100 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describeBackgroundScheduler, describeBrainDb, describeWorkingMemoryHealth } from "../src/command/cli/status.ts";
-import type { FlyflorConfig } from "../src/config/index.ts";
+import {
+    describeBackgroundScheduler,
+    describeBrainDb,
+    describeIdentityActivity,
+    describeModelApiKey,
+    renderDoctor,
+    describeWorkingMemoryHealth,
+    describeWorkingMemoryRecoveryFiles,
+} from "../src/command/cli/status.ts";
+import { FlyFlorTokens } from "../src/app.ts";
+import { createDefaultMemoryTuning, type FlyflorConfig } from "../src/config/index.ts";
 import { BrainStore } from "../src/neural/memory/brain.store.ts";
 import {
     CrystalMemoryBackend,
     MemoryEventStatus,
     MemoryEventType,
     MemoryLinkType,
+    ModelApiMode,
+    SandboxMode,
     MemoryWorkingBackend,
     SummaryRange,
+    ToolApprovalMode,
 } from "../src/protocol/contracts/index.ts";
 
 function configForHome(home: string): FlyflorConfig {
     return { paths: { home } } as FlyflorConfig;
+}
+
+function doctorConfigForHome(home: string): FlyflorConfig {
+    return {
+        paths: {
+            home,
+            configDir: join(home, "config"),
+            storageDir: join(home, "storage"),
+            cacheDir: join(home, "cache"),
+            projectDir: join(home, "project"),
+            projectFlyflorDir: join(home, "project", ".flyflor"),
+            projectSkillDir: join(home, "project", ".flyflor", "skills"),
+            projectMcpDir: join(home, "project", ".flyflor", "mcp"),
+            projectPluginDir: join(home, "project", ".flyflor", "plugins"),
+            projectMemoryDir: join(home, "project", ".flyflor", "memory"),
+            workspaceDir: join(home, "workspace"),
+            logDir: join(home, "logs"),
+            memoryDir: join(home, "memory"),
+            pluginDir: join(home, "plugins"),
+            promptDir: join(home, "prompts"),
+            skillDir: join(home, "skills"),
+            templateDir: join(home, "templates"),
+            mcpDir: join(home, "mcp"),
+        },
+        gateway: {
+            host: "127.0.0.1",
+            port: 1,
+            stdio: false,
+            allowedChannels: [],
+            channelReplyUrls: {},
+            channels: {
+                wechat: {},
+                weixinIlink: { pollIntervalMs: 60_000 },
+            },
+        },
+        memory: {
+            enabled: true,
+            crystal: {
+                backend: CrystalMemoryBackend.Local,
+                enabled: true,
+                local: { dbFile: join(home, "crystal.db") },
+                surreal: { enabled: false },
+            },
+            redis: { enabled: false },
+            working: { backend: MemoryWorkingBackend.Local },
+            tuning: createDefaultMemoryTuning(),
+        },
+        metrics: {},
+        model: {
+            apiMode: ModelApiMode.Responses,
+            provider: "openai",
+            providerId: "openai",
+            apiKey: "REPLACE_ME_TEST_API_KEY",
+            baseUrl: "https://api.openai.com/v1",
+            headers: {},
+            maxTokens: 1024,
+            model: "gpt-4.1-mini",
+            temperature: 0,
+            timeoutMs: 30_000,
+        },
+        routing: {},
+        sandbox: {
+            mode: SandboxMode.Off,
+            mcpToolApproval: ToolApprovalMode.Deny,
+            pluginApproval: ToolApprovalMode.Deny,
+            shellHookApproval: ToolApprovalMode.Deny,
+        },
+    } as unknown as FlyflorConfig;
 }
 
 describe("doctor Brain.db visibility", () => {
@@ -88,6 +168,37 @@ describe("doctor Brain.db visibility", () => {
     });
 });
 
+describe("doctor debug boundary visibility", () => {
+    test("marks direct memory diagnostics as AtomScore bypass", async () => {
+        const config = doctorConfigForHome("/tmp/flyflor-doctor-debug");
+        const app = {
+            resolve(token: unknown) {
+                if (token === FlyFlorTokens.Config) return config;
+                if (token === FlyFlorTokens.Gateway) {
+                    return {
+                        getStatusSnapshot: () => ({
+                            channels: [],
+                            connectedCount: 0,
+                            degradedCount: 0,
+                            gatewayRunning: false,
+                            host: "127.0.0.1",
+                            port: 1,
+                            streamingCount: 0,
+                        }),
+                    };
+                }
+                if (token === FlyFlorTokens.Memory) return { getWorkingMemoryHealthSnapshot: () => undefined };
+                return {};
+            },
+        };
+
+        const output = await renderDoctor(app as never);
+
+        expect(output).toContain("Memory debug");
+        expect(output).toContain("bypass-score=true");
+    });
+});
+
 describe("doctor background scheduler visibility", () => {
     test("local working memory plus local crystal graph is reported as enabled", () => {
         const summary = describeBackgroundScheduler({
@@ -127,6 +238,66 @@ describe("doctor background scheduler visibility", () => {
 
         expect(summary.status).toBe("warn");
         expect(summary.detail).toContain("crystal graph");
+    });
+});
+
+describe("doctor identity activity visibility", () => {
+    test("reports recent identity writes and live pending review rows", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-doctor-identity-"));
+        try {
+            const brain = new BrainStore({ dbPath: join(root, "brain.db") });
+            await brain.open();
+            try {
+                const now = Date.UTC(2026, 4, 15);
+                brain.appendEvent({
+                    id: "identity-recent-live",
+                    ts: now - 60_000,
+                    userId: "u1",
+                    type: MemoryEventType.IdentityAppend,
+                    content: { kind: "preference", content: "recent", confidence: 1 },
+                });
+                brain.appendEvent({
+                    id: "identity-recent-reverted",
+                    ts: now - 120_000,
+                    userId: "u1",
+                    type: MemoryEventType.IdentityAppend,
+                    content: { kind: "goal", content: "reverted", confidence: 1 },
+                });
+                brain.upsertState("identity-recent-reverted", { status: MemoryEventStatus.Abandoned });
+                brain.appendEvent({
+                    id: "identity-old-live",
+                    ts: now - 10 * 24 * 60 * 60_000,
+                    userId: "u1",
+                    type: MemoryEventType.IdentityAppend,
+                    content: { kind: "constraint", content: "old", confidence: 1 },
+                });
+            } finally {
+                brain.close();
+            }
+
+            const summary = await describeIdentityActivity(configForHome(root), { nowMs: Date.UTC(2026, 4, 15) });
+
+            expect(summary.status).toBe("ok");
+            expect(summary.detail).toContain("last7d=2");
+            expect(summary.detail).toContain("pendingReview=2");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+});
+
+describe("doctor model credential visibility", () => {
+    test("treats placeholder provider keys as not configured", () => {
+        expect(describeModelApiKey("REPLACE_ME_FASTAI_API_KEY")).toEqual({
+            configured: false,
+            detail: "placeholder",
+            status: "warn",
+        });
+        expect(describeModelApiKey("sk-test-realistic")).toEqual({
+            configured: true,
+            detail: "configured",
+            status: "ok",
+        });
     });
 });
 
@@ -174,5 +345,47 @@ describe("doctor working memory health visibility", () => {
         expect(summary.status).toBe("warn");
         expect(summary.detail).toContain("circuit open");
         expect(summary.detail).toContain("disk outage");
+    });
+
+    test("surfaces local recovery files without opening working-memory data", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-doctor-working-recovery-"));
+        try {
+            await mkdir(join(root, "memory"), { recursive: true });
+            await writeFile(join(root, "memory", "working.snapshot.json"), "{}", "utf8");
+            await writeFile(join(root, "memory", "working.snapshot.json.bak"), "{}", "utf8");
+            await writeFile(join(root, "memory", "working.wal.jsonl"), "x\n", "utf8");
+
+            const summary = await describeWorkingMemoryRecoveryFiles(doctorConfigForHome(root));
+
+            expect(summary.status).toBe("ok");
+            expect(summary.detail).toContain("local");
+            expect(summary.detail).toContain("snapshot=2 B");
+            expect(summary.detail).toContain("backup=2 B");
+            expect(summary.detail).toContain("wal=2 B");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("reports Redis recovery ownership when working memory uses Redis", async () => {
+        const config = doctorConfigForHome("/tmp/flyflor-doctor-redis-recovery");
+        config.memory.redis.enabled = true;
+        config.memory.working = {
+            backend: MemoryWorkingBackend.Redis,
+            local: {
+                contextRingSize: 12,
+                defaultTtlSeconds: 86_400,
+                maxEpisodesPerUser: 200,
+                maxWalBytes: 4 * 1024 * 1024,
+                snapshotEveryWrites: 64,
+                snapshotFile: "working.snapshot.json",
+                walFile: "working.wal.jsonl",
+            },
+        };
+
+        const summary = await describeWorkingMemoryRecoveryFiles(config);
+
+        expect(summary.status).toBe("ok");
+        expect(summary.detail).toContain("redis backend");
     });
 });

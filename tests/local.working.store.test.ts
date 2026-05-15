@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LocalWorkingMemoryConfig } from "../src/config/index.ts";
@@ -74,6 +74,38 @@ describe("LocalWorkingMemoryStore", () => {
 
             expect(await readFile(join(root, "working.snapshot.json"), "utf8")).toContain("backup me");
             expect(await readFile(join(root, "working.snapshot.json.bak"), "utf8")).toContain("backup me");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("recovers from backup snapshot when the primary snapshot is corrupted", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-local-working-"));
+        try {
+            const first = store(root, { snapshotEveryWrites: 1 });
+            await first.writeEpisode({
+                userId: "u1",
+                episodeId: "ep1",
+                text: "backup survivor",
+                concepts: ["local"],
+                embedding: [1, 0],
+                importance: 0.8,
+                stability: 0.9,
+                sourceKind: "test",
+                createdAt: Date.now(),
+                ttlSeconds: 3600,
+            });
+            await writeFile(join(root, "working.snapshot.json"), "{broken", "utf8");
+
+            const second = store(root);
+
+            expect((await second.readEpisode("u1", "ep1"))?.text).toBe("backup survivor");
+            expect(second.getHealthSnapshot()).toMatchObject({
+                circuitState: "closed",
+                loaded: true,
+                loadedFrom: "backup",
+                recoveredFromBackup: true,
+            });
         } finally {
             await rm(root, { recursive: true, force: true });
         }

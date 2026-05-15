@@ -117,6 +117,20 @@ describe("TUI chat metadata parsing", () => {
             server: "fs",
             tool: "read",
         });
+        expect(
+            readMcpTrace({
+                ok: true,
+                resultSummaryMeta: { kind: "truncated", originalChars: 20_000, keyCount: 3 },
+                server: "fs",
+                tool: "search",
+            }),
+        ).toEqual({
+            ok: true,
+            resultText: "kind=truncated chars=20000 keys=3",
+            resultSummaryMeta: { kind: "truncated", originalChars: 20_000, keyCount: 3 },
+            server: "fs",
+            tool: "search",
+        });
         expect(readStringArray(["a", 1, "b", null])).toEqual(["a", "b"]);
     });
 });

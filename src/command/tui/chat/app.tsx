@@ -1205,6 +1205,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                             selectable: true,
                         }),
                     );
+                    if (call.resultText) {
+                        extras.push(
+                            new TextRenderable(renderer, {
+                                content: `    ${clipText(call.resultText, 120)}`,
+                                fg: THEME.fgMuted,
+                                selectable: true,
+                            }),
+                        );
+                    }
                 }
             }
 
@@ -1360,6 +1369,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                             call.ok ? THEME.fg : THEME.error,
                         ),
                     );
+                    if (call.resultText) {
+                        lines.push(panelLine(`    ${clipText(call.resultText, 96)}`, THEME.fgMuted));
+                    }
                 }
             }
 

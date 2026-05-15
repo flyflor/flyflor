@@ -263,7 +263,7 @@ interface GatewayReply {
 - `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一文件，后续可继续抽 service。
 - `brain.db` 已成为 prompt recall / turn event write 权威；后续改动必须避免把 legacy journal 重新接回 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
-- `fastRouteSnapshots` 有 Redis store 路径，Redis 不可用时退回进程内 Map；多 gateway 节点仍依赖 Redis 可用性。
+- `fastRouteSnapshots` 有 Redis store 路径，Redis 不可用时退回进程内 Map；Redis 启用时复用 `memory.redis.namespace` 前缀隔离多 gateway / 多环境快照。
 - 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；后续重点是围绕这些证据做诊断展示。
 
 ## 相关测试

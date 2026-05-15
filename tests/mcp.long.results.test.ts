@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { renderMcpToolResults } from "../src/agent/mcp/index.ts";
+import { describeMcpResult, renderMcpToolResults } from "../src/agent/mcp/index.ts";
 import type { McpToolCallExecution } from "../src/agent/mcp/index.ts";
 
 describe("renderMcpToolResults – long-result truncation (MCP-03)", () => {
@@ -67,5 +67,12 @@ describe("renderMcpToolResults – long-result truncation (MCP-03)", () => {
         expect(out).toContain("\"summary\"");
         expect(out).toContain("\"kind\": \"unserializable\"");
         expect(out).toContain("unserializable");
+    });
+
+    test("结构化摘要可被 runtime / TUI 复用", () => {
+        const described = describeMcpResult({ content: "hello", extra: "x".repeat(5_000) });
+        expect(described.summary.kind).toBe("truncated");
+        expect(described.summary.originalChars).toBeGreaterThan(4_000);
+        expect(described.summary.keys).toEqual(["content", "extra"]);
     });
 });
