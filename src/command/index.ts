@@ -6,6 +6,7 @@ import {
     runFlyflorUtilityCommand,
     type FlyflorCommandResult,
 } from "./cli/commands.ts";
+import { canStartInteractiveTui, interactiveTuiUnavailableMessage } from "./tui/tty.ts";
 
 export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandResult> {
     if (isHelpRequest(argv)) {
@@ -22,6 +23,10 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
     }
 
     if (argv.includes("--tui")) {
+        if (!canStartInteractiveTui()) {
+            console.error(interactiveTuiUnavailableMessage(tuiRequestLabel(argv)));
+            return { exitCode: 2 };
+        }
         return runFlyflorCommand([argv[0] ?? "flyflor", argv[1] ?? "flyflor", RuntimeMode.Tui]);
     }
 
@@ -36,6 +41,10 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
     }
 
     if (parsed === RuntimeMode.Tui) {
+        if (!canStartInteractiveTui()) {
+            console.error(interactiveTuiUnavailableMessage("flyflor tui"));
+            return { exitCode: 2 };
+        }
         const { getFlyFlor } = await import("../app.ts");
         const app = await getFlyFlor({ argv, mode: parsed });
         const { startTui } = await import("./tui/index.tsx");
@@ -112,6 +121,10 @@ function optionValue(argv: string[], shortFlag: string, longFlag: string): strin
         }
     }
     return undefined;
+}
+
+function tuiRequestLabel(argv: string[]): string {
+    return argv[2] === RuntimeMode.Chat ? "flyflor chat --tui" : "flyflor --tui";
 }
 
 function rootChatArgs(argv: string[], query: string): string[] {

@@ -22,6 +22,8 @@
 - chat 启动时会先注册 OpenTUI 默认 markdown / code parsers，再创建 renderer，避免 Markdown 退化成裸文本或 code block 解析异常
 - binary 构建必须把 `src/command/tui/chat/parser.worker.ts` 作为第二个 Bun compile entrypoint，避免 OpenTUI TreeSitter worker 在独立二进制里退回到不存在的 `parser.worker.ts`
 - TUI 层保留错误的 `Error.name`，这样超时会显示成 `TimeoutError: The operation timed out.`，不会只剩一条泛化提示
+- 所有交互式 TUI 入口统一走 `createTuiLifecycle`：按键 / SIGINT / SIGTERM 只请求一次 renderer destroy，`destroy` 事件只清理监听器、timer 和 UI 资源，不再重入调用 `destroy()`，避免退出卡死
+- 显式 `flyflor tui`、`flyflor --tui`、`flyflor chat --tui` 必须同时拥有 stdin/stdout TTY；CI、管道和重定向环境会快速返回 exit code 2，不创建 renderer
 - 选区复制走 `copyTextToTerminalClipboard`：macOS 优先 `pbcopy`，其他 TTY 走 OSC52；renderer 自带的 copy 回调也会落到 OSC52
 - ask 回复会在消息正文和 TUI 详情里保留结构化列表；只要有选项，就自动附带 `Other — type your own answer`，方便用户直接输入自定义回答
 - ask metadata 严格校验；缺字段或选项结构不合法会直接报错，不做静默兜底

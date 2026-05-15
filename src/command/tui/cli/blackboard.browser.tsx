@@ -8,6 +8,7 @@ import {
     type BlackboardTurnDetail,
     type BlackboardTurnItem,
 } from "../../cli/handlers/blackboard.handler.ts";
+import { createTuiLifecycle } from "../lifecycle.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -133,7 +134,7 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
         event.stopPropagation?.();
         const name = event.name ?? "";
         if (event.ctrl && name === "c") {
-            renderer.destroy();
+            lifecycle.destroy();
             return;
         }
         const sequence = event.sequence ?? "";
@@ -149,14 +150,12 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
     };
 
     renderer.keyInput.on("keypress", keyHandler);
-
-    return new Promise<void>((resolve) => {
-        renderer.once("destroy", () => {
+    const lifecycle = createTuiLifecycle(renderer, {
+        cleanup: () => {
             renderer.keyInput.off("keypress", keyHandler);
-            renderer.destroy();
-            resolve();
-        });
+        },
     });
+    return lifecycle.waitForDestroy();
 
     function renderListPane() {
         const window = listWindow();
@@ -251,7 +250,7 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
 
     function handleListKey(name: string, sequence: string): void {
         if (name === "q" || name === "escape") {
-            renderer.destroy();
+            lifecycle.destroy();
             return;
         }
         if (name === "r") {

@@ -100,8 +100,8 @@ flowchart TB
 
 | Command | Status | Note |
 | --- | --- | --- |
-| `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
-| `flyflor tui` | ✅ | Uses the same TUI bootstrap as `chat --tui`; the dashboard Overview shows working-memory health and recovery file metadata. |
+| `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; `--tui` is TTY-gated, the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
+| `flyflor tui` | ✅ | Requires an interactive stdin/stdout TTY and uses the same TUI lifecycle guard as `chat --tui`; the dashboard Overview shows working-memory health and recovery file metadata and exits through a one-shot renderer teardown path. |
 | `flyflor gateway run` | ✅ | Runs in the foreground. |
 | `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
 | `flyflor gateway status [--deep]` | ✅ | Calls `buildGatewayStatusSnapshot`. |
@@ -132,6 +132,7 @@ flowchart TB
 
 - `0` success
 - `1` business error (`CommanderError`, commonly missing arguments or not found)
+- `2` interactive TUI requested without both stdin and stdout TTYs
 - other built-in `commander` errors
 
 ## Risks / Known Gaps

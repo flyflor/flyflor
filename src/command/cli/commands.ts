@@ -84,6 +84,7 @@ import {
 import { formatFlyflorVersion } from "../version.ts";
 import { renderConfigView } from "../config.view.ts";
 import { runUpdate } from "./update.ts";
+import { canStartInteractiveTui, interactiveTuiUnavailableMessage } from "../tui/tty.ts";
 
 export interface FlyflorCommandResult {
     exitCode: number;
@@ -648,16 +649,25 @@ export async function runFlyflorUtilityCommand(argv: string[]): Promise<FlyflorC
     if (!isFlyflorUtilityCommand(command)) {
         return undefined;
     }
+    if (command === RuntimeMode.Chat && argv.includes("--tui") && !canStartInteractiveTui()) {
+        console.error(interactiveTuiUnavailableMessage("flyflor chat --tui"));
+        return { exitCode: 2 };
+    }
 
     const program = buildFlyflorCommandProgram({ execute: true });
+    const previousExitCode = process.exitCode;
+    process.exitCode = undefined;
     try {
         await program.parseAsync(argv, { from: "node" });
-        return { exitCode: 0 };
+        const exitCode = typeof process.exitCode === "number" ? process.exitCode : 0;
+        return { exitCode };
     } catch (error) {
         if (error instanceof CommanderError) {
             return { exitCode: error.exitCode };
         }
         throw error;
+    } finally {
+        process.exitCode = previousExitCode;
     }
 }
 
@@ -736,6 +746,11 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }>();
         if (opts.tui) {
             // `chat --tui` 与 `tui` 对齐：都进入 TUI 主循环，避免两条职责不清的入口。
+            if (!canStartInteractiveTui()) {
+                console.error(interactiveTuiUnavailableMessage("flyflor chat --tui"));
+                process.exitCode = 2;
+                return;
+            }
             const app = await getFlyFlor({
                 argv: process.argv,
                 mode: RuntimeMode.Tui,
@@ -782,6 +797,11 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "tui") {
+        if (!canStartInteractiveTui()) {
+            console.error(interactiveTuiUnavailableMessage("flyflor tui"));
+            process.exitCode = 2;
+            return;
+        }
         const app = await getFlyFlor({ argv: process.argv, mode: RuntimeMode.Tui });
         const { startTui } = await import("../tui/index.tsx");
         await startTui(app);

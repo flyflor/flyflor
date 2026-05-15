@@ -128,6 +128,11 @@ describe("Command boundary", () => {
         expect(parseFlyflorCommand(["bun", "flyflor", "dream", "status"])).toBeUndefined();
     });
 
+    test("explicit TUI commands remain utility parseable but runtime launch is TTY-gated", () => {
+        expect(parseFlyflorCommand(["bun", "flyflor", "tui"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "chat", "--tui"])).toBeUndefined();
+    });
+
     test("config command surface only exposes supported configuration operations", () => {
         const config = listFlyflorCommandSpecs().find((spec) => spec.name === "config");
         const subcommands = config?.subcommands?.map((spec) => spec.name) ?? [];

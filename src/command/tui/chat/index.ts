@@ -15,6 +15,7 @@ import type { McpToolCallRequest } from "../../../agent/mcp/index.ts";
 import { RuntimeEventBus, type EventSink } from "../../../protocol/events/index.ts";
 import { createChatApp } from "./app.tsx";
 import { loadChatParsers } from "./parsers.config.ts";
+import { createTuiLifecycle } from "../lifecycle.ts";
 
 export interface ChatEntryOptions {
     runtime: RuntimeModule;
@@ -89,17 +90,13 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
 
         const dispose = createChatApp(renderer, { ...options, avatarArt });
 
-        return new Promise<void>((resolve) => {
-            const cleanup = () => {
+        const lifecycle = createTuiLifecycle(renderer, {
+            cleanup: () => {
                 dispose();
-                renderer.destroy();
                 restoreTreeSitterWorkerPath();
-                resolve();
-            };
-            renderer.once("destroy", cleanup);
-            process.once("SIGINT", cleanup);
-            process.once("SIGTERM", cleanup);
+            },
         });
+        return lifecycle.waitForDestroy();
     } catch (error) {
         restoreTreeSitterWorkerPath();
         throw error;

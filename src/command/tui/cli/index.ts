@@ -21,6 +21,7 @@ import { fetchMemoryData } from "../../cli/handlers/memory.handler.ts";
 import { fetchGhostList } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
 import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
+import { createTuiLifecycle } from "../lifecycle.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -472,11 +473,11 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     }) => {
         const name = event.name ?? "";
         if (name === "q" || name === "escape") {
-            if (!destroyed) renderer.destroy();
+            lifecycle.destroy();
             return;
         }
         if (event.ctrl && name === "c") {
-            if (!destroyed) renderer.destroy();
+            lifecycle.destroy();
             event.preventDefault?.();
             event.stopPropagation?.();
             return;
@@ -502,22 +503,13 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     }
 
     renderer.keyInput.on("keypress", keyHandler);
-    renderer.once("destroy", () => {
-        destroyed = true;
-    });
-    process.once("SIGINT", () => {
-        if (!destroyed) renderer.destroy();
-    });
-    process.once("SIGTERM", () => {
-        if (!destroyed) renderer.destroy();
+    const lifecycle = createTuiLifecycle(renderer, {
+        cleanup: () => {
+            destroyed = true;
+            renderer.keyInput.off("keypress", keyHandler);
+        },
     });
     void refresh(initialPage);
 
-    return new Promise<void>((resolve) => {
-        renderer.once("destroy", () => {
-            renderer.keyInput.off("keypress", keyHandler);
-            renderer.destroy();
-            resolve();
-        });
-    });
+    return lifecycle.waitForDestroy();
 }

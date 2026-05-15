@@ -13,6 +13,7 @@ import { describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles, resolv
 import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
+import { createTuiLifecycle } from "./lifecycle.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -192,7 +193,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
     const keyHandler = (event: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; sequence?: string }) => {
         const name = event.name ?? "";
         if (name === "q" || name === "escape") {
-            renderer.destroy();
+            lifecycle.destroy();
             return;
         }
         if (name === "left" || name === "h") cycleView(-1);
@@ -201,13 +202,11 @@ export async function startTui(app: FlyFlor): Promise<void> {
     };
 
     renderer.keyInput.on("keypress", keyHandler);
-
-    return new Promise<void>((resolve) => {
-        renderer.once("destroy", () => {
+    const lifecycle = createTuiLifecycle(renderer, {
+        cleanup: () => {
             renderer.keyInput.off("keypress", keyHandler);
             clearInterval(timer);
-            renderer.destroy();
-            resolve();
-        });
+        },
     });
+    return lifecycle.waitForDestroy();
 }
