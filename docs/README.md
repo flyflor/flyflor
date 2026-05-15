@@ -18,7 +18,7 @@
 10. [cli.commands.md](cli.commands.md) — CLI 命令现状清单（含 blackboard TTY 浏览器）
 11. [boundaries.md](boundaries.md) — 工程硬边界与红线
 12. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
-13. [storage.degradation.md](storage.degradation.md) — MemoryComponent / CrystalComponent / 兼容适配器的降级方案
+13. [storage.degradation.md](storage.degradation.md) — 存储降级历史背景（当前实现以 memory.system 为准）
 14. 根目录 [TODO.md](../TODO.md) — 运行边界、后续增强与路线记录
 
 ## 提案区
