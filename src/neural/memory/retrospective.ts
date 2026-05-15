@@ -13,8 +13,10 @@
  * - symbols: [a, b, c]
  * - rationale: …
  *
- * Failures (mkdir / disk full) are swallowed — auditing must not break the
- * consolidation hot path.
+ * Failures (mkdir / disk full) are surfaced to the caller. The retrospective
+ * log is promotion evidence for crystal memory, so callers must decide whether
+ * to retry, skip, or fail the surrounding operation instead of silently losing
+ * audit data.
  */
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -44,26 +46,22 @@ export class RetrospectiveLog {
         this.projectMemoryDir = options.projectMemoryDir;
     }
 
-    path(): string {
+    public path(): string {
         return join(this.projectMemoryDir, FILE_NAME);
     }
 
-    async append(entry: RetrospectiveEntry): Promise<void> {
-        try {
-            await mkdir(this.projectMemoryDir, { recursive: true });
-            const file = Bun.file(this.path());
-            if (!(await file.exists())) {
-                await Bun.write(this.path(), HEADER);
-            }
-            const block = renderEntry(entry);
-            const existing = await Bun.file(this.path()).text();
-            await Bun.write(this.path(), `${existing}${block}\n`);
-        } catch {
-            // intentional: never fail the caller for an audit write
+    public async append(entry: RetrospectiveEntry): Promise<void> {
+        await mkdir(this.projectMemoryDir, { recursive: true });
+        const file = Bun.file(this.path());
+        if (!(await file.exists())) {
+            await Bun.write(this.path(), HEADER);
         }
+        const block = renderEntry(entry);
+        const existing = await Bun.file(this.path()).text();
+        await Bun.write(this.path(), `${existing}${block}\n`);
     }
 
-    async read(options: { tail?: number } = {}): Promise<string> {
+    public async read(options: { tail?: number } = {}): Promise<string> {
         const file = Bun.file(this.path());
         if (!(await file.exists())) return "";
         const text = await file.text();

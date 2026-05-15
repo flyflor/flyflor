@@ -125,22 +125,22 @@ export class ConsolidationWorker {
                 }
                 const decision = await this.classify(episode);
                 if (decision.decision === ConsolidationDecisionKind.Discard) {
-                    await this.workingMemory.dropEpisode(userId, id);
-                    result.discarded += 1;
+                    // 回顾日志是 discard 证据；先写审计再删除热记忆，避免审计盘故障时静默丢失可复核样本。
                     await this.retrospective?.append({
                         kind: "discard",
                         userId,
                         episodeId: episode.episodeId,
                         rationale: decision.rationale,
                     });
+                    await this.workingMemory.dropEpisode(userId, id);
+                    result.discarded += 1;
                 } else if (decision.decision === ConsolidationDecisionKind.Reinforce) {
                     await this.workingMemory.touchConcepts(userId, episode.concepts ?? []);
                     await this.workingMemory.reinforceEpisode(userId, id, this.reinforceTtl);
                     result.reinforced += 1;
                 } else if (decision.decision === ConsolidationDecisionKind.Consolidate) {
                     await this.consolidateEpisode(episode, decision);
-                    await this.workingMemory.dropEpisode(userId, id);
-                    result.consolidated += 1;
+                    // 长期图写入成功后再落回顾证据；审计失败时保留热记忆候选，下一轮可重试或人工排查。
                     await this.retrospective?.append({
                         kind: "consolidate",
                         userId,
@@ -149,6 +149,8 @@ export class ConsolidationWorker {
                         symbols: decision.symbols ?? episode.concepts,
                         rationale: decision.rationale,
                     });
+                    await this.workingMemory.dropEpisode(userId, id);
+                    result.consolidated += 1;
                 } else {
                     result.skipped += 1;
                 }

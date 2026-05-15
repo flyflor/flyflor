@@ -192,7 +192,7 @@ AtomScore = w_recency · recencyDecay(now - ts)
 | inbox project | inbox = 未升格 codename 的容器；inbox 内 event 走加速衰减 |
 | `pending_project_offer` | 退化为"等待升格 codename 的状态字段"，沿用 cluster sweeper 通路 |
 | `ProjectScaffolder` | 入口由"用户显式 + cluster 自动"改为"codename 升格 + 用户显式"，scaffolder 本身不动 |
-| RETROSPECTIVE.md | 不变 |
+| RETROSPECTIVE.md | 仍作为项目级回顾证据；写失败必须暴露，不允许静默吞掉升格 / 丢弃审计 |
 
 ## Ask（D5）— 一等公民 + 中断模型
 

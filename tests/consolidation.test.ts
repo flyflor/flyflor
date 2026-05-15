@@ -8,6 +8,7 @@ import {
     parseConsolidationDecision,
     type ConsolidationDecision,
 } from "../src/neural/memory/consolidation.worker.ts";
+import type { RetrospectiveLog } from "../src/neural/memory/retrospective.ts";
 import type { RedisMemoryStore } from "../src/neural/memory/redis.ts";
 import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
 import type { SurrealGraphStore } from "../src/neural/memory/surreal.graph.ts";
@@ -288,6 +289,87 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         const worker = new ConsolidationWorker(fakeRedis, fakeGraph, new StubModel(["{}"]), events);
         const result = await worker.drain("u1");
         expect(result.skipped).toBe(1);
+        expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationFailed)).toBe(true);
+    });
+
+    test("retrospective write failure blocks discard drop and publishes failure", async () => {
+        const userId = "u1";
+        const drops: string[] = [];
+        const fakeRedis = {
+            listConsolidationCandidates: async () => ["e1"],
+            readEpisode: async () => makeEpisode("e1", userId),
+            dropEpisode: async (_uid: string, id: string) => {
+                drops.push(id);
+            },
+        } as unknown as RedisMemoryStore;
+        const retrospective = {
+            append: async () => {
+                throw new Error("retrospective disk full");
+            },
+        } as unknown as RetrospectiveLog;
+        const events = new CapturingSink();
+        const worker = new ConsolidationWorker(
+            fakeRedis,
+            {} as SurrealGraphStore,
+            new StubModel([JSON.stringify({ decision: "discard", confidence: 0.8 })]),
+            events,
+            { retrospective },
+        );
+
+        const result = await worker.drain(userId);
+
+        expect(result.discarded).toBe(0);
+        expect(result.skipped).toBe(1);
+        expect(drops).toEqual([]);
+        expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationFailed)).toBe(true);
+    });
+
+    test("retrospective write failure keeps consolidated episode for retry", async () => {
+        const userId = "u1";
+        const drops: string[] = [];
+        const epUpserts: unknown[] = [];
+        const memNodeUpserts: unknown[] = [];
+        const relateCalls: Array<[string, string]> = [];
+        const fakeRedis = {
+            listConsolidationCandidates: async () => ["e1"],
+            readEpisode: async () => makeEpisode("e1", userId),
+            dropEpisode: async (_uid: string, id: string) => {
+                drops.push(id);
+            },
+        } as unknown as RedisMemoryStore;
+        const fakeGraph = {
+            upsertEpisode: async (i: unknown) => {
+                epUpserts.push(i);
+            },
+            upsertMemoryNode: async (i: unknown) => {
+                memNodeUpserts.push(i);
+            },
+            relateConsolidatedInto: async (a: string, b: string) => {
+                relateCalls.push([a, b]);
+            },
+        } as unknown as SurrealGraphStore;
+        const retrospective = {
+            append: async () => {
+                throw new Error("retrospective readonly");
+            },
+        } as unknown as RetrospectiveLog;
+        const events = new CapturingSink();
+        const worker = new ConsolidationWorker(
+            fakeRedis,
+            fakeGraph,
+            new StubModel([JSON.stringify({ decision: "consolidate", confidence: 0.9, summary: "s", symbols: ["x"] })]),
+            events,
+            { retrospective },
+        );
+
+        const result = await worker.drain(userId);
+
+        expect(result.consolidated).toBe(0);
+        expect(result.skipped).toBe(1);
+        expect(epUpserts.length).toBe(1);
+        expect(memNodeUpserts.length).toBe(1);
+        expect(relateCalls.length).toBe(1);
+        expect(drops).toEqual([]);
         expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationFailed)).toBe(true);
     });
 });

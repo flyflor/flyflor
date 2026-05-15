@@ -74,7 +74,7 @@ interface SkillUsage {
 
 - 候选来源：reflection 聚合 / explicit skill intent / 现有 skill offer 计时器。
 - 触发：cluster support + confidence，或显式 `skillPromotionIntent`。
-- 输出：在 `~/.flyflor/skills/<name>/` 写 `SKILL.md` + `skill.json`，并补 `RETROSPECTIVE.md` 的 `skill-promoted` 记录。
+- 输出：在 `~/.flyflor/skills/<name>/` 写 `SKILL.md` + `skill.json`，并补 `RETROSPECTIVE.md` 的 `skill-promoted` 记录；回顾日志写失败会让 promotion 显式失败，避免技能证据链静默缺块。
 
 - 过期路径：`noteSkillOfferTurn` 会递减 ttl，确认不了就自动过期。
 

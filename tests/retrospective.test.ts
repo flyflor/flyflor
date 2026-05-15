@@ -41,9 +41,12 @@ describe("RetrospectiveLog", () => {
         expect(await log.read()).toBe("");
     });
 
-    test("append swallows errors from invalid path", async () => {
-        const log = new RetrospectiveLog({ projectMemoryDir: "/proc/0/forbidden-flyflor-test" });
-        await log.append({ kind: "consolidate", summary: "ignored" });
-        // no throw == pass
+    test("append surfaces write errors from invalid path", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "flyflor-retro-invalid-"));
+        const filePath = join(dir, "not-a-directory");
+        await Bun.write(filePath, "occupied");
+        const log = new RetrospectiveLog({ projectMemoryDir: filePath });
+
+        await expect(log.append({ kind: "consolidate", summary: "must fail loudly" })).rejects.toThrow();
     });
 });

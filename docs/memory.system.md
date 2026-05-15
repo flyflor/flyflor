@@ -306,6 +306,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 ## 运行边界 / 后续增强
 
 - legacy journal 仍保留审计写入；任何新召回或 CLI 可视化能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
+- `RETROSPECTIVE.md` 是晶体升格与丢弃决策的可复核证据；写入失败必须显式失败，后台整合 Worker 只发布 failure event 并保留候选，不做静默吞错。
 - `BackgroundScheduler` 按后端可用性降级；默认本地开发环境可运行 local working memory 与 local crystal graph，brain archive 与热记忆压缩由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
 - Reflection 已拆为 `ReflectionWorker`；Runtime 仅投递异步任务，抽取与落库不再挂在 `RuntimeModule` 私有方法里。
 - 本地 working memory 恢复与 MCP transport 恢复已纳入 `smoke:recovery`；`status` / `doctor` / TUI Overview 只读取 snapshot / backup / WAL 文件元数据展示恢复状态，不解析热数据；Docker doctor/status/recovery 纳入 `smoke:runtime` 与本地 `release:check`。真实模型 chat probe 需要真实 API key，单独由 `smoke:runtime:live` 覆盖；不配置 GitHub Actions 跑仓库侧 CI。
