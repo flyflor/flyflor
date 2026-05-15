@@ -62,7 +62,8 @@ export interface BrainPromptAtomWindowInput {
     days?: number;
     limit?: number;
     minScore: number;
-    userId: string;
+    /** Runtime prompt recall supplies this; diagnostics may omit it to inspect all inbox buckets. */
+    userId?: string;
 }
 
 export interface BrainStateMutation {
@@ -268,7 +269,7 @@ export class BrainStore {
         const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
         const sinceTs = normalizeTimestamp(date) - days * 86_400_000;
         const events = this.listEvents({
-            userId: input.userId,
+            ...(input.userId ? { userId: input.userId } : {}),
             type: MemoryEventType.Event,
             sinceTs,
             limit,

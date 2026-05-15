@@ -47,8 +47,8 @@ import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
 import { ProjectMemoryStore } from "./project.memory.ts";
-import { JournalStore, JournalWriteRejectedError, type JournalAtomWrite, type JournalVisibleAtom } from "./journal.store.ts";
-import { BrainStore } from "./brain.store.ts";
+import { JournalStore, JournalWriteRejectedError, type JournalAtomWrite } from "./journal.store.ts";
+import { BrainStore, type BrainVisibleAtom } from "./brain.store.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
 import { AskReason, MemoryEventStatus, MemoryEventType, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
@@ -672,9 +672,9 @@ export class MemoryModule extends Memory {
         ]);
         if (episodeIds.length === 0) return undefined;
         const records = await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)));
-        const visibleByEpisode = await this.visibleAtomsForEpisodes(userId, records);
+        const visibleByEpisode = this.visibleAtomsForEpisodes(userId, records);
         const candidates: ActivationCandidate[] = [];
-        const visibleAtoms = new Map<string, JournalVisibleAtom>();
+        const visibleAtoms = new Map<string, BrainVisibleAtom>();
         for (const rec of records) {
             if (!rec) continue;
             const entries = visibleByEpisode.get(rec.episodeId) ?? [];
@@ -2562,32 +2562,42 @@ export class MemoryModule extends Memory {
         return cn ? inboxProjectIdFor(cn.id) : null;
     }
 
-    private async visibleAtomsForEpisodes(
+    private visibleAtomsForEpisodes(
         userId: string,
         records: Array<EpisodeRecord | undefined>,
-    ): Promise<Map<string, JournalVisibleAtom[]>> {
-        const dates = uniqueStrings(
-            records
-                .filter((record): record is NonNullable<typeof record> => record != null)
-                .map((record) => new Date(record.createdAt).toISOString()),
+    ): Map<string, BrainVisibleAtom[]> {
+        if (!this.brainOpened) return new Map();
+        const brainEventToWorkingEpisode = new Map<string, string>();
+        let latestCreatedAt = 0;
+        for (const record of records) {
+            if (!record) continue;
+            latestCreatedAt = Math.max(latestCreatedAt, record.createdAt);
+            const brainEventId = readMetadataString(record.metadata, "brainEventId");
+            if (brainEventId) {
+                brainEventToWorkingEpisode.set(brainEventId, record.episodeId);
+            }
+        }
+        if (brainEventToWorkingEpisode.size === 0) return new Map();
+        // Working-memory episodes carry the authoritative brain event id in metadata.
+        // Reading prompt atoms from brain.db keeps hippocampus context independent of the
+        // legacy journal audit copy, so journal cleanup cannot break recall.
+        const visible = this.brain.listPromptAtomsWindow(
+            latestCreatedAt > 0 ? new Date(latestCreatedAt) : new Date(),
+            {
+                days: 31,
+                limit: Math.max(this.config.memory.retrieval.maxResults * 4, records.length),
+                minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
+                userId,
+            },
         );
-        const visible = (
-            await Promise.all(
-                dates.map((date) =>
-                    this.journal.listVisibleAtoms(date, {
-                        limit: this.config.memory.retrieval.maxResults,
-                        minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
-                        userId,
-                    }),
-                ),
-            )
-        ).flat();
-        const byEpisode = new Map<string, JournalVisibleAtom[]>();
+        const byEpisode = new Map<string, BrainVisibleAtom[]>();
         for (const entry of visible) {
             for (const episodeId of entry.atom.episodeIds) {
-                const existing = byEpisode.get(episodeId) ?? [];
+                const workingEpisodeId = brainEventToWorkingEpisode.get(episodeId);
+                if (!workingEpisodeId) continue;
+                const existing = byEpisode.get(workingEpisodeId) ?? [];
                 existing.push(entry);
-                byEpisode.set(episodeId, existing);
+                byEpisode.set(workingEpisodeId, existing);
             }
         }
         return byEpisode;
@@ -2633,6 +2643,7 @@ export class MemoryModule extends Memory {
                 ttlSeconds,
                 metadata: {
                     provenance: normalizedProvenance,
+                    brainEventId: turnEpisodeId(message, context),
                     schemaVersion: 1,
                 },
             });
@@ -3049,6 +3060,11 @@ function compactText(value: string, maxChars: number): string {
 
 function uniqueStrings(values: string[]): string[] {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function readMetadataString(metadata: Record<string, unknown>, key: string): string | undefined {
+    const value = metadata[key];
+    return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 export function createMemory(config: FlyflorConfig, events: EventSink, model?: ModelClient): MemoryModule {

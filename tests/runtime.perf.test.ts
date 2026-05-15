@@ -261,6 +261,37 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(visible[0]?.score.total).toBeGreaterThan(0);
     });
 
+    test("hippocampus context reads brain atoms without legacy journal files", async () => {
+        const config = await buildConfig();
+        const memory = new MemoryModule(config, new CapturingSink());
+        await memory.warmup();
+        const ctx = withEmbedding(await embedFor(config, "brain-backed hippocampus"));
+        await memory.rememberTurn(msg("brain-backed hippocampus"), rep("stored"), ctx, [
+            {
+                action: "add",
+                target: "memory",
+                content: "Hippocampus recall must survive legacy journal cleanup.",
+                confidence: 0.95,
+                signals: {
+                    durability: 0.95,
+                    relevance: 0.95,
+                },
+            },
+        ]);
+        // Simulate removing the legacy audit copy: hippocampus context must come from brain.db.
+        await rm(config.paths.journalDir ?? join(config.paths.home, "journal"), { recursive: true, force: true });
+
+        const prompt = await memory.buildPrompt(msg("brain-backed hippocampus follow-up"), {
+            ...ctx,
+            requestId: crypto.randomUUID(),
+            embedding: await embedFor(config, "brain-backed hippocampus"),
+        });
+
+        expect(prompt).toContain("Hippocampus context");
+        expect(prompt).toContain("Hippocampus recall must survive legacy journal cleanup.");
+        memory.dispose();
+    });
+
     test("buildPrompt only exposes brain prompt atoms after the AtomScore visibility gate", async () => {
         const config = await buildConfig();
         config.memory.candidates.autoPromoteExplicit = false;

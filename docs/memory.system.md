@@ -82,7 +82,7 @@ flowchart LR
 | `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
 | `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示 |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，legacy journal 只做 best-effort 复制。当前读路径：prompt atom recall 走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event，legacy journal 只做 best-effort 复制。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
 chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。
 
@@ -263,7 +263,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 **配置**：`memory.tuning.inbox.activeCodenameWindowMinutes`（默认 60）/ `inbox.codenameRecallBoost`（默认 0.15）。
 
-**可视化**：`flyflor inbox list` 按 codename 分桶展示，`(uncoded)` 桶聚合无 codename 的 inbox atom。
+**可视化**：`flyflor inbox list` 直接读取 brain.db 权威事件并按 codename 分桶展示，`(uncoded)` 桶聚合无 codename 的 inbox atom；它不依赖 legacy journal 审计副本。
 
 ## 事件清单
 
@@ -305,7 +305,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 ## 运行边界 / 后续增强
 
-- legacy journal 仍保留 best-effort 审计写入；任何新召回能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
+- legacy journal 仍保留审计写入；任何新召回或 CLI 可视化能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
 - `BackgroundScheduler` 按后端可用性降级；默认本地开发环境可运行 local working memory 与 local crystal graph，brain archive 与热记忆压缩由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
 - Reflection 已拆为 `ReflectionWorker`；Runtime 仅投递异步任务，抽取与落库不再挂在 `RuntimeModule` 私有方法里。
 - 本地 working memory 恢复与 MCP transport 恢复已纳入 `smoke:recovery`；`status` / `doctor` / TUI Overview 只读取 snapshot / backup / WAL 文件元数据展示恢复状态，不解析热数据；Docker doctor/status/recovery 纳入 `smoke:runtime` 与本地 `release:check`。真实模型 chat probe 需要真实 API key，单独由 `smoke:runtime:live` 覆盖；不配置 GitHub Actions 跑仓库侧 CI。
