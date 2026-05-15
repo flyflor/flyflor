@@ -899,26 +899,12 @@ export class RuntimeModule extends RuntimeBoundary {
 
         let rawText = "";
         const visibility = new MemoryActionVisibilityFilter();
-        try {
-            for await (const chunk of this.model.stream(messages)) {
-                rawText += chunk;
-                const visible = visibility.push(chunk);
-                if (visible) {
-                    await options.onTextDelta(visible);
-                }
+        for await (const chunk of this.model.stream(messages)) {
+            rawText += chunk;
+            const visible = visibility.push(chunk);
+            if (visible) {
+                await options.onTextDelta(visible);
             }
-        } catch (error) {
-            // Some OpenAI-compatible relays expose only non-streaming HTTP.
-            // If no stream bytes arrived, retry once through generate() and emit a single final delta.
-            if (rawText.length === 0) {
-                const fallbackText = await this.model.generate(messages);
-                const visible = filterVisibleMemoryActionText(fallbackText);
-                if (visible) {
-                    await options.onTextDelta(`${prefixSent ? "" : replyPrefix}${visible}`);
-                }
-                return fallbackText;
-            }
-            throw error;
         }
 
         const tail = visibility.finish();

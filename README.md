@@ -123,7 +123,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 }
 ```
 
-`baseUrl` 存在时默认推断为 OpenAI-compatible，`apiMode` 默认 `chat-completions`；未配置 `activeModel` / `defaultModel` / `models` 时会用已解析的 `apiKey` 探测 `${baseUrl}/models`。Runtime 默认走流式生成；如果 relay 不支持 stream 且尚未收到任何 chunk，会重试一次普通 HTTP 并给调用方返回一段完整 final delta。
+`baseUrl` 存在时默认推断为 OpenAI-compatible，`apiMode` 默认 `chat-completions`；未配置 `activeModel` / `defaultModel` / `models` 时会用已解析的 `apiKey` 探测 `${baseUrl}/models`。Runtime 默认走流式生成；只有模型 client 未暴露 `stream` 方法时才走普通 HTTP 并给调用方返回一段完整 final delta。若 `stream` 方法已存在但请求失败，错误会直接透出，不自动重试另一条 provider 路径。
 
 ## 架构
 

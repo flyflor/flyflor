@@ -934,7 +934,7 @@ describe("Agent memory stability and latency", () => {
         expect(reply.text).toBe("一次性回答。");
     });
 
-    test("runtime falls back to non-streaming HTTP when stream endpoint is unavailable", async () => {
+    test("runtime propagates stream failures instead of retrying through non-streaming HTTP", async () => {
         const config = await testConfig();
         const runtime = new RuntimeModule(
             { ...config, memory: { ...config.memory } },
@@ -943,14 +943,15 @@ describe("Agent memory stability and latency", () => {
         );
         const deltas: string[] = [];
 
-        const reply = await runtime.handleMessage(gatewayMessage("流接口不可用。"), runtimeContext(), {
-            onTextDelta: (text) => {
-                deltas.push(text);
-            },
-        });
+        await expect(
+            runtime.handleMessage(gatewayMessage("流接口不可用。"), runtimeContext(), {
+                onTextDelta: (text) => {
+                    deltas.push(text);
+                },
+            }),
+        ).rejects.toThrow("stream_not_supported");
 
-        expect(deltas).toEqual(["普通 HTTP 回答。"]);
-        expect(reply.text).toBe("普通 HTTP 回答。");
+        expect(deltas).toEqual([]);
     });
 
     test("blackboard NeedsUser short-circuits to AgentAsk reply (LF-R3 slice D)", async () => {
