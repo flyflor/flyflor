@@ -47,8 +47,7 @@ import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "./embedding.ts";
 import { MarkdownMemoryStore } from "./markdown.ts";
 import { ProjectMemoryStore } from "./project.memory.ts";
-import { JournalStore, JournalWriteRejectedError, type JournalAtomWrite } from "./journal.store.ts";
-import { BrainStore, type BrainVisibleAtom } from "./brain.store.ts";
+import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain.store.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
 import { AskReason, MemoryEventStatus, MemoryEventType, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
@@ -80,7 +79,6 @@ import type { WorkingMemoryHealthSnapshot } from "./working.store.ts";
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
 export { MarkdownMemoryStore } from "./markdown.ts";
-export { JournalStore, type JournalAtomWrite, type JournalEpisodeInput } from "./journal.store.ts";
 export { ProjectMemoryStore } from "./project.memory.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
 export { HotMemoryCompressionWorker, parseHotMemoryCompressionDecision } from "./hot.memory.compression.worker.ts";
@@ -137,8 +135,7 @@ export interface MemoryModuleOverrides {
 
 @Module({ name: "memory", tags: ["flyflor", "boundary"] })
 export class MemoryModule extends Memory {
-    private readonly journal: JournalStore;
-    /** LF-R10 brain.db 权威源。warmup 时 open；legacy journal 仅做 best-effort audit。 */
+    /** LF-R10 brain.db 权威源。warmup 时 open；旧 journal 不再参与热路径写入。 */
     private readonly brain: BrainStore;
     private brainOpened = false;
     private readonly markdown: MarkdownMemoryStore;
@@ -177,7 +174,6 @@ export class MemoryModule extends Memory {
         const working = resolveWorkingMemoryConfig(config);
         this.workingMemoryBackend = working.backend;
         this.workingMemoryDefaultTtlSeconds = working.local.defaultTtlSeconds;
-        this.journal = new JournalStore({ journalRoot: config.paths.journalDir ?? join(config.paths.home, "journal") });
         this.brain = new BrainStore({ dbPath: join(config.paths.home, "brain.db") });
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
         this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
@@ -737,7 +733,7 @@ export class MemoryModule extends Memory {
 
         // brain.db 是生命事件事实层：每轮先写权威事件，再从同轮结构化 memory action
         // 派生 atom。失败直接抛出，避免半状态继续运行。
-        await this.writeTurnToBrainAndLegacyJournal(message, reply, context, actions, provenance, projectConstraintId, codenameId);
+        await this.writeTurnToBrain(message, reply, context, actions, provenance, projectConstraintId, codenameId);
 
         // 模型本轮如果发起新的 ask（kind='ask'），落 brain.memory_events.type='ask'。
         // chainDepth 由前序 ask 是否存在 + countAskChainDepth 决定；超过 maxChainDepth
@@ -843,7 +839,7 @@ export class MemoryModule extends Memory {
                 RuntimeEventType.MemoryTurnRecorded,
                 {
                     candidates: candidates.length,
-                    journal: true,
+                    brain: true,
                     projectConstraintId,
                     projectPromoted: projectRecords.length,
                     promoted: promotedRecords.length,
@@ -1180,11 +1176,11 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * brain.db 是生命事件事实层：每轮先写 `memory_events`，并把模型同轮结构化
+     * brain.db 是生命事件事实层：每轮写 `memory_events`，并把模型同轮结构化
      * memory action 派生的 prompt atom 一并封进 event.content.atoms。
-     * legacy journal 仅作为过渡审计副本写入；不可写时显式失败，避免审计链断裂。
+     * 旧 journal 只读保留，不再从热路径反向写入。
      */
-    private async writeTurnToBrainAndLegacyJournal(
+    private async writeTurnToBrain(
         message: GatewayMessage,
         reply: GatewayReply,
         context: RuntimeContext,
@@ -1209,7 +1205,7 @@ export class MemoryModule extends Memory {
                     const existing = this.brain.getCodenameByName(message.user.id, action.codename.name);
                     codenameUseCount = existing?.useCount ?? 0;
                 }
-                return journalAtomFromAction({
+                return brainAtomFromAction({
                     action,
                     embedding,
                     episodeId,
@@ -1239,63 +1235,6 @@ export class MemoryModule extends Memory {
                 codenameId,
             });
 
-            try {
-                const result = await this.journal.appendEpisode(
-                    {
-                        id: episodeId,
-                        userId: message.user.id,
-                        channelId: message.route.channel,
-                        projectId: projectConstraintId,
-                        role: ModelRole.User,
-                        text: renderEpisodeText(message.text, reply.text, normalizedProvenance),
-                        createdAt,
-                    },
-                    atoms,
-                ).catch((err: unknown) => {
-                    if (err instanceof JournalWriteRejectedError) {
-                        this.events.publish(
-                            event(
-                                RuntimeEventType.MemoryJournalRejectedLegacy,
-                                {
-                                    code: err.code,
-                                    dateKey: err.dateKey,
-                                    ageDays: err.ageDays,
-                                    graceDays: err.graceDays,
-                                    episodeId,
-                                },
-                                context.requestId,
-                            ),
-                        );
-                        return null;
-                    }
-                    throw err;
-                });
-                if (result) {
-                    this.events.publish(
-                        event(
-                            RuntimeEventType.MemoryJournalWritten,
-                            {
-                                atomIds: result.atomIds,
-                                atoms: result.atomIds.length,
-                                dbPath: result.dbPath,
-                                episodeId: result.episodeId,
-                                projectConstraintId,
-                                week: result.week,
-                            },
-                            context.requestId,
-                        ),
-                    );
-                }
-            } catch (err) {
-                this.events.publish(
-                    event(
-                        RuntimeEventType.MemoryReflectionFailed,
-                        { stage: "legacy-journal-write", error: String(err), episodeId },
-                        context.requestId,
-                    ),
-                );
-                throw err;
-            }
         } catch (err) {
             this.events.publish(
                 event(
@@ -1310,7 +1249,7 @@ export class MemoryModule extends Memory {
 
     /**
      * LF-R10：把每条 episode 落到 brain.db `memory_events`。
-     * prompt recall 直接从 event.content.atoms 展开；legacy journal 不再参与权威写路径。
+     * prompt recall 直接从 event.content.atoms 展开；brain.db 是唯一热路径写入源。
      */
     private writeBrainEvent(input: {
         episodeId: string;
@@ -1321,7 +1260,7 @@ export class MemoryModule extends Memory {
         projectConstraintId: string;
         requestId: string;
         atomIds: string[];
-        atoms: JournalAtomWrite[];
+        atoms: BrainPromptAtomWrite[];
         codenameId?: string;
     }): void {
         if (!this.brainOpened) {
@@ -2516,8 +2455,8 @@ export class MemoryModule extends Memory {
         if (visible.length === 0) return [];
         const queryEmbedding =
             context?.embedding && context.embedding.length > 0 ? context.embedding : await this.embeddings.embed(message.text);
-        // P0 prompt recall：brain_events 是权威源；召回时仍按资源指标做轻量排序，
-        // 但不再经过 legacy journal。零字符匹配——只看结构化 score + embedding。
+        // P0 prompt recall：brain_events 是权威源；召回时仍按资源指标做轻量排序。
+        // 零字符匹配——只看结构化 score + embedding。
         const activeInboxProjectId = this.peekActiveInboxProjectId(message.user.id, context);
         const boost = this.config.memory.tuning.inbox.codenameRecallBoost;
         const results = visible
@@ -2561,8 +2500,7 @@ export class MemoryModule extends Memory {
         }
         if (brainEventToWorkingEpisode.size === 0) return new Map();
         // Working-memory episodes carry the authoritative brain event id in metadata.
-        // Reading prompt atoms from brain.db keeps hippocampus context independent of the
-        // legacy journal audit copy, so journal cleanup cannot break recall.
+        // Reading prompt atoms from brain.db keeps hippocampus context on the single hot-path store.
         const visible = this.brain.listPromptAtomsWindow(
             latestCreatedAt > 0 ? new Date(latestCreatedAt) : new Date(),
             {
@@ -2620,7 +2558,7 @@ export class MemoryModule extends Memory {
                 embedding,
                 importance,
                 stability,
-                sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.JournalTurn,
+                sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.UserTurn,
                 createdAt: Date.now(),
                 ttlSeconds,
                 metadata: {
@@ -2638,7 +2576,7 @@ export class MemoryModule extends Memory {
                         importance,
                         mcpCalls: normalizedProvenance.mcpCalls?.length ?? 0,
                         skillNames: normalizedProvenance.skillNames ?? [],
-                        sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.JournalTurn,
+                        sourceKind: hasMcpSuccess ? MemorySourceKind.McpAugmented : MemorySourceKind.UserTurn,
                         ttlSeconds,
                     },
                     context.requestId,
@@ -3251,7 +3189,7 @@ export function extractCodenameIdFromInboxProjectId(id: string): string | null {
     return tail.length > 0 ? tail : null;
 }
 
-interface JournalAtomFromActionInput {
+interface BrainAtomFromActionInput {
     action: MemoryAction;
     createdAt: string;
     defaultWeights: MemoryWeights;
@@ -3277,7 +3215,7 @@ interface JournalAtomFromActionInput {
     codenameUseCount?: number;
 }
 
-function journalAtomFromAction(input: JournalAtomFromActionInput): JournalAtomWrite {
+function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWrite {
     const baseWeights = weightsFromAction(input.defaultWeights, input.action);
     const matrix = input.matrix.aggregate({
         action: input.action,

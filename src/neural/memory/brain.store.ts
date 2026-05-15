@@ -147,6 +147,15 @@ export interface BrainVisibleAtom {
     sourceEventTs: number;
 }
 
+/**
+ * Shape persisted under `memory_events.content.atoms`.
+ * The store owns windowing and visibility; callers own scoring before append.
+ */
+export interface BrainPromptAtomWrite {
+    atom: MemoryAtom;
+    score: AtomScore;
+}
+
 export class BrainStore {
     private db: Database | null = null;
     private opened = false;

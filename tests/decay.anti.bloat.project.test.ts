@@ -176,7 +176,7 @@ describe("project triggers (three paths, no string match)", () => {
             embedding: [1, 0, 0, 0],
             importance: 0.6,
             stability: 0.5,
-            sourceKind: "journal-turn",
+            sourceKind: "user-turn",
             createdAt: NOW,
             metadata: {},
             ...over,
@@ -240,7 +240,7 @@ describe("project triggers (three paths, no string match)", () => {
         const result = detectClusterCandidate({
             concepts: ["x"],
             episodes: Array.from({ length: 6 }, (_, i) =>
-                ep({ createdAt: NOW + i * 24 * HOUR, sourceKind: MemorySourceKind.JournalTurn }),
+                ep({ createdAt: NOW + i * 24 * HOUR, sourceKind: MemorySourceKind.UserTurn }),
             ),
         });
         expect(result.kind).toBe(ProjectTriggerKind.None);
@@ -252,7 +252,7 @@ describe("project triggers (three paths, no string match)", () => {
             ep({
                 createdAt: NOW + i * 24 * HOUR,
                 importance: 0.7,
-                sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.JournalTurn,
+                sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.UserTurn,
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes });
@@ -265,7 +265,7 @@ describe("project triggers (three paths, no string match)", () => {
             ep({
                 createdAt: NOW + i * 24 * HOUR,
                 importance: 0.72,
-                sourceKind: i === 0 ? MemorySourceKind.McpAugmented : MemorySourceKind.JournalTurn,
+                sourceKind: i === 0 ? MemorySourceKind.McpAugmented : MemorySourceKind.UserTurn,
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes });
@@ -277,7 +277,7 @@ describe("project triggers (three paths, no string match)", () => {
             ep({
                 createdAt: NOW + i * 24 * HOUR,
                 importance: 0.05,
-                sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.JournalTurn,
+                sourceKind: i === 0 ? MemorySourceKind.BlackboardConverged : MemorySourceKind.UserTurn,
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes }, { clusterEvidenceMin: 0.9 });

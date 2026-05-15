@@ -319,7 +319,6 @@ export type FpcLayer = ArchitectureLayer;
 export const MemoryLayer = {
     Brain: "brain",
     Crystal: "crystal",
-    Journal: "journal",
     Markdown: "markdown",
     Project: "project",
     SQLite: "sqlite",
@@ -381,7 +380,7 @@ export type MemoryCandidateStatus = (typeof MemoryCandidateStatus)[keyof typeof 
 
 export const MemorySourceKind = {
     ExplicitUserIntent: "explicit-user-intent",
-    JournalTurn: "journal-turn",
+    UserTurn: "user-turn",
     Reflection: "reflection",
     SignalAnalysis: "signal-analysis",
     BlackboardConverged: "blackboard-converged",

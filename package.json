@@ -26,7 +26,6 @@
         "test": "bun test ./tests/*.test.ts",
         "ci": "bun run docs:check && bun run check && bun run test && bun run build:binary && bun run build:binary:docker && bun run smoke:docker:binary && bun run smoke:recovery",
         "inspect:blackboard": "bun run scripts/blackboard.inspect.ts",
-        "smoke:journal": "bun run scripts/journal.smoke.ts",
         "smoke:docker": "bun run scripts/docker.dev.smoke.ts",
         "smoke:docker:binary": "bun run scripts/docker.dev.smoke.ts --require-binary",
         "smoke:runtime": "bun run scripts/docker.runtime.smoke.ts",

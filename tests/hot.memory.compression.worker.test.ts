@@ -180,7 +180,7 @@ function makeEpisode(episodeId: string): EpisodeRecord {
         embedding: [0.1, 0.2],
         importance: 0.4,
         stability: 0.5,
-        sourceKind: "journal-turn",
+        sourceKind: "user-turn",
         createdAt: 1_799_999_000_000,
         metadata: { schemaVersion: 1 },
     };

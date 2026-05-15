@@ -31,7 +31,6 @@ async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; 
         workspaceDir: join(root, "workspace"),
         logDir: join(root, "logs"),
         memoryDir: join(root, "memory"),
-        journalDir: join(root, "journal"),
         projectMemoryDir: join(root, "memory", "projects"),
         pluginDir: join(root, "plugins"),
         promptDir: join(root, "prompts"),

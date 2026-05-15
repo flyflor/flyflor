@@ -42,7 +42,6 @@ function paths(root: string): FlyflorPaths {
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(home, "memory"),
-        journalDir: join(home, "journal"),
         projectMemoryDir: join(home, "memory", "projects"),
         pluginDir: join(home, "plugins"),
         promptDir: join(home, "prompts"),
@@ -117,8 +116,8 @@ describe("P2 inbox slice C — fetchInboxBuckets handler", () => {
             await memory.rememberTurn(gwMsg("misc", "m-4"), gwReply("ack", "m-4"), ctx(), [
                 actionAdd("uncoded note"),
             ]);
-            // Inbox CLI must read brain.db authority, not the legacy journal audit copy.
-            await rm(config.paths.journalDir ?? join(config.paths.home, "journal"), { recursive: true, force: true });
+            // Inbox CLI must read brain.db authority even if an old sidecar directory is absent.
+            await rm(join(config.paths.home, "journal"), { recursive: true, force: true });
 
             const result = await fetchInboxBuckets(config, { userId: "user-inbox-cli" });
             expect(result.brainPresent).toBe(true);

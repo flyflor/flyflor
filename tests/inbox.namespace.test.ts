@@ -11,6 +11,7 @@ import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../sr
 import {
     Channel,
     ChatType,
+    MemoryEventType,
     type GatewayMessage,
     type GatewayReply,
     type RuntimeContext,
@@ -46,7 +47,6 @@ function paths(root: string): FlyflorPaths {
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(home, "memory"),
-        journalDir: join(home, "journal"),
         projectMemoryDir: join(home, "memory", "projects"),
         pluginDir: join(home, "plugins"),
         promptDir: join(home, "prompts"),
@@ -130,10 +130,17 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
                 ctx(),
                 [actionAdd("just a note")],
             );
-            const written = sink.events.find((e) => e.type === RuntimeEventType.MemoryJournalWritten);
-            expect(written).toBeTruthy();
-            expect(written?.payload?.projectConstraintId).toBe("inbox");
-            expect(isInboxProjectId(String(written?.payload?.projectConstraintId))).toBe(true);
+            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            try {
+                const event = db
+                    .query("SELECT content FROM memory_events WHERE type = ? ORDER BY ts DESC LIMIT 1")
+                    .get(MemoryEventType.Event) as { content: string } | null;
+                const atoms = readBrainAtoms(event?.content);
+                expect(atoms[0]?.projectId).toBe("inbox");
+                expect(isInboxProjectId(String(atoms[0]?.projectId))).toBe(true);
+            } finally {
+                db.close();
+            }
         } finally {
             memory.dispose();
         }
@@ -156,16 +163,18 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
             const codenameId = String(created?.payload?.id);
             expect(codenameId.startsWith("cn-")).toBe(true);
 
-            const written = sink.events.find((e) => e.type === RuntimeEventType.MemoryJournalWritten);
-            expect(written).toBeTruthy();
-            const projId = String(written?.payload?.projectConstraintId);
-            expect(projId).toBe(inboxProjectIdFor(codenameId));
-            expect(projId.startsWith("inbox:cn-")).toBe(true);
-            expect(isInboxProjectId(projId)).toBe(true);
-
             // 同样 brain.codenames 表也写入了
             const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
             try {
+                const event = db
+                    .query("SELECT content FROM memory_events WHERE type = ? ORDER BY ts DESC LIMIT 1")
+                    .get(MemoryEventType.Event) as { content: string } | null;
+                const atoms = readBrainAtoms(event?.content);
+                const projId = String(atoms[0]?.projectId);
+                expect(projId).toBe(inboxProjectIdFor(codenameId));
+                expect(projId.startsWith("inbox:cn-")).toBe(true);
+                expect(isInboxProjectId(projId)).toBe(true);
+
                 const cn = db
                     .query("SELECT id, name FROM codenames WHERE user_id = ? AND name = ?")
                     .get("user-inbox-ns", "fly") as { id: string; name: string } | null;
@@ -179,3 +188,8 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
         }
     });
 });
+
+function readBrainAtoms(rawContent: string | undefined): Array<{ projectId?: string }> {
+    const content = rawContent ? (JSON.parse(rawContent) as { atoms?: Array<{ atom?: { projectId?: string } }> }) : {};
+    return (content.atoms ?? []).map((entry) => entry.atom ?? {});
+}

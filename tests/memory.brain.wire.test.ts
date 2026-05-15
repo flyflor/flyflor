@@ -20,7 +20,7 @@ afterEach(async () => {
     await Promise.all(tempRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
-describe("MemoryModule + BrainStore (LF-R1 dual-write)", () => {
+describe("MemoryModule + BrainStore", () => {
     test("appendEpisode also writes to brain.db memory_events", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
@@ -63,14 +63,13 @@ describe("MemoryModule + BrainStore (LF-R1 dual-write)", () => {
         }
     });
 
-    test("rememberTurn opens brain.db for direct callers and still writes legacy journal", async () => {
+    test("rememberTurn opens brain.db for direct callers", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
         // Direct MemoryModule callers can bypass RuntimeModule.warmup(); rememberTurn owns
         // the lazy-open boundary so CLI/tests/background jobs still hit the single brain.db.
         await memory.rememberTurn(gatewayMessage("hi"), gatewayReply("hello", "msg-2"), runtimeContext());
-        expect(sink.types).toContain(RuntimeEventType.MemoryJournalWritten);
         expect(sink.types).toContain(RuntimeEventType.MemoryBrainEventWritten);
         expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainWriteFailed);
         memory.dispose();
@@ -216,7 +215,6 @@ function testPaths(root: string): FlyflorPaths {
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(home, "memory"),
-        journalDir: join(home, "journal"),
         projectMemoryDir: join(home, "memory", "projects"),
         pluginDir: join(home, "plugins"),
         promptDir: join(home, "prompts"),

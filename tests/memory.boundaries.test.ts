@@ -617,7 +617,7 @@ describe("Agent memory stability and latency", () => {
         expect(prompt).toContain("# Retrieved Long-Term Memory");
     });
 
-    test("journal replaces raw live-message continuity in the memory hot path", async () => {
+    test("brain events replace raw live-message continuity in the memory hot path", async () => {
         const config = await testConfig();
         const sink = new CapturingSink();
         const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, sink);
@@ -634,7 +634,7 @@ describe("Agent memory stability and latency", () => {
 
         const prompt = await memory.buildPrompt({ ...message, id: "message-3", text: "继续。" });
 
-        expect(sink.events.filter((item) => item.type === RuntimeEventType.MemoryJournalWritten)).toHaveLength(2);
+        expect(sink.events.filter((item) => item.type === RuntimeEventType.MemoryBrainEventWritten)).toHaveLength(2);
         expect(prompt).not.toContain("第二轮保持生命事件。");
         expect(prompt).not.toContain("第二轮回复。");
         expect(prompt).not.toContain("第一轮会被固化。");

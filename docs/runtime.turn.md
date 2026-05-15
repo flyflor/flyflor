@@ -202,7 +202,6 @@ flowchart LR
     Cand --> SqliteCand[sqlite.addCandidate<br/>autoPromote 时直接 markdown 写入]
     Trig --> ProjectMem[ProjectMemoryStore.recordTurn<br/>显式意图通道]
     Action --> BrainEvent[BrainStore.appendEvent<br/>brain.db memory_events + content.atoms]
-    Action -.-> JournalRec[JournalStore.appendEpisode<br/>legacy audit copy]
     Cand -.-> CrystalAsync[CrystalMemoryService.recordTurn]
 ```
 
@@ -259,7 +258,7 @@ interface GatewayReply {
 ## 运行边界 / 后续增强
 
 - `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一文件，后续可继续抽 service。
-- `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免把 legacy journal 重新接回 prompt path。
+- `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走进程内 Map；多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。
 - 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；后续重点是围绕这些证据做诊断展示。

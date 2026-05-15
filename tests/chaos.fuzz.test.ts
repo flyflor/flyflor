@@ -13,7 +13,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LruCache } from "../src/neural/memory/lru.cache.ts";
-import { JournalStore, type JournalAtomWrite } from "../src/neural/memory/journal.store.ts";
+import { BrainStore, type BrainPromptAtomWrite } from "../src/neural/memory/brain.store.ts";
 import { spreadActivation } from "../src/neural/memory/activation.ts";
 import {
     DecayLayer,
@@ -36,7 +36,7 @@ import {
     ProjectTriggerKind,
 } from "../src/agent/project/index.ts";
 import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
-import { AtomStage, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
+import { AtomStage, MemoryEventType, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────
 function rng(seed: number): () => number {
@@ -359,53 +359,58 @@ describe("chaos: spreadActivation", () => {
     });
 });
 
-// ─── journal AtomScore 暴力 ───────────────────────────────────────
-describe("chaos: JournalStore AtomScore gate", () => {
+// ─── brain AtomScore 暴力 ───────────────────────────────────────
+describe("chaos: BrainStore AtomScore gate", () => {
     test("window recall keeps only threshold-passing atoms across random day partitions", async () => {
-        const root = await mkdtemp(join(tmpdir(), "flyflor-chaos-journal-"));
-        const store = new JournalStore({ journalRoot: join(root, "journal") });
+        const root = await mkdtemp(join(tmpdir(), "flyflor-chaos-brain-"));
+        const store = new BrainStore({ dbPath: join(root, "brain.db") });
+        await store.open();
         const r = rng(0xa70);
         const expected = new Set<string>();
 
-        for (let day = 0; day < 14; day += 1) {
-            const createdAt = new Date(Date.UTC(2026, 4, 12 - day, 8, 0, 0)).toISOString();
-            const episodeId = `chaos-ep-${day}`;
-            const writes: JournalAtomWrite[] = [];
-            for (let i = 0; i < 40; i += 1) {
-                const score = Math.max(0, Math.min(1, r()));
-                const id = `chaos-${day}-${i}`;
-                writes.push(journalAtomWrite(id, episodeId, score, createdAt));
-                if (day < 7 && score >= 0.7) expected.add(id);
-            }
-            await store.appendEpisode(
-                {
+        try {
+            for (let day = 0; day < 14; day += 1) {
+                const ts = Date.UTC(2026, 4, 12 - day, 8, 0, 0);
+                const createdAt = new Date(ts).toISOString();
+                const episodeId = `chaos-ep-${day}`;
+                const writes: BrainPromptAtomWrite[] = [];
+                for (let i = 0; i < 40; i += 1) {
+                    const score = Math.max(0, Math.min(1, r()));
+                    const id = `chaos-${day}-${i}`;
+                    writes.push(brainAtomWrite(id, episodeId, score, createdAt));
+                    if (day <= 7 && score >= 0.7) expected.add(id);
+                }
+                // BrainStore persists atoms inside the authoritative turn event; no sidecar files are involved.
+                store.appendEvent({
                     id: episodeId,
+                    ts,
                     userId: "u-chaos",
                     channelId: "stdio",
-                    projectId: "p-chaos",
+                    codenameId: "p-chaos",
+                    type: MemoryEventType.Event,
                     role: ModelRole.User,
-                    text: `chaos day ${day}`,
-                    createdAt,
-                },
-                writes,
-            );
-        }
+                    content: { atoms: writes },
+                });
+            }
 
-        const visible = await store.listVisibleAtomsWindow("2026-05-12T08:00:00.000Z", {
-            days: 7,
-            limit: 100,
-            minScore: 0.7,
-            userId: "u-chaos",
-        });
+            const visible = store.listPromptAtomsWindow("2026-05-12T08:00:00.000Z", {
+                days: 7,
+                limit: 100,
+                minScore: 0.7,
+                userId: "u-chaos",
+            });
 
-        expect(visible.length).toBeLessThanOrEqual(100);
-        for (const entry of visible) {
-            expect(expected.has(entry.atom.id)).toBe(true);
-            expect(entry.score.total).toBeGreaterThanOrEqual(0.7);
-            expect(Number.isFinite(entry.score.total)).toBe(true);
-        }
-        for (let i = 1; i < visible.length; i += 1) {
-            expect(visible[i - 1]!.score.total).toBeGreaterThanOrEqual(visible[i]!.score.total);
+            expect(visible.length).toBeLessThanOrEqual(100);
+            for (const entry of visible) {
+                expect(expected.has(entry.atom.id)).toBe(true);
+                expect(entry.score.total).toBeGreaterThanOrEqual(0.7);
+                expect(Number.isFinite(entry.score.total)).toBe(true);
+            }
+            for (let i = 1; i < visible.length; i += 1) {
+                expect(visible[i - 1]!.score.total).toBeGreaterThanOrEqual(visible[i]!.score.total);
+            }
+        } finally {
+            store.close();
         }
     });
 });
@@ -483,7 +488,7 @@ describe("chaos: project triggers", () => {
                 embedding: chaosVector(r, 4),
                 importance: chaosNumber(r),
                 stability: chaosNumber(r),
-                sourceKind: r() < 0.3 ? "blackboard-converged" : "journal-turn",
+                sourceKind: r() < 0.3 ? "blackboard-converged" : "user-turn",
                 createdAt: chaosNumber(r),
                 metadata: {},
             }));
@@ -531,7 +536,7 @@ describe("chaos: determinism check", () => {
     });
 });
 
-function journalAtomWrite(id: string, episodeId: string, total: number, createdAt: string): JournalAtomWrite {
+function brainAtomWrite(id: string, episodeId: string, total: number, createdAt: string): BrainPromptAtomWrite {
     const atom: MemoryAtom = {
         id,
         episodeIds: [episodeId],
@@ -540,7 +545,7 @@ function journalAtomWrite(id: string, episodeId: string, total: number, createdA
         projectId: "p-chaos",
         role: ModelRole.User,
         task: "chaos",
-        context: "journal chaos",
+        context: "brain chaos",
         action: id,
         outcome: "stored",
         success: total >= 0.7,

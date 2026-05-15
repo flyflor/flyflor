@@ -37,7 +37,6 @@ function paths(root: string): FlyflorPaths {
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(home, "memory"),
-        journalDir: join(home, "journal"),
         projectMemoryDir: join(home, "memory", "projects"),
         pluginDir: join(home, "plugins"),
         promptDir: join(home, "prompts"),

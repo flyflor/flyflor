@@ -1,6 +1,6 @@
 # 记忆系统
 
-> 当前实现处于 LF-R15 收口态：`~/.flyflor/brain.db` 是 prompt atom recall 与 turn event write 的权威源；legacy `JournalStore` 仅保留为 best-effort 审计副本，不再参与 prompt 召回；月级冷归档与热记忆隔离压缩已自动化。
+> 当前实现处于 LF-R15 收口态：`~/.flyflor/brain.db` 是 prompt atom recall 与 turn event write 的唯一热路径权威源；月级冷归档与热记忆隔离压缩已自动化。
 
 ## 一句话定位
 
@@ -11,7 +11,6 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/markdown.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
 - `src/neural/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/eq）
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
-- `src/neural/memory/journal.store.ts` — legacy atom journal（best-effort 审计副本，不参与 prompt recall）
 - `src/neural/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
 - `src/neural/memory/sqlite.ts` — candidates / offers / search
@@ -40,7 +39,6 @@ flowchart LR
     subgraph Life["生命事件层（单文件大脑）"]
         Brain[("~/.flyflor/brain.db<br/>memory_events / state / summary / links / codenames")]
         Archive[("~/.flyflor/archive/<br/>brain.YYYY-MM.db")]
-        Journal[("legacy journal<br/>best-effort audit copy")]
     end
 
     subgraph Index["辅助索引与审计"]
@@ -53,7 +51,6 @@ flowchart LR
 
     User["用户 turn"] --> Brain
     Brain -- archived state + cutoff --> Archive
-    User --> Journal
     User --> Work
     Work -- ConsolidationWorker --> Crystal
     Work -- HotMemoryCompressionWorker --> Brain
@@ -80,7 +77,7 @@ flowchart LR
 | `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
 | `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示 |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event，legacy journal 只做 best-effort 复制。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
 chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。
 
@@ -263,7 +260,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 **配置**：`memory.tuning.inbox.activeCodenameWindowMinutes`（默认 60）/ `inbox.codenameRecallBoost`（默认 0.15）。
 
-**可视化**：`flyflor inbox list` 直接读取 brain.db 权威事件并按 codename 分桶展示，`(uncoded)` 桶聚合无 codename 的 inbox atom；它不依赖 legacy journal 审计副本。
+**可视化**：`flyflor inbox list` 直接读取 brain.db 权威事件并按 codename 分桶展示，`(uncoded)` 桶聚合无 codename 的 inbox atom。
 
 ## 事件清单
 
@@ -303,7 +300,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 ## 运行边界 / 后续增强
 
-- legacy journal 仍保留审计写入；任何新召回或 CLI 可视化能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
+- 任何新召回或 CLI 可视化能力必须直接扩展 brain events/state，不得新增 sidecar 事件库回到 prompt path。
 - `RETROSPECTIVE.md` 是晶体升格与丢弃决策的可复核证据；写入失败必须显式失败，后台整合 Worker 只发布 failure event 并保留候选，不做静默吞错。
 - 项目记忆 snapshot 只允许“缺文件初始化”这一种恢复路径；坏 manifest / recall JSONL 写失败必须向上冒泡，避免把项目局部记忆损坏伪装成空上下文。
 - Ghost content patch 属于状态修复写路径；若原始 ghost event content 已不是合法 JSON object，patch 必须失败，不允许用空对象覆盖坏数据。

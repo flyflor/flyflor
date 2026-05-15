@@ -46,7 +46,6 @@ export interface FlyflorPaths {
     projectMcpDir: string;
     projectPluginDir: string;
     projectMemoryDir: string;
-    journalDir?: string;
     workspaceDir: string;
     logDir: string;
     memoryDir: string;
@@ -1219,7 +1218,6 @@ function resolvePaths(): FlyflorPaths {
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),
         projectMemoryDir: join(projectFlyflorDir, "memory"),
-        journalDir: join(home, "journal"),
         workspaceDir: join(home, "workspace"),
         logDir: join(home, "logs"),
         memoryDir: join(xdgData, "flyflor", "memory"),
@@ -1241,7 +1239,6 @@ async function ensureDirectories(paths: FlyflorPaths): Promise<void> {
             paths.workspaceDir,
             paths.logDir,
             paths.memoryDir,
-            paths.journalDir,
             paths.pluginDir,
             paths.promptDir,
             paths.skillDir,

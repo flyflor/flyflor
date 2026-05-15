@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/fast.route.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/memory/embedding.ts";
-import { JournalStore, MemoryModule } from "../src/neural/memory/index.ts";
+import { MemoryModule } from "../src/neural/memory/index.ts";
 import {
     BlackboardMode,
     Channel,
@@ -230,21 +230,19 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const result = await memory.rememberTurn(message, reply, ctx);
         expect(result.candidates).toHaveLength(0);
         expect(events.countOf(RuntimeEventType.MemoryEpisodeWritten)).toBe(1);
-        expect(events.countOf(RuntimeEventType.MemoryJournalWritten)).toBe(1);
-        const journalEvent = events.findOf(RuntimeEventType.MemoryJournalWritten);
-        expect(await Bun.file(String(journalEvent?.payload?.dbPath)).exists()).toBe(true);
+        expect(events.countOf(RuntimeEventType.MemoryBrainEventWritten)).toBe(1);
     });
 
-    test("rememberTurn writes structured memory actions as journal atoms", async () => {
+    test("rememberTurn writes structured memory actions as brain atoms", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
-        const ctx = withEmbedding(await embedFor(config, "journal atom"));
-        await memory.rememberTurn(msg("journal atom"), rep("stored"), ctx, [
+        const ctx = withEmbedding(await embedFor(config, "brain atom"));
+        await memory.rememberTurn(msg("brain atom"), rep("stored"), ctx, [
             {
                 action: "add",
                 target: "memory",
-                content: "Journal atoms are driven by structured memory actions.",
+                content: "Brain atoms are driven by structured memory actions.",
                 confidence: 0.9,
                 signals: {
                     durability: 0.9,
@@ -253,15 +251,22 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             },
         ]);
 
-        const journal = new JournalStore({ journalRoot: join(config.paths.home, "journal") });
-        const visible = await journal.listVisibleAtoms(ctx.now, { minScore: 0.1, userId: "u1" });
+        const brain = memory as unknown as {
+            brain: {
+                listPromptAtomsWindow(date: Date | string, input: { minScore: number; userId: string }): Array<{
+                    atom: { text: string };
+                    score: { total: number };
+                }>;
+            };
+        };
+        const visible = brain.brain.listPromptAtomsWindow(ctx.now, { minScore: 0.1, userId: "u1" });
         expect(visible.map((entry) => entry.atom.text)).toContain(
-            "Journal atoms are driven by structured memory actions.",
+            "Brain atoms are driven by structured memory actions.",
         );
         expect(visible[0]?.score.total).toBeGreaterThan(0);
     });
 
-    test("hippocampus context reads brain atoms without legacy journal files", async () => {
+    test("hippocampus context reads brain atoms without sidecar memory files", async () => {
         const config = await buildConfig();
         const memory = new MemoryModule(config, new CapturingSink());
         await memory.warmup();
@@ -270,7 +275,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             {
                 action: "add",
                 target: "memory",
-                content: "Hippocampus recall must survive legacy journal cleanup.",
+                content: "Hippocampus recall must survive sidecar cleanup.",
                 confidence: 0.95,
                 signals: {
                     durability: 0.95,
@@ -278,8 +283,8 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
                 },
             },
         ]);
-        // Simulate removing the legacy audit copy: hippocampus context must come from brain.db.
-        await rm(config.paths.journalDir ?? join(config.paths.home, "journal"), { recursive: true, force: true });
+        // Simulate removing an old sidecar directory: hippocampus context must come from brain.db.
+        await rm(join(config.paths.home, "journal"), { recursive: true, force: true });
 
         const prompt = await memory.buildPrompt(msg("brain-backed hippocampus follow-up"), {
             ...ctx,
@@ -288,7 +293,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         });
 
         expect(prompt).toContain("Hippocampus context");
-        expect(prompt).toContain("Hippocampus recall must survive legacy journal cleanup.");
+        expect(prompt).toContain("Hippocampus recall must survive sidecar cleanup.");
         memory.dispose();
     });
 
