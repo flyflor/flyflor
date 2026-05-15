@@ -98,7 +98,7 @@ describe("HotMemoryCompressionWorker", () => {
             expect(rows[0]?.content.isolation).toEqual({
                 promptVisible: false,
                 memorySummary: false,
-                surrealCandidate: false,
+                graphCandidate: false,
                 gemCandidate: false,
             });
             const recalled = brain.listPromptAtomsWindow(new Date(1_800_000_000_000), {

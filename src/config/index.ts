@@ -330,16 +330,6 @@ export interface LocalCrystalMemoryConfig {
     dbFile?: string;
 }
 
-export interface SurrealMemoryConfig {
-    database: string;
-    enabled: boolean;
-    internalUrl: string;
-    namespace: string;
-    password?: SecretRef | string;
-    timeoutMs: number;
-    username?: SecretRef | string;
-}
-
 export interface MemoryRetrievalConfig {
     maxPromptChars: number;
     maxResults: number;

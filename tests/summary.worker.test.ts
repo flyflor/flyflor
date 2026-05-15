@@ -90,7 +90,7 @@ describe("SummaryWorker.aggregate", () => {
                     isolation: {
                         promptVisible: false,
                         memorySummary: false,
-                        surrealCandidate: false,
+                        graphCandidate: false,
                         gemCandidate: false,
                     },
                 },

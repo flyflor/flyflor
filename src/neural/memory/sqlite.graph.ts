@@ -17,7 +17,7 @@ import type {
     MemoryNodeInput,
     MemoryNodeRecord,
     SummaryEmbeddingInput,
-} from "./surreal.graph.ts";
+} from "./graph.store.ts";
 
 interface EpisodeRow {
     id: string;

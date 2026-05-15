@@ -223,7 +223,7 @@ export interface HotMemoryCompressionContent {
     isolation: {
         promptVisible: false;
         memorySummary: false;
-        surrealCandidate: false;
+        graphCandidate: false;
         gemCandidate: false;
     };
     createdAt: number;

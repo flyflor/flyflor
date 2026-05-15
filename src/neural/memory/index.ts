@@ -57,7 +57,7 @@ import { SQLiteMemoryStore } from "./sqlite.ts";
 import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
 import { LocalWorkingMemoryStore } from "./local.working.store.ts";
 import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
-import type { MemoryGraphStore } from "./surreal.graph.ts";
+import type { MemoryGraphStore } from "./graph.store.ts";
 import { SQLiteGraphStore } from "./sqlite.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";

@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { MemoryModule } from "../src/agent/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import { BrainStore } from "../src/neural/memory/brain.store.ts";
-import { SurrealGraphStore, type SummaryEmbeddingInput } from "../src/neural/memory/surreal.graph.ts";
+import type { MemoryGraphStore, SummaryEmbeddingInput } from "../src/neural/memory/graph.store.ts";
 import {
     Channel,
     ChatType,
@@ -109,7 +109,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                     isolation: {
                         promptVisible: false,
                         memorySummary: false,
-                        surrealCandidate: false,
+                        graphCandidate: false,
                         gemCandidate: false,
                     },
                     createdAt: now - 60_000,
@@ -144,7 +144,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const graph = new FakeSummaryGraph(config);
-        const memory = new MemoryModule(config, sink, undefined, { graph });
+        const memory = new MemoryModule(config, sink, undefined, { graph: graph as unknown as MemoryGraphStore });
         await memory.warmup();
         try {
             await memory.rememberTurn(
@@ -176,7 +176,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const graph = new FailingSummaryGraph(config);
-        const memory = new MemoryModule(config, sink, undefined, { graph });
+        const memory = new MemoryModule(config, sink, undefined, { graph: graph as unknown as MemoryGraphStore });
         await memory.warmup();
         try {
             await memory.rememberTurn(
@@ -203,21 +203,13 @@ class RecordingSink implements EventSink {
     }
 }
 
-class FakeSummaryGraph extends SurrealGraphStore {
+class FakeSummaryGraph implements Partial<MemoryGraphStore> {
     readonly inputs: SummaryEmbeddingInput[] = [];
-    constructor(config: FlyflorConfig) {
-        super({
-            database: "test",
-            enabled: true,
-            internalUrl: "http://127.0.0.1:1",
-            namespace: "flyflor",
-            timeoutMs: 25,
-        });
-    }
-    override async initialize(): Promise<void> {
+    constructor(_config: FlyflorConfig) {}
+    async initialize(): Promise<void> {
         return;
     }
-    override async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
+    async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
         this.inputs.push(input);
     }
 }

@@ -137,7 +137,7 @@ export class HotMemoryCompressionWorker {
             isolation: {
                 promptVisible: false,
                 memorySummary: false,
-                surrealCandidate: false,
+                graphCandidate: false,
                 gemCandidate: false,
             },
             createdAt,

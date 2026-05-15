@@ -1,7 +1,7 @@
 /**
  * Dream worker 单元测试（README.md §12）。
  *
- * 用 fake SurrealGraphStore 覆盖三类动作的执行路径：
+ * 用 fake MemoryGraphStore 覆盖三类动作的执行路径：
  *  - drift-repair 必须先 writeGemSnapshot 再 applyGemDriftRepair；
  *  - recall-reinforce 调 applyMemoryReinforce；
  *  - contradiction-audit 调 applyContradictionAudit 一或两次（取决于 weaker）。
@@ -22,7 +22,7 @@ import {
     NullDreamWorker,
     parseDreamDecisions,
 } from "../src/agent/runtime/dream.worker.ts";
-import type { SurrealGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/surreal.graph.ts";
+import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph.store.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 
@@ -53,21 +53,21 @@ class ThrowingModel implements ModelClient {
     }
 }
 
-interface FakeSurrealOpts {
+interface FakeGraphOpts {
     driftGems?: GemRecord[];
     recallTops?: MemoryNodeRecord[];
     recallBottoms?: MemoryNodeRecord[];
     pairs?: Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>;
 }
 
-class FakeSurrealGraph {
+class FakeGraph {
     readonly snapshots: Array<{ skillId: string; reason: string; takenAt: number }> = [];
     readonly drift: Array<Record<string, unknown>> = [];
     readonly reinforce: Array<Record<string, unknown>> = [];
     readonly contradiction: Array<Record<string, unknown>> = [];
     readonly reconsolidation: Array<Record<string, unknown>> = [];
 
-    constructor(private readonly state: FakeSurrealOpts = {}) {}
+    constructor(private readonly state: FakeGraphOpts = {}) {}
 
     async listGemDriftCandidates(): Promise<GemRecord[]> {
         return this.state.driftGems ?? [];
@@ -103,8 +103,8 @@ class FakeSurrealGraph {
     }
 }
 
-function fakeAs(graph: FakeSurrealGraph): SurrealGraphStore {
-    return graph as unknown as SurrealGraphStore;
+function fakeAs(graph: FakeGraph): MemoryGraphStore {
+    return graph as unknown as MemoryGraphStore;
 }
 
 function mkSkill(over: Partial<GemRecord> = {}): GemRecord {
@@ -266,7 +266,7 @@ describe("DreamWorkerImpl.runOnce", () => {
 
     test("empty userId returns zero without calling LLM", async () => {
         const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(fakeAs(new FakeSurrealGraph()), new StubModel([]), sink, { now });
+        const w = new DreamWorkerImpl(fakeAs(new FakeGraph()), new StubModel([]), sink, { now });
         const r = await w.runOnce("");
         expect(r.scanned).toBe(0);
         expect(sink.events).toHaveLength(0);
@@ -274,14 +274,14 @@ describe("DreamWorkerImpl.runOnce", () => {
 
     test("no candidates → publishes completed with zero", async () => {
         const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(fakeAs(new FakeSurrealGraph()), new StubModel([]), sink, { now });
+        const w = new DreamWorkerImpl(fakeAs(new FakeGraph()), new StubModel([]), sink, { now });
         const r = await w.runOnce("u1");
         expect(r.scanned).toBe(0);
         expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryDreamCompleted);
     });
 
     test("drift-repair: snapshots before repair and fires MemoryDriftRepaired", async () => {
-        const graph = new FakeSurrealGraph({ driftGems: [mkSkill({ id: "s1" })] });
+        const graph = new FakeGraph({ driftGems: [mkSkill({ id: "s1" })] });
         const model = new StubModel([
             JSON.stringify({
                 decisions: [
@@ -308,7 +308,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("recall-reinforce: applies importance multiplier to target", async () => {
-        const graph = new FakeSurrealGraph({ recallTops: [mkMem({ id: "m1" })] });
+        const graph = new FakeGraph({ recallTops: [mkMem({ id: "m1" })] });
         const model = new StubModel([
             JSON.stringify({
                 decisions: [
@@ -324,7 +324,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("contradiction-audit (both): applies to both sides", async () => {
-        const graph = new FakeSurrealGraph({
+        const graph = new FakeGraph({
             pairs: [{ left: mkMem({ id: "L" }), right: mkMem({ id: "R" }), cosine: 0.9 }],
         });
         const model = new StubModel([
@@ -340,7 +340,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("reconsolidation (winner=left): fires MemoryReconsolidated with strong signal", async () => {
-        const graph = new FakeSurrealGraph({
+        const graph = new FakeGraph({
             pairs: [{ left: mkMem({ id: "L", contradictionCount: 2 }), right: mkMem({ id: "R" }), cosine: 0.92 }],
         });
         const model = new StubModel([
@@ -367,7 +367,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("reconsolidation: weak signal (low contradictionCount, low cosine) is short-circuited to skip", async () => {
-        const graph = new FakeSurrealGraph({
+        const graph = new FakeGraph({
             pairs: [{ left: mkMem({ id: "L", contradictionCount: 0 }), right: mkMem({ id: "R", contradictionCount: 0 }), cosine: 0.79 }],
         });
         const model = new StubModel([
@@ -384,7 +384,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("kind mismatch (drift-repair on a recall candidate) → skip, no writes", async () => {
-        const graph = new FakeSurrealGraph({ recallTops: [mkMem({ id: "m1" })] });
+        const graph = new FakeGraph({ recallTops: [mkMem({ id: "m1" })] });
         const model = new StubModel([
             JSON.stringify({
                 decisions: [{ candidateId: "recall-top:memory_node:m1", action: "drift-repair", newSummary: "no" }],
@@ -399,7 +399,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("LLM throws → all candidates skipped, MemoryDreamFailed emitted", async () => {
-        const graph = new FakeSurrealGraph({ recallTops: [mkMem({ id: "m1" })] });
+        const graph = new FakeGraph({ recallTops: [mkMem({ id: "m1" })] });
         const sink = new CapturingSink();
         const w = new DreamWorkerImpl(fakeAs(graph), new ThrowingModel(), sink, { now });
         const r = await w.runOnce("u1");

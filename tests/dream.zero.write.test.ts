@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DreamWorkerImpl } from "../src/agent/runtime/dream.worker.ts";
-import type { GemRecord, MemoryNodeRecord, SurrealGraphStore } from "../src/neural/memory/surreal.graph.ts";
+import type { GemRecord, MemoryNodeRecord, MemoryGraphStore } from "../src/neural/memory/graph.store.ts";
 import { ModelRole, type ModelClient } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 
@@ -69,7 +69,7 @@ describe("LF-R6: dream zero-write hard rule", () => {
         const graph = new ZeroSignalGraph();
         const model = new CountingModel();
         const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(graph as unknown as SurrealGraphStore, model, sink);
+        const w = new DreamWorkerImpl(graph as unknown as MemoryGraphStore, model, sink);
         const r = await w.runOnce("u1");
         expect(r.scanned).toBe(0);
         expect(r.driftRepaired).toBe(0);
@@ -94,7 +94,7 @@ describe("LF-R6: dream zero-write hard rule", () => {
         })();
         const model = new CountingModel();
         const sink = new CapturingSink();
-        const w = new DreamWorkerImpl(graph as unknown as SurrealGraphStore, model, sink);
+        const w = new DreamWorkerImpl(graph as unknown as MemoryGraphStore, model, sink);
         const r = await w.runOnce("u1");
         expect(r.scanned).toBe(0);
         expect(model.calls).toBe(0);
@@ -108,7 +108,7 @@ describe("LF-R6: dream zero-write hard rule", () => {
     test("empty userId → no graph methods invoked", async () => {
         const graph = new ZeroSignalGraph();
         const model = new CountingModel();
-        const w = new DreamWorkerImpl(graph as unknown as SurrealGraphStore, model, new CapturingSink());
+        const w = new DreamWorkerImpl(graph as unknown as MemoryGraphStore, model, new CapturingSink());
         const r = await w.runOnce("");
         expect(r.scanned).toBe(0);
         expect(model.calls).toBe(0);

@@ -1,7 +1,7 @@
 import { ModelRole, type ModelClient } from "../../protocol/contracts/index.ts";
 import type { EpisodeRecord, WorkingMemoryStore, WorkingMemoryHealthSnapshot } from "./working.store.ts";
 import { isWorkingMemoryCircuitCoolingDown } from "./working.store.ts";
-import type { MemoryGraphStore } from "./surreal.graph.ts";
+import type { MemoryGraphStore } from "./graph.store.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderMemoryConsolidationPrompt } from "../../agent/prompts/index.ts";
 import type { RetrospectiveLog } from "./retrospective.ts";

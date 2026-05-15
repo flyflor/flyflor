@@ -2,8 +2,8 @@
 /**
  * Dream worker 压测脚本（M-04）。
  *
- * 目标：在真实 LLM / SurrealDB 不可用的开发环境中，验证 DreamWorkerImpl
- * 在大批量候选下的吞吐与稳定性。完全基于内存驱动，不接 Surreal、不接外网。
+ * 目标：在真实 LLM / 外部图数据库 不可用的开发环境中，验证 DreamWorkerImpl
+ * 在大批量候选下的吞吐与稳定性。完全基于内存驱动，不接外部图数据库、不接外网。
  *
  * 用法：
  *   bun run scripts/dream.stress.ts [--candidates N] [--passes P] [--mix drift,recall,contradiction]
@@ -20,7 +20,7 @@ import {
     type DreamRunResult,
 } from "../src/agent/runtime/dream.worker.ts";
 import { DreamCandidateKind } from "../src/neural/memory/dream.candidates.ts";
-import type { SurrealGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/surreal.graph.ts";
+import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph.store.ts";
 import type { ModelClient, ModelMessage } from "../src/protocol/contracts/index.ts";
 import type { EventSink } from "../src/protocol/events/index.ts";
 
@@ -195,7 +195,7 @@ async function main(): Promise<void> {
     const state = buildState(opts);
     const graph = new StressGraph(state.drift, state.tops, state.pairs);
     const model = new DeterministicModel();
-    const worker = new DreamWorkerImpl(graph as unknown as SurrealGraphStore, model, new NullSink(), {
+    const worker = new DreamWorkerImpl(graph as unknown as MemoryGraphStore, model, new NullSink(), {
         maxCandidates: opts.candidates,
     });
 

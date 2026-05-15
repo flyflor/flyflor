@@ -10,7 +10,7 @@ import {
 } from "../src/neural/memory/consolidation.worker.ts";
 import type { RetrospectiveLog } from "../src/neural/memory/retrospective.ts";
 import type { EpisodeRecord, WorkingMemoryStore } from "../src/neural/memory/working.store.ts";
-import type { SurrealGraphStore } from "../src/neural/memory/surreal.graph.ts";
+import type { MemoryGraphStore } from "../src/neural/memory/graph.store.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 
@@ -193,7 +193,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             relateConsolidatedInto: async (a: string, b: string) => {
                 relateCalls.push([a, b]);
             },
-        } as unknown as SurrealGraphStore;
+        } as unknown as MemoryGraphStore;
         const model = new StubModel([
             JSON.stringify({ decision: "consolidate", confidence: 0.9, summary: "s", symbols: ["x"] }),
             JSON.stringify({ decision: "reinforce", confidence: 0.6 }),
@@ -231,7 +231,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             readEpisode: async () => makeEpisode("e1", "u1"),
         } as unknown as WorkingMemoryStore;
         const events = new CapturingSink();
-        const worker = new ConsolidationWorker(fakeWorking, {} as SurrealGraphStore, new StubModel(["{}"]), events, {
+        const worker = new ConsolidationWorker(fakeWorking, {} as MemoryGraphStore, new StubModel(["{}"]), events, {
             workingMemoryHealthSnapshot: () => fakeWorking.getHealthSnapshot?.(),
         });
 
@@ -250,7 +250,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             touchConcepts: async () => {},
             reinforceEpisode: async () => true,
         } as unknown as WorkingMemoryStore;
-        const fakeGraph = {} as SurrealGraphStore;
+        const fakeGraph = {} as MemoryGraphStore;
         const model = new StubModel(["{}"]);
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(fakeWorking, fakeGraph, model, events);
@@ -265,7 +265,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
                 throw new Error("conn refused");
             },
         } as unknown as WorkingMemoryStore;
-        const fakeGraph = {} as SurrealGraphStore;
+        const fakeGraph = {} as MemoryGraphStore;
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(fakeWorking, fakeGraph, new StubModel(["{}"]), events);
         const result = await worker.drain("u1");
@@ -283,7 +283,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             touchConcepts: async () => {},
             reinforceEpisode: async () => true,
         } as unknown as WorkingMemoryStore;
-        const fakeGraph = {} as SurrealGraphStore;
+        const fakeGraph = {} as MemoryGraphStore;
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(fakeWorking, fakeGraph, new StubModel(["{}"]), events);
         const result = await worker.drain("u1");
@@ -309,7 +309,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(
             fakeWorking,
-            {} as SurrealGraphStore,
+            {} as MemoryGraphStore,
             new StubModel([JSON.stringify({ decision: "discard", confidence: 0.8 })]),
             events,
             { retrospective },
@@ -346,7 +346,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             relateConsolidatedInto: async (a: string, b: string) => {
                 relateCalls.push([a, b]);
             },
-        } as unknown as SurrealGraphStore;
+        } as unknown as MemoryGraphStore;
         const retrospective = {
             append: async () => {
                 throw new Error("retrospective readonly");

@@ -28,7 +28,7 @@ import {
     type DreamCandidate,
 } from "../../neural/memory/dream.candidates.ts";
 import { DreamActionKind, parseDreamDecisions, type DreamDecision } from "../../neural/memory/dream.decisions.ts";
-import type { MemoryGraphStore } from "../../neural/memory/surreal.graph.ts";
+import type { MemoryGraphStore } from "../../neural/memory/graph.store.ts";
 
 export { DreamActionKind, parseDreamDecisions } from "../../neural/memory/dream.decisions.ts";
 export type { DreamDecision } from "../../neural/memory/dream.decisions.ts";

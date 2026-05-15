@@ -19,7 +19,7 @@ import { event, RuntimeEventType, type EventSink } from "../../protocol/events/i
 import { DecayLayer, DEFAULT_DECAY_PROFILES, decayImportance, type DecayProfile } from "./decay.ts";
 import type { ConsolidationWorker } from "./consolidation.worker.ts";
 import type { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
-import type { MemoryGraphStore } from "./surreal.graph.ts";
+import type { MemoryGraphStore } from "./graph.store.ts";
 import type { DreamWorker } from "../../agent/runtime/dream.worker.ts";
 import {
     isWorkingMemoryCircuitCoolingDown,
