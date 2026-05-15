@@ -243,9 +243,6 @@ function renderConfigJsonc(): string {
                 crystal: {
                     enabled: false,
                 },
-                redis: {
-                    enabled: false,
-                },
                 working: {
                     backend: "local",
                 },

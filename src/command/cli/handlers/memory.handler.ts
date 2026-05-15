@@ -6,10 +6,6 @@ export interface MemoryData {
     enabled: boolean;
     crystalEnabled: boolean;
     crystalBackend: string;
-    /** 兼容外部工作记忆适配器状态；默认本地 MemoryComponent 不依赖它。 */
-    redisAdapterEnabled: boolean;
-    /** 兼容外部晶体图适配器状态；默认本地 CrystalComponent 不依赖它。 */
-    surrealAdapterEnabled: boolean;
     sqliteEnabled: boolean;
     embeddingDimensions: number;
     crystalDbFile: string;
@@ -41,8 +37,6 @@ export async function fetchMemoryData(app: FlyFlor): Promise<MemoryData> {
         enabled: config.memory.enabled,
         crystalEnabled: config.memory.crystal.enabled,
         crystalBackend: config.memory.crystal.backend,
-        redisAdapterEnabled: config.memory.redis.enabled,
-        surrealAdapterEnabled: config.memory.crystal.surreal.enabled,
         sqliteEnabled: config.memory.sqlite.enabled,
         embeddingDimensions: config.memory.embedding.dimensions,
         crystalDbFile: config.memory.crystal.local.dbFile ?? "",

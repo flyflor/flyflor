@@ -69,9 +69,7 @@ function doctorConfigForHome(home: string): FlyflorConfig {
                 backend: CrystalMemoryBackend.Local,
                 enabled: true,
                 local: { dbFile: join(home, "crystal.db") },
-                surreal: { enabled: false },
             },
-            redis: { enabled: false },
             working: { backend: MemoryWorkingBackend.Local },
             tuning: createDefaultMemoryTuning(),
         },
@@ -207,9 +205,7 @@ describe("doctor background scheduler visibility", () => {
                     backend: CrystalMemoryBackend.Local,
                     enabled: true,
                     local: { dbFile: "/tmp/crystal.db" },
-                    surreal: { enabled: false },
                 },
-                redis: { enabled: false },
                 working: {
                     backend: MemoryWorkingBackend.Local,
                 },
@@ -217,19 +213,17 @@ describe("doctor background scheduler visibility", () => {
         } as FlyflorConfig);
 
         expect(summary.status).toBe("ok");
-        expect(summary.detail).toContain("local working-memory component");
+        expect(summary.detail).toContain("local working-memory");
     });
 
-    test("surreal adapter backend still requires surreal to be enabled", () => {
+    test("disabled crystal backend is not part of the main scheduler path", () => {
         const summary = describeBackgroundScheduler({
             memory: {
                 crystal: {
-                    backend: CrystalMemoryBackend.Surreal,
-                    enabled: true,
+                    backend: CrystalMemoryBackend.Local,
+                    enabled: false,
                     local: {},
-                    surreal: { enabled: false },
                 },
-                redis: { enabled: false },
                 working: {
                     backend: MemoryWorkingBackend.Local,
                 },
@@ -237,7 +231,7 @@ describe("doctor background scheduler visibility", () => {
         } as FlyflorConfig);
 
         expect(summary.status).toBe("warn");
-        expect(summary.detail).toContain("crystal graph");
+        expect(summary.detail).toContain("local crystal graph");
     });
 });
 
@@ -367,25 +361,4 @@ describe("doctor working memory health visibility", () => {
         }
     });
 
-    test("reports Redis recovery ownership when working memory uses Redis", async () => {
-        const config = doctorConfigForHome("/tmp/flyflor-doctor-redis-recovery");
-        config.memory.redis.enabled = true;
-        config.memory.working = {
-            backend: MemoryWorkingBackend.Redis,
-            local: {
-                contextRingSize: 12,
-                defaultTtlSeconds: 86_400,
-                maxEpisodesPerUser: 200,
-                maxWalBytes: 4 * 1024 * 1024,
-                snapshotEveryWrites: 64,
-                snapshotFile: "working.snapshot.json",
-                walFile: "working.wal.jsonl",
-            },
-        };
-
-        const summary = await describeWorkingMemoryRecoveryFiles(config);
-
-        expect(summary.status).toBe("ok");
-        expect(summary.detail).toContain("redis adapter");
-    });
 });

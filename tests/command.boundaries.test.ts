@@ -228,9 +228,10 @@ describe("Command boundary", () => {
 
         expect(output).toContain('"activeProvider": "custom"');
         expect(output).toContain('"activeModel": "gpt-5.5"');
-        expect(output).toContain('"type": "openai-compatible"');
-        expect(output).toContain('"apiMode": "responses"');
         expect(output).toContain('"baseUrl": "https://relay.example/v1"');
+        expect(output).not.toContain('"type": "openai-compatible"');
+        expect(output).not.toContain('"apiMode": "responses"');
+        expect(output).not.toContain('"models": [');
         expect(output).toContain('"custom-api-key": "test-key"');
         expect(output).toContain('"allowedChannels": [');
         expect(output).toContain('"api"');
@@ -254,8 +255,8 @@ describe("Command boundary", () => {
 
         expect(output).toContain('"type": "anthropic-compatible"');
         expect(output).toContain('"baseUrl": "https://example.invalid/v1"');
-        expect(output).toContain('"models": [');
         expect(output).toContain('"claude-sonnet-4-5-20250929"');
+        expect(output).not.toContain('"models": [');
         expect(output).not.toContain('"apiMode":');
     });
 
@@ -273,7 +274,8 @@ describe("Command boundary", () => {
         expect(output).toContain('"activeProvider": "xxxai"');
         expect(output).toContain('"xxxai": {');
         expect(output).toContain('"baseUrl": "https://relay.example/v1"');
-        expect(output).toContain('"apiMode": "chat-completions"');
+        expect(output).not.toContain('"apiMode": "chat-completions"');
+        expect(output).not.toContain('"models": [');
     });
 
     test("init config generator includes configured channels and iLink bindings", () => {

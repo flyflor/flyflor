@@ -271,11 +271,6 @@ function describeIlinkState(config: FlyflorConfig): string {
 }
 
 /**
- * 后台调度器（consolidation / decay / dream）需要 working memory + crystal graph + model 三件齐备。
- * 本地 MemoryComponent 是默认工作记忆；Redis / SurrealDB 只作为显式兼容适配器。
- * 本函数从配置侧静态判断，给 doctor 一行可见性。
- */
-/**
  * LF-R1：brain.db 单文件大脑可见性。展示当前主文件大小、核心表行数 + 月级冷归档数量。
  * 缺失（warmup 前 / 未启用记忆）显示为 "not-yet"，不报错。
  */
@@ -387,23 +382,21 @@ function formatBytes(bytes: number): string {
 }
 
 export function describeBackgroundScheduler(config: FlyflorConfig): { status: string; detail: string } {
-    const missing: string[] = [];
     const workingBackend =
-        config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
-    if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
-        missing.push("Redis working-memory adapter");
-    }
+        config.memory.working?.backend ?? MemoryWorkingBackend.Local;
     const crystalBackend = config.memory.crystal.backend ?? CrystalMemoryBackend.Local;
-    const crystalGraphReady =
-        config.memory.crystal.enabled &&
-        (crystalBackend === CrystalMemoryBackend.Local || config.memory.crystal.surreal.enabled);
-    if (!crystalGraphReady) missing.push("crystal graph");
-    if (missing.length === 0) {
-        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working-memory component)` };
+    const memoryEnabled = config.memory.enabled !== false;
+    const workingReady = memoryEnabled && workingBackend === MemoryWorkingBackend.Local;
+    const crystalReady = config.memory.crystal.enabled && crystalBackend === CrystalMemoryBackend.Local;
+    if (workingReady && crystalReady) {
+        return {
+            status: "ok",
+            detail: "consolidation+decay+dream+project-cluster enabled (local working-memory + local crystal graph)",
+        };
     }
     return {
         status: "warn",
-        detail: `disabled — missing ${missing.join(", ")}; long-term memory consolidation is paused`,
+        detail: "disabled — local working-memory or local crystal graph not ready; long-term memory consolidation is paused",
     };
 }
 
@@ -452,11 +445,6 @@ export function describeWorkingMemoryHealth(snapshot: unknown): { status: "ok" |
 export async function describeWorkingMemoryRecoveryFiles(
     config: FlyflorConfig,
 ): Promise<{ status: "ok"; detail: string }> {
-    const backend =
-        config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
-    if (backend !== MemoryWorkingBackend.Local) {
-        return { status: "ok", detail: `${backend} adapter; recovery handled by configured working-memory component` };
-    }
     const local = config.memory.working?.local;
     const snapshotFile = local?.snapshotFile ?? "working.snapshot.json";
     const walFile = local?.walFile ?? "working.wal.jsonl";

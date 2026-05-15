@@ -322,23 +322,19 @@ export const MemoryLayer = {
     Journal: "journal",
     Markdown: "markdown",
     Project: "project",
-    Redis: "redis",
     SQLite: "sqlite",
-    Surreal: "surreal",
 } as const;
 
 export type MemoryLayer = (typeof MemoryLayer)[keyof typeof MemoryLayer];
 
 export const MemoryWorkingBackend = {
     Local: "local",
-    Redis: "redis",
 } as const;
 
 export type MemoryWorkingBackend = (typeof MemoryWorkingBackend)[keyof typeof MemoryWorkingBackend];
 
 export const CrystalMemoryBackend = {
     Local: "local",
-    Surreal: "surreal",
 } as const;
 
 export type CrystalMemoryBackend = (typeof CrystalMemoryBackend)[keyof typeof CrystalMemoryBackend];

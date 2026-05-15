@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CrystalMemoryService, InMemoryCrystalMemoryStore, SurrealCrystalMemoryStore } from "../src/agent/index.ts";
+import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/agent/index.ts";
 import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/crystal/index.ts";
 import { MemoryKind } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
@@ -144,36 +144,6 @@ describe("Crystal memory boundaries", () => {
         expect(store.gems.size).toBe(0);
     });
 
-    test("SurrealDB store sends namespace and database headers", async () => {
-        const originalFetch = globalThis.fetch;
-        let headers: Headers | undefined;
-        globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-            headers = new Headers(init?.headers);
-            return new Response(JSON.stringify([{ status: "OK", result: [] }]), {
-                headers: { "content-type": "application/json" },
-            });
-        }) as typeof fetch;
-
-        try {
-            const store = new SurrealCrystalMemoryStore({
-                database: "dev",
-                enabled: true,
-                internalUrl: "http://surrealdb:8000",
-                namespace: "flyflor",
-                password: "root",
-                timeoutMs: 25,
-                username: "root",
-            });
-
-            await store.initialize();
-
-            expect(headers?.get("Surreal-NS")).toBe("flyflor");
-            expect(headers?.get("Surreal-DB")).toBe("dev");
-            expect(headers?.get("authorization")).toStartWith("Basic ");
-        } finally {
-            globalThis.fetch = originalFetch;
-        }
-    });
 });
 
 function crystalConfig(): CrystalMemoryConfig {
@@ -181,13 +151,6 @@ function crystalConfig(): CrystalMemoryConfig {
         enabled: true,
         backend: "local",
         local: { dbFile: "" },
-        surreal: {
-            database: "test",
-            enabled: false,
-            internalUrl: "http://127.0.0.1:1",
-            namespace: "flyflor",
-            timeoutMs: 25,
-        },
     };
 }
 

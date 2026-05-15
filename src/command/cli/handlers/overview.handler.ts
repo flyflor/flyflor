@@ -221,23 +221,21 @@ function describeBackgroundScheduler(config: FlyflorConfig): {
     status: string;
     detail: string;
 } {
-    const missing: string[] = [];
     const workingBackend =
-        config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
-    if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
-        missing.push("Redis working-memory adapter");
-    }
+        config.memory.working?.backend ?? MemoryWorkingBackend.Local;
     const crystalBackend = config.memory.crystal.backend ?? CrystalMemoryBackend.Local;
-    const crystalGraphReady =
-        config.memory.crystal.enabled &&
-        (crystalBackend === CrystalMemoryBackend.Local || config.memory.crystal.surreal.enabled);
-    if (!crystalGraphReady) missing.push("crystal graph");
-    if (missing.length === 0) {
-        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working-memory component)` };
+    const memoryEnabled = config.memory.enabled !== false;
+    const workingReady = memoryEnabled && workingBackend === MemoryWorkingBackend.Local;
+    const crystalReady = config.memory.crystal.enabled && crystalBackend === CrystalMemoryBackend.Local;
+    if (workingReady && crystalReady) {
+        return {
+            status: "ok",
+            detail: "consolidation+decay+dream+project-cluster enabled (local working-memory + local crystal graph)",
+        };
     }
     return {
         status: "warn",
-        detail: `disabled — missing ${missing.join(", ")}; long-term memory consolidation is paused`,
+        detail: "disabled — local working-memory or local crystal graph not ready; long-term memory consolidation is paused",
     };
 }
 

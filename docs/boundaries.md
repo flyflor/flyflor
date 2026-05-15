@@ -93,7 +93,7 @@ flowchart LR
 ```bash
 bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
   --define process.env.FLYFLOR_BUILD_COMMIT="'$(git rev-parse --short HEAD)'" \
-  --outfile dist/flyflor app.ts
+  --outfile dist/flyflor app.ts src/command/tui/chat/parser.worker.ts
 ```
 
 硬规则：
@@ -104,7 +104,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
 - 禁止要求安装 Node.js；开发与发布都以 Bun 为准。
-- 当前必须启用 `--allow-unresolved=""` 兼容 OpenTUI 的 opaque dynamic import；新增依赖仍不得引入新的运行时动态加载要求。
+- 当前必须启用 `--allow-unresolved=""` 兼容 OpenTUI 的 opaque dynamic import；同时保留 `src/command/tui/chat/parser.worker.ts` 作为第二个 compile entrypoint，保证 TreeSitter worker 及其依赖进入独立二进制。新增依赖仍不得引入新的运行时动态加载要求。
 - 不把 `.env`、本地日志、会话数据库、密钥、测试 fixture 编译进二进制。
 
 ## 7. 依赖准入
@@ -130,6 +130,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 全局：`~/.flyflor/config.jsonc`；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
+- OpenAI-compatible provider 的最小配置是 `baseUrl` + `apiKey` + 当前模型；`type`、默认 `chat-completions` 和模型列表由加载器推断 / 探测。自动化代理不得把用户本地 `config.jsonc` 中正在使用的 `apiKey` 改成占位符。
 - provider key / MCP token / 插件 token 不得写入日志、事件 payload、错误详情或记忆。
 - 配置对象进入核心后视为只读。
 - 默认配置必须能离线启动；需要联网的能力必须显式启用。

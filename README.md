@@ -94,11 +94,36 @@ docker exec -it flyflor-dev flyflor       # 进入容器交互
 | `./docker/workspace`   | `/root/.flyflor/workspace`     | 工作区数据              |
 | `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor`| 编译好的二进制          |
 
-默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆会落到 `flyflor_data` 卷。Redis / SurrealDB 仅作为兼容外部后端保留，默认路径始终是本地记忆。架构变更后重新编译 + 重启：
+默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆会落到 `flyflor_data` 卷；`brain.db` 和 `crystal.db` 分别承载生命事件与晶体图。架构变更后重新编译 + 重启：
 
 ```bash
 bun run docker:up   # = 重编 binary + force-recreate compose
 ```
+
+## 模型配置
+
+自定义 OpenAI-compatible provider 只需要最小 JSONC：
+
+```jsonc
+{
+  "model": {
+    "activeProvider": "fastai",
+    "activeModel": "gpt-5.5",
+    "providers": {
+      "fastai": {
+        "baseUrl": "https://fastai.fast/v1",
+        "apiKey": "fastai-api-key",
+        "defaultModel": "gpt-5.5"
+      }
+    },
+    "secrets": {
+      "fastai-api-key": "..."
+    }
+  }
+}
+```
+
+`baseUrl` 存在时默认推断为 OpenAI-compatible，`apiMode` 默认 `chat-completions`；未配置 `activeModel` / `defaultModel` / `models` 时会用已解析的 `apiKey` 探测 `${baseUrl}/models`。Runtime 默认走流式生成；如果 relay 不支持 stream 且尚未收到任何 chunk，会重试一次普通 HTTP 并给调用方返回一段完整 final delta。
 
 ## 架构
 
@@ -113,7 +138,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
 | `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
 | `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
-| `src/neural`      | 海马体工作记忆：local WAL/snapshot 默认实现、Redis 兼容适配器、召回、最近交流 ring、热记忆压缩 |
+| `src/neural`      | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩 |
 | `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
 | `templates`       | 提示词和记忆 Markdown 模板                                     |
 
@@ -121,7 +146,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 - **LLM = 流体智力**：当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策。
 - **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格。
-- **Neural = 海马体**：默认由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex）；Redis / SurrealDB 只保留兼容适配器，认知流转不变。
+- **Neural = 海马体**：由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex）。
 
 **核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
@@ -129,7 +154,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 1. 渠道、消息、用户身份归一为 `GatewayMessage`
 2. 路由判断：fastRoute 启发式（~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
-3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + working-memory 热激活 + project/codename 局部记忆 + local/Surreal Gem 召回
+3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + working-memory 热激活 + project/codename 局部记忆 + local crystal Gem 召回
 4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append；TTFB 目标 < 350ms
 5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
@@ -142,8 +167,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | ---------------- | --------- | ---------------------------------------------------------------- |
 | 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
 | 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；prompt recall/write authority 已切到 brain events |
-| 工作记忆         | `MemoryComponent`：Local WAL/snapshot（默认）+ Redis 兼容适配器 | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
-| 长期记忆图       | `CrystalComponent`：`crystal.db` + VectorIndex（默认）+ SurrealDB 兼容适配器 | episode → memory_node → Gem，summary_embedding，本地图 mirror / Surreal RELATE 边 |
+| 工作记忆         | `MemoryComponent`：Local WAL/snapshot | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
+| 长期记忆图       | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系 |
 | 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
 
 **长期图主实体：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`
@@ -177,7 +202,7 @@ Evidence Weight 裁判表：
 
 ### Dream 模式（晶体层离线维护）
 
-Dream 是长期晶体层的主动维护 worker，经 `CrystalComponent` 读写本地 `crystal.db` 或兼容 SurrealDB 适配器（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
+Dream 是长期晶体层的主动维护 worker，经 `CrystalComponent` 读写本地 `crystal.db`（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
 
 | Worker        | 作用层             | 唯一职责                                                       |
 | ------------- | ------------------ | -------------------------------------------------------------- |

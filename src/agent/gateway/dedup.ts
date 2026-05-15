@@ -16,10 +16,9 @@
  *
  * 实现：
  *  - InMemoryDedupStore：LRU + TTL，单进程兜底；
- *  - RedisDedupStore：基于 ioredis `SET key value EX ttl NX`，多副本下天然 atomic。
+ *  - RedisDedupStore：基于 Redis-compatible `SET key value EX ttl NX`，多副本下天然 atomic。
  */
 
-import type Redis from "ioredis";
 import type { GatewayReply } from "../../protocol/contracts/index.ts";
 
 export type DedupClaim =
@@ -34,6 +33,12 @@ export interface MessageDedupStore {
     recordReply(key: string, reply: GatewayReply): Promise<void>;
     /** 处理失败时释放 key，允许下次重试时立即重入。 */
     release(key: string): Promise<void>;
+}
+
+export interface RedisDedupClient {
+    del(key: string): Promise<unknown>;
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string, ex: "EX", ttlSeconds: number, mode: "NX" | "XX"): Promise<"OK" | null>;
 }
 
 export function buildDedupKey(channel: string, messageId: string): string {
@@ -85,11 +90,11 @@ export class InMemoryDedupStore implements MessageDedupStore {
 
 /**
  * Redis 实现：用 `SET key "" EX ttl NX` 抢占 → 处理完 `SET key <reply> EX ttl XX`。
- * 不复用 RedisMemoryStore 的 schema，独立 key 前缀避免 namespace 污染。
+ * 不复用任何 memory component schema，独立 key 前缀避免 namespace 污染。
  */
 export class RedisDedupStore implements MessageDedupStore {
     private readonly inflightMarker = "__inflight__";
-    constructor(private readonly redis: Redis, private readonly ttlSeconds: number = 60) {}
+    constructor(private readonly redis: RedisDedupClient, private readonly ttlSeconds: number = 60) {}
 
     async tryClaim(key: string): Promise<DedupClaim> {
         const ok = await this.redis.set(key, this.inflightMarker, "EX", this.ttlSeconds, "NX");

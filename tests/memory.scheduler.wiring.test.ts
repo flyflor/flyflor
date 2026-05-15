@@ -48,7 +48,7 @@ describe("MemoryModule background scheduler wiring", () => {
     test("scheduler is null without a model even if working memory and crystal graph would qualify", async () => {
         const config = await testConfig();
         config.memory.crystal.enabled = true;
-        config.memory.crystal.surreal.enabled = true;
+        config.memory.crystal.backend = CrystalMemoryBackend.Local;
         const memory = new MemoryModule(config, new CapturingSink());
         expect((memory as unknown as { scheduler: unknown }).scheduler).toBeNull();
     });
@@ -56,7 +56,7 @@ describe("MemoryModule background scheduler wiring", () => {
     test("scheduler is instantiated when working memory + crystal graph + model all present", async () => {
         const config = await testConfig();
         config.memory.crystal.enabled = true;
-        config.memory.crystal.surreal.enabled = true;
+        config.memory.crystal.backend = CrystalMemoryBackend.Local;
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
         const scheduler = (memory as unknown as {
             scheduler: { activeUsers(): number; snapshot(): { brainArchiveEnabled: boolean; hotMemoryCompressionEnabled: boolean } } | null;

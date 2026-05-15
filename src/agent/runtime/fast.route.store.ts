@@ -1,17 +1,14 @@
 /**
  * fastRoute 快照存储抽象。
  *
- * 单副本场景：InMemoryFastRouteSnapshotStore（进程内 Map，与历史行为一致）。
- * 多副本场景：RedisFastRouteSnapshotStore，跨副本共享上一轮 nextRouteHint /
- *             lastMode / 升级计数器，避免漂移导致 fastRoute 误判。
+ * 当前运行时只保留进程内 Map：fastRoute 是单进程热路径优化，
+ * 不参与记忆权威状态，也不跨实例同步。
  *
  * 设计约束：
- * - 热路径只允许「O(1) L1 内存读 + Redis 单 key 读写」。
- * - Redis 异常只降级本次 L2 读写，L1 仍保留最新快照；fastRoute 是性能提示，
- *   不能因为缓存层抖动阻断主 runtime。
+ * - 热路径只允许 O(1) 内存读写。
+ * - fastRoute 是性能提示，不能因为缓存状态阻断主 runtime。
  * - 不解析 snapshot 内容做语义判断，纯透传序列化。
  */
-import type Redis from "ioredis";
 import type { FastRouteSnapshot } from "./fast.route.ts";
 
 export interface FastRouteSnapshotStore {
@@ -32,60 +29,5 @@ export class InMemoryFastRouteSnapshotStore implements FastRouteSnapshotStore {
 
     size(): number {
         return this.map.size;
-    }
-}
-
-export interface RedisFastRouteSnapshotStoreOptions {
-    /** 仅可注入 ioredis 客户端；HTTP/REST 模式不支持。 */
-    redis: Redis;
-    /** Redis key 前缀，默认 "ff:fastroute"。 */
-    prefix?: string;
-    /** TTL（秒），默认 3600s（1 小时）。 */
-    ttlSeconds?: number;
-}
-
-/**
- * L1（进程内 Map） + L2（Redis）双层存储。
- * - get：L1 命中直接返回；miss 则 best-effort Redis GET，反序列化后填回 L1。
- * - set：同步写 L1，再 best-effort 写 Redis（带 TTL）；Redis 失败不回滚 L1。
- */
-export class RedisFastRouteSnapshotStore implements FastRouteSnapshotStore {
-    private readonly l1 = new Map<string, FastRouteSnapshot>();
-    private readonly redis: Redis;
-    private readonly prefix: string;
-    private readonly ttlSeconds: number;
-
-    constructor(options: RedisFastRouteSnapshotStoreOptions) {
-        this.redis = options.redis;
-        this.prefix = options.prefix ?? "ff:fastroute";
-        this.ttlSeconds = Math.max(1, options.ttlSeconds ?? 3600);
-    }
-
-    private keyFor(key: string): string {
-        return `${this.prefix}:${key}`;
-    }
-
-    async get(key: string): Promise<FastRouteSnapshot | undefined> {
-        const cached = this.l1.get(key);
-        if (cached) return cached;
-        try {
-            const raw = await this.redis.get(this.keyFor(key));
-            if (!raw) return undefined;
-            const parsed = JSON.parse(raw) as FastRouteSnapshot;
-            this.l1.set(key, parsed);
-            return parsed;
-        } catch {
-            return undefined;
-        }
-    }
-
-    async set(key: string, snapshot: FastRouteSnapshot): Promise<void> {
-        this.l1.set(key, snapshot);
-        const payload = JSON.stringify(snapshot);
-        try {
-            await this.redis.set(this.keyFor(key), payload, "EX", this.ttlSeconds);
-        } catch {
-            // L1 已经更新；Redis 恢复后下一次 set 会重新同步共享快照。
-        }
     }
 }

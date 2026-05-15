@@ -8,7 +8,7 @@
 
 1. [architecture.md](architecture.md) — 顶层分层、composition root、DI 容器、模块边界
 2. [runtime.turn.md](runtime.turn.md) — 单轮请求从渠道入站到回复落盘的完整流程
-3. [memory.system.md](memory.system.md) — Markdown / MemoryComponent / SQLite / 晶体本地后端 / SurrealDB 兼容层
+3. [memory.system.md](memory.system.md) — Markdown / MemoryComponent / brain.db / crystal.db 本地记忆系统
 4. [blackboard.md](blackboard.md) — 黑板路由、lease、worker plan、收敛与 livelock
 5. [gateway.channels.md](gateway.channels.md) — 渠道注册、传输类型、状态快照
 6. [sandbox.capabilities.md](sandbox.capabilities.md) — 沙箱策略与能力执行边界

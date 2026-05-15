@@ -27,7 +27,6 @@ import { parseAgentAsk } from "../../neural/memory/ask.ts";
 import { parseGhostDecisions } from "../../neural/memory/ghost.decisions.ts";
 import { parseIdentityAppends } from "../../neural/memory/identity.ts";
 import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
-import { redisKeyPrefixForNamespace } from "../../neural/memory/redis.ts";
 import { LocalHashEmbeddingProvider } from "../../neural/memory/embedding.ts";
 import {
     callMcpTool,
@@ -71,11 +70,7 @@ import {
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
 import { ReflectionWorker } from "./reflection.worker.ts";
 import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./fast.route.ts";
-import {
-    InMemoryFastRouteSnapshotStore,
-    RedisFastRouteSnapshotStore,
-    type FastRouteSnapshotStore,
-} from "./fast.route.store.ts";
+import { InMemoryFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./fast.route.store.ts";
 import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
@@ -188,7 +183,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.inflight = new InFlightTracker(config.paths.storageDir);
     }
 
-    /** 预热 Redis 连接；在 GatewayModule 启动后立即调用。 */
+    /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
     async warmup(): Promise<void> {
         this.warmupPromise ??= this.performWarmup().catch((error) => {
             this.warmupPromise = undefined;
@@ -208,14 +203,6 @@ export class RuntimeModule extends RuntimeBoundary {
 
     private async performWarmup(): Promise<void> {
         await this.memory.warmup();
-        const redisClient = this.memory.getRedisClient();
-        if (redisClient && this.fastRouteSnapshots instanceof InMemoryFastRouteSnapshotStore) {
-            // Redis 命中即升级为跨副本共享存储；namespace 复用工作记忆前缀，避免多 agent 共用 Redis 时串快照。
-            this.fastRouteSnapshots = new RedisFastRouteSnapshotStore({
-                prefix: `${redisKeyPrefixForNamespace(this.config.memory.redis.namespace)}:fastroute`,
-                redis: redisClient,
-            });
-        }
         await this.recoverProcessRestartGhosts();
     }
 
@@ -904,8 +891,10 @@ export class RuntimeModule extends RuntimeBoundary {
             return rawText;
         }
 
+        let prefixSent = false;
         if (replyPrefix) {
             await options.onTextDelta(replyPrefix);
+            prefixSent = true;
         }
 
         let rawText = "";
@@ -919,6 +908,16 @@ export class RuntimeModule extends RuntimeBoundary {
                 }
             }
         } catch (error) {
+            // Some OpenAI-compatible relays expose only non-streaming HTTP.
+            // If no stream bytes arrived, retry once through generate() and emit a single final delta.
+            if (rawText.length === 0) {
+                const fallbackText = await this.model.generate(messages);
+                const visible = filterVisibleMemoryActionText(fallbackText);
+                if (visible) {
+                    await options.onTextDelta(`${prefixSent ? "" : replyPrefix}${visible}`);
+                }
+                return fallbackText;
+            }
             throw error;
         }
 
@@ -1859,7 +1858,7 @@ function keepSuffix(value: string, token: string): string {
 
 /**
  * 把黑板辩论转写为 episode text：用户问题 + 每个 worker 的 outputSummary，
- * 截断保护，便于 Redis 长期检索而不存原始长 transcript。
+ * 截断保护，便于长期检索而不存原始长 transcript。
  */
 function renderDebateEpisodeText(userText: string, run: RuntimeBlackboardRun): string {
     const head = `[debate-goal] ${userText.slice(0, 256)}`;

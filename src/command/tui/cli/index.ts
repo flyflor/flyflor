@@ -6,7 +6,7 @@
 
 import { createCliRenderer, Box, Text, ScrollBox, RGBA, TextAttributes, type CliRenderer } from "@opentui/core";
 import { render } from "@opentui/solid";
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import type { FlyFlor } from "../../../app.ts";
 import { FlyFlorTokens } from "../../../app.ts";
 import { fetchOverviewData } from "../../cli/handlers/overview.handler.ts";
@@ -240,8 +240,6 @@ function memoryLoader(): PageLoader {
             lines.push(`  Enabled: ${data.enabled ? "yes" : "no"}`);
             lines.push(`  Crystal: ${data.crystalEnabled ? "yes" : "no"}`);
             lines.push(`  Crystal component: ${data.crystalBackend}`);
-            lines.push(`  Redis adapter: ${data.redisAdapterEnabled ? "yes" : "no"}`);
-            lines.push(`  Surreal adapter: ${data.surrealAdapterEnabled ? "yes" : "no"}`);
             lines.push(`  SQLite: ${data.sqliteEnabled ? "yes" : "no"}`);
             lines.push(`  Embedding: ${data.embeddingDimensions}d`);
             lines.push(`  Working: ${data.workingMemoryStatus.status} · ${data.workingMemoryStatus.detail}`);
@@ -338,50 +336,52 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     });
 
     const [activePage, setActivePage] = createSignal<CliPage>(initialPage);
-    const loader = createMemo(() => getLoader(activePage()));
     const [lines, setLines] = createSignal<string[]>([]);
     const [err, setErr] = createSignal<string | null>(null);
     const [status, setStatus] = createSignal("Ready");
     let refreshToken = 0;
+    let destroyed = false;
 
-    const refresh = async () => {
+    const refresh = async (page = activePage()) => {
         const token = ++refreshToken;
-        const currentLoader = loader();
+        const currentLoader = getLoader(page);
         setStatus(`Loading ${currentLoader.title}...`);
+        renderer.requestRender();
         try {
             const nextLines = await currentLoader.load(app);
             if (token !== refreshToken) return;
             setLines(nextLines);
             setErr(null);
             setStatus(`Loaded ${currentLoader.title}`);
+            renderer.requestRender();
         } catch (e) {
             if (token !== refreshToken) return;
             setErr(e instanceof Error ? e.message : String(e));
             setStatus("Load failed");
+            renderer.requestRender();
         }
     };
-
-    createEffect(() => {
-        activePage();
-        void refresh();
-    });
-
-    const lineNodes = createMemo(() =>
-        lines().map((line) =>
-            Text({
-                content: line,
-                fg: line.startsWith("◆") ? THEME.cyan : line.startsWith("  ✓") ? THEME.green : line.startsWith("  ✗") || line.startsWith("⚠") ? THEME.red : THEME.fg,
-                attributes: line.startsWith("◆") ? TextAttributes.BOLD : undefined,
-            }),
-        ),
-    );
 
     void render(() => {
         const width = renderer.width;
         const height = renderer.height;
         const navWidth = Math.min(30, Math.max(22, Math.floor(width * 0.22)));
         const currentPage = activePage();
-        const currentLoader = loader();
+        const currentLoader = getLoader(currentPage);
+        const lineNodes = lines().map((line) =>
+            Text({
+                content: line,
+                fg:
+                    line.startsWith("◆")
+                        ? THEME.cyan
+                        : line.startsWith("  ✓")
+                          ? THEME.green
+                          : line.startsWith("  ✗") || line.startsWith("⚠")
+                            ? THEME.red
+                            : THEME.fg,
+                attributes: line.startsWith("◆") ? TextAttributes.BOLD : undefined,
+            }),
+        );
 
         return Box(
             {
@@ -451,7 +451,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
                             },
                         },
                     },
-                    ...lineNodes(),
+                    ...lineNodes,
                 ),
             ),
             Box(
@@ -461,10 +461,24 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         );
     }, renderer);
 
-    const keyHandler = (event: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; sequence?: string }) => {
+    const keyHandler = (event: {
+        name?: string;
+        ctrl?: boolean;
+        meta?: boolean;
+        shift?: boolean;
+        sequence?: string;
+        preventDefault?: () => void;
+        stopPropagation?: () => void;
+    }) => {
         const name = event.name ?? "";
         if (name === "q" || name === "escape") {
-            renderer.destroy();
+            if (!destroyed) renderer.destroy();
+            return;
+        }
+        if (event.ctrl && name === "c") {
+            if (!destroyed) renderer.destroy();
+            event.preventDefault?.();
+            event.stopPropagation?.();
             return;
         }
         if (name === "up" || name === "k") {
@@ -481,10 +495,23 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     function movePage(delta: -1 | 1): void {
         const index = PAGE_ITEMS.findIndex((item) => item.page === activePage());
         const next = PAGE_ITEMS[Math.max(0, Math.min(PAGE_ITEMS.length - 1, index + delta))];
-        if (next) setActivePage(next.page);
+        if (next) {
+            setActivePage(next.page);
+            void refresh(next.page);
+        }
     }
 
     renderer.keyInput.on("keypress", keyHandler);
+    renderer.once("destroy", () => {
+        destroyed = true;
+    });
+    process.once("SIGINT", () => {
+        if (!destroyed) renderer.destroy();
+    });
+    process.once("SIGTERM", () => {
+        if (!destroyed) renderer.destroy();
+    });
+    void refresh(initialPage);
 
     return new Promise<void>((resolve) => {
         renderer.once("destroy", () => {

@@ -9,7 +9,7 @@
  *  4. 时效性衰减：skill.lastVerifiedAt 与现在差 > 90 天则强制降权（由 decay.ts 提供）。
  *
  * 边界约束：
- *  - 全部纯函数；I/O 由 ConsolidationWorker / SurrealGraphStore 调用；
+ *  - 全部纯函数；I/O 由 ConsolidationWorker / MemoryGraphStore 调用；
  *  - **零字符串匹配**：判断同一 skill / 矛盾，全部使用 cosine 向量 + 集合 IoU。
  */
 
@@ -25,7 +25,7 @@ export interface GemCandidate {
 export interface GemMergeResult {
     /** 合并后唯一保留的 skill，由调用方决定如何 upsert。 */
     surviving: GemCandidate;
-    /** 合并掉的 skill ID 列表，调用方负责 SurrealDB DELETE。 */
+    /** 合并掉的 skill ID 列表，调用方负责在图存储中删除或归档。 */
     droppedIds: string[];
 }
 

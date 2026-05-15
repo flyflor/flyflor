@@ -1,6 +1,6 @@
 # Docker Dev Workspace
 
-本目录承载 Flyflor 的 dev compose 与本地容器配置。默认拓扑已经降级为单容器：Flyflor 主进程 + 本地 WAL 工作记忆，不再强制启动 Redis / SurrealDB；对应能力现在统一由 `MemoryComponent` / `CrystalComponent` 承载。
+本目录承载 Flyflor 的 dev compose 与本地容器配置。默认拓扑是单容器：Flyflor 主进程 + 本地 WAL 工作记忆 + 本地晶体图；记忆能力统一由 `MemoryComponent` / `CrystalComponent` 承载。
 
 ## 服务拓扑
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `flyflor` | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / gateway / local working memory | 仅 internal |
 
-`flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要 Redis 或 SurrealDB 兼容适配器回归时，用本地 `docker-compose.override.yml` 加服务，不提交到仓库。
+`flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要临时暴露 gateway 时，用本地 `docker-compose.override.yml` 加端口映射，不提交到仓库。
 
 ## 目录映射
 
@@ -30,11 +30,12 @@
 {
   "memory": {
     "working": { "backend": "local" },
-    "redis": { "enabled": false },
-    "crystal": { "surreal": { "enabled": false } }
+    "crystal": { "backend": "local" }
   }
 }
 ```
+
+模型配置保持最小形态：OpenAI-compatible relay 只写 `baseUrl`、`apiKey` 和当前模型即可，协议类型、`chat-completions` 模式和模型列表由配置加载器推断或探测。`apiKey` 是用户本地运行凭据，自动化清理不要替换为占位符。
 
 本地 working memory 的热视图在进程内，所有 mutation 先写 `working.wal.jsonl`，再周期 compact 到 `working.snapshot.json`。断电最多丢最后一条撕裂 JSONL，不会整段失忆；`flyflor doctor`、`flyflor status` 和 TUI Overview 会用轻量文件元数据展示 snapshot / backup / WAL 的恢复状态。
 
@@ -63,7 +64,7 @@ docker compose logs -f flyflor
 docker exec -it flyflor-dev flyflor
 ```
 
-## 可选外部后端
+## 本地 Override
 
 不要修改 `docker-compose.yml`，新建一个不提交的 override。例如临时打开 gateway 端口：
 
@@ -76,5 +77,3 @@ services:
 YAML
 docker compose up -d
 ```
-
-需要 Redis / SurrealDB 回归测试时，在 override 中加服务，并把 `docker/config/config.jsonc` 的 `memory.working.backend` / `memory.redis.enabled` / `memory.crystal.surreal.enabled` 显式切回兼容适配器。

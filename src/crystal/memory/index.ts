@@ -1,7 +1,6 @@
 import type { CrystalMemoryConfig } from "../../config/index.ts";
 import { CrystalComponent } from "../../agent/components.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { CrystalMemoryBackend } from "../../protocol/contracts/index.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS } from "./vector.index.ts";
 import {
     buildReflectionCandidate,
@@ -13,11 +12,9 @@ import {
 import { MemoryKind, MemoryLayer, ProviderScope } from "../../protocol/contracts/index.ts";
 import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
 import { LocalCrystalMemoryStore } from "./local.store.ts";
-import { SurrealCrystalMemoryStore } from "./surreal.ts";
 import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
 export { LocalCrystalMemoryStore } from "./local.store.ts";
-export { SurrealCrystalMemoryStore } from "./surreal.ts";
 export type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
 @Component({
@@ -175,8 +172,5 @@ function hashText(text: string): string {
 }
 
 function resolveCrystalStore(config: CrystalMemoryConfig, vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS): CrystalMemoryStore {
-    if (config.backend === CrystalMemoryBackend.Local) {
-        return new LocalCrystalMemoryStore(config.local, vectorDimensions);
-    }
-    return new SurrealCrystalMemoryStore(config.surreal);
+    return new LocalCrystalMemoryStore(config.local, vectorDimensions);
 }

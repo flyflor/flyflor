@@ -4,7 +4,7 @@
 
 ## 一句话定位
 
-Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、`MemoryComponent` 默认 local 工作记忆 + Redis 兼容适配器、SQLite 辅助索引与审计、`CrystalComponent` 本地 `crystal.db` + SurrealDB 兼容适配器；升格走证据门，遗忘走工作记忆 TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与晶体图漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
+Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、`MemoryComponent` 本地工作记忆、SQLite 辅助索引与审计、`CrystalComponent` 本地 `crystal.db` 晶体图；升格走证据门，遗忘走工作记忆 TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与晶体图漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
 
 ## 相关代码路径
 
@@ -13,10 +13,8 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/neural/memory/journal.store.ts` — legacy atom journal（best-effort 审计副本，不参与 prompt recall）
 - `src/neural/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
-- `src/neural/memory/redis.ts` — Redis 兼容 episode buffer / ring / hot concepts 适配器
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
 - `src/neural/memory/sqlite.ts` — candidates / offers / search
-- `src/neural/memory/surreal.graph.ts` — episode / memory_node / gem / 边关系
 - `src/neural/memory/activation.ts` — spreading activation
 - `src/neural/memory/consolidation.worker.ts` — working memory → crystal graph 升格
 - `src/neural/memory/decay.ts` — 双轨衰减
@@ -25,7 +23,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/background.scheduler.ts` — consolidation / hot compression / summary / decay / dream / dormant 节拍
 - `src/agent/runtime/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
-- `src/crystal/memory/index.ts` / `src/crystal/memory/surreal.ts` — Crystal Memory 适配
+- `src/crystal/memory/index.ts` / `src/crystal/memory/surreal.ts` — CrystalMemoryService 与 graph backend
 
 ## 分层结构
 
@@ -36,7 +34,7 @@ flowchart LR
     end
 
     subgraph Working["工作记忆（短期，TTL 遗忘）"]
-        Work[("MemoryComponent<br/>Local WAL/snapshot（默认）<br/>+ Redis 兼容适配器")]
+        Work[("MemoryComponent<br/>Local WAL/snapshot")]
     end
 
     subgraph Life["生命事件层（单文件大脑）"]
@@ -50,7 +48,7 @@ flowchart LR
     end
 
     subgraph LongTerm["长期记忆图（结晶）"]
-        Crystal[("CrystalComponent<br/>crystal.db + VectorIndex（默认）<br/>+ SurrealDB 兼容适配器<br/>episode / memory_node / gem / gem_snapshot")]
+        Crystal[("CrystalComponent<br/>crystal.db + VectorIndex<br/>episode / memory_node / gem / gem_snapshot")]
     end
 
     User["用户 turn"] --> Brain
@@ -131,7 +129,7 @@ erDiagram
     GEM ||--o{ GEM_SNAPSHOT : "snapshot"
 ```
 
-主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。默认承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore；SurrealDB 保留为兼容适配器。
+主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore。
 
 `summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。summary 主记录先落盘；若 embedding 同步失败，会先保留已写入的 summary，再显式抛出，便于上层感知索引不一致并重试。
 
@@ -291,9 +289,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 ## 配置要点
 
 - `config.memory.enabled` — 总开关
-- `config.memory.redis` — 工作记忆兼容适配器（非默认）
 - `config.memory.crystal.backend` / `config.memory.crystal.local.dbFile` — 晶体层本地 Component 配置
-- `config.memory.crystal.surreal` — 长期图兼容适配器
 - `config.memory.candidates.maxCandidatesPerTurn` — 每轮候选上限
 - `config.memory.candidates.autoPromoteExplicit` — 显式 action 直接 promote
 - `config.memory.retrieval.maxResults` / `maxPromptChars` — 上下文预算

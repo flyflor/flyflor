@@ -24,6 +24,7 @@ const subprocess = Bun.spawn(
         "--outfile",
         "dist/flyflor-linux",
         "app.ts",
+        "src/command/tui/chat/parser.worker.ts",
     ],
     {
         stdout: "inherit",

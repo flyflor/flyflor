@@ -118,7 +118,7 @@ stateDiagram-v2
 flowchart LR
     Q[GatewayMessage] --> Markdown[MarkdownMemoryStore.snapshot<br/>SELF/SOUL/USER/MEMORY]
     Q --> Brain[BrainStore<br/>brain event prompt recall + ask/ghost/identity/codename/eq state]
-    Q --> Hippo[Hippocampus context<br/>MemoryComponent local ring + optional Redis compatibility adapter]
+    Q --> Hippo[Hippocampus context<br/>MemoryComponent local ring]
     Q --> Project[ProjectMemoryStore.snapshot<br/>项目局部记忆]
     Q --> Crystal[CrystalMemoryService.recall<br/>CrystalComponent Gem]
     Q --> SqliteSearch[SQLiteMemoryStore.search]
@@ -221,8 +221,6 @@ flowchart LR
 | `perf.build_prompt` | 上下文装配耗时 |
 | `perf.route_llm` | 路由阶段总耗时（含 bypass） |
 | `perf.fast_route_evaluated` | fastRoute 决策记录 |
-| `perf.redis_latency` | Redis compatibility adapter warmup ping |
-| `perf.surreal_ann_latency` | SurrealDB compatibility adapter ANN 检索耗时 |
 
 ## 关键数据结构
 
@@ -263,7 +261,7 @@ interface GatewayReply {
 - `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一文件，后续可继续抽 service。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免把 legacy journal 重新接回 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
-- `fastRouteSnapshots` 默认走进程内 Map；Redis compatibility adapter 仅在显式启用时作为 L2，启用后复用 `memory.redis.namespace` 前缀隔离多 gateway / 多环境快照。
+- `fastRouteSnapshots` 默认走进程内 Map；多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。
 - 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；后续重点是围绕这些证据做诊断展示。
 
 ## 相关测试

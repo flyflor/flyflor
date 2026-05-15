@@ -20,6 +20,7 @@
 - `onSubmit` / 全局 keybind 都能触发提交
 - 回复区走 Markdown 渲染
 - chat 启动时会先注册 OpenTUI 默认 markdown / code parsers，再创建 renderer，避免 Markdown 退化成裸文本或 code block 解析异常
+- binary 构建必须把 `src/command/tui/chat/parser.worker.ts` 作为第二个 Bun compile entrypoint，避免 OpenTUI TreeSitter worker 在独立二进制里退回到不存在的 `parser.worker.ts`
 - TUI 层保留错误的 `Error.name`，这样超时会显示成 `TimeoutError: The operation timed out.`，不会只剩一条泛化提示
 - 选区复制走 `copyTextToTerminalClipboard`：macOS 优先 `pbcopy`，其他 TTY 走 OSC52；renderer 自带的 copy 回调也会落到 OSC52
 - ask 回复会在消息正文和 TUI 详情里保留结构化列表；只要有选项，就自动附带 `Other — type your own answer`，方便用户直接输入自定义回答

@@ -706,14 +706,14 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         });
         chatPane.add(messagesRow);
 
-        // Messages viewport owns scroll state; OpenTUI's bar stays coupled to viewport geometry.
+        // Messages flow inside content; keep the ScrollBox root on its default row axis so the vertical bar stays right.
         const scrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
+                flexDirection: "column",
                 paddingRight: 1,
             },
             flexGrow: 1,
             flexShrink: 1,
-            flexDirection: "column",
             paddingLeft: 1,
             paddingRight: 0,
             stickyScroll: true,
@@ -775,7 +775,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const statusBox = new BoxRenderable(renderer, {
             backgroundColor: THEME.violetBg,
             height: 1,
-            paddingLeft: 1,
+            paddingLeft: 2,
             paddingRight: 1,
         });
         const statusText = new TextRenderable(renderer, {
@@ -789,7 +789,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         inputBox.add(statusBox);
         chatPane.add(inputBox);
 
-        // 右侧栏只展示结构化运行态和黑板事件，不从回复文本推断“思考过程”。
+        // 右侧栏只展示结构化运行态：路由分析、黑板讨论和 turn 进度。
         const sidePanel = new BoxRenderable(renderer, {
             flexDirection: "column",
             border: ["left"],
@@ -802,22 +802,33 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             width: rightPanelWidth(renderer.width),
         });
         const sideTitle = new TextRenderable(renderer, {
-            content: "Thinking / Blackboard",
+            content: "Analysis / Blackboard",
             fg: THEME.header,
             attributes: TextAttributes.BOLD,
             selectable: true,
         });
         const sideScrollBox = new ScrollBoxRenderable(renderer, {
-            flexDirection: "column",
+            contentOptions: {
+                flexDirection: "column",
+                paddingRight: 1,
+            },
             flexGrow: 1,
             flexShrink: 1,
             horizontalScrollbarOptions: { height: 0, visible: false },
-            verticalScrollbarOptions: { visible: false, width: 0 },
+            verticalScrollbarOptions: {
+                visible: true,
+                width: 2,
+                showArrows: false,
+                trackOptions: {
+                    backgroundColor: THEME.violetBg,
+                    foregroundColor: THEME.pink,
+                },
+            },
         });
         sideScrollBox.horizontalScrollBar.visible = false;
         sideScrollBox.horizontalScrollBar.height = 0;
-        sideScrollBox.verticalScrollBar.visible = false;
-        sideScrollBox.verticalScrollBar.width = 0;
+        sideScrollBox.verticalScrollBar.visible = true;
+        sideScrollBox.verticalScrollBar.width = 2;
         sidePanel.add(sideTitle);
         sidePanel.add(sideScrollBox);
         contentRow.add(sidePanel);
@@ -906,21 +917,18 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         }) => {
             const isMac = process.platform === "darwin";
             const name = event.name ?? "";
-            if (event.ctrl && name === "c" && inputRef?.focused) {
-                handleExit();
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (((isMac && event.meta) || (!isMac && event.ctrl)) && name === "c" && !inputRef?.focused) {
+            if (((isMac && event.meta) || (!isMac && event.ctrl)) && name === "c") {
                 if (copySelectionToClipboard()) {
                     event.preventDefault?.();
                     event.stopPropagation?.();
                     return;
                 }
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
+                if (!isMac && event.ctrl && inputRef?.focused) {
+                    handleExit();
+                    event.preventDefault?.();
+                    event.stopPropagation?.();
+                    return;
+                }
             }
             if ((event.ctrl && event.shift && name === "c") || (event.ctrl && name === "y")) {
                 if (copySelectionToClipboard()) {
@@ -1347,12 +1355,39 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const lines: PanelLine[] = [];
             appendQuestionMenu(lines);
             const msg = activeReply();
+            const turn = focusedBlackboardTurn();
             const ph = phase();
             const def = PHASE_DEF[ph];
             const running = processing();
             const frame = running ? (def.frames[frameTick() % def.frames.length] ?? def.done) : def.done;
             lines.push(panelLine(`${frame} ${running ? def.label : "ready"}`, running ? def.color : THEME.fgMuted));
+            if (turn) {
+                appendBlackboardRouteLines(lines, turn);
+                appendBlackboardStatusLines(lines, turn, 4);
+            } else {
+                lines.push(panelLine("Analysis", THEME.header, TextAttributes.BOLD));
+                lines.push(panelLine("  no blackboard turn yet", THEME.fgMuted));
+            }
+            appendReplySummaryLines(lines, msg);
+            return lines;
+        }
 
+        function blackboardPanelLines(): PanelLine[] {
+            const lines: PanelLine[] = [];
+            appendQuestionMenu(lines);
+            const turn = focusedBlackboardTurn();
+            if (!turn) {
+                lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
+                lines.push(panelLine("  no turn yet", THEME.fgMuted));
+                return lines;
+            }
+
+            appendBlackboardRouteLines(lines, turn);
+            appendBlackboardPanelLines(lines, turn);
+            return lines;
+        }
+
+        function appendReplySummaryLines(lines: PanelLine[], msg: ChatMessage | undefined): void {
             if (msg?.skills && msg.skills.length > 0) {
                 lines.push(panelLine("Skills", THEME.pink, TextAttributes.BOLD));
                 for (const skill of msg.skills) {
@@ -1376,26 +1411,110 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             }
 
             if (!msg) {
-                lines.push(panelLine("No active reply yet.", THEME.fgMuted));
-            } else {
                 lines.push(panelLine("Reply", THEME.header, TextAttributes.BOLD));
-                lines.push(
-                    panelLine(`  ${msg.status}${msg.content ? ` · ${msg.content.length} chars` : ""}`, THEME.fg),
-                );
+                lines.push(panelLine("  no active reply yet", THEME.fgMuted));
+                return;
             }
-            return lines;
+
+            lines.push(panelLine("Reply", THEME.header, TextAttributes.BOLD));
+            lines.push(panelLine(`  ${msg.status}${msg.content ? ` · ${msg.content.length} chars` : ""}`, THEME.fg));
         }
 
-        function blackboardPanelLines(): PanelLine[] {
-            const lines: PanelLine[] = [];
-            appendQuestionMenu(lines);
-            const turn = focusedBlackboardTurn();
-            if (!turn) {
-                lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
-                lines.push(panelLine("  no turn yet", THEME.fgMuted));
-                return lines;
+        function appendBlackboardStatusLines(lines: PanelLine[], turn: BlackboardTurn, recentCount: number): void {
+            lines.push(panelLine("Discussion", THEME.purple, TextAttributes.BOLD));
+            const recentSteps = turn.steps.slice(-recentCount);
+            if (recentSteps.length === 0) {
+                lines.push(panelLine("  waiting for worker output", THEME.fgMuted));
+                return;
             }
+            for (const step of recentSteps) {
+                lines.push(
+                    panelLine(
+                        `  r${step.round} ${step.workerRole}: ${clipText(step.outputSummary, 110)}`,
+                        THEME.purple,
+                    ),
+                );
+            }
+        }
 
+        function appendBlackboardRouteLines(lines: PanelLine[], turn: BlackboardTurn): void {
+            const metadata = readRecord(turn.metadata);
+            const routeReason = stringValue(metadata?.routeReason);
+            const routeScore = numberValue(metadata?.routeScore);
+            const routeSignals = readStringArray(metadata?.routeSignals);
+            const needsReflectionCandidate = metadata?.routeNeedsReflectionCandidate === true;
+            const contract = readRecord(metadata?.blackboardContract);
+            const plan = readRecord(metadata?.blackboardPlan);
+
+            lines.push(panelLine("Route / Complexity", THEME.header, TextAttributes.BOLD));
+            lines.push(
+                panelLine(
+                    `  ${routeScore !== undefined ? `score=${routeScore.toFixed(2)}` : "score=-"} · ${
+                        routeReason ?? "reason=-"
+                    }`,
+                    THEME.fg,
+                ),
+            );
+            if (needsReflectionCandidate) {
+                lines.push(panelLine("  reflection candidate: yes", THEME.fgMuted));
+            }
+            if (routeSignals.length > 0) {
+                lines.push(panelLine(`  signals: ${routeSignals.join(" · ")}`, THEME.fgMuted));
+            }
+            if (contract) {
+                const contractMode = stringValue(contract.mode) ?? "normal";
+                const policyReason = stringValue(contract.policyReason) ?? "default-convergence";
+                lines.push(panelLine(`  contract: ${contractMode} · policy=${policyReason}`, THEME.fg));
+                const evidence = readStringArray(contract.evidence);
+                if (evidence.length > 0) {
+                    lines.push(
+                        panelLine(`  evidence: ${evidence.map((item) => clipText(item, 42)).join(" · ")}`, THEME.fgMuted),
+                    );
+                }
+                for (const contradiction of readBlackboardContradictions(contract)) {
+                    lines.push(
+                        panelLine(
+                            `  conflict: ${clipText(contradiction.left, 28)} ↔ ${clipText(contradiction.right, 28)} · ${clipText(
+                                contradiction.reason,
+                                48,
+                            )}`,
+                            THEME.fgMuted,
+                        ),
+                    );
+                }
+            }
+            if (plan) {
+                const objective = stringValue(plan.objective);
+                const qaGoal = stringValue(plan.qaGoal);
+                const workstreams = readStringArray(plan.workstreams);
+                lines.push(panelLine("  plan", THEME.fgMuted));
+                if (objective) {
+                    lines.push(panelLine(`    objective: ${clipText(objective, 118)}`, THEME.fgMuted));
+                }
+                if (qaGoal) {
+                    lines.push(panelLine(`    qa: ${clipText(qaGoal, 118)}`, THEME.fgMuted));
+                }
+                if (workstreams.length > 0) {
+                    lines.push(panelLine(`    workstreams: ${workstreams.join(" / ")}`, THEME.fgMuted));
+                }
+            }
+            if (turn.workers.length > 0) {
+                lines.push(panelLine("  workers", THEME.fgMuted));
+                for (const worker of turn.workers) {
+                    const dependsOn = worker.dependsOn.length > 0 ? ` ← ${worker.dependsOn.join(",")}` : "";
+                    lines.push(
+                        panelLine(
+                            `    ${worker.name} · ${worker.role} · ${worker.status} · ${worker.stage} · ${worker.handoff}${dependsOn}`,
+                            THEME.fgMuted,
+                        ),
+                    );
+                }
+            }
+            lines.push(panelLine("", THEME.fg));
+        }
+
+        function appendBlackboardPanelLines(lines: PanelLine[], turn: BlackboardTurn): void {
+            const detailColor = THEME.purple;
             lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
             lines.push(
                 panelLine(
@@ -1405,17 +1524,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             );
             if (turn.goal.trim()) {
                 lines.push(panelLine(`  goal: ${clipText(turn.goal, 160)}`, THEME.fgMuted));
-            }
-            appendBlackboardPanelLines(lines, turn);
-            return lines;
-        }
-
-        function appendBlackboardPanelLines(lines: PanelLine[], turn: BlackboardTurn): void {
-            const detailColor = THEME.purple;
-            if (turn.workers.length > 0) {
-                lines.push(
-                    panelLine(`  workers: ${turn.workers.map((w) => `${w.name}:${w.status}`).join(", ")}`, detailColor),
-                );
             }
             for (const step of turn.steps) {
                 const factCount = step.newFacts.length;
@@ -1470,6 +1578,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         function clipText(value: string, max = 140): string {
             const text = value.replace(/\s+/gu, " ").trim();
             return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+        }
+
+        function numberValue(value: unknown): number | undefined {
+            return typeof value === "number" && Number.isFinite(value) ? value : undefined;
         }
 
         function summarizeQuestion(question: string, ordinal: number, max: number): string {
@@ -1570,10 +1682,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
             const menuOpen = commandMenuMode() === sidePanelMode();
             sideTitle.content = menuOpen
-                ? `${sidePanelMode() === "thinking" ? "Thinking" : "Blackboard"}  [question menu]`
+                ? `${sidePanelMode() === "thinking" ? "Analysis" : "Blackboard"}  [question menu]`
                 : sidePanelMode() === "thinking"
-                  ? "Thinking  [Ctrl+B Blackboard]"
-                  : "Blackboard  [Ctrl+B Thinking]";
+                  ? "Analysis  [Ctrl+B Blackboard]"
+                  : "Blackboard  [Ctrl+B Analysis]";
             const lines = sidePanelLines();
             const content = sideScrollBox.content;
             while (sideLineRenderables.length > lines.length) {
@@ -1667,4 +1779,25 @@ function rightPanelWidth(totalWidth: number): number {
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
+}
+
+function readBlackboardContradictions(
+    contract: Record<string, unknown>,
+): Array<{ left: string; reason: string; right: string }> {
+    const contradictions = contract.contradictions;
+    if (!Array.isArray(contradictions)) {
+        return [];
+    }
+    return contradictions
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
+        .map((item) => ({
+            left: typeof item.left === "string" ? item.left : "",
+            reason: typeof item.reason === "string" ? item.reason : "",
+            right: typeof item.right === "string" ? item.right : "",
+        }))
+        .filter((item) => item.left.length > 0 && item.right.length > 0 && item.reason.length > 0);
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+    return typeof value === "boolean" ? value : undefined;
 }

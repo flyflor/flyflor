@@ -37,8 +37,10 @@ export async function runDockerDevSmoke(options: DockerDevSmokeOptions = {}): Pr
     push(checks, "compose mounts docker workspace", compose.includes("./docker/workspace:/root/.flyflor/workspace"));
     push(checks, "compose has no external backend health dependency", !compose.includes("condition: service_healthy"));
     push(checks, "docker config uses local working memory", backendConfigured(config, "working", "\"backend\"\\s*:\\s*\"local\""));
-    push(checks, "docker config disables redis by default", backendConfigured(config, "redis", "\"enabled\"\\s*:\\s*false"));
-    push(checks, "docker config disables surreal by default", backendConfigured(config, "surreal", "\"enabled\"\\s*:\\s*false"));
+    // Redis / SurrealDB compatibility adapters are no longer part of the dev
+    // baseline; absence is the contract, not `enabled: false` placeholders.
+    push(checks, "docker config omits redis adapter by default", !backendExists(config, "redis"));
+    push(checks, "docker config omits surreal adapter by default", !backendExists(config, "surreal"));
     push(checks, "docker binary build uses browser conditions", buildScript.includes('"--conditions=browser"'));
     // Docker and local binary builds share the same OpenTUI dynamic-import compatibility flag.
     push(checks, "docker binary build allows OpenTUI dynamic imports", buildScript.includes('"--allow-unresolved="'));
@@ -109,6 +111,10 @@ function backendConfigured(config: string, key: string, pattern: string): boolea
         `"${escapedKey}"\\s*:\\s*\\{[^}]*${pattern}`,
         "u",
     ).test(config);
+}
+
+function backendExists(config: string, key: string): boolean {
+    return new RegExp(`"${escapeRegex(key)}"\\s*:`, "u").test(config);
 }
 
 function escapeRegex(value: string): string {

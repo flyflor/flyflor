@@ -193,7 +193,7 @@ describe("PerfMetrics event emission", () => {
         const perf = new PerfMetrics({ enabled: false }, events);
         const done = perf.mark(RuntimeEventType.PerfBuildPrompt);
         done();
-        perf.record(RuntimeEventType.PerfRedisLatency, { latencyMs: 1 });
+        perf.record(RuntimeEventType.PerfFastRouteEvaluated, { latencyMs: 1 });
         expect(events.events.length).toBe(0);
     });
 
@@ -206,7 +206,7 @@ describe("PerfMetrics event emission", () => {
 });
 
 describe("Memory module warmup, embedding reuse, episode capture", () => {
-    test("warmup opens the default local working memory when Redis adapter is disabled", async () => {
+    test("warmup opens the default local working memory when non-local backend is disabled", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
@@ -220,7 +220,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         });
     });
 
-    test("rememberTurn writes episode to local working memory when Redis adapter is disabled", async () => {
+    test("rememberTurn writes episode to local working memory when non-local backend is disabled", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
@@ -382,7 +382,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         expect(elapsed).toBeLessThan(1500);
     });
 
-    test("recordDebateEpisode writes to local working memory when Redis adapter is disabled", async () => {
+    test("recordDebateEpisode writes to local working memory when non-local backend is disabled", async () => {
         const config = await buildConfig();
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);

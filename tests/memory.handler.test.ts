@@ -60,10 +60,8 @@ function config(root: string): FlyflorConfig {
                 enabled: true,
                 backend: "local",
                 local: { dbFile: join(root, "crystal.db") },
-                surreal: { enabled: false },
             },
             embedding: { dimensions: 64 },
-            redis: { enabled: false },
             sqlite: { enabled: true },
         },
     } as unknown as FlyflorConfig;

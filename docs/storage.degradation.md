@@ -4,8 +4,8 @@
 
 这份文档记录的是存储降级的设计动机，而不是当前实现细则。核心结论已经落地：
 
-- `MemoryComponent` 默认使用本地 WAL / snapshot / backup，Redis 只保留兼容适配器。
-- `CrystalComponent` 默认使用本地 `crystal.db` + VectorIndex，SurrealDB 只保留兼容适配器。
+- `MemoryComponent` 默认使用本地 WAL / snapshot / backup，Redis 相关内容只作为历史迁移背景。
+- `CrystalComponent` 默认使用本地 `crystal.db` + VectorIndex，SurrealDB 相关内容只作为历史迁移背景。
 - `brain.db` 负责自传体记忆事件与状态，`crystal.db` 负责长期知识图，二者分离。
 - `smoke:recovery`、`doctor`、`status`、TUI 元数据视图用于验证恢复链路，不解析热数据。
 

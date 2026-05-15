@@ -9,8 +9,7 @@ import {
     type ConsolidationDecision,
 } from "../src/neural/memory/consolidation.worker.ts";
 import type { RetrospectiveLog } from "../src/neural/memory/retrospective.ts";
-import type { RedisMemoryStore } from "../src/neural/memory/redis.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "../src/neural/memory/working.store.ts";
 import type { SurrealGraphStore } from "../src/neural/memory/surreal.graph.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
@@ -170,7 +169,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         const memNodeUpserts: unknown[] = [];
         const epUpserts: unknown[] = [];
         const relateCalls: Array<[string, string]> = [];
-        const fakeRedis = {
+        const fakeWorking = {
             listConsolidationCandidates: async () => ["e1", "e2", "e3"],
             readEpisode: async (_uid: string, id: string) => episodes[id],
             dropEpisode: async (_uid: string, id: string) => {
@@ -183,7 +182,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
                 reinforced.push({ id, ttl });
                 return true;
             },
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const fakeGraph = {
             upsertEpisode: async (i: unknown) => {
                 epUpserts.push(i);
@@ -201,7 +200,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             JSON.stringify({ decision: "discard", confidence: 0.7 }),
         ]);
         const events = new CapturingSink();
-        const worker = new ConsolidationWorker(fakeRedis, fakeGraph, model, events);
+        const worker = new ConsolidationWorker(fakeWorking, fakeGraph, model, events);
         const result = await worker.drain(userId);
         expect(result.scanned).toBe(3);
         expect(result.consolidated).toBe(1);
@@ -220,7 +219,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
 
     test("drain skips without working-memory calls while breaker is cooling down", async () => {
         let listCalls = 0;
-        const fakeRedis = {
+        const fakeWorking = {
             getHealthSnapshot: () => ({
                 circuitState: "open",
                 nextRetryAt: Date.now() + 60_000,
@@ -230,10 +229,10 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
                 return ["e1"];
             },
             readEpisode: async () => makeEpisode("e1", "u1"),
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const events = new CapturingSink();
-        const worker = new ConsolidationWorker(fakeRedis, {} as SurrealGraphStore, new StubModel(["{}"]), events, {
-            workingMemoryHealthSnapshot: () => fakeRedis.getHealthSnapshot(),
+        const worker = new ConsolidationWorker(fakeWorking, {} as SurrealGraphStore, new StubModel(["{}"]), events, {
+            workingMemoryHealthSnapshot: () => fakeWorking.getHealthSnapshot?.(),
         });
 
         const result = await worker.drain("u1");
@@ -243,50 +242,50 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         expect(events.events).toEqual([]);
     });
 
-    test("skipped when episode is missing from redis", async () => {
-        const fakeRedis = {
+    test("skipped when episode is missing from working memory", async () => {
+        const fakeWorking = {
             listConsolidationCandidates: async () => ["ghost"],
             readEpisode: async () => undefined,
             dropEpisode: async () => {},
             touchConcepts: async () => {},
             reinforceEpisode: async () => true,
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const fakeGraph = {} as SurrealGraphStore;
         const model = new StubModel(["{}"]);
         const events = new CapturingSink();
-        const worker = new ConsolidationWorker(fakeRedis, fakeGraph, model, events);
+        const worker = new ConsolidationWorker(fakeWorking, fakeGraph, model, events);
         const result = await worker.drain("u1");
         expect(result.scanned).toBe(1);
         expect(result.skipped).toBe(1);
     });
 
     test("publishes failure event when listing candidates throws", async () => {
-        const fakeRedis = {
+        const fakeWorking = {
             listConsolidationCandidates: async () => {
                 throw new Error("conn refused");
             },
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const fakeGraph = {} as SurrealGraphStore;
         const events = new CapturingSink();
-        const worker = new ConsolidationWorker(fakeRedis, fakeGraph, new StubModel(["{}"]), events);
+        const worker = new ConsolidationWorker(fakeWorking, fakeGraph, new StubModel(["{}"]), events);
         const result = await worker.drain("u1");
         expect(result.scanned).toBe(0);
         expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationFailed)).toBe(true);
     });
 
     test("publishes failure event when per-candidate processing throws", async () => {
-        const fakeRedis = {
+        const fakeWorking = {
             listConsolidationCandidates: async () => ["e1"],
             readEpisode: async () => {
-                throw new Error("redis oom");
+                throw new Error("working memory oom");
             },
             dropEpisode: async () => {},
             touchConcepts: async () => {},
             reinforceEpisode: async () => true,
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const fakeGraph = {} as SurrealGraphStore;
         const events = new CapturingSink();
-        const worker = new ConsolidationWorker(fakeRedis, fakeGraph, new StubModel(["{}"]), events);
+        const worker = new ConsolidationWorker(fakeWorking, fakeGraph, new StubModel(["{}"]), events);
         const result = await worker.drain("u1");
         expect(result.skipped).toBe(1);
         expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationFailed)).toBe(true);
@@ -295,13 +294,13 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
     test("retrospective write failure blocks discard drop and publishes failure", async () => {
         const userId = "u1";
         const drops: string[] = [];
-        const fakeRedis = {
+        const fakeWorking = {
             listConsolidationCandidates: async () => ["e1"],
             readEpisode: async () => makeEpisode("e1", userId),
             dropEpisode: async (_uid: string, id: string) => {
                 drops.push(id);
             },
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const retrospective = {
             append: async () => {
                 throw new Error("retrospective disk full");
@@ -309,7 +308,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         } as unknown as RetrospectiveLog;
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(
-            fakeRedis,
+            fakeWorking,
             {} as SurrealGraphStore,
             new StubModel([JSON.stringify({ decision: "discard", confidence: 0.8 })]),
             events,
@@ -330,13 +329,13 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         const epUpserts: unknown[] = [];
         const memNodeUpserts: unknown[] = [];
         const relateCalls: Array<[string, string]> = [];
-        const fakeRedis = {
+        const fakeWorking = {
             listConsolidationCandidates: async () => ["e1"],
             readEpisode: async () => makeEpisode("e1", userId),
             dropEpisode: async (_uid: string, id: string) => {
                 drops.push(id);
             },
-        } as unknown as RedisMemoryStore;
+        } as unknown as WorkingMemoryStore;
         const fakeGraph = {
             upsertEpisode: async (i: unknown) => {
                 epUpserts.push(i);
@@ -355,7 +354,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         } as unknown as RetrospectiveLog;
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(
-            fakeRedis,
+            fakeWorking,
             fakeGraph,
             new StubModel([JSON.stringify({ decision: "consolidate", confidence: 0.9, summary: "s", symbols: ["x"] })]),
             events,

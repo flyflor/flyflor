@@ -63,12 +63,5 @@ function config(root: string): CrystalMemoryConfig {
         enabled: true,
         backend: "local",
         local: { dbFile: join(root, "crystal.db") },
-        surreal: {
-            database: "test",
-            enabled: false,
-            internalUrl: "http://127.0.0.1:1",
-            namespace: "flyflor",
-            timeoutMs: 25,
-        },
     };
 }

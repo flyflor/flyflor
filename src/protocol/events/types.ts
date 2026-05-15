@@ -92,8 +92,6 @@ export const RuntimeEventType = {
     PerfTtfb: "perf.ttfb",
     PerfBuildPrompt: "perf.build_prompt",
     PerfRouteLlm: "perf.route_llm",
-    PerfRedisLatency: "perf.redis_latency",
-    PerfSurrealAnnLatency: "perf.surreal_ann_latency",
     PerfFastRouteEvaluated: "perf.fast_route_evaluated",
     RouteEscalated: "route.escalated",
     RuntimeModeEntered: "runtime.mode.entered",

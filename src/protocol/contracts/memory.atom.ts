@@ -90,7 +90,7 @@ export interface AtomScore {
 
 /**
  * 焦点指针：表达"现在用户和 agent 在干什么"。
- * 存于 Redis：flyflor:focus:<userId>:<channelId>。无活动超过 dormant.idleMinutes 后过期或回落 inbox。
+ * 存于 brain/state 层或本地运行时状态。无活动超过 dormant.idleMinutes 后回落 inbox。
  */
 export interface FocusPointer {
     userId: string;

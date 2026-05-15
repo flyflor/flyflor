@@ -415,12 +415,7 @@ export function buildConfigJsonc(input: {
             enabled: true,
             crystal: {
                 enabled: false,
-                surreal: {
-                    enabled: true,
-                    internalUrl: "http://127.0.0.1:8000",
-                    namespace: "flyflor",
-                    database: "flyflor",
-                },
+                backend: "local",
             },
         },
         sandbox: {
@@ -1358,31 +1353,6 @@ async function resolveApiKey(provider: ProviderChoice, options: InitConfigOption
     return String(value).trim();
 }
 
-function buildProviderOverride(
-    provider: string,
-    model: string,
-    secretId: string,
-    baseUrl: string | undefined,
-    providerKind: ModelProviderKindType,
-    apiMode: ModelApiModeType | undefined,
-): string {
-    const useStandaloneProfile = Boolean(baseUrl) || provider === ModelProviderId.Custom;
-    const commonLines = [`"apiKey": ${JSON.stringify(secretId)}`];
-    if (useStandaloneProfile) {
-        commonLines.unshift(`"type": ${JSON.stringify(providerKind)}`);
-        commonLines.push(`"baseUrl": ${JSON.stringify(normalizeProviderBaseUrl(baseUrl ?? "", providerKind))}`);
-        commonLines.push(`"defaultModel": ${JSON.stringify(model)}`);
-        commonLines.push(`"models": [${JSON.stringify(model)}]`);
-        if (apiMode && providerKind === ModelProviderKind.OpenAICompatible) {
-            commonLines.push(`"apiMode": ${JSON.stringify(apiMode)}`);
-        }
-    }
-
-    return `"${provider}": {
-${indent(commonLines.join(",\n"), 4)}
-}`;
-}
-
 function indent(text: string, spaces: number): string {
     const prefix = " ".repeat(spaces);
     return text
@@ -1860,12 +1830,12 @@ function buildProviderProfile(
     };
     const standalone = Boolean(input.baseUrl) || input.provider === ModelProviderId.Custom;
     if (standalone) {
-        profile.type = input.providerKind;
         profile.baseUrl = normalizeProviderBaseUrl(input.baseUrl ?? "", input.providerKind);
         profile.defaultModel = input.model;
-        profile.models = [input.model];
-        if (input.apiMode && input.providerKind === ModelProviderKind.OpenAICompatible) {
-            profile.apiMode = input.apiMode;
+        // OpenAI-compatible relays are inferred from baseUrl; only non-default
+        // protocols need to be explicit in generated config.
+        if (input.providerKind !== ModelProviderKind.OpenAICompatible) {
+            profile.type = input.providerKind;
         }
     }
 

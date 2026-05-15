@@ -34,6 +34,8 @@ import {
     ComponentKind,
     CrystalMemoryBackend,
     MarkdownMemoryFile,
+    ModelApiMode,
+    ModelProviderKind,
     MemoryKind,
     RuntimeMode,
 } from "../src/protocol/contracts/index.ts";
@@ -119,7 +121,6 @@ describe("config JSONC boundaries", () => {
                 '    "secrets": { "fastai-api-key": "sk-real-token" },',
                 '    "providers": {',
                 '      "fastai": {',
-                '        "type": "openai-compatible",',
                 '        "baseUrl": "https://fastai.fast/v1",',
                 '        "apiKey": "fastai-api-key",',
                 '        "defaultModel": "gpt-5.5"',
@@ -134,6 +135,53 @@ describe("config JSONC boundaries", () => {
 
         expect(config.model.providerId).toBe("fastai");
         expect(config.model.apiKey).toBe("sk-real-token");
+        expect(config.model.provider).toBe(ModelProviderKind.OpenAICompatible);
+        expect(config.model.apiMode).toBe(ModelApiMode.ChatCompletions);
+    });
+
+    test("auto-discovers OpenAI-compatible model list when model is omitted", async () => {
+        const root = await tempRoot();
+        const paths = testPaths(root);
+        const originalFetch = globalThis.fetch;
+        const captured: { authHeader?: string | null; modelsUrl?: string } = {};
+        globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+            captured.modelsUrl = String(input);
+            captured.authHeader = new Headers(init?.headers).get("authorization");
+            return new Response(JSON.stringify({ data: [{ id: "gpt-5.5" }, { id: "gpt-5.4" }] }), {
+                headers: { "content-type": "application/json" },
+            });
+        }) as unknown as typeof fetch;
+        try {
+            await Bun.write(
+                join(paths.configDir, "config.jsonc"),
+                [
+                    "{",
+                    '  "model": {',
+                    '    "activeProvider": "fastai",',
+                    '    "secrets": { "fastai-api-key": "resolved-key" },',
+                    '    "providers": {',
+                    '      "fastai": {',
+                    '        "baseUrl": "https://fastai.fast/openai/v1",',
+                    '        "apiKey": "fastai-api-key"',
+                    "      }",
+                    "    }",
+                    "  }",
+                    "}",
+                ].join("\n"),
+            );
+
+            const config = await loadConfigForPaths(paths);
+
+            expect(config.model.providerId).toBe("fastai");
+            expect(config.model.model).toBe("gpt-5.5");
+            expect(config.model.provider).toBe(ModelProviderKind.OpenAICompatible);
+            expect(config.model.apiMode).toBe(ModelApiMode.ChatCompletions);
+            expect(config.model.apiKey).toBe("resolved-key");
+            expect(captured.authHeader).toBe("Bearer resolved-key");
+            expect(captured.modelsUrl).toBe("https://fastai.fast/openai/v1/models");
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
     });
 });
 
@@ -144,17 +192,15 @@ describe("Internal infrastructure deployment boundaries", () => {
 
         expect(compose).not.toContain("redis:7.4-alpine");
         expect(config).toContain('"backend": "local"');
-        expect(config).toContain('"redis":');
-        expect(config).toContain('"enabled": false');
+        expect(config).not.toContain('"redis":');
     });
 
-    test("docker dev defaults to optional crystal graph without SurrealDB service", async () => {
+    test("docker dev omits SurrealDB service and adapter config", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
         const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();
 
         expect(compose).not.toContain("surrealdb/surrealdb");
-        expect(config).toContain('"surreal":');
-        expect(config).toContain('"enabled": false');
+        expect(config).not.toContain('"surreal":');
     });
 
     test("docker dev keeps the flyflor agent itself off the host network", async () => {
@@ -888,6 +934,25 @@ describe("Agent memory stability and latency", () => {
         expect(reply.text).toBe("一次性回答。");
     });
 
+    test("runtime falls back to non-streaming HTTP when stream endpoint is unavailable", async () => {
+        const config = await testConfig();
+        const runtime = new RuntimeModule(
+            { ...config, memory: { ...config.memory } },
+            new StreamUnavailableModel("普通 HTTP 回答。"),
+            new CapturingSink(),
+        );
+        const deltas: string[] = [];
+
+        const reply = await runtime.handleMessage(gatewayMessage("流接口不可用。"), runtimeContext(), {
+            onTextDelta: (text) => {
+                deltas.push(text);
+            },
+        });
+
+        expect(deltas).toEqual(["普通 HTTP 回答。"]);
+        expect(reply.text).toBe("普通 HTTP 回答。");
+    });
+
     test("blackboard NeedsUser short-circuits to AgentAsk reply (LF-R3 slice D)", async () => {
         const config = await testConfig();
         const runtimeConfig = {
@@ -1189,13 +1254,6 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
                 local: {
                     dbFile: join(paths.storageDir, "crystal", "crystal.db"),
                 },
-                surreal: {
-                    database: "test",
-                    enabled: false,
-                    internalUrl: "http://127.0.0.1:1",
-                    namespace: "flyflor",
-                    timeoutMs: 25,
-                },
             },
             matrix: {
                 enabled: true,
@@ -1210,15 +1268,6 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
             sqlite: {
                 enabled: true,
                 maxPromptItems: 8,
-            },
-            redis: {
-                enabled: false,
-                internalUrl: "redis://127.0.0.1:1",
-                namespace: "flyflor-test",
-                defaultTtlSeconds: 60,
-                maxEpisodesPerUser: 32,
-                contextRingSize: 8,
-                timeoutMs: 25,
             },
             embedding: {
                 dimensions: 32,
@@ -1463,6 +1512,22 @@ class StreamingModel implements ModelClient {
         for (const chunk of this.chunks) {
             yield chunk;
         }
+    }
+}
+
+class StreamUnavailableModel implements ModelClient {
+    readonly messages: ModelMessage[][] = [];
+
+    constructor(private readonly response: string) {}
+
+    async generate(messages: ModelMessage[]): Promise<string> {
+        this.messages.push(messages);
+        return this.response;
+    }
+
+    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+        this.messages.push(messages);
+        throw new Error("stream_not_supported");
     }
 }
 

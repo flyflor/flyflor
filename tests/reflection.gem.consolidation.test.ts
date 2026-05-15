@@ -30,13 +30,6 @@ const CFG: CrystalMemoryConfig = {
     enabled: true,
     backend: "local",
     local: { dbFile: "" },
-    surreal: {
-        database: "test",
-        enabled: false,
-        internalUrl: "http://127.0.0.1:1",
-        namespace: "flyflor",
-        timeoutMs: 25,
-    },
 };
 
 function makeService(): { svc: CrystalMemoryService; store: InMemoryCrystalMemoryStore } {
@@ -227,13 +220,6 @@ describe("reflection → skill consolidation (P0-5)", () => {
                 enabled: false,
                 backend: "local",
                 local: { dbFile: "" },
-                surreal: {
-                    database: "test",
-                    enabled: false,
-                    internalUrl: "http://127.0.0.1:1",
-                    namespace: "flyflor",
-                    timeoutMs: 25,
-                },
             },
             store,
         );

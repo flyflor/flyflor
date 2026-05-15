@@ -48,6 +48,4 @@ export type PerfEventType =
     | typeof RuntimeEventType.PerfTtfb
     | typeof RuntimeEventType.PerfBuildPrompt
     | typeof RuntimeEventType.PerfRouteLlm
-    | typeof RuntimeEventType.PerfRedisLatency
-    | typeof RuntimeEventType.PerfSurrealAnnLatency
     | typeof RuntimeEventType.PerfFastRouteEvaluated;

@@ -1,4 +1,4 @@
-import type { FlyflorConfig } from "../../config/index.ts";
+import { createDefaultMemoryConfig, type FlyflorConfig } from "../../config/index.ts";
 import type { WorkingMemoryConfig } from "../../config/index.ts";
 import { join } from "node:path";
 import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
@@ -55,10 +55,9 @@ import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryService } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore } from "./sqlite.ts";
 import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
-import { RedisMemoryStore } from "./redis.ts";
 import { LocalWorkingMemoryStore } from "./local.working.store.ts";
 import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
-import { SurrealGraphStore, type MemoryGraphStore } from "./surreal.graph.ts";
+import type { MemoryGraphStore } from "./surreal.graph.ts";
 import { SQLiteGraphStore } from "./sqlite.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
@@ -134,8 +133,6 @@ export interface BehaviorSnapshotInput {
 export interface MemoryModuleOverrides {
     embeddings?: EmbeddingProvider;
     graph?: MemoryGraphStore | null;
-    /** Compatibility alias for older tests and setup code. New callers should use graph. */
-    surreal?: MemoryGraphStore | null;
 }
 
 @Module({ name: "memory", tags: ["flyflor", "boundary"] })
@@ -149,13 +146,11 @@ export class MemoryModule extends Memory {
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
     private readonly crystal: CrystalMemoryService;
-    /** 工作记忆 Component；默认 local WAL/snapshot，Redis 仅作为兼容适配器实现同一接口。 */
+    /** 工作记忆 Component；主线实现是本地 WAL/snapshot。 */
     private readonly workingMemory: WorkingMemoryStore | null;
-    /** Redis 兼容适配器实例；仅在显式启用时存在，供 fastRoute 等跨副本能力复用底层 client。 */
-    private readonly workingMemoryClientStore: RedisMemoryStore | null;
     private readonly workingMemoryBackend: MemoryWorkingBackend;
     private readonly workingMemoryDefaultTtlSeconds: number;
-    /** 长期晶体图 Component；默认 local crystal graph，SurrealDB 仅作为兼容适配器。 */
+    /** 长期晶体图 Component；主线实现是本地 crystal graph。 */
     private readonly graph: MemoryGraphStore | null;
     private readonly hotMemoryCompression: HotMemoryCompressionWorker | null;
     private readonly scheduler: BackgroundScheduler | null;
@@ -193,21 +188,15 @@ export class MemoryModule extends Memory {
             undefined,
             config.memory.embedding.dimensions,
         );
-        this.workingMemoryClientStore =
-            working.backend === MemoryWorkingBackend.Redis ? new RedisMemoryStore(config.memory.redis) : null;
         this.workingMemory =
-            this.workingMemoryClientStore ??
-            (working.backend === MemoryWorkingBackend.Local
+            working.backend === MemoryWorkingBackend.Local
                 ? new LocalWorkingMemoryStore(config.paths.memoryDir, working.local)
-                : null);
-        const graphOverride = overrides.graph !== undefined ? overrides.graph : overrides.surreal;
+                : null;
         this.graph =
-            graphOverride !== undefined
-                ? graphOverride
+            overrides.graph !== undefined
+                ? overrides.graph
                 : config.memory.crystal.enabled && config.memory.crystal.backend === CrystalMemoryBackend.Local
                   ? new SQLiteGraphStore(config.memory.crystal.local)
-                  : config.memory.crystal.enabled && config.memory.crystal.surreal.enabled
-                    ? new SurrealGraphStore(config.memory.crystal.surreal)
                   : null;
         this.hotMemoryCompression =
             this.workingMemory && model && config.memory.tuning.hotMemoryCompression.enabled
@@ -259,11 +248,6 @@ export class MemoryModule extends Memory {
         });
     }
 
-    /** 暴露底层 Redis 兼容 client，供同进程其他热路径组件（fastRoute 快照等）复用。 */
-    getRedisClient() {
-        return this.workingMemoryClientStore?.getClient();
-    }
-
     getWorkingMemoryHealthSnapshot(): WorkingMemoryHealthSnapshot | undefined {
         return (this.workingMemory as { getHealthSnapshot?: () => WorkingMemoryHealthSnapshot } | null)?.getHealthSnapshot?.();
     }
@@ -280,10 +264,8 @@ export class MemoryModule extends Memory {
             this.events.publish(
                 event(RuntimeEventType.MemoryBackgroundSchedulerSkipped, {
                     missing,
-                    redisAdapterEnabled: this.config.memory.redis.enabled,
                     workingMemoryBackend: this.workingMemoryBackend,
                     crystalGraphEnabled: Boolean(this.graph),
-                    surrealAdapterEnabled: this.config.memory.crystal.surreal.enabled,
                     modelProvider: this.config.model.provider,
                     impact: "consolidation/decay/dream 跳过缺失依赖；工作记忆仍按 configured backend 写入，长期晶体层需要 graph component",
                 }),
@@ -766,7 +748,7 @@ export class MemoryModule extends Memory {
 
         await this.writeEpisodeToWorkingMemory(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
-        // 不扫描外部后端，只信任活跃 turn 触发，避免把兼容适配器变成全局枚举入口。
+        // 不扫描外部后端，只信任活跃 turn 触发，避免把后端存储变成全局枚举入口。
         this.activeMemoryUsers.add(message.user.id);
         this.scheduler?.noteUserTurn(message.user.id);
         this.dormant.touch(message.user.id);
@@ -3448,14 +3430,12 @@ function resolveWorkingMemoryConfig(config: FlyflorConfig): WorkingMemoryConfig 
     if (config.memory.working) {
         return config.memory.working;
     }
-    // Older tests and user configs predate `memory.working`; preserve the legacy
-    // Redis compatibility switch while keeping local WAL-backed memory as the default.
-    return {
-        backend: config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local,
+    return createDefaultMemoryConfig().working ?? {
+        backend: MemoryWorkingBackend.Local,
         local: {
-            contextRingSize: config.memory.redis.contextRingSize,
-            defaultTtlSeconds: config.memory.redis.defaultTtlSeconds,
-            maxEpisodesPerUser: config.memory.redis.maxEpisodesPerUser,
+            contextRingSize: 12,
+            defaultTtlSeconds: 86_400,
+            maxEpisodesPerUser: 200,
             maxWalBytes: 4 * 1024 * 1024,
             snapshotEveryWrites: 64,
             snapshotFile: "working.snapshot.json",

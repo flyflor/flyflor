@@ -144,7 +144,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const graph = new FakeSummaryGraph(config);
-        const memory = new MemoryModule(config, sink, undefined, { surreal: graph });
+        const memory = new MemoryModule(config, sink, undefined, { graph });
         await memory.warmup();
         try {
             await memory.rememberTurn(
@@ -176,7 +176,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const graph = new FailingSummaryGraph(config);
-        const memory = new MemoryModule(config, sink, undefined, { surreal: graph });
+        const memory = new MemoryModule(config, sink, undefined, { graph });
         await memory.warmup();
         try {
             await memory.rememberTurn(
@@ -206,7 +206,13 @@ class RecordingSink implements EventSink {
 class FakeSummaryGraph extends SurrealGraphStore {
     readonly inputs: SummaryEmbeddingInput[] = [];
     constructor(config: FlyflorConfig) {
-        super({ ...config.memory.crystal.surreal, enabled: true });
+        super({
+            database: "test",
+            enabled: true,
+            internalUrl: "http://127.0.0.1:1",
+            namespace: "flyflor",
+            timeoutMs: 25,
+        });
     }
     override async initialize(): Promise<void> {
         return;

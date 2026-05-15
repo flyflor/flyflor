@@ -1,5 +1,3 @@
-import type { Redis } from "ioredis";
-
 export interface WorkingMemoryHealthSnapshot {
     circuitState: "closed" | "open" | string;
     lastError?: string;
@@ -27,10 +25,6 @@ export interface WorkingMemoryStore {
     ): Promise<boolean>;
     touchConcepts(userId: string, concepts: string[]): Promise<void>;
     writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult>;
-}
-
-export interface RedisBackedWorkingMemoryStore extends WorkingMemoryStore {
-    getClient(): Redis;
 }
 
 export interface EpisodeWriteInput {

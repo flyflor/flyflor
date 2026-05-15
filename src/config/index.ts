@@ -235,7 +235,8 @@ export interface ModelConfig {
 export type ModelProviderType = ModelProviderKindType;
 
 export interface ModelProviderConfig {
-    type: ModelProviderType;
+    /** 省略时按 baseUrl 自动推断；自定义 OpenAI-compatible relay 不需要手写。 */
+    type?: ModelProviderType;
     apiMode?: ModelApiModeType;
     apiKey?: SecretRef | string;
     apiKeyHeader?: string;
@@ -263,7 +264,6 @@ export interface MemoryConfig {
     matrix: MemoryMatrixConfig;
     markdown: MarkdownMemoryConfig;
     working?: WorkingMemoryConfig;
-    redis: RedisMemoryConfig;
     sqlite: SQLiteMemoryConfig;
     embedding: MemoryEmbeddingConfig;
     retrieval: MemoryRetrievalConfig;
@@ -301,21 +301,6 @@ export interface SQLiteMemoryConfig {
     maxPromptItems: number;
 }
 
-export interface RedisMemoryConfig {
-    enabled: boolean;
-    internalUrl: string;
-    namespace: string;
-    // 默认 episode 稳定度 (importance≈0.5) 对应的 TTL，以秒计；
-    // 真正写入时由 importance × multiplier 决定个体 TTL。
-    defaultTtlSeconds: number;
-    // 单 user 工作记忆 episode 数硬上限，用于触发 forced-forgetting。
-    maxEpisodesPerUser: number;
-    // ring buffer 长度（最近上下文条数，对应 ff:ctx:{userId} LTRIM）。
-    contextRingSize: number;
-    // 兼容适配器 socket 超时；不可达时调用必须在此时间内 timeout。
-    timeoutMs: number;
-}
-
 export interface WorkingMemoryConfig {
     backend: MemoryWorkingBackendType;
     local: LocalWorkingMemoryConfig;
@@ -339,7 +324,6 @@ export interface CrystalMemoryConfig {
     backend: CrystalMemoryBackendType;
     enabled: boolean;
     local: LocalCrystalMemoryConfig;
-    surreal: SurrealMemoryConfig;
 }
 
 export interface LocalCrystalMemoryConfig {
@@ -611,7 +595,7 @@ export async function loadConfigForPaths(
 
     const configFile = await readConfigFile(paths.configDir);
 
-    const model = resolveModelConfig(applyModelOverrides(normalizeModelRegistryConfig(configFile), options.model));
+    const model = await resolveModelConfig(applyModelOverrides(normalizeModelRegistryConfig(configFile), options.model));
     const memory = resolveMemoryConfigPaths(mergeMemoryConfig(createDefaultMemoryConfig(), configFile.memory), paths);
     const secrets = configFile.model?.secrets ?? {};
 
@@ -744,16 +728,6 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
     }
 
     const merged = mergeConfig(defaults, override);
-    if (!override.crystal?.backend && override.crystal?.surreal?.enabled === true) {
-        merged.crystal.backend = CrystalMemoryBackend.Surreal;
-    }
-    // Backward compatibility: older configs only toggled memory.redis.enabled.
-    // If no explicit working backend is present, honor that switch and keep Redis adapter behavior.
-    if (!override.working && override.redis?.enabled) {
-        if (merged.working) {
-            merged.working.backend = MemoryWorkingBackend.Redis;
-        }
-    }
     // R red-line enforcement: `_keepGatewayListening` is an audit-only field.
     merged.tuning.dormant._keepGatewayListening = true;
     return merged;
@@ -781,7 +755,7 @@ function mergeConfig<T>(defaults: T, override: Partial<T>): T {
     }) as T;
 }
 
-function createDefaultMemoryConfig(): MemoryConfig {
+export function createDefaultMemoryConfig(): MemoryConfig {
     return {
         analyzer: {
             enabled: true,
@@ -798,15 +772,6 @@ function createDefaultMemoryConfig(): MemoryConfig {
             enabled: false,
             backend: CrystalMemoryBackend.Local,
             local: {},
-            surreal: {
-                database: "flyflor",
-                enabled: false,
-                internalUrl: "http://127.0.0.1:8000",
-                namespace: "flyflor",
-                password: "root",
-                timeoutMs: 1500,
-                username: "root",
-            },
         },
         matrix: {
             enabled: true,
@@ -833,15 +798,6 @@ function createDefaultMemoryConfig(): MemoryConfig {
         sqlite: {
             enabled: true,
             maxPromptItems: 8,
-        },
-        redis: {
-            enabled: false,
-            internalUrl: "redis://127.0.0.1:6379",
-            namespace: "flyflor",
-            defaultTtlSeconds: 86_400,
-            maxEpisodesPerUser: 200,
-            contextRingSize: 12,
-            timeoutMs: 250,
         },
         embedding: {
             dimensions: 384,
@@ -931,32 +887,40 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
     };
 }
 
-function resolveModelConfig(config: ModelRegistryConfig | undefined): ModelConfig {
+async function resolveModelConfig(config: ModelRegistryConfig | undefined): Promise<ModelConfig> {
     const providers = mergeConfig(createDefaultModelProviders(), config?.providers ?? {});
     const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.OpenAI;
-    return buildModelConfig(providers, providerId, config);
+    return await buildModelConfig(providers, providerId, config);
 }
 
-function buildModelConfig(
+async function buildModelConfig(
     providers: Record<string, ModelProviderConfig>,
     providerId: string,
     config: ModelRegistryConfig | undefined,
-): ModelConfig {
+): Promise<ModelConfig> {
     const provider = providers[providerId];
     if (!provider) {
         throw new Error(`Unknown model provider: ${providerId}`);
     }
-    const model = config?.activeModel ?? provider.defaultModel ?? provider.models?.[0];
+    const providerKind = provider.type ?? inferProviderKind(providerId, provider.baseUrl);
+    // Model discovery may require auth; resolve config-provider secrets before
+    // probing `/v1/models` so minimal relay profiles can omit the static list.
+    const apiKey = resolveSecret(provider.apiKey, config?.secrets);
+    const models =
+        provider.models && provider.models.length > 0
+            ? provider.models
+            : await fetchProviderModelIds({ ...provider, type: providerKind, apiKey }).catch(() => []);
+    const model = config?.activeModel ?? provider.defaultModel ?? models[0];
     if (!model || model.trim().length === 0) {
         throw new Error(`Model provider ${providerId} does not define a default model.`);
     }
     return {
         apiMode: provider.apiMode ?? ModelApiMode.ChatCompletions,
         providerId,
-        provider: provider.type,
+        provider: providerKind,
         apiKeyHeader: provider.apiKeyHeader,
         baseUrl: provider.baseUrl ?? "",
-        apiKey: resolveSecret(provider.apiKey, config?.secrets),
+        apiKey,
         headers: provider.headers ?? {},
         maxTokens: provider.maxTokens ?? 4096,
         model,
@@ -988,11 +952,10 @@ function normalizeProviderProfiles(input: Record<string, ProviderProfileConfig>)
     const providers: Record<string, ModelProviderConfig> = {};
     for (const [id, provider] of Object.entries(input)) {
         const baseUrl = provider.baseUrl ?? provider.apiBase;
-        providers[id] = {
+        providers[id] = normalizeProviderProfile(id, {
             ...provider,
             baseUrl,
-            type: provider.type ?? inferProviderKind(id, baseUrl),
-        };
+        });
         delete (providers[id] as ProviderProfileConfig).apiBase;
     }
     return providers;
@@ -1004,7 +967,8 @@ function mergeProviderProfiles(
 ): Record<string, ModelProviderConfig> {
     const merged = { ...topLevel };
     for (const [id, provider] of Object.entries(nested)) {
-        merged[id] = merged[id] ? mergeConfig(merged[id], provider) : provider;
+        const normalized = normalizeProviderProfile(id, provider);
+        merged[id] = merged[id] ? mergeConfig(merged[id], normalized) : normalized;
     }
     return merged;
 }
@@ -1014,6 +978,40 @@ function inferProviderKind(id: string, baseUrl: string | undefined): ModelProvid
         return ModelProviderKind.OpenAICompatible;
     }
     throw new Error(`Provider ${id} must define type or apiBase/baseUrl.`);
+}
+
+function normalizeProviderProfile(id: string, provider: ModelProviderConfig): ModelProviderConfig {
+    const providerKind = provider.type ?? inferProviderKind(id, provider.baseUrl);
+    return {
+        ...provider,
+        type: providerKind,
+        apiMode: provider.apiMode ?? (providerKind === ModelProviderKind.AnthropicCompatible ? undefined : ModelApiMode.ChatCompletions),
+    };
+}
+
+async function fetchProviderModelIds(provider: ModelProviderConfig): Promise<string[]> {
+    if (provider.type !== ModelProviderKind.OpenAICompatible || !provider.baseUrl) {
+        return [];
+    }
+    const response = await fetch(openAICompatibleModelsUrl(provider.baseUrl), {
+        headers: {
+            ...(provider.apiKey ? { authorization: `Bearer ${String(provider.apiKey)}` } : {}),
+            ...(provider.headers ?? {}),
+        },
+        signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) {
+        return [];
+    }
+    const payload = (await response.json()) as { data?: Array<{ id?: unknown }> };
+    return (payload.data ?? []).map((item) => item.id).filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
+function openAICompatibleModelsUrl(baseUrl: string): URL {
+    const raw = baseUrl.trim().replace(/\/+$/, "");
+    // Preserve relay path prefixes such as `/openai/v1`; URL("/v1/models", ...)
+    // would incorrectly reset to the host root.
+    return new URL(raw.endsWith("/v1") ? `${raw}/models` : `${raw}/v1/models`);
 }
 
 function createDefaultModelProviders(): Record<string, ModelProviderConfig> {

@@ -32,8 +32,7 @@ const fakeConfig = (): FlyflorConfig =>
         },
         memory: {
             enabled: true,
-            crystal: { enabled: true, backend: "local", local: {}, surreal: { enabled: false } },
-            redis: { enabled: true },
+            crystal: { enabled: true, backend: "local", local: {} },
         },
         sandbox: {
             mode: "off",
@@ -98,8 +97,6 @@ describe("config view", () => {
             enabled: true,
             crystal: true,
             crystalBackend: "local",
-            redis: true,
-            surreal: false,
             crystalDbFile: "",
         });
     });
