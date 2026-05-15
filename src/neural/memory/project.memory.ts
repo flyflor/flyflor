@@ -97,90 +97,86 @@ export class ProjectMemoryStore {
         requestId?: string;
         scope?: string;
     }): Promise<ProjectMemorySnapshot> {
-        try {
-            await this.initialize();
-            const paths = this.projectPaths();
-            const path = paths.memory;
-            const content = (await Bun.file(path).text()).trim();
-            let manifest = (await this.readManifest()) ?? this.createManifest(new Date().toISOString());
-            if (!content) {
-                return { prompt: "", results: [], manifest };
-            }
-            const prompt = truncate(content, input.maxChars);
-            const now = new Date().toISOString();
-            const receipt: ProjectMemoryRecallReceipt = {
-                id: crypto.randomUUID(),
-                createdAt: now,
-                maxChars: input.maxChars,
-                projectDir: this.paths.projectDir,
-                projectMemoryPath: path,
-                promptChars: prompt.length,
-                requestId: input.requestId,
-                resultCount: 1,
-                scope: input.scope,
-            };
-            await appendJsonLine(paths.recalls, {
-                schemaVersion: PROJECT_MEMORY_SCHEMA_VERSION,
-                type: "project.memory.recall",
-                ...receipt,
-                queryChars: input.query?.length ?? 0,
-            });
-            await appendJsonLine(paths.events, {
-                schemaVersion: PROJECT_MEMORY_SCHEMA_VERSION,
-                type: "project.memory.recalled",
-                receiptId: receipt.id,
-                requestId: input.requestId,
-                createdAt: now,
-                promptChars: prompt.length,
-                resultCount: receipt.resultCount,
-            });
-            manifest = await this.updateManifest({
-                eventsDelta: 1,
-                recallsDelta: 1,
-                updatedAt: now,
-            });
-            this.events?.publish(
-                event(
-                    RuntimeEventType.MemoryProjectMemoryRecalled,
-                    {
-                        projectDir: this.paths.projectDir,
-                        promptChars: prompt.length,
-                        receiptId: receipt.id,
-                        resultCount: receipt.resultCount,
-                    },
-                    input.requestId,
-                ),
-            );
-            return {
-                prompt,
-                manifest,
-                receipt,
-                results: [
-                    {
-                        layer: MemoryLayer.Project,
-                        score: 1,
-                        record: {
-                            id: "project-local-memory",
-                            kind: MemoryKind.Summary,
-                            content: prompt,
-                            scope: this.paths.projectDir,
-                            importance: 1,
-                            confidence: 1,
-                            createdAt: new Date(0).toISOString(),
-                            updatedAt: new Date(0).toISOString(),
-                            metadata: {
-                                manifestPath: paths.manifest,
-                                path,
-                                projectDir: this.paths.projectDir,
-                                recallReceiptId: receipt.id,
-                            },
+        await this.initialize();
+        const paths = this.projectPaths();
+        const path = paths.memory;
+        const content = (await Bun.file(path).text()).trim();
+        let manifest = (await this.readManifest()) ?? this.createManifest(new Date().toISOString());
+        if (!content) {
+            return { prompt: "", results: [], manifest };
+        }
+        const prompt = truncate(content, input.maxChars);
+        const now = new Date().toISOString();
+        const receipt: ProjectMemoryRecallReceipt = {
+            id: crypto.randomUUID(),
+            createdAt: now,
+            maxChars: input.maxChars,
+            projectDir: this.paths.projectDir,
+            projectMemoryPath: path,
+            promptChars: prompt.length,
+            requestId: input.requestId,
+            resultCount: 1,
+            scope: input.scope,
+        };
+        await appendJsonLine(paths.recalls, {
+            schemaVersion: PROJECT_MEMORY_SCHEMA_VERSION,
+            type: "project.memory.recall",
+            ...receipt,
+            queryChars: input.query?.length ?? 0,
+        });
+        await appendJsonLine(paths.events, {
+            schemaVersion: PROJECT_MEMORY_SCHEMA_VERSION,
+            type: "project.memory.recalled",
+            receiptId: receipt.id,
+            requestId: input.requestId,
+            createdAt: now,
+            promptChars: prompt.length,
+            resultCount: receipt.resultCount,
+        });
+        manifest = await this.updateManifest({
+            eventsDelta: 1,
+            recallsDelta: 1,
+            updatedAt: now,
+        });
+        this.events?.publish(
+            event(
+                RuntimeEventType.MemoryProjectMemoryRecalled,
+                {
+                    projectDir: this.paths.projectDir,
+                    promptChars: prompt.length,
+                    receiptId: receipt.id,
+                    resultCount: receipt.resultCount,
+                },
+                input.requestId,
+            ),
+        );
+        return {
+            prompt,
+            manifest,
+            receipt,
+            results: [
+                {
+                    layer: MemoryLayer.Project,
+                    score: 1,
+                    record: {
+                        id: "project-local-memory",
+                        kind: MemoryKind.Summary,
+                        content: prompt,
+                        scope: this.paths.projectDir,
+                        importance: 1,
+                        confidence: 1,
+                        createdAt: new Date(0).toISOString(),
+                        updatedAt: new Date(0).toISOString(),
+                        metadata: {
+                            manifestPath: paths.manifest,
+                            path,
+                            projectDir: this.paths.projectDir,
+                            recallReceiptId: receipt.id,
                         },
                     },
-                ],
-            };
-        } catch {
-            return { prompt: "", results: [], manifest: this.createManifest(new Date().toISOString()) };
-        }
+                },
+            ],
+        };
     }
 
     async recordTurn(input: {
@@ -382,18 +378,15 @@ export class ProjectMemoryStore {
         if (!(await file.exists())) {
             return undefined;
         }
-        try {
-            const parsed = JSON.parse(await file.text()) as ProjectMemoryManifest;
-            if (parsed.schemaVersion !== PROJECT_MEMORY_SCHEMA_VERSION) {
-                return undefined;
-            }
-            return {
-                ...parsed,
-                paths: this.projectPaths(),
-            };
-        } catch {
-            return undefined;
+        // 缺 manifest 可以初始化；已存在但无法解析代表项目记忆元数据损坏，必须暴露给调用方修复。
+        const parsed = JSON.parse(await file.text()) as ProjectMemoryManifest;
+        if (parsed.schemaVersion !== PROJECT_MEMORY_SCHEMA_VERSION) {
+            throw new Error(`Invalid project memory manifest schemaVersion at ${manifestPath}.`);
         }
+        return {
+            ...parsed,
+            paths: this.projectPaths(),
+        };
     }
 
     private async updateManifest(input: {

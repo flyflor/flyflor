@@ -135,6 +135,8 @@ erDiagram
 
 `summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。summary 主记录先落盘；若 embedding 同步失败，会先保留已写入的 summary，再显式抛出，便于上层感知索引不一致并重试。
 
+项目级记忆由 `ProjectMemoryStore` 维护在项目 `.flyflor/memory/` 下。缺失的 manifest 可以按约定初始化；已存在但 schema 不兼容或无法解析的 manifest 视为项目记忆元数据损坏，prompt 装配会显式失败，不再返回空项目记忆掩盖问题。
+
 ## 上下文装配
 
 ```mermaid
@@ -307,6 +309,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 - legacy journal 仍保留审计写入；任何新召回或 CLI 可视化能力必须直接扩展 brain events/state，不得回退到 journal prompt path。
 - `RETROSPECTIVE.md` 是晶体升格与丢弃决策的可复核证据；写入失败必须显式失败，后台整合 Worker 只发布 failure event 并保留候选，不做静默吞错。
+- 项目记忆 snapshot 只允许“缺文件初始化”这一种恢复路径；坏 manifest / recall JSONL 写失败必须向上冒泡，避免把项目局部记忆损坏伪装成空上下文。
 - `BackgroundScheduler` 按后端可用性降级；默认本地开发环境可运行 local working memory 与 local crystal graph，brain archive 与热记忆压缩由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
 - Reflection 已拆为 `ReflectionWorker`；Runtime 仅投递异步任务，抽取与落库不再挂在 `RuntimeModule` 私有方法里。
 - 本地 working memory 恢复与 MCP transport 恢复已纳入 `smoke:recovery`；`status` / `doctor` / TUI Overview 只读取 snapshot / backup / WAL 文件元数据展示恢复状态，不解析热数据；Docker doctor/status/recovery 纳入 `smoke:runtime` 与本地 `release:check`。真实模型 chat probe 需要真实 API key，单独由 `smoke:runtime:live` 覆盖；不配置 GitHub Actions 跑仓库侧 CI。

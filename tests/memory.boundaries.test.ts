@@ -703,6 +703,20 @@ describe("Agent memory stability and latency", () => {
         expect(prompt).toContain("项目必须维护局部技能和局部记忆。");
     });
 
+    test("project memory recall fails loudly on corrupt manifest", async () => {
+        const config = await testConfig();
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
+        await mkdir(config.paths.projectMemoryDir, { recursive: true });
+        await Bun.write(
+            join(config.paths.projectMemoryDir, "manifest.json"),
+            `${JSON.stringify({ schemaVersion: 999 })}\n`,
+        );
+
+        await expect(memory.buildPrompt(gatewayMessage("读取项目记忆。"), runtimeContext())).rejects.toThrow(
+            "Invalid project memory manifest schemaVersion",
+        );
+    });
+
     test("crystal candidates keep project-local memory provenance metadata", async () => {
         const config = await testConfig();
         const store = new InMemoryCrystalMemoryStore();
