@@ -4,9 +4,11 @@ import { join } from "node:path";
 import mergeWith from "lodash-es/mergeWith.js";
 import {
     Channel,
+    CrystalMemoryBackend,
     ModelApiMode,
     MemoryWorkingBackend,
     type MemoryWorkingBackend as MemoryWorkingBackendType,
+    type CrystalMemoryBackend as CrystalMemoryBackendType,
     type ModelApiMode as ModelApiModeType,
     ModelProviderId,
     ModelProviderKind,
@@ -334,8 +336,14 @@ export interface MemoryEmbeddingConfig {
 }
 
 export interface CrystalMemoryConfig {
+    backend: CrystalMemoryBackendType;
     enabled: boolean;
+    local: LocalCrystalMemoryConfig;
     surreal: SurrealMemoryConfig;
+}
+
+export interface LocalCrystalMemoryConfig {
+    dbFile?: string;
 }
 
 export interface SurrealMemoryConfig {
@@ -604,7 +612,7 @@ export async function loadConfigForPaths(
     const configFile = await readConfigFile(paths.configDir);
 
     const model = resolveModelConfig(applyModelOverrides(normalizeModelRegistryConfig(configFile), options.model));
-    const memory = mergeMemoryConfig(createDefaultMemoryConfig(), configFile.memory);
+    const memory = resolveMemoryConfigPaths(mergeMemoryConfig(createDefaultMemoryConfig(), configFile.memory), paths);
     const secrets = configFile.model?.secrets ?? {};
 
     const gateway = resolveGatewaySecrets(
@@ -736,6 +744,9 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
     }
 
     const merged = mergeConfig(defaults, override);
+    if (!override.crystal?.backend && override.crystal?.surreal?.enabled === true) {
+        merged.crystal.backend = CrystalMemoryBackend.Surreal;
+    }
     // Backward compatibility: older configs only toggled memory.redis.enabled.
     // If no explicit working backend is present, honor that switch and keep Redis behavior.
     if (!override.working && override.redis?.enabled) {
@@ -746,6 +757,19 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
     // R red-line enforcement: `_keepGatewayListening` is an audit-only field.
     merged.tuning.dormant._keepGatewayListening = true;
     return merged;
+}
+
+function resolveMemoryConfigPaths(memory: MemoryConfig, paths: FlyflorPaths): MemoryConfig {
+    return {
+        ...memory,
+        crystal: {
+            ...memory.crystal,
+            local: {
+                ...memory.crystal.local,
+                dbFile: memory.crystal.local.dbFile || join(paths.storageDir, "crystal", "crystal.db"),
+            },
+        },
+    };
 }
 
 function mergeConfig<T>(defaults: T, override: Partial<T>): T {
@@ -772,9 +796,11 @@ function createDefaultMemoryConfig(): MemoryConfig {
         },
         crystal: {
             enabled: false,
+            backend: CrystalMemoryBackend.Local,
+            local: {},
             surreal: {
                 database: "flyflor",
-                enabled: true,
+                enabled: false,
                 internalUrl: "http://127.0.0.1:8000",
                 namespace: "flyflor",
                 password: "root",

@@ -137,6 +137,29 @@ describe("MCP HTTP transport", () => {
         expect(res.content?.[0]).toEqual({ type: "text", text: "hello" });
     });
 
+    test("callHttpMcpTool retries one transient transport failure", async () => {
+        let callAttempts = 0;
+        setHandler(async (req) => {
+            const msg = await readBody(req);
+            if (msg.method === "initialize") return ok(msg.id!, { capabilities: {} });
+            if (msg.method === "notifications/initialized") return new Response(null, { status: 202 });
+            if (msg.method === "tools/call") {
+                callAttempts += 1;
+                if (callAttempts === 1) {
+                    return new Response("temporary upstream failure", { status: 503 });
+                }
+                return ok(msg.id!, {
+                    content: [{ type: "text", text: "recovered" }],
+                    isError: false,
+                });
+            }
+            return new Response("bad", { status: 400 });
+        });
+        const res = await callHttpMcpTool(PATHS, defServer(), "echo", { text: "hi" });
+        expect(callAttempts).toBe(2);
+        expect(res.content?.[0]).toEqual({ type: "text", text: "recovered" });
+    });
+
     test("SSE response is parsed correctly", async () => {
         setHandler(async (req) => {
             const msg = await readBody(req);

@@ -135,6 +135,40 @@ describe("HotMemoryCompressionWorker", () => {
             brain.close();
         }
     });
+
+    test("skips without Redis or model calls while breaker is cooling down", async () => {
+        let listCalls = 0;
+        const redis = {
+            getHealthSnapshot: () => ({
+                circuitState: "open",
+                nextRetryAt: Date.now() + 60_000,
+            }),
+            listConsolidationCandidates: async () => {
+                listCalls += 1;
+                return ["ep-1"];
+            },
+            readEpisode: async () => makeEpisode("ep-1"),
+            dropEpisode: async () => {},
+        };
+        const events = new CapturingSink();
+        const model = new StubModel(
+            JSON.stringify({
+                compressedText: "unused",
+                retainedSignals: [],
+                confidence: 1,
+            }),
+        );
+        const worker = new HotMemoryCompressionWorker(redis as never, {} as BrainStore, model, events, {
+            workingMemoryHealthSnapshot: () => redis.getHealthSnapshot(),
+        });
+
+        const result = await worker.drain("u1");
+
+        expect(result).toEqual({ scanned: 0, compressed: 0, deleted: 0, missing: 0, skipped: 0 });
+        expect(listCalls).toBe(0);
+        expect(model.calls).toBe(0);
+        expect(events.events).toEqual([]);
+    });
 });
 
 function makeEpisode(episodeId: string): EpisodeRecord {

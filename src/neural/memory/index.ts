@@ -6,6 +6,7 @@ import {
     ArchitectureLayer,
     AtomStage,
     ComponentKind,
+    CrystalMemoryBackend,
     MarkdownMemoryFile,
     MemoryCandidateStatus,
     MemoryKind,
@@ -57,7 +58,8 @@ import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
 import { RedisMemoryStore } from "./redis.ts";
 import { LocalWorkingMemoryStore } from "./local.working.store.ts";
 import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
-import { SurrealGraphStore } from "./surreal.graph.ts";
+import { SurrealGraphStore, type MemoryGraphStore } from "./surreal.graph.ts";
+import { SQLiteGraphStore } from "./sqlite.graph.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
 import { RetrospectiveLog } from "./retrospective.ts";
@@ -75,6 +77,7 @@ import type {
     MemoryWeights,
     TurnMemoryResult,
 } from "./types.ts";
+import type { WorkingMemoryHealthSnapshot } from "./working.store.ts";
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
 export { MarkdownMemoryStore } from "./markdown.ts";
@@ -83,6 +86,7 @@ export { ProjectMemoryStore } from "./project.memory.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
 export { HotMemoryCompressionWorker, parseHotMemoryCompressionDecision } from "./hot.memory.compression.worker.ts";
 export { SQLiteMemoryStore } from "./sqlite.ts";
+export { SQLiteGraphStore } from "./sqlite.graph.ts";
 export type {
     MemoryAction,
     MemoryCandidate,
@@ -129,7 +133,7 @@ export interface BehaviorSnapshotInput {
 
 export interface MemoryModuleOverrides {
     embeddings?: EmbeddingProvider;
-    surreal?: SurrealGraphStore | null;
+    surreal?: MemoryGraphStore | null;
 }
 
 @Module({ name: "memory", tags: ["flyflor", "boundary"] })
@@ -148,7 +152,7 @@ export class MemoryModule extends Memory {
     private readonly redisClientStore: RedisMemoryStore | null;
     private readonly workingMemoryBackend: MemoryWorkingBackend;
     private readonly workingMemoryDefaultTtlSeconds: number;
-    private readonly surreal: SurrealGraphStore | null;
+    private readonly surreal: MemoryGraphStore | null;
     private readonly hotMemoryCompression: HotMemoryCompressionWorker | null;
     private readonly scheduler: BackgroundScheduler | null;
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
@@ -180,7 +184,11 @@ export class MemoryModule extends Memory {
         this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-        this.crystal = new CrystalMemoryService(config.memory.crystal);
+        this.crystal = new CrystalMemoryService(
+            config.memory.crystal,
+            undefined,
+            config.memory.embedding.dimensions,
+        );
         this.redisClientStore =
             working.backend === MemoryWorkingBackend.Redis ? new RedisMemoryStore(config.memory.redis) : null;
         this.redis =
@@ -191,23 +199,27 @@ export class MemoryModule extends Memory {
         this.surreal =
             overrides.surreal !== undefined
                 ? overrides.surreal
-                : config.memory.crystal.enabled && config.memory.crystal.surreal.enabled
-                  ? new SurrealGraphStore(config.memory.crystal.surreal)
+                : config.memory.crystal.enabled && config.memory.crystal.backend === CrystalMemoryBackend.Local
+                  ? new SQLiteGraphStore(config.memory.crystal.local)
+                  : config.memory.crystal.enabled && config.memory.crystal.surreal.enabled
+                    ? new SurrealGraphStore(config.memory.crystal.surreal)
                   : null;
         this.hotMemoryCompression =
             this.redis && model && config.memory.tuning.hotMemoryCompression.enabled
                 ? new HotMemoryCompressionWorker(this.redis, this.brain, model, this.events, {
                       batchSize: config.memory.tuning.hotMemoryCompression.batchSize,
+                      workingMemoryHealthSnapshot: () => this.getWorkingMemoryHealthSnapshot(),
                   })
                 : null;
         this.projectScaffolder = new ProjectScaffolder(config.paths, this.events);
-        // 后台调度器仅在三件依赖（Redis 短期 + Surreal 长期 + 模型）齐备时启用；
+        // 后台调度器仅在三件依赖（Redis 短期 + 长期图后端 + 模型）齐备时启用；
         // 任一缺失时不启动 scheduler，并通过 warmup 事件显式暴露缺口。
         this.scheduler =
             this.redis && this.surreal && model
                 ? new BackgroundScheduler(
                       new ConsolidationWorker(this.redis, this.surreal, model, this.events, {
                           retrospective: new RetrospectiveLog({ projectMemoryDir: config.paths.projectMemoryDir }),
+                          workingMemoryHealthSnapshot: () => this.getWorkingMemoryHealthSnapshot(),
                       }),
                       this.surreal,
                       this.events,
@@ -233,6 +245,7 @@ export class MemoryModule extends Memory {
                           },
                           brainArchiveIntervalMs:
                               Math.max(0, config.memory.tuning.brainDb.archiveIntervalHours) * 60 * 60_000,
+                          workingMemoryHealthSnapshot: () => this.getWorkingMemoryHealthSnapshot(),
                       },
                   )
                 : null;
@@ -245,6 +258,10 @@ export class MemoryModule extends Memory {
     /** 暴露底层 Redis 客户端，供同进程其他热路径组件（fastRoute 快照等）复用。 */
     getRedisClient() {
         return this.redisClientStore?.getClient();
+    }
+
+    getWorkingMemoryHealthSnapshot(): WorkingMemoryHealthSnapshot | undefined {
+        return (this.redis as { getHealthSnapshot?: () => WorkingMemoryHealthSnapshot } | null)?.getHealthSnapshot?.();
     }
 
     async warmup(): Promise<void> {
@@ -261,7 +278,7 @@ export class MemoryModule extends Memory {
                     missing,
                     redisEnabled: this.config.memory.redis.enabled,
                     workingMemoryBackend: this.workingMemoryBackend,
-                    surrealEnabled: this.config.memory.crystal.enabled && this.config.memory.crystal.surreal.enabled,
+                    surrealEnabled: Boolean(this.surreal),
                     modelProvider: this.config.model.provider,
                     impact: "consolidation/decay/dream 跳过缺失依赖；工作记忆仍按 configured backend 写入，长期晶体层需要 graph store",
                 }),
@@ -278,6 +295,9 @@ export class MemoryModule extends Memory {
                 event(RuntimeEventType.MemoryWarmupComplete, {
                     backend: this.workingMemoryBackend,
                     latencyMs,
+                    // ping() has already loaded/probed the backend, so exposing
+                    // this snapshot adds observability without extra recovery IO.
+                    workingMemoryHealth: this.getWorkingMemoryHealthSnapshot(),
                 }),
             );
         } catch (err) {
@@ -286,6 +306,7 @@ export class MemoryModule extends Memory {
                     backend: this.workingMemoryBackend,
                     latencyMs: -1,
                     error: String(err),
+                    workingMemoryHealth: this.getWorkingMemoryHealthSnapshot(),
                 }),
             );
             throw err;

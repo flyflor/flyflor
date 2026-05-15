@@ -139,6 +139,7 @@ flowchart LR
 - `memoryContext`：上面的合成 prompt
 - `memoryActionInstructions`：`memory.action.md`
 - `skillContext`：`renderSkillContextPrompt`
+- `selectedSkills` 的自动池已经吃到 runtime 预计算 embedding，但仍只按资源指标做排序，不碰自然语言启发式
 - `mcpContext`：`renderMcpContextPrompt`（含可用工具 catalog）
 - `blackboardContext`：`renderBlackboardAdvisoryPrompt`
 - `askSchemaInstructions`：Ask / Ghost / Identity 结构化块协议

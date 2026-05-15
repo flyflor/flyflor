@@ -211,8 +211,13 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
         await memory.warmup();
+        const warmup = events.findOf(RuntimeEventType.MemoryWarmupComplete);
         expect(events.countOf(RuntimeEventType.MemoryWarmupComplete)).toBe(1);
-        expect(events.findOf(RuntimeEventType.MemoryWarmupComplete)?.payload?.backend).toBe("local");
+        expect(warmup?.payload?.backend).toBe("local");
+        expect(warmup?.payload?.workingMemoryHealth).toMatchObject({
+            backend: "local",
+            loaded: true,
+        });
     });
 
     test("rememberTurn writes episode to local working memory when redis is disabled", async () => {

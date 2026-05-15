@@ -30,10 +30,12 @@ export interface GatewayConfigView {
 export interface MemoryConfigView {
     enabled: boolean;
     crystalEnabled: boolean;
+    crystalBackend: string;
     redisEnabled: boolean;
     surrealEnabled: boolean;
     sqliteEnabled: boolean;
     embeddingDimensions: number;
+    crystalDbFile: string;
 }
 
 export interface SandboxConfigView {
@@ -89,10 +91,12 @@ function extractMemory(config: FlyflorConfig): MemoryConfigView {
     return {
         enabled: config.memory.enabled,
         crystalEnabled: config.memory.crystal.enabled,
+        crystalBackend: config.memory.crystal.backend,
         redisEnabled: config.memory.redis.enabled,
         surrealEnabled: config.memory.crystal.surreal.enabled,
         sqliteEnabled: config.memory.sqlite.enabled,
         embeddingDimensions: config.memory.embedding.dimensions,
+        crystalDbFile: config.memory.crystal.local.dbFile ?? "",
     };
 }
 

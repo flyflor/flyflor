@@ -32,7 +32,7 @@ const fakeConfig = (): FlyflorConfig =>
         },
         memory: {
             enabled: true,
-            crystal: { enabled: true, surreal: { enabled: false } },
+            crystal: { enabled: true, backend: "local", local: {}, surreal: { enabled: false } },
             redis: { enabled: true },
         },
         sandbox: {
@@ -94,7 +94,14 @@ describe("config view", () => {
             pluginApproval: "deny",
         });
         expect(parsed.gateway.configuredChannels.find((c: { name: string }) => c.name === "slack").ready).toBe(false);
-        expect(parsed.memory).toEqual({ enabled: true, crystal: true, redis: true, surreal: false });
+        expect(parsed.memory).toEqual({
+            enabled: true,
+            crystal: true,
+            crystalBackend: "local",
+            redis: true,
+            surreal: false,
+            crystalDbFile: "",
+        });
     });
 
     test("json view honors redact=false", () => {

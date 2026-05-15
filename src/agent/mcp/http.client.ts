@@ -15,6 +15,8 @@ interface JsonRpcMessage {
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
+const DEFAULT_RETRY_ATTEMPTS = 2;
+const DEFAULT_RETRY_BACKOFF_MS = 25;
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
 export async function listHttpMcpTools(
@@ -61,9 +63,23 @@ async function withHttpSession<T>(
     if (!server.url) {
         throw new Error(`MCP server is not a remote HTTP endpoint: ${server.name}`);
     }
-    const session = new McpHttpSession(server, options);
-    await session.initialize();
-    return fn(session);
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
+        // 只在 transport / protocol 层失败时重开一次 session：
+        // 这能覆盖短暂网络抖动和服务端瞬断，但不会吞掉 MCP error 之类的模型级失败。
+        const session = new McpHttpSession(server, options);
+        try {
+            await session.initialize();
+            return await fn(session);
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            if (!isRetryableMcpTransportError(lastError) || attempt >= DEFAULT_RETRY_ATTEMPTS) {
+                throw lastError;
+            }
+            await sleep(backoffMs(attempt));
+        }
+    }
+    throw lastError ?? new Error(`MCP HTTP session failed: ${server.name}`);
 }
 
 class McpHttpSession {
@@ -202,4 +218,22 @@ function isToolDefinition(value: unknown): value is McpToolDefinition {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRetryableMcpTransportError(error: Error): boolean {
+    return (
+        error.message.startsWith("MCP HTTP ") ||
+        error.message.startsWith("MCP request timed out:") ||
+        error.message.startsWith("MCP server returned a non-object JSON-RPC response.") ||
+        error.message.startsWith("MCP SSE response did not contain the expected JSON-RPC response.") ||
+        error.message.startsWith("fetch failed")
+    );
+}
+
+function backoffMs(attempt: number): number {
+    return Math.min(DEFAULT_RETRY_BACKOFF_MS * 2 ** (attempt - 1), 200);
+}
+
+async function sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
 }

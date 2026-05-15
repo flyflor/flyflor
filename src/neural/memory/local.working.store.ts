@@ -17,12 +17,30 @@ type StoredEpisode = {
     reviewAt: number;
 };
 
+type WorkingMemoryCircuitState = "closed" | "open";
+type WorkingMemoryLoadSource = "empty" | "snapshot" | "backup" | "wal" | "snapshot+wal" | "backup+wal";
+
 type SnapshotPayload = {
     activation: Array<[string, Array<[string, number]>]>;
     context: Array<[string, string[]]>;
     episodes: StoredEpisode[];
     schemaVersion: 1;
 };
+
+export interface LocalWorkingMemoryHealthSnapshot {
+    backend: "local";
+    circuitState: WorkingMemoryCircuitState;
+    failureCount: number;
+    lastError?: string;
+    lastRecoveredAt?: number;
+    nextRecoveryAt?: number;
+    loaded: boolean;
+    loadedFrom: WorkingMemoryLoadSource;
+    recoveredFromBackup: boolean;
+    replayedWalRecords: number;
+    tornWalLines: number;
+    writesSinceSnapshot: number;
+}
 
 type WalRecord =
     | { op: typeof WorkingMemoryWalOperation.WriteEpisode; episode: StoredEpisode }
@@ -36,6 +54,25 @@ type WalRecord =
       }
     | { op: typeof WorkingMemoryWalOperation.TouchConcepts; userId: string; concepts: string[]; touchedAt: number };
 
+interface WorkingMemoryState {
+    activation: Map<string, Map<string, number>>;
+    context: Map<string, string[]>;
+    episodes: Map<string, StoredEpisode>;
+}
+
+function createStorageError(code: string, message: string, cause?: unknown): Error & { code: string } {
+    const error = new Error(message);
+    if (cause !== undefined) {
+        (error as Error & { cause?: unknown }).cause = cause;
+    }
+    (error as Error & { code: string }).code = code;
+    return error as Error & { code: string };
+}
+
+function isMissingFileError(error: unknown): boolean {
+    return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "ENOENT";
+}
+
 /**
  * Durable local working-memory backend.
  *
@@ -47,11 +84,21 @@ type WalRecord =
 @Component({ name: "local-working-memory-store", tags: ["database", "memory", "hippocampus", "local"] })
 export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingMemoryStore {
     private readonly snapshotPath: string;
+    private readonly snapshotBackupPath: string;
     private readonly walPath: string;
     private readonly episodes = new Map<string, StoredEpisode>();
     private readonly context = new Map<string, string[]>();
     private readonly activation = new Map<string, Map<string, number>>();
     private loaded = false;
+    private circuitState: WorkingMemoryCircuitState = "closed";
+    private failureCount = 0;
+    private lastError: string | undefined;
+    private lastRecoveredAt: number | undefined;
+    private nextRecoveryAtTs = 0;
+    private loadedFrom: WorkingMemoryLoadSource = "empty";
+    private recoveredFromBackup = false;
+    private replayedWalRecords = 0;
+    private tornWalLines = 0;
     private writesSinceSnapshot = 0;
 
     public constructor(
@@ -60,6 +107,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     ) {
         super();
         this.snapshotPath = join(memoryDir, config.snapshotFile);
+        this.snapshotBackupPath = `${this.snapshotPath}.bak`;
         this.walPath = join(memoryDir, config.walFile);
     }
 
@@ -68,10 +116,15 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             return;
         }
         await mkdir(dirname(this.snapshotPath), { recursive: true });
-        await this.loadSnapshot();
-        await this.replayWal();
-        this.pruneExpired(Date.now());
-        this.loaded = true;
+        try {
+            const state = await this.loadStateFromDisk();
+            this.replaceState(state);
+            this.loaded = true;
+            this.closeCircuit();
+        } catch (error) {
+            this.tripCircuit(error);
+            throw error;
+        }
     }
 
     public async ping(): Promise<number> {
@@ -85,6 +138,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             return;
         }
         await this.compact();
+        this.loaded = false;
     }
 
     public dispose(): void {
@@ -95,8 +149,25 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         return this.loaded;
     }
 
+    public getHealthSnapshot(): LocalWorkingMemoryHealthSnapshot {
+        return {
+            backend: "local",
+            circuitState: this.circuitState,
+            failureCount: this.failureCount,
+            lastError: this.lastError,
+            lastRecoveredAt: this.lastRecoveredAt,
+            nextRecoveryAt: this.circuitState === "open" ? this.nextRecoveryAtTs : undefined,
+            loaded: this.loaded,
+            loadedFrom: this.loadedFrom,
+            recoveredFromBackup: this.recoveredFromBackup,
+            replayedWalRecords: this.replayedWalRecords,
+            tornWalLines: this.tornWalLines,
+            writesSinceSnapshot: this.writesSinceSnapshot,
+        };
+    }
+
     public async writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult> {
-        await this.connect();
+        await this.ensureWritable();
         const now = Date.now();
         const ttl = Math.max(1, Math.floor(input.ttlSeconds ?? this.config.defaultTtlSeconds));
         const reviewAt = Math.floor(now / 1000) + Math.floor(ttl * 0.8);
@@ -144,7 +215,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     }
 
     public async dropEpisode(userId: string, episodeId: string): Promise<void> {
-        await this.connect();
+        await this.ensureWritable();
         await this.applyDurably({ op: WorkingMemoryWalOperation.DropEpisode, userId, episodeId });
     }
 
@@ -183,7 +254,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         if (concepts.length === 0) {
             return;
         }
-        await this.connect();
+        await this.ensureWritable();
         await this.applyDurably({
             op: WorkingMemoryWalOperation.TouchConcepts,
             userId,
@@ -221,29 +292,49 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     }
 
     private async applyDurably(record: WalRecord): Promise<void> {
-        await appendFile(this.walPath, `${JSON.stringify(record)}\n`, "utf8");
+        await this.ensureWritable();
+        try {
+            await this.appendWal(record);
+        } catch (error) {
+            this.tripCircuit(error);
+            throw error;
+        }
+        if (this.circuitState !== "closed") {
+            this.closeCircuit();
+        }
         this.applyWalRecord(record);
         this.writesSinceSnapshot += 1;
-        if (this.writesSinceSnapshot >= this.config.snapshotEveryWrites || (await this.isWalTooLarge())) {
+        let walTooLarge = false;
+        try {
+            walTooLarge = await this.isWalTooLarge();
+        } catch (error) {
+            this.tripCircuit(error);
+            throw error;
+        }
+        if (this.writesSinceSnapshot >= this.config.snapshotEveryWrites || walTooLarge) {
             await this.compact();
         }
     }
 
     private applyWalRecord(record: WalRecord): void {
+        this.applyWalRecordToState({ episodes: this.episodes, context: this.context, activation: this.activation }, record);
+    }
+
+    private applyWalRecordToState(state: WorkingMemoryState, record: WalRecord): void {
         if (record.op === WorkingMemoryWalOperation.WriteEpisode) {
             const episode = record.episode;
             const userId = episode.record.userId;
-            this.episodes.set(this.key(userId, episode.record.episodeId), episode);
-            const ring = [episode.record.episodeId, ...(this.context.get(userId) ?? []).filter((id) => id !== episode.record.episodeId)];
-            this.context.set(userId, ring.slice(0, this.config.contextRingSize));
+            state.episodes.set(this.key(userId, episode.record.episodeId), episode);
+            const ring = [episode.record.episodeId, ...(state.context.get(userId) ?? []).filter((id) => id !== episode.record.episodeId)];
+            state.context.set(userId, ring.slice(0, this.config.contextRingSize));
             return;
         }
         if (record.op === WorkingMemoryWalOperation.DropEpisode) {
-            this.dropFromMemory(record.userId, record.episodeId);
+            this.dropFromMemory(state, record.userId, record.episodeId);
             return;
         }
         if (record.op === WorkingMemoryWalOperation.ReinforceEpisode) {
-            const episode = this.episodes.get(this.key(record.userId, record.episodeId));
+            const episode = state.episodes.get(this.key(record.userId, record.episodeId));
             if (episode) {
                 episode.expiresAt = record.expiresAt;
                 episode.reviewAt = record.reviewAt;
@@ -251,7 +342,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             return;
         }
         if (record.op === WorkingMemoryWalOperation.RewriteEpisode) {
-            const episode = this.episodes.get(this.key(record.userId, record.episodeId));
+            const episode = state.episodes.get(this.key(record.userId, record.episodeId));
             if (episode) {
                 episode.record = {
                     ...episode.record,
@@ -262,78 +353,47 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             return;
         }
         if (record.op === WorkingMemoryWalOperation.TouchConcepts) {
-            const bucket = this.activation.get(record.userId) ?? new Map<string, number>();
+            const bucket = state.activation.get(record.userId) ?? new Map<string, number>();
             for (const concept of record.concepts) {
                 bucket.set(concept, record.touchedAt);
             }
-            this.activation.set(record.userId, bucket);
-        }
-    }
-
-    private async loadSnapshot(): Promise<void> {
-        const payload = await readJsonFile<SnapshotPayload>(this.snapshotPath);
-        if (!payload) {
-            return;
-        }
-        for (const episode of payload.episodes) {
-            this.episodes.set(this.key(episode.record.userId, episode.record.episodeId), episode);
-        }
-        for (const [userId, ids] of payload.context) {
-            this.context.set(userId, ids);
-        }
-        for (const [userId, concepts] of payload.activation) {
-            this.activation.set(userId, new Map(concepts));
-        }
-    }
-
-    private async replayWal(): Promise<void> {
-        const text = await readTextFile(this.walPath);
-        if (!text) {
-            return;
-        }
-        for (const line of text.split("\n")) {
-            if (!line.trim()) {
-                continue;
-            }
-            try {
-                this.applyWalRecord(JSON.parse(line) as WalRecord);
-            } catch {
-                // Power loss can leave one torn JSONL record; previous complete
-                // records remain valid and the next compact will rewrite a clean WAL.
-                break;
-            }
+            state.activation.set(record.userId, bucket);
         }
     }
 
     private async compact(): Promise<void> {
         await mkdir(dirname(this.snapshotPath), { recursive: true });
         this.pruneExpired(Date.now());
-        const payload: SnapshotPayload = {
-            schemaVersion: 1,
-            episodes: [...this.episodes.values()],
-            context: [...this.context.entries()],
-            activation: [...this.activation.entries()].map(([userId, concepts]) => [userId, [...concepts.entries()]]),
-        };
-        const tmp = `${this.snapshotPath}.tmp`;
-        await writeFile(tmp, `${JSON.stringify(payload)}\n`, "utf8");
-        await rename(tmp, this.snapshotPath);
-        await writeFile(this.walPath, "", "utf8");
-        this.writesSinceSnapshot = 0;
+        const payload = this.snapshotPayload();
+        const serialized = `${JSON.stringify(payload)}\n`;
+        try {
+            await this.persistSnapshot(serialized);
+            await writeFile(this.walPath, "", "utf8");
+            this.writesSinceSnapshot = 0;
+            this.closeCircuit();
+        } catch (error) {
+            this.tripCircuit(error);
+            throw error;
+        }
     }
 
     private pruneExpired(now: number): void {
-        for (const episode of [...this.episodes.values()]) {
+        this.pruneExpiredState({ episodes: this.episodes, context: this.context, activation: this.activation }, now);
+    }
+
+    private pruneExpiredState(state: WorkingMemoryState, now: number): void {
+        for (const episode of [...state.episodes.values()]) {
             if (episode.expiresAt <= now) {
-                this.dropFromMemory(episode.record.userId, episode.record.episodeId);
+                this.dropFromMemory(state, episode.record.userId, episode.record.episodeId);
             }
         }
     }
 
-    private dropFromMemory(userId: string, episodeId: string): void {
-        this.episodes.delete(this.key(userId, episodeId));
-        const ring = this.context.get(userId);
+    private dropFromMemory(state: WorkingMemoryState, userId: string, episodeId: string): void {
+        state.episodes.delete(this.key(userId, episodeId));
+        const ring = state.context.get(userId);
         if (ring) {
-            this.context.set(userId, ring.filter((id) => id !== episodeId));
+            state.context.set(userId, ring.filter((id) => id !== episodeId));
         }
     }
 
@@ -341,9 +401,194 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         try {
             const info = await stat(this.walPath);
             return info.size >= this.config.maxWalBytes;
-        } catch {
-            return false;
+        } catch (error) {
+            if (isMissingFileError(error)) {
+                return false;
+            }
+            throw error;
         }
+    }
+
+    private async loadStateFromDisk(): Promise<WorkingMemoryState> {
+        const state: WorkingMemoryState = {
+            activation: new Map<string, Map<string, number>>(),
+            context: new Map<string, string[]>(),
+            episodes: new Map<string, StoredEpisode>(),
+        };
+        let sawRecoverableSource = false;
+        let sawBrokenSource = false;
+
+        const primary = await this.loadSnapshotCandidate(this.snapshotPath);
+        const backup = primary.payload ? undefined : await this.loadSnapshotCandidate(this.snapshotBackupPath);
+        const payload = primary.payload ?? backup?.payload;
+        if (payload) {
+            this.applySnapshotPayload(state, payload);
+            this.loadedFrom = primary.payload ? "snapshot" : "backup";
+            this.recoveredFromBackup = Boolean(backup?.payload && !primary.payload);
+            sawRecoverableSource = true;
+        }
+        sawBrokenSource = primary.corrupted || Boolean(backup?.corrupted);
+
+        const wal = await this.replayWal(state);
+        this.replayedWalRecords = wal.replayed;
+        this.tornWalLines = wal.torn;
+        if (payload) {
+            this.loadedFrom = wal.replayed > 0 ? (this.loadedFrom === "snapshot" ? "snapshot+wal" : "backup+wal") : this.loadedFrom;
+        } else if (wal.replayed > 0) {
+            this.loadedFrom = "wal";
+            sawRecoverableSource = true;
+        } else {
+            this.loadedFrom = "empty";
+        }
+        sawBrokenSource = sawBrokenSource || wal.torn > 0 || wal.readFailed;
+
+        this.pruneExpiredState(state, Date.now());
+
+        if (!sawRecoverableSource && sawBrokenSource) {
+            throw createStorageError(
+                "working-memory-load-failed",
+                "local working memory could not be recovered from snapshot, backup, or WAL",
+            );
+        }
+
+        return state;
+    }
+
+    private async loadSnapshotCandidate(path: string): Promise<{ corrupted: boolean; payload?: SnapshotPayload }> {
+        let text: string | undefined;
+        try {
+            text = await readOptionalTextFile(path);
+        } catch {
+            return { corrupted: true };
+        }
+        if (text === undefined) {
+            return { corrupted: false };
+        }
+        try {
+            const payload = JSON.parse(text) as SnapshotPayload;
+            if (
+                payload.schemaVersion !== 1 ||
+                !Array.isArray(payload.episodes) ||
+                !Array.isArray(payload.context) ||
+                !Array.isArray(payload.activation)
+            ) {
+                return { corrupted: true };
+            }
+            return { corrupted: false, payload };
+        } catch {
+            return { corrupted: true };
+        }
+    }
+
+    private async replayWal(state: WorkingMemoryState): Promise<{ readFailed: boolean; replayed: number; torn: number }> {
+        let text: string | undefined;
+        try {
+            text = await readOptionalTextFile(this.walPath);
+        } catch (error) {
+            if (!this.hasRecoveredState(state)) {
+                throw error;
+            }
+            return { readFailed: true, replayed: 0, torn: 0 };
+        }
+        if (text === undefined) {
+            return { readFailed: false, replayed: 0, torn: 0 };
+        }
+        let replayed = 0;
+        let torn = 0;
+        for (const line of text.split("\n")) {
+            if (!line.trim()) {
+                continue;
+            }
+            try {
+                this.applyWalRecordToState(state, JSON.parse(line) as WalRecord);
+                replayed += 1;
+            } catch {
+                torn += 1;
+                break;
+            }
+        }
+        return { readFailed: false, replayed, torn };
+    }
+
+    private applySnapshotPayload(state: WorkingMemoryState, payload: SnapshotPayload): void {
+        for (const episode of payload.episodes) {
+            state.episodes.set(this.key(episode.record.userId, episode.record.episodeId), episode);
+        }
+        for (const [userId, ids] of payload.context) {
+            state.context.set(userId, ids);
+        }
+        for (const [userId, concepts] of payload.activation) {
+            state.activation.set(userId, new Map(concepts));
+        }
+    }
+
+    private async persistSnapshot(serialized: string): Promise<void> {
+        const tmp = `${this.snapshotPath}.tmp`;
+        await writeFile(tmp, serialized, "utf8");
+        await rename(tmp, this.snapshotPath);
+        await writeFile(this.snapshotBackupPath, serialized, "utf8");
+    }
+
+    private snapshotPayload(): SnapshotPayload {
+        return {
+            schemaVersion: 1,
+            episodes: [...this.episodes.values()],
+            context: [...this.context.entries()],
+            activation: [...this.activation.entries()].map(([userId, concepts]) => [userId, [...concepts.entries()]]),
+        };
+    }
+
+    private replaceState(state: WorkingMemoryState): void {
+        this.episodes.clear();
+        this.context.clear();
+        this.activation.clear();
+        for (const [key, episode] of state.episodes.entries()) {
+            this.episodes.set(key, episode);
+        }
+        for (const [userId, ring] of state.context.entries()) {
+            this.context.set(userId, ring);
+        }
+        for (const [userId, concepts] of state.activation.entries()) {
+            this.activation.set(userId, new Map(concepts));
+        }
+    }
+
+    private closeCircuit(): void {
+        this.circuitState = "closed";
+        this.failureCount = 0;
+        this.lastError = undefined;
+        this.lastRecoveredAt = Date.now();
+        this.nextRecoveryAtTs = 0;
+    }
+
+    private tripCircuit(error: unknown): void {
+        this.circuitState = "open";
+        this.failureCount = Math.min(10, this.failureCount + 1);
+        this.lastError = describeError(error);
+        const delay = Math.min(30000, 1000 * 2 ** Math.max(0, this.failureCount - 1));
+        this.nextRecoveryAtTs = Date.now() + delay;
+    }
+
+    private nextRecoveryAt(): number {
+        return this.nextRecoveryAtTs;
+    }
+
+    private hasRecoveredState(state: WorkingMemoryState): boolean {
+        return state.episodes.size > 0 || state.context.size > 0 || state.activation.size > 0;
+    }
+
+    private async ensureWritable(): Promise<void> {
+        await this.connect();
+        if (this.circuitState === "open" && Date.now() < this.nextRecoveryAt()) {
+            throw createStorageError(
+                "working-memory-circuit-open",
+                "local working memory is degraded and temporarily read-only until persistence recovery succeeds",
+            );
+        }
+    }
+
+    protected async appendWal(record: WalRecord): Promise<void> {
+        await appendFile(this.walPath, `${JSON.stringify(record)}\n`, "utf8");
     }
 
     private key(userId: string, episodeId: string): string {
@@ -351,18 +596,21 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     }
 }
 
-async function readTextFile(path: string): Promise<string | undefined> {
+async function readOptionalTextFile(path: string): Promise<string | undefined> {
     try {
         return await readFile(path, "utf8");
-    } catch {
-        return undefined;
+    } catch (error) {
+        if (isMissingFileError(error)) {
+            return undefined;
+        }
+        throw error;
     }
 }
 
-async function readJsonFile<T>(path: string): Promise<T | undefined> {
-    const text = await readTextFile(path);
-    if (!text) {
-        return undefined;
+function describeError(error: unknown): string {
+    if (error instanceof Error) {
+        const code = (error as Error & { code?: string }).code;
+        return code ? `${code}: ${error.message}` : error.message;
     }
-    return JSON.parse(text) as T;
+    return String(error);
 }

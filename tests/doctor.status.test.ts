@@ -2,10 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describeBrainDb } from "../src/command/cli/status.ts";
+import { describeBackgroundScheduler, describeBrainDb, describeWorkingMemoryHealth } from "../src/command/cli/status.ts";
 import type { FlyflorConfig } from "../src/config/index.ts";
 import { BrainStore } from "../src/neural/memory/brain.store.ts";
-import { MemoryEventStatus, MemoryEventType, MemoryLinkType, SummaryRange } from "../src/protocol/contracts/index.ts";
+import {
+    CrystalMemoryBackend,
+    MemoryEventStatus,
+    MemoryEventType,
+    MemoryLinkType,
+    MemoryWorkingBackend,
+    SummaryRange,
+} from "../src/protocol/contracts/index.ts";
 
 function configForHome(home: string): FlyflorConfig {
     return { paths: { home } } as FlyflorConfig;
@@ -78,5 +85,94 @@ describe("doctor Brain.db visibility", () => {
         } finally {
             await rm(root, { recursive: true, force: true });
         }
+    });
+});
+
+describe("doctor background scheduler visibility", () => {
+    test("local working memory plus local crystal graph is reported as enabled", () => {
+        const summary = describeBackgroundScheduler({
+            memory: {
+                crystal: {
+                    backend: CrystalMemoryBackend.Local,
+                    enabled: true,
+                    local: { dbFile: "/tmp/crystal.db" },
+                    surreal: { enabled: false },
+                },
+                redis: { enabled: false },
+                working: {
+                    backend: MemoryWorkingBackend.Local,
+                },
+            },
+        } as FlyflorConfig);
+
+        expect(summary.status).toBe("ok");
+        expect(summary.detail).toContain("local working memory");
+    });
+
+    test("surreal backend still requires surreal to be enabled", () => {
+        const summary = describeBackgroundScheduler({
+            memory: {
+                crystal: {
+                    backend: CrystalMemoryBackend.Surreal,
+                    enabled: true,
+                    local: {},
+                    surreal: { enabled: false },
+                },
+                redis: { enabled: false },
+                working: {
+                    backend: MemoryWorkingBackend.Local,
+                },
+            },
+        } as FlyflorConfig);
+
+        expect(summary.status).toBe("warn");
+        expect(summary.detail).toContain("crystal graph");
+    });
+});
+
+describe("doctor working memory health visibility", () => {
+    test("reports a local working memory snapshot without treating lazy load as failure", () => {
+        const summary = describeWorkingMemoryHealth({
+            backend: "local",
+            circuitState: "closed",
+            loaded: false,
+            loadedFrom: "empty",
+            recoveredFromBackup: false,
+            replayedWalRecords: 0,
+            tornWalLines: 0,
+        });
+
+        expect(summary.status).toBe("ok");
+        expect(summary.detail).toContain("local not loaded");
+    });
+
+    test("surfaces backup recovery and WAL replay counters", () => {
+        const summary = describeWorkingMemoryHealth({
+            backend: "local",
+            circuitState: "closed",
+            loaded: true,
+            loadedFrom: "backup+wal",
+            recoveredFromBackup: true,
+            replayedWalRecords: 12,
+            tornWalLines: 1,
+        });
+
+        expect(summary.status).toBe("ok");
+        expect(summary.detail).toContain("backup recovered");
+        expect(summary.detail).toContain("wal=12");
+        expect(summary.detail).toContain("torn=1");
+    });
+
+    test("warns when the working memory circuit breaker is open", () => {
+        const summary = describeWorkingMemoryHealth({
+            backend: "local",
+            circuitState: "open",
+            lastError: "disk outage",
+            loaded: true,
+        });
+
+        expect(summary.status).toBe("warn");
+        expect(summary.detail).toContain("circuit open");
+        expect(summary.detail).toContain("disk outage");
     });
 });

@@ -51,7 +51,7 @@ flowchart TB
 ```
 
 - 显式命中的技能优先，其余自动池按 `skill_usage.summary.json` 排序。
-- 排序信号是 `useCount`、最近使用时间和 MCP 成功率；`activation.auto=false` 的技能不进自动池。
+- 排序信号是 `useCount`、最近使用时间、MCP 成功率，以及 runtime 入口统一计算的一次性查询 embedding；`activation.auto=false` 的技能不进自动池。
 
 ## 使用计数
 
@@ -100,7 +100,7 @@ interface SkillUsage {
 
 ## 运行边界 / 后续增强
 
-- 自动选择仍主要依赖本地 `skill_usage.summary.json`，还没有 embedding / 向量召回参与。
+- 自动选择已经接入一次性查询 embedding 的轻量语义召回，但仍以 `skill_usage.summary.json` 的 usage / recency / MCP 成功率为主。
 - promotion 主要消费显式意图和 cluster 证据，尚未做更细粒度的人机协同确认流。
 - skill 模板已有 schema 兼容检查；安装包内容漂移必须由 `validate` / `doctor` 明示报错。
 

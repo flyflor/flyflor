@@ -6,6 +6,24 @@ import type { EpisodeRecord, EpisodeWriteInput, EpisodeWriteResult, RedisBackedW
 
 export type { EpisodeRecord, EpisodeWriteInput, EpisodeWriteResult } from "./working.store.ts";
 
+type RedisCircuitState = "closed" | "open";
+
+export interface RedisWorkingMemoryHealthSnapshot {
+    backend: "redis";
+    circuitState: RedisCircuitState;
+    failureCount: number;
+    lastError?: string;
+    lastRecoveredAt?: number;
+    nextRetryAt?: number;
+    ready: boolean;
+}
+
+function createStorageError(code: string, message: string): Error & { code: string } {
+    const error = new Error(message);
+    (error as Error & { code: string }).code = code;
+    return error as Error & { code: string };
+}
+
 /**
  * 海马体工作记忆 Redis 客户端：封装 ff:* 四类 key 的 CRUD。
  *
@@ -31,7 +49,12 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
     private readonly defaultTtlSeconds: number;
     private readonly maxEpisodesPerUser: number;
     private readonly contextRingSize: number;
+    private circuitState: RedisCircuitState = "closed";
     private connectPromise: Promise<void> | undefined;
+    private failureCount = 0;
+    private lastError: string | undefined;
+    private lastRecoveredAt: number | undefined;
+    private nextRetryAt: number | undefined;
 
     public constructor(private readonly config: RedisMemoryConfig) {
         super();
@@ -52,13 +75,25 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
     }
 
     public async connect(): Promise<void> {
+        this.ensureCircuitProbeAllowed();
         if (this.client.status === "ready") {
+            if (this.circuitState !== "closed") {
+                this.closeCircuit();
+            }
             return;
         }
-        this.connectPromise ??= this.client.connect().finally(() => {
-            this.connectPromise = undefined;
-        });
-        await this.connectPromise;
+        try {
+            this.connectPromise ??= this.client.connect().finally(() => {
+                this.connectPromise = undefined;
+            });
+            await this.connectPromise;
+            if (this.circuitState !== "closed") {
+                this.closeCircuit();
+            }
+        } catch (error) {
+            this.tripCircuit(error);
+            throw error;
+        }
     }
 
     /**
@@ -66,10 +101,11 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
      * 返回 RTT（ms）；失败抛出。
      */
     public async ping(): Promise<number> {
-        await this.connect();
-        const start = Date.now();
-        await this.client.ping();
-        return Date.now() - start;
+        return await this.withCircuit(async () => {
+            const start = Date.now();
+            await this.client.ping();
+            return Date.now() - start;
+        });
     }
 
     public async disconnect(): Promise<void> {
@@ -81,7 +117,19 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
     }
 
     public isReady(): boolean {
-        return this.client.status === "ready";
+        return this.client.status === "ready" && this.circuitState === "closed";
+    }
+
+    public getHealthSnapshot(): RedisWorkingMemoryHealthSnapshot {
+        return {
+            backend: "redis",
+            circuitState: this.circuitState,
+            failureCount: this.failureCount,
+            lastError: this.lastError,
+            lastRecoveredAt: this.lastRecoveredAt,
+            nextRetryAt: this.nextRetryAt,
+            ready: this.client.status === "ready",
+        };
     }
 
     /** 暴露底层 ioredis 客户端，供同 namespace 的其他模块（fastRoute 快照等）共享。 */
@@ -94,73 +142,79 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
      * 调用方必须先算好 stability/ttlSeconds（基于 importance × multiplier）。
      */
     public async writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult> {
-        await this.connect();
-        const epKey = this.episodeKey(input.userId, input.episodeId);
-        const cqKey = this.consolidationKey(input.userId);
-        const ctxKey = this.contextKey(input.userId);
-        const ttl = Math.max(1, Math.floor(input.ttlSeconds ?? this.defaultTtlSeconds));
-        // consolidation review 时间 = 现在 + TTL × 0.8（提前 20% 触发整合决策）
-        const reviewAt = Math.floor(Date.now() / 1000) + Math.floor(ttl * 0.8);
+        return await this.withCircuit(async () => {
+            const epKey = this.episodeKey(input.userId, input.episodeId);
+            const cqKey = this.consolidationKey(input.userId);
+            const ctxKey = this.contextKey(input.userId);
+            const ttl = Math.max(1, Math.floor(input.ttlSeconds ?? this.defaultTtlSeconds));
+            // consolidation review 时间 = 现在 + TTL × 0.8（提前 20% 触发整合决策）
+            const reviewAt = Math.floor(Date.now() / 1000) + Math.floor(ttl * 0.8);
 
-        // 强制遗忘：先量队列长度，超限就弹掉最旧的 episode（同时删 hash）
-        const forced = await this.enforceUserCapacity(input.userId);
+            // 强制遗忘：先量队列长度，超限就弹掉最旧的 episode（同时删 hash）
+            const forced = await this.enforceUserCapacity(input.userId);
 
-        const pipeline = this.client.pipeline();
-        pipeline.hset(epKey, this.encodeEpisodeFields(input));
-        pipeline.expire(epKey, ttl);
-        pipeline.zadd(cqKey, reviewAt, input.episodeId);
-        pipeline.lpush(ctxKey, input.episodeId);
-        pipeline.ltrim(ctxKey, 0, this.contextRingSize - 1);
-        // ctx ring 同样过期，避免离线用户的 list 永远占内存
-        pipeline.expire(ctxKey, ttl * 2);
-        await pipeline.exec();
+            const pipeline = this.client.pipeline();
+            pipeline.hset(epKey, this.encodeEpisodeFields(input));
+            pipeline.expire(epKey, ttl);
+            pipeline.zadd(cqKey, reviewAt, input.episodeId);
+            pipeline.lpush(ctxKey, input.episodeId);
+            pipeline.ltrim(ctxKey, 0, this.contextRingSize - 1);
+            // ctx ring 同样过期，避免离线用户的 list 永远占内存
+            pipeline.expire(ctxKey, ttl * 2);
+            await pipeline.exec();
 
-        return { episodeId: input.episodeId, ttlSeconds: ttl, reviewAt, forcedForgotten: forced };
+            return { episodeId: input.episodeId, ttlSeconds: ttl, reviewAt, forcedForgotten: forced };
+        });
     }
 
     public async readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
-        await this.connect();
-        const data = await this.client.hgetall(this.episodeKey(userId, episodeId));
-        if (!data || Object.keys(data).length === 0) {
-            return undefined;
-        }
-        return this.decodeEpisodeFields(episodeId, data);
+        return await this.withCircuit(async () => {
+            const data = await this.client.hgetall(this.episodeKey(userId, episodeId));
+            if (!data || Object.keys(data).length === 0) {
+                return undefined;
+            }
+            return this.decodeEpisodeFields(episodeId, data);
+        });
     }
 
     public async readContextRing(userId: string, limit: number): Promise<string[]> {
-        await this.connect();
-        // ring buffer 从 head 读取最近 N 条 episodeId（按写入新→旧）
-        return await this.client.lrange(this.contextKey(userId), 0, Math.max(0, limit - 1));
+        return await this.withCircuit(async () => {
+            // ring buffer 从 head 读取最近 N 条 episodeId（按写入新→旧）
+            return await this.client.lrange(this.contextKey(userId), 0, Math.max(0, limit - 1));
+        });
     }
 
     public async listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]> {
-        await this.connect();
-        // 整合 worker 用：取所有 reviewAt <= now 的 episode
-        return await this.client.zrangebyscore(this.consolidationKey(userId), 0, until, "LIMIT", 0, limit);
+        return await this.withCircuit(async () => {
+            // 整合 worker 用：取所有 reviewAt <= now 的 episode
+            return await this.client.zrangebyscore(this.consolidationKey(userId), 0, until, "LIMIT", 0, limit);
+        });
     }
 
     public async dropEpisode(userId: string, episodeId: string): Promise<void> {
-        await this.connect();
-        // CONSOLIDATE / DISCARD 决策完毕后回收 Redis 占用
-        const pipeline = this.client.pipeline();
-        pipeline.del(this.episodeKey(userId, episodeId));
-        pipeline.zrem(this.consolidationKey(userId), episodeId);
-        await pipeline.exec();
+        await this.withCircuit(async () => {
+            // CONSOLIDATE / DISCARD 决策完毕后回收 Redis 占用
+            const pipeline = this.client.pipeline();
+            pipeline.del(this.episodeKey(userId, episodeId));
+            pipeline.zrem(this.consolidationKey(userId), episodeId);
+            await pipeline.exec();
+        });
     }
 
     public async reinforceEpisode(userId: string, episodeId: string, ttlSeconds: number): Promise<boolean> {
-        await this.connect();
-        const epKey = this.episodeKey(userId, episodeId);
-        const exists = await this.client.exists(epKey);
-        if (!exists) return false;
-        const ttl = Math.max(1, Math.floor(ttlSeconds));
-        const reviewAt = Math.floor(Date.now() / 1000) + Math.floor(ttl * 0.8);
-        const pipeline = this.client.pipeline();
-        pipeline.expire(epKey, ttl);
-        pipeline.zadd(this.consolidationKey(userId), reviewAt, episodeId);
-        pipeline.expire(this.contextKey(userId), ttl * 2);
-        await pipeline.exec();
-        return true;
+        return await this.withCircuit(async () => {
+            const epKey = this.episodeKey(userId, episodeId);
+            const exists = await this.client.exists(epKey);
+            if (!exists) return false;
+            const ttl = Math.max(1, Math.floor(ttlSeconds));
+            const reviewAt = Math.floor(Date.now() / 1000) + Math.floor(ttl * 0.8);
+            const pipeline = this.client.pipeline();
+            pipeline.expire(epKey, ttl);
+            pipeline.zadd(this.consolidationKey(userId), reviewAt, episodeId);
+            pipeline.expire(this.contextKey(userId), ttl * 2);
+            await pipeline.exec();
+            return true;
+        });
     }
 
     /** 原地改写 episode（dream rewrite 决策）：保留 id 与 createdAt，重写 text/concepts/importance。 */
@@ -169,42 +223,88 @@ export class RedisMemoryStore extends MemoryComponent implements RedisBackedWork
         episodeId: string,
         patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
     ): Promise<boolean> {
-        await this.connect();
-        const existing = await this.readEpisode(userId, episodeId);
-        if (!existing) return false;
-        const fields: Record<string, string> = {};
-        if (typeof patch.text === "string") fields.text = patch.text;
-        if (Array.isArray(patch.concepts)) fields.concepts = JSON.stringify(patch.concepts);
-        if (typeof patch.importance === "number" && Number.isFinite(patch.importance)) {
-            fields.importance = String(patch.importance);
-        }
-        if (patch.metadata && typeof patch.metadata === "object") {
-            fields.metadata = JSON.stringify({ ...existing.metadata, ...patch.metadata });
-        }
-        if (Object.keys(fields).length === 0) return true;
-        await this.client.hset(this.episodeKey(userId, episodeId), fields);
-        return true;
+        return await this.withCircuit(async () => {
+            const raw = await this.client.hgetall(this.episodeKey(userId, episodeId));
+            if (!raw || Object.keys(raw).length === 0) return false;
+            const existing = this.decodeEpisodeFields(episodeId, raw);
+            const fields: Record<string, string> = {};
+            if (typeof patch.text === "string") fields.text = patch.text;
+            if (Array.isArray(patch.concepts)) fields.concepts = JSON.stringify(patch.concepts);
+            if (typeof patch.importance === "number" && Number.isFinite(patch.importance)) {
+                fields.importance = String(patch.importance);
+            }
+            if (patch.metadata && typeof patch.metadata === "object") {
+                fields.metadata = JSON.stringify({ ...existing.metadata, ...patch.metadata });
+            }
+            if (Object.keys(fields).length === 0) return true;
+            await this.client.hset(this.episodeKey(userId, episodeId), fields);
+            return true;
+        });
     }
 
     public async touchConcepts(userId: string, concepts: string[]): Promise<void> {
         if (concepts.length === 0) {
             return;
         }
-        await this.connect();
-        const now = Date.now();
-        const args: (string | number)[] = [];
-        for (const concept of concepts) {
-            args.push(now, concept);
-        }
-        await this.client.zadd(this.activationKey(userId), ...args);
-        // ZSET 也加 TTL，避免静默用户的热度榜永久占内存
-        await this.client.expire(this.activationKey(userId), this.defaultTtlSeconds * 2);
+        await this.withCircuit(async () => {
+            const now = Date.now();
+            const args: (string | number)[] = [];
+            for (const concept of concepts) {
+                args.push(now, concept);
+            }
+            await this.client.zadd(this.activationKey(userId), ...args);
+            // ZSET 也加 TTL，避免静默用户的热度榜永久占内存
+            await this.client.expire(this.activationKey(userId), this.defaultTtlSeconds * 2);
+        });
     }
 
     public async hotConcepts(userId: string, limit: number): Promise<string[]> {
+        return await this.withCircuit(async () => {
+            // 返回最近激活的 top N 概念（按时间戳倒序）
+            return await this.client.zrevrange(this.activationKey(userId), 0, Math.max(0, limit - 1));
+        });
+    }
+
+    private async withCircuit<T>(action: () => Promise<T>): Promise<T> {
         await this.connect();
-        // 返回最近激活的 top N 概念（按时间戳倒序）
-        return await this.client.zrevrange(this.activationKey(userId), 0, Math.max(0, limit - 1));
+        try {
+            const result = await action();
+            if (this.circuitState !== "closed") {
+                this.closeCircuit();
+            }
+            return result;
+        } catch (error) {
+            this.tripCircuit(error);
+            throw error;
+        }
+    }
+
+    private ensureCircuitProbeAllowed(): void {
+        if (this.circuitState !== "open") {
+            return;
+        }
+        const now = Date.now();
+        if (this.nextRetryAt !== undefined && now < this.nextRetryAt) {
+            throw createStorageError(
+                "redis-working-memory-circuit-open",
+                "Redis working memory is temporarily unavailable; waiting for the next circuit probe",
+            );
+        }
+    }
+
+    private closeCircuit(): void {
+        this.circuitState = "closed";
+        this.failureCount = 0;
+        this.lastError = undefined;
+        this.lastRecoveredAt = Date.now();
+        this.nextRetryAt = undefined;
+    }
+
+    private tripCircuit(error: unknown): void {
+        this.circuitState = "open";
+        this.failureCount = Math.min(10, this.failureCount + 1);
+        this.lastError = describeError(error);
+        this.nextRetryAt = Date.now() + Math.min(30000, Math.max(this.timeoutMs, 1000 * 2 ** Math.max(0, this.failureCount - 1)));
     }
 
     private async enforceUserCapacity(userId: string): Promise<string[]> {
@@ -302,4 +402,12 @@ function safeJsonObject(value: string | undefined): Record<string, unknown> {
         throw new Error("Redis episode field expected a JSON object.");
     }
     return parsed as Record<string, unknown>;
+}
+
+function describeError(error: unknown): string {
+    if (error instanceof Error) {
+        const code = (error as Error & { code?: string }).code;
+        return code ? `${code}: ${error.message}` : error.message;
+    }
+    return String(error);
 }

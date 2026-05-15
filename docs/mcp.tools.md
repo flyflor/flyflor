@@ -129,10 +129,10 @@ interface McpCallResult {
 
 ## 运行边界 / 后续增强
 
-- 旧式 SSE 双端点已有客户端兼容，但还缺真实第三方 MCP server 的长连接 / 断线重连烟测。
+- 旧式 SSE 双端点已有客户端兼容，会话建立阶段现在有一次指数退避重试；`tools/call` 在传输/协议失败时也会重开一次 session 重试。`bun run smoke:recovery` 已覆盖本地 mock 的短暂断链与长结果回灌，但仍缺真实第三方 MCP server 的长期断链回归。
 - catalog 缓存为进程内 Map，**多副本不共享**；已有 TTL/LRU，但跨 gateway 节点仍依赖各自预拉取。
-- tool 调用结果已有 head/tail 截断和原始大小标记；还缺语义摘要与大结果可观察策略。
-- 调用失败的重试策略只是 0-1 次，无指数退避。
+- tool 调用结果现在带结构化 `summary`，长结果保留 head/tail + 原始大小标记；仍缺更细的多段语义摘要与跨轮可观察策略。
+- 调用失败的重试策略仍然很薄，只对 transport/protocol 层做一次短退避重试；真正的幂等语义还要靠 server 自身能力或更细的 tool 标记。
 - inputSchema 只做轻量 JSON Schema 子集校验；复杂 schema 仍依赖 server 端拒绝。
 
 ## 相关测试

@@ -2,6 +2,77 @@ import type { SurrealMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
 import { LruCache } from "./lru.cache.ts";
 
+export interface MemoryGraphStore {
+    initialize(): Promise<void>;
+    upsertEpisode(input: EpisodeNodeInput): Promise<void>;
+    upsertMemoryNode(input: MemoryNodeInput): Promise<void>;
+    upsertGem(input: GemNodeInput): Promise<void>;
+    upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void>;
+    applyDecaySweep(input: DecaySweepInput): Promise<DecaySweepResult>;
+    relateNextContext(prev: string, curr: string): Promise<void>;
+    relateSimilarEpisode(a: string, b: string, score: number): Promise<void>;
+    relateConsolidatedInto(episodeId: string, memoryNodeId: string): Promise<void>;
+    relateSimilarConcept(a: string, b: string, score: number): Promise<void>;
+    relateProvenAs(memoryNodeId: string, gemId: string): Promise<void>;
+    relateProvenBy(gemId: string, episodeId: string): Promise<void>;
+    recallMemoryNodes(input: GraphRecallInput): Promise<MemoryNodeRecord[]>;
+    recallSkills(input: GraphRecallInput): Promise<GemRecord[]>;
+    expandSimilarConcept(seedIds: string[], limit: number): Promise<MemoryNodeRecord[]>;
+    countByUser(userId: string): Promise<GraphCounts>;
+    listGemDriftCandidates(input: {
+        userId: string;
+        nowMs: number;
+        minContradictionCount: number;
+        maxStaleMs: number;
+        maxConfidence: number;
+        limit: number;
+    }): Promise<GemRecord[]>;
+    listRecallExtremes(input: {
+        userId: string;
+        topN: number;
+        bottomN: number;
+    }): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }>;
+    listContradictionPairs(input: {
+        userId: string;
+        seedN: number;
+        neighborK: number;
+        minCosine: number;
+    }): Promise<Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>>;
+    writeGemSnapshot(gem: GemRecord, reason: string, takenAtMs: number): Promise<string>;
+    applyGemDriftRepair(input: {
+        gemId: string;
+        nowMs: number;
+        newSummary?: string;
+        newSymbols?: string[];
+        newStatus?: "active" | "deprecated";
+        scopeNote?: string;
+        confidenceMultiplier?: number;
+    }): Promise<boolean>;
+    applyMemoryReinforce(input: {
+        table: "memory_node" | "gem";
+        id: string;
+        importanceMultiplier: number;
+        nowMs: number;
+    }): Promise<boolean>;
+    applyContradictionAudit(input: {
+        table: "memory_node" | "gem";
+        id: string;
+        confidenceMultiplier: number;
+        contradictionDelta: number;
+        nowMs: number;
+        relateWith?: { table: "memory_node" | "gem"; id: string };
+    }): Promise<boolean>;
+    applyReconsolidation(input: {
+        left: { table: "memory_node" | "gem"; id: string };
+        right: { table: "memory_node" | "gem"; id: string };
+        winner: "left" | "right" | "merge";
+        nowMs: number;
+        mergedSummary?: string;
+        mergedSymbols?: string[];
+        scopeNote?: string;
+    }): Promise<boolean>;
+}
+
 /**
  * 海马体长期记忆图：SurrealDB v2+ 实现。
  *
@@ -29,7 +100,7 @@ import { LruCache } from "./lru.cache.ts";
  * - **idempotent initialize**：DEFINE TABLE/INDEX IF NOT EXISTS，安全重复调用。
  */
 @Component({ name: "surreal-graph-store", tags: ["database", "memory", "graph", "hippocampus"] })
-export class SurrealGraphStore {
+export class SurrealGraphStore implements MemoryGraphStore {
     private initialized = false;
     /**
      * ANN 召回结果 LRU 缓存：相同 (userId, symbols, embedding 摘要, limit)
@@ -674,6 +745,8 @@ export interface MemoryNodeInput {
     recallCount?: number;
     contradictionCount?: number;
     lastAccessedAt?: number;
+    scopeNote?: string;
+    supersededBy?: string;
 }
 
 export interface GemNodeInput {
@@ -682,6 +755,7 @@ export interface GemNodeInput {
     symbols: string[];
     summary: string;
     embedding: number[];
+    importance?: number;
     confidence: number;
     support: number;
     protected: boolean;
@@ -691,6 +765,7 @@ export interface GemNodeInput {
     lastVerifiedAt?: number;
     status?: "active" | "deprecated";
     scopeNote?: string;
+    supersededBy?: string;
 }
 
 export interface SummaryEmbeddingInput {

@@ -98,6 +98,7 @@ function overviewLoader(): PageLoader {
             lines.push("◆ Memory");
             lines.push(`  Enabled: ${data.memory.memoryEnabled ? "yes" : "no"}`);
             lines.push(`  Crystal: ${data.memory.crystalEnabled ? "yes" : "no"}`);
+            lines.push(`  Working: ${data.memory.workingMemoryStatus.status} · ${data.memory.workingMemoryStatus.detail}`);
             lines.push("");
             lines.push("◆ Doctor");
             for (const check of data.doctor) {
@@ -237,10 +238,12 @@ function memoryLoader(): PageLoader {
             lines.push("◆ Memory");
             lines.push(`  Enabled: ${data.enabled ? "yes" : "no"}`);
             lines.push(`  Crystal: ${data.crystalEnabled ? "yes" : "no"}`);
+            lines.push(`  Crystal backend: ${data.crystalBackend}`);
             lines.push(`  Redis: ${data.redisEnabled ? "yes" : "no"}`);
             lines.push(`  Surreal: ${data.surrealEnabled ? "yes" : "no"}`);
             lines.push(`  SQLite: ${data.sqliteEnabled ? "yes" : "no"}`);
             lines.push(`  Embedding: ${data.embeddingDimensions}d`);
+            lines.push(`  Working: ${data.workingMemoryStatus.status} · ${data.workingMemoryStatus.detail}`);
             lines.push(`  Retrospective: ${data.retrospectiveEntryCount} entries`);
             return lines;
         },

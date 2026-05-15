@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { appendFile, mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { LocalWorkingMemoryConfig } from "../src/config/index.ts";
 import { LocalWorkingMemoryStore } from "../src/neural/memory/local.working.store.ts";
 
 describe("LocalWorkingMemoryStore", () => {
@@ -53,9 +54,88 @@ describe("LocalWorkingMemoryStore", () => {
             await rm(root, { recursive: true, force: true });
         }
     });
+
+    test("writes a backup snapshot during compaction", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-local-working-"));
+        try {
+            const first = store(root, { snapshotEveryWrites: 1 });
+            await first.writeEpisode({
+                userId: "u1",
+                episodeId: "ep1",
+                text: "backup me",
+                concepts: ["local"],
+                embedding: [1, 0],
+                importance: 0.8,
+                stability: 0.9,
+                sourceKind: "test",
+                createdAt: Date.now(),
+                ttlSeconds: 3600,
+            });
+
+            expect(await readFile(join(root, "working.snapshot.json"), "utf8")).toContain("backup me");
+            expect(await readFile(join(root, "working.snapshot.json.bak"), "utf8")).toContain("backup me");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("opens the circuit breaker when WAL writes fail and keeps loaded reads available", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-local-working-"));
+        try {
+            const store = new FailingStore(root);
+            await store.writeEpisode({
+                userId: "u1",
+                episodeId: "ep1",
+                text: "keep me",
+                concepts: [],
+                importance: 0.7,
+                stability: 0.8,
+                sourceKind: "test",
+                ttlSeconds: 3600,
+            });
+
+            await expect(
+                store.writeEpisode({
+                    userId: "u1",
+                    episodeId: "ep2",
+                    text: "break me",
+                    concepts: [],
+                    importance: 0.7,
+                    stability: 0.8,
+                    sourceKind: "test",
+                    ttlSeconds: 3600,
+                }),
+            ).rejects.toThrow("simulated disk outage");
+
+            const health = store.getHealthSnapshot();
+            expect(health.circuitState).toBe("open");
+            expect(await store.readEpisode("u1", "ep1")).toBeDefined();
+            await expect(
+                store.writeEpisode({
+                    userId: "u1",
+                    episodeId: "ep3",
+                    text: "still broken",
+                    concepts: [],
+                    importance: 0.7,
+                    stability: 0.8,
+                    sourceKind: "test",
+                    ttlSeconds: 3600,
+                }),
+            ).rejects.toThrow("temporarily read-only");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
 });
 
-function store(root: string): LocalWorkingMemoryStore {
+function store(root: string, overrides: Partial<LocalWorkingMemoryConfig> = {}): LocalWorkingMemoryStore {
+    return storeWithConfig(root, overrides);
+}
+
+function storeWithConfig(
+    root: string,
+    overrides: Partial<LocalWorkingMemoryConfig> = {},
+): LocalWorkingMemoryStore {
     return new LocalWorkingMemoryStore(root, {
         contextRingSize: 4,
         defaultTtlSeconds: 3600,
@@ -64,5 +144,30 @@ function store(root: string): LocalWorkingMemoryStore {
         snapshotEveryWrites: 100,
         snapshotFile: "working.snapshot.json",
         walFile: "working.wal.jsonl",
+        ...overrides,
     });
+}
+
+class FailingStore extends LocalWorkingMemoryStore {
+    private writes = 0;
+
+    public constructor(root: string) {
+        super(root, {
+            contextRingSize: 4,
+            defaultTtlSeconds: 3600,
+            maxEpisodesPerUser: 8,
+            maxWalBytes: 1024 * 1024,
+            snapshotEveryWrites: 100,
+            snapshotFile: "working.snapshot.json",
+            walFile: "working.wal.jsonl",
+        });
+    }
+
+    protected override async appendWal(record: any): Promise<void> {
+        this.writes += 1;
+        if (this.writes >= 2) {
+            throw new Error("simulated disk outage");
+        }
+        await super.appendWal(record as never);
+    }
 }

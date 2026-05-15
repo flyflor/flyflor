@@ -336,6 +336,13 @@ export const MemoryWorkingBackend = {
 
 export type MemoryWorkingBackend = (typeof MemoryWorkingBackend)[keyof typeof MemoryWorkingBackend];
 
+export const CrystalMemoryBackend = {
+    Local: "local",
+    Surreal: "surreal",
+} as const;
+
+export type CrystalMemoryBackend = (typeof CrystalMemoryBackend)[keyof typeof CrystalMemoryBackend];
+
 export const WorkingMemoryWalOperation = {
     DropEpisode: "drop-episode",
     ReinforceEpisode: "reinforce-episode",

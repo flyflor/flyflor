@@ -5,7 +5,8 @@ import { checkSkillSchemaCompatibility } from "../../../crystal/skills/index.ts"
 import { getFlyflorConfigPath } from "../config.ts";
 import type { FlyflorConfig } from "../../../config/index.ts";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../../agent/gateway/index.ts";
-import { ChannelLinkState } from "../../../protocol/contracts/index.ts";
+import { ChannelLinkState, CrystalMemoryBackend, MemoryWorkingBackend } from "../../../protocol/contracts/index.ts";
+import { describeWorkingMemoryHealth } from "../status.ts";
 
 export interface OverviewData {
     runtime: RuntimeSummary;
@@ -52,7 +53,13 @@ export interface ChannelRow {
 export interface MemorySummary {
     memoryEnabled: boolean;
     crystalEnabled: boolean;
+    crystalBackend: string;
     storageDir: string;
+    crystalDbFile: string;
+    workingMemoryStatus: {
+        status: "ok" | "warn";
+        detail: string;
+    };
 }
 
 export interface DoctorCheck {
@@ -65,12 +72,13 @@ export async function fetchOverviewData(app: FlyFlor): Promise<OverviewData> {
     const config = app.resolve(FlyFlorTokens.Config);
     // Use local snapshot directly to avoid blocking HTTP fetch (500ms timeout)
     const gateway = app.resolve(FlyFlorTokens.Gateway).getStatusSnapshot();
+    const workingMemorySnapshot = app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot();
 
     return {
         runtime: extractRuntime(config),
         gateway: extractGateway(gateway),
         channels: extractChannels(gateway),
-        memory: extractMemory(config),
+        memory: extractMemory(config, workingMemorySnapshot),
         doctor: await runDoctorChecks(app, gateway),
     };
 }
@@ -115,11 +123,14 @@ function extractChannels(gateway: GatewayStatusSnapshot): ChannelRow[] {
     }));
 }
 
-function extractMemory(config: FlyflorConfig): MemorySummary {
+function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unknown): MemorySummary {
     return {
         memoryEnabled: config.memory.enabled,
         crystalEnabled: config.memory.crystal.enabled,
+        crystalBackend: config.memory.crystal.backend,
         storageDir: config.paths.storageDir,
+        crystalDbFile: config.memory.crystal.local.dbFile ?? "",
+        workingMemoryStatus: describeWorkingMemoryHealth(workingMemorySnapshot),
     };
 }
 
@@ -206,10 +217,18 @@ function describeBackgroundScheduler(config: FlyflorConfig): {
     detail: string;
 } {
     const missing: string[] = [];
-    if (!config.memory.redis.enabled) missing.push("redis");
-    if (!config.memory.crystal.surreal.enabled) missing.push("surreal");
+    const workingBackend =
+        config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
+    if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
+        missing.push("redis working memory");
+    }
+    const crystalBackend = config.memory.crystal.backend ?? CrystalMemoryBackend.Local;
+    const crystalGraphReady =
+        config.memory.crystal.enabled &&
+        (crystalBackend === CrystalMemoryBackend.Local || config.memory.crystal.surreal.enabled);
+    if (!crystalGraphReady) missing.push("crystal graph");
     if (missing.length === 0) {
-        return { status: "ok", detail: "consolidation+decay+dream+project-cluster enabled" };
+        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working memory)` };
     }
     return {
         status: "warn",

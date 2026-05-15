@@ -31,6 +31,8 @@ interface SseEvent {
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
+const DEFAULT_RETRY_ATTEMPTS = 2;
+const DEFAULT_RETRY_BACKOFF_MS = 25;
 const MCP_PROTOCOL_VERSION = "2024-11-05";
 
 export async function listSseMcpTools(
@@ -73,14 +75,26 @@ async function withSseSession<T>(
 ): Promise<T> {
     if (!server.enabled) throw new Error(`MCP server is disabled: ${server.name}`);
     if (!server.url) throw new Error(`MCP server is not a remote SSE endpoint: ${server.name}`);
-    const session = new McpSseSession(server, options);
-    try {
-        await session.open();
-        await session.initialize();
-        return await fn(session);
-    } finally {
-        session.close();
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
+        // 只在流建立后的 transport/protocol 失败时重开一次 session；
+        // 不把 MCP error 当作可恢复事件，以免重复执行已有语义结果的工具调用。
+        const session = new McpSseSession(server, options);
+        try {
+            await session.open();
+            await session.initialize();
+            return await fn(session);
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            if (!isRetryableMcpTransportError(lastError) || attempt >= DEFAULT_RETRY_ATTEMPTS) {
+                throw lastError;
+            }
+            await sleep(backoffMs(attempt));
+        } finally {
+            session.close();
+        }
     }
+    throw lastError ?? new Error(`MCP SSE session failed: ${server.name}`);
 }
 
 class McpSseSession {
@@ -92,6 +106,7 @@ class McpSseSession {
     private streamDone = false;
     private streamError: Error | undefined;
     private readonly timeoutMs: number;
+    private openAttempt = 0;
 
     constructor(
         private readonly server: McpServerDefinition,
@@ -101,28 +116,24 @@ class McpSseSession {
     }
 
     async open(): Promise<void> {
-        if (!this.server.url) throw new Error(`MCP server URL is missing: ${this.server.name}`);
-        const response = await fetch(this.server.url, {
-            method: "GET",
-            headers: { Accept: "text/event-stream", "MCP-Protocol-Version": MCP_PROTOCOL_VERSION },
-            signal: this.controller.signal,
-        });
-        if (!response.ok) {
-            throw new Error(`MCP SSE GET ${response.status}: ${await response.text()}`);
+        // 只重试会话建立阶段：GET /endpoint 失败或过早断链可以重连，
+        // 但已经进入 tools/call 的请求不在这个薄重试层里重复发送。
+        let lastError: Error | undefined;
+        for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
+            this.resetOpenState(attempt);
+            try {
+                await this.openOnce();
+                return;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                this.controller.abort();
+                if (!this.isRetryableOpenError(lastError) || attempt >= DEFAULT_RETRY_ATTEMPTS) {
+                    throw lastError;
+                }
+                await sleep(this.retryBackoffMs(attempt));
+            }
         }
-        if (!response.body) {
-            throw new Error(`MCP SSE response missing body: ${this.server.name}`);
-        }
-        void this.consume(response.body).catch((err) => {
-            const e = err instanceof Error ? err : new Error(String(err));
-            this.streamError = e;
-            this.streamDone = true;
-            for (const w of this.endpointWaiters) w.reject(e);
-            this.endpointWaiters.length = 0;
-            for (const p of this.pending.values()) p.reject(e);
-            this.pending.clear();
-        });
-        await this.waitEndpoint();
+        throw lastError ?? new Error(`MCP SSE failed to open: ${this.server.name}`);
     }
 
     async initialize(): Promise<void> {
@@ -139,7 +150,12 @@ class McpSseSession {
         const wait = new Promise<JsonRpcMessage>((resolve, reject) => {
             this.pending.set(id, { resolve, reject });
         });
-        await this.post({ jsonrpc: "2.0", id, method, params });
+        try {
+            await this.post({ jsonrpc: "2.0", id, method, params });
+        } catch (error) {
+            this.pending.delete(id);
+            throw error;
+        }
         const message = await withTimeout(wait, this.timeoutMs, `MCP SSE request timed out: ${method}`);
         if (message.error) {
             throw new Error(`MCP error ${message.error.code ?? "unknown"}: ${message.error.message ?? ""}`);
@@ -170,14 +186,6 @@ class McpSseSession {
             },
         });
         if (!response.ok && response.status !== 202) {
-            const id = typeof message.id === "number" ? message.id : undefined;
-            if (id !== undefined) {
-                const p = this.pending.get(id);
-                if (p) {
-                    this.pending.delete(id);
-                    p.reject(new Error(`MCP SSE POST ${response.status}`));
-                }
-            }
             throw new Error(`MCP SSE POST ${response.status}: ${await response.text()}`);
         }
     }
@@ -195,7 +203,36 @@ class McpSseSession {
         );
     }
 
-    private async consume(body: ReadableStream<Uint8Array>): Promise<void> {
+    private async openOnce(): Promise<void> {
+        if (!this.server.url) throw new Error(`MCP server URL is missing: ${this.server.name}`);
+        const attempt = this.openAttempt;
+        const response = await fetch(this.server.url, {
+            method: "GET",
+            headers: { Accept: "text/event-stream", "MCP-Protocol-Version": MCP_PROTOCOL_VERSION },
+            signal: this.controller.signal,
+        });
+        if (!response.ok) {
+            throw new Error(`MCP SSE GET ${response.status}: ${await response.text()}`);
+        }
+        if (!response.body) {
+            throw new Error(`MCP SSE response missing body: ${this.server.name}`);
+        }
+        void this.consume(response.body, attempt).catch((err) => {
+            this.failStream(err instanceof Error ? err : new Error(String(err)), attempt);
+        });
+        await this.waitEndpoint();
+    }
+
+    private resetOpenState(attempt: number): void {
+        this.openAttempt = attempt;
+        this.endpointUrl = undefined;
+        this.streamDone = false;
+        this.streamError = undefined;
+        this.endpointWaiters.length = 0;
+        this.controller = new AbortController();
+    }
+
+    private async consume(body: ReadableStream<Uint8Array>, attempt: number): Promise<void> {
         const reader = body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
@@ -204,6 +241,7 @@ class McpSseSession {
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
+                if (attempt !== this.openAttempt) break;
                 buffer += decoder.decode(value, { stream: true });
                 let idx = buffer.indexOf("\n\n");
                 while (idx === -1) {
@@ -230,16 +268,19 @@ class McpSseSession {
                     const chunk = buffer.slice(0, sep);
                     buffer = buffer.slice(sep + sepLen);
                     const evt = parseSseChunk(chunk);
-                    if (evt) this.dispatch(evt);
+                    if (evt) this.dispatch(evt, attempt);
                 }
             }
         } finally {
-            this.streamDone = true;
+            if (attempt === this.openAttempt) {
+                this.streamDone = true;
+            }
             reader.releaseLock();
         }
     }
 
-    private dispatch(evt: SseEvent): void {
+    private dispatch(evt: SseEvent, attempt: number): void {
+        if (attempt !== this.openAttempt) return;
         if (evt.event === "endpoint") {
             const resolved = resolveEndpoint(this.server.url!, evt.data.trim());
             this.endpointUrl = resolved;
@@ -253,11 +294,11 @@ class McpSseSession {
                 parsed = JSON.parse(evt.data);
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                this.failStream(new Error(`MCP SSE invalid JSON-RPC message: ${message}`));
+                this.failStream(new Error(`MCP SSE invalid JSON-RPC message: ${message}`), attempt);
                 return;
             }
             if (!isRecord(parsed)) {
-                this.failStream(new Error(`MCP SSE non-object JSON-RPC message: ${this.server.name}`));
+                this.failStream(new Error(`MCP SSE non-object JSON-RPC message: ${this.server.name}`), attempt);
                 return;
             }
             const msg = parsed as JsonRpcMessage;
@@ -271,7 +312,8 @@ class McpSseSession {
         }
     }
 
-    private failStream(error: Error): void {
+    private failStream(error: Error, attempt: number): void {
+        if (attempt !== this.openAttempt) return;
         this.streamError = error;
         this.streamDone = true;
         for (const waiter of this.endpointWaiters) {
@@ -283,6 +325,19 @@ class McpSseSession {
         }
         this.pending.clear();
         this.controller.abort();
+    }
+
+    private isRetryableOpenError(error: Error): boolean {
+        return (
+            error.message.startsWith("MCP SSE GET ") ||
+            error.message.startsWith("MCP SSE response missing body") ||
+            error.message.startsWith("MCP SSE closed before endpoint") ||
+            error.message.startsWith("MCP SSE endpoint announcement timed out")
+        );
+    }
+
+    private retryBackoffMs(attempt: number): number {
+        return Math.min(DEFAULT_RETRY_BACKOFF_MS * 2 ** (attempt - 1), 200);
     }
 }
 
@@ -318,6 +373,10 @@ async function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promi
     }
 }
 
+async function sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizeTools(result: unknown): McpToolDefinition[] {
     if (!isRecord(result) || !Array.isArray(result.tools)) {
         throw new Error("MCP SSE tools/list returned invalid tools payload.");
@@ -335,4 +394,18 @@ function isToolDefinition(value: unknown): value is McpToolDefinition {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRetryableMcpTransportError(error: Error): boolean {
+    return (
+        error.message.startsWith("MCP SSE ") ||
+        error.message.startsWith("MCP request timed out:") ||
+        error.message.startsWith("MCP HTTP ") ||
+        error.message.startsWith("MCP server returned a non-object JSON-RPC response.") ||
+        error.message.startsWith("fetch failed")
+    );
+}
+
+function backoffMs(attempt: number): number {
+    return Math.min(DEFAULT_RETRY_BACKOFF_MS * 2 ** (attempt - 1), 200);
 }

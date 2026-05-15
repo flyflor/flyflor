@@ -148,4 +148,111 @@ describe("MCP SSE legacy transport", () => {
         expect(Array.isArray(result.content)).toBe(true);
         expect(result.content?.[0]).toEqual({ type: "text", text: "ok" });
     });
+
+    test("callSseMcpTool retries one transient POST failure", async () => {
+        let getAttempts = 0;
+        let callAttempts = 0;
+        const server = { onPost: (_msg: Record<string, unknown>) => {}, events: [] as string[] };
+        function openStream(): Response {
+            const encoder = new TextEncoder();
+            let push = (chunk: string): void => {
+                controller.enqueue(encoder.encode(chunk));
+            };
+            let controller: ReadableStreamDefaultController<Uint8Array>;
+            const stream = new ReadableStream<Uint8Array>({
+                start(c) {
+                    controller = c;
+                    push = (chunk: string) => controller.enqueue(encoder.encode(chunk));
+                    push("event: endpoint\ndata: /messages?sessionId=abc\n\n");
+                    server.onPost = (msg: Record<string, unknown>) => {
+                        const method = String(msg.method ?? "");
+                        const id = typeof msg.id === "number" ? msg.id : undefined;
+                        if (id === undefined) return;
+                        if (method === "initialize") {
+                            push(
+                                `event: message\ndata: ${JSON.stringify({
+                                    jsonrpc: "2.0",
+                                    id,
+                                    result: { protocolVersion: "2024-11-05" },
+                                })}\n\n`,
+                            );
+                            return;
+                        }
+                        if (method === "tools/call") {
+                            callAttempts += 1;
+                            if (callAttempts === 1) {
+                                return;
+                            }
+                            push(
+                                `event: message\ndata: ${JSON.stringify({
+                                    jsonrpc: "2.0",
+                                    id,
+                                    result: { content: [{ type: "text", text: "recovered" }], isError: false },
+                                })}\n\n`,
+                            );
+                        }
+                    };
+                },
+            });
+            return new Response(stream, {
+                status: 200,
+                headers: { "content-type": "text/event-stream" },
+            });
+        }
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+            const method = (init?.method ?? "GET").toUpperCase();
+            if (method === "GET") {
+                getAttempts += 1;
+                return openStream();
+            }
+            if (method === "POST") {
+                const body = init?.body ? JSON.parse(String(init.body)) : {};
+                const rpcMethod = String(body.method ?? "");
+                server.onPost(body);
+                server.events.push(`POST ${url}`);
+                if (rpcMethod === "tools/call") {
+                    if (callAttempts === 1) {
+                        return new Response("temporary upstream failure", { status: 503 });
+                    }
+                    return new Response(null, { status: 202 });
+                }
+                return new Response(null, { status: 202 });
+            }
+            return new Response("unsupported", { status: 405 });
+        }) as unknown as FetchFn;
+
+        const result = await callSseMcpTool(PATHS, buildServer(), "echo", { msg: "hi" }, { timeoutMs: 2_000 });
+        expect(getAttempts).toBe(2);
+        expect(callAttempts).toBe(2);
+        expect(result.content?.[0]).toEqual({ type: "text", text: "recovered" });
+    });
+
+    test("listSseMcpTools retries a transient GET failure before endpoint announcement", async () => {
+        let getAttempts = 0;
+        const server = { onPost: (_msg: Record<string, unknown>) => {}, events: [] as string[] };
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+            const method = (init?.method ?? "GET").toUpperCase();
+            if (method === "GET") {
+                getAttempts += 1;
+                if (getAttempts === 1) {
+                    return new Response("temporary failure", { status: 503 });
+                }
+                return streamServer(server);
+            }
+            if (method === "POST") {
+                const body = init?.body ? JSON.parse(String(init.body)) : {};
+                server.onPost(body);
+                server.events.push(`POST ${url}`);
+                return new Response(null, { status: 202 });
+            }
+            return new Response("unsupported", { status: 405 });
+        }) as unknown as FetchFn;
+
+        const tools = await listSseMcpTools(PATHS, buildServer(), { timeoutMs: 2_000 });
+        expect(getAttempts).toBe(2);
+        expect(tools).toHaveLength(1);
+        expect(tools[0]?.name).toBe("echo");
+    });
 });

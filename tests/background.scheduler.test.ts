@@ -3,6 +3,7 @@ import { BackgroundScheduler } from "../src/neural/memory/background.scheduler.t
 import { ConsolidationDecisionKind, type ConsolidationRunResult } from "../src/neural/memory/consolidation.worker.ts";
 import { RuntimeEventType } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
+import type { WorkingMemoryHealthSnapshot } from "../src/neural/memory/working.store.ts";
 
 class FakeEvents {
     readonly published: RuntimeEvent[] = [];
@@ -70,7 +71,7 @@ class FakeHotCompression {
     }
 }
 
-function build(extra?: { dream?: FakeDream }): {
+function build(extra?: { dream?: FakeDream; workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined }): {
     scheduler: BackgroundScheduler;
     consolidation: FakeConsolidation;
     graph: FakeGraph;
@@ -85,6 +86,7 @@ function build(extra?: { dream?: FakeDream }): {
         decayBatchSize: 50,
         now: () => 1_700_000_000_000,
         dream: extra?.dream as never,
+        workingMemoryHealthSnapshot: extra?.workingMemoryHealthSnapshot,
     });
     return { scheduler, consolidation, graph, events };
 }
@@ -124,6 +126,23 @@ describe("BackgroundScheduler", () => {
         expect(totals.users).toBe(2);
         expect(totals.consolidated).toBe(2);
         expect(totals.reinforced).toBe(2);
+    });
+
+    test("runConsolidationOnce skips while working memory breaker is cooling down", async () => {
+        const { scheduler, consolidation } = build({
+            workingMemoryHealthSnapshot: () => ({
+                circuitState: "open",
+                nextRetryAt: 1_700_000_001_000,
+            }),
+        });
+        SCHEDULERS.push(scheduler);
+        scheduler.trackUser("a");
+        scheduler.trackUser("b");
+
+        const totals = await scheduler.runConsolidationOnce();
+
+        expect(totals).toEqual({ users: 0, consolidated: 0, reinforced: 0, discarded: 0 });
+        expect(consolidation.drained).toEqual([]);
     });
 
     test("runConsolidationOnce swallows per-user failure and continues", async () => {

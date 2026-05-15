@@ -1,0 +1,256 @@
+#!/usr/bin/env bun
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
+
+interface RecoverySmokeReport {
+    firstWarmup: WorkingMemoryWarmupEvent;
+    ok: boolean;
+    recoveryWarmup: WorkingMemoryWarmupEvent;
+    tempHome: string;
+    usedBinary: string;
+}
+
+interface WorkingMemoryWarmupEvent {
+    backend?: string;
+    loaded?: boolean;
+    loadedFrom?: string;
+    replayedWalRecords?: number;
+    tornWalLines?: number;
+    latencyMs?: number;
+    workingMemoryHealth?: Record<string, unknown>;
+}
+
+async function main(): Promise<void> {
+    const repoRoot = join(import.meta.dir, "..");
+    const tempHome = await mkdtemp(join(tmpdir(), "flyflor-working-memory-recovery-"));
+    const tempConfigHome = join(tempHome, ".flyflor");
+    const tempDataHome = join(tempHome, ".local", "share");
+    const tempCacheHome = join(tempHome, ".cache");
+    const tempMemoryDir = join(tempDataHome, "flyflor", "memory");
+    const tempLogDir = join(tempHome, "logs");
+    const binaryPath = join(repoRoot, "dist", "flyflor-linux");
+    const gatewayCommand = process.platform === "linux" && existsSync(binaryPath)
+        ? [binaryPath, "gateway"]
+        : [process.execPath, "run", "--conditions=browser", "app.ts", "gateway"];
+
+    try {
+        await mkdir(tempConfigHome, { recursive: true });
+        await mkdir(tempMemoryDir, { recursive: true });
+        await mkdir(tempLogDir, { recursive: true });
+        await writeFile(join(tempConfigHome, "config.jsonc"), renderConfigJsonc(), "utf8");
+        await runInstallTemplates(tempConfigHome, repoRoot);
+
+        const firstStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
+        const firstOutput = await settleAndCollect(firstStart, 1200);
+        const firstWarmup = extractWarmup(firstOutput);
+        assertWarmup(firstWarmup, "first warmup");
+
+        await writeRecoveryWal(tempMemoryDir);
+
+        const secondStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
+        const secondOutput = await settleAndCollect(secondStart, 1200);
+        const recoveryWarmup = extractWarmup(secondOutput);
+        assertWarmup(recoveryWarmup, "recovery warmup");
+
+        const report: RecoverySmokeReport = {
+            firstWarmup,
+            ok:
+                firstWarmup.loadedFrom === "empty" &&
+                recoveryWarmup.loadedFrom === "wal" &&
+                recoveryWarmup.replayedWalRecords === 1 &&
+                recoveryWarmup.tornWalLines === 1,
+            recoveryWarmup,
+            tempHome,
+            usedBinary: gatewayCommand.join(" "),
+        };
+
+        console.log(JSON.stringify(report, null, 2));
+        if (!report.ok) {
+            process.exitCode = 1;
+        }
+    } finally {
+        await rm(tempHome, { recursive: true, force: true });
+    }
+}
+
+async function runInstallTemplates(targetHome: string, repoRoot: string): Promise<void> {
+    const proc = Bun.spawn(
+        [
+            process.execPath,
+            "run",
+            "scripts/install.templates.ts",
+            "--target",
+            targetHome,
+            "--force",
+        ],
+        {
+            cwd: repoRoot,
+            env: withEnv({ HOME: targetHome }),
+            stderr: "pipe",
+            stdout: "pipe",
+        },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ]);
+    if (exitCode !== 0) {
+        throw new Error(`template install failed (${exitCode})\n${stdout}${stderr}`);
+    }
+}
+
+async function startGateway(
+    home: string,
+    dataHome: string,
+    cacheHome: string,
+    cwd: string,
+    command: string[],
+): Promise<Bun.Subprocess> {
+    const proc = Bun.spawn(command, {
+        cwd,
+        env: withEnv({
+            HOME: home,
+            XDG_CACHE_HOME: cacheHome,
+            XDG_DATA_HOME: dataHome,
+        }),
+        stderr: "pipe",
+        stdout: "pipe",
+    });
+    return proc;
+}
+
+async function settleAndCollect(proc: Bun.Subprocess, waitMs: number): Promise<string> {
+    await sleep(waitMs);
+    proc.kill();
+    await proc.exited.catch(() => undefined);
+    const [stdout, stderr] = await Promise.all([readPipe(proc.stdout), readPipe(proc.stderr)]);
+    return `${stdout}\n${stderr}`;
+}
+
+async function writeRecoveryWal(memoryDir: string): Promise<void> {
+    const goodRecord = {
+        episode: {
+            expiresAt: 9999999999999,
+            record: {
+                concepts: ["recovery"],
+                createdAt: 1700000000000,
+                embedding: [0.1, 0.2],
+                episodeId: "smoke-recovery-episode",
+                importance: 0.9,
+                metadata: {},
+                sourceKind: "smoke",
+                stability: 0.8,
+                text: "recovery smoke",
+                userId: "smoke-user",
+            },
+            reviewAt: 9999999999,
+        },
+        op: "write-episode",
+    };
+    const wal = `${JSON.stringify(goodRecord)}\n{"op":"write-episode"`;
+    await writeFile(join(memoryDir, "working.wal.jsonl"), wal, "utf8");
+}
+
+function extractWarmup(output: string): WorkingMemoryWarmupEvent {
+    const lines = stripAnsi(output)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+        const line = lines[index]!;
+        if (!line.includes("\"memory.warmup.complete\"")) {
+            continue;
+        }
+        const parsed = JSON.parse(line) as { payload?: WorkingMemoryWarmupEvent };
+        if (!parsed.payload) {
+            continue;
+        }
+        return {
+            ...parsed.payload,
+            ...(parsed.payload.workingMemoryHealth ?? {}),
+        } as WorkingMemoryWarmupEvent;
+    }
+    throw new Error(`memory.warmup.complete not found in output\n${output}`);
+}
+
+function assertWarmup(event: WorkingMemoryWarmupEvent, label: string): void {
+    if (event.backend !== "local") {
+        throw new Error(`${label} backend mismatch: ${event.backend}`);
+    }
+    if (!event.workingMemoryHealth || typeof event.workingMemoryHealth !== "object") {
+        throw new Error(`${label} missing workingMemoryHealth`);
+    }
+}
+
+function renderConfigJsonc(): string {
+    return JSON.stringify(
+        {
+            gateway: {
+                allowedChannels: ["api"],
+                channelReplyUrls: {},
+                channels: {
+                    api: {},
+                },
+                host: "127.0.0.1",
+                port: 19990,
+                stdio: false,
+            },
+            memory: {
+                crystal: {
+                    enabled: false,
+                },
+                redis: {
+                    enabled: false,
+                },
+                working: {
+                    backend: "local",
+                },
+            },
+            model: {
+                activeModel: "llama3.2",
+                activeProvider: "local",
+                providers: {
+                    local: {
+                        apiKey: "ollama",
+                        baseUrl: "http://127.0.0.1:11434/v1",
+                        defaultModel: "llama3.2",
+                        models: ["llama3.2"],
+                        type: "openai-compatible",
+                    },
+                },
+            },
+            sandbox: {
+                mode: "off",
+            },
+        },
+        null,
+        2,
+    );
+}
+
+function stripAnsi(value: string): string {
+    return value.replace(/\u001B\[[0-9;]*[A-Za-z]/g, "");
+}
+
+async function readPipe(pipe: Bun.Subprocess["stdout"] | Bun.Subprocess["stderr"]): Promise<string> {
+    if (!pipe || typeof pipe === "number") {
+        return "";
+    }
+    return await new Response(pipe as ReadableStream<Uint8Array>).text();
+}
+
+function withEnv(extra: Record<string, string>): Record<string, string> {
+    return {
+        ...process.env,
+        ...extra,
+    } as Record<string, string>;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+await main();

@@ -9,7 +9,12 @@ import {
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderHotMemoryCompressionPrompt } from "../../agent/prompts/index.ts";
 import type { BrainStore } from "./brain.store.ts";
-import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
+import type {
+    EpisodeRecord,
+    WorkingMemoryHealthSnapshot,
+    WorkingMemoryStore,
+} from "./working.store.ts";
+import { isWorkingMemoryCircuitCoolingDown } from "./working.store.ts";
 
 export interface HotMemoryCompressionRunResult {
     scanned: number;
@@ -30,12 +35,15 @@ export interface HotMemoryCompressionWorkerOptions {
     batchSize?: number;
     reason?: HotMemoryCompressionReasonType;
     now?: () => number;
+    /** 工作记忆健康快照，用于在 breaker 冷却期内薄跳过。 */
+    workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 }
 
 export class HotMemoryCompressionWorker {
     private readonly batchSize: number;
     private readonly reason: HotMemoryCompressionReasonType;
     private readonly now: () => number;
+    private readonly workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 
     constructor(
         private readonly redis: WorkingMemoryStore,
@@ -47,6 +55,7 @@ export class HotMemoryCompressionWorker {
         this.batchSize = Math.max(1, Math.min(100, Math.floor(options.batchSize ?? 16)));
         this.reason = options.reason ?? HotMemoryCompressionReason.ReviewDue;
         this.now = options.now ?? (() => Date.now());
+        this.workingMemoryHealthSnapshot = options.workingMemoryHealthSnapshot;
     }
 
     async drain(userId: string): Promise<HotMemoryCompressionRunResult> {
@@ -57,6 +66,9 @@ export class HotMemoryCompressionWorker {
             missing: 0,
             skipped: 0,
         };
+        if (isWorkingMemoryCircuitCoolingDown(this.workingMemoryHealthSnapshot?.(), this.now())) {
+            return result;
+        }
         let candidateIds: string[] = [];
         try {
             candidateIds = await this.redis.listConsolidationCandidates(

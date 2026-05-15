@@ -84,24 +84,64 @@ const MCP_RESULT_MAX_CHARS_PER_CALL = 4_000;
 const MCP_RESULT_TRUNCATE_HEAD = 2_400;
 const MCP_RESULT_TRUNCATE_TAIL = 1_200;
 
-function summarizeMcpResultPayload(raw: unknown): unknown {
-    if (raw === undefined || raw === null) return raw;
+function summarizeMcpResultPayload(raw: unknown): { summary: Record<string, unknown>; result: unknown } {
+    if (raw === undefined || raw === null) {
+        return {
+            summary: { kind: "empty", valueType: raw === null ? "null" : "undefined" },
+            result: raw,
+        };
+    }
     let serialized: string;
     try {
         serialized = typeof raw === "string" ? raw : JSON.stringify(raw);
     } catch {
-        return { kind: "unserializable", message: "result not JSON-serializable" };
+        return {
+            summary: { kind: "unserializable", valueType: typeof raw },
+            result: { kind: "unserializable", message: "result not JSON-serializable" },
+        };
     }
+    const summary = buildMcpResultSummary(raw, serialized);
     if (serialized.length <= MCP_RESULT_MAX_CHARS_PER_CALL) {
-        return raw;
+        return { summary, result: raw };
     }
     return {
-        kind: "truncated",
-        originalChars: serialized.length,
-        head: serialized.slice(0, MCP_RESULT_TRUNCATE_HEAD),
-        tail: serialized.slice(-MCP_RESULT_TRUNCATE_TAIL),
-        notice: `result truncated to head ${MCP_RESULT_TRUNCATE_HEAD} + tail ${MCP_RESULT_TRUNCATE_TAIL} chars (original ${serialized.length})`,
+        summary: {
+            ...summary,
+            kind: "truncated",
+            originalChars: serialized.length,
+            previewChars: MCP_RESULT_MAX_CHARS_PER_CALL,
+        },
+        result: {
+            kind: "truncated",
+            originalChars: serialized.length,
+            head: serialized.slice(0, MCP_RESULT_TRUNCATE_HEAD),
+            tail: serialized.slice(-MCP_RESULT_TRUNCATE_TAIL),
+            notice: `result truncated to head ${MCP_RESULT_TRUNCATE_HEAD} + tail ${MCP_RESULT_TRUNCATE_TAIL} chars (original ${serialized.length})`,
+        },
     };
+}
+
+function buildMcpResultSummary(raw: unknown, serialized: string): Record<string, unknown> {
+    if (typeof raw === "string") {
+        return { kind: "string", chars: serialized.length, lines: countLines(raw) };
+    }
+    if (Array.isArray(raw)) {
+        return { kind: "array", items: raw.length, chars: serialized.length };
+    }
+    if (isRecord(raw)) {
+        return {
+            kind: "object",
+            chars: serialized.length,
+            keys: Object.keys(raw).slice(0, 8),
+            keyCount: Object.keys(raw).length,
+        };
+    }
+    return { kind: "primitive", valueType: typeof raw, chars: serialized.length };
+}
+
+function countLines(text: string): number {
+    if (text.length === 0) return 0;
+    return text.split(/\r?\n/u).length;
 }
 
 export function renderMcpToolResults(executions: McpToolCallExecution[]): string {
@@ -112,7 +152,7 @@ export function renderMcpToolResults(executions: McpToolCallExecution[]): string
                     server: execution.call.server,
                     tool: execution.call.tool,
                     ok: execution.ok,
-                    result: summarizeMcpResultPayload(execution.result?.raw),
+                    ...summarizeMcpResultPayload(execution.result?.raw),
                     error: execution.error,
                 })),
             },

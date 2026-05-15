@@ -12,6 +12,8 @@ describe("renderMcpToolResults – long-result truncation (MCP-03)", () => {
             },
         ];
         const out = renderMcpToolResults(executions);
+        expect(out).toContain("\"summary\"");
+        expect(out).toContain("\"kind\": \"object\"");
         expect(out).toContain("\"hello\"");
         expect(out).not.toContain("truncated");
     });
@@ -26,6 +28,8 @@ describe("renderMcpToolResults – long-result truncation (MCP-03)", () => {
             },
         ];
         const out = renderMcpToolResults(executions);
+        expect(out).toContain("\"summary\"");
+        expect(out).toContain("\"kind\": \"truncated\"");
         expect(out).toContain("\"truncated\"");
         expect(out).toContain("\"originalChars\": 20000");
         expect(out).toContain("head");
@@ -43,6 +47,8 @@ describe("renderMcpToolResults – long-result truncation (MCP-03)", () => {
             },
         ];
         const out = renderMcpToolResults(executions);
+        expect(out).toContain("\"summary\"");
+        expect(out).toContain("\"kind\": \"empty\"");
         expect(out).toContain("\"tool failed\"");
         expect(out).toContain("\"ok\": false");
     });
@@ -58,6 +64,8 @@ describe("renderMcpToolResults – long-result truncation (MCP-03)", () => {
             },
         ];
         const out = renderMcpToolResults(executions);
+        expect(out).toContain("\"summary\"");
+        expect(out).toContain("\"kind\": \"unserializable\"");
         expect(out).toContain("unserializable");
     });
 });

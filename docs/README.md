@@ -8,7 +8,7 @@
 
 1. [architecture.md](architecture.md) — 顶层分层、composition root、DI 容器、模块边界
 2. [runtime.turn.md](runtime.turn.md) — 单轮请求从渠道入站到回复落盘的完整流程
-3. [memory.system.md](memory.system.md) — Markdown / Redis / SQLite / SurrealDB 四层记忆系统
+3. [memory.system.md](memory.system.md) — Markdown / Redis / SQLite / 晶体本地后端 / SurrealDB 兼容层
 4. [blackboard.md](blackboard.md) — 黑板路由、lease、worker plan、收敛与 livelock
 5. [gateway.channels.md](gateway.channels.md) — 渠道注册、传输类型、状态快照
 6. [sandbox.capabilities.md](sandbox.capabilities.md) — 沙箱策略与能力执行边界
@@ -18,7 +18,7 @@
 10. [cli.commands.md](cli.commands.md) — CLI 命令现状清单（含 blackboard TTY 浏览器）
 11. [boundaries.md](boundaries.md) — 工程硬边界与红线
 12. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
-13. [storage.degradation.md](storage.degradation.md) — Redis / SurrealDB 降级为纯本地存储的草案
+13. [storage.degradation.md](storage.degradation.md) — Redis / 晶体本地后端 / SurrealDB 兼容层的降级方案
 14. 根目录 [TODO.md](../TODO.md) — 运行边界、后续增强与路线记录
 
 ## 提案区

@@ -8,7 +8,7 @@ import { checkSkillSchemaCompatibility } from "../../crystal/skills/index.ts";
 import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { createDefaultMemoryTuning } from "../../config/index.ts";
-import { ChannelLinkState, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
+import { ChannelLinkState, CrystalMemoryBackend, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
 import { getFlyflorConfigPath } from "./config.ts";
 
 export function renderFlyflorBanner(): string {
@@ -27,6 +27,7 @@ export function renderFlyflorBanner(): string {
 export async function renderStatus(app: FlyFlor): Promise<string> {
     const config = app.resolve(FlyFlorTokens.Config);
     const gateway = await resolveGatewaySnapshot(app);
+    const workingHealth = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
     return [
         section("Runtime", [
             line("Config", getFlyflorConfigPath()),
@@ -49,6 +50,9 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
                 "Crystal",
                 config.memory.crystal.enabled ? statusText("enabled", "ok") : statusText("disabled", "warn"),
             ),
+            line("Crystal backend", config.memory.crystal.backend),
+            line("Crystal DB", config.memory.crystal.local.dbFile ?? "(unset)"),
+            line("Working", `${statusText(workingHealth.status, workingHealth.status)} ${workingHealth.detail}`),
             line("Storage", config.paths.storageDir),
         ]),
     ].join("\n");
@@ -114,6 +118,9 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
 
     const brainSummary = await describeBrainDb(config);
     rows.push(["Brain.db", brainSummary.status, brainSummary.detail]);
+
+    const workingMemorySummary = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
+    rows.push(["Working memory", workingMemorySummary.status, workingMemorySummary.detail]);
 
     const table = new Table({
         head: ["Check", "Status", "Detail"],
@@ -233,7 +240,7 @@ function describeIlinkState(config: FlyflorConfig): string {
 
 /**
  * 后台调度器（consolidation / decay / dream）需要 working memory + crystal graph + model 三件齐备。
- * 本地 working memory 可替代 Redis；晶体图仍需要显式打开 memory.crystal 与 surreal。
+ * 本地 working memory 可替代 Redis；晶体层支持 local / surreal 双后端，状态由 backend 决定。
  * 本函数从配置侧静态判断，给 doctor 一行可见性。
  */
 /**
@@ -296,16 +303,18 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function describeBackgroundScheduler(config: FlyflorConfig): { status: string; detail: string } {
+export function describeBackgroundScheduler(config: FlyflorConfig): { status: string; detail: string } {
     const missing: string[] = [];
     const workingBackend =
         config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
     if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
         missing.push("redis working memory");
     }
-    if (!config.memory.crystal.enabled || !config.memory.crystal.surreal.enabled) {
-        missing.push("crystal graph");
-    }
+    const crystalBackend = config.memory.crystal.backend ?? CrystalMemoryBackend.Local;
+    const crystalGraphReady =
+        config.memory.crystal.enabled &&
+        (crystalBackend === CrystalMemoryBackend.Local || config.memory.crystal.surreal.enabled);
+    if (!crystalGraphReady) missing.push("crystal graph");
     if (missing.length === 0) {
         return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working memory)` };
     }
@@ -313,6 +322,44 @@ function describeBackgroundScheduler(config: FlyflorConfig): { status: string; d
         status: "warn",
         detail: `disabled — missing ${missing.join(", ")}; long-term memory consolidation is paused`,
     };
+}
+
+export function describeWorkingMemoryHealth(snapshot: unknown): { status: "ok" | "warn"; detail: string } {
+    if (!isRecord(snapshot)) {
+        return { status: "ok", detail: "runtime snapshot unavailable" };
+    }
+    const backend = readString(snapshot.backend) ?? "working";
+    const circuitState = readString(snapshot.circuitState) ?? "unknown";
+    if (circuitState === "open") {
+        const lastError = readString(snapshot.lastError);
+        const nextRetryAt = readNumber(snapshot.nextRetryAt) ?? readNumber(snapshot.nextRecoveryAt);
+        const retryDetail = nextRetryAt ? `; next probe ${new Date(nextRetryAt).toISOString()}` : "";
+        return {
+            status: "warn",
+            detail: `${backend} circuit open${lastError ? `; ${truncate(lastError, 100)}` : ""}${retryDetail}`,
+        };
+    }
+
+    const loaded = typeof snapshot.loaded === "boolean" ? snapshot.loaded : undefined;
+    const ready = typeof snapshot.ready === "boolean" ? snapshot.ready : undefined;
+    const detail: string[] = [];
+    detail.push(`${backend} ${loaded === false || ready === false ? "not loaded" : "ready"}`);
+    const loadedFrom = readString(snapshot.loadedFrom);
+    if (loadedFrom) {
+        detail.push(`load=${loadedFrom}`);
+    }
+    if (readBoolean(snapshot.recoveredFromBackup, false)) {
+        detail.push("backup recovered");
+    }
+    const replayed = readNumber(snapshot.replayedWalRecords);
+    if (replayed !== undefined) {
+        detail.push(`wal=${replayed}`);
+    }
+    const torn = readNumber(snapshot.tornWalLines);
+    if (torn !== undefined && torn > 0) {
+        detail.push(`torn=${torn}`);
+    }
+    return { status: "ok", detail: detail.join(", ") };
 }
 
 /**

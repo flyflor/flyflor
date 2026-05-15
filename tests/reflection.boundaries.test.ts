@@ -179,6 +179,8 @@ describe("Crystal memory boundaries", () => {
 function crystalConfig(): CrystalMemoryConfig {
     return {
         enabled: true,
+        backend: "local",
+        local: { dbFile: "" },
         surreal: {
             database: "test",
             enabled: false,

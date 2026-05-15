@@ -368,7 +368,7 @@ export class RuntimeModule extends RuntimeBoundary {
             }),
         ]);
         const mcpServers = filterMcpServersByToolset(mcpServersAll, options.toolsetAllowlist);
-        const selectedSkills = selectRuntimeSkills(skills, context.skillNames, skillUsage);
+        const selectedSkills = selectRuntimeSkills(skills, context.skillNames, enrichedContext.embedding, skillUsage);
         this.events.publish(
             event(
                 RuntimeEventType.SkillContextBuilt,
@@ -1709,16 +1709,17 @@ function summarizeMcpResult(value: unknown): string {
 function selectRuntimeSkills(
     skills: Skill[],
     requestedNames: string[] | undefined,
+    queryEmbedding: number[] | undefined,
     usage: SkillUsageSummary | undefined,
 ): Skill[] {
     const requested = new Set((requestedNames ?? []).map((name) => name.trim()).filter(Boolean));
     if (requested.size === 0) {
-        return selectSkills(skills, { usage });
+        return selectSkills(skills, { usage, queryEmbedding });
     }
 
     const explicit = skills.filter((skill) => requested.has(skill.name));
     const explicitNames = new Set(explicit.map((skill) => skill.name));
-    const automatic = selectSkills(skills, { usage }).filter((skill) => !explicitNames.has(skill.name));
+    const automatic = selectSkills(skills, { usage, queryEmbedding }).filter((skill) => !explicitNames.has(skill.name));
     return [...explicit, ...automatic].slice(0, 4);
 }
 

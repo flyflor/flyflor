@@ -78,6 +78,7 @@ bun run docker:dev                        # 重编 Linux binary + 启动 compose
 bun run docker:chat                       # 直接进入 chat TUI
 bun run smoke:docker                      # 不启动容器，检查 compose / binary / prompt bundle
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / 真实配置模型 chat 主路径
+bun run smoke:recovery                    # 临时 HOME 下检查 local working memory + MCP transport 恢复
 bun run smoke:release                     # docs + type + tests + binary + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 release smoke，包含真实模型 Docker chat 主路径

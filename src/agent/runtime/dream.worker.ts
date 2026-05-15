@@ -28,7 +28,7 @@ import {
     type DreamCandidate,
 } from "../../neural/memory/dream.candidates.ts";
 import { DreamActionKind, parseDreamDecisions, type DreamDecision } from "../../neural/memory/dream.decisions.ts";
-import type { SurrealGraphStore } from "../../neural/memory/surreal.graph.ts";
+import type { MemoryGraphStore } from "../../neural/memory/surreal.graph.ts";
 
 export { DreamActionKind, parseDreamDecisions } from "../../neural/memory/dream.decisions.ts";
 export type { DreamDecision } from "../../neural/memory/dream.decisions.ts";
@@ -70,7 +70,7 @@ export class DreamWorkerImpl implements DreamWorker {
     private readonly maxCandidates: number;
 
     constructor(
-        private readonly graph: SurrealGraphStore,
+        private readonly graph: MemoryGraphStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
         options: DreamWorkerOptions = {},

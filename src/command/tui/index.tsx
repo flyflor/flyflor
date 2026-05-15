@@ -9,7 +9,7 @@ import { render } from "@opentui/solid";
 import { createSignal, createMemo, onCleanup } from "solid-js";
 import type { FlyFlor } from "../../app.ts";
 import { FlyFlorTokens } from "../../app.ts";
-import { resolveGatewaySnapshot } from "../../command/cli/status.ts";
+import { describeWorkingMemoryHealth, resolveGatewaySnapshot } from "../../command/cli/status.ts";
 import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
@@ -32,6 +32,7 @@ interface TuiSnapshot {
     config: FlyflorConfig;
     gateway: GatewayStatusSnapshot;
     loadedAt: string;
+    workingMemory: ReturnType<typeof describeWorkingMemoryHealth>;
 }
 
 export async function startTui(app: FlyFlor): Promise<void> {
@@ -52,7 +53,8 @@ export async function startTui(app: FlyFlor): Promise<void> {
         const gateway = await resolveGatewaySnapshot(app);
         const blackboard = app.resolve(FlyFlorTokens.Blackboard);
         const blackboardTurns = await blackboard.listRecentTurns(3);
-        return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString() };
+        const workingMemory = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
+        return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString(), workingMemory };
     };
 
     const initialSnapshot = await loadSnapshot();
@@ -120,7 +122,8 @@ export async function startTui(app: FlyFlor): Promise<void> {
             lines.push(Text({ content: `Gateway: ${s.gateway.host}:${s.gateway.port}`, fg: THEME.fg }));
             lines.push(Text({ content: `API mode: ${s.config.model.apiMode}`, fg: THEME.fg }));
             lines.push(Text({ content: `Sandbox: ${s.config.sandbox.mode}`, fg: THEME.fg }));
-            lines.push(Text({ content: `Memory: ${s.config.memory.enabled ? "enabled" : "disabled"} · Crystal ${s.config.memory.crystal.enabled ? "enabled" : "disabled"}`, fg: THEME.fg }));
+            lines.push(Text({ content: `Memory: ${s.config.memory.enabled ? "enabled" : "disabled"} · Crystal ${s.config.memory.crystal.enabled ? "enabled" : "disabled"} · ${s.config.memory.crystal.backend}`, fg: THEME.fg }));
+            lines.push(Text({ content: `Working: ${s.workingMemory.status} · ${s.workingMemory.detail}`, fg: s.workingMemory.status === "warn" ? THEME.yellow : THEME.fg }));
             lines.push(Text({ content: "" }));
             lines.push(Text({ content: "◆ Latest Blackboard", fg: THEME.cyan, attributes: TextAttributes.BOLD }));
             const turn = s.blackboardTurns[0];

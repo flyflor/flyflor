@@ -64,8 +64,10 @@ interface ConfigView {
     memory: {
         enabled: boolean;
         crystal: boolean;
+        crystalBackend: string;
         redis: boolean;
         surreal: boolean;
+        crystalDbFile: string;
     };
 }
 
@@ -103,8 +105,10 @@ function buildView(config: FlyflorConfig, redact: boolean): ConfigView {
         memory: {
             enabled: config.memory.enabled,
             crystal: config.memory.crystal.enabled,
+            crystalBackend: config.memory.crystal.backend,
             redis: config.memory.redis.enabled,
             surreal: config.memory.crystal.surreal.enabled,
+            crystalDbFile: config.memory.crystal.local.dbFile ?? "",
         },
     };
 }
@@ -175,8 +179,10 @@ function renderText(view: ConfigView): string {
     lines.push("[memory]");
     lines.push(`  enabled: ${view.memory.enabled}`);
     lines.push(`  crystal: ${view.memory.crystal}`);
+    lines.push(`  crystalBackend: ${view.memory.crystalBackend}`);
     lines.push(`  redis: ${view.memory.redis}`);
     lines.push(`  surreal: ${view.memory.surreal}`);
+    lines.push(`  crystalDbFile: ${view.memory.crystalDbFile || "(unset)"}`);
     lines.push("");
     lines.push("[paths]");
     lines.push(`  home: ${view.home}`);

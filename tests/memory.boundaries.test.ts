@@ -32,6 +32,7 @@ import {
     Channel,
     ChatType,
     ComponentKind,
+    CrystalMemoryBackend,
     MarkdownMemoryFile,
     MemoryKind,
     RuntimeMode,
@@ -1170,6 +1171,10 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
             },
             crystal: {
                 enabled: false,
+                backend: CrystalMemoryBackend.Local,
+                local: {
+                    dbFile: join(paths.storageDir, "crystal", "crystal.db"),
+                },
                 surreal: {
                     database: "test",
                     enabled: false,

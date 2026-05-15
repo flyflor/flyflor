@@ -137,6 +137,8 @@ export function skillRoots(paths: FlyflorPaths): SkillRoot[] {
 
 export interface SkillSelectionOptions {
     limit?: number;
+    /** Runtime 入口统一计算的一次性查询 embedding；存在时做轻量语义召回，不再额外做字符串启发式。 */
+    queryEmbedding?: number[];
     usage?: SkillUsageSummary;
     now?: number;
 }
@@ -150,8 +152,12 @@ export function selectSkills(skills: Skill[], optionsOrLimit: SkillSelectionOpti
     const scored = eligible.map((skill) => ({
         skill,
         score: scoreSkill(skill, options.usage, now),
+        semanticScore: scoreSkillSemantic(skill, options.queryEmbedding),
     }));
     scored.sort((a, b) => {
+        if (options.queryEmbedding && options.queryEmbedding.length > 0 && b.semanticScore !== a.semanticScore) {
+            return b.semanticScore - a.semanticScore;
+        }
         if (b.score !== a.score) return b.score - a.score;
         return a.skill.name.localeCompare(b.skill.name);
     });
@@ -160,19 +166,93 @@ export function selectSkills(skills: Skill[], optionsOrLimit: SkillSelectionOpti
 
 function scoreSkill(skill: Skill, usage: SkillUsageSummary | undefined, now: number): number {
     const stats = usage?.skills[skill.name];
-    if (!stats) return 0;
-    let score = Math.log1p(stats.useCount) * 2;
-    if (stats.mcpCallCount > 0) {
-        score += (stats.mcpSuccessCount / stats.mcpCallCount) * 5;
+    let score = 0;
+    if (stats) {
+        score += Math.log1p(stats.useCount) * 2;
+        if (stats.mcpCallCount > 0) {
+            score += (stats.mcpSuccessCount / stats.mcpCallCount) * 5;
+        }
+        const last = Date.parse(stats.lastUsedAt);
+        if (Number.isFinite(last)) {
+            const ageDays = (now - last) / (24 * 60 * 60 * 1000);
+            if (ageDays < 1) score += 3;
+            else if (ageDays < 7) score += 2;
+            else if (ageDays < 30) score += 1;
+        }
     }
-    const last = Date.parse(stats.lastUsedAt);
-    if (Number.isFinite(last)) {
-        const ageDays = (now - last) / (24 * 60 * 60 * 1000);
-        if (ageDays < 1) score += 3;
-        else if (ageDays < 7) score += 2;
-        else if (ageDays < 30) score += 1;
-    }
+
     return score;
+}
+
+function scoreSkillSemantic(skill: Skill, queryEmbedding: number[] | undefined): number {
+    if (!queryEmbedding || queryEmbedding.length === 0) {
+        return 0;
+    }
+    const dimensions = queryEmbedding.length;
+    const nameVector = embedSkillText(skill.name, dimensions);
+    const descriptionVector = embedSkillText(skill.manifest.description, dimensions);
+    const bodyVector = embedSkillText(skill.body.trim().slice(0, 4_000), dimensions);
+    const nameScore = cosineSimilarity(queryEmbedding, nameVector);
+    const descriptionScore = cosineSimilarity(queryEmbedding, descriptionVector);
+    const bodyScore = cosineSimilarity(queryEmbedding, bodyVector);
+    // 语义召回只负责主排序，不直接替换 usage / recency 分数。
+    return Math.max(nameScore, descriptionScore, bodyScore);
+}
+
+function cosineSimilarity(left: number[], right: number[]): number {
+    const length = Math.max(left.length, right.length);
+    let dot = 0;
+    let leftNorm = 0;
+    let rightNorm = 0;
+    for (let index = 0; index < length; index += 1) {
+        const a = left[index] ?? 0;
+        const b = right[index] ?? 0;
+        dot += a * b;
+        leftNorm += a * a;
+        rightNorm += b * b;
+    }
+    if (leftNorm === 0 || rightNorm === 0) {
+        return 0;
+    }
+    return dot / Math.sqrt(leftNorm * rightNorm);
+}
+
+function embedSkillText(text: string, dimensions: number): number[] {
+    const vector = new Array<number>(dimensions).fill(0);
+    for (const token of tokenizeSkillText(text)) {
+        const hash = fnv1a(token);
+        const index = hash % dimensions;
+        vector[index] = (vector[index] ?? 0) + (hash % 2 === 0 ? 1 : -1);
+    }
+    normalize(vector);
+    return vector;
+}
+
+function tokenizeSkillText(text: string): string[] {
+    return text
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}_-]+/u)
+        .filter((token) => token.length >= 2 && token.length <= 64)
+        .slice(0, 2048);
+}
+
+function fnv1a(value: string): number {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return hash >>> 0;
+}
+
+function normalize(vector: number[]): void {
+    const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+    if (magnitude === 0) {
+        return;
+    }
+    for (let index = 0; index < vector.length; index += 1) {
+        vector[index] = vector[index]! / magnitude;
+    }
 }
 
 export async function loadSkillUsageSummary(paths: FlyflorPaths): Promise<SkillUsageSummary> {

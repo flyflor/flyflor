@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { selectSkills, SKILL_MANIFEST_SCHEMA_VERSION, type Skill, type SkillUsageSummary } from "../src/crystal/skills/index.ts";
+import { LocalHashEmbeddingProvider } from "../src/neural/index.ts";
 
 function makeSkill(name: string, opts: Partial<Skill["manifest"]> = {}): Skill {
     return {
@@ -87,5 +88,39 @@ describe("selectSkills ranking", () => {
     test("legacy numeric limit signature still works", () => {
         const skills = [makeSkill("a"), makeSkill("b"), makeSkill("c")];
         expect(selectSkills(skills, 2).map((s) => s.name)).toEqual(["a", "b"]);
+    });
+
+    test("query embedding lifts a semantically relevant skill above higher-usage unrelated skills", async () => {
+        const embedder = new LocalHashEmbeddingProvider(32);
+        const queryEmbedding = await embedder.embed("missing facts blocker list");
+        const skills = [
+            makeSkill("blocker-listing", {
+                description: "Surface numbered blocker lists when facts are missing.",
+            }),
+            makeSkill("retry-debugger", {
+                description: "Debug MCP tool failures with retries and backoff.",
+            }),
+        ];
+        const usage: SkillUsageSummary = {
+            schemaVersion: 1,
+            projectDir: "/p",
+            skills: {
+                "retry-debugger": {
+                    capabilities: [],
+                    compatibility: [],
+                    firstUsedAt: "2024-01-01T00:00:00Z",
+                    lastUsedAt: "2024-06-09T00:00:00Z",
+                    mcpCallCount: 8,
+                    mcpSuccessCount: 8,
+                    source: "project",
+                    useCount: 24,
+                },
+            },
+        };
+
+        const picked = selectSkills(skills, { limit: 2, usage, queryEmbedding });
+
+        expect(picked[0]?.name).toBe("blocker-listing");
+        expect(picked.map((skill) => skill.name)).toContain("retry-debugger");
     });
 });

@@ -13,7 +13,7 @@
  * 阈值常量在 README.md §12.2 单点定义；后续若需 expose 给 config 在此聚合即可。
  */
 
-import type { MemoryNodeRecord, GemRecord, SurrealGraphStore } from "./surreal.graph.ts";
+import type { MemoryNodeRecord, GemRecord, MemoryGraphStore } from "./surreal.graph.ts";
 
 export const DREAM_THRESHOLDS = {
     /** drift: skill 上 contradictionCount 达到此值即列入修复审计候选。 */
@@ -96,7 +96,7 @@ export interface CollectDreamCandidatesInput {
  * 收集器只发查询；写入由 dream module 在 LLM 决策后回写。
  */
 export async function collectDreamCandidates(
-    graph: SurrealGraphStore,
+    graph: MemoryGraphStore,
     input: CollectDreamCandidatesInput,
 ): Promise<DreamCandidate[]> {
     const { userId, nowMs } = input;

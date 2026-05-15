@@ -26,7 +26,18 @@ beforeAll(async () => {
     await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);
 });
 
-const CFG: CrystalMemoryConfig = { enabled: true } as CrystalMemoryConfig;
+const CFG: CrystalMemoryConfig = {
+    enabled: true,
+    backend: "local",
+    local: { dbFile: "" },
+    surreal: {
+        database: "test",
+        enabled: false,
+        internalUrl: "http://127.0.0.1:1",
+        namespace: "flyflor",
+        timeoutMs: 25,
+    },
+};
 
 function makeService(): { svc: CrystalMemoryService; store: InMemoryCrystalMemoryStore } {
     const store = new InMemoryCrystalMemoryStore();
@@ -211,7 +222,21 @@ describe("reflection → skill consolidation (P0-5)", () => {
 
     test("[chaos] disabled crystal config → recordTurn no-op", async () => {
         const store = new InMemoryCrystalMemoryStore();
-        const svc = new CrystalMemoryService({ enabled: false } as CrystalMemoryConfig, store);
+        const svc = new CrystalMemoryService(
+            {
+                enabled: false,
+                backend: "local",
+                local: { dbFile: "" },
+                surreal: {
+                    database: "test",
+                    enabled: false,
+                    internalUrl: "http://127.0.0.1:1",
+                    namespace: "flyflor",
+                    timeoutMs: 25,
+                },
+            },
+            store,
+        );
         const r = await svc.recordTurn({
             requestId: "r",
             now: NOW,

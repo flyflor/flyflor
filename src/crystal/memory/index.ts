@@ -1,6 +1,8 @@
 import type { CrystalMemoryConfig } from "../../config/index.ts";
 import { CrystalComponent } from "../../agent/components.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { CrystalMemoryBackend } from "../../protocol/contracts/index.ts";
+import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS } from "./vector.index.ts";
 import {
     buildReflectionCandidate,
     crystallizeCandidate,
@@ -10,9 +12,11 @@ import {
 } from "../reflection/index.ts";
 import { MemoryKind, MemoryLayer, ProviderScope } from "../../protocol/contracts/index.ts";
 import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
+import { LocalCrystalMemoryStore } from "./local.store.ts";
 import { SurrealCrystalMemoryStore } from "./surreal.ts";
 import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
+export { LocalCrystalMemoryStore } from "./local.store.ts";
 export { SurrealCrystalMemoryStore } from "./surreal.ts";
 export type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
@@ -22,17 +26,22 @@ export type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./
     tags: ["crystal", "memory"],
 })
 export class CrystalMemoryService extends CrystalComponent {
+    private readonly store: CrystalMemoryStore;
+
     public constructor(
         private readonly config: CrystalMemoryConfig,
-        private readonly store: CrystalMemoryStore = new SurrealCrystalMemoryStore(config.surreal),
+        store?: CrystalMemoryStore,
+        vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
     ) {
         super();
+        this.store = store ?? resolveCrystalStore(config, vectorDimensions);
     }
 
     public async recall(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
         if (!this.config.enabled) {
             return [];
         }
+        await this.store.initialize();
         const candidate = buildReflectionCandidate({
             id: `query-${hashText(request.query)}`,
             sourceId: request.scope,
@@ -64,6 +73,7 @@ export class CrystalMemoryService extends CrystalComponent {
         if (!this.config.enabled) {
             return { candidates: [], atoms: [], gems: [] };
         }
+        await this.store.initialize();
 
         const candidates = [
             ...input.promoted.map((record) => candidateFromPromotedMemory(record, input.now)),
@@ -162,4 +172,11 @@ function hashText(text: string): string {
         hash = Math.imul(hash, 16777619);
     }
     return (hash >>> 0).toString(16);
+}
+
+function resolveCrystalStore(config: CrystalMemoryConfig, vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS): CrystalMemoryStore {
+    if (config.backend === CrystalMemoryBackend.Local) {
+        return new LocalCrystalMemoryStore(config.local, vectorDimensions);
+    }
+    return new SurrealCrystalMemoryStore(config.surreal);
 }

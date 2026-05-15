@@ -289,7 +289,8 @@ Consolidation 的 reinforce 分支会延长 Redis episode TTL 并把下一次 re
 
 - `config.memory.enabled` — 总开关
 - `config.memory.redis` — 工作记忆后端
-- `config.memory.crystal.surreal` — 长期图后端
+- `config.memory.crystal.backend` / `config.memory.crystal.local.dbFile` — 晶体层本地后端
+- `config.memory.crystal.surreal` — 兼容长期图后端
 - `config.memory.candidates.maxCandidatesPerTurn` — 每轮候选上限
 - `config.memory.candidates.autoPromoteExplicit` — 显式 action 直接 promote
 - `config.memory.retrieval.maxResults` / `maxPromptChars` — 上下文预算

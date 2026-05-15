@@ -216,6 +216,31 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationCompleted)).toBe(true);
     });
 
+    test("drain skips without Redis calls while breaker is cooling down", async () => {
+        let listCalls = 0;
+        const fakeRedis = {
+            getHealthSnapshot: () => ({
+                circuitState: "open",
+                nextRetryAt: Date.now() + 60_000,
+            }),
+            listConsolidationCandidates: async () => {
+                listCalls += 1;
+                return ["e1"];
+            },
+            readEpisode: async () => makeEpisode("e1", "u1"),
+        } as unknown as RedisMemoryStore;
+        const events = new CapturingSink();
+        const worker = new ConsolidationWorker(fakeRedis, {} as SurrealGraphStore, new StubModel(["{}"]), events, {
+            workingMemoryHealthSnapshot: () => fakeRedis.getHealthSnapshot(),
+        });
+
+        const result = await worker.drain("u1");
+
+        expect(result).toEqual({ scanned: 0, reinforced: 0, consolidated: 0, discarded: 0, skipped: 0 });
+        expect(listCalls).toBe(0);
+        expect(events.events).toEqual([]);
+    });
+
     test("skipped when episode is missing from redis", async () => {
         const fakeRedis = {
             listConsolidationCandidates: async () => ["ghost"],

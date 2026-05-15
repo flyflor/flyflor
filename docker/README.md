@@ -49,6 +49,7 @@ bun run docker:down      # 停服务，保留数据
 bun run docker:nuke      # 停服务并清空具名卷（重置本地持久状态）
 bun run smoke:docker     # 不启动容器，检查 compose / Linux binary 挂载 / prompt bundle
 bun run smoke:runtime    # 已启动 compose 后，检查 doctor / 真实配置模型 chat 主路径
+bun run smoke:recovery   # 临时 HOME 下验证 local working memory + MCP transport 恢复
 bun run smoke:release    # docs + type + tests + binary + docker smoke
 bun run ci               # 本地确定性门禁：docs/type/tests/binary + docker 静态烟测
 ```

@@ -1,9 +1,17 @@
 import type { Redis } from "ioredis";
 
+export interface WorkingMemoryHealthSnapshot {
+    circuitState: "closed" | "open" | string;
+    lastError?: string;
+    nextRecoveryAt?: number;
+    nextRetryAt?: number;
+}
+
 export interface WorkingMemoryStore {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
     dispose(): void;
+    getHealthSnapshot?(): WorkingMemoryHealthSnapshot;
     hotConcepts(userId: string, limit: number): Promise<string[]>;
     isReady(): boolean;
     listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]>;
@@ -57,4 +65,20 @@ export interface EpisodeRecord {
     sourceKind: string;
     createdAt: number;
     metadata: Record<string, unknown>;
+}
+
+export function isWorkingMemoryCircuitCoolingDown(
+    snapshot: WorkingMemoryHealthSnapshot | undefined,
+    nowMs = Date.now(),
+): boolean {
+    if (!snapshot || snapshot.circuitState !== "open") {
+        return false;
+    }
+    const probeAt = resolveWorkingMemoryProbeAt(snapshot);
+    return probeAt !== undefined && nowMs < probeAt;
+}
+
+function resolveWorkingMemoryProbeAt(snapshot: WorkingMemoryHealthSnapshot): number | undefined {
+    const probeAt = snapshot.nextRetryAt ?? snapshot.nextRecoveryAt;
+    return typeof probeAt === "number" && Number.isFinite(probeAt) ? probeAt : undefined;
 }

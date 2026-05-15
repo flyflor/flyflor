@@ -1,6 +1,7 @@
 import { ModelRole, type ModelClient } from "../../protocol/contracts/index.ts";
-import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
-import type { SurrealGraphStore } from "./surreal.graph.ts";
+import type { EpisodeRecord, WorkingMemoryStore, WorkingMemoryHealthSnapshot } from "./working.store.ts";
+import { isWorkingMemoryCircuitCoolingDown } from "./working.store.ts";
+import type { MemoryGraphStore } from "./surreal.graph.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderMemoryConsolidationPrompt } from "../../agent/prompts/index.ts";
 import type { RetrospectiveLog } from "./retrospective.ts";
@@ -60,6 +61,8 @@ export interface ConsolidationWorkerOptions {
     defaultConfidence?: number;
     /** 可选的回顾日志：consolidate / discard 决策结果会追加到 RETROSPECTIVE.md */
     retrospective?: RetrospectiveLog;
+    /** 工作记忆健康快照，用于在 breaker 冷却期内薄跳过。 */
+    workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 }
 
 // 系统消息留空：所有提示词内容由 templates/prompts/*.md 提供，避免代码内出现提示词字符串。
@@ -69,10 +72,11 @@ export class ConsolidationWorker {
     private readonly reinforceTtl: number;
     private readonly defaultConfidence: number;
     private readonly retrospective?: RetrospectiveLog;
+    private readonly workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 
     constructor(
         private readonly redis: WorkingMemoryStore,
-        private readonly graph: SurrealGraphStore,
+        private readonly graph: MemoryGraphStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
         options: ConsolidationWorkerOptions = {},
@@ -81,6 +85,7 @@ export class ConsolidationWorker {
         this.reinforceTtl = options.reinforceTtlSeconds ?? 7 * 24 * 3600;
         this.defaultConfidence = options.defaultConfidence ?? 0.6;
         this.retrospective = options.retrospective;
+        this.workingMemoryHealthSnapshot = options.workingMemoryHealthSnapshot;
     }
 
     /**
@@ -96,6 +101,9 @@ export class ConsolidationWorker {
             discarded: 0,
             skipped: 0,
         };
+        if (isWorkingMemoryCircuitCoolingDown(this.workingMemoryHealthSnapshot?.(), Date.now())) {
+            return result;
+        }
         let candidateIds: string[];
         try {
             candidateIds = await this.redis.listConsolidationCandidates(

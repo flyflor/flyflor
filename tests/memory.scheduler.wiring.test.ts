@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
-import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
+import { CrystalMemoryBackend, ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { type EventSink } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
@@ -67,6 +67,19 @@ describe("MemoryModule background scheduler wiring", () => {
         expect(scheduler?.snapshot().hotMemoryCompressionEnabled).toBe(true);
         // dispose 必须可以多次调用
         memory.dispose();
+        memory.dispose();
+    });
+
+    test("scheduler is instantiated for the local crystal backend without SurrealDB", async () => {
+        const config = await testConfig();
+        config.memory.crystal.enabled = true;
+        config.memory.crystal.backend = CrystalMemoryBackend.Local;
+        const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
+        const scheduler = (memory as unknown as {
+            scheduler: { activeUsers(): number } | null;
+        }).scheduler;
+        expect(scheduler).not.toBeNull();
+        expect(scheduler?.activeUsers()).toBe(0);
         memory.dispose();
     });
 });

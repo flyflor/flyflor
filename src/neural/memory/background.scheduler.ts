@@ -19,8 +19,12 @@ import { event, RuntimeEventType, type EventSink } from "../../protocol/events/i
 import { DecayLayer, DEFAULT_DECAY_PROFILES, decayImportance, type DecayProfile } from "./decay.ts";
 import type { ConsolidationWorker } from "./consolidation.worker.ts";
 import type { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
-import type { SurrealGraphStore } from "./surreal.graph.ts";
+import type { MemoryGraphStore } from "./surreal.graph.ts";
 import type { DreamWorker } from "../../agent/runtime/dream.worker.ts";
+import {
+    isWorkingMemoryCircuitCoolingDown,
+    type WorkingMemoryHealthSnapshot,
+} from "./working.store.ts";
 
 export interface BackgroundSchedulerOptions {
     /** 整合 worker 节拍（毫秒）。默认 10 分钟。 */
@@ -77,6 +81,8 @@ export interface BackgroundSchedulerOptions {
     brainArchiveSweeper?: () => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>;
     /** brain.db 冷归档检查节拍。默认 24h，0 关闭。 */
     brainArchiveIntervalMs?: number;
+    /** 工作记忆健康快照，供 consolidation / hot compression 在 breaker 冷却期内薄跳过。 */
+    workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 }
 
 export class BackgroundScheduler {
@@ -106,16 +112,31 @@ export class BackgroundScheduler {
     private readonly hotMemoryCompression: HotMemoryCompressionWorker | undefined;
     private readonly dormantSweeper: (() => { entered: number }) | undefined;
     private readonly brainArchiveSweeper: (() => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>) | undefined;
+    private readonly workingMemoryHealthSnapshot: (() => WorkingMemoryHealthSnapshot | undefined) | undefined;
     private dormantTimer: ReturnType<typeof setInterval> | undefined;
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
-    private readonly opts: Required<Omit<BackgroundSchedulerOptions, "profiles" | "now" | "dream" | "projectSweeper" | "skillSweeper" | "summarySweeper" | "hotMemoryCompression" | "dormantSweeper" | "brainArchiveSweeper">> & {
+    private readonly opts: Required<
+        Omit<
+            BackgroundSchedulerOptions,
+            | "profiles"
+            | "now"
+            | "dream"
+            | "projectSweeper"
+            | "skillSweeper"
+            | "summarySweeper"
+            | "hotMemoryCompression"
+            | "dormantSweeper"
+            | "brainArchiveSweeper"
+            | "workingMemoryHealthSnapshot"
+        >
+    > & {
         profiles: Record<DecayLayer, DecayProfile>;
         now: () => number;
     };
 
     constructor(
         private readonly consolidation: ConsolidationWorker,
-        private readonly graph: SurrealGraphStore,
+        private readonly graph: MemoryGraphStore,
         private readonly events: EventSink,
         options: BackgroundSchedulerOptions = {},
     ) {
@@ -126,6 +147,7 @@ export class BackgroundScheduler {
         this.hotMemoryCompression = options.hotMemoryCompression;
         this.dormantSweeper = options.dormantSweeper;
         this.brainArchiveSweeper = options.brainArchiveSweeper;
+        this.workingMemoryHealthSnapshot = options.workingMemoryHealthSnapshot;
         this.opts = {
             consolidationIntervalMs: options.consolidationIntervalMs ?? 10 * 60_000,
             decayIntervalMs: options.decayIntervalMs ?? 24 * 60 * 60_000,
@@ -315,7 +337,7 @@ export class BackgroundScheduler {
         reinforced: number;
         discarded: number;
     }> {
-        if (this.consolidationBusy) {
+        if (this.consolidationBusy || this.shouldSkipWorkingMemoryMaintenance()) {
             return { users: 0, consolidated: 0, reinforced: 0, discarded: 0 };
         }
         this.consolidationBusy = true;
@@ -336,6 +358,10 @@ export class BackgroundScheduler {
             this.consolidationBusy = false;
         }
         return totals;
+    }
+
+    private shouldSkipWorkingMemoryMaintenance(): boolean {
+        return isWorkingMemoryCircuitCoolingDown(this.workingMemoryHealthSnapshot?.(), this.opts.now());
     }
 
     /** 立即跑一轮衰减扫描（测试与手动触发复用）。 */
@@ -512,7 +538,15 @@ export class BackgroundScheduler {
         skipped: number;
     }> {
         const totals = { users: 0, compressed: 0, deleted: 0, missing: 0, skipped: 0 };
-        if (!this.hotMemoryCompression || this.hotMemoryCompressionBusy || this.consolidationBusy || this.brainMaintenanceBusy) return totals;
+        if (
+            !this.hotMemoryCompression ||
+            this.hotMemoryCompressionBusy ||
+            this.consolidationBusy ||
+            this.brainMaintenanceBusy ||
+            this.shouldSkipWorkingMemoryMaintenance()
+        ) {
+            return totals;
+        }
         this.hotMemoryCompressionBusy = true;
         this.brainMaintenanceBusy = true;
         const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];

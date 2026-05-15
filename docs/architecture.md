@@ -18,8 +18,8 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 | 层 | 目录 | 角色 | 后端 |
 | --- | --- | --- | --- |
 | 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI 兼容 / Anthropic 兼容 |
-| 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、Skill 与方法论沉淀 | SurrealDB |
-| 海马体 Neural | `src/neural/memory` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计 | Redis + Markdown + SQLite + SurrealDB |
+| 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、Skill 与方法论沉淀 | local crystal.db + Surreal 兼容 |
+| 海马体 Neural | `src/neural/memory` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计 | local working memory + Markdown + SQLite + local graph + Redis/Surreal 兼容 |
 
 ## 分层结构图
 
@@ -46,7 +46,7 @@ flowchart TB
     Memory --> Redis["Redis 工作记忆<br/>episode ring + hot concepts"]
     Memory --> HotCompression["HotMemoryCompressionWorker<br/>隔离压缩审计"]
     Memory --> SQLite["SQLite 索引<br/>candidates/offers/search"]
-    Memory --> Surreal["SurrealDB 长期图<br/>episode/memory_node/gem/summary_embedding"]
+    Memory --> Graph["本地 / Surreal 兼容长期图<br/>episode/memory_node/gem/summary_embedding"]
     Memory --> Crystal["CrystalMemoryService"]
     HotCompression --> SQLiteBrain["brain.db memory_events<br/>hot-memory-compression"]
 
