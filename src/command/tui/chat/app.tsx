@@ -127,7 +127,15 @@ type SelectionScopedRenderer = CliRenderer & {
 
 export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions): () => void {
     return createRoot((disposeSolid) => {
-        const { runtime, blackboard, eventBus, approveMcpToolCall, agentName = "flyflor", userId = "human" } = options;
+        const {
+            runtime,
+            blackboard,
+            eventBus,
+            approveMcpToolCall,
+            agentName = "flyflor",
+            avatarArt = "",
+            userId = "human",
+        } = options;
 
         // ── 状态 ──────────────────────────────────────────────
         const [messages, setMessages] = createSignal<ChatMessage[]>([], { equals: false });
@@ -829,7 +837,29 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         sideScrollBox.horizontalScrollBar.height = 0;
         sideScrollBox.verticalScrollBar.visible = true;
         sideScrollBox.verticalScrollBar.width = 2;
-        sidePanel.add(sideTitle);
+        const sideHeader = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            flexShrink: 0,
+            paddingBottom: 1,
+        });
+        if (avatarArt.trim().length > 0) {
+            const avatarRow = new BoxRenderable(renderer, {
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                alignItems: "flex-start",
+                flexShrink: 0,
+                width: "100%",
+            });
+            const avatar = new TextRenderable(renderer, {
+                content: avatarArt,
+                fg: THEME.fg,
+                selectable: false,
+            });
+            avatarRow.add(avatar);
+            sideHeader.add(avatarRow);
+        }
+        sideHeader.add(sideTitle);
+        sidePanel.add(sideHeader);
         sidePanel.add(sideScrollBox);
         contentRow.add(sidePanel);
 
