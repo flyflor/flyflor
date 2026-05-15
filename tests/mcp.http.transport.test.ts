@@ -14,7 +14,8 @@ interface Handler {
     (req: Request): Promise<Response> | Response;
 }
 
-let server: ReturnType<typeof Bun.serve> | undefined;
+const MOCK_URL = "https://mcp.transport.test/mcp";
+let originalFetch: typeof fetch;
 let currentHandler: Handler = () => new Response("no handler", { status: 500 });
 
 function setHandler(h: Handler): void {
@@ -22,16 +23,18 @@ function setHandler(h: Handler): void {
 }
 
 beforeAll(() => {
-    server = Bun.serve({
-        port: 0,
-        fetch(req) {
-            return currentHandler(req);
-        },
-    });
+    originalFetch = globalThis.fetch;
+    // The transport contract is exercised at the fetch boundary. Avoiding a
+    // real TCP listener keeps this suite stable in Bun sandboxes that deny bind().
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        if (String(input) !== MOCK_URL) return originalFetch(input, init);
+        const request = input instanceof Request ? input : new Request(String(input), init);
+        return abortableResponse(currentHandler(request), request.signal);
+    }) as typeof fetch;
 });
 
 afterAll(() => {
-    server?.stop(true);
+    globalThis.fetch = originalFetch;
 });
 
 afterEach(() => {
@@ -39,7 +42,7 @@ afterEach(() => {
 });
 
 function url(): string {
-    return `http://127.0.0.1:${server!.port}/mcp`;
+    return MOCK_URL;
 }
 
 function defServer(overrides: Partial<McpServerDefinition> = {}): McpServerDefinition {
@@ -87,6 +90,23 @@ async function readBody(req: Request): Promise<RpcMessage> {
     const text = await req.text();
     if (!text) return {};
     return JSON.parse(text) as RpcMessage;
+}
+
+async function abortableResponse(response: Promise<Response> | Response, signal: AbortSignal): Promise<Response> {
+    if (signal.aborted) throw abortError();
+    return new Promise<Response>((resolve, reject) => {
+        const onAbort = () => reject(abortError());
+        signal.addEventListener("abort", onAbort, { once: true });
+        Promise.resolve(response).then(resolve, reject).finally(() => {
+            signal.removeEventListener("abort", onAbort);
+        });
+    });
+}
+
+function abortError(): Error {
+    const error = new Error("The operation was aborted.");
+    error.name = "AbortError";
+    return error;
 }
 
 describe("MCP HTTP transport", () => {

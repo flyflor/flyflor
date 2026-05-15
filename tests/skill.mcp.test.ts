@@ -1,5 +1,4 @@
 import { copyFile, mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -720,85 +719,46 @@ function handle(message) {
 
 async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promise<T> {
     let sessionId = "";
-    const server = createServer((request, response) => {
-        const chunks: Buffer[] = [];
-        request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-        request.on("end", () => {
-            const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
-                id?: number | string;
-                method?: string;
-                params?: Record<string, unknown>;
-            };
-            const writeJson = (body: unknown, headers: Record<string, string> = {}) => {
-                response.writeHead(200, { "content-type": "application/json", ...headers });
-                response.end(JSON.stringify(body));
-            };
-            if (payload.method === "initialize") {
-                sessionId = crypto.randomUUID();
-                writeJson(
-                    {
-                        jsonrpc: "2.0",
-                        id: payload.id,
-                        result: {
-                            protocolVersion: "2025-06-18",
-                            capabilities: {},
-                            serverInfo: { name: "fake-http", version: "1" },
-                        },
-                    },
-                    { "Mcp-Session-Id": sessionId },
-                );
-                return;
-            }
-            if (payload.method === "notifications/initialized") {
-                response.writeHead(202);
-                response.end();
-                return;
-            }
-            if (request.headers["mcp-session-id"] !== sessionId) {
-                writeJson({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
-                return;
-            }
-            if (payload.method === "tools/list") {
-                writeJson({
+    return withMockHttpMcpEndpoint("fake", async (request) => {
+        const payload = (await request.json()) as {
+            id?: number | string;
+            method?: string;
+            params?: Record<string, unknown>;
+        };
+        if (payload.method === "initialize") {
+            sessionId = crypto.randomUUID();
+            return jsonResponse(
+                {
                     jsonrpc: "2.0",
                     id: payload.id,
                     result: {
-                        tools: [
-                            {
-                                name: "echo",
-                                description: "Echo input text",
-                                inputSchema: { type: "object", properties: { text: { type: "string" } } },
-                            },
-                        ],
+                        protocolVersion: "2025-06-18",
+                        capabilities: {},
+                        serverInfo: { name: "fake-http", version: "1" },
                     },
-                });
-                return;
-            }
-            if (payload.method === "tools/call") {
-                const args = payload.params?.arguments as { text?: unknown } | undefined;
-                writeJson({
-                    jsonrpc: "2.0",
-                    id: payload.id,
-                    result: {
-                        isError: false,
-                        content: [{ type: "text", text: String(args?.text ?? "") }],
-                    },
-                });
-                return;
-            }
-            writeJson({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
-        });
-    });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (!address || typeof address === "string") {
-        throw new Error("fake HTTP MCP server did not bind a TCP port");
-    }
-    try {
-        return await fn(`http://127.0.0.1:${address.port}/mcp`);
-    } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
+                },
+                { "Mcp-Session-Id": sessionId },
+            );
+        }
+        if (payload.method === "notifications/initialized") {
+            return new Response(null, { status: 202 });
+        }
+        if (request.headers.get("mcp-session-id") !== sessionId) {
+            return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
+        }
+        if (payload.method === "tools/list") {
+            return jsonResponse({ jsonrpc: "2.0", id: payload.id, result: { tools: [httpEchoTool()] } });
+        }
+        if (payload.method === "tools/call") {
+            const args = payload.params?.arguments as { text?: unknown } | undefined;
+            return jsonResponse({
+                jsonrpc: "2.0",
+                id: payload.id,
+                result: { isError: false, content: [{ type: "text", text: String(args?.text ?? "") }] },
+            });
+        }
+        return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
+    }, fn);
 }
 
 async function withControllableHttpMcpServer<T>(
@@ -806,82 +766,77 @@ async function withControllableHttpMcpServer<T>(
 ): Promise<T> {
     const control = { failToolsList: false };
     let sessionId = "";
-    const server = createServer((request, response) => {
-        const chunks: Buffer[] = [];
-        request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-        request.on("end", () => {
-            const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+    return withMockHttpMcpEndpoint(
+        "controllable",
+        async (request) => {
+            const payload = (await request.json()) as {
                 id?: number | string;
                 method?: string;
                 params?: Record<string, unknown>;
             };
-            const writeJson = (body: unknown, headers: Record<string, string> = {}) => {
-                response.writeHead(200, { "content-type": "application/json", ...headers });
-                response.end(JSON.stringify(body));
-            };
             if (payload.method === "initialize") {
                 sessionId = crypto.randomUUID();
-                writeJson(
+                return jsonResponse(
                     { jsonrpc: "2.0", id: payload.id, result: { capabilities: {} } },
                     { "Mcp-Session-Id": sessionId },
                 );
-                return;
             }
             if (payload.method === "notifications/initialized") {
-                response.writeHead(202);
-                response.end();
-                return;
+                return new Response(null, { status: 202 });
             }
-            if (request.headers["mcp-session-id"] !== sessionId) {
-                writeJson({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
-                return;
+            if (request.headers.get("mcp-session-id") !== sessionId) {
+                return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
             }
             if (payload.method === "tools/list") {
-                if (control.failToolsList) {
-                    response.writeHead(503);
-                    response.end("catalog unavailable");
-                    return;
-                }
-                writeJson({
-                    jsonrpc: "2.0",
-                    id: payload.id,
-                    result: {
-                        tools: [
-                            {
-                                name: "echo",
-                                description: "Echo input text",
-                                inputSchema: { type: "object", properties: { text: { type: "string" } } },
-                            },
-                        ],
-                    },
-                });
-                return;
+                if (control.failToolsList) return new Response("catalog unavailable", { status: 503 });
+                return jsonResponse({ jsonrpc: "2.0", id: payload.id, result: { tools: [httpEchoTool()] } });
             }
             if (payload.method === "tools/call") {
                 const args = payload.params?.arguments as { text?: unknown } | undefined;
-                writeJson({
+                return jsonResponse({
                     jsonrpc: "2.0",
                     id: payload.id,
-                    result: {
-                        isError: false,
-                        content: [{ type: "text", text: String(args?.text ?? "") }],
-                    },
+                    result: { isError: false, content: [{ type: "text", text: String(args?.text ?? "") }] },
                 });
-                return;
             }
-            writeJson({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
-        });
-    });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const address = server.address();
-    if (!address || typeof address === "string") {
-        throw new Error("controllable HTTP MCP server did not bind a TCP port");
-    }
+            return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
+        },
+        (url) => fn(url, control),
+    );
+}
+
+async function withMockHttpMcpEndpoint<T>(
+    name: string,
+    handler: (request: Request) => Promise<Response>,
+    fn: (url: string) => Promise<T>,
+): Promise<T> {
+    const url = `https://mcp.test/${name}`;
+    const originalFetch = globalThis.fetch;
+    // HTTP MCP behavior is validated at the fetch boundary so tests do not depend on
+    // local TCP listen support in constrained Bun sandboxes.
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        if (String(input) !== url) return originalFetch(input, init);
+        return handler(input instanceof Request ? input : new Request(String(input), init));
+    }) as typeof fetch;
     try {
-        return await fn(`http://127.0.0.1:${address.port}/mcp`, control);
+        return await fn(url);
     } finally {
-        await new Promise<void>((resolve) => server.close(() => resolve()));
+        globalThis.fetch = originalFetch;
     }
+}
+
+function jsonResponse(body: unknown, headers: Record<string, string> = {}): Response {
+    return new Response(JSON.stringify(body), {
+        headers: { "content-type": "application/json", ...headers },
+    });
+}
+
+function httpEchoTool(): { description: string; inputSchema: { properties: { text: { type: string } }; type: string }; name: string } {
+    return {
+        name: "echo",
+        description: "Echo input text",
+        inputSchema: { type: "object", properties: { text: { type: "string" } } },
+    };
 }
 
 async function installTestTemplates(paths: FlyflorPaths): Promise<void> {
