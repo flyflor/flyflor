@@ -29,7 +29,7 @@
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
 - Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
-- chat 右侧栏头部可以读取 repo-root 或 Docker `/workspace` 下的 `ui/avatar.txt` 作为像素风 logo；缺失时自动省略，不影响启动
+- `ui/头像.png` 是 Flyflor 正式 bitmap logo；`ui/avatar.txt` 是 Chat TUI 可直接渲染的文本头像，右侧栏头部会从 repo-root 或 Docker `/workspace` 读取它，缺失时自动省略，不影响启动
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情
 - `flyflor tui` 仪表盘 Overview 与 CLI navigator 的 Overview / Memory 页保持同一状态口径：展示 working-memory breaker 健康，以及 local MemoryComponent 的 snapshot / backup / WAL 恢复文件元数据；刷新路径只做 `stat`，不解析热数据
 
