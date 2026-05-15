@@ -2,13 +2,13 @@
  * Dream 模式 worker（README.md §12）：晶体层离线维护。
  *
  * 与 ConsolidationWorker 严格不重叠：
- *  - Consolidation 在 Redis→SurrealDB 升格通道，处理"哪些 episode 应该被晶体化"；
- *  - Dream 完全运行在 SurrealDB 长期层上，做三件事：
+ *  - Consolidation 在 MemoryComponent→CrystalComponent 升格通道，处理"哪些 episode 应该被晶体化"；
+ *  - Dream 完全运行在 CrystalComponent 长期层上，做三件事：
  *    1. drift-repair：修复已晶体化但产生漂移的 skill（scope 错位 / 长期未验证 / 矛盾累积）；
  *    2. recall-reinforce：把近期 recallCount 极端值反映到 importance（热门拉高、冷门降级）；
  *    3. contradiction-audit：ANN 邻居中疑似冲突的二元对，让 LLM 决断弱侧并降权。
  *
- * 候选来自 SurrealDB 查询（dream.candidates.ts），不读 text；语义判断只由 LLM 在
+ * 候选来自晶体图查询（dream.candidates.ts），不读 text；语义判断只由 LLM 在
  * memory.dream 提示词模板中产出结构化 JSON，本文件做 enum + JSON shape 校验。
  *
  * 红线（与 docs/BOUNDARIES.md 对齐）：
@@ -51,7 +51,7 @@ export interface DreamWorker {
     runOnce(userId: string, limit?: number): Promise<DreamRunResult>;
 }
 
-/** No-op 实现：缺少 SurrealDB 或 ModelClient 时使用，保持依赖图稳定。 */
+/** No-op 实现：缺少晶体图 Component 或 ModelClient 时使用，保持依赖图稳定。 */
 export class NullDreamWorker implements DreamWorker {
     async runOnce(_userId: string, _limit?: number): Promise<DreamRunResult> {
         return zeroResult();

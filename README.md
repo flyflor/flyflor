@@ -94,7 +94,7 @@ docker exec -it flyflor-dev flyflor       # 进入容器交互
 | `./docker/workspace`   | `/root/.flyflor/workspace`     | 工作区数据              |
 | `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor`| 编译好的二进制          |
 
-默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆会落到 `flyflor_data` 卷。Redis / SurrealDB 是可选外部后端，需要时通过本地 override 打开。架构变更后重新编译 + 重启：
+默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆会落到 `flyflor_data` 卷。Redis / SurrealDB 仅作为兼容外部后端保留，默认路径始终是本地记忆。架构变更后重新编译 + 重启：
 
 ```bash
 bun run docker:up   # = 重编 binary + force-recreate compose
@@ -113,7 +113,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
 | `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
 | `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
-| `src/neural`      | 海马体工作记忆：local/Redis episodes、召回、最近交流 ring、热记忆压缩 |
+| `src/neural`      | 海马体工作记忆：local WAL/snapshot 默认实现、Redis 兼容适配器、召回、最近交流 ring、热记忆压缩 |
 | `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
 | `templates`       | 提示词和记忆 Markdown 模板                                     |
 
@@ -121,7 +121,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 - **LLM = 流体智力**：当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策。
 - **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格。
-- **Neural = 海马体**：默认本地工作记忆（WAL + snapshot）+ 本地晶体图（`crystal.db` + VectorIndex）；Redis / SurrealDB 作为兼容外部后端保留，认知流转不变。
+- **Neural = 海马体**：默认由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex）；Redis / SurrealDB 只保留兼容适配器，认知流转不变。
 
 **核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
@@ -142,8 +142,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | ---------------- | --------- | ---------------------------------------------------------------- |
 | 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
 | 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；prompt recall/write authority 已切到 brain events |
-| 工作记忆         | Local WAL/snapshot（默认）或 Redis | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
-| 长期记忆图       | `crystal.db` + VectorIndex（默认）或 SurrealDB | episode → memory_node → Gem，summary_embedding，本地图 mirror / Surreal RELATE 边 |
+| 工作记忆         | `MemoryComponent`：Local WAL/snapshot（默认）+ Redis 兼容适配器 | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
+| 长期记忆图       | `CrystalComponent`：`crystal.db` + VectorIndex（默认）+ SurrealDB 兼容适配器 | episode → memory_node → Gem，summary_embedding，本地图 mirror / Surreal RELATE 边 |
 | 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
 
 **长期图主实体：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`
@@ -171,13 +171,13 @@ Evidence Weight 裁判表：
 
 - **双轨衰减**：episode 5%/天、memory_node 2%/天、Gem 0.5%/天；lastVerifiedAt 超 30 天额外打折。
 - **矛盾检测**：`contradictionCount ≥ 2` → drift-repair；confidence < 0.1 → deprecated 归档。
-- **热记忆压缩**：到期 working-memory episode 可压缩成 `memory_events.type='hot-memory-compression'` 审计事件；不进入 prompt recall / `memory_summary` / SurrealDB / Gem 候选。
+- **热记忆压缩**：到期 working-memory episode 可压缩成 `memory_events.type='hot-memory-compression'` 审计事件；不进入 prompt recall / `memory_summary` / CrystalComponent / Gem 候选。
 - **容量阀门**：working memory `maxEpisodesPerUser=200`；长期图 episode 500 / memory_node 100 / Gem 50。
 - **Gem 去重**：symbols IoU ≥ 0.7 且 cosine ≥ 0.85 → merge（`dedupeGems`，纯函数，无字符匹配）。
 
 ### Dream 模式（晶体层离线维护）
 
-Dream 是长期晶体层的主动维护 worker，读写本地 `crystal.db` 或兼容 SurrealDB 后端（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
+Dream 是长期晶体层的主动维护 worker，经 `CrystalComponent` 读写本地 `crystal.db` 或兼容 SurrealDB 适配器（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
 
 | Worker        | 作用层             | 唯一职责                                                       |
 | ------------- | ------------------ | -------------------------------------------------------------- |
@@ -290,7 +290,7 @@ flyflor gateway status       # 网关状态
 | [docs/proposals/eq.module.md](docs/proposals/eq.module.md) | EQ 语气控制层 |
 | [docs/proposals/life.form.md](docs/proposals/life.form.md) | 无 session / brain.db / Codename / Ask / Ghost / Dream 主线 |
 | [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
-| [docs/storage.degradation.md](docs/storage.degradation.md) | Redis / SurrealDB 纯本地降级现状 |
+| [docs/storage.degradation.md](docs/storage.degradation.md) | Redis / SurrealDB 兼容适配器与纯本地默认方案 |
 | [TODO.md](TODO.md) | 运行边界 / 后续计划 |
 
 <!-- flyflor:prompt-templates:start -->

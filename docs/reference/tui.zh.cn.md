@@ -29,7 +29,7 @@
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
 - Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情
-- `flyflor tui` 仪表盘 Overview 与 CLI navigator 的 Overview / Memory 页保持同一状态口径：展示 working-memory breaker 健康，以及 local backend 的 snapshot / backup / WAL 恢复文件元数据；刷新路径只做 `stat`，不解析热数据
+- `flyflor tui` 仪表盘 Overview 与 CLI navigator 的 Overview / Memory 页保持同一状态口径：展示 working-memory breaker 健康，以及 local MemoryComponent 的 snapshot / backup / WAL 恢复文件元数据；刷新路径只做 `stat`，不解析热数据
 
 ## Flyflor 本地复现
 

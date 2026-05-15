@@ -25,7 +25,7 @@ function createStorageError(code: string, message: string): Error & { code: stri
 }
 
 /**
- * 海马体工作记忆 Redis 客户端：封装 ff:* 四类 key 的 CRUD。
+ * 海马体工作记忆 Redis 兼容适配器：封装 ff:* 四类 key 的 CRUD。
  *
  * Key 协议（与 README.md §5.2 工作记忆 对齐）：
  *   ff:ep:{userId}:{episodeId}    HASH   episode 全字段 + EXPIRE TTL

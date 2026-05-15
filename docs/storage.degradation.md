@@ -1,8 +1,8 @@
-# 存储降级方案：Redis + SurrealDB → 纯本地方案
+# 存储降级方案：MemoryComponent / CrystalComponent 纯本地默认方案
 
-> Status: **阶段 3+ 已落地 — local working memory 默认启用；WAL/snapshot/backup 恢复、恢复可见性、crystal.db + VectorIndex + SQLiteGraphStore 已实现，Surreal 保留兼容后端**
+> Status: **阶段 3+ 已落地 — local working memory 默认启用；WAL/snapshot/backup 恢复、恢复可见性、crystal.db + VectorIndex + SQLiteGraphStore 已实现，Redis / Surreal 保留兼容适配器**
 >
-> 从智能生命体的设计哲学出发，评估将 Redis（海马体工作记忆）和 SurrealDB（晶体长期图）两个外部服务降级为进程内实现。
+> 从智能生命体的设计哲学出发，评估将 Redis（海马体工作记忆兼容适配器）和 SurrealDB（晶体长期图兼容适配器）两个外部服务降级为进程内实现。
 
 ---
 
@@ -10,9 +10,9 @@
 
 Flyflor 是一个在时间里持续活着的智能生命体。它的记忆系统模仿人类的三层结构：**工作记忆（海马体）→ 生命事件（自传体记忆）→ 晶体智力（可复用的知识）**。
 
-Redis 和 SurrealDB 是这三层中的存储介质。本文评估用进程内 TypeScript 组件替换这两个介质，不改变三层记忆的**流转逻辑**——只换存储载体，不换认知模型。
+Redis 和 SurrealDB 曾经是这三层中的外部存储介质。本文评估用进程内 TypeScript 组件替换这两个介质，不改变三层记忆的**流转逻辑**——只换存储载体，不换认知模型。
 
-目标：将 docker-compose 从 3 容器降为 1 容器，零外部运行时依赖，同时确保智能生命体的记忆机制不受损。当前已完成工作记忆 local backend、Docker 单容器默认配置、晶体层 local backend，以及长期图的 SQLite 本地后端；SurrealDB 仅保留兼容后端。
+目标：将 docker-compose 从 3 容器降为 1 容器，零外部运行时依赖，同时确保智能生命体的记忆机制不受损。当前已完成工作记忆 local Component、Docker 单容器默认配置、晶体层 local Component，以及长期图的 SQLite 本地实现；Redis / SurrealDB 仅保留兼容适配器。
 
 配套门禁已经补上 `bun run smoke:recovery`：它会在临时 `HOME` 下复跑本地 working memory 的首次 warmup、WAL 撕裂尾部恢复、主 snapshot 损坏时的 `.bak` 快照恢复，以及再启动后的 `memory.warmup.complete` 摘要，并顺带验证 MCP 传输短暂失败后的 session 重开与长结果回灌，确保恢复路径可重复验证且不污染现有数据。`doctor`、`status`、CLI navigator 和 Dashboard TUI 现在都会展示恢复状态；实现只做 `stat` 文件元数据读取，不打开或解析热数据。
 
@@ -35,8 +35,8 @@ Redis 和 SurrealDB 是这三层中的存储介质。本文评估用进程内 Ty
 
 | ID | 决策 | 认知对应 | 理论基础 |
 |----|------|---------|---------|
-| D1 | Redis → 进程内存 | 海马体工作记忆 | TTL 遗忘 + consolidation 升格 + 衰减降权，三条核心通道进程内等价 |
-| D2 | SurrealDB 图关系 → SQLite crystal.db | 晶体知识图 | 已实现 local crystal backend + VectorIndex + SQLiteGraphStore；Surreal 仅作为兼容后端 |
+| D1 | Redis 兼容适配器 → 进程内存 | 海马体工作记忆 | TTL 遗忘 + consolidation 升格 + 衰减降权，三条核心通道进程内等价 |
+| D2 | SurrealDB 图关系 → SQLite crystal.db | 晶体知识图 | 已实现 local crystal backend + VectorIndex + SQLiteGraphStore；Surreal 仅作为兼容适配器 |
 | D3 | SurrealDB 向量搜索 → brute-force cosine | 记忆召回 | 召回面受衰减阈值约束，搜索规模天然受限 |
 | D4 | 搜索与持久化分离 | 热/冷路径 | 热路径（每请求 recall）走内存索引，冷路径（dream/consolidation）走 SQLite |
 | D5 | 文件级别解耦 | 生平 vs 知识 | brain.db = 自传体记忆（发生了什么），crystal.db = 晶体智力（学到了什么） |
@@ -62,7 +62,7 @@ Redis 和 SurrealDB 是这三层中的存储介质。本文评估用进程内 Ty
 
 晶体智力层存储「已经过 LLM 判断值得长期保留的知识」。它包含三类实体和它们之间的关系：episode（事件）、memory_node（概念聚合）、gem（晶体知识）、边（consolidated_into/similar_concept/contradicts 等）。
 
-当前 SurrealDB 兼容后端仍可处理图关系；本地路径把 gem / atom / candidate、episode / memory_node / graph edge 都落到 `crystal.db`，召回由进程内 `VectorIndex` 与 SQLite graph mirror 完成。实际使用面仍只涉及 1-hop 图遍历或本地 brute-force 召回，没有递归图查询，没有复杂图算法。
+当前 SurrealDB 兼容适配器仍可处理图关系；本地路径把 gem / atom / candidate、episode / memory_node / graph edge 都落到 `crystal.db`，召回由进程内 `VectorIndex` 与 SQLite graph mirror 完成。实际使用面仍只涉及 1-hop 图遍历或本地 brute-force 召回，没有递归图查询，没有复杂图算法。
 
 crystal.db 独立于 brain.db，因为「生平事件」和「晶体知识」是两类不同记忆。
 
@@ -95,9 +95,9 @@ crystal.db 独立于 brain.db，因为「生平事件」和「晶体知识」是
 
 约定大于配置：文件名本身就是契约。
 
-### 2.8 Redis 的其他消费者
+### 2.8 Redis 兼容适配器的其他消费者
 
-除 MemoryComponent 替代的核心工作记忆外，Redis 还被以下模块使用，替换为零代码改动——`InMemory*` fallback 已有实现：
+除 MemoryComponent 替代的核心工作记忆外，Redis 兼容适配器还被以下模块使用，替换为零代码改动——`InMemory*` fallback 已有实现：
 
 | 消费者 | 原 Redis 用途 | 替换 |
 |--------|-------------|------|
@@ -240,10 +240,10 @@ Redis 重新启用时，working memory 与 fastRoute 共享同一 namespace 前�
 
 ```
 flyflor ←→ surrealdb (长期晶体图)
-flyflor ←→ redis (工作记忆)
+flyflor ←→ redis 兼容适配器 (工作记忆)
 flyflor ←→ brain.db / audit.jsonl (文件)
 
-3 容器，外部依赖 Redis + SurrealDB
+3 容器，历史外部依赖 Redis + SurrealDB
 ```
 
 ### 6.2 替换后
@@ -306,17 +306,17 @@ semantic overlap 的 gem 合并为一条。纯函数，替换后不变。
 
 ### 7.6 MemoryComponent 持续机制
 
-工作记忆的语义是「临时的、时间窗口内的」。它不能替代 brain.db / crystal.db 的长期记忆，但默认 local backend 必须能在进程重启、断电或 snapshot 损坏后薄恢复热窗口，避免一次基础设施毛刺造成整段热上下文丢失。
+工作记忆的语义是「临时的、时间窗口内的」。它不能替代 brain.db / crystal.db 的长期记忆，但默认 local MemoryComponent 必须能在进程重启、断电或 snapshot 损坏后薄恢复热窗口，避免一次基础设施毛刺造成整段热上下文丢失。
 
 但作为智能生命体，热数据仍必须具备**持续加载**能力：
 
 - 本地 working memory 采用 `WAL + snapshot + snapshot.bak`，启动时优先加载主快照，主快照损坏时回退到备份
 - WAL 只记录增量；遇到单条 torn JSONL 时只截断尾部，不影响之前完整记录
 - 写路径一旦遇到持久化失败，会打开 circuit breaker，暂停后续写入，但已经加载到内存的热窗口仍可继续读取
-- Redis 兼容后端也保留薄 circuit breaker：命令失败后短时间快失败，冷却后下一次命令作为探针恢复
+- Redis 兼容适配器也保留薄 circuit breaker：命令失败后短时间快失败，冷却后下一次命令作为探针恢复
 - 后台 consolidation / hot compression 在 breaker 冷却期只读健康快照并跳过整轮；探针窗口到达后才重新触发一次真实命令，避免维护任务反复冲击降级中的热存储
 - 恢复成功后，下一次可恢复写入；不替代晶体层，晶体知识始终在 `crystal.db`
-- `describeWorkingMemoryRecoveryFiles` 是状态层唯一恢复探针：local backend 展示 snapshot / backup / WAL 大小，Redis backend 只报告恢复责任归外部 working-memory 服务；该探针不参与请求热路径
+- `describeWorkingMemoryRecoveryFiles` 是状态层唯一恢复探针：local MemoryComponent 展示 snapshot / backup / WAL 大小，Redis adapter 只报告恢复责任归外部 working-memory component；该探针不参与请求热路径
 
 ---
 
@@ -327,7 +327,7 @@ config.memory.working.backend = "local"  | "redis"
 config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 ```
 
-开发默认 `local` working memory，可随时通过 config/compose override 切回 `redis + surreal`。
+开发默认 `local` working memory；需要兼容回归或对比时，才通过 config/compose override 切回 `redis + surreal`。
 
 ---
 
@@ -347,7 +347,7 @@ config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 | 阶段 | 内容 |
 |------|------|
 | 1 | `VectorIndex` 接口 + `FlatBruteForceIndex` |
-| 2 | `MemoryComponent`（替代 Redis）✅ local WAL + snapshot + backup + circuit breaker + 状态可见性 |
+| 2 | `MemoryComponent`（替代 Redis 兼容适配器）✅ local WAL + snapshot + backup + circuit breaker + 状态可见性 |
 | 3 | `SQLiteGraphStore`（替代 SurrealGraphStore）✅ |
 | 4 | DI 切换 + 配置开关 |
 | 5 | 更新 docker-compose.yml |
@@ -357,5 +357,5 @@ config.memory.vector.backend  = "flat"   | "surreal" | "hnsw"
 
 ## 11. 回滚路径
 
-- 配置切回 `redis + surreal`，零代码改动
+- 配置切回 `redis + surreal`，零代码改动（兼容回归场景）
 - 未来可切换到 HNSW 实现，VectorIndex 接口已抽象

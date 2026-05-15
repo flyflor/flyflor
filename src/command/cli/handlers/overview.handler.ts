@@ -225,7 +225,7 @@ function describeBackgroundScheduler(config: FlyflorConfig): {
     const workingBackend =
         config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
     if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
-        missing.push("redis working memory");
+        missing.push("Redis working-memory adapter");
     }
     const crystalBackend = config.memory.crystal.backend ?? CrystalMemoryBackend.Local;
     const crystalGraphReady =
@@ -233,7 +233,7 @@ function describeBackgroundScheduler(config: FlyflorConfig): {
         (crystalBackend === CrystalMemoryBackend.Local || config.memory.crystal.surreal.enabled);
     if (!crystalGraphReady) missing.push("crystal graph");
     if (missing.length === 0) {
-        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working memory)` };
+        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working-memory component)` };
     }
     return {
         status: "warn",

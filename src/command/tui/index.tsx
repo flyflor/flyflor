@@ -125,7 +125,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
             lines.push(Text({ content: `Gateway: ${s.gateway.host}:${s.gateway.port}`, fg: THEME.fg }));
             lines.push(Text({ content: `API mode: ${s.config.model.apiMode}`, fg: THEME.fg }));
             lines.push(Text({ content: `Sandbox: ${s.config.sandbox.mode}`, fg: THEME.fg }));
-            lines.push(Text({ content: `Memory: ${s.config.memory.enabled ? "enabled" : "disabled"} · Crystal ${s.config.memory.crystal.enabled ? "enabled" : "disabled"} · ${s.config.memory.crystal.backend}`, fg: THEME.fg }));
+            lines.push(Text({ content: `Memory: ${s.config.memory.enabled ? "enabled" : "disabled"} · Crystal component ${s.config.memory.crystal.enabled ? "enabled" : "disabled"} · ${s.config.memory.crystal.backend}`, fg: THEME.fg }));
             lines.push(Text({ content: `Working: ${s.workingMemory.status} · ${s.workingMemory.detail}`, fg: s.workingMemory.status === "warn" ? THEME.yellow : THEME.fg }));
             lines.push(Text({ content: `Recovery: ${s.workingRecovery.status} · ${s.workingRecovery.detail}`, fg: THEME.fg }));
             lines.push(Text({ content: "" }));

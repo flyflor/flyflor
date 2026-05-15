@@ -52,7 +52,7 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
                 "Crystal",
                 config.memory.crystal.enabled ? statusText("enabled", "ok") : statusText("disabled", "warn"),
             ),
-            line("Crystal backend", config.memory.crystal.backend),
+            line("Crystal component", config.memory.crystal.backend),
             line("Crystal DB", config.memory.crystal.local.dbFile ?? "(unset)"),
             line("Working", `${statusText(workingHealth.status, workingHealth.status)} ${workingHealth.detail}`),
             line("Recovery", `${statusText(workingRecovery.status, workingRecovery.status)} ${workingRecovery.detail}`),
@@ -272,7 +272,7 @@ function describeIlinkState(config: FlyflorConfig): string {
 
 /**
  * 后台调度器（consolidation / decay / dream）需要 working memory + crystal graph + model 三件齐备。
- * 本地 working memory 可替代 Redis；晶体层支持 local / surreal 双后端，状态由 backend 决定。
+ * 本地 MemoryComponent 是默认工作记忆；Redis / SurrealDB 只作为显式兼容适配器。
  * 本函数从配置侧静态判断，给 doctor 一行可见性。
  */
 /**
@@ -391,7 +391,7 @@ export function describeBackgroundScheduler(config: FlyflorConfig): { status: st
     const workingBackend =
         config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
     if (workingBackend === MemoryWorkingBackend.Redis && !config.memory.redis.enabled) {
-        missing.push("redis working memory");
+        missing.push("Redis working-memory adapter");
     }
     const crystalBackend = config.memory.crystal.backend ?? CrystalMemoryBackend.Local;
     const crystalGraphReady =
@@ -399,7 +399,7 @@ export function describeBackgroundScheduler(config: FlyflorConfig): { status: st
         (crystalBackend === CrystalMemoryBackend.Local || config.memory.crystal.surreal.enabled);
     if (!crystalGraphReady) missing.push("crystal graph");
     if (missing.length === 0) {
-        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working memory)` };
+        return { status: "ok", detail: `consolidation+decay+dream+project-cluster enabled (${workingBackend} working-memory component)` };
     }
     return {
         status: "warn",
@@ -455,7 +455,7 @@ export async function describeWorkingMemoryRecoveryFiles(
     const backend =
         config.memory.working?.backend ?? (config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local);
     if (backend !== MemoryWorkingBackend.Local) {
-        return { status: "ok", detail: `${backend} backend; recovery handled by configured working-memory service` };
+        return { status: "ok", detail: `${backend} adapter; recovery handled by configured working-memory component` };
     }
     const local = config.memory.working?.local;
     const snapshotFile = local?.snapshotFile ?? "working.snapshot.json";

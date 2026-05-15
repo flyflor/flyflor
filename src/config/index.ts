@@ -312,7 +312,7 @@ export interface RedisMemoryConfig {
     maxEpisodesPerUser: number;
     // ring buffer 长度（最近上下文条数，对应 ff:ctx:{userId} LTRIM）。
     contextRingSize: number;
-    // socket 超时；Redis 不可达时所有 best-effort 调用必须在此时间内 timeout。
+    // 兼容适配器 socket 超时；不可达时调用必须在此时间内 timeout。
     timeoutMs: number;
 }
 
@@ -452,7 +452,7 @@ export interface SummaryTuningConfig {
 }
 
 export interface HotMemoryCompressionTuningConfig {
-    /** 是否启用 Redis 热记忆到期压缩清理。关闭后自然 TTL 仍会生效，但不会写压缩审计。 */
+    /** 是否启用工作记忆到期压缩清理。关闭后自然 TTL 仍会生效，但不会写压缩审计。 */
     enabled: boolean;
     /** 后台检查节拍（分钟）。0 表示关闭自动检查。 */
     intervalMinutes: number;
@@ -748,7 +748,7 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
         merged.crystal.backend = CrystalMemoryBackend.Surreal;
     }
     // Backward compatibility: older configs only toggled memory.redis.enabled.
-    // If no explicit working backend is present, honor that switch and keep Redis behavior.
+    // If no explicit working backend is present, honor that switch and keep Redis adapter behavior.
     if (!override.working && override.redis?.enabled) {
         if (merged.working) {
             merged.working.backend = MemoryWorkingBackend.Redis;

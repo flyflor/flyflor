@@ -209,7 +209,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 禁止把 event 表改成可变行（任何"更新内容"操作必须新写一行 + 状态层指向）；可变性只允许出现在 `memory_state` / `memory_summary` / `codenames` 这类显式状态表。
 - 性能优化必须保持单主库契约：`brain.db` 是唯一 live DB，热路径通过复合索引和 query-plan 测试守住；历史数据只通过月级只读归档外迁。禁止把 live 主库拆成按日 / 按项目 shard。
 - 月级冷归档落 `~/.flyflor/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
-- Redis 热记忆压缩只能写 `memory_events.type='hot-memory-compression'` 审计事件；不得写入 `memory_summary`、不得生成 prompt atom、不得默认进入 SurrealDB / Gem 候选。若未来要把压缩结果转为长期证据，必须新增显式 gate。
+- `MemoryComponent` 热记忆压缩只能写 `memory_events.type='hot-memory-compression'` 审计事件；不得写入 `memory_summary`、不得生成 prompt atom、不得默认进入 `CrystalComponent` / Gem 候选。若未来要把压缩结果转为长期证据，必须新增显式 gate。
 - 删除操作只能通过显式 CLI（如 `flyflor memory forget`）触发并审计；Dream / sweeper 一律只能改 `memory_state` 字段，不得 DELETE event 行。
 - 旧 `~/.flyflor/journal/<yyyy>/W<ww>/day_*.db` 目录在重构过渡期内只读保留 60 天，期满下线；过渡期内禁止反向写入旧目录。
 

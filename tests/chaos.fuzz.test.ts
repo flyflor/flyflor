@@ -35,7 +35,7 @@ import {
     detectSkillPromotion,
     ProjectTriggerKind,
 } from "../src/agent/project/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/redis.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
 import { AtomStage, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────

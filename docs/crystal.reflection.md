@@ -8,7 +8,7 @@ Crystal 子系统负责把单轮证据「结晶」为长期可复用的 Gem：�
 
 - `src/crystal/reflection/index.ts` — `CrystalReflectionService`
 - `src/crystal/memory/index.ts` — `CrystalMemoryService` / `LocalCrystalMemoryStore` / `SurrealCrystalMemoryStore`
-- `src/crystal/memory/surreal.ts` — SurrealDB 实现
+- `src/crystal/memory/surreal.ts` — SurrealDB 兼容实现
 - `src/crystal/skills/index.ts` — Skill 升格（见 `skill.system.md`）
 - `src/agent/runtime/reflection.worker.ts` — 反思 worker 调度
 - `templates/prompts/reflection.candidate.md` — 反思抽取提示
@@ -100,9 +100,9 @@ sequenceDiagram
 
 ## 配置
 
-- `config.memory.crystal.backend` — `local` / `surreal`
+- `config.memory.crystal.backend` — `local` / `surreal`（对应 CrystalComponent 兼容适配器）
 - `config.memory.crystal.local.dbFile` — 本地 `crystal.db` 路径
-- `config.memory.crystal.surreal` — SurrealDB 兼容后端连接
+- `config.memory.crystal.surreal` — SurrealDB 兼容适配器连接
 - `config.memory.candidates.minConfidence` — gate 2 阈值
 - `config.memory.candidates.minEvidenceCount` — gate 2 阈值
 - `config.memory.candidates.maxCandidatesPerTurn` — 抽取上限
@@ -123,7 +123,7 @@ sequenceDiagram
 ## 运行边界 / 后续增强
 
 - Reflection 已拆为独立 `ReflectionWorker`；Runtime 只投递异步任务，worker 自己处理抽取、规范化与失败事件。
-- 本地后端已落地 `crystal.db + VectorIndex`；SurrealDB 迁移脚本 `scripts/surreal.migrate.ts` 仍保留兼容写入路径，方便对比与回滚。
+- 本地后端已落地 `crystal.db + VectorIndex`；SurrealDB 迁移脚本 `scripts/surreal.migrate.ts` 仍保留兼容写入路径，方便对比与回滚。上层调用现在统一经 `CrystalComponent` 约束，不直接依赖后端实现。
 - gate 2 是定值阈值，没有按 sourceKind 动态调整。
 - contradictionCount 只在 dream pass 修复，runtime 路径不会清零（即便后续有大量正向证据）。
 

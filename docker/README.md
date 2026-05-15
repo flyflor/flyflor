@@ -1,6 +1,6 @@
 # Docker Dev Workspace
 
-本目录承载 Flyflor 的 dev compose 与本地容器配置。默认拓扑已经降级为单容器：Flyflor 主进程 + 本地 WAL 工作记忆，不再强制启动 Redis / SurrealDB。
+本目录承载 Flyflor 的 dev compose 与本地容器配置。默认拓扑已经降级为单容器：Flyflor 主进程 + 本地 WAL 工作记忆，不再强制启动 Redis / SurrealDB；对应能力现在统一由 `MemoryComponent` / `CrystalComponent` 承载。
 
 ## 服务拓扑
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `flyflor` | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / gateway / local working memory | 仅 internal |
 
-`flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要 Redis 或 SurrealDB 时用本地 `docker-compose.override.yml` 加服务，不提交到仓库。
+`flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要 Redis 或 SurrealDB 兼容适配器回归时，用本地 `docker-compose.override.yml` 加服务，不提交到仓库。
 
 ## 目录映射
 
@@ -77,4 +77,4 @@ YAML
 docker compose up -d
 ```
 
-需要 Redis / SurrealDB 回归测试时，在 override 中加服务，并把 `docker/config/config.jsonc` 的 `memory.working.backend` / `memory.redis.enabled` / `memory.crystal.surreal.enabled` 显式切回外部后端。
+需要 Redis / SurrealDB 回归测试时，在 override 中加服务，并把 `docker/config/config.jsonc` 的 `memory.working.backend` / `memory.redis.enabled` / `memory.crystal.surreal.enabled` 显式切回兼容适配器。

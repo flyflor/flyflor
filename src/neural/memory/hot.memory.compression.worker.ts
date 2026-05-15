@@ -46,7 +46,7 @@ export class HotMemoryCompressionWorker {
     private readonly workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 
     constructor(
-        private readonly redis: WorkingMemoryStore,
+        private readonly workingMemory: WorkingMemoryStore,
         private readonly brain: BrainStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
@@ -71,7 +71,7 @@ export class HotMemoryCompressionWorker {
         }
         let candidateIds: string[] = [];
         try {
-            candidateIds = await this.redis.listConsolidationCandidates(
+            candidateIds = await this.workingMemory.listConsolidationCandidates(
                 userId,
                 Math.floor(this.now() / 1000),
                 this.batchSize,
@@ -87,12 +87,12 @@ export class HotMemoryCompressionWorker {
         const missingEpisodeIds: string[] = [];
         for (const id of candidateIds) {
             try {
-                const episode = await this.redis.readEpisode(userId, id);
+                const episode = await this.workingMemory.readEpisode(userId, id);
                 if (episode) {
                     episodes.push(episode);
                 } else {
                     missingEpisodeIds.push(id);
-                    await this.redis.dropEpisode(userId, id);
+                    await this.workingMemory.dropEpisode(userId, id);
                 }
             } catch (err) {
                 this.publishFailure(userId, "read-episode", err);
@@ -113,7 +113,7 @@ export class HotMemoryCompressionWorker {
         const deletedEpisodeIds: string[] = [];
         for (const episode of episodes) {
             try {
-                await this.redis.dropEpisode(userId, episode.episodeId);
+                await this.workingMemory.dropEpisode(userId, episode.episodeId);
                 deletedEpisodeIds.push(episode.episodeId);
             } catch (err) {
                 this.publishFailure(userId, "drop-episode", err);

@@ -217,10 +217,10 @@ describe("doctor background scheduler visibility", () => {
         } as FlyflorConfig);
 
         expect(summary.status).toBe("ok");
-        expect(summary.detail).toContain("local working memory");
+        expect(summary.detail).toContain("local working-memory component");
     });
 
-    test("surreal backend still requires surreal to be enabled", () => {
+    test("surreal adapter backend still requires surreal to be enabled", () => {
         const summary = describeBackgroundScheduler({
             memory: {
                 crystal: {
@@ -386,6 +386,6 @@ describe("doctor working memory health visibility", () => {
         const summary = await describeWorkingMemoryRecoveryFiles(config);
 
         expect(summary.status).toBe("ok");
-        expect(summary.detail).toContain("redis backend");
+        expect(summary.detail).toContain("redis adapter");
     });
 });

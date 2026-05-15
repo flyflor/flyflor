@@ -61,7 +61,7 @@
 - `_keepGatewayListening` 是审计字段，编辑无效（merge 后强制为 `true`）。
 - AtomScore 权重 / brainDb / ghost 调参属内部参数，**不在 CLI / README 文档化**，避免误调。
 - `brainDb.archiveIntervalHours=0` 表示关闭 runtime 自动归档；admin 脚本仍可手动执行。
-- `hotMemoryCompression.intervalMinutes=0` 表示关闭 runtime 自动压缩；Redis TTL 仍会自然删除工作记忆。
+- `hotMemoryCompression.intervalMinutes=0` 表示关闭 runtime 自动压缩；工作记忆 Component 的 TTL 仍会自然删除热数据。
 - 缺字段静默 fallback；类型不正确时由 doctor 表「Memory tuning」一行高亮。
 
 ## 目录契约（生平）
@@ -79,8 +79,8 @@
     <projectId>/
       PROJECT.md                    # Codename 升格后落地
       RETROSPECTIVE.md
-  graph/                            # SurrealDB：晶体层（gem / gem_snapshot / skill）
-  activation/                       # Redis 持久化快照
+  graph/                            # CrystalComponent：晶体层（gem / gem_snapshot / skill）
+  activation/                       # MemoryComponent：持久化快照
 ```
 
 > 与上一版差异：删除 `journal/<yyyy>/W<ww>/day_*.db` 目录契约，回归单文件大脑。
@@ -158,7 +158,7 @@ CREATE INDEX idx_codename_user_used ON codenames(user_id, last_used_at DESC);
 > 关键点：
 > - **Ghost 不是新概念，是 `memory_events.type = 'ghost-context'`** 的一种。复用 AtomScore / decay / 召回 / gem 升格通路，零新机制。
 > - **Ask-Answer pair 也是 events**，`type = 'ask-answer-pair'`，`parent_id` 指向触发它的 ghost。
-> - 冷归档：超过 `archiveAfterMonths` 的 `memory_events` 行批量 `INSERT OR REPLACE INTO archive.memory_events` + 主库 `DELETE`。runtime 每 `archiveIntervalHours` 检查一次；有完整后台调度器时避开 summary / dream busy，缺 Redis / Surreal / Model 时由 MemoryModule 根 timer 独立运行。读路径通过 `ATTACH DATABASE archive.brain.YYYY-MM.db` 按需挂载。
+> - 冷归档：超过 `archiveAfterMonths` 的 `memory_events` 行批量 `INSERT OR REPLACE INTO archive.memory_events` + 主库 `DELETE`。runtime 每 `archiveIntervalHours` 检查一次；有完整后台调度器时避开 summary / dream busy，缺 MemoryComponent / CrystalComponent / Model 时由 MemoryModule 根 timer 独立运行。读路径通过 `ATTACH DATABASE archive.brain.YYYY-MM.db` 按需挂载。
 
 ## AtomScore（不变）
 
@@ -318,9 +318,9 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 | R10 brain.db 权威源切换 | ✅ done — prompt atom recall 从 `brain_events.content.atoms` 展开；turn event 写入改为 brain-first；legacy journal 仅 best-effort audit；Ghost Context 保持独立 `[ghost-hint]` 分支，不被普通 atom recall 吞掉，`resume` / `fork` / `fresh` 仍可让分支回归主线 |
 | R11 Behavior Snapshot | ✅ done — 每轮写 `behavior-snapshot`，后续用户纠正写 `behavior-correction`；ask / ask-answer / reply metadata 共用 `snapshotId`，用于回放行为原因 |
 | R12 提示词优先级冲突表 | ✅ done — `behavior.priority.md` 注入 runtime system；模型看到的是可执行来源优先级和 ask 多问题结构，不暴露路线编号或内部隐喻 |
-| R13 Summary embeddingId 补全 | ✅ done — `SummaryWorker` 写 daily / weekly summary 后，`MemoryModule` best-effort 计算 summary content embedding，写入 SurrealDB `summary_embedding` 节点并回填 `memory_summary.embedding_id`；失败不阻断 summary 主写入 |
+| R13 Summary embeddingId 补全 | ✅ done — `SummaryWorker` 写 daily / weekly summary 后，`MemoryModule` 计算 summary content embedding，写入 `CrystalComponent` 的 `summary_embedding` 节点并回填 `memory_summary.embedding_id`；summary 主记录先写，若 embedding 同步失败会显式抛出，便于上层重试 |
 | R14 brain.db 月度归档自动化 | ✅ done — `src/neural/memory/brain.archive.ts` 统一 admin 脚本与 runtime；`MemoryModule.runBrainArchiveOnce` 只搬 `state=archived` 且早于 cutoff 的事件和同月 summary，发布 `MemoryBrainArchiveCompleted/Failed`；`BackgroundScheduler` 场景避开 summary / dream busy，降级场景由根 timer 继续维护 |
-| R15 热记忆隔离压缩 | ✅ done — `HotMemoryCompressionWorker` 对 Redis 到期 episode 调用专用模板输出结构化压缩审计，写 `memory_events.type='hot-memory-compression'` 后删除 Redis episode；事件固定声明不进入 prompt recall，`SummaryWorker` 跳过该事件，不进入 SurrealDB 或 Gem 候选；scheduler 与 `MemoryModule` root timer 两层都和 summary / brain archive 串行化；Consolidation reinforce 会延长 Redis TTL 并后移 reviewAt，避免仍有价值的工作记忆被立刻压缩；有完整 `BackgroundScheduler` 时随调度器运行，缺 SurrealDB 时由 `MemoryModule` 根 timer 保底 |
+| R15 热记忆隔离压缩 | ✅ done — `HotMemoryCompressionWorker` 对工作记忆 Component 到期 episode 调用专用模板输出结构化压缩审计，写 `memory_events.type='hot-memory-compression'` 后删除对应 episode；事件固定声明不进入 prompt recall，`SummaryWorker` 跳过该事件，不进入 CrystalComponent 或 Gem 候选；scheduler 与 `MemoryModule` root timer 两层都和 summary / brain archive 串行化；Consolidation reinforce 会延长工作记忆 TTL 并后移 reviewAt，避免仍有价值的工作记忆被立刻压缩；有完整 `BackgroundScheduler` 时随调度器运行，缺 CrystalComponent 时由 `MemoryModule` 根 timer 保底 |
 
 ## 与上一版的作废清单
 

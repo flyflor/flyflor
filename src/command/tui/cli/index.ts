@@ -239,9 +239,9 @@ function memoryLoader(): PageLoader {
             lines.push("◆ Memory");
             lines.push(`  Enabled: ${data.enabled ? "yes" : "no"}`);
             lines.push(`  Crystal: ${data.crystalEnabled ? "yes" : "no"}`);
-            lines.push(`  Crystal backend: ${data.crystalBackend}`);
-            lines.push(`  Redis: ${data.redisEnabled ? "yes" : "no"}`);
-            lines.push(`  Surreal: ${data.surrealEnabled ? "yes" : "no"}`);
+            lines.push(`  Crystal component: ${data.crystalBackend}`);
+            lines.push(`  Redis adapter: ${data.redisAdapterEnabled ? "yes" : "no"}`);
+            lines.push(`  Surreal adapter: ${data.surrealAdapterEnabled ? "yes" : "no"}`);
             lines.push(`  SQLite: ${data.sqliteEnabled ? "yes" : "no"}`);
             lines.push(`  Embedding: ${data.embeddingDimensions}d`);
             lines.push(`  Working: ${data.workingMemoryStatus.status} · ${data.workingMemoryStatus.detail}`);

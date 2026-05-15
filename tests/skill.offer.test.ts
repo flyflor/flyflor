@@ -11,7 +11,7 @@ import {
     detectSkillCandidate,
     ProjectTriggerKind,
 } from "../src/agent/project/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/redis.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { ModelClient, ModelMessage, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";

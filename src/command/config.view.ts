@@ -179,9 +179,9 @@ function renderText(view: ConfigView): string {
     lines.push("[memory]");
     lines.push(`  enabled: ${view.memory.enabled}`);
     lines.push(`  crystal: ${view.memory.crystal}`);
-    lines.push(`  crystalBackend: ${view.memory.crystalBackend}`);
-    lines.push(`  redis: ${view.memory.redis}`);
-    lines.push(`  surreal: ${view.memory.surreal}`);
+    lines.push(`  crystalComponent: ${view.memory.crystalBackend}`);
+    lines.push(`  redisAdapter: ${view.memory.redis}`);
+    lines.push(`  surrealAdapter: ${view.memory.surreal}`);
     lines.push(`  crystalDbFile: ${view.memory.crystalDbFile || "(unset)"}`);
     lines.push("");
     lines.push("[paths]");

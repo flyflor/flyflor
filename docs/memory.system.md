@@ -4,7 +4,7 @@
 
 ## 一句话定位
 
-Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、local/Redis 工作记忆、SQLite 辅助索引与审计、`crystal.db`/SurrealDB 长期晶体图；升格走证据门，遗忘走工作记忆 TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与晶体图漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
+Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件层、`MemoryComponent` 默认 local 工作记忆 + Redis 兼容适配器、SQLite 辅助索引与审计、`CrystalComponent` 本地 `crystal.db` + SurrealDB 兼容适配器；升格走证据门，遗忘走工作记忆 TTL / 热记忆压缩、AtomScore / decayScore / Gem 衰减与晶体图漂移机制，Dream worker 只放大已有信号，不凭空创造记忆。
 
 ## 相关代码路径
 
@@ -13,7 +13,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/neural/memory/journal.store.ts` — legacy atom journal（best-effort 审计副本，不参与 prompt recall）
 - `src/neural/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
-- `src/neural/memory/redis.ts` — Redis 兼容 episode buffer / ring / hot concepts 后端
+- `src/neural/memory/redis.ts` — Redis 兼容 episode buffer / ring / hot concepts 适配器
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
 - `src/neural/memory/sqlite.ts` — candidates / offers / search
 - `src/neural/memory/surreal.graph.ts` — episode / memory_node / gem / 边关系
@@ -36,7 +36,7 @@ flowchart LR
     end
 
     subgraph Working["工作记忆（短期，TTL 遗忘）"]
-        Work[("Local WAL/snapshot（默认）<br/>或 Redis ff:* 兼容后端")]
+        Work[("MemoryComponent<br/>Local WAL/snapshot（默认）<br/>+ Redis 兼容适配器")]
     end
 
     subgraph Life["生命事件层（单文件大脑）"]
@@ -50,7 +50,7 @@ flowchart LR
     end
 
     subgraph LongTerm["长期记忆图（结晶）"]
-        Crystal[("crystal.db + VectorIndex（默认）<br/>或 SurrealDB<br/>episode / memory_node / gem / gem_snapshot")]
+        Crystal[("CrystalComponent<br/>crystal.db + VectorIndex（默认）<br/>+ SurrealDB 兼容适配器<br/>episode / memory_node / gem / gem_snapshot")]
     end
 
     User["用户 turn"] --> Brain
@@ -86,11 +86,11 @@ flowchart LR
 
 chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。
 
-月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 Redis、SurrealDB 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
+月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 `MemoryComponent`、`CrystalComponent` 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
 
 Ghost Context 不被压平成普通 prompt atom。它以 `[ghost-hint]` 单独注入，让模型同轮用 `<flyflor_ghost_decisions>` 决定 `resume` / `fork` / `fresh`；`fork` 或 `fresh` 只更新 ghost 的结构化 evidence，不删除 ghost，后续仍可像分支回归主线一样重新激活。
 
-热记忆压缩同样不被压平成普通 prompt atom。`HotMemoryCompressionWorker` 只把到期 working-memory episode 批次压缩为 `memory_events.type='hot-memory-compression'` 审计事件，`content.isolation` 固定声明 `promptVisible=false`、`memorySummary=false`、`surrealCandidate=false`、`gemCandidate=false`。这条记录不是 `memory_summary`，`SummaryWorker` 也会跳过该审计事件；它不写长期图。未来如果要把它作为证据，必须走显式 gate。
+热记忆压缩同样不被压平成普通 prompt atom。`HotMemoryCompressionWorker` 只把到期 working-memory episode 批次压缩为 `memory_events.type='hot-memory-compression'` 审计事件，`content.isolation` 固定声明 `promptVisible=false`、`memorySummary=false`、`surrealCandidate=false`、`gemCandidate=false`。这条记录不是 `memory_summary`，`SummaryWorker` 也会跳过该审计事件；它不写 `CrystalComponent` 长期图。未来如果要把它作为证据，必须走显式 gate。
 调度层和 `MemoryModule` 降级 root timer 都把热压缩与 summary / brain archive 视为同一条 brain.db 维护通道，默认串行，避免同库写入互撞。
 
 ## 升格双质量门
@@ -131,9 +131,9 @@ erDiagram
     GEM ||--o{ GEM_SNAPSHOT : "snapshot"
 ```
 
-主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。默认后端是本地 `crystal.db` + VectorIndex + SQLiteGraphStore；SurrealDB 保留为兼容后端。
+主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。默认承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore；SurrealDB 保留为兼容适配器。
 
-`summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后 best-effort 维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。该链路失败只发布 `memory.brain.write.failed(op="summary.embed")`，不影响 `memory_summary` 主记录。
+`summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。summary 主记录先落盘；若 embedding 同步失败，会先保留已写入的 summary，再显式抛出，便于上层感知索引不一致并重试。
 
 ## 上下文装配
 
@@ -289,9 +289,9 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 ## 配置要点
 
 - `config.memory.enabled` — 总开关
-- `config.memory.redis` — 工作记忆后端
-- `config.memory.crystal.backend` / `config.memory.crystal.local.dbFile` — 晶体层本地后端
-- `config.memory.crystal.surreal` — 兼容长期图后端
+- `config.memory.redis` — 工作记忆兼容适配器（非默认）
+- `config.memory.crystal.backend` / `config.memory.crystal.local.dbFile` — 晶体层本地 Component 配置
+- `config.memory.crystal.surreal` — 长期图兼容适配器
 - `config.memory.candidates.maxCandidatesPerTurn` — 每轮候选上限
 - `config.memory.candidates.autoPromoteExplicit` — 显式 action 直接 promote
 - `config.memory.retrieval.maxResults` / `maxPromptChars` — 上下文预算

@@ -1,7 +1,7 @@
 /**
  * Dream 模式候选采集（README.md §12）。
  *
- * 三类候选来自 SurrealDB 长期晶体层的资源指标（counter / age / cosine / recallCount），
+ * 三类候选来自晶体图 Component 的资源指标（counter / age / cosine / recallCount），
  * 不读 text、不做关键词匹配；语义判定全部由 LLM 在结构化 prompt 中产出。
  *
  * - drift candidate: skill 上的稳定度信号（contradictionCount / lastVerifiedAt / confidence）触发

@@ -140,7 +140,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         }
     });
 
-    test("runSummaryOnce best-effort writes summary embeddings and backfills embeddingId", async () => {
+    test("runSummaryOnce writes summary embeddings and backfills embeddingId", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const graph = new FakeSummaryGraph(config);
@@ -171,6 +171,26 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
             memory.dispose();
         }
     });
+
+    test("runSummaryOnce fails loudly when summary embedding sync fails", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const graph = new FailingSummaryGraph(config);
+        const memory = new MemoryModule(config, sink, undefined, { surreal: graph });
+        await memory.warmup();
+        try {
+            await memory.rememberTurn(
+                gatewayMessage("summary failure fixture"),
+                gatewayReply("收到", "msg-fail"),
+                runtimeContext(),
+            );
+            await expect(memory.runSummaryOnce("user-1")).rejects.toThrow("Summary embedding write failed");
+            expect(sink.types).toContain(RuntimeEventType.MemorySummaryWritten);
+            expect(sink.types).toContain(RuntimeEventType.MemoryBrainWriteFailed);
+        } finally {
+            memory.dispose();
+        }
+    });
 });
 
 class RecordingSink implements EventSink {
@@ -193,6 +213,12 @@ class FakeSummaryGraph extends SurrealGraphStore {
     }
     override async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
         this.inputs.push(input);
+    }
+}
+
+class FailingSummaryGraph extends FakeSummaryGraph {
+    override async upsertSummaryEmbedding(_input: SummaryEmbeddingInput): Promise<void> {
+        throw new Error("summary embedding down");
     }
 }
 

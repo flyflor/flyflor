@@ -122,7 +122,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         expect(sink.events.find((e) => e.type === RuntimeEventType.MemoryFeedbackClassified)).toBeUndefined();
     });
 
-    test("LocalCorrection without redis is a graceful no-op (publishes classified event)", async () => {
+    test("LocalCorrection without working-memory component is a graceful no-op (publishes classified event)", async () => {
         const config = await testConfig();
         const sink = new CapturingSink();
         const memory = new MemoryModule(config, sink, new StubModel("{}"));
@@ -134,11 +134,11 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
             currentUserText: "Just Lisa",
             recordedAt: new Date().toISOString(),
         });
-        // Redis disabled by default → 没有 episode 写入，但 classified 事件依然发出
+        // 工作记忆 Component 未装配时不写 episode，但 classified 事件依然发出。
         const cls = sink.events.find((e) => e.type === RuntimeEventType.MemoryFeedbackClassified);
         expect(cls).toBeDefined();
     });
-    test("Confirmation without redis is a graceful no-op (publishes classified event)", async () => {
+    test("Confirmation without working-memory component is a graceful no-op (publishes classified event)", async () => {
         const config = await testConfig();
         const sink = new CapturingSink();
         const memory = new MemoryModule(config, sink, new StubModel("{}"));

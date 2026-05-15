@@ -8,7 +8,8 @@ import {
     parseConsolidationDecision,
     type ConsolidationDecision,
 } from "../src/neural/memory/consolidation.worker.ts";
-import type { EpisodeRecord, RedisMemoryStore } from "../src/neural/memory/redis.ts";
+import type { RedisMemoryStore } from "../src/neural/memory/redis.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
 import type { SurrealGraphStore } from "../src/neural/memory/surreal.graph.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
@@ -216,7 +217,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         expect(events.events.some((e) => e.type === RuntimeEventType.MemoryConsolidationCompleted)).toBe(true);
     });
 
-    test("drain skips without Redis calls while breaker is cooling down", async () => {
+    test("drain skips without working-memory calls while breaker is cooling down", async () => {
         let listCalls = 0;
         const fakeRedis = {
             getHealthSnapshot: () => ({

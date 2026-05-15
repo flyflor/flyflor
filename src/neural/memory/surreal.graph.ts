@@ -79,7 +79,7 @@ export interface MemoryGraphStore {
  * 表结构（与 README.md §5.3 长期记忆图 对齐）：
  *
  *   节点：
- *     episode      已 consolidate 落库的事件级条目（短期 Redis episode 升格而来）
+ *     episode      已 consolidate 落库的事件级条目（短期工作记忆 episode 升格而来）
  *     memory_node  概念聚合节点（多个 episode → 一个 memory_node，confidence/evidenceCount 累计）
  *     gem          晶体（晶粒）（memory_node 二次升格，受双质量门约束）
  *

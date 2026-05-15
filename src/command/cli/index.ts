@@ -25,7 +25,7 @@ async function renderMemorySummary(app: FlyFlor): Promise<string> {
     const rows = new Table({ head: ["Field", "Value"], style: { head: [] } });
     rows.push(["Enabled", config.memory.enabled ? "yes" : "no"]);
     rows.push(["Crystal", config.memory.crystal.enabled ? "yes" : "no"]);
-    rows.push(["Crystal backend", config.memory.crystal.backend]);
+    rows.push(["Crystal component", config.memory.crystal.backend]);
     rows.push(["Storage", config.paths.storageDir]);
     rows.push(["Memory dir", config.paths.memoryDir]);
     rows.push(["Prompt dir", config.paths.promptDir]);

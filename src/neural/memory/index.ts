@@ -133,6 +133,8 @@ export interface BehaviorSnapshotInput {
 
 export interface MemoryModuleOverrides {
     embeddings?: EmbeddingProvider;
+    graph?: MemoryGraphStore | null;
+    /** Compatibility alias for older tests and setup code. New callers should use graph. */
     surreal?: MemoryGraphStore | null;
 }
 
@@ -147,12 +149,14 @@ export class MemoryModule extends Memory {
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
     private readonly crystal: CrystalMemoryService;
-    /** Working-memory backend. Kept as `redis` internally while migration is staged to avoid widening the patch. */
-    private readonly redis: WorkingMemoryStore | null;
-    private readonly redisClientStore: RedisMemoryStore | null;
+    /** 工作记忆 Component；默认 local WAL/snapshot，Redis 仅作为兼容适配器实现同一接口。 */
+    private readonly workingMemory: WorkingMemoryStore | null;
+    /** Redis 兼容适配器实例；仅在显式启用时存在，供 fastRoute 等跨副本能力复用底层 client。 */
+    private readonly workingMemoryClientStore: RedisMemoryStore | null;
     private readonly workingMemoryBackend: MemoryWorkingBackend;
     private readonly workingMemoryDefaultTtlSeconds: number;
-    private readonly surreal: MemoryGraphStore | null;
+    /** 长期晶体图 Component；默认 local crystal graph，SurrealDB 仅作为兼容适配器。 */
+    private readonly graph: MemoryGraphStore | null;
     private readonly hotMemoryCompression: HotMemoryCompressionWorker | null;
     private readonly scheduler: BackgroundScheduler | null;
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
@@ -189,42 +193,43 @@ export class MemoryModule extends Memory {
             undefined,
             config.memory.embedding.dimensions,
         );
-        this.redisClientStore =
+        this.workingMemoryClientStore =
             working.backend === MemoryWorkingBackend.Redis ? new RedisMemoryStore(config.memory.redis) : null;
-        this.redis =
-            this.redisClientStore ??
+        this.workingMemory =
+            this.workingMemoryClientStore ??
             (working.backend === MemoryWorkingBackend.Local
                 ? new LocalWorkingMemoryStore(config.paths.memoryDir, working.local)
                 : null);
-        this.surreal =
-            overrides.surreal !== undefined
-                ? overrides.surreal
+        const graphOverride = overrides.graph !== undefined ? overrides.graph : overrides.surreal;
+        this.graph =
+            graphOverride !== undefined
+                ? graphOverride
                 : config.memory.crystal.enabled && config.memory.crystal.backend === CrystalMemoryBackend.Local
                   ? new SQLiteGraphStore(config.memory.crystal.local)
                   : config.memory.crystal.enabled && config.memory.crystal.surreal.enabled
                     ? new SurrealGraphStore(config.memory.crystal.surreal)
                   : null;
         this.hotMemoryCompression =
-            this.redis && model && config.memory.tuning.hotMemoryCompression.enabled
-                ? new HotMemoryCompressionWorker(this.redis, this.brain, model, this.events, {
+            this.workingMemory && model && config.memory.tuning.hotMemoryCompression.enabled
+                ? new HotMemoryCompressionWorker(this.workingMemory, this.brain, model, this.events, {
                       batchSize: config.memory.tuning.hotMemoryCompression.batchSize,
                       workingMemoryHealthSnapshot: () => this.getWorkingMemoryHealthSnapshot(),
                   })
                 : null;
         this.projectScaffolder = new ProjectScaffolder(config.paths, this.events);
-        // 后台调度器仅在三件依赖（Redis 短期 + 长期图后端 + 模型）齐备时启用；
+        // 后台调度器仅在三件依赖（工作记忆 Component + 长期图 Component + 模型）齐备时启用；
         // 任一缺失时不启动 scheduler，并通过 warmup 事件显式暴露缺口。
         this.scheduler =
-            this.redis && this.surreal && model
+            this.workingMemory && this.graph && model
                 ? new BackgroundScheduler(
-                      new ConsolidationWorker(this.redis, this.surreal, model, this.events, {
+                      new ConsolidationWorker(this.workingMemory, this.graph, model, this.events, {
                           retrospective: new RetrospectiveLog({ projectMemoryDir: config.paths.projectMemoryDir }),
                           workingMemoryHealthSnapshot: () => this.getWorkingMemoryHealthSnapshot(),
                       }),
-                      this.surreal,
+                      this.graph,
                       this.events,
                       {
-                          dream: new DreamWorkerImpl(this.surreal, model, this.events),
+                          dream: new DreamWorkerImpl(this.graph, model, this.events),
                           projectSweeper: (userId: string) => this.sweepProjectClusters(userId),
                           skillSweeper: (userId: string) => this.sweepSkillCandidates(userId),
                           summarySweeper: async (userId: string) => {
@@ -254,14 +259,13 @@ export class MemoryModule extends Memory {
         });
     }
 
-    /** 预热：打开 brain.db，并在 Redis 启用时测 PING 往返延迟。 */
-    /** 暴露底层 Redis 客户端，供同进程其他热路径组件（fastRoute 快照等）复用。 */
+    /** 暴露底层 Redis 兼容 client，供同进程其他热路径组件（fastRoute 快照等）复用。 */
     getRedisClient() {
-        return this.redisClientStore?.getClient();
+        return this.workingMemoryClientStore?.getClient();
     }
 
     getWorkingMemoryHealthSnapshot(): WorkingMemoryHealthSnapshot | undefined {
-        return (this.redis as { getHealthSnapshot?: () => WorkingMemoryHealthSnapshot } | null)?.getHealthSnapshot?.();
+        return (this.workingMemory as { getHealthSnapshot?: () => WorkingMemoryHealthSnapshot } | null)?.getHealthSnapshot?.();
     }
 
     async warmup(): Promise<void> {
@@ -270,17 +274,18 @@ export class MemoryModule extends Memory {
             this.scheduler.start();
         } else {
             const missing: string[] = [];
-            if (!this.redis) missing.push("redis");
-            if (!this.surreal) missing.push("surreal");
+            if (!this.workingMemory) missing.push("working-memory");
+            if (!this.graph) missing.push("crystal-graph");
             if (!this.model) missing.push("model");
             this.events.publish(
                 event(RuntimeEventType.MemoryBackgroundSchedulerSkipped, {
                     missing,
-                    redisEnabled: this.config.memory.redis.enabled,
+                    redisAdapterEnabled: this.config.memory.redis.enabled,
                     workingMemoryBackend: this.workingMemoryBackend,
-                    surrealEnabled: Boolean(this.surreal),
+                    crystalGraphEnabled: Boolean(this.graph),
+                    surrealAdapterEnabled: this.config.memory.crystal.surreal.enabled,
                     modelProvider: this.config.model.provider,
-                    impact: "consolidation/decay/dream 跳过缺失依赖；工作记忆仍按 configured backend 写入，长期晶体层需要 graph store",
+                    impact: "consolidation/decay/dream 跳过缺失依赖；工作记忆仍按 configured backend 写入，长期晶体层需要 graph component",
                 }),
             );
         }
@@ -288,9 +293,9 @@ export class MemoryModule extends Memory {
             this.startBrainArchiveTimer();
             this.startHotMemoryCompressionTimer();
         }
-        if (!this.redis) return;
+        if (!this.workingMemory) return;
         try {
-            const latencyMs = await this.redis.ping();
+            const latencyMs = await this.workingMemory.ping();
             this.events.publish(
                 event(RuntimeEventType.MemoryWarmupComplete, {
                     backend: this.workingMemoryBackend,
@@ -341,7 +346,7 @@ export class MemoryModule extends Memory {
             clearInterval(this.hotMemoryCompressionTimer);
             this.hotMemoryCompressionTimer = undefined;
         }
-        this.redis?.dispose();
+        this.workingMemory?.dispose();
         if (this.brainOpened) {
             this.brain.close();
             this.brainOpened = false;
@@ -650,23 +655,23 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * Hippocampus 上下文装配（Redis ring + spreading activation）。
-     * 仅在 Redis 启用且 ring 非空时有效；异常必须向上传递，禁止静默吞掉记忆层错误。
+     * Hippocampus 上下文装配（working-memory ring + spreading activation）。
+     * 仅在工作记忆 Component 可用且 ring 非空时有效；异常必须向上传递，禁止静默吞掉记忆层错误。
      * 性能：限制 candidate ≤ ringSize，激活计算 O(N·D) 在 1ms 量级。
      */
     private async assembleHippocampusContext(
         message: GatewayMessage,
         context?: RuntimeContext,
     ): Promise<string | undefined> {
-        if (!this.redis) return undefined;
+        if (!this.workingMemory) return undefined;
         const userId = message.user.id;
         const ringSize = this.config.memory.retrieval.maxResults;
         const [episodeIds, hotConcepts] = await Promise.all([
-            this.redis.readContextRing(userId, ringSize),
-            this.redis.hotConcepts(userId, 16),
+            this.workingMemory.readContextRing(userId, ringSize),
+            this.workingMemory.hotConcepts(userId, 16),
         ]);
         if (episodeIds.length === 0) return undefined;
-        const records = await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)));
+        const records = await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)));
         const visibleByEpisode = await this.visibleAtomsForEpisodes(userId, records);
         const candidates: ActivationCandidate[] = [];
         const visibleAtoms = new Map<string, JournalVisibleAtom>();
@@ -759,9 +764,9 @@ export class MemoryModule extends Memory {
             this.recordAskEvent(message, context, ask, pendingAskBefore?.id, provenance.behaviorSnapshotId);
         }
 
-        await this.writeEpisodeToRedis(message, reply, context, importanceFromActions(actions), provenance);
+        await this.writeEpisodeToWorkingMemory(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
-        // 不做 Redis SCAN（会爆炸），只信任活跃 turn 触发。
+        // 不扫描外部后端，只信任活跃 turn 触发，避免把兼容适配器变成全局枚举入口。
         this.activeMemoryUsers.add(message.user.id);
         this.scheduler?.noteUserTurn(message.user.id);
         this.dormant.touch(message.user.id);
@@ -895,7 +900,7 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 黑板辩论收敛后由 RuntimeModule 调用，将整轮辩论沉淀为 Redis episode；
+     * 黑板辩论收敛后由 RuntimeModule 调用，将整轮辩论沉淀为工作记忆 episode；
      * sourceKind=blackboard-converged，weight 0.8（高于普通对话）。
      * 失败发布事件后继续抛出。
      */
@@ -905,7 +910,7 @@ export class MemoryModule extends Memory {
         embedding?: number[];
         requestId?: string;
     }): Promise<void> {
-        if (!this.redis) return;
+        if (!this.workingMemory) return;
         try {
             const importance = 0.8;
             const stability = 0.9;
@@ -918,7 +923,7 @@ export class MemoryModule extends Memory {
                     ? input.embedding
                     : await this.embeddings.embed(input.text);
             const episodeId = crypto.randomUUID();
-            await this.redis.writeEpisode({
+            await this.workingMemory.writeEpisode({
                 userId: input.userId,
                 episodeId,
                 text: input.text.slice(0, 2048),
@@ -952,7 +957,7 @@ export class MemoryModule extends Memory {
     /**
      * Apply a feedback classification produced by feedback.interpreter.
      * Routes (零字符串匹配；仅在 enum 上分发)：
-     *   - LocalCorrection → 高重要度 episode（带 correction 标记）写入 Redis；
+     *   - LocalCorrection → 高重要度 episode（带 correction 标记）写入工作记忆 Component；
      *   - Preference      → user.md 追加 (managed block)；
      *   - GlobalStrategy  → self.md 追加 (managed block)；
      *   - Confirmation    → 仅发事件，由 reinforce 通道（ConsolidationWorker）拾取；
@@ -972,9 +977,9 @@ export class MemoryModule extends Memory {
         if (input.category === FeedbackCategory.None) return;
         const fact = (input.extractedFact ?? input.currentUserText).slice(0, 500);
         try {
-            if (input.category === FeedbackCategory.LocalCorrection && this.redis) {
+            if (input.category === FeedbackCategory.LocalCorrection && this.workingMemory) {
                 const embedding = await this.embeddings.embed(input.currentUserText);
-                await this.redis.writeEpisode({
+                await this.workingMemory.writeEpisode({
                     userId: input.userId,
                     episodeId: crypto.randomUUID(),
                     text: `correction: ${fact} (was: ${input.previousAssistantText.slice(0, 256)})`,
@@ -992,12 +997,12 @@ export class MemoryModule extends Memory {
                 await this.markdown.appendFeedback(MarkdownMemoryFile.Self, fact, input.recordedAt);
             } else if (input.category === FeedbackCategory.Confirmation) {
                 // Confirmation：用户明确确认上一轮答案有效。
-                // 1) Redis 写一条高稳定性 episode（concept=confirmation，便于召回时识别正反馈）；
-                // 2) 若 Surreal 装配了，用 previousAssistantText 的 embedding 做 ANN top-1
+                // 1) 工作记忆 Component 写一条高稳定性 episode（concept=confirmation，便于召回时识别正反馈）；
+                // 2) 若晶体图 Component 装配了，用 previousAssistantText 的 embedding 做 ANN top-1
                 //    召回最相关的 gem/memory_node，调用 applyMemoryReinforce 提升 importance + 刷 lastVerifiedAt。
-                if (this.redis) {
+                if (this.workingMemory) {
                     const embedding = await this.embeddings.embed(input.previousAssistantText);
-                    await this.redis.writeEpisode({
+                    await this.workingMemory.writeEpisode({
                         userId: input.userId,
                         episodeId: crypto.randomUUID(),
                         text: `confirmation: ${fact} (about: ${input.previousAssistantText.slice(0, 256)})`,
@@ -1009,12 +1014,12 @@ export class MemoryModule extends Memory {
                         createdAt: Date.now(),
                         ttlSeconds: this.workingMemoryDefaultTtlSeconds,
                     });
-                    if (this.surreal) {
-                        const top = await this.surreal.recallMemoryNodes({ userId: input.userId, embedding, limit: 1 });
+                    if (this.graph) {
+                        const top = await this.graph.recallMemoryNodes({ userId: input.userId, embedding, limit: 1 });
                         const candidate = top[0];
                         const score = (candidate as { score?: number } | undefined)?.score ?? 0;
                         if (candidate && score >= 0.75) {
-                            await this.surreal.applyMemoryReinforce({
+                            await this.graph.applyMemoryReinforce({
                                 table: "memory_node",
                                 id: candidate.id,
                                 importanceMultiplier: 1.2,
@@ -2236,7 +2241,6 @@ export class MemoryModule extends Memory {
                 minIntervalHours: this.config.memory.tuning.summary.minIntervalHours,
             });
             const result = worker.runOnceForUser(userId, nowMs);
-            await this.embedWrittenSummaries(userId, result.writtenIds);
             this.events.publish(
                 event(RuntimeEventType.MemorySummaryWritten, {
                     userId,
@@ -2245,6 +2249,7 @@ export class MemoryModule extends Memory {
                     skippedEmpty: result.skippedEmpty,
                 }),
             );
+            await this.embedWrittenSummaries(userId, result.writtenIds);
             return result;
         } catch (err) {
             this.events.publish(
@@ -2299,15 +2304,16 @@ export class MemoryModule extends Memory {
     }
 
     private async embedWrittenSummaries(userId: string, summaryIds: string[]): Promise<void> {
-        if (!this.brainOpened || !this.surreal || summaryIds.length === 0) return;
+        if (!this.brainOpened || !this.graph || summaryIds.length === 0) return;
         let written = 0;
+        const failures: Array<{ summaryId: string; error: unknown }> = [];
         for (const summaryId of summaryIds) {
             const summary = this.brain.getSummary(summaryId);
             if (!summary) continue;
             try {
                 const embeddingId = `summary-embedding-${summary.id}`;
                 const embedding = await this.embeddings.embed(summary.content);
-                await this.surreal.upsertSummaryEmbedding({
+                await this.graph.upsertSummaryEmbedding({
                     id: embeddingId,
                     userId,
                     summaryId: summary.id,
@@ -2322,8 +2328,6 @@ export class MemoryModule extends Memory {
                 });
                 written += 1;
             } catch (err) {
-                // Summary 本体已经写入 brain.db；Surreal embedding 是晶体层索引，
-                // 失败只能丢索引并上报，不能回滚生平摘要。
                 this.events.publish(
                     event(RuntimeEventType.MemoryBrainWriteFailed, {
                         op: "summary.embedding",
@@ -2331,6 +2335,7 @@ export class MemoryModule extends Memory {
                         message: err instanceof Error ? err.message : String(err),
                     }),
                 );
+                failures.push({ summaryId, error: err });
             }
         }
         if (written > 0) {
@@ -2340,6 +2345,10 @@ export class MemoryModule extends Memory {
                     written,
                 }),
             );
+        }
+        if (failures.length > 0) {
+            const failedIds = failures.map((failure) => failure.summaryId).join(", ");
+            throw new Error(`Summary embedding write failed for ${failedIds}`);
         }
     }
 
@@ -2585,17 +2594,17 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 向 Redis 写入本轮 episode（工作记忆）。
+     * 向工作记忆 Component 写入本轮 episode。
      * 失败记录事件后继续抛出。embedding 优先复用 context.embedding；缺省时使用本地 embedding provider。
      */
-    private async writeEpisodeToRedis(
+    private async writeEpisodeToWorkingMemory(
         message: GatewayMessage,
         reply: GatewayReply,
         context: RuntimeContext,
         importance: number,
         provenance: MemoryEpisodeProvenance,
     ): Promise<void> {
-        if (!this.redis) return;
+        if (!this.workingMemory) return;
         try {
             const stability = Math.min(1, importance * 1.2);
             const ttlMultiplier = this.workingMemoryDefaultTtlSeconds;
@@ -2611,7 +2620,7 @@ export class MemoryModule extends Memory {
             const hasMcpSuccess = (normalizedProvenance.mcpCalls ?? []).some((call) => call.ok);
             const text = renderEpisodeText(message.text, reply.text, normalizedProvenance);
 
-            await this.redis.writeEpisode({
+            await this.workingMemory.writeEpisode({
                 userId: message.user.id,
                 episodeId,
                 text,
@@ -2642,7 +2651,7 @@ export class MemoryModule extends Memory {
                     context.requestId,
                 ),
             );
-            // Dream 已转 SurrealDB 长期层维护（DESIGN §12），不再有 episode 入队步骤。
+            // Dream 已转晶体图长期层维护（DESIGN §12），不再有 episode 入队步骤。
         } catch (err) {
             this.events.publish(
                 event(
@@ -2656,21 +2665,21 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 项目候选 cluster 扫描：从 Redis context ring 拿近期 episode，按 concept 聚合，
+     * 项目候选 cluster 扫描：从工作记忆 context ring 拿近期 episode，按 concept 聚合，
      * 用 `detectClusterCandidate` 判定；命中即写入 pending_project_offer（每 userId 最多一条；
      * 已有 offer 时不重复触发，避免噪声）。
      *
      * 返回是否新增了一条 offer（用于测试与诊断）。
      */
     async sweepProjectClusters(userId: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
-        if (!this.redis) return false;
+        if (!this.workingMemory) return false;
         const existing = await this.sqlite.getProjectOffer(userId);
         if (existing) return false;
 
         const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
-        const episodeIds = await this.redis.readContextRing(userId, ringLimit);
+        const episodeIds = await this.workingMemory.readContextRing(userId, ringLimit);
         if (episodeIds.length === 0) return false;
-        const episodes = (await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)))).filter(
+        const episodes = (await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)))).filter(
             (e): e is NonNullable<typeof e> => Boolean(e),
         );
         if (episodes.length === 0) return false;
@@ -2755,21 +2764,21 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 技能候选扫描：从 Redis context ring 拿近期 episode，按 episode.provenance.mcpCalls
+     * 技能候选扫描：从工作记忆 context ring 拿近期 episode，按 episode.provenance.mcpCalls
      * 的工具组合（成功的 tools，按字典序去重）聚合 cluster；满足 support/confidence 阈值即
      * 写入 pending_skill_offer。
      *
      * 同 sweepProjectClusters 一样：每 userId 最多一条 offer；已存在 offer 时直接跳过。
      */
     async sweepSkillCandidates(userId: string): Promise<boolean> {
-        if (!this.redis) return false;
+        if (!this.workingMemory) return false;
         const existing = await this.sqlite.getSkillOffer(userId);
         if (existing) return false;
 
         const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
-        const episodeIds = await this.redis.readContextRing(userId, ringLimit);
+        const episodeIds = await this.workingMemory.readContextRing(userId, ringLimit);
         if (episodeIds.length === 0) return false;
-        const episodes = (await Promise.all(episodeIds.map((id) => this.redis!.readEpisode(userId, id)))).filter(
+        const episodes = (await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)))).filter(
             (e): e is NonNullable<typeof e> => Boolean(e),
         );
         if (episodes.length === 0) return false;
@@ -3423,8 +3432,8 @@ function resolveWorkingMemoryConfig(config: FlyflorConfig): WorkingMemoryConfig 
     if (config.memory.working) {
         return config.memory.working;
     }
-    // Older tests and user configs predate `memory.working`; preserve the old
-    // `redis.enabled` switch while keeping local WAL-backed memory as the new default.
+    // Older tests and user configs predate `memory.working`; preserve the legacy
+    // Redis compatibility switch while keeping local WAL-backed memory as the default.
     return {
         backend: config.memory.redis.enabled ? MemoryWorkingBackend.Redis : MemoryWorkingBackend.Local,
         local: {

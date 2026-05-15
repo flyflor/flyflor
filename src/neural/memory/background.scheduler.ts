@@ -4,12 +4,12 @@
  * 单一职责：按固定节拍对每个"活跃用户"驱动两条后台流水：
  *   1. ConsolidationWorker.drain(userId) — 把到期的 episode candidate 跑过 LLM 决策
  *      （reinforce / consolidate / discard）；
- *   2. decay sweep — 对 SurrealDB memory_node / skill 跑衰减纯函数并把
+ *   2. decay sweep — 对 CrystalComponent memory_node / skill 跑衰减纯函数并把
  *      新 importance 写回（避免假高分长期占据召回）。
  *
  * 设计约束（与 docs/BOUNDARIES.md 对齐）：
  *  - 不依赖系统 cron / node-cron，只用 setInterval；编译进 bun 二进制零风险；
- *  - 用户集合由 trackUser() 显式注册；不做 Redis SCAN 爆炸；
+ *  - 用户集合由 trackUser() 显式注册；不扫描工作记忆适配器枚举全量用户；
  *  - 单个 tick 内串行执行同一用户的两条任务，跨用户也串行（避免并发 LLM 风暴）；
  *  - 失败只发事件不抛错，下一 tick 自动重试；
  *  - 关停时立即清 timer，正在跑的 tick 让其自然结束。
@@ -66,7 +66,7 @@ export interface BackgroundSchedulerOptions {
     summarySweeper?: (userId: string) => Promise<{ written: number }>;
     /** Summary worker 节拍。默认 6 小时，0 关闭。 */
     summaryIntervalMs?: number;
-    /** Redis 热记忆压缩 worker。未注入则跳过。 */
+    /** 工作记忆压缩 worker。未注入则跳过。 */
     hotMemoryCompression?: HotMemoryCompressionWorker;
     /** 热记忆压缩检查节拍。默认 30 分钟，0 关闭。 */
     hotMemoryCompressionIntervalMs?: number;
@@ -529,7 +529,7 @@ export class BackgroundScheduler {
         return totals;
     }
 
-    /** Redis 热记忆压缩清理：只写隔离审计事件，不进入 summary / prompt recall / SurrealDB。 */
+    /** 工作记忆压缩清理：只写隔离审计事件，不进入 summary / prompt recall / CrystalComponent。 */
     async runHotMemoryCompressionOnce(userId?: string): Promise<{
         users: number;
         compressed: number;

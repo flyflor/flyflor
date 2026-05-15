@@ -8,7 +8,7 @@ import {
     HotMemoryCompressionWorker,
     parseHotMemoryCompressionDecision,
 } from "../src/neural/memory/hot.memory.compression.worker.ts";
-import type { EpisodeRecord } from "../src/neural/memory/redis.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
 import { MemoryEventType, ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
@@ -34,7 +34,7 @@ class StubModel implements ModelClient {
     }
 }
 
-class FakeRedis {
+class FakeWorkingMemory {
     readonly dropped: string[] = [];
     constructor(
         private readonly ids: string[],
@@ -67,13 +67,13 @@ describe("HotMemoryCompressionWorker", () => {
         expect(parsed?.confidence).toBe(1);
     });
 
-    test("writes isolated brain event and deletes Redis episodes", async () => {
+    test("writes isolated brain event and deletes working-memory episodes", async () => {
         const dir = await mkdtemp(join(tmpdir(), "flyflor-hot-compress-"));
         const brain = new BrainStore({ dbPath: join(dir, "brain.db") });
         await brain.open();
         try {
             const episode = makeEpisode("ep-1");
-            const redis = new FakeRedis(["ep-1", "missing"], new Map([["ep-1", episode]]));
+            const workingMemory = new FakeWorkingMemory(["ep-1", "missing"], new Map([["ep-1", episode]]));
             const events = new CapturingSink();
             const model = new StubModel(
                 JSON.stringify({
@@ -83,14 +83,14 @@ describe("HotMemoryCompressionWorker", () => {
                     rationale: "Cache entry reached review time.",
                 }),
             );
-            const worker = new HotMemoryCompressionWorker(redis as never, brain, model, events, {
+            const worker = new HotMemoryCompressionWorker(workingMemory as never, brain, model, events, {
                 now: () => 1_800_000_000_000,
             });
 
             const result = await worker.drain("u1");
 
             expect(result).toEqual({ scanned: 2, compressed: 1, deleted: 1, missing: 1, skipped: 0 });
-            expect(redis.dropped.sort()).toEqual(["ep-1", "missing"]);
+            expect(workingMemory.dropped.sort()).toEqual(["ep-1", "missing"]);
             expect(model.calls).toBe(1);
             const rows = brain.listEvents({ userId: "u1", type: MemoryEventType.HotMemoryCompression });
             expect(rows).toHaveLength(1);
@@ -113,22 +113,22 @@ describe("HotMemoryCompressionWorker", () => {
         }
     });
 
-    test("invalid model output keeps Redis episodes", async () => {
+    test("invalid model output keeps working-memory episodes", async () => {
         const dir = await mkdtemp(join(tmpdir(), "flyflor-hot-compress-invalid-"));
         const brain = new BrainStore({ dbPath: join(dir, "brain.db") });
         await brain.open();
         try {
-            const redis = new FakeRedis(["ep-1"], new Map([["ep-1", makeEpisode("ep-1")]]));
+            const workingMemory = new FakeWorkingMemory(["ep-1"], new Map([["ep-1", makeEpisode("ep-1")]]));
             const events = new CapturingSink();
             const worker = new HotMemoryCompressionWorker(
-                redis as never,
+                workingMemory as never,
                 brain,
                 new StubModel("not json"),
                 events,
             );
 
             await expect(worker.drain("u1")).rejects.toThrow("JSON object");
-            expect(redis.dropped).toEqual([]);
+            expect(workingMemory.dropped).toEqual([]);
             expect(brain.listEvents({ userId: "u1", type: MemoryEventType.HotMemoryCompression })).toEqual([]);
             expect(events.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryHotCompressionFailed);
         } finally {
@@ -136,9 +136,9 @@ describe("HotMemoryCompressionWorker", () => {
         }
     });
 
-    test("skips without Redis or model calls while breaker is cooling down", async () => {
+    test("skips without working-memory or model calls while breaker is cooling down", async () => {
         let listCalls = 0;
-        const redis = {
+        const workingMemory = {
             getHealthSnapshot: () => ({
                 circuitState: "open",
                 nextRetryAt: Date.now() + 60_000,
@@ -158,8 +158,8 @@ describe("HotMemoryCompressionWorker", () => {
                 confidence: 1,
             }),
         );
-        const worker = new HotMemoryCompressionWorker(redis as never, {} as BrainStore, model, events, {
-            workingMemoryHealthSnapshot: () => redis.getHealthSnapshot(),
+        const worker = new HotMemoryCompressionWorker(workingMemory as never, {} as BrainStore, model, events, {
+            workingMemoryHealthSnapshot: () => workingMemory.getHealthSnapshot(),
         });
 
         const result = await worker.drain("u1");

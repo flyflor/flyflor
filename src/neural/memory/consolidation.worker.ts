@@ -10,11 +10,11 @@ import type { RetrospectiveLog } from "./retrospective.ts";
  * 整合 Worker (consolidation worker)。
  *
  * 角色（与 README.md §7 晶体智力候选与升格对齐）：
- * 1. 周期扫描 Redis ff:cq:{userId}（已到 review 时间的 episode 候选）；
+ * 1. 周期扫描工作记忆 Component（已到 review 时间的 episode 候选）；
  * 2. 让 LLM 输出结构化决策：reinforce / consolidate / discard；
- * 3. consolidate → upsert SurrealDB episode + memory_node + 边；
+ * 3. consolidate → upsert 晶体图 Component 的 episode + memory_node + 边；
  * 4. discard → 直接 dropEpisode；
- * 5. reinforce → 不写 SurrealDB，重置 Redis TTL（让其在工作记忆里存活更久）。
+ * 5. reinforce → 不写长期图，重置工作记忆 TTL（让其在工作记忆里存活更久）。
  *
  * 设计约束：
  *  - **零字符串匹配**：决策完全由 LLM 结构化 JSON 决定，代码只校验 schema；
@@ -75,7 +75,7 @@ export class ConsolidationWorker {
     private readonly workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 
     constructor(
-        private readonly redis: WorkingMemoryStore,
+        private readonly workingMemory: WorkingMemoryStore,
         private readonly graph: MemoryGraphStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
@@ -90,7 +90,7 @@ export class ConsolidationWorker {
 
     /**
      * 处理一个用户当前到期的整合候选。
-     * - 拉取 ff:cq:{userId} 中 reviewAt <= now 的 episode；
+     * - 拉取工作记忆 Component 中 reviewAt <= now 的 episode；
      * - 逐条让 LLM 决策；按结果走三条通道。
      */
     async drain(userId: string): Promise<ConsolidationRunResult> {
@@ -106,7 +106,7 @@ export class ConsolidationWorker {
         }
         let candidateIds: string[];
         try {
-            candidateIds = await this.redis.listConsolidationCandidates(
+            candidateIds = await this.workingMemory.listConsolidationCandidates(
                 userId,
                 Math.floor(Date.now() / 1000),
                 this.batchSize,
@@ -118,14 +118,14 @@ export class ConsolidationWorker {
         result.scanned = candidateIds.length;
         for (const id of candidateIds) {
             try {
-                const episode = await this.redis.readEpisode(userId, id);
+                const episode = await this.workingMemory.readEpisode(userId, id);
                 if (!episode) {
                     result.skipped += 1;
                     continue;
                 }
                 const decision = await this.classify(episode);
                 if (decision.decision === ConsolidationDecisionKind.Discard) {
-                    await this.redis.dropEpisode(userId, id);
+                    await this.workingMemory.dropEpisode(userId, id);
                     result.discarded += 1;
                     await this.retrospective?.append({
                         kind: "discard",
@@ -134,12 +134,12 @@ export class ConsolidationWorker {
                         rationale: decision.rationale,
                     });
                 } else if (decision.decision === ConsolidationDecisionKind.Reinforce) {
-                    await this.redis.touchConcepts(userId, episode.concepts ?? []);
-                    await this.redis.reinforceEpisode(userId, id, this.reinforceTtl);
+                    await this.workingMemory.touchConcepts(userId, episode.concepts ?? []);
+                    await this.workingMemory.reinforceEpisode(userId, id, this.reinforceTtl);
                     result.reinforced += 1;
                 } else if (decision.decision === ConsolidationDecisionKind.Consolidate) {
                     await this.consolidateEpisode(episode, decision);
-                    await this.redis.dropEpisode(userId, id);
+                    await this.workingMemory.dropEpisode(userId, id);
                     result.consolidated += 1;
                     await this.retrospective?.append({
                         kind: "consolidate",
@@ -168,7 +168,7 @@ export class ConsolidationWorker {
         return parseConsolidationDecision(raw);
     }
 
-    /** Promote one episode to SurrealDB long-term storage with a memory_node + edge. */
+    /** Promote one working-memory episode to the CrystalComponent long-term graph with a memory_node + edge. */
     async consolidateEpisode(episode: EpisodeRecord, decision: ConsolidationDecision): Promise<void> {
         const memoryNodeId = crypto.randomUUID();
         await this.graph.upsertEpisode({

@@ -5,12 +5,12 @@
  *  - 三层不同衰减率：episode 最快、memory_node 中、skill 最慢；
  *  - skill 还引入 lastVerifiedAt 双轨衰减：长时间未被复用的 skill 即使 importance
  *    没动，也按时间因子降权，避免"假高分"长期占据召回。
- *  - 强化（reinforce）：召回某 skill/memory_node 时同步把它的 importance 拉高一档，
- *    并刷新 Redis 的 EXPIRE（回到默认 TTL）。
+ *  - 强化（reinforce）：召回某 skill/memory_node 时同步把它的 importance 拉高一档；
+ *    工作记忆 TTL 延长由调用方通过 WorkingMemoryStore 完成。
  *
  * 边界约束：
  *  - 纯函数无 I/O，方便 unit test，编译进 bun 二进制零风险；
- *  - 调度器（DecayScheduler）注入 graph + redis，由后台 cron / consolidation worker 启动。
+ *  - 调度器注入 CrystalComponent graph，由 BackgroundScheduler / consolidation worker 启动。
  */
 
 export const DecayLayer = {
