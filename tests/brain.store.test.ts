@@ -213,6 +213,34 @@ describe("BrainStore", () => {
         }
     });
 
+    test("patchGhostContent fails loudly on corrupt ghost content", async () => {
+        const { store, dir } = await freshStore();
+        try {
+            const ts = Date.UTC(2026, 4, 13, 0, 0, 0);
+            store.appendEvent({
+                id: "ghost-corrupt",
+                ts,
+                userId: "u1",
+                type: MemoryEventType.GhostContext,
+                content: { reason: "ask" },
+            });
+            store.close();
+            const db = new Database(join(dir, "brain.db"));
+            try {
+                db.run("UPDATE memory_events SET content = ? WHERE id = ?", ["{", "ghost-corrupt"]);
+            } finally {
+                db.close();
+            }
+            await store.open();
+
+            expect(() => store.patchGhostContent("ghost-corrupt", { resumed: true })).toThrow(
+                "Invalid ghost-context content JSON",
+            );
+        } finally {
+            store.close();
+        }
+    });
+
     test("writes summary, links and codenames", async () => {
         const { store } = await freshStore();
         try {

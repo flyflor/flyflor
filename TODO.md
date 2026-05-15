@@ -210,7 +210,7 @@
 | 优先级 | 主题 | 依赖 / 状态 | 备注 |
 | --- | --- | --- | --- |
 | ~~P1~~ | ~~发布流程自动化~~ | ✅ done | `bun run ci` / `bun run release:check` 作为本地确定性门禁，覆盖 docs/type/tests/native binary/docker binary/docker runtime smoke；不接入 GitHub Actions；真实模型 chat probe 拆到 `bun run smoke:runtime:live` |
-| P1 | memory 层剩余 best-effort 语义硬失败化 | 进行中 | 已完成 provider fallback、stream fallback、MCP/schema、plugin/shell/audit/inflight/blackboard/reflection/feedback/consolidation/hot compression 的显式失败；summary embedding、retrospective audit 与 project memory snapshot 已从 best-effort 改为显式失败；hippocampus context 与 `inbox list` 已切到 brain.db 权威源，不再读 legacy journal；剩余 legacy journal 写入策略 / 个别异步审计路径需按风险拆批 |
+| P1 | memory 层剩余 best-effort 语义硬失败化 | 进行中 | 已完成 provider fallback、stream fallback、MCP/schema、plugin/shell/audit/inflight/blackboard/reflection/feedback/consolidation/hot compression 的显式失败；summary embedding、retrospective audit、project memory snapshot 与 ghost content patch 已从 best-effort 改为显式失败；hippocampus context 与 `inbox list` 已切到 brain.db 权威源，不再读 legacy journal；剩余 legacy journal 写入策略 / 个别异步审计路径需按风险拆批 |
 | P1 | daemon 安装体验实机验证 | 未开始 | gateway daemon helper 已实现；launchd/systemd 安装脚本和跨平台真实机器回归仍未固化 |
 | P2 | 真实第三方 MCP 长期断链回归 | 未开始 | 本地 mock 已覆盖短暂断链与长结果回灌；还缺真实 server 长时间断链、重连、catalog stale 的实测矩阵 |
 

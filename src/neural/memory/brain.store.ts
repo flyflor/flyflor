@@ -635,12 +635,17 @@ export class BrainStore {
         if (row.type !== "ghost-context") {
             throw new Error(`patchGhostContent: ${eventId} is not a ghost-context event`);
         }
-        let current: Record<string, unknown> = {};
+        // patch 会改写事件 content；若原 content 已坏，必须先暴露损坏，不能用空对象覆盖掉证据。
+        let parsed: unknown;
         try {
-            current = (JSON.parse(row.content) as Record<string, unknown>) ?? {};
-        } catch {
-            current = {};
+            parsed = JSON.parse(row.content) as unknown;
+        } catch (error) {
+            throw new Error(`Invalid ghost-context content JSON for event ${eventId}: ${String(error)}`);
         }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error(`Invalid ghost-context content JSON for event ${eventId}.`);
+        }
+        const current = parsed as Record<string, unknown>;
         const next = { ...current, ...patch };
         db.run("UPDATE memory_events SET content = ? WHERE id = ?", [JSON.stringify(next), eventId]);
         return this.getEvent(eventId);
