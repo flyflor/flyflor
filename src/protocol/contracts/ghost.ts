@@ -1,7 +1,7 @@
 /**
  * Ghost Context 协议（生命体重构 LF-R4）。
  *
- * 设计要点（详见 `docs/proposals/life.form.md` §D6 & §R4）：
+ * 设计要点（当前契约见 `docs/boundaries.md` R6，历史背景见 `docs/old-docs/life.form.md`）：
  * - Ghost 不是新概念，是 `memory_events.type = 'ghost-context'` 的一种。
  *   复用 AtomScore / decay / 召回 / gem 升格通路，零新机制。
  * - Ghost 由 runtime 在以下场景写入：

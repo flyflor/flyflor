@@ -1,6 +1,6 @@
 # Flyflor 文档索引
 
-本目录是 Flyflor 工程文档的唯一入口。所有文档自包含，互不引用；本索引页是唯一允许跨文档引用的页面。
+本目录是 Flyflor 工程文档的唯一入口。主文档只描述当前运行契约；已经落地或迁移完成的提案、历史背景统一归入 [old-docs/](old-docs/)。
 
 ## 阅读顺序
 
@@ -17,13 +17,10 @@
 9. [skill.system.md](skill.system.md) — Skill manifest、选择、使用计数、promotion
 10. [cli.commands.md](cli.commands.md) — CLI 命令现状清单（含 blackboard TTY 浏览器）
 11. [boundaries.md](boundaries.md) — 工程硬边界与红线
-12. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
-13. [storage.degradation.md](storage.degradation.md) — 存储降级历史背景（当前实现以 memory.system 为准）
+12. [old-docs/README.md](old-docs/README.md) — 已归档的提案和历史背景，只做追溯
+13. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
 14. 根目录 [TODO.md](../TODO.md) — 运行边界、后续增强与路线记录
 
-## 提案区
+## 归档区
 
-[proposals/](proposals/) 下记录设计主线与落地历史；其中部分内容已经实现，具体状态以文档内进度表和根目录 [TODO.md](../TODO.md) 为准：
-
-- [proposals/eq.module.md](proposals/eq.module.md) — EQ 语气控制层设计与落地记录
-- [proposals/life.form.md](proposals/life.form.md) — 无 session / brain.db / Codename / Ask / Ghost / Dream 生命体重构主线
+[old-docs/](old-docs/) 只存放历史材料。当前实现细节以本索引的主文档和根目录 [README.md](../README.md) 为准；不要从归档文档反推运行契约。

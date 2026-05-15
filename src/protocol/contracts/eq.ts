@@ -1,7 +1,7 @@
 /**
  * EQ-01 slice A — 情绪状态协议（最小骨架）。
  *
- * 设计要点（严格遵守 docs/proposals/eq.module.md 与 boundaries.md 红线）：
+ * 设计要点（严格遵守 docs/boundaries.md 红线；历史背景见 docs/old-docs/eq.module.md）：
  * - **EqLabel 是封闭枚举**。runtime 严禁基于消息文本派生 label（零字符匹配红线）。
  *   label 只能由模型在 `MemoryAction.eq` 结构化字段中显式给出。
  * - 三个轴 valence（-1..1）/ arousal（0..1）/ dominance（0..1）走 PAD 模型常用范围。

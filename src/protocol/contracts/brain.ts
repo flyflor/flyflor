@@ -1,7 +1,7 @@
 /**
  * Brain.db 协议（单文件大脑 event/state/summary/link/codename 公共契约）
  *
- * 设计要点（详见 `docs/proposals/life.form.md` §brain.db Schema）：
+ * 设计要点（当前契约见 `docs/boundaries.md` R2，历史背景见 `docs/old-docs/life.form.md`）：
  * - `~/.flyflor/brain.db` 是单文件大脑：event/state 分离 + append-only。
  * - `memory_events`：append-only 事件层。任何"更新内容"操作必须新写一行 + 状态层指向。
  * - `memory_state`：状态层。Dream / sweeper 只允许改这里，不得 DELETE event 行。

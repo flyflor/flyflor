@@ -1,7 +1,7 @@
 /**
  * Identity self-write 协议（生命体重构 LF-R5）。
  *
- * 设计要点（详见 `docs/proposals/life.form.md` §R5）：
+ * 设计要点（当前契约见 `docs/boundaries.md` R3，历史背景见 `docs/old-docs/life.form.md`）：
  * - Identity = `memory_events.type = 'identity-append'` 的一系列 append-only 行。
  *   每行携带模型同轮结构化输出的一段自述：偏好、风格、习惯、长期目标、约束等。
  * - 写入完全由模型自决（同轮 `<flyflor_identity_append>` 块），

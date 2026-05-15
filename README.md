@@ -312,11 +312,10 @@ flyflor gateway status       # 网关状态
 | [docs/mcp.tools.md](docs/mcp.tools.md) | MCP 工具循环 |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection → Gem |
 | [docs/skill.system.md](docs/skill.system.md) | Skill 加载与升格 |
-| [docs/proposals/eq.module.md](docs/proposals/eq.module.md) | EQ 语气控制层 |
-| [docs/proposals/life.form.md](docs/proposals/life.form.md) | 无 session / brain.db / Codename / Ask / Ghost / Dream 主线 |
 | [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
-| [docs/storage.degradation.md](docs/storage.degradation.md) | 存储降级历史背景（当前以 memory.system 为准） |
 | [TODO.md](TODO.md) | 运行边界 / 后续计划 |
+
+历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 
 <!-- flyflor:prompt-templates:start -->
 # Prompt Template System
