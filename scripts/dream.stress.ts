@@ -20,7 +20,7 @@ import {
     type DreamRunResult,
 } from "../src/agent/runtime/dream.worker.ts";
 import { DreamCandidateKind } from "../src/neural/memory/dream.candidates.ts";
-import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph.store.ts";
+import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/components/memory/graph.store.ts";
 import type { ModelClient, ModelMessage } from "../src/protocol/contracts/index.ts";
 import type { EventSink } from "../src/protocol/events/index.ts";
 

@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { loadConfig } from "../src/config/index.ts";
-import { BrainStore } from "../src/neural/memory/brain.store.ts";
+import { BrainStore } from "../src/components/memory/brain.store.ts";
 import { Channel, ChatType, MemoryEventType } from "../src/protocol/contracts/index.ts";
 
 interface SeedOptions {

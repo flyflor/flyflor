@@ -24,7 +24,7 @@ import type {
     ModelClient,
     RuntimeContext,
 } from "../../protocol/contracts/index.ts";
-import { Memory } from "../../agent/components.ts";
+import { Memory } from "../../components/index.ts";
 import { Module } from "../../agent/di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import {
@@ -44,29 +44,29 @@ import { promoteCodename as promoteCodenameHelper } from "../../agent/project/co
 import { ProjectScaffolder } from "../../agent/project/scaffolder.ts";
 import { spreadActivation, type ActivationCandidate } from "./activation.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
-import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "./embedding.ts";
-import { MarkdownMemoryStore } from "./markdown.ts";
-import { ProjectMemoryStore } from "./project.memory.ts";
-import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain.store.ts";
+import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding/index.ts";
+import { MarkdownMemoryStore } from "../../components/memory/markdown.store.ts";
+import { ProjectMemoryStore } from "../../components/memory/project.memory.store.ts";
+import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "../../components/memory/brain.store.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
-import { AskReason, MemoryEventStatus, MemoryEventType, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, SceneRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type SceneRecord, type TaskPlanRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
-import { CrystalMemoryService } from "../../crystal/memory/index.ts";
-import { SQLiteMemoryStore } from "./sqlite.ts";
-import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite.ts";
-import { LocalWorkingMemoryStore } from "./local.working.store.ts";
-import type { EpisodeRecord, WorkingMemoryStore } from "./working.store.ts";
-import type { MemoryGraphStore } from "./graph.store.ts";
-import { SQLiteGraphStore } from "./sqlite.graph.ts";
+import { CrystalMemoryComponent } from "../../crystal/memory/index.ts";
+import { SQLiteMemoryStore } from "../../components/memory/sqlite.memory.store.ts";
+import type { PendingProjectOffer, PendingSkillOffer } from "../../components/memory/sqlite.memory.store.ts";
+import { LocalWorkingMemoryStore } from "../../components/memory/local.working.store.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "../../components/memory/working.store.ts";
+import type { MemoryGraphStore } from "../../components/memory/graph.store.ts";
+import { SQLiteGraphStore } from "../../components/memory/sqlite.graph.store.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
 import { RetrospectiveLog } from "./retrospective.ts";
 import { BackgroundScheduler } from "./background.scheduler.ts";
 import { runBrainArchive, type BrainArchiveRunResult } from "./brain.archive.ts";
-import { DormantSupervisor } from "./dormant.supervisor.ts";
+import { DormantSupervisor } from "../dormant/index.ts";
 import { DreamWorkerImpl } from "../../agent/runtime/dream.worker.ts";
+import type { MemoryAction } from "./actions.ts";
 import type {
-    MemoryAction,
     MemoryCandidate,
     MemoryEpisodeProvenance,
     MemoryRecord,
@@ -74,18 +74,18 @@ import type {
     MemorySearchResult,
     MemoryWeights,
     TurnMemoryResult,
-} from "./types.ts";
-import type { WorkingMemoryHealthSnapshot } from "./working.store.ts";
+} from "../../components/memory/types.ts";
+import type { WorkingMemoryHealthSnapshot } from "../../components/memory/working.store.ts";
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
-export { MarkdownMemoryStore } from "./markdown.ts";
-export { ProjectMemoryStore } from "./project.memory.ts";
+export { MarkdownMemoryStore } from "../../components/memory/markdown.store.ts";
+export { ProjectMemoryStore } from "../../components/memory/project.memory.store.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
 export { HotMemoryCompressionWorker, parseHotMemoryCompressionDecision } from "./hot.memory.compression.worker.ts";
-export { SQLiteMemoryStore } from "./sqlite.ts";
-export { SQLiteGraphStore } from "./sqlite.graph.ts";
+export { SQLiteMemoryStore } from "../../components/memory/sqlite.memory.store.ts";
+export { SQLiteGraphStore } from "../../components/memory/sqlite.graph.store.ts";
+export type { MemoryAction } from "./actions.ts";
 export type {
-    MemoryAction,
     MemoryCandidate,
     MemoryEpisodeProvenance,
     MemoryMatrixResult,
@@ -94,7 +94,7 @@ export type {
     MemorySearchResult,
     MemoryWeights,
     TurnMemoryResult,
-} from "./types.ts";
+} from "../../components/memory/types.ts";
 
 export interface BehaviorSnapshotRecord {
     corrections: MemoryEventRecord[];
@@ -104,8 +104,17 @@ export interface BehaviorSnapshotRecord {
 export interface ChatHistoryTurn {
     assistantText: string;
     eventId: string;
+    contextForks?: ContextForkRecord[];
+    scenes?: SceneRecord[];
+    taskPlans?: TaskPlanRecord[];
     ts: number;
     userText: string;
+}
+
+export interface TurnPlanningInput {
+    contextForks?: ContextForkRecord[];
+    sceneRecords?: SceneRecord[];
+    taskPlans?: TaskPlanRecord[];
 }
 
 export interface BehaviorSnapshotInput {
@@ -142,7 +151,7 @@ export class MemoryModule extends Memory {
     private readonly projectMemory: ProjectMemoryStore;
     private readonly matrix: MemoryMatrixAggregator;
     private readonly sqlite: SQLiteMemoryStore;
-    private readonly crystal: CrystalMemoryService;
+    private readonly crystal: CrystalMemoryComponent;
     /** 工作记忆 Component；主线实现是本地 WAL/snapshot。 */
     private readonly workingMemory: WorkingMemoryStore | null;
     private readonly workingMemoryBackend: MemoryWorkingBackend;
@@ -179,7 +188,7 @@ export class MemoryModule extends Memory {
         this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
-        this.crystal = new CrystalMemoryService(
+        this.crystal = new CrystalMemoryComponent(
             config.memory.crystal,
             undefined,
             config.memory.embedding.dimensions,
@@ -594,6 +603,11 @@ export class MemoryModule extends Memory {
         const ghostHint = this.renderGhostHint(message.user.id);
         if (ghostHint) nudges.push(ghostHint);
 
+        // ContextFork：无 session 设计下的显式分叉上下文。只有调用方传入
+        // context.contextForkId 时才注入范围边界；runtime 不从文本推断 fork。
+        const forkBlock = this.renderContextForkBlock(message.user.id, context?.contextForkId);
+        if (forkBlock) nudges.push(forkBlock);
+
         // LF-R5 Identity：把当前 live identity append 拼成 [identity] 块注入 prompt 顶部。
         // 零字符匹配——是否注入只看 brain 行的 status，runtime 不解析 content 语义。
         const identityBlock = this.renderIdentityBlock(message.user.id);
@@ -705,6 +719,7 @@ export class MemoryModule extends Memory {
         actions: MemoryAction[] = [],
         provenance: MemoryEpisodeProvenance = {},
         ask?: AgentAsk,
+        planning: TurnPlanningInput = {},
     ): Promise<TurnMemoryResult> {
         if (!this.config.memory.enabled) {
             return {
@@ -733,14 +748,32 @@ export class MemoryModule extends Memory {
 
         // brain.db 是生命事件事实层：每轮先写权威事件，再从同轮结构化 memory action
         // 派生 atom。失败直接抛出，避免半状态继续运行。
-        await this.writeTurnToBrain(message, reply, context, actions, provenance, projectConstraintId, codenameId);
+        const sourceEventId = await this.writeTurnToBrain(
+            message,
+            reply,
+            context,
+            actions,
+            provenance,
+            projectConstraintId,
+            codenameId,
+        );
 
         // 模型本轮如果发起新的 ask（kind='ask'），落 brain.memory_events.type='ask'。
         // chainDepth 由前序 ask 是否存在 + countAskChainDepth 决定；超过 maxChainDepth
         // 时仅记审计事件，runtime 由调用方决定是否强制 reply（见 RuntimeModule）。
+        let askEventId: string | undefined;
         if (ask) {
-            this.recordAskEvent(message, context, ask, pendingAskBefore?.id, provenance.behaviorSnapshotId);
+            askEventId = this.recordAskEvent(message, context, ask, pendingAskBefore?.id, provenance.behaviorSnapshotId);
         }
+
+        this.recordTurnPlanning({
+            ...planning,
+            blackboardTurnId: provenance.blackboardTurnId,
+            requestId: context.requestId,
+            sourceAskId: askEventId,
+            sourceEventId,
+            userId: message.user.id,
+        });
 
         await this.writeEpisodeToWorkingMemory(message, reply, context, importanceFromActions(actions), provenance);
         // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
@@ -1188,7 +1221,7 @@ export class MemoryModule extends Memory {
         provenance: MemoryEpisodeProvenance,
         projectConstraintId: string,
         codenameId?: string,
-    ): Promise<void> {
+    ): Promise<string> {
         try {
             const normalizedProvenance = normalizeEpisodeProvenance(provenance);
             const episodeId = turnEpisodeId(message, context);
@@ -1234,6 +1267,7 @@ export class MemoryModule extends Memory {
                 atoms,
                 codenameId,
             });
+            return episodeId;
 
         } catch (err) {
             this.events.publish(
@@ -1486,7 +1520,96 @@ export class MemoryModule extends Memory {
             untilTs: options.beforeTs,
             limit: options.limit ?? 20,
         });
-        return rows.map(historyTurnFromEvent).reverse();
+        return rows.map((row) => historyTurnFromEvent(row, this.historyPlanningForEvent(userId, row.id))).reverse();
+    }
+
+    /**
+     * Planning/fork/history write path. The semantic decision comes from model
+     * protocol blocks or blackboard structured output; this component only
+     * attaches source ids and stores summary records in brain.db.
+     */
+    recordTurnPlanning(input: TurnPlanningInput & {
+        blackboardTurnId?: string;
+        requestId?: string;
+        sourceAskId?: string;
+        sourceEventId: string;
+        userId: string;
+    }): void {
+        if (!this.brainOpened) return;
+        const withSourcePlan = (plan: TaskPlanRecord): TaskPlanRecord => ({
+            ...plan,
+            userId: input.userId,
+            sourceAskId: plan.sourceAskId ?? input.sourceAskId,
+            sourceBlackboardTurnId: plan.sourceBlackboardTurnId ?? input.blackboardTurnId,
+            sourceEventId: plan.sourceEventId ?? input.sourceEventId,
+        });
+        const withSourceFork = (fork: ContextForkRecord): ContextForkRecord => ({
+            ...fork,
+            userId: input.userId,
+            sourceAskId: fork.sourceAskId ?? input.sourceAskId,
+            sourceBlackboardTurnId: fork.sourceBlackboardTurnId ?? input.blackboardTurnId,
+            sourceEventId: fork.sourceEventId ?? input.sourceEventId,
+            inheritedEventIds: uniqueStrings([input.sourceEventId, ...fork.inheritedEventIds]),
+        });
+        const withSourceScene = (scene: SceneRecord): SceneRecord => ({
+            ...scene,
+            userId: input.userId,
+            blackboardTurnId: scene.blackboardTurnId ?? input.blackboardTurnId,
+            sourceEventId: scene.sourceEventId ?? input.sourceEventId,
+        });
+        try {
+            for (const plan of (input.taskPlans ?? []).slice(0, 4).map(withSourcePlan)) {
+                this.brain.writeTaskPlan(plan);
+                this.events.publish(
+                    event(RuntimeEventType.MemoryTaskPlanWritten, {
+                        planId: plan.id,
+                        userId: input.userId,
+                        status: plan.status,
+                        progress: plan.progress,
+                    }, input.requestId),
+                );
+            }
+            for (const fork of (input.contextForks ?? []).slice(0, 4).map(withSourceFork)) {
+                this.brain.writeContextFork(fork);
+                this.events.publish(
+                    event(RuntimeEventType.MemoryContextForkWritten, {
+                        forkId: fork.id,
+                        userId: input.userId,
+                        maxContextTokens: fork.maxContextTokens,
+                    }, input.requestId),
+                );
+            }
+            for (const scene of (input.sceneRecords ?? []).slice(0, 8).map(withSourceScene)) {
+                this.brain.writeSceneRecord(scene);
+                this.events.publish(
+                    event(RuntimeEventType.MemorySceneRecordWritten, {
+                        sceneId: scene.id,
+                        userId: input.userId,
+                        kind: scene.kind,
+                        blackboardTurnId: scene.blackboardTurnId,
+                    }, input.requestId),
+                );
+            }
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "planning.write",
+                    message: err instanceof Error ? err.message : String(err),
+                }, input.requestId),
+            );
+            throw err;
+        }
+    }
+
+    private historyPlanningForEvent(
+        userId: string,
+        sourceEventId: string,
+    ): Pick<ChatHistoryTurn, "contextForks" | "scenes" | "taskPlans"> {
+        return {
+            contextForks: this.brain.listContextForks({ userId, sourceEventId, limit: 8 }),
+            scenes: this.brain.listSceneRecords({ userId, sourceEventId, limit: 16 }),
+            taskPlans: this.brain.listTaskPlans({ userId, sourceEventId, limit: 8 }),
+        };
     }
 
     /**
@@ -1676,6 +1799,21 @@ export class MemoryModule extends Memory {
         return renderRuntimeGhostHintPrompt({ ghostEntries: entries.join("\n") });
     }
 
+    private renderContextForkBlock(userId: string, contextForkId: string | undefined): string | undefined {
+        if (!this.brainOpened || !contextForkId) return undefined;
+        const fork = this.brain.getContextFork(contextForkId);
+        if (!fork || fork.userId !== userId) return undefined;
+        return [
+            "[context-fork]",
+            `id: ${fork.id}`,
+            `title: ${fork.title}`,
+            `scope: ${fork.scopeSummary}`,
+            `budget: ${fork.maxContextTokens} tokens`,
+            `inheritedEvents: ${fork.inheritedEventIds.slice(0, 12).join(", ")}`,
+            "[/context-fork]",
+        ].join("\n");
+    }
+
     /**
      * LF-R5：把当前 live identity append 渲染为 `[identity]` 块。仅根据 brain 的状态层
      * （`status='live'`）过滤；runtime 不读 content 文本派生 kind / 排序。
@@ -1788,8 +1926,8 @@ export class MemoryModule extends Memory {
         ask: AgentAsk,
         parentAskId: string | undefined,
         behaviorSnapshotId?: string,
-    ): void {
-        if (!this.brainOpened) return;
+    ): string | undefined {
+        if (!this.brainOpened) return undefined;
         const ts = Date.parse(context.now);
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
         const askId = `ask-${crypto.randomUUID()}`;
@@ -1844,6 +1982,7 @@ export class MemoryModule extends Memory {
                 context,
                 nowMs,
             });
+            return askId;
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
@@ -2953,6 +3092,7 @@ function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): Memory
             tool: call.tool.trim(),
         }));
     return {
+        ...(provenance.blackboardTurnId ? { blackboardTurnId: provenance.blackboardTurnId } : {}),
         ...(skillNames.length > 0 ? { skillNames } : {}),
         ...(mcpCalls.length > 0 ? { mcpCalls } : {}),
     };
@@ -3337,12 +3477,18 @@ function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string
     return `episode:${hasher.digest("hex").slice(0, 24)}`;
 }
 
-function historyTurnFromEvent(row: MemoryEventRecord): ChatHistoryTurn {
+function historyTurnFromEvent(
+    row: MemoryEventRecord,
+    planning: Pick<ChatHistoryTurn, "contextForks" | "scenes" | "taskPlans"> = {},
+): ChatHistoryTurn {
     const userText = strictHistoryString(row.content.userText, row.id, "userText");
     const assistantText = strictHistoryString(row.content.assistantText, row.id, "assistantText");
     return {
         assistantText,
+        ...(planning.contextForks && planning.contextForks.length > 0 ? { contextForks: planning.contextForks } : {}),
         eventId: row.id,
+        ...(planning.scenes && planning.scenes.length > 0 ? { scenes: planning.scenes } : {}),
+        ...(planning.taskPlans && planning.taskPlans.length > 0 ? { taskPlans: planning.taskPlans } : {}),
         ts: row.ts,
         userText,
     };

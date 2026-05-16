@@ -127,8 +127,13 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
                         action: "add",
                         target: "memory",
                         content: "bad eq",
-                        // @ts-expect-error 故意构造非法 label
-                        eq: { label: "happy", valence: 0.5, arousal: 0.5, dominance: 0.5, confidence: 0.5 },
+                        eq: {
+                            label: "happy" as unknown as EqLabel,
+                            valence: 0.5,
+                            arousal: 0.5,
+                            dominance: 0.5,
+                            confidence: 0.5,
+                        },
                     },
                 ],
             );
