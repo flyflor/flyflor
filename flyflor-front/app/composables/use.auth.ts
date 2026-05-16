@@ -10,7 +10,8 @@ export function useAuth() {
     const user = userState();
 
     async function refreshUser(): Promise<void> {
-        const response = await $fetch<AuthResponse>("/api/auth/me");
+        const requestFetch = import.meta.server ? useRequestFetch() : $fetch;
+        const response = await requestFetch<AuthResponse>("/api/auth/me");
         user.value = response.user;
     }
 

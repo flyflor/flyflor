@@ -47,6 +47,31 @@ export type Announcement = {
     title_zh: string;
 };
 
+export type AdminTopic = Topic & {
+    author_avatar_url: string | null;
+    author_email: string | null;
+    board_description_en: string | null;
+    board_description_zh: string | null;
+    board_name_en: string | null;
+    board_name_zh: string | null;
+};
+
+export type AdminComment = {
+    author_email: string | null;
+    author_name: string;
+    author_user_id: number | null;
+    board_key: string | null;
+    board_name_en: string | null;
+    board_name_zh: string | null;
+    body_en: string;
+    body_zh: string;
+    created_at: string;
+    id: number;
+    topic_id: number;
+    topic_title_en: string;
+    topic_title_zh: string;
+};
+
 export type SiteSettings = {
     accent_color: string;
     community_subtitle_en: string;

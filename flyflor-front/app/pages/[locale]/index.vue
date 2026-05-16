@@ -129,22 +129,22 @@ useHead({
 .hero {
     align-items: center;
     display: grid;
-    gap: 44px;
-    grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.82fr);
+    gap: 34px;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.78fr);
     margin: 0 auto;
     max-width: 1280px;
-    min-height: calc(100vh - 82px);
+    min-height: min(760px, calc(100vh - 82px));
     overflow: hidden;
-    padding: 42px 24px 76px;
+    padding: 36px 24px 58px;
     position: relative;
     background: linear-gradient(
         180deg,
-        color-mix(in srgb, var(--color-surface) 92%, var(--color-bg) 8%) 0%,
-        color-mix(in srgb, var(--color-bg) 88%, var(--color-surface) 12%) 100%
+        color-mix(in srgb, var(--color-surface) 78%, transparent) 0%,
+        color-mix(in srgb, var(--color-bg) 82%, var(--color-surface) 18%) 100%
     );
-    border: 1px solid color-mix(in srgb, var(--color-line) 72%, transparent);
-    border-radius: 18px;
-    box-shadow: var(--shadow-soft);
+    border: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
+    border-radius: 14px;
+    box-shadow: var(--shadow-tight);
     margin-top: 10px;
 }
 
@@ -166,11 +166,11 @@ useHead({
 }
 
 .hero__backdrop img {
-    filter: saturate(1.16) contrast(1.04);
+    filter: saturate(1.08) contrast(1.02);
     height: 100%;
     object-fit: cover;
     object-position: 82% 42%;
-    opacity: 0.24;
+    opacity: 0.18;
     transform: scale(1.08);
     width: 100%;
 }
@@ -182,17 +182,19 @@ useHead({
 }
 
 .hero__content {
-    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
+    backdrop-filter: blur(8px);
+    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-line) 58%, transparent);
     border-radius: 8px;
-    padding: 18px 0;
+    padding: 22px;
 }
 
 .hero__content h1 {
     font-family: var(--font-display);
-    font-size: clamp(4.2rem, 12vw, 9.2rem);
+    font-size: clamp(3.6rem, 9vw, 7.4rem);
     font-weight: 800;
     letter-spacing: 0;
-    line-height: 0.92;
+    line-height: 0.95;
     margin: 0;
 }
 
@@ -403,7 +405,7 @@ useHead({
     }
 
     .hero__content h1 {
-        font-size: clamp(3.2rem, 14vw, 5rem);
+        font-size: clamp(2.8rem, 13vw, 4.8rem);
     }
 
     .hero__visual {

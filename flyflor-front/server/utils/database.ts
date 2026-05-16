@@ -32,6 +32,24 @@ type AdminUserRow = UserRow & {
     topic_count: number;
 };
 
+type AdminTopicRow = TopicRow & {
+    author_avatar_url: string | null;
+    author_email: string | null;
+    board_description_en: string | null;
+    board_description_zh: string | null;
+    board_name_en: string | null;
+    board_name_zh: string | null;
+};
+
+type AdminCommentRow = CommentRow & {
+    author_email: string | null;
+    board_key: string | null;
+    board_name_en: string | null;
+    board_name_zh: string | null;
+    topic_title_en: string;
+    topic_title_zh: string;
+};
+
 type TopicRow = {
     id: number;
     board_key: string | null;
@@ -44,6 +62,16 @@ type TopicRow = {
     replies: number;
     views: number;
     likes: number;
+    created_at: string;
+};
+
+type CommentRow = {
+    id: number;
+    topic_id: number;
+    author_user_id: number | null;
+    author_name: string;
+    body_zh: string;
+    body_en: string;
     created_at: string;
 };
 
@@ -149,6 +177,16 @@ database.exec(`
         replies INTEGER NOT NULL DEFAULT 0,
         views INTEGER NOT NULL DEFAULT 0,
         likes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+        author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        author_name TEXT NOT NULL,
+        body_zh TEXT NOT NULL,
+        body_en TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -357,6 +395,44 @@ insertAnnouncement.run({
     $titleZh: "OpenClaw 与 Hermes 支持",
 });
 
+const commentCount = database.query("SELECT COUNT(*) AS count FROM comments").get() as { count: number };
+
+if (commentCount.count === 0) {
+    const seedTopics = database.query("SELECT id, board_key FROM topics ORDER BY id ASC LIMIT 2").all() as Array<{
+        board_key: string;
+        id: number;
+    }>;
+    const insertComment = database.query(`
+        INSERT INTO comments (
+            topic_id,
+            author_name,
+            body_zh,
+            body_en
+        )
+        VALUES (
+            $topicId,
+            $authorName,
+            $bodyZh,
+            $bodyEn
+        )
+    `);
+
+    for (const topic of seedTopics) {
+        insertComment.run({
+            $authorName: topic.board_key === "skill" ? "Skill Builder" : "Runtime Maintainer",
+            $bodyEn:
+                topic.board_key === "skill"
+                    ? "Please include trigger rules and a short verification step when sharing a skill."
+                    : "Transport recovery notes are especially useful when documenting MCP integrations.",
+            $bodyZh:
+                topic.board_key === "skill"
+                    ? "分享技能时建议包含触发规则和一条简短验证步骤。"
+                    : "记录 MCP 集成时，传输恢复经验尤其有价值。",
+            $topicId: topic.id,
+        });
+    }
+}
+
 const marketSeeds: MarketSeed[] = [
     {
         descriptionEn: "Turns repository rules, verification criteria, and implementation boundaries into a reusable coding discipline.",
@@ -532,6 +608,45 @@ export function listAdminUsers(): ReturnType<typeof serializeAdminUser>[] {
         .all() as AdminUserRow[];
 
     return users.map(serializeAdminUser);
+}
+
+export function listAdminTopics(): AdminTopicRow[] {
+    return database
+        .query(`
+            SELECT
+                topics.*,
+                boards.description_en AS board_description_en,
+                boards.description_zh AS board_description_zh,
+                boards.name_en AS board_name_en,
+                boards.name_zh AS board_name_zh,
+                users.avatar_url AS author_avatar_url,
+                users.email AS author_email
+            FROM topics
+            LEFT JOIN boards ON boards.key = topics.board_key
+            LEFT JOIN users ON users.id = topics.author_user_id
+            ORDER BY topics.created_at DESC, topics.id DESC
+        `)
+        .all() as AdminTopicRow[];
+}
+
+export function listAdminComments(): AdminCommentRow[] {
+    return database
+        .query(`
+            SELECT
+                comments.*,
+                topics.board_key,
+                topics.title_en AS topic_title_en,
+                topics.title_zh AS topic_title_zh,
+                boards.name_en AS board_name_en,
+                boards.name_zh AS board_name_zh,
+                users.email AS author_email
+            FROM comments
+            INNER JOIN topics ON topics.id = comments.topic_id
+            LEFT JOIN boards ON boards.key = topics.board_key
+            LEFT JOIN users ON users.id = comments.author_user_id
+            ORDER BY comments.created_at DESC, comments.id DESC
+        `)
+        .all() as AdminCommentRow[];
 }
 
 export function countAdminUsers(): number {
