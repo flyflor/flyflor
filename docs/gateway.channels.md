@@ -41,7 +41,7 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 | Webhook (Generic) | `webhook` | `GenericWebhookAdapter` | ✅ 完整 |
 | Google Chat | `google_chat` | `HttpPlatformAdapter` | ✅ Chat event 归一化 + incoming webhook 回复 |
 | IRC | `irc` | `HttpPlatformAdapter` | ✅ message/channel/nick 归一化 + reply URL 回发 |
-| Weixin iLink | `weixin-ilink` | `WeixinIlinkAdapter` | ✅ token + base URL 配齐即启用 |
+| Weixin iLink | `weixin-ilink` | `WeixinIlinkAdapter` | ✅ token + base URL 配齐即启用；context_token / typing ticket |
 | WeChat official account | `wechat` | `WeChatOfficialAccountAdapter` | ✅ 官方公众号 XML callback；text/image/voice/video/location/link/event 入站 |
 | Telegram | `telegram` | `TelegramAdapter` | ✅ webhook + bot；thread / reply anchor / typing / message edit |
 | Discord | `discord` | `DiscordInteractionAdapter` | ✅ interactions |
@@ -76,9 +76,10 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 | Feishu | ✅ | no-op | ✅ `root_id` / `reply_in_thread` | ✅ `parent_id` | ✅ message PATCH | 预留 | — |
 | WeChat official | ✅ XML callback | — | — | ✅ callback source id | — | — | — |
 | WeCom Callback | ✅ `message/send` | — | — | ✅ callback source id | — | — | — |
-| Weixin iLink | ✅ `sendmessage` + `context_token` | — | — | ✅ `context_token` | — | — | — |
+| Weixin iLink | ✅ `sendmessage` + `context_token` | ✅ `sendtyping`（需 `getconfig` ticket） | — | ✅ `context_token` | — | — | — |
 | DingTalk | ✅ robot webhook | — | — | ✅ `replyMsgId` 入站归一化 | — | 预留 | — |
-| Matrix / Mattermost / Google Chat | ✅ | adapter-specific no-op | ✅ 原生 thread/root 字段 | ✅ 原生 reply 字段 | 共享 HTTP 预留 | — | Matrix 入站 reaction |
+| Mattermost | ✅ webhook JSON / REST post | ✅ `users/me/typing`（需 bot REST） | ✅ `root_id` | ✅ `post_id` root | ✅ `posts/{id}/patch` | — | — |
+| Matrix / Google Chat | ✅ | adapter-specific no-op | ✅ 原生 thread/root 字段 | ✅ 原生 reply 字段 | 共享 HTTP 预留 | — | Matrix 入站 reaction |
 | 其他 HTTP channel | ✅ / reply URL | — | 结构化保留 | 结构化保留 | — | — | 结构化保留 |
 
 状态接口 `/channels` 会返回每个 adapter 的 `capabilities`，用于 CLI/TUI 和后续健康检查判断哪些细节是原生支持、哪些是显式降级。
@@ -178,7 +179,7 @@ interface GatewayChannelCapabilities {
 
 - 多数 HTTP channel 共用 `HttpPlatformAdapter`，但保留 channel-specific normalize / verify / send 分支；Slack、Line、Mattermost、DingTalk、WeChat official account、WeCom Callback 等已拆独立适配器，凭据不完整时不会回退到未校验的通用入口。
 - 外部聊天 / 平台 channel 只发送最终 `GatewayReply.text`，不把 runtime 的 token delta 拆成多条平台消息；显式 OpenAI-compatible `/v1/*` API SSE 属于 API 协议面，单独处理。
-- `typing.start` 只作为 best-effort lifecycle；失败会记录 `gateway.operation.failed` / `gateway.typing.failed`，不会阻断 final reply。
+- `typing.start` / `typing.stop` 只作为 best-effort lifecycle；失败会记录 `gateway.operation.failed` / `gateway.typing.failed`，不会阻断 final reply。Weixin iLink 只有拿到 `getconfig.typing_ticket` 后才调用官方 `sendtyping`，缺 ticket 时 no-op；最终回复仍必须走同一条入站 update 的官方 `sendmessage + context_token`，不能被 lifecycle operation 吞掉。
 - `message.edit` / `card.update` 必须由 adapter capability 声明支持后才能走原生 API；否则保持 final text send，不做 bridge 式伪装。
 - `GatewayMessage.messageAction / mentions / reactions / replyTo / comment` 只从平台结构化字段或协议 token 复制，属于通信协议归一化，不参与业务语义判断。
 - TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；chat TUI 已订阅 runtime / blackboard 事件，后续可把 gateway 级 channel 状态变化也接入同一事件面板。

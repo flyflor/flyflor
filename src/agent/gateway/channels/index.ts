@@ -101,6 +101,10 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
             adapters.set(
                 name,
                 new MattermostAdapter({
+                    baseUrl:
+                        typeof config.channels.mattermost.baseUrl === "string"
+                            ? config.channels.mattermost.baseUrl
+                            : undefined,
                     botToken:
                         typeof config.channels.mattermost.botToken === "string"
                             ? config.channels.mattermost.botToken

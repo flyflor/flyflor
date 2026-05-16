@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { MattermostAdapter } from "../src/agent/gateway/channels/mattermost.ts";
-import { Channel, ChatType, type GatewayReply } from "../src/protocol/contracts/index.ts";
+import { Channel, ChatType, GatewayOutboundOperation, type GatewayReply } from "../src/protocol/contracts/index.ts";
 
 const TOKEN = "mattermost-webhook-token";
 
@@ -111,5 +111,95 @@ describe("MattermostAdapter", () => {
             response_type: "ephemeral",
             text: "",
         });
+    });
+
+    test("uses Mattermost REST for typing and threaded final replies when bot credentials exist", async () => {
+        const originalFetch = globalThis.fetch;
+        const calls: Array<{ body: Record<string, unknown>; method?: string; url: string }> = [];
+        globalThis.fetch = (async (input, init) => {
+            calls.push({
+                url: String(input instanceof Request ? input.url : input),
+                method: init?.method,
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            return new Response(JSON.stringify({ id: "post-out" }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
+        }) as typeof fetch;
+        try {
+            const adapter = new MattermostAdapter({
+                baseUrl: "https://mattermost.test",
+                botToken: "bot-token",
+                webhookToken: TOKEN,
+            });
+            const response = await adapter.handle(
+                formRequest({
+                    token: TOKEN,
+                    team_id: "team-1",
+                    channel_id: "channel-1",
+                    user_id: "user-1",
+                    post_id: "root-post",
+                    text: "hello",
+                }),
+                async (message) =>
+                    ({
+                        messageId: "reply-1",
+                        route: message.route,
+                        text: "threaded ack",
+                    }) satisfies GatewayReply,
+            );
+
+            expect(response.status).toBe(200);
+            await expect(response.json()).resolves.toMatchObject({ response_type: "in_channel", text: "" });
+            expect(calls.map((call) => [call.method, call.url])).toEqual([
+                ["POST", "https://mattermost.test/api/v4/users/me/typing"],
+                ["POST", "https://mattermost.test/api/v4/posts"],
+            ]);
+            expect(calls[1]?.body).toEqual({
+                channel_id: "channel-1",
+                message: "threaded ack",
+                root_id: "root-post",
+            });
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    test("sendOperation patches an existing Mattermost post", async () => {
+        const originalFetch = globalThis.fetch;
+        const calls: Array<{ body: Record<string, unknown>; method?: string; url: string }> = [];
+        globalThis.fetch = (async (input, init) => {
+            calls.push({
+                url: String(input instanceof Request ? input.url : input),
+                method: init?.method,
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            return new Response(JSON.stringify({ id: "post-1" }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
+        }) as typeof fetch;
+        try {
+            const adapter = new MattermostAdapter({
+                baseUrl: "https://mattermost.test",
+                botToken: "bot-token",
+                webhookToken: TOKEN,
+            });
+            await adapter.sendOperation({
+                operation: GatewayOutboundOperation.MessageEdit,
+                route: { channel: Channel.Mattermost, chatId: "channel-1", chatType: ChatType.Group },
+                targetMessageId: "post-1",
+                text: "updated",
+            });
+
+            expect(calls[0]).toMatchObject({
+                method: "PUT",
+                url: "https://mattermost.test/api/v4/posts/post-1/patch",
+                body: { message: "updated" },
+            });
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
     });
 });

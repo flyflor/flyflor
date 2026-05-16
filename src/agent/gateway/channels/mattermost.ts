@@ -6,13 +6,26 @@
  * dispatch and is stripped before the payload is kept as GatewayMessage.raw.
  */
 
-import type { ChannelName, GatewayDeliveryMetadata, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
-import { isRecord, json, readString } from "./helpers.ts";
-import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import type {
+    ChannelName,
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import {
+    Channel,
+    ChannelTransport,
+    ChatType,
+    GatewayMessageKind,
+    GatewayOutboundOperation,
+} from "../../../protocol/contracts/index.ts";
+import { assertPlatformResponse, dispatchWithDelivery, isRecord, json, readString } from "./helpers.ts";
+import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 export interface MattermostAdapterConfig {
+    baseUrl?: string;
     botToken?: string;
     webhookToken?: string;
 }
@@ -34,6 +47,12 @@ interface MattermostPayload {
 export class MattermostAdapter implements ChannelAdapter {
     readonly name: ChannelName = Channel.Mattermost;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        messageUpdate: true,
+        replyReference: true,
+        thread: true,
+        typing: true,
+    });
 
     constructor(private readonly config: MattermostAdapterConfig) {}
 
@@ -48,12 +67,30 @@ export class MattermostAdapter implements ChannelAdapter {
             return json({ response_type: "ephemeral", text: "" });
         }
 
-        const reply = await dispatch(message);
-        if (reply.text.trim()) {
-            await this.sendTyping(message.route, buildDeliveryMetadata(message));
-            return json({ response_type: "in_channel", text: reply.text.trim() });
-        }
-        return json({ response_type: "ephemeral", text: "" });
+        const reply = await dispatchWithDelivery({
+            dispatch,
+            message,
+            deliver: async (text) => {
+                if (await this.sendNative(message.route, text, buildDeliveryMetadata(message))) {
+                    return;
+                }
+                // Slash/outgoing webhook response JSON is the stable fallback
+                // when no bot REST credentials are configured.
+            },
+            metadata: buildDeliveryMetadata(message),
+            operation: this.hasRestApi()
+                ? (operation) =>
+                      this.sendOperation({
+                          ...operation,
+                          metadata: operation.metadata ?? buildDeliveryMetadata(message),
+                      })
+                : undefined,
+            typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
+        });
+        return json({
+            response_type: reply.text.trim() ? "in_channel" : "ephemeral",
+            text: this.hasRestApi() ? "" : reply.text.trim(),
+        });
     }
 
     private verifyToken(token: string | undefined): boolean {
@@ -90,8 +127,74 @@ export class MattermostAdapter implements ChannelAdapter {
         };
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
-        // Mattermost slash/outgoing webhooks do not expose a durable typing API.
+    async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        if (!this.hasRestApi()) {
+            return;
+        }
+        await this.postRest("users/me/typing", { channel_id: route.chatId });
+    }
+
+    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.TypingStart) {
+            await this.sendTyping(operation.route, operation.metadata);
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            await this.sendNative(operation.route, operation.text, operation.metadata);
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.MessageEdit && operation.text && operation.targetMessageId) {
+            await this.putRest(`posts/${encodeURIComponent(operation.targetMessageId)}/patch`, {
+                message: operation.text,
+            });
+        }
+    }
+
+    private async sendNative(
+        route: GatewayRoute,
+        text: string,
+        metadata?: GatewayDeliveryMetadata,
+    ): Promise<boolean> {
+        if (!this.hasRestApi() || !text.trim()) {
+            return false;
+        }
+        const body: Record<string, unknown> = {
+            channel_id: route.chatId,
+            message: text.trim(),
+        };
+        const rootId = metadata?.replyToMessageId ?? metadata?.threadId ?? route.threadId;
+        if (rootId) {
+            body.root_id = rootId;
+        }
+        await this.postRest("posts", body);
+        return true;
+    }
+
+    private hasRestApi(): boolean {
+        return Boolean(this.config.baseUrl && this.config.botToken);
+    }
+
+    private async postRest(path: string, body: Record<string, unknown>): Promise<unknown> {
+        return this.restFetch("POST", path, body);
+    }
+
+    private async putRest(path: string, body: Record<string, unknown>): Promise<unknown> {
+        return this.restFetch("PUT", path, body);
+    }
+
+    private async restFetch(method: "POST" | "PUT", path: string, body: Record<string, unknown>): Promise<unknown> {
+        if (!this.config.baseUrl || !this.config.botToken) {
+            return undefined;
+        }
+        const response = await fetch(new URL(`/api/v4/${path}`, this.config.baseUrl).toString(), {
+            method,
+            headers: {
+                authorization: `Bearer ${this.config.botToken}`,
+                "content-type": "application/json",
+            },
+            body: JSON.stringify(body),
+        });
+        return assertPlatformResponse(response, "Mattermost REST");
     }
 }
 

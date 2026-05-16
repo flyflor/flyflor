@@ -59,7 +59,9 @@ describe("gateway channel status snapshots", () => {
             false,
         );
 
+        const mattermost = snapshot.channels.find((channel) => channel.name === Channel.Mattermost);
         const wechat = snapshot.channels.find((channel) => channel.name === Channel.WeChat);
+        const weixin = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
         const ilink = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
 
         expect(wechat?.configured).toBe(true);
@@ -166,7 +168,12 @@ describe("gateway channel status snapshots", () => {
 
     test("exposes channel capability matrix in status snapshots", () => {
         const snapshot = buildGatewayStatusSnapshot(
-            gatewayConfig([Channel.Telegram, Channel.Slack, Channel.WeChat, Channel.WeixinIlink], {
+            gatewayConfig([Channel.Telegram, Channel.Slack, Channel.Mattermost, Channel.WeChat, Channel.WeixinIlink], {
+                mattermost: {
+                    baseUrl: "https://mattermost.test",
+                    botToken: "mattermost-bot",
+                    webhookToken: "mattermost-token",
+                },
                 slack: { botToken: "xoxb-test", signingSecret: "slack-secret" },
                 telegram: { botToken: "telegram-token" },
                 wechat: { token: "wechat-token" },
@@ -177,7 +184,12 @@ describe("gateway channel status snapshots", () => {
                 },
             }),
             createChannelAdapters(
-                gatewayConfig([Channel.Telegram, Channel.Slack, Channel.WeChat, Channel.WeixinIlink], {
+                gatewayConfig([Channel.Telegram, Channel.Slack, Channel.Mattermost, Channel.WeChat, Channel.WeixinIlink], {
+                    mattermost: {
+                        baseUrl: "https://mattermost.test",
+                        botToken: "mattermost-bot",
+                        webhookToken: "mattermost-token",
+                    },
                     slack: { botToken: "xoxb-test", signingSecret: "slack-secret" },
                     telegram: { botToken: "telegram-token" },
                     wechat: { token: "wechat-token" },
@@ -194,7 +206,9 @@ describe("gateway channel status snapshots", () => {
 
         const telegram = snapshot.channels.find((channel) => channel.name === Channel.Telegram);
         const slack = snapshot.channels.find((channel) => channel.name === Channel.Slack);
+        const mattermost = snapshot.channels.find((channel) => channel.name === Channel.Mattermost);
         const wechat = snapshot.channels.find((channel) => channel.name === Channel.WeChat);
+        const weixin = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
 
         expect(telegram?.capabilities).toMatchObject({
             finalReply: true,
@@ -212,6 +226,15 @@ describe("gateway channel status snapshots", () => {
             finalReply: true,
             replyReference: true,
             typing: false,
+        });
+        expect(mattermost?.capabilities).toMatchObject({
+            messageUpdate: true,
+            thread: true,
+            typing: true,
+        });
+        expect(weixin?.capabilities).toMatchObject({
+            replyReference: true,
+            typing: true,
         });
     });
 });

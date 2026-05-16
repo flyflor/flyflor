@@ -1,8 +1,23 @@
-import type { GatewayDeliveryMetadata, GatewayMessage, GatewayReply } from "../../../protocol/contracts/index.ts";
-import { ChannelLinkState, ChannelTransport, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
+import type {
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayReply,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import {
+    ChannelLinkState,
+    ChannelTransport,
+    GatewayMessageKind,
+    GatewayOutboundOperation,
+} from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery, isRecord } from "./helpers.ts";
-import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, ChannelAdapterSnapshot, StreamingMessageDispatcher } from "./types.ts";
+
+const ILINK_TYPING_TICKET_TTL_MS = 10 * 60 * 1000;
+const ILINK_TYPING_START = 1;
+const ILINK_TYPING_STOP = 2;
 
 interface IlinkConfig {
     accountId?: string;
@@ -44,7 +59,12 @@ interface IlinkItem {
 export class WeixinIlinkAdapter implements ChannelAdapter {
     readonly name: "wechat" | "weixin-ilink";
     readonly transport = ChannelTransport.Polling;
+    readonly capabilities = channelCapabilities({
+        replyReference: true,
+        typing: true,
+    });
     private readonly seen = new Set<string>();
+    private readonly typingTickets = new Map<string, { ticket: string; seenAt: number }>();
     private running = false;
     private lastError?: string;
     private lastErrorAt?: string;
@@ -110,25 +130,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
                     }
                     this.remember(key);
 
-                    const message = this.normalize(update);
-                    if (!message.text) {
-                        continue;
-                    }
-                    this.lastInboundAt = message.receivedAt;
-                    await dispatchWithDelivery({
-                        dispatch,
-                        message,
-                        deliver: async (text) => {
-                            await this.sendReply(update, {
-                                messageId: crypto.randomUUID(),
-                                route: message.route,
-                                text,
-                            });
-                            this.lastOutboundAt = new Date().toISOString();
-                        },
-                        metadata: buildDeliveryMetadata(message),
-                        typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
-                    });
+                    await this.dispatchUpdate(update, dispatch);
                 }
             } catch (error) {
                 this.lastError = String(error);
@@ -137,6 +139,30 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
             }
             await Bun.sleep(this.config.pollIntervalMs);
         }
+    }
+
+    private async dispatchUpdate(update: IlinkUpdate, dispatch: StreamingMessageDispatcher): Promise<void> {
+        const message = this.normalize(update);
+        if (!message.text) {
+            return;
+        }
+        await this.maybeFetchTypingTicket(update);
+        this.lastInboundAt = message.receivedAt;
+        await dispatchWithDelivery({
+            dispatch,
+            message,
+            deliver: async (text) => {
+                await this.sendReply(update, {
+                    messageId: crypto.randomUUID(),
+                    route: message.route,
+                    text,
+                });
+                this.lastOutboundAt = new Date().toISOString();
+            },
+            metadata: buildDeliveryMetadata(message),
+            operation: (operation) => this.sendOperation(operation, update),
+            typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
+        });
     }
 
     private async fetchUpdates(): Promise<IlinkUpdate[]> {
@@ -224,8 +250,96 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "iLink sendmessage");
     }
 
-    async sendTyping(_route: import("../../../protocol/contracts/index.ts").GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
-        // The iLink bot API surface does not expose typing lifecycle calls.
+    async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        const ticket = this.readTypingTicket(route.chatId);
+        if (!ticket || !this.config.token) {
+            return;
+        }
+        await this.sendTypingStatus(route.chatId, ticket, ILINK_TYPING_START);
+    }
+
+    async sendOperation(operation: GatewayOutboundEnvelope, sourceUpdate?: IlinkUpdate): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            if (!sourceUpdate) {
+                return;
+            }
+            // iLink replies require the original context_token from the inbound
+            // update. Standalone MessageSend is therefore a no-op unless the
+            // poll loop supplies the source update to preserve official routing.
+            await this.sendReply(sourceUpdate, {
+                messageId: crypto.randomUUID(),
+                route: operation.route,
+                text: operation.text,
+            });
+            this.lastOutboundAt = new Date().toISOString();
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.TypingStart) {
+            await this.sendTyping(operation.route, operation.metadata);
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.TypingStop) {
+            const ticket = this.readTypingTicket(operation.route.chatId);
+            if (ticket && this.config.token) {
+                await this.sendTypingStatus(operation.route.chatId, ticket, ILINK_TYPING_STOP);
+            }
+        }
+    }
+
+    private async maybeFetchTypingTicket(update: IlinkUpdate): Promise<void> {
+        if (!this.config.token || !update.context_token) {
+            return;
+        }
+        const userId = update.from_user_id ?? update.from_user_name;
+        if (!userId || this.readTypingTicket(userId)) {
+            return;
+        }
+        const body = JSON.stringify({
+            base_info: normalizeBaseInfo(this.config.baseInfo),
+            ilink_user_id: userId,
+            context_token: update.context_token,
+        });
+        try {
+            const response = await fetch(new URL("/ilink/bot/getconfig", this.config.apiBaseUrl), {
+                method: "POST",
+                headers: this.headers(body),
+                body,
+            });
+            const payload = await assertPlatformResponse(response, "iLink getconfig");
+            const ticket = readRecordString(payload, "typing_ticket");
+            if (ticket) {
+                this.typingTickets.set(userId, { ticket, seenAt: Date.now() });
+            }
+        } catch (error) {
+            console.error(JSON.stringify({ type: "weixin_ilink.getconfig.failed", error: String(error) }));
+        }
+    }
+
+    private readTypingTicket(userId: string): string | undefined {
+        const item = this.typingTickets.get(userId);
+        if (!item) {
+            return undefined;
+        }
+        if (Date.now() - item.seenAt >= ILINK_TYPING_TICKET_TTL_MS) {
+            this.typingTickets.delete(userId);
+            return undefined;
+        }
+        return item.ticket;
+    }
+
+    private async sendTypingStatus(userId: string, ticket: string, status: number): Promise<void> {
+        const body = JSON.stringify({
+            base_info: normalizeBaseInfo(this.config.baseInfo),
+            ilink_user_id: userId,
+            typing_ticket: ticket,
+            status,
+        });
+        const response = await fetch(new URL("/ilink/bot/sendtyping", this.config.apiBaseUrl), {
+            method: "POST",
+            headers: this.headers(body),
+            body,
+        });
+        await assertPlatformResponse(response, "iLink sendtyping");
     }
 
     private headers(body: string): Record<string, string> {
@@ -347,6 +461,14 @@ function assertIlinkOk(payload: unknown, platform: string): void {
     if (typeof ret === "number" && ret !== 0) {
         throw new Error(`${platform} failed: ${ret} ${String(payload.errmsg ?? payload.message ?? "")}`);
     }
+}
+
+function readRecordString(payload: unknown, key: string): string | undefined {
+    if (!isRecord(payload)) {
+        return undefined;
+    }
+    const value = payload[key];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function isSessionExpiredError(error: unknown): boolean {
