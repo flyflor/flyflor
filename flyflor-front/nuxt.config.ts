@@ -8,8 +8,8 @@ export default defineNuxtConfig({
             link: [
                 {
                     rel: "icon",
-                    href: "/favicon.svg",
-                    type: "image/svg+xml",
+                    href: "/brand/flyflor.logo.mark.png",
+                    type: "image/png",
                 },
             ],
             meta: [
