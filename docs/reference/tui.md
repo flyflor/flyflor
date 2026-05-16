@@ -19,12 +19,14 @@
 - `ref` 后保留实例并显式 `focus()`
 - `onSubmit` / 全局 keybind 都能触发提交
 - 回复区走 Markdown 渲染
+- Chat TUI 可以用 Solid signal 管本地状态，但 UI 树必须由 OpenTUI command renderables 显式装配；CLI navigator、dashboard、blackboard browser 不再使用 `@opentui/solid` 渲染桥，避免二进制条件差异造成卡死或不刷新
 - chat 启动时会先注册 OpenTUI 默认 markdown / code parsers，再创建 renderer，避免 Markdown 退化成裸文本或 code block 解析异常
 - binary 构建必须把 `src/command/tui/chat/parser.worker.ts` 作为第二个 Bun compile entrypoint，避免 OpenTUI TreeSitter worker 在独立二进制里退回到不存在的 `parser.worker.ts`
 - TUI 层保留错误的 `Error.name`，这样超时会显示成 `TimeoutError: The operation timed out.`，不会只剩一条泛化提示
 - 所有交互式 TUI 入口统一走 `createTuiLifecycle`：按键 / SIGINT / SIGTERM 只请求一次 renderer destroy，`destroy` 事件只清理监听器、timer 和 UI 资源，不再重入调用 `destroy()`，避免退出卡死
 - 显式 `flyflor tui`、`flyflor --tui`、`flyflor chat --tui` 必须同时拥有 stdin/stdout TTY；CI、管道和重定向环境会快速返回 exit code 2，不创建 renderer
-- 选区复制走 `copyTextToTerminalClipboard`：macOS 优先 `pbcopy`，其他 TTY 走 OSC52；renderer 自带的 copy 回调也会落到 OSC52
+- Chat `/stop` 通过 `AbortSignal` 传到 Runtime 和模型 HTTP 层，当前回复标记为 stopped；`/continue` 只发送一条普通 continuation prompt，不恢复 session，不绕过无 session 设计
+- 选区复制走 `copyTextToTerminalClipboard`：macOS 优先 `pbcopy`，其他 TTY 走 OSC52；Chat 会按选区起点限制在消息区或右侧详情区，避免跨 panel 复制混入无关内容
 - ask 回复会在消息正文和 TUI 详情里保留结构化列表；只要有选项，就自动附带 `Other — type your own answer`，方便用户直接输入自定义回答
 - ask metadata 严格校验；缺字段或选项结构不合法会直接报错，不做静默兜底
 - chat 启动后从 `brain.db` 加载当前用户最近历史 turn；向上滚动到顶部时继续按 `ts` 分页加载更早记录
@@ -43,13 +45,13 @@
 bun run chat
 ```
 
-Docker dev 的 TUI binary 必须用 browser 条件编译：
+Docker dev 的 TUI binary 仍保留 browser 条件编译：
 
 ```bash
 bun run build:binary:docker
 ```
 
-原因：chat TUI 用 Solid `createSignal/createEffect` 驱动 header/messages 区域；缺少 `--conditions=browser` 时，compiled binary 会落到 server 条件，表现为输入框可以编辑/清空，但消息列表和回复区不刷新。
+原因：Chat TUI 仍使用 Solid signal / effect 管理本地状态和订阅生命周期，但渲染输出已改为 OpenTUI command renderables；browser 条件用于保持 Solid runtime 与 OpenTUI 事件行为在二进制里和开发模式一致。
 
 Docker dev 需要时再临时同步配置：
 

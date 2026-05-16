@@ -15,6 +15,7 @@ import {
     RGBA,
     TextAttributes,
     SyntaxStyle,
+    type Selection,
 } from "@opentui/core";
 import { createSignal, createEffect, createRoot, batch } from "solid-js";
 import {
@@ -85,7 +86,7 @@ const THEME = {
     violetBg: RGBA.fromInts(24, 34, 47),
 };
 
-const DEFAULT_STATUS_TEXT = "Enter send · / commands · PageUp/Down scroll · End bottom · Input Ctrl+C clears · Cmd/Ctrl+C copies selection";
+const DEFAULT_STATUS_TEXT = "Enter send · /stop cancel · /continue resume · PageUp/Down scroll · Cmd/Ctrl+C copy";
 const HISTORY_BATCH_SIZE = 20;
 const SIDE_PANEL_MIN_WIDTH = 24;
 const SIDE_PANEL_MAX_WIDTH = 46;
@@ -95,9 +96,13 @@ const CHAT_COMMANDS = [
     { name: "/bottom", detail: "jump to latest" },
     { name: "/thinking", detail: "show process panel" },
     { name: "/blackboard", detail: "show blackboard panel" },
+    { name: "/stop", detail: "cancel current reply" },
+    { name: "/continue", detail: "continue previous reply" },
     { name: "/clear", detail: "clear screen" },
     { name: "/exit", detail: "quit" },
 ] as const;
+
+const CONTINUE_PROMPT = "Continue the previous response from where it stopped. Do not restart from the beginning.";
 
 interface MsgRenderable {
     id: string;
@@ -156,6 +161,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const [commandMenuMode, setCommandMenuMode] = createSignal<CommandMenuMode>(null);
 
         let currentTurnId: string | null = null;
+        let currentTurnController: AbortController | undefined;
         let inputRef: TextareaRenderable | undefined;
         let destroyed = false;
         // Shared markdown syntax style for assistant replies; destroyed with the chat root.
@@ -174,6 +180,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const originalClearSelection = selectionRenderer.clearSelection.bind(renderer);
         let selectionScope: SelectionScope = null;
         let suppressSelectionReset = false;
+        const queuedInputs: string[] = [];
 
         // ── 动画帧 ────────────────────────────────────────────
         const animTimer = setInterval(() => {
@@ -262,7 +269,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         }
 
         function copySelectionToClipboard(): boolean {
-            const text = renderer.getSelection()?.getSelectedText() ?? "";
+            const text = selectedTextForScope(renderer.getSelection(), selectionScope, {
+                chat: scrollBox.content,
+                side: sidePanel,
+            });
             if (text.trim().length === 0) return false;
             try {
                 copyTextToTerminalClipboard(text);
@@ -434,10 +444,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
         // ── 发送消息 ──────────────────────────────────────────
         async function sendMessage(text: string): Promise<void> {
-            if (processing() || !text.trim()) return;
+            if (!text.trim()) return;
+            if (processing()) {
+                enqueueInput(text);
+                return;
+            }
 
             const turnId = crypto.randomUUID();
             const startedAt = new Date().toISOString();
+            const controller = new AbortController();
 
             batch(() => {
                 setMessages((prev) => [
@@ -451,6 +466,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             });
 
             currentTurnId = turnId;
+            currentTurnController = controller;
             setActiveReplyId(turnId);
 
             const context: RuntimeContext = {
@@ -472,7 +488,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             try {
                 const reply = await runtime.handleMessage(message, context, {
                     approveMcpToolCall: approveMcpToolCall ?? (async () => true),
+                    signal: controller.signal,
                     onTextDelta: (chunk: string) => {
+                        if (controller.signal.aborted) return;
                         setMessages((prev) => {
                             const last = prev[prev.length - 1];
                             if (last && last.id === turnId && last.role === "assistant") {
@@ -524,6 +542,18 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     return prev;
                 });
             } catch (cause) {
+                if (controller.signal.aborted || isAbortError(cause)) {
+                    setError("Stopped current reply.");
+                    setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.id === turnId && last.role === "assistant") {
+                            last.content = last.content || "Stopped.";
+                            last.status = "stopped";
+                        }
+                        return prev;
+                    });
+                    return;
+                }
                 const messageText = describeError(cause);
                 setError(messageText);
                 setMessages((prev) => {
@@ -536,12 +566,41 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 });
             } finally {
                 currentTurnId = null;
+                if (currentTurnController === controller) {
+                    currentTurnController = undefined;
+                }
                 setActiveReplyId(null);
                 batch(() => {
                     setProcessing(false);
                     setPhase("idle");
                 });
+                queueMicrotask(processQueuedInput);
             }
+        }
+
+        function stopCurrentTurn(): boolean {
+            if (!processing() || !currentTurnController) return false;
+            currentTurnController.abort();
+            setPhase("idle");
+            showStatusNotice("Stopping current reply...");
+            return true;
+        }
+
+        function enqueueInput(text: string): void {
+            queuedInputs.push(text.trim());
+            showStatusNotice(`Queued ${queuedInputs.length} message${queuedInputs.length === 1 ? "" : "s"}`);
+        }
+
+        function processQueuedInput(): void {
+            if (destroyed || processing()) return;
+            const next = queuedInputs.shift();
+            if (!next) return;
+            showStatusNotice(queuedInputs.length > 0 ? `Sending queued message · ${queuedInputs.length} left` : "Sending queued message");
+            void sendMessage(next);
+        }
+
+        function isAbortError(cause: unknown): boolean {
+            return cause instanceof Error && cause.name === "AbortError";
         }
 
         // ── 退出处理 ──────────────────────────────────────────
@@ -597,6 +656,18 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 showStatusNotice("Jumped to latest");
                 return;
             }
+            if (command === "/stop") {
+                inputRef.clear();
+                if (!stopCurrentTurn()) {
+                    showStatusNotice("No active reply to stop");
+                }
+                return;
+            }
+            if (command === "/continue") {
+                inputRef.clear();
+                void sendMessage(CONTINUE_PROMPT);
+                return;
+            }
             if (command === "/thinking") {
                 inputRef.clear();
                 openQuestionMenu("thinking", text);
@@ -614,7 +685,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             }
             if (text.startsWith("/")) {
                 setError(
-                    `Unknown command: ${text}. Press Tab to complete or use /history, /bottom, /thinking, /blackboard.`,
+                    `Unknown command: ${text}. Press Tab to complete or use /history, /bottom, /thinking, /blackboard, /stop, /continue.`,
                 );
                 return;
             }
@@ -1805,6 +1876,31 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 function rightPanelWidth(totalWidth: number): number {
     if (totalWidth < 88) return 0;
     return Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(SIDE_PANEL_MIN_WIDTH, Math.floor(totalWidth * 0.32)));
+}
+
+export function selectedTextForScope(
+    selection: Selection | null,
+    scope: SelectionScope,
+    containers: { chat: Renderable; side: Renderable },
+): string {
+    if (!selection) return "";
+    if (!scope) return selection.getSelectedText();
+    const container = scope === "chat" ? containers.chat : containers.side;
+    return selection.selectedRenderables
+        .filter((renderable) => isRenderableWithin(renderable, container))
+        .sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y))
+        .map((renderable) => renderable.getSelectedText())
+        .filter((text) => text.length > 0)
+        .join("\n");
+}
+
+function isRenderableWithin(renderable: Renderable | undefined, container: Renderable): boolean {
+    let current: Renderable | null | undefined = renderable;
+    while (current) {
+        if (current === container) return true;
+        current = current.parent;
+    }
+    return false;
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -1,6 +1,11 @@
-import { Box, createCliRenderer, RGBA, Text, TextAttributes } from "@opentui/core";
-import { render } from "@opentui/solid";
-import { createEffect, createMemo, createSignal } from "solid-js";
+import {
+    BoxRenderable,
+    CliRenderEvents,
+    createCliRenderer,
+    RGBA,
+    TextAttributes,
+    TextRenderable,
+} from "@opentui/core";
 import type { FlyFlor } from "../../../app.ts";
 import {
     fetchBlackboardTurnDetail,
@@ -24,104 +29,97 @@ const THEME = {
 
 type Mode = "detail" | "list";
 
+export function filterBlackboardTurns(turns: BlackboardTurnItem[], query: string): BlackboardTurnItem[] {
+    // Literal UI search only. This does not drive runtime routing, memory
+    // actions, or model decisions, so it stays outside the zero semantic-match redline.
+    const needle = query.trim().toLowerCase();
+    if (!needle) return turns;
+    return turns.filter((turn) =>
+        [turn.id, turn.status, turn.projectConstraintId, turn.goal, turn.updatedAt].some((value) =>
+            value.toLowerCase().includes(needle),
+        ),
+    );
+}
+
+export function listWindow<TValue>(
+    items: TValue[],
+    selectedIndex: number,
+    pageSize: number,
+): { items: TValue[]; start: number } {
+    const start = clamp(selectedIndex - Math.floor(pageSize / 2), 0, Math.max(0, items.length - pageSize));
+    return { items: items.slice(start, start + pageSize), start };
+}
+
 export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
     const renderer = await createCliRenderer({
         targetFps: 30,
         exitOnCtrlC: false,
+        screenMode: "alternate-screen",
         useMouse: false,
         externalOutputMode: "passthrough",
     });
 
-    const [turns, setTurns] = createSignal<BlackboardTurnItem[]>([]);
-    const [query, setQuery] = createSignal("");
-    const [searching, setSearching] = createSignal(false);
-    const [selectedIndex, setSelectedIndex] = createSignal(0);
-    const [mode, setMode] = createSignal<Mode>("list");
-    const [detail, setDetail] = createSignal<BlackboardTurnDetail | null>(null);
-    const [detailOffset, setDetailOffset] = createSignal(0);
-    const [loading, setLoading] = createSignal(false);
-    const [err, setErr] = createSignal<string | null>(null);
+    let turns: BlackboardTurnItem[] = [];
+    let query = "";
+    let searching = false;
+    let selectedIndex = 0;
+    let mode: Mode = "list";
+    let detail: BlackboardTurnDetail | null = null;
+    let detailOffset = 0;
+    let loading = false;
+    let err: string | null = null;
+
+    const root = renderer.root;
+    const mainBox = new BoxRenderable(renderer, {
+        backgroundColor: THEME.bg,
+        flexDirection: "column",
+        height: renderer.height,
+        width: renderer.width,
+    });
+    const headerBox = new BoxRenderable(renderer, {
+        border: ["bottom"],
+        borderColor: THEME.border,
+        flexDirection: "column",
+        flexShrink: 0,
+        padding: 1,
+    });
+    const headerTitle = new TextRenderable(renderer, {
+        content: "Flyflor · Blackboard",
+        fg: THEME.cyan,
+        attributes: TextAttributes.BOLD,
+    });
+    const headerHelp = new TextRenderable(renderer, { content: "", fg: THEME.fgMuted, selectable: false });
+    const headerFilter = new TextRenderable(renderer, { content: "", fg: THEME.fgMuted, selectable: true });
+    const errorText = new TextRenderable(renderer, { content: "", fg: THEME.red, selectable: true });
+    errorText.visible = false;
+    headerBox.add(headerTitle);
+    headerBox.add(headerHelp);
+    headerBox.add(headerFilter);
+    headerBox.add(errorText);
+    mainBox.add(headerBox);
+    const bodyBox = new BoxRenderable(renderer, { flexDirection: "column", flexGrow: 1, padding: 1 });
+    mainBox.add(bodyBox);
+    root.add(mainBox);
+
+    const lineRenderables: TextRenderable[] = [];
 
     const refresh = async (): Promise<void> => {
-        setLoading(true);
+        loading = true;
+        syncUi();
         try {
-            setTurns(await fetchBlackboardTurnList(app, 120));
-            setErr(null);
+            turns = await fetchBlackboardTurnList(app, 120);
+            selectedIndex = clamp(selectedIndex, 0, Math.max(0, filterBlackboardTurns(turns, query).length - 1));
+            err = null;
         } catch (cause) {
-            setErr(describeError(cause));
+            err = describeError(cause);
             console.error(cause);
         } finally {
-            setLoading(false);
+            loading = false;
+            syncUi();
         }
     };
 
     await refresh();
-
-    const filteredTurns = createMemo(() => {
-        const needle = query().trim().toLowerCase();
-        if (!needle) return turns();
-        return turns().filter((turn) =>
-            [turn.id, turn.status, turn.projectConstraintId, turn.goal, turn.updatedAt].some((value) =>
-                value.toLowerCase().includes(needle),
-            ),
-        );
-    });
-
-    createEffect(() => {
-        const count = filteredTurns().length;
-        if (count === 0) {
-            setSelectedIndex(0);
-            return;
-        }
-        if (selectedIndex() >= count) {
-            setSelectedIndex(count - 1);
-        }
-    });
-
-    const listWindow = createMemo(() => {
-        const items = filteredTurns();
-        const pageSize = Math.max(6, renderer.height - 8);
-        const selected = selectedIndex();
-        const start = clamp(selected - Math.floor(pageSize / 2), 0, Math.max(0, items.length - pageSize));
-        return { items: items.slice(start, start + pageSize), start };
-    });
-
-    const detailLines = createMemo(() => (detail() ? renderDetailLines(detail()!) : []));
-
-    const detailWindow = createMemo(() => {
-        const lines = detailLines();
-        const pageSize = Math.max(6, renderer.height - 7);
-        const start = clamp(detailOffset(), 0, Math.max(0, lines.length - pageSize));
-        if (start !== detailOffset()) {
-            queueMicrotask(() => setDetailOffset(start));
-        }
-        return { lines: lines.slice(start, start + pageSize), start };
-    });
-
-    void render(() => {
-        const width = renderer.width;
-        const height = renderer.height;
-        return Box(
-            { backgroundColor: THEME.bg, flexDirection: "column", height, width },
-            Box(
-                { border: ["bottom"], borderColor: THEME.border, flexDirection: "column", padding: 1, flexShrink: 0 },
-                Text({ content: "Flyflor · Blackboard", fg: THEME.cyan, attributes: TextAttributes.BOLD }),
-                Text({
-                    content:
-                        mode() === "list"
-                            ? "↑/↓ or j/k select · Enter/o/→ open · / search · r refresh · q quit"
-                            : "↑/↓ or j/k scroll · Esc/q/← back · r refresh",
-                    fg: THEME.fgMuted,
-                }),
-                Text({
-                    content: searching() ? `search: ${query()}_` : query() ? `filter: ${query()}` : "filter: none",
-                    fg: searching() ? THEME.yellow : THEME.fgMuted,
-                }),
-                err() ? Text({ content: `Error: ${err()}`, fg: THEME.red }) : undefined,
-            ),
-            mode() === "list" ? renderListPane() : renderDetailPane(),
-        );
-    }, renderer);
 
     const keyHandler = (event: {
         name?: string;
@@ -133,122 +131,141 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
         event.preventDefault?.();
         event.stopPropagation?.();
         const name = event.name ?? "";
+        const sequence = event.sequence ?? "";
         if (event.ctrl && name === "c") {
             lifecycle.destroy();
             return;
         }
-        const sequence = event.sequence ?? "";
-        if (searching()) {
+        if (searching) {
             handleSearchKey(name, sequence);
             return;
         }
-        if (mode() === "detail") {
+        if (mode === "detail") {
             handleDetailKey(name, sequence);
             return;
         }
         handleListKey(name, sequence);
     };
 
-    renderer.keyInput.on("keypress", keyHandler);
-    const lifecycle = createTuiLifecycle(renderer, {
-        cleanup: () => {
-            renderer.keyInput.off("keypress", keyHandler);
-        },
-    });
-    return lifecycle.waitForDestroy();
+    function syncUi(): void {
+        headerHelp.content =
+            mode === "list"
+                ? "↑/↓ or j/k select · Enter/o/→ open · / search · r refresh · q quit"
+                : "↑/↓ or j/k scroll · Esc/q/← back · r refresh";
+        headerFilter.content = searching ? `search: ${query}_` : query ? `filter: ${query}` : "filter: none";
+        headerFilter.fg = searching ? THEME.yellow : THEME.fgMuted;
+        errorText.content = err ? `Error: ${err}` : "";
+        errorText.visible = Boolean(err);
+        const lines = mode === "list" ? renderListLines() : renderDetailPaneLines();
+        while (lineRenderables.length > lines.length) {
+            const stale = lineRenderables.pop()!;
+            bodyBox.remove(stale.id);
+        }
+        for (let index = lineRenderables.length; index < lines.length; index += 1) {
+            const line = lines[index]!;
+            const renderable = new TextRenderable(renderer, {
+                content: line.text,
+                fg: line.color,
+                bg: line.bg,
+                attributes: line.bold ? TextAttributes.BOLD : TextAttributes.NONE,
+                selectable: true,
+                width: "100%",
+                wrapMode: "word",
+            });
+            lineRenderables.push(renderable);
+            bodyBox.add(renderable);
+        }
+        for (let index = 0; index < lines.length; index += 1) {
+            const line = lines[index]!;
+            const renderable = lineRenderables[index]!;
+            renderable.content = line.text;
+            renderable.fg = line.color;
+            renderable.bg = line.bg;
+            renderable.attributes = line.bold ? TextAttributes.BOLD : TextAttributes.NONE;
+        }
+        renderer.requestRender();
+    }
 
-    function renderListPane() {
-        const window = listWindow();
-        const total = filteredTurns().length;
-        const nodes = [];
-        nodes.push(
-            Text({
-                content: `${loading() ? "loading..." : `${total} turn(s)`}${turns().length !== total ? ` from ${turns().length}` : ""}`,
-                fg: THEME.fgMuted,
-            }),
-        );
+    function renderListLines(): Array<{ text: string; color: RGBA; bg?: RGBA; bold?: boolean }> {
+        const filtered = filterBlackboardTurns(turns, query);
+        const total = filtered.length;
+        const window = listWindow(filtered, selectedIndex, Math.max(6, renderer.height - 8));
+        const lines: Array<{ text: string; color: RGBA; bg?: RGBA; bold?: boolean }> = [
+            { text: loading ? "loading..." : `${total} turn(s)${turns.length !== total ? ` from ${turns.length}` : ""}`, color: THEME.fgMuted },
+        ];
         if (total === 0) {
-            nodes.push(Text({ content: query() ? "No matching blackboard turns." : "No blackboard turns yet.", fg: THEME.fgMuted }));
+            lines.push({ text: query ? "No matching blackboard turns." : "No blackboard turns yet.", color: THEME.fgMuted });
+            return lines;
         }
         for (let local = 0; local < window.items.length; local += 1) {
             const turn = window.items[local]!;
             const index = window.start + local;
-            const selected = index === selectedIndex();
-            nodes.push(
-                Text({
-                    content: `${selected ? ">" : " "} ${shortId(turn.id)} · ${turn.status} · ${turn.stepCount} step(s) · ${turn.workerCount} worker(s) · ${turn.updatedAt}`,
-                    fg: selected ? THEME.cyan : statusColor(turn.status),
-                    bg: selected ? THEME.selectedBg : undefined,
-                    attributes: selected ? TextAttributes.BOLD : undefined,
-                    selectable: true,
-                }),
-            );
-            nodes.push(
-                Text({
-                    content: `  ${turn.goal}`,
-                    fg: selected ? THEME.fg : THEME.fgMuted,
-                    bg: selected ? THEME.selectedBg : undefined,
-                    selectable: true,
-                }),
-            );
+            const selected = index === selectedIndex;
+            lines.push({
+                text: `${selected ? ">" : " "} ${shortId(turn.id)} · ${turn.status} · ${turn.stepCount} step(s) · ${turn.workerCount} worker(s) · ${turn.updatedAt}`,
+                color: selected ? THEME.cyan : statusColor(turn.status),
+                bg: selected ? THEME.selectedBg : undefined,
+                bold: selected,
+            });
+            lines.push({
+                text: `  ${turn.goal}`,
+                color: selected ? THEME.fg : THEME.fgMuted,
+                bg: selected ? THEME.selectedBg : undefined,
+            });
         }
-        return Box({ flexDirection: "column", flexGrow: 1, padding: 1 }, ...nodes);
+        return lines;
     }
 
-    function renderDetailPane() {
-        const turn = detail();
-        const nodes = [];
-        if (!turn) {
-            nodes.push(Text({ content: "No turn selected.", fg: THEME.fgMuted }));
-        } else {
-            const window = detailWindow();
-            nodes.push(
-                Text({
-                    content: `${shortId(turn.id)} · ${turn.status} · ${turn.steps.length} step(s) · ${turn.decisions.length} decision(s) · ${turn.updatedAt}`,
-                    fg: statusColor(turn.status),
-                    attributes: TextAttributes.BOLD,
-                    selectable: true,
-                }),
-            );
-            nodes.push(Text({ content: `id: ${turn.id}`, fg: THEME.fgMuted, selectable: true }));
-            nodes.push(Text({ content: "" }));
-            for (const line of window.lines) {
-                nodes.push(
-                    Text({
-                        content: line,
-                        fg: detailLineColor(line),
-                        attributes: line.startsWith("◆") ? TextAttributes.BOLD : undefined,
-                        selectable: true,
-                    }),
-                );
-            }
+    function renderDetailPaneLines(): Array<{ text: string; color: RGBA; bg?: RGBA; bold?: boolean }> {
+        if (!detail) {
+            return [{ text: "No turn selected.", color: THEME.fgMuted }];
         }
-        return Box({ flexDirection: "column", flexGrow: 1, padding: 1 }, ...nodes);
+        const lines = renderDetailLines(detail);
+        const pageSize = Math.max(6, renderer.height - 7);
+        const start = clamp(detailOffset, 0, Math.max(0, lines.length - pageSize));
+        detailOffset = start;
+        return [
+            {
+                text: `${shortId(detail.id)} · ${detail.status} · ${detail.steps.length} step(s) · ${detail.decisions.length} decision(s) · ${detail.updatedAt}`,
+                color: statusColor(detail.status),
+                bold: true,
+            },
+            { text: `id: ${detail.id}`, color: THEME.fgMuted },
+            { text: "", color: THEME.fg },
+            ...lines.slice(start, start + pageSize).map((line) => ({
+                text: line,
+                color: detailLineColor(line),
+                bold: line.startsWith("◆"),
+            })),
+        ];
     }
 
     async function openSelectedTurn(): Promise<void> {
-        const turn = filteredTurns()[selectedIndex()];
+        const turn = filterBlackboardTurns(turns, query)[selectedIndex];
         if (!turn) return;
-        setLoading(true);
+        loading = true;
+        syncUi();
         try {
             const next = await fetchBlackboardTurnDetail(app, turn.id);
             if (!next) {
-                setErr(`Blackboard turn not found: ${turn.id}`);
+                err = `Blackboard turn not found: ${turn.id}`;
                 return;
             }
-            setDetail(next);
-            setDetailOffset(0);
-            setMode("detail");
-            setErr(null);
+            detail = next;
+            detailOffset = 0;
+            mode = "detail";
+            err = null;
         } catch (cause) {
-            setErr(describeError(cause));
+            err = describeError(cause);
             console.error(cause);
         } finally {
-            setLoading(false);
+            loading = false;
+            syncUi();
         }
     }
 
     function handleListKey(name: string, sequence: string): void {
+        const filtered = filterBlackboardTurns(turns, query);
         if (name === "q" || name === "escape") {
             lifecycle.destroy();
             return;
@@ -258,23 +275,28 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
             return;
         }
         if (name === "/") {
-            setSearching(true);
+            searching = true;
+            syncUi();
             return;
         }
         if (isDownKey(name, sequence) || name === "j") {
-            setSelectedIndex((idx) => clamp(idx + 1, 0, Math.max(0, filteredTurns().length - 1)));
+            selectedIndex = clamp(selectedIndex + 1, 0, Math.max(0, filtered.length - 1));
+            syncUi();
             return;
         }
         if (isUpKey(name, sequence) || name === "k") {
-            setSelectedIndex((idx) => clamp(idx - 1, 0, Math.max(0, filteredTurns().length - 1)));
+            selectedIndex = clamp(selectedIndex - 1, 0, Math.max(0, filtered.length - 1));
+            syncUi();
             return;
         }
         if (name === "g") {
-            setSelectedIndex(0);
+            selectedIndex = 0;
+            syncUi();
             return;
         }
         if (name === "G") {
-            setSelectedIndex(Math.max(0, filteredTurns().length - 1));
+            selectedIndex = Math.max(0, filtered.length - 1);
+            syncUi();
             return;
         }
         if (isEnterKey(name, sequence) || isRightKey(name, sequence) || name === "l" || name === "o") {
@@ -284,7 +306,8 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
 
     function handleDetailKey(name: string, sequence: string): void {
         if (name === "q" || name === "escape" || isLeftKey(name, sequence) || name === "h") {
-            setMode("list");
+            mode = "list";
+            syncUi();
             return;
         }
         if (name === "r") {
@@ -292,57 +315,85 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
             return;
         }
         if (isDownKey(name, sequence) || name === "j") {
-            setDetailOffset((offset) => offset + 1);
+            detailOffset += 1;
+            syncUi();
             return;
         }
         if (isUpKey(name, sequence) || name === "k") {
-            setDetailOffset((offset) => Math.max(0, offset - 1));
+            detailOffset = Math.max(0, detailOffset - 1);
+            syncUi();
             return;
         }
         if (name === "pagedown" || sequence === "\u001b[6~") {
-            setDetailOffset((offset) => offset + Math.max(6, renderer.height - 7));
+            detailOffset += Math.max(6, renderer.height - 7);
+            syncUi();
             return;
         }
         if (name === "pageup" || sequence === "\u001b[5~") {
-            setDetailOffset((offset) => Math.max(0, offset - Math.max(6, renderer.height - 7)));
+            detailOffset = Math.max(0, detailOffset - Math.max(6, renderer.height - 7));
+            syncUi();
             return;
         }
         if (name === "g") {
-            setDetailOffset(0);
+            detailOffset = 0;
+            syncUi();
             return;
         }
         if (name === "G") {
-            setDetailOffset(Math.max(0, detailLines().length - Math.max(6, renderer.height - 7)));
+            detailOffset = Math.max(0, renderDetailLines(detail!).length - Math.max(6, renderer.height - 7));
+            syncUi();
         }
     }
 
     function handleSearchKey(name: string, sequence: string): void {
         if (name === "escape") {
-            setSearching(false);
+            searching = false;
+            syncUi();
             return;
         }
         if (isEnterKey(name, sequence)) {
-            setSearching(false);
+            searching = false;
+            syncUi();
             return;
         }
         if (name === "backspace" || name === "delete") {
-            setQuery((value) => value.slice(0, -1));
-            setSelectedIndex(0);
+            query = query.slice(0, -1);
+            selectedIndex = 0;
+            syncUi();
             return;
         }
         if (name === "u" && sequence === "\u0015") {
-            setQuery("");
-            setSelectedIndex(0);
+            query = "";
+            selectedIndex = 0;
+            syncUi();
             return;
         }
         if (sequence.length === 1 && sequence >= " " && sequence !== "\u007f") {
-            setQuery((value) => value + sequence);
-            setSelectedIndex(0);
+            query += sequence;
+            selectedIndex = 0;
+            syncUi();
         }
     }
+
+    const resizeHandler = () => {
+        mainBox.width = renderer.width;
+        mainBox.height = renderer.height;
+        syncUi();
+    };
+    renderer.on(CliRenderEvents.RESIZE, resizeHandler);
+    renderer.keyInput.on("keypress", keyHandler);
+    const lifecycle = createTuiLifecycle(renderer, {
+        cleanup: () => {
+            renderer.keyInput.off("keypress", keyHandler);
+            renderer.off(CliRenderEvents.RESIZE, resizeHandler);
+            root.remove(mainBox.id);
+        },
+    });
+    syncUi();
+    return lifecycle.waitForDestroy();
 }
 
-function renderDetailLines(turn: BlackboardTurnDetail): string[] {
+export function renderDetailLines(turn: BlackboardTurnDetail): string[] {
     const lines: string[] = [];
     lines.push("◆ Goal");
     lines.push(`  ${turn.goal}`);

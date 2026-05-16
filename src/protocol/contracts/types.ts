@@ -224,8 +224,8 @@ export interface ModelMessage {
 }
 
 export interface ModelClient {
-    generate(messages: ModelMessage[]): Promise<string>;
-    stream?(messages: ModelMessage[]): AsyncIterable<string>;
+    generate(messages: ModelMessage[], options?: { signal?: AbortSignal }): Promise<string>;
+    stream?(messages: ModelMessage[], options?: { signal?: AbortSignal }): AsyncIterable<string>;
 }
 
 export interface RuntimeEvent {

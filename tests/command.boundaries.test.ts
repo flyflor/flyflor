@@ -133,6 +133,14 @@ describe("Command boundary", () => {
         expect(parseFlyflorCommand(["bun", "flyflor", "chat", "--tui"])).toBeUndefined();
     });
 
+    test("setup stays on the interactive wizard instead of the read-only CLI TUI", async () => {
+        const source = await Bun.file("src/command/cli/commands.ts").text();
+        const setupBranch = source.slice(source.indexOf('if (root === "setup")'), source.indexOf('if (root === "status")'));
+
+        expect(setupBranch).toContain("await runSetup(command)");
+        expect(setupBranch).not.toContain("startCliTui");
+    });
+
     test("config command surface only exposes supported configuration operations", () => {
         const config = listFlyflorCommandSpecs().find((spec) => spec.name === "config");
         const subcommands = config?.subcommands?.map((spec) => spec.name) ?? [];

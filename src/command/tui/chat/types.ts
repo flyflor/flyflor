@@ -49,7 +49,7 @@ export interface ChatMessage {
     id: string;
     role: "user" | "assistant";
     content: string;
-    status: "streaming" | "done" | "error";
+    status: "streaming" | "done" | "error" | "stopped";
     ask?: AskMeta | null;
     mcpCalls?: McpTrace[];
     skills?: string[];

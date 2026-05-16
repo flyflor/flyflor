@@ -1,12 +1,18 @@
 /**
- * Flyflor CLI TUI — 基于 @opentui/core + @opentui/solid
+ * Flyflor CLI TUI — 基于 @opentui/core 命令式 renderable API
  *
  * 简化版：为各 CLI 命令提供通用文本浏览界面。
  */
 
-import { createCliRenderer, Box, Text, ScrollBox, RGBA, TextAttributes, type CliRenderer } from "@opentui/core";
-import { render } from "@opentui/solid";
-import { createSignal } from "solid-js";
+import {
+    BoxRenderable,
+    CliRenderEvents,
+    createCliRenderer,
+    RGBA,
+    ScrollBoxRenderable,
+    TextAttributes,
+    TextRenderable,
+} from "@opentui/core";
 import type { FlyFlor } from "../../../app.ts";
 import { FlyFlorTokens } from "../../../app.ts";
 import { fetchOverviewData } from "../../cli/handlers/overview.handler.ts";
@@ -22,6 +28,15 @@ import { fetchGhostList } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
 import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
+import {
+    CLI_TUI_PAGE_ITEMS,
+    listCliTuiPages,
+    nextGenericCliTuiPage,
+    type CliPage,
+    type GenericCliPage,
+} from "./command.route.ts";
+
+export { listCliTuiPages, nextCliTuiPage, resolveCommandTuiPage, type CliPage } from "./command.route.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -37,38 +52,9 @@ const THEME = {
     selectedBg: RGBA.fromInts(24, 34, 47),
 };
 
-export type CliPage =
-    | "overview"
-    | "config"
-    | "skills"
-    | "mcp"
-    | "plugins"
-    | "sandbox"
-    | "blackboard"
-    | "memory"
-    | "ghosts"
-    | "dream";
-
 interface PageLoader {
     title: string;
     load: (app: FlyFlor) => Promise<string[]>;
-}
-
-const PAGE_ITEMS: Array<{ page: CliPage; title: string; detail: string }> = [
-    { page: "overview", title: "Overview", detail: "status + doctor" },
-    { page: "config", title: "Config", detail: "model + paths" },
-    { page: "skills", title: "Skills", detail: "installed skills" },
-    { page: "mcp", title: "MCP", detail: "servers + tools" },
-    { page: "plugins", title: "Plugins", detail: "local plugins" },
-    { page: "sandbox", title: "Sandbox", detail: "allowlists" },
-    { page: "blackboard", title: "Blackboard", detail: "recent turns" },
-    { page: "memory", title: "Memory", detail: "brain status" },
-    { page: "ghosts", title: "Ghosts", detail: "pending continuations" },
-    { page: "dream", title: "Dream", detail: "background pass" },
-];
-
-export function listCliTuiPages(): Array<{ page: CliPage; title: string; detail: string }> {
-    return PAGE_ITEMS.map((item) => ({ ...item }));
 }
 
 function overviewLoader(): PageLoader {
@@ -319,6 +305,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         await startBlackboardBrowser(app);
         return;
     }
+    const firstPage: GenericCliPage = initialPage;
 
     const renderer = await createCliRenderer({
         targetFps: 30,
@@ -336,131 +323,141 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         },
     });
 
-    const [activePage, setActivePage] = createSignal<CliPage>(initialPage);
-    const [lines, setLines] = createSignal<string[]>([]);
-    const [err, setErr] = createSignal<string | null>(null);
-    const [status, setStatus] = createSignal("Ready");
+    let activePage = firstPage;
+    let lines: string[] = [];
+    let err: string | null = null;
+    let status = "Ready";
     let refreshToken = 0;
     let destroyed = false;
 
-    const refresh = async (page = activePage()) => {
+    const root = renderer.root;
+    const mainBox = new BoxRenderable(renderer, {
+        backgroundColor: THEME.bg,
+        flexDirection: "column",
+        height: renderer.height,
+        width: renderer.width,
+    });
+    const headerBox = new BoxRenderable(renderer, {
+        border: ["bottom"],
+        borderColor: THEME.border,
+        flexDirection: "column",
+        flexShrink: 0,
+        padding: 1,
+    });
+    const headerTitle = new TextRenderable(renderer, {
+        content: "",
+        fg: THEME.cyan,
+        attributes: TextAttributes.BOLD,
+    });
+    const headerHelp = new TextRenderable(renderer, {
+        content: "↑/↓ select page · r refresh · q/Esc quit · Cmd/Ctrl+C copy selection",
+        fg: THEME.fgMuted,
+        selectable: false,
+    });
+    const errorText = new TextRenderable(renderer, {
+        content: "",
+        fg: THEME.red,
+        selectable: true,
+    });
+    errorText.visible = false;
+    headerBox.add(headerTitle);
+    headerBox.add(headerHelp);
+    headerBox.add(errorText);
+    mainBox.add(headerBox);
+
+    const bodyBox = new BoxRenderable(renderer, {
+        flexDirection: "row",
+        flexGrow: 1,
+        flexShrink: 1,
+    });
+    mainBox.add(bodyBox);
+
+    const navBox = new BoxRenderable(renderer, {
+        border: ["right"],
+        borderColor: THEME.border,
+        flexDirection: "column",
+        flexShrink: 0,
+        paddingLeft: 1,
+        paddingRight: 1,
+        paddingTop: 1,
+        width: navWidthFor(renderer.width),
+    });
+    bodyBox.add(navBox);
+
+    const navItems = CLI_TUI_PAGE_ITEMS.map((item, index) => {
+        const box = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            paddingBottom: 0,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: index === 0 ? 0 : 1,
+        });
+        const title = new TextRenderable(renderer, { content: "", fg: THEME.fg, selectable: false });
+        const detail = new TextRenderable(renderer, { content: "", fg: THEME.fgMuted, selectable: false });
+        box.add(title);
+        box.add(detail);
+        navBox.add(box);
+        return { box, detail, item, title };
+    });
+
+    const contentBox = new ScrollBoxRenderable(renderer, {
+        contentOptions: { flexDirection: "column" },
+        flexGrow: 1,
+        flexShrink: 1,
+        padding: 1,
+        horizontalScrollbarOptions: { height: 0, visible: false },
+        verticalScrollbarOptions: {
+            visible: true,
+            width: 2,
+            showArrows: false,
+            trackOptions: {
+                backgroundColor: THEME.selectedBg,
+                foregroundColor: THEME.purple,
+            },
+        },
+    });
+    contentBox.horizontalScrollBar.visible = false;
+    contentBox.horizontalScrollBar.height = 0;
+    bodyBox.add(contentBox);
+
+    const statusBox = new BoxRenderable(renderer, {
+        backgroundColor: THEME.selectedBg,
+        flexShrink: 0,
+        height: 1,
+        paddingLeft: 1,
+        paddingRight: 1,
+    });
+    const statusText = new TextRenderable(renderer, {
+        content: status,
+        fg: THEME.fgMuted,
+        selectable: false,
+        truncate: true,
+    });
+    statusBox.add(statusText);
+    mainBox.add(statusBox);
+    root.add(mainBox);
+
+    const lineRenderables: TextRenderable[] = [];
+
+    const refresh = async (page = activePage) => {
         const token = ++refreshToken;
         const currentLoader = getLoader(page);
-        setStatus(`Loading ${currentLoader.title}...`);
-        renderer.requestRender();
+        status = `Loading ${currentLoader.title}...`;
+        syncUi();
         try {
             const nextLines = await currentLoader.load(app);
             if (token !== refreshToken) return;
-            setLines(nextLines);
-            setErr(null);
-            setStatus(`Loaded ${currentLoader.title}`);
-            renderer.requestRender();
+            lines = nextLines;
+            err = null;
+            status = `Loaded ${currentLoader.title}`;
+            syncUi();
         } catch (e) {
             if (token !== refreshToken) return;
-            setErr(e instanceof Error ? e.message : String(e));
-            setStatus("Load failed");
-            renderer.requestRender();
+            err = e instanceof Error ? e.message : String(e);
+            status = "Load failed";
+            syncUi();
         }
     };
-
-    void render(() => {
-        const width = renderer.width;
-        const height = renderer.height;
-        const navWidth = Math.min(30, Math.max(22, Math.floor(width * 0.22)));
-        const currentPage = activePage();
-        const currentLoader = getLoader(currentPage);
-        const lineNodes = lines().map((line) =>
-            Text({
-                content: line,
-                fg:
-                    line.startsWith("◆")
-                        ? THEME.cyan
-                        : line.startsWith("  ✓")
-                          ? THEME.green
-                          : line.startsWith("  ✗") || line.startsWith("⚠")
-                            ? THEME.red
-                            : THEME.fg,
-                attributes: line.startsWith("◆") ? TextAttributes.BOLD : undefined,
-            }),
-        );
-
-        return Box(
-            {
-                flexDirection: "column",
-                width,
-                height,
-                backgroundColor: THEME.bg,
-            },
-            Box(
-                { flexDirection: "column", border: ["bottom"], borderColor: THEME.border, padding: 1, flexShrink: 0 },
-                Text({ content: `Flyflor · ${currentLoader.title}`, fg: THEME.cyan, attributes: TextAttributes.BOLD }),
-                Text({
-                    content: "↑/↓ select page · r refresh · q/Esc quit · Cmd/Ctrl+C copy selection",
-                    fg: THEME.fgMuted,
-                    selectable: false,
-                }),
-                err() ? Text({ content: `Error: ${err()}`, fg: THEME.red }) : undefined,
-            ),
-            Box(
-                { flexDirection: "row", flexGrow: 1, flexShrink: 1 },
-                Box(
-                    {
-                        flexDirection: "column",
-                        width: navWidth,
-                        flexShrink: 0,
-                        border: ["right"],
-                        borderColor: THEME.border,
-                        paddingTop: 1,
-                        paddingLeft: 1,
-                        paddingRight: 1,
-                    },
-                    ...PAGE_ITEMS.map((item, index) => {
-                        const active = item.page === currentPage;
-                        return Box(
-                            {
-                                flexDirection: "column",
-                                backgroundColor: active ? THEME.selectedBg : undefined,
-                                paddingLeft: 1,
-                                paddingRight: 1,
-                                paddingTop: index === 0 ? 0 : 1,
-                                paddingBottom: 0,
-                            },
-                            Text({
-                                content: `${active ? ">" : " "} ${item.title}`,
-                                fg: active ? THEME.pink : THEME.fg,
-                                attributes: active ? TextAttributes.BOLD : undefined,
-                                selectable: false,
-                            }),
-                            Text({ content: `  ${item.detail}`, fg: THEME.fgMuted, selectable: false }),
-                        );
-                    }),
-                ),
-                ScrollBox(
-                    {
-                        flexGrow: 1,
-                        flexShrink: 1,
-                        flexDirection: "column",
-                        padding: 1,
-                        horizontalScrollbarOptions: { height: 0, visible: false },
-                        verticalScrollbarOptions: {
-                            visible: true,
-                            width: 2,
-                            showArrows: false,
-                            trackOptions: {
-                                backgroundColor: THEME.selectedBg,
-                                foregroundColor: THEME.purple,
-                            },
-                        },
-                    },
-                    ...lineNodes,
-                ),
-            ),
-            Box(
-                { height: 1, backgroundColor: THEME.selectedBg, paddingLeft: 1, paddingRight: 1, flexShrink: 0 },
-                Text({ content: status(), fg: THEME.fgMuted, selectable: false, truncate: true }),
-            ),
-        );
-    }, renderer);
 
     const keyHandler = (event: {
         name?: string;
@@ -484,32 +481,97 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         }
         if (name === "up" || name === "k") {
             movePage(-1);
+            event.preventDefault?.();
+            event.stopPropagation?.();
             return;
         }
         if (name === "down" || name === "j") {
             movePage(1);
+            event.preventDefault?.();
+            event.stopPropagation?.();
             return;
         }
         if (name === "r") void refresh();
     };
 
     function movePage(delta: -1 | 1): void {
-        const index = PAGE_ITEMS.findIndex((item) => item.page === activePage());
-        const next = PAGE_ITEMS[Math.max(0, Math.min(PAGE_ITEMS.length - 1, index + delta))];
-        if (next) {
-            setActivePage(next.page);
-            void refresh(next.page);
-        }
+        const next = nextGenericCliTuiPage(activePage, delta);
+        if (next === activePage) return;
+        activePage = next;
+        contentBox.scrollTop = 0;
+        syncUi();
+        void refresh(next);
     }
 
+    function syncUi(): void {
+        const currentLoader = getLoader(activePage);
+        headerTitle.content = `Flyflor · ${currentLoader.title}`;
+        errorText.content = err ? `Error: ${err}` : "";
+        errorText.visible = Boolean(err);
+        statusText.content = status;
+        for (const entry of navItems) {
+            const active = entry.item.page === activePage;
+            entry.box.backgroundColor = active ? THEME.selectedBg : undefined;
+            entry.title.content = `${active ? ">" : " "} ${entry.item.title}`;
+            entry.title.fg = active ? THEME.pink : THEME.fg;
+            entry.title.attributes = active ? TextAttributes.BOLD : TextAttributes.NONE;
+            entry.detail.content = `  ${entry.item.detail}`;
+        }
+        while (lineRenderables.length > lines.length) {
+            const stale = lineRenderables.pop()!;
+            contentBox.content.remove(stale.id);
+        }
+        for (let index = lineRenderables.length; index < lines.length; index += 1) {
+            const line = lines[index] ?? "";
+            const renderable = new TextRenderable(renderer, {
+                content: line,
+                fg: lineColor(line),
+                attributes: line.startsWith("◆") ? TextAttributes.BOLD : TextAttributes.NONE,
+                selectable: true,
+                width: "100%",
+                wrapMode: "word",
+            });
+            lineRenderables.push(renderable);
+            contentBox.content.add(renderable);
+        }
+        for (let index = 0; index < lines.length; index += 1) {
+            const line = lines[index] ?? "";
+            const renderable = lineRenderables[index]!;
+            renderable.content = line;
+            renderable.fg = lineColor(line);
+            renderable.attributes = line.startsWith("◆") ? TextAttributes.BOLD : TextAttributes.NONE;
+        }
+        renderer.requestRender();
+    }
+
+    function lineColor(line: string): RGBA {
+        if (line.startsWith("◆")) return THEME.cyan;
+        if (line.startsWith("  ✓")) return THEME.green;
+        if (line.startsWith("  ✗") || line.startsWith("⚠")) return THEME.red;
+        return THEME.fg;
+    }
+
+    const resizeHandler = () => {
+        mainBox.width = renderer.width;
+        mainBox.height = renderer.height;
+        navBox.width = navWidthFor(renderer.width);
+    };
+    renderer.on(CliRenderEvents.RESIZE, resizeHandler);
     renderer.keyInput.on("keypress", keyHandler);
     const lifecycle = createTuiLifecycle(renderer, {
         cleanup: () => {
             destroyed = true;
             renderer.keyInput.off("keypress", keyHandler);
+            renderer.off(CliRenderEvents.RESIZE, resizeHandler);
+            root.remove(mainBox.id);
         },
     });
+    syncUi();
     void refresh(initialPage);
 
     return lifecycle.waitForDestroy();
+}
+
+function navWidthFor(width: number): number {
+    return Math.min(30, Math.max(22, Math.floor(width * 0.22)));
 }

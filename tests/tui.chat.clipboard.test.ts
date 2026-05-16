@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { osc52ClipboardSequence } from "../src/command/tui/chat/clipboard.ts";
+import { selectedTextForScope } from "../src/command/tui/chat/app.tsx";
 
 describe("TUI chat clipboard", () => {
     test("builds an OSC52 clipboard sequence", () => {
@@ -19,4 +20,40 @@ describe("TUI chat clipboard", () => {
             }
         }
     });
+
+    test("copies only text from the panel where selection starts", () => {
+        const chatRoot = fakeRenderable("chat-root", "");
+        const sideRoot = fakeRenderable("side-root", "");
+        const chatLine = fakeRenderable("chat-line", "selected code", chatRoot);
+        const sideLine = fakeRenderable("side-line", "Analysis panel", sideRoot);
+        const selection = {
+            getSelectedText: () => "selected code\nAnalysis panel",
+            selectedRenderables: [chatLine, sideLine],
+        };
+
+        expect(selectedTextForScope(selection as never, "chat", { chat: chatRoot as never, side: sideRoot as never })).toBe(
+            "selected code",
+        );
+        expect(selectedTextForScope(selection as never, "side", { chat: chatRoot as never, side: sideRoot as never })).toBe(
+            "Analysis panel",
+        );
+    });
 });
+
+interface FakeRenderable {
+    id: string;
+    parent: FakeRenderable | null;
+    x: number;
+    y: number;
+    getSelectedText: () => string;
+}
+
+function fakeRenderable(id: string, text: string, parent: FakeRenderable | null = null): FakeRenderable {
+    return {
+        id,
+        parent,
+        x: 0,
+        y: parent ? 1 : 0,
+        getSelectedText: () => text,
+    };
+}

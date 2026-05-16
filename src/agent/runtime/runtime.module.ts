@@ -92,6 +92,8 @@ interface RuntimeBlackboardRun {
 export interface RuntimeStreamOptions {
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     onTextDelta?: (text: string) => void | Promise<void>;
+    /** One-turn cancellation signal from interactive surfaces such as the chat TUI `/stop` command. */
+    signal?: AbortSignal;
     /**
      * MCP tool-call 循环最大轮数。默认 1（与历史行为一致：发起 → 工具结果 → 总结）。
      * `--max-turns N` 把上限提高到 N，允许模型多轮调用工具；超过上限后下一轮直接总结。
@@ -280,10 +282,14 @@ export class RuntimeModule extends RuntimeBoundary {
             startedAtMs: Date.now(),
         });
         try {
+            this.throwIfAborted(options.signal);
             const prepared = await this.prepareTurn(message, context);
+            this.throwIfAborted(options.signal);
             const assembled = await this.assembleTurnContext(message, prepared, options);
+            this.throwIfAborted(options.signal);
             const generated = await this.generateTurnReply(message, prepared, assembled, options);
 
+            this.throwIfAborted(options.signal);
             await this.persistTurn(message, prepared, assembled, generated);
             await this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
 
@@ -881,12 +887,14 @@ export class RuntimeModule extends RuntimeBoundary {
         replyPrefix: string,
         options: RuntimeStreamOptions,
     ): Promise<string> {
+        this.throwIfAborted(options.signal);
         if (!options.onTextDelta) {
-            return this.model.generate(messages);
+            return this.model.generate(messages, { signal: options.signal });
         }
 
         if (!this.model.stream) {
-            const rawText = await this.model.generate(messages);
+            const rawText = await this.model.generate(messages, { signal: options.signal });
+            this.throwIfAborted(options.signal);
             await options.onTextDelta(`${replyPrefix}${filterVisibleMemoryActionText(rawText)}`);
             return rawText;
         }
@@ -899,7 +907,8 @@ export class RuntimeModule extends RuntimeBoundary {
 
         let rawText = "";
         const visibility = new MemoryActionVisibilityFilter();
-        for await (const chunk of this.model.stream(messages)) {
+        for await (const chunk of this.model.stream(messages, { signal: options.signal })) {
+            this.throwIfAborted(options.signal);
             rawText += chunk;
             const visible = visibility.push(chunk);
             if (visible) {
@@ -938,7 +947,8 @@ export class RuntimeModule extends RuntimeBoundary {
         const transcript: ModelMessage[] = [...messages];
 
         for (let turn = 0; turn < maxTurns; turn++) {
-            const raw = await this.model.generate(transcript);
+            this.throwIfAborted(options.signal);
+            const raw = await this.model.generate(transcript, { signal: options.signal });
             const parsedCalls = parseMcpToolCalls(raw);
             if (parsedCalls.calls.length === 0) {
                 if (options.onTextDelta) {
@@ -1156,6 +1166,13 @@ export class RuntimeModule extends RuntimeBoundary {
                 requestId,
             ),
         );
+    }
+
+    private throwIfAborted(signal: AbortSignal | undefined): void {
+        if (!signal?.aborted) return;
+        const error = new Error("The operation was stopped.");
+        error.name = "AbortError";
+        throw error;
     }
 
     private async runBlackboard(

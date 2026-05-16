@@ -1,6 +1,6 @@
 import type { ModelConfig } from "../config/index.ts";
 import type { ModelClient, ModelMessage } from "../protocol/index.ts";
-import { assertStreamResponse, normalizeAnthropicBaseUrl, readSseJson } from "./http.ts";
+import { assertStreamResponse, fetchModelEndpoint, normalizeAnthropicBaseUrl, readSseJson } from "./http.ts";
 
 interface AnthropicMessagesResponse {
     content?: Array<{
@@ -22,10 +22,10 @@ interface AnthropicMessagesStreamChunk {
 export class AnthropicCompatibleClient implements ModelClient {
     constructor(private readonly config: ModelConfig) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    async generate(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): Promise<string> {
         this.assertApiKey();
         const { system, userMessages } = splitMessages(messages);
-        const response = await fetch(new URL("/v1/messages", normalizeAnthropicBaseUrl(this.config.baseUrl)), {
+        const response = await fetchModelEndpoint(this.config, "/v1/messages", {
             method: "POST",
             headers: {
                 "anthropic-version": "2023-06-01",
@@ -40,8 +40,7 @@ export class AnthropicCompatibleClient implements ModelClient {
                 max_tokens: this.config.maxTokens,
                 temperature: this.config.temperature,
             }),
-            signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
+        }, normalizeAnthropicBaseUrl, options);
         const payload = (await response.json()) as AnthropicMessagesResponse;
         if (!response.ok) {
             throw new Error(payload.error?.message ?? `Model request failed: ${response.status}`);
@@ -56,10 +55,10 @@ export class AnthropicCompatibleClient implements ModelClient {
         return content;
     }
 
-    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+    async *stream(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): AsyncGenerator<string> {
         this.assertApiKey();
         const { system, userMessages } = splitMessages(messages);
-        const response = await fetch(new URL("/v1/messages", normalizeAnthropicBaseUrl(this.config.baseUrl)), {
+        const response = await fetchModelEndpoint(this.config, "/v1/messages", {
             method: "POST",
             headers: {
                 "anthropic-version": "2023-06-01",
@@ -75,8 +74,7 @@ export class AnthropicCompatibleClient implements ModelClient {
                 stream: true,
                 temperature: this.config.temperature,
             }),
-            signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
+        }, normalizeAnthropicBaseUrl, options);
         await assertStreamResponse(response);
         for await (const chunk of readSseJson<AnthropicMessagesStreamChunk>(response)) {
             if (chunk.type === "content_block_delta" && chunk.delta?.text) {

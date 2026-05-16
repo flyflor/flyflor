@@ -3,7 +3,7 @@
  *
  * 纯命令式 API 装配 UI 树，绕过 Solid reconciler 的 ref/事件时序问题。
  * 保留 solid-js 的 createSignal/createEffect 做响应式状态管理。
- * 兼容 bun build --compile，不依赖 @opentui/solid。
+ * 兼容 bun build --compile，不依赖框架渲染桥。
  */
 
 import { addDefaultParsers, clearEnvCache, createCliRenderer, type CliRendererConfig } from "@opentui/core";

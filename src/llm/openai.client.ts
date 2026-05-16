@@ -1,7 +1,7 @@
 import type { ModelConfig } from "../config/index.ts";
 import type { ModelClient, ModelMessage } from "../protocol/index.ts";
 import { ModelApiMode } from "../protocol/index.ts";
-import { assertStreamResponse, normalizeOpenAIBaseUrl, readSseJson } from "./http.ts";
+import { assertStreamResponse, fetchModelEndpoint, normalizeOpenAIBaseUrl, readSseJson } from "./http.ts";
 
 interface ChatCompletionResponse {
     choices?: Array<{
@@ -49,12 +49,12 @@ interface ResponsesApiStreamChunk {
 export class OpenAICompatibleClient implements ModelClient {
     constructor(private readonly config: ModelConfig) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    async generate(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): Promise<string> {
         this.assertApiKey();
         if (this.config.apiMode === ModelApiMode.Responses) {
-            return this.generateWithResponsesApi(messages);
+            return this.generateWithResponsesApi(messages, options);
         }
-        const response = await fetch(new URL("/v1/chat/completions", normalizeOpenAIBaseUrl(this.config.baseUrl)), {
+        const response = await fetchModelEndpoint(this.config, "/v1/chat/completions", {
             method: "POST",
             headers: this.headers(),
             body: JSON.stringify({
@@ -62,8 +62,7 @@ export class OpenAICompatibleClient implements ModelClient {
                 messages,
                 temperature: this.config.temperature,
             }),
-            signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
+        }, normalizeOpenAIBaseUrl, options);
         const payload = (await response.json()) as ChatCompletionResponse;
         if (!response.ok) {
             throw new Error(payload.error?.message ?? `Model request failed: ${response.status}`);
@@ -75,13 +74,13 @@ export class OpenAICompatibleClient implements ModelClient {
         return content;
     }
 
-    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+    async *stream(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): AsyncGenerator<string> {
         this.assertApiKey();
         if (this.config.apiMode === ModelApiMode.Responses) {
-            yield* this.streamWithResponsesApi(messages);
+            yield* this.streamWithResponsesApi(messages, options);
             return;
         }
-        const response = await fetch(new URL("/v1/chat/completions", normalizeOpenAIBaseUrl(this.config.baseUrl)), {
+        const response = await fetchModelEndpoint(this.config, "/v1/chat/completions", {
             method: "POST",
             headers: this.headers(),
             body: JSON.stringify({
@@ -90,8 +89,7 @@ export class OpenAICompatibleClient implements ModelClient {
                 stream: true,
                 temperature: this.config.temperature,
             }),
-            signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
+        }, normalizeOpenAIBaseUrl, options);
         await assertStreamResponse(response);
         for await (const chunk of readSseJson<ChatCompletionStreamChunk>(response)) {
             const text = chunk.choices?.[0]?.delta?.content;
@@ -101,8 +99,11 @@ export class OpenAICompatibleClient implements ModelClient {
         }
     }
 
-    private async generateWithResponsesApi(messages: ModelMessage[]): Promise<string> {
-        const response = await fetch(new URL("/v1/responses", normalizeOpenAIBaseUrl(this.config.baseUrl)), {
+    private async generateWithResponsesApi(
+        messages: ModelMessage[],
+        options: { signal?: AbortSignal } = {},
+    ): Promise<string> {
+        const response = await fetchModelEndpoint(this.config, "/v1/responses", {
             method: "POST",
             headers: this.headers(),
             body: JSON.stringify({
@@ -111,8 +112,7 @@ export class OpenAICompatibleClient implements ModelClient {
                 max_output_tokens: this.config.maxTokens,
                 temperature: this.config.temperature,
             }),
-            signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
+        }, normalizeOpenAIBaseUrl, options);
         const payload = (await response.json()) as ResponsesApiResponse;
         if (!response.ok) {
             throw new Error(payload.error?.message ?? `Model request failed: ${response.status}`);
@@ -124,8 +124,11 @@ export class OpenAICompatibleClient implements ModelClient {
         return content;
     }
 
-    private async *streamWithResponsesApi(messages: ModelMessage[]): AsyncGenerator<string> {
-        const response = await fetch(new URL("/v1/responses", normalizeOpenAIBaseUrl(this.config.baseUrl)), {
+    private async *streamWithResponsesApi(
+        messages: ModelMessage[],
+        options: { signal?: AbortSignal } = {},
+    ): AsyncGenerator<string> {
+        const response = await fetchModelEndpoint(this.config, "/v1/responses", {
             method: "POST",
             headers: this.headers(),
             body: JSON.stringify({
@@ -135,8 +138,7 @@ export class OpenAICompatibleClient implements ModelClient {
                 stream: true,
                 temperature: this.config.temperature,
             }),
-            signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
+        }, normalizeOpenAIBaseUrl, options);
         await assertStreamResponse(response);
         let emittedDelta = false;
         for await (const chunk of readSseJson<ResponsesApiStreamChunk>(response)) {

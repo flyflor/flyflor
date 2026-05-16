@@ -37,4 +37,38 @@ describe("LLM client factory", () => {
             }),
         ).toThrow(/Unsupported model provider kind/);
     });
+
+    test("model request timeouts keep their name and include request context", async () => {
+        const previousFetch = globalThis.fetch;
+        const failingFetch = () => {
+            const error = new Error("The operation timed out.");
+            error.name = "TimeoutError";
+            return Promise.reject(error);
+        };
+        globalThis.fetch = failingFetch as unknown as typeof fetch;
+        try {
+            const client = new OpenAICompatibleClient({
+                apiKey: "sk-test",
+                apiMode: ModelApiMode.ChatCompletions,
+                baseUrl: "https://relay.test/v1",
+                headers: {},
+                maxTokens: 4096,
+                model: "gpt-test",
+                provider: ModelProviderKind.OpenAICompatible,
+                providerId: "relay",
+                temperature: 0.2,
+                timeoutMs: 1234,
+            });
+
+            await expect(client.generate([{ role: "user", content: "hello" }])).rejects.toThrow(
+                /provider=relay model=gpt-test .* timeoutMs=1234/,
+            );
+            await expect(client.generate([{ role: "user", content: "hello" }])).rejects.toHaveProperty(
+                "name",
+                "TimeoutError",
+            );
+        } finally {
+            globalThis.fetch = previousFetch;
+        }
+    });
 });

@@ -1,3 +1,5 @@
+import type { ModelConfig } from "../config/index.ts";
+
 export function normalizeOpenAIBaseUrl(value: string): string {
     const raw = value.trim().replace(/\/+$/, "");
     if (!raw) {
@@ -9,6 +11,54 @@ export function normalizeOpenAIBaseUrl(value: string): string {
 export function normalizeAnthropicBaseUrl(value: string): string {
     const raw = value.trim().replace(/\/+$/, "");
     return raw.endsWith("/v1") ? raw.slice(0, -3) : raw;
+}
+
+export async function fetchModelEndpoint(
+    config: ModelConfig,
+    path: string,
+    init: RequestInit,
+    normalizeBaseUrl: (value: string) => string,
+    options: { signal?: AbortSignal } = {},
+): Promise<Response> {
+    const url = new URL(path, normalizeBaseUrl(config.baseUrl));
+    const signal = timeoutSignal(config.timeoutMs, options.signal);
+    try {
+        return await fetch(url, {
+            ...init,
+            signal,
+        });
+    } catch (error) {
+        throw annotateModelFetchError(error, config, url);
+    }
+}
+
+function timeoutSignal(timeoutMs: number, parent?: AbortSignal): AbortSignal {
+    if (!parent) {
+        return AbortSignal.timeout(timeoutMs);
+    }
+    if (parent.aborted) {
+        return parent;
+    }
+    return AbortSignal.any([parent, AbortSignal.timeout(timeoutMs)]);
+}
+
+function annotateModelFetchError(error: unknown, config: ModelConfig, url: URL): Error {
+    if (!(error instanceof Error)) {
+        return new Error(String(error));
+    }
+    // Preserve Error.name so TUI callers still show TimeoutError, while adding the request boundary.
+    const detail = `provider=${config.providerId} model=${config.model} url=${redactUrl(url)} timeoutMs=${config.timeoutMs}`;
+    const next = new Error(`${error.message} (${detail})`);
+    next.name = error.name;
+    next.cause = error;
+    return next;
+}
+
+function redactUrl(url: URL): string {
+    const next = new URL(url);
+    next.username = "";
+    next.password = "";
+    return next.toString();
 }
 
 export async function assertStreamResponse(response: Response): Promise<void> {

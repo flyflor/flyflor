@@ -85,6 +85,7 @@ import { formatFlyflorVersion } from "../version.ts";
 import { renderConfigView } from "../config.view.ts";
 import { runUpdate } from "./update.ts";
 import { canStartInteractiveTui, interactiveTuiUnavailableMessage } from "../tui/tty.ts";
+import { resolveCommandTuiPage } from "../tui/cli/command.route.ts";
 
 export interface FlyflorCommandResult {
     exitCode: number;
@@ -873,20 +874,11 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "setup") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "config");
-            return;
-        }
         await runSetup(command);
         return;
     }
     if (root === "status") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "overview");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         const app = await cliApp();
@@ -898,10 +890,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "channels") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "overview");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         const app = await cliApp();
@@ -914,39 +903,28 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         if (opts.fix) {
             await runDoctorFix(app);
         }
-        if (process.stdin.isTTY) {
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "overview");
+        if (await maybeStartCommandTui(root, sub, app)) {
             return;
         }
         console.log(await renderDoctor(app));
         return;
     }
     if (root === "config") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "config");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runConfig(sub, command);
         return;
     }
     if (root === "memory") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "memory");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runMemory(sub, command);
         return;
     }
     if (root === "blackboard") {
-        if (!sub && process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "blackboard");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runBlackboard(sub, command);
@@ -973,20 +951,14 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "skills") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "skills");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runSkills(sub, command);
         return;
     }
     if (root === "mcp") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "mcp");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runMcp(sub, command);
@@ -997,40 +969,28 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "sandbox") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "sandbox");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runSandbox(sub, command);
         return;
     }
     if (root === "plugins") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "plugins");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runPlugins(sub, command);
         return;
     }
     if (root === "dream") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "dream");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runDream(sub, command);
         return;
     }
     if (root === "model") {
-        if (process.stdin.isTTY) {
-            const app = await cliApp();
-            const { startCliTui } = await import("../tui/cli/index.ts");
-            await startCliTui(app, "config");
+        if (await maybeStartCommandTui(root, sub)) {
             return;
         }
         await runModelWizard(command);
@@ -1049,6 +1009,15 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     throwUnsupportedCommand(path);
+}
+
+async function maybeStartCommandTui(root: string, sub?: string, app?: FlyFlor): Promise<boolean> {
+    const page = resolveCommandTuiPage(root, sub);
+    if (!page || !process.stdin.isTTY) return false;
+    const resolvedApp = app ?? (await cliApp());
+    const { startCliTui } = await import("../tui/cli/index.ts");
+    await startCliTui(resolvedApp, page);
+    return true;
 }
 
 async function runDoctorFix(app: FlyFlor): Promise<void> {
