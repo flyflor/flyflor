@@ -168,23 +168,10 @@ describe("gateway channel status snapshots", () => {
 
     test("exposes channel capability matrix in status snapshots", () => {
         const snapshot = buildGatewayStatusSnapshot(
-            gatewayConfig([Channel.Telegram, Channel.Slack, Channel.Mattermost, Channel.WeChat, Channel.WeixinIlink], {
-                mattermost: {
-                    baseUrl: "https://mattermost.test",
-                    botToken: "mattermost-bot",
-                    webhookToken: "mattermost-token",
-                },
-                slack: { botToken: "xoxb-test", signingSecret: "slack-secret" },
-                telegram: { botToken: "telegram-token" },
-                wechat: { token: "wechat-token" },
-                weixinIlink: {
-                    apiBaseUrl: "https://ilinkai.weixin.qq.com",
-                    pollIntervalMs: 1500,
-                    token: "ilink-token",
-                },
-            }),
-            createChannelAdapters(
-                gatewayConfig([Channel.Telegram, Channel.Slack, Channel.Mattermost, Channel.WeChat, Channel.WeixinIlink], {
+            gatewayConfig(
+                [Channel.Telegram, Channel.Slack, Channel.Discord, Channel.Mattermost, Channel.WeChat, Channel.WeixinIlink],
+                {
+                    discord: { applicationId: "discord-app", publicKey: "00" },
                     mattermost: {
                         baseUrl: "https://mattermost.test",
                         botToken: "mattermost-bot",
@@ -198,7 +185,35 @@ describe("gateway channel status snapshots", () => {
                         pollIntervalMs: 1500,
                         token: "ilink-token",
                     },
-                }),
+                },
+            ),
+            createChannelAdapters(
+                gatewayConfig(
+                    [
+                        Channel.Telegram,
+                        Channel.Slack,
+                        Channel.Discord,
+                        Channel.Mattermost,
+                        Channel.WeChat,
+                        Channel.WeixinIlink,
+                    ],
+                    {
+                        discord: { applicationId: "discord-app", publicKey: "00" },
+                        mattermost: {
+                            baseUrl: "https://mattermost.test",
+                            botToken: "mattermost-bot",
+                            webhookToken: "mattermost-token",
+                        },
+                        slack: { botToken: "xoxb-test", signingSecret: "slack-secret" },
+                        telegram: { botToken: "telegram-token" },
+                        wechat: { token: "wechat-token" },
+                        weixinIlink: {
+                            apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                            pollIntervalMs: 1500,
+                            token: "ilink-token",
+                        },
+                    },
+                ),
             ),
             new Map(),
             true,
@@ -206,6 +221,7 @@ describe("gateway channel status snapshots", () => {
 
         const telegram = snapshot.channels.find((channel) => channel.name === Channel.Telegram);
         const slack = snapshot.channels.find((channel) => channel.name === Channel.Slack);
+        const discord = snapshot.channels.find((channel) => channel.name === Channel.Discord);
         const mattermost = snapshot.channels.find((channel) => channel.name === Channel.Mattermost);
         const wechat = snapshot.channels.find((channel) => channel.name === Channel.WeChat);
         const weixin = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
@@ -221,6 +237,10 @@ describe("gateway channel status snapshots", () => {
             messageUpdate: true,
             reactions: true,
             thread: true,
+        });
+        expect(discord?.capabilities).toMatchObject({
+            messageUpdate: true,
+            replyReference: true,
         });
         expect(wechat?.capabilities).toMatchObject({
             finalReply: true,

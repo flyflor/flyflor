@@ -1,7 +1,7 @@
 import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
 import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
-import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const DISCORD_PING = 1;
@@ -35,6 +35,10 @@ interface DiscordUser {
 export class DiscordInteractionAdapter implements ChannelAdapter {
     readonly name = Channel.Discord;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        messageUpdate: true,
+        replyReference: true,
+    });
 
     constructor(
         private readonly applicationId: string,
@@ -77,16 +81,16 @@ export class DiscordInteractionAdapter implements ChannelAdapter {
         await dispatchWithDelivery({
             dispatch,
             message,
-            deliver: (text) => this.sendFollowup(interaction, text),
+            deliver: (text) => this.updateOriginalReply(interaction, text),
             metadata: buildDeliveryMetadata(message),
         });
     }
 
-    private async sendFollowup(interaction: DiscordInteraction, text: string): Promise<void> {
+    private async updateOriginalReply(interaction: DiscordInteraction, text: string): Promise<void> {
         const response = await fetch(
-            `https://discord.com/api/v10/webhooks/${this.applicationId}/${interaction.token}`,
+            `https://discord.com/api/v10/webhooks/${this.applicationId}/${interaction.token}/messages/@original`,
             {
-                method: "POST",
+                method: "PATCH",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
                     content: text.slice(0, 2000),
