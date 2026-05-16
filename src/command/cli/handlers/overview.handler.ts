@@ -1,9 +1,9 @@
 import { stat } from "node:fs/promises";
-import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
+import { GatewayModule, MemoryModule, type FlyFlor } from "../../../app.ts";
 import { lintPromptTemplates } from "../../../agent/prompts/index.ts";
-import { checkSkillSchemaCompatibility } from "../../../crystal/skills/index.ts";
+import { checkSkillSchemaCompatibility } from "../../../skills/index.ts";
 import { getFlyflorConfigPath } from "../config.ts";
-import type { FlyflorConfig } from "../../../config/index.ts";
+import { ConfigComponent, type FlyflorConfig } from "../../../config/index.ts";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../../agent/gateway/index.ts";
 import { ChannelLinkState, CrystalMemoryBackend, MemoryWorkingBackend } from "../../../protocol/contracts/index.ts";
 import { describeModelApiKey, describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles } from "../status.ts";
@@ -73,18 +73,17 @@ export interface DoctorCheck {
 }
 
 export async function fetchOverviewData(app: FlyFlor): Promise<OverviewData> {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     // Use local snapshot directly to avoid blocking HTTP fetch (500ms timeout)
-    const gateway = app.resolve(FlyFlorTokens.Gateway).getStatusSnapshot();
-    const workingMemorySnapshot = app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot();
+    const gateway = app.resolve(GatewayModule).getStatusSnapshot();
+    const workingMemorySnapshot = app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot();
 
     return {
         runtime: extractRuntime(config),
         gateway: extractGateway(gateway),
         channels: extractChannels(gateway),
         memory: await extractMemory(config, workingMemorySnapshot),
-        doctor: await runDoctorChecks(app, gateway),
-    };
+        doctor: await runDoctorChecks(app, gateway)};
 }
 
 function extractRuntime(config: FlyflorConfig): RuntimeSummary {
@@ -96,8 +95,7 @@ function extractRuntime(config: FlyflorConfig): RuntimeSummary {
         workspace: config.paths.workspaceDir,
         model: `${config.model.providerId}/${config.model.model}`,
         apiMode: config.model.apiMode,
-        sandbox: config.sandbox.mode,
-    };
+        sandbox: config.sandbox.mode};
 }
 
 function extractGateway(gateway: GatewayStatusSnapshot): GatewaySummary {
@@ -108,8 +106,7 @@ function extractGateway(gateway: GatewayStatusSnapshot): GatewaySummary {
         totalCount: gateway.channels.length,
         degradedCount: gateway.degradedCount,
         streamingCount: gateway.streamingCount,
-        startedAt: gateway.startedAt ?? null,
-    };
+        startedAt: gateway.startedAt ?? null};
 }
 
 function extractChannels(gateway: GatewayStatusSnapshot): ChannelRow[] {
@@ -123,8 +120,7 @@ function extractChannels(gateway: GatewayStatusSnapshot): ChannelRow[] {
         lastError: ch.lastError ?? undefined,
         lastInboundAt: ch.lastInboundAt ?? undefined,
         lastOutboundAt: ch.lastOutboundAt ?? undefined,
-        lastErrorAt: ch.lastErrorAt ?? undefined,
-    }));
+        lastErrorAt: ch.lastErrorAt ?? undefined}));
 }
 
 async function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unknown): Promise<MemorySummary> {
@@ -135,66 +131,55 @@ async function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unkno
         storageDir: config.paths.storageDir,
         crystalDbFile: config.memory.crystal.local.dbFile ?? "",
         workingMemoryStatus: describeWorkingMemoryHealth(workingMemorySnapshot),
-        workingRecoveryStatus: await describeWorkingMemoryRecoveryFiles(config),
-    };
+        workingRecoveryStatus: await describeWorkingMemoryRecoveryFiles(config)};
 }
 
 async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Promise<DoctorCheck[]> {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     const checks: DoctorCheck[] = [];
 
     checks.push({
         name: "Config file",
         status: (await exists(getFlyflorConfigPath())) ? "ok" : "warn",
-        detail: getFlyflorConfigPath(),
-    });
+        detail: getFlyflorConfigPath()});
     checks.push({
         name: "Config home",
         status: (await exists(config.paths.home)) ? "ok" : "warn",
-        detail: config.paths.home,
-    });
+        detail: config.paths.home});
     checks.push({
         name: "Workspace",
         status: (await exists(config.paths.workspaceDir)) ? "ok" : "warn",
-        detail: config.paths.workspaceDir,
-    });
+        detail: config.paths.workspaceDir});
     checks.push({
         name: "Model provider",
         status: config.model.providerId ? "ok" : "warn",
-        detail: config.model.providerId,
-    });
+        detail: config.model.providerId});
     checks.push({
         name: "Model name",
         status: config.model.model ? "ok" : "warn",
-        detail: config.model.model || "empty",
-    });
+        detail: config.model.model || "empty"});
     checks.push({
         name: "Base URL",
         status: config.model.baseUrl ? "ok" : "warn",
-        detail: config.model.baseUrl || "empty",
-    });
+        detail: config.model.baseUrl || "empty"});
     checks.push({
         name: "API key",
         status: describeModelApiKey(config.model.apiKey).status,
-        detail: describeModelApiKey(config.model.apiKey).detail,
-    });
+        detail: describeModelApiKey(config.model.apiKey).detail});
     checks.push({
         name: "Gateway port",
         status: config.gateway.port > 0 ? "ok" : "warn",
-        detail: String(config.gateway.port),
-    });
+        detail: String(config.gateway.port)});
     checks.push({
         name: "Gateway channels",
         status: gateway.connectedCount > 0 ? "ok" : "warn",
-        detail: `${gateway.connectedCount}/${gateway.channels.length} connected, ${gateway.degradedCount} degraded`,
-    });
+        detail: `${gateway.connectedCount}/${gateway.channels.length} connected, ${gateway.degradedCount} degraded`});
 
     const scheduler = describeBackgroundScheduler(config);
     checks.push({
         name: "Background scheduler",
         status: scheduler.status as "ok" | "warn",
-        detail: scheduler.detail,
-    });
+        detail: scheduler.detail});
 
     const templateLint = await lintPromptTemplates(config.paths);
     checks.push({
@@ -202,8 +187,7 @@ async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Pr
         status: templateLint.ok ? "ok" : "warn",
         detail: templateLint.ok
             ? `${templateLint.checked.length} templates ok`
-            : `${templateLint.issues.length} issue(s); run "bun run install:templates"`,
-    });
+            : `${templateLint.issues.length} issue(s); run "bun run install:templates"`});
 
     const skillCompat = await checkSkillSchemaCompatibility(config.paths);
     checks.push({
@@ -211,8 +195,7 @@ async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Pr
         status: skillCompat.ok ? "ok" : "warn",
         detail: skillCompat.ok
             ? "all skills compatible"
-            : skillCompat.issues.map((i) => `${i.name} (${i.source}): v${i.schemaVersion} ${i.kind}`).join("; "),
-    });
+            : skillCompat.issues.map((i) => `${i.name} (${i.source}): v${i.schemaVersion} ${i.kind}`).join("; ")});
 
     return checks;
 }
@@ -230,13 +213,11 @@ function describeBackgroundScheduler(config: FlyflorConfig): {
     if (workingReady && crystalReady) {
         return {
             status: "ok",
-            detail: "consolidation+decay+dream+project-cluster enabled (local working-memory + local crystal graph)",
-        };
+            detail: "consolidation+decay+dream+project-cluster enabled (local working-memory + local crystal graph)"};
     }
     return {
         status: "warn",
-        detail: "disabled — local working-memory or local crystal graph not ready; long-term memory consolidation is paused",
-    };
+        detail: "disabled — local working-memory or local crystal graph not ready; long-term memory consolidation is paused"};
 }
 
 async function exists(path: string): Promise<boolean> {

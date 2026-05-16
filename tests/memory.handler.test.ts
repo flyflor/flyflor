@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FlyFlorTokens } from "../src/app.ts";
+import { MemoryModule } from "../src/app.ts";
 import { fetchMemoryData } from "../src/command/cli/handlers/memory.handler.ts";
-import type { FlyflorConfig } from "../src/config/index.ts";
+import { ConfigComponent, type FlyflorConfig } from "../src/config/index.ts";
 
 describe("memory CLI handler", () => {
     test("surfaces working memory breaker health", async () => {
@@ -14,8 +14,7 @@ describe("memory CLI handler", () => {
                 backend: "local",
                 circuitState: "open",
                 lastError: "disk outage",
-                nextRecoveryAt: Date.UTC(2026, 4, 15, 12),
-            });
+                nextRecoveryAt: Date.UTC(2026, 4, 15, 12)});
 
             const data = await fetchMemoryData(app as never);
 
@@ -36,15 +35,13 @@ describe("memory CLI handler", () => {
 function fakeApp(config: FlyflorConfig, workingMemorySnapshot: unknown) {
     return {
         resolve(token: unknown) {
-            if (token === FlyFlorTokens.Config) return config;
-            if (token === FlyFlorTokens.Memory) {
+            if (token === ConfigComponent) return config;
+            if (token === MemoryModule) {
                 return {
-                    getWorkingMemoryHealthSnapshot: () => workingMemorySnapshot,
-                };
+                    getWorkingMemoryHealthSnapshot: () => workingMemorySnapshot};
             }
             throw new Error("unexpected token");
-        },
-    };
+        }};
 }
 
 function config(root: string): FlyflorConfig {
@@ -52,17 +49,13 @@ function config(root: string): FlyflorConfig {
         paths: {
             memoryDir: join(root, "memory"),
             projectMemoryDir: join(root, "project-memory"),
-            storageDir: join(root, "storage"),
-        },
+            storageDir: join(root, "storage")},
         memory: {
             enabled: true,
             crystal: {
                 enabled: true,
                 backend: "local",
-                local: { dbFile: join(root, "crystal.db") },
-            },
+                local: { dbFile: join(root, "crystal.db") }},
             embedding: { dimensions: 64 },
-            sqlite: { enabled: true },
-        },
-    } as unknown as FlyflorConfig;
+            sqlite: { enabled: true }}} as unknown as FlyflorConfig;
 }

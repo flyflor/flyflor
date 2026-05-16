@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { selectSkills, SKILL_MANIFEST_SCHEMA_VERSION, type Skill, type SkillUsageSummary } from "../src/crystal/skills/index.ts";
+import { selectSkills, SKILL_MANIFEST_SCHEMA_VERSION, type Skill, type SkillUsageSummary } from "../src/skills/index.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/index.ts";
 
 function makeSkill(name: string, opts: Partial<Skill["manifest"]> = {}): Skill {

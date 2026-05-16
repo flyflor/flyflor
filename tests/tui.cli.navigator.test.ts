@@ -148,9 +148,9 @@ describe("CLI TUI navigator", () => {
     test("interactive TUI entrypoints use the shared one-shot lifecycle guard", async () => {
         const files = await Promise.all([
             readFile("src/command/tui/index.tsx", "utf8"),
-            readFile("src/command/tui/cli/index.ts", "utf8"),
+            readFile("src/command/tui/cli/navigator.ts", "utf8"),
             readFile("src/command/tui/cli/blackboard.browser.tsx", "utf8"),
-            readFile("src/command/tui/chat/index.ts", "utf8"),
+            readFile("src/command/tui/chat/chat.entry.ts", "utf8"),
         ]);
 
         for (const source of files) {
@@ -162,7 +162,7 @@ describe("CLI TUI navigator", () => {
 
     test("all command TUI surfaces use command renderables instead of Solid rendering", async () => {
         const sources = await Promise.all([
-            readFile("src/command/tui/cli/index.ts", "utf8"),
+            readFile("src/command/tui/cli/navigator.ts", "utf8"),
             readFile("src/command/tui/index.tsx", "utf8"),
             readFile("src/command/tui/cli/blackboard.browser.tsx", "utf8"),
         ]);

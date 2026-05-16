@@ -8,6 +8,7 @@
  * - `memory_summary`：日 / 周级摘要，取代旧 `week.summary.md`。
  * - `memory_links`：dream / reflection 形成的隐含链接（contradicts / causal / derived / similarity）。
  * - `codenames`：用户显式工作目录锚点；频次衰减自然上浮，可升格为 Project。
+ * - `projects`：显式 `/project` 选择的项目作用域；只记录结构化路径和本地记忆目录，不解析对话文本。
  *
  * 本文件是 memory runtime、BrainStore、doctor/status 与归档工具共享的协议边界；
  * 新增事件类型必须仍可 JSON 序列化，且不得通过字符串语义解析派生。
@@ -257,4 +258,23 @@ export interface CodenameRecord {
     useCount: number;
     /** 升格后绑定 `projects/<projectId>/`。未升格则 undefined。 */
     projectId?: string;
+}
+
+/**
+ * Project：用户显式创建 / 使用的工作作用域。
+ *
+ * 它不是 session。调用方必须在每轮 RuntimeContext.activeProject 里显式传入，
+ * MemoryModule 才会加载该项目的 `.flyflor/memory` 与项目红线。
+ */
+export interface ProjectRecord {
+    id: string;
+    userId: string;
+    title: string;
+    goal?: string;
+    projectDir: string;
+    projectMemoryDir: string;
+    createdAt: number;
+    updatedAt: number;
+    lastUsedAt: number;
+    useCount: number;
 }

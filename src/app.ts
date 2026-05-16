@@ -12,17 +12,19 @@ import {
     WorkerManager,
     type ChannelAdapter,
 } from "./agent/index.ts";
-import { loadConfig, type FlyflorConfig } from "./config/index.ts";
+import { AdaptersComponent } from "./agent/gateway/index.ts";
+import { ConfigComponent, loadConfig, type FlyflorConfig } from "./config/index.ts";
 import { createMemory, MemoryModule } from "./neural/memory/index.ts";
 import {
     assertModuleMetadata,
-    createInjectionToken,
     DependencyContainer,
     isInjectionToken,
     Module,
     type DependencyToken,
 } from "./agent/di/index.ts";
-import { createModelClient } from "./llm/index.ts";
+import { EventsComponent } from "./protocol/events/index.ts";
+import { RuntimeModeComponent } from "./protocol/contracts/index.ts";
+import { createModelClient, ModelComponent } from "./llm/index.ts";
 import {
     ConsoleEventSink,
     NullEventSink,
@@ -36,47 +38,33 @@ import { CompositeEventSink } from "./protocol/events/index.ts";
 import { FileAuditSink, HttpAuditSink } from "./agent/sandbox/audit.sink.ts";
 import { join } from "node:path";
 
-export const FlyFlorTokens = {
-    Adapters: createInjectionToken<Map<ChannelName, ChannelAdapter>>("flyflor.adapters"),
-    Blackboard: BlackboardModule,
-    Config: createInjectionToken<FlyflorConfig>("flyflor.config"),
-    Container: createInjectionToken<DependencyContainer>("flyflor.container"),
-    Events: createInjectionToken<EventSink>("flyflor.events"),
-    Gateway: GatewayModule,
-    Mode: createInjectionToken<RuntimeModeType>("flyflor.mode"),
-    Model: createInjectionToken<ModelClient>("flyflor.model"),
-    Memory: MemoryModule,
-    Runtime: RuntimeModule,
-    Workers: WorkerManager,
-} as const;
+export { BlackboardModule, DependencyContainer, GatewayModule, MemoryModule, RuntimeModule, WorkerManager };
 
 @Module({
-    name: "flyflor",
     providers: [
-        FlyFlorTokens.Container,
-        FlyFlorTokens.Mode,
-        FlyFlorTokens.Config,
-        FlyFlorTokens.Events,
-        FlyFlorTokens.Model,
-        FlyFlorTokens.Workers,
-        FlyFlorTokens.Blackboard,
-        FlyFlorTokens.Memory,
-        FlyFlorTokens.Runtime,
-        FlyFlorTokens.Adapters,
-        FlyFlorTokens.Gateway,
+        DependencyContainer,
+        RuntimeModeComponent,
+        ConfigComponent,
+        EventsComponent,
+        ModelComponent,
+        WorkerManager,
+        BlackboardModule,
+        MemoryModule,
+        RuntimeModule,
+        AdaptersComponent,
+        GatewayModule,
     ],
     exports: [
-        FlyFlorTokens.Config,
-        FlyFlorTokens.Events,
-        FlyFlorTokens.Model,
-        FlyFlorTokens.Workers,
-        FlyFlorTokens.Blackboard,
-        FlyFlorTokens.Memory,
-        FlyFlorTokens.Runtime,
-        FlyFlorTokens.Adapters,
-        FlyFlorTokens.Gateway,
+        ConfigComponent,
+        EventsComponent,
+        ModelComponent,
+        WorkerManager,
+        BlackboardModule,
+        MemoryModule,
+        RuntimeModule,
+        AdaptersComponent,
+        GatewayModule,
     ],
-    tags: ["app", "root"],
 })
 export class FlyFlorModule {}
 
@@ -96,15 +84,15 @@ export interface FlyFlorCreateOptions {
 }
 
 export interface FlyFlorDependencies {
-    adapters: Map<ChannelName, ChannelAdapter>;
+    adapters: AdaptersComponent;
     blackboard: BlackboardModule;
-    config: FlyflorConfig;
+    config: ConfigComponent;
     container: DependencyContainer;
-    events: EventSink;
+    events: EventsComponent;
     gateway: GatewayModule;
     memory: MemoryModule;
-    mode: RuntimeModeType;
-    model: ModelClient;
+    mode: RuntimeModeComponent;
+    model: ModelComponent;
     runtime: RuntimeModule;
     workers: WorkerManager;
 }
@@ -117,7 +105,7 @@ export class FlyFlor {
     }
 
     public async start(): Promise<void> {
-        if (this.dependencies.mode === RuntimeMode.Gateway) {
+        if (this.dependencies.mode.is(RuntimeMode.Gateway)) {
             this.dependencies.gateway.start();
             return;
         }
@@ -154,18 +142,18 @@ async function createFlyFlorApplication(options: FlyFlorCreateOptions): Promise<
 }
 
 async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise<FlyFlorDependencies> {
-    const mode = normalizeRuntimeMode(options.mode ?? options.argv?.[2]);
-    const config = options.config ?? (await loadConfig());
+    const mode = new RuntimeModeComponent(normalizeRuntimeMode(options.mode ?? options.argv?.[2]));
+    const config = new ConfigComponent(options.config ?? (await loadConfig()));
     await loadPromptTemplates(config.paths);
-    const events = options.events ?? createDefaultEventSink(mode, config);
-    const model = options.model ?? createModelClient(config.model, events);
+    const events = new EventsComponent(options.events ?? createDefaultEventSink(mode.value, config));
+    const model = new ModelComponent(options.model ?? createModelClient(config.model, events));
     const workers = options.workers ?? createDefaultWorkerManager(model, events);
     const blackboard =
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
     const memory = options.memory ?? createMemory(config, events, model);
     const runtime = options.runtime ?? new RuntimeModule(config, model, events, blackboard, memory);
-    const adapters = options.adapters ?? createChannelAdapters(config.gateway);
-    const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters, runtime, events);
+    const adapters = new AdaptersComponent(options.adapters ?? createChannelAdapters(config.gateway));
+    const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters.asMap(), runtime, events);
     const container = options.container ?? new DependencyContainer();
 
     return {
@@ -186,17 +174,17 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
 function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies: FlyFlorDependencies): void {
     const metadata = assertModuleMetadata(FlyFlorModule);
     const values = new Map<DependencyToken<unknown>, unknown>([
-        [FlyFlorTokens.Container, container],
-        [FlyFlorTokens.Mode, dependencies.mode],
-        [FlyFlorTokens.Config, dependencies.config],
-        [FlyFlorTokens.Events, dependencies.events],
-        [FlyFlorTokens.Model, dependencies.model],
-        [FlyFlorTokens.Workers, dependencies.workers],
-        [FlyFlorTokens.Blackboard, dependencies.blackboard],
-        [FlyFlorTokens.Memory, dependencies.memory],
-        [FlyFlorTokens.Runtime, dependencies.runtime],
-        [FlyFlorTokens.Adapters, dependencies.adapters],
-        [FlyFlorTokens.Gateway, dependencies.gateway],
+        [DependencyContainer, container],
+        [RuntimeModeComponent, dependencies.mode],
+        [ConfigComponent, dependencies.config],
+        [EventsComponent, dependencies.events],
+        [ModelComponent, dependencies.model],
+        [WorkerManager, dependencies.workers],
+        [BlackboardModule, dependencies.blackboard],
+        [MemoryModule, dependencies.memory],
+        [RuntimeModule, dependencies.runtime],
+        [AdaptersComponent, dependencies.adapters],
+        [GatewayModule, dependencies.gateway],
     ]);
 
     for (const provider of metadata.providers) {

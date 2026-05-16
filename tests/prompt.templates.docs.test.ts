@@ -90,6 +90,8 @@ describe("prompt template docs generator", () => {
                 const spec = PROMPT_TEMPLATE_DEFINITIONS[key];
                 expect(await Bun.file(join(root, "prompts", spec.filename)).exists()).toBe(true);
             }
+            expect(await Bun.file(join(root, "commands.jsonc")).exists()).toBe(true);
+            expect(await Bun.file(join(root, "commands.jsonc")).text()).toContain('"run"');
         } finally {
             await rm(root, { force: true, recursive: true });
         }

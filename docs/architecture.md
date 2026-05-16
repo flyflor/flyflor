@@ -21,7 +21,7 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 | 层 | 目录 | 角色 | 后端 |
 | --- | --- | --- | --- |
 | 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI 兼容 / Anthropic 兼容 |
-| 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、Skill 与方法论沉淀 | local `crystal.db` + VectorIndex |
+| 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、方法论沉淀 | local `crystal.db` + VectorIndex |
 | 海马体 Neural | `src/neural` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计、计划/fork/场景摘要落 brain.db | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
 
 ## 分层结构图
@@ -42,7 +42,7 @@ flowchart TB
     Runtime --> Memory["MemoryModule<br/>src/neural/memory"]
     Runtime --> Sandbox["SandboxModule<br/>src/agent/sandbox"]
     Runtime --> MCP["MCP Client<br/>src/agent/mcp"]
-    Runtime --> Skills["Skill Loader<br/>src/crystal/skills"]
+    Runtime --> Skills["Skill Loader<br/>src/skills"]
     Runtime --> Prompts["Prompts<br/>src/agent/prompts"]
     Runtime --> FastRouteCache["fastRoute cache<br/><cacheDir>/runtime.fast.route.snapshots.json"]
 
@@ -104,31 +104,33 @@ sequenceDiagram
 
 ## 边界继承约定
 
-所有边界模块继承 `src/components/index.ts` 中的空抽象类来表达语义；`src/agent/components.ts` 仅保留旧路径兼容，不再作为新代码入口：
+所有边界模块继承 `src/components/index.ts` 中的 Flyflor 组件基类来表达语义；`src/agent/components.ts` 仅保留旧路径兼容，不再作为新代码入口：
 
 ```ts
-abstract class Gateway {}
-abstract class Blackboard {}
-abstract class Runtime {}
-abstract class Memory {}
-abstract class Sandbox {}
-abstract class BrainComponent {}
-abstract class GraphComponent {}
-abstract class SQLiteComponent {}
-abstract class RedisComponent {}
-abstract class SurrealComponent {}
-abstract class CrystalComponent {}
+abstract class FlyflorComponent {}
+abstract class Gateway extends FlyflorComponent {}
+abstract class Blackboard extends FlyflorComponent {}
+abstract class Runtime extends FlyflorComponent {}
+abstract class Memory extends FlyflorComponent {}
+abstract class Sandbox extends FlyflorComponent {}
+abstract class ContextComponent extends FlyflorComponent {}
+abstract class BrainComponent extends FlyflorComponent {}
+abstract class GraphComponent extends FlyflorComponent {}
+abstract class SQLiteComponent extends FlyflorComponent {}
+abstract class RedisComponent extends FlyflorComponent {}
+abstract class SurrealComponent extends FlyflorComponent {}
+abstract class CrystalComponent extends FlyflorComponent {}
 ```
 
-实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。本地存储也必须挂到组件基类：`BrainStore extends BrainComponent`、`SQLiteGraphStore extends GraphComponent`、`SQLiteMemoryStore extends SQLiteComponent`、Markdown/project working memory store extends `MemoryComponent`。`RedisComponent` / `SurrealComponent` 继续作为外部存储原型锚点保留，默认运行时不启用对应 backend；未来恢复外部 Redis / SurrealDB 时必须通过这两个 Component 边界接入。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。`MemoryComponent` / `CrystalComponent` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `RedisComponent` / `SurrealComponent` 是默认且唯一对外描述的组件承载层。
+实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`、`class ContextScopeComponent extends ContextComponent`。本地存储也必须挂到组件基类：`BrainStore extends BrainComponent`、`SQLiteGraphStore extends GraphComponent`、`SQLiteMemoryStore extends SQLiteComponent`、Markdown/project working memory store extends `MemoryComponent`。`RedisComponent` / `SurrealComponent` 继续作为外部存储原型锚点保留，默认运行时不启用对应 backend；未来恢复外部 Redis / SurrealDB 时必须通过这两个 Component 边界接入。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。`ContextComponent` / `MemoryComponent` / `CrystalComponent` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `RedisComponent` / `SurrealComponent` 是默认且唯一对外描述的组件承载层。
 
 默认推断规则：
 
-- core 基类推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox/BrainComponent/GraphComponent/SQLiteComponent → control layer`，`RedisComponent/SurrealComponent` 与其他 component → capability layer。
+- `FlyflorComponent` 继承链推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox/ContextComponent/BrainComponent/GraphComponent/SQLiteComponent → control layer`，`RedisComponent/SurrealComponent` 与其他 component → capability layer。
 - 类名推断 `name`：去掉 `Module/Component/Store` 后转 kebab-case。
 - provider 默认 singleton；需要重新 `new` 的组件显式使用 `ProviderScope.Factory`。
 - 只有默认推断不够表达边界时才写 `kind/layer/name/provider`，避免装饰器参数变成重复配置。
-- DI token 优先是 class 对象本身，例如 `@Inject(RuntimeModule)`；非 class 值才用 `createInjectionToken()` 生成对象 token。禁止新增裸字符串 token。
+- DI key 优先是 class 对象本身，例如 `@Inject(RuntimeModule)`、`container.resolve(ConfigComponent)`；`*.component.ts` 必须定义真实组件边界，禁止新增只为当 token 存在的空壳类。
 
 ## DI 容器
 
@@ -138,8 +140,9 @@ abstract class CrystalComponent {}
   - `bindFactory(token, factory)` / `bindTransient(token, factory)` — 每次 resolve 创建新实例
   - `bindComponent(token, factory, metadata)` — 按 `@Module` / `@Component` 的 provider scope 绑定
 - 仅在 composition root 注入；运行时只 `resolve` 已注册 token。
-- `@Module` / `@Provide` / `@Inject` / `@Component` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
-- `FlyFlorTokens` 列出 10 个对外 token：`Container / Mode / Config / Events / Model / Workers / Blackboard / Runtime / Adapters / Gateway`。
+- `@Module` / `@Provide` / `@Inject` / `@Component` / `@Event` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
+- `EventsComponent` 是运行时全局事件入口：`emit()` 发布结构化 RuntimeEvent，`on()` 注册显式 handler，`registerHooks(instance)` 只读取实例类上由 `@Event(type)` 写入的 metadata。
+- DI 入口不再维护 `FlyFlorTokens` 这种集中式 token 目录；`RuntimeModeComponent / ConfigComponent / EventsComponent / ModelComponent / AdaptersComponent` 这类边界直接用各自域内的真实 `*.component.ts` 类作为 DI key，composition root 显式构造并 `bindSingleton` / `resolve`。
 
 ## 模块边界硬约束
 
@@ -154,8 +157,9 @@ abstract class CrystalComponent {}
 | `src/agent/sandbox` | mcp-tool / shell-hook / plugin 审批 | 被业务模块绕过 |
 | `src/agent/mcp` | server/client 适配 | 跑非 MCP 工具、维护路由策略 |
 | `src/llm` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |
-| `src/crystal` | reflection、Gem、Skill | 持有渠道协议、绕过证据门 |
+| `src/crystal` | reflection、Gem、drift | 持有渠道协议、绕过证据门、直接改写外部 Skill 包 |
 | `src/neural` | 海马体策略、回放、衰减、调度 | 调用模型决策 |
+| `src/context` | 显式 project / fork / capability scope 装配 | 业务语义判断、隐式 session |
 | `src/protocol` | 枚举、事件、信封 | 业务决策、状态存储 |
 
 ## 进程模型

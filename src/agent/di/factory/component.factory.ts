@@ -1,7 +1,7 @@
 import {
     type ArchitectureLayer as ArchitectureLayerType,
     type ComponentKind as ComponentKindType,
-} from "../../../protocol/contracts/index.ts";
+} from "../../../protocol/contracts/enums.ts";
 import { type ComponentConstructor, type ComponentMetadata, readComponentMetadata } from "../composition/index.ts";
 
 export class ComponentRegistry {

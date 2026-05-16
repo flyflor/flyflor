@@ -1,9 +1,9 @@
 /**
- * 端到端 reflection → skill 固化路径污染暴力测试。
+ * 端到端 reflection → gem 固化路径污染暴力测试。
  *
  * 验证目标：
- * - blackboard-converged 才能产生 skill；direct reflection（weight=0）只留 candidate；
- * - 同 bucket+symbols 多次反思应合并为单个 skill，support 累加，confidence 加权平均；
+ * - blackboard-converged 才能产生 gem；direct reflection（weight=0）只留 candidate；
+ * - 同 bucket+symbols 多次反思应合并为单个 gem，support 累加，confidence 加权平均；
  * - 模型乱输出、空数组、非数组、JSON 损坏 → reflection 模块抛错或返回空，绝不污染存储；
  * - 高频/并发 recordTurn 应安全；store throws 不影响其他 candidate 处理。
  */
@@ -52,8 +52,8 @@ class FailingModel implements ModelClient {
 
 const NOW = "2026-05-12T00:00:00.000Z";
 
-describe("reflection → skill consolidation (P0-5)", () => {
-    test("blackboard-converged candidate becomes a skill", async () => {
+describe("reflection → gem consolidation (P0-5)", () => {
+    test("blackboard-converged candidate becomes a gem", async () => {
         const { svc, store } = makeComponent();
         const result = await svc.recordTurn({
             requestId: "r1",
@@ -80,7 +80,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
         expect(store.atoms.size).toBe(1);
     });
 
-    test("direct reflection (weight=0) creates candidate but no skill", async () => {
+    test("direct reflection (weight=0) creates candidate but no gem", async () => {
         const { svc, store } = makeComponent();
         const result = await svc.recordTurn({
             requestId: "r2",
@@ -106,7 +106,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
         expect(store.candidates.size).toBe(1);
     });
 
-    test("same bucket+symbols merge into single skill with growing support", async () => {
+    test("same bucket+symbols merge into single gem with growing support", async () => {
         const { svc, store } = makeComponent();
         for (let i = 0; i < 5; i++) {
             await svc.recordTurn({
@@ -273,7 +273,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
 
     test("[chaos] high-frequency parallel recordTurn does not corrupt store", async () => {
         const { svc, store } = makeComponent();
-        // 用相同 content 确保 extractSymbolTokens 派生符号一致 → 同 bucket+symbols → 同 skillId
+        // 用相同 content 确保 extractSymbolTokens 派生符号一致 → 同 bucket+symbols → 同 gemId
         const tasks = Array.from({ length: 50 }, (_, i) =>
             svc.recordTurn({
                 requestId: `p-${i}`,
@@ -314,7 +314,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
         let calls = 0;
         store.upsertGem = async () => {
             calls += 1;
-            throw new Error("skill-upsert-down");
+            throw new Error("gem-upsert-down");
         };
         const svc = new CrystalMemoryComponent(CFG, store);
         await expect(
@@ -338,7 +338,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
                     },
                 ],
             }),
-        ).rejects.toThrow(/skill-upsert-down/);
+        ).rejects.toThrow(/gem-upsert-down/);
         expect(calls).toBe(1);
         expect(store.gems.size).toBe(0);
     });

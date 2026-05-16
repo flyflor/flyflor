@@ -85,7 +85,7 @@ interface BlackboardLeaseRow {
     expires_at: string;
 }
 
-@Component({ name: "sqlite-blackboard-store", tags: ["database", "blackboard"] })
+@Component()
 export class SQLiteBlackboardStore implements BlackboardStore {
     private database?: Database;
 

@@ -2,7 +2,7 @@
  * Runtime skill selection adapter.
  *
  * Explicit skill names come from config/context fields; automatic selection is
- * delegated to the crystal skill index so RuntimeModule does not embed skill
+ * delegated to the external Skill package index so RuntimeModule does not embed skill
  * policy details in the turn orchestration class.
  */
 
@@ -10,7 +10,7 @@ import {
     selectSkills,
     type Skill,
     type SkillUsageSummary,
-} from "../../../crystal/skills/index.ts";
+} from "../../../skills/index.ts";
 
 export function selectRuntimeSkills(
     skills: Skill[],

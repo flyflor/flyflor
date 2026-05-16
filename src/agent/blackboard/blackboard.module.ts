@@ -3,8 +3,6 @@ import {
     BlackboardMode,
     BlackboardTurnStatus,
     BlackboardWorkerOutcome,
-    ComponentKind,
-    ArchitectureLayer,
     WorkerTaskStatus,
 } from "../../protocol/contracts/index.ts";
 import { BLACKBOARD_MODEL_WORKER_NAME, WorkerManager } from "../worker/index.ts";
@@ -60,7 +58,7 @@ export interface BlackboardRunUntilConvergedInput {
     onWorkerDone?: (event: BlackboardProgressEvent) => void | Promise<void>;
 }
 
-@Module({ name: "blackboard", tags: ["flyflor", "boundary"] })
+@Module()
 export class BlackboardModule extends Blackboard {
     public constructor(
         private readonly store: BlackboardStore,

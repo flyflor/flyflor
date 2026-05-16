@@ -1,7 +1,8 @@
-import { ProviderScope, type ProviderScope as ProviderScopeType } from "../../../protocol/contracts/index.ts";
-import type { ComponentMetadata } from "../composition/index.ts";
+import { ProviderScope, type ProviderScope as ProviderScopeType } from "../../../protocol/contracts/enums.ts";
+import { readInjectionMetadata, type ComponentMetadata } from "../composition/index.ts";
 
 export type ClassToken<TValue> = abstract new (...args: any[]) => TValue;
+export type Constructable<TValue> = new (...args: any[]) => TValue;
 export type DependencyToken<TValue> = InjectionToken<TValue> | ClassToken<TValue>;
 
 export interface InjectionToken<TValue> {
@@ -55,6 +56,21 @@ export class DependencyContainer {
         return this.bindProvider(token, factory, metadata.provider?.scope ?? ProviderScope.Singleton);
     }
 
+    /**
+     * Bind a class dependency using constructor @Inject metadata.
+     *
+     * This is intentionally not a scanner: the composition root still chooses
+     * which class is registered, while constructor parameters are resolved from
+     * explicit class/object tokens.
+     */
+    public bindClass<TValue>(
+        target: Constructable<TValue>,
+        scope: InjectionScope = ProviderScope.Singleton,
+        token: DependencyToken<TValue> = target,
+    ): this {
+        return this.bindProvider(token, (container) => container.instantiate(target), scope);
+    }
+
     public bindProvider<TValue>(
         token: DependencyToken<TValue>,
         factory: InjectionFactory<TValue>,
@@ -90,6 +106,17 @@ export class DependencyContainer {
 
         return value;
     }
+
+    public instantiate<TValue>(target: Constructable<TValue>): TValue {
+        const injections = readInjectionMetadata(target)
+            .filter((entry) => typeof entry.parameterIndex === "number")
+            .sort((left, right) => left.parameterIndex! - right.parameterIndex!);
+        const args: unknown[] = [];
+        for (const injection of injections) {
+            args[injection.parameterIndex!] = this.resolve(injection.token);
+        }
+        return new target(...args);
+    }
 }
 
 function tokenKey(token: DependencyToken<unknown>): object | symbol {
@@ -112,3 +139,4 @@ export function isInjectionToken(value: unknown): value is InjectionToken<unknow
 }
 
 export { DependencyContainer as FpcDependencyContainer };
+export type { Constructable as FpcConstructable };

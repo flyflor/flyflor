@@ -4,20 +4,22 @@
 
 Crystal 子系统负责把单轮证据「结晶」为长期可复用的 Gem：候选 → atom（向量化原始事实）→ memory_node → gem，每一步都经过双质量门校验。
 
+Gem 与 Skill 必须分开：Gem 是内部晶体智力，存在 `crystal.db` / Crystal graph；Skill 是外部 `SKILL.md` 能力包，存在 `~/.flyflor/skills` 或项目 skill 目录。`gem-drift` 只修 Crystal graph，不能代替 `skill-drift`。
+
 ## 相关代码路径
 
 - `src/crystal/reflection/index.ts` — Crystal reflection helpers（函数式结晶流程）
 - `src/crystal/memory/index.ts` — `CrystalMemoryComponent` / `LocalCrystalMemoryStore`
-- `src/crystal/skills/index.ts` — Skill 升格（见 `skill.system.md`）
+- `src/skills/index.ts` — 外部 Skill 包加载与物化；不属于 Gem 本体（见 `skill.system.md`）
 - `src/agent/runtime/reflection/worker.ts` — 反思 worker 调度
-- `templates/prompts/reflection.candidate.md` — 反思抽取提示
+- `templates/prompts/crystal.reflection.md` — 反思抽取提示
 
 ## 数据流
 
 ```mermaid
 flowchart LR
     Turn["完成的 turn"] --> RT["ReflectionWorker.dispatch"]
-    RT --> LLM["reflection.candidate.md<br/>抽 symbols / bucket / coordinates"]
+    RT --> LLM["crystal.reflection.md<br/>抽 symbols / bucket / coordinates"]
     LLM --> Cand["ReflectionCandidate[]"]
     Cand --> Apply["MemoryModule.applyReflection"]
     Apply --> Crystal["CrystalMemoryComponent.recordTurn"]
@@ -72,7 +74,7 @@ sequenceDiagram
     participant LLM as ModelClient
     participant Mem as MemoryModule
     participant CR as CrystalMemoryComponent
-    RT->>LLM: reflection.candidate.md(turn 摘要)
+    RT->>LLM: crystal.reflection.md(turn 摘要)
     LLM-->>RT: ReflectionCandidate[]（JSON）
     RT->>Mem: applyReflection(candidates)
     Mem->>CR: recordTurn / writeMemoryNode
@@ -96,6 +98,7 @@ sequenceDiagram
 - `dedupeGems`（纯函数）：`symbols IoU >= 0.7` 且 `cosine >= 0.85` → merge 到较新 gem，旧 gem 标 `merged`。
 - 漂移触发条件：`contradictionCount >= 2`。
 - 漂移修复：先写 `gem_snapshot`，再收窄 `scope`；不删除旧版本。
+- `gem-drift` 与 `skill-drift` 是两个协议概念：前者属于 Crystal graph，后者属于外部 Skill 包校验/迁移，不能共用候选类型或写入路径。
 
 ## 配置
 

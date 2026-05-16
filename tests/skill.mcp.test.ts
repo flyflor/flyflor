@@ -23,7 +23,7 @@ import {
     resetSkill,
     selectSkills,
     validateSkill,
-} from "../src/crystal/skills/index.ts";
+} from "../src/skills/index.ts";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { NullEventSink, RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 import {

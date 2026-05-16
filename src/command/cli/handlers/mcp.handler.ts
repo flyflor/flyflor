@@ -2,10 +2,10 @@ import {
     findMcpServer,
     listMcpTools,
     loadMcpServers,
-    type McpServerDefinition,
-} from "../../../agent/mcp/index.ts";
-import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
+    type McpServerDefinition} from "../../../agent/mcp/index.ts";
+import { type FlyFlor } from "../../../app.ts";
 import type { FlyflorPaths } from "../../../config/index.ts";
+import { EventsComponent } from "../../../protocol/events/index.ts";
 
 export interface McpServerListItem {
     name: string;
@@ -43,8 +43,7 @@ export async function fetchMcpServerList(paths: FlyflorPaths): Promise<McpServer
         source: server.source ?? "project",
         command: server.command,
         url: server.url,
-        toolCount: 0,
-    }));
+        toolCount: 0}));
 }
 
 export async function fetchMcpServerDetail(
@@ -58,9 +57,8 @@ export async function fetchMcpServerDetail(
     let tools: McpToolItem[] = [];
     try {
         const toolList = await listMcpTools(paths, server, {
-            events: app.resolve(FlyFlorTokens.Events),
-            timeoutMs: 5000,
-        });
+            events: app.resolve(EventsComponent),
+            timeoutMs: 5000});
         tools = toolList.map((t: { name: string; description?: string }) => ({ name: t.name, description: t.description }));
     } catch {
         // Fallback: no tools available
@@ -75,6 +73,5 @@ export async function fetchMcpServerDetail(
         args: server.args ?? [],
         url: server.url,
         env: server.env ?? {},
-        tools,
-    };
+        tools};
 }

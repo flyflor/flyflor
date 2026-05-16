@@ -29,7 +29,7 @@ export interface CrystalMemoryStore {
     listGems(request: CrystalRecallRequest): Promise<CrystalGem[]>;
     upsertCandidate(candidate: ReflectionCandidate): Promise<void>;
     upsertAtom(atom: ReflectionAtom): Promise<void>;
-    upsertGem(skill: CrystalGem): Promise<void>;
+    upsertGem(gem: CrystalGem): Promise<void>;
 }
 
 export type {

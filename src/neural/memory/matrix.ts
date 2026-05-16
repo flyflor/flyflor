@@ -2,8 +2,6 @@ import type { MemoryMatrixConfig } from "../../config/index.ts";
 import type { GatewayMessage, GatewayReply } from "../../protocol/contracts/index.ts";
 import type { MemoryAction } from "./actions.ts";
 import type { MemoryMatrixResult, MemoryWeights } from "../../components/memory/types.ts";
-import SentimentAnalyzer from "natural/lib/natural/sentiment/SentimentAnalyzer.js";
-import PorterStemmer from "natural/lib/natural/stemmers/porter_stemmer.js";
 import TfIdf from "natural/lib/natural/tfidf/tfidf.js";
 import { WordTokenizer } from "natural/lib/natural/tokenizers/regexp_tokenizer.js";
 
@@ -17,7 +15,6 @@ interface MatrixInput {
 const ROWS = ["affect", "semantic", "residual", "evidence"];
 const COLUMNS = ["stability", "salience", "utility", "risk"];
 const tokenizer = new WordTokenizer();
-const sentiment = new SentimentAnalyzer("English", PorterStemmer, "afinn");
 
 export class MemoryMatrixAggregator {
     public constructor(private readonly config: MemoryMatrixConfig) {}
@@ -33,7 +30,9 @@ export class MemoryMatrixAggregator {
         const contentTokens = tokenize(content, this.config.maxTokens);
         const sourceTokens = tokenize(source, this.config.maxTokens * 2);
         const replyTokens = tokenize(input.reply.text, this.config.maxTokens);
-        const naturalSentiment = this.config.naturalSentiment ? sentimentScore(contentTokens) : 0;
+        // Affect is accepted only from same-turn structured model weights.
+        // No sentiment dictionary or text keyword can influence memory routing.
+        const structuredAffect = clampSigned(weights.emotionalValence);
         const tfidfPeak = tfidfPeakScore(contentTokens, sourceTokens, replyTokens);
         const lexicalNovelty = clamp01(1 - overlapRatio(contentTokens, [...sourceTokens, ...replyTokens]));
         const uncertainty = clamp01(1 - weights.certainty * weights.confidence);
@@ -59,7 +58,7 @@ export class MemoryMatrixAggregator {
                 tfidfPeak * 0.12,
         );
         const recallBoost = clamp01(
-            weights.importance * 0.5 + reusePotential * 0.22 + residualValue * 0.18 + Math.abs(naturalSentiment) * 0.1,
+            weights.importance * 0.5 + reusePotential * 0.22 + residualValue * 0.18 + Math.abs(structuredAffect) * 0.1,
         );
         const reflectionPriority = clamp01(
             residualValue * 0.42 + contradictionRisk * 0.24 + uncertainty * 0.2 + decayRisk * 0.14,
@@ -69,7 +68,7 @@ export class MemoryMatrixAggregator {
                 clamp01((weights.emotionalValence + 1) / 2),
                 weights.arousal,
                 weights.dominance,
-                Math.abs(naturalSentiment),
+                Math.abs(structuredAffect),
             ],
             [weights.durability, weights.relevance, weights.actionability, weights.certainty],
             [lexicalNovelty, uncertainty, reusePotential, contradictionRisk],
@@ -89,7 +88,7 @@ export class MemoryMatrixAggregator {
             columns: COLUMNS,
             matrix,
             natural: {
-                sentiment: naturalSentiment,
+                sentiment: structuredAffect,
                 tfidfPeak,
                 tokenCount: contentTokens.length,
                 uniqueTokenRatio: uniqueRatio(contentTokens),
@@ -182,14 +181,6 @@ function cjkBigrams(text: string): string[] {
         tokens.push(`${chars[index]}${chars[index + 1]}`);
     }
     return tokens;
-}
-
-function sentimentScore(tokens: string[]): number {
-    const latinTokens = tokens.filter((token) => /[a-z]/u.test(token));
-    if (latinTokens.length === 0) {
-        return 0;
-    }
-    return clampSigned(sentiment.getSentiment(latinTokens) / 5);
 }
 
 function tfidfPeakScore(contentTokens: string[], sourceTokens: string[], replyTokens: string[]): number {

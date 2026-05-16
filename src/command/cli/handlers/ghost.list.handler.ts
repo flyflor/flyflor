@@ -1,12 +1,12 @@
 import { join } from "node:path";
 import { stat } from "node:fs/promises";
-import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
+import { type FlyFlor } from "../../../app.ts";
 import { BrainStore } from "../../../components/memory/brain.store.ts";
+import { ConfigComponent } from "../../../config/index.ts";
 import {
     MemoryEventStatus,
     type GhostContextEventContent,
-    type MemoryEventRecord,
-} from "../../../protocol/contracts/index.ts";
+    type MemoryEventRecord} from "../../../protocol/contracts/index.ts";
 
 export interface GhostListItem {
     id: string;
@@ -35,7 +35,7 @@ export interface GhostListData {
 }
 
 export async function fetchGhostList(app: FlyFlor, userId: string, limit = 60): Promise<GhostListData> {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     const brainPath = join(config.paths.home, "brain.db");
     try {
         await stat(brainPath);
@@ -63,8 +63,7 @@ function toItem(row: MemoryEventRecord): GhostListItem {
         ...(content.userFacing?.contextHint ? { contextHint: content.userFacing.contextHint } : {}),
         ts: row.ts,
         codenameId: row.codenameId ?? null,
-        status: MemoryEventStatus.Live,
-    };
+        status: MemoryEventStatus.Live};
 }
 
 function groupByCodename(items: GhostListItem[]): GhostGroup[] {
@@ -76,8 +75,7 @@ function groupByCodename(items: GhostListItem[]): GhostGroup[] {
             group = {
                 codenameId: item.codenameId ?? null,
                 label: item.codenameId ?? "(no codename)",
-                items: [],
-            };
+                items: []};
             buckets.set(key, group);
         }
         group.items.push(item);

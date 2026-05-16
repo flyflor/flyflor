@@ -167,6 +167,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
 | `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
 | `src/neural`      | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩 |
+| `src/context`     | 显式 project / fork / capability scope 装配；与 neural 平级，不承载 session |
 | `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
 | `templates`       | 提示词和记忆 Markdown 模板                                     |
 
@@ -194,7 +195,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | 层               | 后端      | 职责                                                             |
 | ---------------- | --------- | ---------------------------------------------------------------- |
 | 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
-| 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
+| 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；projects / TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
 | 工作记忆         | `MemoryComponent`：Local WAL/snapshot | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
 | 长期记忆图       | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系 |
 | 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
@@ -207,7 +208,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 ### Gem（晶体智力固化产物）升格流程
 
-候选来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升、黑板收敛 / MCP 增强证据、skill promotion 与 brain 事件状态。
+候选来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升、黑板收敛 / MCP 增强证据与 brain 事件状态；外部 Skill promotion 只作为能力包物化证据，不再和 Gem 本体混名。
 
 **双质量门：**
 - 门 1：episode cluster sourceKind weight gate
@@ -271,6 +272,11 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 ```bash
 flyflor                      # 启动 chat TUI（TTY 环境）
 flyflor chat                 # 对话模式
+# Chat TUI 内置 slash commands：
+# /project [path]  创建 / 使用项目作用域
+# /projects        从 brain.db 项目列表选择并激活
+# /fork            从历史 turn 摘要 fork 上下文
+# /forks           选择已保存的 ContextFork
 flyflor tui                  # 仪表板 TUI
 flyflor setup                # 初始化向导
 flyflor status               # 运行状态
@@ -301,10 +307,12 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 
 ### DI 与命名
 
-- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Worker`、`@Channel`、`@Plugin`
-- 边界模块用 core 继承表达：`class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`；`kind/layer/name/provider` 默认由基类和类名推断
+- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Event`、`@Worker`、`@Channel`、`@Plugin`
+- 边界模块用 `FlyflorComponent` 继承链表达：`class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class ContextScopeComponent extends ContextComponent`；`kind/layer/name/provider` 默认由基类和类名推断
 - `@Module` / `@Component` 复用 `Provide` 注入元数据；默认单例，需要每次重新 `new` 时显式使用 `ProviderScope.Factory`
-- DI token 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
+- DI key 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；`*.component.ts` 必须是有边界职责的真实组件，不能只是空壳 token；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
+- OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
+- `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
 - 实现文件使用点分后缀：`*.module.ts`、`*.component.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
@@ -321,6 +329,7 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 
 - 只使用 Bun 命令管理依赖，不要求安装 Node.js
 - 配置走 `~/.flyflor/config.jsonc`（Docker dev：`./docker/config/config.jsonc`），兼容 JSONC
+- 本地 TUI / app slash commands 走 `~/.flyflor/commands.jsonc`，由 `match.slash` + `run.type` / `run.action` 规则驱动；不要混入模型、凭据和网关配置
 - 业务配置不走环境变量；凭据、沙箱策略走 config/secrets provider
 - 新增运行时依赖前确认兼容 `bun build --compile`（无 native addon、无 postinstall、无动态 require）
 - 不把密钥、日志、会话数据库、用户数据编译进二进制
@@ -441,7 +450,7 @@ Every template must guarantee:
 ## Prompt-facing Enums
 
 - `MemoryActionTarget`: `memory` / `self` / `soul` / `user`
-- `MemoryKind`: `candidate` / `conversation-turn` / `fact` / `history` / `profile` / `rule` / `skill` / `summary`
+- `MemoryKind`: `candidate` / `conversation-turn` / `fact` / `gem` / `history` / `profile` / `rule` / `skill` / `summary`
 - `MarkdownMemoryFile`: `MEMORY.md` / `SELF.md` / `SOUL.md` / `USER.md`
 - `AskReason`: `codename-ambiguity` / `codename-create` / `user-intent-unclear` / `blackboard-stalemate` / `policy-decision` / `other`
 - `GhostContextReason`: `ask` / `tool-failure` / `blackboard-cap` / `process-restart`

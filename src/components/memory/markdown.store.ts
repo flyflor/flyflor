@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths, MarkdownMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../core.ts";
+import { MemoryComponent } from "../base.component.ts";
 import { MarkdownMemoryFile, MemoryLayer } from "../../protocol/contracts/index.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchResult } from "./types.ts";
 
@@ -25,7 +25,7 @@ export interface MarkdownMemorySnapshot {
     results: MemorySearchResult[];
 }
 
-@Component({ name: "markdown-memory-store", tags: ["database", "memory"] })
+@Component()
 export class MarkdownMemoryStore extends MemoryComponent {
     public constructor(
         private readonly paths: FlyflorPaths,

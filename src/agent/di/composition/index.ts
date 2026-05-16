@@ -12,6 +12,13 @@ export {
 } from "./component.metadata.ts";
 export { readInjectionMetadata, registerInjectionMetadata, type InjectionMetadata } from "./injection.metadata.ts";
 export {
+    readEventMetadata,
+    registerEventMetadata,
+    type EventHandler,
+    type EventHandlerMetadata,
+    type EventHandlerSelector,
+} from "./event.metadata.ts";
+export {
     assertModuleMetadata,
     readModuleMetadata,
     registerModuleMetadata,

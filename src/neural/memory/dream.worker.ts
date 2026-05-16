@@ -4,7 +4,7 @@
  * 与 ConsolidationWorker 严格不重叠：
  *  - Consolidation 在 MemoryComponent→CrystalComponent 升格通道，处理"哪些 episode 应该被晶体化"；
  *  - Dream 完全运行在 CrystalComponent 长期层上，做三件事：
- *    1. drift-repair：修复已晶体化但产生漂移的 skill（scope 错位 / 长期未验证 / 矛盾累积）；
+ *    1. drift-repair：修复已晶体化但产生漂移的 Gem（scope 错位 / 长期未验证 / 矛盾累积）；
  *    2. recall-reinforce：把近期 recallCount 极端值反映到 importance（热门拉高、冷门降级）；
  *    3. contradiction-audit：ANN 邻居中疑似冲突的二元对，让 LLM 决断弱侧并降权。
  *
@@ -13,8 +13,8 @@
  *
  * 红线（与 docs/BOUNDARIES.md 对齐）：
  *  - 零业务字符串匹配；
- *  - 任何 skill 写入必须先 writeGemSnapshot；
- *  - protected = true 的 skill 不参与 dream（候选层就过滤掉）；
+ *  - 任何 Gem 写入必须先 writeGemSnapshot；
+ *  - protected = true 的 Gem 不参与 dream（候选层就过滤掉）；
  *  - 失败只发事件不抛错；
  *  - 无 native 依赖，bun --compile 安全。
  */
@@ -145,7 +145,7 @@ export class DreamWorkerImpl implements DreamWorker {
         if (decision.action === DreamActionKind.Skip) return "skip";
 
         if (decision.action === DreamActionKind.DriftRepair) {
-            if (candidate.kind !== DreamCandidateKind.SkillDrift) return "skip";
+            if (candidate.kind !== DreamCandidateKind.GemDrift) return "skip";
             // 红线：写入前必须先快照。
             const snapId = await this.graph.writeGemSnapshot(
                 {
@@ -303,10 +303,10 @@ function zeroResult(): DreamRunResult {
 export function renderCandidatesBlock(candidates: DreamCandidate[]): string {
     return candidates
         .map((c) => {
-            if (c.kind === DreamCandidateKind.SkillDrift) {
+            if (c.kind === DreamCandidateKind.GemDrift) {
                 return [
                     `- candidateId: ${c.candidateId}`,
-                    `  kind: skill-drift`,
+                    `  kind: method-drift`,
                     `  gemId: ${c.gemId}`,
                     `  symbols: ${JSON.stringify(c.symbols)}`,
                     `  signals: ${JSON.stringify(c.signals)}`,

@@ -1,4 +1,4 @@
-import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
+import { BlackboardModule, type FlyFlor } from "../../../app.ts";
 
 export interface BlackboardTurnItem {
     id: string;
@@ -27,7 +27,7 @@ export interface BlackboardTurnDetail {
 }
 
 export async function fetchBlackboardTurnList(app: FlyFlor, limit: number): Promise<BlackboardTurnItem[]> {
-    const blackboard = app.resolve(FlyFlorTokens.Blackboard);
+    const blackboard = app.resolve(BlackboardModule);
     const turns = await blackboard.listRecentTurns(limit);
     return turns.map((turn) => ({
         id: turn.id,
@@ -41,7 +41,7 @@ export async function fetchBlackboardTurnList(app: FlyFlor, limit: number): Prom
 }
 
 export async function fetchBlackboardTurnDetail(app: FlyFlor, turnId: string): Promise<BlackboardTurnDetail | undefined> {
-    const blackboard = app.resolve(FlyFlorTokens.Blackboard);
+    const blackboard = app.resolve(BlackboardModule);
     const turn = await blackboard.getTurn(turnId);
     if (!turn) return undefined;
     return {

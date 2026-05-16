@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import type { LocalCrystalMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { CrystalComponent } from "../core.ts";
+import { CrystalComponent } from "../base.component.ts";
 import type {
     CrystalRecallRequest,
     CrystalGem,
@@ -36,7 +36,7 @@ interface CrystalGemRow {
     searchable_text: string;
 }
 
-@Component({ name: "local-crystal-memory-store", tags: ["database", "crystal", "local"] })
+@Component()
 export class LocalCrystalMemoryStore extends CrystalComponent implements CrystalMemoryStore {
     private database?: Database;
     private readonly index: FlatBruteForceVectorIndex;

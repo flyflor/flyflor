@@ -2,8 +2,6 @@ import type { GatewayConfig } from "../../config/index.ts";
 import type { RuntimeModule } from "../runtime/index.ts";
 import {
     ChannelLinkState,
-    ComponentKind,
-    ArchitectureLayer,
     type ChannelName,
     type GatewayMessage,
     type GatewayReply,
@@ -16,7 +14,7 @@ import { buildGatewayStatusSnapshot, type ChannelRuntimeState } from "./channels
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./channels/types.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.ts";
 
-@Module({ name: "gateway", tags: ["flyflor", "boundary"] })
+@Module()
 export class GatewayModule extends Gateway {
     protected readonly channelRuntime = new Map<ChannelName, ChannelRuntimeState>();
     protected running = false;

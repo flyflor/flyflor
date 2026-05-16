@@ -1,5 +1,5 @@
-import { FlyFlorTokens, type FlyFlor } from "../../../app.ts";
-import type { FlyflorConfig } from "../../../config/index.ts";
+import { type FlyFlor } from "../../../app.ts";
+import { ConfigComponent, type FlyflorConfig } from "../../../config/index.ts";
 import { describeModelApiKey } from "../status.ts";
 
 export interface ConfigData {
@@ -53,15 +53,14 @@ export interface PathConfigView {
 }
 
 export function fetchConfigData(app: FlyFlor, configPath: string): ConfigData {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     return {
         configPath,
         model: extractModel(config),
         gateway: extractGateway(config),
         memory: extractMemory(config),
         sandbox: extractSandbox(config),
-        paths: extractPaths(config),
-    };
+        paths: extractPaths(config)};
 }
 
 function extractModel(config: FlyflorConfig): ModelConfigView {
@@ -71,8 +70,7 @@ function extractModel(config: FlyflorConfig): ModelConfigView {
         apiMode: config.model.apiMode,
         providerKind: config.model.provider,
         baseUrl: config.model.baseUrl || undefined,
-        apiKeyConfigured: describeModelApiKey(config.model.apiKey).configured,
-    };
+        apiKeyConfigured: describeModelApiKey(config.model.apiKey).configured};
 }
 
 function extractGateway(config: FlyflorConfig): GatewayConfigView {
@@ -82,8 +80,7 @@ function extractGateway(config: FlyflorConfig): GatewayConfigView {
         port: config.gateway.port,
         stdio: config.gateway.stdio,
         allowedChannels: config.gateway.allowedChannels,
-        channelCount: channelKeys.length,
-    };
+        channelCount: channelKeys.length};
 }
 
 function extractMemory(config: FlyflorConfig): MemoryConfigView {
@@ -93,8 +90,7 @@ function extractMemory(config: FlyflorConfig): MemoryConfigView {
         crystalBackend: config.memory.crystal.backend,
         sqliteEnabled: config.memory.sqlite.enabled,
         embeddingDimensions: config.memory.embedding.dimensions,
-        crystalDbFile: config.memory.crystal.local.dbFile ?? "",
-    };
+        crystalDbFile: config.memory.crystal.local.dbFile ?? ""};
 }
 
 function extractSandbox(config: FlyflorConfig): SandboxConfigView {
@@ -102,8 +98,7 @@ function extractSandbox(config: FlyflorConfig): SandboxConfigView {
         mode: config.sandbox.mode,
         mcpToolApproval: config.sandbox.mcpToolApproval ?? "deny",
         shellHookApproval: config.sandbox.shellHookApproval ?? "deny",
-        pluginApproval: config.sandbox.pluginApproval ?? "deny",
-    };
+        pluginApproval: config.sandbox.pluginApproval ?? "deny"};
 }
 
 function extractPaths(config: FlyflorConfig): PathConfigView {
@@ -112,6 +107,5 @@ function extractPaths(config: FlyflorConfig): PathConfigView {
         workspace: config.paths.workspaceDir,
         projectDir: config.paths.projectDir,
         storageDir: config.paths.storageDir,
-        logDir: config.paths.logDir,
-    };
+        logDir: config.paths.logDir};
 }

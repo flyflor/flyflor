@@ -9,7 +9,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 ## 相关代码路径
 
 - `src/components/memory/markdown.store.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
-- `src/components/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/eq/task_plans/context_forks/scene_records）
+- `src/components/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/components/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
@@ -19,6 +19,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/decay.ts` — 双轨衰减
 - `src/neural/memory/anti.bloat.ts` — 容量阀门
 - `src/components/memory/project.memory.store.ts` — 项目局部记忆
+- `src/components/memory/context.fork.store.ts` — fork 低频 replay sidecar；`brain.db` 只保留摘要索引
 - `src/neural/memory/background.scheduler.ts` — consolidation / hot compression / summary / decay / dream / dormant 节拍
 - `src/neural/memory/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
@@ -76,6 +77,7 @@ flowchart LR
 | `memory_summary` | day / week / rolling summary；`embedding_id` 指向长期图 `summary_embedding` 节点 |
 | `memory_links` | contradicts / causal / derived / supersedes 等证据关系 |
 | `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
+| `projects` | `/project` 显式创建 / 使用的项目注册表；存 projectDir、projectMemoryDir、useCount，不承担 session 连续性 |
 | `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示 |
 | `task_plans` | 模型同轮输出的 TODO / 计划摘要；TUI 侧栏展示进度，不存原始推理 |
 | `context_forks` | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算 |
@@ -83,7 +85,9 @@ flowchart LR
 
 当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。Feedback 分类器归属 `src/neural/memory/feedback.interpreter.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
-TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，保持无 session 设计。
+TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
+
+ContextFork 的低频 replay 详情落 `~/.flyflor/storage/forks/<forkId>/manifest.json` / `replay.jsonl`。`brain.db.context_forks` 仍是权威摘要与列表索引；sidecar 只服务 TUI 深度回放和未来清理策略，可按 `memory.tuning.contextFork.sidecarTtlDays`（默认 90 天，0 关闭）删除而不影响摘要审计。
 
 chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/neural/memory/history.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
 
@@ -246,13 +250,15 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 ## 项目局部记忆
 
-显式 project intent 触发后，候选写入 `project/.flyflor/memory/`：
+显式 project intent 或 TUI `/project` 激活后，候选写入当前 project 的 `.flyflor/memory/`：
 
 - `project.memory.md` — 人可读
 - `episodes.jsonl` / `candidates.jsonl` / `events.jsonl` / `recalls.jsonl` — 闭环证据链
 - `manifest.json` — provenance
 
 每条写入必须能反查模型 action、trigger 评分、目标文件、写入状态、召回回执和 Crystal provenance（projectId、project dir、memory path、memory layer）。
+
+`/project [path]` 会创建 / 复用目标路径的项目骨架、`.flyflor/memory`、`.flyflor/skills`、`.flyflor/mcp`、`.flyflor/plugins`，并把项目注册到 `brain.db.projects`。后续 turn 是否使用该项目只看 `RuntimeContext.activeProject`，不从 cwd、chatId 或文本推断。
 
 ## Inbox 容器与 codename 命名空间（P2）
 
@@ -296,13 +302,14 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 - `config.memory.candidates.maxCandidatesPerTurn` — 每轮候选上限
 - `config.memory.candidates.autoPromoteExplicit` — 显式 action 直接 promote
 - `config.memory.retrieval.maxResults` / `maxPromptChars` — 上下文预算
-- `config.memory.matrix` — Memory Matrix 权重
+- `config.memory.matrix` — Memory Matrix 权重；affect 只消费模型结构化 `emotionalValence/arousal/dominance`，不得启用情感词典或文本关键词推断
 - `config.memory.tuning.brainDb.archiveAfterMonths` — 归档 cutoff 月数，默认 3
 - `config.memory.tuning.brainDb.archiveIntervalHours` — runtime 自动归档检查间隔，默认 24；0 表示关闭
 - `config.memory.tuning.brainDb.vacuumIntervalDays` — 自动 VACUUM 最小间隔，默认 14；0 表示关闭自动 VACUUM
 - `config.memory.tuning.hotMemoryCompression.enabled` — 是否启用热记忆压缩审计，默认 true
 - `config.memory.tuning.hotMemoryCompression.intervalMinutes` — 自动检查间隔，默认 30；0 表示关闭
 - `config.memory.tuning.hotMemoryCompression.batchSize` — 单用户单轮压缩上限，默认 16
+- `config.memory.tuning.contextFork.sidecarTtlDays` — fork 冷详情 sidecar TTL，默认 90；0 表示关闭自动清理
 
 ## 运行边界 / 后续增强
 

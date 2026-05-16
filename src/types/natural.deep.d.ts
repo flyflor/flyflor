@@ -1,17 +1,3 @@
-declare module "natural/lib/natural/sentiment/SentimentAnalyzer.js" {
-    export default class SentimentAnalyzer {
-        constructor(language: string, stemmer: { stem(value: string): string } | undefined, type: string);
-        getSentiment(words: string[]): number;
-    }
-}
-
-declare module "natural/lib/natural/stemmers/porter_stemmer.js" {
-    const stemmer: {
-        stem(value: string): string;
-    };
-    export default stemmer;
-}
-
 declare module "natural/lib/natural/tfidf/tfidf.js" {
     interface TfIdfTerm {
         term: string;

@@ -4,9 +4,9 @@
  * 三类候选来自晶体图 Component 的资源指标（counter / age / cosine / recallCount），
  * 不读 text、不做关键词匹配；语义判定全部由 LLM 在结构化 prompt 中产出。
  *
- * - drift candidate: skill 上的稳定度信号（contradictionCount / lastVerifiedAt / confidence）触发
+ * - drift candidate: Gem 上的稳定度信号（contradictionCount / lastVerifiedAt / confidence）触发
  *   修复审计；
- * - recall candidate: memory_node / skill 在近 N 天 recallCount 的两极（top + bottom）；
+ * - recall candidate: memory_node / Gem 在近 N 天 recallCount 的两极（top + bottom）；
  * - contradiction candidate: 高 importance memory_node 的 ANN 邻居二元对（cosine 高但是 importance
  *   差距大，疑似冲突），交给 LLM 决断是否矛盾。
  *
@@ -16,7 +16,7 @@
 import type { MemoryNodeRecord, GemRecord, MemoryGraphStore } from "../../components/memory/graph.store.ts";
 
 export const DREAM_THRESHOLDS = {
-    /** drift: skill 上 contradictionCount 达到此值即列入修复审计候选。 */
+    /** drift: Gem 上 contradictionCount 达到此值即列入修复审计候选。 */
     minContradictionCount: 2,
     /** drift: lastVerifiedAt 距今超过此值即列入候选（毫秒）。 */
     maxStaleMs: 30 * 24 * 60 * 60 * 1000,
@@ -37,7 +37,11 @@ export const DREAM_THRESHOLDS = {
 } as const;
 
 export const DreamCandidateKind = {
-    SkillDrift: "skill-drift",
+    /**
+     * Crystal graph Gem drift. Do not reuse external `skill-drift` here:
+     * Skill drift belongs to SKILL.md package maintenance, not memory graph repair.
+     */
+    GemDrift: "gem-drift",
     Recall: "recall",
     ContradictionPair: "contradiction-pair",
 } as const;
@@ -55,7 +59,7 @@ export interface DreamSignals {
 
 export interface DreamGemDriftCandidate {
     candidateId: string;
-    kind: typeof DreamCandidateKind.SkillDrift;
+    kind: typeof DreamCandidateKind.GemDrift;
     gemId: string;
     summary: string;
     symbols: string[];
@@ -113,7 +117,7 @@ export async function collectDreamCandidates(
     for (const s of driftGems) {
         out.push({
             candidateId: `drift:${s.id}`,
-            kind: DreamCandidateKind.SkillDrift,
+            kind: DreamCandidateKind.GemDrift,
             gemId: s.id,
             summary: s.summary,
             symbols: s.symbols ?? [],

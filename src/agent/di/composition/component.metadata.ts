@@ -5,12 +5,13 @@ import {
     type ComponentKind as ComponentKindType,
     type ArchitectureLayer as ArchitectureLayerType,
     type ProviderScope as ProviderScopeType,
-} from "../../../protocol/contracts/index.ts";
+} from "../../../protocol/contracts/enums.ts";
 import {
     Blackboard,
     BrainComponent,
-    CoreComponent,
+    ContextComponent,
     CrystalComponent,
+    FlyflorComponent,
     Gateway,
     GraphComponent,
     Memory,
@@ -20,7 +21,7 @@ import {
     Sandbox,
     SQLiteComponent,
     SurrealComponent,
-} from "../../../components/core.ts";
+} from "../../../components/base.component.ts";
 
 export interface ComponentCompatibility {
     protocol?: string;
@@ -113,6 +114,7 @@ function inferComponentKind(target: Function): ComponentKindType {
     if (prototype instanceof Gateway) return ComponentKind.Gateway;
     if (prototype instanceof Blackboard) return ComponentKind.Blackboard;
     if (prototype instanceof Runtime) return ComponentKind.Runtime;
+    if (prototype instanceof ContextComponent) return ComponentKind.Context;
     if (
         prototype instanceof Memory ||
         prototype instanceof MemoryComponent ||
@@ -124,7 +126,7 @@ function inferComponentKind(target: Function): ComponentKindType {
     }
     if (prototype instanceof Sandbox) return ComponentKind.Sandbox;
     if (prototype instanceof CrystalComponent) return ComponentKind.Crystal;
-    if (prototype instanceof CoreComponent) return ComponentKind.Component;
+    if (prototype instanceof FlyflorComponent) return ComponentKind.Component;
     return ComponentKind.Component;
 }
 
@@ -134,6 +136,7 @@ function inferComponentLayer(target: Function): ArchitectureLayerType {
     if (
         prototype instanceof Gateway ||
         prototype instanceof Blackboard ||
+        prototype instanceof ContextComponent ||
         prototype instanceof Memory ||
         prototype instanceof MemoryComponent ||
         prototype instanceof BrainComponent ||

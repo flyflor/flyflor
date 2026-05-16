@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { BrainComponent } from "../core.ts";
+import { BrainComponent } from "../base.component.ts";
 import {
     type AtomScore,
     type MemoryAtom,
@@ -16,6 +16,7 @@ import {
     type MemoryLinkType,
     type MemoryStateRecord,
     type MemorySummaryRecord,
+    type ProjectRecord,
     type ContextForkRecord,
     type SceneRecord,
     type TaskPlanRecord,
@@ -136,6 +137,19 @@ interface CodenameRow {
     project_id: string | null;
 }
 
+interface ProjectRow {
+    id: string;
+    user_id: string;
+    title: string;
+    goal: string | null;
+    project_dir: string;
+    project_memory_dir: string;
+    created_at: number;
+    updated_at: number;
+    last_used_at: number;
+    use_count: number;
+}
+
 interface EqStateRow {
     user_id: string;
     valence: number;
@@ -213,7 +227,7 @@ export interface BrainPromptAtomWrite {
     score: AtomScore;
 }
 
-@Component({ name: "brain-store", tags: ["database", "memory", "brain"] })
+@Component()
 export class BrainStore extends BrainComponent {
     private db: Database | null = null;
     private opened = false;
@@ -766,6 +780,63 @@ export class BrainStore extends BrainComponent {
     }
 
     /**
+     * Project registry for explicit `/project` scope selection.
+     * This table stores only structured paths and counters; runtime context must
+     * still pass the active project every turn, so it does not become a session.
+     */
+    public upsertProject(record: ProjectRecord): ProjectRecord {
+        const db = this.requireDb();
+        db.query(
+            `INSERT INTO projects (
+                id, user_id, title, goal, project_dir, project_memory_dir,
+                created_at, updated_at, last_used_at, use_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                goal = excluded.goal,
+                project_dir = excluded.project_dir,
+                project_memory_dir = excluded.project_memory_dir,
+                updated_at = excluded.updated_at,
+                last_used_at = excluded.last_used_at,
+                use_count = excluded.use_count`,
+        ).run(
+            record.id,
+            record.userId,
+            record.title,
+            record.goal ?? null,
+            record.projectDir,
+            record.projectMemoryDir,
+            record.createdAt,
+            record.updatedAt,
+            record.lastUsedAt,
+            record.useCount,
+        );
+        return record;
+    }
+
+    public getProject(id: string): ProjectRecord | null {
+        const db = this.requireDb();
+        const row = db.query("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | null;
+        return row ? rowToProject(row) : null;
+    }
+
+    public listProjects(input: { userId?: string; limit?: number } = {}): ProjectRecord[] {
+        const db = this.requireDb();
+        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
+        const conditions: string[] = [];
+        const values: Array<string | number> = [];
+        if (input.userId !== undefined) {
+            conditions.push("user_id = ?");
+            values.push(input.userId);
+        }
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+        const rows = db
+            .query(`SELECT * FROM projects ${where} ORDER BY last_used_at DESC LIMIT ?`)
+            .all(...values, limit) as ProjectRow[];
+        return rows.map(rowToProject);
+    }
+
+    /**
      * P2 inbox 收口：取用户最近被 touch 过且仍未升格（projectId IS NULL）的 codename，
      * 用于召回侧偏变（让 inbox 召回向"用户当前正在用的那个 codename"倾斜）。
      * 零字符匹配——只看 last_used_at >= sinceTs 资源指标 + project_id IS NULL 结构化字段。
@@ -1087,6 +1158,20 @@ function createSchema(db: Database): void {
         );
         CREATE INDEX IF NOT EXISTS idx_codename_user_used ON codenames(user_id, last_used_at DESC);
 
+        CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            goal TEXT,
+            project_dir TEXT NOT NULL,
+            project_memory_dir TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL,
+            use_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_projects_user_used ON projects(user_id, last_used_at DESC);
+
         CREATE TABLE IF NOT EXISTS memory_eq_state (
             user_id     TEXT PRIMARY KEY,
             valence     REAL NOT NULL,
@@ -1342,6 +1427,21 @@ function rowToCodename(row: CodenameRow): CodenameRecord {
         lastUsedAt: row.last_used_at,
         useCount: row.use_count,
         projectId: row.project_id ?? undefined,
+    };
+}
+
+function rowToProject(row: ProjectRow): ProjectRecord {
+    return {
+        id: row.id,
+        userId: row.user_id,
+        title: row.title,
+        goal: row.goal ?? undefined,
+        projectDir: row.project_dir,
+        projectMemoryDir: row.project_memory_dir,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        lastUsedAt: row.last_used_at,
+        useCount: row.use_count,
     };
 }
 

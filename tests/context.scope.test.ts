@@ -1,0 +1,90 @@
+import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
+import { ContextComponent } from "../src/components/index.ts";
+import { useContextScope } from "../src/context/index.ts";
+import type { FlyflorPaths } from "../src/config/index.ts";
+import { Channel, ChatType, type GatewayMessage, type RuntimeContext } from "../src/protocol/contracts/index.ts";
+
+describe("ContextScopeComponent", () => {
+    test("is part of the explicit component inheritance tree", () => {
+        const scope = useContextScope(paths("/tmp/flyflor"));
+
+        // Context is a first-class boundary beside neural, not a loose helper
+        // bucket for project/fork state.
+        expect(scope).toBeInstanceOf(ContextComponent);
+    });
+
+    test("maps explicit activeProject to project-local component paths", () => {
+        const scope = useContextScope(paths("/tmp/flyflor"));
+        const projectDir = "/tmp/flyflor/workspace/demo";
+        const mapped = scope.projectStorePaths({
+            id: "project-demo",
+            projectDir,
+            projectMemoryDir: join(projectDir, ".flyflor", "memory"),
+        });
+
+        expect(mapped.projectDir).toBe(projectDir);
+        expect(mapped.projectMemoryDir).toBe(join(projectDir, ".flyflor", "memory"));
+        expect(mapped.projectSkillDir).toBe(join(projectDir, ".flyflor", "skills"));
+        expect(mapped.projectMcpDir).toBe(join(projectDir, ".flyflor", "mcp"));
+        expect(mapped.projectPluginDir).toBe(join(projectDir, ".flyflor", "plugins"));
+    });
+
+    test("derives project constraint from explicit structure, not text", () => {
+        const scope = useContextScope(paths("/tmp/flyflor"));
+        const message = gatewayMessage("whatever text");
+        const context: RuntimeContext = {
+            requestId: "req-1",
+            now: "2026-05-17T00:00:00.000Z",
+            activeProject: {
+                id: "project-active",
+                projectDir: "/tmp/active",
+                projectMemoryDir: "/tmp/active/.flyflor/memory",
+            },
+        };
+
+        expect(
+            scope.projectConstraintId({
+                codenameId: "code-1",
+                context,
+                fallbackProjectId: "project-fallback",
+                inboxProjectId: "inbox",
+                message,
+                projectIntent: true,
+            }),
+        ).toBe("project-active");
+    });
+});
+
+function gatewayMessage(text: string): GatewayMessage {
+    return {
+        id: "msg-1",
+        receivedAt: "2026-05-17T00:00:00.000Z",
+        route: { channel: Channel.Stdio, chatId: "chat", chatType: ChatType.Direct },
+        text,
+        user: { id: "u1" },
+    };
+}
+
+function paths(root: string): FlyflorPaths {
+    return {
+        home: root,
+        configDir: root,
+        storageDir: join(root, "storage"),
+        cacheDir: join(root, "cache"),
+        projectDir: join(root, "project"),
+        projectFlyflorDir: join(root, "project", ".flyflor"),
+        projectSkillDir: join(root, "project", ".flyflor", "skills"),
+        projectMcpDir: join(root, "project", ".flyflor", "mcp"),
+        projectPluginDir: join(root, "project", ".flyflor", "plugins"),
+        projectMemoryDir: join(root, "project", ".flyflor", "memory"),
+        workspaceDir: join(root, "workspace"),
+        logDir: join(root, "logs"),
+        memoryDir: join(root, "memory"),
+        pluginDir: join(root, "plugins"),
+        promptDir: join(root, "prompts"),
+        skillDir: join(root, "skills"),
+        templateDir: join(root, "templates"),
+        mcpDir: join(root, "mcp"),
+    };
+}

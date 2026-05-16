@@ -31,7 +31,7 @@ describe("Crystal memory boundaries", () => {
         expect(crystallized?.gem.method).toContain("missing facts");
     });
 
-    test("recalls crystallized skills through generated symbols and evidence score", async () => {
+    test("recalls crystallized gems through generated symbols and evidence score", async () => {
         const store = new InMemoryCrystalMemoryStore();
         const controller = new CrystalMemoryComponent(crystalConfig(), store);
 
@@ -54,7 +54,7 @@ describe("Crystal memory boundaries", () => {
         });
 
         expect(results.length).toBeGreaterThan(0);
-        expect(results[0]?.record.kind).toBe(MemoryKind.Skill);
+        expect(results[0]?.record.kind).toBe(MemoryKind.Gem);
         expect(results[0]?.record.content).toContain("blocker");
     });
 
@@ -71,7 +71,7 @@ describe("Crystal memory boundaries", () => {
             }),
         );
         if (!first) {
-            throw new Error("expected crystallized skill");
+            throw new Error("expected crystallized gem");
         }
 
         const results = recallCrystalGems(
@@ -116,7 +116,7 @@ describe("Crystal memory boundaries", () => {
         expect(store.gems.size).toBe(1);
     });
 
-    test("garbage reflection candidates are stored as candidates without becoming skills", async () => {
+    test("garbage reflection candidates are stored as candidates without becoming gems", async () => {
         const store = new InMemoryCrystalMemoryStore();
         const controller = new CrystalMemoryComponent(crystalConfig(), store);
 

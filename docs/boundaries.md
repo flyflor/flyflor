@@ -20,8 +20,9 @@ src/command/      CLI / TUI / 命令注册 / 终端渲染
 src/agent/        runtime / gateway / blackboard / sandbox / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
 src/llm/          模型 provider
-src/crystal/      reflection / Gem / skill
+src/crystal/      reflection / Gem / drift
 src/neural/       海马体记忆
+src/context/      显式 project / fork / capability scope 装配
 src/protocol/     枚举 / 事件 / contract / 信封
 src/config/       JSONC 配置 + 默认值 + 路径
 templates/        提示词与记忆 Markdown 模板
@@ -67,17 +68,18 @@ flowchart LR
 
 ## 4. Decorator 白名单
 
-只保留：`@Module` / `@Provide` / `@Inject` / `@Component` / `@Worker` / `@Channel` / `@Plugin`。
+只保留：`@Module` / `@Provide` / `@Inject` / `@Component` / `@Event` / `@Worker` / `@Channel` / `@Plugin`。
 
 - `@Provide` 是注入底座；`@Module` / `@Component` 必须复用 `Provide` 的 metadata 注册路径，禁止各自维护第二套注入协议。
-- Gateway / Blackboard / Memory / Runtime / Sandbox / Crystal 等边界必须优先用 core 基类表达：`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。
+- Gateway / Blackboard / Memory / Runtime / Sandbox / Context / Crystal 等边界必须优先用 `FlyflorComponent` 继承链表达：`class MemoryModule extends Memory`、`class ContextScopeComponent extends ContextComponent`、`class CrystalMemoryComponent extends CrystalComponent`。
 - 本地状态与 IO 存储属于 Component：`BrainStore`、`SQLiteGraphStore`、`SQLiteMemoryStore`、Markdown/project memory store 等必须继承 `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `MemoryComponent`，避免回退成额外中间层或散落工具类。
-- Redis / SurrealDB 作为原型定位继续保留 `RedisComponent` / `SurrealComponent` core 基类；默认运行时不启用外部 Redis / SurrealDB backend，未来恢复外部存储时必须通过这两个 Component 边界接入。
-- `kind` / `layer` / `name` / `provider` 默认由 core 基类与类名推断；只有偏离默认值（例如非默认 token、factory scope、channel 特例）时才显式写。
-- `@Component` 默认是可注入单例组件；需要每次 `resolve` 重新构造时必须显式写 `provider: { scope: ProviderScope.Factory }`。
+- Redis / SurrealDB 作为原型定位继续保留 `RedisComponent` / `SurrealComponent` 基类；默认运行时不启用外部 Redis / SurrealDB backend，未来恢复外部存储时必须通过这两个 Component 边界接入。
+- `kind` / `layer` / `provider` 默认由 `FlyflorComponent` 继承链与类名推断；`name` 只作展示字段，不参与注入匹配；`tags` 不用于 `@Module` / `@Component`。
+- `@Component()` / `@Module()` 默认无参数、默认单例；只有偏离默认值（例如 factory scope、channel / worker / plugin 特例）时才显式写参数。
+- `@Event(type)` 只登记显式事件 hook metadata，不做反射类型推断、不扫描目录；实例必须由 composition root 或组件 owner 调用 `EventsComponent.registerHooks(instance)` 显式接入。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
-- 依赖注入仅在 composition root 使用显式 token/provider 绑定。
-- DI token 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。只有非 class 值（config、events、mode、adapter map 等）才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
+- 依赖注入仅在 composition root 使用显式 token/provider 绑定；允许 `DependencyContainer.bindClass()` 按构造函数 `@Inject(ClassToken)` 自动实例化，但注册目标仍必须由 composition root 显式列出。
+- DI key 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。`ConfigComponent` / `RuntimeModeComponent` / `EventsComponent` / `ModelComponent` / `AdaptersComponent` 这类边界必须是域内 `*.component.ts` 的真实组件，不能只是空壳 token；只有非 class 值才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
 - 公开 API 必须显式写 `public`；内部状态和 helper 保持 `private` / `protected`，避免隐式可见性漂移。可被子类定制的生命周期、factory、storage hook 预留 `protected`，不要为了“封闭”而把扩展点无脑写死为 `private`。
 
 ## 5. 类型与协议
@@ -133,18 +135,23 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 ## 8. 配置与密钥
 
 - 全局：`~/.flyflor/config.jsonc`；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
+- 本地交互命令：`~/.flyflor/commands.jsonc`。它只定义 TUI / app slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
+- `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 project / fork 选择写回 `RuntimeContext.activeProject` / `contextForkId`，不能反向变成隐式 session 容器。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
 - OpenAI-compatible provider 的最小配置是 `baseUrl` + `apiKey` + 当前模型；`type`、默认 `chat-completions` 和模型列表由加载器推断 / 探测。自动化代理不得把用户本地 `config.jsonc` 中正在使用的 `apiKey` 改成占位符。
 - provider key / MCP token / 插件 token 不得写入日志、事件 payload、错误详情或记忆。
 - 配置对象进入核心后视为只读。
 - 默认配置必须能离线启动；需要联网的能力必须显式启用。
+- OOP + use composition 是硬边界：业务能力用 class / Component 表达；跨 class 的组合装配只允许写在对应模块的 `composition.ts` 中，并统一用 `useXxx()` 命名；禁止在业务文件里散落无归属 helper function 去拼装依赖或路径。
+- `index.ts` 只做 barrel export：单出口可以直接一行 export；多出口必须拆到明确角色文件后再汇总，禁止把实现逻辑、class 主体或 helper function 写进 `index.ts`。
 
 目录约定：
 
 ```
 ~/.flyflor/
   config.jsonc
+  commands.jsonc              # TUI / app slash command rules
   prompts/                    # 内部提示词模板（不属于用户工作区）
   templates/memory/           # MEMORY/SELF/SOUL/USER 初始模板
   templates/projects/         # 项目骨架模板

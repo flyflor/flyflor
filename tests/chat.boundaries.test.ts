@@ -4,7 +4,7 @@ import { coalesceChatInput } from "../src/agent/runtime/chat.ts";
 describe("Human chat input boundary", () => {
     test("chat entrypoints warm runtime before first turn", async () => {
         const humanChatSource = await Bun.file("src/agent/runtime/chat.ts").text();
-        const tuiChatSource = await Bun.file("src/command/tui/chat/index.ts").text();
+        const tuiChatSource = await Bun.file("src/command/tui/chat/chat.entry.ts").text();
         const commandSource = await Bun.file("src/command/cli/commands.ts").text();
 
         expect(humanChatSource).toContain("await runtime.warmup()");

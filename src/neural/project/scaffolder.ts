@@ -28,6 +28,8 @@ const PROJECT_TEMPLATE_FILES: Record<ProjectFile, string> = {
 
 export interface ProjectScaffoldInput {
     projectId: string;
+    /** Optional explicit project directory from `/project <path>`; default remains workspace/projects/<projectId>. */
+    projectDir?: string;
     title: string;
     goal: string;
     userId: string;
@@ -53,7 +55,7 @@ export class ProjectScaffolder {
      * trigger.kind === None 时直接返回空结果。
      */
     public async scaffold(input: ProjectScaffoldInput): Promise<ProjectScaffoldResult> {
-        const projectDir = join(this.paths.workspaceDir, "projects", input.projectId);
+        const projectDir = input.projectDir ?? join(this.paths.workspaceDir, "projects", input.projectId);
         const result: ProjectScaffoldResult = {
             projectId: input.projectId,
             projectDir,
@@ -91,9 +93,28 @@ export class ProjectScaffolder {
                 await Bun.write(targetPath, content);
                 result.written.push(file);
             }
+            const projectManifestPath = join(projectDir, ".flyflor", "project.json");
+            if (!(await Bun.file(projectManifestPath).exists())) {
+                await Bun.write(
+                    projectManifestPath,
+                    `${JSON.stringify(
+                        {
+                            schemaVersion: 1,
+                            projectId: input.projectId,
+                            title: input.title,
+                            goal: input.goal,
+                            userId: input.userId,
+                            createdAt: input.createdAt,
+                        },
+                        null,
+                        2,
+                    )}\n`,
+                );
+            }
             this.events.publish(
                 event(RuntimeEventType.ProjectScaffolded, {
                     projectId: input.projectId,
+                    projectDir,
                     written: result.written,
                     skipped: result.skipped,
                     trigger: input.trigger.kind,

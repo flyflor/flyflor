@@ -61,7 +61,7 @@ interface FakeGraphOpts {
 }
 
 class FakeGraph {
-    public readonly snapshots: Array<{ skillId: string; reason: string; takenAt: number }> = [];
+    public readonly snapshots: Array<{ gemId: string; reason: string; takenAt: number }> = [];
     public readonly drift: Array<Record<string, unknown>> = [];
     public readonly reinforce: Array<Record<string, unknown>> = [];
     public readonly contradiction: Array<Record<string, unknown>> = [];
@@ -80,9 +80,9 @@ class FakeGraph {
     > {
         return this.state.pairs ?? [];
     }
-    public async writeGemSnapshot(skill: GemRecord, reason: string, takenAtMs: number): Promise<string> {
-        const id = `${skill.id}-${takenAtMs}`;
-        this.snapshots.push({ skillId: skill.id, reason, takenAt: takenAtMs });
+    public async writeGemSnapshot(gem: GemRecord, reason: string, takenAtMs: number): Promise<string> {
+        const id = `${gem.id}-${takenAtMs}`;
+        this.snapshots.push({ gemId: gem.id, reason, takenAt: takenAtMs });
         return id;
     }
     public async applyGemDriftRepair(input: Record<string, unknown>): Promise<boolean> {
@@ -107,7 +107,7 @@ function fakeAs(graph: FakeGraph): MemoryGraphStore {
     return graph as unknown as MemoryGraphStore;
 }
 
-function mkSkill(over: Partial<GemRecord> = {}): GemRecord {
+function mkGem(over: Partial<GemRecord> = {}): GemRecord {
     return {
         id: "s1",
         userId: "u1",
@@ -281,7 +281,7 @@ describe("DreamWorkerImpl.runOnce", () => {
     });
 
     test("drift-repair: snapshots before repair and fires MemoryDriftRepaired", async () => {
-        const graph = new FakeGraph({ driftGems: [mkSkill({ id: "s1" })] });
+        const graph = new FakeGraph({ driftGems: [mkGem({ id: "s1" })] });
         const model = new StubModel([
             JSON.stringify({
                 decisions: [
@@ -302,7 +302,7 @@ describe("DreamWorkerImpl.runOnce", () => {
         expect(r.driftRepaired).toBe(1);
         expect(r.skipped).toBe(0);
         expect(graph.snapshots).toHaveLength(1);
-        expect(graph.snapshots[0]!.skillId).toBe("s1");
+        expect(graph.snapshots[0]!.gemId).toBe("s1");
         expect(graph.drift).toHaveLength(1);
         expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryDriftRepaired);
     });

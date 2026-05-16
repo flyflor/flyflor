@@ -9,10 +9,9 @@ import {
     describeModelApiKey,
     renderDoctor,
     describeWorkingMemoryHealth,
-    describeWorkingMemoryRecoveryFiles,
-} from "../src/command/cli/status.ts";
-import { FlyFlorTokens } from "../src/app.ts";
-import { createDefaultMemoryTuning, type FlyflorConfig } from "../src/config/index.ts";
+    describeWorkingMemoryRecoveryFiles} from "../src/command/cli/status.ts";
+import { GatewayModule, MemoryModule } from "../src/app.ts";
+import { ConfigComponent, createDefaultMemoryTuning, type FlyflorConfig } from "../src/config/index.ts";
 import { BrainStore } from "../src/components/memory/brain.store.ts";
 import {
     CrystalMemoryBackend,
@@ -23,8 +22,7 @@ import {
     SandboxMode,
     MemoryWorkingBackend,
     SummaryRange,
-    ToolApprovalMode,
-} from "../src/protocol/contracts/index.ts";
+    ToolApprovalMode} from "../src/protocol/contracts/index.ts";
 
 function configForHome(home: string): FlyflorConfig {
     return { paths: { home } } as FlyflorConfig;
@@ -50,8 +48,7 @@ function doctorConfigForHome(home: string): FlyflorConfig {
             promptDir: join(home, "prompts"),
             skillDir: join(home, "skills"),
             templateDir: join(home, "templates"),
-            mcpDir: join(home, "mcp"),
-        },
+            mcpDir: join(home, "mcp")},
         gateway: {
             host: "127.0.0.1",
             port: 1,
@@ -60,19 +57,15 @@ function doctorConfigForHome(home: string): FlyflorConfig {
             channelReplyUrls: {},
             channels: {
                 wechat: {},
-                weixinIlink: { pollIntervalMs: 60_000 },
-            },
-        },
+                weixinIlink: { pollIntervalMs: 60_000 }}},
         memory: {
             enabled: true,
             crystal: {
                 backend: CrystalMemoryBackend.Local,
                 enabled: true,
-                local: { dbFile: join(home, "crystal.db") },
-            },
+                local: { dbFile: join(home, "crystal.db") }},
             working: { backend: MemoryWorkingBackend.Local },
-            tuning: createDefaultMemoryTuning(),
-        },
+            tuning: createDefaultMemoryTuning()},
         metrics: {},
         model: {
             apiMode: ModelApiMode.Responses,
@@ -84,16 +77,13 @@ function doctorConfigForHome(home: string): FlyflorConfig {
             maxTokens: 1024,
             model: "gpt-4.1-mini",
             temperature: 0,
-            timeoutMs: 30_000,
-        },
+            timeoutMs: 30_000},
         routing: {},
         sandbox: {
             mode: SandboxMode.Off,
             mcpToolApproval: ToolApprovalMode.Deny,
             pluginApproval: ToolApprovalMode.Deny,
-            shellHookApproval: ToolApprovalMode.Deny,
-        },
-    } as unknown as FlyflorConfig;
+            shellHookApproval: ToolApprovalMode.Deny}} as unknown as FlyflorConfig;
 }
 
 describe("doctor Brain.db visibility", () => {
@@ -112,24 +102,21 @@ describe("doctor Brain.db visibility", () => {
                     timeRange: SummaryRange.Day,
                     bucketKey: "2026-05-14",
                     content: "{}",
-                    createdAt: ts,
-                });
+                    createdAt: ts});
                 brain.writeLink({
                     id: "l1",
                     fromId: "e1",
                     toId: "e2",
                     strength: 1,
                     type: MemoryLinkType.Derived,
-                    createdAt: ts,
-                });
+                    createdAt: ts});
                 brain.upsertCodename({
                     id: "c1",
                     name: "demo",
                     userId: "u1",
                     createdAt: ts,
                     lastUsedAt: ts,
-                    useCount: 1,
-                });
+                    useCount: 1});
             } finally {
                 brain.close();
             }
@@ -171,8 +158,8 @@ describe("doctor diagnostics visibility", () => {
         const config = doctorConfigForHome("/tmp/flyflor-doctor-debug");
         const app = {
             resolve(token: unknown) {
-                if (token === FlyFlorTokens.Config) return config;
-                if (token === FlyFlorTokens.Gateway) {
+                if (token === ConfigComponent) return config;
+                if (token === GatewayModule) {
                     return {
                         getStatusSnapshot: () => ({
                             channels: [],
@@ -181,14 +168,11 @@ describe("doctor diagnostics visibility", () => {
                             gatewayRunning: false,
                             host: "127.0.0.1",
                             port: 1,
-                            streamingCount: 0,
-                        }),
-                    };
+                            streamingCount: 0})};
                 }
-                if (token === FlyFlorTokens.Memory) return { getWorkingMemoryHealthSnapshot: () => undefined };
+                if (token === MemoryModule) return { getWorkingMemoryHealthSnapshot: () => undefined };
                 return {};
-            },
-        };
+            }};
 
         const output = await renderDoctor(app as never);
 
@@ -204,13 +188,9 @@ describe("doctor background scheduler visibility", () => {
                 crystal: {
                     backend: CrystalMemoryBackend.Local,
                     enabled: true,
-                    local: { dbFile: "/tmp/crystal.db" },
-                },
+                    local: { dbFile: "/tmp/crystal.db" }},
                 working: {
-                    backend: MemoryWorkingBackend.Local,
-                },
-            },
-        } as FlyflorConfig);
+                    backend: MemoryWorkingBackend.Local}}} as FlyflorConfig);
 
         expect(summary.status).toBe("ok");
         expect(summary.detail).toContain("local working-memory");
@@ -222,13 +202,9 @@ describe("doctor background scheduler visibility", () => {
                 crystal: {
                     backend: CrystalMemoryBackend.Local,
                     enabled: false,
-                    local: {},
-                },
+                    local: {}},
                 working: {
-                    backend: MemoryWorkingBackend.Local,
-                },
-            },
-        } as FlyflorConfig);
+                    backend: MemoryWorkingBackend.Local}}} as FlyflorConfig);
 
         expect(summary.status).toBe("warn");
         expect(summary.detail).toContain("local crystal graph");
@@ -248,23 +224,20 @@ describe("doctor identity activity visibility", () => {
                     ts: now - 60_000,
                     userId: "u1",
                     type: MemoryEventType.IdentityAppend,
-                    content: { kind: "preference", content: "recent", confidence: 1 },
-                });
+                    content: { kind: "preference", content: "recent", confidence: 1 }});
                 brain.appendEvent({
                     id: "identity-recent-reverted",
                     ts: now - 120_000,
                     userId: "u1",
                     type: MemoryEventType.IdentityAppend,
-                    content: { kind: "goal", content: "reverted", confidence: 1 },
-                });
+                    content: { kind: "goal", content: "reverted", confidence: 1 }});
                 brain.upsertState("identity-recent-reverted", { status: MemoryEventStatus.Abandoned });
                 brain.appendEvent({
                     id: "identity-old-live",
                     ts: now - 10 * 24 * 60 * 60_000,
                     userId: "u1",
                     type: MemoryEventType.IdentityAppend,
-                    content: { kind: "constraint", content: "old", confidence: 1 },
-                });
+                    content: { kind: "constraint", content: "old", confidence: 1 }});
             } finally {
                 brain.close();
             }
@@ -285,13 +258,11 @@ describe("doctor model credential visibility", () => {
         expect(describeModelApiKey("REPLACE_ME_FASTAI_API_KEY")).toEqual({
             configured: false,
             detail: "placeholder",
-            status: "warn",
-        });
+            status: "warn"});
         expect(describeModelApiKey("sk-test-realistic")).toEqual({
             configured: true,
             detail: "configured",
-            status: "ok",
-        });
+            status: "ok"});
     });
 });
 
@@ -304,8 +275,7 @@ describe("doctor working memory health visibility", () => {
             loadedFrom: "empty",
             recoveredFromBackup: false,
             replayedWalRecords: 0,
-            tornWalLines: 0,
-        });
+            tornWalLines: 0});
 
         expect(summary.status).toBe("ok");
         expect(summary.detail).toContain("local not loaded");
@@ -319,8 +289,7 @@ describe("doctor working memory health visibility", () => {
             loadedFrom: "backup+wal",
             recoveredFromBackup: true,
             replayedWalRecords: 12,
-            tornWalLines: 1,
-        });
+            tornWalLines: 1});
 
         expect(summary.status).toBe("ok");
         expect(summary.detail).toContain("backup recovered");
@@ -333,8 +302,7 @@ describe("doctor working memory health visibility", () => {
             backend: "local",
             circuitState: "open",
             lastError: "disk outage",
-            loaded: true,
-        });
+            loaded: true});
 
         expect(summary.status).toBe("warn");
         expect(summary.detail).toContain("circuit open");

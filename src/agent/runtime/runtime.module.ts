@@ -6,6 +6,7 @@ import type {
     GatewayReply,
     ModelClient,
     ModelMessage,
+    ProjectRecord,
     RuntimeContext,
     SceneRecord,
     TaskPlanRecord,
@@ -55,7 +56,7 @@ import {
     loadSkillUsageSummary,
     recordSkillUsage,
     type Skill,
-} from "../../crystal/skills/index.ts";
+} from "../../skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard/route.ts";
 import {
     blackboardRunFromTurn,
@@ -153,7 +154,7 @@ interface GeneratedTurn {
     ask?: AgentAsk;
 }
 
-@Module({ name: "runtime", tags: ["flyflor", "boundary"] })
+@Module()
 export class RuntimeModule extends RuntimeBoundary {
     protected readonly memory: MemoryModule;
     /** Shared embedding provider — compute once per turn, reused by memory recall + episode write. */
@@ -207,6 +208,31 @@ export class RuntimeModule extends RuntimeBoundary {
 
     public listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}) {
         return this.memory.listChatHistory(userId, options);
+    }
+
+    public createOrUseProject(input: {
+        goal?: string;
+        path: string;
+        title?: string;
+        userId: string;
+        now?: number;
+    }): Promise<ProjectRecord> {
+        return this.memory.createOrUseProject(input);
+    }
+
+    public listProjects(userId: string, options: { limit?: number } = {}): ProjectRecord[] {
+        return this.memory.listProjects(userId, options);
+    }
+
+    public createContextFork(
+        record: ContextForkRecord,
+        source?: { assistantText?: string; eventId?: string; userText?: string },
+    ): Promise<ContextForkRecord> {
+        return this.memory.createContextFork(record, source);
+    }
+
+    public listContextForks(userId: string, options: { limit?: number } = {}): ContextForkRecord[] {
+        return this.memory.listContextForks(userId, options);
     }
 
     private async performWarmup(): Promise<void> {
@@ -1254,7 +1280,7 @@ export class RuntimeModule extends RuntimeBoundary {
         await options.onTextDelta?.(`> 🤔 黑板讨论中 · 参与者：${workerNames}\n\n`);
 
         const started = performance.now();
-        const projectConstraintId = projectConstraintIdForMessage(message);
+        const projectConstraintId = context.activeProject?.id ?? projectConstraintIdForMessage(message);
         const start = await this.blackboard.startTurn({
             projectConstraintId,
             requestId: context.requestId,

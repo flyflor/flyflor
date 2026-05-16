@@ -12,6 +12,7 @@ import {
     SceneRecordKind,
     SummaryRange,
     TaskPlanStatus,
+    type ProjectRecord,
 } from "../src/protocol/contracts/index.ts";
 
 async function freshStore() {
@@ -344,6 +345,30 @@ describe("BrainStore", () => {
             expect(store.listSceneRecords({ userId: "u1", sourceEventId: "episode-1" })[0]?.visibleFacts).toEqual([
                 "plan exists",
             ]);
+        } finally {
+            store.close();
+        }
+    });
+
+    test("stores explicit project registry records", async () => {
+        const { store } = await freshStore();
+        try {
+            const now = Date.now();
+            const project: ProjectRecord = {
+                id: "project-1",
+                userId: "u1",
+                title: "Alpha",
+                goal: "Ship alpha",
+                projectDir: "/tmp/alpha",
+                projectMemoryDir: "/tmp/alpha/.flyflor/memory",
+                createdAt: now,
+                updatedAt: now,
+                lastUsedAt: now,
+                useCount: 1,
+            };
+            store.upsertProject(project);
+            expect(store.getProject("project-1")?.projectDir).toBe("/tmp/alpha");
+            expect(store.listProjects({ userId: "u1" })[0]?.title).toBe("Alpha");
         } finally {
             store.close();
         }

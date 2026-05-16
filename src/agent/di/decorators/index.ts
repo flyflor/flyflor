@@ -1,5 +1,6 @@
 export { Channel } from "./channel.ts";
 export { Component } from "./component.ts";
+export { Event } from "./event.ts";
 export { Inject } from "./inject.ts";
 export { Module } from "./module.ts";
 export { Plugin } from "./plugin.ts";

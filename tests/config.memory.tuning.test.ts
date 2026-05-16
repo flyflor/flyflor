@@ -63,6 +63,7 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(tuning.brainDb.archiveAfterMonths).toBe(3);
             expect(tuning.brainDb.archiveIntervalHours).toBe(24);
             expect(tuning.brainDb.vacuumIntervalDays).toBe(14);
+            expect(tuning.contextFork.sidecarTtlDays).toBe(90);
             expect(tuning.atomScore.weights.recency).toBeCloseTo(0.35);
             expect(tuning.atomScore.weights.access).toBeCloseTo(0.15);
             expect(tuning.atomScore.weights.successPrior).toBeCloseTo(0.35);
@@ -83,6 +84,7 @@ describe("LF-P0 memory tuning defaults", () => {
                             identity: { appendDailyLimitPerFile: 7 },
                             brainDb: { archiveAfterMonths: 6 },
                             hotMemoryCompression: { intervalMinutes: 45 },
+                            contextFork: { sidecarTtlDays: 30 },
                             inbox: { ttlDays: 14 },
                         },
                     },
@@ -99,6 +101,7 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(config.memory.tuning.hotMemoryCompression.enabled).toBe(true);
             expect(config.memory.tuning.hotMemoryCompression.intervalMinutes).toBe(45);
             expect(config.memory.tuning.hotMemoryCompression.batchSize).toBe(16);
+            expect(config.memory.tuning.contextFork.sidecarTtlDays).toBe(30);
             // unrelated blocks keep defaults
             expect(config.memory.tuning.summary.trigger).toBe(SummaryTrigger.Rolling);
             expect(config.memory.tuning.dormant.idleMinutes).toBe(10);

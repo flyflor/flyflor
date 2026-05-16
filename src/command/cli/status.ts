@@ -1,14 +1,13 @@
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import Table from "cli-table3";
 import pc from "picocolors";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import { lintPromptTemplates } from "../../agent/prompts/index.ts";
-import { checkSkillSchemaCompatibility } from "../../crystal/skills/index.ts";
-import { FlyFlorTokens, type FlyFlor } from "../../app.ts";
-import type { FlyflorConfig } from "../../config/index.ts";
-import { createDefaultMemoryTuning } from "../../config/index.ts";
+import { checkSkillSchemaCompatibility } from "../../skills/index.ts";
+import { GatewayModule, MemoryModule, type FlyFlor } from "../../app.ts";
+import { ConfigComponent, createDefaultMemoryTuning, type FlyflorConfig } from "../../config/index.ts";
 import { ChannelLinkState, CrystalMemoryBackend, MemoryEventStatus, MemoryEventType, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
 import { getFlyflorConfigPath } from "./config.ts";
 
@@ -26,9 +25,9 @@ export function renderFlyflorBanner(): string {
 }
 
 export async function renderStatus(app: FlyFlor): Promise<string> {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     const gateway = await resolveGatewaySnapshot(app);
-    const workingHealth = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
+    const workingHealth = describeWorkingMemoryHealth(app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot());
     const workingRecovery = await describeWorkingMemoryRecoveryFiles(config);
     return [
         section("Runtime", [
@@ -66,7 +65,7 @@ export async function renderChannels(app: FlyFlor): Promise<string> {
 }
 
 export async function renderDoctor(app: FlyFlor): Promise<string> {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     const gateway = await resolveGatewaySnapshot(app);
     const rows: Array<[string, string, string]> = [];
     rows.push(["Config file", (await exists(getFlyflorConfigPath())) ? "ok" : "missing", getFlyflorConfigPath()]);
@@ -126,7 +125,7 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
     const identitySummary = await describeIdentityActivity(config);
     rows.push(["Identity activity", identitySummary.status, identitySummary.detail]);
 
-    const workingMemorySummary = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
+    const workingMemorySummary = describeWorkingMemoryHealth(app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot());
     rows.push(["Working memory", workingMemorySummary.status, workingMemorySummary.detail]);
 
     const workingRecoverySummary = await describeWorkingMemoryRecoveryFiles(config);
@@ -134,8 +133,7 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
 
     const table = new Table({
         head: ["Check", "Status", "Detail"],
-        style: { head: [] },
-    });
+        style: { head: [] }});
     for (const row of rows) {
         table.push([row[0], colorStatus(row[1]), row[2]]);
     }
@@ -146,8 +144,7 @@ export function renderChannelTable(channels: ChannelStatusSnapshot[]): string {
     const table = new Table({
         head: ["Channel", "State", "Transport", "Activity", "Detail"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const channel of channels) {
         table.push([
             channel.name,
@@ -183,15 +180,14 @@ function isPlaceholderSecret(value: string): boolean {
 }
 
 export async function resolveGatewaySnapshot(app: FlyFlor): Promise<GatewayStatusSnapshot> {
-    const config = app.resolve(FlyFlorTokens.Config);
-    const local = app.resolve(FlyFlorTokens.Gateway).getStatusSnapshot();
+    const config = app.resolve(ConfigComponent);
+    const local = app.resolve(GatewayModule).getStatusSnapshot();
     const host = config.gateway.host === "0.0.0.0" ? "127.0.0.1" : config.gateway.host;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 500);
     try {
         const response = await fetch(`http://${host}:${config.gateway.port}/channels`, {
-            signal: controller.signal,
-        });
+            signal: controller.signal});
         if (!response.ok) {
             return local;
         }
@@ -222,8 +218,7 @@ function gatewaySnapshotFromPayload(local: GatewayStatusSnapshot, payload: unkno
         startedAt: readString(gateway.startedAt) ?? local.startedAt,
         streamingCount: channels.filter((channel) => channel.streaming).length,
         uptimeMs: readNumber(gateway.uptimeMs) ?? local.uptimeMs,
-        url: readString(gateway.url) ?? local.url,
-    };
+        url: readString(gateway.url) ?? local.url};
 }
 
 function renderGatewayLines(snapshot: GatewayStatusSnapshot): string[] {
@@ -275,7 +270,6 @@ function describeIlinkState(config: FlyflorConfig): string {
  * 缺失（warmup 前 / 未启用记忆）显示为 "not-yet"，不报错。
  */
 export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: string; detail: string }> {
-    const { join } = await import("node:path");
     const brainPath = join(config.paths.home, "brain.db");
     let mainSize = 0;
     try {
@@ -287,7 +281,6 @@ export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: 
     const archiveDir = join(config.paths.home, "archive");
     let archiveCount = 0;
     try {
-        const { readdir } = await import("node:fs/promises");
         const entries = await readdir(archiveDir);
         archiveCount = entries.filter((name) => name.startsWith("brain.") && name.endsWith(".db")).length;
     } catch {
@@ -296,8 +289,7 @@ export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: 
     const counts = readBrainDbCounts(brainPath);
     return {
         status: "ok",
-        detail: `${formatBytes(mainSize)} main, ${archiveCount} archive file(s), ${counts}`,
-    };
+        detail: `${formatBytes(mainSize)} main, ${archiveCount} archive file(s), ${counts}`};
 }
 
 /**
@@ -308,7 +300,6 @@ export async function describeIdentityActivity(
     config: FlyflorConfig,
     options: { nowMs?: number; windowDays?: number } = {},
 ): Promise<{ status: string; detail: string }> {
-    const { join } = await import("node:path");
     const brainPath = join(config.paths.home, "brain.db");
     try {
         await stat(brainPath);
@@ -391,13 +382,11 @@ export function describeBackgroundScheduler(config: FlyflorConfig): { status: st
     if (workingReady && crystalReady) {
         return {
             status: "ok",
-            detail: "consolidation+decay+dream+project-cluster enabled (local working-memory + local crystal graph)",
-        };
+            detail: "consolidation+decay+dream+project-cluster enabled (local working-memory + local crystal graph)"};
     }
     return {
         status: "warn",
-        detail: "disabled — local working-memory or local crystal graph not ready; long-term memory consolidation is paused",
-    };
+        detail: "disabled — local working-memory or local crystal graph not ready; long-term memory consolidation is paused"};
 }
 
 export function describeWorkingMemoryHealth(snapshot: unknown): { status: "ok" | "warn"; detail: string } {
@@ -412,8 +401,7 @@ export function describeWorkingMemoryHealth(snapshot: unknown): { status: "ok" |
         const retryDetail = nextRetryAt ? `; next probe ${new Date(nextRetryAt).toISOString()}` : "";
         return {
             status: "warn",
-            detail: `${backend} circuit open${lastError ? `; ${truncate(lastError, 100)}` : ""}${retryDetail}`,
-        };
+            detail: `${backend} circuit open${lastError ? `; ${truncate(lastError, 100)}` : ""}${retryDetail}`};
     }
 
     const loaded = typeof snapshot.loaded === "boolean" ? snapshot.loaded : undefined;
@@ -508,8 +496,7 @@ function describeMemoryTuning(config: FlyflorConfig): { status: string; detail: 
     if (changed.length === 0) {
         return {
             status: "ok",
-            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d, hot compression ${tuning.hotMemoryCompression.intervalMinutes}m/${tuning.hotMemoryCompression.batchSize}, brain archive ${tuning.brainDb.archiveAfterMonths}mo/${tuning.brainDb.archiveIntervalHours}h)`,
-        };
+            detail: `defaults (identity ${tuning.identity.appendDailyLimitPerFile}/d, dormant ${tuning.dormant.idleMinutes}m, inbox ×${tuning.inbox.decayMultiplier}/${tuning.inbox.ttlDays}d, hot compression ${tuning.hotMemoryCompression.intervalMinutes}m/${tuning.hotMemoryCompression.batchSize}, brain archive ${tuning.brainDb.archiveAfterMonths}mo/${tuning.brainDb.archiveIntervalHours}h)`};
     }
     return { status: "tuned", detail: changed.join("; ") };
 }

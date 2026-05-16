@@ -2,7 +2,7 @@ import {
     ComponentKind,
     type ComponentKind as ComponentKindType,
     ArchitectureLayer,
-} from "../../../protocol/contracts/index.ts";
+} from "../../../protocol/contracts/enums.ts";
 import { type ComponentDecoratorOptions, registerComponentMetadata } from "../composition/index.ts";
 
 export interface ProvideDecoratorOptions extends ComponentDecoratorOptions {

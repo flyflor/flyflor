@@ -21,10 +21,13 @@ import { createSignal, createEffect, createRoot, batch } from "solid-js";
 import {
     Channel,
     ChatType,
+    type ContextForkRecord,
     type GatewayMessage,
+    type ProjectRecord,
     type RuntimeContext,
     type RuntimeEvent,
 } from "../../../protocol/contracts/index.ts";
+import { resolve } from "node:path";
 import { RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
 import type { ChatEntryOptions } from "./index.ts";
 import { formatAskSummaryLines } from "./ask.render.ts";
@@ -32,6 +35,16 @@ import { copyTextToTerminalClipboard } from "./clipboard.ts";
 import { readAskMeta, readBlackboardMeta, readMcpTrace, readPlanningMeta, readRecord, readStringArray } from "./metadata.parse.ts";
 import type { ChatMessage, McpTrace, Phase } from "./types.ts";
 import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
+import {
+    AppCommandAction,
+    AppCommandRunType,
+    builtinActionOf,
+    commandSuggestions as appCommandSuggestions,
+    createDefaultAppCommandRegistry,
+    matchAppCommand,
+    type AppCommandRegistry,
+    type AppCommandSuggestion,
+} from "../../app.commands.ts";
 
 const PHASE_DEF: Record<Phase, { label: string; color: RGBA; done: string; frames: string[] }> = {
     idle: {
@@ -98,19 +111,6 @@ const AVATAR_MIN_HEIGHT = 6;
 const AVATAR_MAX_HEIGHT = 14;
 const AVATAR_HEIGHT_RATIO = 0.28;
 
-const CHAT_COMMANDS = [
-    { name: "/history", detail: "open history" },
-    { name: "/bottom", detail: "jump to latest" },
-    { name: "/thinking", detail: "show process panel" },
-    { name: "/blackboard", detail: "show blackboard panel" },
-    { name: "/stop", detail: "cancel current reply" },
-    { name: "/continue", detail: "continue previous reply" },
-    { name: "/clear", detail: "clear screen" },
-    { name: "/exit", detail: "quit" },
-] as const;
-
-const CONTINUE_PROMPT = "Continue the previous response from where it stopped. Do not restart from the beginning.";
-
 interface MsgRenderable {
     id: string;
     box: BoxRenderable;
@@ -128,9 +128,16 @@ interface PanelLine {
     fg: RGBA;
 }
 
-export type SidePanelMode = "blackboard" | "thinking";
+export type SidePanelMode = "blackboard" | "thinking" | "projects" | "fork" | "forks";
 type CommandMenuMode = SidePanelMode | null;
 type SelectionScope = "chat" | "side" | null;
+
+interface ForkHistorySource {
+    assistantText: string;
+    eventId: string;
+    ts: number;
+    userText: string;
+}
 
 type SelectionScopedRenderer = CliRenderer & {
     clearSelection: () => void;
@@ -151,6 +158,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             eventBus,
             approveMcpToolCall,
             agentName = "flyflor",
+            appCommands = createDefaultAppCommandRegistry(),
             avatarArt = "",
             userId = "human",
         } = options;
@@ -172,6 +180,14 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const [selectedQuestionIndex, setSelectedQuestionIndex] = createSignal<number | null>(null);
         const [sidePanelMode, setSidePanelMode] = createSignal<SidePanelMode>("blackboard");
         const [commandMenuMode, setCommandMenuMode] = createSignal<CommandMenuMode>(null);
+        const [activeProject, setActiveProject] = createSignal<ProjectRecord | null>(null);
+        const [activeFork, setActiveFork] = createSignal<ContextForkRecord | null>(null);
+        const [projectOptions, setProjectOptions] = createSignal<ProjectRecord[]>([]);
+        const [forkOptions, setForkOptions] = createSignal<ContextForkRecord[]>([]);
+        const [forkSources, setForkSources] = createSignal<ForkHistorySource[]>([]);
+        const [selectedProjectIndex, setSelectedProjectIndex] = createSignal(0);
+        const [selectedForkIndex, setSelectedForkIndex] = createSignal(0);
+        const [selectedForkSourceIndex, setSelectedForkSourceIndex] = createSignal(0);
 
         let currentTurnId: string | null = null;
         let currentTurnController: AbortController | undefined;
@@ -532,6 +548,17 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const context: RuntimeContext = {
                 now: startedAt,
                 requestId: crypto.randomUUID(),
+                ...(activeFork() ? { contextForkId: activeFork()!.id } : {}),
+                ...(activeProject()
+                    ? {
+                          activeProject: {
+                              id: activeProject()!.id,
+                              title: activeProject()!.title,
+                              projectDir: activeProject()!.projectDir,
+                              projectMemoryDir: activeProject()!.projectMemoryDir,
+                          },
+                      }
+                    : {}),
             };
             const message: GatewayMessage = {
                 id: crypto.randomUUID(),
@@ -684,8 +711,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (!inputRef) return;
             const text = inputRef.plainText.trim();
             if (!text) return;
-            const command = commandForText(text);
-            if (text === "/clear" || text === "/reset") {
+            const matchedCommand = matchAppCommand(appCommands, text);
+            const matchedAction = matchedCommand ? builtinActionOf(matchedCommand.rule) : undefined;
+            if (matchedAction === AppCommandAction.Clear) {
                 batch(() => {
                     setMessages([]);
                     setError(null);
@@ -697,11 +725,19 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     loadedHistoryEventIds.clear();
                     setBlackboardTurns({});
                     setFocusedBlackboardTurnId(null);
+                    setActiveProject(null);
+                    setActiveFork(null);
+                    setProjectOptions([]);
+                    setForkOptions([]);
+                    setForkSources([]);
+                    setSelectedProjectIndex(0);
+                    setSelectedForkIndex(0);
+                    setSelectedForkSourceIndex(0);
                 });
                 inputRef.clear();
                 return;
             }
-            if (command === "/history") {
+            if (matchedAction === AppCommandAction.History) {
                 inputRef.clear();
                 historyOpen = true;
                 historyExhausted = false;
@@ -712,52 +748,71 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 void loadOlderHistory("initial");
                 return;
             }
-            if (command === "/bottom") {
+            if (matchedAction === AppCommandAction.Bottom) {
                 inputRef.clear();
                 scrollToBottom();
                 showStatusNotice("Jumped to latest");
                 return;
             }
-            if (command === "/stop") {
+            if (matchedAction === AppCommandAction.Stop) {
                 inputRef.clear();
                 if (!stopCurrentTurn()) {
                     showStatusNotice("No active reply to stop");
                 }
                 return;
             }
-            if (command === "/continue") {
+            if (matchedAction === AppCommandAction.Continue) {
                 inputRef.clear();
-                void sendMessage(CONTINUE_PROMPT);
+                void sendMessage(matchedCommand?.rule.prompt ?? "");
                 return;
             }
-            if (command === "/thinking") {
+            if (matchedAction === AppCommandAction.OpenThinking) {
                 inputRef.clear();
                 openQuestionMenu("thinking", text);
                 return;
             }
-            if (command === "/blackboard") {
+            if (matchedAction === AppCommandAction.OpenBlackboard) {
                 inputRef.clear();
                 openQuestionMenu("blackboard", text);
                 return;
             }
-            if (command === "/exit" || command === "/quit") {
+            if (matchedAction === AppCommandAction.Project) {
+                inputRef.clear();
+                void useProjectFromInput(text);
+                return;
+            }
+            if (matchedAction === AppCommandAction.Projects) {
+                inputRef.clear();
+                void openProjectMenu();
+                return;
+            }
+            if (matchedAction === AppCommandAction.Fork) {
+                inputRef.clear();
+                void openForkMenu(text);
+                return;
+            }
+            if (matchedAction === AppCommandAction.Forks) {
+                inputRef.clear();
+                void openForkListMenu();
+                return;
+            }
+            if (matchedAction === AppCommandAction.Exit) {
                 destroyed = true;
                 renderer.destroy();
                 return;
             }
+            if (matchedCommand?.rule.run.type === AppCommandRunType.SendMessage) {
+                inputRef.clear();
+                void sendMessage(matchedCommand.rule.run.prompt);
+                return;
+            }
             if (text.startsWith("/")) {
-                setError(
-                    `Unknown command: ${text}. Press Tab to complete or use /history, /bottom, /thinking, /blackboard, /stop, /continue.`,
-                );
+                setError(`Unknown command: ${text}. Press Tab to complete or use ${knownCommandList(appCommands)}.`);
                 return;
             }
             inputRef.clear();
             setError(null);
             void sendMessage(text);
-        }
-
-        function commandForText(text: string): string {
-            return text.split(/\s+/u)[0] ?? text;
         }
 
         function selectQuestionFromCommand(text: string): void {
@@ -785,6 +840,72 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             showStatusNotice(
                 hasExplicitSelection ? `Showing /${mode}` : `/${mode}: Up/Down choose a question, Enter open`,
             );
+        }
+
+        async function useProjectFromInput(text: string): Promise<void> {
+            const raw = text.trim().split(/\s+/u).slice(1).join(" ").trim();
+            const path = raw.length > 0 ? resolve(raw) : process.cwd();
+            try {
+                const project = await runtime.createOrUseProject({
+                    path,
+                    title: raw.length > 0 ? raw : undefined,
+                    userId,
+                    now: Date.now(),
+                });
+                setActiveProject(project);
+                setSidePanelMode("projects");
+                setProjectOptions((prev) => {
+                    const next = [project, ...prev.filter((item) => item.id !== project.id)];
+                    setSelectedProjectIndex(0);
+                    return next;
+                });
+                showStatusNotice(`Project active: ${project.title}`);
+            } catch (cause) {
+                setError(`Project setup failed: ${describeError(cause)}`);
+            }
+        }
+
+        async function openProjectMenu(): Promise<void> {
+            const projects = runtime.listProjects(userId, { limit: 50 });
+            setProjectOptions(projects);
+            setSelectedProjectIndex(0);
+            setCommandMenuMode("projects");
+            setSidePanelMode("projects");
+            if (projects.length === 0) {
+                showStatusNotice("/projects has no saved projects yet");
+            } else {
+                showStatusNotice("/projects: Up/Down choose, Enter activate");
+            }
+        }
+
+        async function openForkMenu(text: string, loadAll = false): Promise<void> {
+            const turns = runtime.listChatHistory(userId, { limit: loadAll ? 200 : 20 });
+            setForkSources(
+                turns.map((turn) => ({
+                    assistantText: turn.assistantText,
+                    eventId: turn.eventId,
+                    ts: turn.ts,
+                    userText: turn.userText,
+                })),
+            );
+            setSelectedForkSourceIndex(Math.max(0, turns.length - 1));
+            setSidePanelMode("fork");
+            setCommandMenuMode("fork");
+            if (turns.length === 0) {
+                showStatusNotice("/fork has no history yet");
+                return;
+            }
+            const explicit = text.trim().split(/\s+/u).length > 1;
+            showStatusNotice(explicit ? "Showing /fork source" : "/fork: Up/Down choose, a loads more, Enter fork");
+        }
+
+        async function openForkListMenu(): Promise<void> {
+            const forks = runtime.listContextForks(userId, { limit: 50 });
+            setForkOptions(forks);
+            setSelectedForkIndex(0);
+            setSidePanelMode("forks");
+            setCommandMenuMode("forks");
+            showStatusNotice(forks.length === 0 ? "/forks has no saved forks yet" : "/forks: Up/Down choose, Enter activate");
         }
 
         // ── 命令式 UI 树 ──────────────────────────────────────
@@ -1153,7 +1274,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     return;
                 }
             }
-            if (handleQuestionMenuKey(name, event.sequence)) {
+            if (handleSideMenuKey(name, event.sequence)) {
                 event.preventDefault?.();
                 event.stopPropagation?.();
                 return;
@@ -1209,43 +1330,189 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         };
         renderer.keyInput.on("keypress", keyHandler);
 
-        function handleQuestionMenuKey(name: string, sequence?: string): boolean {
-            if (!commandMenuMode()) return false;
-            const pairs = turnPairs();
-            if (pairs.length === 0) {
-                setCommandMenuMode(null);
+        function handleSideMenuKey(name: string, sequence?: string): boolean {
+            const mode = commandMenuMode();
+            if (!mode) return false;
+            if (mode === "blackboard" || mode === "thinking") {
+                const pairs = turnPairs();
+                if (pairs.length === 0) {
+                    setCommandMenuMode(null);
+                    return false;
+                }
+                const selected = selectedQuestionIndex() ?? pairs.length - 1;
+                if (name === "up" || name === "k" || sequence === "\u001b[A") {
+                    setSelectedQuestionIndex(clamp(selected - 1, 0, pairs.length - 1));
+                    return true;
+                }
+                if (name === "down" || name === "j" || sequence === "\u001b[B") {
+                    setSelectedQuestionIndex(clamp(selected + 1, 0, pairs.length - 1));
+                    return true;
+                }
+                if (
+                    name === "return" ||
+                    name === "enter" ||
+                    name === "linefeed" ||
+                    name === "right" ||
+                    name === "o" ||
+                    sequence === "\n" ||
+                    sequence === "\r" ||
+                    sequence === "\u001b[C"
+                ) {
+                    setCommandMenuMode(null);
+                    showStatusNotice(`Showing /${mode} for selected question`);
+                    return true;
+                }
+                if (name === "escape" || sequence === "\u001b") {
+                    setCommandMenuMode(null);
+                    showStatusNotice("Question menu closed");
+                    return true;
+                }
                 return false;
             }
-            const selected = selectedQuestionIndex() ?? pairs.length - 1;
-            if (name === "up" || name === "k" || sequence === "\u001b[A") {
-                setSelectedQuestionIndex(clamp(selected - 1, 0, pairs.length - 1));
-                return true;
+            if (mode === "projects") {
+                const projects = projectOptions();
+                if (projects.length === 0) {
+                    setCommandMenuMode(null);
+                    return false;
+                }
+                const selected = selectedProjectIndex();
+                if (name === "up" || name === "k" || sequence === "\u001b[A") {
+                    setSelectedProjectIndex(clamp(selected - 1, 0, projects.length - 1));
+                    return true;
+                }
+                if (name === "down" || name === "j" || sequence === "\u001b[B") {
+                    setSelectedProjectIndex(clamp(selected + 1, 0, projects.length - 1));
+                    return true;
+                }
+                if (name === "escape" || sequence === "\u001b") {
+                    setCommandMenuMode(null);
+                    showStatusNotice("Project picker closed");
+                    return true;
+                }
+                if (
+                    name === "return" ||
+                    name === "enter" ||
+                    name === "linefeed" ||
+                    sequence === "\n" ||
+                    sequence === "\r"
+                ) {
+                    const project = projects[clamp(selected, 0, projects.length - 1)];
+                    if (project) {
+                        setActiveProject(project);
+                        showStatusNotice(`Project active: ${project.title}`);
+                    }
+                    setCommandMenuMode(null);
+                    return true;
+                }
+                return false;
             }
-            if (name === "down" || name === "j" || sequence === "\u001b[B") {
-                setSelectedQuestionIndex(clamp(selected + 1, 0, pairs.length - 1));
-                return true;
+            if (mode === "fork") {
+                const sources = forkSources();
+                if (sources.length === 0) {
+                    setCommandMenuMode(null);
+                    return false;
+                }
+                const selected = selectedForkSourceIndex();
+                if (name === "a") {
+                    void openForkMenu("/fork all", true);
+                    return true;
+                }
+                if (name === "up" || name === "k" || sequence === "\u001b[A") {
+                    setSelectedForkSourceIndex(clamp(selected - 1, 0, sources.length - 1));
+                    return true;
+                }
+                if (name === "down" || name === "j" || sequence === "\u001b[B") {
+                    setSelectedForkSourceIndex(clamp(selected + 1, 0, sources.length - 1));
+                    return true;
+                }
+                if (name === "escape" || sequence === "\u001b") {
+                    setCommandMenuMode(null);
+                    showStatusNotice("Fork picker closed");
+                    return true;
+                }
+                if (
+                    name === "return" ||
+                    name === "enter" ||
+                    name === "linefeed" ||
+                    sequence === "\n" ||
+                    sequence === "\r"
+                ) {
+                    const source = sources[clamp(selected, 0, sources.length - 1)];
+                    if (source) {
+                        void activateForkFromSource(source);
+                    }
+                    setCommandMenuMode(null);
+                    return true;
+                }
+                return false;
             }
-            if (
-                name === "return" ||
-                name === "enter" ||
-                name === "linefeed" ||
-                name === "right" ||
-                name === "o" ||
-                sequence === "\n" ||
-                sequence === "\r" ||
-                sequence === "\u001b[C"
-            ) {
-                const mode = commandMenuMode();
-                setCommandMenuMode(null);
-                if (mode) showStatusNotice(`Showing /${mode} for selected question`);
-                return true;
-            }
-            if (name === "escape" || sequence === "\u001b") {
-                setCommandMenuMode(null);
-                showStatusNotice("Question menu closed");
-                return true;
+            if (mode === "forks") {
+                const forks = forkOptions();
+                if (forks.length === 0) {
+                    setCommandMenuMode(null);
+                    return false;
+                }
+                const selected = selectedForkIndex();
+                if (name === "up" || name === "k" || sequence === "\u001b[A") {
+                    setSelectedForkIndex(clamp(selected - 1, 0, forks.length - 1));
+                    return true;
+                }
+                if (name === "down" || name === "j" || sequence === "\u001b[B") {
+                    setSelectedForkIndex(clamp(selected + 1, 0, forks.length - 1));
+                    return true;
+                }
+                if (name === "escape" || sequence === "\u001b") {
+                    setCommandMenuMode(null);
+                    showStatusNotice("Fork list closed");
+                    return true;
+                }
+                if (
+                    name === "return" ||
+                    name === "enter" ||
+                    name === "linefeed" ||
+                    sequence === "\n" ||
+                    sequence === "\r"
+                ) {
+                    const fork = forks[clamp(selected, 0, forks.length - 1)];
+                    if (fork) {
+                        setActiveFork(fork);
+                        showStatusNotice(`Fork active: ${fork.title}`);
+                    }
+                    setCommandMenuMode(null);
+                    return true;
+                }
+                return false;
             }
             return false;
+        }
+
+        async function activateForkFromSource(source: ForkHistorySource): Promise<void> {
+            try {
+                const fork = await runtime.createContextFork(
+                    {
+                        id: `fork-${source.eventId}`,
+                        userId,
+                        title: clipText(source.userText, 60),
+                        summary: clipText(`${source.userText} / ${source.assistantText}`, 160),
+                        scopeSummary: clipText(source.assistantText || source.userText, 180),
+                        maxContextTokens: 4096,
+                        inheritedEventIds: [source.eventId],
+                        createdAt: new Date(source.ts).toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        sourceEventId: source.eventId,
+                    },
+                    {
+                        assistantText: source.assistantText,
+                        eventId: source.eventId,
+                        userText: source.userText,
+                    },
+                );
+                setActiveFork(fork);
+                setForkOptions((prev) => [fork, ...prev.filter((item) => item.id !== fork.id)]);
+                showStatusNotice(`Fork active: ${fork.title}`);
+            } catch (cause) {
+                setError(`Fork setup failed: ${describeError(cause)}`);
+            }
         }
 
         function scrollMessages(direction: -1 | 1): void {
@@ -1295,9 +1562,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             return true;
         }
 
-        function commandSuggestions(prefix: string): Array<(typeof CHAT_COMMANDS)[number]> {
-            if (!prefix.startsWith("/")) return [];
-            return CHAT_COMMANDS.filter((command) => command.name.startsWith(prefix));
+        function commandSuggestions(prefix: string): AppCommandSuggestion[] {
+            return appCommandSuggestions(appCommands, prefix);
         }
 
         const selectionHandler = () => {
@@ -1579,6 +1845,19 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         function sidePanelLines(): PanelLine[] {
             const lines: PanelLine[] = [];
             const turn = focusedBlackboardTurn();
+            appendScopeSummary(lines);
+            if (sidePanelMode() === "projects") {
+                appendProjectPickerLines(lines);
+                return lines;
+            }
+            if (sidePanelMode() === "fork") {
+                appendForkSourceLines(lines);
+                return lines;
+            }
+            if (sidePanelMode() === "forks") {
+                appendForkListLines(lines);
+                return lines;
+            }
             appendTodoSection(lines, activeReply(), turn);
             appendConversationSummary(lines);
             lines.push(panelLine("", THEME.fg));
@@ -1588,6 +1867,24 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 appendBlackboardDetail(lines, turn);
             }
             return lines;
+        }
+
+        function appendScopeSummary(lines: PanelLine[]): void {
+            const project = activeProject();
+            const fork = activeFork();
+            lines.push(panelLine("Scope", THEME.header, TextAttributes.BOLD));
+            lines.push(
+                panelLine(
+                    `  project: ${project ? project.title : "none"} · fork: ${fork ? fork.title : "none"}`,
+                    THEME.fg,
+                ),
+            );
+            if (project) {
+                lines.push(panelLine(`  dir: ${clipText(project.projectDir, 96)}`, THEME.fgMuted));
+            }
+            if (fork) {
+                lines.push(panelLine(`  fork scope: ${clipText(fork.scopeSummary, 96)}`, THEME.fgMuted));
+            }
         }
 
         function appendConversationSummary(lines: PanelLine[]): void {
@@ -1776,6 +2073,61 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                         THEME.purple,
                     ),
                 );
+            }
+        }
+
+        function appendProjectPickerLines(lines: PanelLine[]): void {
+            const projects = projectOptions();
+            if (projects.length === 0) {
+                lines.push(panelLine("  no saved projects", THEME.fgMuted));
+                return;
+            }
+            lines.push(panelLine("Project Picker", THEME.purple, TextAttributes.BOLD));
+            for (const [idx, project] of projects.entries()) {
+                const active = idx === selectedProjectIndex();
+                lines.push(
+                    panelLine(
+                        `  ${active ? ">" : " "} ${project.title} · ${clipText(project.projectDir, 64)}`,
+                        active ? THEME.pink : THEME.fg,
+                    ),
+                );
+            }
+        }
+
+        function appendForkSourceLines(lines: PanelLine[]): void {
+            const sources = forkSources();
+            if (sources.length === 0) {
+                lines.push(panelLine("  no history turns", THEME.fgMuted));
+                return;
+            }
+            lines.push(panelLine("Fork Source History", THEME.purple, TextAttributes.BOLD));
+            for (const [idx, source] of sources.entries()) {
+                const active = idx === selectedForkSourceIndex();
+                lines.push(
+                    panelLine(
+                        `  ${active ? ">" : " "} ${clipText(source.userText, 30)} → ${clipText(source.assistantText, 42)}`,
+                        active ? THEME.pink : THEME.fg,
+                    ),
+                );
+            }
+        }
+
+        function appendForkListLines(lines: PanelLine[]): void {
+            const forks = forkOptions();
+            if (forks.length === 0) {
+                lines.push(panelLine("  no saved forks", THEME.fgMuted));
+                return;
+            }
+            lines.push(panelLine("Fork Picker", THEME.purple, TextAttributes.BOLD));
+            for (const [idx, fork] of forks.entries()) {
+                const active = idx === selectedForkIndex();
+                lines.push(
+                    panelLine(
+                        `  ${active ? ">" : " "} ${fork.title} · ${Math.round(fork.maxContextTokens)} tokens`,
+                        active ? THEME.pink : THEME.fg,
+                    ),
+                );
+                lines.push(panelLine(`    ${clipText(fork.summary, 88)}`, THEME.fgMuted));
             }
         }
 
@@ -1995,15 +2347,19 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         function commandHintText(text: string): string | undefined {
             const trimmed = text.trim();
             if (!trimmed.startsWith("/")) return undefined;
-            if (trimmed === "/blackboard" || trimmed.startsWith("/blackboard "))
-                return questionCommandHint("/blackboard");
-            if (trimmed === "/thinking" || trimmed.startsWith("/thinking ")) return questionCommandHint("/thinking");
+            const matched = matchAppCommand(appCommands, trimmed);
+            if (matched && builtinActionOf(matched.rule) === AppCommandAction.OpenBlackboard) {
+                return questionCommandHint(matched.name);
+            }
+            if (matched && builtinActionOf(matched.rule) === AppCommandAction.OpenThinking) {
+                return questionCommandHint(matched.name);
+            }
             const suggestions = commandSuggestions(trimmed);
             if (suggestions.length === 0) return "Unknown command · Tab cannot complete";
             return suggestions.map((command) => `${command.name} ${command.detail}`).join(" · ");
         }
 
-        function questionCommandHint(command: "/blackboard" | "/thinking"): string {
+        function questionCommandHint(command: string): string {
             const pairs = turnPairs();
             const items = pairs.slice(-4);
             if (items.length === 0) return `${command} has no sent questions yet`;
@@ -2182,6 +2538,15 @@ function rightPanelWidth(totalWidth: number): number {
 
 function avatarPanelHeight(totalHeight: number): number {
     return Math.min(AVATAR_MAX_HEIGHT, Math.max(AVATAR_MIN_HEIGHT, Math.floor(totalHeight * AVATAR_HEIGHT_RATIO)));
+}
+
+function knownCommandList(registry: AppCommandRegistry): string {
+    const names = registry.rules
+        .filter((rule) => rule.enabled)
+        .map((rule) => rule.match.slash[0])
+        .filter((name): name is string => typeof name === "string" && name.length > 0)
+        .slice(0, 8);
+    return names.length > 0 ? names.join(", ") : "configured commands";
 }
 
 export function selectedTextForScope(

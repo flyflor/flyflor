@@ -1,0 +1,116 @@
+{
+    // Flyflor local app command rules.
+    // Installed as ~/.flyflor/commands.jsonc; kept separate from config.jsonc
+    // because this file only customizes local TUI/app slash commands.
+    "schemaVersion": 1,
+
+    // Top-level rules apply to all local apps that opt into this registry.
+    // app-specific rules can also live under apps.chat.rules and are merged after these.
+    "rules": [
+        {
+            "match": { "slash": ["/history"] },
+            "run": { "type": "builtin", "action": "history" },
+            "detail": "open history",
+            "group": "navigation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/bottom"] },
+            "run": { "type": "builtin", "action": "bottom" },
+            "detail": "jump to latest",
+            "group": "navigation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/thinking"] },
+            "run": { "type": "builtin", "action": "open-thinking" },
+            "detail": "show process panel",
+            "group": "panel",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/blackboard"] },
+            "run": { "type": "builtin", "action": "open-blackboard" },
+            "detail": "show blackboard panel",
+            "group": "panel",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/project"] },
+            "run": { "type": "builtin", "action": "project" },
+            "detail": "create or use project",
+            "group": "navigation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/projects"] },
+            "run": { "type": "builtin", "action": "projects" },
+            "detail": "choose project",
+            "group": "navigation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/fork"] },
+            "run": { "type": "builtin", "action": "fork" },
+            "detail": "fork from history",
+            "group": "navigation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/forks"] },
+            "run": { "type": "builtin", "action": "forks" },
+            "detail": "choose fork",
+            "group": "navigation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/stop", "/cancel"] },
+            "run": { "type": "builtin", "action": "stop" },
+            "detail": "cancel current reply",
+            "group": "conversation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/continue", "/c"] },
+            "run": { "type": "builtin", "action": "continue" },
+            "prompt": "Continue the previous response from where it stopped. Do not restart from the beginning.",
+            "detail": "continue previous reply",
+            "group": "conversation",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/clear", "/reset"] },
+            "run": { "type": "builtin", "action": "clear" },
+            "detail": "clear screen",
+            "group": "session",
+            "enabled": true
+        },
+        {
+            "match": { "slash": ["/exit", "/quit"] },
+            "run": { "type": "builtin", "action": "exit" },
+            "detail": "quit",
+            "group": "session",
+            "enabled": true
+        },
+
+        // Example custom extension. Uncomment and edit in ~/.flyflor/commands.jsonc.
+        // {
+        //     "match": { "slash": ["/review"] },
+        //     "run": {
+        //         "type": "send-message",
+        //         "prompt": "Review the current work and list concrete risks, missing tests, and next actions."
+        //     },
+        //     "detail": "ask for a review pass",
+        //     "group": "custom",
+        //     "enabled": false
+        // }
+    ],
+
+    "apps": {
+        "chat": {
+            // Chat-specific overrides merge after top-level rules.
+            // Re-declare the same builtin action to override triggers/detail/prompt.
+            "rules": []
+        }
+    }
+}

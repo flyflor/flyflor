@@ -1,4 +1,4 @@
-import { ProviderScope } from "../../../protocol/contracts/index.ts";
+import { ProviderScope } from "../../../protocol/contracts/enums.ts";
 import { registerComponentMetadata, registerModuleMetadata, type ModuleDecoratorOptions } from "../composition/index.ts";
 
 export function Module(options: ModuleDecoratorOptions | string = {}): ClassDecorator {

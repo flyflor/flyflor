@@ -291,6 +291,7 @@ export const ComponentKind = {
     Channel: "channel",
     Command: "command",
     Component: "component",
+    Context: "context",
     Crystal: "crystal",
     FlyFlor: "flyflor",
     Gateway: "gateway",
@@ -367,9 +368,11 @@ export const MemoryKind = {
     Candidate: "candidate",
     ConversationTurn: "conversation-turn",
     Fact: "fact",
+    Gem: "gem",
     History: "history",
     Profile: "profile",
     Rule: "rule",
+    // Skill is reserved for external SKILL.md packages and legacy persisted rows; crystal recall now emits Gem.
     Skill: "skill",
     Summary: "summary",
 } as const;

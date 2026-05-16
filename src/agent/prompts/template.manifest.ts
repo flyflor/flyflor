@@ -1,4 +1,4 @@
-import { BlackboardWorkerProtocol } from "../../protocol/contracts/index.ts";
+import { BlackboardWorkerProtocol } from "../../protocol/contracts/enums.ts";
 
 export const PROMPT_TEMPLATE_BUNDLE_VERSION = 2;
 

@@ -8,7 +8,7 @@ import {
     type Skill,
     type SkillUsageSummary,
     type SkillValidationResult as RawSkillValidationResult,
-} from "../../../crystal/skills/index.ts";
+} from "../../../skills/index.ts";
 import type { FlyflorPaths } from "../../../config/index.ts";
 
 export interface SkillListItem {

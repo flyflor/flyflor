@@ -9,5 +9,6 @@ export {
     type InjectionScope,
     type InjectionToken,
     type ClassToken,
+    type Constructable,
     type DependencyToken,
 } from "./dependency.container.ts";

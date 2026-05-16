@@ -37,6 +37,15 @@ describe("repository naming boundary", () => {
         // code review, while private/protected extension points are intentional.
         expect(violations).toEqual([]);
     });
+
+    test("index files stay as barrel exports only", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "src"))).filter((file) => basename(file) === "index.ts");
+        const violations = (await Promise.all(files.map(findNonBarrelIndexStatements))).flat();
+
+        // Directory entrypoints are public API maps. Keeping implementation
+        // out of index.ts prevents hidden helpers from bypassing module shape.
+        expect(violations).toEqual([]);
+    });
 });
 
 function isAllowedFilename(file: string): boolean {
@@ -124,4 +133,22 @@ function isImplicitPublicParameterProperty(parameter: ts.ParameterDeclaration): 
                 modifier.kind === ts.SyntaxKind.ProtectedKeyword,
         ) !== true
     );
+}
+
+async function findNonBarrelIndexStatements(file: string): Promise<string[]> {
+    const text = await Bun.file(file).text();
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const violations: string[] = [];
+    for (const statement of source.statements) {
+        if (isAllowedIndexStatement(statement)) continue;
+        const line = source.getLineAndCharacterOfPosition(statement.getStart(source)).line + 1;
+        violations.push(`${relative(REPO_ROOT, file)}:${line}`);
+    }
+    return violations;
+}
+
+function isAllowedIndexStatement(statement: ts.Statement): boolean {
+    if (ts.isExportDeclaration(statement)) return true;
+    if (ts.isImportDeclaration(statement)) return Boolean(statement.importClause?.isTypeOnly);
+    return ts.isEmptyStatement(statement);
 }

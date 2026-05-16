@@ -2,7 +2,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../core.ts";
+import { MemoryComponent } from "../base.component.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
@@ -63,7 +63,7 @@ export interface ProjectMemorySnapshot {
     receipt?: ProjectMemoryRecallReceipt;
 }
 
-@Component({ name: "project-memory-store", tags: ["database", "memory", "project"] })
+@Component()
 export class ProjectMemoryStore extends MemoryComponent {
     public constructor(
         private readonly paths: FlyflorPaths,

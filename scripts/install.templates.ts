@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 interface InstallOptions {
     force: boolean;
@@ -35,6 +35,12 @@ await installTemplateGroup({
     source: join(repoRoot, "templates", "projects"),
 });
 
+await installTemplateFile({
+    destination: join(options.targetHome, "commands.jsonc"),
+    force: options.force,
+    source: join(repoRoot, "templates", "app.commands.jsonc"),
+});
+
 console.log(`Template install complete: ${options.targetHome}`);
 
 async function installTemplateGroup(input: { destination: string; force: boolean; source: string }): Promise<void> {
@@ -54,6 +60,17 @@ async function installTemplateGroup(input: { destination: string; force: boolean
         await copyFile(sourcePath, destinationPath);
         console.log(`${input.force ? "write" : "copy"} ${basename(destinationPath)}`);
     }
+}
+
+async function installTemplateFile(input: { destination: string; force: boolean; source: string }): Promise<void> {
+    await mkdir(dirname(input.destination), { recursive: true });
+    const destination = Bun.file(input.destination);
+    if (!input.force && (await destination.exists())) {
+        console.log(`skip ${basename(input.destination)}`);
+        return;
+    }
+    await copyFile(input.source, input.destination);
+    console.log(`${input.force ? "write" : "copy"} ${basename(input.destination)}`);
 }
 
 function readArgValue(name: string): string | undefined {

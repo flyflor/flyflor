@@ -2,11 +2,13 @@
 
 ## 一句话定位
 
-Skill 是可重用、可热加载的「做事方式」工件：manifest.json 描述能力，loader 把 markdown 拼进 prompt，usage 统计会影响自动选择，promotion 已接到 pending skill offer 的物化闭环。
+Skill 是可重用、可热加载的外部「做事方式」工件：manifest.json 描述能力，loader 把 markdown 拼进 prompt，usage 统计会影响自动选择，promotion 已接到 pending skill offer 的物化闭环。内部晶体智力统一叫 Gem，由 Crystal 子系统维护；Skill 只表示 `SKILL.md` 能力包。
+
+Skill drift 与 Gem drift 必须分开：`skill-drift` 指 `SKILL.md` 包的 manifest、兼容版本、依赖或内容漂移；`gem-drift` 指 Crystal graph 里已结晶 Gem 的范围、置信度或矛盾漂移。Skill 维护不能写 `gem_snapshot`，Gem 维护也不能直接改 `~/.flyflor/skills`。
 
 ## 相关代码路径
 
-- `src/crystal/skills/index.ts` — SkillLoader / 选择 / usage / promotion
+- `src/skills/index.ts` — SkillLoader / 选择 / usage / promotion
 - `src/agent/prompts/index.ts` — `renderSkillContextPrompt`
 - `templates/skills/*` — 内置默认 skill 模板
 - `~/.flyflor/skills/` — 用户 skill 安装目录
@@ -72,7 +74,7 @@ interface SkillUsage {
 
 `pending_skill_offer` + `MemoryModule.consumeSkillOffer` 已把 promotion 闭环跑通：
 
-- 候选来源：reflection 聚合 / explicit skill intent / 现有 skill offer 计时器。
+- 候选来源：MCP/工具工作流聚合、用户显式保存 Skill 的意图、现有 skill offer 计时器；Reflection 产生的是 Gem 候选，不直接等同 Skill。
 - 触发：cluster support + confidence，或显式 `skillPromotionIntent`。
 - 输出：在 `~/.flyflor/skills/<name>/` 写 `SKILL.md` + `skill.json`，并补 `RETROSPECTIVE.md` 的 `skill-promoted` 记录；回顾日志写失败会让 promotion 显式失败，避免技能证据链静默缺块。
 
@@ -102,7 +104,7 @@ interface SkillUsage {
 
 - 自动选择已经接入一次性查询 embedding 的轻量语义召回，但仍以 `skill_usage.summary.json` 的 usage / recency / MCP 成功率为主。
 - promotion 主要消费显式意图和 cluster 证据，尚未做更细粒度的人机协同确认流。
-- skill 模板已有 schema 兼容检查；安装包内容漂移必须由 `validate` / `doctor` 明示报错。
+- skill 模板已有 schema 兼容检查；安装包内容漂移必须由 `validate` / `doctor` 明示报错。后续若增加 `skill-drift` 修复 worker，必须走 Skill 包目录与 manifest 写入路径，不能复用 Memory Dream 的 `gem-drift`。
 
 ## 相关测试
 

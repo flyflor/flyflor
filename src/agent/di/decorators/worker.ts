@@ -1,4 +1,4 @@
-import { ComponentKind, ArchitectureLayer } from "../../../protocol/contracts/index.ts";
+import { ComponentKind, ArchitectureLayer } from "../../../protocol/contracts/enums.ts";
 import type { ComponentDecoratorOptions } from "../composition/index.ts";
 import { Provide } from "./provide.ts";
 

@@ -6,11 +6,13 @@ export {
     type InjectionScope,
     type InjectionToken,
     type ClassToken,
+    type Constructable,
     type DependencyToken,
 } from "./factory/index.ts";
 export {
     Channel as ChannelDecorator,
     Component,
+    Event,
     Inject,
     Module,
     Plugin,

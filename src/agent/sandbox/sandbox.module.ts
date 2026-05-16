@@ -1,8 +1,6 @@
 import type { SandboxConfig } from "../../config/index.ts";
 import {
-    ArchitectureLayer,
     CapabilityExecutionKind,
-    ComponentKind,
     SandboxMode,
     ToolApprovalMode,
     type CapabilityExecutionKind as CapabilityExecutionKindType,
@@ -31,7 +29,7 @@ export interface CapabilityExecutionDecision {
     requiresApproval: boolean;
 }
 
-@Module({ name: "sandbox", tags: ["flyflor", "boundary"] })
+@Module()
 export class SandboxModule extends Sandbox {
     public constructor(private readonly config: SandboxConfig) {
         super();

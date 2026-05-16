@@ -1,6 +1,6 @@
 import { appendFile, cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import type { FlyflorPaths } from "../../config/index.ts";
+import type { FlyflorPaths } from "../config/index.ts";
 
 export type SkillSource = "project" | "global";
 

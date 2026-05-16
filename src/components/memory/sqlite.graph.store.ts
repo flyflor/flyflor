@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import type { LocalCrystalMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { GraphComponent } from "../core.ts";
+import { GraphComponent } from "../base.component.ts";
 import { LruCache } from "./lru.cache.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS, embedCrystalText } from "../../crystal/memory/vector.index.ts";
 import type {
@@ -106,7 +106,7 @@ interface GraphEdgeRow {
     created_at: number;
 }
 
-@Component({ name: "sqlite-graph-store", tags: ["database", "memory", "graph", "local"] })
+@Component()
 export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore {
     private database?: Database;
     private initialized = false;

@@ -221,6 +221,18 @@ export interface RuntimeContext {
      * 必须传入已持久化的 ContextFork id，runtime 只按该结构化 id 注入范围边界。
      */
     contextForkId?: string;
+    /**
+     * 显式 project 作用域。Flyflor 保持无 session：TUI / API 若要使用某个项目，
+     * 必须每轮传入这个结构化对象；runtime 不从自然语言或 cwd 猜测当前项目。
+     */
+    activeProject?: RuntimeProjectScope;
+}
+
+export interface RuntimeProjectScope {
+    id: string;
+    title?: string;
+    projectDir: string;
+    projectMemoryDir: string;
 }
 
 export interface ModelMessage {

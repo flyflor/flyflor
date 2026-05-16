@@ -12,7 +12,7 @@
 - `src/agent/runtime/routing/route.escalation.ts` — direct-with-watch 升级器
 - `src/agent/runtime/reflection/worker.ts` — 反思调度 worker
 - `src/agent/runtime/mcp/` — MCP toolset 过滤、工具结果 provenance 投影
-- `src/agent/runtime/skills/selection.ts` — crystal skill 选择适配
+- `src/agent/runtime/skills/selection.ts` — 外部 Skill 包选择适配
 - `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
 - `src/agent/runtime/streaming/` — 内部协议块流式可见性过滤
 - `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 helper
@@ -152,6 +152,8 @@ flowchart LR
 Ghost Context 不是普通 retrieved memory：active / resumed ghost 通过 `[ghost-hint]` 单独进入 prompt，模型用结构化 `resume` / `fork` / `fresh` 决策让分支继续、降权或回到主线。
 
 ContextFork 不等于 session。调用方只有在 `RuntimeContext.contextForkId` 显式传入已落库的 fork id 时，MemoryComponent 才注入 `[context-fork]` 范围摘要与 token 预算；不传 id 时不会靠自然语言猜测分叉。
+
+Project 也不等于 session。调用方只有在 `RuntimeContext.activeProject` 显式传入 `{ id, projectDir, projectMemoryDir }` 时，MemoryComponent 才把当前 turn 绑定到该项目的 `.flyflor/memory`；`/project` / `/projects` 只是在 TUI 本地维护这个结构化选择。
 
 RuntimeModule 另外暴露 `listChatHistory(userId, options)` 给 chat TUI 做 out-of-band 历史回放；这条路径只读 `brain.db` 事件与 `task_plans` / `context_forks` / `scene_records` 摘要表，不进入 prompt 装配。
 

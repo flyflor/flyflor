@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import type { FlyflorPaths, SQLiteMemoryConfig } from "../../config/index.ts";
 import { MemoryCandidateStatus, MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { SQLiteComponent } from "../core.ts";
+import { SQLiteComponent } from "../base.component.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchRequest, MemorySearchResult } from "./types.ts";
 
 interface MemoryRow {
@@ -28,7 +28,7 @@ interface ExistingMemoryRow {
     created_at: string;
 }
 
-@Component({ name: "sqlite-memory-store", tags: ["database", "memory"] })
+@Component()
 export class SQLiteMemoryStore extends SQLiteComponent {
     private database?: Database;
 

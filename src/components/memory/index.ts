@@ -1,4 +1,5 @@
 export { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain.store.ts";
+export { ContextForkStore, type ContextForkSidecarRecord, type ContextForkStoreSource } from "./context.fork.store.ts";
 export { LocalWorkingMemoryStore, type LocalWorkingMemoryHealthSnapshot } from "./local.working.store.ts";
 export { MarkdownMemoryStore, type MarkdownMemorySnapshot } from "./markdown.store.ts";
 export { ProjectMemoryStore, type ProjectMemoryRecallReceipt, type ProjectMemorySnapshot } from "./project.memory.store.ts";

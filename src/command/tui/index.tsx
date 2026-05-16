@@ -13,15 +13,13 @@ import {
     RGBA,
     ScrollBoxRenderable,
     TextAttributes,
-    TextRenderable,
-} from "@opentui/core";
-import type { FlyFlor } from "../../app.ts";
-import { FlyFlorTokens } from "../../app.ts";
+    TextRenderable} from "@opentui/core";
+import { BlackboardModule, MemoryModule, type FlyFlor } from "../../app.ts";
+import { ConfigComponent } from "../../config/index.ts";
 import {
     describeWorkingMemoryHealth,
     describeWorkingMemoryRecoveryFiles,
-    resolveGatewaySnapshot,
-} from "../../command/cli/status.ts";
+    resolveGatewaySnapshot} from "../../command/cli/status.ts";
 import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
@@ -36,8 +34,7 @@ const THEME = {
     yellow: RGBA.fromInts(255, 203, 116),
     red: RGBA.fromInts(255, 111, 127),
     border: RGBA.fromInts(76, 106, 126),
-    selectedBg: RGBA.fromInts(24, 34, 47),
-};
+    selectedBg: RGBA.fromInts(24, 34, 47)};
 
 export type DashboardTab = "overview" | "channels" | "blackboard";
 
@@ -78,8 +75,7 @@ export function renderDashboardLines(view: DashboardTab, snapshot: TuiSnapshot):
         );
         lines.push({
             text: `Working: ${snapshot.workingMemory.status} · ${snapshot.workingMemory.detail}`,
-            color: snapshot.workingMemory.status === "warn" ? THEME.yellow : THEME.fg,
-        });
+            color: snapshot.workingMemory.status === "warn" ? THEME.yellow : THEME.fg});
         lines.push(normal(`Recovery: ${snapshot.workingRecovery.status} · ${snapshot.workingRecovery.detail}`));
         lines.push(normal(""));
         lines.push(heading("◆ Latest Blackboard"));
@@ -129,16 +125,14 @@ export async function startTui(app: FlyFlor): Promise<void> {
         consoleOptions: {
             onCopySelection: (text) => {
                 void Bun.write(Bun.stdout, text);
-            },
-        },
-    });
+            }}});
 
     const loadSnapshot = async (): Promise<TuiSnapshot> => {
-        const config = app.resolve(FlyFlorTokens.Config);
+        const config = app.resolve(ConfigComponent);
         const gateway = await resolveGatewaySnapshot(app);
-        const blackboard = app.resolve(FlyFlorTokens.Blackboard);
+        const blackboard = app.resolve(BlackboardModule);
         const blackboardTurns = await blackboard.listRecentTurns(3);
-        const workingMemory = describeWorkingMemoryHealth(app.resolve(FlyFlorTokens.Memory).getWorkingMemoryHealthSnapshot());
+        const workingMemory = describeWorkingMemoryHealth(app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot());
         // Recovery visibility intentionally reads only file metadata, so the dashboard stays cheap to refresh.
         const workingRecovery = await describeWorkingMemoryRecoveryFiles(config);
         return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString(), workingMemory, workingRecovery };
@@ -153,26 +147,22 @@ export async function startTui(app: FlyFlor): Promise<void> {
         flexDirection: "column",
         width: renderer.width,
         height: renderer.height,
-        backgroundColor: THEME.bg,
-    });
+        backgroundColor: THEME.bg});
     const headerBox = new BoxRenderable(renderer, {
         flexDirection: "column",
         border: ["bottom"],
         borderColor: THEME.border,
         padding: 1,
-        flexShrink: 0,
-    });
+        flexShrink: 0});
     const headerTitle = new TextRenderable(renderer, {
         content: "Flyflor Dashboard",
         fg: THEME.cyan,
-        attributes: TextAttributes.BOLD,
-    });
+        attributes: TextAttributes.BOLD});
     const headerMeta = new TextRenderable(renderer, { content: "", fg: THEME.fgMuted, selectable: true });
     const headerHelp = new TextRenderable(renderer, {
         content: "q/Esc quit · h/l arrows switch · r refresh",
         fg: THEME.fgMuted,
-        selectable: false,
-    });
+        selectable: false});
     const errorText = new TextRenderable(renderer, { content: "", fg: THEME.red, selectable: true });
     errorText.visible = false;
     headerBox.add(headerTitle);
@@ -189,14 +179,12 @@ export async function startTui(app: FlyFlor): Promise<void> {
         borderColor: THEME.border,
         padding: 1,
         width: 20,
-        flexShrink: 0,
-    });
+        flexShrink: 0});
     const sidebarTitle = new TextRenderable(renderer, {
         content: "Views",
         fg: THEME.yellow,
         attributes: TextAttributes.BOLD,
-        selectable: false,
-    });
+        selectable: false});
     sidebar.add(sidebarTitle);
     const tabTexts = DASHBOARD_TABS.map((tab) => {
         const text = new TextRenderable(renderer, { content: "", fg: THEME.fg, selectable: false });
@@ -209,8 +197,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
         contentOptions: { flexDirection: "column" },
         flexGrow: 1,
         flexShrink: 1,
-        padding: 1,
-    });
+        padding: 1});
     row.add(content);
     root.add(mainBox);
 
@@ -271,8 +258,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
                 attributes: line.bold ? TextAttributes.BOLD : TextAttributes.NONE,
                 selectable: true,
                 width: "100%",
-                wrapMode: "word",
-            });
+                wrapMode: "word"});
             lineRenderables.push(text);
             content.content.add(text);
         }
@@ -298,8 +284,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
             renderer.off(CliRenderEvents.RESIZE, resizeHandler);
             clearInterval(timer);
             root.remove(mainBox.id);
-        },
-    });
+        }});
     syncUi();
     return lifecycle.waitForDestroy();
 }

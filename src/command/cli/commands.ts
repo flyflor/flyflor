@@ -13,12 +13,11 @@ import {
     ToolApprovalMode,
     type GatewayAttachment,
     type GatewayMessage,
-    type RuntimeContext,
-} from "../../protocol/contracts/index.ts";
-import { ConsoleEventSink } from "../../protocol/events/index.ts";
-import { loadConfig, type FlyflorConfig } from "../../config/index.ts";
+    type RuntimeContext} from "../../protocol/contracts/index.ts";
+import { ConsoleEventSink, EventsComponent } from "../../protocol/events/index.ts";
+import { ConfigComponent, loadConfig, type FlyflorConfig } from "../../config/index.ts";
 import type { FlyFlor } from "../../app.ts";
-import { FlyFlorTokens, getFlyFlor } from "../../app.ts";
+import { BlackboardModule, GatewayModule, getFlyFlor, RuntimeModule } from "../../app.ts";
 import {
     buildGatewayServicePlan,
     gatewayDaemonStatus,
@@ -26,8 +25,7 @@ import {
     restartGatewayDaemon,
     startGatewayDaemon,
     stopGatewayDaemon,
-    writeGatewayServicePlan,
-} from "../../agent/gateway/index.ts";
+    writeGatewayServicePlan} from "../../agent/gateway/index.ts";
 import { RetrospectiveLog } from "../../neural/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import {
@@ -43,8 +41,7 @@ import {
     validateMcpServers,
     type McpCallResult,
     type McpServerDefinition,
-    type McpToolDefinition,
-} from "../../agent/mcp/index.ts";
+    type McpToolDefinition} from "../../agent/mcp/index.ts";
 import {
     findPlugin,
     loadPlugins,
@@ -55,8 +52,7 @@ import {
     upsertPlugin,
     validatePlugins,
     type PluginDefinition,
-    type PluginValidationResult,
-} from "../../agent/plugin/index.ts";
+    type PluginValidationResult} from "../../agent/plugin/index.ts";
 import { promptApproveMcpToolCall, startHumanChat } from "../../agent/runtime/index.ts";
 import {
     addSandboxAllow,
@@ -64,8 +60,7 @@ import {
     loadSandboxAllowlist,
     removeSandboxAllow,
     sandboxAllowlistPath,
-    type SandboxAllowKind,
-} from "../../agent/sandbox/index.ts";
+    type SandboxAllowKind} from "../../agent/sandbox/index.ts";
 import {
     findSkill,
     installSkill,
@@ -74,16 +69,14 @@ import {
     resetSkill,
     validateSkill,
     type Skill,
-    type SkillUsageSummary,
-} from "../../crystal/skills/index.ts";
+    type SkillUsageSummary} from "../../skills/index.ts";
 import {
     initializeFlyflorGatewayConfig,
     initializeFlyflorModelConfig,
     renderChannels,
     renderDoctor,
     renderMemorySummary,
-    renderStatus,
-} from "./index.ts";
+    renderStatus} from "./index.ts";
 import { formatFlyflorVersion } from "../version.ts";
 import { renderConfigView } from "../config.view.ts";
 import { runUpdate } from "./update.ts";
@@ -134,8 +127,7 @@ const COMMAND_SPECS: CommandSpec[] = [
             ["--accept-hooks", "Auto-approve unseen shell hooks"],
             ["--max-turns <n>", "Maximum tool-calling iterations"],
             ["--tui", "Launch TUI"],
-        ],
-    },
+        ]},
     { name: "tui", help: "Full-screen terminal interface" },
     {
         name: "gateway",
@@ -148,8 +140,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["-v, --verbose", "Increase stderr log verbosity"],
                     ["-q, --quiet", "Suppress stderr log output"],
                     ["--accept-hooks", "Auto-approve unseen shell hooks"],
-                ],
-            },
+                ]},
             { name: "start", help: "Start the installed background service" },
             { name: "stop", help: "Stop gateway service" },
             { name: "restart", help: "Restart gateway service" },
@@ -166,13 +157,10 @@ const COMMAND_SPECS: CommandSpec[] = [
                             ["--binary <path>", "Flyflor binary path to run"],
                             ["--write", "Write the rendered service file to its target path"],
                             ["--json", "Print machine-readable install plan"],
-                        ],
-                    },
-                ],
-            },
+                        ]},
+                ]},
             { name: "setup", help: "Configure messaging platforms" },
-        ],
-    },
+        ]},
     {
         name: "model",
         help: "Select default model and provider",
@@ -182,8 +170,7 @@ const COMMAND_SPECS: CommandSpec[] = [
             ["--api-key <apiKey>", "Provider API key"],
             ["--base-url <baseUrl>", "Custom relay base URL"],
             ["--protocol <protocol>", "Protocol override"],
-        ],
-    },
+        ]},
     {
         name: "setup",
         argument: "[section]",
@@ -196,13 +183,11 @@ const COMMAND_SPECS: CommandSpec[] = [
             ["--base-url <baseUrl>", "Custom relay base URL"],
             ["--gateway-port <port>", "Gateway port"],
             ["-y, --yes", "Accept defaults for missing values"],
-        ],
-    },
+        ]},
     {
         name: "status",
         help: "Show status of all components",
-        options: [["--deep", "Run deep checks"]],
-    },
+        options: [["--deep", "Run deep checks"]]},
     { name: "channels", help: "List registered channel adapters" },
     {
         name: "codename",
@@ -215,8 +200,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--user <id>", "Filter by user id"],
                     ["--limit <n>", "Limit rows (default 50)"],
                     ["--json", "Emit JSON"],
-                ],
-            },
+                ]},
             {
                 name: "promote",
                 help: "Promote a codename to a project scaffold (workspace/projects/<projectId>/)",
@@ -224,8 +208,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--force", "Skip useCount/age thresholds"],
                     ["--json", "Emit JSON"],
-                ],
-            },
+                ]},
             {
                 name: "use",
                 help: "Mark a codename as active (writes ~/.flyflor/state/active-codename.json)",
@@ -233,10 +216,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--user <id>", "Filter by user id"],
                     ["--json", "Emit JSON"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "inbox",
         help: "Inspect inbox project (un-promoted codename buckets) atoms (P2)",
@@ -249,10 +230,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--days <n>", "Window in days (default 7, max 31)"],
                     ["--limit <n>", "Atom row limit (default 100, max 500)"],
                     ["--json", "Emit JSON"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "ghost",
         help: "Inspect / manage Ghost Context snapshots stored in brain.db (LF-R4)",
@@ -265,34 +244,28 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--codename <id>", "Filter by codename id"],
                     ["--limit <n>", "Limit rows (default 20)"],
                     ["--json", "Emit JSON"],
-                ],
-            },
+                ]},
             {
                 name: "show",
                 help: "Show a single ghost-context entry (id from `ghost list`)",
                 argument: "<ghostEventId>",
-                options: [["--json", "Emit JSON"]],
-            },
+                options: [["--json", "Emit JSON"]]},
             {
                 name: "resume",
                 help: "Mark a ghost as resumed (status=resumed, pulls importance back to peak)",
                 argument: "<ghostEventId>",
-                options: [["--json", "Emit JSON"]],
-            },
+                options: [["--json", "Emit JSON"]]},
             {
                 name: "drop",
                 help: "Drop a ghost (status=abandoned, hidden from list)",
                 argument: "<ghostEventId>",
-                options: [["--json", "Emit JSON"]],
-            },
+                options: [["--json", "Emit JSON"]]},
             {
                 name: "pin",
                 help: "Pin a ghost (decay halflife × ghost.pinHalflifeMultiplier, default 3x)",
                 argument: "<ghostEventId>",
-                options: [["--json", "Emit JSON"]],
-            },
-        ],
-    },
+                options: [["--json", "Emit JSON"]]},
+        ]},
     {
         name: "identity",
         help: "Inspect / revert agent identity self-write entries stored in brain.db (LF-R5)",
@@ -305,16 +278,13 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--limit <n>", "Limit rows (default 32)"],
                     ["--all", "Include reverted / archived entries"],
                     ["--json", "Emit JSON"],
-                ],
-            },
+                ]},
             {
                 name: "revert",
                 help: "Revert an identity-append entry (state.status=abandoned; content keeps a revertedAt audit field)",
                 argument: "<eventId>",
-                options: [["--json", "Emit JSON"]],
-            },
-        ],
-    },
+                options: [["--json", "Emit JSON"]]},
+        ]},
     { name: "doctor", help: "Check configuration and dependencies", options: [["--fix", "Attempt to fix issues"]] },
     {
         name: "config",
@@ -326,12 +296,10 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--json", "Emit JSON instead of text"],
                     ["--show-secrets", "Print secrets in full (default redacted)"],
-                ],
-            },
+                ]},
             { name: "path", help: "Print config file path" },
             { name: "env-path", help: "Print secrets file path" },
-        ],
-    },
+        ]},
     {
         name: "memory",
         help: "Manage agent memory",
@@ -340,18 +308,15 @@ const COMMAND_SPECS: CommandSpec[] = [
             {
                 name: "reset",
                 help: "Erase built-in memory",
-                options: [["-y, --yes", "Skip confirmation"]],
-            },
+                options: [["-y, --yes", "Skip confirmation"]]},
             {
                 name: "retrospective",
                 help: "Show RETROSPECTIVE.md (consolidation audit log)",
                 options: [
                     ["--tail <n>", "Show only the last N entries"],
                     ["--json", "Emit JSON metadata (path, size, entryCount)"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "blackboard",
         help: "Inspect blackboard turns",
@@ -363,8 +328,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--limit <n>", "Limit"],
                     ["--project-constraint <id>", "Filter by internal project constraint id"],
                     ["--json", "Emit JSON instead of a table"],
-                ],
-            },
+                ]},
             {
                 name: "show",
                 argument: "<turnId>",
@@ -372,10 +336,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--limit <n>", "Limit messages and steps"],
                     ["--json", "Emit JSON instead of tables"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "skills",
         help: "Manage agent skills",
@@ -384,26 +346,22 @@ const COMMAND_SPECS: CommandSpec[] = [
                 name: "list",
                 aliases: ["ls"],
                 help: "List installed skills",
-                options: [["--json", "Emit JSON instead of a table"]],
-            },
+                options: [["--json", "Emit JSON instead of a table"]]},
             {
                 name: "show",
                 argument: "<name>",
                 help: "Show a skill package",
-                options: [["--json", "Emit JSON instead of text"]],
-            },
+                options: [["--json", "Emit JSON instead of text"]]},
             {
                 name: "validate",
                 argument: "[name]",
                 help: "Validate one skill or all installed skills",
-                options: [["--json", "Emit JSON instead of text"]],
-            },
+                options: [["--json", "Emit JSON instead of text"]]},
             {
                 name: "usage",
                 argument: "[name]",
                 help: "Show project-local skill usage counters",
-                options: [["--json", "Emit JSON instead of a table"]],
-            },
+                options: [["--json", "Emit JSON instead of a table"]]},
             {
                 name: "install",
                 argument: "<identifier>",
@@ -413,8 +371,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--force", "Install despite caution"],
                     ["--global", "Install into global skill directory"],
                     ["-y, --yes", "Skip confirmation"],
-                ],
-            },
+                ]},
             {
                 name: "reset",
                 aliases: ["remove", "rm"],
@@ -423,10 +380,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--global", "Reset from global skill directory"],
                     ["-y, --yes", "Skip confirmation"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "tools",
         help: "Toggle toolsets",
@@ -435,16 +390,13 @@ const COMMAND_SPECS: CommandSpec[] = [
                 name: "enable",
                 argument: "<toolsets...>",
                 help: "Enable toolsets",
-                options: [["--mcp-server <name>", "MCP server"]],
-            },
+                options: [["--mcp-server <name>", "MCP server"]]},
             {
                 name: "disable",
                 argument: "<toolsets...>",
                 help: "Disable toolsets",
-                options: [["--mcp-server <name>", "MCP server"]],
-            },
-        ],
-    },
+                options: [["--mcp-server <name>", "MCP server"]]},
+        ]},
     {
         name: "mcp",
         help: "Manage MCP servers",
@@ -453,20 +405,17 @@ const COMMAND_SPECS: CommandSpec[] = [
                 name: "list",
                 aliases: ["ls"],
                 help: "List configured MCP servers",
-                options: [["--json", "Emit JSON instead of a table"]],
-            },
+                options: [["--json", "Emit JSON instead of a table"]]},
             {
                 name: "show",
                 argument: "<name>",
                 help: "Show an MCP server config",
-                options: [["--json", "Emit JSON instead of text"]],
-            },
+                options: [["--json", "Emit JSON instead of text"]]},
             {
                 name: "validate",
                 argument: "[name]",
                 help: "Validate one MCP server or all MCP servers",
-                options: [["--json", "Emit JSON instead of text"]],
-            },
+                options: [["--json", "Emit JSON instead of text"]]},
             {
                 name: "add",
                 argument: "<name>",
@@ -478,20 +427,17 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--env <env...>", "Environment KEY=value entries"],
                     ["--global", "Write global MCP config"],
                     ["-y, --yes", "Skip confirmation"],
-                ],
-            },
+                ]},
             {
                 name: "enable",
                 argument: "<name>",
                 help: "Enable an MCP server in project config",
-                options: [["--global", "Write global MCP config"]],
-            },
+                options: [["--global", "Write global MCP config"]]},
             {
                 name: "disable",
                 argument: "<name>",
                 help: "Disable an MCP server in project config",
-                options: [["--global", "Write global MCP config"]],
-            },
+                options: [["--global", "Write global MCP config"]]},
             {
                 name: "remove",
                 aliases: ["rm", "delete"],
@@ -500,8 +446,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--global", "Write global MCP config"],
                     ["-y, --yes", "Skip confirmation"],
-                ],
-            },
+                ]},
             {
                 name: "tools",
                 argument: "<name>",
@@ -509,8 +454,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--json", "Emit JSON instead of a table"],
                     ["--timeout <ms>", "Request timeout in milliseconds"],
-                ],
-            },
+                ]},
             {
                 name: "call",
                 argument: "<name> <tool>",
@@ -519,10 +463,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--input <json>", "Tool input JSON object"],
                     ["--json", "Emit JSON instead of text"],
                     ["--timeout <ms>", "Request timeout in milliseconds"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "plugins",
         help: "Manage plugins",
@@ -531,20 +473,17 @@ const COMMAND_SPECS: CommandSpec[] = [
                 name: "list",
                 aliases: ["ls"],
                 help: "List plugins",
-                options: [["--json", "Emit JSON instead of a table"]],
-            },
+                options: [["--json", "Emit JSON instead of a table"]]},
             {
                 name: "show",
                 argument: "<name>",
                 help: "Show plugin manifest",
-                options: [["--json", "Emit JSON instead of text"]],
-            },
+                options: [["--json", "Emit JSON instead of text"]]},
             {
                 name: "validate",
                 argument: "[name]",
                 help: "Validate one plugin or all plugins",
-                options: [["--json", "Emit JSON instead of text"]],
-            },
+                options: [["--json", "Emit JSON instead of text"]]},
             {
                 name: "add",
                 argument: "<name>",
@@ -554,20 +493,17 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--description <text>", "Plugin description"],
                     ["--global", "Write global plugin manifest"],
                     ["-y, --yes", "Skip confirmation"],
-                ],
-            },
+                ]},
             {
                 name: "enable",
                 argument: "<name>",
                 help: "Enable a plugin in project manifest",
-                options: [["--global", "Write global plugin manifest"]],
-            },
+                options: [["--global", "Write global plugin manifest"]]},
             {
                 name: "disable",
                 argument: "<name>",
                 help: "Disable a plugin in project manifest",
-                options: [["--global", "Write global plugin manifest"]],
-            },
+                options: [["--global", "Write global plugin manifest"]]},
             {
                 name: "remove",
                 aliases: ["rm", "uninstall"],
@@ -576,8 +512,7 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--global", "Write global plugin manifest"],
                     ["-y, --yes", "Skip confirmation"],
-                ],
-            },
+                ]},
             {
                 name: "run",
                 argument: "<name>",
@@ -589,10 +524,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                     ["--command <cmd>", "Override command (default: bun)"],
                     ["--allow-cmd <cmd...>", "Additional allowed commands"],
                     ["--json", "Emit raw JSON result"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "dream",
         help: "Memory dream-stage maintenance",
@@ -604,10 +537,8 @@ const COMMAND_SPECS: CommandSpec[] = [
                 options: [
                     ["--limit <n>", "Max episodes per user"],
                     ["--user <userId>", "Run for a single tracked user"],
-                ],
-            },
-        ],
-    },
+                ]},
+        ]},
     {
         name: "sandbox",
         help: "Manage persisted sandbox allowlist (sandbox.allow.jsonc)",
@@ -616,30 +547,25 @@ const COMMAND_SPECS: CommandSpec[] = [
                 name: "list",
                 aliases: ["ls"],
                 help: "List allowlist entries",
-                options: [["--json", "Emit JSON instead of a table"]],
-            },
+                options: [["--json", "Emit JSON instead of a table"]]},
             {
                 name: "allow",
                 argument: "<kind> <value>",
                 help: "Add an allowlist entry (kind: plugin-command|shell-command|mcp-tool)",
-                options: [["--global", "Write to global sandbox.allow.jsonc"]],
-            },
+                options: [["--global", "Write to global sandbox.allow.jsonc"]]},
             {
                 name: "deny",
                 argument: "<kind> <value>",
                 help: "Remove an allowlist entry",
-                options: [["--global", "Write to global sandbox.allow.jsonc"]],
-            },
-        ],
-    },
+                options: [["--global", "Write to global sandbox.allow.jsonc"]]},
+        ]},
     {
         name: "update",
         help: "Update Flyflor",
         options: [
             ["--check", "Check for update"],
             ["-y, --yes", "Skip prompts"],
-        ],
-    },
+        ]},
     { name: "version", help: "Show version information" },
 ];
 
@@ -774,8 +700,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             const app = await getFlyFlor({
                 argv: process.argv,
                 mode: RuntimeMode.Tui,
-                config: await configWithRuntimeOverrides(opts),
-            });
+                config: await configWithRuntimeOverrides(opts)});
             const { startTui } = await import("../tui/index.tsx");
             await startTui(app);
             return;
@@ -784,8 +709,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             argv: process.argv,
             mode: RuntimeMode.Chat,
             config: await configWithRuntimeOverrides(opts),
-            events: opts.verbose && !opts.quiet ? new ConsoleEventSink() : undefined,
-        });
+            events: opts.verbose && !opts.quiet ? new ConsoleEventSink() : undefined});
         const toolsetAllowlist = parseToolsetAllowlist(opts.toolsets);
         const maxToolTurns = parseMaxTurns(opts.maxTurns);
         if (typeof opts.query === "string" && opts.query.trim().length > 0) {
@@ -793,8 +717,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             try {
                 await runChatQuery(app, opts.query, opts.skills, Boolean(opts.quiet), imagePaths, {
                     toolsetAllowlist,
-                    maxToolTurns,
-                });
+                    maxToolTurns});
             } finally {
                 app.dispose();
             }
@@ -802,12 +725,11 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }
         if (Array.isArray(opts.skills) && opts.skills.length > 0) {
             try {
-                await startHumanChat(app.resolve(FlyFlorTokens.Runtime), {
+                await startHumanChat(app.resolve(RuntimeModule), {
                     approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
                     skillNames: opts.skills,
                     toolsetAllowlist,
-                    maxToolTurns,
-                });
+                    maxToolTurns});
             } finally {
                 app.dispose();
             }
@@ -833,9 +755,8 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             const app = await getFlyFlor({
                 argv: process.argv,
                 mode: RuntimeMode.Gateway,
-                config: await configWithRuntimeOverrides(opts),
-            });
-            app.resolve(FlyFlorTokens.Gateway).start();
+                config: await configWithRuntimeOverrides(opts)});
+            app.resolve(GatewayModule).start();
             await new Promise<void>(() => {});
             return;
         }
@@ -846,7 +767,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         if (sub === "status") {
             const app = await cliApp();
             console.log(await renderChannels(app));
-            const daemonStatus = await gatewayDaemonStatus(app.resolve(FlyFlorTokens.Config).paths);
+            const daemonStatus = await gatewayDaemonStatus(app.resolve(ConfigComponent).paths);
             if (daemonStatus.running) {
                 console.log(`\nBackground daemon: running (pid ${daemonStatus.pid})`);
             } else {
@@ -860,7 +781,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }
         if (sub === "start") {
             const app = await cliApp();
-            const paths = app.resolve(FlyFlorTokens.Config).paths;
+            const paths = app.resolve(ConfigComponent).paths;
             const result = await startGatewayDaemon(paths);
             if (result.started) {
                 console.log(`gateway daemon started (pid ${result.pid}); logs → ${result.logFile}`);
@@ -871,7 +792,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }
         if (sub === "stop") {
             const app = await cliApp();
-            const paths = app.resolve(FlyFlorTokens.Config).paths;
+            const paths = app.resolve(ConfigComponent).paths;
             const result = await stopGatewayDaemon(paths);
             if (result.stopped) {
                 console.log(`gateway daemon stopped (pid ${result.pid}${result.forced ? ", forced" : ""})`);
@@ -882,7 +803,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }
         if (sub === "restart") {
             const app = await cliApp();
-            const paths = app.resolve(FlyFlorTokens.Config).paths;
+            const paths = app.resolve(ConfigComponent).paths;
             const result = await restartGatewayDaemon(paths);
             console.log(
                 `gateway daemon restarted (pid ${result.pid}${result.forced ? ", previous forced" : ""}); logs → ${result.logFile}`,
@@ -892,10 +813,9 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         if (sub === "service" && path[2] === "plan") {
             const opts = command.opts<{ binary?: string; json?: boolean; target?: string; write?: boolean }>();
             const app = await cliApp();
-            const plan = buildGatewayServicePlan(app.resolve(FlyFlorTokens.Config).paths, {
+            const plan = buildGatewayServicePlan(app.resolve(ConfigComponent).paths, {
                 binary: opts.binary,
-                target: parseGatewayServiceTarget(opts.target),
-            });
+                target: parseGatewayServiceTarget(opts.target)});
             if (opts.write) {
                 await writeGatewayServicePlan(plan);
             }
@@ -1057,7 +977,7 @@ async function maybeStartCommandTui(root: string, sub?: string, app?: FlyFlor): 
 }
 
 async function runDoctorFix(app: FlyFlor): Promise<void> {
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     const targets = [
         config.paths.home,
         config.paths.workspaceDir,
@@ -1108,29 +1028,25 @@ async function runChatQuery(
     imagePaths: string[] = [],
     runtimeOptions: { toolsetAllowlist?: string[]; maxToolTurns?: number } = {},
 ): Promise<void> {
-    const runtime = app.resolve(FlyFlorTokens.Runtime);
+    const runtime = app.resolve(RuntimeModule);
     await runtime.warmup();
     const now = new Date().toISOString();
     const context: RuntimeContext = {
         requestId: crypto.randomUUID(),
         now,
-        skillNames,
-    };
+        skillNames};
     const attachments = await loadAttachmentsFromPaths(imagePaths);
     const message: GatewayMessage = {
         id: crypto.randomUUID(),
         route: {
             channel: Channel.Stdio,
             chatId: "human-local",
-            chatType: ChatType.Direct,
-        },
+            chatType: ChatType.Direct},
         user: {
-            id: "human",
-        },
+            id: "human"},
         text: query.trim(),
         attachments: attachments.length > 0 ? attachments : undefined,
-        receivedAt: now,
-    };
+        receivedAt: now};
 
     let wrote = false;
     let buffered = "";
@@ -1145,8 +1061,7 @@ async function runChatQuery(
                 return;
             }
             process.stdout.write(text);
-        },
-    });
+        }});
     if (quiet) {
         process.stdout.write(buffered);
     }
@@ -1211,8 +1126,7 @@ async function loadAttachmentsFromPaths(paths: string[]): Promise<GatewayAttachm
                 name: basename(absolute),
                 mimeType: inferMimeType(absolute),
                 size: info.size,
-                sha256,
-            });
+                sha256});
         } catch (error) {
             process.stderr.write(`warn: --image "${trimmed}" could not be read: ${String(error)}\n`);
         }
@@ -1237,8 +1151,7 @@ function inferMimeType(path: string): string | undefined {
         ".heic": "image/heic",
         ".pdf": "application/pdf",
         ".txt": "text/plain",
-        ".md": "text/markdown",
-    };
+        ".md": "text/markdown"};
     return map[ext];
 }
 
@@ -1260,9 +1173,7 @@ async function configWithRuntimeOverrides(options: {
     const config = await loadConfig({
         model: {
             model,
-            providerId,
-        },
-    });
+            providerId}});
     if (!acceptHooks) {
         return config;
     }
@@ -1270,9 +1181,7 @@ async function configWithRuntimeOverrides(options: {
         ...config,
         sandbox: {
             ...config.sandbox,
-            shellHookApproval: ToolApprovalMode.Allow,
-        },
-    };
+            shellHookApproval: ToolApprovalMode.Allow}};
 }
 
 async function runModelWizard(command?: Command): Promise<void> {
@@ -1288,8 +1197,7 @@ async function runModelWizard(command?: Command): Promise<void> {
     }>();
     const result = await initializeFlyflorModelConfig({
         ...options,
-        gatewayPort: parseOptionalPort(options?.gatewayPort),
-    });
+        gatewayPort: parseOptionalPort(options?.gatewayPort)});
     if (result) {
         prompts.note(
             [
@@ -1309,8 +1217,7 @@ async function runGatewaySetupWizard(command?: Command): Promise<void> {
     const options = command?.opts<{ gatewayPort?: string | number; yes?: boolean }>();
     const result = await initializeFlyflorGatewayConfig({
         gatewayPort: parseOptionalPort(options?.gatewayPort),
-        yes: options?.yes,
-    });
+        yes: options?.yes});
     if (!result) {
         prompts.cancel("Gateway setup cancelled");
         return;
@@ -1328,7 +1235,7 @@ async function runGatewaySetupWizard(command?: Command): Promise<void> {
 
 async function runConfig(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     if (!sub || sub === "show") {
         const showCmd = command.name() === "show" ? command : command.commands.find((c) => c.name() === "show");
         const opts = showCmd?.opts<{ json?: boolean; showSecrets?: boolean }>() ?? {};
@@ -1363,7 +1270,7 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
     }
     if (sub === "reset") {
         const app = await cliApp();
-        const config = app.resolve(FlyFlorTokens.Config);
+        const config = app.resolve(ConfigComponent);
         const removed = await resetBuiltInMemory(config);
         console.log(`Memory reset complete. Removed ${removed.length} paths.`);
         for (const path of removed) {
@@ -1373,7 +1280,7 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
     }
     if (sub === "retrospective") {
         const app = await cliApp();
-        const config = app.resolve(FlyFlorTokens.Config);
+        const config = app.resolve(ConfigComponent);
         const log = new RetrospectiveLog({ projectMemoryDir: config.paths.projectMemoryDir });
         const opts = command.opts<{ json?: boolean; tail?: string }>();
         const tail = opts.tail ? Math.max(0, Number(opts.tail) | 0) : undefined;
@@ -1398,7 +1305,7 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
 
 async function runBlackboard(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const blackboard = app.resolve(FlyFlorTokens.Blackboard);
+    const blackboard = app.resolve(BlackboardModule);
     if (!sub || sub === "list") {
         const opts = command.opts<{ json?: boolean; limit?: string | number; projectConstraint?: string }>();
         const limit = parseOptionalPositive(opts.limit) ?? 20;
@@ -1428,7 +1335,7 @@ async function runBlackboard(sub: string | undefined, command: Command): Promise
 
 async function runDream(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const runtime = app.resolve(FlyFlorTokens.Runtime);
+    const runtime = app.resolve(RuntimeModule);
     if (!sub || sub === "status") {
         const snapshot = runtime.dreamSnapshot();
         const lines = [
@@ -1455,7 +1362,7 @@ async function runDream(sub: string | undefined, command: Command): Promise<void
 
 async function runSkills(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     if (!sub || sub === "list") {
         const opts = command.opts<{ json?: boolean }>();
         const skills = await loadSkills(config.paths);
@@ -1505,8 +1412,7 @@ async function runSkills(sub: string | undefined, command: Command): Promise<voi
         if (!opts.yes && process.stdin.isTTY) {
             const confirm = await prompts.confirm({
                 initialValue: !opts.force,
-                message: `Install skill from ${identifier}?`,
-            });
+                message: `Install skill from ${identifier}?`});
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("Skill install cancelled");
                 return;
@@ -1515,8 +1421,7 @@ async function runSkills(sub: string | undefined, command: Command): Promise<voi
         const skill = await installSkill(config.paths, identifier, {
             force: opts.force,
             global: opts.global,
-            name: opts.name,
-        });
+            name: opts.name});
         console.log(`Installed skill: ${skill.name}`);
         console.log(`Path: ${skill.path}`);
         return;
@@ -1530,8 +1435,7 @@ async function runSkills(sub: string | undefined, command: Command): Promise<voi
         if (!opts.yes && process.stdin.isTTY) {
             const confirm = await prompts.confirm({
                 initialValue: false,
-                message: `Reset workspace skill ${name}?`,
-            });
+                message: `Reset workspace skill ${name}?`});
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("Skill reset cancelled");
                 return;
@@ -1548,7 +1452,7 @@ async function runSkills(sub: string | undefined, command: Command): Promise<voi
 
 async function runMcp(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     if (!sub || sub === "list") {
         const opts = command.opts<{ json?: boolean }>();
         const servers = await loadMcpServers(config.paths);
@@ -1611,8 +1515,7 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
             const target = url ?? [serverCommand, ...args].filter(Boolean).join(" ");
             const confirm = await prompts.confirm({
                 initialValue: true,
-                message: `Add MCP server ${name}: ${target}?`,
-            });
+                message: `Add MCP server ${name}: ${target}?`});
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("MCP add cancelled");
                 return;
@@ -1624,8 +1527,7 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
             env,
             global: opts.global,
             name,
-            url,
-        });
+            url});
         console.log(`Saved MCP server: ${server.name}`);
         console.log(`Path: ${mcpConfigPath(config.paths, { global: opts.global })}`);
         return;
@@ -1650,8 +1552,7 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
         if (!opts.yes && process.stdin.isTTY) {
             const confirm = await prompts.confirm({
                 initialValue: false,
-                message: `Remove ${opts.global ? "global" : "project"} MCP server ${name}?`,
-            });
+                message: `Remove ${opts.global ? "global" : "project"} MCP server ${name}?`});
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("MCP remove cancelled");
                 return;
@@ -1671,9 +1572,8 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
         const opts = command.opts<{ json?: boolean; timeout?: string | number }>();
         const server = await resolveMcpServer(config.paths, name);
         const tools = await listMcpTools(config.paths, server, {
-            events: app.resolve(FlyFlorTokens.Events),
-            timeoutMs: parseOptionalPositive(opts.timeout),
-        });
+            events: app.resolve(EventsComponent),
+            timeoutMs: parseOptionalPositive(opts.timeout)});
         console.log(renderMcpTools(server, tools, Boolean(opts.json)));
         return;
     }
@@ -1687,9 +1587,8 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
         const input = parseJsonObjectOption(opts.input, "--input");
         const server = await resolveMcpServer(config.paths, name);
         const result = await callMcpTool(config.paths, server, tool, input, {
-            events: app.resolve(FlyFlorTokens.Events),
-            timeoutMs: parseOptionalPositive(opts.timeout),
-        });
+            events: app.resolve(EventsComponent),
+            timeoutMs: parseOptionalPositive(opts.timeout)});
         console.log(renderMcpCallResult(result, Boolean(opts.json)));
         return;
     }
@@ -1698,7 +1597,7 @@ async function runMcp(sub: string | undefined, command: Command): Promise<void> 
 
 async function runTools(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     if (sub !== "enable" && sub !== "disable") {
         throwUnsupportedCommand(["tools", sub ?? ""]);
         return;
@@ -1722,7 +1621,7 @@ async function runTools(sub: string | undefined, command: Command): Promise<void
 
 async function runSandbox(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
 
     if (!sub || sub === "list" || sub === "ls") {
         const opts = command.opts<{ json?: boolean }>();
@@ -1768,7 +1667,7 @@ async function runSandbox(sub: string | undefined, command: Command): Promise<vo
 
 async function runPlugins(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const config = app.resolve(FlyFlorTokens.Config);
+    const config = app.resolve(ConfigComponent);
     if (!sub || sub === "list" || sub === "ls") {
         const opts = command.opts<{ json?: boolean }>();
         const plugins = await loadPlugins(config.paths);
@@ -1819,8 +1718,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
         if (!opts.yes && process.stdin.isTTY) {
             const confirm = await prompts.confirm({
                 initialValue: true,
-                message: `Add plugin ${name}: ${entry}?`,
-            });
+                message: `Add plugin ${name}: ${entry}?`});
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("Plugin add cancelled");
                 return;
@@ -1830,8 +1728,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
             description: opts.description,
             entry,
             global: opts.global,
-            name,
-        });
+            name});
         console.log(`Saved plugin: ${plugin.name}`);
         console.log(`Path: ${pluginConfigPath(config.paths, { global: opts.global })}`);
         return;
@@ -1856,8 +1753,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
         if (!opts.yes && process.stdin.isTTY) {
             const confirm = await prompts.confirm({
                 initialValue: false,
-                message: `Remove ${opts.global ? "global" : "project"} plugin ${name}?`,
-            });
+                message: `Remove ${opts.global ? "global" : "project"} plugin ${name}?`});
             if (prompts.isCancel(confirm) || !confirm) {
                 prompts.cancel("Plugin remove cancelled");
                 return;
@@ -1903,7 +1799,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
             const message = error instanceof Error ? error.message : String(error);
             throw new CommanderError(1, "flyflor.invalidPluginRequest", `Invalid JSON request: ${message}`);
         }
-        const events = app.resolve(FlyFlorTokens.Events);
+        const events = app.resolve(EventsComponent);
         const policy = createSandboxPolicy(config.sandbox);
         const command_ = opts.command?.trim() || "bun";
         const persisted = await loadSandboxAllowlist(config.paths);
@@ -1914,8 +1810,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
         const runner = new PluginRunner({
             policy,
             events,
-            allowedCommands: [...allowed],
-        });
+            allowedCommands: [...allowed]});
         const timeoutMs = opts.timeoutMs ? Number(opts.timeoutMs) : undefined;
         const result = await runner.invoke({
             plugin,
@@ -1924,8 +1819,7 @@ async function runPlugins(sub: string | undefined, command: Command): Promise<vo
             cwd: config.paths.projectDir,
             env: process.env as Record<string, string>,
             timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : undefined,
-            request,
-        });
+            request});
         if (opts.json) {
             console.log(JSON.stringify(result, null, 2));
         } else {
@@ -1950,8 +1844,7 @@ function renderPluginList(plugins: PluginDefinition[], json: boolean): string {
     const table = new Table({
         head: ["Name", "Source", "Enabled", "Entry", "Description"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const plugin of plugins) {
         table.push([plugin.name, plugin.source, plugin.enabled ? "yes" : "no", plugin.entry, plugin.description ?? ""]);
     }
@@ -1974,8 +1867,7 @@ function renderPluginValidation(results: PluginValidationResult[], json: boolean
     const table = new Table({
         head: ["Plugin", "OK", "Warnings", "Errors"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const result of results) {
         table.push([
             result.plugin.name,
@@ -2023,8 +1915,7 @@ function renderBlackboardTurnList(turns: BlackboardTurn[], json: boolean): strin
     const table = new Table({
         head: ["Turn", "Status", "Project Constraint", "Goal", "Steps", "Updated"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const turn of turns) {
         table.push([
             turn.id,
@@ -2044,8 +1935,7 @@ function renderBlackboardTurn(turn: BlackboardTurn, limit: number, json: boolean
             {
                 ...turn,
                 messages: turn.messages.slice(0, limit),
-                steps: turn.steps.slice(0, limit),
-            },
+                steps: turn.steps.slice(0, limit)},
             null,
             2,
         );
@@ -2063,8 +1953,7 @@ function renderBlackboardTurn(turn: BlackboardTurn, limit: number, json: boolean
     const workers = new Table({
         head: ["Role", "Name", "Stage", "Handoff", "Status"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const worker of turn.workers) {
         workers.push([worker.role, worker.name, worker.stage, worker.handoff, worker.status]);
     }
@@ -2072,8 +1961,7 @@ function renderBlackboardTurn(turn: BlackboardTurn, limit: number, json: boolean
     const steps = new Table({
         head: ["Round", "Worker", "Risk", "Summary", "Blockers"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const step of turn.steps.slice(0, limit)) {
         steps.push([
             step.round,
@@ -2087,8 +1975,7 @@ function renderBlackboardTurn(turn: BlackboardTurn, limit: number, json: boolean
     const messages = new Table({
         head: ["Created", "Round", "Worker", "Role", "Visibility", "Content"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const message of turn.messages.slice(0, limit)) {
         messages.push([
             message.createdAt,
@@ -2125,8 +2012,7 @@ function renderSkillList(skills: Skill[], json: boolean): string {
     const table = new Table({
         head: ["Name", "Source", "Description", "Path"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const skill of skills) {
         table.push([skill.name, skill.source, truncate(skill.description, 100), skill.path]);
     }
@@ -2163,8 +2049,7 @@ function renderSkillValidation(
     const table = new Table({
         head: ["Skill", "OK", "Warnings", "Errors"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const result of results) {
         table.push([
             result.skill?.name ?? "unknown",
@@ -2189,8 +2074,7 @@ function renderSkillUsage(summary: SkillUsageSummary, name: string | undefined, 
     const table = new Table({
         head: ["Name", "Source", "Uses", "MCP", "MCP OK", "Last Used", "Compatibility", "Capabilities"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const row of rows.sort(
         (left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name),
     )) {
@@ -2218,8 +2102,7 @@ function renderMcpList(servers: McpServerDefinition[], json: boolean): string {
     const table = new Table({
         head: ["Name", "Source", "Enabled", "Transport", "Target", "Env"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const server of servers) {
         table.push([
             server.name,
@@ -2257,8 +2140,7 @@ function renderMcpValidation(
     const table = new Table({
         head: ["Server", "OK", "Warnings", "Errors"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const result of results) {
         table.push([
             result.server.name,
@@ -2280,8 +2162,7 @@ function renderMcpTools(server: McpServerDefinition, tools: McpToolDefinition[],
     const table = new Table({
         head: ["Tool", "Description", "Input schema"],
         style: { head: [] },
-        wordWrap: true,
-    });
+        wordWrap: true});
     for (const tool of tools) {
         table.push([tool.name, truncate(tool.description ?? "", 140), summarizeJson(tool.inputSchema, 180)]);
     }
@@ -2427,8 +2308,7 @@ function cloneCommandSpec(spec: CommandSpec): CommandSpec {
         ...spec,
         aliases: spec.aliases ? [...spec.aliases] : undefined,
         options: spec.options ? [...spec.options] : undefined,
-        subcommands: spec.subcommands?.map(cloneCommandSpec),
-    };
+        subcommands: spec.subcommands?.map(cloneCommandSpec)};
 }
 
 export function commandSummaryTable(config?: FlyflorConfig): string {

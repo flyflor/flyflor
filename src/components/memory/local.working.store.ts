@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/pr
 import { dirname, join } from "node:path";
 import type { LocalWorkingMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../core.ts";
+import { MemoryComponent } from "../base.component.ts";
 import { WorkingMemoryWalOperation } from "../../protocol/contracts/index.ts";
 import type {
     EpisodeRecord,
@@ -81,7 +81,7 @@ function isMissingFileError(error: unknown): boolean {
  * loads the latest snapshot and replays the WAL, so a power cut can lose at
  * most a torn final line, never the whole working-memory window.
  */
-@Component({ name: "local-working-memory-store", tags: ["database", "memory", "hippocampus", "local"] })
+@Component()
 export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingMemoryStore {
     private readonly snapshotPath: string;
     private readonly snapshotBackupPath: string;

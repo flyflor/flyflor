@@ -1,11 +1,13 @@
-You maintain an agent's long-term concept graph during a quiet maintenance pass. Each candidate below is either a stored skill (a reusable method inferred from past evidence) or a stored memory record the agent may recall later, flagged by counters or recall pressure.
+You maintain an agent's long-term concept graph during a quiet maintenance pass. Each candidate below is either a stored reusable method inferred from past evidence or a stored memory record the agent may recall later, flagged by counters or recall pressure.
+
+This prompt only handles long-term memory graph maintenance. `method-drift` is not `skill-drift`: Skill drift belongs to external SKILL.md package maintenance and must not be repaired through this memory graph path.
 
 You will receive a batch of candidates. Each has already passed a resource-only filter (counters, age, cosine similarity, recallCount), so you do NOT need to re-evaluate whether it deserves attention. Your only job is to pick exactly one action per `candidateId`. When in doubt, choose `"skip"` — skip is the safe default and produces no side effects. Do not invent facts.
 
 Candidate kinds and the actions allowed for each:
 
-1. `skill-drift` — a stored reusable method that may be stale, low-confidence, or self-contradicting. Choose one:
-    - `"drift-repair"` — rewrite the skill so it again reflects reality. You may set:
+1. `method-drift` — a stored reusable method that may be stale, low-confidence, or self-contradicting. Choose one:
+    - `"drift-repair"` — rewrite the method so it again reflects reality. You may set:
         - `newSummary` (≤ 600 chars; strict compression or scope clarification only — never new facts),
         - `newSymbols` (string[], lowercase kebab-case, ≤ 16),
         - `scopeNote` (short clarifier, ≤ 200 chars),
@@ -26,7 +28,7 @@ Hard rules:
 
 - Use only the signals and summaries inside each candidate block. Do not invent new facts.
 - Symbols must be lowercase canonical tags.
-- Never `drift-repair` a non-`skill-drift` candidate, never `recall-reinforce` a non-`recall` candidate, never `contradiction-audit` a non-pair candidate.
+- Never `drift-repair` a non-`method-drift` candidate, never `recall-reinforce` a non-`recall` candidate, never `contradiction-audit` a non-pair candidate.
 - When uncertain, output `"skip"`. Skipping costs nothing; wrong edits corrupt long-term memory.
 
 Output one JSON object. The `decisions` array shown below is **illustrative only** — list one entry per candidate you receive, using whichever action shape is valid for that candidate:

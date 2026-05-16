@@ -5,10 +5,10 @@ import { join, resolve } from "node:path";
 
 import { MemoryModule } from "../src/agent/index.ts";
 import { fetchGhostList } from "../src/command/cli/handlers/ghost.list.handler.ts";
-import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import { ConfigComponent, loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import { GhostContextReason } from "../src/protocol/contracts/index.ts";
 import { type EventSink } from "../src/protocol/events/index.ts";
-import { FlyFlorTokens, type FlyFlor } from "../src/app.ts";
+import { type FlyFlor } from "../src/app.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -40,8 +40,7 @@ function paths(root: string): FlyflorPaths {
         projectFlyflorDir: join(project, ".flyflor"),
         projectSkillDir: join(project, ".flyflor", "skills"),
         projectMcpDir: join(project, ".flyflor", "mcp"),
-        projectPluginDir: join(project, ".flyflor", "plugins"),
-    };
+        projectPluginDir: join(project, ".flyflor", "plugins")};
 }
 
 async function makeConfig(): Promise<FlyflorConfig> {
@@ -58,10 +57,9 @@ async function makeConfig(): Promise<FlyflorConfig> {
 function fakeApp(config: FlyflorConfig): FlyFlor {
     return {
         resolve(token: unknown): unknown {
-            if (token === FlyFlorTokens.Config) return config;
+            if (token === ConfigComponent) return config;
             throw new Error(`unknown token ${String(token)}`);
-        },
-    } as unknown as FlyFlor;
+        }} as unknown as FlyFlor;
 }
 
 describe("LF-R4 fetchGhostList groups ghosts by codename", () => {
@@ -83,21 +81,18 @@ describe("LF-R4 fetchGhostList groups ghosts by codename", () => {
                 reason: GhostContextReason.ToolFailure,
                 userFacing: { title: "tool fail A" },
                 codenameId: "alpha",
-                channelId: "stdio",
-            });
+                channelId: "stdio"});
             memory.recordGhostFromReason({
                 userId: "user-1",
                 reason: GhostContextReason.ProcessRestart,
                 userFacing: { title: "restart B" },
-                channelId: "stdio",
-            });
+                channelId: "stdio"});
             memory.recordGhostFromReason({
                 userId: "user-1",
                 reason: GhostContextReason.BlackboardCap,
                 userFacing: { title: "cap C" },
                 codenameId: "bravo",
-                channelId: "stdio",
-            });
+                channelId: "stdio"});
             const data = await fetchGhostList(fakeApp(config), "user-1");
             expect(data.present).toBe(true);
             expect(data.total).toBe(3);
