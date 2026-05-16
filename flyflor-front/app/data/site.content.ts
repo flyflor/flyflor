@@ -110,31 +110,39 @@ export const githubUrl = "https://github.com/flyflor/flyflor";
 
 const installBlocksZh: CodeBlock[] = [
     {
-        title: "一键安装",
-        code: "curl -fsSL https://flyflor.dev/install.sh | sh",
+        title: "二进制安装",
+        code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash",
     },
     {
-        title: "从源码运行",
-        code: "git clone https://github.com/flyflor/flyflor.git\ncd flyflor\nbun install\nbun run chat",
+        title: "源码安装",
+        code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash",
     },
     {
-        title: "Docker dev",
-        code: "bun run build:binary:linux\ndocker compose up -d",
+        title: "Docker 安装",
+        code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash",
+    },
+    {
+        title: "Windows 源码安装",
+        code: 'powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.ps1 | iex"',
     },
 ];
 
 const installBlocksEn: CodeBlock[] = [
     {
-        title: "One-line install",
-        code: "curl -fsSL https://flyflor.dev/install.sh | sh",
+        title: "Binary install",
+        code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash",
     },
     {
-        title: "Run from source",
-        code: "git clone https://github.com/flyflor/flyflor.git\ncd flyflor\nbun install\nbun run chat",
+        title: "Source install",
+        code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash",
     },
     {
-        title: "Docker dev",
-        code: "bun run build:binary:linux\ndocker compose up -d",
+        title: "Docker install",
+        code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash",
+    },
+    {
+        title: "Windows source install",
+        code: 'powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.ps1 | iex"',
     },
 ];
 
@@ -196,8 +204,8 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
         },
         install: {
             blocks: installBlocksZh,
-            body: "从一条命令开始，也可以直接从 GitHub 源码启动。配置固定走 JSONC，不把密钥和业务配置散落进环境变量。",
-            title: "一键安装",
+            body: "正式版提供二进制、源码、Docker 和 Windows bootstrap 四个入口。源码与 Docker 路径都会把仓库保留在本机，方便自我迭代和后续 git pull。",
+            title: "安装方式",
         },
         agent: {
             body: "Flyflor 的目标不是做一个聊天壳，而是把 runtime、gateway、blackboard、sandbox、memory 和 MCP 拆成清晰边界。",
@@ -236,6 +244,10 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
                     body: "业务语义不靠关键词和 includes，必须来自模型同轮结构化字段或专用 JSON 输出。",
                     title: "零字符匹配",
                 },
+                {
+                    body: "@Service 仅作为兼容别名保留，新代码使用 @Component 表达可注入组件，不再新增独立 service 层。",
+                    title: "Decorator 白名单",
+                },
             ],
             title: "为什么是 Flyflor",
         },
@@ -243,13 +255,14 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
             body: "这里不是宣传页摘要，而是第一版可执行文档：从安装、配置、运行，到 Skill/MCP 生态、OpenClaw/Hermes 接入和沙箱边界。",
             sections: [
                 {
-                    body: "安装后先生成本地配置，再用 doctor/status 验证 provider、模板、memory 和 gateway 状态。",
+                    body: "二进制入口只安装 release 产物和模板包；源码与 Docker 入口会把源码 checkout 留在本机，便于后续修改、自迭代和 git pull。",
                     bullets: [
                         "配置固定读取 ~/.flyflor/config.jsonc，Docker dev 对应 ./docker/config/config.jsonc。",
+                        "install.sh 只负责 release 二进制；install.source.sh、install.docker.sh 和 install.ps1 负责源码路径。",
                         "不要把 provider、模型、渠道凭据和沙箱策略写进业务环境变量。",
                         "首次运行建议先执行 doctor，再进入 chat 或 TUI。",
                     ],
-                    code: "curl -fsSL https://flyflor.dev/install.sh | sh\nflyflor doctor\nflyflor status\nflyflor chat",
+                    code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash\nflyflor doctor\nflyflor status\nflyflor chat",
                     title: "快速开始",
                 },
                 {
@@ -263,11 +276,12 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
                     title: "配置模型",
                 },
                 {
-                    body: "入口只启动 FlyFlor 主类，composition root 显式装配 provider/token，运行时再把任务拆给 gateway、blackboard、sandbox、memory 和 worker。",
+                    body: "入口只启动 FlyFlor 主类，composition root 显式装配 provider/token，运行时再把任务拆给 gateway、blackboard、sandbox、memory 和 worker。新代码不再使用 @Service 作为独立层语义。",
                     bullets: [
                         "Runtime 负责 turn 生命周期和工具编排，不承担长期记忆策略。",
                         "Blackboard 只处理复杂协作收敛，最终决策交回 runtime。",
                         "Crystal 固化验证过的经验，Neural 维护工作记忆、长期图和慢通道。",
+                        "@Component 默认是可注入单例；需要每次 resolve 重新构造时显式使用 factory scope。",
                     ],
                     title: "架构边界",
                 },
@@ -380,8 +394,8 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
         },
         install: {
             blocks: installBlocksEn,
-            body: "Start from one command or run directly from GitHub source. Configuration stays in JSONC instead of leaking provider, model, and channel behavior into ad hoc environment variables.",
-            title: "One-line install",
+            body: "The release path now has binary, source, Docker, and Windows bootstrap entrypoints. Source and Docker installs keep the repository on the local machine for self-iteration and later git pull updates.",
+            title: "Install paths",
         },
         agent: {
             body: "Flyflor is not a chat wrapper. It separates runtime, gateway, blackboard, sandbox, memory, and MCP into explicit operating boundaries.",
@@ -420,6 +434,10 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
                     body: "Business semantics do not use keywords or includes; they come from model-returned structured fields or dedicated JSON prompts.",
                     title: "Zero text matching",
                 },
+                {
+                    body: "@Service remains only as a compatibility alias. New code uses @Component for injectable components instead of adding a separate service layer.",
+                    title: "Decorator whitelist",
+                },
             ],
             title: "Why Flyflor",
         },
@@ -427,13 +445,14 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
             body: "This is not a thin marketing summary. The first version documents the executable path: install, configure, run, understand boundaries, and connect Skill/MCP ecosystems including OpenClaw and Hermes.",
             sections: [
                 {
-                    body: "Install the binary, create local config, then verify provider, templates, memory, and gateway state with doctor/status.",
+                    body: "The binary entrypoint installs only release artifacts and the template bundle. Source and Docker entrypoints keep a source checkout locally for future edits, self-iteration, and git pull updates.",
                     bullets: [
                         "Config is fixed at ~/.flyflor/config.jsonc; Docker dev uses ./docker/config/config.jsonc.",
+                        "install.sh owns release binaries; install.source.sh, install.docker.sh, and install.ps1 own source-based paths.",
                         "Do not push provider, model, channel credentials, or sandbox policy into business environment variables.",
                         "Run doctor before entering chat or TUI on a new machine.",
                     ],
-                    code: "curl -fsSL https://flyflor.dev/install.sh | sh\nflyflor doctor\nflyflor status\nflyflor chat",
+                    code: "curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash\nflyflor doctor\nflyflor status\nflyflor chat",
                     title: "Quick start",
                 },
                 {
@@ -447,11 +466,12 @@ export const siteContent: Record<LocaleCode, SiteContent> = {
                     title: "Configuration model",
                 },
                 {
-                    body: "The entrypoint only starts the FlyFlor class. The composition root wires providers and tokens explicitly, then runtime delegates work to gateway, blackboard, sandbox, memory, and workers.",
+                    body: "The entrypoint only starts the FlyFlor class. The composition root wires providers and tokens explicitly, then runtime delegates work to gateway, blackboard, sandbox, memory, and workers. New code no longer uses @Service as a separate layer semantic.",
                     bullets: [
                         "Runtime owns turn lifecycle and tool orchestration, not long-term memory strategy.",
                         "Blackboard handles complex collaboration and returns a converged result to runtime.",
                         "Crystal consolidates validated experience; Neural maintains working memory, long-term graph, and slow paths.",
+                        "@Component is an injectable singleton by default; factory scope must be explicit when every resolve needs a fresh instance.",
                     ],
                     title: "Architecture boundaries",
                 },
