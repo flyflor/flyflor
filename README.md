@@ -101,6 +101,7 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 直接进入 chat TUI
 bun run smoke:docker                      # 不启动容器，检查 compose / binary / prompt bundle
+bun run smoke:gateway:service             # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
