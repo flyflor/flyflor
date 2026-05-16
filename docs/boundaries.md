@@ -17,7 +17,7 @@
 app.ts            程序入口，只做版本/命令分派
 src/app.ts        FlyFlor composition root
 src/command/      CLI / TUI / 命令注册 / 终端渲染
-src/agent/        runtime / gateway / blackboard / focus / sandbox / worker / mcp / project / plugin
+src/agent/        runtime / gateway / blackboard / sandbox / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
 src/llm/          模型 provider
 src/crystal/      reflection / Gem / skill
@@ -59,7 +59,7 @@ flowchart LR
 
 - `llm` / `crystal` / `neural` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- `focus` 是当前注意力指针的唯一计算入口；其他目录不得重新实现隐式会话容器。
+- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/agent/project` 与 `src/neural/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。

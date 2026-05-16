@@ -65,4 +65,14 @@ describe("TODO status", () => {
         expect(doc).not.toContain("we can also add checks");
         expect(doc).toContain("checked for drift by `docs:check`");
     });
+
+    test("boundaries docs do not reference the removed focus directory", async () => {
+        const doc = await readFile(join(import.meta.dir, "..", "docs", "boundaries.md"), "utf8");
+        // Focus is now a protocol/memory continuity concept, not a standalone
+        // agent directory. Keeping this guard prevents the old service-style
+        // layer from coming back through documentation drift.
+        expect(doc).not.toContain("blackboard / focus / sandbox");
+        expect(doc).not.toContain("`focus` 是当前注意力指针的唯一计算入口");
+        expect(doc).toContain("`FocusPointer` 协议字段");
+    });
 });
