@@ -72,6 +72,7 @@ flowchart LR
 - `@Provide` 是注入底座；`@Module` / `@Component` 必须复用 `Provide` 的 metadata 注册路径，禁止各自维护第二套注入协议。
 - Gateway / Blackboard / Memory / Runtime / Sandbox / Crystal 等边界必须优先用 core 基类表达：`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。
 - 本地状态与 IO 存储属于 Component：`BrainStore`、`SQLiteGraphStore`、`SQLiteMemoryStore`、Markdown/project memory store 等必须继承 `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `MemoryComponent`，避免回退成额外中间层或散落工具类。
+- Redis / SurrealDB 作为原型定位继续保留 `RedisComponent` / `SurrealComponent` core 基类；默认运行时不启用外部 Redis / SurrealDB backend，未来恢复外部存储时必须通过这两个 Component 边界接入。
 - `kind` / `layer` / `name` / `provider` 默认由 core 基类与类名推断；只有偏离默认值（例如非默认 token、factory scope、channel 特例）时才显式写。
 - `@Component` 默认是可注入单例组件；需要每次 `resolve` 重新构造时必须显式写 `provider: { scope: ProviderScope.Factory }`。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。

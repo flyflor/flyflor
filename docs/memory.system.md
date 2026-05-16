@@ -23,7 +23,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
 - `src/crystal/memory/index.ts` — CrystalMemoryComponent 与本地晶体图 backend
-- `src/components/index.ts` — 共享 Component 基类：MemoryComponent / CrystalComponent / BrainComponent / GraphComponent / SQLiteComponent
+- `src/components/index.ts` — 共享 Component 基类：MemoryComponent / CrystalComponent / BrainComponent / GraphComponent / SQLiteComponent / RedisComponent / SurrealComponent
 
 ## 分层结构
 

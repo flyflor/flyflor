@@ -1,9 +1,9 @@
 /**
- * 网关消息去重 / 幂等键（multi-replica safe）。
+ * 网关消息去重 / 幂等键。
  *
  * 场景：
  *  - 同一 webhook 被上游重试（Slack、Telegram、企业微信都会按 5xx 重发）；
- *  - 多副本部署 + 负载均衡时同一消息分发到两个 replica；
+ *  - 单进程网关中同一消息重复进入 dispatcher；
  *  - 调试期间手动重放 webhook payload。
  *
  * 模型：
@@ -15,8 +15,8 @@
  *      - 已完成 → 返回 "duplicate" 带 cachedReply（调用方直接回 200/写回原文）。
  *
  * 实现：
- *  - InMemoryDedupStore：LRU + TTL，单进程兜底；
- *  - RedisDedupStore：基于 Redis-compatible `SET key value EX ttl NX`，多副本下天然 atomic。
+ *  - InMemoryDedupStore：LRU + TTL，当前默认实现；
+ *  - 多副本共享去重后续必须新增独立 Component 实现，不能复用记忆后端或旧 Redis 兼容适配器。
  */
 
 import type { GatewayReply } from "../../protocol/contracts/index.ts";
@@ -33,12 +33,6 @@ export interface MessageDedupStore {
     recordReply(key: string, reply: GatewayReply): Promise<void>;
     /** 处理失败时释放 key，允许下次重试时立即重入。 */
     release(key: string): Promise<void>;
-}
-
-export interface RedisDedupClient {
-    del(key: string): Promise<unknown>;
-    get(key: string): Promise<string | null>;
-    set(key: string, value: string, ex: "EX", ttlSeconds: number, mode: "NX" | "XX"): Promise<"OK" | null>;
 }
 
 export function buildDedupKey(channel: string, messageId: string): string {
@@ -85,40 +79,5 @@ export class InMemoryDedupStore implements MessageDedupStore {
             if (first.done) break;
             this.entries.delete(first.value);
         }
-    }
-}
-
-/**
- * Redis 实现：用 `SET key "" EX ttl NX` 抢占 → 处理完 `SET key <reply> EX ttl XX`。
- * 不复用任何 memory component schema，独立 key 前缀避免 namespace 污染。
- */
-export class RedisDedupStore implements MessageDedupStore {
-    private readonly inflightMarker = "__inflight__";
-    public constructor(private readonly redis: RedisDedupClient, private readonly ttlSeconds: number = 60) {}
-
-    public async tryClaim(key: string): Promise<DedupClaim> {
-        const ok = await this.redis.set(key, this.inflightMarker, "EX", this.ttlSeconds, "NX");
-        if (ok === "OK") return { state: "claimed", key };
-        const existing = await this.redis.get(key);
-        if (existing === null || existing === this.inflightMarker) {
-            return { state: "in-flight", key };
-        }
-        try {
-            const cachedReply = JSON.parse(existing) as GatewayReply;
-            return { state: "duplicate", key, cachedReply };
-        } catch {
-            // corrupt payload — treat as in-flight (caller should drop)
-            return { state: "in-flight", key };
-        }
-    }
-
-    public async recordReply(key: string, reply: GatewayReply): Promise<void> {
-        const payload = JSON.stringify(reply);
-        // XX = only set if exists, preserving TTL implicitly via KEEPTTL when supported; fallback EX same ttl.
-        await this.redis.set(key, payload, "EX", this.ttlSeconds, "XX");
-    }
-
-    public async release(key: string): Promise<void> {
-        await this.redis.del(key);
     }
 }

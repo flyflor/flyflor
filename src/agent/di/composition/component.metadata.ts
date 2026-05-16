@@ -15,9 +15,11 @@ import {
     GraphComponent,
     Memory,
     MemoryComponent,
+    RedisComponent,
     Runtime,
     Sandbox,
     SQLiteComponent,
+    SurrealComponent,
 } from "../../../components/core.ts";
 
 export interface ComponentCompatibility {
@@ -140,6 +142,9 @@ function inferComponentLayer(target: Function): ArchitectureLayerType {
         prototype instanceof Sandbox
     ) {
         return ArchitectureLayer.Control;
+    }
+    if (prototype instanceof RedisComponent || prototype instanceof SurrealComponent) {
+        return ArchitectureLayer.Capability;
     }
     return ArchitectureLayer.Capability;
 }

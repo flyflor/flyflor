@@ -8,7 +8,7 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 
 - `app.ts` — 程序入口，仅做版本输出与命令分派
 - `src/app.ts` — `FlyFlor` composition root，显式 DI 装配
-- `src/components/` — shared component base classes `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox` / `BrainComponent` / `GraphComponent` / `SQLiteComponent`
+- `src/components/` — shared component base classes `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `RedisComponent` / `SurrealComponent`
 - `src/agent/components.ts` — legacy compatibility re-export, 新代码应直接依赖 `src/components`
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、事件、进程信封
@@ -115,14 +115,16 @@ abstract class Sandbox {}
 abstract class BrainComponent {}
 abstract class GraphComponent {}
 abstract class SQLiteComponent {}
+abstract class RedisComponent {}
+abstract class SurrealComponent {}
 abstract class CrystalComponent {}
 ```
 
-实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。本地存储也必须挂到组件基类：`BrainStore extends BrainComponent`、`SQLiteGraphStore extends GraphComponent`、`SQLiteMemoryStore extends SQLiteComponent`、Markdown/project working memory store extends `MemoryComponent`。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。`MemoryComponent` / `CrystalComponent` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` 是默认且唯一对外描述的组件承载层。
+实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。本地存储也必须挂到组件基类：`BrainStore extends BrainComponent`、`SQLiteGraphStore extends GraphComponent`、`SQLiteMemoryStore extends SQLiteComponent`、Markdown/project working memory store extends `MemoryComponent`。`RedisComponent` / `SurrealComponent` 继续作为外部存储原型锚点保留，默认运行时不启用对应 backend；未来恢复外部 Redis / SurrealDB 时必须通过这两个 Component 边界接入。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。`MemoryComponent` / `CrystalComponent` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `RedisComponent` / `SurrealComponent` 是默认且唯一对外描述的组件承载层。
 
 默认推断规则：
 
-- core 基类推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox/BrainComponent/GraphComponent/SQLiteComponent → control layer`，其他 component → capability layer。
+- core 基类推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox/BrainComponent/GraphComponent/SQLiteComponent → control layer`，`RedisComponent/SurrealComponent` 与其他 component → capability layer。
 - 类名推断 `name`：去掉 `Module/Component/Store` 后转 kebab-case。
 - provider 默认 singleton；需要重新 `new` 的组件显式使用 `ProviderScope.Factory`。
 - 只有默认推断不够表达边界时才写 `kind/layer/name/provider`，避免装饰器参数变成重复配置。

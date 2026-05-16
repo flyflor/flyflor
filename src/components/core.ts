@@ -27,6 +27,10 @@ export abstract class GraphComponent extends CoreComponent {}
 
 export abstract class SQLiteComponent extends CoreComponent {}
 
+export abstract class RedisComponent extends CoreComponent {}
+
+export abstract class SurrealComponent extends CoreComponent {}
+
 export abstract class MemoryComponent extends Memory {}
 
 export abstract class CrystalComponent extends CoreComponent {}

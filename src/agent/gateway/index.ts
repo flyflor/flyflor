@@ -10,7 +10,6 @@ export { GatewayModule } from "./gateway.module.ts";
 export {
     buildDedupKey,
     InMemoryDedupStore,
-    RedisDedupStore,
     type DedupClaim,
     type MessageDedupStore,
 } from "./dedup.ts";

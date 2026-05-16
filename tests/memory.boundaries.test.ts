@@ -61,6 +61,7 @@ import {
     Worker,
     type EventSink,
 } from "../src/agent/di/index.ts";
+import { RedisComponent, SurrealComponent } from "../src/components/index.ts";
 import type { BrainStore } from "../src/components/memory/brain.store.ts";
 
 const tempRoots: string[] = [];
@@ -69,6 +70,12 @@ const TEST_REVIEW_ROLE = "review-worker";
 
 @Component("test-component")
 class TestComponent {}
+
+@Component("test-redis-component")
+class TestRedisComponent extends RedisComponent {}
+
+@Component("test-surreal-component")
+class TestSurrealComponent extends SurrealComponent {}
 
 class TestConsumer {
     public constructor(@Inject(TestComponent) public readonly dependency: TestComponent) {}
@@ -257,6 +264,19 @@ describe("Internal infrastructure deployment boundaries", () => {
         expect(compose).not.toContain("redis:7.4-alpine");
         expect(config).toContain('"backend": "local"');
         expect(config).not.toContain('"redis":');
+    });
+
+    test("gateway dedup does not keep gateway-specific Redis compatibility adapters", async () => {
+        const [dedupSource, gatewayExports] = await Promise.all([
+            Bun.file(join(import.meta.dir, "..", "src", "agent", "gateway", "dedup.ts")).text(),
+            Bun.file(join(import.meta.dir, "..", "src", "agent", "gateway", "index.ts")).text(),
+        ]);
+
+        // Redis remains a named Component prototype, but gateway idempotency
+        // should not carry a hidden Redis adapter in the default chain.
+        expect(dedupSource).not.toContain("RedisDedupStore");
+        expect(dedupSource).not.toContain("RedisDedupClient");
+        expect(gatewayExports).not.toContain("RedisDedupStore");
     });
 
     test("docker dev omits SurrealDB service and adapter config", async () => {
@@ -1252,6 +1272,22 @@ describe("FCP provider metadata", () => {
         expect(memory).toMatchObject({
             kind: ComponentKind.Memory,
             provider: { scope: "singleton", token: "control.memory" },
+        });
+    });
+
+    test("keeps Redis and Surreal as named Component prototypes", () => {
+        const redis = componentRegistry.assertProvider(TestRedisComponent);
+        const surreal = componentRegistry.assertProvider(TestSurrealComponent);
+
+        expect(new TestRedisComponent()).toBeInstanceOf(RedisComponent);
+        expect(new TestSurrealComponent()).toBeInstanceOf(SurrealComponent);
+        expect(redis).toMatchObject({
+            kind: ComponentKind.Component,
+            provider: { scope: "singleton", token: "capability.test-redis-component" },
+        });
+        expect(surreal).toMatchObject({
+            kind: ComponentKind.Component,
+            provider: { scope: "singleton", token: "capability.test-surreal-component" },
         });
     });
 });
