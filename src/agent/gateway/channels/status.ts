@@ -6,6 +6,7 @@ export interface ChannelRuntimeState extends ChannelAdapterSnapshot {}
 
 export interface ChannelStatusSnapshot extends ChannelAdapterSnapshot {
     adapter: string | null;
+    capabilities: import("../../../protocol/contracts/index.ts").GatewayChannelCapabilities;
     configured: boolean;
     implemented: boolean;
     name: ChannelName;
@@ -84,6 +85,7 @@ export function buildChannelStatusSnapshot(
     });
     return {
         adapter: adapter?.constructor?.name ?? null,
+        capabilities: adapterSnapshot?.capabilities ?? adapter?.capabilities ?? defaultCapabilities(name),
         configured,
         connected,
         detail: merged.detail ?? defaultDetailForChannel(config, name, configured, transport),
@@ -293,6 +295,38 @@ function transportForChannel(name: ChannelName): ChannelTransport {
         return ChannelTransport.Polling;
     }
     return ChannelTransport.Http;
+}
+
+function defaultCapabilities(
+    name: ChannelName,
+): import("../../../protocol/contracts/index.ts").GatewayChannelCapabilities {
+    return {
+        cardUpdate: false,
+        finalReply: true,
+        messageUpdate:
+            name === Channel.Slack ||
+            name === Channel.Telegram ||
+            name === Channel.Feishu ||
+            name === Channel.Matrix ||
+            name === Channel.Mattermost,
+        reactions: name === Channel.Slack || name === Channel.Matrix,
+        replyReference:
+            name === Channel.Telegram ||
+            name === Channel.Feishu ||
+            name === Channel.Matrix ||
+            name === Channel.WeChat ||
+            name === Channel.WeComCallback ||
+            name === Channel.WeixinIlink,
+        thread:
+            name === Channel.Slack ||
+            name === Channel.Telegram ||
+            name === Channel.Feishu ||
+            name === Channel.Mattermost ||
+            name === Channel.Matrix ||
+            name === Channel.GoogleChat,
+        topicCreate: false,
+        typing: name === Channel.Telegram,
+    };
 }
 
 function hasIlinkBinding(config: GatewayConfig): boolean {

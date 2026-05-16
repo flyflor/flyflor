@@ -2,7 +2,9 @@ import type {
     ChannelLinkState,
     ChannelName,
     ChannelTransport,
+    GatewayChannelCapabilities,
     GatewayDeliveryMetadata,
+    GatewayOutboundEnvelope,
     GatewayMessage,
     GatewayReply,
     GatewayRoute,
@@ -15,6 +17,7 @@ export type StreamingMessageDispatcher = (
 export type MessageDispatcher = StreamingMessageDispatcher;
 
 export interface ChannelAdapterSnapshot {
+    capabilities?: GatewayChannelCapabilities;
     connected?: boolean;
     detail?: string;
     lastError?: string;
@@ -28,9 +31,12 @@ export interface ChannelAdapterSnapshot {
 export interface ChannelAdapter {
     readonly name: ChannelName;
     readonly transport?: ChannelTransport;
+    readonly capabilities?: GatewayChannelCapabilities;
     handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response>;
     /** Optional native typing indicator. Callers treat failures as observable but non-fatal. */
     sendTyping?(route: GatewayRoute, metadata?: GatewayDeliveryMetadata): Promise<void>;
+    /** Optional native outbound lifecycle operation such as edit/card update/reaction. */
+    sendOperation?(operation: GatewayOutboundEnvelope): Promise<GatewayReply | void>;
     start?(dispatch: StreamingMessageDispatcher): void | Promise<void>;
     snapshot?(): ChannelAdapterSnapshot;
 }

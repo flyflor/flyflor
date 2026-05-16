@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { FeishuAdapter } from "../src/agent/gateway/channels/feishu.ts";
-import { Channel, ChatType, type GatewayMessage, type GatewayReply } from "../src/protocol/contracts/index.ts";
+import {
+    Channel,
+    ChatType,
+    GatewayOutboundOperation,
+    type GatewayMessage,
+    type GatewayReply,
+} from "../src/protocol/contracts/index.ts";
 
 const originalFetch = globalThis.fetch;
 
@@ -114,6 +120,35 @@ describe("FeishuAdapter", () => {
             receive_id: "chat-1",
             msg_type: "text",
             content: JSON.stringify({ text: "ack" }),
+        });
+    });
+
+    test("sendOperation updates existing Feishu message", async () => {
+        const sent: Array<{ method?: string; url: string; body: Record<string, unknown> }> = [];
+        globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+            const url = String(input);
+            sent.push({
+                url,
+                method: init?.method,
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            if (url.includes("/auth/v3/tenant_access_token/internal")) {
+                return new Response(JSON.stringify({ code: 0, tenant_access_token: "tenant-token", expire: 7200 }));
+            }
+            return new Response(JSON.stringify({ code: 0, data: { message_id: "msg-1" } }));
+        }) as typeof fetch;
+
+        await adapter().sendOperation({
+            operation: GatewayOutboundOperation.MessageEdit,
+            route: { channel: Channel.Feishu, chatId: "chat-1", chatType: ChatType.Group },
+            targetMessageId: "msg-1",
+            text: "updated",
+        });
+
+        expect(sent[1]?.method).toBe("PATCH");
+        expect(sent[1]?.url).toContain("/open-apis/im/v1/messages/msg-1");
+        expect(sent[1]?.body).toEqual({
+            content: JSON.stringify({ text: "updated" }),
         });
     });
 });

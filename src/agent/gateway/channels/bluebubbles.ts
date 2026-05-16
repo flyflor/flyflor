@@ -63,6 +63,7 @@ export class BlueBubblesAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send(message.route, text),
+            metadata: buildDeliveryMetadata(message),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });

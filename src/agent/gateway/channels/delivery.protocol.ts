@@ -1,5 +1,11 @@
-import type { GatewayDeliveryMetadata, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChatType } from "../../../protocol/contracts/index.ts";
+import type {
+    GatewayChannelCapabilities,
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import { Channel, ChatType, GatewayOutboundOperation } from "../../../protocol/contracts/index.ts";
 import { readString } from "./helpers.ts";
 
 /**
@@ -94,4 +100,59 @@ export function readPlatformMessageId(...values: unknown[]): string | undefined 
         }
     }
     return undefined;
+}
+
+export function channelCapabilities(
+    patch: Partial<GatewayChannelCapabilities> = {},
+): GatewayChannelCapabilities {
+    return {
+        cardUpdate: false,
+        finalReply: true,
+        messageUpdate: false,
+        reactions: false,
+        replyReference: false,
+        thread: false,
+        topicCreate: false,
+        typing: false,
+        ...patch,
+    };
+}
+
+export function buildSendOperation(
+    message: GatewayMessage,
+    text: string,
+    metadata = buildDeliveryMetadata(message),
+): GatewayOutboundEnvelope {
+    return {
+        operation: GatewayOutboundOperation.MessageSend,
+        route: message.route,
+        text,
+        metadata,
+    };
+}
+
+export function buildTypingOperation(
+    route: GatewayRoute,
+    metadata?: GatewayDeliveryMetadata,
+    active = true,
+): GatewayOutboundEnvelope {
+    return {
+        operation: active ? GatewayOutboundOperation.TypingStart : GatewayOutboundOperation.TypingStop,
+        route,
+        metadata,
+    };
+}
+
+export function buildUpdateOperation(
+    route: GatewayRoute,
+    text: string,
+    metadata?: GatewayDeliveryMetadata,
+): GatewayOutboundEnvelope {
+    return {
+        operation: GatewayOutboundOperation.MessageEdit,
+        route,
+        targetMessageId: metadata?.replyToMessageId,
+        text,
+        metadata,
+    };
 }

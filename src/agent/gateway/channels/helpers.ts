@@ -1,28 +1,77 @@
-import type { GatewayMessage, GatewayReply, GatewayRoute, GatewayUser } from "../../../protocol/contracts/index.ts";
+import type {
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayReply,
+    GatewayRoute,
+    GatewayUser,
+} from "../../../protocol/contracts/index.ts";
+import { GatewayOutboundOperation } from "../../../protocol/contracts/index.ts";
 import type { StreamingMessageDispatcher } from "./types.ts";
 
 export interface DispatchDeliveryOptions {
     deliver: (text: string, reply?: GatewayReply) => Promise<void>;
     dispatch: StreamingMessageDispatcher;
     message: GatewayMessage;
+    /** Adapter routing metadata already normalized from thread/reply/comment protocol fields. */
+    metadata?: GatewayOutboundEnvelope["metadata"];
     /**
      * Best-effort platform typing indicator. This is intentionally adapter
      * supplied because channel protocols differ and failures must not change
      * the runtime reply semantics.
      */
     typing?: () => Promise<void>;
+    /** Optional operation sender; used for lifecycle hooks and future native updates. */
+    operation?: (operation: GatewayOutboundEnvelope) => Promise<GatewayReply | void>;
 }
 
 export async function dispatchWithDelivery(input: DispatchDeliveryOptions): Promise<GatewayReply> {
     // Channel adapters must not push model deltas as separate platform messages.
     // They can emit a typing signal while the runtime works, then send one
     // complete reply after the turn reaches its final text.
-    await emitTyping(input.typing);
-    const reply = await input.dispatch(input.message);
-    if (reply.text) {
-        await input.deliver(reply.text, reply);
+    await emitOperation(input, GatewayOutboundOperation.TypingStart);
+    if (!input.operation) {
+        await emitTyping(input.typing);
     }
-    return reply;
+    try {
+        const reply = await input.dispatch(input.message);
+        if (reply.text) {
+            await deliverFinalReply(input, reply);
+        }
+        return reply;
+    } finally {
+        await emitOperation(input, GatewayOutboundOperation.TypingStop);
+    }
+}
+
+async function deliverFinalReply(input: DispatchDeliveryOptions, reply: GatewayReply): Promise<void> {
+    if (input.operation) {
+        await input.operation({
+            operation: GatewayOutboundOperation.MessageSend,
+            route: input.message.route,
+            text: reply.text,
+            metadata: input.metadata,
+        });
+        return;
+    }
+    await input.deliver(reply.text, reply);
+}
+
+async function emitOperation(
+    input: DispatchDeliveryOptions,
+    operation: typeof GatewayOutboundOperation.TypingStart | typeof GatewayOutboundOperation.TypingStop,
+): Promise<void> {
+    if (!input.operation) {
+        return;
+    }
+    try {
+        await input.operation({
+            operation,
+            route: input.message.route,
+            metadata: input.metadata,
+        });
+    } catch (error) {
+        console.error(JSON.stringify({ type: "gateway.operation.failed", operation, error: String(error) }));
+    }
 }
 
 async function emitTyping(typing: DispatchDeliveryOptions["typing"]): Promise<void> {

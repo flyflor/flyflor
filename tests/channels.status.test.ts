@@ -163,4 +163,55 @@ describe("gateway channel status snapshots", () => {
         }
         expect(adapters.get(Channel.GoogleChat)?.constructor.name).toBe("HttpPlatformAdapter");
     });
+
+    test("exposes channel capability matrix in status snapshots", () => {
+        const snapshot = buildGatewayStatusSnapshot(
+            gatewayConfig([Channel.Telegram, Channel.Slack, Channel.WeChat, Channel.WeixinIlink], {
+                slack: { botToken: "xoxb-test", signingSecret: "slack-secret" },
+                telegram: { botToken: "telegram-token" },
+                wechat: { token: "wechat-token" },
+                weixinIlink: {
+                    apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                    pollIntervalMs: 1500,
+                    token: "ilink-token",
+                },
+            }),
+            createChannelAdapters(
+                gatewayConfig([Channel.Telegram, Channel.Slack, Channel.WeChat, Channel.WeixinIlink], {
+                    slack: { botToken: "xoxb-test", signingSecret: "slack-secret" },
+                    telegram: { botToken: "telegram-token" },
+                    wechat: { token: "wechat-token" },
+                    weixinIlink: {
+                        apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                        pollIntervalMs: 1500,
+                        token: "ilink-token",
+                    },
+                }),
+            ),
+            new Map(),
+            true,
+        );
+
+        const telegram = snapshot.channels.find((channel) => channel.name === Channel.Telegram);
+        const slack = snapshot.channels.find((channel) => channel.name === Channel.Slack);
+        const wechat = snapshot.channels.find((channel) => channel.name === Channel.WeChat);
+
+        expect(telegram?.capabilities).toMatchObject({
+            finalReply: true,
+            messageUpdate: true,
+            replyReference: true,
+            thread: true,
+            typing: true,
+        });
+        expect(slack?.capabilities).toMatchObject({
+            messageUpdate: true,
+            reactions: true,
+            thread: true,
+        });
+        expect(wechat?.capabilities).toMatchObject({
+            finalReply: true,
+            replyReference: true,
+            typing: false,
+        });
+    });
 });

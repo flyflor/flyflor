@@ -4,7 +4,12 @@
 
 import { describe, expect, test } from "bun:test";
 import { TelegramAdapter } from "../src/agent/gateway/channels/telegram.ts";
-import { ChatType, GatewayMessageAction, type GatewayReply } from "../src/protocol/contracts/index.ts";
+import {
+    ChatType,
+    GatewayMessageAction,
+    GatewayOutboundOperation,
+    type GatewayReply,
+} from "../src/protocol/contracts/index.ts";
 
 function adapter(): TelegramAdapter {
     return new TelegramAdapter("test-token");
@@ -157,6 +162,37 @@ describe("TelegramAdapter rich media", () => {
             expect(captured?.mentions).toEqual([
                 { id: undefined, kind: "mention", displayName: undefined, text: "@alice" },
             ]);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    test("sendOperation edits an existing message with native Telegram API", async () => {
+        const calls: Array<{ body: Record<string, unknown>; url: string }> = [];
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async (input, init) => {
+            calls.push({
+                url: String(input instanceof Request ? input.url : input),
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            return new Response(JSON.stringify({ ok: true, result: { message_id: 99 } }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
+        }) as typeof fetch;
+        try {
+            await adapter().sendOperation({
+                operation: GatewayOutboundOperation.MessageEdit,
+                route: { channel: "telegram", chatId: "100", chatType: "group" },
+                targetMessageId: "99",
+                text: "updated",
+            });
+            expect(calls[0]?.url).toContain("/editMessageText");
+            expect(calls[0]?.body).toEqual({
+                chat_id: "100",
+                message_id: 99,
+                text: "updated",
+            });
         } finally {
             globalThis.fetch = originalFetch;
         }

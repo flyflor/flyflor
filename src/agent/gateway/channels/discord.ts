@@ -1,6 +1,7 @@
 import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
 import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
+import { buildDeliveryMetadata } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const DISCORD_PING = 1;
@@ -77,6 +78,7 @@ export class DiscordInteractionAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.sendFollowup(interaction, text),
+            metadata: buildDeliveryMetadata(message),
         });
     }
 

@@ -1,7 +1,20 @@
-import type { GatewayAttachment, GatewayDeliveryMetadata, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType, GatewayMessageAction, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
+import type {
+    GatewayAttachment,
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import {
+    Channel,
+    ChannelTransport,
+    ChatType,
+    GatewayMessageAction,
+    GatewayMessageKind,
+    GatewayOutboundOperation,
+} from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
-import { buildDeliveryMetadata, readPlatformMessageId } from "./delivery.protocol.ts";
+import { buildDeliveryMetadata, channelCapabilities, readPlatformMessageId } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 interface TelegramPhotoSize {
@@ -70,6 +83,12 @@ interface TelegramUpdate {
 export class TelegramAdapter implements ChannelAdapter {
     readonly name = Channel.Telegram;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        messageUpdate: true,
+        replyReference: true,
+        thread: true,
+        typing: true,
+    });
     private readonly seenUpdates = new Set<number>();
 
     constructor(
@@ -102,6 +121,9 @@ export class TelegramAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.sendMessage(message.route, text, buildDeliveryMetadata(message)),
+            metadata: buildDeliveryMetadata(message),
+            operation: (operation) =>
+                this.sendOperation({ ...operation, metadata: operation.metadata ?? buildDeliveryMetadata(message) }),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
@@ -173,7 +195,11 @@ export class TelegramAdapter implements ChannelAdapter {
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
         });
-        await assertPlatformResponse(response, "Telegram");
+        const payload = await assertPlatformResponse(response, "Telegram");
+        const messageId = readTelegramResultMessageId(payload);
+        if (messageId) {
+            return;
+        }
     }
 
     async sendTyping(route: GatewayRoute, metadata?: GatewayDeliveryMetadata): Promise<void> {
@@ -195,6 +221,29 @@ export class TelegramAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "Telegram typing");
     }
 
+    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            await this.sendMessage(operation.route, operation.text, operation.metadata);
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.MessageEdit && operation.text && operation.targetMessageId) {
+            const body: Record<string, unknown> = {
+                chat_id: operation.route.chatId,
+                message_id: Number(operation.targetMessageId),
+                text: operation.text,
+            };
+            const response = await fetch(`https://api.telegram.org/bot${this.botToken}/editMessageText`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            await assertPlatformResponse(response, "Telegram edit");
+        }
+        if (operation.operation === GatewayOutboundOperation.TypingStart) {
+            await this.sendTyping(operation.route, operation.metadata);
+        }
+    }
+
     private rememberUpdate(updateId: number): void {
         this.seenUpdates.add(updateId);
         if (this.seenUpdates.size > 10_000) {
@@ -204,6 +253,18 @@ export class TelegramAdapter implements ChannelAdapter {
             }
         }
     }
+}
+
+function readTelegramResultMessageId(payload: unknown): string | undefined {
+    if (typeof payload !== "object" || payload === null || !("result" in payload)) {
+        return undefined;
+    }
+    const result = (payload as { result?: unknown }).result;
+    if (typeof result !== "object" || result === null || !("message_id" in result)) {
+        return undefined;
+    }
+    const value = (result as { message_id?: unknown }).message_id;
+    return typeof value === "number" || typeof value === "string" ? String(value) : undefined;
 }
 
 function readTelegramMentions(message: TelegramMessage | undefined, text: string): GatewayMessage["mentions"] {

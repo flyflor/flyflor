@@ -21,7 +21,7 @@ Flyflor 当前支持 31 个 channel，分为三类：
 | 官方协议 / 独立适配 | WeChat official account、WeCom Callback、Weixin iLink、Telegram、Discord、Feishu、Slack、Line、Mattermost、DingTalk、BlueBubbles / iMessage |
 | 共享 HTTP 协议适配 | API Server、Google Chat、IRC、Email、Home Assistant、Matrix、MS Graph Webhook、QQ、QQBot、Signal、SMS、Teams、WeCom、WhatsApp、Yuanbao、Zalo |
 
-Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。
+Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除、卡片更新等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。`/channels` 状态会暴露每个 adapter 的 capability：Telegram 已支持 typing / thread / reply / message edit，Slack 支持 thread / update / reaction，Feishu 支持 thread reply / message update，WeChat official、WeCom Callback、Weixin iLink 坚持官方协议并按平台能力稳定降级。
 
 完整矩阵和每个 channel 的配置要求见 [docs/gateway.channels.md](docs/gateway.channels.md)。
 
@@ -159,7 +159,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
 
-外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成和驱动 TUI/API SSE，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。
+外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成和驱动 TUI/API SSE，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
 
 ## 记忆系统
 

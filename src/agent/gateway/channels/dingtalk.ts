@@ -8,8 +8,14 @@
  *   remains a separate attachment-security concern.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ChannelName, GatewayDeliveryMetadata, GatewayMessage, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
+import type {
+    ChannelName,
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind, GatewayOutboundOperation } from "../../../protocol/contracts/index.ts";
 import {
     assertPlatformResponse,
     dispatchWithDelivery,
@@ -19,6 +25,7 @@ import {
     truncatePlatformText,
 } from "./helpers.ts";
 import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import { channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const DINGTALK_SIGNATURE_WINDOW_MS = 60 * 60 * 1000;
@@ -32,6 +39,10 @@ export interface DingTalkAdapterConfig {
 export class DingTalkAdapter implements ChannelAdapter {
     readonly name: ChannelName = Channel.DingTalk;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        cardUpdate: false,
+        replyReference: true,
+    });
 
     constructor(
         private readonly config: DingTalkAdapterConfig,
@@ -60,6 +71,8 @@ export class DingTalkAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send(text),
+            metadata: buildDeliveryMetadata(message),
+            operation: (operation) => this.sendOperation(operation),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
@@ -133,6 +146,15 @@ export class DingTalkAdapter implements ChannelAdapter {
     async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // DingTalk robots expose no generic typing endpoint; the hook exists
         // so the gateway can keep a uniform lifecycle contract.
+    }
+
+    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            await this.send(operation.text);
+        }
+        // DingTalk card streaming/update requires the official card SDK and
+        // template ids. This binary-safe adapter exposes the unsupported
+        // operation explicitly and falls back to final text sends.
     }
 }
 

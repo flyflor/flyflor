@@ -3,6 +3,7 @@ import type {
     ChatType,
     GatewayMessageAction,
     GatewayMessageKind,
+    GatewayOutboundOperation,
     GatewayProcessingOutcome,
     ModelRole,
 } from "./enums.ts";
@@ -12,6 +13,7 @@ export type {
     ChatType,
     GatewayMessageAction,
     GatewayMessageKind,
+    GatewayOutboundOperation,
     GatewayProcessingOutcome,
     ModelRole,
 } from "./enums.ts";
@@ -117,6 +119,38 @@ export interface GatewayDeliveryMetadata {
     directMessagesTopicId?: string;
     /** Comment target when the outbound response is a document comment reply. */
     comment?: GatewayCommentContext;
+}
+
+export interface GatewayChannelCapabilities {
+    /** Final text reply can be sent to the originating channel. */
+    finalReply: boolean;
+    /** Platform has a native typing/processing lifecycle signal. */
+    typing: boolean;
+    /** Platform accepts a native reply/quote anchor on outbound sends. */
+    replyReference: boolean;
+    /** Platform can keep outbound responses inside a native thread/topic. */
+    thread: boolean;
+    /** Platform can edit/update a previously sent message. */
+    messageUpdate: boolean;
+    /** Platform can create/update rich cards instead of plain text. */
+    cardUpdate: boolean;
+    /** Platform exposes structured reactions for inbound and/or outbound lifecycle. */
+    reactions: boolean;
+    /** Platform exposes native topic/thread creation; otherwise topics are inbound-only metadata. */
+    topicCreate: boolean;
+}
+
+export interface GatewayOutboundEnvelope {
+    /** Explicit outbound lifecycle operation; adapters must never infer this from reply text. */
+    operation: GatewayOutboundOperation;
+    route: GatewayRoute;
+    text?: string;
+    /** Native message/card id to update/delete/react to, when the channel supports it. */
+    targetMessageId?: string;
+    /** Native card id distinct from message id on card-first platforms such as DingTalk/Feishu. */
+    targetCardId?: string;
+    metadata?: GatewayDeliveryMetadata;
+    raw?: Record<string, unknown>;
 }
 
 export interface GatewayMessage {

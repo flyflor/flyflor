@@ -65,6 +65,7 @@ export class HttpPlatformAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send(message.route, text, buildDeliveryMetadata(message)),
+            metadata: buildDeliveryMetadata(message),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         if (this.name === Channel.Sms) {

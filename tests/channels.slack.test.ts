@@ -5,7 +5,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 import { SlackAdapter } from "../src/agent/gateway/channels/slack.ts";
-import { Channel, ChatType, GatewayMessageAction } from "../src/protocol/contracts/index.ts";
+import { Channel, ChatType, GatewayMessageAction, GatewayOutboundOperation } from "../src/protocol/contracts/index.ts";
 import type { GatewayReply } from "../src/protocol/contracts/index.ts";
 
 const SECRET = "test-signing-secret";
@@ -190,5 +190,39 @@ describe("SlackAdapter event normalize", () => {
         const response = await adapter.handle(signedRequest(payload), dispatch);
         expect(response.status).toBe(200);
         expect(dispatched).toBe(false);
+    });
+
+    test("sendOperation updates message through chat.update", async () => {
+        const adapter = buildAdapter({ botToken: "xoxb-test" });
+        const calls: Array<{ body: Record<string, unknown>; headers: Headers; url: string }> = [];
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async (input, init) => {
+            calls.push({
+                url: String(input instanceof Request ? input.url : input),
+                headers: new Headers(init?.headers),
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            return new Response(JSON.stringify({ ok: true, ts: "1700000000.001" }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
+        }) as typeof fetch;
+        try {
+            await adapter.sendOperation({
+                operation: GatewayOutboundOperation.MessageEdit,
+                route: { channel: Channel.Slack, chatId: "C5", chatType: ChatType.Group },
+                targetMessageId: "1700000000.001",
+                text: "updated",
+            });
+            expect(calls[0]?.url).toBe("https://slack.com/api/chat.update");
+            expect(calls[0]?.headers.get("authorization")).toBe("Bearer xoxb-test");
+            expect(calls[0]?.body).toEqual({
+                channel: "C5",
+                ts: "1700000000.001",
+                text: "updated",
+            });
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
     });
 });

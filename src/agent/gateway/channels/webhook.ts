@@ -46,6 +46,7 @@ export class GenericWebhookAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send({ route: message.route, text }),
+            metadata: buildDeliveryMetadata(message),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ reply });

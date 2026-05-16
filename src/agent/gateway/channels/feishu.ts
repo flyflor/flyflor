@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
-import type { GatewayDeliveryMetadata, GatewayMessage, GatewayReply, GatewayRoute } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
+import type {
+    GatewayDeliveryMetadata,
+    GatewayMessage,
+    GatewayOutboundEnvelope,
+    GatewayReply,
+    GatewayRoute,
+} from "../../../protocol/contracts/index.ts";
+import { Channel, ChannelTransport, ChatType, GatewayMessageKind, GatewayOutboundOperation } from "../../../protocol/contracts/index.ts";
 import { assertPlatformResponse, dispatchWithDelivery } from "./helpers.ts";
-import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 interface FeishuConfig {
@@ -43,6 +49,11 @@ interface FeishuPayload {
 export class FeishuAdapter implements ChannelAdapter {
     readonly name = Channel.Feishu;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        messageUpdate: true,
+        replyReference: true,
+        thread: true,
+    });
     private tenantToken?: { expiresAt: number; value: string };
 
     constructor(private readonly config: FeishuConfig) {}
@@ -82,6 +93,9 @@ export class FeishuAdapter implements ChannelAdapter {
                     route: message.route,
                     text,
                 }, buildDeliveryMetadata(message)),
+            metadata: buildDeliveryMetadata(message),
+            operation: (operation) =>
+                this.sendOperation({ ...operation, metadata: operation.metadata ?? buildDeliveryMetadata(message) }),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
@@ -165,13 +179,44 @@ export class FeishuAdapter implements ChannelAdapter {
                 body: JSON.stringify(body),
             },
         );
-        await assertPlatformResponse(response, "Feishu");
+        const payload = await assertPlatformResponse(response, "Feishu");
+        const messageId = readFeishuMessageId(payload);
+        if (messageId) {
+            reply.delivery = { messageId, outcome: "success", rawResponse: payload };
+        }
     }
 
     async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // Feishu open platform does not expose a generic bot typing endpoint for
         // ordinary IM messages; the method exists so the gateway lifecycle has
         // a uniform channel contract.
+    }
+
+    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            await this.sendReply(
+                { messageId: crypto.randomUUID(), route: operation.route, text: operation.text },
+                operation.metadata,
+            );
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.MessageEdit && operation.text && operation.targetMessageId) {
+            const token = await this.getTenantAccessToken();
+            const response = await fetch(
+                `https://open.feishu.cn/open-apis/im/v1/messages/${encodeURIComponent(operation.targetMessageId)}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        authorization: `Bearer ${token}`,
+                        "content-type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        content: JSON.stringify({ text: operation.text }),
+                    }),
+                },
+            );
+            await assertPlatformResponse(response, "Feishu update");
+        }
     }
 
     private async getTenantAccessToken(): Promise<string> {
@@ -201,6 +246,13 @@ export class FeishuAdapter implements ChannelAdapter {
         };
         return this.tenantToken.value;
     }
+}
+
+function readFeishuMessageId(payload: unknown): string | undefined {
+    const record = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : {};
+    const data = typeof record.data === "object" && record.data !== null ? (record.data as Record<string, unknown>) : record;
+    const messageId = data.message_id ?? data.messageId;
+    return typeof messageId === "string" && messageId.trim() ? messageId.trim() : undefined;
 }
 
 function parseFeishuContent(content: string | undefined): string {

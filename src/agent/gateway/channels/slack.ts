@@ -17,6 +17,7 @@ import type {
     GatewayDeliveryMetadata,
     GatewayAttachment,
     GatewayMessage,
+    GatewayOutboundEnvelope,
     GatewayRoute,
 } from "../../../protocol/contracts/index.ts";
 import {
@@ -25,6 +26,7 @@ import {
     ChatType as ChatTypeValue,
     GatewayMessageAction,
     GatewayMessageKind,
+    GatewayOutboundOperation,
 } from "../../../protocol/contracts/index.ts";
 import {
     assertPlatformResponse,
@@ -33,7 +35,7 @@ import {
     json,
     readString,
 } from "./helpers.ts";
-import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const SLACK_SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
@@ -46,6 +48,12 @@ export interface SlackAdapterConfig {
 export class SlackAdapter implements ChannelAdapter {
     readonly name: ChannelName = Channel.Slack;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        messageUpdate: true,
+        reactions: true,
+        replyReference: true,
+        thread: true,
+    });
 
     constructor(
         private readonly config: SlackAdapterConfig,
@@ -90,6 +98,9 @@ export class SlackAdapter implements ChannelAdapter {
             dispatch,
             message,
             deliver: (text) => this.send(message.route, text, buildDeliveryMetadata(message)),
+            metadata: buildDeliveryMetadata(message),
+            operation: (operation) =>
+                this.sendOperation({ ...operation, metadata: operation.metadata ?? buildDeliveryMetadata(message) }),
             typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
         });
         return json({ ok: true });
@@ -173,13 +184,61 @@ export class SlackAdapter implements ChannelAdapter {
             },
             body: JSON.stringify(body),
         });
-        await assertPlatformResponse(response, "Slack");
+        const payload = await assertPlatformResponse(response, "Slack");
+        const messageId = readSlackTimestamp(payload);
+        if (messageId) {
+            return;
+        }
     }
 
     async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // Slack Web API has no durable native "typing" call for bot messages.
         // Keeping this no-op makes lifecycle support explicit and consistent.
     }
+
+    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            await this.send(operation.route, operation.text, operation.metadata);
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.MessageEdit && operation.text && operation.targetMessageId) {
+            if (!this.config.botToken) return;
+            const response = await fetch("https://slack.com/api/chat.update", {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json; charset=utf-8",
+                    authorization: `Bearer ${this.config.botToken}`,
+                },
+                body: JSON.stringify({
+                    channel: operation.route.chatId,
+                    ts: operation.targetMessageId,
+                    text: operation.text,
+                }),
+            });
+            await assertPlatformResponse(response, "Slack update");
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.ReactionAdd && operation.targetMessageId && operation.text) {
+            if (!this.config.botToken) return;
+            const response = await fetch("https://slack.com/api/reactions.add", {
+                method: "POST",
+                headers: {
+                    "content-type": "application/json; charset=utf-8",
+                    authorization: `Bearer ${this.config.botToken}`,
+                },
+                body: JSON.stringify({
+                    channel: operation.route.chatId,
+                    name: operation.text,
+                    timestamp: operation.targetMessageId,
+                }),
+            });
+            await assertPlatformResponse(response, "Slack reaction");
+        }
+    }
+}
+
+function readSlackTimestamp(payload: unknown): string | undefined {
+    return isRecord(payload) ? readString(payload.ts) : undefined;
 }
 
 function readSlackChatType(...events: Array<Record<string, unknown>>): ChatType {

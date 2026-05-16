@@ -77,6 +77,21 @@ export const GatewayProcessingOutcome = {
 
 export type GatewayProcessingOutcome = (typeof GatewayProcessingOutcome)[keyof typeof GatewayProcessingOutcome];
 
+export const GatewayOutboundOperation = {
+    CardCreate: "card.create",
+    CardUpdate: "card.update",
+    MessageDelete: "message.delete",
+    MessageEdit: "message.edit",
+    MessageSend: "message.send",
+    ReactionAdd: "reaction.add",
+    ReactionRemove: "reaction.remove",
+    ThreadCreate: "thread.create",
+    TypingStart: "typing.start",
+    TypingStop: "typing.stop",
+} as const;
+
+export type GatewayOutboundOperation = (typeof GatewayOutboundOperation)[keyof typeof GatewayOutboundOperation];
+
 export const GatewayReplyToMode = {
     All: "all",
     First: "first",

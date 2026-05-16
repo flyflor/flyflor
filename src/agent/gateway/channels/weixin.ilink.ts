@@ -126,6 +126,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
                             });
                             this.lastOutboundAt = new Date().toISOString();
                         },
+                        metadata: buildDeliveryMetadata(message),
                         typing: () => this.sendTyping(message.route, buildDeliveryMetadata(message)),
                     });
                 }

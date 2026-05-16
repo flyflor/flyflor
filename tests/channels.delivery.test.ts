@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { GatewayModule } from "../src/agent/gateway/gateway.module.ts";
 import { dispatchWithDelivery } from "../src/agent/gateway/channels/helpers.ts";
-import { Channel, ChatType, type GatewayMessage, type GatewayReply, type RuntimeEvent } from "../src/protocol/contracts/index.ts";
+import {
+    Channel,
+    ChatType,
+    GatewayOutboundOperation,
+    type GatewayMessage,
+    type GatewayOutboundEnvelope,
+    type GatewayReply,
+    type RuntimeEvent,
+} from "../src/protocol/contracts/index.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import type { ChannelAdapter } from "../src/agent/gateway/channels/types.ts";
 import type { EventSink } from "../src/protocol/events/index.ts";
@@ -39,6 +47,35 @@ describe("channel delivery", () => {
         expect(typingCount).toBe(1);
         expect(dispatcherReceivedOptions).toBe(false);
         expect(delivered).toEqual(["final"]);
+    });
+
+    test("dispatchWithDelivery emits typed lifecycle operations without streaming deltas", async () => {
+        const operations: GatewayOutboundEnvelope[] = [];
+
+        await dispatchWithDelivery({
+            message,
+            metadata: { replyToMessageId: "source-1", threadId: "thread-1" },
+            operation: async (operation) => {
+                operations.push(operation);
+            },
+            deliver: async () => {
+                throw new Error("operation sender should own delivery");
+            },
+            dispatch: async (_message, options) => {
+                expect(options).toBeUndefined();
+                return { messageId: "m-1", route: message.route, text: "final" };
+            },
+        });
+
+        expect(operations.map((operation) => operation.operation)).toEqual([
+            GatewayOutboundOperation.TypingStart,
+            GatewayOutboundOperation.MessageSend,
+            GatewayOutboundOperation.TypingStop,
+        ]);
+        expect(operations[1]).toMatchObject({
+            metadata: { replyToMessageId: "source-1", threadId: "thread-1" },
+            text: "final",
+        });
     });
 
     test("legacy gateway stream URL returns final text without channel deltas", async () => {
