@@ -106,8 +106,8 @@ bun run smoke:runtime                     # 已启动 compose 后，检查 docto
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
-bun run smoke:release                     # docs + type + tests + binary + docker smoke
-bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/docker 静态烟测
+bun run smoke:release                     # docs + type + tests + binary + gateway service + docker smoke
+bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```

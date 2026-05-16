@@ -187,7 +187,7 @@ interface GatewayChannelCapabilities {
 - `message.edit` / `card.update` 必须由 adapter capability 声明支持后才能走原生 API；否则保持 final text send，不做 bridge 式伪装。
 - `GatewayMessage.messageAction / mentions / reactions / replyTo / comment` 只从平台结构化字段或协议 token 复制，属于通信协议归一化，不参与业务语义判断。
 - TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；chat TUI 已订阅 runtime / blackboard 事件，后续可把 gateway 级 channel 状态变化也接入同一事件面板。
-- `gateway start/stop/restart` 已有 daemon helper；后台子进程 stdout / stderr 会写入 `<logDir>/gateway.log`，PID 写 `<cacheDir>/gateway.pid`，便于二进制安装后排障。`gateway service plan` 可生成 systemd user unit 或 launchd plist，`--write` 只写服务文件，启用 / 启动命令保持显式输出。`bun run smoke:gateway:service` 会在临时 HOME 内渲染并写入两类服务文件，不调用 `systemctl` / `launchctl`；跨平台长期运行仍需真实环境验证。
+- `gateway start/stop/restart` 已有 daemon helper；后台子进程 stdout / stderr 会写入 `<logDir>/gateway.log`，PID 写 `<cacheDir>/gateway.pid`，便于二进制安装后排障。`gateway service plan` 可生成 systemd user unit 或 launchd plist，`--write` 只写服务文件，启用 / 启动命令保持显式输出。`bun run smoke:gateway:service` 会在临时 HOME 内渲染并写入两类服务文件，不调用 `systemctl` / `launchctl`，并已纳入确定性 `ci` / `smoke:release` 门禁；跨平台长期运行仍需真实环境验证。
 - Gateway 已有单进程 `InMemoryDedupStore` 与 `buildDedupKey(channel,messageId)`；多副本部署时需要替换为共享 dedup store 才能跨节点幂等。
 - 入站消息 `attachments` 已由 `src/agent/runtime/attachments.ts` 渲染为 `[attachments]` 元数据摘要；runtime 不下载二进制。渠道富媒体下载 / 缓存 / 安全扫描必须作为 gateway attachment pipeline 单独落地，不能混入业务语义判断。
 
