@@ -260,7 +260,7 @@ interface GatewayReply {
 
 ## 运行边界 / 后续增强
 
-- `RuntimeModule` 已拆 phase；附件摘要渲染已下沉到 `src/agent/runtime/attachments.ts`，保持 runtime 只消费 gateway 归一化 metadata，不下载二进制。工具循环、结构化块解析、persist 副作用仍在同一组件内，后续只在职责膨胀时抽 Component，不新增额外中间层。
+- `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/attachments.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/ask.reply.ts`，保持 runtime 主类只编排 turn 生命周期。工具循环、结构化块解析、persist 副作用仍在同一组件内，后续只在职责膨胀时抽 Component，不新增额外中间层。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走进程内 Map；多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。

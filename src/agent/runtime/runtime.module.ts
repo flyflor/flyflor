@@ -1,7 +1,6 @@
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
-    AgentAskChoice,
     BlackboardTurnStatus as BlackboardTurnStatusType,
     GatewayMessage,
     GatewayReply,
@@ -80,6 +79,7 @@ import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
 import { renderUserContentWithAttachments } from "./attachments.ts";
 import { parsePlanningBlocks } from "./planning.blocks.ts";
+import { buildAskMetadata, renderAskReplyText } from "./ask.reply.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -1397,61 +1397,6 @@ function renderBlackboardPrompt(run: RuntimeBlackboardRun | undefined): string {
 
 function renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefined): string {
     return `${renderReplyPrefix(run)}${finalAnswer}`;
-}
-
-/**
- * LF-R3 Ask 一等公民：把 AgentAsk 渲染成可见 reply 文本。
- * 不混入黑板 transcript 前缀——ask 是面向用户的纯反问，不展示中间推理。
- */
-function renderAskReplyText(ask: AgentAsk): string {
-    const lines: string[] = [ask.prompt.trim()];
-    const questions = ask.questions ?? [];
-    if (ask.choices && ask.choices.length > 0) {
-        lines.push("");
-        renderAskChoiceLines(ask.choices).forEach((line) => lines.push(line));
-    }
-    if (questions.length > 0) {
-        if (ask.choices && ask.choices.length > 0) {
-            lines.push("");
-        }
-        questions.forEach((question, idx) => {
-            lines.push(`${idx + 1}. ${question.prompt.trim()}`);
-            const questionChoices = renderAskChoiceLines(question.choices);
-            if (questionChoices.length > 0) {
-                questionChoices.forEach((line) => lines.push(`   ${line}`));
-            }
-            if (idx < questions.length - 1) {
-                lines.push("");
-            }
-        });
-    }
-    return lines.join("\n");
-}
-
-function renderAskChoiceLines(choices: AgentAskChoice[] | undefined): string[] {
-    if (!choices || choices.length === 0) {
-        return [];
-    }
-    const lines: string[] = [];
-    choices.forEach((choice, idx) => {
-        const tail = choice.description ? ` — ${choice.description}` : "";
-        lines.push(`${idx + 1}. ${choice.label}${tail}`);
-    });
-    lines.push(`${choices.length + 1}. Other — type your own answer`);
-    return lines;
-}
-
-function buildAskMetadata(ask: AgentAsk, snapshotId: string): Record<string, unknown> {
-    return {
-        choiceCount: ask.choices?.length ?? 0,
-        choices: ask.choices ?? [],
-        freeform: ask.freeform ?? true,
-        prompt: ask.prompt,
-        questionCount: ask.questions?.length ?? 0,
-        questions: ask.questions ?? [],
-        reason: ask.reason,
-        snapshotId,
-    };
 }
 
 function buildPlanningMetadata(
