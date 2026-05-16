@@ -129,7 +129,7 @@ interface McpCallResult {
 
 ## 运行边界 / 后续增强
 
-- 旧式 SSE 双端点已有客户端兼容，会话建立阶段现在有一次指数退避重试；`tools/call` 在传输/协议失败时也会重开一次 session 重试。`bun run smoke:recovery` 已覆盖本地 mock 的短暂断链与长结果回灌，`tests/skill.mcp.test.ts` 覆盖 catalog stale 复用，并与 local working memory WAL/snapshot 恢复同属恢复门禁；但仍缺真实第三方 MCP server 的长期断链回归。
+- 旧式 SSE 双端点已有客户端兼容，会话建立阶段现在有一次指数退避重试；`tools/call` 在传输/协议失败时也会重开一次 session 重试。`bun run smoke:recovery` 已覆盖本地 mock 的短暂断链与长结果回灌，`tests/skill.mcp.test.ts` 覆盖 catalog stale 复用，并与 local working memory WAL/snapshot 恢复同属恢复门禁。真实第三方 server 走显式 opt-in：`bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000`，默认只重复 `tools/list`，不会调用任何 tool；需要真实调用时再显式加 `--call server.tool --input '{}'`。
 - catalog 缓存为进程内 Map，**多副本不共享**；已有 TTL/LRU，但跨 gateway 节点仍依赖各自预拉取。
 - tool 调用结果现在带结构化 `summary`，长结果保留 head/tail + 原始大小标记；runtime 同步把 `resultSummary` + `resultSummaryMeta` 写入事件、TUI trace 和 memory provenance，后续反思 / skill 候选可以直接消费，不再回读完整大结果。
 - 调用失败的重试策略仍然很薄，只对 transport/protocol 层做一次短退避重试；真正的幂等语义还要靠 server 自身能力或更细的 tool 标记。

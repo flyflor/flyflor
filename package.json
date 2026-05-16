@@ -35,6 +35,7 @@
         "smoke:docker:binary": "bun run scripts/docker.dev.smoke.ts --require-binary",
         "smoke:runtime": "bun run scripts/docker.runtime.smoke.ts",
         "smoke:runtime:live": "bun run scripts/docker.runtime.smoke.ts --require-provider-key --chat-probe",
+        "smoke:mcp:live": "bun run scripts/mcp.live.smoke.ts",
         "smoke:release": "bun run scripts/quality.ts release",
         "smoke:recovery": "bun run scripts/working.memory.recovery.smoke.ts && bun run scripts/mcp.transport.recovery.smoke.ts",
         "release:check": "bun run smoke:release",

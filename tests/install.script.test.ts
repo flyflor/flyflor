@@ -159,6 +159,10 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:source"]).toContain("install.source.sh");
         expect(packageJson.scripts?.["install:docker"]).toContain("install.docker.sh");
         expect(packageJson.scripts?.["install:windows"]).toContain("install.ps1");
+        // Live MCP smoke is intentionally opt-in and must stay outside the
+        // deterministic `test` / `ci` gates, but it still needs a stable package
+        // entrypoint for real third-party recovery checks.
+        expect(packageJson.scripts?.["smoke:mcp:live"]).toContain("mcp.live.smoke.ts");
     });
 
     test("在沙盒内实测源码安装，checkout 留在目标目录", async () => {

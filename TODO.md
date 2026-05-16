@@ -21,4 +21,4 @@
 | 优先级 | 主题 | 状态 | 备注 |
 | --- | --- | --- | --- |
 | P1 | daemon 安装体验实机验证 | 进行中 | gateway daemon helper、`gateway service plan`、`tests/gateway.daemon.test.ts` 与安装脚本测试已覆盖本地生命周期和服务文件生成；launchd/systemd 跨平台真实机器回归仍待实机验收。 |
-| P2 | 真实第三方 MCP 长期断链回归 | 进行中 | `scripts/mcp.transport.recovery.smoke.ts`、`tests/mcp.sse.test.ts`、`tests/skill.mcp.test.ts` 与 `smoke:recovery` 已覆盖本地断链 / 重连 / catalog stale / 长结果回灌；仍缺真实 server 长时间断链、重连、catalog stale 的实测矩阵。 |
+| P2 | 真实第三方 MCP 长期断链回归 | 进行中 | `scripts/mcp.transport.recovery.smoke.ts`、`tests/mcp.sse.test.ts`、`tests/skill.mcp.test.ts` 与 `smoke:recovery` 已覆盖本地断链 / 重连 / catalog stale / 长结果回灌；`smoke:mcp:live` 已提供 opt-in 真实 server 多轮 `tools/list` / 显式 tool call 探测，仍待真实第三方矩阵跑数。 |
