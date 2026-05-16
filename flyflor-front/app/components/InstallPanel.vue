@@ -32,9 +32,11 @@ defineProps<{
 
 <style scoped>
 .install-section {
-    background:
-        linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 70%, transparent), color-mix(in srgb, var(--color-bg-strong) 72%, transparent)),
-        color-mix(in srgb, var(--color-bg) 70%, transparent);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-surface) 92%, var(--color-bg) 8%) 0%,
+        color-mix(in srgb, var(--color-bg) 90%, var(--color-surface) 10%) 100%
+    );
     border-bottom: 1px solid var(--color-line);
     border-top: 1px solid var(--color-line);
 }
@@ -94,9 +96,32 @@ defineProps<{
 
 pre {
     margin: 0;
-    overflow-x: hidden;
+    overflow-x: auto;
+    scrollbar-color: color-mix(in srgb, var(--color-orchid) 38%, var(--color-muted)) transparent;
+    scrollbar-width: thin;
     padding: 18px;
     white-space: pre-wrap;
+}
+
+pre::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+pre::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-orchid) 36%, var(--color-muted));
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-sky) 42%, var(--color-orchid));
+    background-clip: content-box;
 }
 
 code {

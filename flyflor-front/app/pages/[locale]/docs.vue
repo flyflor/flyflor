@@ -87,7 +87,7 @@ useHead({
     grid-template-columns: 240px minmax(0, 1fr);
     margin: 0 auto;
     max-width: 1160px;
-    padding: 24px 24px 88px;
+    padding: 10px 24px 72px;
 }
 
 .doc-nav {
@@ -95,7 +95,7 @@ useHead({
     gap: 8px;
     padding: 16px;
     position: sticky;
-    top: 16px;
+    top: 12px;
 }
 
 .doc-nav a {
@@ -106,11 +106,11 @@ useHead({
 
 .doc-content {
     display: grid;
-    gap: 22px;
+    gap: 18px;
 }
 
 .doc-section {
-    padding: 28px;
+    padding: 24px;
 }
 
 .doc-section h2,
@@ -165,8 +165,31 @@ useHead({
 
 pre {
     margin: 0;
-    overflow-x: hidden;
+    overflow-x: auto;
+    scrollbar-color: color-mix(in srgb, var(--color-orchid) 38%, var(--color-muted)) transparent;
+    scrollbar-width: thin;
     white-space: pre-wrap;
+}
+
+pre::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+pre::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-orchid) 36%, var(--color-muted));
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-sky) 42%, var(--color-orchid));
+    background-clip: content-box;
 }
 
 code {

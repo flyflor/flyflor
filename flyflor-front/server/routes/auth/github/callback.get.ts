@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
         });
     }
 
+    // Keep the callback aligned with the configured deployed URL; the origin fallback is only for local/dev.
     const redirectUri =
         github.redirectUri ||
         `${getRequestURL(event).origin}/auth/github/callback`;

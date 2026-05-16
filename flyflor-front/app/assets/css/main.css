@@ -215,9 +215,7 @@ textarea {
 .surface-panel:hover {
     background: color-mix(in srgb, var(--color-surface) 94%, var(--color-orchid) 6%);
     border-color: color-mix(in srgb, var(--color-orchid) 38%, var(--color-line));
-    box-shadow:
-        var(--shadow-soft),
-        inset 0 0 0 1px color-mix(in srgb, var(--color-sky) 18%, transparent);
+    box-shadow: var(--shadow-tight);
 }
 
 .info-card:hover::before,
@@ -294,7 +292,7 @@ textarea {
 .page-hero {
     margin: 0 auto;
     max-width: 1160px;
-    padding: 54px 24px 28px;
+    padding: 34px 24px 14px;
 }
 
 .page-hero h1 {
@@ -309,7 +307,7 @@ textarea {
 .page-hero p:not(.eyebrow) {
     color: var(--color-muted);
     font-size: 1.18rem;
-    margin: 22px 0 0;
+    margin: 16px 0 0;
     max-width: 780px;
 }
 

@@ -9,6 +9,7 @@ export default defineEventHandler((event) => {
     }
 
     const state = createOAuthState(event);
+    // Production should set githubRedirectUri to the deployed callback, e.g. https://flyflor.qingshen.xin/auth/github/callback.
     const redirectUri =
         github.redirectUri ||
         `${getRequestURL(event).origin}/auth/github/callback`;

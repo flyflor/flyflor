@@ -137,13 +137,11 @@ useHead({
     overflow: hidden;
     padding: 42px 24px 76px;
     position: relative;
-    background:
-        linear-gradient(
-            145deg,
-            color-mix(in srgb, var(--color-surface) 72%, transparent) 0%,
-            color-mix(in srgb, var(--color-bg) 74%, transparent) 44%,
-            color-mix(in srgb, var(--color-surface-soft) 68%, transparent) 100%
-        );
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-surface) 92%, var(--color-bg) 8%) 0%,
+        color-mix(in srgb, var(--color-bg) 88%, var(--color-surface) 12%) 100%
+    );
     border: 1px solid color-mix(in srgb, var(--color-line) 72%, transparent);
     border-radius: 18px;
     box-shadow: var(--shadow-soft);
@@ -152,13 +150,8 @@ useHead({
 
 .hero::before {
     background:
-        linear-gradient(
-            90deg,
-            color-mix(in srgb, var(--color-bg) 78%, transparent) 0%,
-            color-mix(in srgb, var(--color-bg) 58%, transparent) 46%,
-            color-mix(in srgb, var(--color-bg) 38%, transparent) 76%
-        ),
-        radial-gradient(circle at 78% 42%, color-mix(in srgb, var(--color-orchid) 14%, transparent), transparent 30%);
+        radial-gradient(circle at 78% 42%, color-mix(in srgb, var(--color-orchid) 12%, transparent), transparent 28%),
+        radial-gradient(circle at 16% 16%, color-mix(in srgb, var(--color-sky) 8%, transparent), transparent 26%);
     content: "";
     inset: 0;
     pointer-events: none;
@@ -189,7 +182,7 @@ useHead({
 }
 
 .hero__content {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--color-bg) 82%, transparent), transparent);
+    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
     border-radius: 8px;
     padding: 18px 0;
 }
@@ -356,9 +349,7 @@ useHead({
 .ecosystem-card:hover {
     background: color-mix(in srgb, var(--color-surface) 94%, var(--color-orchid) 6%);
     border-color: color-mix(in srgb, var(--color-orchid) 42%, var(--color-line));
-    box-shadow:
-        var(--shadow-soft),
-        inset 0 0 0 1px color-mix(in srgb, var(--color-sky) 16%, transparent);
+    box-shadow: var(--shadow-tight);
 }
 
 .ecosystem-card svg {
