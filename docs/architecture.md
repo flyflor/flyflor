@@ -44,6 +44,7 @@ flowchart TB
     Runtime --> MCP["MCP Client<br/>src/agent/mcp"]
     Runtime --> Skills["Skill Loader<br/>src/crystal/skills"]
     Runtime --> Prompts["Prompts<br/>src/agent/prompts"]
+    Runtime --> FastRouteCache["fastRoute cache<br/><cacheDir>/runtime.fast.route.snapshots.json"]
 
     Memory --> Markdown["Markdown 宪法层<br/>~/.flyflor/workspace/*.md"]
     Memory --> Working["MemoryComponent<br/>local WAL + snapshot"]

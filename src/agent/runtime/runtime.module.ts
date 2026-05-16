@@ -79,7 +79,7 @@ import { filterMcpServersByToolset, mcpCatalogCacheKey } from "./mcp/toolset.ts"
 import { parsePlanningBlocks } from "./planning/blocks.ts";
 import { buildPlanningMetadata } from "./planning/metadata.ts";
 import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./routing/fast.route.ts";
-import { InMemoryFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./routing/fast.route.store.ts";
+import { FileBackedFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./routing/fast.route.store.ts";
 import { decideRouteEscalation, nextEscalationCounters } from "./routing/route.escalation.ts";
 import { selectRuntimeSkills } from "./skills/selection.ts";
 import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/protocol.visibility.ts";
@@ -168,7 +168,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
      * 用于 fastRoute 复用：上一轮模型 nextRouteHint + embedding + lastMode。
      */
-    private fastRouteSnapshots: FastRouteSnapshotStore = new InMemoryFastRouteSnapshotStore();
+    private readonly fastRouteSnapshots: FastRouteSnapshotStore;
 
     public constructor(
         protected readonly config: FlyflorConfig,
@@ -188,6 +188,7 @@ export class RuntimeModule extends RuntimeBoundary {
             yoloCooldownMs: config.sandbox.quota?.yoloCooldownMs,
         });
         this.inflight = new InFlightTracker(config.paths.storageDir);
+        this.fastRouteSnapshots = new FileBackedFastRouteSnapshotStore(config.paths.cacheDir);
     }
 
     /** 预热记忆层；在 GatewayModule 启动后立即调用。 */

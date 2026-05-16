@@ -181,10 +181,10 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 ### 请求流程
 
 1. 渠道、消息、用户身份归一为 `GatewayMessage`
-2. 路由判断：fastRoute 启发式（~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
+2. 路由判断：fastRoute 资源指标短路（本地 cache 恢复热提示，目标 ~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
 3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + working-memory 热激活 + project/codename 局部记忆 + local crystal Gem 召回
 4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append / TaskPlan / ContextFork / SceneRecord；TTFB 目标 < 350ms
-5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot
+5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot cache
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
 
 外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成和驱动 TUI/API SSE，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
