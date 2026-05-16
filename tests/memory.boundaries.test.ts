@@ -197,6 +197,19 @@ describe("Internal infrastructure deployment boundaries", () => {
         expect(source).toContain("StructuredBlockProtocol.MemoryActions");
     });
 
+    test("neural memory module owns dream worker instead of importing runtime", async () => {
+        const [memoryModule, scheduler] = await Promise.all([
+            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "index.ts"), "utf8"),
+            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "background.scheduler.ts"), "utf8"),
+        ]);
+
+        // Dream mutates the long-term memory graph; keeping the implementation
+        // inside neural/memory avoids a runtime -> memory -> runtime cycle.
+        expect(`${memoryModule}\n${scheduler}`).not.toContain("../../agent/runtime/dream.worker");
+        expect(memoryModule).toContain('from "./dream.worker.ts"');
+        expect(scheduler).toContain('from "./dream.worker.ts"');
+    });
+
     test("docker dev defaults to local working memory without Redis service", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
         const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();

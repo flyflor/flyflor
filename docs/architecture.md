@@ -199,5 +199,5 @@ interface FlyFlorDependencies {
 
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
 - `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；后续如果新增可执行能力，必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
-- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染、project promotion 与 runtime dream worker；导入方向需要继续收敛。已收口的边界：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；runtime 直接从 prompt registry 注入 memory action instructions。
+- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向需要继续收敛。已收口的边界：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；`DreamWorker` 已迁入 `src/neural/memory/dream.worker.ts`，runtime 只保留旧路径兼容 re-export。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot、TaskPlan / ContextFork / SceneRecord 摘要与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

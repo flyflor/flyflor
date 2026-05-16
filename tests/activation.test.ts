@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spreadActivation, type ActivationCandidate } from "../src/neural/memory/activation.ts";
-import { NullDreamWorker } from "../src/agent/runtime/dream.worker.ts";
+import { NullDreamWorker } from "../src/neural/memory/dream.worker.ts";
 
 const nowMs = 1_700_000_000_000;
 

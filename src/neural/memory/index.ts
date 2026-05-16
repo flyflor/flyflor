@@ -64,7 +64,7 @@ import { RetrospectiveLog } from "./retrospective.ts";
 import { BackgroundScheduler } from "./background.scheduler.ts";
 import { runBrainArchive, type BrainArchiveRunResult } from "./brain.archive.ts";
 import { DormantSupervisor } from "../dormant/index.ts";
-import { DreamWorkerImpl } from "../../agent/runtime/dream.worker.ts";
+import { DreamWorkerImpl } from "./dream.worker.ts";
 import { historyTurnFromEvent, type ChatHistoryPlanning, type ChatHistoryTurn } from "./history.ts";
 import type { MemoryAction } from "./actions.ts";
 import type {
