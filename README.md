@@ -65,7 +65,9 @@ bun run app.ts gateway
 
 ```bash
 bun run check        # TypeScript 类型检查
-bun run test         # 运行本仓库测试
+bun run test         # 确定性单元测试：离线、stub model、无真实 API 消耗
+bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的当前 provider
+bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc
 bun run build:binary # 编译本机二进制
 ```
 
@@ -85,6 +87,8 @@ bun run ci                                # 本地确定性门禁：不跑真实
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```
+
+`bun run test` 默认不调用真实模型，避免普通单测受网络、余额和 provider 抖动影响；需要验证你当前配置的真实模型时，单独跑 `bun run test:live`、`bun run test:live:docker` 或 Docker 场景的 `bun run smoke:runtime:live`。
 
 挂载路径：
 

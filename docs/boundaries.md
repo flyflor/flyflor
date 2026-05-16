@@ -269,8 +269,10 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ```bash
 bun run check         # tsc --noEmit
-bun test              # 已注册测试套件
+bun run test          # 已注册确定性测试套件
 bun run build:binary  # 二进制可编译
 ```
+
+默认测试套件必须离线、确定性、无真实 provider 消耗；模型调用用 stub / mock 覆盖协议与错误边界。需要验证当前真实配置时，显式运行 `bun run test:live`（`~/.flyflor/config.jsonc`）或 `bun run test:live:docker`（`./docker/config/config.jsonc`），这类 live 冒烟不进入 `ci` / `release:check` 的默认门禁。
 
 涉及工具 / MCP / 插件 / 文件系统 / shell / 网络 / 记忆 / provider 时必须补对应测试或最小验证脚本。
