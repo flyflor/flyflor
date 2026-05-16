@@ -143,7 +143,7 @@ useHead({
 }
 
 .doc-code {
-    background: #171712;
+    background: color-mix(in srgb, #171712 86%, var(--color-surface));
     border-radius: 8px;
     color: #fffdf7;
     padding: 18px;
@@ -156,7 +156,7 @@ useHead({
 }
 
 .doc-example {
-    background: #171712;
+    background: color-mix(in srgb, #171712 86%, var(--color-surface));
     border-radius: 8px;
     color: #fffdf7;
     margin-top: 18px;
@@ -165,12 +165,15 @@ useHead({
 
 pre {
     margin: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
+    white-space: pre-wrap;
 }
 
 code {
     font-family: var(--font-mono);
     font-size: 0.92rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 @media (max-width: 840px) {

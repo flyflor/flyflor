@@ -216,7 +216,7 @@ useHead({
 }
 
 .market-card__install {
-    background: #171712;
+    background: color-mix(in srgb, #171712 86%, var(--color-surface));
     border-radius: 8px;
     color: #fffdf7;
     display: grid;
@@ -231,7 +231,9 @@ useHead({
 }
 
 .market-card__install code {
+    display: block;
     overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 @media (max-width: 980px) {

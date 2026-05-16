@@ -137,12 +137,28 @@ useHead({
     overflow: hidden;
     padding: 42px 24px 76px;
     position: relative;
+    background:
+        linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--color-surface) 72%, transparent) 0%,
+            color-mix(in srgb, var(--color-bg) 74%, transparent) 44%,
+            color-mix(in srgb, var(--color-surface-soft) 68%, transparent) 100%
+        );
+    border: 1px solid color-mix(in srgb, var(--color-line) 72%, transparent);
+    border-radius: 18px;
+    box-shadow: var(--shadow-soft);
+    margin-top: 10px;
 }
 
 .hero::before {
     background:
-        linear-gradient(90deg, var(--color-bg) 0%, color-mix(in srgb, var(--color-bg) 96%, transparent) 46%, color-mix(in srgb, var(--color-bg) 52%, transparent) 76%),
-        radial-gradient(circle at 78% 42%, color-mix(in srgb, var(--color-orchid) 18%, transparent), transparent 30%);
+        linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--color-bg) 78%, transparent) 0%,
+            color-mix(in srgb, var(--color-bg) 58%, transparent) 46%,
+            color-mix(in srgb, var(--color-bg) 38%, transparent) 76%
+        ),
+        radial-gradient(circle at 78% 42%, color-mix(in srgb, var(--color-orchid) 14%, transparent), transparent 30%);
     content: "";
     inset: 0;
     pointer-events: none;
@@ -161,7 +177,7 @@ useHead({
     height: 100%;
     object-fit: cover;
     object-position: 82% 42%;
-    opacity: 0.16;
+    opacity: 0.24;
     transform: scale(1.08);
     width: 100%;
 }
@@ -173,7 +189,7 @@ useHead({
 }
 
 .hero__content {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--color-bg) 92%, transparent), transparent);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-bg) 82%, transparent), transparent);
     border-radius: 8px;
     padding: 18px 0;
 }
@@ -181,9 +197,9 @@ useHead({
 .hero__content h1 {
     font-family: var(--font-display);
     font-size: clamp(4.2rem, 12vw, 9.2rem);
-    font-weight: 900;
+    font-weight: 800;
     letter-spacing: 0;
-    line-height: 0.9;
+    line-height: 0.92;
     margin: 0;
 }
 
@@ -241,7 +257,7 @@ useHead({
 
 .brand-orbit__badge {
     animation: badge-enter 560ms ease both;
-    background: rgba(9, 11, 22, 0.62);
+    background: color-mix(in srgb, var(--color-bg) 72%, transparent);
     border: 1px solid color-mix(in srgb, var(--color-surface) 28%, transparent);
     border-radius: 8px;
     color: #fffdf8;
@@ -334,13 +350,15 @@ useHead({
     transition:
         border-color 180ms ease,
         box-shadow 180ms ease,
-        transform 180ms ease;
+        background 180ms ease;
 }
 
 .ecosystem-card:hover {
+    background: color-mix(in srgb, var(--color-surface) 94%, var(--color-orchid) 6%);
     border-color: color-mix(in srgb, var(--color-orchid) 42%, var(--color-line));
-    box-shadow: var(--shadow-soft);
-    transform: translateY(-6px) rotateX(2deg);
+    box-shadow:
+        var(--shadow-soft),
+        inset 0 0 0 1px color-mix(in srgb, var(--color-sky) 16%, transparent);
 }
 
 .ecosystem-card svg {
@@ -391,6 +409,10 @@ useHead({
     .hero {
         min-height: auto;
         padding: 34px 18px 64px;
+    }
+
+    .hero__content h1 {
+        font-size: clamp(3.2rem, 14vw, 5rem);
     }
 
     .hero__visual {

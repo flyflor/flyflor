@@ -118,6 +118,11 @@ const themeItems = computed<Array<{ icon: string; label: string; value: ThemePre
     color: var(--color-muted);
     gap: 24px;
     justify-content: center;
+    scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+    display: none;
 }
 
 .actions {

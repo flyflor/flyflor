@@ -32,7 +32,9 @@ defineProps<{
 
 <style scoped>
 .install-section {
-    background: rgba(255, 253, 247, 0.64);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 70%, transparent), color-mix(in srgb, var(--color-bg-strong) 72%, transparent)),
+        color-mix(in srgb, var(--color-bg) 70%, transparent);
     border-bottom: 1px solid var(--color-line);
     border-top: 1px solid var(--color-line);
 }
@@ -50,7 +52,7 @@ defineProps<{
 }
 
 .terminal {
-    background: #171712;
+    background: color-mix(in srgb, #171712 86%, var(--color-surface));
     border-radius: 8px;
     box-shadow: var(--shadow-soft);
     color: #fffdf7;
@@ -59,7 +61,7 @@ defineProps<{
 
 .terminal__bar {
     align-items: center;
-    background: #2c2b25;
+    background: color-mix(in srgb, #2c2b25 86%, var(--color-surface));
     display: flex;
     gap: 8px;
     padding: 10px 14px;
@@ -92,13 +94,17 @@ defineProps<{
 
 pre {
     margin: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
     padding: 18px;
+    white-space: pre-wrap;
 }
 
 code {
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    display: block;
+    font-family: var(--font-mono);
     font-size: 0.92rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 @media (max-width: 900px) {
