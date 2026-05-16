@@ -91,6 +91,7 @@ const THEME = {
     panelBgSoft: RGBA.fromInts(20, 28, 44),
     fg: RGBA.fromInts(235, 244, 246),
     fgMuted: RGBA.fromInts(132, 154, 169),
+    gold: RGBA.fromInts(219, 190, 136),
     user: RGBA.fromInts(98, 207, 255),
     assistant: RGBA.fromInts(241, 248, 248),
     error: RGBA.fromInts(255, 111, 127),
@@ -110,6 +111,10 @@ const SIDE_PANEL_RATIO = 0.28;
 const AVATAR_MIN_HEIGHT = 6;
 const AVATAR_MAX_HEIGHT = 14;
 const AVATAR_HEIGHT_RATIO = 0.28;
+const TODO_PANEL_MIN_HEIGHT = 6;
+const TODO_PANEL_MAX_HEIGHT = 10;
+const TODO_PANEL_HEIGHT_RATIO = 0.18;
+export const NO_PLAN_TEXT = "暂无计划";
 
 interface MsgRenderable {
     id: string;
@@ -197,7 +202,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const markdownSyntaxStyle = createMarkdownSyntaxStyle();
         let statusNoticeTimer: ReturnType<typeof setTimeout> | undefined;
         const messageRenderables: MsgRenderable[] = [];
-        const sideLineRenderables: TextRenderable[] = [];
+        const todoLineRenderables: TextRenderable[] = [];
+        const detailLineRenderables: TextRenderable[] = [];
         const pendingBlackboardRefreshes = new Set<string>();
         const loadedHistoryEventIds = new Set<string>();
         let historyOpen = false;
@@ -536,6 +542,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     { id: crypto.randomUUID(), role: "user", content: text.trim(), status: "done" },
                     { id: turnId, role: "assistant", content: "", status: "streaming", mcpCalls: [], skills: [] },
                 ]);
+                // New live turns return the side rail to follow-latest mode; explicit /thinking or /blackboard
+                // selection can still pin older turns until the next user message starts.
+                setSelectedQuestionIndex(null);
                 setProcessing(true);
                 setError(null);
                 setPhase("thinking");
@@ -1098,9 +1107,33 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexShrink: 0,
             rowGap: 1,
             width: rightPanelWidth(renderer.width),
-            onMouseScroll: (event) => scrollByWheel(sideScrollBox, event),
         });
-        const sideScrollBox = new ScrollBoxRenderable(renderer, {
+        const todoScrollBox = new ScrollBoxRenderable(renderer, {
+            contentOptions: {
+                flexDirection: "column",
+                paddingRight: 1,
+            },
+            flexGrow: 1,
+            flexShrink: 1,
+            backgroundColor: THEME.panelBg,
+            horizontalScrollbarOptions: { height: 0, visible: false },
+            verticalScrollbarOptions: {
+                visible: true,
+                width: 2,
+                showArrows: false,
+                trackOptions: {
+                    backgroundColor: THEME.violetBg,
+                    foregroundColor: THEME.gold,
+                },
+            },
+            onMouseScroll: (event) => scrollByWheel(todoScrollBox, event),
+        });
+        todoScrollBox.horizontalScrollBar.visible = false;
+        todoScrollBox.horizontalScrollBar.height = 0;
+        todoScrollBox.verticalScrollBar.visible = true;
+        todoScrollBox.verticalScrollBar.width = 2;
+
+        const detailScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
                 flexDirection: "column",
                 paddingRight: 1,
@@ -1118,13 +1151,27 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     foregroundColor: THEME.pink,
                 },
             },
-            onMouseScroll: (event) => scrollByWheel(sideScrollBox, event),
+            onMouseScroll: (event) => scrollByWheel(detailScrollBox, event),
         });
-        sideScrollBox.horizontalScrollBar.visible = false;
-        sideScrollBox.horizontalScrollBar.height = 0;
-        sideScrollBox.verticalScrollBar.visible = true;
-        sideScrollBox.verticalScrollBar.width = 2;
-        const sideCard = new BoxRenderable(renderer, {
+        detailScrollBox.horizontalScrollBar.visible = false;
+        detailScrollBox.horizontalScrollBar.height = 0;
+        detailScrollBox.verticalScrollBar.visible = true;
+        detailScrollBox.verticalScrollBar.width = 2;
+
+        const todoCard = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            flexShrink: 0,
+            height: todoPanelHeight(renderer.height),
+            border: true,
+            borderColor: THEME.border,
+            backgroundColor: THEME.panelBg,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: 1,
+            paddingBottom: 1,
+            onMouseScroll: (event) => scrollByWheel(todoScrollBox, event),
+        });
+        const detailCard = new BoxRenderable(renderer, {
             flexDirection: "column",
             flexGrow: 1,
             flexShrink: 1,
@@ -1135,7 +1182,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             paddingRight: 1,
             paddingTop: 1,
             paddingBottom: 1,
-            onMouseScroll: (event) => scrollByWheel(sideScrollBox, event),
+            onMouseScroll: (event) => scrollByWheel(detailScrollBox, event),
         });
         let avatarFrame: BoxRenderable | undefined;
         if (avatarArt.trim().length > 0) {
@@ -1156,8 +1203,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             avatarFrame.add(avatar);
             sidePanel.add(avatarFrame);
         }
-        sideCard.add(sideScrollBox);
-        sidePanel.add(sideCard);
+        todoCard.add(todoScrollBox);
+        detailCard.add(detailScrollBox);
+        sidePanel.add(todoCard);
+        sidePanel.add(detailCard);
         contentRow.add(sidePanel);
 
         root.add(mainBox);
@@ -1229,6 +1278,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             mainBox.width = renderer.width;
             mainBox.height = renderer.height;
             sidePanel.width = rightPanelWidth(renderer.width);
+            todoCard.height = todoPanelHeight(renderer.height);
             if (avatarFrame) {
                 avatarFrame.height = avatarPanelHeight(renderer.height);
             }
@@ -1842,7 +1892,13 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             return pairs[clamp(selected, 0, pairs.length - 1)];
         }
 
-        function sidePanelLines(): PanelLine[] {
+        function todoPanelLines(): PanelLine[] {
+            const lines: PanelLine[] = [];
+            appendTodoSection(lines, activeReply(), focusedBlackboardTurn());
+            return lines;
+        }
+
+        function detailPanelLines(): PanelLine[] {
             const lines: PanelLine[] = [];
             const turn = focusedBlackboardTurn();
             appendScopeSummary(lines);
@@ -1858,7 +1914,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 appendForkListLines(lines);
                 return lines;
             }
-            appendTodoSection(lines, activeReply(), turn);
+            appendDetailModeHeader(lines);
             appendConversationSummary(lines);
             lines.push(panelLine("", THEME.fg));
             if (sidePanelMode() === "thinking") {
@@ -1867,6 +1923,17 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 appendBlackboardDetail(lines, turn);
             }
             return lines;
+        }
+
+        function appendDetailModeHeader(lines: PanelLine[]): void {
+            const thinkingActive = sidePanelMode() === "thinking";
+            lines.push(panelLine("Detail Panel  Ctrl+B", THEME.gold, TextAttributes.BOLD));
+            lines.push(
+                panelLine(
+                    `  ${thinkingActive ? ">" : " "} 深度思考    ${thinkingActive ? " " : ">"} 黑板详情`,
+                    thinkingActive ? THEME.header : THEME.purple,
+                ),
+            );
         }
 
         function appendScopeSummary(lines: PanelLine[]): void {
@@ -1938,15 +2005,20 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                         lines.push(panelLine(`    ${step.status} ${step.title}`, THEME.purple));
                     }
                 }
-                appendForkAndSceneSummary(lines, msg);
                 return;
             }
             if (!turn) {
-                lines.push(panelLine("  no todo list yet", THEME.fgMuted));
-                appendForkAndSceneSummary(lines, msg);
+                lines.push(panelLine(`  ${NO_PLAN_TEXT}`, THEME.fgMuted));
                 return;
             }
             const snapshot = buildChatTodoSnapshot(turn);
+            if (snapshot.stepCount === 0 && snapshot.workstreamCount === 0) {
+                lines.push(panelLine(`  ${NO_PLAN_TEXT}`, THEME.fgMuted));
+                if (snapshot.workerLine) {
+                    lines.push(panelLine(`  ${snapshot.workerLine}`, THEME.fgMuted));
+                }
+                return;
+            }
             lines.push(panelLine(`  ${snapshot.progressLine}`, THEME.fg));
             if (snapshot.workerLine) {
                 lines.push(panelLine(`  ${snapshot.workerLine}`, THEME.fgMuted));
@@ -1961,24 +2033,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 lines.push(panelLine("  steps", THEME.fgMuted));
                 for (const item of snapshot.steps) {
                     lines.push(panelLine(`    ${item}`, THEME.purple));
-                }
-            }
-            appendForkAndSceneSummary(lines, msg);
-        }
-
-        function appendForkAndSceneSummary(lines: PanelLine[], msg: ChatMessage | undefined): void {
-            const forks = msg?.planning?.contextForks ?? [];
-            const scenes = msg?.planning?.scenes ?? [];
-            if (forks.length > 0) {
-                lines.push(panelLine("  forks", THEME.fgMuted));
-                for (const fork of forks.slice(0, 3)) {
-                    lines.push(panelLine(`    ${fork.title} · ${fork.maxContextTokens} tokens`, THEME.fgMuted));
-                }
-            }
-            if (scenes.length > 0) {
-                lines.push(panelLine("  scenes", THEME.fgMuted));
-                for (const scene of scenes.slice(0, 3)) {
-                    lines.push(panelLine(`    ${scene.kind}: ${clipText(scene.title, 80)}`, THEME.fgMuted));
                 }
             }
         }
@@ -2372,18 +2426,16 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 .join(" · ");
         }
 
-        // ── 响应式同步：右侧思考 / 黑板面板 ────────────────────
-        createEffect(() => {
-            const panelVisible = renderer.width >= 88;
-            sidePanel.visible = panelVisible;
-            if (!panelVisible) return;
-            const lines = sidePanelLines();
-            const content = sideScrollBox.content;
-            while (sideLineRenderables.length > lines.length) {
-                const stale = sideLineRenderables.pop()!;
+        function syncPanelLines(
+            content: BoxRenderable,
+            renderables: TextRenderable[],
+            lines: PanelLine[],
+        ): void {
+            while (renderables.length > lines.length) {
+                const stale = renderables.pop()!;
                 content.remove(stale.id);
             }
-            for (let i = sideLineRenderables.length; i < lines.length; i += 1) {
+            for (let i = renderables.length; i < lines.length; i += 1) {
                 const line = lines[i]!;
                 const item = new TextRenderable(renderer, {
                     attributes: line.attributes,
@@ -2393,17 +2445,26 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     selectable: true,
                     width: "100%",
                 });
-                sideLineRenderables.push(item);
+                renderables.push(item);
                 content.add(item);
             }
             for (let i = 0; i < lines.length; i += 1) {
                 const line = lines[i]!;
-                const item = sideLineRenderables[i]!;
+                const item = renderables[i]!;
                 item.content = line.content;
                 item.fg = line.fg;
                 item.bg = line.bg;
                 item.attributes = line.attributes ?? TextAttributes.NONE;
             }
+        }
+
+        // ── 响应式同步：右侧 todo / 思考 / 黑板面板 ─────────────
+        createEffect(() => {
+            const panelVisible = renderer.width >= 88;
+            sidePanel.visible = panelVisible;
+            if (!panelVisible) return;
+            syncPanelLines(todoScrollBox.content, todoLineRenderables, todoPanelLines());
+            syncPanelLines(detailScrollBox.content, detailLineRenderables, detailPanelLines());
         });
 
         // ── 响应式同步：消息列表（增量更新）────────────────────
@@ -2470,6 +2531,7 @@ export interface ChatChromeLayout {
     headerBrand: string;
     inputStatusText: string;
     sidePanelVisible: boolean;
+    todoPanelHeight: number;
     sidePanelWidth: number;
 }
 
@@ -2527,6 +2589,7 @@ export function chatChromeLayout(totalWidth: number, totalHeight: number): ChatC
         headerBrand: CHAT_HEADER_BRAND,
         inputStatusText: DEFAULT_STATUS_TEXT,
         sidePanelVisible: sidePanelWidth > 0,
+        todoPanelHeight: todoPanelHeight(totalHeight),
         sidePanelWidth,
     };
 }
@@ -2538,6 +2601,10 @@ function rightPanelWidth(totalWidth: number): number {
 
 function avatarPanelHeight(totalHeight: number): number {
     return Math.min(AVATAR_MAX_HEIGHT, Math.max(AVATAR_MIN_HEIGHT, Math.floor(totalHeight * AVATAR_HEIGHT_RATIO)));
+}
+
+function todoPanelHeight(totalHeight: number): number {
+    return Math.min(TODO_PANEL_MAX_HEIGHT, Math.max(TODO_PANEL_MIN_HEIGHT, Math.floor(totalHeight * TODO_PANEL_HEIGHT_RATIO)));
 }
 
 function knownCommandList(registry: AppCommandRegistry): string {

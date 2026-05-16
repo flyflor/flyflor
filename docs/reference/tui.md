@@ -29,6 +29,8 @@
 - chat 启动后从 `brain.db` 加载当前用户最近历史 turn；向上滚动到顶部时继续按 `ts` 分页加载更早记录；历史 assistant 消息会携带 `TaskPlan` / `ContextFork` / `SceneRecord` 摘要，右侧 `/history` 场景回放直接复用这些摘要，不读取 raw thinking trace
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
+- Chat right rail is split into two independent OpenTUI `ScrollBoxRenderable` regions: a fixed `Todo / Progress` panel that shows `暂无计划` when no structured TaskPlan or blackboard progress exists, and a lower `Thinking / Blackboard detail` panel toggled by `Ctrl+B`; both panels consume only structured metadata, RuntimeEvent payloads, and blackboard turns
+- During a live turn, the side rail follows the latest turn by default; `/thinking` and `/blackboard` open a selectable question preview with Up/Down or `j/k`, and the next user message restores follow-latest mode
 - Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
 - `ui/头像.png` 是 Flyflor 正式 bitmap logo；`ui/avatar.txt` 是 Chat TUI 可直接渲染的文本头像，右侧栏头部会从 repo-root 或 Docker `/workspace` 读取它，缺失时自动省略，不影响启动
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情

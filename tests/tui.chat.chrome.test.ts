@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildChatTodoSnapshot, chatChromeLayout } from "../src/command/tui/chat/app.tsx";
+import { buildChatTodoSnapshot, chatChromeLayout, NO_PLAN_TEXT } from "../src/command/tui/chat/app.tsx";
 
 describe("TUI chat chrome", () => {
     test("matches the screenshot-style chat layout contract", () => {
@@ -10,8 +10,18 @@ describe("TUI chat chrome", () => {
         expect(layout.sidePanelVisible).toBe(true);
         expect(layout.sidePanelWidth).toBe(44);
         expect(layout.avatarHeight).toBe(14);
+        expect(layout.todoPanelHeight).toBe(9);
         expect(layout.inputStatusText).toContain("Enter 发送");
         expect(layout.inputStatusText).toContain("Cmd/Ctrl+C 复制");
+    });
+
+    test("keeps a stable no-plan label for the todo rail", () => {
+        const snapshot = buildChatTodoSnapshot(undefined);
+
+        expect(NO_PLAN_TEXT).toBe("暂无计划");
+        expect(snapshot.progressLine).toBe("no todo list yet");
+        expect(snapshot.stepCount).toBe(0);
+        expect(snapshot.workstreamCount).toBe(0);
     });
 
     test("renders todo progress from blackboard workstreams and steps", () => {
@@ -50,5 +60,6 @@ describe("TUI chat chrome", () => {
         expect(layout.sidePanelVisible).toBe(false);
         expect(layout.sidePanelWidth).toBe(0);
         expect(layout.avatarHeight).toBe(6);
+        expect(layout.todoPanelHeight).toBe(6);
     });
 });
