@@ -3,12 +3,12 @@
     "type": "module",
     "private": true,
     "scripts": {
-        "build": "nuxt build",
-        "check": "nuxt typecheck && bun run scripts/redlines.check.ts",
+        "build": "bun --bun node_modules/.bin/nuxt build",
+        "check": "bun --bun node_modules/.bin/nuxt typecheck && bun run scripts/redlines.check.ts",
         "dev": "bun --bun node_modules/.bin/nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
+        "generate": "bun --bun node_modules/.bin/nuxt generate",
+        "preview": "bun --bun node_modules/.bin/nuxt preview",
+        "postinstall": "bun --bun node_modules/.bin/nuxt prepare",
         "redlines:check": "bun run scripts/redlines.check.ts"
     },
     "devDependencies": {
