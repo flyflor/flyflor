@@ -29,7 +29,7 @@ import { RuntimeEventType, type EventSink } from "../../../protocol/events/index
 import type { ChatEntryOptions } from "./index.ts";
 import { formatAskSummaryLines } from "./ask.render.ts";
 import { copyTextToTerminalClipboard } from "./clipboard.ts";
-import { readAskMeta, readBlackboardMeta, readMcpTrace, readRecord, readStringArray } from "./metadata.parse.ts";
+import { readAskMeta, readBlackboardMeta, readMcpTrace, readPlanningMeta, readRecord, readStringArray } from "./metadata.parse.ts";
 import type { ChatMessage, McpTrace, Phase } from "./types.ts";
 import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
 
@@ -74,22 +74,29 @@ const PHASE_DEF: Record<Phase, { label: string; color: RGBA; done: string; frame
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
+    panelBg: RGBA.fromInts(16, 23, 37),
+    panelBgSoft: RGBA.fromInts(20, 28, 44),
     fg: RGBA.fromInts(235, 244, 246),
     fgMuted: RGBA.fromInts(132, 154, 169),
     user: RGBA.fromInts(98, 207, 255),
     assistant: RGBA.fromInts(241, 248, 248),
     error: RGBA.fromInts(255, 111, 127),
-    border: RGBA.fromInts(76, 106, 126),
+    border: RGBA.fromInts(45, 59, 85),
     header: RGBA.fromInts(126, 232, 218),
     pink: RGBA.fromInts(255, 151, 190),
     purple: RGBA.fromInts(188, 171, 255),
     violetBg: RGBA.fromInts(24, 34, 47),
 };
 
-const DEFAULT_STATUS_TEXT = "Enter send · /stop cancel · /continue resume · PageUp/Down scroll · Cmd/Ctrl+C copy";
+const CHAT_HEADER_BRAND = "◉ flyflor-chat · powered by OpenTUI";
+const DEFAULT_STATUS_TEXT = "Enter 发送  |  ↑/↓ 历史  |  Tab 切换  |  Ctrl+C 清屏  |  Cmd/Ctrl+C 复制";
 const HISTORY_BATCH_SIZE = 20;
-const SIDE_PANEL_MIN_WIDTH = 24;
-const SIDE_PANEL_MAX_WIDTH = 46;
+const SIDE_PANEL_MIN_WIDTH = 34;
+const SIDE_PANEL_MAX_WIDTH = 50;
+const SIDE_PANEL_RATIO = 0.28;
+const AVATAR_MIN_HEIGHT = 6;
+const AVATAR_MAX_HEIGHT = 14;
+const AVATAR_HEIGHT_RATIO = 0.28;
 
 const CHAT_COMMANDS = [
     { name: "/history", detail: "open history" },
@@ -121,13 +128,19 @@ interface PanelLine {
     fg: RGBA;
 }
 
-type SidePanelMode = "blackboard" | "thinking";
+export type SidePanelMode = "blackboard" | "thinking";
 type CommandMenuMode = SidePanelMode | null;
 type SelectionScope = "chat" | "side" | null;
 
 type SelectionScopedRenderer = CliRenderer & {
     clearSelection: () => void;
     startSelection: (renderable: Renderable, x: number, y: number) => void;
+    updateSelection: (
+        renderable: Renderable | undefined,
+        x: number,
+        y: number,
+        options?: { finishDragging?: boolean },
+    ) => void;
 };
 
 export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions): () => void {
@@ -157,7 +170,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const [activeReplyId, setActiveReplyId] = createSignal<string | null>(null);
         const [focusedBlackboardTurnId, setFocusedBlackboardTurnId] = createSignal<string | null>(null);
         const [selectedQuestionIndex, setSelectedQuestionIndex] = createSignal<number | null>(null);
-        const [sidePanelMode, setSidePanelMode] = createSignal<SidePanelMode>("thinking");
+        const [sidePanelMode, setSidePanelMode] = createSignal<SidePanelMode>("blackboard");
         const [commandMenuMode, setCommandMenuMode] = createSignal<CommandMenuMode>(null);
 
         let currentTurnId: string | null = null;
@@ -177,6 +190,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         let oldestHistoryTs: number | undefined;
         const selectionRenderer = renderer as SelectionScopedRenderer;
         const originalStartSelection = selectionRenderer.startSelection?.bind(renderer);
+        const originalUpdateSelection = selectionRenderer.updateSelection.bind(renderer);
         const originalClearSelection = selectionRenderer.clearSelection.bind(renderer);
         let selectionScope: SelectionScope = null;
         let suppressSelectionReset = false;
@@ -269,7 +283,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         }
 
         function copySelectionToClipboard(): boolean {
-            const text = selectedTextForScope(renderer.getSelection(), selectionScope, {
+            const text = selectedTextForScope(renderer.getSelection(), selectionScope ?? inferredSelectionScope(), {
                 chat: scrollBox.content,
                 side: sidePanel,
             });
@@ -285,6 +299,29 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 console.error(cause);
                 return false;
             }
+        }
+
+        function inferredSelectionScope(): SelectionScope {
+            const selected = renderer.getSelection()?.selectedRenderables ?? [];
+            for (const renderable of selected) {
+                const scope = scopeForRenderable(renderable);
+                if (scope) return scope;
+            }
+            return null;
+        }
+
+        function pruneSelectionToScope(): void {
+            const selection = renderer.getSelection();
+            const scope = selectionScope ?? inferredSelectionScope();
+            if (!selection || !scope) return;
+            const container = scope === "chat" ? scrollBox.content : sidePanel;
+            selection.updateSelectedRenderables(
+                selection.selectedRenderables.filter((renderable) => isWithin(renderable, container)),
+            );
+            selection.updateTouchedRenderables(
+                selection.touchedRenderables.filter((renderable) => isWithin(renderable, container)),
+            );
+            renderer.requestSelectionUpdate();
         }
 
         function createMarkdownSyntaxStyle(): SyntaxStyle {
@@ -366,10 +403,14 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
         function historyMessagesForTurn(turn: {
             assistantText: string;
+            contextForks?: unknown[];
             eventId: string;
+            scenes?: unknown[];
+            taskPlans?: unknown[];
             ts: number;
             userText: string;
         }): ChatMessage[] {
+            const planning = planningFromHistoryTurn(turn);
             return [
                 {
                     id: `history-${turn.eventId}-user`,
@@ -388,8 +429,27 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     history: true,
                     historyEventId: turn.eventId,
                     historyTs: turn.ts,
+                    planning,
                 },
             ];
+        }
+
+        function planningFromHistoryTurn(turn: {
+            contextForks?: unknown[];
+            scenes?: unknown[];
+            taskPlans?: unknown[];
+        }): ChatMessage["planning"] {
+            const planning = readPlanningMeta({
+                planning: {
+                    contextForks: turn.contextForks ?? [],
+                    scenes: turn.scenes ?? [],
+                    taskPlans: (turn.taskPlans ?? []).map((plan) => {
+                        const record = readRecord(plan);
+                        return record ? { ...record, steps: record.step } : plan;
+                    }),
+                },
+            });
+            return planning;
         }
 
         async function loadOlderHistory(reason: "initial" | "scroll"): Promise<void> {
@@ -505,6 +565,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 const metadata = readRecord(reply.metadata) ?? null;
                 const askMeta = readAskMeta(metadata);
                 const blackboardMeta = readBlackboardMeta(metadata);
+                const planningMeta = readPlanningMeta(metadata);
                 if (blackboardMeta?.turnId) {
                     setFocusedBlackboardTurnId(blackboardMeta.turnId);
                     void refreshBlackboardTurn(blackboardMeta.turnId);
@@ -517,6 +578,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                         last.status = "done";
                         last.ask = askMeta;
                         last.blackboard = blackboardMeta;
+                        last.planning = planningMeta;
                         last.metadata = metadata;
                         const executions = metadata?.mcpToolExecutions;
                         if (Array.isArray(executions)) {
@@ -734,25 +796,38 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             width: renderer.width,
             height: renderer.height,
             backgroundColor: THEME.bg,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingBottom: 1,
         });
 
         // Header
         const headerBox = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            border: ["bottom"],
-            borderColor: THEME.border,
+            flexDirection: "row",
+            alignItems: "center",
+            height: 2,
             paddingLeft: 1,
             paddingRight: 1,
-            paddingTop: 1,
-            paddingBottom: 1,
             flexShrink: 0,
         });
-        const headerText = new TextRenderable(renderer, {
+        const brandText = new TextRenderable(renderer, {
+            content: CHAT_HEADER_BRAND,
+            fg: THEME.purple,
+            selectable: false,
+        });
+        const headerSpacer = new BoxRenderable(renderer, {
+            flexGrow: 1,
+            flexShrink: 1,
+        });
+        const topStatusText = new TextRenderable(renderer, {
             content: "",
             fg: THEME.header,
             attributes: TextAttributes.BOLD,
+            selectable: false,
         });
-        headerBox.add(headerText);
+        headerBox.add(brandText);
+        headerBox.add(headerSpacer);
+        headerBox.add(topStatusText);
         mainBox.add(headerBox);
 
         // Error line
@@ -767,6 +842,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexDirection: "row",
             flexGrow: 1,
             flexShrink: 1,
+            columnGap: 1,
         });
         mainBox.add(contentRow);
 
@@ -774,6 +850,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexDirection: "column",
             flexGrow: 1,
             flexShrink: 1,
+            rowGap: 1,
         });
         contentRow.add(chatPane);
 
@@ -782,6 +859,14 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexGrow: 1,
             flexShrink: 1,
             minHeight: 1,
+            border: true,
+            borderColor: THEME.border,
+            backgroundColor: THEME.panelBg,
+            paddingLeft: 1,
+            paddingRight: 0,
+            paddingTop: 1,
+            paddingBottom: 0,
+            onMouseScroll: (event) => scrollByWheel(scrollBox, event),
         });
         chatPane.add(messagesRow);
 
@@ -793,7 +878,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
             flexGrow: 1,
             flexShrink: 1,
-            paddingLeft: 1,
+            backgroundColor: THEME.panelBg,
+            paddingLeft: 0,
             paddingRight: 0,
             stickyScroll: true,
             stickyStart: "bottom",
@@ -807,6 +893,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     foregroundColor: THEME.pink,
                 },
             },
+            onMouseScroll: (event) => scrollByWheel(scrollBox, event),
         });
         scrollBox.horizontalScrollBar.visible = false;
         scrollBox.horizontalScrollBar.height = 0;
@@ -815,23 +902,31 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         // Input area
         const inputBox = new BoxRenderable(renderer, {
             flexDirection: "column",
-            border: ["top"],
+            border: true,
             borderColor: THEME.border,
+            backgroundColor: THEME.panelBg,
             flexShrink: 0,
-            paddingLeft: 2,
+            paddingLeft: 1,
             paddingRight: 1,
             paddingTop: 1,
+            paddingBottom: 0,
+        });
+        const inputRow = new BoxRenderable(renderer, {
+            flexDirection: "row",
+            alignItems: "center",
+            minHeight: 1,
         });
         const input = new TextareaRenderable(renderer, {
             placeholder: "Ask anything...",
             placeholderColor: THEME.fgMuted,
-            backgroundColor: THEME.bg,
-            focusedBackgroundColor: THEME.bg,
+            backgroundColor: THEME.panelBg,
+            focusedBackgroundColor: THEME.panelBg,
             textColor: THEME.fg,
             focusedTextColor: THEME.fg,
             cursorColor: THEME.fg,
             showCursor: true,
-            width: "100%",
+            flexGrow: 1,
+            flexShrink: 1,
             minHeight: 1,
             maxHeight: 6,
             wrapMode: "word",
@@ -844,7 +939,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             ],
             onSubmit,
         });
-        inputBox.add(input);
+        const sendIcon = new TextRenderable(renderer, {
+            content: "➤",
+            fg: THEME.purple,
+            selectable: false,
+            width: 3,
+        });
+        inputRow.add(input);
+        inputRow.add(sendIcon);
+        inputBox.add(inputRow);
         inputRef = input;
         input.onSubmit = () => {
             onSubmit();
@@ -852,9 +955,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
         // Status bar
         const statusBox = new BoxRenderable(renderer, {
-            backgroundColor: THEME.violetBg,
+            backgroundColor: THEME.panelBg,
             height: 1,
-            paddingLeft: 2,
+            paddingLeft: 1,
             paddingRight: 1,
         });
         const statusText = new TextRenderable(renderer, {
@@ -871,20 +974,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         // 右侧栏只展示结构化运行态：路由分析、黑板讨论和 turn 进度。
         const sidePanel = new BoxRenderable(renderer, {
             flexDirection: "column",
-            border: ["left"],
-            borderColor: THEME.border,
             flexShrink: 0,
-            paddingLeft: 1,
-            paddingRight: 1,
-            paddingTop: 1,
-            paddingBottom: 1,
+            rowGap: 1,
             width: rightPanelWidth(renderer.width),
-        });
-        const sideTitle = new TextRenderable(renderer, {
-            content: "Analysis / Blackboard",
-            fg: THEME.header,
-            attributes: TextAttributes.BOLD,
-            selectable: true,
+            onMouseScroll: (event) => scrollByWheel(sideScrollBox, event),
         });
         const sideScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
@@ -893,6 +986,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
             flexGrow: 1,
             flexShrink: 1,
+            backgroundColor: THEME.panelBg,
             horizontalScrollbarOptions: { height: 0, visible: false },
             verticalScrollbarOptions: {
                 visible: true,
@@ -903,35 +997,46 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     foregroundColor: THEME.pink,
                 },
             },
+            onMouseScroll: (event) => scrollByWheel(sideScrollBox, event),
         });
         sideScrollBox.horizontalScrollBar.visible = false;
         sideScrollBox.horizontalScrollBar.height = 0;
         sideScrollBox.verticalScrollBar.visible = true;
         sideScrollBox.verticalScrollBar.width = 2;
-        const sideHeader = new BoxRenderable(renderer, {
+        const sideCard = new BoxRenderable(renderer, {
             flexDirection: "column",
-            flexShrink: 0,
+            flexGrow: 1,
+            flexShrink: 1,
+            border: true,
+            borderColor: THEME.border,
+            backgroundColor: THEME.panelBg,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: 1,
             paddingBottom: 1,
+            onMouseScroll: (event) => scrollByWheel(sideScrollBox, event),
         });
+        let avatarFrame: BoxRenderable | undefined;
         if (avatarArt.trim().length > 0) {
-            const avatarRow = new BoxRenderable(renderer, {
+            avatarFrame = new BoxRenderable(renderer, {
                 flexDirection: "row",
-                justifyContent: "flex-end",
+                justifyContent: "center",
                 alignItems: "flex-start",
                 flexShrink: 0,
                 width: "100%",
+                height: avatarPanelHeight(renderer.height),
+                backgroundColor: THEME.panelBgSoft,
             });
             const avatar = new TextRenderable(renderer, {
                 content: avatarArt,
                 fg: THEME.fg,
                 selectable: false,
             });
-            avatarRow.add(avatar);
-            sideHeader.add(avatarRow);
+            avatarFrame.add(avatar);
+            sidePanel.add(avatarFrame);
         }
-        sideHeader.add(sideTitle);
-        sidePanel.add(sideHeader);
-        sidePanel.add(sideScrollBox);
+        sideCard.add(sideScrollBox);
+        sidePanel.add(sideCard);
         contentRow.add(sidePanel);
 
         root.add(mainBox);
@@ -955,8 +1060,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         function applySelectionScope(scope: SelectionScope): void {
             selectionScope = scope;
             setSelectableDeep(scrollBox.content, scope !== "side");
-            setSelectableDeep(sideScrollBox.content, scope !== "chat");
-            sideTitle.selectable = scope !== "chat";
+            setSelectableDeep(sidePanel, scope !== "chat");
         }
 
         function scopeForRenderable(renderable: Renderable | undefined): SelectionScope {
@@ -974,11 +1078,19 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 suppressSelectionReset = true;
                 try {
                     originalStartSelection(renderable, x, y);
+                    pruneSelectionToScope();
                 } finally {
                     suppressSelectionReset = false;
                 }
             };
         }
+        selectionRenderer.updateSelection = (renderable, x, y, options) => {
+            const nextScope = scopeForRenderable(renderable);
+            const scopedRenderable =
+                selectionScope && nextScope && nextScope !== selectionScope ? undefined : renderable;
+            originalUpdateSelection(scopedRenderable, x, y, options);
+            pruneSelectionToScope();
+        };
         selectionRenderer.clearSelection = () => {
             originalClearSelection();
             if (!suppressSelectionReset && selectionScope !== null) {
@@ -996,6 +1108,9 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             mainBox.width = renderer.width;
             mainBox.height = renderer.height;
             sidePanel.width = rightPanelWidth(renderer.width);
+            if (avatarFrame) {
+                avatarFrame.height = avatarPanelHeight(renderer.height);
+            }
         };
         renderer.on(CliRenderEvents.RESIZE, resizeHandler);
         historyPollTimer = setInterval(() => {
@@ -1142,6 +1257,30 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: scrollBox.scrollHeight });
         }
 
+        function scrollByWheel(
+            pane: ScrollBoxRenderable,
+            event: {
+                scroll?: { delta: number; direction: "down" | "left" | "right" | "up" };
+                preventDefault?: () => void;
+                stopPropagation?: () => void;
+            },
+        ): void {
+            const scroll = event.scroll;
+            if (!scroll) return;
+            const amount = Math.max(1, scroll.delta || 1) * 3;
+            if (scroll.direction === "up") {
+                pane.scrollTop = Math.max(0, pane.scrollTop - amount);
+            } else if (scroll.direction === "down") {
+                pane.scrollTop = Math.max(0, pane.scrollTop + amount);
+            } else if (scroll.direction === "left") {
+                pane.scrollLeft = Math.max(0, pane.scrollLeft - amount);
+            } else if (scroll.direction === "right") {
+                pane.scrollLeft = Math.max(0, pane.scrollLeft + amount);
+            }
+            event.preventDefault?.();
+            event.stopPropagation?.();
+        }
+
         function completeCommandInput(): boolean {
             if (!inputRef) return false;
             const text = inputRef.plainText.trim();
@@ -1281,6 +1420,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 ask: msg.ask ?? null,
                 mcpCalls: msg.mcpCalls ?? [],
                 phase: msg.status === "streaming" && !msg.content ? phase() : undefined,
+                planning: msg.planning ?? null,
                 skills: msg.skills ?? [],
                 status: msg.status,
                 tick: msg.status === "streaming" && !msg.content ? frameTick() : undefined,
@@ -1358,6 +1498,24 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 }
             }
 
+            if (msg.planning?.taskPlans && msg.planning.taskPlans.length > 0) {
+                for (const plan of msg.planning.taskPlans.slice(0, 2)) {
+                    extras.push(
+                        new TextRenderable(renderer, {
+                            content: `  todo: ${plan.title} · ${plan.status} · ${Math.round(plan.progress * 100)}%`,
+                            fg: THEME.header,
+                            selectable: true,
+                        }),
+                    );
+                }
+            }
+
+            if (msg.planning?.contextForks && msg.planning.contextForks.length > 0) {
+                for (const fork of msg.planning.contextForks.slice(0, 2)) {
+                    extras.push(extraLine(`  fork: ${fork.title} · budget=${fork.maxContextTokens}`, THEME.purple));
+                }
+            }
+
             if (extras.length === 0) return undefined;
             const box = new BoxRenderable(renderer, { flexDirection: "column" });
             for (const t of extras) box.add(t);
@@ -1418,74 +1576,157 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             return pairs[clamp(selected, 0, pairs.length - 1)];
         }
 
-        function appendQuestionMenu(lines: PanelLine[]): void {
+        function sidePanelLines(): PanelLine[] {
+            const lines: PanelLine[] = [];
+            const turn = focusedBlackboardTurn();
+            appendTodoSection(lines, activeReply(), turn);
+            appendConversationSummary(lines);
+            lines.push(panelLine("", THEME.fg));
+            if (sidePanelMode() === "thinking") {
+                appendThinkingDetail(lines, turn);
+            } else {
+                appendBlackboardDetail(lines, turn);
+            }
+            return lines;
+        }
+
+        function appendConversationSummary(lines: PanelLine[]): void {
             const pairs = turnPairs();
-            if (pairs.length === 0) return;
             const selected = selectedTurnPair();
             const menuOpen = commandMenuMode() === sidePanelMode();
             lines.push(
                 panelLine(
-                    menuOpen ? "Choose Question  ↑/↓ Enter" : "Questions",
+                    menuOpen ? "Conversation Summary  ↑/↓ Enter" : "Conversation Summary",
                     THEME.header,
                     TextAttributes.BOLD,
                 ),
             );
-            if (menuOpen) {
-                lines.push(panelLine("  Esc closes · j/k also works", THEME.fgMuted));
+            if (pairs.length === 0) {
+                lines.push(panelLine("  no conversation turns yet", THEME.fgMuted));
+                return;
             }
+            lines.push(
+                panelLine(
+                    "  select a turn to preview its thinking / blackboard",
+                    THEME.fgMuted,
+                ),
+            );
             const visibleCount = menuOpen ? 12 : 8;
             pairs.slice(-visibleCount).forEach((pair, idx) => {
                 const absoluteIndex = pairs.length - Math.min(visibleCount, pairs.length) + idx;
                 const active = pair.user.id === selected?.user.id;
+                const status = pair.assistant?.status ?? "pending";
                 lines.push(
                     panelLine(
-                        `${active ? ">" : " "} ${summarizeQuestion(pair.question, absoluteIndex + 1, menuOpen ? 38 : 34)}`,
+                        `${active ? ">" : " "} ${summarizeQuestion(pair.question, absoluteIndex + 1, menuOpen ? 36 : 32)} · ${status}`,
                         active ? THEME.pink : THEME.fgMuted,
                         active ? TextAttributes.BOLD : undefined,
                     ),
                 );
             });
-            lines.push(panelLine("", THEME.fg));
         }
 
-        function sidePanelLines(): PanelLine[] {
-            return sidePanelMode() === "thinking" ? thinkingPanelLines() : blackboardPanelLines();
+        function appendTodoSection(lines: PanelLine[], msg: ChatMessage | undefined, turn: BlackboardTurn | undefined): void {
+            lines.push(panelLine("Todo / Progress", THEME.header, TextAttributes.BOLD));
+            const plans = msg?.planning?.taskPlans ?? [];
+            if (plans.length > 0) {
+                for (const plan of plans.slice(0, 3)) {
+                    lines.push(
+                        panelLine(
+                            `  ${plan.title} · ${plan.status} · ${Math.round(plan.progress * 100)}%`,
+                            THEME.fg,
+                        ),
+                    );
+                    for (const step of (plan.steps ?? []).slice(0, 5)) {
+                        lines.push(panelLine(`    ${step.status} ${step.title}`, THEME.purple));
+                    }
+                }
+                appendForkAndSceneSummary(lines, msg);
+                return;
+            }
+            if (!turn) {
+                lines.push(panelLine("  no todo list yet", THEME.fgMuted));
+                appendForkAndSceneSummary(lines, msg);
+                return;
+            }
+            const snapshot = buildChatTodoSnapshot(turn);
+            lines.push(panelLine(`  ${snapshot.progressLine}`, THEME.fg));
+            if (snapshot.workerLine) {
+                lines.push(panelLine(`  ${snapshot.workerLine}`, THEME.fgMuted));
+            }
+            if (snapshot.workstreams.length > 0) {
+                lines.push(panelLine("  workstreams", THEME.fgMuted));
+                for (const item of snapshot.workstreams) {
+                    lines.push(panelLine(`    ${item}`, THEME.fg));
+                }
+            }
+            if (snapshot.steps.length > 0) {
+                lines.push(panelLine("  steps", THEME.fgMuted));
+                for (const item of snapshot.steps) {
+                    lines.push(panelLine(`    ${item}`, THEME.purple));
+                }
+            }
+            appendForkAndSceneSummary(lines, msg);
         }
 
-        function thinkingPanelLines(): PanelLine[] {
-            const lines: PanelLine[] = [];
-            appendQuestionMenu(lines);
+        function appendForkAndSceneSummary(lines: PanelLine[], msg: ChatMessage | undefined): void {
+            const forks = msg?.planning?.contextForks ?? [];
+            const scenes = msg?.planning?.scenes ?? [];
+            if (forks.length > 0) {
+                lines.push(panelLine("  forks", THEME.fgMuted));
+                for (const fork of forks.slice(0, 3)) {
+                    lines.push(panelLine(`    ${fork.title} · ${fork.maxContextTokens} tokens`, THEME.fgMuted));
+                }
+            }
+            if (scenes.length > 0) {
+                lines.push(panelLine("  scenes", THEME.fgMuted));
+                for (const scene of scenes.slice(0, 3)) {
+                    lines.push(panelLine(`    ${scene.kind}: ${clipText(scene.title, 80)}`, THEME.fgMuted));
+                }
+            }
+        }
+
+        function appendThinkingDetail(lines: PanelLine[], turn: BlackboardTurn | undefined): void {
             const msg = activeReply();
-            const turn = focusedBlackboardTurn();
             const ph = phase();
             const def = PHASE_DEF[ph];
             const running = processing();
             const frame = running ? (def.frames[frameTick() % def.frames.length] ?? def.done) : def.done;
+            lines.push(panelLine("Thinking", THEME.header, TextAttributes.BOLD));
             lines.push(panelLine(`${frame} ${running ? def.label : "ready"}`, running ? def.color : THEME.fgMuted));
             if (turn) {
                 appendBlackboardRouteLines(lines, turn);
                 appendBlackboardStatusLines(lines, turn, 4);
             } else {
-                lines.push(panelLine("Analysis", THEME.header, TextAttributes.BOLD));
-                lines.push(panelLine("  no blackboard turn yet", THEME.fgMuted));
+                appendSceneReplayLines(lines, msg);
             }
             appendReplySummaryLines(lines, msg);
-            return lines;
         }
 
-        function blackboardPanelLines(): PanelLine[] {
-            const lines: PanelLine[] = [];
-            appendQuestionMenu(lines);
-            const turn = focusedBlackboardTurn();
+        function appendBlackboardDetail(lines: PanelLine[], turn: BlackboardTurn | undefined): void {
             if (!turn) {
                 lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
-                lines.push(panelLine("  no turn yet", THEME.fgMuted));
-                return lines;
+                appendSceneReplayLines(lines, activeReply());
+                return;
             }
-
             appendBlackboardRouteLines(lines, turn);
             appendBlackboardPanelLines(lines, turn);
-            return lines;
+        }
+
+        function appendSceneReplayLines(lines: PanelLine[], msg: ChatMessage | undefined): void {
+            const scenes = msg?.planning?.scenes ?? [];
+            if (scenes.length === 0) {
+                lines.push(panelLine("  no replay summary yet", THEME.fgMuted));
+                return;
+            }
+            lines.push(panelLine("Scene Replay", THEME.purple, TextAttributes.BOLD));
+            for (const scene of scenes.slice(0, 5)) {
+                lines.push(panelLine(`  ${scene.kind}: ${scene.title}`, THEME.purple));
+                lines.push(panelLine(`    ${clipText(scene.summary, 120)}`, THEME.fgMuted));
+                if (scene.detail) {
+                    lines.push(panelLine(`    ${clipText(scene.detail, 180)}`, THEME.fgMuted));
+                }
+            }
         }
 
         function appendReplySummaryLines(lines: PanelLine[], msg: ChatMessage | undefined): void {
@@ -1732,8 +1973,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const processing_ = processing();
             const frame = processing_ ? (def.frames[frameTick() % def.frames.length] ?? def.done) : def.done;
             const turnCount = messages().filter((m) => m.role === "user").length;
-            headerText.content = `${frame} ${agentName} · ${processing_ ? def.label : "ready"} · ${turnCount} turns`;
-            headerText.fg = processing_ ? def.color : THEME.header;
+            topStatusText.content = `${frame} ${agentName} · ${processing_ ? def.label : "ready"} · ${turnCount} turns`;
+            topStatusText.fg = processing_ ? def.color : THEME.header;
         });
 
         // ── 响应式同步：Error line ────────────────────────────
@@ -1780,13 +2021,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const panelVisible = renderer.width >= 88;
             sidePanel.visible = panelVisible;
             if (!panelVisible) return;
-
-            const menuOpen = commandMenuMode() === sidePanelMode();
-            sideTitle.content = menuOpen
-                ? `${sidePanelMode() === "thinking" ? "Analysis" : "Blackboard"}  [question menu]`
-                : sidePanelMode() === "thinking"
-                  ? "Analysis  [Ctrl+B Blackboard]"
-                  : "Blackboard  [Ctrl+B Analysis]";
             const lines = sidePanelLines();
             const content = sideScrollBox.content;
             while (sideLineRenderables.length > lines.length) {
@@ -1863,6 +2097,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (originalStartSelection) {
                 selectionRenderer.startSelection = originalStartSelection;
             }
+            selectionRenderer.updateSelection = originalUpdateSelection;
             selectionRenderer.clearSelection = originalClearSelection;
             unsubscribeEvents?.();
             // remove main tree
@@ -1873,9 +2108,80 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
     });
 }
 
+export interface ChatChromeLayout {
+    avatarHeight: number;
+    defaultSidePanelMode: SidePanelMode;
+    headerBrand: string;
+    inputStatusText: string;
+    sidePanelVisible: boolean;
+    sidePanelWidth: number;
+}
+
+export interface ChatTodoSnapshot {
+    progressLine: string;
+    stepCount: number;
+    steps: string[];
+    workerLine?: string;
+    workstreamCount: number;
+    workstreams: string[];
+}
+
+export function buildChatTodoSnapshot(turn: BlackboardTurn | undefined): ChatTodoSnapshot {
+    if (!turn) {
+        return {
+            progressLine: "no todo list yet",
+            stepCount: 0,
+            steps: [],
+            workstreamCount: 0,
+            workstreams: [],
+        };
+    }
+
+    const metadata = readRecord(turn.metadata);
+    const plan = readRecord(metadata?.blackboardPlan);
+    const workstreams = readStringArray(plan?.workstreams).slice(0, 6);
+    const totalRounds = Math.max(1, turn.budget.maxRounds);
+    const stepCount = turn.steps.length;
+    const doneWorkers = turn.workers.filter((worker) => worker.status === "done").length;
+    const runningWorkers = turn.workers.filter((worker) => worker.status === "running").length;
+    const blockedWorkers = turn.workers.filter((worker) => worker.status === "blocked").length;
+    const clip = (value: string, max = 96): string => {
+        const text = value.replace(/\s+/gu, " ").trim();
+        return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    };
+
+    return {
+        progressLine: `progress ${stepCount}/${totalRounds} rounds · workers ${doneWorkers}/${turn.workers.length}`,
+        stepCount,
+        steps: turn.steps.slice(-4).map((step) => `r${step.round} ${step.workerRole}: ${clip(step.outputSummary)}`),
+        workerLine:
+            turn.workers.length > 0
+                ? `workers ${doneWorkers} done · ${runningWorkers} running · ${blockedWorkers} blocked`
+                : undefined,
+        workstreamCount: workstreams.length,
+        workstreams,
+    };
+}
+
+export function chatChromeLayout(totalWidth: number, totalHeight: number): ChatChromeLayout {
+    const sidePanelWidth = rightPanelWidth(totalWidth);
+    return {
+        avatarHeight: avatarPanelHeight(totalHeight),
+        defaultSidePanelMode: "blackboard",
+        headerBrand: CHAT_HEADER_BRAND,
+        inputStatusText: DEFAULT_STATUS_TEXT,
+        sidePanelVisible: sidePanelWidth > 0,
+        sidePanelWidth,
+    };
+}
+
 function rightPanelWidth(totalWidth: number): number {
     if (totalWidth < 88) return 0;
-    return Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(SIDE_PANEL_MIN_WIDTH, Math.floor(totalWidth * 0.32)));
+    return Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(SIDE_PANEL_MIN_WIDTH, Math.floor(totalWidth * SIDE_PANEL_RATIO)));
+}
+
+function avatarPanelHeight(totalHeight: number): number {
+    return Math.min(AVATAR_MAX_HEIGHT, Math.max(AVATAR_MIN_HEIGHT, Math.floor(totalHeight * AVATAR_HEIGHT_RATIO)));
 }
 
 export function selectedTextForScope(

@@ -11,8 +11,8 @@
 - 该使用枚举/常量对象时不要裸写字符串；新增协议值先放入 `src/protocol/contracts/enums.ts` 并经 `src/protocol/contracts/index.ts` 暴露，或放入对应 registry。
 - 新增内部结构化协议块必须先登记到 `src/protocol/structured.block.ts`；业务模块只做对应 JSON payload 校验，不得各自手写 tag、边界符或剥离逻辑。
 - 新增代码必须带必要注释说明边界、生命周期、副作用或协议意图；修改旧代码时同步补齐被触碰路径的关键注释，避免无上下文的隐式行为。
-- 目录入口统一为 `index.ts`；有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `runtime.module.ts`、`memory.service.ts`、`blackboard.worker.ts`、`worker.manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`；不要新增连字符或下划线命名的仓库文件。
-- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`。
+- 目录入口统一为 `index.ts`；有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `runtime.module.ts`、`memory.component.ts`、`blackboard.worker.ts`、`worker.manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`；不要新增连字符或下划线命名的仓库文件。
+- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Worker`、`@Channel`、`@Plugin`。
 - `@Provide` 是注入底座；Gateway、Blackboard、Memory、Session、Runtime、Sandbox 通过 `class XModule extends X` 表达边界语义，不再新增专门 decorator。
 - 入口必须保持薄：`app.ts` 只启动 FlyFlor 主类；依赖注入只能在 composition root 使用显式 token/provider 容器，不做反射扫描或动态加载。
 - Docker dev 保持简单：挂载工作目录、`./docker/config` 和已编译 Linux 二进制；不要在 Compose 里安装依赖或构建项目。

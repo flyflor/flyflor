@@ -11,7 +11,7 @@ import {
     GatewayMessageKind,
     GatewayOutboundOperation,
 } from "../../../protocol/contracts/index.ts";
-import { assertPlatformResponse, dispatchWithDelivery, isRecord } from "./helpers.ts";
+import { assertPlatformResponse, dispatchWithDelivery, isRecord, PlatformResponseError } from "./helpers.ts";
 import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, ChannelAdapterSnapshot, StreamingMessageDispatcher } from "./types.ts";
 
@@ -459,7 +459,11 @@ function assertIlinkOk(payload: unknown, platform: string): void {
     }
     const ret = payload.ret ?? payload.errcode ?? payload.code;
     if (typeof ret === "number" && ret !== 0) {
-        throw new Error(`${platform} failed: ${ret} ${String(payload.errmsg ?? payload.message ?? "")}`);
+        throw new PlatformResponseError(
+            `${platform} failed: ${ret} ${String(payload.errmsg ?? payload.message ?? "")}`,
+            platform,
+            { code: ret, payload },
+        );
     }
 }
 
@@ -472,8 +476,9 @@ function readRecordString(payload: unknown, key: string): string | undefined {
 }
 
 function isSessionExpiredError(error: unknown): boolean {
-    const text = error instanceof Error ? error.message : String(error);
-    return text.includes("-14") || text.toLowerCase().includes("session expired");
+    // iLink ret=-14 is the official context-token/session expiry signal. Retry
+    // logic must key off the structured code, not localized error text.
+    return error instanceof PlatformResponseError && error.details.code === -14;
 }
 
 function randomWechatUin(): string {

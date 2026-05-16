@@ -1,6 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
+import { Component } from "../../agent/di/decorators/index.ts";
+import { BrainComponent } from "../core.ts";
 import {
     type AtomScore,
     type MemoryAtom,
@@ -14,6 +16,10 @@ import {
     type MemoryLinkType,
     type MemoryStateRecord,
     type MemorySummaryRecord,
+    type ContextForkRecord,
+    type SceneRecord,
+    type TaskPlanRecord,
+    type TaskPlanStepRecord,
     type SummaryRange,
 } from "../../protocol/contracts/index.ts";
 
@@ -140,6 +146,57 @@ interface EqStateRow {
     updated_at: number;
 }
 
+interface TaskPlanRow {
+    id: string;
+    user_id: string;
+    title: string;
+    summary: string;
+    status: string;
+    progress: number;
+    step_count: number;
+    completed_step_count: number;
+    steps_json: string;
+    created_at: string;
+    updated_at: string;
+    source_event_id: string | null;
+    source_ask_id: string | null;
+    source_blackboard_turn_id: string | null;
+    source_scene_id: string | null;
+}
+
+interface ContextForkRow {
+    id: string;
+    user_id: string;
+    parent_id: string | null;
+    title: string;
+    summary: string;
+    scope_summary: string;
+    max_context_tokens: number;
+    inherited_event_ids_json: string;
+    created_at: string;
+    updated_at: string;
+    source_event_id: string | null;
+    source_ask_id: string | null;
+    source_blackboard_turn_id: string | null;
+}
+
+interface SceneRecordRow {
+    id: string;
+    user_id: string;
+    kind: string;
+    title: string;
+    summary: string;
+    detail: string | null;
+    visible_facts_json: string;
+    open_questions_json: string;
+    task_plan_id: string | null;
+    context_fork_id: string | null;
+    blackboard_turn_id: string | null;
+    source_event_id: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface BrainVisibleAtom {
     atom: MemoryAtom;
     score: AtomScore;
@@ -156,13 +213,16 @@ export interface BrainPromptAtomWrite {
     score: AtomScore;
 }
 
-export class BrainStore {
+@Component({ name: "brain-store", tags: ["database", "memory", "brain"] })
+export class BrainStore extends BrainComponent {
     private db: Database | null = null;
     private opened = false;
 
-    constructor(private readonly options: BrainStoreOptions) {}
+    public constructor(private readonly options: BrainStoreOptions) {
+        super();
+    }
 
-    async open(): Promise<void> {
+    public async open(): Promise<void> {
         if (this.opened) return;
         await mkdir(dirname(this.options.dbPath), { recursive: true });
         const db = new Database(this.options.dbPath);
@@ -174,14 +234,14 @@ export class BrainStore {
         this.opened = true;
     }
 
-    close(): void {
+    public close(): void {
         if (!this.opened) return;
         this.db?.close();
         this.db = null;
         this.opened = false;
     }
 
-    appendEvent(input: BrainEventInput): MemoryEventRecord {
+    public appendEvent(input: BrainEventInput): MemoryEventRecord {
         const db = this.requireDb();
         const importance = input.importance ?? 0.5;
         const bucket = formatBucket(input.ts);
@@ -220,13 +280,13 @@ export class BrainStore {
         };
     }
 
-    getEvent(id: string): MemoryEventRecord | null {
+    public getEvent(id: string): MemoryEventRecord | null {
         const db = this.requireDb();
         const row = db.query("SELECT * FROM memory_events WHERE id = ?").get(id) as EventRow | null;
         return row ? rowToEvent(row) : null;
     }
 
-    listEvents(input: BrainEventListInput = {}): MemoryEventRecord[] {
+    public listEvents(input: BrainEventListInput = {}): MemoryEventRecord[] {
         const db = this.requireDb();
         const conditions: string[] = [];
         const values: Array<string | number> = [];
@@ -273,7 +333,7 @@ export class BrainStore {
      * prompt recall 的 brain 权威窗口：从 `memory_events` 展开结构化 `content.atoms`。
      * 不做字符匹配，只按时间窗、状态层与 JSON shape 过滤。
      */
-    listPromptAtomsWindow(date: Date | string, input: BrainPromptAtomWindowInput): BrainVisibleAtom[] {
+    public listPromptAtomsWindow(date: Date | string, input: BrainPromptAtomWindowInput): BrainVisibleAtom[] {
         const days = Math.max(1, Math.min(31, Math.floor(input.days ?? 7)));
         const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
         const sinceTs = normalizeTimestamp(date) - days * 86_400_000;
@@ -302,13 +362,13 @@ export class BrainStore {
         return visible.slice(0, limit);
     }
 
-    getState(eventId: string): MemoryStateRecord | null {
+    public getState(eventId: string): MemoryStateRecord | null {
         const db = this.requireDb();
         const row = db.query("SELECT * FROM memory_state WHERE event_id = ?").get(eventId) as StateRow | null;
         return row ? rowToState(row) : null;
     }
 
-    upsertState(eventId: string, mutation: BrainStateMutation): MemoryStateRecord {
+    public upsertState(eventId: string, mutation: BrainStateMutation): MemoryStateRecord {
         const db = this.requireDb();
         const existing = this.getState(eventId);
         const next: MemoryStateRecord = {
@@ -344,7 +404,7 @@ export class BrainStore {
         return next;
     }
 
-    writeSummary(record: MemorySummaryRecord): void {
+    public writeSummary(record: MemorySummaryRecord): void {
         const db = this.requireDb();
         db.query(
             `INSERT INTO memory_summary (id, time_range, bucket_key, content, embedding_id, created_at)
@@ -365,13 +425,13 @@ export class BrainStore {
         );
     }
 
-    getSummary(id: string): MemorySummaryRecord | null {
+    public getSummary(id: string): MemorySummaryRecord | null {
         const db = this.requireDb();
         const row = db.query("SELECT * FROM memory_summary WHERE id = ?").get(id) as SummaryRow | null;
         return row ? rowToSummary(row) : null;
     }
 
-    listSummaries(input: { timeRange?: SummaryRange; limit?: number } = {}): MemorySummaryRecord[] {
+    public listSummaries(input: { timeRange?: SummaryRange; limit?: number } = {}): MemorySummaryRecord[] {
         const db = this.requireDb();
         const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
         const conditions: string[] = [];
@@ -387,7 +447,221 @@ export class BrainStore {
         return rows.map(rowToSummary);
     }
 
-    writeLink(record: MemoryLinkRecord): void {
+    /**
+     * Runtime planning metadata lives in brain.db but outside `memory_events`.
+     * These tables are summary-first views for TUI/history; they never store raw chain-of-thought.
+     */
+    public writeTaskPlan(record: TaskPlanRecord): TaskPlanRecord {
+        const db = this.requireDb();
+        db.query(
+            `INSERT INTO task_plans (
+                id, user_id, title, summary, status, progress, step_count, completed_step_count,
+                steps_json, created_at, updated_at, source_event_id, source_ask_id,
+                source_blackboard_turn_id, source_scene_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                summary = excluded.summary,
+                status = excluded.status,
+                progress = excluded.progress,
+                step_count = excluded.step_count,
+                completed_step_count = excluded.completed_step_count,
+                steps_json = excluded.steps_json,
+                updated_at = excluded.updated_at,
+                source_event_id = excluded.source_event_id,
+                source_ask_id = excluded.source_ask_id,
+                source_blackboard_turn_id = excluded.source_blackboard_turn_id,
+                source_scene_id = excluded.source_scene_id`,
+        ).run(
+            record.id,
+            record.userId,
+            record.title,
+            record.summary,
+            record.status,
+            record.progress,
+            record.stepCount,
+            record.completedStepCount,
+            JSON.stringify(record.step ?? []),
+            record.createdAt,
+            record.updatedAt,
+            record.sourceEventId ?? null,
+            record.sourceAskId ?? null,
+            record.sourceBlackboardTurnId ?? null,
+            record.sourceSceneId ?? null,
+        );
+        return record;
+    }
+
+    public listTaskPlans(input: {
+        userId?: string;
+        sourceEventId?: string;
+        sourceBlackboardTurnId?: string;
+        limit?: number;
+    } = {}): TaskPlanRecord[] {
+        const db = this.requireDb();
+        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
+        const conditions: string[] = [];
+        const values: Array<string | number> = [];
+        if (input.userId !== undefined) {
+            conditions.push("user_id = ?");
+            values.push(input.userId);
+        }
+        if (input.sourceEventId !== undefined) {
+            conditions.push("source_event_id = ?");
+            values.push(input.sourceEventId);
+        }
+        if (input.sourceBlackboardTurnId !== undefined) {
+            conditions.push("source_blackboard_turn_id = ?");
+            values.push(input.sourceBlackboardTurnId);
+        }
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+        const rows = db
+            .query(`SELECT * FROM task_plans ${where} ORDER BY updated_at DESC LIMIT ?`)
+            .all(...values, limit) as TaskPlanRow[];
+        return rows.map(rowToTaskPlan);
+    }
+
+    public writeContextFork(record: ContextForkRecord): ContextForkRecord {
+        const db = this.requireDb();
+        db.query(
+            `INSERT INTO context_forks (
+                id, user_id, parent_id, title, summary, scope_summary, max_context_tokens,
+                inherited_event_ids_json, created_at, updated_at, source_event_id,
+                source_ask_id, source_blackboard_turn_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                parent_id = excluded.parent_id,
+                title = excluded.title,
+                summary = excluded.summary,
+                scope_summary = excluded.scope_summary,
+                max_context_tokens = excluded.max_context_tokens,
+                inherited_event_ids_json = excluded.inherited_event_ids_json,
+                updated_at = excluded.updated_at,
+                source_event_id = excluded.source_event_id,
+                source_ask_id = excluded.source_ask_id,
+                source_blackboard_turn_id = excluded.source_blackboard_turn_id`,
+        ).run(
+            record.id,
+            record.userId,
+            record.parentId ?? null,
+            record.title,
+            record.summary,
+            record.scopeSummary,
+            record.maxContextTokens,
+            JSON.stringify(record.inheritedEventIds),
+            record.createdAt,
+            record.updatedAt,
+            record.sourceEventId ?? null,
+            record.sourceAskId ?? null,
+            record.sourceBlackboardTurnId ?? null,
+        );
+        return record;
+    }
+
+    public getContextFork(id: string): ContextForkRecord | null {
+        const db = this.requireDb();
+        const row = db.query("SELECT * FROM context_forks WHERE id = ?").get(id) as ContextForkRow | null;
+        return row ? rowToContextFork(row) : null;
+    }
+
+    public listContextForks(input: {
+        userId?: string;
+        sourceEventId?: string;
+        sourceBlackboardTurnId?: string;
+        limit?: number;
+    } = {}): ContextForkRecord[] {
+        const db = this.requireDb();
+        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
+        const conditions: string[] = [];
+        const values: Array<string | number> = [];
+        if (input.userId !== undefined) {
+            conditions.push("user_id = ?");
+            values.push(input.userId);
+        }
+        if (input.sourceEventId !== undefined) {
+            conditions.push("source_event_id = ?");
+            values.push(input.sourceEventId);
+        }
+        if (input.sourceBlackboardTurnId !== undefined) {
+            conditions.push("source_blackboard_turn_id = ?");
+            values.push(input.sourceBlackboardTurnId);
+        }
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+        const rows = db
+            .query(`SELECT * FROM context_forks ${where} ORDER BY updated_at DESC LIMIT ?`)
+            .all(...values, limit) as ContextForkRow[];
+        return rows.map(rowToContextFork);
+    }
+
+    public writeSceneRecord(record: SceneRecord): SceneRecord {
+        const db = this.requireDb();
+        db.query(
+            `INSERT INTO scene_records (
+                id, user_id, kind, title, summary, detail, visible_facts_json,
+                open_questions_json, task_plan_id, context_fork_id, blackboard_turn_id,
+                source_event_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                kind = excluded.kind,
+                title = excluded.title,
+                summary = excluded.summary,
+                detail = excluded.detail,
+                visible_facts_json = excluded.visible_facts_json,
+                open_questions_json = excluded.open_questions_json,
+                task_plan_id = excluded.task_plan_id,
+                context_fork_id = excluded.context_fork_id,
+                blackboard_turn_id = excluded.blackboard_turn_id,
+                source_event_id = excluded.source_event_id,
+                updated_at = excluded.updated_at`,
+        ).run(
+            record.id,
+            record.userId,
+            record.kind,
+            record.title,
+            record.summary,
+            record.detail ?? null,
+            JSON.stringify(record.visibleFacts),
+            JSON.stringify(record.openQuestions),
+            record.taskPlanId ?? null,
+            record.contextForkId ?? null,
+            record.blackboardTurnId ?? null,
+            record.sourceEventId ?? null,
+            record.createdAt,
+            record.updatedAt,
+        );
+        return record;
+    }
+
+    public listSceneRecords(input: {
+        userId?: string;
+        sourceEventId?: string;
+        blackboardTurnId?: string;
+        limit?: number;
+    } = {}): SceneRecord[] {
+        const db = this.requireDb();
+        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
+        const conditions: string[] = [];
+        const values: Array<string | number> = [];
+        if (input.userId !== undefined) {
+            conditions.push("user_id = ?");
+            values.push(input.userId);
+        }
+        if (input.sourceEventId !== undefined) {
+            conditions.push("source_event_id = ?");
+            values.push(input.sourceEventId);
+        }
+        if (input.blackboardTurnId !== undefined) {
+            conditions.push("blackboard_turn_id = ?");
+            values.push(input.blackboardTurnId);
+        }
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+        const rows = db
+            .query(`SELECT * FROM scene_records ${where} ORDER BY updated_at DESC LIMIT ?`)
+            .all(...values, limit) as SceneRecordRow[];
+        return rows.map(rowToSceneRecord);
+    }
+
+    public writeLink(record: MemoryLinkRecord): void {
         const db = this.requireDb();
         db.query(
             `INSERT OR REPLACE INTO memory_links (id, from_id, to_id, strength, type, created_at)
@@ -395,7 +669,7 @@ export class BrainStore {
         ).run(record.id, record.fromId, record.toId, record.strength, record.type, record.createdAt);
     }
 
-    listLinks(input: { fromId?: string; toId?: string; type?: MemoryLinkType; limit?: number } = {}): MemoryLinkRecord[] {
+    public listLinks(input: { fromId?: string; toId?: string; type?: MemoryLinkType; limit?: number } = {}): MemoryLinkRecord[] {
         const db = this.requireDb();
         const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
         const conditions: string[] = [];
@@ -419,7 +693,7 @@ export class BrainStore {
         return rows.map(rowToLink);
     }
 
-    upsertCodename(record: CodenameRecord): CodenameRecord {
+    public upsertCodename(record: CodenameRecord): CodenameRecord {
         const db = this.requireDb();
         db.query(
             `INSERT INTO codenames (
@@ -447,7 +721,7 @@ export class BrainStore {
         return record;
     }
 
-    touchCodename(id: string, ts: number): void {
+    public touchCodename(id: string, ts: number): void {
         const db = this.requireDb();
         db.query(
             `UPDATE codenames
@@ -456,18 +730,18 @@ export class BrainStore {
         ).run(ts, id);
     }
 
-    bindCodenameProject(id: string, projectId: string): void {
+    public bindCodenameProject(id: string, projectId: string): void {
         const db = this.requireDb();
         db.query(`UPDATE codenames SET project_id = ? WHERE id = ?`).run(projectId, id);
     }
 
-    getCodename(id: string): CodenameRecord | null {
+    public getCodename(id: string): CodenameRecord | null {
         const db = this.requireDb();
         const row = db.query("SELECT * FROM codenames WHERE id = ?").get(id) as CodenameRow | null;
         return row ? rowToCodename(row) : null;
     }
 
-    listCodenames(input: { userId?: string; limit?: number } = {}): CodenameRecord[] {
+    public listCodenames(input: { userId?: string; limit?: number } = {}): CodenameRecord[] {
         const db = this.requireDb();
         const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
         const conditions: string[] = [];
@@ -483,7 +757,7 @@ export class BrainStore {
         return rows.map(rowToCodename);
     }
 
-    getCodenameByName(userId: string, name: string): CodenameRecord | null {
+    public getCodenameByName(userId: string, name: string): CodenameRecord | null {
         const db = this.requireDb();
         const row = db
             .query("SELECT * FROM codenames WHERE user_id = ? AND name = ?")
@@ -496,7 +770,7 @@ export class BrainStore {
      * 用于召回侧偏变（让 inbox 召回向"用户当前正在用的那个 codename"倾斜）。
      * 零字符匹配——只看 last_used_at >= sinceTs 资源指标 + project_id IS NULL 结构化字段。
      */
-    getMostRecentTouchedCodename(userId: string, sinceTs: number): CodenameRecord | null {
+    public getMostRecentTouchedCodename(userId: string, sinceTs: number): CodenameRecord | null {
         const db = this.requireDb();
         const row = db
             .query(
@@ -514,7 +788,7 @@ export class BrainStore {
      * append-only 历史轨迹由 `memory_events` 中模型同轮记录的对话事件携带，
      * 此处只保留"现在的样子"以便快速取读 + 衰减。
      */
-    upsertEqState(state: EqState): void {
+    public upsertEqState(state: EqState): void {
         const db = this.requireDb();
         db.run(
             `INSERT INTO memory_eq_state (user_id, valence, arousal, dominance, label, confidence, updated_at)
@@ -539,7 +813,7 @@ export class BrainStore {
     }
 
     /** 取某用户最新 EQ 状态。无记录返回 null。 */
-    getEqState(userId: string): EqState | null {
+    public getEqState(userId: string): EqState | null {
         const db = this.requireDb();
         const row = db
             .query("SELECT * FROM memory_eq_state WHERE user_id = ?")
@@ -551,7 +825,7 @@ export class BrainStore {
      * LF-R3：取该用户最近一次未答复的 ask 事件。"未答复"= 既不是 Abandoned/Archived，
      * 也没有任何 ask-answer-pair 子事件（parent_id 指向它）。
      */
-    getLatestPendingAsk(userId: string): MemoryEventRecord | null {
+    public getLatestPendingAsk(userId: string): MemoryEventRecord | null {
         const db = this.requireDb();
         const row = db
             .query(
@@ -574,7 +848,7 @@ export class BrainStore {
      * LF-R3：链深度 = 从 pending ask 沿 parent_id 反向追溯，前序 ask 事件个数 + 1。
      * 用于 `memory.tuning.ghost.maxChainDepth` 强制 reply 阈值检查。
      */
-    countAskChainDepth(askEventId: string): number {
+    public countAskChainDepth(askEventId: string): number {
         const db = this.requireDb();
         let depth = 1;
         let cursor: string | null = askEventId;
@@ -602,7 +876,7 @@ export class BrainStore {
      * "active" = status ∈ {live, resumed}（drop = abandoned；archive = archived；不展示）。
      * codenameId 可选，传入则只看该工作目录下的 ghost。
      */
-    listActiveGhosts(
+    public listActiveGhosts(
         userId: string,
         options: { codenameId?: string | null; limit?: number } = {},
     ): MemoryEventRecord[] {
@@ -637,7 +911,7 @@ export class BrainStore {
      * LF-R4 fork/fresh hint：合并 patch 到 ghost-context content，并保留其它字段。
      * 仅对 `type='ghost-context'` 生效；其他类型直接抛错避免误用。
      */
-    patchGhostContent(eventId: string, patch: Record<string, unknown>): MemoryEventRecord | null {
+    public patchGhostContent(eventId: string, patch: Record<string, unknown>): MemoryEventRecord | null {
         const db = this.requireDb();
         const row = db.query("SELECT * FROM memory_events WHERE id = ?").get(eventId) as EventRow | null;
         if (!row) return null;
@@ -664,7 +938,7 @@ export class BrainStore {
      * LF-R5 identity revert：通用的事件 content 整体替换（不限 type）。
      * Identity revert 等审计操作只允许写入 content；schema 列（type、parent_id、user_id 等）不可改。
      */
-    updateEventContent(eventId: string, nextContent: Record<string, unknown>): MemoryEventRecord | null {
+    public updateEventContent(eventId: string, nextContent: Record<string, unknown>): MemoryEventRecord | null {
         const db = this.requireDb();
         const row = db.query("SELECT id FROM memory_events WHERE id = ?").get(eventId) as { id: string } | null;
         if (!row) return null;
@@ -676,7 +950,7 @@ export class BrainStore {
      * LF-R4 evidence weight：判断给定 askEventId 是否已有 ask-answer-pair 子事件。
      * 仅消费结构化关系（parent_id + type），不读对话文本。
      */
-    hasAskBeenAnswered(askEventId: string): boolean {
+    public hasAskBeenAnswered(askEventId: string): boolean {
         const db = this.requireDb();
         const row = db
             .query(
@@ -692,7 +966,7 @@ export class BrainStore {
      * LF-R5 identity 召回：列出指定 user 的 live `identity-append` 事件，按 ts 倒序。
      * 状态层为 `abandoned` 的（revert 过）会被过滤；`archived` 同理（冷归档已外迁）。
      */
-    listActiveIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
+    public listActiveIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
         const db = this.requireDb();
         const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 32)));
         const rows = db
@@ -712,7 +986,7 @@ export class BrainStore {
      * LF-R5 identity 历史：列出所有 identity append（含 revert / archived），按 ts 倒序。
      * 仅 CLI / TUI 审计使用，prompt 召回请用 listActiveIdentity。
      */
-    listAllIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
+    public listAllIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
         const db = this.requireDb();
         const limit = Math.max(1, Math.min(500, Math.floor(options.limit ?? 64)));
         const rows = db
@@ -822,6 +1096,66 @@ function createSchema(db: Database): void {
             confidence  REAL NOT NULL,
             updated_at  INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS task_plans (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            status TEXT NOT NULL,
+            progress REAL NOT NULL,
+            step_count INTEGER NOT NULL,
+            completed_step_count INTEGER NOT NULL,
+            steps_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source_event_id TEXT,
+            source_ask_id TEXT,
+            source_blackboard_turn_id TEXT,
+            source_scene_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_plans_user_updated ON task_plans(user_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_task_plans_source_event ON task_plans(source_event_id);
+        CREATE INDEX IF NOT EXISTS idx_task_plans_blackboard ON task_plans(source_blackboard_turn_id);
+
+        CREATE TABLE IF NOT EXISTS context_forks (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            parent_id TEXT,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            scope_summary TEXT NOT NULL,
+            max_context_tokens INTEGER NOT NULL,
+            inherited_event_ids_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source_event_id TEXT,
+            source_ask_id TEXT,
+            source_blackboard_turn_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_context_forks_user_updated ON context_forks(user_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_context_forks_source_event ON context_forks(source_event_id);
+        CREATE INDEX IF NOT EXISTS idx_context_forks_blackboard ON context_forks(source_blackboard_turn_id);
+
+        CREATE TABLE IF NOT EXISTS scene_records (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            detail TEXT,
+            visible_facts_json TEXT NOT NULL,
+            open_questions_json TEXT NOT NULL,
+            task_plan_id TEXT,
+            context_fork_id TEXT,
+            blackboard_turn_id TEXT,
+            source_event_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_scene_records_user_updated ON scene_records(user_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_scene_records_source_event ON scene_records(source_event_id);
+        CREATE INDEX IF NOT EXISTS idx_scene_records_blackboard ON scene_records(blackboard_turn_id);
     `);
 }
 
@@ -1021,6 +1355,87 @@ function rowToEq(row: EqStateRow): EqState {
         confidence: row.confidence,
         updatedAt: row.updated_at,
     };
+}
+
+function rowToTaskPlan(row: TaskPlanRow): TaskPlanRecord {
+    const steps = parseJsonArray(row.steps_json).filter(isTaskPlanStepRecord);
+    return {
+        id: row.id,
+        userId: row.user_id,
+        title: row.title,
+        summary: row.summary,
+        status: row.status as TaskPlanRecord["status"],
+        progress: row.progress,
+        stepCount: row.step_count,
+        completedStepCount: row.completed_step_count,
+        ...(steps.length > 0 ? { step: steps } : {}),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        sourceEventId: row.source_event_id ?? undefined,
+        sourceAskId: row.source_ask_id ?? undefined,
+        sourceBlackboardTurnId: row.source_blackboard_turn_id ?? undefined,
+        sourceSceneId: row.source_scene_id ?? undefined,
+    };
+}
+
+function rowToContextFork(row: ContextForkRow): ContextForkRecord {
+    return {
+        id: row.id,
+        userId: row.user_id,
+        parentId: row.parent_id ?? undefined,
+        title: row.title,
+        summary: row.summary,
+        scopeSummary: row.scope_summary,
+        maxContextTokens: row.max_context_tokens,
+        inheritedEventIds: parseJsonArray(row.inherited_event_ids_json).filter(
+            (item): item is string => typeof item === "string",
+        ),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        sourceEventId: row.source_event_id ?? undefined,
+        sourceAskId: row.source_ask_id ?? undefined,
+        sourceBlackboardTurnId: row.source_blackboard_turn_id ?? undefined,
+    };
+}
+
+function rowToSceneRecord(row: SceneRecordRow): SceneRecord {
+    return {
+        id: row.id,
+        userId: row.user_id,
+        kind: row.kind as SceneRecord["kind"],
+        title: row.title,
+        summary: row.summary,
+        detail: row.detail ?? undefined,
+        visibleFacts: parseJsonArray(row.visible_facts_json).filter((item): item is string => typeof item === "string"),
+        openQuestions: parseJsonArray(row.open_questions_json).filter(
+            (item): item is string => typeof item === "string",
+        ),
+        taskPlanId: row.task_plan_id ?? undefined,
+        contextForkId: row.context_fork_id ?? undefined,
+        blackboardTurnId: row.blackboard_turn_id ?? undefined,
+        sourceEventId: row.source_event_id ?? undefined,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    };
+}
+
+function isTaskPlanStepRecord(value: unknown): value is TaskPlanStepRecord {
+    if (!isRecord(value)) return false;
+    return (
+        typeof value.id === "string" &&
+        typeof value.title === "string" &&
+        typeof value.status === "string" &&
+        typeof value.order === "number"
+    );
+}
+
+function parseJsonArray(value: string): unknown[] {
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
 }
 
 function parseContent(value: string): Record<string, unknown> {

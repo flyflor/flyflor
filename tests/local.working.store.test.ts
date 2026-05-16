@@ -3,7 +3,7 @@ import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LocalWorkingMemoryConfig } from "../src/config/index.ts";
-import { LocalWorkingMemoryStore } from "../src/neural/memory/local.working.store.ts";
+import { LocalWorkingMemoryStore } from "../src/components/memory/local.working.store.ts";
 
 describe("LocalWorkingMemoryStore", () => {
     test("replays WAL after restart and keeps the context ring", async () => {

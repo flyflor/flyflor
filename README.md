@@ -27,20 +27,40 @@ Channel 协议会保留 thread、引用回复、评论、typing、mention、reac
 
 ## 快速开始
 
-### 安装（curl-pipe，无需克隆源码）
+### 安装（远程一行命令）
 
 ```bash
-curl -fsSL https://flyflor.dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
 # 固定版本：
-curl -fsSL https://flyflor.dev/install.sh | sh -s -- --version v0.4.0
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --version v0.4.0
 # 自定义前缀：
-curl -fsSL https://flyflor.dev/install.sh | sh -s -- --prefix /usr/local/flyflor
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --prefix /usr/local/flyflor
 # 更新 / 卸载：
 flyflor update -y
-curl -fsSL https://flyflor.dev/install.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-脚本从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 二进制与 `flyflor-templates.tar.gz`，默认安装到 `~/.flyflor`。`--uninstall` 保留配置和数据。
+二进制安装从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`，默认安装到 `~/.flyflor`。`--uninstall` 保留配置和数据。
+
+### 安装方式
+
+正式版提供三条路径。非二进制路径都会把源码保留在用户本机，方便 Flyflor 自我迭代、手动修改和后续 `git pull`：
+
+```bash
+# 1. 直接二进制安装，适合只想快速上线的用户
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
+
+# 2. 源码安装，仓库会留在 ~/src/flyflor，可编辑、可拉取、可自迭代
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash
+
+# 3. Docker 一键安装，保留本机源码并直接拉起 compose
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash
+
+# Windows：用 PowerShell bootstrap 源码安装
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.ps1 | iex"
+```
+
+已经在源码目录内时，也可以运行 `bun run install:source`、`bun run install:docker` 或 `bun run install:windows` 调试这些 bootstrap 脚本。
 
 ### 从源码
 
@@ -59,6 +79,7 @@ bun run doctor       # 诊断配置与依赖
 bun run doctor --fix # 自动创建缺失目录
 bun run tui          # 仪表板 TUI
 bun run app.ts gateway
+flyflor gateway service plan --target systemd --write # 写入用户级 systemd 服务文件；launchd 同理
 ```
 
 质量验证：
@@ -111,17 +132,17 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 ```jsonc
 {
   "model": {
-    "activeProvider": "fastai",
+    "activeProvider": "openai",
     "activeModel": "gpt-5.5",
     "providers": {
       "fastai": {
-        "baseUrl": "https://fastai.fast/v1",
-        "apiKey": "fastai-api-key",
+        "baseUrl": "https://api.openai.com",
+        "apiKey": "openai-api-key",
         "defaultModel": "gpt-5.5"
       }
     },
     "secrets": {
-      "fastai-api-key": "..."
+      "openai-api-key": "..."
     }
   }
 }
@@ -159,8 +180,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 1. 渠道、消息、用户身份归一为 `GatewayMessage`
 2. 路由判断：fastRoute 启发式（~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
 3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + working-memory 热激活 + project/codename 局部记忆 + local crystal Gem 召回
-4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append；TTFB 目标 < 350ms
-5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ 状态、skill usage 和 fastRoute snapshot
+4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append / TaskPlan / ContextFork / SceneRecord；TTFB 目标 < 350ms
+5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
 
 外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成和驱动 TUI/API SSE，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
@@ -170,7 +191,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | 层               | 后端      | 职责                                                             |
 | ---------------- | --------- | ---------------------------------------------------------------- |
 | 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
-| 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；prompt recall/write authority 已切到 brain events |
+| 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
 | 工作记忆         | `MemoryComponent`：Local WAL/snapshot | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
 | 长期记忆图       | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系 |
 | 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
@@ -268,18 +289,19 @@ flyflor dream status         # Dream 队列状态
 flyflor dream run            # 手动触发 dream pass
 flyflor model                # 模型配置向导
 flyflor gateway status       # 网关状态
+flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 ```
 
 ## 工程规则
 
 ### DI 与命名
 
-- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Service`、`@Component`、`@Worker`、`@Channel`、`@Plugin`
+- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Worker`、`@Channel`、`@Plugin`
 - 边界模块用 core 继承表达：`class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`；`kind/layer/name/provider` 默认由基类和类名推断
 - `@Module` / `@Component` 复用 `Provide` 注入元数据；默认单例，需要每次重新 `new` 时显式使用 `ProviderScope.Factory`
 - DI token 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
-- 实现文件使用点分后缀：`*.module.ts`、`*.service.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`
+- 实现文件使用点分后缀：`*.module.ts`、`*.component.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
 
 ### 零字符匹配红线

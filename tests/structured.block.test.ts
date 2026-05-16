@@ -13,10 +13,13 @@ describe("structured internal protocol blocks", () => {
         expect(Object.keys(STRUCTURED_BLOCKS).sort()).toEqual(
             [
                 StructuredBlockProtocol.AgentAsk,
+                StructuredBlockProtocol.ContextFork,
                 StructuredBlockProtocol.GhostDecisions,
                 StructuredBlockProtocol.IdentityAppend,
                 StructuredBlockProtocol.MemoryActions,
                 StructuredBlockProtocol.McpCalls,
+                StructuredBlockProtocol.SceneRecord,
+                StructuredBlockProtocol.TaskPlan,
             ].sort(),
         );
         expect(structuredBlock(StructuredBlockProtocol.AgentAsk)).toEqual({
@@ -24,6 +27,12 @@ describe("structured internal protocol blocks", () => {
             open: "<flyflor_agent_ask>",
             protocol: StructuredBlockProtocol.AgentAsk,
             tag: "flyflor_agent_ask",
+        });
+        expect(structuredBlock(StructuredBlockProtocol.TaskPlan)).toEqual({
+            close: "</flyflor_task_plan>",
+            open: "<flyflor_task_plan>",
+            protocol: StructuredBlockProtocol.TaskPlan,
+            tag: "flyflor_task_plan",
         });
     });
 

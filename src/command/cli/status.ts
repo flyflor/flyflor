@@ -44,7 +44,7 @@ export async function renderStatus(app: FlyFlor): Promise<string> {
         "",
         section("Messaging Platforms", renderChannelTable(gateway.channels)),
         "",
-        section("Gateway Service", renderGatewayLines(gateway)),
+        section("Gateway", renderGatewayLines(gateway)),
         "",
         section("Memory", [
             line("Brain events", config.memory.enabled ? statusText("enabled", "ok") : statusText("disabled", "warn")),
@@ -118,7 +118,7 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
 
     const tuningSummary = describeMemoryTuning(config);
     rows.push(["Memory tuning", tuningSummary.status, tuningSummary.detail]);
-    rows.push(["Memory debug", "ok", "bypass-score=true (doctor diagnostics only)"]);
+    rows.push(["Memory diagnostics", "ok", "bypass-score=true (doctor diagnostics only)"]);
 
     const brainSummary = await describeBrainDb(config);
     rows.push(["Brain.db", brainSummary.status, brainSummary.detail]);

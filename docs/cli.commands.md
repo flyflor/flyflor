@@ -23,6 +23,8 @@ flowchart TB
     gateway --> gateway_stop["stop"]
     gateway --> gateway_restart["restart"]
     gateway --> gateway_status["status"]
+    gateway --> gateway_service["service"]
+    gateway_service --> gateway_service_plan["plan"]
     gateway --> gateway_setup["setup"]
     Root --> model["model"]
     Root --> setup["setup [section]"]
@@ -104,6 +106,7 @@ flowchart TB
 | `flyflor tui` | ✅ | Requires an interactive stdin/stdout TTY and uses the same TUI lifecycle guard as `chat --tui`; the dashboard Overview shows working-memory health and recovery file metadata and exits through a one-shot renderer teardown path. |
 | `flyflor gateway run` | ✅ | Runs in the foreground. |
 | `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
+| `flyflor gateway service plan` | ✅ | Renders deterministic systemd user units or launchd plists; `--write` only writes the file and leaves enable/start commands explicit. |
 | `flyflor gateway status [--deep]` | ✅ | Calls `buildGatewayStatusSnapshot`. |
 | `flyflor gateway setup` | ✅ | Interactive configuration. |
 | `flyflor model` | ✅ | Lists or sets the default provider and model. |
@@ -138,7 +141,7 @@ flowchart TB
 ## Risks / Known Gaps
 
 - The command surface is growing quickly, so the CLI docs are generated from the command spec and checked for drift by `docs:check`.
-- Daemon mode already has helpers, but the cross-platform launchd/systemd install experience still needs real-world validation.
+- Daemon mode has PID helpers and a service-file planning command; cross-platform launchd/systemd long-running behavior still needs real-world validation.
 - The implementation status table has spec coverage checks; newly added command leaves must be documented before tests pass.
 
 ## Related Tests

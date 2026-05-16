@@ -3,14 +3,20 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import type { LocalCrystalMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { CrystalComponent } from "../core.ts";
 import type {
     CrystalRecallRequest,
     CrystalGem,
     ReflectionAtom,
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
-import type { CrystalMemoryStore } from "./types.ts";
-import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS, FlatBruteForceVectorIndex, embedCrystalText, toCrystalSearchText } from "./vector.index.ts";
+import type { CrystalMemoryStore } from "../../crystal/memory/types.ts";
+import {
+    DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
+    FlatBruteForceVectorIndex,
+    embedCrystalText,
+    toCrystalSearchText,
+} from "../../crystal/memory/vector.index.ts";
 
 interface CrystalGemRow {
     id: string;
@@ -31,7 +37,7 @@ interface CrystalGemRow {
 }
 
 @Component({ name: "local-crystal-memory-store", tags: ["database", "crystal", "local"] })
-export class LocalCrystalMemoryStore implements CrystalMemoryStore {
+export class LocalCrystalMemoryStore extends CrystalComponent implements CrystalMemoryStore {
     private database?: Database;
     private readonly index: FlatBruteForceVectorIndex;
     private readonly vectorDimensions: number;
@@ -40,6 +46,7 @@ export class LocalCrystalMemoryStore implements CrystalMemoryStore {
         private readonly config: LocalCrystalMemoryConfig,
         vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
     ) {
+        super();
         this.vectorDimensions = vectorDimensions;
         this.index = new FlatBruteForceVectorIndex(vectorDimensions);
     }

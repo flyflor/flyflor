@@ -8,6 +8,9 @@ import type {
     ModelClient,
     ModelMessage,
     RuntimeContext,
+    ContextForkRecord,
+    SceneRecord,
+    TaskPlanRecord,
 } from "../../protocol/contracts/index.ts";
 import {
     ArchitectureLayer,
@@ -18,16 +21,17 @@ import {
     ComponentKind,
     GhostContextReason,
     ModelRole,
+    SceneRecordKind,
 } from "../../protocol/contracts/index.ts";
 import { Runtime as RuntimeBoundary } from "../components.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions, renderMemoryActionPrompt } from "../../neural/memory/actions.ts";
-import { parseAgentAsk } from "../../neural/memory/ask.ts";
-import { parseGhostDecisions } from "../../neural/memory/ghost.decisions.ts";
-import { parseIdentityAppends } from "../../neural/memory/identity.ts";
+import { parseAgentAsk } from "../../neural/ask/index.ts";
+import { parseGhostDecisions } from "../../neural/ghost/index.ts";
+import { parseIdentityAppends } from "../../neural/identity/index.ts";
 import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
-import { LocalHashEmbeddingProvider } from "../../neural/memory/embedding.ts";
+import { LocalHashEmbeddingProvider } from "../../neural/embedding/index.ts";
 import {
     callMcpTool,
     describeMcpResult,
@@ -74,6 +78,7 @@ import { InMemoryFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./f
 import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
+import { parsePlanningBlocks } from "./planning.blocks.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -144,6 +149,9 @@ interface GeneratedTurn {
     visibleText: string;
     mcpCallProvenance: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
     selectedSkillNames: string[];
+    contextForks: ContextForkRecord[];
+    sceneRecords: SceneRecord[];
+    taskPlans: TaskPlanRecord[];
     /** LF-R3 Ask 一等公民：模型本轮显式输出的 ask 块（kind='ask'）。 */
     ask?: AgentAsk;
 }
@@ -518,10 +526,19 @@ export class RuntimeModule extends RuntimeBoundary {
                 requestId: context.requestId,
             });
         }
+        // Planning/fork/history blocks are model-owned structured output. Runtime
+        // validates shape and strips them from the visible reply; persistence happens
+        // after the canonical brain event id is available.
+        const planningParsed = parsePlanningBlocks(identityParsed.text, {
+            blackboardTurnId: blackboardRun?.turnId,
+            now: context.now,
+            requestId: context.requestId,
+            userId: message.user.id,
+        });
         // LF-R3 Ask 一等公民：从剥离 memory_actions + ghost_decisions + identity 后的剩余文本里解析
         // <flyflor_agent_ask> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
         // 渲染，原模型 reply 文本忽略。
-        const askParsed = parseAgentAsk(identityParsed.text);
+        const askParsed = parseAgentAsk(planningParsed.text);
         const visibleSource = parseMcpToolCalls(askParsed.text || rawText).text || askParsed.text || rawText;
         if (askParsed.dropped > 0) {
             this.events.publish(
@@ -586,6 +603,11 @@ export class RuntimeModule extends RuntimeBoundary {
                           reason: "blackboard-controller-not-configured",
                       },
                 memoryActions: parsed.actions.length,
+                planning: buildPlanningMetadata(
+                    planningParsed.taskPlans,
+                    planningParsed.contextForks,
+                    planningParsed.sceneRecords,
+                ),
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                 mcpToolCalls: generated.mcpToolCalls.length,
                 mcpToolExecutions: mcpCallProvenance,
@@ -594,7 +616,18 @@ export class RuntimeModule extends RuntimeBoundary {
             },
         };
 
-        return { behaviorSnapshotId, reply, parsed, visibleText, mcpCallProvenance, selectedSkillNames, ask };
+        return {
+            behaviorSnapshotId,
+            reply,
+            parsed,
+            visibleText,
+            mcpCallProvenance,
+            selectedSkillNames,
+            contextForks: planningParsed.contextForks,
+            sceneRecords: planningParsed.sceneRecords,
+            taskPlans: planningParsed.taskPlans,
+            ask,
+        };
     }
 
     /**
@@ -649,6 +682,9 @@ export class RuntimeModule extends RuntimeBoundary {
             visibleText: ask.prompt,
             mcpCallProvenance: [],
             selectedSkillNames,
+            contextForks: [],
+            sceneRecords: [],
+            taskPlans: [],
             ask,
         };
     }
@@ -665,13 +701,31 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<void> {
         const { context, enrichedContext, embedding, snapshotKey } = prepared;
         const { blackboardRun } = assembled;
-        const { behaviorSnapshotId, reply, parsed, mcpCallProvenance, selectedSkillNames, ask } = generated;
+        const {
+            behaviorSnapshotId,
+            reply,
+            parsed,
+            mcpCallProvenance,
+            selectedSkillNames,
+            ask,
+            contextForks,
+            sceneRecords,
+            taskPlans,
+        } = generated;
 
         await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions, {
             behaviorSnapshotId,
+            blackboardTurnId: blackboardRun?.turnId,
             mcpCalls: mcpCallProvenance,
             skillNames: selectedSkillNames,
-        }, ask);
+        }, ask, {
+            contextForks,
+            sceneRecords: [
+                ...sceneRecords,
+                ...buildBlackboardSceneRecords(message.user.id, context.now, blackboardRun, context.requestId),
+            ],
+            taskPlans,
+        });
         this.memory.recordBehaviorSnapshot({
             snapshotId: behaviorSnapshotId,
             ask,
@@ -1403,6 +1457,107 @@ function buildAskMetadata(ask: AgentAsk, snapshotId: string): Record<string, unk
         reason: ask.reason,
         snapshotId,
     };
+}
+
+function buildPlanningMetadata(
+    taskPlans: TaskPlanRecord[],
+    contextForks: ContextForkRecord[],
+    sceneRecords: SceneRecord[],
+): Record<string, unknown> {
+    return {
+        taskPlans: taskPlans.map(compactTaskPlanMetadata),
+        contextForks: contextForks.map((fork) => ({
+            id: fork.id,
+            title: fork.title,
+            scopeSummary: fork.scopeSummary,
+            maxContextTokens: fork.maxContextTokens,
+        })),
+        scenes: sceneRecords.map(compactSceneMetadata),
+    };
+}
+
+function compactTaskPlanMetadata(plan: TaskPlanRecord): Record<string, unknown> {
+    return {
+        id: plan.id,
+        title: plan.title,
+        summary: plan.summary,
+        status: plan.status,
+        progress: plan.progress,
+        stepCount: plan.stepCount,
+        completedStepCount: plan.completedStepCount,
+        steps: (plan.step ?? []).slice(0, 8).map((step) => ({
+            id: step.id,
+            title: step.title,
+            status: step.status,
+            order: step.order,
+            progress: step.progress,
+        })),
+    };
+}
+
+function compactSceneMetadata(scene: SceneRecord): Record<string, unknown> {
+    return {
+        id: scene.id,
+        kind: scene.kind,
+        title: scene.title,
+        summary: scene.summary,
+        blackboardTurnId: scene.blackboardTurnId,
+        taskPlanId: scene.taskPlanId,
+        contextForkId: scene.contextForkId,
+    };
+}
+
+function buildBlackboardSceneRecords(
+    userId: string,
+    now: string,
+    run: RuntimeBlackboardRun | undefined,
+    requestId: string,
+): SceneRecord[] {
+    if (!run || run.mode !== BlackboardMode.Blackboard || !run.turnId) return [];
+    const facts = uniqueStrings(run.steps.flatMap((step) => step.newFacts)).slice(0, 16);
+    const openQuestions = uniqueStrings([
+        ...run.decisions.map((decision) => decision.prompt),
+        ...run.steps.flatMap((step) => step.blockers),
+    ]).slice(0, 12);
+    return [
+        {
+            id: `scene-blackboard-${run.turnId}`,
+            userId,
+            kind: SceneRecordKind.Blackboard,
+            title: `Blackboard ${run.status ?? BlackboardTurnStatus.Running}`,
+            summary: `status=${run.status ?? BlackboardTurnStatus.Running}; reason=${run.reason}; steps=${run.steps.length}; decisions=${run.decisions.length}`,
+            detail: renderBlackboardSceneDetail(run),
+            visibleFacts: facts,
+            openQuestions,
+            blackboardTurnId: run.turnId,
+            createdAt: normalizeIso(now),
+            updatedAt: normalizeIso(now),
+        },
+    ];
+}
+
+function renderBlackboardSceneDetail(run: RuntimeBlackboardRun): string {
+    const lines = [
+        `Route: ${run.reason}`,
+        `Status: ${run.status ?? BlackboardTurnStatus.Running}`,
+        `Plan: ${planSummaryForRun(run)}`,
+    ];
+    for (const step of run.steps.slice(0, 12)) {
+        lines.push(`r${step.round} ${step.workerRole}: ${compactDialogueText(step.outputSummary)}`);
+    }
+    for (const decision of run.decisions.slice(-3)) {
+        lines.push(`decision: ${compactDialogueText(decision.prompt)}`);
+    }
+    return lines.join("\n").slice(0, 4000);
+}
+
+function normalizeIso(value: string): string {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
+}
+
+function uniqueStrings(values: string[]): string[] {
+    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 export function filterMcpServersByToolset<T extends { name: string }>(

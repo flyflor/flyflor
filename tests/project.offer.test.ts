@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
-import { SQLiteMemoryStore } from "../src/neural/memory/sqlite.ts";
+import { SQLiteMemoryStore } from "../src/components/memory/sqlite.memory.store.ts";
 import type { ModelClient, ModelMessage, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 

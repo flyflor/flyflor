@@ -15,7 +15,6 @@ export {
     Module,
     Plugin,
     Provide,
-    Service,
     Worker,
     getComponentMetadata,
     type ComponentDecoratorOptions,

@@ -3,6 +3,7 @@ import {
     readAskMeta,
     readBlackboardMeta,
     readMcpTrace,
+    readPlanningMeta,
     readStringArray,
 } from "../src/command/tui/chat/metadata.parse.ts";
 
@@ -132,5 +133,46 @@ describe("TUI chat metadata parsing", () => {
             tool: "search",
         });
         expect(readStringArray(["a", 1, "b", null])).toEqual(["a", "b"]);
+    });
+
+    test("reads planning metadata without parsing visible reply text", () => {
+        expect(
+            readPlanningMeta({
+                planning: {
+                    taskPlans: [
+                        {
+                            id: "plan-1",
+                            title: "Release",
+                            summary: "Ship the release.",
+                            status: "in-progress",
+                            progress: 0.5,
+                            stepCount: 2,
+                            completedStepCount: 1,
+                            steps: [{ id: "s1", title: "Check", status: "done", order: 0 }],
+                        },
+                    ],
+                    contextForks: [
+                        {
+                            id: "fork-1",
+                            title: "Installer",
+                            scopeSummary: "Installer only.",
+                            maxContextTokens: 12000,
+                        },
+                    ],
+                    scenes: [
+                        {
+                            id: "scene-1",
+                            kind: "deep-think",
+                            title: "Review",
+                            summary: "Summary only.",
+                        },
+                    ],
+                },
+            }),
+        ).toMatchObject({
+            taskPlans: [{ id: "plan-1", completedStepCount: 1 }],
+            contextForks: [{ id: "fork-1", maxContextTokens: 12000 }],
+            scenes: [{ id: "scene-1", kind: "deep-think" }],
+        });
     });
 });

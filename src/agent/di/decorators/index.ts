@@ -4,7 +4,6 @@ export { Inject } from "./inject.ts";
 export { Module } from "./module.ts";
 export { Plugin } from "./plugin.ts";
 export { Provide, type ProvideDecoratorOptions } from "./provide.ts";
-export { Service } from "./service.ts";
 export { Worker } from "./worker.ts";
 export {
     readComponentMetadata as getComponentMetadata,

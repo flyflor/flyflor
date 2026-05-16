@@ -26,6 +26,11 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
         note: "Manages the background service through gateway daemon helpers.",
         covers: ["gateway start", "gateway stop", "gateway restart"],
     },
+    {
+        path: "gateway service plan",
+        status: "✅",
+        note: "Renders deterministic systemd user units or launchd plists; `--write` only writes the file and leaves enable/start commands explicit.",
+    },
     { path: "gateway status [--deep]", status: "✅", note: "Calls `buildGatewayStatusSnapshot`.", covers: ["gateway status"] },
     { path: "gateway setup", status: "✅", note: "Interactive configuration." },
     { path: "model", status: "✅", note: "Lists or sets the default provider and model." },
@@ -161,7 +166,7 @@ export function renderCliCommandsDoc(): string {
     lines.push("## Risks / Known Gaps");
     lines.push("");
     lines.push("- The command surface is growing quickly, so the CLI docs are generated from the command spec and checked for drift by `docs:check`.");
-    lines.push("- Daemon mode already has helpers, but the cross-platform launchd/systemd install experience still needs real-world validation.");
+    lines.push("- Daemon mode has PID helpers and a service-file planning command; cross-platform launchd/systemd long-running behavior still needs real-world validation.");
     lines.push("- The implementation status table has spec coverage checks; newly added command leaves must be documented before tests pass.");
     lines.push("");
     lines.push("## Related Tests");

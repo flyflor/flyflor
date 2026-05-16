@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import type { FlyflorPaths, SQLiteMemoryConfig } from "../../config/index.ts";
 import { MemoryCandidateStatus, MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { recallBoostFromMetadata } from "./matrix.ts";
+import { SQLiteComponent } from "../core.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchRequest, MemorySearchResult } from "./types.ts";
 
 interface MemoryRow {
@@ -29,15 +29,17 @@ interface ExistingMemoryRow {
 }
 
 @Component({ name: "sqlite-memory-store", tags: ["database", "memory"] })
-export class SQLiteMemoryStore {
+export class SQLiteMemoryStore extends SQLiteComponent {
     private database?: Database;
 
-    constructor(
+    public constructor(
         private readonly paths: FlyflorPaths,
         private readonly config: SQLiteMemoryConfig,
-    ) {}
+    ) {
+        super();
+    }
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         if (!this.config.enabled || this.database) {
             return;
         }
@@ -123,7 +125,7 @@ export class SQLiteMemoryStore {
         this.database = database;
     }
 
-    async addCandidate(candidate: MemoryCandidate): Promise<void> {
+    public async addCandidate(candidate: MemoryCandidate): Promise<void> {
         await this.initialize();
         if (!this.database) {
             return;
@@ -155,19 +157,19 @@ export class SQLiteMemoryStore {
             );
     }
 
-    async markCandidatePromoted(candidateId: string, promotedAt: string): Promise<void> {
+    public async markCandidatePromoted(candidateId: string, promotedAt: string): Promise<void> {
         await this.initialize();
         this.database
             ?.query("UPDATE memory_candidates SET status = ?, promoted_at = ? WHERE id = ?")
             .run(MemoryCandidateStatus.Promoted, promotedAt, candidateId);
     }
 
-    async addSearchRecord(record: MemoryRecord): Promise<void> {
+    public async addSearchRecord(record: MemoryRecord): Promise<void> {
         await this.initialize();
         this.insertMemoryRecord(record);
     }
 
-    async search(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
+    public async search(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
         await this.initialize();
         if (!this.database) {
             return [];
@@ -270,7 +272,7 @@ export class SQLiteMemoryStore {
     }
 
     /** 持久化一个待用户确认的项目候选（每 userId 最多一条；存在则覆盖）。 */
-    async upsertProjectOffer(offer: PendingProjectOffer): Promise<void> {
+    public async upsertProjectOffer(offer: PendingProjectOffer): Promise<void> {
         await this.initialize();
         if (!this.database) return;
         this.database
@@ -294,7 +296,7 @@ export class SQLiteMemoryStore {
             );
     }
 
-    async getProjectOffer(userId: string): Promise<PendingProjectOffer | undefined> {
+    public async getProjectOffer(userId: string): Promise<PendingProjectOffer | undefined> {
         await this.initialize();
         if (!this.database) return undefined;
         const row = this.database
@@ -330,7 +332,7 @@ export class SQLiteMemoryStore {
     }
 
     /** TTL -1；返回更新后的剩余 TTL（不存在则返回 undefined）。 */
-    async decrementProjectOfferTtl(userId: string): Promise<number | undefined> {
+    public async decrementProjectOfferTtl(userId: string): Promise<number | undefined> {
         await this.initialize();
         if (!this.database) return undefined;
         const current = await this.getProjectOffer(userId);
@@ -344,14 +346,14 @@ export class SQLiteMemoryStore {
         return next;
     }
 
-    async deleteProjectOffer(userId: string): Promise<void> {
+    public async deleteProjectOffer(userId: string): Promise<void> {
         await this.initialize();
         if (!this.database) return;
         this.database.prepare("DELETE FROM pending_project_offer WHERE user_id = ?").run(userId);
     }
 
     /** 持久化一个待用户确认的技能候选（每 userId 最多一条；存在则覆盖）。 */
-    async upsertSkillOffer(offer: PendingSkillOffer): Promise<void> {
+    public async upsertSkillOffer(offer: PendingSkillOffer): Promise<void> {
         await this.initialize();
         if (!this.database) return;
         this.database
@@ -378,7 +380,7 @@ export class SQLiteMemoryStore {
             );
     }
 
-    async getSkillOffer(userId: string): Promise<PendingSkillOffer | undefined> {
+    public async getSkillOffer(userId: string): Promise<PendingSkillOffer | undefined> {
         await this.initialize();
         if (!this.database) return undefined;
         const row = this.database
@@ -417,7 +419,7 @@ export class SQLiteMemoryStore {
         };
     }
 
-    async decrementSkillOfferTtl(userId: string): Promise<number | undefined> {
+    public async decrementSkillOfferTtl(userId: string): Promise<number | undefined> {
         await this.initialize();
         if (!this.database) return undefined;
         const current = await this.getSkillOffer(userId);
@@ -431,7 +433,7 @@ export class SQLiteMemoryStore {
         return next;
     }
 
-    async deleteSkillOffer(userId: string): Promise<void> {
+    public async deleteSkillOffer(userId: string): Promise<void> {
         await this.initialize();
         if (!this.database) return;
         this.database.prepare("DELETE FROM pending_skill_offer WHERE user_id = ?").run(userId);
@@ -526,6 +528,23 @@ function rowToMemory(row: MemoryRow): MemoryRecord {
 function scoreWithMemoryMatrix(baseScore: number, record: MemoryRecord): number {
     const recallBoost = recallBoostFromMetadata(record.metadata);
     return clamp01(baseScore * 0.72 + record.importance * 0.18 + recallBoost * 0.1);
+}
+
+function recallBoostFromMetadata(metadata: Record<string, unknown> | undefined): number {
+    const matrix = metadata?.matrix;
+    if (!isRecord(matrix)) {
+        return 0;
+    }
+    const aggregate = matrix.aggregate;
+    if (!isRecord(aggregate)) {
+        return 0;
+    }
+    const value = aggregate.recallBoost;
+    return typeof value === "number" && Number.isFinite(value) ? clamp01(value) : 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function clamp01(value: number): number {

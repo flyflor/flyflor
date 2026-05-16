@@ -8,13 +8,17 @@ import {
 } from "../../../protocol/contracts/index.ts";
 import {
     Blackboard,
+    BrainComponent,
     CoreComponent,
     CrystalComponent,
     Gateway,
+    GraphComponent,
     Memory,
+    MemoryComponent,
     Runtime,
     Sandbox,
-} from "../../components.ts";
+    SQLiteComponent,
+} from "../../../components/core.ts";
 
 export interface ComponentCompatibility {
     protocol?: string;
@@ -107,7 +111,15 @@ function inferComponentKind(target: Function): ComponentKindType {
     if (prototype instanceof Gateway) return ComponentKind.Gateway;
     if (prototype instanceof Blackboard) return ComponentKind.Blackboard;
     if (prototype instanceof Runtime) return ComponentKind.Runtime;
-    if (prototype instanceof Memory) return ComponentKind.Memory;
+    if (
+        prototype instanceof Memory ||
+        prototype instanceof MemoryComponent ||
+        prototype instanceof BrainComponent ||
+        prototype instanceof GraphComponent ||
+        prototype instanceof SQLiteComponent
+    ) {
+        return ComponentKind.Memory;
+    }
     if (prototype instanceof Sandbox) return ComponentKind.Sandbox;
     if (prototype instanceof CrystalComponent) return ComponentKind.Crystal;
     if (prototype instanceof CoreComponent) return ComponentKind.Component;
@@ -121,6 +133,10 @@ function inferComponentLayer(target: Function): ArchitectureLayerType {
         prototype instanceof Gateway ||
         prototype instanceof Blackboard ||
         prototype instanceof Memory ||
+        prototype instanceof MemoryComponent ||
+        prototype instanceof BrainComponent ||
+        prototype instanceof GraphComponent ||
+        prototype instanceof SQLiteComponent ||
         prototype instanceof Sandbox
     ) {
         return ArchitectureLayer.Control;
@@ -132,7 +148,6 @@ function inferComponentName(target: Function): string {
     return target.name
         .replace(/Module$/u, "")
         .replace(/Component$/u, "")
-        .replace(/Service$/u, "")
         .replace(/Store$/u, "")
         .replace(/([a-z0-9])([A-Z])/gu, "$1-$2")
         .toLowerCase();

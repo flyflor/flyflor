@@ -10,12 +10,14 @@ import {
     ChatType,
     MemoryEventType,
     ModelRole,
+    SceneRecordKind,
+    TaskPlanStatus,
     type GatewayMessage,
     type GatewayReply,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { type EventSink } from "../src/protocol/events/index.ts";
-import type { BrainStore } from "../src/neural/memory/brain.store.ts";
+import type { BrainStore } from "../src/components/memory/brain.store.ts";
 
 const tempRoots: string[] = [];
 
@@ -145,6 +147,59 @@ describe("TUI chat history source", () => {
             expect(() => memory.listChatHistory("history-user", { limit: 1 })).toThrow(
                 "Invalid chat history event bad-history-event: missing assistantText",
             );
+        } finally {
+            memory.dispose();
+        }
+    });
+
+    test("includes persisted planning metadata for history side-panel replay", async () => {
+        const config = await makeConfig();
+        const memory = new MemoryModule(config, new RecordingSink());
+        await memory.warmup();
+        try {
+            const now = "2026-05-14T00:00:05.000Z";
+            await memory.rememberTurn(
+                gatewayMessage("plan it", "msg-plan", now),
+                gatewayReply("planned", "rep-plan"),
+                runtimeContext("req-plan", now),
+                [],
+                {},
+                undefined,
+                {
+                    taskPlans: [
+                        {
+                            id: "plan-1",
+                            userId: "history-user",
+                            title: "Plan",
+                            summary: "Summary",
+                            status: TaskPlanStatus.Planned,
+                            progress: 0,
+                            stepCount: 1,
+                            completedStepCount: 0,
+                            step: [{ id: "s1", title: "Step", status: TaskPlanStatus.Planned, order: 0 }],
+                            createdAt: now,
+                            updatedAt: now,
+                        },
+                    ],
+                    sceneRecords: [
+                        {
+                            id: "scene-1",
+                            userId: "history-user",
+                            kind: SceneRecordKind.DeepThink,
+                            title: "Scene",
+                            summary: "Replay summary",
+                            visibleFacts: [],
+                            openQuestions: [],
+                            createdAt: now,
+                            updatedAt: now,
+                        },
+                    ],
+                },
+            );
+
+            const latest = memory.listChatHistory("history-user", { limit: 1 });
+            expect(latest[0]?.taskPlans?.[0]?.title).toBe("Plan");
+            expect(latest[0]?.scenes?.[0]?.summary).toBe("Replay summary");
         } finally {
             memory.dispose();
         }

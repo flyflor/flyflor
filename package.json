@@ -22,6 +22,9 @@
         "docker:down": "docker compose down",
         "docker:nuke": "docker compose down -v",
         "docker:templates": "bun run scripts/install.templates.ts --docker --force",
+        "install:docker": "sh scripts/install.docker.sh",
+        "install:source": "sh scripts/install.source.sh",
+        "install:windows": "powershell -ExecutionPolicy Bypass -File scripts/install.ps1",
         "install:templates": "bun run scripts/install.templates.ts",
         "test": "bun run scripts/test.ts",
         "test:live": "bun run scripts/test.ts live",
@@ -57,10 +60,10 @@
     "dependencies": {
         "@clack/prompts": "^1.3.0",
         "@opentui/core": "0.2.8",
-        "@opentui/solid": "0.2.8",
         "cli-table3": "^0.6.5",
         "commander": "^14.0.3",
         "lodash-es": "^4.18.1",
+        "solid-js": "^1.9.12",
         "markdown-it": "^14.1.1",
         "natural": "8.1.1",
         "picocolors": "^1.1.1"

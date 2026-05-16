@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths, MarkdownMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { MemoryComponent } from "../core.ts";
 import { MarkdownMemoryFile, MemoryLayer } from "../../protocol/contracts/index.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchResult } from "./types.ts";
 
@@ -25,20 +26,22 @@ export interface MarkdownMemorySnapshot {
 }
 
 @Component({ name: "markdown-memory-store", tags: ["database", "memory"] })
-export class MarkdownMemoryStore {
-    constructor(
+export class MarkdownMemoryStore extends MemoryComponent {
+    public constructor(
         private readonly paths: FlyflorPaths,
         private readonly config: MarkdownMemoryConfig,
-    ) {}
+    ) {
+        super();
+    }
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         await mkdir(this.paths.workspaceDir, { recursive: true });
         await Promise.all(
             MARKDOWN_FILES.map((file) => ensureMarkdownFile(this.paths.workspaceDir, this.paths.templateDir, file)),
         );
     }
 
-    async snapshot(): Promise<MarkdownMemorySnapshot> {
+    public async snapshot(): Promise<MarkdownMemorySnapshot> {
         if (!this.config.enabled) {
             return { prompt: "", results: [] };
         }
@@ -67,7 +70,7 @@ export class MarkdownMemoryStore {
         };
     }
 
-    async promoteCandidate(candidate: MemoryCandidate, promotedAt: string): Promise<MemoryRecord> {
+    public async promoteCandidate(candidate: MemoryCandidate, promotedAt: string): Promise<MemoryRecord> {
         await this.initialize();
         const filePath = join(this.paths.workspaceDir, candidate.targetFile);
         const file = Bun.file(filePath);
@@ -102,7 +105,7 @@ export class MarkdownMemoryStore {
      * Used by the feedback router (B Preference → user.md, C GlobalStrategy → self.md).
      * 不解析提示词；只做附加写入，由调用方决定 `target` 与 `content`。
      */
-    async appendFeedback(target: MarkdownMemoryFile, content: string, recordedAt: string): Promise<void> {
+    public async appendFeedback(target: MarkdownMemoryFile, content: string, recordedAt: string): Promise<void> {
         if (!this.config.enabled) return;
         await this.initialize();
         const filePath = join(this.paths.workspaceDir, target);

@@ -65,6 +65,7 @@ import { BackgroundScheduler } from "./background.scheduler.ts";
 import { runBrainArchive, type BrainArchiveRunResult } from "./brain.archive.ts";
 import { DormantSupervisor } from "../dormant/index.ts";
 import { DreamWorkerImpl } from "../../agent/runtime/dream.worker.ts";
+import { historyTurnFromEvent, type ChatHistoryPlanning, type ChatHistoryTurn } from "./history.ts";
 import type { MemoryAction } from "./actions.ts";
 import type {
     MemoryCandidate,
@@ -101,15 +102,7 @@ export interface BehaviorSnapshotRecord {
     snapshot: MemoryEventRecord;
 }
 
-export interface ChatHistoryTurn {
-    assistantText: string;
-    eventId: string;
-    contextForks?: ContextForkRecord[];
-    scenes?: SceneRecord[];
-    taskPlans?: TaskPlanRecord[];
-    ts: number;
-    userText: string;
-}
+export type { ChatHistoryTurn } from "./history.ts";
 
 export interface TurnPlanningInput {
     contextForks?: ContextForkRecord[];
@@ -1604,7 +1597,7 @@ export class MemoryModule extends Memory {
     private historyPlanningForEvent(
         userId: string,
         sourceEventId: string,
-    ): Pick<ChatHistoryTurn, "contextForks" | "scenes" | "taskPlans"> {
+    ): ChatHistoryPlanning {
         return {
             contextForks: this.brain.listContextForks({ userId, sourceEventId, limit: 8 }),
             scenes: this.brain.listSceneRecords({ userId, sourceEventId, limit: 16 }),
@@ -3475,30 +3468,6 @@ function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string
     const hasher = new Bun.CryptoHasher("sha256");
     hasher.update(`${context.requestId}:${message.id}:${context.now}`);
     return `episode:${hasher.digest("hex").slice(0, 24)}`;
-}
-
-function historyTurnFromEvent(
-    row: MemoryEventRecord,
-    planning: Pick<ChatHistoryTurn, "contextForks" | "scenes" | "taskPlans"> = {},
-): ChatHistoryTurn {
-    const userText = strictHistoryString(row.content.userText, row.id, "userText");
-    const assistantText = strictHistoryString(row.content.assistantText, row.id, "assistantText");
-    return {
-        assistantText,
-        ...(planning.contextForks && planning.contextForks.length > 0 ? { contextForks: planning.contextForks } : {}),
-        eventId: row.id,
-        ...(planning.scenes && planning.scenes.length > 0 ? { scenes: planning.scenes } : {}),
-        ...(planning.taskPlans && planning.taskPlans.length > 0 ? { taskPlans: planning.taskPlans } : {}),
-        ts: row.ts,
-        userText,
-    };
-}
-
-function strictHistoryString(value: unknown, eventId: string, field: string): string {
-    if (typeof value !== "string" || value.trim().length === 0) {
-        throw new Error(`Invalid chat history event ${eventId}: missing ${field}`);
-    }
-    return value;
 }
 
 function deriveProjectConstraintId(message: GatewayMessage, triggerKind: ProjectTriggerKind, codenameId?: string): string {

@@ -203,7 +203,7 @@ CLI `flyflor blackboard` 在 TTY 下进入黑板浏览 TUI，可搜索、上下�
 
 worker **不能**直接写长期记忆：
 
-- 允许：写 blackboard step / decision、写 journal episode、通过模型输出合法 `memory_action` 走 Memory Action 链路。
+- 允许：写 blackboard step / decision、通过 runtime 写入 brain.db 事件摘要、通过模型输出合法 `memory_action` 走 Memory Action 链路。
 - 禁止：worker prompt 改 Markdown、关键词把讨论自动晋升长期记忆、unresolved blocker 当长期事实。
 
 收敛黑板 → `recordDebateEpisode` 高权重 episode（`sourceKind = blackboard-converged`，evidence weight 0.8）。

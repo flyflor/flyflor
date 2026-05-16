@@ -4,6 +4,7 @@ export * from "./eq.ts";
 export * from "./ghost.ts";
 export * from "./identity.ts";
 export * from "./enums.ts";
+export * from "./planning.ts";
 export * from "./memory.atom.ts";
 export * from "./reflection.ts";
 export * from "./types.ts";

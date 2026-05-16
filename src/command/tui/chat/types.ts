@@ -45,6 +45,49 @@ export interface AskQuestionMeta {
     rationale?: string;
 }
 
+export interface TaskPlanStepMeta {
+    id: string;
+    title: string;
+    status: string;
+    order: number;
+    progress?: number;
+}
+
+export interface TaskPlanMeta {
+    id: string;
+    title: string;
+    summary: string;
+    status: string;
+    progress: number;
+    stepCount: number;
+    completedStepCount: number;
+    steps?: TaskPlanStepMeta[];
+}
+
+export interface ContextForkMeta {
+    id: string;
+    title: string;
+    scopeSummary: string;
+    maxContextTokens: number;
+}
+
+export interface SceneRecordMeta {
+    id: string;
+    kind: string;
+    title: string;
+    summary: string;
+    detail?: string;
+    blackboardTurnId?: string;
+    taskPlanId?: string;
+    contextForkId?: string;
+}
+
+export interface PlanningMeta {
+    contextForks: ContextForkMeta[];
+    scenes: SceneRecordMeta[];
+    taskPlans: TaskPlanMeta[];
+}
+
 export interface ChatMessage {
     id: string;
     role: "user" | "assistant";
@@ -55,6 +98,7 @@ export interface ChatMessage {
     skills?: string[];
     blackboard?: BlackboardMeta | null;
     blackboardTurn?: BlackboardTurn | null;
+    planning?: PlanningMeta | null;
     history?: boolean;
     historyEventId?: string;
     historyTs?: number;

@@ -2,6 +2,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { MemoryComponent } from "../core.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
@@ -63,13 +64,15 @@ export interface ProjectMemorySnapshot {
 }
 
 @Component({ name: "project-memory-store", tags: ["database", "memory", "project"] })
-export class ProjectMemoryStore {
-    constructor(
+export class ProjectMemoryStore extends MemoryComponent {
+    public constructor(
         private readonly paths: FlyflorPaths,
         private readonly events?: EventSink,
-    ) {}
+    ) {
+        super();
+    }
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         await mkdir(this.paths.projectMemoryDir, { recursive: true });
         const memoryPath = this.projectPaths().memory;
         const memory = Bun.file(memoryPath);
@@ -91,7 +94,7 @@ export class ProjectMemoryStore {
         }
     }
 
-    async snapshot(input: {
+    public async snapshot(input: {
         maxChars: number;
         query?: string;
         requestId?: string;
@@ -179,7 +182,7 @@ export class ProjectMemoryStore {
         };
     }
 
-    async recordTurn(input: {
+    public async recordTurn(input: {
         message: GatewayMessage;
         reply: GatewayReply;
         context: RuntimeContext;

@@ -10,7 +10,7 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import {
     buildReflectionCandidate,
     crystallizeCandidate,
@@ -32,9 +32,9 @@ const CFG: CrystalMemoryConfig = {
     local: { dbFile: "" },
 };
 
-function makeService(): { svc: CrystalMemoryService; store: InMemoryCrystalMemoryStore } {
+function makeComponent(): { svc: CrystalMemoryComponent; store: InMemoryCrystalMemoryStore } {
     const store = new InMemoryCrystalMemoryStore();
-    return { svc: new CrystalMemoryService(CFG, store), store };
+    return { svc: new CrystalMemoryComponent(CFG, store), store };
 }
 
 class StubModel implements ModelClient {
@@ -54,7 +54,7 @@ const NOW = "2026-05-12T00:00:00.000Z";
 
 describe("reflection → skill consolidation (P0-5)", () => {
     test("blackboard-converged candidate becomes a skill", async () => {
-        const { svc, store } = makeService();
+        const { svc, store } = makeComponent();
         const result = await svc.recordTurn({
             requestId: "r1",
             now: NOW,
@@ -81,7 +81,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
     });
 
     test("direct reflection (weight=0) creates candidate but no skill", async () => {
-        const { svc, store } = makeService();
+        const { svc, store } = makeComponent();
         const result = await svc.recordTurn({
             requestId: "r2",
             now: NOW,
@@ -107,7 +107,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
     });
 
     test("same bucket+symbols merge into single skill with growing support", async () => {
-        const { svc, store } = makeService();
+        const { svc, store } = makeComponent();
         for (let i = 0; i < 5; i++) {
             await svc.recordTurn({
                 requestId: `r-${i}`,
@@ -215,7 +215,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
 
     test("[chaos] disabled crystal config → recordTurn no-op", async () => {
         const store = new InMemoryCrystalMemoryStore();
-        const svc = new CrystalMemoryService(
+        const svc = new CrystalMemoryComponent(
             {
                 enabled: false,
                 backend: "local",
@@ -272,7 +272,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
     });
 
     test("[chaos] high-frequency parallel recordTurn does not corrupt store", async () => {
-        const { svc, store } = makeService();
+        const { svc, store } = makeComponent();
         // 用相同 content 确保 extractSymbolTokens 派生符号一致 → 同 bucket+symbols → 同 skillId
         const tasks = Array.from({ length: 50 }, (_, i) =>
             svc.recordTurn({
@@ -316,7 +316,7 @@ describe("reflection → skill consolidation (P0-5)", () => {
             calls += 1;
             throw new Error("skill-upsert-down");
         };
-        const svc = new CrystalMemoryService(CFG, store);
+        const svc = new CrystalMemoryComponent(CFG, store);
         await expect(
             svc.recordTurn({
                 requestId: "r",

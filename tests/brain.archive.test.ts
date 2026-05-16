@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { spawnSync } from "node:child_process";
-import { BrainStore } from "../src/neural/memory/brain.store.ts";
+import { BrainStore } from "../src/components/memory/brain.store.ts";
 import {
     MemoryEventStatus,
     MemoryEventType,

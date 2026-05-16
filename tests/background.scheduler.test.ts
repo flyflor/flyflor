@@ -3,7 +3,7 @@ import { BackgroundScheduler } from "../src/neural/memory/background.scheduler.t
 import { ConsolidationDecisionKind, type ConsolidationRunResult } from "../src/neural/memory/consolidation.worker.ts";
 import { RuntimeEventType } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
-import type { WorkingMemoryHealthSnapshot } from "../src/neural/memory/working.store.ts";
+import type { WorkingMemoryHealthSnapshot } from "../src/components/memory/working.store.ts";
 
 class FakeEvents {
     readonly published: RuntimeEvent[] = [];

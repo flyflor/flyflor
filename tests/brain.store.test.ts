@@ -3,13 +3,15 @@ import { Database } from "bun:sqlite";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BrainStore } from "../src/neural/memory/brain.store.ts";
+import { BrainStore } from "../src/components/memory/brain.store.ts";
 import {
     MemoryEventStatus,
     MemoryEventType,
     MemoryLinkType,
     ModelRole,
+    SceneRecordKind,
     SummaryRange,
+    TaskPlanStatus,
 } from "../src/protocol/contracts/index.ts";
 
 async function freshStore() {
@@ -285,6 +287,63 @@ describe("BrainStore", () => {
             const reread = store.getCodenameByName("u1", "projA");
             expect(reread?.useCount).toBe(1);
             expect(reread?.lastUsedAt).toBe(now + 1000);
+        } finally {
+            store.close();
+        }
+    });
+
+    test("stores summary-first task plans, forks and scene records in brain.db", async () => {
+        const { store } = await freshStore();
+        try {
+            store.writeTaskPlan({
+                id: "plan-1",
+                userId: "u1",
+                title: "Release plan",
+                summary: "Track release readiness.",
+                status: TaskPlanStatus.InProgress,
+                progress: 0.5,
+                stepCount: 1,
+                completedStepCount: 0,
+                step: [{ id: "s1", title: "Run checks", status: TaskPlanStatus.Planned, order: 0 }],
+                createdAt: "2026-05-16T00:00:00.000Z",
+                updatedAt: "2026-05-16T00:00:00.000Z",
+                sourceEventId: "episode-1",
+            });
+            store.writeContextFork({
+                id: "fork-1",
+                userId: "u1",
+                title: "Installer fork",
+                summary: "Isolate installer decisions.",
+                scopeSummary: "Installer files only.",
+                maxContextTokens: 12000,
+                inheritedEventIds: ["episode-1"],
+                createdAt: "2026-05-16T00:00:00.000Z",
+                updatedAt: "2026-05-16T00:00:00.000Z",
+                sourceEventId: "episode-1",
+            });
+            store.writeSceneRecord({
+                id: "scene-1",
+                userId: "u1",
+                kind: SceneRecordKind.DeepThink,
+                title: "Planning scene",
+                summary: "The plan was created after analysis.",
+                visibleFacts: ["plan exists"],
+                openQuestions: [],
+                sourceEventId: "episode-1",
+                createdAt: "2026-05-16T00:00:00.000Z",
+                updatedAt: "2026-05-16T00:00:00.000Z",
+            });
+
+            expect(store.listTaskPlans({ userId: "u1", sourceEventId: "episode-1" })[0]?.step?.[0]?.title).toBe(
+                "Run checks",
+            );
+            expect(store.listContextForks({ userId: "u1", sourceEventId: "episode-1" })[0]?.maxContextTokens).toBe(
+                12000,
+            );
+            expect(store.getContextFork("fork-1")?.scopeSummary).toBe("Installer files only.");
+            expect(store.listSceneRecords({ userId: "u1", sourceEventId: "episode-1" })[0]?.visibleFacts).toEqual([
+                "plan exists",
+            ]);
         } finally {
             store.close();
         }

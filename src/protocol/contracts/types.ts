@@ -216,6 +216,11 @@ export interface RuntimeContext {
      * 未注入时下游按需自行计算（降级）。
      */
     embedding?: number[];
+    /**
+     * 显式 fork 节点。Flyflor 不用 session 续命；调用方若要进入分叉话题，
+     * 必须传入已持久化的 ContextFork id，runtime 只按该结构化 id 注入范围边界。
+     */
+    contextForkId?: string;
 }
 
 export interface ModelMessage {

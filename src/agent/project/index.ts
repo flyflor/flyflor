@@ -25,7 +25,7 @@
  */
 
 import type { MemoryAction } from "../../neural/memory/actions.ts";
-import type { EpisodeRecord } from "../../neural/memory/working.store.ts";
+import type { EpisodeRecord } from "../../components/memory/working.store.ts";
 import { MemorySourceKind } from "../../protocol/contracts/index.ts";
 
 export const ProjectTriggerKind = {

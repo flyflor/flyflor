@@ -8,7 +8,7 @@
  * 项目 id/title/goal 全部由 codename 字段直接派生，不解析任何对话文本。
  */
 
-import type { BrainStore } from "../../neural/memory/brain.store.ts";
+import type { BrainStore } from "../../components/memory/brain.store.ts";
 import type { CodenameRecord } from "../../protocol/contracts/index.ts";
 import { detectCodenamePromotion, ProjectTriggerKind, type ProjectTriggerConfig, type ProjectTriggerResult } from "./index.ts";
 import { ProjectScaffolder } from "./scaffolder.ts";

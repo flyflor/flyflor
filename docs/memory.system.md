@@ -8,21 +8,22 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 
 ## 相关代码路径
 
-- `src/neural/memory/markdown.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
-- `src/neural/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/eq）
+- `src/components/memory/markdown.store.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
+- `src/components/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/eq/task_plans/context_forks/scene_records）
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
-- `src/neural/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
+- `src/components/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
-- `src/neural/memory/sqlite.ts` — candidates / offers / search
+- `src/components/memory/sqlite.memory.store.ts` — candidates / offers / search
 - `src/neural/memory/activation.ts` — spreading activation
 - `src/neural/memory/consolidation.worker.ts` — working memory → crystal graph 升格
 - `src/neural/memory/decay.ts` — 双轨衰减
 - `src/neural/memory/anti.bloat.ts` — 容量阀门
-- `src/neural/memory/project.memory.ts` — 项目局部记忆
+- `src/components/memory/project.memory.store.ts` — 项目局部记忆
 - `src/neural/memory/background.scheduler.ts` — consolidation / hot compression / summary / decay / dream / dormant 节拍
 - `src/agent/runtime/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
-- `src/crystal/memory/index.ts` — CrystalMemoryService 与本地晶体图 backend
+- `src/crystal/memory/index.ts` — CrystalMemoryComponent 与本地晶体图 backend
+- `src/components/index.ts` — 共享 Component 基类：MemoryComponent / CrystalComponent / BrainComponent / GraphComponent / SQLiteComponent
 
 ## 分层结构
 
@@ -76,10 +77,15 @@ flowchart LR
 | `memory_links` | contradicts / causal / derived / supersedes 等证据关系 |
 | `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
 | `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示 |
+| `task_plans` | 模型同轮输出的 TODO / 计划摘要；TUI 侧栏展示进度，不存原始推理 |
+| `context_forks` | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算 |
+| `scene_records` | 黑板 / 深度思考 / 反思场景回放摘要；`/history` 右侧复用，不存 chain-of-thought |
 
 当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
-chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。
+TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，保持无 session 设计。
+
+chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/neural/memory/history.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
 
 月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 `MemoryComponent`、`CrystalComponent` 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
 
@@ -142,7 +148,7 @@ sequenceDiagram
     participant B as BrainStore
     participant R as WorkingStore
     participant PM as ProjectMemoryStore
-    participant CR as CrystalMemoryService
+    participant CR as CrystalMemoryComponent
     participant SQ as SQLiteStore
     participant Act as activation
     RT->>Mem: buildPrompt(message, ctx)

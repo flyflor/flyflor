@@ -8,13 +8,13 @@ import {
 } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { renderHotMemoryCompressionPrompt } from "../../agent/prompts/index.ts";
-import type { BrainStore } from "./brain.store.ts";
+import type { BrainStore } from "../../components/memory/brain.store.ts";
 import type {
     EpisodeRecord,
     WorkingMemoryHealthSnapshot,
     WorkingMemoryStore,
-} from "./working.store.ts";
-import { isWorkingMemoryCircuitCoolingDown } from "./working.store.ts";
+} from "../../components/memory/working.store.ts";
+import { isWorkingMemoryCircuitCoolingDown } from "../../components/memory/working.store.ts";
 
 export interface HotMemoryCompressionRunResult {
     scanned: number;

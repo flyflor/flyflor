@@ -6,8 +6,8 @@ Crystal 子系统负责把单轮证据「结晶」为长期可复用的 Gem：�
 
 ## 相关代码路径
 
-- `src/crystal/reflection/index.ts` — `CrystalReflectionService`
-- `src/crystal/memory/index.ts` — `CrystalMemoryService` / `LocalCrystalMemoryStore`
+- `src/crystal/reflection/index.ts` — Crystal reflection helpers（函数式结晶流程）
+- `src/crystal/memory/index.ts` — `CrystalMemoryComponent` / `LocalCrystalMemoryStore`
 - `src/crystal/skills/index.ts` — Skill 升格（见 `skill.system.md`）
 - `src/agent/runtime/reflection.worker.ts` — 反思 worker 调度
 - `templates/prompts/reflection.candidate.md` — 反思抽取提示
@@ -20,7 +20,7 @@ flowchart LR
     RT --> LLM["reflection.candidate.md<br/>抽 symbols / bucket / coordinates"]
     LLM --> Cand["ReflectionCandidate[]"]
     Cand --> Apply["MemoryModule.applyReflection"]
-    Apply --> Crystal["CrystalMemoryService.recordTurn"]
+    Apply --> Crystal["CrystalMemoryComponent.recordTurn"]
     Crystal --> Atom["写 episode / memory_node 候选"]
     Atom --> Gate1["门 1：sourceKind weight gate"]
     Gate1 --> Node["memory_node"]
@@ -71,7 +71,7 @@ sequenceDiagram
     participant RT as RuntimeModule
     participant LLM as ModelClient
     participant Mem as MemoryModule
-    participant CR as CrystalMemoryService
+    participant CR as CrystalMemoryComponent
     RT->>LLM: reflection.candidate.md(turn 摘要)
     LLM-->>RT: ReflectionCandidate[]（JSON）
     RT->>Mem: applyReflection(candidates)

@@ -6,7 +6,6 @@ import type {
     MemorySourceKind,
 } from "../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
-import type { MemoryAction } from "./actions.ts";
 
 export interface MemoryRecord {
     id: string;
@@ -85,6 +84,8 @@ export interface MemoryCandidate {
 
 export interface MemoryEpisodeProvenance {
     behaviorSnapshotId?: string;
+    /** Summary/link id for a blackboard turn. Stored as structured provenance, not as prompt-visible reasoning. */
+    blackboardTurnId?: string;
     mcpCalls?: Array<{
         error?: string;
         ok: boolean;
@@ -121,5 +122,3 @@ export interface MemoryTurn {
     reply: GatewayReply;
     context: RuntimeContext;
 }
-
-export type { MemoryAction } from "./actions.ts";

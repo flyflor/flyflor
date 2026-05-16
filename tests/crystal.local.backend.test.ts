@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CrystalMemoryService, LocalCrystalMemoryStore } from "../src/crystal/memory/index.ts";
+import { CrystalMemoryComponent, LocalCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import { evidence } from "../src/crystal/reflection/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
 
@@ -10,7 +10,7 @@ describe("local crystal backend", () => {
     test("persists gems in crystal.db and recalls them through the in-process vector index", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-crystal-local-"));
         const store = new LocalCrystalMemoryStore({ dbFile: join(root, "crystal.db") });
-        const svc = new CrystalMemoryService(config(root), store);
+        const svc = new CrystalMemoryComponent(config(root), store);
 
         try {
             await svc.recordTurn({

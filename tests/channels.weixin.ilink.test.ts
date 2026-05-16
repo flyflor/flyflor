@@ -141,4 +141,49 @@ describe("WeixinIlinkAdapter", () => {
             globalThis.fetch = originalFetch;
         }
     });
+
+    test("retries sendmessage without context token only on structured iLink expiry code", async () => {
+        const instance = adapter();
+        const originalFetch = globalThis.fetch;
+        const calls: Array<{ body: Record<string, unknown>; url: string }> = [];
+        globalThis.fetch = (async (input, init) => {
+            calls.push({
+                url: String(input instanceof Request ? input.url : input),
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            if (calls.length === 1) {
+                return new Response(JSON.stringify({ ret: -14 }), {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                });
+            }
+            return new Response(JSON.stringify({ ret: 0 }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
+        }) as typeof fetch;
+        try {
+            await (
+                instance as unknown as {
+                    sendReply(
+                        update: { context_token: string; from_user_id: string },
+                        reply: GatewayReply,
+                    ): Promise<void>;
+                }
+            ).sendReply(
+                { context_token: "ctx-expired", from_user_id: "wxid-user" },
+                {
+                    messageId: "reply-1",
+                    route: { channel: Channel.WeixinIlink, chatId: "wxid-user", chatType: ChatType.Direct },
+                    text: "final reply",
+                },
+            );
+
+            expect(calls).toHaveLength(2);
+            expect((calls[0]?.body.msg as Record<string, unknown> | undefined)?.context_token).toBe("ctx-expired");
+            expect((calls[1]?.body.msg as Record<string, unknown> | undefined)?.context_token).toBeUndefined();
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
 });

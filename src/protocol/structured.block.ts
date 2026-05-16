@@ -13,10 +13,13 @@
 
 export const StructuredBlockProtocol = {
     AgentAsk: "agentAsk",
+    ContextFork: "contextFork",
     GhostDecisions: "ghostDecisions",
     IdentityAppend: "identityAppend",
     MemoryActions: "memoryActions",
     McpCalls: "mcpCalls",
+    SceneRecord: "sceneRecord",
+    TaskPlan: "taskPlan",
 } as const;
 
 export type StructuredBlockProtocol = (typeof StructuredBlockProtocol)[keyof typeof StructuredBlockProtocol];
@@ -32,10 +35,13 @@ const STRUCTURED_BLOCK_TAGS: Record<StructuredBlockProtocol, string> = {
     // 新增模型可输出的内部协议块时先登记在这里，再由业务模块挂自己的 JSON 校验器。
     // 这样 tag 拼写、边界符和剥离行为只有一个来源，避免不同模块写出互不兼容的坏数据。
     [StructuredBlockProtocol.AgentAsk]: "flyflor_agent_ask",
+    [StructuredBlockProtocol.ContextFork]: "flyflor_context_fork",
     [StructuredBlockProtocol.GhostDecisions]: "flyflor_ghost_decisions",
     [StructuredBlockProtocol.IdentityAppend]: "flyflor_identity_append",
     [StructuredBlockProtocol.MemoryActions]: "flyflor_memory_actions",
     [StructuredBlockProtocol.McpCalls]: "flyflor_mcp_calls",
+    [StructuredBlockProtocol.SceneRecord]: "flyflor_scene_record",
+    [StructuredBlockProtocol.TaskPlan]: "flyflor_task_plan",
 };
 
 export const STRUCTURED_BLOCKS: Record<StructuredBlockProtocol, StructuredBlockDefinition> = Object.fromEntries(

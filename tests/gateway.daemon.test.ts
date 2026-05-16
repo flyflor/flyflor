@@ -3,10 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+    buildGatewayServicePlan,
     gatewayDaemonStatus,
+    GatewayServiceTarget,
     resolveDaemonPaths,
     startGatewayDaemon,
     stopGatewayDaemon,
+    writeGatewayServicePlan,
 } from "../src/agent/gateway/daemon.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 
@@ -113,5 +116,72 @@ describe("gateway daemon (PID file lifecycle)", () => {
         expect(second.started).toBe(false);
         expect(second.pid).toBe(first.pid);
         await stopGatewayDaemon(paths, { graceTimeoutMs: 500 });
+    });
+
+    test("start redirects daemon stdout and stderr to the gateway log file", async () => {
+        const paths = await makePaths();
+        const result = await startGatewayDaemon(paths, {
+            binary: "/bin/sh",
+            argv: ["-c", "echo daemon-out; echo daemon-err >&2; sleep 30"],
+            healthTimeoutMs: 300,
+        });
+        await Bun.sleep(100);
+        const log = await readFile(result.logFile, "utf8");
+        expect(log).toContain("daemon-out");
+        expect(log).toContain("daemon-err");
+        await stopGatewayDaemon(paths, { graceTimeoutMs: 500 });
+    });
+
+    test("renders and writes a systemd user service plan without starting host services", async () => {
+        const paths = await makePaths();
+        const plan = buildGatewayServicePlan(paths, {
+            binary: "/opt/flyflor/bin/flyflor",
+            target: GatewayServiceTarget.Systemd,
+            userHome: join(paths.home, "user"),
+        });
+        expect(plan.servicePath).toBe(join(paths.home, "user", ".config", "systemd", "user", "flyflor-gateway.service"));
+        expect(plan.content).toContain("ExecStart=/opt/flyflor/bin/flyflor gateway run");
+        expect(plan.content).toContain(`WorkingDirectory=${paths.projectDir}`);
+        expect(plan.installCommands).toContain("systemctl --user daemon-reload");
+
+        await writeGatewayServicePlan(plan);
+        expect(await readFile(plan.servicePath, "utf8")).toBe(plan.content);
+    });
+
+    test("renders a launchd plist with explicit ProgramArguments and logs", async () => {
+        const paths = await makePaths();
+        const plan = buildGatewayServicePlan(paths, {
+            binary: "/Applications/FlyFlor/flyflor",
+            target: GatewayServiceTarget.Launchd,
+            userHome: join(paths.home, "user"),
+        });
+        expect(plan.servicePath).toBe(join(paths.home, "user", "Library", "LaunchAgents", "com.flyflor.gateway.plist"));
+        expect(plan.content).toContain("<key>ProgramArguments</key>");
+        expect(plan.content).toContain("<string>/Applications/FlyFlor/flyflor</string>");
+        expect(plan.content).toContain("<string>gateway</string>");
+        expect(plan.content).toContain("<string>run</string>");
+        expect(plan.content).toContain(resolveDaemonPaths(paths).logFile);
+        expect(plan.installCommands.some((command) => command.includes("launchctl bootstrap"))).toBe(true);
+    });
+
+    test("quotes service plans without losing literal paths or launchctl targets", async () => {
+        const paths = await makePaths();
+        paths.projectDir = join(paths.projectDir, "Project 100%");
+
+        const systemd = buildGatewayServicePlan(paths, {
+            binary: "/opt/Fly Flor/bin/fly\"flor",
+            target: GatewayServiceTarget.Systemd,
+            userHome: join(paths.home, "user"),
+        });
+        expect(systemd.content).toContain(`ExecStart="/opt/Fly Flor/bin/fly\\"flor" gateway run`);
+        expect(systemd.content).toContain(`WorkingDirectory="${paths.projectDir.replace(/%/gu, "%%")}"`);
+
+        const launchd = buildGatewayServicePlan(paths, {
+            target: GatewayServiceTarget.Launchd,
+            serviceName: "com.flyflor.gateway",
+            userHome: join(paths.home, "user"),
+        });
+        expect(launchd.startCommand).toBe(`launchctl kickstart -k "gui/$(id -u)/com.flyflor.gateway"`);
+        expect(launchd.statusCommand).toBe(`launchctl print "gui/$(id -u)/com.flyflor.gateway"`);
     });
 });

@@ -9,7 +9,7 @@ import {
     type FlyflorConfig,
     type FlyflorPaths,
 } from "../src/config/index.ts";
-import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import {
     MemoryModule,
     RuntimeModule,
@@ -51,7 +51,7 @@ import type {
 } from "../src/protocol/contracts/index.ts";
 import {
     Inject,
-    Service,
+    Component,
     assertModuleMetadata,
     createInjectionToken,
     componentRegistry,
@@ -61,16 +61,17 @@ import {
     Worker,
     type EventSink,
 } from "../src/agent/di/index.ts";
+import type { BrainStore } from "../src/components/memory/brain.store.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
 const TEST_REVIEW_ROLE = "review-worker";
 
-@Service("test-service")
-class TestService {}
+@Component("test-component")
+class TestComponent {}
 
 class TestConsumer {
-    constructor(@Inject(TestService) readonly dependency: TestService) {}
+    constructor(@Inject(TestComponent) readonly dependency: TestComponent) {}
 }
 
 afterEach(async () => {
@@ -640,6 +641,44 @@ describe("Agent memory stability and latency", () => {
         expect(prompt).not.toContain("第一轮会被固化。");
     });
 
+    test("injects context fork scope only when caller passes an explicit fork id", async () => {
+        const config = await testConfig();
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
+        await memory.warmup();
+        try {
+            const brain = (memory as unknown as { brain: BrainStore }).brain;
+            brain.writeContextFork({
+                id: "fork-explicit",
+                userId: "user-a",
+                title: "Release fork",
+                summary: "Isolated release discussion.",
+                scopeSummary: "Release blockers and rollout only.",
+                maxContextTokens: 4096,
+                inheritedEventIds: ["turn-a", "turn-b"],
+                createdAt: "2026-05-09T02:00:00.000Z",
+                updatedAt: "2026-05-09T02:00:00.000Z",
+            });
+
+            const withoutFork = await memory.buildPrompt(gatewayMessage("继续。"), runtimeContext());
+            const withFork = await memory.buildPrompt(gatewayMessage("继续。"), {
+                ...runtimeContext(),
+                contextForkId: "fork-explicit",
+            });
+            const otherUser = await memory.buildPrompt(
+                { ...gatewayMessage("继续。"), user: { id: "other-user" } },
+                { ...runtimeContext(), contextForkId: "fork-explicit" },
+            );
+
+            expect(withoutFork).not.toContain("[context-fork]");
+            expect(withFork).toContain("[context-fork]");
+            expect(withFork).toContain("id: fork-explicit");
+            expect(withFork).toContain("scope: Release blockers and rollout only.");
+            expect(otherUser).not.toContain("[context-fork]");
+        } finally {
+            memory.dispose();
+        }
+    });
+
     test("persists explicit memory actions without reading user text through dictionaries", async () => {
         const config = await testConfig();
         const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, new CapturingSink());
@@ -766,7 +805,7 @@ describe("Agent memory stability and latency", () => {
     test("crystal candidates keep project-local memory provenance metadata", async () => {
         const config = await testConfig();
         const store = new InMemoryCrystalMemoryStore();
-        const crystal = new CrystalMemoryService(
+        const crystal = new CrystalMemoryComponent(
             {
                 ...config.memory.crystal,
                 enabled: true,
@@ -1155,18 +1194,18 @@ describe("FCP provider metadata", () => {
 });
 
 describe("FCP dependency container", () => {
-    test("records module-local service and explicit inject metadata", () => {
-        const service = componentRegistry.assertProvider(TestService);
+    test("records module-local component and explicit inject metadata", () => {
+        const service = componentRegistry.assertProvider(TestComponent);
         const injections = readInjectionMetadata(TestConsumer);
 
         expect(service).toMatchObject({
-            kind: ComponentKind.Provider,
-            provider: { scope: "singleton", token: "capability.test-service" },
+            kind: ComponentKind.Component,
+            provider: { scope: "singleton", token: "capability.test-component" },
         });
         expect(injections).toEqual([
             expect.objectContaining({
                 parameterIndex: 0,
-                token: TestService,
+                token: TestComponent,
             }),
         ]);
     });
@@ -1177,22 +1216,22 @@ describe("FCP dependency container", () => {
         let created = 0;
 
         container.bindSingleton(configToken, { mode: "stable" });
-        class PluginService {
+        class PluginComponent {
             constructor(readonly id: string) {}
         }
 
-        container.bindProvider(PluginService, (scope) => {
+        container.bindProvider(PluginComponent, (scope) => {
             created += 1;
             const config = scope.resolve(configToken);
-            return new PluginService(`${config.mode}-service`);
+            return new PluginComponent(`${config.mode}-component`);
         });
 
         expect(container.resolve(configToken)).toEqual({ mode: "stable" });
-        expect(container.resolve(PluginService)).toEqual({ id: "stable-service" });
-        expect(container.resolve(PluginService)).toEqual({ id: "stable-service" });
+        expect(container.resolve(PluginComponent)).toEqual({ id: "stable-component" });
+        expect(container.resolve(PluginComponent)).toEqual({ id: "stable-component" });
         expect(created).toBe(1);
         expect(container.has(configToken)).toBe(true);
-        expect(container.has(PluginService)).toBe(true);
+        expect(container.has(PluginComponent)).toBe(true);
     });
 });
 

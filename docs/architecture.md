@@ -8,7 +8,8 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 
 - `app.ts` — 程序入口，仅做版本输出与命令分派
 - `src/app.ts` — `FlyFlor` composition root，显式 DI 装配
-- `src/agent/components.ts` — 边界基类 `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox`
+- `src/components/` — shared component base classes `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox` / `BrainComponent` / `GraphComponent` / `SQLiteComponent`
+- `src/agent/components.ts` — legacy compatibility re-export, 新代码应直接依赖 `src/components`
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、事件、进程信封
 - `src/llm/`、`src/crystal/`、`src/neural/`、`src/agent/`、`src/command/`、`src/config/`
@@ -19,7 +20,7 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 | --- | --- | --- | --- |
 | 流体智力 LLM | `src/llm` | 当前任务的理解、推理、生成、工具编排 | OpenAI 兼容 / Anthropic 兼容 |
 | 晶体智力 Crystal | `src/crystal` | 反思候选 → Gem 升格、Skill 与方法论沉淀 | local `crystal.db` + VectorIndex |
-| 海马体 Neural | `src/neural/memory` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计 | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
+| 海马体 Neural | `src/neural` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计、计划/fork/场景摘要落 brain.db | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
 
 ## 分层结构图
 
@@ -47,7 +48,7 @@ flowchart TB
     Memory --> HotCompression["HotMemoryCompressionWorker<br/>隔离压缩审计"]
     Memory --> SQLite["SQLite 索引<br/>candidates/offers/search"]
     Memory --> Graph["CrystalComponent<br/>crystal.db + VectorIndex<br/>episode/memory_node/gem/summary_embedding"]
-    Memory --> Crystal["CrystalMemoryService"]
+    Memory --> Crystal["CrystalMemoryComponent"]
     HotCompression --> SQLiteBrain["brain.db memory_events<br/>hot-memory-compression"]
 
     Blackboard --> BlackboardSqlite["SQLite 黑板存储<br/>turn/step/decision/lease"]
@@ -100,7 +101,7 @@ sequenceDiagram
 
 ## 边界继承约定
 
-所有边界模块继承 `src/agent/components.ts` 中的空抽象类来表达语义：
+所有边界模块继承 `src/components/index.ts` 中的空抽象类来表达语义；`src/agent/components.ts` 仅保留旧路径兼容，不再作为新代码入口：
 
 ```ts
 abstract class Gateway {}
@@ -108,14 +109,18 @@ abstract class Blackboard {}
 abstract class Runtime {}
 abstract class Memory {}
 abstract class Sandbox {}
+abstract class BrainComponent {}
+abstract class GraphComponent {}
+abstract class SQLiteComponent {}
+abstract class CrystalComponent {}
 ```
 
-实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryService extends CrystalComponent`。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。`MemoryComponent` / `CrystalComponent` 是默认且唯一对外描述的记忆承载层。
+实现类形如 `class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。本地存储也必须挂到组件基类：`BrainStore extends BrainComponent`、`SQLiteGraphStore extends GraphComponent`、`SQLiteMemoryStore extends SQLiteComponent`、Markdown/project working memory store extends `MemoryComponent`。继承关系只用于身份标识，不在基类放业务逻辑；`@Module` 与 `@Component` 复用 `Provide` metadata 注册路径，运行期连线由 `DependencyContainer` 完成。`MemoryComponent` / `CrystalComponent` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` 是默认且唯一对外描述的组件承载层。
 
 默认推断规则：
 
-- core 基类推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox → control layer`，其他 component → capability layer。
-- 类名推断 `name`：去掉 `Module/Component/Service/Store` 后转 kebab-case。
+- core 基类推断 `kind` 与 `layer`：`Runtime → runtime layer`，`Gateway/Blackboard/Memory/Sandbox/BrainComponent/GraphComponent/SQLiteComponent → control layer`，其他 component → capability layer。
+- 类名推断 `name`：去掉 `Module/Component/Store` 后转 kebab-case。
 - provider 默认 singleton；需要重新 `new` 的组件显式使用 `ProviderScope.Factory`。
 - 只有默认推断不够表达边界时才写 `kind/layer/name/provider`，避免装饰器参数变成重复配置。
 - DI token 优先是 class 对象本身，例如 `@Inject(RuntimeModule)`；非 class 值才用 `createInjectionToken()` 生成对象 token。禁止新增裸字符串 token。
@@ -128,7 +133,7 @@ abstract class Sandbox {}
   - `bindFactory(token, factory)` / `bindTransient(token, factory)` — 每次 resolve 创建新实例
   - `bindComponent(token, factory, metadata)` — 按 `@Module` / `@Component` 的 provider scope 绑定
 - 仅在 composition root 注入；运行时只 `resolve` 已注册 token。
-- `@Module` / `@Provide` / `@Inject` / `@Service` / `@Component` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
+- `@Module` / `@Provide` / `@Inject` / `@Component` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
 - `FlyFlorTokens` 列出 10 个对外 token：`Container / Mode / Config / Events / Model / Workers / Blackboard / Runtime / Adapters / Gateway`。
 
 ## 模块边界硬约束
@@ -145,7 +150,7 @@ abstract class Sandbox {}
 | `src/agent/mcp` | server/client 适配 | 跑非 MCP 工具、维护路由策略 |
 | `src/llm` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |
 | `src/crystal` | reflection、Gem、Skill | 持有渠道协议、绕过证据门 |
-| `src/neural/memory` | 海马体 + markdown + 索引 + 长期图 | 调用模型决策 |
+| `src/neural` | 海马体策略、回放、衰减、调度 | 调用模型决策 |
 | `src/protocol` | 枚举、事件、信封 | 业务决策、状态存储 |
 
 ## 进程模型
@@ -195,4 +200,4 @@ interface FlyFlorDependencies {
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
 - `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；后续如果新增可执行能力，必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
 - 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt/project/runtime dream worker；导入方向需要继续收敛。
-- `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot 与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。
+- `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot、TaskPlan / ContextFork / SceneRecord 摘要与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

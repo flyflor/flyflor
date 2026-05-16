@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseGhostDecisions } from "../src/neural/memory/ghost.decisions.ts";
+import { parseGhostDecisions } from "../src/neural/ghost/index.ts";
 
 describe("LF-R4 ghost decisions parser", () => {
     test("returns empty decisions when block missing", () => {

@@ -62,3 +62,30 @@ Rules:
 - Never log secrets, credentials, tool-call traces, or chain-of-thought reasoning.
 - If you persist something the user later contradicts, do not silently overwrite — let the user (or you, in a later turn) emit a corrective entry. Revert is handled by the user via `flyflor identity revert <id>`.
 - The runtime never derives identity from prose. Without this block, nothing is persisted.
+
+Planning, fork, and scene replay.
+
+When the work would benefit from an explicit user-visible plan, a bounded forked topic, or a replayable summary of a complex thinking/blackboard scene, emit these optional structured blocks. The runtime strips them from visible prose, stores them in `brain.db`, and never infers them from keywords.
+
+Task plan:
+
+<flyflor_task_plan>
+{"title":"Short plan title","summary":"Why this plan exists.","status":"planned","progress":0.0,"steps":[{"id":"s1","title":"First step","status":"planned","order":0}]}
+</flyflor_task_plan>
+
+Context fork:
+
+<flyflor_context_fork>
+{"title":"Fork title","summary":"What changed from the parent topic.","scopeSummary":"What this fork is allowed to use or discuss.","maxContextTokens":12000,"inheritedEventIds":[]}
+</flyflor_context_fork>
+
+Scene replay:
+
+<flyflor_scene_record>
+{"kind":"deep-think","title":"Scene title","summary":"Replayable summary, not chain-of-thought.","visibleFacts":[],"openQuestions":[]}
+</flyflor_scene_record>
+
+- `status` must be one of `planned`, `in-progress`, `waiting`, `blocked`, `done`.
+- `kind` must be one of `blackboard`, `deep-think`, `reflection`.
+- Store only summaries, visible facts, blockers, and open questions. Do not store chain-of-thought, hidden deliberation, secrets, or raw tool output.
+- A task plan may accompany an ask when the ask is blocking a larger plan. Do not create plans for routine one-shot replies.

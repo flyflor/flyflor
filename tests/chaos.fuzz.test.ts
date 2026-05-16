@@ -12,8 +12,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LruCache } from "../src/neural/memory/lru.cache.ts";
-import { BrainStore, type BrainPromptAtomWrite } from "../src/neural/memory/brain.store.ts";
+import { LruCache } from "../src/components/memory/lru.cache.ts";
+import { BrainStore, type BrainPromptAtomWrite } from "../src/components/memory/brain.store.ts";
 import { spreadActivation } from "../src/neural/memory/activation.ts";
 import {
     DecayLayer,
@@ -35,7 +35,7 @@ import {
     detectSkillPromotion,
     ProjectTriggerKind,
 } from "../src/agent/project/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working.store.ts";
+import type { EpisodeRecord } from "../src/components/memory/working.store.ts";
 import { AtomStage, MemoryEventType, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────

@@ -15,11 +15,16 @@ export {
     type MessageDedupStore,
 } from "./dedup.ts";
 export {
+    buildGatewayServicePlan,
     gatewayDaemonStatus,
+    GatewayServiceTarget,
     resolveDaemonPaths,
     restartGatewayDaemon,
     startGatewayDaemon,
     stopGatewayDaemon,
+    writeGatewayServicePlan,
     type DaemonStatus,
     type GatewayDaemonPaths,
+    type GatewayServicePlan,
+    type GatewayServicePlanOptions,
 } from "./daemon.ts";

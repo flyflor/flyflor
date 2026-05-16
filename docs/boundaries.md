@@ -30,7 +30,7 @@ templates/        提示词与记忆 Markdown 模板
 命名规则（点分后缀是硬规则）：
 
 - 目录入口统一 `index.ts`；跨目录导入优先指向 `index.ts`。
-- 实现文件按角色加点分后缀：`*.module.ts` / `*.service.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.route.ts` / `*.executor.ts`。
+- 实现文件按角色加点分后缀：`*.module.ts` / `*.component.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.route.ts` / `*.executor.ts`。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
 - 单职责短文件保留语义名：`types.ts` / `scope.ts`。
@@ -67,10 +67,11 @@ flowchart LR
 
 ## 4. Decorator 白名单
 
-只保留：`@Module` / `@Provide` / `@Inject` / `@Service` / `@Component` / `@Worker` / `@Channel` / `@Plugin`。
+只保留：`@Module` / `@Provide` / `@Inject` / `@Component` / `@Worker` / `@Channel` / `@Plugin`。
 
 - `@Provide` 是注入底座；`@Module` / `@Component` 必须复用 `Provide` 的 metadata 注册路径，禁止各自维护第二套注入协议。
-- Gateway / Blackboard / Memory / Runtime / Sandbox / Crystal 等边界必须优先用 core 基类表达：`class MemoryModule extends Memory`、`class CrystalMemoryService extends CrystalComponent`。
+- Gateway / Blackboard / Memory / Runtime / Sandbox / Crystal 等边界必须优先用 core 基类表达：`class MemoryModule extends Memory`、`class CrystalMemoryComponent extends CrystalComponent`。
+- 本地状态与 IO 存储属于 Component：`BrainStore`、`SQLiteGraphStore`、`SQLiteMemoryStore`、Markdown/project memory store 等必须继承 `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `MemoryComponent`，避免回退成额外中间层或散落工具类。
 - `kind` / `layer` / `name` / `provider` 默认由 core 基类与类名推断；只有偏离默认值（例如非默认 token、factory scope、channel 特例）时才显式写。
 - `@Component` 默认是可注入单例组件；需要每次 `resolve` 重新构造时必须显式写 `provider: { scope: ProviderScope.Factory }`。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
@@ -85,7 +86,7 @@ flowchart LR
 - 外部输入进入核心前必须 schema 校验；`unknown` / `any` 只能在第三方边界短暂存在，必须在同一函数收敛。
 - 错误必须保留机器可读 `code`，用户文案与调试信息分离。
 - 协议值使用枚举或常量对象，不裸写字符串。新增协议值先放 `src/protocol/contracts/enums.ts`。
-- 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。
+- 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。当前允许的内部块包括 `AgentAsk`、`GhostDecisions`、`IdentityAppend`、`MemoryActions`、`McpCalls`、`TaskPlan`、`ContextFork`、`SceneRecord`。
 - Gateway 出站生命周期（typing、message edit、card update、reaction、thread create）必须走 `GatewayOutboundOperation` + `GatewayChannelCapabilities`；adapter 不得用自然语言文本、私有字符串或隐式布尔推断平台能力。
 - 新增代码必须带必要注释解释边界、生命周期、副作用或协议意图；修改旧代码时补齐被触碰路径的关键注释。注释应解释“为什么/边界是什么”，避免机械复述代码。
 
@@ -102,6 +103,8 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 运行时不依赖用户机器存在 `node_modules`。
 - 不从依赖包目录读取 schema / wasm / 二进制 / 模板，除非构建明确把它们复制到产物旁。
 - 内部提示词模板必须由安装脚本复制到 `~/.flyflor/prompts` 与 `~/.flyflor/templates/*`；缺失即报错，不写兜底。
+- 安装分发固定三条路径：`install.sh` 只做 release 二进制 + 模板包安装；`install.source.sh` / `install.ps1` 必须把源码 checkout 留在用户本机；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。
+- curl-pipe / PowerShell bootstrap 脚本属于发布协议，新增选项必须同步 README 与 `tests/install.script.test.ts`，避免安装入口漂移。
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
 - 禁止要求安装 Node.js；开发与发布都以 Bun 为准。

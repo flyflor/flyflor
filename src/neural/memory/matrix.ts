@@ -1,7 +1,7 @@
 import type { MemoryMatrixConfig } from "../../config/index.ts";
 import type { GatewayMessage, GatewayReply } from "../../protocol/contracts/index.ts";
 import type { MemoryAction } from "./actions.ts";
-import type { MemoryMatrixResult, MemoryWeights } from "./types.ts";
+import type { MemoryMatrixResult, MemoryWeights } from "../../components/memory/types.ts";
 import SentimentAnalyzer from "natural/lib/natural/sentiment/SentimentAnalyzer.js";
 import PorterStemmer from "natural/lib/natural/stemmers/porter_stemmer.js";
 import TfIdf from "natural/lib/natural/tfidf/tfidf.js";

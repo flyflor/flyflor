@@ -1,4 +1,15 @@
-import type { AskChoiceMeta, AskMeta, AskQuestionMeta, BlackboardMeta, McpTrace } from "./types.ts";
+import type {
+    AskChoiceMeta,
+    AskMeta,
+    AskQuestionMeta,
+    BlackboardMeta,
+    ContextForkMeta,
+    McpTrace,
+    PlanningMeta,
+    SceneRecordMeta,
+    TaskPlanMeta,
+    TaskPlanStepMeta,
+} from "./types.ts";
 
 export function readRecord(value: unknown): Record<string, unknown> | null {
     if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -58,6 +69,93 @@ export function readAskMeta(meta: Record<string, unknown> | null): AskMeta | nul
         reason: readStrictString(record.reason, "ask.reason"),
         snapshotId: readStrictString(record.snapshotId, "ask.snapshotId"),
     };
+}
+
+export function readPlanningMeta(meta: Record<string, unknown> | null): PlanningMeta | null {
+    if (!meta) return null;
+    const record = readRecord(meta.planning);
+    if (!record) return null;
+    const taskPlans = readTaskPlans(record.taskPlans);
+    const contextForks = readContextForks(record.contextForks);
+    const scenes = readScenes(record.scenes);
+    if (taskPlans.length === 0 && contextForks.length === 0 && scenes.length === 0) return null;
+    return { contextForks, scenes, taskPlans };
+}
+
+function readTaskPlans(value: unknown): TaskPlanMeta[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((raw) => {
+        const record = readRecord(raw);
+        const id = readString(record?.id);
+        const title = readString(record?.title);
+        const summary = readString(record?.summary);
+        const status = readString(record?.status);
+        const progress = readNumber(record?.progress);
+        const stepCount = readNumber(record?.stepCount);
+        const completedStepCount = readNumber(record?.completedStepCount);
+        if (!record || !id || !title || !summary || !status || progress === undefined || stepCount === undefined || completedStepCount === undefined) {
+            return [];
+        }
+        return [{
+            id,
+            title,
+            summary,
+            status,
+            progress,
+            stepCount,
+            completedStepCount,
+            steps: readTaskPlanSteps(record.steps),
+        }];
+    });
+}
+
+function readTaskPlanSteps(value: unknown): TaskPlanStepMeta[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const steps = value.flatMap((raw) => {
+        const record = readRecord(raw);
+        const id = readString(record?.id);
+        const title = readString(record?.title);
+        const status = readString(record?.status);
+        const order = readNumber(record?.order);
+        if (!record || !id || !title || !status || order === undefined) return [];
+        return [{ id, title, status, order, progress: readNumber(record.progress) }];
+    });
+    return steps.length > 0 ? steps : undefined;
+}
+
+function readContextForks(value: unknown): ContextForkMeta[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((raw) => {
+        const record = readRecord(raw);
+        const id = readString(record?.id);
+        const title = readString(record?.title);
+        const scopeSummary = readString(record?.scopeSummary);
+        const maxContextTokens = readNumber(record?.maxContextTokens);
+        if (!record || !id || !title || !scopeSummary || maxContextTokens === undefined) return [];
+        return [{ id, title, scopeSummary, maxContextTokens }];
+    });
+}
+
+function readScenes(value: unknown): SceneRecordMeta[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((raw) => {
+        const record = readRecord(raw);
+        const id = readString(record?.id);
+        const kind = readString(record?.kind);
+        const title = readString(record?.title);
+        const summary = readString(record?.summary);
+        if (!record || !id || !kind || !title || !summary) return [];
+        return [{
+            id,
+            kind,
+            title,
+            summary,
+            detail: readString(record.detail),
+            blackboardTurnId: readString(record.blackboardTurnId),
+            taskPlanId: readString(record.taskPlanId),
+            contextForkId: readString(record.contextForkId),
+        }];
+    });
 }
 
 function readAskChoices(value: unknown, path: string): AskChoiceMeta[] | undefined {

@@ -120,7 +120,7 @@ flowchart LR
     Q --> Brain[BrainStore<br/>brain event prompt recall + ask/ghost/identity/codename/eq state]
     Q --> Hippo[Hippocampus context<br/>MemoryComponent local ring]
     Q --> Project[ProjectMemoryStore.snapshot<br/>项目局部记忆]
-    Q --> Crystal[CrystalMemoryService.recall<br/>CrystalComponent Gem]
+    Q --> Crystal[CrystalMemoryComponent.recall<br/>CrystalComponent Gem]
     Q --> SqliteSearch[SQLiteMemoryStore.search]
     Markdown --> Render[renderMemoryPrompt]
     Brain --> Render
@@ -146,7 +146,9 @@ flowchart LR
 
 Ghost Context 不是普通 retrieved memory：active / resumed ghost 通过 `[ghost-hint]` 单独进入 prompt，模型用结构化 `resume` / `fork` / `fresh` 决策让分支继续、降权或回到主线。
 
-RuntimeModule 另外暴露 `listChatHistory(userId, options)` 给 chat TUI 做 out-of-band 历史回放；这条路径只读 `brain.db` 事件，不进入 prompt 装配。
+ContextFork 不等于 session。调用方只有在 `RuntimeContext.contextForkId` 显式传入已落库的 fork id 时，MemoryComponent 才注入 `[context-fork]` 范围摘要与 token 预算；不传 id 时不会靠自然语言猜测分叉。
+
+RuntimeModule 另外暴露 `listChatHistory(userId, options)` 给 chat TUI 做 out-of-band 历史回放；这条路径只读 `brain.db` 事件与 `task_plans` / `context_forks` / `scene_records` 摘要表，不进入 prompt 装配。
 
 ## MCP 工具循环
 
@@ -202,7 +204,8 @@ flowchart LR
     Cand --> SqliteCand[sqlite.addCandidate<br/>autoPromote 时直接 markdown 写入]
     Trig --> ProjectMem[ProjectMemoryStore.recordTurn<br/>显式意图通道]
     Action --> BrainEvent[BrainStore.appendEvent<br/>brain.db memory_events + content.atoms]
-    Cand -.-> CrystalAsync[CrystalMemoryService.recordTurn]
+    Planning[TaskPlan / ContextFork / SceneRecord blocks] --> BrainPlanning[BrainStore planning tables<br/>summary-only metadata]
+    Cand -.-> CrystalAsync[CrystalMemoryComponent.recordTurn]
 ```
 
 随后 fire-and-forget 启动：
@@ -257,7 +260,7 @@ interface GatewayReply {
 
 ## 运行边界 / 后续增强
 
-- `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一文件，后续可继续抽 service。
+- `RuntimeModule` 已拆 phase，但工具循环、结构化块解析、persist 副作用仍在同一组件内；后续只在职责膨胀时抽 Component，不新增额外中间层。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走进程内 Map；多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。

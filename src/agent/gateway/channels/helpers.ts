@@ -153,19 +153,46 @@ export function truncatePlatformText(text: string, limit: number): string {
     return text.slice(0, Math.max(0, limit - 1)).trimEnd();
 }
 
+export class PlatformResponseError extends Error {
+    constructor(
+        message: string,
+        readonly platform: string,
+        readonly details: {
+            code?: number | string;
+            payload?: unknown;
+            status?: number;
+        } = {},
+    ) {
+        super(message);
+        this.name = "PlatformResponseError";
+    }
+}
+
 export async function assertPlatformResponse(response: Response, platform: string): Promise<unknown> {
     const text = await response.text();
     const payload = parseJson(text);
     if (!response.ok) {
-        throw new Error(`${platform} send failed: ${response.status}${text ? ` ${text.slice(0, 200)}` : ""}`);
+        throw new PlatformResponseError(
+            `${platform} send failed: ${response.status}${text ? ` ${text.slice(0, 200)}` : ""}`,
+            platform,
+            { status: response.status, payload },
+        );
     }
     if (isRecord(payload)) {
         if (payload.ok === false) {
-            throw new Error(`${platform} send failed: ${String(payload.error ?? "ok=false")}`);
+            throw new PlatformResponseError(
+                `${platform} send failed: ${String(payload.error ?? "ok=false")}`,
+                platform,
+                { code: typeof payload.error === "string" ? payload.error : undefined, payload },
+            );
         }
         const ret = payload.ret ?? payload.errcode ?? payload.code;
         if (typeof ret === "number" && ret !== 0) {
-            throw new Error(`${platform} send failed: ${ret} ${String(payload.errmsg ?? payload.message ?? "")}`);
+            throw new PlatformResponseError(
+                `${platform} send failed: ${ret} ${String(payload.errmsg ?? payload.message ?? "")}`,
+                platform,
+                { code: ret, payload },
+            );
         }
     }
     return payload;

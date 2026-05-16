@@ -20,10 +20,13 @@ import { loadConfig, type FlyflorConfig } from "../../config/index.ts";
 import type { FlyFlor } from "../../app.ts";
 import { FlyFlorTokens, getFlyFlor } from "../../app.ts";
 import {
+    buildGatewayServicePlan,
     gatewayDaemonStatus,
+    GatewayServiceTarget,
     restartGatewayDaemon,
     startGatewayDaemon,
     stopGatewayDaemon,
+    writeGatewayServicePlan,
 } from "../../agent/gateway/index.ts";
 import { RetrospectiveLog } from "../../neural/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
@@ -151,6 +154,22 @@ const COMMAND_SPECS: CommandSpec[] = [
             { name: "stop", help: "Stop gateway service" },
             { name: "restart", help: "Restart gateway service" },
             { name: "status", help: "Show gateway status", options: [["--deep", "Deep status check"]] },
+            {
+                name: "service",
+                help: "Render launchd/systemd service files",
+                subcommands: [
+                    {
+                        name: "plan",
+                        help: "Print or write a user service definition",
+                        options: [
+                            ["--target <target>", "Service target: systemd or launchd"],
+                            ["--binary <path>", "Flyflor binary path to run"],
+                            ["--write", "Write the rendered service file to its target path"],
+                            ["--json", "Print machine-readable install plan"],
+                        ],
+                    },
+                ],
+            },
             { name: "setup", help: "Configure messaging platforms" },
         ],
     },
@@ -870,6 +889,23 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             );
             return;
         }
+        if (sub === "service" && path[2] === "plan") {
+            const opts = command.opts<{ binary?: string; json?: boolean; target?: string; write?: boolean }>();
+            const app = await cliApp();
+            const plan = buildGatewayServicePlan(app.resolve(FlyFlorTokens.Config).paths, {
+                binary: opts.binary,
+                target: parseGatewayServiceTarget(opts.target),
+            });
+            if (opts.write) {
+                await writeGatewayServicePlan(plan);
+            }
+            if (opts.json) {
+                console.log(JSON.stringify({ ...plan, written: Boolean(opts.write) }, null, 2));
+            } else {
+                console.log(renderGatewayServicePlan(plan, Boolean(opts.write)));
+            }
+            return;
+        }
         throwUnsupportedCommand(path);
         return;
     }
@@ -1129,6 +1165,30 @@ function parseMaxTurns(value: string | undefined): number | undefined {
     if (typeof value !== "string") return undefined;
     const n = Number.parseInt(value.trim(), 10);
     return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function parseGatewayServiceTarget(value: string | undefined): GatewayServiceTarget | undefined {
+    if (!value) return undefined;
+    if (value === GatewayServiceTarget.Systemd || value === GatewayServiceTarget.Launchd) {
+        return value;
+    }
+    throw new CommanderError(1, "flyflor.invalidGatewayServiceTarget", "--target must be systemd or launchd");
+}
+
+function renderGatewayServicePlan(plan: ReturnType<typeof buildGatewayServicePlan>, written: boolean): string {
+    return [
+        `Gateway service target: ${plan.target}`,
+        `Service file: ${plan.servicePath}${written ? " (written)" : ""}`,
+        "",
+        plan.content.trimEnd(),
+        "",
+        "After writing the file, run:",
+        ...plan.installCommands.map((command) => `  ${command}`),
+        "",
+        `Start:  ${plan.startCommand}`,
+        `Stop:   ${plan.stopCommand}`,
+        `Status: ${plan.statusCommand}`,
+    ].join("\n");
 }
 
 async function loadAttachmentsFromPaths(paths: string[]): Promise<GatewayAttachment[]> {

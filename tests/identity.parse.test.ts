@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseIdentityAppends } from "../src/neural/memory/identity.ts";
+import { parseIdentityAppends } from "../src/neural/identity/index.ts";
 
 describe("LF-R5 identity append parser", () => {
     test("returns empty list when block missing", () => {

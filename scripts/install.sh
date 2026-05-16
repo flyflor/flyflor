@@ -2,10 +2,10 @@
 # Flyflor curl-pipe installer.
 #
 # Usage:
-#   curl -fsSL https://flyflor.dev/install.sh | sh
-#   curl -fsSL https://flyflor.dev/install.sh | sh -s -- --version v0.4.0
-#   curl -fsSL https://flyflor.dev/install.sh | sh -s -- --prefix /usr/local/flyflor
-#   curl -fsSL https://flyflor.dev/install.sh | sh -s -- --uninstall
+#   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --version v0.4.0
+#   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --prefix /usr/local/flyflor
+#   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 #
 # Behaviour:
 #   - 检测 OS/arch，从 release-base 下载匹配的 flyflor 二进制 + templates tarball；
@@ -30,13 +30,20 @@ ACTION="install"
 die() { echo "flyflor-install: $*" >&2; exit 1; }
 info() { echo "flyflor-install: $*"; }
 
+# curl-pipe users often pass options manually. Validate values before reading
+# them so install failures stay explicit and do not depend on the user's shell.
+need_value() {
+    [ $# -ge 2 ] || die "$1 requires a value"
+    [ -n "$2" ] || die "$1 requires a value"
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
-        --version) VERSION="$2"; shift 2 ;;
+        --version) need_value "$1" "${2-}"; VERSION="$2"; shift 2 ;;
         --version=*) VERSION="${1#--version=}"; shift ;;
-        --prefix) PREFIX="$2"; shift 2 ;;
+        --prefix) need_value "$1" "${2-}"; PREFIX="$2"; shift 2 ;;
         --prefix=*) PREFIX="${1#--prefix=}"; shift ;;
-        --release-base) RELEASE_BASE="$2"; shift 2 ;;
+        --release-base) need_value "$1" "${2-}"; RELEASE_BASE="$2"; shift 2 ;;
         --release-base=*) RELEASE_BASE="${1#--release-base=}"; shift ;;
         --uninstall) ACTION="uninstall"; shift ;;
         --update) ACTION="install"; shift ;;
@@ -50,6 +57,9 @@ Options:
   --release-base <url>  Base URL for release downloads
   --uninstall           Remove bin + templates (keeps config + data)
   --update              Force re-install latest (default behaviour)
+
+Remote usage:
+  curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
 EOF
             exit 0
             ;;

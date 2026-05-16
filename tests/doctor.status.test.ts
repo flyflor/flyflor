@@ -13,7 +13,7 @@ import {
 } from "../src/command/cli/status.ts";
 import { FlyFlorTokens } from "../src/app.ts";
 import { createDefaultMemoryTuning, type FlyflorConfig } from "../src/config/index.ts";
-import { BrainStore } from "../src/neural/memory/brain.store.ts";
+import { BrainStore } from "../src/components/memory/brain.store.ts";
 import {
     CrystalMemoryBackend,
     MemoryEventStatus,
@@ -166,7 +166,7 @@ describe("doctor Brain.db visibility", () => {
     });
 });
 
-describe("doctor debug boundary visibility", () => {
+describe("doctor diagnostics visibility", () => {
     test("marks direct memory diagnostics as AtomScore bypass", async () => {
         const config = doctorConfigForHome("/tmp/flyflor-doctor-debug");
         const app = {
@@ -192,7 +192,7 @@ describe("doctor debug boundary visibility", () => {
 
         const output = await renderDoctor(app as never);
 
-        expect(output).toContain("Memory debug");
+        expect(output).toContain("Memory diagnostics");
         expect(output).toContain("bypass-score=true");
     });
 });

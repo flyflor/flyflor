@@ -1,5 +1,5 @@
 import type { CrystalMemoryConfig } from "../../config/index.ts";
-import { CrystalComponent } from "../../agent/components.ts";
+import { CrystalComponent } from "../../components/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS } from "./vector.index.ts";
 import {
@@ -10,19 +10,19 @@ import {
     recallCrystalGems,
 } from "../reflection/index.ts";
 import { MemoryKind, MemoryLayer, ProviderScope } from "../../protocol/contracts/index.ts";
-import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
-import { LocalCrystalMemoryStore } from "./local.store.ts";
+import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../components/memory/types.ts";
+import { LocalCrystalMemoryStore } from "../../components/crystal/local.crystal.store.ts";
 import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
-export { LocalCrystalMemoryStore } from "./local.store.ts";
+export { LocalCrystalMemoryStore } from "../../components/crystal/local.crystal.store.ts";
 export type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
 @Component({
-    name: "crystal-memory-service",
+    name: "crystal-memory-component",
     provider: { scope: ProviderScope.Singleton },
     tags: ["crystal", "memory"],
 })
-export class CrystalMemoryService extends CrystalComponent {
+export class CrystalMemoryComponent extends CrystalComponent {
     private readonly store: CrystalMemoryStore;
 
     public constructor(

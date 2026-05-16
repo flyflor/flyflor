@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CrystalMemoryService, InMemoryCrystalMemoryStore } from "../src/agent/index.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/agent/index.ts";
 import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/crystal/index.ts";
 import { MemoryKind } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
@@ -33,7 +33,7 @@ describe("Crystal memory boundaries", () => {
 
     test("recalls crystallized skills through generated symbols and evidence score", async () => {
         const store = new InMemoryCrystalMemoryStore();
-        const controller = new CrystalMemoryService(crystalConfig(), store);
+        const controller = new CrystalMemoryComponent(crystalConfig(), store);
 
         await controller.recordTurn({
             now: "2026-05-10T00:00:00.000Z",
@@ -89,7 +89,7 @@ describe("Crystal memory boundaries", () => {
 
     test("runtime reflection candidates must pass through candidate before crystallizing", async () => {
         const store = new InMemoryCrystalMemoryStore();
-        const controller = new CrystalMemoryService(crystalConfig(), store);
+        const controller = new CrystalMemoryComponent(crystalConfig(), store);
 
         await controller.recordTurn({
             now: "2026-05-10T00:00:00.000Z",
@@ -118,7 +118,7 @@ describe("Crystal memory boundaries", () => {
 
     test("garbage reflection candidates are stored as candidates without becoming skills", async () => {
         const store = new InMemoryCrystalMemoryStore();
-        const controller = new CrystalMemoryService(crystalConfig(), store);
+        const controller = new CrystalMemoryComponent(crystalConfig(), store);
 
         await controller.recordTurn({
             now: "2026-05-10T00:00:00.000Z",

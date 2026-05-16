@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/fast.route.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
-import { LocalHashEmbeddingProvider } from "../src/neural/memory/embedding.ts";
+import { LocalHashEmbeddingProvider } from "../src/neural/embedding/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
 import {
     BlackboardMode,

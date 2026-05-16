@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import type { LocalCrystalMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
+import { GraphComponent } from "../core.ts";
 import { LruCache } from "./lru.cache.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS, embedCrystalText } from "../../crystal/memory/vector.index.ts";
 import type {
@@ -106,7 +107,7 @@ interface GraphEdgeRow {
 }
 
 @Component({ name: "sqlite-graph-store", tags: ["database", "memory", "graph", "local"] })
-export class SQLiteGraphStore implements MemoryGraphStore {
+export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore {
     private database?: Database;
     private initialized = false;
     private readonly recallCache = new LruCache<MemoryNodeRecord[]>({ maxSize: 100, ttlMs: 60_000 });
@@ -117,13 +118,18 @@ export class SQLiteGraphStore implements MemoryGraphStore {
     private readonly snapshots = new Map<string, GemSnapshotRecord>();
     private readonly edges = new Map<string, GraphEdgeRecord>();
 
-    constructor(private readonly config: LocalCrystalMemoryConfig, private readonly vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS) {}
+    public constructor(
+        private readonly config: LocalCrystalMemoryConfig,
+        private readonly vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
+    ) {
+        super();
+    }
 
-    recallCacheStats(): ReturnType<LruCache<MemoryNodeRecord[]>["stats"]> {
+    public recallCacheStats(): ReturnType<LruCache<MemoryNodeRecord[]>["stats"]> {
         return this.recallCache.stats();
     }
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         if (this.initialized) {
             return;
         }
@@ -269,7 +275,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         this.initialized = true;
     }
 
-    async upsertEpisode(input: EpisodeNodeInput): Promise<void> {
+    public async upsertEpisode(input: EpisodeNodeInput): Promise<void> {
         if (!this.config.dbFile) return;
         await this.initialize();
         const record: MemoryEpisodeRecord = {
@@ -306,7 +312,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         this.invalidateRecallCache();
     }
 
-    async upsertMemoryNode(input: MemoryNodeInput): Promise<void> {
+    public async upsertMemoryNode(input: MemoryNodeInput): Promise<void> {
         if (!this.config.dbFile) return;
         await this.initialize();
         const record: MemoryNodeRecord = {
@@ -352,7 +358,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         this.invalidateRecallCache();
     }
 
-    async upsertGem(input: GemNodeInput): Promise<void> {
+    public async upsertGem(input: GemNodeInput): Promise<void> {
         if (!this.config.dbFile) return;
         await this.initialize();
         const record: GemRecord = {
@@ -403,7 +409,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         this.invalidateRecallCache();
     }
 
-    async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
+    public async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
         if (!this.config.dbFile) return;
         await this.initialize();
         this.summaryEmbeddings.set(input.id, {
@@ -439,7 +445,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
             );
     }
 
-    async applyDecaySweep(input: DecaySweepInput): Promise<DecaySweepResult> {
+    public async applyDecaySweep(input: DecaySweepInput): Promise<DecaySweepResult> {
         if (!this.config.dbFile) return { memoryNodes: 0, gems: 0 };
         await this.initialize();
         const limit = Math.max(1, Math.floor(input.batchSize ?? 200));
@@ -481,31 +487,31 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return { memoryNodes, gems: gemCount };
     }
 
-    async relateNextContext(prev: string, curr: string): Promise<void> {
+    public async relateNextContext(prev: string, curr: string): Promise<void> {
         await this.relate("episode", prev, "next_context", "episode", curr);
     }
 
-    async relateSimilarEpisode(a: string, b: string, score: number): Promise<void> {
+    public async relateSimilarEpisode(a: string, b: string, score: number): Promise<void> {
         await this.relate("episode", a, "similar_ep", "episode", b, { score });
     }
 
-    async relateConsolidatedInto(episodeId: string, memoryNodeId: string): Promise<void> {
+    public async relateConsolidatedInto(episodeId: string, memoryNodeId: string): Promise<void> {
         await this.relate("episode", episodeId, "consolidated_into", "memory_node", memoryNodeId);
     }
 
-    async relateSimilarConcept(a: string, b: string, score: number): Promise<void> {
+    public async relateSimilarConcept(a: string, b: string, score: number): Promise<void> {
         await this.relate("memory_node", a, "similar_concept", "memory_node", b, { score });
     }
 
-    async relateProvenAs(memoryNodeId: string, gemId: string): Promise<void> {
+    public async relateProvenAs(memoryNodeId: string, gemId: string): Promise<void> {
         await this.relate("memory_node", memoryNodeId, "proven_as", "gem", gemId);
     }
 
-    async relateProvenBy(gemId: string, episodeId: string): Promise<void> {
+    public async relateProvenBy(gemId: string, episodeId: string): Promise<void> {
         await this.relate("gem", gemId, "proven_by", "episode", episodeId);
     }
 
-    async recallMemoryNodes(input: GraphRecallInput): Promise<MemoryNodeRecord[]> {
+    public async recallMemoryNodes(input: GraphRecallInput): Promise<MemoryNodeRecord[]> {
         if (!this.config.dbFile) return [];
         await this.initialize();
         const cacheKey = recallCacheKey(input);
@@ -516,13 +522,13 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return result;
     }
 
-    async recallSkills(input: GraphRecallInput): Promise<GemRecord[]> {
+    public async recallSkills(input: GraphRecallInput): Promise<GemRecord[]> {
         if (!this.config.dbFile) return [];
         await this.initialize();
         return this.searchGems(input, 32);
     }
 
-    async expandSimilarConcept(seedIds: string[], limit: number): Promise<MemoryNodeRecord[]> {
+    public async expandSimilarConcept(seedIds: string[], limit: number): Promise<MemoryNodeRecord[]> {
         if (!this.config.dbFile || seedIds.length === 0) return [];
         await this.initialize();
         const wanted = new Set(seedIds);
@@ -539,7 +545,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return out.slice(0, Math.max(1, limit));
     }
 
-    async countByUser(userId: string): Promise<GraphCounts> {
+    public async countByUser(userId: string): Promise<GraphCounts> {
         if (!this.config.dbFile) return { episodes: 0, memoryNodes: 0, gems: 0 };
         await this.initialize();
         return {
@@ -549,7 +555,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         };
     }
 
-    async listGemDriftCandidates(input: {
+    public async listGemDriftCandidates(input: {
         userId: string;
         nowMs: number;
         minContradictionCount: number;
@@ -575,7 +581,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
             .map((row) => ({ ...row }));
     }
 
-    async listRecallExtremes(input: {
+    public async listRecallExtremes(input: {
         userId: string;
         topN: number;
         bottomN: number;
@@ -599,7 +605,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         };
     }
 
-    async listContradictionPairs(input: {
+    public async listContradictionPairs(input: {
         userId: string;
         seedN: number;
         neighborK: number;
@@ -640,7 +646,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return out;
     }
 
-    async writeGemSnapshot(gem: GemRecord, reason: string, takenAtMs: number): Promise<string> {
+    public async writeGemSnapshot(gem: GemRecord, reason: string, takenAtMs: number): Promise<string> {
         if (!this.config.dbFile) return "";
         await this.initialize();
         const snapId = `${gem.id}-${takenAtMs}`;
@@ -682,7 +688,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return record.id;
     }
 
-    async applyGemDriftRepair(input: {
+    public async applyGemDriftRepair(input: {
         gemId: string;
         nowMs: number;
         newSummary?: string;
@@ -709,7 +715,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return true;
     }
 
-    async applyMemoryReinforce(input: {
+    public async applyMemoryReinforce(input: {
         table: "memory_node" | "gem";
         id: string;
         importanceMultiplier: number;
@@ -739,7 +745,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return true;
     }
 
-    async applyContradictionAudit(input: {
+    public async applyContradictionAudit(input: {
         table: "memory_node" | "gem";
         id: string;
         confidenceMultiplier: number;
@@ -778,7 +784,7 @@ export class SQLiteGraphStore implements MemoryGraphStore {
         return ok;
     }
 
-    async applyReconsolidation(input: {
+    public async applyReconsolidation(input: {
         left: { table: "memory_node" | "gem"; id: string };
         right: { table: "memory_node" | "gem"; id: string };
         winner: "left" | "right" | "merge";

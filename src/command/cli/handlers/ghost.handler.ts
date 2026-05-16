@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { join } from "node:path";
 import { stat } from "node:fs/promises";
-import { BrainStore } from "../../../neural/memory/brain.store.ts";
+import { BrainStore } from "../../../components/memory/brain.store.ts";
 import { loadConfig } from "../../../config/index.ts";
 import { MemoryEventStatus, type GhostContextEventContent, type MemoryEventRecord } from "../../../protocol/contracts/index.ts";
 

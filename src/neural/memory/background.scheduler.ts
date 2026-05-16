@@ -19,12 +19,12 @@ import { event, RuntimeEventType, type EventSink } from "../../protocol/events/i
 import { DecayLayer, DEFAULT_DECAY_PROFILES, decayImportance, type DecayProfile } from "./decay.ts";
 import type { ConsolidationWorker } from "./consolidation.worker.ts";
 import type { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
-import type { MemoryGraphStore } from "./graph.store.ts";
+import type { MemoryGraphStore } from "../../components/memory/graph.store.ts";
 import type { DreamWorker } from "../../agent/runtime/dream.worker.ts";
 import {
     isWorkingMemoryCircuitCoolingDown,
     type WorkingMemoryHealthSnapshot,
-} from "./working.store.ts";
+} from "../../components/memory/working.store.ts";
 
 export interface BackgroundSchedulerOptions {
     /** 整合 worker 节拍（毫秒）。默认 10 分钟。 */
