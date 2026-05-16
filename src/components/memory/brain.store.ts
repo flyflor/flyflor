@@ -7,7 +7,6 @@ import {
     type AtomScore,
     type MemoryAtom,
     type CodenameRecord,
-    type EqLabel,
     type EqState,
     type MemoryEventRecord,
     MemoryEventType,
@@ -22,10 +21,23 @@ import {
     type TaskPlanRecord,
     type SummaryRange,
 } from "../../protocol/contracts/index.ts";
+import { BrainCodenameRepo } from "./brain.codename.repo.ts";
+import {
+    BrainEventRepo,
+    type BrainEventInput,
+    type BrainEventListInput,
+} from "./brain.event.repo.ts";
 import { BrainContextForkRepo } from "./brain.context.fork.repo.ts";
+import { BrainEqStateRepo } from "./brain.eq.state.repo.ts";
+import { BrainLinkRepo } from "./brain.link.repo.ts";
 import { BrainProjectRepo } from "./brain.project.repo.ts";
 import { BrainSceneRecordRepo } from "./brain.scene.record.repo.ts";
+import { BrainStateRepo, type BrainStateMutation } from "./brain.state.repo.ts";
+import { BrainSummaryRepo } from "./brain.summary.repo.ts";
 import { BrainTaskPlanRepo } from "./brain.task.plan.repo.ts";
+
+export type { BrainEventInput, BrainEventListInput } from "./brain.event.repo.ts";
+export type { BrainStateMutation } from "./brain.state.repo.ts";
 
 /**
  * LF-R1 brain.db single-file store.
@@ -44,110 +56,12 @@ export interface BrainStoreOptions {
     dbPath: string;
 }
 
-export interface BrainEventInput {
-    id: string;
-    ts: number;
-    userId: string;
-    channelId?: string;
-    codenameId?: string;
-    type: MemoryEventType;
-    role?: MemoryEventRecord["role"];
-    content: Record<string, unknown>;
-    parentId?: string;
-    embeddingId?: string;
-    importance?: number;
-}
-
-export interface BrainEventListInput {
-    userId?: string;
-    codenameId?: string;
-    type?: MemoryEventType;
-    sinceTs?: number;
-    untilTs?: number;
-    limit?: number;
-    statusIn?: MemoryEventRecord extends never ? never : MemoryStateRecord["status"][];
-}
-
 export interface BrainPromptAtomWindowInput {
     days?: number;
     limit?: number;
     minScore: number;
     /** Runtime prompt recall supplies this; diagnostics may omit it to inspect all inbox buckets. */
     userId?: string;
-}
-
-export interface BrainStateMutation {
-    activation?: number;
-    decayScore?: number;
-    accessCount?: number;
-    lastAccessed?: number;
-    resumedAt?: number;
-    status?: MemoryStateRecord["status"];
-}
-
-interface EventRow {
-    id: string;
-    ts: number;
-    time_bucket: string;
-    user_id: string;
-    channel_id: string | null;
-    codename_id: string | null;
-    type: string;
-    role: string | null;
-    content: string;
-    parent_id: string | null;
-    embedding_id: string | null;
-    importance: number;
-}
-
-interface StateRow {
-    event_id: string;
-    activation: number;
-    decay_score: number;
-    access_count: number;
-    last_accessed: number | null;
-    resumed_at: number | null;
-    status: string;
-}
-
-interface SummaryRow {
-    id: string;
-    time_range: string;
-    bucket_key: string;
-    content: string;
-    embedding_id: string | null;
-    created_at: number;
-}
-
-interface LinkRow {
-    id: string;
-    from_id: string;
-    to_id: string;
-    strength: number;
-    type: string;
-    created_at: number;
-}
-
-interface CodenameRow {
-    id: string;
-    name: string;
-    working_dir: string | null;
-    description: string | null;
-    user_id: string;
-    created_at: number;
-    last_used_at: number;
-    use_count: number;
-    project_id: string | null;
-}
-
-interface EqStateRow {
-    user_id: string;
-    valence: number;
-    arousal: number;
-    dominance: number;
-    label: string;
-    confidence: number;
-    updated_at: number;
 }
 
 export interface BrainVisibleAtom {
@@ -168,11 +82,17 @@ export interface BrainPromptAtomWrite {
 
 @Component()
 export class BrainStore extends BrainComponent {
+    private codenameRepo: BrainCodenameRepo | null = null;
     private db: Database | null = null;
+    private eventRepo: BrainEventRepo | null = null;
     private contextForkRepo: BrainContextForkRepo | null = null;
+    private eqStateRepo: BrainEqStateRepo | null = null;
+    private linkRepo: BrainLinkRepo | null = null;
     private opened = false;
     private projectRepo: BrainProjectRepo | null = null;
     private sceneRecordRepo: BrainSceneRecordRepo | null = null;
+    private stateRepo: BrainStateRepo | null = null;
+    private summaryRepo: BrainSummaryRepo | null = null;
     private taskPlanRepo: BrainTaskPlanRepo | null = null;
 
     public constructor(private readonly options: BrainStoreOptions) {
@@ -188,9 +108,15 @@ export class BrainStore extends BrainComponent {
         db.exec("PRAGMA foreign_keys = ON");
         createSchema(db);
         this.db = db;
+        this.codenameRepo = new BrainCodenameRepo(db);
+        this.eventRepo = new BrainEventRepo(db);
         this.contextForkRepo = new BrainContextForkRepo(db);
+        this.eqStateRepo = new BrainEqStateRepo(db);
+        this.linkRepo = new BrainLinkRepo(db);
         this.projectRepo = new BrainProjectRepo(db);
         this.sceneRecordRepo = new BrainSceneRecordRepo(db);
+        this.stateRepo = new BrainStateRepo(db);
+        this.summaryRepo = new BrainSummaryRepo(db);
         this.taskPlanRepo = new BrainTaskPlanRepo(db);
         this.opened = true;
     }
@@ -198,100 +124,30 @@ export class BrainStore extends BrainComponent {
     public close(): void {
         if (!this.opened) return;
         this.db?.close();
+        this.codenameRepo = null;
         this.db = null;
+        this.eventRepo = null;
         this.contextForkRepo = null;
+        this.eqStateRepo = null;
+        this.linkRepo = null;
         this.opened = false;
         this.projectRepo = null;
         this.sceneRecordRepo = null;
+        this.stateRepo = null;
+        this.summaryRepo = null;
         this.taskPlanRepo = null;
     }
 
     public appendEvent(input: BrainEventInput): MemoryEventRecord {
-        const db = this.requireDb();
-        const importance = input.importance ?? 0.5;
-        const bucket = formatBucket(input.ts);
-        db.query(
-            `INSERT INTO memory_events (
-                id, ts, time_bucket, user_id, channel_id, codename_id,
-                type, role, content, parent_id, embedding_id, importance
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(
-            input.id,
-            input.ts,
-            bucket,
-            input.userId,
-            input.channelId ?? null,
-            input.codenameId ?? null,
-            input.type,
-            input.role ?? null,
-            JSON.stringify(input.content),
-            input.parentId ?? null,
-            input.embeddingId ?? null,
-            importance,
-        );
-        return {
-            id: input.id,
-            ts: input.ts,
-            timeBucket: bucket,
-            userId: input.userId,
-            channelId: input.channelId,
-            codenameId: input.codenameId,
-            type: input.type,
-            role: input.role,
-            content: input.content,
-            parentId: input.parentId,
-            embeddingId: input.embeddingId,
-            importance,
-        };
+        return this.requireEventRepo().append(input);
     }
 
     public getEvent(id: string): MemoryEventRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM memory_events WHERE id = ?").get(id) as EventRow | null;
-        return row ? rowToEvent(row) : null;
+        return this.requireEventRepo().get(id);
     }
 
     public listEvents(input: BrainEventListInput = {}): MemoryEventRecord[] {
-        const db = this.requireDb();
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.userId !== undefined) {
-            conditions.push("e.user_id = ?");
-            values.push(input.userId);
-        }
-        if (input.codenameId !== undefined) {
-            conditions.push("e.codename_id = ?");
-            values.push(input.codenameId);
-        }
-        if (input.type !== undefined) {
-            conditions.push("e.type = ?");
-            values.push(input.type);
-        }
-        if (input.sinceTs !== undefined) {
-            conditions.push("e.ts >= ?");
-            values.push(input.sinceTs);
-        }
-        if (input.untilTs !== undefined) {
-            conditions.push("e.ts <= ?");
-            values.push(input.untilTs);
-        }
-        if (input.statusIn && input.statusIn.length > 0) {
-            const placeholders = input.statusIn.map(() => "?").join(", ");
-            conditions.push(`COALESCE(s.status, '${MemoryEventStatus.Live}') IN (${placeholders})`);
-            for (const status of input.statusIn) values.push(status);
-        }
-        const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(
-                `SELECT e.* FROM memory_events e
-                 LEFT JOIN memory_state s ON s.event_id = e.id
-                 ${where}
-                 ORDER BY e.ts DESC
-                 LIMIT ?`,
-            )
-            .all(...values, limit) as EventRow[];
-        return rows.map(rowToEvent);
+        return this.requireEventRepo().list(input);
     }
 
     /**
@@ -328,88 +184,23 @@ export class BrainStore extends BrainComponent {
     }
 
     public getState(eventId: string): MemoryStateRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM memory_state WHERE event_id = ?").get(eventId) as StateRow | null;
-        return row ? rowToState(row) : null;
+        return this.requireStateRepo().get(eventId);
     }
 
     public upsertState(eventId: string, mutation: BrainStateMutation): MemoryStateRecord {
-        const db = this.requireDb();
-        const existing = this.getState(eventId);
-        const next: MemoryStateRecord = {
-            eventId,
-            activation: mutation.activation ?? existing?.activation ?? 0,
-            decayScore: mutation.decayScore ?? existing?.decayScore ?? 0,
-            accessCount: mutation.accessCount ?? existing?.accessCount ?? 0,
-            lastAccessed: mutation.lastAccessed ?? existing?.lastAccessed,
-            resumedAt: mutation.resumedAt ?? existing?.resumedAt,
-            status: mutation.status ?? existing?.status ?? MemoryEventStatus.Live,
-        };
-        db.query(
-            `INSERT INTO memory_state (
-                event_id, activation, decay_score, access_count,
-                last_accessed, resumed_at, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(event_id) DO UPDATE SET
-                activation = excluded.activation,
-                decay_score = excluded.decay_score,
-                access_count = excluded.access_count,
-                last_accessed = excluded.last_accessed,
-                resumed_at = excluded.resumed_at,
-                status = excluded.status`,
-        ).run(
-            eventId,
-            next.activation,
-            next.decayScore,
-            next.accessCount,
-            next.lastAccessed ?? null,
-            next.resumedAt ?? null,
-            next.status,
-        );
-        return next;
+        return this.requireStateRepo().upsert(eventId, mutation);
     }
 
     public writeSummary(record: MemorySummaryRecord): void {
-        const db = this.requireDb();
-        db.query(
-            `INSERT INTO memory_summary (id, time_range, bucket_key, content, embedding_id, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-                time_range = excluded.time_range,
-                bucket_key = excluded.bucket_key,
-                content = excluded.content,
-                embedding_id = excluded.embedding_id,
-                created_at = excluded.created_at`,
-        ).run(
-            record.id,
-            record.timeRange,
-            record.bucketKey,
-            record.content,
-            record.embeddingId ?? null,
-            record.createdAt,
-        );
+        this.requireSummaryRepo().write(record);
     }
 
     public getSummary(id: string): MemorySummaryRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM memory_summary WHERE id = ?").get(id) as SummaryRow | null;
-        return row ? rowToSummary(row) : null;
+        return this.requireSummaryRepo().get(id);
     }
 
     public listSummaries(input: { timeRange?: SummaryRange; limit?: number } = {}): MemorySummaryRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.timeRange !== undefined) {
-            conditions.push("time_range = ?");
-            values.push(input.timeRange);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM memory_summary ${where} ORDER BY created_at DESC LIMIT ?`)
-            .all(...values, limit) as SummaryRow[];
-        return rows.map(rowToSummary);
+        return this.requireSummaryRepo().list(input);
     }
 
     /**
@@ -460,107 +251,35 @@ export class BrainStore extends BrainComponent {
     }
 
     public writeLink(record: MemoryLinkRecord): void {
-        const db = this.requireDb();
-        db.query(
-            `INSERT OR REPLACE INTO memory_links (id, from_id, to_id, strength, type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-        ).run(record.id, record.fromId, record.toId, record.strength, record.type, record.createdAt);
+        this.requireLinkRepo().write(record);
     }
 
     public listLinks(input: { fromId?: string; toId?: string; type?: MemoryLinkType; limit?: number } = {}): MemoryLinkRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.fromId !== undefined) {
-            conditions.push("from_id = ?");
-            values.push(input.fromId);
-        }
-        if (input.toId !== undefined) {
-            conditions.push("to_id = ?");
-            values.push(input.toId);
-        }
-        if (input.type !== undefined) {
-            conditions.push("type = ?");
-            values.push(input.type);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM memory_links ${where} ORDER BY created_at DESC LIMIT ?`)
-            .all(...values, limit) as LinkRow[];
-        return rows.map(rowToLink);
+        return this.requireLinkRepo().list(input);
     }
 
     public upsertCodename(record: CodenameRecord): CodenameRecord {
-        const db = this.requireDb();
-        db.query(
-            `INSERT INTO codenames (
-                id, name, working_dir, description, user_id,
-                created_at, last_used_at, use_count, project_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                name = excluded.name,
-                working_dir = excluded.working_dir,
-                description = excluded.description,
-                last_used_at = excluded.last_used_at,
-                use_count = excluded.use_count,
-                project_id = excluded.project_id`,
-        ).run(
-            record.id,
-            record.name,
-            record.workingDir ?? null,
-            record.description ?? null,
-            record.userId,
-            record.createdAt,
-            record.lastUsedAt,
-            record.useCount,
-            record.projectId ?? null,
-        );
-        return record;
+        return this.requireCodenameRepo().upsert(record);
     }
 
     public touchCodename(id: string, ts: number): void {
-        const db = this.requireDb();
-        db.query(
-            `UPDATE codenames
-             SET last_used_at = ?, use_count = use_count + 1
-             WHERE id = ?`,
-        ).run(ts, id);
+        this.requireCodenameRepo().touch(id, ts);
     }
 
     public bindCodenameProject(id: string, projectId: string): void {
-        const db = this.requireDb();
-        db.query(`UPDATE codenames SET project_id = ? WHERE id = ?`).run(projectId, id);
+        this.requireCodenameRepo().bindProject(id, projectId);
     }
 
     public getCodename(id: string): CodenameRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM codenames WHERE id = ?").get(id) as CodenameRow | null;
-        return row ? rowToCodename(row) : null;
+        return this.requireCodenameRepo().get(id);
     }
 
     public listCodenames(input: { userId?: string; limit?: number } = {}): CodenameRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.userId !== undefined) {
-            conditions.push("user_id = ?");
-            values.push(input.userId);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM codenames ${where} ORDER BY last_used_at DESC LIMIT ?`)
-            .all(...values, limit) as CodenameRow[];
-        return rows.map(rowToCodename);
+        return this.requireCodenameRepo().list(input);
     }
 
     public getCodenameByName(userId: string, name: string): CodenameRecord | null {
-        const db = this.requireDb();
-        const row = db
-            .query("SELECT * FROM codenames WHERE user_id = ? AND name = ?")
-            .get(userId, name) as CodenameRow | null;
-        return row ? rowToCodename(row) : null;
+        return this.requireCodenameRepo().getByName(userId, name);
     }
 
     /**
@@ -586,16 +305,7 @@ export class BrainStore extends BrainComponent {
      * 零字符匹配——只看 last_used_at >= sinceTs 资源指标 + project_id IS NULL 结构化字段。
      */
     public getMostRecentTouchedCodename(userId: string, sinceTs: number): CodenameRecord | null {
-        const db = this.requireDb();
-        const row = db
-            .query(
-                `SELECT * FROM codenames
-                 WHERE user_id = ? AND project_id IS NULL AND last_used_at >= ?
-                 ORDER BY last_used_at DESC
-                 LIMIT 1`,
-            )
-            .get(userId, sinceTs) as CodenameRow | null;
-        return row ? rowToCodename(row) : null;
+        return this.requireCodenameRepo().getMostRecentTouched(userId, sinceTs);
     }
 
     /**
@@ -604,36 +314,12 @@ export class BrainStore extends BrainComponent {
      * 此处只保留"现在的样子"以便快速取读 + 衰减。
      */
     public upsertEqState(state: EqState): void {
-        const db = this.requireDb();
-        db.run(
-            `INSERT INTO memory_eq_state (user_id, valence, arousal, dominance, label, confidence, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(user_id) DO UPDATE SET
-                valence = excluded.valence,
-                arousal = excluded.arousal,
-                dominance = excluded.dominance,
-                label = excluded.label,
-                confidence = excluded.confidence,
-                updated_at = excluded.updated_at`,
-            [
-                state.userId,
-                state.valence,
-                state.arousal,
-                state.dominance,
-                state.label,
-                state.confidence,
-                state.updatedAt,
-            ],
-        );
+        this.requireEqStateRepo().upsert(state);
     }
 
     /** 取某用户最新 EQ 状态。无记录返回 null。 */
     public getEqState(userId: string): EqState | null {
-        const db = this.requireDb();
-        const row = db
-            .query("SELECT * FROM memory_eq_state WHERE user_id = ?")
-            .get(userId) as EqStateRow | null;
-        return row ? rowToEq(row) : null;
+        return this.requireEqStateRepo().get(userId);
     }
 
     /**
@@ -641,22 +327,7 @@ export class BrainStore extends BrainComponent {
      * 也没有任何 ask-answer-pair 子事件（parent_id 指向它）。
      */
     public getLatestPendingAsk(userId: string): MemoryEventRecord | null {
-        const db = this.requireDb();
-        const row = db
-            .query(
-                `SELECT e.* FROM memory_events e
-                 LEFT JOIN memory_state s ON s.event_id = e.id
-                 WHERE e.user_id = ? AND e.type = 'ask'
-                   AND COALESCE(s.status, '${MemoryEventStatus.Live}') IN ('${MemoryEventStatus.Live}', '${MemoryEventStatus.Resumed}')
-                   AND NOT EXISTS (
-                     SELECT 1 FROM memory_events c
-                     WHERE c.parent_id = e.id AND c.type = 'ask-answer-pair'
-                   )
-                 ORDER BY e.ts DESC
-                 LIMIT 1`,
-            )
-            .get(userId) as EventRow | null;
-        return row ? rowToEvent(row) : null;
+        return this.requireEventRepo().getLatestPendingAsk(userId);
     }
 
     /**
@@ -664,26 +335,7 @@ export class BrainStore extends BrainComponent {
      * 用于 `memory.tuning.ghost.maxChainDepth` 强制 reply 阈值检查。
      */
     public countAskChainDepth(askEventId: string): number {
-        const db = this.requireDb();
-        let depth = 1;
-        let cursor: string | null = askEventId;
-        for (let i = 0; i < 32 && cursor; i += 1) {
-            const row = db.query("SELECT parent_id, type FROM memory_events WHERE id = ?").get(cursor) as
-                | { parent_id: string | null; type: string }
-                | null;
-            if (!row) break;
-            if (row.parent_id == null) break;
-            const parent = db
-                .query("SELECT type FROM memory_events WHERE id = ?")
-                .get(row.parent_id) as { type: string } | null;
-            cursor = row.parent_id;
-            if (parent?.type === "ask") {
-                depth += 1;
-                continue;
-            }
-            break;
-        }
-        return depth;
+        return this.requireEventRepo().countAskChainDepth(askEventId);
     }
 
     /**
@@ -695,31 +347,7 @@ export class BrainStore extends BrainComponent {
         userId: string,
         options: { codenameId?: string | null; limit?: number } = {},
     ): MemoryEventRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 50)));
-        const conditions: string[] = ["e.user_id = ?", "e.type = 'ghost-context'"];
-        const values: Array<string | number> = [userId];
-        if (options.codenameId !== undefined) {
-            if (options.codenameId === null) {
-                conditions.push("e.codename_id IS NULL");
-            } else {
-                conditions.push("e.codename_id = ?");
-                values.push(options.codenameId);
-            }
-        }
-        conditions.push(
-            `COALESCE(s.status, '${MemoryEventStatus.Live}') IN ('${MemoryEventStatus.Live}', '${MemoryEventStatus.Resumed}')`,
-        );
-        const rows = db
-            .query(
-                `SELECT e.* FROM memory_events e
-                 LEFT JOIN memory_state s ON s.event_id = e.id
-                 WHERE ${conditions.join(" AND ")}
-                 ORDER BY e.ts DESC
-                 LIMIT ?`,
-            )
-            .all(...values, limit) as EventRow[];
-        return rows.map(rowToEvent);
+        return this.requireEventRepo().listActiveGhosts(userId, options);
     }
 
     /**
@@ -727,26 +355,7 @@ export class BrainStore extends BrainComponent {
      * 仅对 `type='ghost-context'` 生效；其他类型直接抛错避免误用。
      */
     public patchGhostContent(eventId: string, patch: Record<string, unknown>): MemoryEventRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM memory_events WHERE id = ?").get(eventId) as EventRow | null;
-        if (!row) return null;
-        if (row.type !== "ghost-context") {
-            throw new Error(`patchGhostContent: ${eventId} is not a ghost-context event`);
-        }
-        // patch 会改写事件 content；若原 content 已坏，必须先暴露损坏，不能用空对象覆盖掉证据。
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(row.content) as unknown;
-        } catch (error) {
-            throw new Error(`Invalid ghost-context content JSON for event ${eventId}: ${String(error)}`);
-        }
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-            throw new Error(`Invalid ghost-context content JSON for event ${eventId}.`);
-        }
-        const current = parsed as Record<string, unknown>;
-        const next = { ...current, ...patch };
-        db.run("UPDATE memory_events SET content = ? WHERE id = ?", [JSON.stringify(next), eventId]);
-        return this.getEvent(eventId);
+        return this.requireEventRepo().patchGhostContent(eventId, patch);
     }
 
     /**
@@ -754,11 +363,7 @@ export class BrainStore extends BrainComponent {
      * Identity revert 等审计操作只允许写入 content；schema 列（type、parent_id、user_id 等）不可改。
      */
     public updateEventContent(eventId: string, nextContent: Record<string, unknown>): MemoryEventRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT id FROM memory_events WHERE id = ?").get(eventId) as { id: string } | null;
-        if (!row) return null;
-        db.run("UPDATE memory_events SET content = ? WHERE id = ?", [JSON.stringify(nextContent), eventId]);
-        return this.getEvent(eventId);
+        return this.requireEventRepo().updateContent(eventId, nextContent);
     }
 
     /**
@@ -766,15 +371,7 @@ export class BrainStore extends BrainComponent {
      * 仅消费结构化关系（parent_id + type），不读对话文本。
      */
     public hasAskBeenAnswered(askEventId: string): boolean {
-        const db = this.requireDb();
-        const row = db
-            .query(
-                `SELECT 1 FROM memory_events
-                 WHERE parent_id = ? AND type = 'ask-answer-pair'
-                 LIMIT 1`,
-            )
-            .get(askEventId) as { 1: number } | null;
-        return row !== null;
+        return this.requireEventRepo().hasAskBeenAnswered(askEventId);
     }
 
     /**
@@ -782,19 +379,7 @@ export class BrainStore extends BrainComponent {
      * 状态层为 `abandoned` 的（revert 过）会被过滤；`archived` 同理（冷归档已外迁）。
      */
     public listActiveIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 32)));
-        const rows = db
-            .query(
-                `SELECT e.* FROM memory_events e
-                 LEFT JOIN memory_state s ON s.event_id = e.id
-                 WHERE e.user_id = ? AND e.type = 'identity-append'
-                   AND COALESCE(s.status, 'live') = 'live'
-                 ORDER BY e.ts DESC
-                 LIMIT ?`,
-            )
-            .all(userId, limit) as EventRow[];
-        return rows.map(rowToEvent);
+        return this.requireEventRepo().listActiveIdentity(userId, options);
     }
 
     /**
@@ -802,17 +387,7 @@ export class BrainStore extends BrainComponent {
      * 仅 CLI / TUI 审计使用，prompt 召回请用 listActiveIdentity。
      */
     public listAllIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(500, Math.floor(options.limit ?? 64)));
-        const rows = db
-            .query(
-                `SELECT e.* FROM memory_events e
-                 WHERE e.user_id = ? AND e.type = 'identity-append'
-                 ORDER BY e.ts DESC
-                 LIMIT ?`,
-            )
-            .all(userId, limit) as EventRow[];
-        return rows.map(rowToEvent);
+        return this.requireEventRepo().listAllIdentity(userId, options);
     }
 
     private requireDb(): Database {
@@ -822,11 +397,39 @@ export class BrainStore extends BrainComponent {
         return this.db;
     }
 
+    private requireCodenameRepo(): BrainCodenameRepo {
+        if (!this.codenameRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.codenameRepo;
+    }
+
     private requireContextForkRepo(): BrainContextForkRepo {
         if (!this.contextForkRepo || !this.opened) {
             throw new Error("BrainStore is not opened; call open() before use.");
         }
         return this.contextForkRepo;
+    }
+
+    private requireEqStateRepo(): BrainEqStateRepo {
+        if (!this.eqStateRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.eqStateRepo;
+    }
+
+    private requireEventRepo(): BrainEventRepo {
+        if (!this.eventRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.eventRepo;
+    }
+
+    private requireLinkRepo(): BrainLinkRepo {
+        if (!this.linkRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.linkRepo;
     }
 
     private requireProjectRepo(): BrainProjectRepo {
@@ -841,6 +444,20 @@ export class BrainStore extends BrainComponent {
             throw new Error("BrainStore is not opened; call open() before use.");
         }
         return this.sceneRecordRepo;
+    }
+
+    private requireStateRepo(): BrainStateRepo {
+        if (!this.stateRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.stateRepo;
+    }
+
+    private requireSummaryRepo(): BrainSummaryRepo {
+        if (!this.summaryRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.summaryRepo;
     }
 
     private requireTaskPlanRepo(): BrainTaskPlanRepo {
@@ -1016,31 +633,6 @@ function createSchema(db: Database): void {
     `);
 }
 
-function formatBucket(ts: number): string {
-    const date = new Date(ts);
-    const yyyy = date.getUTCFullYear();
-    const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(date.getUTCDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-}
-
-function rowToEvent(row: EventRow): MemoryEventRecord {
-    return {
-        id: row.id,
-        ts: row.ts,
-        timeBucket: row.time_bucket,
-        userId: row.user_id,
-        channelId: row.channel_id ?? undefined,
-        codenameId: row.codename_id ?? undefined,
-        type: row.type as MemoryEventType,
-        role: row.role ? (row.role as MemoryEventRecord["role"]) : undefined,
-        content: parseContent(row.content),
-        parentId: row.parent_id ?? undefined,
-        embeddingId: row.embedding_id ?? undefined,
-        importance: row.importance,
-    };
-}
-
 function readPromptAtomEntries(event: MemoryEventRecord): BrainVisibleAtom[] {
     const content = isRecord(event.content) ? event.content : null;
     const rawAtoms = content && Array.isArray(content.atoms) ? content.atoms : [];
@@ -1152,78 +744,6 @@ function parseAtomScore(raw: unknown, atomId: string): AtomScore | null {
         inboxDecayApplied,
         explain: readString(raw.explain) ?? undefined,
     };
-}
-
-function rowToState(row: StateRow): MemoryStateRecord {
-    return {
-        eventId: row.event_id,
-        activation: row.activation,
-        decayScore: row.decay_score,
-        accessCount: row.access_count,
-        lastAccessed: row.last_accessed ?? undefined,
-        resumedAt: row.resumed_at ?? undefined,
-        status: row.status as MemoryStateRecord["status"],
-    };
-}
-
-function rowToSummary(row: SummaryRow): MemorySummaryRecord {
-    return {
-        id: row.id,
-        timeRange: row.time_range as SummaryRange,
-        bucketKey: row.bucket_key,
-        content: row.content,
-        embeddingId: row.embedding_id ?? undefined,
-        createdAt: row.created_at,
-    };
-}
-
-function rowToLink(row: LinkRow): MemoryLinkRecord {
-    return {
-        id: row.id,
-        fromId: row.from_id,
-        toId: row.to_id,
-        strength: row.strength,
-        type: row.type as MemoryLinkType,
-        createdAt: row.created_at,
-    };
-}
-
-function rowToCodename(row: CodenameRow): CodenameRecord {
-    return {
-        id: row.id,
-        name: row.name,
-        workingDir: row.working_dir ?? undefined,
-        description: row.description ?? undefined,
-        userId: row.user_id,
-        createdAt: row.created_at,
-        lastUsedAt: row.last_used_at,
-        useCount: row.use_count,
-        projectId: row.project_id ?? undefined,
-    };
-}
-
-function rowToEq(row: EqStateRow): EqState {
-    return {
-        userId: row.user_id,
-        valence: row.valence,
-        arousal: row.arousal,
-        dominance: row.dominance,
-        label: row.label as EqLabel,
-        confidence: row.confidence,
-        updatedAt: row.updated_at,
-    };
-}
-
-function parseContent(value: string): Record<string, unknown> {
-    try {
-        const parsed = JSON.parse(value) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            return parsed as Record<string, unknown>;
-        }
-    } catch {
-        // fallthrough
-    }
-    return { raw: value };
 }
 
 function readString(value: unknown): string | null {

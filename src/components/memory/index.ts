@@ -1,7 +1,13 @@
 export { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain.store.ts";
+export { BrainCodenameRepo, type BrainCodenameRow } from "./brain.codename.repo.ts";
 export { BrainContextForkRepo, type BrainContextForkRow } from "./brain.context.fork.repo.ts";
+export { BrainEqStateRepo, type BrainEqStateRow } from "./brain.eq.state.repo.ts";
+export { BrainEventRepo, type BrainEventInput, type BrainEventListInput, type BrainEventRow } from "./brain.event.repo.ts";
+export { BrainLinkRepo, type BrainLinkRow } from "./brain.link.repo.ts";
 export { BrainProjectRepo, type BrainProjectRow } from "./brain.project.repo.ts";
 export { BrainSceneRecordRepo, type BrainSceneRecordRow } from "./brain.scene.record.repo.ts";
+export { BrainStateRepo, type BrainStateMutation, type BrainStateRow } from "./brain.state.repo.ts";
+export { BrainSummaryRepo, type BrainSummaryRow } from "./brain.summary.repo.ts";
 export { BrainTaskPlanRepo, type BrainTaskPlanRow } from "./brain.task.plan.repo.ts";
 export { ContextForkStore, type ContextForkSidecarRecord, type ContextForkStoreSource } from "./context.fork.store.ts";
 export { LocalWorkingMemoryStore, type LocalWorkingMemoryHealthSnapshot } from "./local.working.store.ts";

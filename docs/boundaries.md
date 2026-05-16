@@ -87,7 +87,7 @@ flowchart LR
 
 - SQLite 访问分三层：`*.repo.ts` 是表模型 + SQL function，`*.store.ts` 负责连接生命周期 / schema / 事务组合，`*.component.ts` 对上表达能力边界。
 - Repo 不是 service 层：不得调用 LLM、prompt、runtime、gateway、TUI 或业务决策；只能接收结构化 DTO、执行 SQL、映射 row。
-- 新增表或高频 SQL 必须优先建立 `tablename.repo.ts`，例如 `brain.project.repo.ts`、`brain.context.fork.repo.ts`、`crystal.gem.repo.ts`。
+- 新增表或高频 SQL 必须优先建立 `tablename.repo.ts`，例如 `brain.event.repo.ts`、`brain.state.repo.ts`、`brain.summary.repo.ts`、`crystal.gem.repo.ts`。
 - 新增 repo SQL 必须使用 `query\`SELECT ... ${value}\`` tagged template；插值只允许值参数并转成 SQLite `?`，禁止字符串拼接值进入 SQL。
 - 表名、列名和排序字段必须是 repo 内部字面量。确需动态 identifier 时先设计白名单 helper 和测试，不能直接插值用户输入。
 - `brain.db` 热路径仍保持单库；低频详情可以由 repo 写 sidecar，但 `brain.db` 必须保留摘要索引和可恢复审计。

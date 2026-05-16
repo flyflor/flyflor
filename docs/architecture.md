@@ -153,7 +153,7 @@ SQLite 数据访问按 `repo -> store -> component` 分层：
 - `*.store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery。
 - `*.component.ts`：向 runtime / neural / crystal 暴露能力边界。
 
-Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前已迁移 `brain.project.repo.ts`、`brain.task.plan.repo.ts`、`brain.context.fork.repo.ts`、`brain.scene.record.repo.ts`，BrainStore 只保留 `brain.db` 生命周期和对外门面。
+Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `brain.*.repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
 
 ## 模块边界硬约束
 
