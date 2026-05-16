@@ -25,7 +25,7 @@ import {
 import { Runtime as RuntimeBoundary } from "../components.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import { parseMemoryActions, renderMemoryActionPrompt } from "../../neural/memory/actions.ts";
+import { parseMemoryActions } from "../../neural/memory/actions.ts";
 import { parseAgentAsk } from "../../neural/ask/index.ts";
 import { parseGhostDecisions } from "../../neural/ghost/index.ts";
 import { parseIdentityAppends } from "../../neural/identity/index.ts";
@@ -51,6 +51,7 @@ import {
     renderAskSchemaInstructions,
     renderBehaviorPriorityInstructions,
     renderBlackboardAdvisoryPrompt,
+    renderMemoryActionInstructions,
     renderMcpContextPrompt,
     renderRuntimeSystemPrompt,
     renderSkillContextPrompt,
@@ -483,7 +484,7 @@ export class RuntimeModule extends RuntimeBoundary {
                             tools: mcpToolCatalog,
                         }),
                     }),
-                    memoryActionInstructions: renderMemoryActionPrompt(),
+                    memoryActionInstructions: renderMemoryActionInstructions(),
                     memoryContext: memoryPrompt,
                     sandboxSummary: sandbox.summary,
                     skillContext: renderSkillContextPrompt({ skills: selectedSkills }),

@@ -1,6 +1,5 @@
 import { MarkdownMemoryFile, MemoryActionTarget, MemoryKind } from "../../protocol/contracts/index.ts";
 import { normalizeEqClassification, type EqClassification } from "../../protocol/contracts/eq.ts";
-import { renderMemoryActionInstructions } from "../../agent/prompts/index.ts";
 import { extractStructuredBlocks, parseStructuredJson, structuredBlock, StructuredBlockProtocol } from "../../protocol/index.ts";
 
 export interface MemoryAction {
@@ -59,10 +58,6 @@ export interface ParsedMemoryActions {
 }
 
 const MEMORY_ACTION_BLOCK = structuredBlock(StructuredBlockProtocol.MemoryActions);
-
-export function renderMemoryActionPrompt(): string {
-    return renderMemoryActionInstructions();
-}
 
 export function parseMemoryActions(rawText: string, maxActions: number): ParsedMemoryActions {
     const actions: MemoryAction[] = [];

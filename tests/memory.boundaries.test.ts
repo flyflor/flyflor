@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -187,6 +187,16 @@ describe("config JSONC boundaries", () => {
 });
 
 describe("Internal infrastructure deployment boundaries", () => {
+    test("neural memory action parser does not import agent prompt registry", async () => {
+        const source = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "actions.ts"), "utf8");
+
+        // Prompt rendering belongs to the runtime/prompt registry boundary.
+        // The neural parser only validates the structured MemoryActions block,
+        // which keeps the memory semantic layer from depending on agent wiring.
+        expect(source).not.toContain("../../agent/prompts");
+        expect(source).toContain("StructuredBlockProtocol.MemoryActions");
+    });
+
     test("docker dev defaults to local working memory without Redis service", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
         const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();
