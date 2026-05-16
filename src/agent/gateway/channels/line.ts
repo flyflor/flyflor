@@ -4,14 +4,22 @@ import type {
     GatewayAttachment,
     GatewayDeliveryMetadata,
     GatewayMessage,
+    GatewayOutboundEnvelope,
     GatewayRoute,
 } from "../../../protocol/contracts/index.ts";
-import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../../protocol/contracts/index.ts";
-import { assertPlatformResponse, json, readString } from "./helpers.ts";
-import { buildDeliveryMetadata } from "./delivery.protocol.ts";
+import {
+    Channel,
+    ChannelTransport,
+    ChatType,
+    GatewayMessageKind,
+    GatewayOutboundOperation,
+} from "../../../protocol/contracts/index.ts";
+import { assertPlatformResponse, dispatchWithDelivery, json, readString, truncatePlatformText } from "./helpers.ts";
+import { buildDeliveryMetadata, channelCapabilities } from "./delivery.protocol.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./types.ts";
 
 const LINE_SIGNATURE_HEADER = "x-line-signature";
+const LINE_LOADING_SECONDS = 20;
 
 export interface LineAdapterConfig {
     channelAccessToken?: string;
@@ -41,6 +49,7 @@ interface LineSource {
 interface LineMessage {
     fileName?: string;
     id?: string;
+    quoteToken?: string;
     text?: string;
     type?: string;
 }
@@ -48,6 +57,10 @@ interface LineMessage {
 export class LineAdapter implements ChannelAdapter {
     readonly name: ChannelName = Channel.Line;
     readonly transport = ChannelTransport.Http;
+    readonly capabilities = channelCapabilities({
+        replyReference: true,
+        typing: true,
+    });
     private readonly seenEvents = new Set<string>();
 
     constructor(
@@ -79,11 +92,20 @@ export class LineAdapter implements ChannelAdapter {
                 continue;
             }
             processed += 1;
-            const reply = await dispatch(message);
-            if (event.replyToken && reply.text.trim()) {
-                await this.reply(event.replyToken, reply.text);
-            }
-            await this.sendTyping(message.route, buildDeliveryMetadata(message));
+            const metadata = buildDeliveryMetadata(message);
+            await dispatchWithDelivery({
+                dispatch,
+                message,
+                deliver: (text) => this.sendFinal(message.route, event.replyToken, text, metadata),
+                metadata,
+                operation: (operation) =>
+                    this.sendOperation({
+                        ...operation,
+                        metadata: operation.metadata ?? metadata,
+                        raw: { replyToken: event.replyToken },
+                    }),
+                typing: () => this.sendTyping(message.route, metadata),
+            });
         }
         return json({ ok: true, processed });
     }
@@ -142,7 +164,9 @@ export class LineAdapter implements ChannelAdapter {
                 chatName: readString(source.groupId ?? source.roomId ?? source.userId),
                 messageId: readString(message.id),
             },
-            replyTo: event.replyToken ? { messageId: event.replyToken } : undefined,
+            // LINE replyToken is a short-lived send credential. Only quoteToken
+            // is a durable protocol anchor for native quoted replies.
+            replyTo: message.quoteToken ? { messageId: message.quoteToken } : undefined,
             text: readString(message.text) ?? "",
             attachments: readLineAttachments(message),
             raw: event,
@@ -150,7 +174,39 @@ export class LineAdapter implements ChannelAdapter {
         };
     }
 
-    private async reply(replyToken: string, text: string): Promise<void> {
+    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+        if (operation.operation === GatewayOutboundOperation.TypingStart) {
+            await this.sendTyping(operation.route, operation.metadata);
+            return;
+        }
+        if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
+            const replyToken = readString(operation.raw?.replyToken);
+            await this.sendFinal(operation.route, replyToken, operation.text, operation.metadata);
+        }
+    }
+
+    private async sendFinal(
+        route: GatewayRoute,
+        replyToken: string | undefined,
+        text: string,
+        metadata?: GatewayDeliveryMetadata,
+    ): Promise<void> {
+        const content = truncatePlatformText(text.trim(), 5000);
+        if (!content) {
+            return;
+        }
+        if (replyToken) {
+            try {
+                await this.reply(replyToken, content, metadata);
+                return;
+            } catch (error) {
+                console.error(JSON.stringify({ type: "line.reply.failed", error: String(error) }));
+            }
+        }
+        await this.push(route, content, metadata);
+    }
+
+    private async reply(replyToken: string, text: string, metadata?: GatewayDeliveryMetadata): Promise<void> {
         if (!this.config.channelAccessToken) {
             return;
         }
@@ -162,15 +218,55 @@ export class LineAdapter implements ChannelAdapter {
             },
             body: JSON.stringify({
                 replyToken,
-                messages: [{ type: "text", text }],
+                messages: [lineTextMessage(text, metadata)],
             }),
         });
         await assertPlatformResponse(response, "LINE");
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
-        // LINE has no bot typing endpoint for webhook bots.
+    private async push(route: GatewayRoute, text: string, metadata?: GatewayDeliveryMetadata): Promise<void> {
+        if (!this.config.channelAccessToken) {
+            return;
+        }
+        const response = await fetch("https://api.line.me/v2/bot/message/push", {
+            method: "POST",
+            headers: {
+                "content-type": "application/json; charset=utf-8",
+                authorization: `Bearer ${this.config.channelAccessToken}`,
+            },
+            body: JSON.stringify({
+                to: route.chatId,
+                messages: [lineTextMessage(text, metadata)],
+            }),
+        });
+        await assertPlatformResponse(response, "LINE push");
     }
+
+    async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+        if (!this.config.channelAccessToken || route.chatType !== ChatType.Direct) {
+            return;
+        }
+        const response = await fetch("https://api.line.me/v2/bot/chat/loading/start", {
+            method: "POST",
+            headers: {
+                "content-type": "application/json; charset=utf-8",
+                authorization: `Bearer ${this.config.channelAccessToken}`,
+            },
+            body: JSON.stringify({
+                chatId: route.chatId,
+                loadingSeconds: LINE_LOADING_SECONDS,
+            }),
+        });
+        await assertPlatformResponse(response, "LINE loading");
+    }
+}
+
+function lineTextMessage(text: string, metadata?: GatewayDeliveryMetadata): Record<string, unknown> {
+    return {
+        type: "text",
+        text,
+        ...(metadata?.replyToMessageId ? { quoteToken: metadata.replyToMessageId } : {}),
+    };
 }
 
 function lineChatType(sourceType: string | undefined): GatewayMessage["route"]["chatType"] {

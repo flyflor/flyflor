@@ -51,7 +51,7 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 | Microsoft Graph Webhook | `msgraph_webhook` | `HttpPlatformAdapter` | ✅ validationToken + change notification 归一化 |
 | Email | `email` | `HttpPlatformAdapter` | ✅ subject/from/body 归一化 + reply URL 回发 |
 | Home Assistant | `homeassistant` | `HttpPlatformAdapter` | ✅ state_changed 归一化 + persistent_notification 回复 |
-| Line | `line` | `LineAdapter` | ✅ HMAC 签名 + replyToken 回注 |
+| Line | `line` | `LineAdapter` | ✅ HMAC 签名 + loading animation + reply/push fallback + quoteToken |
 | Mattermost | `mattermost` | `MattermostAdapter` | ✅ outgoing webhook / slash command token 校验 + response JSON |
 | Matrix | `matrix` | `HttpPlatformAdapter` | ✅ room event 归一化 + Matrix send API 回复 |
 | QQ / QQBot | `qq` / `qqbot` | `HttpPlatformAdapter` | ✅ guild/channel/group/direct 事件归一化 |
@@ -78,6 +78,7 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 | WeChat official | ✅ XML callback | — | — | ✅ callback source id | — | — | — |
 | WeCom Callback | ✅ `message/send` | — | — | ✅ callback source id | — | — | — |
 | Weixin iLink | ✅ `sendmessage` + `context_token` | ✅ `sendtyping`（需 `getconfig` ticket） | — | ✅ `context_token` | — | — | — |
+| LINE | ✅ replyToken / push fallback | ✅ direct chat loading animation | — | ✅ `quoteToken` | — | — | — |
 | DingTalk | ✅ robot webhook | — | — | ✅ `replyMsgId` 入站归一化 | — | 预留 | — |
 | Mattermost | ✅ webhook JSON / REST post | ✅ `users/me/typing`（需 bot REST） | ✅ `root_id` | ✅ `post_id` root | ✅ `posts/{id}/patch` | — | — |
 | Matrix / Google Chat | ✅ | adapter-specific no-op | ✅ 原生 thread/root 字段 | ✅ 原生 reply 字段 | 共享 HTTP 预留 | — | Matrix 入站 reaction |
@@ -182,6 +183,7 @@ interface GatewayChannelCapabilities {
 - 外部聊天 / 平台 channel 只发送最终 `GatewayReply.text`，不把 runtime 的 token delta 拆成多条平台消息；显式 OpenAI-compatible `/v1/*` API SSE 属于 API 协议面，单独处理。
 - `typing.start` / `typing.stop` 只作为 best-effort lifecycle；失败会记录 `gateway.operation.failed` / `gateway.typing.failed`，不会阻断 final reply。Weixin iLink 只有拿到 `getconfig.typing_ticket` 后才调用官方 `sendtyping`，缺 ticket 时 no-op；最终回复仍必须走同一条入站 update 的官方 `sendmessage + context_token`，不能被 lifecycle operation 吞掉。
 - Discord slash command 先按官方 interaction 协议返回 deferred ACK，再用 `PATCH /webhooks/{application_id}/{token}/messages/@original` 写入最终文本；不要改成 followup POST 造成重复消息。
+- LINE 的 `replyToken` 是短生命周期发送凭据，不是引用锚点；引用回复只使用 message `quoteToken`。Direct chat 可用官方 loading animation，replyToken 失败后按官方 push API 回退，仍只发送最终文本。
 - `message.edit` / `card.update` 必须由 adapter capability 声明支持后才能走原生 API；否则保持 final text send，不做 bridge 式伪装。
 - `GatewayMessage.messageAction / mentions / reactions / replyTo / comment` 只从平台结构化字段或协议 token 复制，属于通信协议归一化，不参与业务语义判断。
 - TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；chat TUI 已订阅 runtime / blackboard 事件，后续可把 gateway 级 channel 状态变化也接入同一事件面板。

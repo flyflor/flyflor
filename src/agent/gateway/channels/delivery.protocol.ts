@@ -60,6 +60,13 @@ export function resolveReplyAnchor(message: GatewayMessage): string | undefined 
         return message.replyTo.messageId;
     }
 
+    if (message.route.channel === Channel.Line && message.replyTo?.messageId) {
+        // LINE's message id identifies inbound content, while quoteToken is
+        // the official outbound quoted-reply anchor. The adapter stores that
+        // quoteToken in replyTo.messageId, so it must win over source.messageId.
+        return message.replyTo.messageId;
+    }
+
     return message.source?.messageId ?? message.replyTo?.messageId;
 }
 

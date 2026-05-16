@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { GatewayModule } from "../src/agent/gateway/gateway.module.ts";
+import { buildDeliveryMetadata } from "../src/agent/gateway/channels/delivery.protocol.ts";
 import { dispatchWithDelivery } from "../src/agent/gateway/channels/helpers.ts";
 import {
     Channel,
@@ -76,6 +77,17 @@ describe("channel delivery", () => {
             metadata: { replyToMessageId: "source-1", threadId: "thread-1" },
             text: "final",
         });
+    });
+
+    test("LINE delivery metadata prefers quoteToken over inbound message id", () => {
+        const metadata = buildDeliveryMetadata({
+            ...message,
+            route: { channel: Channel.Line, chatId: "line-user", chatType: ChatType.Direct },
+            source: { messageId: "line-message-id" },
+            replyTo: { messageId: "line-quote-token" },
+        });
+
+        expect(metadata?.replyToMessageId).toBe("line-quote-token");
     });
 
     test("legacy gateway stream URL returns final text without channel deltas", async () => {

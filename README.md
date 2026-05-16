@@ -21,7 +21,7 @@ Flyflor 当前支持 31 个 channel，分为三类：
 | 官方协议 / 独立适配 | WeChat official account、WeCom Callback、Weixin iLink、Telegram、Discord、Feishu、Slack、Line、Mattermost、DingTalk、BlueBubbles / iMessage |
 | 共享 HTTP 协议适配 | API Server、Google Chat、IRC、Email、Home Assistant、Matrix、MS Graph Webhook、QQ、QQBot、Signal、SMS、Teams、WeCom、WhatsApp、Yuanbao、Zalo |
 
-Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除、卡片更新等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。`/channels` 状态会暴露每个 adapter 的 capability：Telegram 已支持 typing / thread / reply / message edit，Discord 使用 official deferred interaction + original message patch，Slack 支持 thread / update / reaction，Feishu 支持 thread reply / message update，Mattermost 支持 REST typing / thread / post patch，Weixin iLink 支持官方 `sendtyping` ticket 生命周期，WeChat official、WeCom Callback 坚持官方协议并按平台能力稳定降级。
+Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除、卡片更新等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。`/channels` 状态会暴露每个 adapter 的 capability：Telegram 已支持 typing / thread / reply / message edit，Discord 使用 official deferred interaction + original message patch，Slack 支持 thread / update / reaction，Feishu 支持 thread reply / message update，LINE 支持 loading animation / quoteToken / push fallback，Mattermost 支持 REST typing / thread / post patch，Weixin iLink 支持官方 `sendtyping` ticket 生命周期，WeChat official、WeCom Callback 坚持官方协议并按平台能力稳定降级。
 
 完整矩阵和每个 channel 的配置要求见 [docs/gateway.channels.md](docs/gateway.channels.md)。
 

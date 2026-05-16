@@ -31,7 +31,7 @@ describe("LineAdapter", () => {
         expect(response.status).toBe(401);
     });
 
-    test("normalizes message event and replies once with replyToken", async () => {
+    test("normalizes message event, starts official loading and replies once with replyToken", async () => {
         const adapter = new LineAdapter({ channelAccessToken: TOKEN, channelSecret: SECRET });
         const body = JSON.stringify({
             destination: "line-bot-id",
@@ -40,17 +40,20 @@ describe("LineAdapter", () => {
                     type: "message",
                     webhookEventId: "evt-1",
                     replyToken: "reply-1",
-                    source: { type: "group", groupId: "group-1", userId: "user-1" },
-                    message: { id: "msg-1", type: "text", text: "hello" },
+                    source: { type: "user", userId: "user-1" },
+                    message: { id: "msg-1", quoteToken: "quote-1", type: "text", text: "hello" },
                 },
             ],
         });
 
         let captured: { route: unknown; text: string; attachments?: unknown } | undefined;
-        const replies: Array<Record<string, unknown>> = [];
+        const calls: Array<{ body: Record<string, unknown>; url: string }> = [];
         globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-            if (String(input) === "https://api.line.me/v2/bot/message/reply") {
-                replies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+            if (String(input).startsWith("https://api.line.me/v2/bot/")) {
+                calls.push({
+                    url: String(input),
+                    body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+                });
                 return new Response(JSON.stringify({ ok: true }), { status: 200 });
             }
             return originalFetch(input, init);
@@ -70,12 +73,60 @@ describe("LineAdapter", () => {
         expect(captured?.text).toBe("hello");
         expect(captured?.route).toMatchObject({
             channel: Channel.Line,
-            chatId: "group-1",
-            chatType: ChatType.Group,
+            chatId: "user-1",
+            chatType: ChatType.Direct,
         });
-        expect(replies).toHaveLength(1);
-        expect(replies[0]).toMatchObject({
+        expect(calls.map((call) => call.url)).toEqual([
+            "https://api.line.me/v2/bot/chat/loading/start",
+            "https://api.line.me/v2/bot/message/reply",
+        ]);
+        expect(calls[0]?.body).toMatchObject({ chatId: "user-1", loadingSeconds: 20 });
+        expect(calls[1]?.body).toMatchObject({
             replyToken: "reply-1",
+            messages: [{ type: "text", text: "ack", quoteToken: "quote-1" }],
+        });
+    });
+
+    test("falls back to push when reply token delivery fails", async () => {
+        const adapter = new LineAdapter({ channelAccessToken: TOKEN, channelSecret: SECRET });
+        const body = JSON.stringify({
+            events: [
+                {
+                    type: "message",
+                    webhookEventId: "evt-push-fallback",
+                    replyToken: "expired-reply",
+                    source: { type: "group", groupId: "group-1", userId: "user-1" },
+                    message: { id: "msg-2", type: "text", text: "hello group" },
+                },
+            ],
+        });
+        const calls: Array<{ body: Record<string, unknown>; url: string }> = [];
+        globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+            const url = String(input);
+            calls.push({
+                url,
+                body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+            });
+            if (url === "https://api.line.me/v2/bot/message/reply") {
+                return new Response(JSON.stringify({ message: "Invalid reply token" }), { status: 400 });
+            }
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }) as typeof fetch;
+
+        const response = await adapter.handle(signedRequest(body), async (message) => ({
+            messageId: "reply",
+            route: message.route,
+            text: "fallback ack",
+        }));
+
+        expect(response.status).toBe(200);
+        expect(calls.map((call) => call.url)).toEqual([
+            "https://api.line.me/v2/bot/message/reply",
+            "https://api.line.me/v2/bot/message/push",
+        ]);
+        expect(calls[1]?.body).toMatchObject({
+            to: "group-1",
+            messages: [{ type: "text", text: "fallback ack" }],
         });
     });
 });

@@ -169,9 +169,18 @@ describe("gateway channel status snapshots", () => {
     test("exposes channel capability matrix in status snapshots", () => {
         const snapshot = buildGatewayStatusSnapshot(
             gatewayConfig(
-                [Channel.Telegram, Channel.Slack, Channel.Discord, Channel.Mattermost, Channel.WeChat, Channel.WeixinIlink],
+                [
+                    Channel.Telegram,
+                    Channel.Slack,
+                    Channel.Discord,
+                    Channel.Line,
+                    Channel.Mattermost,
+                    Channel.WeChat,
+                    Channel.WeixinIlink,
+                ],
                 {
                     discord: { applicationId: "discord-app", publicKey: "00" },
+                    line: { channelAccessToken: "line-token", channelSecret: "line-secret" },
                     mattermost: {
                         baseUrl: "https://mattermost.test",
                         botToken: "mattermost-bot",
@@ -193,12 +202,14 @@ describe("gateway channel status snapshots", () => {
                         Channel.Telegram,
                         Channel.Slack,
                         Channel.Discord,
+                        Channel.Line,
                         Channel.Mattermost,
                         Channel.WeChat,
                         Channel.WeixinIlink,
                     ],
                     {
                         discord: { applicationId: "discord-app", publicKey: "00" },
+                        line: { channelAccessToken: "line-token", channelSecret: "line-secret" },
                         mattermost: {
                             baseUrl: "https://mattermost.test",
                             botToken: "mattermost-bot",
@@ -222,6 +233,7 @@ describe("gateway channel status snapshots", () => {
         const telegram = snapshot.channels.find((channel) => channel.name === Channel.Telegram);
         const slack = snapshot.channels.find((channel) => channel.name === Channel.Slack);
         const discord = snapshot.channels.find((channel) => channel.name === Channel.Discord);
+        const line = snapshot.channels.find((channel) => channel.name === Channel.Line);
         const mattermost = snapshot.channels.find((channel) => channel.name === Channel.Mattermost);
         const wechat = snapshot.channels.find((channel) => channel.name === Channel.WeChat);
         const weixin = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
@@ -241,6 +253,10 @@ describe("gateway channel status snapshots", () => {
         expect(discord?.capabilities).toMatchObject({
             messageUpdate: true,
             replyReference: true,
+        });
+        expect(line?.capabilities).toMatchObject({
+            replyReference: true,
+            typing: true,
         });
         expect(wechat?.capabilities).toMatchObject({
             finalReply: true,
