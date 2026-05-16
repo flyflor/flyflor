@@ -5,23 +5,7 @@ import {
     ChatType,
     type GatewayMessage,
 } from "../src/protocol/contracts/index.ts";
-
-// Mirror of the runtime-internal helpers, kept in test-local copy to assert the rendered shape.
-// Source of truth lives in runtime.module.ts; if the rendering changes, this test will fail loudly
-// when the runtime is updated to use a different format.
-function renderAttachmentSummary(attachments: GatewayMessage["attachments"]): string {
-    if (!attachments || attachments.length === 0) return "";
-    const lines = attachments.map((a, idx) => {
-        const parts: string[] = [`#${idx + 1}`, a.kind];
-        if (a.name) parts.push(a.name);
-        else if (a.path) parts.push(a.path);
-        if (a.mimeType) parts.push(a.mimeType);
-        if (typeof a.size === "number") parts.push(`${a.size}B`);
-        if (a.sha256) parts.push(`sha256:${a.sha256.slice(0, 12)}`);
-        return `- ${parts.join(" | ")}`;
-    });
-    return ["[attachments]", ...lines].join("\n");
-}
+import { renderAttachmentSummary, renderUserContentWithAttachments } from "../src/agent/runtime/attachments.ts";
 
 function makeMessage(attachments?: GatewayMessage["attachments"]): GatewayMessage {
     return {
@@ -61,6 +45,13 @@ describe("attachments rendering", () => {
     test("falls back to path when name absent", () => {
         const summary = renderAttachmentSummary([{ kind: "file", path: "/tmp/x.pdf" }]);
         expect(summary).toContain("/tmp/x.pdf");
+    });
+
+    test("appends attachment summary to user content without downloading binaries", () => {
+        const text = renderUserContentWithAttachments(makeMessage([{ kind: "file", name: "spec.pdf" }]));
+        expect(text).toContain("look at this");
+        expect(text).toContain("[attachments]");
+        expect(text).toContain("spec.pdf");
     });
 });
 

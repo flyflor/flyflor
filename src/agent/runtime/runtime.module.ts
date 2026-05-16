@@ -78,6 +78,7 @@ import { InMemoryFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./f
 import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
+import { renderUserContentWithAttachments } from "./attachments.ts";
 import { parsePlanningBlocks } from "./planning.blocks.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
@@ -1440,12 +1441,6 @@ function renderAskChoiceLines(choices: AgentAskChoice[] | undefined): string[] {
     return lines;
 }
 
-function renderUserContentWithAttachments(message: GatewayMessage): string {
-    const summary = renderAttachmentSummary(message.attachments);
-    if (!summary) return message.text;
-    return message.text ? `${message.text}\n\n${summary}` : summary;
-}
-
 function buildAskMetadata(ask: AgentAsk, snapshotId: string): Record<string, unknown> {
     return {
         choiceCount: ask.choices?.length ?? 0,
@@ -1568,20 +1563,6 @@ export function filterMcpServersByToolset<T extends { name: string }>(
     const allowed = new Set(allowlist.map((entry) => entry.trim()).filter((entry) => entry.length > 0));
     if (allowed.size === 0) return servers;
     return servers.filter((server) => allowed.has(server.name));
-}
-
-function renderAttachmentSummary(attachments: GatewayMessage["attachments"]): string {
-    if (!attachments || attachments.length === 0) return "";
-    const lines = attachments.map((a, idx) => {
-        const parts: string[] = [`#${idx + 1}`, a.kind];
-        if (a.name) parts.push(a.name);
-        else if (a.path) parts.push(a.path);
-        if (a.mimeType) parts.push(a.mimeType);
-        if (typeof a.size === "number") parts.push(`${a.size}B`);
-        if (a.sha256) parts.push(`sha256:${a.sha256.slice(0, 12)}`);
-        return `- ${parts.join(" | ")}`;
-    });
-    return ["[attachments]", ...lines].join("\n");
 }
 
 function renderReplyPrefix(run: RuntimeBlackboardRun | undefined): string {
