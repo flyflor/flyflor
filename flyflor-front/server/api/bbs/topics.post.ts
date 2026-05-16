@@ -2,6 +2,7 @@ import { getCurrentUser } from "../../utils/auth";
 import { database, listTopics } from "../../utils/database";
 
 type TopicBody = {
+    boardKey?: string;
     title?: string;
     body?: string;
 };
@@ -17,13 +18,23 @@ export default defineEventHandler(async (event) => {
     }
 
     const payload = await readBody<TopicBody>(event);
+    const boardKey = payload.boardKey?.trim();
     const title = payload.title?.trim();
     const body = payload.body?.trim();
 
-    if (!title || !body) {
+    if (!boardKey || !title || !body) {
         throw createError({
             statusCode: 400,
-            statusMessage: "Title and body are required.",
+            statusMessage: "Board, title, and body are required.",
+        });
+    }
+
+    const board = database.query("SELECT key FROM boards WHERE key = $key").get({ $key: boardKey });
+
+    if (!board) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: "Board was not found.",
         });
     }
 
@@ -31,6 +42,7 @@ export default defineEventHandler(async (event) => {
         .query(`
             INSERT INTO topics (
                 board_key,
+                author_user_id,
                 title_zh,
                 title_en,
                 body_zh,
@@ -38,7 +50,8 @@ export default defineEventHandler(async (event) => {
                 author_name
             )
             VALUES (
-                'skill',
+                $boardKey,
+                $authorUserId,
                 $title,
                 $title,
                 $body,
@@ -48,6 +61,8 @@ export default defineEventHandler(async (event) => {
         `)
         .run({
             $authorName: user.name,
+            $authorUserId: user.id,
+            $boardKey: boardKey,
             $body: body,
             $title: title,
         });

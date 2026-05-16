@@ -11,9 +11,14 @@ export type Board = {
     description_en: string;
     description_zh: string;
     id: number;
-    key: "skill" | "mcp";
+    key: string;
     name_en: string;
     name_zh: string;
+    topic_count?: number;
+};
+
+export type AdminUser = AuthUser & {
+    topicCount: number;
 };
 
 export type Topic = {

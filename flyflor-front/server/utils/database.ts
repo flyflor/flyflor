@@ -28,9 +28,14 @@ type BoardRow = {
     description_en: string;
 };
 
+type AdminUserRow = UserRow & {
+    topic_count: number;
+};
+
 type TopicRow = {
     id: number;
     board_key: string | null;
+    author_user_id: number | null;
     title_zh: string;
     title_en: string;
     body_zh: string;
@@ -135,6 +140,7 @@ database.exec(`
     CREATE TABLE IF NOT EXISTS topics (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         board_key TEXT NOT NULL REFERENCES boards(key) ON DELETE CASCADE,
+        author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         title_zh TEXT NOT NULL,
         title_en TEXT NOT NULL,
         body_zh TEXT NOT NULL,
@@ -192,6 +198,17 @@ const tableColumns = {
 
 if (!tableColumns.users.some((column) => column.name === "is_admin")) {
     database.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;");
+}
+
+if (!tableColumns.topics.some((column) => column.name === "author_user_id")) {
+    database.exec("ALTER TABLE topics ADD COLUMN author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;");
+    database.exec(`
+        UPDATE topics
+        SET author_user_id = (
+            SELECT id FROM users WHERE users.name = topics.author_name LIMIT 1
+        )
+        WHERE author_user_id IS NULL
+    `);
 }
 
 if (!tableColumns.topics.some((column) => column.name === "views")) {
@@ -476,8 +493,51 @@ export function serializeUser(user: UserRow) {
     };
 }
 
+export function serializeAdminUser(user: AdminUserRow) {
+    return {
+        ...serializeUser(user),
+        topicCount: user.topic_count,
+    };
+}
+
 export function listBoards(): BoardRow[] {
     return database.query("SELECT * FROM boards ORDER BY id ASC").all() as BoardRow[];
+}
+
+export function listBoardsWithTopicCounts(): Array<BoardRow & { topic_count: number }> {
+    return database
+        .query(`
+            SELECT
+                boards.*,
+                COUNT(topics.id) AS topic_count
+            FROM boards
+            LEFT JOIN topics ON topics.board_key = boards.key
+            GROUP BY boards.id
+            ORDER BY boards.id ASC
+        `)
+        .all() as Array<BoardRow & { topic_count: number }>;
+}
+
+export function listAdminUsers(): ReturnType<typeof serializeAdminUser>[] {
+    const users = database
+        .query(`
+            SELECT
+                users.*,
+                COUNT(topics.id) AS topic_count
+            FROM users
+            LEFT JOIN topics ON topics.author_user_id = users.id
+            GROUP BY users.id
+            ORDER BY users.is_admin DESC, users.created_at DESC, users.id DESC
+        `)
+        .all() as AdminUserRow[];
+
+    return users.map(serializeAdminUser);
+}
+
+export function countAdminUsers(): number {
+    const row = database.query("SELECT COUNT(*) AS count FROM users WHERE is_admin = 1").get() as { count: number };
+
+    return row.count;
 }
 
 export function listTopics(boardKey?: string): TopicRow[] {

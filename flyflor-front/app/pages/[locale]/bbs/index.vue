@@ -45,6 +45,11 @@
                 <div class="feed-column">
                     <form v-if="user" class="topic-form surface-panel reveal-flip" @submit.prevent="submitTopic">
                         <h2>{{ content.bbs.newTopic }}</h2>
+                        <select v-model="topicBoardKey" required>
+                            <option v-for="board in boards" :key="board.key" :value="board.key">
+                                {{ locale === "zh" ? board.name_zh : board.name_en }}
+                            </option>
+                        </select>
                         <input v-model="topicTitle" :placeholder="content.bbs.titlePlaceholder" required />
                         <textarea v-model="topicBody" :placeholder="content.bbs.bodyPlaceholder" required></textarea>
                         <button class="button button--primary" type="submit">
@@ -53,9 +58,25 @@
                         </button>
                     </form>
 
-                    <article v-for="topic in topics" :key="topic.id" class="topic-card surface-panel reveal-flip">
+                    <div v-if="boards.length" class="board-filter surface-panel reveal-flip">
+                        <button :class="{ 'is-active': selectedBoardKey === '' }" type="button" @click="selectedBoardKey = ''">
+                            {{ locale === "zh" ? "全部" : "All" }}
+                        </button>
+                        <button
+                            v-for="board in boards"
+                            :key="board.key"
+                            :class="{ 'is-active': selectedBoardKey === board.key }"
+                            type="button"
+                            @click="selectedBoardKey = board.key"
+                        >
+                            {{ locale === "zh" ? board.name_zh : board.name_en }}
+                        </button>
+                    </div>
+
+                    <article v-for="topic in filteredTopics" :key="topic.id" class="topic-card surface-panel reveal-flip">
                         <div class="topic-card__head">
                             <span>{{ topic.author_name }}</span>
+                            <small>{{ boardName(topic.board_key) }}</small>
                             <small>{{ formatDate(topic.created_at) }}</small>
                         </div>
                         <h2>{{ locale === "zh" ? topic.title_zh : topic.title_en }}</h2>
@@ -84,20 +105,31 @@
 </template>
 
 <script setup lang="ts">
-import type { Announcement, SiteSettings, Topic } from "~/types/api";
+import type { Announcement, Board, SiteSettings, Topic } from "~/types/api";
 
 const { alternateLocale, content, locale } = useSiteLocale();
 const { user } = useAuth();
+const selectedBoardKey = ref("");
+const topicBoardKey = ref("");
 const topicTitle = ref("");
 const topicBody = ref("");
 const { data, refresh } = await useFetch<{
     announcements: Announcement[];
+    boards: Board[];
     settings: SiteSettings;
     topics: Topic[];
 }>("/api/bbs");
 const announcements = computed(() => data.value?.announcements ?? []);
+const boards = computed(() => data.value?.boards ?? []);
 const settings = computed(() => data.value?.settings ?? null);
 const topics = computed(() => data.value?.topics ?? []);
+const filteredTopics = computed(() => {
+    if (!selectedBoardKey.value) {
+        return topics.value;
+    }
+
+    return topics.value.filter((topic) => topic.board_key === selectedBoardKey.value);
+});
 const communityTitle = computed(() => {
     if (!settings.value) {
         return content.value.bbs.title;
@@ -128,6 +160,22 @@ const leaderboard = computed(() => {
         .slice(0, 5);
 });
 
+watchEffect(() => {
+    if (!topicBoardKey.value && boards.value[0]) {
+        topicBoardKey.value = boards.value[0].key;
+    }
+});
+
+function boardName(key: string | null): string {
+    const board = boards.value.find((item) => item.key === key);
+
+    if (!board) {
+        return locale.value === "zh" ? "未分区" : "Unassigned";
+    }
+
+    return locale.value === "zh" ? board.name_zh : board.name_en;
+}
+
 function formatDate(value: string): string {
     return new Intl.DateTimeFormat(locale.value === "zh" ? "zh-CN" : "en", {
         dateStyle: "medium",
@@ -137,6 +185,7 @@ function formatDate(value: string): string {
 async function submitTopic(): Promise<void> {
     await $fetch("/api/bbs/topics", {
         body: {
+            boardKey: topicBoardKey.value,
             body: topicBody.value,
             title: topicTitle.value,
         },
@@ -280,6 +329,28 @@ useHead({
 
 .topic-form .button {
     width: fit-content;
+}
+
+.board-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+}
+
+.board-filter button {
+    background: transparent;
+    border-radius: 6px;
+    color: var(--color-muted);
+    cursor: pointer;
+    font-weight: 900;
+    min-height: 36px;
+    padding: 0 12px;
+}
+
+.board-filter button.is-active {
+    background: var(--color-text);
+    color: var(--color-surface);
 }
 
 .topic-card {
