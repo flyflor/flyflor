@@ -54,7 +54,6 @@ import { type BlackboardModule } from "../blackboard/index.ts";
 import {
     loadSkills,
     loadSkillUsageSummary,
-    recordSkillUsage,
     type Skill,
 } from "../../skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard/route.ts";
@@ -329,6 +328,7 @@ export class RuntimeModule extends RuntimeBoundary {
             this.events.publish(
                 event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
             );
+            await this.flushEventHooks();
             this.sandboxQuota.forgetRequest(context.requestId);
             return generated.reply;
         } finally {
@@ -774,13 +774,6 @@ export class RuntimeModule extends RuntimeBoundary {
         // 触发条件是布尔字段 `call.ok === false`（资源指标，非字符匹配）；
         // userFacing.title 由 server/tool/error 三段结构化字段拼接，不解析对话文本。
         this.recordToolFailureGhosts(message, context.requestId, mcpCallProvenance);
-        await recordSkillUsage(this.config.paths, assembled.selectedSkills, {
-            mcpCallCount: mcpCallProvenance.length,
-            mcpSuccessCount: mcpCallProvenance.filter((call) => call.ok).length,
-            now: context.now,
-            requestId: context.requestId,
-        });
-
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
         const previousSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const totalToolCalls = mcpCallProvenance.length;
@@ -881,6 +874,13 @@ export class RuntimeModule extends RuntimeBoundary {
                 embedding,
                 requestId: context.requestId,
             });
+        }
+    }
+
+    protected async flushEventHooks(): Promise<void> {
+        const maybeFlush = (this.events as { flush?: () => Promise<void> }).flush;
+        if (typeof maybeFlush === "function") {
+            await maybeFlush.call(this.events);
         }
     }
 

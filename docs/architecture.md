@@ -142,7 +142,18 @@ abstract class CrystalComponent extends FlyflorComponent {}
 - 仅在 composition root 注入；运行时只 `resolve` 已注册 token。
 - `@Module` / `@Provide` / `@Inject` / `@Component` / `@Event` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
 - `EventsComponent` 是运行时全局事件入口：`emit()` 发布结构化 RuntimeEvent，`on()` 注册显式 handler，`registerHooks(instance)` 只读取实例类上由 `@Event(type)` 写入的 metadata。
+- Runtime 只保留 turn pipeline 主干；可旁路的统计 / 审计 / 后处理优先抽成 `src/agent/runtime/events/*.event.ts` 全局 handler。当前 `RuntimeSkillUsageEventHandler` 通过 `skill.context.built` / `mcp.tool.call.executed` / `agent.turn.end` 聚合并写 usage sidecar。
 - DI 入口不再维护 `FlyFlorTokens` 这种集中式 token 目录；`RuntimeModeComponent / ConfigComponent / EventsComponent / ModelComponent / AdaptersComponent` 这类边界直接用各自域内的真实 `*.component.ts` 类作为 DI key，composition root 显式构造并 `bindSingleton` / `resolve`。
+
+## Repo / SQL 分层
+
+SQLite 数据访问按 `repo -> store -> component` 分层：
+
+- `*.repo.ts`：表 row model、写入 DTO、SQL function、row 映射。只做数据模型层，不承载业务决策。
+- `*.store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery。
+- `*.component.ts`：向 runtime / neural / crystal 暴露能力边界。
+
+Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前已迁移 `brain.project.repo.ts`、`brain.task.plan.repo.ts`、`brain.context.fork.repo.ts`、`brain.scene.record.repo.ts`，BrainStore 只保留 `brain.db` 生命周期和对外门面。
 
 ## 模块边界硬约束
 
@@ -157,7 +168,7 @@ abstract class CrystalComponent extends FlyflorComponent {}
 | `src/agent/sandbox` | mcp-tool / shell-hook / plugin 审批 | 被业务模块绕过 |
 | `src/agent/mcp` | server/client 适配 | 跑非 MCP 工具、维护路由策略 |
 | `src/llm` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |
-| `src/crystal` | reflection、Gem、drift | 持有渠道协议、绕过证据门、直接改写外部 Skill 包 |
+| `src/crystal` | reflection、`gems`、drift | 持有渠道协议、绕过证据门、直接改写外部 Skill 包 |
 | `src/neural` | 海马体策略、回放、衰减、调度 | 调用模型决策 |
 | `src/context` | 显式 project / fork / capability scope 装配 | 业务语义判断、隐式 session |
 | `src/protocol` | 枚举、事件、信封 | 业务决策、状态存储 |

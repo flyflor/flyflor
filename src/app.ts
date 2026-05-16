@@ -14,6 +14,7 @@ import {
 } from "./agent/index.ts";
 import { AdaptersComponent } from "./agent/gateway/index.ts";
 import { ConfigComponent, loadConfig, type FlyflorConfig } from "./config/index.ts";
+import { RuntimeSkillUsageEventHandler } from "./agent/runtime/events/index.ts";
 import { createMemory, MemoryModule } from "./neural/memory/index.ts";
 import {
     assertModuleMetadata,
@@ -89,6 +90,7 @@ export interface FlyFlorDependencies {
     config: ConfigComponent;
     container: DependencyContainer;
     events: EventsComponent;
+    eventDisposers: Array<() => void>;
     gateway: GatewayModule;
     memory: MemoryModule;
     mode: RuntimeModeComponent;
@@ -121,6 +123,9 @@ export class FlyFlor {
 
     public dispose(): void {
         this.dependencies.runtime.dispose();
+        for (const dispose of this.dependencies.eventDisposers.splice(0)) {
+            dispose();
+        }
     }
 
     public resolve<TValue>(token: DependencyToken<TValue>): TValue {
@@ -152,6 +157,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
     const memory = options.memory ?? createMemory(config, events, model);
     const runtime = options.runtime ?? new RuntimeModule(config, model, events, blackboard, memory);
+    const eventDisposers = registerRuntimeEventHandlers(config, events);
     const adapters = new AdaptersComponent(options.adapters ?? createChannelAdapters(config.gateway));
     const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters.asMap(), runtime, events);
     const container = options.container ?? new DependencyContainer();
@@ -162,6 +168,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         config,
         container,
         events,
+        eventDisposers,
         gateway,
         memory,
         mode,
@@ -169,6 +176,10 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         runtime,
         workers,
     };
+}
+
+function registerRuntimeEventHandlers(config: ConfigComponent, events: EventsComponent): Array<() => void> {
+    return [...events.registerHooks(new RuntimeSkillUsageEventHandler(config.snapshot()))];
 }
 
 function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies: FlyFlorDependencies): void {

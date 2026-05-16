@@ -9,7 +9,8 @@ Gem 与 Skill 必须分开：Gem 是内部晶体智力，存在 `crystal.db` / C
 ## 相关代码路径
 
 - `src/crystal/reflection/index.ts` — Crystal reflection helpers（函数式结晶流程）
-- `src/crystal/memory/index.ts` — `CrystalMemoryComponent` / `LocalCrystalMemoryStore`
+- `src/crystal/gems/index.ts` — `CrystalGemComponent` / `InMemoryCrystalMemoryStore`，内部 Gem 模块边界
+- `src/crystal/memory/index.ts` — `CrystalMemoryComponent` 对外兼容门面 / `LocalCrystalMemoryStore`
 - `src/skills/index.ts` — 外部 Skill 包加载与物化；不属于 Gem 本体（见 `skill.system.md`）
 - `src/agent/runtime/reflection/worker.ts` — 反思 worker 调度
 - `templates/prompts/crystal.reflection.md` — 反思抽取提示

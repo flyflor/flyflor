@@ -9,7 +9,8 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 ## 相关代码路径
 
 - `src/components/memory/markdown.store.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
-- `src/components/memory/brain.store.ts` — `brain.db` 单库（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
+- `src/components/memory/brain.store.ts` — `brain.db` 单库生命周期与对外门面（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
+- `src/components/memory/brain.*.repo.ts` — `projects`、`task_plans`、`context_forks`、`scene_records` 的 row model + SQL function；repo 只做数据映射，不做业务决策
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/components/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
@@ -23,7 +24,8 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/neural/memory/background.scheduler.ts` — consolidation / hot compression / summary / decay / dream / dormant 节拍
 - `src/neural/memory/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
-- `src/crystal/memory/index.ts` — CrystalMemoryComponent 与本地晶体图 backend
+- `src/crystal/gems/index.ts` — CrystalGemComponent，内部 Gem 召回与结晶边界
+- `src/crystal/memory/index.ts` — CrystalMemoryComponent 兼容门面与本地晶体图 backend
 - `src/components/index.ts` — 共享 Component 基类：MemoryComponent / CrystalComponent / BrainComponent / GraphComponent / SQLiteComponent / RedisComponent / SurrealComponent
 
 ## 分层结构
@@ -136,7 +138,7 @@ erDiagram
     GEM ||--o{ GEM_SNAPSHOT : "snapshot"
 ```
 
-主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore。
+主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore；Gem 的对内模块边界是 `src/crystal/gems/CrystalGemComponent`，`CrystalMemoryComponent` 只保留对外兼容门面。
 
 `summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。summary 主记录先落盘；若 embedding 同步失败，会先保留已写入的 summary，再显式抛出，便于上层感知索引不一致并重试。
 

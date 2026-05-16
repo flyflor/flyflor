@@ -13,6 +13,8 @@ import type { EventSink, RuntimeEventType } from "./types.ts";
  * plugin observers; side-effect sinks stay configured at the composition root.
  */
 export class EventsComponent extends FlyflorComponent implements EventSink {
+    private readonly pendingHooks = new Set<Promise<void>>();
+
     public constructor(private readonly sink: EventSink, private readonly bus: RuntimeEventBus = globalEvents) {
         super();
     }
@@ -39,7 +41,10 @@ export class EventsComponent extends FlyflorComponent implements EventSink {
                 try {
                     const result = handler(runtimeEvent);
                     if (result instanceof Promise) {
-                        void result.catch(() => {});
+                        const pending = result.catch(() => {}).finally(() => {
+                            this.pendingHooks.delete(pending);
+                        });
+                        this.pendingHooks.add(pending);
                     }
                 } catch {
                     // Event hooks are observers; failures must not interrupt
@@ -70,5 +75,9 @@ export class EventsComponent extends FlyflorComponent implements EventSink {
 
     public asBus(): RuntimeEventBus {
         return this.bus;
+    }
+
+    public async flush(): Promise<void> {
+        await Promise.all([...this.pendingHooks]);
     }
 }

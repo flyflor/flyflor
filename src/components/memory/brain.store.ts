@@ -20,9 +20,12 @@ import {
     type ContextForkRecord,
     type SceneRecord,
     type TaskPlanRecord,
-    type TaskPlanStepRecord,
     type SummaryRange,
 } from "../../protocol/contracts/index.ts";
+import { BrainContextForkRepo } from "./brain.context.fork.repo.ts";
+import { BrainProjectRepo } from "./brain.project.repo.ts";
+import { BrainSceneRecordRepo } from "./brain.scene.record.repo.ts";
+import { BrainTaskPlanRepo } from "./brain.task.plan.repo.ts";
 
 /**
  * LF-R1 brain.db single-file store.
@@ -137,19 +140,6 @@ interface CodenameRow {
     project_id: string | null;
 }
 
-interface ProjectRow {
-    id: string;
-    user_id: string;
-    title: string;
-    goal: string | null;
-    project_dir: string;
-    project_memory_dir: string;
-    created_at: number;
-    updated_at: number;
-    last_used_at: number;
-    use_count: number;
-}
-
 interface EqStateRow {
     user_id: string;
     valence: number;
@@ -158,57 +148,6 @@ interface EqStateRow {
     label: string;
     confidence: number;
     updated_at: number;
-}
-
-interface TaskPlanRow {
-    id: string;
-    user_id: string;
-    title: string;
-    summary: string;
-    status: string;
-    progress: number;
-    step_count: number;
-    completed_step_count: number;
-    steps_json: string;
-    created_at: string;
-    updated_at: string;
-    source_event_id: string | null;
-    source_ask_id: string | null;
-    source_blackboard_turn_id: string | null;
-    source_scene_id: string | null;
-}
-
-interface ContextForkRow {
-    id: string;
-    user_id: string;
-    parent_id: string | null;
-    title: string;
-    summary: string;
-    scope_summary: string;
-    max_context_tokens: number;
-    inherited_event_ids_json: string;
-    created_at: string;
-    updated_at: string;
-    source_event_id: string | null;
-    source_ask_id: string | null;
-    source_blackboard_turn_id: string | null;
-}
-
-interface SceneRecordRow {
-    id: string;
-    user_id: string;
-    kind: string;
-    title: string;
-    summary: string;
-    detail: string | null;
-    visible_facts_json: string;
-    open_questions_json: string;
-    task_plan_id: string | null;
-    context_fork_id: string | null;
-    blackboard_turn_id: string | null;
-    source_event_id: string | null;
-    created_at: string;
-    updated_at: string;
 }
 
 export interface BrainVisibleAtom {
@@ -230,7 +169,11 @@ export interface BrainPromptAtomWrite {
 @Component()
 export class BrainStore extends BrainComponent {
     private db: Database | null = null;
+    private contextForkRepo: BrainContextForkRepo | null = null;
     private opened = false;
+    private projectRepo: BrainProjectRepo | null = null;
+    private sceneRecordRepo: BrainSceneRecordRepo | null = null;
+    private taskPlanRepo: BrainTaskPlanRepo | null = null;
 
     public constructor(private readonly options: BrainStoreOptions) {
         super();
@@ -245,6 +188,10 @@ export class BrainStore extends BrainComponent {
         db.exec("PRAGMA foreign_keys = ON");
         createSchema(db);
         this.db = db;
+        this.contextForkRepo = new BrainContextForkRepo(db);
+        this.projectRepo = new BrainProjectRepo(db);
+        this.sceneRecordRepo = new BrainSceneRecordRepo(db);
+        this.taskPlanRepo = new BrainTaskPlanRepo(db);
         this.opened = true;
     }
 
@@ -252,7 +199,11 @@ export class BrainStore extends BrainComponent {
         if (!this.opened) return;
         this.db?.close();
         this.db = null;
+        this.contextForkRepo = null;
         this.opened = false;
+        this.projectRepo = null;
+        this.sceneRecordRepo = null;
+        this.taskPlanRepo = null;
     }
 
     public appendEvent(input: BrainEventInput): MemoryEventRecord {
@@ -466,44 +417,7 @@ export class BrainStore extends BrainComponent {
      * These tables are summary-first views for TUI/history; they never store raw chain-of-thought.
      */
     public writeTaskPlan(record: TaskPlanRecord): TaskPlanRecord {
-        const db = this.requireDb();
-        db.query(
-            `INSERT INTO task_plans (
-                id, user_id, title, summary, status, progress, step_count, completed_step_count,
-                steps_json, created_at, updated_at, source_event_id, source_ask_id,
-                source_blackboard_turn_id, source_scene_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                title = excluded.title,
-                summary = excluded.summary,
-                status = excluded.status,
-                progress = excluded.progress,
-                step_count = excluded.step_count,
-                completed_step_count = excluded.completed_step_count,
-                steps_json = excluded.steps_json,
-                updated_at = excluded.updated_at,
-                source_event_id = excluded.source_event_id,
-                source_ask_id = excluded.source_ask_id,
-                source_blackboard_turn_id = excluded.source_blackboard_turn_id,
-                source_scene_id = excluded.source_scene_id`,
-        ).run(
-            record.id,
-            record.userId,
-            record.title,
-            record.summary,
-            record.status,
-            record.progress,
-            record.stepCount,
-            record.completedStepCount,
-            JSON.stringify(record.step ?? []),
-            record.createdAt,
-            record.updatedAt,
-            record.sourceEventId ?? null,
-            record.sourceAskId ?? null,
-            record.sourceBlackboardTurnId ?? null,
-            record.sourceSceneId ?? null,
-        );
-        return record;
+        return this.requireTaskPlanRepo().write(record);
     }
 
     public listTaskPlans(input: {
@@ -512,70 +426,15 @@ export class BrainStore extends BrainComponent {
         sourceBlackboardTurnId?: string;
         limit?: number;
     } = {}): TaskPlanRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.userId !== undefined) {
-            conditions.push("user_id = ?");
-            values.push(input.userId);
-        }
-        if (input.sourceEventId !== undefined) {
-            conditions.push("source_event_id = ?");
-            values.push(input.sourceEventId);
-        }
-        if (input.sourceBlackboardTurnId !== undefined) {
-            conditions.push("source_blackboard_turn_id = ?");
-            values.push(input.sourceBlackboardTurnId);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM task_plans ${where} ORDER BY updated_at DESC LIMIT ?`)
-            .all(...values, limit) as TaskPlanRow[];
-        return rows.map(rowToTaskPlan);
+        return this.requireTaskPlanRepo().list(input);
     }
 
     public writeContextFork(record: ContextForkRecord): ContextForkRecord {
-        const db = this.requireDb();
-        db.query(
-            `INSERT INTO context_forks (
-                id, user_id, parent_id, title, summary, scope_summary, max_context_tokens,
-                inherited_event_ids_json, created_at, updated_at, source_event_id,
-                source_ask_id, source_blackboard_turn_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                parent_id = excluded.parent_id,
-                title = excluded.title,
-                summary = excluded.summary,
-                scope_summary = excluded.scope_summary,
-                max_context_tokens = excluded.max_context_tokens,
-                inherited_event_ids_json = excluded.inherited_event_ids_json,
-                updated_at = excluded.updated_at,
-                source_event_id = excluded.source_event_id,
-                source_ask_id = excluded.source_ask_id,
-                source_blackboard_turn_id = excluded.source_blackboard_turn_id`,
-        ).run(
-            record.id,
-            record.userId,
-            record.parentId ?? null,
-            record.title,
-            record.summary,
-            record.scopeSummary,
-            record.maxContextTokens,
-            JSON.stringify(record.inheritedEventIds),
-            record.createdAt,
-            record.updatedAt,
-            record.sourceEventId ?? null,
-            record.sourceAskId ?? null,
-            record.sourceBlackboardTurnId ?? null,
-        );
-        return record;
+        return this.requireContextForkRepo().write(record);
     }
 
     public getContextFork(id: string): ContextForkRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM context_forks WHERE id = ?").get(id) as ContextForkRow | null;
-        return row ? rowToContextFork(row) : null;
+        return this.requireContextForkRepo().get(id);
     }
 
     public listContextForks(input: {
@@ -584,66 +443,11 @@ export class BrainStore extends BrainComponent {
         sourceBlackboardTurnId?: string;
         limit?: number;
     } = {}): ContextForkRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.userId !== undefined) {
-            conditions.push("user_id = ?");
-            values.push(input.userId);
-        }
-        if (input.sourceEventId !== undefined) {
-            conditions.push("source_event_id = ?");
-            values.push(input.sourceEventId);
-        }
-        if (input.sourceBlackboardTurnId !== undefined) {
-            conditions.push("source_blackboard_turn_id = ?");
-            values.push(input.sourceBlackboardTurnId);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM context_forks ${where} ORDER BY updated_at DESC LIMIT ?`)
-            .all(...values, limit) as ContextForkRow[];
-        return rows.map(rowToContextFork);
+        return this.requireContextForkRepo().list(input);
     }
 
     public writeSceneRecord(record: SceneRecord): SceneRecord {
-        const db = this.requireDb();
-        db.query(
-            `INSERT INTO scene_records (
-                id, user_id, kind, title, summary, detail, visible_facts_json,
-                open_questions_json, task_plan_id, context_fork_id, blackboard_turn_id,
-                source_event_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                kind = excluded.kind,
-                title = excluded.title,
-                summary = excluded.summary,
-                detail = excluded.detail,
-                visible_facts_json = excluded.visible_facts_json,
-                open_questions_json = excluded.open_questions_json,
-                task_plan_id = excluded.task_plan_id,
-                context_fork_id = excluded.context_fork_id,
-                blackboard_turn_id = excluded.blackboard_turn_id,
-                source_event_id = excluded.source_event_id,
-                updated_at = excluded.updated_at`,
-        ).run(
-            record.id,
-            record.userId,
-            record.kind,
-            record.title,
-            record.summary,
-            record.detail ?? null,
-            JSON.stringify(record.visibleFacts),
-            JSON.stringify(record.openQuestions),
-            record.taskPlanId ?? null,
-            record.contextForkId ?? null,
-            record.blackboardTurnId ?? null,
-            record.sourceEventId ?? null,
-            record.createdAt,
-            record.updatedAt,
-        );
-        return record;
+        return this.requireSceneRecordRepo().write(record);
     }
 
     public listSceneRecords(input: {
@@ -652,27 +456,7 @@ export class BrainStore extends BrainComponent {
         blackboardTurnId?: string;
         limit?: number;
     } = {}): SceneRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.userId !== undefined) {
-            conditions.push("user_id = ?");
-            values.push(input.userId);
-        }
-        if (input.sourceEventId !== undefined) {
-            conditions.push("source_event_id = ?");
-            values.push(input.sourceEventId);
-        }
-        if (input.blackboardTurnId !== undefined) {
-            conditions.push("blackboard_turn_id = ?");
-            values.push(input.blackboardTurnId);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM scene_records ${where} ORDER BY updated_at DESC LIMIT ?`)
-            .all(...values, limit) as SceneRecordRow[];
-        return rows.map(rowToSceneRecord);
+        return this.requireSceneRecordRepo().list(input);
     }
 
     public writeLink(record: MemoryLinkRecord): void {
@@ -785,55 +569,15 @@ export class BrainStore extends BrainComponent {
      * still pass the active project every turn, so it does not become a session.
      */
     public upsertProject(record: ProjectRecord): ProjectRecord {
-        const db = this.requireDb();
-        db.query(
-            `INSERT INTO projects (
-                id, user_id, title, goal, project_dir, project_memory_dir,
-                created_at, updated_at, last_used_at, use_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                title = excluded.title,
-                goal = excluded.goal,
-                project_dir = excluded.project_dir,
-                project_memory_dir = excluded.project_memory_dir,
-                updated_at = excluded.updated_at,
-                last_used_at = excluded.last_used_at,
-                use_count = excluded.use_count`,
-        ).run(
-            record.id,
-            record.userId,
-            record.title,
-            record.goal ?? null,
-            record.projectDir,
-            record.projectMemoryDir,
-            record.createdAt,
-            record.updatedAt,
-            record.lastUsedAt,
-            record.useCount,
-        );
-        return record;
+        return this.requireProjectRepo().upsert(record);
     }
 
     public getProject(id: string): ProjectRecord | null {
-        const db = this.requireDb();
-        const row = db.query("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | null;
-        return row ? rowToProject(row) : null;
+        return this.requireProjectRepo().get(id);
     }
 
     public listProjects(input: { userId?: string; limit?: number } = {}): ProjectRecord[] {
-        const db = this.requireDb();
-        const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-        const conditions: string[] = [];
-        const values: Array<string | number> = [];
-        if (input.userId !== undefined) {
-            conditions.push("user_id = ?");
-            values.push(input.userId);
-        }
-        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const rows = db
-            .query(`SELECT * FROM projects ${where} ORDER BY last_used_at DESC LIMIT ?`)
-            .all(...values, limit) as ProjectRow[];
-        return rows.map(rowToProject);
+        return this.requireProjectRepo().list(input);
     }
 
     /**
@@ -1076,6 +820,34 @@ export class BrainStore extends BrainComponent {
             throw new Error("BrainStore is not opened; call open() before use.");
         }
         return this.db;
+    }
+
+    private requireContextForkRepo(): BrainContextForkRepo {
+        if (!this.contextForkRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.contextForkRepo;
+    }
+
+    private requireProjectRepo(): BrainProjectRepo {
+        if (!this.projectRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.projectRepo;
+    }
+
+    private requireSceneRecordRepo(): BrainSceneRecordRepo {
+        if (!this.sceneRecordRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.sceneRecordRepo;
+    }
+
+    private requireTaskPlanRepo(): BrainTaskPlanRepo {
+        if (!this.taskPlanRepo || !this.opened) {
+            throw new Error("BrainStore is not opened; call open() before use.");
+        }
+        return this.taskPlanRepo;
     }
 }
 
@@ -1430,21 +1202,6 @@ function rowToCodename(row: CodenameRow): CodenameRecord {
     };
 }
 
-function rowToProject(row: ProjectRow): ProjectRecord {
-    return {
-        id: row.id,
-        userId: row.user_id,
-        title: row.title,
-        goal: row.goal ?? undefined,
-        projectDir: row.project_dir,
-        projectMemoryDir: row.project_memory_dir,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        lastUsedAt: row.last_used_at,
-        useCount: row.use_count,
-    };
-}
-
 function rowToEq(row: EqStateRow): EqState {
     return {
         userId: row.user_id,
@@ -1455,87 +1212,6 @@ function rowToEq(row: EqStateRow): EqState {
         confidence: row.confidence,
         updatedAt: row.updated_at,
     };
-}
-
-function rowToTaskPlan(row: TaskPlanRow): TaskPlanRecord {
-    const steps = parseJsonArray(row.steps_json).filter(isTaskPlanStepRecord);
-    return {
-        id: row.id,
-        userId: row.user_id,
-        title: row.title,
-        summary: row.summary,
-        status: row.status as TaskPlanRecord["status"],
-        progress: row.progress,
-        stepCount: row.step_count,
-        completedStepCount: row.completed_step_count,
-        ...(steps.length > 0 ? { step: steps } : {}),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        sourceEventId: row.source_event_id ?? undefined,
-        sourceAskId: row.source_ask_id ?? undefined,
-        sourceBlackboardTurnId: row.source_blackboard_turn_id ?? undefined,
-        sourceSceneId: row.source_scene_id ?? undefined,
-    };
-}
-
-function rowToContextFork(row: ContextForkRow): ContextForkRecord {
-    return {
-        id: row.id,
-        userId: row.user_id,
-        parentId: row.parent_id ?? undefined,
-        title: row.title,
-        summary: row.summary,
-        scopeSummary: row.scope_summary,
-        maxContextTokens: row.max_context_tokens,
-        inheritedEventIds: parseJsonArray(row.inherited_event_ids_json).filter(
-            (item): item is string => typeof item === "string",
-        ),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        sourceEventId: row.source_event_id ?? undefined,
-        sourceAskId: row.source_ask_id ?? undefined,
-        sourceBlackboardTurnId: row.source_blackboard_turn_id ?? undefined,
-    };
-}
-
-function rowToSceneRecord(row: SceneRecordRow): SceneRecord {
-    return {
-        id: row.id,
-        userId: row.user_id,
-        kind: row.kind as SceneRecord["kind"],
-        title: row.title,
-        summary: row.summary,
-        detail: row.detail ?? undefined,
-        visibleFacts: parseJsonArray(row.visible_facts_json).filter((item): item is string => typeof item === "string"),
-        openQuestions: parseJsonArray(row.open_questions_json).filter(
-            (item): item is string => typeof item === "string",
-        ),
-        taskPlanId: row.task_plan_id ?? undefined,
-        contextForkId: row.context_fork_id ?? undefined,
-        blackboardTurnId: row.blackboard_turn_id ?? undefined,
-        sourceEventId: row.source_event_id ?? undefined,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-    };
-}
-
-function isTaskPlanStepRecord(value: unknown): value is TaskPlanStepRecord {
-    if (!isRecord(value)) return false;
-    return (
-        typeof value.id === "string" &&
-        typeof value.title === "string" &&
-        typeof value.status === "string" &&
-        typeof value.order === "number"
-    );
-}
-
-function parseJsonArray(value: string): unknown[] {
-    try {
-        const parsed = JSON.parse(value) as unknown;
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
 }
 
 function parseContent(value: string): Record<string, unknown> {

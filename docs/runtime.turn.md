@@ -13,6 +13,7 @@
 - `src/agent/runtime/reflection/worker.ts` — 反思调度 worker
 - `src/agent/runtime/mcp/` — MCP toolset 过滤、工具结果 provenance 投影
 - `src/agent/runtime/skills/selection.ts` — 外部 Skill 包选择适配
+- `src/agent/runtime/events/skill.usage.event.ts` — `@Event` 聚合 skill usage sidecar，避免 runtime 主流程直接写辅助统计
 - `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
 - `src/agent/runtime/streaming/` — 内部协议块流式可见性过滤
 - `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 helper

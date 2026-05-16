@@ -88,6 +88,13 @@ export interface SkillUsageInput {
     requestId?: string;
 }
 
+export interface SkillUsageSelection {
+    capabilities: string[];
+    compatibility: string[];
+    name: string;
+    source: SkillSource;
+}
+
 export async function loadSkills(paths: FlyflorPaths): Promise<Skill[]> {
     const skills = await Promise.all(skillRoots(paths).map((root) => loadSkillsFromRoot(root)));
     return dedupeSkills(skills.flat());
@@ -288,16 +295,33 @@ export async function recordSkillUsage(
     skills: Skill[],
     input: SkillUsageInput,
 ): Promise<SkillUsageSummary> {
+    return recordSkillUsageSelections(
+        paths,
+        dedupeSkills(skills).map((skill) => ({
+            capabilities: skill.manifest.capabilities,
+            compatibility: skill.manifest.compatibility,
+            name: skill.name,
+            source: skill.source,
+        })),
+        input,
+    );
+}
+
+export async function recordSkillUsageSelections(
+    paths: FlyflorPaths,
+    skills: SkillUsageSelection[],
+    input: SkillUsageInput,
+): Promise<SkillUsageSummary> {
     await mkdir(paths.projectSkillDir, { recursive: true });
     const now = new Date(input.now).toISOString();
     const mcpCallCount = Math.max(0, Math.floor(input.mcpCallCount ?? 0));
     const mcpSuccessCount = Math.max(0, Math.floor(input.mcpSuccessCount ?? 0));
     const summary = await loadSkillUsageSummary(paths);
     const records: SkillUsageRecord[] = [];
-    for (const skill of dedupeSkills(skills)) {
+    for (const skill of dedupeSkillUsageSelections(skills)) {
         const record: SkillUsageRecord = {
-            capabilities: skill.manifest.capabilities,
-            compatibility: skill.manifest.compatibility,
+            capabilities: skill.capabilities,
+            compatibility: skill.compatibility,
             mcpCallCount,
             mcpSuccessCount,
             name: skill.name,
@@ -308,8 +332,8 @@ export async function recordSkillUsage(
         records.push(record);
         const previous = summary.skills[skill.name];
         summary.skills[skill.name] = {
-            capabilities: skill.manifest.capabilities,
-            compatibility: skill.manifest.compatibility,
+            capabilities: skill.capabilities,
+            compatibility: skill.compatibility,
             firstUsedAt: previous?.firstUsedAt ?? now,
             lastUsedAt: now,
             mcpCallCount: (previous?.mcpCallCount ?? 0) + mcpCallCount,
@@ -674,6 +698,16 @@ function sortUsageSummary(summary: SkillUsageSummary): SkillUsageSummary {
 
 function dedupeSkills(skills: Skill[]): Skill[] {
     const byName = new Map<string, Skill>();
+    for (const skill of skills) {
+        if (!byName.has(skill.name)) {
+            byName.set(skill.name, skill);
+        }
+    }
+    return [...byName.values()];
+}
+
+function dedupeSkillUsageSelections(skills: SkillUsageSelection[]): SkillUsageSelection[] {
+    const byName = new Map<string, SkillUsageSelection>();
     for (const skill of skills) {
         if (!byName.has(skill.name)) {
             byName.set(skill.name, skill);

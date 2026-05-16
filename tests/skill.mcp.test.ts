@@ -13,6 +13,7 @@ import {
     validateMcpServers,
 } from "../src/agent/mcp/index.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
+import { RuntimeSkillUsageEventHandler } from "../src/agent/runtime/events/index.ts";
 import { createSandboxPolicy, decideCapabilityExecution } from "../src/agent/sandbox/index.ts";
 import {
     findSkill,
@@ -25,7 +26,7 @@ import {
     validateSkill,
 } from "../src/skills/index.ts";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
-import { NullEventSink, RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { EventsComponent, NullEventSink, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 import {
     CapabilityExecutionKind,
     Channel,
@@ -426,7 +427,9 @@ describe("Skill and MCP capability config", () => {
             "Final from MCP result.",
             "[]",
         ]);
-        const events = new CapturingSink();
+        const sink = new CapturingSink();
+        const events = new EventsComponent(sink, new RuntimeEventBus());
+        const disposeHooks = events.registerHooks(new RuntimeSkillUsageEventHandler({ paths }));
         const runtime = new RuntimeModule(
             {
                 ...baseConfig,
@@ -466,9 +469,12 @@ describe("Skill and MCP capability config", () => {
             mcpSuccessCount: 1,
             useCount: 1,
         });
-        expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.SkillContextBuilt);
-        expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.McpToolCatalogBuilt);
-        expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.McpToolCallExecuted);
+        for (const dispose of disposeHooks) {
+            dispose();
+        }
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.SkillContextBuilt);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.McpToolCatalogBuilt);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.McpToolCallExecuted);
     });
 
     test("runtime skips MCP execution when approval is denied", async () => {

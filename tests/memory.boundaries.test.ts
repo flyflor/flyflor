@@ -242,9 +242,19 @@ describe("Internal infrastructure deployment boundaries", () => {
         const moduleSource = await readFile(join(runtimeRoot, "runtime.module.ts"), "utf8");
 
         // RuntimeModule is the turn orchestration class. MCP/skill/planning/
-        // blackboard rendering helpers live in named folders so the hot path
-        // does not become a service bucket again.
-        expect(dirs).toEqual(["blackboard", "mcp", "planning", "reflection", "routing", "skills", "streaming", "turn"]);
+        // blackboard/event rendering helpers live in named folders so the hot
+        // path does not become a service bucket again.
+        expect(dirs).toEqual([
+            "blackboard",
+            "events",
+            "mcp",
+            "planning",
+            "reflection",
+            "routing",
+            "skills",
+            "streaming",
+            "turn",
+        ]);
         expect(files).not.toContain("blackboard.output.ts");
         expect(files).not.toContain("planning.metadata.ts");
         expect(files).not.toContain("protocol.visibility.ts");

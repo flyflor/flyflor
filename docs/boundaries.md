@@ -31,7 +31,7 @@ templates/        提示词与记忆 Markdown 模板
 命名规则（点分后缀是硬规则）：
 
 - 目录入口统一 `index.ts`；跨目录导入优先指向 `index.ts`。
-- 实现文件按角色加点分后缀：`*.module.ts` / `*.component.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.route.ts` / `*.executor.ts`。
+- 实现文件按角色加点分后缀：`*.module.ts` / `*.component.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
 - 单职责短文件保留语义名：`types.ts` / `scope.ts`。
@@ -77,10 +77,20 @@ flowchart LR
 - `kind` / `layer` / `provider` 默认由 `FlyflorComponent` 继承链与类名推断；`name` 只作展示字段，不参与注入匹配；`tags` 不用于 `@Module` / `@Component`。
 - `@Component()` / `@Module()` 默认无参数、默认单例；只有偏离默认值（例如 factory scope、channel / worker / plugin 特例）时才显式写参数。
 - `@Event(type)` 只登记显式事件 hook metadata，不做反射类型推断、不扫描目录；实例必须由 composition root 或组件 owner 调用 `EventsComponent.registerHooks(instance)` 显式接入。
+- Runtime 副作用优先事件化：主 turn pipeline 可以发布结构化 RuntimeEvent，统计、审计、usage、后处理等非路由关键路径放在 `*.event.ts` handler；handler 只能消费 JSON payload 和显式注入组件，不能反向读取自然语言做业务判断。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定；允许 `DependencyContainer.bindClass()` 按构造函数 `@Inject(ClassToken)` 自动实例化，但注册目标仍必须由 composition root 显式列出。
 - DI key 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。`ConfigComponent` / `RuntimeModeComponent` / `EventsComponent` / `ModelComponent` / `AdaptersComponent` 这类边界必须是域内 `*.component.ts` 的真实组件，不能只是空壳 token；只有非 class 值才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
 - 公开 API 必须显式写 `public`；内部状态和 helper 保持 `private` / `protected`，避免隐式可见性漂移。可被子类定制的生命周期、factory、storage hook 预留 `protected`，不要为了“封闭”而把扩展点无脑写死为 `private`。
+
+## 4.1 数据模型与 SQL Repo
+
+- SQLite 访问分三层：`*.repo.ts` 是表模型 + SQL function，`*.store.ts` 负责连接生命周期 / schema / 事务组合，`*.component.ts` 对上表达能力边界。
+- Repo 不是 service 层：不得调用 LLM、prompt、runtime、gateway、TUI 或业务决策；只能接收结构化 DTO、执行 SQL、映射 row。
+- 新增表或高频 SQL 必须优先建立 `tablename.repo.ts`，例如 `brain.project.repo.ts`、`brain.context.fork.repo.ts`、`crystal.gem.repo.ts`。
+- 新增 repo SQL 必须使用 `query\`SELECT ... ${value}\`` tagged template；插值只允许值参数并转成 SQLite `?`，禁止字符串拼接值进入 SQL。
+- 表名、列名和排序字段必须是 repo 内部字面量。确需动态 identifier 时先设计白名单 helper 和测试，不能直接插值用户输入。
+- `brain.db` 热路径仍保持单库；低频详情可以由 repo 写 sidecar，但 `brain.db` 必须保留摘要索引和可恢复审计。
 
 ## 5. 类型与协议
 

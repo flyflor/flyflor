@@ -313,8 +313,9 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 - DI key 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；`*.component.ts` 必须是有边界职责的真实组件，不能只是空壳 token；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
 - OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
 - `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
+- SQLite 访问按 `repo -> store -> component` 分层；新增 SQL 优先放到 `tablename.repo.ts`，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
-- 实现文件使用点分后缀：`*.module.ts`、`*.component.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`
+- 实现文件使用点分后缀：`*.module.ts`、`*.component.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`、`*.repo.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
 
 ### 零字符匹配红线
