@@ -153,11 +153,11 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
 });
 
 class RecordingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    get types(): string[] {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public get types(): string[] {
         return this.events.map((e) => e.type);
     }
-    publish(event: { type: string; payload?: Record<string, unknown> }): void {
+    public publish(event: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(event);
     }
 }

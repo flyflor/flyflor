@@ -2,39 +2,39 @@ import { describe, expect, test } from "bun:test";
 import { createTuiLifecycle, type TuiLifecycleProcess, type TuiLifecycleRenderer } from "../src/command/tui/lifecycle.ts";
 
 class FakeRenderer implements TuiLifecycleRenderer {
-    destroyCalls = 0;
+    public destroyCalls = 0;
     private destroyListener: (() => void) | undefined;
 
-    destroy(): void {
+    public destroy(): void {
         this.destroyCalls += 1;
     }
 
-    once(event: "destroy", listener: () => void): void {
+    public once(event: "destroy", listener: () => void): void {
         expect(event).toBe("destroy");
         this.destroyListener = listener;
     }
 
-    emitDestroy(): void {
+    public emitDestroy(): void {
         this.destroyListener?.();
     }
 }
 
 class FakeProcess implements TuiLifecycleProcess {
-    readonly handlers = new Map<NodeJS.Signals, () => void>();
-    readonly removed: NodeJS.Signals[] = [];
+    public readonly handlers = new Map<NodeJS.Signals, () => void>();
+    public readonly removed: NodeJS.Signals[] = [];
 
-    once(event: NodeJS.Signals, listener: () => void): void {
+    public once(event: NodeJS.Signals, listener: () => void): void {
         this.handlers.set(event, listener);
     }
 
-    off(event: NodeJS.Signals, listener: () => void): void {
+    public off(event: NodeJS.Signals, listener: () => void): void {
         if (this.handlers.get(event) === listener) {
             this.handlers.delete(event);
         }
         this.removed.push(event);
     }
 
-    emit(event: NodeJS.Signals): void {
+    public emit(event: NodeJS.Signals): void {
         this.handlers.get(event)?.();
     }
 }

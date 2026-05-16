@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
 import { BrainStore } from "../src/components/memory/brain.store.ts";
-import { ProjectScaffolder } from "../src/agent/project/scaffolder.ts";
-import { detectCodenamePromotion, ProjectTriggerKind } from "../src/agent/project/index.ts";
-import { promoteCodename } from "../src/agent/project/codename.promote.ts";
+import { ProjectScaffolder } from "../src/neural/project/scaffolder.ts";
+import { detectCodenamePromotion, ProjectTriggerKind } from "../src/neural/project/index.ts";
+import { promoteCodename } from "../src/neural/project/codename.promote.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import type { EventSink } from "../src/protocol/events/index.ts";
 
@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 class NullSink implements EventSink {
-    publish(): void {}
+    public publish(): void {}
 }
 
 async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; scaffolder: ProjectScaffolder; root: string }> {

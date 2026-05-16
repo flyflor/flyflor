@@ -71,7 +71,7 @@ const TEST_REVIEW_ROLE = "review-worker";
 class TestComponent {}
 
 class TestConsumer {
-    constructor(@Inject(TestComponent) readonly dependency: TestComponent) {}
+    public constructor(@Inject(TestComponent) public readonly dependency: TestComponent) {}
 }
 
 afterEach(async () => {
@@ -208,6 +208,46 @@ describe("Internal infrastructure deployment boundaries", () => {
         expect(`${memoryModule}\n${scheduler}`).not.toContain("../../agent/runtime/dream.worker");
         expect(memoryModule).toContain('from "./dream.worker.ts"');
         expect(scheduler).toContain('from "./dream.worker.ts"');
+    });
+
+    test("runtime directory no longer owns memory-only workers", async () => {
+        const runtimeFiles = await readdir(join(import.meta.dir, "..", "src", "agent", "runtime"));
+
+        // Dream and feedback both mutate or classify memory state, so their
+        // implementation lives under neural/memory rather than runtime.
+        expect(runtimeFiles).not.toContain("dream.worker.ts");
+        expect(runtimeFiles).not.toContain("feedback.interpreter.ts");
+    });
+
+    test("runtime helpers are grouped by semantic subdirectory", async () => {
+        const runtimeRoot = join(import.meta.dir, "..", "src", "agent", "runtime");
+        const entries = await readdir(runtimeRoot, { withFileTypes: true });
+        const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+        const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+        const moduleSource = await readFile(join(runtimeRoot, "runtime.module.ts"), "utf8");
+
+        // RuntimeModule is the turn orchestration class. MCP/skill/planning/
+        // blackboard rendering helpers live in named folders so the hot path
+        // does not become a service bucket again.
+        expect(dirs).toEqual(["blackboard", "mcp", "planning", "reflection", "routing", "skills", "streaming", "turn"]);
+        expect(files).not.toContain("blackboard.output.ts");
+        expect(files).not.toContain("planning.metadata.ts");
+        expect(files).not.toContain("protocol.visibility.ts");
+        expect(moduleSource).not.toContain("\nfunction ");
+        expect(moduleSource).not.toContain("\nexport function ");
+    });
+
+    test("project solidification lives under neural rather than agent", async () => {
+        const [agentFiles, neuralProjectFiles] = await Promise.all([
+            readdir(join(import.meta.dir, "..", "src", "agent")),
+            readdir(join(import.meta.dir, "..", "src", "neural", "project")),
+        ]);
+
+        // Codename promotion and project scaffolding are memory solidification
+        // paths. Agent keeps orchestration modules; neural owns the persistence
+        // semantics and resource-metric triggers.
+        expect(agentFiles).not.toContain("project");
+        expect(neuralProjectFiles.sort()).toEqual(["codename.promote.ts", "index.ts", "scaffolder.ts"]);
     });
 
     test("docker dev defaults to local working memory without Redis service", async () => {
@@ -1240,7 +1280,7 @@ describe("FCP dependency container", () => {
 
         container.bindSingleton(configToken, { mode: "stable" });
         class PluginComponent {
-            constructor(readonly id: string) {}
+            public constructor(public readonly id: string) {}
         }
 
         container.bindProvider(PluginComponent, (scope) => {
@@ -1498,31 +1538,31 @@ async function copyTemplateGroup(source: string, destination: string): Promise<v
 }
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
+    public readonly events: RuntimeEvent[] = [];
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         this.events.push(event);
     }
 }
 
 class StaticModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
 
-    constructor(private readonly response: string) {}
+    public constructor(private readonly response: string) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         return this.response;
     }
 }
 
 class SequencedModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
     private index = 0;
 
-    constructor(private readonly responses: string[]) {}
+    public constructor(private readonly responses: string[]) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         const response = this.responses[this.index];
         this.index += 1;
@@ -1534,15 +1574,15 @@ class SequencedModel implements ModelClient {
 }
 
 class SequencedStreamingModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
     private generateIndex = 0;
 
-    constructor(
+    public constructor(
         private readonly generateResponses: string[],
         private readonly streamChunks: string[],
     ) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         const response = this.generateResponses[this.generateIndex];
         this.generateIndex += 1;
@@ -1552,7 +1592,7 @@ class SequencedStreamingModel implements ModelClient {
         return response;
     }
 
-    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+    public async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
         this.messages.push(messages);
         for (const chunk of this.streamChunks) {
             yield chunk;
@@ -1561,16 +1601,16 @@ class SequencedStreamingModel implements ModelClient {
 }
 
 class StreamingModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
 
-    constructor(private readonly chunks: string[]) {}
+    public constructor(private readonly chunks: string[]) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         return this.chunks.join("");
     }
 
-    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+    public async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
         this.messages.push(messages);
         for (const chunk of this.chunks) {
             yield chunk;
@@ -1579,16 +1619,16 @@ class StreamingModel implements ModelClient {
 }
 
 class StreamUnavailableModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
 
-    constructor(private readonly response: string) {}
+    public constructor(private readonly response: string) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         return this.response;
     }
 
-    async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
+    public async *stream(messages: ModelMessage[]): AsyncGenerator<string> {
         this.messages.push(messages);
         throw new Error("stream_not_supported");
     }
@@ -1625,7 +1665,7 @@ function routeDecision(
 
 @Worker(TEST_ANALYSIS_ROLE)
 class AnalysisQaWorker {
-    run(input: { goal: string; prompt?: string; round: number }): {
+    public run(input: { goal: string; prompt?: string; round: number }): {
         inputSummary: string;
         outputSummary: string;
         newFacts: string[];
@@ -1655,7 +1695,7 @@ class AnalysisQaWorker {
 
 @Worker(TEST_REVIEW_ROLE)
 class ReviewQaWorker {
-    run(input: { goal: string; prompt?: string; round: number }): {
+    public run(input: { goal: string; prompt?: string; round: number }): {
         inputSummary: string;
         outputSummary: string;
         newFacts: string[];
@@ -1689,7 +1729,7 @@ function testWorkerPlan() {
 
 @Worker("final-without-agreement")
 class FinalWithoutAgreementWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Final worker keeps returning final, but route contract should force hard cap.",

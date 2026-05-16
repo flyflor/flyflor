@@ -1,26 +1,21 @@
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
-    BlackboardTurnStatus as BlackboardTurnStatusType,
+    ContextForkRecord,
     GatewayMessage,
     GatewayReply,
     ModelClient,
     ModelMessage,
     RuntimeContext,
-    ContextForkRecord,
     SceneRecord,
     TaskPlanRecord,
 } from "../../protocol/contracts/index.ts";
 import {
-    ArchitectureLayer,
-    AskReason,
     BlackboardMode,
     BlackboardTurnStatus,
     CapabilityExecutionKind,
-    ComponentKind,
     GhostContextReason,
     ModelRole,
-    SceneRecordKind,
 } from "../../protocol/contracts/index.ts";
 import { Runtime as RuntimeBoundary } from "../components.ts";
 import { Module } from "../di/decorators/index.ts";
@@ -40,7 +35,6 @@ import {
     renderMcpToolCatalog,
     renderMcpToolResults,
     validateAgainstInputSchema,
-    type McpResultSummary,
     type McpToolCallExecution,
     type McpToolCatalogEntry,
     type McpToolCallRequest,
@@ -50,51 +44,52 @@ import {
     loadPromptTemplates,
     renderAskSchemaInstructions,
     renderBehaviorPriorityInstructions,
-    renderBlackboardAdvisoryPrompt,
     renderMemoryActionInstructions,
     renderMcpContextPrompt,
     renderRuntimeSystemPrompt,
     renderSkillContextPrompt,
 } from "../prompts/index.ts";
-import {
-    type BlackboardModule,
-    type BlackboardDecision,
-    type BlackboardMessage,
-    type BlackboardStep,
-    type BlackboardTurn,
-} from "../blackboard/index.ts";
+import { type BlackboardModule } from "../blackboard/index.ts";
 import {
     loadSkills,
     loadSkillUsageSummary,
     recordSkillUsage,
-    selectSkills,
     type Skill,
-    type SkillUsageSummary,
 } from "../../crystal/skills/index.ts";
-import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
-import { ReflectionWorker } from "./reflection.worker.ts";
-import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./fast.route.ts";
-import { InMemoryFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./fast.route.store.ts";
-import { decideRouteEscalation, nextEscalationCounters, RouteEscalationReason } from "./route.escalation.ts";
+import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard/route.ts";
+import {
+    blackboardRunFromTurn,
+    buildBlackboardSceneRecords,
+    buildBlackboardStalemateAsk,
+    renderBlackboardPrompt,
+    renderDebateEpisodeText,
+    renderReplyPrefix,
+    renderReplyStreamingPrefix,
+    renderReplyText,
+    routeMetadata,
+    type RuntimeBlackboardRun,
+} from "./blackboard/output.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
-import { renderUserContentWithAttachments } from "./attachments.ts";
-import { parsePlanningBlocks } from "./planning.blocks.ts";
-import { buildAskMetadata, renderAskReplyText } from "./ask.reply.ts";
+import {
+    formatMcpResultSummary,
+    mcpExecutionsToProvenance,
+} from "./mcp/provenance.ts";
+import { filterMcpServersByToolset, mcpCatalogCacheKey } from "./mcp/toolset.ts";
+import { parsePlanningBlocks } from "./planning/blocks.ts";
+import { buildPlanningMetadata } from "./planning/metadata.ts";
+import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./routing/fast.route.ts";
+import { InMemoryFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./routing/fast.route.store.ts";
+import { decideRouteEscalation, nextEscalationCounters } from "./routing/route.escalation.ts";
+import { selectRuntimeSkills } from "./skills/selection.ts";
+import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/protocol.visibility.ts";
+import { buildAskMetadata, renderAskReplyText } from "./turn/ask.reply.ts";
+import { renderUserContentWithAttachments } from "./turn/attachments.ts";
+import { projectConstraintIdForMessage } from "./turn/project.constraint.ts";
+import { elapsed } from "./turn/timing.ts";
+import { ReflectionWorker } from "./reflection/worker.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
-
-interface RuntimeBlackboardRun {
-    elapsedMs: number;
-    mode: BlackboardMode;
-    reason: string;
-    decisions: BlackboardDecision[];
-    metadata: Record<string, unknown>;
-    steps: BlackboardTurn["steps"];
-    status?: BlackboardTurnStatusType;
-    transcript: BlackboardMessage[];
-    turnId?: string;
-}
 
 export interface RuntimeStreamOptions {
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
@@ -160,14 +155,14 @@ interface GeneratedTurn {
 
 @Module({ name: "runtime", tags: ["flyflor", "boundary"] })
 export class RuntimeModule extends RuntimeBoundary {
-    private readonly memory: MemoryModule;
+    protected readonly memory: MemoryModule;
     /** Shared embedding provider — compute once per turn, reused by memory recall + episode write. */
-    private readonly embeddings: LocalHashEmbeddingProvider;
-    private readonly perf: PerfMetrics;
-    private readonly reflection: ReflectionWorker;
+    protected readonly embeddings: LocalHashEmbeddingProvider;
+    protected readonly perf: PerfMetrics;
+    protected readonly reflection: ReflectionWorker;
     private readonly mcpToolCatalogCache = new Map<string, CachedMcpToolCatalog>();
-    private readonly sandboxQuota: SandboxQuotaTracker;
-    private readonly inflight: InFlightTracker;
+    protected readonly sandboxQuota: SandboxQuotaTracker;
+    protected readonly inflight: InFlightTracker;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
@@ -175,11 +170,11 @@ export class RuntimeModule extends RuntimeBoundary {
      */
     private fastRouteSnapshots: FastRouteSnapshotStore = new InMemoryFastRouteSnapshotStore();
 
-    constructor(
-        private readonly config: FlyflorConfig,
-        private readonly model: ModelClient,
-        private readonly events: EventSink,
-        private readonly blackboard?: BlackboardModule,
+    public constructor(
+        protected readonly config: FlyflorConfig,
+        protected readonly model: ModelClient,
+        protected readonly events: EventSink,
+        protected readonly blackboard?: BlackboardModule,
         memory?: MemoryModule,
         reflection?: ReflectionWorker,
     ) {
@@ -196,7 +191,7 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
-    async warmup(): Promise<void> {
+    public async warmup(): Promise<void> {
         this.warmupPromise ??= this.performWarmup().catch((error) => {
             this.warmupPromise = undefined;
             throw error;
@@ -204,12 +199,12 @@ export class RuntimeModule extends RuntimeBoundary {
         await this.warmupPromise;
     }
 
-    dispose(): void {
+    public dispose(): void {
         this.reflection.dispose();
         this.memory.dispose();
     }
 
-    listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}) {
+    public listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}) {
         return this.memory.listChatHistory(userId, options);
     }
 
@@ -251,12 +246,12 @@ export class RuntimeModule extends RuntimeBoundary {
     }
 
     /** CLI 接口：dream 状态快照。 */
-    dreamSnapshot(): { dreamEnabled: boolean; dreamBusy: boolean; users: number } {
+    public dreamSnapshot(): { dreamEnabled: boolean; dreamBusy: boolean; users: number } {
         return this.memory.dreamSnapshot();
     }
 
     /** CLI 接口：手动跑一轮 dream pass，可指定单用户。 */
-    runDreamOnce(
+    public runDreamOnce(
         limit?: number,
         userId?: string,
     ): Promise<{
@@ -278,7 +273,7 @@ export class RuntimeModule extends RuntimeBoundary {
      *   5) dispatchAsyncTurnTasks —— 反思 / 反馈分类 / 辩论 episode；
      *   6) finalize —— ttfbDone + AgentTurnEnd。
      */
-    async handleMessage(
+    public async handleMessage(
         message: GatewayMessage,
         context: RuntimeContext,
         options: RuntimeStreamOptions = {},
@@ -318,7 +313,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * Phase 1：发布 start 事件、记录 ttfb 计时、加载提示词模板、复用 embedding，
      * 并依据资源指标评估 fastRoute（决定是否短路 LLM 路由调用）。
      */
-    private async prepareTurn(message: GatewayMessage, context: RuntimeContext): Promise<PreparedTurn> {
+    protected async prepareTurn(message: GatewayMessage, context: RuntimeContext): Promise<PreparedTurn> {
         this.events.publish(
             event(RuntimeEventType.AgentTurnStart, { channel: message.route.channel }, context.requestId),
         );
@@ -353,7 +348,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * 解析 sandbox 与 mcp 执行能力；应用 direct-with-watch 升级器；
      * 跑黑板（如配置）；构建 MCP 工具 catalog 并发布对应事件。
      */
-    private async assembleTurnContext(
+    protected async assembleTurnContext(
         message: GatewayMessage,
         prepared: PreparedTurn,
         options: RuntimeStreamOptions,
@@ -443,7 +438,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * Phase 3：根据 assembled context 拼 system+user prompt，进入 LLM+MCP loop，
      * 解析记忆动作 / mcp 工具调用，构造最终 GatewayReply。
      */
-    private async generateTurnReply(
+    protected async generateTurnReply(
         message: GatewayMessage,
         prepared: PreparedTurn,
         assembled: AssembledTurnContext,
@@ -695,7 +690,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * Phase 4：同步落库 —— rememberTurn（journal+candidates+episode）、skill usage，
      * 并按本轮实际模式 + 黑板状态刷新 fastRoute 快照（升级器计数器）。
      */
-    private async persistTurn(
+    protected async persistTurn(
         message: GatewayMessage,
         prepared: PreparedTurn,
         assembled: AssembledTurnContext,
@@ -831,7 +826,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * Phase 5：反思（LLM 抽取 → crystal）、反馈四分类、
      * 黑板辩论收敛后写入高权重 episode。失败由各自模块发布事件并继续抛出。
      */
-    private async dispatchAsyncTurnTasks(
+    protected async dispatchAsyncTurnTasks(
         message: GatewayMessage,
         prepared: PreparedTurn,
         assembled: AssembledTurnContext,
@@ -866,7 +861,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * fastRoute 命中时直接返回 bypass 决策（不发起 LLM 调用）；
      * 未命中时才调用 decideBlackboardRoute（仅当 blackboard 装配可用）。
      */
-    private async resolveRouteDecision(
+    protected async resolveRouteDecision(
         message: GatewayMessage,
         fastRoute: FastRouteResult,
     ): Promise<RuntimeBlackboardRouteDecision | undefined> {
@@ -882,7 +877,7 @@ export class RuntimeModule extends RuntimeBoundary {
      * 把 LLM 给出的 direct/direct-with-watch 强制升格为 blackboard。
      * 升格触发时发布 RouteEscalated 事件并构造一个最小化的 blackboard route decision。
      */
-    private applyRouteEscalation(
+    protected applyRouteEscalation(
         original: RuntimeBlackboardRouteDecision | undefined,
         snapshot: FastRouteSnapshot | undefined,
         requestId: string,
@@ -951,7 +946,7 @@ export class RuntimeModule extends RuntimeBoundary {
         if (!this.model.stream) {
             const rawText = await this.model.generate(messages, { signal: options.signal });
             this.throwIfAborted(options.signal);
-            await options.onTextDelta(`${replyPrefix}${filterVisibleMemoryActionText(rawText)}`);
+            await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(rawText)}`);
             return rawText;
         }
 
@@ -962,7 +957,7 @@ export class RuntimeModule extends RuntimeBoundary {
         }
 
         let rawText = "";
-        const visibility = new MemoryActionVisibilityFilter();
+        const visibility = new ProtocolVisibilityFilter();
         for await (const chunk of this.model.stream(messages, { signal: options.signal })) {
             this.throwIfAborted(options.signal);
             rawText += chunk;
@@ -1009,7 +1004,7 @@ export class RuntimeModule extends RuntimeBoundary {
             if (parsedCalls.calls.length === 0) {
                 if (options.onTextDelta) {
                     await options.onTextDelta(
-                        `${replyPrefix}${filterVisibleMemoryActionText(parsedCalls.text || raw)}`,
+                        `${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`,
                     );
                 }
                 return {
@@ -1231,7 +1226,7 @@ export class RuntimeModule extends RuntimeBoundary {
         throw error;
     }
 
-    private async runBlackboard(
+    protected async runBlackboard(
         message: GatewayMessage,
         context: RuntimeContext,
         options: RuntimeStreamOptions = {},
@@ -1325,7 +1320,7 @@ export class RuntimeModule extends RuntimeBoundary {
             if (!finished) {
                 throw new Error(`Blackboard turn disappeared before convergence: ${start.turn.id}`);
             }
-            return blackboardRunFromTurn(finished, started, route);
+            return blackboardRunFromTurn(finished, elapsed(started), route);
         } catch (error) {
             await this.blackboard.finishTurn(start.turn.id, BlackboardTurnStatus.Failed, context.now);
             const loaded = await this.blackboard.getTurn(start.turn.id);
@@ -1355,611 +1350,4 @@ export class RuntimeModule extends RuntimeBoundary {
         }
     }
 
-}
-
-function blackboardRunFromTurn(
-    turn: BlackboardTurn | undefined,
-    started: number,
-    route: RuntimeBlackboardRouteDecision,
-): RuntimeBlackboardRun {
-    return {
-        elapsedMs: elapsed(started),
-        mode: BlackboardMode.Blackboard,
-        reason: route.reason,
-        decisions: turn?.decisions ?? [],
-        metadata: {
-            ...(turn?.metadata ?? {}),
-            ...routeMetadata(route),
-        },
-        steps: turn?.steps ?? [],
-        status: turn?.status,
-        transcript: turn?.messages ?? [],
-        turnId: turn?.id,
-    };
-}
-
-function renderBlackboardPrompt(run: RuntimeBlackboardRun | undefined): string {
-    if (!run) {
-        return renderBlackboardAdvisoryPrompt({ configured: false });
-    }
-    if (run.mode !== BlackboardMode.Blackboard) {
-        return renderBlackboardAdvisoryPrompt({ configured: true, mode: "direct", reason: run.reason });
-    }
-    return renderBlackboardAdvisoryPrompt({
-        compactRounds: renderBlackboardTranscript(run),
-        configured: true,
-        elapsedMs: run.elapsedMs,
-        mode: run.mode,
-        reason: run.reason,
-        status: run.status,
-        turnId: run.turnId,
-    });
-}
-
-function renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefined): string {
-    return `${renderReplyPrefix(run)}${finalAnswer}`;
-}
-
-function buildPlanningMetadata(
-    taskPlans: TaskPlanRecord[],
-    contextForks: ContextForkRecord[],
-    sceneRecords: SceneRecord[],
-): Record<string, unknown> {
-    return {
-        taskPlans: taskPlans.map(compactTaskPlanMetadata),
-        contextForks: contextForks.map((fork) => ({
-            id: fork.id,
-            title: fork.title,
-            scopeSummary: fork.scopeSummary,
-            maxContextTokens: fork.maxContextTokens,
-        })),
-        scenes: sceneRecords.map(compactSceneMetadata),
-    };
-}
-
-function compactTaskPlanMetadata(plan: TaskPlanRecord): Record<string, unknown> {
-    return {
-        id: plan.id,
-        title: plan.title,
-        summary: plan.summary,
-        status: plan.status,
-        progress: plan.progress,
-        stepCount: plan.stepCount,
-        completedStepCount: plan.completedStepCount,
-        steps: (plan.step ?? []).slice(0, 8).map((step) => ({
-            id: step.id,
-            title: step.title,
-            status: step.status,
-            order: step.order,
-            progress: step.progress,
-        })),
-    };
-}
-
-function compactSceneMetadata(scene: SceneRecord): Record<string, unknown> {
-    return {
-        id: scene.id,
-        kind: scene.kind,
-        title: scene.title,
-        summary: scene.summary,
-        blackboardTurnId: scene.blackboardTurnId,
-        taskPlanId: scene.taskPlanId,
-        contextForkId: scene.contextForkId,
-    };
-}
-
-function buildBlackboardSceneRecords(
-    userId: string,
-    now: string,
-    run: RuntimeBlackboardRun | undefined,
-    requestId: string,
-): SceneRecord[] {
-    if (!run || run.mode !== BlackboardMode.Blackboard || !run.turnId) return [];
-    const facts = uniqueStrings(run.steps.flatMap((step) => step.newFacts)).slice(0, 16);
-    const openQuestions = uniqueStrings([
-        ...run.decisions.map((decision) => decision.prompt),
-        ...run.steps.flatMap((step) => step.blockers),
-    ]).slice(0, 12);
-    return [
-        {
-            id: `scene-blackboard-${run.turnId}`,
-            userId,
-            kind: SceneRecordKind.Blackboard,
-            title: `Blackboard ${run.status ?? BlackboardTurnStatus.Running}`,
-            summary: `status=${run.status ?? BlackboardTurnStatus.Running}; reason=${run.reason}; steps=${run.steps.length}; decisions=${run.decisions.length}`,
-            detail: renderBlackboardSceneDetail(run),
-            visibleFacts: facts,
-            openQuestions,
-            blackboardTurnId: run.turnId,
-            createdAt: normalizeIso(now),
-            updatedAt: normalizeIso(now),
-        },
-    ];
-}
-
-function renderBlackboardSceneDetail(run: RuntimeBlackboardRun): string {
-    const lines = [
-        `Route: ${run.reason}`,
-        `Status: ${run.status ?? BlackboardTurnStatus.Running}`,
-        `Plan: ${planSummaryForRun(run)}`,
-    ];
-    for (const step of run.steps.slice(0, 12)) {
-        lines.push(`r${step.round} ${step.workerRole}: ${compactDialogueText(step.outputSummary)}`);
-    }
-    for (const decision of run.decisions.slice(-3)) {
-        lines.push(`decision: ${compactDialogueText(decision.prompt)}`);
-    }
-    return lines.join("\n").slice(0, 4000);
-}
-
-function normalizeIso(value: string): string {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
-}
-
-function uniqueStrings(values: string[]): string[] {
-    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-}
-
-export function filterMcpServersByToolset<T extends { name: string }>(
-    servers: T[],
-    allowlist: string[] | undefined,
-): T[] {
-    if (!allowlist || allowlist.length === 0) return servers;
-    const allowed = new Set(allowlist.map((entry) => entry.trim()).filter((entry) => entry.length > 0));
-    if (allowed.size === 0) return servers;
-    return servers.filter((server) => allowed.has(server.name));
-}
-
-function renderReplyPrefix(run: RuntimeBlackboardRun | undefined): string {
-    if (!run || run.mode !== BlackboardMode.Blackboard) {
-        return "";
-    }
-    return [...renderBlackboardTranscript(run), ...renderDecisionLines(run), "", "Final answer:", ""].join("\n");
-}
-
-function renderReplyStreamingPrefix(run: RuntimeBlackboardRun | undefined): string {
-    if (!run || run.mode !== BlackboardMode.Blackboard) {
-        return "";
-    }
-    const decisionLines = renderDecisionLines(run);
-    if (decisionLines.length > 0) {
-        return [...decisionLines, "", "Final answer:", ""].join("\n");
-    }
-    return "\n---\n\n";
-}
-
-function routeMetadata(route: RuntimeBlackboardRouteDecision): Record<string, unknown> {
-    return {
-        route: {
-            mode: route.mode,
-            needsReflectionCandidate: route.needsReflectionCandidate,
-            raw: route.raw,
-            reason: route.reason,
-            score: route.score,
-            signals: route.signals,
-        },
-    };
-}
-
-function readRouteMetadata(metadata: Record<string, unknown> | undefined): RuntimeBlackboardRouteDecision | undefined {
-    const route = metadata?.route;
-    if (!route || typeof route !== "object") {
-        return undefined;
-    }
-    const candidate = route as Partial<RuntimeBlackboardRouteDecision>;
-    if (
-        typeof candidate.reason === "string" &&
-        typeof candidate.score === "number" &&
-        Array.isArray(candidate.signals) &&
-        typeof candidate.raw === "string" &&
-        (candidate.mode === BlackboardMode.Direct ||
-            candidate.mode === BlackboardMode.DirectWithWatch ||
-            candidate.mode === BlackboardMode.Blackboard)
-    ) {
-        return {
-            mode: candidate.mode,
-            blackboardContract: isBlackboardContract(candidate.blackboardContract)
-                ? candidate.blackboardContract
-                : normalBlackboardContract(),
-            needsReflectionCandidate: candidate.needsReflectionCandidate === true,
-            raw: candidate.raw,
-            reason: candidate.reason,
-            score: candidate.score,
-            signals: candidate.signals.filter((item): item is string => typeof item === "string"),
-            workers: Array.isArray(candidate.workers) ? candidate.workers : [],
-        };
-    }
-    return undefined;
-}
-
-function isBlackboardContract(value: unknown): value is RuntimeBlackboardRouteDecision["blackboardContract"] {
-    if (!value || typeof value !== "object") {
-        return false;
-    }
-    const candidate = value as { mode?: unknown };
-    return candidate.mode === "normal" || candidate.mode === "non-convergent";
-}
-
-function normalBlackboardContract(): RuntimeBlackboardRouteDecision["blackboardContract"] {
-    return {
-        contradictions: [],
-        evidence: [],
-        mode: "normal",
-        policyReason: "default-convergence",
-    };
-}
-
-function renderBlackboardTranscript(run: RuntimeBlackboardRun): string[] {
-    const rounds = [
-        ...new Set([
-            ...run.steps.map((step) => step.round),
-            ...run.transcript
-                .map((message) => message.round)
-                .filter((round): round is number => typeof round === "number"),
-        ]),
-    ]
-        .filter((round) => round > 0)
-        .sort((left, right) => left - right);
-    const header = [
-        "",
-        "Blackboard discussion:",
-        `Status: ${run.status ?? BlackboardTurnStatus.Running}; reason: ${run.reason}; plan: ${planSummaryForRun(run)}`,
-    ];
-    if (rounds.length === 0) {
-        return [...header, "Blackboard: No worker discussion was recorded."];
-    }
-    return [...header, ...rounds.flatMap((round) => renderRoundDialogue(run, round))];
-}
-
-function renderRoundDialogue(run: RuntimeBlackboardRun, round: number): string[] {
-    const steps = run.steps.filter((step) => step.round === round);
-    const messages = run.transcript.filter((message) => message.round === round && message.visibility === "public");
-    const dialogue = messages.length > 0 ? messages.map((message) => renderDialogueMessage(run, message)) : [];
-    const fallback = dialogue.length > 0 ? [] : steps.map((step) => renderStepAsDialogue(run, step));
-    return [
-        "",
-        `Round ${round} (${phaseForRound(run, round, policyReasonForRound(run, round))})`,
-        ...dialogue,
-        ...fallback,
-    ];
-}
-
-function renderDialogueMessage(run: RuntimeBlackboardRun, message: BlackboardMessage): string {
-    const speaker = message.workerRole
-        ? displayNameForWorker(run, message.workerRole)
-        : readableMessageRole(message.role);
-    return `${speaker}: ${compactDialogueText(message.content)}`;
-}
-
-function renderStepAsDialogue(run: RuntimeBlackboardRun, step: BlackboardStep): string {
-    return `${displayNameForWorker(run, step.workerRole)}: ${compactStepOutput(step)}`;
-}
-
-/**
- * LF-R3 slice D：把黑板封顶（NeedsUser）状态合成为 AgentAsk(reason=blackboard-stalemate)。
- * 仅消费 blackboard.status + 最新 decision（结构化资源指标），不做任何文本启发。
- * 模型本轮已显式 ask 时不调用本函数（model-ask 优先）。
- */
-function buildBlackboardStalemateAsk(run: RuntimeBlackboardRun | undefined): AgentAsk | undefined {
-    if (!run || run.status !== BlackboardTurnStatus.NeedsUser) return undefined;
-    const decision = run.decisions[run.decisions.length - 1];
-    if (!decision) return undefined;
-    const choices = decision.options.map((option) => ({
-        value: option.id,
-        label: option.label,
-        ...(option.description ? { description: option.description } : {}),
-    }));
-    return {
-        reason: AskReason.BlackboardStalemate,
-        prompt: decision.prompt,
-        ...(choices.length > 0 ? { choices } : {}),
-        freeform: true,
-        rationale: `blackboard:${decision.reason}`,
-    };
-}
-
-function compactDialogueText(value: string): string {
-    return value.replace(/\s+/gu, " ").trim();
-}
-
-function renderBlackboardState(run: RuntimeBlackboardRun, round: number): string {
-    const policy = policyReasonForRound(run, round);
-    const phase = phaseForRound(run, round, policy);
-    const plan = planSummaryForRun(run);
-    const status =
-        round < latestRound(run) ? BlackboardTurnStatus.Running : (run.status ?? BlackboardTurnStatus.Running);
-    if (policy === "declared-non-convergent-contract" && status === BlackboardTurnStatus.Running && round > 1) {
-        return `phase=${phase}; plan=${plan}; policy=${policy}; unresolved-contract=true; continue-to-hard-cap=true`;
-    }
-    return `phase=${phase}; plan=${plan}; policy=${policy}; status=${status}`;
-}
-
-function phaseForRound(run: RuntimeBlackboardRun, round: number, policy: string): string {
-    if (policy === "declared-non-convergent-contract" && round > 1) {
-        return "reframe";
-    }
-    if (round <= 1) {
-        return "decompose";
-    }
-    return run.status === BlackboardTurnStatus.Converged && round === latestRound(run) ? "final-output" : "qa";
-}
-
-function policyReasonForRound(run: RuntimeBlackboardRun, round: number): string {
-    const step = run.steps.find((item) => item.round === round);
-    const policy = step?.metadata.convergencePolicy;
-    if (isPolicyMetadata(policy)) {
-        return policy.reason;
-    }
-    if (run.steps.length === 0) {
-        return "default-convergence";
-    }
-    return "default-convergence";
-}
-
-function isPolicyMetadata(value: unknown): value is { forceHardCap: boolean; reason: string } {
-    if (!value || typeof value !== "object") {
-        return false;
-    }
-    const candidate = value as { reason?: unknown };
-    return typeof candidate.reason === "string";
-}
-
-function compactStepOutput(step: BlackboardStep): string {
-    const questions = readStringArray(step.metadata.qaQuestions);
-    const answers = readStringArray(step.metadata.qaAnswers);
-    const openIssues = readStringArray(step.metadata.qaOpenIssues);
-    const agreement = readBoolean(step.metadata.qaAgreement);
-    const outcome = typeof step.metadata.qaOutcome === "string" ? step.metadata.qaOutcome : undefined;
-    const qa = [
-        questions.length > 0 ? `Q=${questions.join("; ")}` : "",
-        answers.length > 0 ? `A=${answers.join("; ")}` : "",
-        outcome ? `outcome=${outcome}` : "",
-        agreement !== undefined ? `agreement=${agreement ? "yes" : "no"}` : "",
-        openIssues.length > 0 ? `open=${openIssues.join("; ")}` : "",
-    ].filter(Boolean);
-    const blockers = step.blockers.length > 0 ? `; blockers=${step.blockers.join("; ")}` : "";
-    return `${step.outputSummary}${qa.length > 0 ? `; QA: ${qa.join("; ")}` : ""}${blockers}`;
-}
-
-function readableWorkerRole(role: string): string {
-    return role
-        .split(/[-_.]+/u)
-        .filter(Boolean)
-        .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-        .join(" ");
-}
-
-function latestRound(run: RuntimeBlackboardRun): number {
-    return run.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
-}
-
-function renderDecisionLines(run: RuntimeBlackboardRun): string[] {
-    if (run.decisions.length === 0) {
-        return [];
-    }
-    return run.decisions.map(
-        (decision) => `Blackboard needs input: ${decision.reason}; ${decision.prompt.replace(/\s+/gu, " ")}`,
-    );
-}
-
-function planSummaryForRun(run: RuntimeBlackboardRun): string {
-    const plan = run.metadata.blackboardPlan;
-    if (!plan || typeof plan !== "object") {
-        return "-";
-    }
-    const workstreams = (plan as { workstreams?: unknown }).workstreams;
-    if (!Array.isArray(workstreams) || workstreams.length === 0) {
-        return "-";
-    }
-    return workstreams
-        .filter((item): item is string => typeof item === "string")
-        .slice(0, 2)
-        .join(" / ");
-}
-
-function displayNameForWorker(run: RuntimeBlackboardRun, role: string): string {
-    const plan = run.metadata.blackboardPlan;
-    if (plan && typeof plan === "object") {
-        const participants = (plan as { participants?: unknown }).participants;
-        if (Array.isArray(participants)) {
-            const participant = participants.find(
-                (item): item is { name?: unknown; role?: unknown } =>
-                    !!item && typeof item === "object" && (item as { role?: unknown }).role === role,
-            );
-            if (typeof participant?.name === "string" && participant.name.trim()) {
-                return participant.name.trim();
-            }
-        }
-    }
-    return readableWorkerRole(role);
-}
-
-function readableMessageRole(role: BlackboardMessage["role"]): string {
-    if (role === "system") {
-        return "Blackboard";
-    }
-    return readableWorkerRole(role);
-}
-
-function readStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-    return value.filter((item): item is string => typeof item === "string");
-}
-
-function readBoolean(value: unknown): boolean | undefined {
-    return typeof value === "boolean" ? value : undefined;
-}
-
-function elapsed(started: number): number {
-    return Number((performance.now() - started).toFixed(3));
-}
-
-function filterVisibleMemoryActionText(text: string): string {
-    const filter = new MemoryActionVisibilityFilter();
-    return `${filter.push(text)}${filter.finish()}`;
-}
-
-function mcpCatalogCacheKey(server: Awaited<ReturnType<typeof loadMcpServers>>[number]): string {
-    return JSON.stringify({
-        args: server.args ?? [],
-        command: server.command,
-        disabledTools: server.disabledTools ?? [],
-        env: server.env ?? {},
-        name: server.name,
-        source: server.source,
-        transport: server.transport,
-        url: server.url,
-    });
-}
-
-function mcpExecutionsToProvenance(
-    executions: McpToolCallExecution[],
-): NonNullable<MemoryEpisodeProvenance["mcpCalls"]> {
-    return executions.map((execution) => {
-        const summary = execution.result ? describeMcpResult(execution.result.raw).summary : undefined;
-        return {
-            error: execution.error ? execution.error.slice(0, 240) : undefined,
-            ok: execution.ok,
-            resultSummary: summary ? formatMcpResultSummary(summary, execution.result?.raw) : undefined,
-            resultSummaryMeta: summary,
-            server: execution.call.server,
-            tool: execution.call.tool,
-        };
-    });
-}
-
-function formatMcpResultSummary(summary: McpResultSummary, raw?: unknown): string {
-    const parts = [`kind=${summary.kind}`];
-    if (typeof summary.chars === "number") parts.push(`chars=${summary.chars}`);
-    if (typeof summary.originalChars === "number") parts.push(`originalChars=${summary.originalChars}`);
-    if (typeof summary.items === "number") parts.push(`items=${summary.items}`);
-    if (typeof summary.lines === "number") parts.push(`lines=${summary.lines}`);
-    if (typeof summary.keyCount === "number") parts.push(`keys=${summary.keyCount}`);
-    if (summary.keys && summary.keys.length > 0) parts.push(`sampleKeys=${summary.keys.join(",")}`);
-    if (summary.valueType) parts.push(`valueType=${summary.valueType}`);
-    const preview = previewMcpResult(raw);
-    if (preview) parts.push(`preview=${preview}`);
-    return parts.join(" ").slice(0, 500);
-}
-
-function previewMcpResult(value: unknown): string {
-    if (value === undefined || value === null) return "";
-    try {
-        return (typeof value === "string" ? value : JSON.stringify(value)).replace(/\s+/g, " ").trim().slice(0, 180);
-    } catch {
-        return "";
-    }
-}
-
-function selectRuntimeSkills(
-    skills: Skill[],
-    requestedNames: string[] | undefined,
-    queryEmbedding: number[] | undefined,
-    usage: SkillUsageSummary | undefined,
-): Skill[] {
-    const requested = new Set((requestedNames ?? []).map((name) => name.trim()).filter(Boolean));
-    if (requested.size === 0) {
-        return selectSkills(skills, { usage, queryEmbedding });
-    }
-
-    const explicit = skills.filter((skill) => requested.has(skill.name));
-    const explicitNames = new Set(explicit.map((skill) => skill.name));
-    const automatic = selectSkills(skills, { usage, queryEmbedding }).filter((skill) => !explicitNames.has(skill.name));
-    return [...explicit, ...automatic].slice(0, 4);
-}
-
-class MemoryActionVisibilityFilter {
-    private buffer = "";
-    private hiddenClose: string | undefined;
-
-    push(chunk: string): string {
-        this.buffer += chunk;
-        let output = "";
-        while (this.buffer) {
-            if (this.hiddenClose) {
-                const closeIndex = this.buffer.indexOf(this.hiddenClose);
-                if (closeIndex < 0) {
-                    this.buffer = keepSuffix(this.buffer, this.hiddenClose);
-                    return output;
-                }
-                this.buffer = this.buffer.slice(closeIndex + this.hiddenClose.length);
-                this.hiddenClose = undefined;
-                continue;
-            }
-
-            const nextBlock = findHiddenProtocolBlock(this.buffer);
-            if (nextBlock) {
-                output += this.buffer.slice(0, nextBlock.index);
-                this.buffer = this.buffer.slice(nextBlock.index + nextBlock.open.length);
-                this.hiddenClose = nextBlock.close;
-                continue;
-            }
-
-            const emitLength = Math.max(0, this.buffer.length - HIDDEN_PROTOCOL_MAX_OPEN_LENGTH + 1);
-            if (emitLength === 0) {
-                return output;
-            }
-            output += this.buffer.slice(0, emitLength);
-            this.buffer = this.buffer.slice(emitLength);
-        }
-        return output;
-    }
-
-    finish(): string {
-        const output = this.hiddenClose ? "" : this.buffer;
-        this.buffer = "";
-        this.hiddenClose = undefined;
-        return output;
-    }
-}
-
-const HIDDEN_PROTOCOL_BLOCKS = [
-    { open: "<flyflor_memory_actions>", close: "</flyflor_memory_actions>" },
-    { open: "<flyflor_mcp_calls>", close: "</flyflor_mcp_calls>" },
-] as const;
-
-const HIDDEN_PROTOCOL_MAX_OPEN_LENGTH = Math.max(...HIDDEN_PROTOCOL_BLOCKS.map((block) => block.open.length));
-
-function findHiddenProtocolBlock(buffer: string): { close: string; index: number; open: string } | undefined {
-    let found: { close: string; index: number; open: string } | undefined;
-    for (const block of HIDDEN_PROTOCOL_BLOCKS) {
-        const index = buffer.indexOf(block.open);
-        if (index < 0) {
-            continue;
-        }
-        if (!found || index < found.index) {
-            found = { close: block.close, index, open: block.open };
-        }
-    }
-    return found;
-}
-
-function keepSuffix(value: string, token: string): string {
-    return value.slice(Math.max(0, value.length - token.length + 1));
-}
-
-/**
- * 把黑板辩论转写为 episode text：用户问题 + 每个 worker 的 outputSummary，
- * 截断保护，便于长期检索而不存原始长 transcript。
- */
-function renderDebateEpisodeText(userText: string, run: RuntimeBlackboardRun): string {
-    const head = `[debate-goal] ${userText.slice(0, 256)}`;
-    const summaries = run.steps
-        .map((step) => {
-            const summary = step.outputSummary ?? "";
-            if (!summary) return "";
-            return `[${step.workerRole}] ${summary.slice(0, 256)}`;
-        })
-        .filter((s) => s.length > 0)
-        .join("\n");
-    return summaries ? `${head}\n${summaries}` : head;
-}
-
-function projectConstraintIdForMessage(message: GatewayMessage): string {
-    return [message.route.channel, message.route.accountId, message.route.chatId, message.route.threadId]
-        .filter(Boolean)
-        .join(":");
 }

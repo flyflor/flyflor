@@ -19,16 +19,16 @@ beforeAll(async () => {
 });
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push({ type: evt.type, payload: evt.payload });
     }
 }
 
 class StubModel implements ModelClient {
-    constructor(private readonly responses: string[]) {}
+    public constructor(private readonly responses: string[]) {}
     private idx = 0;
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         const r = this.responses[this.idx] ?? this.responses[this.responses.length - 1] ?? "";
         this.idx += 1;
         return r;

@@ -21,7 +21,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import type { BlackboardWorkerResult, BlackboardWorkerTask, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, componentRegistry, type EventSink, Worker } from "../src/agent/di/index.ts";
-import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard.route.ts";
+import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/route.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
@@ -742,7 +742,7 @@ describe("Blackboard control boundary", () => {
 
 @Worker(TEST_ANALYSIS_ROLE)
 class AnalysisQaWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         const isFirstRound = input.round <= 1;
         const questions = isFirstRound
             ? ["review-worker.accepts_workstreams", "review-worker.missing_acceptance_or_risk_bounds"]
@@ -771,7 +771,7 @@ class AnalysisQaWorker {
 
 @Worker(TEST_REVIEW_ROLE)
 class ReviewQaWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         const analysisStep = input.currentRoundSteps.find((step) => step.workerRole === TEST_ANALYSIS_ROLE);
         const analysisQuestions = analysisStep?.questions ?? [];
         const isFirstRound = input.round <= 1;
@@ -808,7 +808,7 @@ function testWorkerPlan() {
 
 @Worker("external-kimi")
 class KimiProposalWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Kimi 给出可执行方案。",
@@ -826,7 +826,7 @@ class KimiProposalWorker {
 
 @Worker("external-codex")
 class CodexReviewWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Codex 完成边界复审。",
@@ -844,7 +844,7 @@ class CodexReviewWorker {
 
 @Worker("external-opencode")
 class RepeatingBlockerWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "OpenCode 无法在缺失路径时继续裁决。",
@@ -861,7 +861,7 @@ class RepeatingBlockerWorker {
 
 @Worker("legacy-agreement")
 class LegacyAgreementWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Legacy worker 只返回 agreement=true，没有 final outcome。",
@@ -877,7 +877,7 @@ class LegacyAgreementWorker {
 
 @Worker("final-without-agreement")
 class FinalWithoutAgreementWorker {
-    run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
         return {
             inputSummary: input.prompt ?? input.goal,
             outputSummary: "Final worker 返回明确 final，且没有开放问题。",
@@ -944,9 +944,9 @@ async function copyTemplateGroup(source: string, destination: string): Promise<v
 }
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
+    public readonly events: RuntimeEvent[] = [];
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         this.events.push(event);
     }
 }

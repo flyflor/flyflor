@@ -18,7 +18,7 @@ import {
     detectExplicitIntent,
     detectSkillPromotion,
     ProjectTriggerKind,
-} from "../src/agent/project/index.ts";
+} from "../src/neural/project/index.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { EpisodeRecord } from "../src/components/memory/working.store.ts";
 

@@ -89,9 +89,9 @@ interface BlackboardLeaseRow {
 export class SQLiteBlackboardStore implements BlackboardStore {
     private database?: Database;
 
-    constructor(private readonly paths: FlyflorPaths) {}
+    public constructor(private readonly paths: FlyflorPaths) {}
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         if (this.database) {
             return;
         }
@@ -183,7 +183,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         this.database = database;
     }
 
-    async acquireLease(request: BlackboardLeaseAcquireRequest): Promise<BlackboardLeaseAcquireResult> {
+    public async acquireLease(request: BlackboardLeaseAcquireRequest): Promise<BlackboardLeaseAcquireResult> {
         await this.initialize();
         const database = this.requiredDatabase();
         const expiresAt = new Date(Date.parse(request.now) + request.ttlMs).toISOString();
@@ -218,7 +218,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return { acquired: true, lease };
     }
 
-    async releaseLease(projectConstraintId: string, turnId: string, _now: string): Promise<BlackboardLease | undefined> {
+    public async releaseLease(projectConstraintId: string, turnId: string, _now: string): Promise<BlackboardLease | undefined> {
         await this.initialize();
         const database = this.requiredDatabase();
         const existing = database
@@ -233,7 +233,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return rowToLease(existing);
     }
 
-    async createTurn(turn: BlackboardTurn): Promise<void> {
+    public async createTurn(turn: BlackboardTurn): Promise<void> {
         await this.initialize();
         this.requiredDatabase()
             .query(
@@ -260,7 +260,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
             );
     }
 
-    async appendStep(turnId: string, input: BlackboardStepInput): Promise<BlackboardStep> {
+    public async appendStep(turnId: string, input: BlackboardStepInput): Promise<BlackboardStep> {
         await this.initialize();
         const step: BlackboardStep = {
             id: crypto.randomUUID(),
@@ -302,7 +302,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return step;
     }
 
-    async appendMessage(turnId: string, input: BlackboardMessageInput): Promise<BlackboardMessage> {
+    public async appendMessage(turnId: string, input: BlackboardMessageInput): Promise<BlackboardMessage> {
         await this.initialize();
         const message: BlackboardMessage = {
             id: crypto.randomUUID(),
@@ -339,7 +339,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return message;
     }
 
-    async appendDecision(turnId: string, input: BlackboardDecisionInput): Promise<BlackboardDecision> {
+    public async appendDecision(turnId: string, input: BlackboardDecisionInput): Promise<BlackboardDecision> {
         await this.initialize();
         const decision: BlackboardDecision = {
             id: crypto.randomUUID(),
@@ -374,7 +374,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return decision;
     }
 
-    async updateTurnStatus(
+    public async updateTurnStatus(
         turnId: string,
         status: BlackboardTurnStatusType,
         now: string,
@@ -387,7 +387,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return this.getTurn(turnId);
     }
 
-    async getTurn(turnId: string): Promise<BlackboardTurn | undefined> {
+    public async getTurn(turnId: string): Promise<BlackboardTurn | undefined> {
         await this.initialize();
         const row = this.requiredDatabase()
             .query("SELECT * FROM blackboard_turns WHERE id = ?")
@@ -398,7 +398,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return this.hydrateTurn(row);
     }
 
-    async listTurns(projectConstraintId: string, limit: number): Promise<BlackboardTurn[]> {
+    public async listTurns(projectConstraintId: string, limit: number): Promise<BlackboardTurn[]> {
         await this.initialize();
         if (limit <= 0) {
             return [];
@@ -417,7 +417,7 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return rows.map((row) => this.hydrateTurn(row));
     }
 
-    async listRecentTurns(limit: number): Promise<BlackboardTurn[]> {
+    public async listRecentTurns(limit: number): Promise<BlackboardTurn[]> {
         await this.initialize();
         if (limit <= 0) {
             return [];

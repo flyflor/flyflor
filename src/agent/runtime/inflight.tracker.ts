@@ -21,7 +21,7 @@ export interface InFlightRecord {
 
 export class InFlightTracker {
     private readonly dir: string;
-    constructor(storageDir: string) {
+    public constructor(storageDir: string) {
         this.dir = join(storageDir, "inflight");
     }
 
@@ -30,17 +30,17 @@ export class InFlightTracker {
         return join(this.dir, `${safe}.json`);
     }
 
-    async markStart(record: InFlightRecord): Promise<void> {
+    public async markStart(record: InFlightRecord): Promise<void> {
         await mkdir(this.dir, { recursive: true });
         const path = this.fileFor(record.requestId);
         await writeFile(path, JSON.stringify(record), "utf8");
     }
 
-    async markEnd(requestId: string): Promise<void> {
+    public async markEnd(requestId: string): Promise<void> {
         await unlink(this.fileFor(requestId));
     }
 
-    async recoverOrphans(): Promise<InFlightRecord[]> {
+    public async recoverOrphans(): Promise<InFlightRecord[]> {
         await mkdir(this.dir, { recursive: true });
         const entries = await readdir(this.dir);
         const out: InFlightRecord[] = [];

@@ -127,11 +127,11 @@ class BufferedAsyncLines {
     private readonly queue: string[] = [];
     private readonly waiters: Array<(value: string | undefined) => void> = [];
 
-    constructor(source: AsyncIterable<unknown>) {
+    public constructor(source: AsyncIterable<unknown>) {
         void this.read(source);
     }
 
-    next(timeoutMs?: number): Promise<string | undefined> {
+    public next(timeoutMs?: number): Promise<string | undefined> {
         const queued = this.queue.shift();
         if (queued !== undefined) {
             return Promise.resolve(queued);

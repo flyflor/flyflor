@@ -4,8 +4,8 @@ import { RuntimeMode } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(event: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(event: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(event);
     }
 }

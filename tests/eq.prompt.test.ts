@@ -151,8 +151,8 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
 });
 
 class RecordingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(event: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(event: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(event);
     }
 }

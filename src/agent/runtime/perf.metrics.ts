@@ -13,7 +13,7 @@ export class PerfMetrics {
     private readonly enabled: boolean;
     private readonly events: EventSink;
 
-    constructor(config: MetricsConfig, events: EventSink) {
+    public constructor(config: MetricsConfig, events: EventSink) {
         this.enabled = config.enabled;
         this.events = events;
     }
@@ -22,7 +22,7 @@ export class PerfMetrics {
      * 标记一个起点；返回的 measure 函数闭包记录 elapsed 并发布事件。
      * 即便 metrics disabled 也要返回可调用的 measure，避免调用方 if-else 散落。
      */
-    mark<T extends Record<string, unknown>>(
+    public mark<T extends Record<string, unknown>>(
         type: PerfEventType,
         baseline: T = {} as T,
         requestId?: string,
@@ -38,7 +38,7 @@ export class PerfMetrics {
     }
 
     /** 直接发布一条已知 elapsed 的事件（适用于调用方自己 timing 的情形）。 */
-    record(type: PerfEventType, payload: Record<string, unknown>, requestId?: string): void {
+    public record(type: PerfEventType, payload: Record<string, unknown>, requestId?: string): void {
         if (!this.enabled) return;
         this.events.publish(event(type, payload, requestId));
     }

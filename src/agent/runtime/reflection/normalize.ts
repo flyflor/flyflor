@@ -4,8 +4,8 @@
  * 与模型调用解耦，方便在 Bun Worker 线程或主线程任意位置复用；不依赖运行时类、
  * 沙箱、配置或事件总线，确保可以被 `bun build --compile` 直接打包。
  */
-import { evidence, type CrystalCandidateInput } from "../../crystal/reflection/index.ts";
-import { BlackboardMode, BlackboardTurnStatus, type CrystalEvidence } from "../../protocol/contracts/index.ts";
+import { evidence, type CrystalCandidateInput } from "../../../crystal/reflection/index.ts";
+import { BlackboardMode, BlackboardTurnStatus, type CrystalEvidence } from "../../../protocol/contracts/index.ts";
 
 export interface ReflectionNormalizeSource {
     answer: string;

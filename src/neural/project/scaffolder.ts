@@ -43,7 +43,7 @@ export interface ProjectScaffoldResult {
 }
 
 export class ProjectScaffolder {
-    constructor(
+    public constructor(
         private readonly paths: FlyflorPaths,
         private readonly events: EventSink,
     ) {}
@@ -52,7 +52,7 @@ export class ProjectScaffolder {
      * Idempotent scaffold. 已存在的文件保持不动；只新建缺失的。
      * trigger.kind === None 时直接返回空结果。
      */
-    async scaffold(input: ProjectScaffoldInput): Promise<ProjectScaffoldResult> {
+    public async scaffold(input: ProjectScaffoldInput): Promise<ProjectScaffoldResult> {
         const projectDir = join(this.paths.workspaceDir, "projects", input.projectId);
         const result: ProjectScaffoldResult = {
             projectId: input.projectId,

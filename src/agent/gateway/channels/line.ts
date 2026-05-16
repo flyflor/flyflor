@@ -55,20 +55,20 @@ interface LineMessage {
 }
 
 export class LineAdapter implements ChannelAdapter {
-    readonly name: ChannelName = Channel.Line;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name: ChannelName = Channel.Line;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         replyReference: true,
         typing: true,
     });
     private readonly seenEvents = new Set<string>();
 
-    constructor(
+    public constructor(
         private readonly config: LineAdapterConfig,
         private readonly now: () => number = () => Date.now(),
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const raw = await request.text();
         if (!this.verifySignature(request, raw)) {
             return json({ ok: false, error: "invalid_signature" }, 401);
@@ -174,7 +174,7 @@ export class LineAdapter implements ChannelAdapter {
         };
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.TypingStart) {
             await this.sendTyping(operation.route, operation.metadata);
             return;
@@ -242,7 +242,7 @@ export class LineAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "LINE push");
     }
 
-    async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         if (!this.config.channelAccessToken || route.chatType !== ChatType.Direct) {
             return;
         }

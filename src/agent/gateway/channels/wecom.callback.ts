@@ -22,16 +22,16 @@ const ACCESS_TOKEN_TTL_SECONDS = 7200;
 const DEDUP_TTL_MS = 5 * 60 * 1000;
 
 export class WeComCallbackAdapter implements ChannelAdapter {
-    readonly name = Channel.WeComCallback;
-    readonly transport = ChannelTransport.Http;
+    public readonly name = Channel.WeComCallback;
+    public readonly transport = ChannelTransport.Http;
     private readonly seen = new Map<string, number>();
     private accessToken?: AccessTokenCache;
     private lastInboundAt?: string;
     private lastOutboundAt?: string;
 
-    constructor(private readonly config: WeComCallbackConfig) {}
+    public constructor(private readonly config: WeComCallbackConfig) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const url = new URL(request.url);
         if (request.method === "GET") {
             return this.handleVerify(url);
@@ -62,7 +62,7 @@ export class WeComCallbackAdapter implements ChannelAdapter {
         return text("success");
     }
 
-    snapshot(): ChannelAdapterSnapshot {
+    public snapshot(): ChannelAdapterSnapshot {
         return {
             connected: true,
             detail: "WeCom callback ready",
@@ -71,7 +71,7 @@ export class WeComCallbackAdapter implements ChannelAdapter {
         };
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // WeCom application messages do not expose a typing lifecycle API.
     }
 

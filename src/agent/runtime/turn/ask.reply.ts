@@ -1,4 +1,4 @@
-import type { AgentAsk, AgentAskChoice } from "../../protocol/contracts/index.ts";
+import type { AgentAsk, AgentAskChoice } from "../../../protocol/contracts/index.ts";
 
 /**
  * Render AgentAsk into the visible reply sent to the user.

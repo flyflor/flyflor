@@ -48,9 +48,9 @@ export function buildDedupKey(channel: string, messageId: string): string {
 /** 单进程 LRU + TTL 实现（默认 60s）。 */
 export class InMemoryDedupStore implements MessageDedupStore {
     private readonly entries = new Map<string, { expiresAt: number; reply?: GatewayReply }>();
-    constructor(private readonly ttlMs: number = 60_000, private readonly maxEntries: number = 1024) {}
+    public constructor(private readonly ttlMs: number = 60_000, private readonly maxEntries: number = 1024) {}
 
-    async tryClaim(key: string): Promise<DedupClaim> {
+    public async tryClaim(key: string): Promise<DedupClaim> {
         this.evictExpired();
         const existing = this.entries.get(key);
         if (existing && existing.expiresAt > Date.now()) {
@@ -62,13 +62,13 @@ export class InMemoryDedupStore implements MessageDedupStore {
         return { state: "claimed", key };
     }
 
-    async recordReply(key: string, reply: GatewayReply): Promise<void> {
+    public async recordReply(key: string, reply: GatewayReply): Promise<void> {
         const existing = this.entries.get(key);
         const expiresAt = existing?.expiresAt ?? Date.now() + this.ttlMs;
         this.entries.set(key, { expiresAt, reply });
     }
 
-    async release(key: string): Promise<void> {
+    public async release(key: string): Promise<void> {
         this.entries.delete(key);
     }
 
@@ -94,9 +94,9 @@ export class InMemoryDedupStore implements MessageDedupStore {
  */
 export class RedisDedupStore implements MessageDedupStore {
     private readonly inflightMarker = "__inflight__";
-    constructor(private readonly redis: RedisDedupClient, private readonly ttlSeconds: number = 60) {}
+    public constructor(private readonly redis: RedisDedupClient, private readonly ttlSeconds: number = 60) {}
 
-    async tryClaim(key: string): Promise<DedupClaim> {
+    public async tryClaim(key: string): Promise<DedupClaim> {
         const ok = await this.redis.set(key, this.inflightMarker, "EX", this.ttlSeconds, "NX");
         if (ok === "OK") return { state: "claimed", key };
         const existing = await this.redis.get(key);
@@ -112,13 +112,13 @@ export class RedisDedupStore implements MessageDedupStore {
         }
     }
 
-    async recordReply(key: string, reply: GatewayReply): Promise<void> {
+    public async recordReply(key: string, reply: GatewayReply): Promise<void> {
         const payload = JSON.stringify(reply);
         // XX = only set if exists, preserving TTL implicitly via KEEPTTL when supported; fallback EX same ttl.
         await this.redis.set(key, payload, "EX", this.ttlSeconds, "XX");
     }
 
-    async release(key: string): Promise<void> {
+    public async release(key: string): Promise<void> {
         await this.redis.del(key);
     }
 }

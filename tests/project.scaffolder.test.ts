@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readdir, rm, copyFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../src/config/index.ts";
-import { ProjectScaffolder } from "../src/agent/project/scaffolder.ts";
-import { ProjectTriggerKind, type ProjectTriggerResult } from "../src/agent/project/index.ts";
+import { ProjectScaffolder } from "../src/neural/project/scaffolder.ts";
+import { ProjectTriggerKind, type ProjectTriggerResult } from "../src/neural/project/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
@@ -17,8 +17,8 @@ afterEach(async () => {
 });
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
+    public readonly events: RuntimeEvent[] = [];
+    public publish(e: RuntimeEvent): void {
         this.events.push(e);
     }
 }

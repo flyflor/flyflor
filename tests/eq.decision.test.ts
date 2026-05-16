@@ -154,7 +154,7 @@ async function collectTs(root: string): Promise<string[]> {
 }
 
 class RecordingSink implements EventSink {
-    publish(_event: { type: string; payload?: Record<string, unknown> }): void {
+    public publish(_event: { type: string; payload?: Record<string, unknown> }): void {
         // no-op
     }
 }

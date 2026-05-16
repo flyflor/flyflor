@@ -13,53 +13,53 @@ import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.t
  */
 
 class ZeroSignalGraph {
-    callLog: string[] = [];
-    async listGemDriftCandidates(): Promise<GemRecord[]> {
+    public callLog: string[] = [];
+    public async listGemDriftCandidates(): Promise<GemRecord[]> {
         this.callLog.push("listGemDriftCandidates");
         return [];
     }
-    async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
+    public async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
         this.callLog.push("listRecallExtremes");
         return { tops: [], bottoms: [] };
     }
-    async listContradictionPairs(): Promise<Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>> {
+    public async listContradictionPairs(): Promise<Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>> {
         this.callLog.push("listContradictionPairs");
         return [];
     }
-    async writeGemSnapshot(): Promise<string> {
+    public async writeGemSnapshot(): Promise<string> {
         this.callLog.push("writeGemSnapshot");
         return "should-not-be-called";
     }
-    async applyGemDriftRepair(): Promise<boolean> {
+    public async applyGemDriftRepair(): Promise<boolean> {
         this.callLog.push("applyGemDriftRepair");
         return true;
     }
-    async applyMemoryReinforce(): Promise<boolean> {
+    public async applyMemoryReinforce(): Promise<boolean> {
         this.callLog.push("applyMemoryReinforce");
         return true;
     }
-    async applyContradictionAudit(): Promise<boolean> {
+    public async applyContradictionAudit(): Promise<boolean> {
         this.callLog.push("applyContradictionAudit");
         return true;
     }
-    async applyReconsolidation(): Promise<boolean> {
+    public async applyReconsolidation(): Promise<boolean> {
         this.callLog.push("applyReconsolidation");
         return true;
     }
 }
 
 class CountingModel implements ModelClient {
-    calls = 0;
-    async generate(): Promise<string> {
+    public calls = 0;
+    public async generate(): Promise<string> {
         this.calls += 1;
         return JSON.stringify({ decisions: [] });
     }
-    readonly role = ModelRole.Assistant;
+    public readonly role = ModelRole.Assistant;
 }
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(event: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(event: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(event);
     }
 }
@@ -87,7 +87,7 @@ describe("LF-R6: dream zero-write hard rule", () => {
 
     test("collect throws → no LLM call, no graph writes, MemoryDreamFailed emitted", async () => {
         const graph = new (class extends ZeroSignalGraph {
-            override async listGemDriftCandidates(): Promise<GemRecord[]> {
+            public override async listGemDriftCandidates(): Promise<GemRecord[]> {
                 this.callLog.push("listGemDriftCandidates");
                 throw new Error("graph down");
             }

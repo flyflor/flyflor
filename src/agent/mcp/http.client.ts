@@ -86,12 +86,12 @@ class McpHttpSession {
     private nextId = 1;
     private sessionId: string | undefined;
 
-    constructor(
+    public constructor(
         private readonly server: McpServerDefinition,
         private readonly options: McpClientOptions,
     ) {}
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         await this.request("initialize", {
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: {},
@@ -103,7 +103,7 @@ class McpHttpSession {
         await this.notify("notifications/initialized", {});
     }
 
-    async request(method: string, params: Record<string, unknown>): Promise<unknown> {
+    public async request(method: string, params: Record<string, unknown>): Promise<unknown> {
         const id = this.nextId++;
         const response = await this.post({
             jsonrpc: "2.0",
@@ -118,7 +118,7 @@ class McpHttpSession {
         return message.result;
     }
 
-    async notify(method: string, params: Record<string, unknown>): Promise<void> {
+    public async notify(method: string, params: Record<string, unknown>): Promise<void> {
         await this.post({
             jsonrpc: "2.0",
             method,

@@ -42,7 +42,7 @@ export interface RetrospectiveLogOptions {
 export class RetrospectiveLog {
     private readonly projectMemoryDir: string;
 
-    constructor(options: RetrospectiveLogOptions) {
+    public constructor(options: RetrospectiveLogOptions) {
         this.projectMemoryDir = options.projectMemoryDir;
     }
 

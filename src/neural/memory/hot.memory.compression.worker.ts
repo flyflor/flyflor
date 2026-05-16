@@ -45,7 +45,7 @@ export class HotMemoryCompressionWorker {
     private readonly now: () => number;
     private readonly workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 
-    constructor(
+    public constructor(
         private readonly workingMemory: WorkingMemoryStore,
         private readonly brain: BrainStore,
         private readonly model: ModelClient,
@@ -58,7 +58,7 @@ export class HotMemoryCompressionWorker {
         this.workingMemoryHealthSnapshot = options.workingMemoryHealthSnapshot;
     }
 
-    async drain(userId: string): Promise<HotMemoryCompressionRunResult> {
+    public async drain(userId: string): Promise<HotMemoryCompressionRunResult> {
         const result: HotMemoryCompressionRunResult = {
             scanned: 0,
             compressed: 0,
@@ -171,7 +171,7 @@ export class HotMemoryCompressionWorker {
         return result;
     }
 
-    async compress(userId: string, episodes: EpisodeRecord[]): Promise<HotMemoryCompressionDecision> {
+    public async compress(userId: string, episodes: EpisodeRecord[]): Promise<HotMemoryCompressionDecision> {
         const prompt = renderHotMemoryCompressionPrompt({
             episodes: renderEpisodesBlock(userId, episodes),
         });

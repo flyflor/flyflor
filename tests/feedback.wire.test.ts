@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
-import { FeedbackCategory } from "../src/agent/runtime/feedback.interpreter.ts";
+import { FeedbackCategory } from "../src/neural/memory/feedback.interpreter.ts";
 import {
     ChatType,
     Channel,
@@ -32,15 +32,15 @@ afterEach(async () => {
 });
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
+    public readonly events: RuntimeEvent[] = [];
+    public publish(e: RuntimeEvent): void {
         this.events.push(e);
     }
 }
 
 class StubModel implements ModelClient {
-    constructor(private readonly response: string) {}
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public constructor(private readonly response: string) {}
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         return this.response;
     }
 }

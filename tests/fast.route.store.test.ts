@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { InMemoryFastRouteSnapshotStore } from "../src/agent/runtime/fast.route.store.ts";
+import { InMemoryFastRouteSnapshotStore } from "../src/agent/runtime/routing/fast.route.store.ts";
 import { BlackboardMode } from "../src/protocol/contracts/index.ts";
-import type { FastRouteSnapshot } from "../src/agent/runtime/fast.route.ts";
+import type { FastRouteSnapshot } from "../src/agent/runtime/routing/fast.route.ts";
 
 const baseSnapshot: FastRouteSnapshot = {
     recordedAt: 1700000000000,

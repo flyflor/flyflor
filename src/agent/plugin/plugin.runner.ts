@@ -81,7 +81,7 @@ export class PluginRunner {
     private readonly now: () => number;
     private readonly spawnFn: PluginSpawnFn;
 
-    constructor(options: PluginRunnerOptions) {
+    public constructor(options: PluginRunnerOptions) {
         this.policy = options.policy;
         this.events = options.events;
         this.allowed = new Set(options.allowedCommands);
@@ -92,7 +92,7 @@ export class PluginRunner {
         this.spawnFn = options.spawn ?? defaultSpawn;
     }
 
-    async invoke(spec: PluginInvocationSpec): Promise<PluginInvocationResult> {
+    public async invoke(spec: PluginInvocationSpec): Promise<PluginInvocationResult> {
         const started = this.now();
         if (!validSpec(spec)) {
             return this.fail(started, "plugin spec missing required fields");

@@ -17,7 +17,7 @@ import {
     evidence,
     mergeCrystalGem,
 } from "../src/crystal/reflection/index.ts";
-import { extractRuntimeReflectionCandidates } from "../src/agent/runtime/reflection.ts";
+import { extractRuntimeReflectionCandidates } from "../src/agent/runtime/reflection/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { type ModelClient } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
@@ -38,14 +38,14 @@ function makeComponent(): { svc: CrystalMemoryComponent; store: InMemoryCrystalM
 }
 
 class StubModel implements ModelClient {
-    constructor(private readonly raw: string) {}
-    async generate(): Promise<string> {
+    public constructor(private readonly raw: string) {}
+    public async generate(): Promise<string> {
         return this.raw;
     }
 }
 
 class FailingModel implements ModelClient {
-    async generate(): Promise<string> {
+    public async generate(): Promise<string> {
         throw new Error("model-down");
     }
 }

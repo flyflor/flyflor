@@ -31,13 +31,13 @@ export class SandboxQuotaTracker {
     private readonly cooldownMs: number;
     private readonly now: () => number;
 
-    constructor(options: SandboxQuotaOptions = {}) {
+    public constructor(options: SandboxQuotaOptions = {}) {
         this.perKindLimit = options.perKindPerRequest && options.perKindPerRequest > 0 ? options.perKindPerRequest : 0;
         this.cooldownMs = options.yoloCooldownMs && options.yoloCooldownMs > 0 ? options.yoloCooldownMs : 0;
         this.now = options.now ?? (() => Date.now());
     }
 
-    checkBeforeAllow(
+    public checkBeforeAllow(
         kind: CapabilityExecutionKindType,
         requestId: string | undefined,
         opts: { yolo: boolean },
@@ -69,7 +69,7 @@ export class SandboxQuotaTracker {
         return { ok: true };
     }
 
-    recordAllow(kind: CapabilityExecutionKindType, requestId: string | undefined, opts: { yolo: boolean }): void {
+    public recordAllow(kind: CapabilityExecutionKindType, requestId: string | undefined, opts: { yolo: boolean }): void {
         if (opts.yolo) {
             this.yoloLastAt.set(kind, this.now());
         }
@@ -79,7 +79,7 @@ export class SandboxQuotaTracker {
         }
     }
 
-    forgetRequest(requestId: string): void {
+    public forgetRequest(requestId: string): void {
         for (const key of this.perKind.keys()) {
             if (key.startsWith(`${requestId}:`)) {
                 this.perKind.delete(key);

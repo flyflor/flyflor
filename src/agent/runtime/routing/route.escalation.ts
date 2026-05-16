@@ -16,8 +16,8 @@
  *   - 调用方持有计数（FastRouteSnapshot），本函数无副作用。
  */
 
-import { BlackboardMode, BlackboardTurnStatus } from "../../protocol/contracts/index.ts";
-import type { BlackboardTurnStatus as BlackboardTurnStatusType } from "../../protocol/contracts/index.ts";
+import { BlackboardMode, BlackboardTurnStatus } from "../../../protocol/contracts/index.ts";
+import type { BlackboardTurnStatus as BlackboardTurnStatusType } from "../../../protocol/contracts/index.ts";
 
 export const RouteEscalationReason = {
     None: "none",

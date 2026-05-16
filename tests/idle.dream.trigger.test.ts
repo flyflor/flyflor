@@ -13,10 +13,10 @@ const ZERO: DreamRunResult = {
 };
 
 class FakeDream implements DreamWorker {
-    calls: Array<{ userId: string; limit?: number }> = [];
-    shouldThrow = false;
-    result: DreamRunResult = { ...ZERO, driftRepaired: 1 };
-    async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
+    public calls: Array<{ userId: string; limit?: number }> = [];
+    public shouldThrow = false;
+    public result: DreamRunResult = { ...ZERO, driftRepaired: 1 };
+    public async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
         this.calls.push({ userId, limit });
         if (this.shouldThrow) throw new Error("dream-boom");
         return this.result;
@@ -24,13 +24,13 @@ class FakeDream implements DreamWorker {
 }
 
 class StubGraph {
-    async applyDecaySweep(): Promise<{ memoryNodes: number; gems: number }> {
+    public async applyDecaySweep(): Promise<{ memoryNodes: number; gems: number }> {
         return { memoryNodes: 0, gems: 0 };
     }
 }
 
 class StubConsolidation {
-    async drain(): Promise<{
+    public async drain(): Promise<{
         scanned: number;
         reinforced: number;
         consolidated: number;

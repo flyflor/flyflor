@@ -9,7 +9,7 @@ Crystal 子系统负责把单轮证据「结晶」为长期可复用的 Gem：�
 - `src/crystal/reflection/index.ts` — Crystal reflection helpers（函数式结晶流程）
 - `src/crystal/memory/index.ts` — `CrystalMemoryComponent` / `LocalCrystalMemoryStore`
 - `src/crystal/skills/index.ts` — Skill 升格（见 `skill.system.md`）
-- `src/agent/runtime/reflection.worker.ts` — 反思 worker 调度
+- `src/agent/runtime/reflection/worker.ts` — 反思 worker 调度
 - `templates/prompts/reflection.candidate.md` — 反思抽取提示
 
 ## 数据流

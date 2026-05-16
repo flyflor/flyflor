@@ -47,9 +47,9 @@ interface ResponsesApiStreamChunk {
 }
 
 export class OpenAICompatibleClient implements ModelClient {
-    constructor(private readonly config: ModelConfig) {}
+    public constructor(private readonly config: ModelConfig) {}
 
-    async generate(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): Promise<string> {
+    public async generate(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): Promise<string> {
         this.assertApiKey();
         if (this.config.apiMode === ModelApiMode.Responses) {
             return this.generateWithResponsesApi(messages, options);
@@ -74,7 +74,7 @@ export class OpenAICompatibleClient implements ModelClient {
         return content;
     }
 
-    async *stream(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): AsyncGenerator<string> {
+    public async *stream(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): AsyncGenerator<string> {
         this.assertApiKey();
         if (this.config.apiMode === ModelApiMode.Responses) {
             yield* this.streamWithResponsesApi(messages, options);

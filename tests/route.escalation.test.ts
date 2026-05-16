@@ -4,7 +4,7 @@ import {
     decideRouteEscalation,
     nextEscalationCounters,
     RouteEscalationReason,
-} from "../src/agent/runtime/route.escalation.ts";
+} from "../src/agent/runtime/routing/route.escalation.ts";
 
 describe("decideRouteEscalation", () => {
     test("watch 计数未到阈值时不升级", () => {

@@ -57,9 +57,9 @@ interface IlinkItem {
 }
 
 export class WeixinIlinkAdapter implements ChannelAdapter {
-    readonly name: "wechat" | "weixin-ilink";
-    readonly transport = ChannelTransport.Polling;
-    readonly capabilities = channelCapabilities({
+    public readonly name: "wechat" | "weixin-ilink";
+    public readonly transport = ChannelTransport.Polling;
+    public readonly capabilities = channelCapabilities({
         replyReference: true,
         typing: true,
     });
@@ -72,14 +72,14 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
     private lastOutboundAt?: string;
     private lastPollAt?: string;
 
-    constructor(
+    public constructor(
         private readonly config: IlinkConfig,
         name: "wechat" | "weixin-ilink" = "weixin-ilink",
     ) {
         this.name = name;
     }
 
-    async handle(): Promise<Response> {
+    public async handle(): Promise<Response> {
         return new Response(
             JSON.stringify({
                 ok: true,
@@ -90,7 +90,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         );
     }
 
-    start(dispatch: StreamingMessageDispatcher): void {
+    public start(dispatch: StreamingMessageDispatcher): void {
         if (this.running) {
             return;
         }
@@ -98,7 +98,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         void this.poll(dispatch);
     }
 
-    snapshot(): ChannelAdapterSnapshot {
+    public snapshot(): ChannelAdapterSnapshot {
         return {
             connected: this.running,
             detail: this.running
@@ -188,7 +188,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         return normalizeUpdates(payload);
     }
 
-    normalize(update: IlinkUpdate): GatewayMessage {
+    public normalize(update: IlinkUpdate): GatewayMessage {
         const userId = update.from_user_id ?? update.from_user_name ?? "unknown";
         const { chatId, chatType } = normalizeChat(update, userId, this.config.accountId);
         return {
@@ -250,7 +250,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "iLink sendmessage");
     }
 
-    async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         const ticket = this.readTypingTicket(route.chatId);
         if (!ticket || !this.config.token) {
             return;
@@ -258,7 +258,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         await this.sendTypingStatus(route.chatId, ticket, ILINK_TYPING_START);
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope, sourceUpdate?: IlinkUpdate): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope, sourceUpdate?: IlinkUpdate): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
             if (!sourceUpdate) {
                 return;

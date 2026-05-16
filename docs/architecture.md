@@ -12,6 +12,8 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 - `src/agent/components.ts` — legacy compatibility re-export, 新代码应直接依赖 `src/components`
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、事件、进程信封
+- `src/neural/project/` — codename / project 固化、项目脚手架与资源指标触发器
+- `src/agent/runtime/{blackboard,mcp,planning,routing,reflection,skills,streaming,turn}/` — RuntimeModule 的语义子目录；主 module 只做 turn 编排
 - `src/llm/`、`src/crystal/`、`src/neural/`、`src/agent/`、`src/command/`、`src/config/`
 
 ## 三层智能模型
@@ -199,5 +201,5 @@ interface FlyFlorDependencies {
 
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
 - `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；后续如果新增可执行能力，必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
-- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向需要继续收敛。已收口的边界：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；`DreamWorker` 已迁入 `src/neural/memory/dream.worker.ts`，runtime 只保留旧路径兼容 re-export。
+- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向需要继续收敛。已收口的边界：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；`DreamWorker` 与 feedback interpreter 已迁入 `src/neural/memory`，runtime 不再保留兼容壳。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot、TaskPlan / ContextFork / SceneRecord 摘要与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

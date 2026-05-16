@@ -1,4 +1,4 @@
-import type { GatewayMessage } from "../../protocol/contracts/index.ts";
+import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
 
 /**
  * Render inbound attachment metadata into the user message passed to the model.

@@ -108,14 +108,14 @@ class McpSseSession {
     private readonly timeoutMs: number;
     private openAttempt = 0;
 
-    constructor(
+    public constructor(
         private readonly server: McpServerDefinition,
         options: McpClientOptions,
     ) {
         this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     }
 
-    async open(): Promise<void> {
+    public async open(): Promise<void> {
         // 只重试会话建立阶段：GET /endpoint 失败或过早断链可以重连，
         // 但已经进入 tools/call 的请求不在这个薄重试层里重复发送。
         let lastError: Error | undefined;
@@ -136,7 +136,7 @@ class McpSseSession {
         throw lastError ?? new Error(`MCP SSE failed to open: ${this.server.name}`);
     }
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         await this.request("initialize", {
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: {},
@@ -145,7 +145,7 @@ class McpSseSession {
         await this.notify("notifications/initialized", {});
     }
 
-    async request(method: string, params: Record<string, unknown>): Promise<unknown> {
+    public async request(method: string, params: Record<string, unknown>): Promise<unknown> {
         const id = this.nextId++;
         const wait = new Promise<JsonRpcMessage>((resolve, reject) => {
             this.pending.set(id, { resolve, reject });
@@ -163,11 +163,11 @@ class McpSseSession {
         return message.result;
     }
 
-    async notify(method: string, params: Record<string, unknown>): Promise<void> {
+    public async notify(method: string, params: Record<string, unknown>): Promise<void> {
         await this.post({ jsonrpc: "2.0", method, params });
     }
 
-    close(): void {
+    public close(): void {
         this.controller.abort();
         for (const p of this.pending.values()) {
             p.reject(new Error("MCP SSE session closed"));

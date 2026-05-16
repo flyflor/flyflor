@@ -34,7 +34,7 @@ import {
     detectExplicitIntent,
     detectSkillPromotion,
     ProjectTriggerKind,
-} from "../src/agent/project/index.ts";
+} from "../src/neural/project/index.ts";
 import type { EpisodeRecord } from "../src/components/memory/working.store.ts";
 import { AtomStage, MemoryEventType, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 

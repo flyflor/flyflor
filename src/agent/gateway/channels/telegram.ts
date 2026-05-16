@@ -81,9 +81,9 @@ interface TelegramUpdate {
 }
 
 export class TelegramAdapter implements ChannelAdapter {
-    readonly name = Channel.Telegram;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name = Channel.Telegram;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         messageUpdate: true,
         replyReference: true,
         thread: true,
@@ -91,12 +91,12 @@ export class TelegramAdapter implements ChannelAdapter {
     });
     private readonly seenUpdates = new Set<number>();
 
-    constructor(
+    public constructor(
         private readonly botToken: string,
         private readonly secretToken?: string,
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         if (this.secretToken) {
             const received = request.headers.get("x-telegram-bot-api-secret-token");
             if (received !== this.secretToken) {
@@ -202,7 +202,7 @@ export class TelegramAdapter implements ChannelAdapter {
         }
     }
 
-    async sendTyping(route: GatewayRoute, metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(route: GatewayRoute, metadata?: GatewayDeliveryMetadata): Promise<void> {
         if (metadata?.telegramDmTopicReplyFallback && !metadata.replyToMessageId) {
             return;
         }
@@ -221,7 +221,7 @@ export class TelegramAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "Telegram typing");
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
             await this.sendMessage(operation.route, operation.text, operation.metadata);
             return;

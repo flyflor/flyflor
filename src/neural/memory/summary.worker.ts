@@ -51,7 +51,7 @@ interface SummaryStats {
 export class SummaryWorker {
     private readonly opts: Required<SummaryWorkerOptions>;
 
-    constructor(
+    public constructor(
         private readonly brain: BrainStore,
         options: SummaryWorkerOptions = {},
     ) {
@@ -68,7 +68,7 @@ export class SummaryWorker {
      * - daily：覆盖 `now` 所在 UTC 日 [00:00, 24:00)；bucketKey = YYYY-MM-DD
      * - weekly：rolling 取 `now - rollingWindowDays`；calendar 取 ISO week
      */
-    runOnceForUser(userId: string, nowMs = this.opts.now()): SummaryRunResult {
+    public runOnceForUser(userId: string, nowMs = this.opts.now()): SummaryRunResult {
         const result: SummaryRunResult = { written: 0, writtenIds: [], skippedByInterval: 0, skippedEmpty: 0 };
         const today = new Date(nowMs);
         const dayKey = toIsoDay(today);

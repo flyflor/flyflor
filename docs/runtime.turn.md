@@ -7,10 +7,15 @@
 ## 相关代码路径
 
 - `src/agent/runtime/runtime.module.ts` — 热路径主入口
-- `src/agent/runtime/fast.route.ts` — 资源指标短路
-- `src/agent/runtime/blackboard.route.ts` — LLM 路由模板调用
-- `src/agent/runtime/route.escalation.ts` — direct-with-watch 升级器
-- `src/agent/runtime/reflection.worker.ts` — 反思调度 worker
+- `src/agent/runtime/routing/fast.route.ts` — 资源指标短路
+- `src/agent/runtime/blackboard/route.ts` — LLM 路由模板调用
+- `src/agent/runtime/routing/route.escalation.ts` — direct-with-watch 升级器
+- `src/agent/runtime/reflection/worker.ts` — 反思调度 worker
+- `src/agent/runtime/mcp/` — MCP toolset 过滤、工具结果 provenance 投影
+- `src/agent/runtime/skills/selection.ts` — crystal skill 选择适配
+- `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
+- `src/agent/runtime/streaming/` — 内部协议块流式可见性过滤
+- `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 helper
 - `src/agent/runtime/perf.metrics.ts` — 性能事件采集
 - `src/agent/runtime/chat.ts` — TTY 交互入口
 - `src/neural/memory/index.ts` — `MemoryModule.buildPrompt` / `rememberTurn`
@@ -260,7 +265,7 @@ interface GatewayReply {
 
 ## 运行边界 / 后续增强
 
-- `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/attachments.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/ask.reply.ts`，保持 runtime 主类只编排 turn 生命周期。工具循环、结构化块解析、persist 副作用仍在同一组件内，后续只在职责膨胀时抽 Component，不新增额外中间层。
+- `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/turn/attachments.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/turn/ask.reply.ts`，MCP/skill/planning/streaming helper 均按子目录归位。`runtime.module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走进程内 Map；多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。

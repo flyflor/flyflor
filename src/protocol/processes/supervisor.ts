@@ -20,23 +20,23 @@ export class ChildProcessSupervisor {
     private restarts = 0;
     private stopping = false;
 
-    constructor(
+    public constructor(
         private readonly spec: ChildProcessSpec,
         private readonly events: EventSink,
     ) {}
 
-    start(): void {
+    public start(): void {
         this.stopping = false;
         this.spawn();
     }
 
-    async stop(): Promise<void> {
+    public async stop(): Promise<void> {
         this.stopping = true;
         this.child?.kill();
         await this.child?.exited;
     }
 
-    send(envelope: ProcessEnvelope): void {
+    public send(envelope: ProcessEnvelope): void {
         const stdin = this.child?.stdin;
         if (!stdin || typeof stdin === "number") {
             throw new Error(`Child process ${this.spec.name} is not writable`);

@@ -19,15 +19,15 @@ export interface FastRouteSnapshotStore {
 export class InMemoryFastRouteSnapshotStore implements FastRouteSnapshotStore {
     private readonly map = new Map<string, FastRouteSnapshot>();
 
-    async get(key: string): Promise<FastRouteSnapshot | undefined> {
+    public async get(key: string): Promise<FastRouteSnapshot | undefined> {
         return this.map.get(key);
     }
 
-    async set(key: string, snapshot: FastRouteSnapshot): Promise<void> {
+    public async set(key: string, snapshot: FastRouteSnapshot): Promise<void> {
         this.map.set(key, snapshot);
     }
 
-    size(): number {
+    public size(): number {
         return this.map.size;
     }
 }

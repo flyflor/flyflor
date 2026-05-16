@@ -4,9 +4,9 @@ export interface EmbeddingProvider {
 }
 
 export class LocalHashEmbeddingProvider implements EmbeddingProvider {
-    constructor(readonly dimensions: number) {}
+    public constructor(public readonly dimensions: number) {}
 
-    async embed(text: string): Promise<number[]> {
+    public async embed(text: string): Promise<number[]> {
         const vector = new Array<number>(this.dimensions).fill(0);
         const tokens = tokenize(text);
         for (const token of tokens) {

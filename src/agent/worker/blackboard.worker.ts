@@ -18,12 +18,12 @@ export interface ModelBackedBlackboardWorkerPrompts {
 }
 
 class ModelBackedBlackboardWorker {
-    constructor(
+    public constructor(
         private readonly model: ModelClient,
         private readonly prompts: ModelBackedBlackboardWorkerPrompts,
     ) {}
 
-    run(input: BlackboardWorkerTask, _context: WorkerRunContext): Promise<BlackboardWorkerResult> {
+    public run(input: BlackboardWorkerTask, _context: WorkerRunContext): Promise<BlackboardWorkerResult> {
         return runModelBackedWorker(this.model, input, input.workerRole, this.prompts);
     }
 }
@@ -33,10 +33,10 @@ class ModelBackedBlackboardWorkerAdapter implements WorkerAdapter<
     BlackboardWorkerTask,
     BlackboardWorkerResult
 > {
-    readonly interaction = WorkerInteractionKind.OneShot;
-    readonly runtime = WorkerRuntimeKind.InProcess;
+    public readonly interaction = WorkerInteractionKind.OneShot;
+    public readonly runtime = WorkerRuntimeKind.InProcess;
 
-    run(
+    public run(
         target: ModelBackedBlackboardWorker,
         input: BlackboardWorkerTask,
         context: WorkerRunContext,

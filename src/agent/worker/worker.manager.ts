@@ -47,9 +47,9 @@ export class WorkerManager {
     private readonly registrations = new Map<string, WorkerRegistration>();
     private readonly pools = new Map<string, PoolState>();
 
-    constructor(private readonly events: EventSink = new NullEventSink()) {}
+    public constructor(private readonly events: EventSink = new NullEventSink()) {}
 
-    register<TInput, TOutput>(
+    public register<TInput, TOutput>(
         instance: ManagedWorker<TInput, TOutput>,
         options: WorkerRegisterOptions = {},
     ): WorkerRegistration<TInput, TOutput> {
@@ -57,7 +57,7 @@ export class WorkerManager {
         return this.registerWithMetadata(instance, new InProcessWorkerAdapter<TInput, TOutput>(), metadata, options);
     }
 
-    registerDynamic<TTarget, TInput, TOutput>(
+    public registerDynamic<TTarget, TInput, TOutput>(
         target: TTarget,
         adapter: WorkerAdapter<TTarget, TInput, TOutput>,
         options: DynamicWorkerRegisterOptions,
@@ -65,7 +65,7 @@ export class WorkerManager {
         return this.registerWithMetadata(target, adapter, metadataFromManifest(options.manifest), options);
     }
 
-    registerJsonProcess<TInput, TOutput>(
+    public registerJsonProcess<TInput, TOutput>(
         manifest: WorkerManifest,
         spec: JsonProcessWorkerSpec,
         options: WorkerRegisterOptions = {},
@@ -81,7 +81,7 @@ export class WorkerManager {
         );
     }
 
-    registerPersistentJsonProcess<TInput, TOutput>(
+    public registerPersistentJsonProcess<TInput, TOutput>(
         manifest: WorkerManifest,
         spec: JsonProcessWorkerSpec,
         options: WorkerRegisterOptions = {},
@@ -99,7 +99,7 @@ export class WorkerManager {
     }
 
     /** 注册 raw-stdio 工作器：spawn 外部命令，纯文本进 / 纯文本出。 */
-    registerRawStdioProcess(
+    public registerRawStdioProcess(
         manifest: WorkerManifest,
         spec: RawStdioWorkerSpec,
         options: WorkerRegisterOptions = {},
@@ -111,11 +111,11 @@ export class WorkerManager {
         });
     }
 
-    has(name: string): boolean {
+    public has(name: string): boolean {
         return this.registrations.has(name);
     }
 
-    list(): WorkerSummary[] {
+    public list(): WorkerSummary[] {
         return [...this.registrations.values()].map((registration) => {
             const pool = this.poolFor(registration.name);
             return {
@@ -133,7 +133,7 @@ export class WorkerManager {
         });
     }
 
-    run<TInput, TOutput>(
+    public run<TInput, TOutput>(
         workerName: string,
         input: TInput,
         options: WorkerRunOptions = {},
@@ -337,10 +337,10 @@ export class JsonProcessWorkerAdapter<TInput, TOutput> implements WorkerAdapter<
     TInput,
     TOutput
 > {
-    readonly interaction = WorkerInteractionKind.OneShot;
-    readonly runtime = WorkerRuntimeKind.JsonProcess;
+    public readonly interaction = WorkerInteractionKind.OneShot;
+    public readonly runtime = WorkerRuntimeKind.JsonProcess;
 
-    async run(target: JsonProcessWorkerSpec, input: TInput, context: WorkerRunContext): Promise<TOutput> {
+    public async run(target: JsonProcessWorkerSpec, input: TInput, context: WorkerRunContext): Promise<TOutput> {
         const child = Bun.spawn({
             cmd: target.cmd,
             cwd: target.cwd,
@@ -378,11 +378,11 @@ export class PersistentJsonProcessWorkerAdapter<TInput, TOutput> implements Work
     TInput,
     TOutput
 > {
-    readonly interaction = WorkerInteractionKind.Persistent;
-    readonly runtime = WorkerRuntimeKind.PersistentJsonProcess;
+    public readonly interaction = WorkerInteractionKind.Persistent;
+    public readonly runtime = WorkerRuntimeKind.PersistentJsonProcess;
     private readonly connections = new WeakMap<JsonProcessWorkerSpec, PersistentJsonConnection>();
 
-    async dispose(target: JsonProcessWorkerSpec): Promise<void> {
+    public async dispose(target: JsonProcessWorkerSpec): Promise<void> {
         const connection = this.connections.get(target);
         if (!connection) {
             return;
@@ -391,7 +391,7 @@ export class PersistentJsonProcessWorkerAdapter<TInput, TOutput> implements Work
         await connection.stop();
     }
 
-    async run(target: JsonProcessWorkerSpec, input: TInput, context: WorkerRunContext): Promise<TOutput> {
+    public async run(target: JsonProcessWorkerSpec, input: TInput, context: WorkerRunContext): Promise<TOutput> {
         return this.connectionFor(target).request<TInput, TOutput>(input, context);
     }
 
@@ -416,10 +416,10 @@ export class PersistentJsonProcessWorkerAdapter<TInput, TOutput> implements Work
  * bun --compile 安全：仅用 Bun.spawn + 普通 pipe，无 native addon。
  */
 export class RawStdioWorkerAdapter implements WorkerAdapter<RawStdioWorkerSpec, string, string> {
-    readonly interaction = WorkerInteractionKind.OneShot;
-    readonly runtime = WorkerRuntimeKind.Process;
+    public readonly interaction = WorkerInteractionKind.OneShot;
+    public readonly runtime = WorkerRuntimeKind.Process;
 
-    async run(target: RawStdioWorkerSpec, input: string, _context: WorkerRunContext): Promise<string> {
+    public async run(target: RawStdioWorkerSpec, input: string, _context: WorkerRunContext): Promise<string> {
         const child = Bun.spawn({
             cmd: target.cmd,
             cwd: target.cwd,
@@ -458,10 +458,10 @@ class InProcessWorkerAdapter<TInput, TOutput> implements WorkerAdapter<
     TInput,
     TOutput
 > {
-    readonly interaction = WorkerInteractionKind.OneShot;
-    readonly runtime = WorkerRuntimeKind.InProcess;
+    public readonly interaction = WorkerInteractionKind.OneShot;
+    public readonly runtime = WorkerRuntimeKind.InProcess;
 
-    run(target: ManagedWorker<TInput, TOutput>, input: TInput, context: WorkerRunContext): Promise<TOutput> | TOutput {
+    public run(target: ManagedWorker<TInput, TOutput>, input: TInput, context: WorkerRunContext): Promise<TOutput> | TOutput {
         return target.run(input, context);
     }
 }
@@ -542,7 +542,7 @@ class PersistentJsonConnection {
     >();
     private stopped = false;
 
-    constructor(private readonly spec: JsonProcessWorkerSpec) {
+    public constructor(private readonly spec: JsonProcessWorkerSpec) {
         this.child = Bun.spawn({
             cmd: spec.cmd,
             cwd: spec.cwd,
@@ -556,7 +556,7 @@ class PersistentJsonConnection {
         void this.child.exited.then((exitCode) => this.rejectAll(new Error(`Persistent worker exited: ${exitCode}`)));
     }
 
-    request<TInput, TOutput>(input: TInput, context: WorkerRunContext): Promise<TOutput> {
+    public request<TInput, TOutput>(input: TInput, context: WorkerRunContext): Promise<TOutput> {
         if (this.stopped) {
             throw new Error("Persistent worker connection is stopped.");
         }
@@ -576,7 +576,7 @@ class PersistentJsonConnection {
         return output;
     }
 
-    async stop(): Promise<void> {
+    public async stop(): Promise<void> {
         this.stopped = true;
         this.child.kill();
         await this.child.exited;

@@ -6,7 +6,7 @@ import { MemoryComponent } from "../core.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../protocol/contracts/index.ts";
-import type { ProjectTriggerResult } from "../../agent/project/index.ts";
+import type { ProjectTriggerResult } from "../../neural/project/index.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchResult } from "./types.ts";
 
 const PROJECT_MEMORY_FILE = "project.memory.md";

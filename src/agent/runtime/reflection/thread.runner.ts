@@ -3,8 +3,8 @@
  * 模型调用仍由 RuntimeModule 在主线程发起；本运行器只承担 raw → CrystalCandidateInput[]
  * 的纯解析/规范化工作，避免长 JSON 在主线程阻塞事件循环。
  */
-import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
-import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./reflection.normalize.ts";
+import type { CrystalCandidateInput } from "../../../crystal/reflection/index.ts";
+import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./normalize.ts";
 
 export interface ReflectionThreadWorkerLike {
     postMessage(data: unknown): void;
@@ -37,12 +37,12 @@ export class ReflectionThreadRunner {
     private readonly factory: ReflectionWorkerFactory;
     private readonly timeoutMs: number;
 
-    constructor(options: ReflectionThreadRunnerOptions = {}) {
+    public constructor(options: ReflectionThreadRunnerOptions = {}) {
         this.factory = options.workerFactory ?? defaultWorkerFactory;
         this.timeoutMs = Math.max(50, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     }
 
-    async normalize(raw: string, source: ReflectionNormalizeSource): Promise<CrystalCandidateInput[]> {
+    public async normalize(raw: string, source: ReflectionNormalizeSource): Promise<CrystalCandidateInput[]> {
         const worker = this.ensureWorker();
         const id = this.nextId++;
         return new Promise<CrystalCandidateInput[]>((resolve, reject) => {
@@ -63,7 +63,7 @@ export class ReflectionThreadRunner {
         });
     }
 
-    dispose(): void {
+    public dispose(): void {
         if (!this.worker) return;
         for (const [id, entry] of this.pending) {
             clearTimeout(entry.timer);
@@ -109,7 +109,7 @@ export class ReflectionThreadRunner {
 }
 
 function defaultWorkerFactory(): ReflectionThreadWorkerLike {
-    const url = new URL("./reflection.worker.thread.ts", import.meta.url);
+    const url = new URL("./worker.thread.ts", import.meta.url);
     // biome-ignore lint/suspicious/noExplicitAny: Bun Worker constructor types differ across runtimes
     const worker = new (globalThis as any).Worker(url.href, { type: "module" }) as ReflectionThreadWorkerLike;
     return worker;

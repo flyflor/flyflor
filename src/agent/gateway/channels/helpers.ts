@@ -154,10 +154,10 @@ export function truncatePlatformText(text: string, limit: number): string {
 }
 
 export class PlatformResponseError extends Error {
-    constructor(
+    public constructor(
         message: string,
-        readonly platform: string,
-        readonly details: {
+        public readonly platform: string,
+        public readonly details: {
             code?: number | string;
             payload?: unknown;
             status?: number;

@@ -25,8 +25,8 @@ afterEach(async () => {
 });
 
 class RecordingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(evt);
     }
 }

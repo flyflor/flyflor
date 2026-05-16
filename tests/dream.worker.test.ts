@@ -31,16 +31,16 @@ beforeAll(async () => {
 });
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push({ type: evt.type, payload: evt.payload });
     }
 }
 
 class StubModel implements ModelClient {
-    constructor(private readonly responses: string[]) {}
+    public constructor(private readonly responses: string[]) {}
     private idx = 0;
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         const r = this.responses[this.idx] ?? this.responses[this.responses.length - 1] ?? "";
         this.idx += 1;
         return r;
@@ -48,7 +48,7 @@ class StubModel implements ModelClient {
 }
 
 class ThrowingModel implements ModelClient {
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         throw new Error("llm boom");
     }
 }
@@ -61,43 +61,43 @@ interface FakeGraphOpts {
 }
 
 class FakeGraph {
-    readonly snapshots: Array<{ skillId: string; reason: string; takenAt: number }> = [];
-    readonly drift: Array<Record<string, unknown>> = [];
-    readonly reinforce: Array<Record<string, unknown>> = [];
-    readonly contradiction: Array<Record<string, unknown>> = [];
-    readonly reconsolidation: Array<Record<string, unknown>> = [];
+    public readonly snapshots: Array<{ skillId: string; reason: string; takenAt: number }> = [];
+    public readonly drift: Array<Record<string, unknown>> = [];
+    public readonly reinforce: Array<Record<string, unknown>> = [];
+    public readonly contradiction: Array<Record<string, unknown>> = [];
+    public readonly reconsolidation: Array<Record<string, unknown>> = [];
 
-    constructor(private readonly state: FakeGraphOpts = {}) {}
+    public constructor(private readonly state: FakeGraphOpts = {}) {}
 
-    async listGemDriftCandidates(): Promise<GemRecord[]> {
+    public async listGemDriftCandidates(): Promise<GemRecord[]> {
         return this.state.driftGems ?? [];
     }
-    async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
+    public async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
         return { tops: this.state.recallTops ?? [], bottoms: this.state.recallBottoms ?? [] };
     }
-    async listContradictionPairs(): Promise<
+    public async listContradictionPairs(): Promise<
         Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>
     > {
         return this.state.pairs ?? [];
     }
-    async writeGemSnapshot(skill: GemRecord, reason: string, takenAtMs: number): Promise<string> {
+    public async writeGemSnapshot(skill: GemRecord, reason: string, takenAtMs: number): Promise<string> {
         const id = `${skill.id}-${takenAtMs}`;
         this.snapshots.push({ skillId: skill.id, reason, takenAt: takenAtMs });
         return id;
     }
-    async applyGemDriftRepair(input: Record<string, unknown>): Promise<boolean> {
+    public async applyGemDriftRepair(input: Record<string, unknown>): Promise<boolean> {
         this.drift.push(input);
         return true;
     }
-    async applyMemoryReinforce(input: Record<string, unknown>): Promise<boolean> {
+    public async applyMemoryReinforce(input: Record<string, unknown>): Promise<boolean> {
         this.reinforce.push(input);
         return true;
     }
-    async applyContradictionAudit(input: Record<string, unknown>): Promise<boolean> {
+    public async applyContradictionAudit(input: Record<string, unknown>): Promise<boolean> {
         this.contradiction.push(input);
         return true;
     }
-    async applyReconsolidation(input: Record<string, unknown>): Promise<boolean> {
+    public async applyReconsolidation(input: Record<string, unknown>): Promise<boolean> {
         this.reconsolidation.push(input);
         return true;
     }

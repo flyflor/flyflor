@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 class NoopSink implements EventSink {
-    publish(): void {}
+    public publish(): void {}
 }
 
 function paths(root: string): FlyflorPaths {

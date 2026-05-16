@@ -1,6 +1,6 @@
-import { BlackboardMode } from "../../protocol/contracts/index.ts";
-import type { RoutingConfig } from "../../config/index.ts";
-import type { RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
+import { BlackboardMode } from "../../../protocol/contracts/index.ts";
+import type { RoutingConfig } from "../../../config/index.ts";
+import type { RuntimeBlackboardRouteDecision } from "../blackboard/route.ts";
 
 /**
  * fastRoute：在调用 LLM 路由器之前的纯指标短路。

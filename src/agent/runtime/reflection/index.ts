@@ -1,13 +1,13 @@
-import type { CrystalCandidateInput } from "../../crystal/reflection/index.ts";
-import { BlackboardMode, ModelRole, type ModelClient, type ModelMessage } from "../../protocol/contracts/index.ts";
-import { renderCrystalReflectionPrompt } from "../prompts/index.ts";
+import type { CrystalCandidateInput } from "../../../crystal/reflection/index.ts";
+import { BlackboardMode, ModelRole, type ModelClient, type ModelMessage } from "../../../protocol/contracts/index.ts";
+import { renderCrystalReflectionPrompt } from "../../prompts/index.ts";
 import {
     normalizeReflectionRaw,
     renderReflectionEvidence as renderReflectionEvidenceShared,
     type ReflectionNormalizeSource,
-} from "./reflection.normalize.ts";
-import type { ReflectionThreadRunner } from "./reflection.thread.runner.ts";
-import type { RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
+} from "./normalize.ts";
+import type { ReflectionThreadRunner } from "./thread.runner.ts";
+import type { RuntimeBlackboardRouteDecision } from "../blackboard/route.ts";
 
 export interface RuntimeReflectionSource {
     answer: string;

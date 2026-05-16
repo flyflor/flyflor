@@ -37,19 +37,19 @@ export interface DingTalkAdapterConfig {
 }
 
 export class DingTalkAdapter implements ChannelAdapter {
-    readonly name: ChannelName = Channel.DingTalk;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name: ChannelName = Channel.DingTalk;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         cardUpdate: false,
         replyReference: true,
     });
 
-    constructor(
+    public constructor(
         private readonly config: DingTalkAdapterConfig,
         private readonly now: () => number = () => Date.now(),
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const raw = await request.text();
         if (!this.verifyRequest(request)) {
             return json({ ok: false, error: "invalid_dingtalk_signature" }, 401);
@@ -143,12 +143,12 @@ export class DingTalkAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "DingTalk");
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // DingTalk robots expose no generic typing endpoint; the hook exists
         // so the gateway can keep a uniform lifecycle contract.
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
             await this.send(operation.text);
         }

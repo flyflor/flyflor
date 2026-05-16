@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 class NoopSink implements EventSink {
-    publish(): void {}
+    public publish(): void {}
 }
 
 async function tempRoot(): Promise<string> {

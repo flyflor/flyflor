@@ -24,7 +24,7 @@
  * 没有任何 text.includes / 正则 / 关键词。
  */
 
-import type { MemoryAction } from "../../neural/memory/actions.ts";
+import type { MemoryAction } from "../memory/actions.ts";
 import type { EpisodeRecord } from "../../components/memory/working.store.ts";
 import { MemorySourceKind } from "../../protocol/contracts/index.ts";
 

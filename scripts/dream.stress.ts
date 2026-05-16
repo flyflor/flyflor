@@ -18,7 +18,7 @@ import {
     DreamActionKind,
     DreamWorkerImpl,
     type DreamRunResult,
-} from "../src/agent/runtime/dream.worker.ts";
+} from "../src/neural/memory/dream.worker.ts";
 import { DreamCandidateKind } from "../src/neural/memory/dream.candidates.ts";
 import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/components/memory/graph.store.ts";
 import type { ModelClient, ModelMessage } from "../src/protocol/contracts/index.ts";
@@ -99,46 +99,46 @@ function buildState(opts: CliOpts): {
 }
 
 class StressGraph {
-    snapshots = 0;
-    drift = 0;
-    reinforce = 0;
-    contradiction = 0;
+    public snapshots = 0;
+    public drift = 0;
+    public reinforce = 0;
+    public contradiction = 0;
 
-    constructor(
+    public constructor(
         private readonly drifts: GemRecord[],
         private readonly tops: MemoryNodeRecord[],
         private readonly pairs: Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }>,
     ) {}
 
-    async listGemDriftCandidates(): Promise<GemRecord[]> {
+    public async listGemDriftCandidates(): Promise<GemRecord[]> {
         return this.drifts;
     }
-    async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
+    public async listRecallExtremes(): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
         return { tops: this.tops, bottoms: [] };
     }
-    async listContradictionPairs(): Promise<typeof this.pairs> {
+    public async listContradictionPairs(): Promise<typeof this.pairs> {
         return this.pairs;
     }
-    async writeGemSnapshot(_skill: GemRecord, _reason: string, takenAtMs: number): Promise<string> {
+    public async writeGemSnapshot(_skill: GemRecord, _reason: string, takenAtMs: number): Promise<string> {
         this.snapshots += 1;
         return `snap-${takenAtMs}-${this.snapshots}`;
     }
-    async applyGemDriftRepair(_input: Record<string, unknown>): Promise<boolean> {
+    public async applyGemDriftRepair(_input: Record<string, unknown>): Promise<boolean> {
         this.drift += 1;
         return true;
     }
-    async applyMemoryReinforce(_input: Record<string, unknown>): Promise<boolean> {
+    public async applyMemoryReinforce(_input: Record<string, unknown>): Promise<boolean> {
         this.reinforce += 1;
         return true;
     }
-    async applyContradictionAudit(_input: Record<string, unknown>): Promise<boolean> {
+    public async applyContradictionAudit(_input: Record<string, unknown>): Promise<boolean> {
         this.contradiction += 1;
         return true;
     }
 }
 
 class DeterministicModel implements ModelClient {
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         const text = messages[messages.length - 1]?.content ?? "";
         const ids = Array.from(text.matchAll(/candidateId:\s*([^\s]+)/g)).map((m) => m[1]!);
         const decisions = ids.map((id) => {
@@ -174,7 +174,7 @@ class DeterministicModel implements ModelClient {
 }
 
 class NullSink implements EventSink {
-    publish(_evt: { type: string; payload?: Record<string, unknown> }): void {
+    public publish(_evt: { type: string; payload?: Record<string, unknown> }): void {
         // 压测期间不输出事件，避免 IO 干扰耗时测量。
     }
 }

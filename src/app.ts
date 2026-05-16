@@ -110,13 +110,13 @@ export interface FlyFlorDependencies {
 }
 
 export class FlyFlor {
-    constructor(private readonly dependencies: FlyFlorDependencies) {}
+    public constructor(private readonly dependencies: FlyFlorDependencies) {}
 
-    static async create(options: FlyFlorCreateOptions = {}): Promise<FlyFlor> {
+    public static async create(options: FlyFlorCreateOptions = {}): Promise<FlyFlor> {
         return createFlyFlorApplication(options);
     }
 
-    async start(): Promise<void> {
+    public async start(): Promise<void> {
         if (this.dependencies.mode === RuntimeMode.Gateway) {
             this.dependencies.gateway.start();
             return;
@@ -131,11 +131,11 @@ export class FlyFlor {
         }
     }
 
-    dispose(): void {
+    public dispose(): void {
         this.dependencies.runtime.dispose();
     }
 
-    resolve<TValue>(token: DependencyToken<TValue>): TValue {
+    public resolve<TValue>(token: DependencyToken<TValue>): TValue {
         return this.dependencies.container.resolve(token);
     }
 }

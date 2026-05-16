@@ -5,9 +5,9 @@ import type {
     TaskPlanRecord,
     TaskPlanStatus,
     TaskPlanStepRecord,
-} from "../../protocol/contracts/index.ts";
-import { SceneRecordKind as SceneRecordKindEnum, TaskPlanStatus as TaskPlanStatusEnum } from "../../protocol/contracts/index.ts";
-import { extractStructuredBlocks, parseStructuredJson, StructuredBlockProtocol } from "../../protocol/index.ts";
+} from "../../../protocol/contracts/index.ts";
+import { SceneRecordKind as SceneRecordKindEnum, TaskPlanStatus as TaskPlanStatusEnum } from "../../../protocol/contracts/index.ts";
+import { extractStructuredBlocks, parseStructuredJson, StructuredBlockProtocol } from "../../../protocol/index.ts";
 
 /**
  * Runtime parser for planning/fork/history protocol blocks.

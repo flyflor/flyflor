@@ -107,13 +107,13 @@ class McpStdioSession {
     private stderr = "";
     private stopped = false;
 
-    constructor(
+    public constructor(
         private readonly paths: FlyflorPaths,
         private readonly server: McpServerDefinition,
         private readonly options: McpClientOptions,
     ) {}
 
-    async start(): Promise<void> {
+    public async start(): Promise<void> {
         if (!this.server.command) {
             throw new Error(`MCP server command is missing: ${this.server.name}`);
         }
@@ -159,7 +159,7 @@ class McpStdioSession {
         });
     }
 
-    async initialize(): Promise<void> {
+    public async initialize(): Promise<void> {
         await this.request("initialize", {
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: {},
@@ -171,7 +171,7 @@ class McpStdioSession {
         this.notify("notifications/initialized", {});
     }
 
-    request(method: string, params: Record<string, unknown>): Promise<unknown> {
+    public request(method: string, params: Record<string, unknown>): Promise<unknown> {
         const id = this.nextId++;
         const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
         const output = new Promise<unknown>((resolve, reject) => {
@@ -190,7 +190,7 @@ class McpStdioSession {
         return output;
     }
 
-    notify(method: string, params: Record<string, unknown>): void {
+    public notify(method: string, params: Record<string, unknown>): void {
         this.writeMessage({
             jsonrpc: "2.0",
             method,
@@ -198,7 +198,7 @@ class McpStdioSession {
         });
     }
 
-    async stop(): Promise<void> {
+    public async stop(): Promise<void> {
         this.stopped = true;
         this.rejectAll(new Error("MCP session stopped."));
         this.child?.kill();

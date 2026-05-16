@@ -30,14 +30,14 @@ export interface BlueBubblesAdapterConfig {
 }
 
 export class BlueBubblesAdapter implements ChannelAdapter {
-    readonly transport = ChannelTransport.Http;
+    public readonly transport = ChannelTransport.Http;
 
-    constructor(
-        readonly name: ChannelName,
+    public constructor(
+        public readonly name: ChannelName,
         private readonly config: BlueBubblesAdapterConfig,
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         if (!this.verifyPassword(request)) {
             return new Response(JSON.stringify({ ok: false, error: "invalid_password" }), {
                 status: 401,
@@ -128,7 +128,7 @@ export class BlueBubblesAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "BlueBubbles");
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // BlueBubbles does not expose a stable bot typing endpoint in the
         // current gateway surface.
     }

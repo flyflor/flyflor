@@ -32,14 +32,14 @@ interface GenericWebhookPayload {
 }
 
 export class GenericWebhookAdapter implements ChannelAdapter {
-    readonly transport = ChannelTransport.Http;
+    public readonly transport = ChannelTransport.Http;
 
-    constructor(
-        readonly name: ChannelName,
+    public constructor(
+        public readonly name: ChannelName,
         private readonly replyUrl?: string,
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const payload = await request.json().catch(() => undefined);
         const message = this.normalize(payload);
         const reply = await dispatchWithDelivery({
@@ -52,7 +52,7 @@ export class GenericWebhookAdapter implements ChannelAdapter {
         return json({ reply });
     }
 
-    normalize(input: unknown): GatewayMessage {
+    public normalize(input: unknown): GatewayMessage {
         const payload = isRecord(input) ? (input as GenericWebhookPayload) : {};
         const user = normalizeUser(payload.user ?? payload.sender ?? payload.from);
         const route: GatewayRoute = {
@@ -100,7 +100,7 @@ export class GenericWebhookAdapter implements ChannelAdapter {
         await assertPlatformResponse(response, "Webhook reply");
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // Generic webhook delivery has no native typing signal.
     }
 }

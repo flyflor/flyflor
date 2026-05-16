@@ -31,7 +31,7 @@ export class DormantSupervisor {
     private readonly idleMs: number;
     private readonly now: () => number;
 
-    constructor(
+    public constructor(
         private readonly events: EventSink,
         options: DormantSupervisorOptions,
     ) {
@@ -40,7 +40,7 @@ export class DormantSupervisor {
     }
 
     /** 任意入站：刷新 lastInputAt；若处于 Dormant，发 Awakened 事件并切回 Chat。 */
-    touch(userId: string): void {
+    public touch(userId: string): void {
         if (!userId) return;
         const nowMs = this.now();
         const prev = this.states.get(userId);
@@ -59,7 +59,7 @@ export class DormantSupervisor {
     }
 
     /** 取某用户当前态；未注册 → Chat。 */
-    modeOf(userId: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Dormant {
+    public modeOf(userId: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Dormant {
         return this.states.get(userId)?.mode ?? RuntimeMode.Chat;
     }
 
@@ -68,7 +68,7 @@ export class DormantSupervisor {
      * 调用方在 `touch()` 之前读取，便于在新一轮 turn 的 prompt 中注入
      * `[runtime-resume]` hint。零字符匹配——只暴露 idleMs，不读消息文本。
      */
-    peekResumeHint(userId: string): { idleMs: number } | null {
+    public peekResumeHint(userId: string): { idleMs: number } | null {
         if (!userId) return null;
         const s = this.states.get(userId);
         if (!s || s.mode !== RuntimeMode.Dormant) return null;
@@ -76,7 +76,7 @@ export class DormantSupervisor {
     }
 
     /** 已知用户快照（CLI / 诊断）。 */
-    snapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
+    public snapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
         const nowMs = this.now();
         return [...this.states.entries()].map(([userId, s]) => ({
             userId,
@@ -90,7 +90,7 @@ export class DormantSupervisor {
      * sweepOnce：扫描所有已知用户，把 idle 超 idleMs 的从 Chat 切到 Dormant。
      * 返回本轮切换的用户数。BackgroundScheduler 会按固定 interval 触发。
      */
-    sweepOnce(): { entered: number } {
+    public sweepOnce(): { entered: number } {
         const nowMs = this.now();
         let entered = 0;
         for (const [userId, s] of this.states) {

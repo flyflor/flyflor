@@ -18,10 +18,10 @@ import type { SandboxPolicy } from "../src/agent/sandbox/index.ts";
 
 class CapturingEvents implements EventSink {
     public readonly events: RuntimeEvent[] = [];
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         this.events.push(event);
     }
-    types(): string[] {
+    public types(): string[] {
         return this.events.map((e) => e.type);
     }
 }

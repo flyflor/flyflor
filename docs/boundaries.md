@@ -59,7 +59,7 @@ flowchart LR
 
 - `llm` / `crystal` / `neural` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/agent/project` 与 `src/neural/memory`。其他目录不得重新实现隐式会话容器。
+- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/neural/project` 与 `src/neural/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。
@@ -77,7 +77,7 @@ flowchart LR
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定。
 - DI token 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。只有非 class 值（config、events、mode、adapter map 等）才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
-- 公开 API 必须显式写 `public`；内部状态和 helper 保持 `private` / `protected`，避免隐式可见性漂移。
+- 公开 API 必须显式写 `public`；内部状态和 helper 保持 `private` / `protected`，避免隐式可见性漂移。可被子类定制的生命周期、factory、storage hook 预留 `protected`，不要为了“封闭”而把扩展点无脑写死为 `private`。
 
 ## 5. 类型与协议
 

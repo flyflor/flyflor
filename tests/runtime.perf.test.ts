@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/fast.route.ts";
+import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/routing/fast.route.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/embedding/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
@@ -19,14 +19,14 @@ import { loadConfigForPaths, type FlyflorConfig } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push({ type: evt.type, payload: evt.payload });
     }
-    countOf(type: string): number {
+    public countOf(type: string): number {
         return this.events.filter((e) => e.type === type).length;
     }
-    findOf(type: string): { type: string; payload?: Record<string, unknown> } | undefined {
+    public findOf(type: string): { type: string; payload?: Record<string, unknown> } | undefined {
         return this.events.find((e) => e.type === type);
     }
 }

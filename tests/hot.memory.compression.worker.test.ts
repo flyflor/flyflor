@@ -18,16 +18,16 @@ beforeAll(async () => {
 });
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
+    public readonly events: RuntimeEvent[] = [];
+    public publish(e: RuntimeEvent): void {
         this.events.push(e);
     }
 }
 
 class StubModel implements ModelClient {
-    calls = 0;
-    constructor(private readonly output: string) {}
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public calls = 0;
+    public constructor(private readonly output: string) {}
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         this.calls += 1;
         void ModelRole.User;
         return this.output;
@@ -35,18 +35,18 @@ class StubModel implements ModelClient {
 }
 
 class FakeWorkingMemory {
-    readonly dropped: string[] = [];
-    constructor(
+    public readonly dropped: string[] = [];
+    public constructor(
         private readonly ids: string[],
         private readonly episodes: Map<string, EpisodeRecord>,
     ) {}
-    async listConsolidationCandidates(): Promise<string[]> {
+    public async listConsolidationCandidates(): Promise<string[]> {
         return this.ids;
     }
-    async readEpisode(_userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
+    public async readEpisode(_userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
         return this.episodes.get(episodeId);
     }
-    async dropEpisode(_userId: string, episodeId: string): Promise<void> {
+    public async dropEpisode(_userId: string, episodeId: string): Promise<void> {
         this.dropped.push(episodeId);
         this.episodes.delete(episodeId);
     }

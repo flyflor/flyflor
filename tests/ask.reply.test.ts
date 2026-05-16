@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildAskMetadata, renderAskReplyText } from "../src/agent/runtime/ask.reply.ts";
+import { buildAskMetadata, renderAskReplyText } from "../src/agent/runtime/turn/ask.reply.ts";
 import { AskReason, type AgentAsk } from "../src/protocol/contracts/index.ts";
 
 describe("runtime ask replies", () => {

@@ -5,7 +5,7 @@
  *   request:  { kind: "normalize"; id; raw; source }
  *   response: { id; ok: true; result } | { id; ok: false; error }
  */
-import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./reflection.normalize.ts";
+import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./normalize.ts";
 
 interface NormalizeRequest {
     kind: "normalize";

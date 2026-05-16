@@ -62,7 +62,7 @@ export interface BlackboardRunUntilConvergedInput {
 
 @Module({ name: "blackboard", tags: ["flyflor", "boundary"] })
 export class BlackboardModule extends Blackboard {
-    constructor(
+    public constructor(
         private readonly store: BlackboardStore,
         private readonly events: EventSink = new NullEventSink(),
         private readonly workers?: WorkerManager,
@@ -70,7 +70,7 @@ export class BlackboardModule extends Blackboard {
         super();
     }
 
-    async startTurn(request: BlackboardStartRequest): Promise<BlackboardStartResult> {
+    public async startTurn(request: BlackboardStartRequest): Promise<BlackboardStartResult> {
         const turnId = request.turnId ?? crypto.randomUUID();
         const lease = await this.store.acquireLease({
             projectConstraintId: request.projectConstraintId,
@@ -143,7 +143,7 @@ export class BlackboardModule extends Blackboard {
         return { acquired: true, lease: lease.lease, turn };
     }
 
-    async runUntilConverged(
+    public async runUntilConverged(
         turnId: string,
         input: BlackboardRunUntilConvergedInput,
     ): Promise<BlackboardTurn | undefined> {
@@ -248,7 +248,7 @@ export class BlackboardModule extends Blackboard {
         );
     }
 
-    async appendStep(turnId: string, input: BlackboardStepInput): Promise<BlackboardStep> {
+    public async appendStep(turnId: string, input: BlackboardStepInput): Promise<BlackboardStep> {
         const turn = await this.store.getTurn(turnId);
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
@@ -284,7 +284,7 @@ export class BlackboardModule extends Blackboard {
         return step;
     }
 
-    async appendMessage(turnId: string, input: BlackboardMessageInput): Promise<BlackboardMessage> {
+    public async appendMessage(turnId: string, input: BlackboardMessageInput): Promise<BlackboardMessage> {
         const turn = await this.store.getTurn(turnId);
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
@@ -306,7 +306,7 @@ export class BlackboardModule extends Blackboard {
         return message;
     }
 
-    async requestDecision(turnId: string, input: BlackboardDecisionInput): Promise<BlackboardDecision> {
+    public async requestDecision(turnId: string, input: BlackboardDecisionInput): Promise<BlackboardDecision> {
         const turn = await this.store.getTurn(turnId);
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
@@ -330,7 +330,7 @@ export class BlackboardModule extends Blackboard {
         return decision;
     }
 
-    async runWorker(
+    public async runWorker(
         turnId: string,
         input: BlackboardWorkerRunInput,
         turnHint?: BlackboardTurn,
@@ -448,7 +448,7 @@ export class BlackboardModule extends Blackboard {
         });
     }
 
-    async finishTurn(
+    public async finishTurn(
         turnId: string,
         status:
             | typeof BlackboardTurnStatus.Converged
@@ -488,15 +488,15 @@ export class BlackboardModule extends Blackboard {
         return updated;
     }
 
-    async getTurn(turnId: string): Promise<BlackboardTurn | undefined> {
+    public async getTurn(turnId: string): Promise<BlackboardTurn | undefined> {
         return this.store.getTurn(turnId);
     }
 
-    async listTurns(projectConstraintId: string, limit = 20): Promise<BlackboardTurn[]> {
+    public async listTurns(projectConstraintId: string, limit = 20): Promise<BlackboardTurn[]> {
         return this.store.listTurns(projectConstraintId, limit);
     }
 
-    async listRecentTurns(limit = 20): Promise<BlackboardTurn[]> {
+    public async listRecentTurns(limit = 20): Promise<BlackboardTurn[]> {
         return this.store.listRecentTurns(limit);
     }
 

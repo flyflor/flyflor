@@ -135,7 +135,7 @@ function fakeConfig(): GatewayConfig {
 }
 
 class NoopSink implements EventSink {
-    publish(_event: RuntimeEvent): void {
+    public publish(_event: RuntimeEvent): void {
         // Test sink deliberately drops gateway lifecycle events.
     }
 }

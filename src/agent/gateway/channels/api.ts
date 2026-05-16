@@ -16,10 +16,10 @@ interface ApiChatRequest {
 }
 
 export class ApiChannelAdapter implements ChannelAdapter {
-    readonly name = Channel.Api;
-    readonly transport = ChannelTransport.Http;
+    public readonly name = Channel.Api;
+    public readonly transport = ChannelTransport.Http;
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const url = new URL(request.url);
         if (request.method === "GET" && url.pathname === "/v1/models") {
             return json({
@@ -90,7 +90,7 @@ export class ApiChannelAdapter implements ChannelAdapter {
         });
     }
 
-    normalize(input: unknown): GatewayMessage {
+    public normalize(input: unknown): GatewayMessage {
         const payload = input as ApiChatRequest;
         const messages = Array.isArray(payload.messages) ? payload.messages : [];
         const lastUser = [...messages].reverse().find((message) => message.role === "user") ?? messages.at(-1);

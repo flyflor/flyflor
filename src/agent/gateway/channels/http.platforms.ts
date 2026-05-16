@@ -40,14 +40,14 @@ export interface HttpPlatformConfig {
 }
 
 export class HttpPlatformAdapter implements ChannelAdapter {
-    readonly transport = ChannelTransport.Http;
+    public readonly transport = ChannelTransport.Http;
 
-    constructor(
-        readonly name: ChannelName,
+    public constructor(
+        public readonly name: ChannelName,
         private readonly config: HttpPlatformConfig,
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const verification = this.handleVerification(request);
         if (verification) {
             return verification;
@@ -74,7 +74,7 @@ export class HttpPlatformAdapter implements ChannelAdapter {
         return json({ ok: true, reply });
     }
 
-    normalize(input: unknown): GatewayMessage {
+    public normalize(input: unknown): GatewayMessage {
         const specialized = this.normalizeSpecialized(input);
         if (specialized) {
             return specialized;
@@ -185,7 +185,7 @@ export class HttpPlatformAdapter implements ChannelAdapter {
         });
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // Generic HTTP platforms only expose outbound message delivery. Typing
         // stays explicit at the protocol layer so adapters with native support
         // can override it without changing the gateway contract.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { filterMcpServersByToolset } from "../src/agent/runtime/runtime.module.ts";
+import { filterMcpServersByToolset } from "../src/agent/runtime/mcp/toolset.ts";
 
 describe("filterMcpServersByToolset", () => {
     const servers = [{ name: "git" }, { name: "shell" }, { name: "search" }];

@@ -44,11 +44,11 @@ function policyAsk(): SandboxPolicy {
 }
 
 class CollectSink implements EventSink {
-    events: Array<{ type: string; payload: unknown }> = [];
-    publish(e: { type: string; payload?: unknown }): void {
+    public events: Array<{ type: string; payload: unknown }> = [];
+    public publish(e: { type: string; payload?: unknown }): void {
         this.events.push({ type: e.type, payload: e.payload });
     }
-    types(): string[] {
+    public types(): string[] {
         return this.events.map((e) => e.type);
     }
 }

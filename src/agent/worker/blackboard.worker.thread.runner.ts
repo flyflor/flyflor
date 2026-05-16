@@ -47,12 +47,12 @@ export class BlackboardThreadRunner {
     private readonly factory: BlackboardWorkerFactory;
     private readonly timeoutMs: number;
 
-    constructor(options: BlackboardThreadRunnerOptions = {}) {
+    public constructor(options: BlackboardThreadRunnerOptions = {}) {
         this.factory = options.workerFactory ?? defaultWorkerFactory;
         this.timeoutMs = Math.max(50, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     }
 
-    async normalize(
+    public async normalize(
         input: BlackboardWorkerTask,
         participant: string,
         raw: string,
@@ -77,7 +77,7 @@ export class BlackboardThreadRunner {
         });
     }
 
-    dispose(): void {
+    public dispose(): void {
         if (!this.worker) return;
         for (const [id, entry] of this.pending) {
             clearTimeout(entry.timer);

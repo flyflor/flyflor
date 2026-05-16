@@ -1,6 +1,6 @@
-import { BlackboardMode, ModelRole, type ModelClient, type ModelMessage } from "../../protocol/contracts/index.ts";
-import type { BlackboardContract, BlackboardWorkerPlanInput } from "../blackboard/index.ts";
-import { renderBlackboardRoutePrompt } from "../prompts/index.ts";
+import { BlackboardMode, ModelRole, type ModelClient, type ModelMessage } from "../../../protocol/contracts/index.ts";
+import type { BlackboardContract, BlackboardWorkerPlanInput } from "../../blackboard/index.ts";
+import { renderBlackboardRoutePrompt } from "../../prompts/index.ts";
 
 const MAX_ROUTE_WORKERS = 5;
 

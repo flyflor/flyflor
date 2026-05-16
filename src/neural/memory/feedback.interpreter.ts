@@ -1,5 +1,5 @@
 import { ModelRole, type ModelClient } from "../../protocol/contracts/index.ts";
-import { renderFeedbackClassifyPrompt } from "../prompts/index.ts";
+import { renderFeedbackClassifyPrompt } from "../../agent/prompts/index.ts";
 
 /**
  * Feedback Interpreter（反馈分类器）：将用户上一回合给出的反馈，归入

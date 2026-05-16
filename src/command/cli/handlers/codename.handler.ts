@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { BrainStore } from "../../../components/memory/brain.store.ts";
 import { loadConfig } from "../../../config/index.ts";
-import { ProjectScaffolder } from "../../../agent/project/scaffolder.ts";
-import { promoteCodename as promoteCodenameHelper } from "../../../agent/project/codename.promote.ts";
+import { ProjectScaffolder } from "../../../neural/project/scaffolder.ts";
+import { promoteCodename as promoteCodenameHelper } from "../../../neural/project/codename.promote.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
 
 interface CodenameListOptions {
@@ -90,10 +90,10 @@ async function runCodenameList(command: Command): Promise<void> {
 
 class ConsoleEventSink implements EventSink {
     private readonly verbose: boolean;
-    constructor(verbose: boolean) {
+    public constructor(verbose: boolean) {
         this.verbose = verbose;
     }
-    publish(evt: ReturnType<typeof event>): void {
+    public publish(evt: ReturnType<typeof event>): void {
         if (this.verbose) console.error(`[event] ${evt.type}`);
     }
 }

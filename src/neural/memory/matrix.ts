@@ -20,9 +20,9 @@ const tokenizer = new WordTokenizer();
 const sentiment = new SentimentAnalyzer("English", PorterStemmer, "afinn");
 
 export class MemoryMatrixAggregator {
-    constructor(private readonly config: MemoryMatrixConfig) {}
+    public constructor(private readonly config: MemoryMatrixConfig) {}
 
-    aggregate(input: MatrixInput): MemoryMatrixResult {
+    public aggregate(input: MatrixInput): MemoryMatrixResult {
         const started = performance.now();
         const weights = input.weights;
         if (!this.config.enabled) {

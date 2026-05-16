@@ -46,21 +46,21 @@ export interface SlackAdapterConfig {
 }
 
 export class SlackAdapter implements ChannelAdapter {
-    readonly name: ChannelName = Channel.Slack;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name: ChannelName = Channel.Slack;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         messageUpdate: true,
         reactions: true,
         replyReference: true,
         thread: true,
     });
 
-    constructor(
+    public constructor(
         private readonly config: SlackAdapterConfig,
         private readonly now: () => number = () => Date.now(),
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const raw = await request.text();
         const verified = this.verifySignature(request, raw);
         if (!verified) {
@@ -191,12 +191,12 @@ export class SlackAdapter implements ChannelAdapter {
         }
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // Slack Web API has no durable native "typing" call for bot messages.
         // Keeping this no-op makes lifecycle support explicit and consistent.
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
             await this.send(operation.route, operation.text, operation.metadata);
             return;

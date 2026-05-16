@@ -27,8 +27,8 @@ const cleanup = async () => {
 };
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(evt);
     }
 }
@@ -90,9 +90,9 @@ function ctx(): RuntimeContext {
 
 /** 模型一直坚持发 ask，让 runtime 验证 cap 强制 reply 行为。 */
 class AskingModel implements ModelClient {
-    readonly id = "test-asking";
-    constructor(private readonly askPrompt: string) {}
-    async generate(): Promise<string> {
+    public readonly id = "test-asking";
+    public constructor(private readonly askPrompt: string) {}
+    public async generate(): Promise<string> {
         return [
             "Sure, but first I need clarification.",
             "<flyflor_agent_ask>",
@@ -103,7 +103,7 @@ class AskingModel implements ModelClient {
 }
 
 class MultiQuestionModel implements ModelClient {
-    async generate(): Promise<string> {
+    public async generate(): Promise<string> {
         return [
             "Need to confirm a few details.",
             "<flyflor_agent_ask>",

@@ -14,8 +14,8 @@ const cleanup = async () => {
 };
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(evt);
     }
 }
@@ -62,8 +62,8 @@ async function makeConfig(): Promise<FlyflorConfig> {
 }
 
 class NoopModel implements ModelClient {
-    readonly id = "noop";
-    async generate(): Promise<string> {
+    public readonly id = "noop";
+    public async generate(): Promise<string> {
         return "ok";
     }
 }

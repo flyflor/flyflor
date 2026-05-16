@@ -1,18 +1,18 @@
-import type { FlyflorConfig } from "../../config/index.ts";
+import type { FlyflorConfig } from "../../../config/index.ts";
 import type {
     BlackboardMode as BlackboardModeType,
     BlackboardTurnStatus as BlackboardTurnStatusType,
     GatewayMessage,
     ModelClient,
     RuntimeContext,
-} from "../../protocol/contracts/index.ts";
-import { BlackboardMode } from "../../protocol/contracts/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import type { BlackboardDecision } from "../blackboard/index.ts";
-import type { MemoryEpisodeProvenance, MemoryModule } from "../../neural/memory/index.ts";
-import { extractRuntimeReflectionCandidates } from "./reflection.ts";
-import { ReflectionThreadRunner } from "./reflection.thread.runner.ts";
-import type { RuntimeBlackboardRouteDecision } from "./blackboard.route.ts";
+} from "../../../protocol/contracts/index.ts";
+import { BlackboardMode } from "../../../protocol/contracts/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
+import type { BlackboardDecision } from "../../blackboard/index.ts";
+import type { MemoryEpisodeProvenance, MemoryModule } from "../../../neural/memory/index.ts";
+import { extractRuntimeReflectionCandidates } from "./index.ts";
+import { ReflectionThreadRunner } from "./thread.runner.ts";
+import type { RuntimeBlackboardRouteDecision } from "../blackboard/route.ts";
 
 export interface ReflectionBlackboardRun {
     decisions: BlackboardDecision[];
@@ -49,12 +49,12 @@ export class ReflectionWorker {
     private readonly normalizer: ReflectionThreadRunner;
     private readonly ownsNormalizer: boolean;
 
-    constructor(private readonly options: ReflectionWorkerOptions) {
+    public constructor(private readonly options: ReflectionWorkerOptions) {
         this.normalizer = options.normalizer ?? new ReflectionThreadRunner();
         this.ownsNormalizer = !options.normalizer;
     }
 
-    async dispatch(input: ReflectionWorkerInput): Promise<void> {
+    public async dispatch(input: ReflectionWorkerInput): Promise<void> {
         if (!this.shouldExtract(input.blackboardRun, input.provenance.mcpCalls)) {
             return;
         }
@@ -104,7 +104,7 @@ export class ReflectionWorker {
         }
     }
 
-    dispose(): void {
+    public dispose(): void {
         if (this.ownsNormalizer) {
             this.normalizer.dispose();
         }
@@ -124,7 +124,7 @@ export class ReflectionWorker {
 }
 
 function readRouteMetadata(metadata: Record<string, unknown> | undefined): RuntimeBlackboardRouteDecision | undefined {
-    const raw = metadata?.routeDecision;
+    const raw = metadata?.routeDecision ?? metadata?.route;
     if (!raw || typeof raw !== "object") return undefined;
     const candidate = raw as RuntimeBlackboardRouteDecision;
     if (

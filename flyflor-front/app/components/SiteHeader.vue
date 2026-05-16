@@ -2,7 +2,7 @@
     <header class="site-header">
         <NuxtLink class="brand" :to="`/${content.locale}`">
             <span class="brand__mark">
-                <img src="/brand/flyflor.logo.mark.png" alt="" />
+                <img src="/brand/flyflor.logo.transparent.png" alt="" />
             </span>
             <span>Flyflor</span>
         </NuxtLink>

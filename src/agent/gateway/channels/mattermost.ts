@@ -45,18 +45,18 @@ interface MattermostPayload {
 }
 
 export class MattermostAdapter implements ChannelAdapter {
-    readonly name: ChannelName = Channel.Mattermost;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name: ChannelName = Channel.Mattermost;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         messageUpdate: true,
         replyReference: true,
         thread: true,
         typing: true,
     });
 
-    constructor(private readonly config: MattermostAdapterConfig) {}
+    public constructor(private readonly config: MattermostAdapterConfig) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const payload = await readMattermostPayload(request);
         if (!this.verifyToken(payload.token)) {
             return json({ ok: false, error: "invalid_token" }, 401);
@@ -127,14 +127,14 @@ export class MattermostAdapter implements ChannelAdapter {
         };
     }
 
-    async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         if (!this.hasRestApi()) {
             return;
         }
         await this.postRest("users/me/typing", { channel_id: route.chatId });
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.TypingStart) {
             await this.sendTyping(operation.route, operation.metadata);
             return;

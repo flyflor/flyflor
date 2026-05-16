@@ -53,7 +53,7 @@ export interface DreamWorker {
 
 /** No-op 实现：缺少晶体图 Component 或 ModelClient 时使用，保持依赖图稳定。 */
 export class NullDreamWorker implements DreamWorker {
-    async runOnce(_userId: string, _limit?: number): Promise<DreamRunResult> {
+    public async runOnce(_userId: string, _limit?: number): Promise<DreamRunResult> {
         return zeroResult();
     }
 }
@@ -69,7 +69,7 @@ export class DreamWorkerImpl implements DreamWorker {
     private readonly now: () => number;
     private readonly maxCandidates: number;
 
-    constructor(
+    public constructor(
         private readonly graph: MemoryGraphStore,
         private readonly model: ModelClient,
         private readonly events: EventSink,
@@ -79,7 +79,7 @@ export class DreamWorkerImpl implements DreamWorker {
         this.maxCandidates = Math.max(1, options.maxCandidates ?? 24);
     }
 
-    async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
+    public async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
         if (typeof userId !== "string" || userId.length === 0) return zeroResult();
         const cap = Math.min(this.maxCandidates, limit && limit > 0 ? limit : this.maxCandidates);
         const nowMs = this.now();

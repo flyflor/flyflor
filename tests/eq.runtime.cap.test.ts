@@ -24,8 +24,8 @@ const cleanup = async () => {
 };
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    publish(evt: { type: string; payload?: Record<string, unknown> }): void {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public publish(evt: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(evt);
     }
 }
@@ -87,9 +87,9 @@ function ctx(): RuntimeContext {
 }
 
 class AskingModel implements ModelClient {
-    readonly id = "test-eq03";
-    constructor(private readonly askPrompt: string) {}
-    async generate(): Promise<string> {
+    public readonly id = "test-eq03";
+    public constructor(private readonly askPrompt: string) {}
+    public async generate(): Promise<string> {
         return [
             "I need clarification.",
             "<flyflor_agent_ask>",

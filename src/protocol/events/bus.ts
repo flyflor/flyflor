@@ -4,12 +4,12 @@ import type { EventSink } from "./types.ts";
 export class RuntimeEventBus implements EventSink {
     private readonly sinks = new Set<EventSink>();
 
-    subscribe(sink: EventSink): () => void {
+    public subscribe(sink: EventSink): () => void {
         this.sinks.add(sink);
         return () => this.sinks.delete(sink);
     }
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         for (const sink of this.sinks) {
             sink.publish(event);
         }

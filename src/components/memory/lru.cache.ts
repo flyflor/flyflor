@@ -24,9 +24,9 @@ export class LruCache<V> {
     private hits = 0;
     private misses = 0;
 
-    constructor(private readonly options: LruOptions) {}
+    public constructor(private readonly options: LruOptions) {}
 
-    get(key: string, nowMs = Date.now()): V | undefined {
+    public get(key: string, nowMs = Date.now()): V | undefined {
         const entry = this.map.get(key);
         if (!entry) {
             this.misses += 1;
@@ -44,7 +44,7 @@ export class LruCache<V> {
         return entry.value;
     }
 
-    set(key: string, value: V, nowMs = Date.now()): void {
+    public set(key: string, value: V, nowMs = Date.now()): void {
         if (this.options.maxSize <= 0) return;
         if (this.map.has(key)) {
             this.map.delete(key);
@@ -57,21 +57,21 @@ export class LruCache<V> {
         this.map.set(key, { value, expiresAt: nowMs + this.options.ttlMs });
     }
 
-    delete(key: string): boolean {
+    public delete(key: string): boolean {
         return this.map.delete(key);
     }
 
-    clear(): void {
+    public clear(): void {
         this.map.clear();
         this.hits = 0;
         this.misses = 0;
     }
 
-    get size(): number {
+    public get size(): number {
         return this.map.size;
     }
 
-    stats(): { hits: number; misses: number; hitRate: number; size: number } {
+    public stats(): { hits: number; misses: number; hitRate: number; size: number } {
         const total = this.hits + this.misses;
         return {
             hits: this.hits,

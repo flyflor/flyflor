@@ -20,9 +20,9 @@ interface AnthropicMessagesStreamChunk {
 }
 
 export class AnthropicCompatibleClient implements ModelClient {
-    constructor(private readonly config: ModelConfig) {}
+    public constructor(private readonly config: ModelConfig) {}
 
-    async generate(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): Promise<string> {
+    public async generate(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): Promise<string> {
         this.assertApiKey();
         const { system, userMessages } = splitMessages(messages);
         const response = await fetchModelEndpoint(this.config, "/v1/messages", {
@@ -55,7 +55,7 @@ export class AnthropicCompatibleClient implements ModelClient {
         return content;
     }
 
-    async *stream(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): AsyncGenerator<string> {
+    public async *stream(messages: ModelMessage[], options: { signal?: AbortSignal } = {}): AsyncGenerator<string> {
         this.assertApiKey();
         const { system, userMessages } = splitMessages(messages);
         const response = await fetchModelEndpoint(this.config, "/v1/messages", {

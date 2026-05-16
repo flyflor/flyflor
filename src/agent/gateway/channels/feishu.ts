@@ -47,18 +47,18 @@ interface FeishuPayload {
 }
 
 export class FeishuAdapter implements ChannelAdapter {
-    readonly name = Channel.Feishu;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name = Channel.Feishu;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         messageUpdate: true,
         replyReference: true,
         thread: true,
     });
     private tenantToken?: { expiresAt: number; value: string };
 
-    constructor(private readonly config: FeishuConfig) {}
+    public constructor(private readonly config: FeishuConfig) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const rawBody = await request.text();
         let payload: FeishuPayload;
         try {
@@ -186,13 +186,13 @@ export class FeishuAdapter implements ChannelAdapter {
         }
     }
 
-    async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
+    public async sendTyping(_route: GatewayRoute, _metadata?: GatewayDeliveryMetadata): Promise<void> {
         // Feishu open platform does not expose a generic bot typing endpoint for
         // ordinary IM messages; the method exists so the gateway lifecycle has
         // a uniform channel contract.
     }
 
-    async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
+    public async sendOperation(operation: GatewayOutboundEnvelope): Promise<void> {
         if (operation.operation === GatewayOutboundOperation.MessageSend && operation.text) {
             await this.sendReply(
                 { messageId: crypto.randomUUID(), route: operation.route, text: operation.text },

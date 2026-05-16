@@ -55,13 +55,13 @@ export class FileAuditSink implements EventSink {
     private readonly audited: ReadonlySet<string>;
     private writeChain: Promise<void> = Promise.resolve();
 
-    constructor(options: FileAuditSinkOptions) {
+    public constructor(options: FileAuditSinkOptions) {
         this.filePath = options.filePath;
         this.now = options.now ?? (() => Date.now());
         this.audited = options.audited ?? AUDITED_EVENTS;
     }
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         if (!this.audited.has(event.type)) return;
         const record = {
             ts: this.now(),
@@ -75,7 +75,7 @@ export class FileAuditSink implements EventSink {
     }
 
     /** 等待当前所有挂起写入完成（测试用 / 优雅停机用）。 */
-    async flush(): Promise<void> {
+    public async flush(): Promise<void> {
         await this.writeChain;
     }
 
@@ -113,7 +113,7 @@ export class HttpAuditSink implements EventSink {
     private readonly timeoutMs: number;
     private writeChain: Promise<void> = Promise.resolve();
 
-    constructor(options: HttpAuditSinkOptions) {
+    public constructor(options: HttpAuditSinkOptions) {
         this.url = options.url;
         this.headers = options.headers ?? {};
         this.contentType = options.contentType ?? "application/json";
@@ -123,7 +123,7 @@ export class HttpAuditSink implements EventSink {
         this.timeoutMs = options.timeoutMs ?? 3_000;
     }
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         if (!this.audited.has(event.type)) return;
         const record = {
             ts: this.now(),
@@ -135,7 +135,7 @@ export class HttpAuditSink implements EventSink {
         this.writeChain = this.writeChain.then(() => this.postStrict(body));
     }
 
-    async flush(): Promise<void> {
+    public async flush(): Promise<void> {
         await this.writeChain;
     }
 

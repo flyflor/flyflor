@@ -6,26 +6,26 @@ import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import type { WorkingMemoryHealthSnapshot } from "../src/components/memory/working.store.ts";
 
 class FakeEvents {
-    readonly published: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
+    public readonly published: RuntimeEvent[] = [];
+    public publish(e: RuntimeEvent): void {
         this.published.push(e);
     }
-    subscribe(): () => void {
+    public subscribe(): () => void {
         return () => undefined;
     }
 }
 
 class FakeConsolidation {
-    readonly drained: string[] = [];
-    fail = false;
-    result: ConsolidationRunResult = {
+    public readonly drained: string[] = [];
+    public fail = false;
+    public result: ConsolidationRunResult = {
         scanned: 1,
         reinforced: 1,
         consolidated: 0,
         discarded: 0,
         skipped: 0,
     };
-    async drain(userId: string): Promise<ConsolidationRunResult> {
+    public async drain(userId: string): Promise<ConsolidationRunResult> {
         this.drained.push(userId);
         if (this.fail) throw new Error("boom-consolidation");
         return this.result;
@@ -33,10 +33,10 @@ class FakeConsolidation {
 }
 
 class FakeGraph {
-    readonly swept: Array<{ userId: string; batchSize?: number }> = [];
-    failNext = false;
-    decayBudget = { mn: 3, sk: 1 };
-    async applyDecaySweep(input: {
+    public readonly swept: Array<{ userId: string; batchSize?: number }> = [];
+    public failNext = false;
+    public decayBudget = { mn: 3, sk: 1 };
+    public async applyDecaySweep(input: {
         userId: string;
         batchSize?: number;
         decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
@@ -55,17 +55,17 @@ class FakeGraph {
 }
 
 class FakeDream {
-    readonly drained: Array<{ userId: string; limit?: number }> = [];
-    async drain(userId: string, limit?: number) {
+    public readonly drained: Array<{ userId: string; limit?: number }> = [];
+    public async drain(userId: string, limit?: number) {
         this.drained.push({ userId, limit });
         return { rewritten: 1, discarded: 0, skipped: 0 };
     }
-    async enqueue() {}
+    public async enqueue() {}
 }
 
 class FakeHotCompression {
-    readonly drained: string[] = [];
-    async drain(userId: string) {
+    public readonly drained: string[] = [];
+    public async drain(userId: string) {
         this.drained.push(userId);
         return { scanned: 2, compressed: 1, deleted: 2, missing: 0, skipped: 0 };
     }

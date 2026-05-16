@@ -167,15 +167,15 @@ describe("Worker manager boundary", () => {
 
 @Worker("test-deferred-worker")
 class DeferredWorker {
-    readonly resolvers: Array<(value: string) => void> = [];
-    readonly started: string[] = [];
+    public readonly resolvers: Array<(value: string) => void> = [];
+    public readonly started: string[] = [];
 
-    run(input: string, _context: WorkerRunContext): Promise<string> {
+    public run(input: string, _context: WorkerRunContext): Promise<string> {
         this.started.push(input);
         return new Promise((resolve) => this.resolvers.push(resolve));
     }
 
-    releaseNext(value: string): void {
+    public releaseNext(value: string): void {
         const resolve = this.resolvers.shift();
         if (!resolve) {
             throw new Error("No pending worker task");
@@ -185,9 +185,9 @@ class DeferredWorker {
 }
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
+    public readonly events: RuntimeEvent[] = [];
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         this.events.push(event);
     }
 }

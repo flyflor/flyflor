@@ -33,19 +33,19 @@ interface DiscordUser {
 }
 
 export class DiscordInteractionAdapter implements ChannelAdapter {
-    readonly name = Channel.Discord;
-    readonly transport = ChannelTransport.Http;
-    readonly capabilities = channelCapabilities({
+    public readonly name = Channel.Discord;
+    public readonly transport = ChannelTransport.Http;
+    public readonly capabilities = channelCapabilities({
         messageUpdate: true,
         replyReference: true,
     });
 
-    constructor(
+    public constructor(
         private readonly applicationId: string,
         private readonly publicKey: string,
     ) {}
 
-    async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: StreamingMessageDispatcher): Promise<Response> {
         const rawBody = await request.text();
         const verified = await verifyDiscordSignature(request, rawBody, this.publicKey);
         if (!verified) {

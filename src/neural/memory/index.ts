@@ -38,10 +38,10 @@ import {
     renderRuntimeIdentityContextPrompt,
     renderSkillOfferPrompt,
 } from "../../agent/prompts/index.ts";
-import { FeedbackCategory, classifyFeedback } from "../../agent/runtime/feedback.interpreter.ts";
-import { detectExplicitIntent, detectExplicitSkillIntent, ProjectTriggerKind } from "../../agent/project/index.ts";
-import { promoteCodename as promoteCodenameHelper } from "../../agent/project/codename.promote.ts";
-import { ProjectScaffolder } from "../../agent/project/scaffolder.ts";
+import { FeedbackCategory, classifyFeedback } from "./feedback.interpreter.ts";
+import { detectExplicitIntent, detectExplicitSkillIntent, ProjectTriggerKind } from "../project/index.ts";
+import { promoteCodename as promoteCodenameHelper } from "../project/codename.promote.ts";
+import { ProjectScaffolder } from "../project/scaffolder.ts";
 import { spreadActivation, type ActivationCandidate } from "./activation.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding/index.ts";
@@ -164,7 +164,7 @@ export class MemoryModule extends Memory {
     private readonly embeddings: EmbeddingProvider;
     private readonly assistantMemoryByFocus = new Map<string, { current?: string; previous?: string }>();
 
-    constructor(
+    public constructor(
         private readonly config: FlyflorConfig,
         private readonly events: EventSink,
         model?: ModelClient,
@@ -246,11 +246,11 @@ export class MemoryModule extends Memory {
         });
     }
 
-    getWorkingMemoryHealthSnapshot(): WorkingMemoryHealthSnapshot | undefined {
+    public getWorkingMemoryHealthSnapshot(): WorkingMemoryHealthSnapshot | undefined {
         return (this.workingMemory as { getHealthSnapshot?: () => WorkingMemoryHealthSnapshot } | null)?.getHealthSnapshot?.();
     }
 
-    async warmup(): Promise<void> {
+    public async warmup(): Promise<void> {
         await this.ensureBrainOpen("warmup-open");
         if (this.scheduler) {
             this.scheduler.start();
@@ -316,7 +316,7 @@ export class MemoryModule extends Memory {
     }
 
     /** 关停：停止后台调度器，让 bun --compile 二进制可以干净退出。 */
-    dispose(): void {
+    public dispose(): void {
         this.scheduler?.stop();
         if (this.brainArchiveTimer !== undefined) {
             clearInterval(this.brainArchiveTimer);
@@ -392,7 +392,7 @@ export class MemoryModule extends Memory {
     }
 
     /** CLI / 诊断接口：dream 后台状态。无 scheduler 时返回禁用快照。 */
-    dreamSnapshot(): { dreamEnabled: boolean; dreamBusy: boolean; users: number } {
+    public dreamSnapshot(): { dreamEnabled: boolean; dreamBusy: boolean; users: number } {
         if (!this.scheduler) {
             return { dreamEnabled: false, dreamBusy: false, users: 0 };
         }
@@ -401,7 +401,7 @@ export class MemoryModule extends Memory {
     }
 
     /** CLI 手动触发一轮 dream pass；scheduler 未启用时返回零值。 */
-    async runDreamOnce(
+    public async runDreamOnce(
         limit?: number,
         userId?: string,
     ): Promise<{
@@ -422,7 +422,7 @@ export class MemoryModule extends Memory {
      * 只记录结构化触发面 + 短文本预览，用于事后回放"为什么这么答"。
      * 不做任何业务语义判断，不保存完整 prompt / 工具输出 / 日志。
      */
-    recordBehaviorSnapshot(input: BehaviorSnapshotInput): string | null {
+    public recordBehaviorSnapshot(input: BehaviorSnapshotInput): string | null {
         if (!this.brainOpened) return null;
         const ts = Date.parse(input.context.now);
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
@@ -508,7 +508,7 @@ export class MemoryModule extends Memory {
     }
 
     /** LF-R11 诊断入口：列出行为快照及其后续纠正证据。 */
-    listBehaviorSnapshots(userId: string, options: { limit?: number } = {}): BehaviorSnapshotRecord[] {
+    public listBehaviorSnapshots(userId: string, options: { limit?: number } = {}): BehaviorSnapshotRecord[] {
         if (!this.brainOpened) return [];
         try {
             const snapshots = this.brain.listEvents({
@@ -537,7 +537,7 @@ export class MemoryModule extends Memory {
         }
     }
 
-    async buildPrompt(message: GatewayMessage, context?: RuntimeContext): Promise<string> {
+    public async buildPrompt(message: GatewayMessage, context?: RuntimeContext): Promise<string> {
         if (!this.config.memory.enabled) {
             return "Memory is disabled.";
         }
@@ -705,7 +705,7 @@ export class MemoryModule extends Memory {
         return `Hippocampus context (top ${lines.length} activated episodes):\n${lines.join("\n")}${reconstructionHint}`;
     }
 
-    async rememberTurn(
+    public async rememberTurn(
         message: GatewayMessage,
         reply: GatewayReply,
         context: RuntimeContext,
@@ -884,7 +884,7 @@ export class MemoryModule extends Memory {
      * 反思入口：由 RuntimeModule 调用。
      * 失败发布 MemoryReflectionFailed 事件后继续抛出。
      */
-    async applyReflection(candidates: CrystalCandidateInput[], context: RuntimeContext): Promise<void> {
+    public async applyReflection(candidates: CrystalCandidateInput[], context: RuntimeContext): Promise<void> {
         if (!this.config.memory.enabled || candidates.length === 0) return;
         try {
             await this.crystal.recordTurn({
@@ -908,7 +908,7 @@ export class MemoryModule extends Memory {
      * sourceKind=blackboard-converged，weight 0.8（高于普通对话）。
      * 失败发布事件后继续抛出。
      */
-    async recordDebateEpisode(input: {
+    public async recordDebateEpisode(input: {
         userId: string;
         text: string;
         embedding?: number[];
@@ -968,7 +968,7 @@ export class MemoryModule extends Memory {
      *   - None            → no-op。
      * 失败发事件后继续抛出。
      */
-    async applyFeedback(input: {
+    public async applyFeedback(input: {
         userId: string;
         category: FeedbackCategory;
         extractedFact?: string;
@@ -1067,7 +1067,7 @@ export class MemoryModule extends Memory {
      *   3. 按 enum 分发给 applyFeedback。
      * 没有 model 或没有上一轮 assistant 文本时直接返回。
      */
-    async classifyAndApplyFeedback(message: GatewayMessage, context: RuntimeContext): Promise<void> {
+    public async classifyAndApplyFeedback(message: GatewayMessage, context: RuntimeContext): Promise<void> {
         if (!this.model || !this.config.memory.enabled) return;
         try {
             const previousAssistantText = this.assistantMemoryByFocus.get(focusKeyForMessage(message))?.previous;
@@ -1453,7 +1453,7 @@ export class MemoryModule extends Memory {
      * 调用 ProjectScaffolder 在 workspace/projects/<projectId>/ 生成骨架，并把
      * projectId 写回 codenames 表。完全幂等；失败发事件后抛出。
      */
-    async promoteCodename(
+    public async promoteCodename(
         codenameId: string,
         opts: { force?: boolean; createdAt?: string } = {},
     ): Promise<{ promoted: boolean; projectId?: string; rationale: string }> {
@@ -1494,13 +1494,13 @@ export class MemoryModule extends Memory {
      * 用于 cap enforcement：模型若要继续 ask 而 chainDepth+1 > maxChainDepth，
      * runtime 抛弃 ask 改走 reply。零字符匹配。
      */
-    peekActiveAsk(userId: string): { askId: string; chainDepth: number; ask: AgentAsk } | null {
+    public peekActiveAsk(userId: string): { askId: string; chainDepth: number; ask: AgentAsk } | null {
         const pending = this.findPendingAsk(userId);
         if (!pending) return null;
         return { askId: pending.id, chainDepth: pending.chainDepth, ask: pending.ask };
     }
 
-    listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}): ChatHistoryTurn[] {
+    public listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}): ChatHistoryTurn[] {
         if (!this.config.memory.enabled) {
             throw new Error("Chat history is unavailable because memory is disabled.");
         }
@@ -1521,7 +1521,7 @@ export class MemoryModule extends Memory {
      * protocol blocks or blackboard structured output; this component only
      * attaches source ids and stores summary records in brain.db.
      */
-    recordTurnPlanning(input: TurnPlanningInput & {
+    public recordTurnPlanning(input: TurnPlanningInput & {
         blackboardTurnId?: string;
         requestId?: string;
         sourceAskId?: string;
@@ -1610,7 +1610,7 @@ export class MemoryModule extends Memory {
      * 零字符匹配——只读 brain 行 + 数字衰减，不基于消息文本派生 label。
      * 没有 state 或 brain 未开则返回 null（只作为语气提示；不参与路由、工具或 ask 决策）。
      */
-    peekEqState(userId: string, nowMs: number = Date.now()): EqState | null {
+    public peekEqState(userId: string, nowMs: number = Date.now()): EqState | null {
         if (!this.brainOpened) return null;
         try {
             const state = this.brain.getEqState(userId);
@@ -1993,7 +1993,7 @@ export class MemoryModule extends Memory {
      * 列出当前用户的活跃 ghost-context 事件（live/resumed），ts 倒序。
      * `codenameId === null` 显式查询无 codename 的 ghost；`undefined` 不限定。
      */
-    listActiveGhosts(
+    public listActiveGhosts(
         userId: string,
         options: { codenameId?: string | null; limit?: number } = {},
     ): MemoryEventRecord[] {
@@ -2012,7 +2012,7 @@ export class MemoryModule extends Memory {
     }
 
     /** 取单个 ghost 详情；找不到或非 ghost-context 类型则返回 null。 */
-    getGhost(ghostEventId: string): MemoryEventRecord | null {
+    public getGhost(ghostEventId: string): MemoryEventRecord | null {
         if (!this.brainOpened) return null;
         try {
             const row = this.brain.getEvent(ghostEventId);
@@ -2029,7 +2029,7 @@ export class MemoryModule extends Memory {
     }
 
     /** 用户主动 resume：拉回峰值，state=resumed + resumedAt。runtime 后续按 ghost 重建上下文。 */
-    resumeGhost(ghostEventId: string, nowMs = Date.now()): boolean {
+    public resumeGhost(ghostEventId: string, nowMs = Date.now()): boolean {
         const ghost = this.getGhost(ghostEventId);
         if (!ghost) return false;
         try {
@@ -2057,7 +2057,7 @@ export class MemoryModule extends Memory {
     }
 
     /** 用户主动 drop：state=abandoned，不再展示，evidence weight=0。 */
-    dropGhost(ghostEventId: string): boolean {
+    public dropGhost(ghostEventId: string): boolean {
         const ghost = this.getGhost(ghostEventId);
         if (!ghost) return false;
         try {
@@ -2084,7 +2084,7 @@ export class MemoryModule extends Memory {
      * 用户 pin：把 decay_score 半衰期乘以 `tuning.ghost.pinHalflifeMultiplier`（默认 3.0）。
      * 实装层面：直接把 decayScore 上调到 current * multiplier，仍走衰减管道（不冻结）。
      */
-    pinGhost(ghostEventId: string): boolean {
+    public pinGhost(ghostEventId: string): boolean {
         const ghost = this.getGhost(ghostEventId);
         if (!ghost) return false;
         try {
@@ -2120,7 +2120,7 @@ export class MemoryModule extends Memory {
      * 未命中的 ghostId 视为模型结构化输出引用漂移，跳过该项并继续应用其它决策。
      * 返回成功应用的条数。
      */
-    applyGhostDecisions(decisions: GhostDecision[]): number {
+    public applyGhostDecisions(decisions: GhostDecision[]): number {
         if (!this.brainOpened || decisions.length === 0) return 0;
         let applied = 0;
         for (const decision of decisions) {
@@ -2163,7 +2163,7 @@ export class MemoryModule extends Memory {
      * 只做 enum + 长度校验（已在 parser 完成），不解析 content 语义。
      * 返回新写入的 eventId 列表（按输入顺序）；写入失败立即抛错。
      */
-    applyIdentityAppends(input: {
+    public applyIdentityAppends(input: {
         userId: string;
         candidates: IdentityAppendCandidate[];
         codenameId?: string;
@@ -2218,7 +2218,7 @@ export class MemoryModule extends Memory {
      * LF-R5 identity 列举：默认只返回 live（未 revert / 未冷归档）行；
      * 传 `includeReverted=true` 时拉全部历史用于 CLI / TUI 审计。
      */
-    listIdentity(
+    public listIdentity(
         userId: string,
         options: { limit?: number; includeReverted?: boolean } = {},
     ): MemoryEventRecord[] {
@@ -2243,7 +2243,7 @@ export class MemoryModule extends Memory {
      * 仅对 `type='identity-append'` 生效；其他类型返回 false。
      * 不删除底层 event，保留审计 / reconsolidation 证据。
      */
-    revertIdentity(eventId: string, nowMs = Date.now()): boolean {
+    public revertIdentity(eventId: string, nowMs = Date.now()): boolean {
         if (!this.brainOpened) return false;
         try {
             const row = this.brain.getEvent(eventId);
@@ -2284,7 +2284,7 @@ export class MemoryModule extends Memory {
      * 纯结构化字段聚合（type / role / codenameId / ask reason / ghost reason 计数），
      * 不调 LLM、不读 content 文本。返回 `null` 表示 brain 未开或当前维护锁忙。
      */
-    async runSummaryOnce(userId: string, nowMs?: number): Promise<SummaryRunResult | null> {
+    public async runSummaryOnce(userId: string, nowMs?: number): Promise<SummaryRunResult | null> {
         if (!this.brainOpened || this.brainMaintenanceBusy) return null;
         this.brainMaintenanceBusy = true;
         try {
@@ -2321,7 +2321,7 @@ export class MemoryModule extends Memory {
      * LF-R14：运行时自动 brain.db 月级冷归档。
      * 只移动 state=archived 且早于 cutoff 的事件；live/resumed 事件不动。
      */
-    async runBrainArchiveOnce(nowMs?: number): Promise<BrainArchiveRunResult | null> {
+    public async runBrainArchiveOnce(nowMs?: number): Promise<BrainArchiveRunResult | null> {
         if (!this.brainOpened || this.brainMaintenanceBusy) return null;
         this.brainMaintenanceBusy = true;
         try {
@@ -2406,17 +2406,17 @@ export class MemoryModule extends Memory {
     }
 
     /** LF-R5 slice D：Dormant 当前态查询。 */
-    runtimeModeOf(userId: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Dormant {
+    public runtimeModeOf(userId: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Dormant {
         return this.dormant.modeOf(userId);
     }
 
     /** LF-R5 slice D：手动触发一次 dormant sweep（测试 / CLI）。 */
-    sweepDormantOnce(): { entered: number } {
+    public sweepDormantOnce(): { entered: number } {
         return this.dormant.sweepOnce();
     }
 
     /** LF-R5 slice D：dormant 状态快照（CLI / 诊断）。 */
-    dormantSnapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
+    public dormantSnapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
         return this.dormant.snapshot();
     }
 
@@ -2426,7 +2426,7 @@ export class MemoryModule extends Memory {
      * 调用方必须显式给出 `userFacing` 字段（不做 prompt fallback，runtime 不解析文本语义）。
      * `ask` reason 的 ghost 仍由 `recordGhostFromAsk` 自动写入，不要走本入口。
      */
-    recordGhostFromReason(input: {
+    public recordGhostFromReason(input: {
         userId: string;
         reason: Exclude<GhostContextReason, typeof GhostContextReason.Ask>;
         userFacing: { title: string; contextHint?: string };
@@ -2734,7 +2734,7 @@ export class MemoryModule extends Memory {
      *
      * 返回是否新增了一条 offer（用于测试与诊断）。
      */
-    async sweepProjectClusters(userId: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
+    public async sweepProjectClusters(userId: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
         if (!this.workingMemory) return false;
         const existing = await this.sqlite.getProjectOffer(userId);
         if (existing) return false;
@@ -2762,7 +2762,7 @@ export class MemoryModule extends Memory {
         const clusterEpisodes = episodes.filter((e) => (e.concepts ?? []).includes(topConcept));
         if (clusterEpisodes.length === 0) return false;
 
-        const { detectClusterCandidate } = await import("../../agent/project/index.ts");
+        const { detectClusterCandidate } = await import("../project/index.ts");
         const trigger = detectClusterCandidate({ concepts: [topConcept], episodes: clusterEpisodes });
         if (trigger.kind === ProjectTriggerKind.None) return false;
 
@@ -2800,7 +2800,7 @@ export class MemoryModule extends Memory {
      * commitTurn 末端调用：若 Path A 触发了显式 project intent，消费 offer 并发事件；
      * 否则 ttl-1，0 时自动过期。
      */
-    async noteProjectOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
+    public async noteProjectOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
         const offer = await this.sqlite.getProjectOffer(userId);
         if (!offer) return;
         if (explicitTriggered) {
@@ -2833,7 +2833,7 @@ export class MemoryModule extends Memory {
      *
      * 同 sweepProjectClusters 一样：每 userId 最多一条 offer；已存在 offer 时直接跳过。
      */
-    async sweepSkillCandidates(userId: string): Promise<boolean> {
+    public async sweepSkillCandidates(userId: string): Promise<boolean> {
         if (!this.workingMemory) return false;
         const existing = await this.sqlite.getSkillOffer(userId);
         if (existing) return false;
@@ -2846,7 +2846,7 @@ export class MemoryModule extends Memory {
         );
         if (episodes.length === 0) return false;
 
-        const { detectSkillCandidate } = await import("../../agent/project/index.ts");
+        const { detectSkillCandidate } = await import("../project/index.ts");
         const supportMin = 5;
 
         // 按工具组合聚合：episode.metadata.provenance.mcpCalls 中 ok=true 的 (server.tool) 集合 (sorted).
@@ -2903,7 +2903,7 @@ export class MemoryModule extends Memory {
     }
 
     /** 显式同意：把 pending offer 物化为 SKILL.md，并写 RETROSPECTIVE。 */
-    async consumeSkillOffer(userId: string): Promise<boolean> {
+    public async consumeSkillOffer(userId: string): Promise<boolean> {
         const offer = await this.sqlite.getSkillOffer(userId);
         if (!offer) return false;
         try {
@@ -2949,7 +2949,7 @@ export class MemoryModule extends Memory {
     }
 
     /** 用户未显式同意 → ttl-1；归零即过期。 */
-    async noteSkillOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
+    public async noteSkillOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
         const offer = await this.sqlite.getSkillOffer(userId);
         if (!offer) return;
         if (explicitTriggered) {

@@ -134,7 +134,7 @@ export class BackgroundScheduler {
         now: () => number;
     };
 
-    constructor(
+    public constructor(
         private readonly consolidation: ConsolidationWorker,
         private readonly graph: MemoryGraphStore,
         private readonly events: EventSink,
@@ -167,7 +167,7 @@ export class BackgroundScheduler {
     }
 
     /** 把一个 userId 加入活跃集合。MemoryModule 在 rememberTurn 时调用。 */
-    trackUser(userId: string): void {
+    public trackUser(userId: string): void {
         if (typeof userId !== "string" || userId.length === 0) return;
         this.users.add(userId);
     }
@@ -179,7 +179,7 @@ export class BackgroundScheduler {
      * - 同一 userId 重复调用会 clear 旧 timer，避免 timer 堆积；
      * - 失败不吞掉；异常通过 returned promise / unhandled rejection 暴露。
      */
-    noteUserTurn(userId: string): void {
+    public noteUserTurn(userId: string): void {
         if (typeof userId !== "string" || userId.length === 0) return;
         this.trackUser(userId);
         if (!this.dream || this.opts.idleDreamTriggerMs <= 0) return;
@@ -202,12 +202,12 @@ export class BackgroundScheduler {
     }
 
     /** 当前活跃用户数（用于可观察性）。 */
-    activeUsers(): number {
+    public activeUsers(): number {
         return this.users.size;
     }
 
     /** 启动两条 timer。重复调用安全（先 stop 再 start）。 */
-    start(): void {
+    public start(): void {
         this.stop();
         this.consolidationTimer = setInterval(() => {
             void this.runConsolidationOnce();
@@ -287,7 +287,7 @@ export class BackgroundScheduler {
         }
     }
 
-    stop(): void {
+    public stop(): void {
         if (this.consolidationTimer !== undefined) {
             clearInterval(this.consolidationTimer);
             this.consolidationTimer = undefined;
@@ -331,7 +331,7 @@ export class BackgroundScheduler {
     }
 
     /** 立即跑一轮整合（测试与 dream-trigger 复用）。串行所有用户。 */
-    async runConsolidationOnce(): Promise<{
+    public async runConsolidationOnce(): Promise<{
         users: number;
         consolidated: number;
         reinforced: number;
@@ -365,7 +365,7 @@ export class BackgroundScheduler {
     }
 
     /** 立即跑一轮衰减扫描（测试与手动触发复用）。 */
-    async runDecayOnce(): Promise<{ users: number; memoryNodes: number; gems: number }> {
+    public async runDecayOnce(): Promise<{ users: number; memoryNodes: number; gems: number }> {
         if (this.decayBusy) return { users: 0, memoryNodes: 0, gems: 0 };
         this.decayBusy = true;
         const totals = { users: 0, memoryNodes: 0, gems: 0 };
@@ -425,7 +425,7 @@ export class BackgroundScheduler {
     }
 
     /** 立即跑一轮 dream（测试与手动触发复用）。串行所有用户。 */
-    async runDreamOnce(
+    public async runDreamOnce(
         limit?: number,
         userId?: string,
     ): Promise<{
@@ -462,7 +462,7 @@ export class BackgroundScheduler {
     }
 
     /** 立即跑一轮项目 cluster 扫描（测试与手动触发复用）。串行所有用户。 */
-    async runProjectClusterOnce(userId?: string): Promise<{ users: number; offers: number }> {
+    public async runProjectClusterOnce(userId?: string): Promise<{ users: number; offers: number }> {
         const totals = { users: 0, offers: 0 };
         if (!this.projectSweeper || this.projectBusy) return totals;
         this.projectBusy = true;
@@ -484,7 +484,7 @@ export class BackgroundScheduler {
     }
 
     /** 立即跑一轮技能 cluster 扫描（测试与手动触发复用）。串行所有用户。 */
-    async runSkillSweepOnce(userId?: string): Promise<{ users: number; offers: number }> {
+    public async runSkillSweepOnce(userId?: string): Promise<{ users: number; offers: number }> {
         const totals = { users: 0, offers: 0 };
         if (!this.skillSweeper || this.skillBusy) return totals;
         this.skillBusy = true;
@@ -506,7 +506,7 @@ export class BackgroundScheduler {
     }
 
     /** LF-R5 slice B：跑一次 summary sweep。串行所有用户。 */
-    async runSummarySweepOnce(userId?: string): Promise<{ users: number; written: number }> {
+    public async runSummarySweepOnce(userId?: string): Promise<{ users: number; written: number }> {
         const totals = { users: 0, written: 0 };
         if (!this.summarySweeper || this.summaryBusy || this.brainMaintenanceBusy) return totals;
         this.summaryBusy = true;
@@ -530,7 +530,7 @@ export class BackgroundScheduler {
     }
 
     /** 工作记忆压缩清理：只写隔离审计事件，不进入 summary / prompt recall / CrystalComponent。 */
-    async runHotMemoryCompressionOnce(userId?: string): Promise<{
+    public async runHotMemoryCompressionOnce(userId?: string): Promise<{
         users: number;
         compressed: number;
         deleted: number;
@@ -577,7 +577,7 @@ export class BackgroundScheduler {
     }
 
     /** LF-R14：全局 brain.db 冷归档。若 summary/dream 正在跑，本 tick 跳过，避免同库维护互相抢锁。 */
-    async runBrainArchiveOnce(): Promise<{ eventsCopied: number; months: number; skippedBusy: boolean; vacuumed: boolean }> {
+    public async runBrainArchiveOnce(): Promise<{ eventsCopied: number; months: number; skippedBusy: boolean; vacuumed: boolean }> {
         const empty = { eventsCopied: 0, months: 0, skippedBusy: false, vacuumed: false };
         if (!this.brainArchiveSweeper) return empty;
         if (this.brainArchiveBusy || this.summaryBusy || this.dreamBusy || this.brainMaintenanceBusy) {
@@ -603,12 +603,12 @@ export class BackgroundScheduler {
     }
 
     /** 返回当前注册的活跃用户快照（CLI 诊断使用）。 */
-    trackedUsers(): string[] {
+    public trackedUsers(): string[] {
         return [...this.users];
     }
 
     /** 后台调度状态快照（CLI / 诊断使用，不抛错）。 */
-    snapshot(): {
+    public snapshot(): {
         dreamEnabled: boolean;
         dreamBusy: boolean;
         consolidationBusy: boolean;

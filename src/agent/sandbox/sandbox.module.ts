@@ -33,11 +33,11 @@ export interface CapabilityExecutionDecision {
 
 @Module({ name: "sandbox", tags: ["flyflor", "boundary"] })
 export class SandboxModule extends Sandbox {
-    constructor(private readonly config: SandboxConfig) {
+    public constructor(private readonly config: SandboxConfig) {
         super();
     }
 
-    policy(): SandboxPolicy {
+    public policy(): SandboxPolicy {
         const approvals = resolveCapabilityApprovals(this.config);
         const mcp = decideCapabilityExecution(
             {

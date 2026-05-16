@@ -10,7 +10,7 @@ import {
     detectExplicitSkillIntent,
     detectSkillCandidate,
     ProjectTriggerKind,
-} from "../src/agent/project/index.ts";
+} from "../src/neural/project/index.ts";
 import type { EpisodeRecord } from "../src/components/memory/working.store.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { ModelClient, ModelMessage, RuntimeEvent } from "../src/protocol/contracts/index.ts";
@@ -29,13 +29,13 @@ afterEach(async () => {
 });
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
+    public readonly events: RuntimeEvent[] = [];
+    public publish(e: RuntimeEvent): void {
         this.events.push(e);
     }
 }
 class StubModel implements ModelClient {
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         return "{}";
     }
 }

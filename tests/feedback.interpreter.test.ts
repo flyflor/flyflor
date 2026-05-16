@@ -5,7 +5,7 @@ import {
     FeedbackCategory,
     parseClassification,
     type FeedbackClassification,
-} from "../src/agent/runtime/feedback.interpreter.ts";
+} from "../src/neural/memory/feedback.interpreter.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 
@@ -14,8 +14,8 @@ beforeAll(async () => {
 });
 
 class StubModel implements ModelClient {
-    constructor(private readonly response: string) {}
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public constructor(private readonly response: string) {}
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         return this.response;
     }
 }

@@ -3,14 +3,14 @@ import { ChannelTransport } from "../../../protocol/contracts/index.ts";
 import type { ChannelAdapter } from "./types.ts";
 
 export class UnsupportedChannelAdapter implements ChannelAdapter {
-    readonly transport = ChannelTransport.Http;
+    public readonly transport = ChannelTransport.Http;
 
-    constructor(
-        readonly name: ChannelName,
+    public constructor(
+        public readonly name: ChannelName,
         private readonly reason: string,
     ) {}
 
-    async handle(): Promise<Response> {
+    public async handle(): Promise<Response> {
         return new Response(
             JSON.stringify({
                 error: "channel_not_ready",

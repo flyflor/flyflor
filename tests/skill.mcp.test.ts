@@ -889,12 +889,12 @@ function gatewayMessage(text: string): GatewayMessage {
 }
 
 class SequencedModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
     private index = 0;
 
-    constructor(private readonly responses: string[]) {}
+    public constructor(private readonly responses: string[]) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         const response = this.responses[this.index];
         this.index += 1;
@@ -906,16 +906,16 @@ class SequencedModel implements ModelClient {
 }
 
 class StreamingModel implements ModelClient {
-    readonly messages: ModelMessage[][] = [];
+    public readonly messages: ModelMessage[][] = [];
 
-    constructor(private readonly chunks: string[]) {}
+    public constructor(private readonly chunks: string[]) {}
 
-    async generate(messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.messages.push(messages);
         return this.chunks.join("");
     }
 
-    async *stream(messages: ModelMessage[]): AsyncIterable<string> {
+    public async *stream(messages: ModelMessage[]): AsyncIterable<string> {
         this.messages.push(messages);
         for (const chunk of this.chunks) {
             yield chunk;
@@ -924,9 +924,9 @@ class StreamingModel implements ModelClient {
 }
 
 class CapturingSink implements EventSink {
-    readonly events: RuntimeEvent[] = [];
+    public readonly events: RuntimeEvent[] = [];
 
-    publish(event: RuntimeEvent): void {
+    public publish(event: RuntimeEvent): void {
         this.events.push(event);
     }
 }

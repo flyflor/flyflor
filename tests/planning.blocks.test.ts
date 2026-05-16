@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parsePlanningBlocks } from "../src/agent/runtime/planning.blocks.ts";
+import { parsePlanningBlocks } from "../src/agent/runtime/planning/blocks.ts";
 import { renderStructuredBlock, StructuredBlockProtocol } from "../src/protocol/index.ts";
 import { SceneRecordKind, TaskPlanStatus } from "../src/protocol/contracts/index.ts";
 

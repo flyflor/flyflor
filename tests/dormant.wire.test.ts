@@ -82,7 +82,7 @@ describe("MemoryModule.dormant (LF-R5 slice D)", () => {
 });
 
 class NoopSink implements EventSink {
-    publish(_event: { type: string; payload?: Record<string, unknown> }): void {}
+    public publish(_event: { type: string; payload?: Record<string, unknown> }): void {}
 }
 
 async function tempRoot(): Promise<string> {

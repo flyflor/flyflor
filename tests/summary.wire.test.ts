@@ -194,28 +194,28 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
 });
 
 class RecordingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
-    get types(): string[] {
+    public readonly events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    public get types(): string[] {
         return this.events.map((e) => e.type);
     }
-    publish(event: { type: string; payload?: Record<string, unknown> }): void {
+    public publish(event: { type: string; payload?: Record<string, unknown> }): void {
         this.events.push(event);
     }
 }
 
 class FakeSummaryGraph implements Partial<MemoryGraphStore> {
-    readonly inputs: SummaryEmbeddingInput[] = [];
-    constructor(_config: FlyflorConfig) {}
-    async initialize(): Promise<void> {
+    public readonly inputs: SummaryEmbeddingInput[] = [];
+    public constructor(_config: FlyflorConfig) {}
+    public async initialize(): Promise<void> {
         return;
     }
-    async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
+    public async upsertSummaryEmbedding(input: SummaryEmbeddingInput): Promise<void> {
         this.inputs.push(input);
     }
 }
 
 class FailingSummaryGraph extends FakeSummaryGraph {
-    override async upsertSummaryEmbedding(_input: SummaryEmbeddingInput): Promise<void> {
+    public override async upsertSummaryEmbedding(_input: SummaryEmbeddingInput): Promise<void> {
         throw new Error("summary embedding down");
     }
 }

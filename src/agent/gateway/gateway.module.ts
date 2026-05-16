@@ -18,22 +18,22 @@ import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./ded
 
 @Module({ name: "gateway", tags: ["flyflor", "boundary"] })
 export class GatewayModule extends Gateway {
-    private readonly channelRuntime = new Map<ChannelName, ChannelRuntimeState>();
-    private running = false;
-    private serverUrl?: string;
-    private startedAt?: string;
+    protected readonly channelRuntime = new Map<ChannelName, ChannelRuntimeState>();
+    protected running = false;
+    protected serverUrl?: string;
+    protected startedAt?: string;
 
-    constructor(
-        private readonly config: GatewayConfig,
-        private readonly adapters: Map<ChannelName, ChannelAdapter>,
-        private readonly runtime: RuntimeModule,
-        private readonly events: EventSink,
-        private readonly dedup: MessageDedupStore = new InMemoryDedupStore(),
+    public constructor(
+        protected readonly config: GatewayConfig,
+        protected readonly adapters: Map<ChannelName, ChannelAdapter>,
+        protected readonly runtime: RuntimeModule,
+        protected readonly events: EventSink,
+        protected readonly dedup: MessageDedupStore = new InMemoryDedupStore(),
     ) {
         super();
     }
 
-    start(): void {
+    public start(): void {
         if (this.running) {
             return;
         }
@@ -61,7 +61,7 @@ export class GatewayModule extends Gateway {
         }
     }
 
-    private async handleRequest(request: Request): Promise<Response> {
+    protected async handleRequest(request: Request): Promise<Response> {
         const url = new URL(request.url);
         if (request.method === "GET" && url.pathname === "/health") {
             return json({ ok: true });
@@ -105,7 +105,7 @@ export class GatewayModule extends Gateway {
         return json({ error: "not_found" }, 404);
     }
 
-    private async dispatchHttp(channel: ChannelName, request: Request): Promise<Response> {
+    protected async dispatchHttp(channel: ChannelName, request: Request): Promise<Response> {
         const adapter = this.adapters.get(channel);
         if (!adapter) {
             return json({ error: "channel_not_enabled", channel }, 404);
@@ -130,7 +130,7 @@ export class GatewayModule extends Gateway {
         }
     }
 
-    private async dispatchHttpStream(channel: ChannelName, request: Request): Promise<Response> {
+    protected async dispatchHttpStream(channel: ChannelName, request: Request): Promise<Response> {
         const adapter = this.adapters.get(channel);
         const normalizer = adapter as { normalize?: (input: unknown) => GatewayMessage };
         if (!adapter || typeof normalizer.normalize !== "function") {
@@ -150,7 +150,7 @@ export class GatewayModule extends Gateway {
         });
     }
 
-    private async dispatch(
+    protected async dispatch(
         message: GatewayMessage,
         options: { onTextDelta?: (text: string) => void | Promise<void> } = {},
     ) {
@@ -204,7 +204,7 @@ export class GatewayModule extends Gateway {
         }
     }
 
-    getStatusSnapshot() {
+    public getStatusSnapshot() {
         return buildGatewayStatusSnapshot(
             this.config,
             this.adapters,
@@ -215,7 +215,7 @@ export class GatewayModule extends Gateway {
         );
     }
 
-    private createTrackedDispatcher(channel: ChannelName): StreamingMessageDispatcher {
+    protected createTrackedDispatcher(channel: ChannelName): StreamingMessageDispatcher {
         return async (message, options = {}) => {
             const startedAt = new Date().toISOString();
             this.markChannelRuntime(channel, {
@@ -261,7 +261,7 @@ export class GatewayModule extends Gateway {
         };
     }
 
-    private markChannelRuntime(channel: ChannelName, patch: Partial<ChannelRuntimeState>): void {
+    protected markChannelRuntime(channel: ChannelName, patch: Partial<ChannelRuntimeState>): void {
         const current = this.channelRuntime.get(channel) ?? {};
         const next = { ...current, ...patch };
         this.channelRuntime.set(channel, next);
@@ -288,7 +288,7 @@ export class GatewayModule extends Gateway {
         }
     }
 
-    private async startStdio(): Promise<void> {
+    protected async startStdio(): Promise<void> {
         const adapter = this.adapters.get("stdio");
         if (!adapter) {
             return;

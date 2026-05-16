@@ -5,8 +5,8 @@ import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 
 class CapturingSink implements EventSink {
-    events: RuntimeEvent[] = [];
-    publish(e: RuntimeEvent): void {
+    public events: RuntimeEvent[] = [];
+    public publish(e: RuntimeEvent): void {
         this.events.push(e);
     }
 }

@@ -74,7 +74,7 @@ export class ConsolidationWorker {
     private readonly retrospective?: RetrospectiveLog;
     private readonly workingMemoryHealthSnapshot?: () => WorkingMemoryHealthSnapshot | undefined;
 
-    constructor(
+    public constructor(
         private readonly workingMemory: WorkingMemoryStore,
         private readonly graph: MemoryGraphStore,
         private readonly model: ModelClient,
@@ -93,7 +93,7 @@ export class ConsolidationWorker {
      * - 拉取工作记忆 Component 中 reviewAt <= now 的 episode；
      * - 逐条让 LLM 决策；按结果走三条通道。
      */
-    async drain(userId: string): Promise<ConsolidationRunResult> {
+    public async drain(userId: string): Promise<ConsolidationRunResult> {
         const result: ConsolidationRunResult = {
             scanned: 0,
             reinforced: 0,
@@ -164,14 +164,14 @@ export class ConsolidationWorker {
     }
 
     /** Public for testing; calls model and parses structured JSON. */
-    async classify(episode: EpisodeRecord): Promise<ConsolidationDecision> {
+    public async classify(episode: EpisodeRecord): Promise<ConsolidationDecision> {
         const prompt = renderMemoryConsolidationPrompt({ episode: renderEpisodeBlock(episode) });
         const raw = await this.model.generate([{ role: ModelRole.User, content: prompt }]);
         return parseConsolidationDecision(raw);
     }
 
     /** Promote one working-memory episode to the CrystalComponent long-term graph with a memory_node + edge. */
-    async consolidateEpisode(episode: EpisodeRecord, decision: ConsolidationDecision): Promise<void> {
+    public async consolidateEpisode(episode: EpisodeRecord, decision: ConsolidationDecision): Promise<void> {
         const memoryNodeId = crypto.randomUUID();
         await this.graph.upsertEpisode({
             id: episode.episodeId,

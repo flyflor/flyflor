@@ -90,7 +90,7 @@ export class ShellHookExecutor {
     private readonly now: () => number;
     private readonly spawnFn: ShellHookSpawnFn;
 
-    constructor(options: ShellHookExecutorOptions) {
+    public constructor(options: ShellHookExecutorOptions) {
         this.policy = options.policy;
         this.events = options.events;
         this.allowed = new Set(options.allowedCommands);
@@ -101,7 +101,7 @@ export class ShellHookExecutor {
         this.spawnFn = options.spawn ?? defaultSpawn;
     }
 
-    async execute(spec: ShellHookSpec): Promise<ShellHookResult> {
+    public async execute(spec: ShellHookSpec): Promise<ShellHookResult> {
         const started = this.now();
         if (!isPlainString(spec.id) || !isPlainString(spec.command) || !isPlainString(spec.cwd)) {
             return this.fail(spec, started, "shell-hook spec missing required string fields");

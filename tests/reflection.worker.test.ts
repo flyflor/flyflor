@@ -15,25 +15,25 @@ import { normalizeReflectionRaw } from "../src/agent/runtime/index.ts";
 import type { BlackboardDecision } from "../src/agent/blackboard/index.ts";
 
 class CapturingSink implements EventSink {
-    readonly events: Array<{ type: string; payload?: unknown }> = [];
+    public readonly events: Array<{ type: string; payload?: unknown }> = [];
 
-    publish(input: { type: string; payload?: unknown }): void {
+    public publish(input: { type: string; payload?: unknown }): void {
         this.events.push({ type: input.type, payload: input.payload });
     }
 }
 
 class StubMemory implements Pick<MemoryModule, "applyReflection"> {
-    readonly calls: Array<{ candidates: unknown[]; context: RuntimeContext }> = [];
+    public readonly calls: Array<{ candidates: unknown[]; context: RuntimeContext }> = [];
 
-    async applyReflection(candidates: unknown[], context: RuntimeContext): Promise<void> {
+    public async applyReflection(candidates: unknown[], context: RuntimeContext): Promise<void> {
         this.calls.push({ candidates, context });
     }
 }
 
 class StubModel implements ModelClient {
-    constructor(private readonly responses: string[] | (() => Promise<string>)) {}
+    public constructor(private readonly responses: string[] | (() => Promise<string>)) {}
 
-    async generate(_messages: ModelMessage[]): Promise<string> {
+    public async generate(_messages: ModelMessage[]): Promise<string> {
         return Array.isArray(this.responses) ? this.responses.shift() ?? "[]" : this.responses();
     }
 }

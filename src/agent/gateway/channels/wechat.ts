@@ -4,12 +4,12 @@ import { Channel, ChannelTransport, ChatType, GatewayMessageKind } from "../../.
 import type { ChannelAdapter, MessageDispatcher } from "./types.ts";
 
 export class WeChatOfficialAccountAdapter implements ChannelAdapter {
-    readonly name = Channel.WeChat;
-    readonly transport = ChannelTransport.Http;
+    public readonly name = Channel.WeChat;
+    public readonly transport = ChannelTransport.Http;
 
-    constructor(private readonly token: string) {}
+    public constructor(private readonly token: string) {}
 
-    async handle(request: Request, dispatch: MessageDispatcher): Promise<Response> {
+    public async handle(request: Request, dispatch: MessageDispatcher): Promise<Response> {
         const url = new URL(request.url);
         if (request.method === "GET") {
             // Official WeChat callback verification uses the same signature
