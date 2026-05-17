@@ -25,8 +25,18 @@ export interface ChatEntryOptions {
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     agentName?: string;
     appCommands?: AppCommandRegistry;
-    avatarArt?: string;
+    resourceConfig?: ChatResourceConfig;
     userId?: string;
+}
+
+export interface ChatResourceConfig {
+    contextPressureBudgetTokens?: number;
+    contextRingSize?: number;
+    identityAppendDailyLimit?: number;
+    maxOutputTokens?: number;
+    memoryVisibilityThreshold?: number;
+    model?: string;
+    providerId?: string;
 }
 
 export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
@@ -48,8 +58,6 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
     try {
         await options.runtime.warmup();
         addDefaultParsers(await loadChatParsers());
-        const avatarArt = await loadChatAvatarArt();
-
         // OpenTUI lets OTUI_USE_ALTERNATE_SCREEN override screenMode. Chat must stay in
         // alternate screen so terminal scrollback/native scrollbars never become the chat viewport.
         const previousAlternateScreen = process.env.OTUI_USE_ALTERNATE_SCREEN;
@@ -90,7 +98,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
             }
         };
 
-        const dispose = createChatApp(renderer, { ...options, avatarArt });
+        const dispose = createChatApp(renderer, options);
 
         const lifecycle = createTuiLifecycle(renderer, {
             cleanup: () => {

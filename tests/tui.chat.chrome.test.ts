@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { buildChatTodoSnapshot, chatChromeLayout, NO_PLAN_TEXT } from "../src/command/tui/chat/app.tsx";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+    buildChatResourceSnapshot,
+    buildChatTodoSnapshot,
+    chatChromeLayout,
+    NO_PLAN_TEXT,
+    renderChatProgressBar,
+} from "../src/command/tui/chat/app.tsx";
 
 describe("TUI chat chrome", () => {
     test("matches the screenshot-style chat layout contract", () => {
@@ -9,8 +17,10 @@ describe("TUI chat chrome", () => {
         expect(layout.defaultSidePanelMode).toBe("blackboard");
         expect(layout.sidePanelVisible).toBe(true);
         expect(layout.sidePanelWidth).toBe(44);
-        expect(layout.avatarHeight).toBe(14);
+        expect(layout.metricsPanelHeight).toBe(12);
         expect(layout.todoPanelHeight).toBe(9);
+        expect(layout.sendIconText).toBe("➤➤➤");
+        expect(layout.sendIconText.length).toBeGreaterThanOrEqual(3);
         expect(layout.inputStatusText).toContain("Enter 发送");
         expect(layout.inputStatusText).toContain("Cmd/Ctrl+C 复制");
     });
@@ -59,7 +69,49 @@ describe("TUI chat chrome", () => {
 
         expect(layout.sidePanelVisible).toBe(false);
         expect(layout.sidePanelWidth).toBe(0);
-        expect(layout.avatarHeight).toBe(6);
+        expect(layout.metricsPanelHeight).toBe(9);
         expect(layout.todoPanelHeight).toBe(6);
+    });
+
+    test("renders model and memory resource bars instead of the old avatar rail", () => {
+        const snapshot = buildChatResourceSnapshot({
+            activeProject: { id: "p1", projectDir: "/p", projectMemoryDir: "/p/.flyflor/memory", title: "Project" } as never,
+            contextRingSize: 12,
+            identityAppendDailyLimit: 3,
+            maxOutputTokens: 100,
+            memoryVisibilityThreshold: 0.65,
+            model: "test-model",
+            providerId: "test-provider",
+            questionText: "12345678",
+            reply: {
+                id: "a1",
+                role: "assistant",
+                content: "123456789012",
+                status: "done",
+                metadata: { memoryActions: 1 },
+            },
+            turnCount: 2,
+        });
+
+        expect(snapshot.modelLine).toBe("test-provider · test-model");
+        expect(snapshot.memoryLine).toContain("actions 1");
+        expect(snapshot.memoryLine).toContain("project on");
+        expect(snapshot.metrics.map((metric) => metric.label)).toEqual([
+            "context",
+            "reply",
+            "draft",
+            "memory",
+            "recall",
+            "write",
+        ]);
+        expect(snapshot.metrics.find((metric) => metric.label === "recall")?.value).toBe("gate 0.65");
+        expect(renderChatProgressBar(0.5, 4)).toBe("██░░ 50%");
+    });
+
+    test("lets OpenTUI ScrollBox own mouse wheel scrolling", async () => {
+        const source = await readFile(join(import.meta.dir, "../src/command/tui/chat/app.tsx"), "utf8");
+
+        expect(source).not.toContain("onMouseScroll");
+        expect(source).not.toContain("applyChatScrollWheel");
     });
 });

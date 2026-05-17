@@ -68,6 +68,15 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
                 eventBus: events.asBus(),
                 agentName: "flyflor",
                 appCommands: await loadAppCommandRegistry(config.paths),
+                resourceConfig: {
+                    contextPressureBudgetTokens: config.routing.contextPressureBudgetTokens,
+                    contextRingSize: config.memory.working?.local.contextRingSize,
+                    identityAppendDailyLimit: config.memory.tuning.identity.appendDailyLimitPerFile,
+                    maxOutputTokens: config.model.maxTokens,
+                    memoryVisibilityThreshold: config.memory.tuning.atomScore.visibilityThreshold,
+                    model: config.model.model,
+                    providerId: config.model.providerId,
+                },
                 blackboard});
         } finally {
             app.dispose();

@@ -222,12 +222,12 @@ export async function startTui(app: FlyFlor): Promise<void> {
         }
         if (name === "left" || name === "h") {
             view = nextDashboardTab(view, -1);
-            content.scrollTop = 0;
+            content.scrollTo({ x: content.scrollLeft, y: 0 });
             syncUi();
         }
         if (name === "right" || name === "l") {
             view = nextDashboardTab(view, 1);
-            content.scrollTop = 0;
+            content.scrollTo({ x: content.scrollLeft, y: 0 });
             syncUi();
         }
         if (name === "r") void refresh();

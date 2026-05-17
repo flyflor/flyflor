@@ -30,10 +30,11 @@
 - chat 启动后从 `brain.db` 加载当前用户最近历史 turn；向上滚动到顶部时继续按 `ts` 分页加载更早记录；历史 assistant 消息会携带 `TaskPlan` / `ContextFork` / `SceneRecord` 摘要，右侧 `/history` 场景回放直接复用这些摘要，不读取 raw thinking trace
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
-- Chat 右侧 rail 分成两个独立 OpenTUI `ScrollBoxRenderable`：顶部固定 `Todo / Progress`，没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`；底部展示 `深度思考 / 黑板详情`，`Ctrl+B` 切换，两者都只消费结构化 metadata、RuntimeEvent 和 blackboard turn，不从自然语言文本反推状态
+- Chat 右侧 rail 顶部先展示固定 LLM 资源卡片（model/provider、估算 context/output/draft token、记忆 ring、recall gate、写入计数），下面分成两个独立 OpenTUI `ScrollBoxRenderable`：顶部固定 `Todo / Progress`，没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`；底部展示 `深度思考 / 黑板详情`，`Ctrl+B` 切换，所有面板都只消费结构化 metadata、RuntimeEvent、配置资源上限和 blackboard turn，不从自然语言文本反推状态
+- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、拖动滚动条、滚动加速度、sticky-bottom 状态和 content translate 全部交给 OpenTUI 自己维护，避免可视滚动条和实际 viewport 漂移
 - 对话进行中默认跟随最新 turn；用户通过 `/thinking` 或 `/blackboard` 打开问题选择后可以用上下 / `j/k` 预览历史 turn，下一条新消息开始时自动恢复跟随最新
 - Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
-- `ui/头像.png` 是 Flyflor 正式 bitmap logo；`ui/avatar.txt` 是 Chat TUI 可直接渲染的文本头像，右侧栏头部会从 repo-root 或 Docker `/workspace` 读取它，缺失时自动省略，不影响启动
+- `ui/头像.png` 仍是 Flyflor 正式 bitmap logo 资产，但 Chat TUI 右侧栏不再渲染文本/像素头像；终端图片保真度不稳定，右栏改用 LLM 资源卡片
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情
 - `flyflor tui` 仪表盘 Overview 与 CLI navigator 的 Overview / Memory 页保持同一状态口径：展示 working-memory breaker 健康，以及 local MemoryComponent 的 snapshot / backup / WAL 恢复文件元数据；刷新路径只做 `stat`，不解析热数据
 

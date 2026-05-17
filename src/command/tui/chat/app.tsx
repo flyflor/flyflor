@@ -104,16 +104,18 @@ const THEME = {
 
 const CHAT_HEADER_BRAND = "◉ flyflor-chat · powered by OpenTUI";
 const DEFAULT_STATUS_TEXT = "Enter 发送  |  ↑/↓ 历史  |  Tab 切换  |  Ctrl+C 清屏  |  Cmd/Ctrl+C 复制";
+const SEND_ICON_TEXT = "➤➤➤";
 const HISTORY_BATCH_SIZE = 20;
 const SIDE_PANEL_MIN_WIDTH = 34;
 const SIDE_PANEL_MAX_WIDTH = 50;
 const SIDE_PANEL_RATIO = 0.28;
-const AVATAR_MIN_HEIGHT = 6;
-const AVATAR_MAX_HEIGHT = 14;
-const AVATAR_HEIGHT_RATIO = 0.28;
+const METRICS_PANEL_MIN_HEIGHT = 9;
+const METRICS_PANEL_MAX_HEIGHT = 13;
+const METRICS_PANEL_HEIGHT_RATIO = 0.24;
 const TODO_PANEL_MIN_HEIGHT = 6;
 const TODO_PANEL_MAX_HEIGHT = 10;
 const TODO_PANEL_HEIGHT_RATIO = 0.18;
+const RESOURCE_BAR_WIDTH = 12;
 export const NO_PLAN_TEXT = "暂无计划";
 
 interface MsgRenderable {
@@ -164,7 +166,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             approveMcpToolCall,
             agentName = "flyflor",
             appCommands = createDefaultAppCommandRegistry(),
-            avatarArt = "",
+            resourceConfig = {},
             userId = "human",
         } = options;
 
@@ -202,6 +204,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         const markdownSyntaxStyle = createMarkdownSyntaxStyle();
         let statusNoticeTimer: ReturnType<typeof setTimeout> | undefined;
         const messageRenderables: MsgRenderable[] = [];
+        const metricLineRenderables: TextRenderable[] = [];
         const todoLineRenderables: TextRenderable[] = [];
         const detailLineRenderables: TextRenderable[] = [];
         const pendingBlackboardRefreshes = new Set<string>();
@@ -507,7 +510,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 queueMicrotask(() => {
                     if (reason === "scroll") {
                         const delta = scrollBox.scrollHeight - previousHeight;
-                        scrollBox.scrollTop = previousTop + Math.max(0, delta);
+                        scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: previousTop + Math.max(0, delta) });
                         return;
                     }
                     scrollBox.scrollTo({
@@ -996,7 +999,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             paddingRight: 0,
             paddingTop: 1,
             paddingBottom: 0,
-            onMouseScroll: (event) => scrollByWheel(scrollBox, event),
         });
         chatPane.add(messagesRow);
 
@@ -1023,7 +1025,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     foregroundColor: THEME.pink,
                 },
             },
-            onMouseScroll: (event) => scrollByWheel(scrollBox, event),
         });
         scrollBox.horizontalScrollBar.visible = false;
         scrollBox.horizontalScrollBar.height = 0;
@@ -1070,10 +1071,11 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             onSubmit,
         });
         const sendIcon = new TextRenderable(renderer, {
-            content: "➤",
+            content: SEND_ICON_TEXT,
             fg: THEME.purple,
+            attributes: TextAttributes.BOLD,
             selectable: false,
-            width: 3,
+            width: 5,
         });
         inputRow.add(input);
         inputRow.add(sendIcon);
@@ -1126,7 +1128,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     foregroundColor: THEME.gold,
                 },
             },
-            onMouseScroll: (event) => scrollByWheel(todoScrollBox, event),
         });
         todoScrollBox.horizontalScrollBar.visible = false;
         todoScrollBox.horizontalScrollBar.height = 0;
@@ -1151,12 +1152,29 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                     foregroundColor: THEME.pink,
                 },
             },
-            onMouseScroll: (event) => scrollByWheel(detailScrollBox, event),
         });
         detailScrollBox.horizontalScrollBar.visible = false;
         detailScrollBox.horizontalScrollBar.height = 0;
         detailScrollBox.verticalScrollBar.visible = true;
         detailScrollBox.verticalScrollBar.width = 2;
+
+        const metricsCard = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            flexShrink: 0,
+            height: metricsPanelHeight(renderer.height),
+            border: true,
+            borderColor: THEME.border,
+            backgroundColor: THEME.panelBgSoft,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: 1,
+            paddingBottom: 1,
+        });
+        const metricsContent = new BoxRenderable(renderer, {
+            flexDirection: "column",
+            width: "100%",
+        });
+        metricsCard.add(metricsContent);
 
         const todoCard = new BoxRenderable(renderer, {
             flexDirection: "column",
@@ -1169,7 +1187,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             paddingRight: 1,
             paddingTop: 1,
             paddingBottom: 1,
-            onMouseScroll: (event) => scrollByWheel(todoScrollBox, event),
         });
         const detailCard = new BoxRenderable(renderer, {
             flexDirection: "column",
@@ -1182,29 +1199,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             paddingRight: 1,
             paddingTop: 1,
             paddingBottom: 1,
-            onMouseScroll: (event) => scrollByWheel(detailScrollBox, event),
         });
-        let avatarFrame: BoxRenderable | undefined;
-        if (avatarArt.trim().length > 0) {
-            avatarFrame = new BoxRenderable(renderer, {
-                flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "flex-start",
-                flexShrink: 0,
-                width: "100%",
-                height: avatarPanelHeight(renderer.height),
-                backgroundColor: THEME.panelBgSoft,
-            });
-            const avatar = new TextRenderable(renderer, {
-                content: avatarArt,
-                fg: THEME.fg,
-                selectable: false,
-            });
-            avatarFrame.add(avatar);
-            sidePanel.add(avatarFrame);
-        }
         todoCard.add(todoScrollBox);
         detailCard.add(detailScrollBox);
+        sidePanel.add(metricsCard);
         sidePanel.add(todoCard);
         sidePanel.add(detailCard);
         contentRow.add(sidePanel);
@@ -1278,10 +1276,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             mainBox.width = renderer.width;
             mainBox.height = renderer.height;
             sidePanel.width = rightPanelWidth(renderer.width);
+            metricsCard.height = metricsPanelHeight(renderer.height);
             todoCard.height = todoPanelHeight(renderer.height);
-            if (avatarFrame) {
-                avatarFrame.height = avatarPanelHeight(renderer.height);
-            }
         };
         renderer.on(CliRenderEvents.RESIZE, resizeHandler);
         historyPollTimer = setInterval(() => {
@@ -1347,7 +1343,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 return;
             }
             if (name === "home" || event.sequence === "\u001b[H" || event.sequence === "\u001b[1~") {
-                scrollBox.scrollTop = 0;
+                scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: 0 });
                 event.preventDefault?.();
                 event.stopPropagation?.();
                 return;
@@ -1567,35 +1563,11 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
         function scrollMessages(direction: -1 | 1): void {
             const page = Math.max(4, scrollBox.viewport.height - 2);
-            scrollBox.scrollTop = Math.max(0, scrollBox.scrollTop + direction * page);
+            scrollBox.scrollBy({ x: 0, y: direction * page });
         }
 
         function scrollToBottom(): void {
             scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: scrollBox.scrollHeight });
-        }
-
-        function scrollByWheel(
-            pane: ScrollBoxRenderable,
-            event: {
-                scroll?: { delta: number; direction: "down" | "left" | "right" | "up" };
-                preventDefault?: () => void;
-                stopPropagation?: () => void;
-            },
-        ): void {
-            const scroll = event.scroll;
-            if (!scroll) return;
-            const amount = Math.max(1, scroll.delta || 1) * 3;
-            if (scroll.direction === "up") {
-                pane.scrollTop = Math.max(0, pane.scrollTop - amount);
-            } else if (scroll.direction === "down") {
-                pane.scrollTop = Math.max(0, pane.scrollTop + amount);
-            } else if (scroll.direction === "left") {
-                pane.scrollLeft = Math.max(0, pane.scrollLeft - amount);
-            } else if (scroll.direction === "right") {
-                pane.scrollLeft = Math.max(0, pane.scrollLeft + amount);
-            }
-            event.preventDefault?.();
-            event.stopPropagation?.();
         }
 
         function completeCommandInput(): boolean {
@@ -1890,6 +1862,37 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const selected = selectedQuestionIndex();
             if (selected === null) return pairs[pairs.length - 1];
             return pairs[clamp(selected, 0, pairs.length - 1)];
+        }
+
+        function resourcePanelLines(): PanelLine[] {
+            const pair = selectedTurnPair();
+            const snapshot = buildChatResourceSnapshot({
+                activeFork: activeFork(),
+                activeProject: activeProject(),
+                draftText: inputText(),
+                maxOutputTokens: resourceConfig.maxOutputTokens,
+                contextPressureBudgetTokens: resourceConfig.contextPressureBudgetTokens,
+                contextRingSize: resourceConfig.contextRingSize,
+                identityAppendDailyLimit: resourceConfig.identityAppendDailyLimit,
+                memoryVisibilityThreshold: resourceConfig.memoryVisibilityThreshold,
+                model: resourceConfig.model,
+                providerId: resourceConfig.providerId,
+                questionText: pair?.question,
+                reply: activeReply(),
+                turnCount: turnPairs().length,
+            });
+            const lines = [
+                panelLine("LLM / Context", THEME.header, TextAttributes.BOLD),
+                panelLine(`  ${snapshot.modelLine}`, THEME.fg),
+            ];
+            const visibleMetrics = metricsPanelHeight(renderer.height) <= METRICS_PANEL_MIN_HEIGHT
+                ? snapshot.metrics.slice(0, 3)
+                : snapshot.metrics;
+            for (const metric of visibleMetrics) {
+                lines.push(panelLine(`  ${metric.label.padEnd(7)} ${metric.bar} ${metric.value}`, metric.color));
+            }
+            lines.push(panelLine(`  memory ${snapshot.memoryLine}`, THEME.fgMuted));
+            return lines;
         }
 
         function todoPanelLines(): PanelLine[] {
@@ -2463,6 +2466,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             const panelVisible = renderer.width >= 88;
             sidePanel.visible = panelVisible;
             if (!panelVisible) return;
+            syncPanelLines(metricsContent, metricLineRenderables, resourcePanelLines());
             syncPanelLines(todoScrollBox.content, todoLineRenderables, todoPanelLines());
             syncPanelLines(detailScrollBox.content, detailLineRenderables, detailPanelLines());
         });
@@ -2526,13 +2530,28 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 }
 
 export interface ChatChromeLayout {
-    avatarHeight: number;
     defaultSidePanelMode: SidePanelMode;
     headerBrand: string;
     inputStatusText: string;
+    metricsPanelHeight: number;
+    sendIconText: string;
     sidePanelVisible: boolean;
     todoPanelHeight: number;
     sidePanelWidth: number;
+}
+
+export interface ChatResourceMetric {
+    bar: string;
+    color: RGBA;
+    label: string;
+    ratio?: number;
+    value: string;
+}
+
+export interface ChatResourceSnapshot {
+    memoryLine: string;
+    metrics: ChatResourceMetric[];
+    modelLine: string;
 }
 
 export interface ChatTodoSnapshot {
@@ -2581,13 +2600,110 @@ export function buildChatTodoSnapshot(turn: BlackboardTurn | undefined): ChatTod
     };
 }
 
+export function buildChatResourceSnapshot(input: {
+    activeFork?: ContextForkRecord | null;
+    activeProject?: ProjectRecord | null;
+    contextPressureBudgetTokens?: number;
+    contextRingSize?: number;
+    draftText?: string;
+    identityAppendDailyLimit?: number;
+    maxOutputTokens?: number;
+    memoryVisibilityThreshold?: number;
+    model?: string;
+    providerId?: string;
+    questionText?: string;
+    reply?: ChatMessage;
+    turnCount?: number;
+}): ChatResourceSnapshot {
+    const replyTokens = estimateTokens(input.reply?.content ?? "");
+    const questionTokens = estimateTokens(input.questionText ?? "");
+    const draftTokens = estimateTokens(input.draftText ?? "");
+    const turnTokens = questionTokens + replyTokens;
+    const contextBudget = finitePositive(input.activeFork?.maxContextTokens)
+        ?? finitePositive(input.contextPressureBudgetTokens)
+        ?? finitePositive(input.maxOutputTokens);
+    const outputBudget = finitePositive(input.maxOutputTokens);
+    const ringSize = finitePositive(input.contextRingSize);
+    const identityLimit = finitePositive(input.identityAppendDailyLimit);
+    const memoryActions = numberValueFromRecord(input.reply?.metadata, "memoryActions") ?? 0;
+    const model = input.model && input.model.trim().length > 0 ? input.model : "model unknown";
+    const provider = input.providerId && input.providerId.trim().length > 0 ? input.providerId : "provider unknown";
+    const visibility = clampRatio(input.memoryVisibilityThreshold);
+
+    return {
+        memoryLine: [
+            `actions ${memoryActions}`,
+            `project ${input.activeProject ? "on" : "off"}`,
+            `fork ${input.activeFork ? "on" : "off"}`,
+        ].join(" · "),
+        modelLine: `${provider} · ${model}`,
+        metrics: [
+            {
+                bar: renderChatProgressBar(contextBudget ? turnTokens / contextBudget : undefined),
+                color: THEME.header,
+                label: "context",
+                ratio: contextBudget ? clampRatio(turnTokens / contextBudget) : undefined,
+                value: contextBudget ? `${turnTokens}/${contextBudget} tok` : `${turnTokens} tok`,
+            },
+            {
+                bar: renderChatProgressBar(outputBudget ? replyTokens / outputBudget : undefined),
+                color: THEME.purple,
+                label: "reply",
+                ratio: outputBudget ? clampRatio(replyTokens / outputBudget) : undefined,
+                value: outputBudget ? `${replyTokens}/${outputBudget} tok` : `${replyTokens} tok`,
+            },
+            {
+                bar: renderChatProgressBar(outputBudget ? draftTokens / outputBudget : undefined),
+                color: THEME.gold,
+                label: "draft",
+                ratio: outputBudget ? clampRatio(draftTokens / outputBudget) : undefined,
+                value: outputBudget ? `${draftTokens}/${outputBudget} tok` : `${draftTokens} tok`,
+            },
+            {
+                bar: renderChatProgressBar(ringSize ? (input.turnCount ?? 0) / ringSize : undefined),
+                color: THEME.pink,
+                label: "memory",
+                ratio: ringSize ? clampRatio((input.turnCount ?? 0) / ringSize) : undefined,
+                value: ringSize ? `${input.turnCount ?? 0}/${ringSize} turns` : `${input.turnCount ?? 0} turns`,
+            },
+            {
+                bar: renderChatProgressBar(visibility),
+                color: THEME.fgMuted,
+                label: "recall",
+                ratio: visibility,
+                value: input.memoryVisibilityThreshold === undefined
+                    ? "gate unknown"
+                    : `gate ${input.memoryVisibilityThreshold.toFixed(2)}`,
+            },
+            {
+                bar: renderChatProgressBar(identityLimit ? memoryActions / identityLimit : undefined),
+                color: THEME.user,
+                label: "write",
+                ratio: identityLimit ? clampRatio(memoryActions / identityLimit) : undefined,
+                value: identityLimit ? `${memoryActions}/${identityLimit} daily` : `${memoryActions} actions`,
+            },
+        ],
+    };
+}
+
+export function renderChatProgressBar(ratio: number | undefined, width = RESOURCE_BAR_WIDTH): string {
+    const size = Math.max(1, Math.floor(width));
+    if (ratio === undefined || !Number.isFinite(ratio)) return `${"·".repeat(size)} --%`;
+    const bounded = Math.min(1, Math.max(0, ratio));
+    const filled = Math.min(size, Math.max(0, Math.round(bounded * size)));
+    return `${"█".repeat(filled)}${"░".repeat(size - filled)} ${Math.round(bounded * 100)
+        .toString()
+        .padStart(2, " ")}%`;
+}
+
 export function chatChromeLayout(totalWidth: number, totalHeight: number): ChatChromeLayout {
     const sidePanelWidth = rightPanelWidth(totalWidth);
     return {
-        avatarHeight: avatarPanelHeight(totalHeight),
         defaultSidePanelMode: "blackboard",
         headerBrand: CHAT_HEADER_BRAND,
         inputStatusText: DEFAULT_STATUS_TEXT,
+        metricsPanelHeight: metricsPanelHeight(totalHeight),
+        sendIconText: SEND_ICON_TEXT,
         sidePanelVisible: sidePanelWidth > 0,
         todoPanelHeight: todoPanelHeight(totalHeight),
         sidePanelWidth,
@@ -2599,8 +2715,11 @@ function rightPanelWidth(totalWidth: number): number {
     return Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(SIDE_PANEL_MIN_WIDTH, Math.floor(totalWidth * SIDE_PANEL_RATIO)));
 }
 
-function avatarPanelHeight(totalHeight: number): number {
-    return Math.min(AVATAR_MAX_HEIGHT, Math.max(AVATAR_MIN_HEIGHT, Math.floor(totalHeight * AVATAR_HEIGHT_RATIO)));
+function metricsPanelHeight(totalHeight: number): number {
+    return Math.min(
+        METRICS_PANEL_MAX_HEIGHT,
+        Math.max(METRICS_PANEL_MIN_HEIGHT, Math.floor(totalHeight * METRICS_PANEL_HEIGHT_RATIO)),
+    );
 }
 
 function todoPanelHeight(totalHeight: number): number {
@@ -2630,6 +2749,25 @@ export function selectedTextForScope(
         .map((renderable) => renderable.getSelectedText())
         .filter((text) => text.length > 0)
         .join("\n");
+}
+
+function estimateTokens(text: string): number {
+    const chars = text.trim().length;
+    return chars === 0 ? 0 : Math.ceil(chars / 4);
+}
+
+function finitePositive(value: number | undefined): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function clampRatio(value: number | undefined): number | undefined {
+    if (value === undefined || !Number.isFinite(value)) return undefined;
+    return Math.min(1, Math.max(0, value));
+}
+
+function numberValueFromRecord(record: Record<string, unknown> | null | undefined, key: string): number | undefined {
+    const value = record?.[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function isRenderableWithin(renderable: Renderable | undefined, container: Renderable): boolean {

@@ -470,7 +470,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         const next = nextGenericCliTuiPage(activePage, delta);
         if (next === activePage) return;
         activePage = next;
-        contentBox.scrollTop = 0;
+        contentBox.scrollTo({ x: contentBox.scrollLeft, y: 0 });
         syncUi();
         void refresh(next);
     }
