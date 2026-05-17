@@ -99,11 +99,12 @@ flowchart LR
 - Crystal 向量检索的 tokenizer / hash / cosine / freshness 数值逻辑必须由 `CrystalVectorCodec` 拥有；`vector.index.ts` 的函数导出只能作为兼容薄入口。
 - Runtime planning 的 `TaskPlan` / `ContextFork` / `SceneRecord` 解析必须由 `PlanningBlockParser` 拥有；runtime 主链和新增代码直接持有 class 实例，`parsePlanningBlocks()` 只作为外部兼容薄入口，禁止继续在 `parser.ts` 外增加解析 helper。
 - Runtime planning 的回复 metadata 压缩必须由 `PlanningMetadataBuilder` 拥有；runtime 主链直接持有 builder 实例，metadata 文件只允许暴露 builder 和兼容薄入口，不能继续追加游离 compact helper。
-- Runtime 黑板路由 prompt 调用、JSON 校验、worker plan 归一化和 contract 读取必须由 `RuntimeBlackboardRouteComponent` 拥有；`route.ts` 兼容函数只能委托该组件。
-- Runtime 黑板文本投影、history scene、ask handoff 必须由 `RuntimeBlackboardOutputComponent` 拥有；`output.ts` 可以保留兼容导出，但不能继续追加新的格式化 helper。
+- Runtime 黑板路由 prompt 调用、JSON 校验、worker plan 归一化和 contract 读取必须由 `RuntimeBlackboardRouteComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`route.ts` 兼容函数只能委托该组件。
+- Runtime 黑板文本投影、history scene、ask handoff 必须由 `RuntimeBlackboardOutputComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`output.ts` 可以保留兼容导出，但不能继续追加新的格式化 helper。
 - Runtime Ask 渲染、附件摘要、project constraint、turn timing 和 working-memory 健康判定分别由 `AskReplyRenderer`、`AttachmentSummaryRenderer`、`ProjectConstraintBuilder`、`TurnTiming`、`WorkingMemoryHealthInspector` 负责；兼容函数只作转发。
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
-- `src/neural/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；兼容函数只能转发，不得继续扩散 helper。
+- `src/neural/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
+- `src/neural/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
 - 约定优先于抽象：迁移不是为了消灭重复代码，而是为了让生命周期、状态、IO 副作用和协议边界有明确 owner。重复的 5-10 行值转换可以保留在对应 class 内，不为了“复用”抽成跨域工具函数。
 - 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
 - `src/components` 只承载共享 Component 基类与真正跨模块基础设施（例如 SQL tagged template）；不得按领域开 `components/<domain>` 目录。

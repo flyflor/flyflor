@@ -41,13 +41,10 @@ import {
 } from "../../agent/prompts/index.ts";
 import { FeedbackCategory, classifyFeedback } from "./feedback/index.ts";
 import {
-    detectClusterCandidate,
-    detectExplicitIntent,
-    detectExplicitSkillIntent,
-    detectSkillCandidate,
+    ProjectTriggerDetector,
     ProjectTriggerKind,
 } from "../project/index.ts";
-import { promoteCodename as promoteCodenameHelper } from "../project/codename.promote.ts";
+import { CodenamePromotionComponent } from "../project/codename.promote.ts";
 import { ProjectScaffolder } from "../project/scaffolder.ts";
 import { spreadActivation, type ActivationCandidate } from "./recall/index.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions/index.ts";
@@ -167,6 +164,10 @@ export class MemoryModule extends Memory {
     private readonly dormant: DormantSupervisor;
     private readonly model: ModelClient | undefined;
     private readonly projectScaffolder: ProjectScaffolder;
+    /** Project/fork/skill 固化触发只读结构化信号和资源指标，不解析自然语言。 */
+    private readonly projectTriggerDetector: ProjectTriggerDetector;
+    /** Codename → project 升格副作用 owner，避免 runtime 直接调用兼容 helper。 */
+    private readonly codenamePromotion: CodenamePromotionComponent;
     /** 单例 embedding provider；用于 context.embedding 缺省时降级计算。 */
     private readonly embeddings: EmbeddingProvider;
     private readonly assistantMemoryByFocus = new Map<string, { current?: string; previous?: string }>();
@@ -213,6 +214,8 @@ export class MemoryModule extends Memory {
                   })
                 : null;
         this.projectScaffolder = new ProjectScaffolder(config.paths, this.events);
+        this.projectTriggerDetector = new ProjectTriggerDetector();
+        this.codenamePromotion = new CodenamePromotionComponent();
         // 后台调度器仅在三件依赖（工作记忆 Component + 长期图 Component + 模型）齐备时启用；
         // 任一缺失时不启动 scheduler，并通过 warmup 事件显式暴露缺口。
         this.scheduler =
@@ -755,7 +758,7 @@ export class MemoryModule extends Memory {
             this.recordAskAnswerPair(pendingAskBefore.id, pendingAskBefore.snapshotId, message);
         }
 
-        const projectTrigger = detectExplicitIntent(actions);
+        const projectTrigger = this.projectTriggerDetector.detectExplicitIntent(actions);
         const createdAt = new Date(context.now).toISOString();
         // P2 inbox 收口：把 codename 持久化提前到 atom 写之前，使 inbox projectId
         // 能命名空间化为 "inbox:cn-<codenameId>"。零字符匹配——只读结构化 action.codename。
@@ -828,7 +831,7 @@ export class MemoryModule extends Memory {
 
         // 技能候选 offer 生命周期：用户在本轮回复中明确同意（skillPromotionIntent ≥ 0.7）即
         // 立即从 pending_skill_offer 生成 SKILL.md；否则 ttl-1。完全与 project offer 解耦。
-        const skillTrigger = detectExplicitSkillIntent(actions);
+        const skillTrigger = this.projectTriggerDetector.detectExplicitSkillIntent(actions);
         if (skillTrigger.kind !== ProjectTriggerKind.None) {
             await this.consumeSkillOffer(message.user.id);
         } else {
@@ -1499,7 +1502,7 @@ export class MemoryModule extends Memory {
     ): Promise<{ promoted: boolean; projectId?: string; rationale: string }> {
         if (!this.brainOpened) return { promoted: false, rationale: "brain-closed" };
         try {
-            const result = await promoteCodenameHelper(this.brain, this.projectScaffolder, codenameId, opts);
+            const result = await this.codenamePromotion.promote(this.brain, this.projectScaffolder, codenameId, opts);
             if (result.promoted && result.record && result.projectId) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryCodenamePromoted, {
@@ -2879,7 +2882,7 @@ export class MemoryModule extends Memory {
         const clusterEpisodes = episodes.filter((e) => (e.concepts ?? []).includes(topConcept));
         if (clusterEpisodes.length === 0) return false;
 
-        const trigger = detectClusterCandidate({ concepts: [topConcept], episodes: clusterEpisodes });
+        const trigger = this.projectTriggerDetector.detectClusterCandidate({ concepts: [topConcept], episodes: clusterEpisodes });
         if (trigger.kind === ProjectTriggerKind.None) return false;
 
         const proposedAt = new Date().toISOString();
@@ -2982,7 +2985,7 @@ export class MemoryModule extends Memory {
         const top = sorted[0];
         if (!top) return false;
 
-        const trigger = detectSkillCandidate(top, { skillSupportMin: supportMin });
+        const trigger = this.projectTriggerDetector.detectSkillCandidate(top, { skillSupportMin: supportMin });
         if (trigger.kind === ProjectTriggerKind.None) return false;
 
         const proposedAt = new Date().toISOString();

@@ -58,16 +58,8 @@ import {
 import { type BlackboardModule } from "../blackboard/index.ts";
 import { loadSkills, loadSkillUsageSummary, type Skill } from "../../skills/index.ts";
 import {
-    blackboardRunFromTurn,
-    buildBlackboardSceneRecords,
-    buildBlackboardStalemateAsk,
-    decideBlackboardRoute,
-    renderBlackboardPrompt,
-    renderDebateEpisodeText,
-    renderReplyPrefix,
-    renderReplyStreamingPrefix,
-    renderReplyText,
-    routeMetadata,
+    RuntimeBlackboardOutputComponent,
+    RuntimeBlackboardRouteComponent,
     type RuntimeBlackboardRouteDecision,
     type RuntimeBlackboardRun,
 } from "./blackboard/index.ts";
@@ -172,6 +164,8 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly inflight: InFlightTracker;
     protected readonly planningBlockParser: PlanningBlockParser;
     protected readonly planningMetadataBuilder: PlanningMetadataBuilder;
+    protected readonly blackboardRoute: RuntimeBlackboardRouteComponent;
+    protected readonly blackboardOutput: RuntimeBlackboardOutputComponent;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
@@ -200,6 +194,8 @@ export class RuntimeModule extends RuntimeBoundary {
         this.fastRouteSnapshots = new FileBackedFastRouteSnapshotStore(config.paths.cacheDir);
         this.planningBlockParser = new PlanningBlockParser();
         this.planningMetadataBuilder = new PlanningMetadataBuilder();
+        this.blackboardRoute = new RuntimeBlackboardRouteComponent();
+        this.blackboardOutput = new RuntimeBlackboardOutputComponent();
     }
 
     /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
@@ -489,7 +485,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
         // LF-R3 slice D：黑板封顶（NeedsUser）→ 直接合成 AgentAsk 短路返回，不再调用 LLM。
         // 黑板已经穷尽 round 没有定论，由 runtime 把"需要用户决断"的语义透传给用户。
-        const stalemateAsk = buildBlackboardStalemateAsk(blackboardRun);
+        const stalemateAsk = this.blackboardOutput.buildBlackboardStalemateAsk(blackboardRun);
         if (stalemateAsk) {
             return this.replyFromAsk({
                 ask: stalemateAsk,
@@ -508,7 +504,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 content: renderRuntimeSystemPrompt({
                     askSchemaInstructions: renderAskSchemaInstructions(),
                     behaviorPriorityInstructions: renderBehaviorPriorityInstructions(),
-                    blackboardContext: renderBlackboardPrompt(blackboardRun),
+                    blackboardContext: this.blackboardOutput.renderBlackboardPrompt(blackboardRun),
                     mcpContext: renderMcpContextPrompt({
                         servers: mcpServers,
                         toolContext: renderMcpToolCatalog({
@@ -530,8 +526,8 @@ export class RuntimeModule extends RuntimeBoundary {
         ];
 
         const replyPrefix = options.onTextDelta
-            ? renderReplyStreamingPrefix(blackboardRun)
-            : renderReplyPrefix(blackboardRun);
+            ? this.blackboardOutput.renderReplyStreamingPrefix(blackboardRun)
+            : this.blackboardOutput.renderReplyPrefix(blackboardRun);
         const generated = await this.generateTextWithMcpTools(modelMessages, replyPrefix, options, {
             canExecuteTools: mcpExecution.canExecute,
             requiresApproval: mcpExecution.requiresApproval,
@@ -615,7 +611,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
-            text: ask ? renderAskReplyText(ask) : renderReplyText(visibleText, blackboardRun),
+            text: ask ? renderAskReplyText(ask) : this.blackboardOutput.renderReplyText(visibleText, blackboardRun),
             metadata: {
                 ...(ask
                     ? {
@@ -764,7 +760,12 @@ export class RuntimeModule extends RuntimeBoundary {
                 contextForks,
                 sceneRecords: [
                     ...sceneRecords,
-                    ...buildBlackboardSceneRecords(message.user.id, context.now, blackboardRun, context.requestId),
+                    ...this.blackboardOutput.buildBlackboardSceneRecords(
+                        message.user.id,
+                        context.now,
+                        blackboardRun,
+                        context.requestId,
+                    ),
                 ],
                 taskPlans,
             },
@@ -904,7 +905,7 @@ export class RuntimeModule extends RuntimeBoundary {
         if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
             await this.memory.recordDebateEpisode({
                 userId: message.user.id,
-                text: renderDebateEpisodeText(message.text, blackboardRun),
+                text: this.blackboardOutput.renderDebateEpisodeText(message.text, blackboardRun),
                 embedding,
                 requestId: context.requestId,
             });
@@ -930,7 +931,7 @@ export class RuntimeModule extends RuntimeBoundary {
         if (fastRoute.bypass) {
             return buildBypassDecision(fastRoute.reason);
         }
-        return decideBlackboardRoute(this.model, message.text);
+        return this.blackboardRoute.decideBlackboardRoute(this.model, message.text);
     }
 
     /**
@@ -1296,14 +1297,14 @@ export class RuntimeModule extends RuntimeBoundary {
             return undefined;
         }
 
-        const route = preRoute ?? (await decideBlackboardRoute(this.model, message.text));
+        const route = preRoute ?? (await this.blackboardRoute.decideBlackboardRoute(this.model, message.text));
         if (route.mode !== BlackboardMode.Blackboard) {
             return {
                 elapsedMs: 0,
                 mode: route.mode,
                 reason: route.reason,
                 decisions: [],
-                metadata: routeMetadata(route),
+                metadata: this.blackboardOutput.routeMetadata(route),
                 steps: [],
                 transcript: [],
             };
@@ -1380,7 +1381,7 @@ export class RuntimeModule extends RuntimeBoundary {
             if (!finished) {
                 throw new Error(`Blackboard turn disappeared before convergence: ${start.turn.id}`);
             }
-            return blackboardRunFromTurn(finished, elapsed(started), route);
+            return this.blackboardOutput.blackboardRunFromTurn(finished, elapsed(started), route);
         } catch (error) {
             await this.blackboard.finishTurn(start.turn.id, BlackboardTurnStatus.Failed, context.now);
             const loaded = await this.blackboard.getTurn(start.turn.id);
