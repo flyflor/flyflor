@@ -194,12 +194,57 @@ export class GatewayModule extends Gateway {
         );
         try {
             const reply = await this.runtime.handleMessage(message, context, options);
-            await this.dedup.recordReply(dedupKey, reply).catch(() => undefined);
+            await this.recordDedupReply(dedupKey, reply, message.route.channel, context.requestId);
             return reply;
         } catch (err) {
-            await this.dedup.release(dedupKey).catch(() => undefined);
+            await this.releaseDedupClaim(dedupKey, message.route.channel, context.requestId);
             throw err;
         }
+    }
+
+    protected async recordDedupReply(
+        key: string,
+        reply: GatewayReply,
+        channel: ChannelName,
+        requestId: string,
+    ): Promise<void> {
+        try {
+            await this.dedup.recordReply(key, reply);
+        } catch (error) {
+            this.publishDedupStoreFailure("recordReply", key, channel, requestId, error);
+        }
+    }
+
+    protected async releaseDedupClaim(key: string, channel: ChannelName, requestId: string): Promise<void> {
+        try {
+            await this.dedup.release(key);
+        } catch (error) {
+            this.publishDedupStoreFailure("release", key, channel, requestId, error);
+        }
+    }
+
+    protected publishDedupStoreFailure(
+        operation: "recordReply" | "release",
+        key: string,
+        channel: ChannelName,
+        requestId: string,
+        error: unknown,
+    ): void {
+        // Dedup storage protects upstream retry idempotency, but it must never
+        // hide the user-visible runtime result. Emit structured telemetry so
+        // degraded external stores are observable without blocking final reply.
+        this.events.publish(
+            event(
+                RuntimeEventType.GatewayDedupStoreFailed,
+                {
+                    channel,
+                    error: errorMessage(error),
+                    key,
+                    operation,
+                },
+                requestId,
+            ),
+        );
     }
 
     public getStatusSnapshot() {

@@ -13,6 +13,7 @@ export const RuntimeEventType = {
     BlackboardWorkerEnd: "blackboard.worker.end",
     BlackboardWorkerStart: "blackboard.worker.start",
     GatewayMessageReceived: "gateway.message.received",
+    GatewayDedupStoreFailed: "gateway.dedup.store.failed",
     GatewayStart: "gateway.start",
     ChannelLinkChanged: "channel.link.changed",
     ChannelError: "channel.error",
