@@ -180,11 +180,14 @@ describe("CLI TUI navigator", () => {
             readFile("src/command/tui/cli/navigator.ts", "utf8"),
             readFile("src/command/tui/index.tsx", "utf8"),
         ]);
+        const composition = await readFile("src/command/tui/scrollbar.composition.ts", "utf8");
 
         for (const source of sources) {
             expect(source).toContain("const SHOW_SCROLLBARS = false");
+            expect(source).toContain("useDetachedScrollBars(");
             expect(source).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
             expect(source).not.toMatch(/visible:\s*true,\s*\n\s*width:\s*2/u);
         }
+        expect(composition).toContain("BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)");
     });
 });

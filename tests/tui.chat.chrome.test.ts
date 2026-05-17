@@ -128,5 +128,9 @@ describe("TUI chat chrome", () => {
         expect(source).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
         expect(source).toContain("stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll");
         expect(source).toContain("visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars");
+        expect(source).toContain("useDetachedScrollBars(scrollBox)");
+        expect(await readFile(join(import.meta.dir, "../src/command/tui/scrollbar.composition.ts"), "utf8")).toContain(
+            "BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)",
+        );
     });
 });

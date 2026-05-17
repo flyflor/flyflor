@@ -31,7 +31,7 @@
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
 - Chat 右侧 rail 顶部先展示固定 LLM 资源卡片（model/provider、估算 context/output/draft token、记忆 ring、recall gate、写入计数），下面分成两个独立 OpenTUI `ScrollBoxRenderable`：顶部固定 `Todo / Progress`，没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`；底部展示 `深度思考 / 黑板详情`，`Ctrl+B` 切换，所有面板都只消费结构化 metadata、RuntimeEvent、配置资源上限和 blackboard turn，不从自然语言文本反推状态
-- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、滚动加速度、sticky-bottom 状态和 content translate 交给 OpenTUI 维护；Chat 隐藏 OpenTUI 自带的可视滚动条，避免屏幕上出现第二套滚动条
+- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、滚动加速度、sticky-bottom 状态和 content translate 交给 OpenTUI 维护；`src/command/tui/scrollbar.composition.ts` 统一移除 OpenTUI 自带的可视滚动条 renderable，避免屏幕上出现第二套滚动条
 - Chat 消息区和右侧两个流式面板都使用 OpenTUI `stickyScroll` + `stickyStart: "bottom"`；深度思考 / 黑板详情在流式输出期间默认跟随最新内容，用户手动滚动面板后由 OpenTUI 接管当前位置
 - 对话进行中默认跟随最新 turn；用户通过 `/thinking` 或 `/blackboard` 打开问题选择后可以用上下 / `j/k` 预览历史 turn，下一条新消息开始时自动恢复跟随最新
 - Chat 滚动行为是固定 OpenTUI 契约：主消息区和右栏 scrollbox 都保持底部 sticky，滚轮事件交给 OpenTUI scrollbox，chat 固定 alternate-screen 并开启鼠标选择

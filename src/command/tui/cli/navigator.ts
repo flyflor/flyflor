@@ -27,6 +27,7 @@ import { fetchGhostList } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
 import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
+import { useDetachedScrollBars } from "../scrollbar.composition.ts";
 import {
     CLI_TUI_PAGE_ITEMS,
     listCliTuiPages,
@@ -393,10 +394,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             trackOptions: {
                 backgroundColor: THEME.selectedBg,
                 foregroundColor: THEME.purple}}});
-    contentBox.horizontalScrollBar.visible = SHOW_SCROLLBARS;
-    contentBox.horizontalScrollBar.height = HIDDEN_SCROLLBAR_SIZE;
-    contentBox.verticalScrollBar.visible = SHOW_SCROLLBARS;
-    contentBox.verticalScrollBar.width = HIDDEN_SCROLLBAR_SIZE;
+    useDetachedScrollBars(contentBox);
     bodyBox.add(contentBox);
 
     const statusBox = new BoxRenderable(renderer, {

@@ -24,6 +24,7 @@ import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { createTuiLifecycle } from "./lifecycle.ts";
+import { useDetachedScrollBars } from "./scrollbar.composition.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -206,10 +207,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
             visible: SHOW_SCROLLBARS,
             width: HIDDEN_SCROLLBAR_SIZE,
             showArrows: false}});
-    content.horizontalScrollBar.visible = SHOW_SCROLLBARS;
-    content.horizontalScrollBar.height = HIDDEN_SCROLLBAR_SIZE;
-    content.verticalScrollBar.visible = SHOW_SCROLLBARS;
-    content.verticalScrollBar.width = HIDDEN_SCROLLBAR_SIZE;
+    useDetachedScrollBars(content);
     row.add(content);
     root.add(mainBox);
 

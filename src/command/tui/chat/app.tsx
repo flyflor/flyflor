@@ -35,6 +35,7 @@ import { copyTextToTerminalClipboard } from "./clipboard.ts";
 import { readAskMeta, readBlackboardMeta, readMcpTrace, readPlanningMeta, readRecord, readStringArray } from "./metadata.parse.ts";
 import type { ChatMessage, McpTrace, Phase } from "./types.ts";
 import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
+import { useDetachedScrollBars } from "../scrollbar.composition.ts";
 import {
     AppCommandAction,
     AppCommandRunType,
@@ -1043,10 +1044,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 },
             },
         });
-        scrollBox.horizontalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
-        scrollBox.horizontalScrollBar.height = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
-        scrollBox.verticalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
-        scrollBox.verticalScrollBar.width = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
+        useDetachedScrollBars(scrollBox);
         messagesRow.add(scrollBox);
 
         // Input area
@@ -1153,10 +1151,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 },
             },
         });
-        todoScrollBox.horizontalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
-        todoScrollBox.horizontalScrollBar.height = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
-        todoScrollBox.verticalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
-        todoScrollBox.verticalScrollBar.width = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
+        useDetachedScrollBars(todoScrollBox);
 
         const detailScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
@@ -1182,10 +1177,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 },
             },
         });
-        detailScrollBox.horizontalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
-        detailScrollBox.horizontalScrollBar.height = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
-        detailScrollBox.verticalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
-        detailScrollBox.verticalScrollBar.width = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
+        useDetachedScrollBars(detailScrollBox);
 
         const metricsCard = new BoxRenderable(renderer, {
             flexDirection: "column",
