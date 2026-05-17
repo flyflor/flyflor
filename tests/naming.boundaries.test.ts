@@ -42,6 +42,8 @@ const DIRECTORY_REPEATED_INFRA_FILES = [
     "src/agent/di/composition/module.metadata.ts",
     "src/agent/di/factory/component.factory.ts",
     "src/agent/di/factory/dependency.container.ts",
+    "src/agent/runtime/planning/block.parser.ts",
+    "src/agent/runtime/planning/blocks.ts",
     "src/agent/runtime/streaming/protocol.visibility.ts",
 ];
 const DIRECTORY_OWNER_PREFIX_ALLOWLIST = new Set([

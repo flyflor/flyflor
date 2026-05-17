@@ -275,3 +275,13 @@ export class PlanningBlockParser {
         return typeof value === "object" && value !== null && !Array.isArray(value);
     }
 }
+
+const defaultParser = new PlanningBlockParser();
+
+/**
+ * Backward-compatible runtime entry for planning/fork/history blocks.
+ * New code should inject or own `PlanningBlockParser` directly.
+ */
+export function parsePlanningBlocks(rawText: string, context: PlanningBlockParseContext): ParsedPlanningBlocks {
+    return defaultParser.parse(rawText, context);
+}

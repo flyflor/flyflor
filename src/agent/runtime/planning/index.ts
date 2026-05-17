@@ -1,2 +1,2 @@
-export * from "./blocks.ts";
+export * from "./parser.ts";
 export * from "./metadata.ts";
