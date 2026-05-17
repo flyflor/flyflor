@@ -1,5 +1,6 @@
 import {
     BlackboardTurnStatus,
+    type BlackboardConvergenceReason,
     type BlackboardDecisionKind,
     type BlackboardDiscussionPlan,
     type BlackboardTurnStatus as BlackboardTurnStatusType,
@@ -177,7 +178,7 @@ export interface BlackboardWorkerPlanInput {
 }
 
 export interface BlackboardConvergenceResult {
-    reason: string;
+    reason: BlackboardConvergenceReason;
     status: "continue" | typeof BlackboardTurnStatus.Converged | typeof BlackboardTurnStatus.NeedsUser;
 }
 

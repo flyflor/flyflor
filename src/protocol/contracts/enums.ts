@@ -247,6 +247,18 @@ export const BlackboardWorkerOutcome = {
 
 export type BlackboardWorkerOutcome = (typeof BlackboardWorkerOutcome)[keyof typeof BlackboardWorkerOutcome];
 
+export const BlackboardConvergenceReason = {
+    AwaitingWorkerConsensus: "awaiting-worker-consensus",
+    AwaitingWorkerFinalOutput: "awaiting-worker-final-output",
+    HardRoundBudgetExhausted: "hard-round-budget-exhausted",
+    PeerQaOpenIssues: "peer-qa-open-issues",
+    WaitingForWorkers: "waiting-for-workers",
+    WorkersReachedConsensus: "workers-reached-consensus",
+} as const;
+
+export type BlackboardConvergenceReason =
+    (typeof BlackboardConvergenceReason)[keyof typeof BlackboardConvergenceReason];
+
 export const BlackboardDecisionKind = {
     Confirm: "confirm",
     Freeform: "freeform",

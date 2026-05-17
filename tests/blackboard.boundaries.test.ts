@@ -764,7 +764,14 @@ class AnalysisQaWorker {
             blockers: [],
             questions,
             risk: isFirstRound ? "medium" : "low",
-            discussion: [{ role: "worker", content: "analysis.unit.decomposition", visibility: "public" }],
+            discussion: [
+                {
+                    role: "worker",
+                    content: "analysis.unit.decomposition",
+                    visibility: "public",
+                    metadata: { internalDiagnostic: true },
+                },
+            ],
         };
     }
 }
@@ -794,7 +801,14 @@ class ReviewQaWorker {
             blockers: [],
             questions: isFirstRound ? ["analysis.provide_acceptance_criteria_and_residual_risks"] : [],
             risk: isFirstRound ? "medium" : "low",
-            discussion: [{ role: "worker", content: "review.unit.qa", visibility: "public" }],
+            discussion: [
+                {
+                    role: "worker",
+                    content: "review.unit.qa",
+                    visibility: "public",
+                    metadata: { internalDiagnostic: true },
+                },
+            ],
         };
     }
 }

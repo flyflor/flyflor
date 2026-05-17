@@ -176,6 +176,7 @@ function discussionArray(
         .map((item) => ({
             role: discussionRole(item.role, participant),
             content: stringValue(item.content),
+            metadata: discussionMetadata(item.metadata),
             visibility: discussionVisibility(item.visibility),
         }))
         .filter((item) => item.content)
@@ -210,4 +211,16 @@ function normalizeDiscussionRole(value: string): string {
 
 function discussionVisibility(value: unknown): "debug" | "internal" | "public" {
     return value === "debug" || value === "internal" || value === "public" ? value : "public";
+}
+
+function discussionMetadata(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+    const source = value as Record<string, unknown>;
+    const metadata: Record<string, unknown> = {};
+    if (source.internalDiagnostic === true) {
+        metadata.internalDiagnostic = true;
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
 }

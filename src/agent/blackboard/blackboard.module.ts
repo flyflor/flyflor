@@ -1,5 +1,6 @@
 import {
     BlackboardDecisionKind,
+    BlackboardConvergenceReason,
     BlackboardMode,
     BlackboardTurnStatus,
     BlackboardWorkerOutcome,
@@ -198,6 +199,7 @@ export class BlackboardModule extends Blackboard {
                     turn,
                     {
                         reason: `hard-round-budget-exhausted:${convergencePolicy.reason}`,
+                        reasonCode: BlackboardConvergenceReason.HardRoundBudgetExhausted,
                         round,
                     },
                     input.createdAt,
@@ -213,6 +215,7 @@ export class BlackboardModule extends Blackboard {
                         turn,
                         {
                             reason: convergence.reason,
+                            reasonCode: convergence.reason,
                             round,
                         },
                         input.createdAt,
@@ -228,6 +231,7 @@ export class BlackboardModule extends Blackboard {
                             convergence.status === BlackboardTurnStatus.NeedsUser
                                 ? convergence.reason
                                 : `round-budget-exhausted:${convergence.reason}`,
+                        reasonCode: convergence.reason,
                         round,
                     },
                     input.createdAt,
@@ -239,7 +243,8 @@ export class BlackboardModule extends Blackboard {
         return this.returnDecisionToUser(
             turn,
             {
-                reason: "hard-round-budget-exhausted",
+                reason: BlackboardConvergenceReason.HardRoundBudgetExhausted,
+                reasonCode: BlackboardConvergenceReason.HardRoundBudgetExhausted,
                 round: hardMaxRounds,
             },
             input.createdAt,
@@ -411,6 +416,7 @@ export class BlackboardModule extends Blackboard {
                               item.content,
                               result.output.outputSummary,
                               stringMetadata(input.metadata?.workerName) ?? input.workerRole,
+                              item.metadata,
                           )
                         : item.content,
                 visibility,
@@ -500,10 +506,10 @@ export class BlackboardModule extends Blackboard {
 
     private async returnDecisionToUser(
         turn: BlackboardTurn,
-        input: { reason: string; round: number },
+        input: { reason: string; reasonCode: BlackboardConvergenceReason; round: number },
         now: string,
     ): Promise<BlackboardTurn | undefined> {
-        const unresolvedIssues = latestUnresolvedIssues(turn, input.reason);
+        const unresolvedIssues = latestUnresolvedIssues(turn, input.reasonCode);
         const options = renderBlackboardDecisionOptions();
         const prompt = renderBlackboardDecisionPrompt({
             reason: input.reason,
@@ -777,22 +783,24 @@ function stringMetadata(value: unknown): string | undefined {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function userFacingDiscussionContent(content: string, fallback: string, participant: string): string {
+function userFacingDiscussionContent(
+    content: string,
+    fallback: string,
+    participant: string,
+    metadata?: Record<string, unknown>,
+): string {
+    if (metadata?.internalDiagnostic === true) {
+        return `${participant} 提出了阶段性意见，等待同伴继续交叉检查。`;
+    }
     const clean = content.trim();
-    if (clean && !looksLikeDiagnosticDiscussion(clean)) {
+    if (clean) {
         return clean;
     }
     const fallbackText = fallback.trim();
-    if (fallbackText && !looksLikeDiagnosticDiscussion(fallbackText)) {
+    if (fallbackText) {
         return fallbackText;
     }
     return `${participant} 提出了阶段性意见，等待同伴继续交叉检查。`;
-}
-
-function looksLikeDiagnosticDiscussion(value: string): boolean {
-    return /\b(?:qa_ack|analysis\.unit|review\.unit|worker-\d+|final=false|outcome=|agreement=|flyflor\.)\b/iu.test(
-        value,
-    );
 }
 
 function readMetadataWorkerOutcome(value: unknown): BlackboardWorkerOutcome | undefined {
@@ -813,7 +821,7 @@ function evaluateConvergence(
 ): BlackboardConvergenceResult {
     const currentSteps = turn.steps.filter((step) => step.round === round);
     if (currentSteps.length < expectedWorkerCount) {
-        return { status: "continue", reason: "waiting-for-workers" };
+        return { status: "continue", reason: BlackboardConvergenceReason.WaitingForWorkers };
     }
 
     const openIssues = normalizedUnique([
@@ -830,28 +838,28 @@ function evaluateConvergence(
         outcomes.length === expectedWorkerCount &&
         outcomes.every((outcome) => outcome === BlackboardWorkerOutcome.Blocked);
     if (hasFinalOutputs && !hasExplicitRejection && openIssues.length === 0) {
-        return { status: BlackboardTurnStatus.Converged, reason: "workers-reached-consensus" };
+        return { status: BlackboardTurnStatus.Converged, reason: BlackboardConvergenceReason.WorkersReachedConsensus };
     }
     if (hasBlockedOutputs && openIssues.length > 0) {
-        return { status: BlackboardTurnStatus.NeedsUser, reason: "peer-qa-open-issues" };
+        return { status: BlackboardTurnStatus.NeedsUser, reason: BlackboardConvergenceReason.PeerQaOpenIssues };
     }
 
     if (openIssues.length > 0) {
-        return { status: "continue", reason: "peer-qa-open-issues" };
+        return { status: "continue", reason: BlackboardConvergenceReason.PeerQaOpenIssues };
     }
     if (!hasFinalOutputs) {
-        return { status: "continue", reason: "awaiting-worker-final-output" };
+        return { status: "continue", reason: BlackboardConvergenceReason.AwaitingWorkerFinalOutput };
     }
     if (hasExplicitRejection) {
-        return { status: "continue", reason: "awaiting-worker-consensus" };
+        return { status: "continue", reason: BlackboardConvergenceReason.AwaitingWorkerConsensus };
     }
 
-    return { status: "continue", reason: "awaiting-worker-consensus" };
+    return { status: "continue", reason: BlackboardConvergenceReason.AwaitingWorkerConsensus };
 }
 
-function latestUnresolvedIssues(turn: BlackboardTurn, reason: string): string[] {
+function latestUnresolvedIssues(turn: BlackboardTurn, reason: BlackboardConvergenceReason): string[] {
     const latestRound = turn.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
-    const useFullTurn = reason.startsWith("hard-round-budget-exhausted");
+    const useFullTurn = reason === BlackboardConvergenceReason.HardRoundBudgetExhausted;
     const sourceSteps = useFullTurn ? turn.steps : turn.steps.filter((step) => step.round === latestRound);
     const contract = blackboardContractFor(turn);
     const issues = normalizedUnique([
@@ -863,12 +871,12 @@ function latestUnresolvedIssues(turn: BlackboardTurn, reason: string): string[] 
     if (issues.length > 0) {
         return issues.slice(0, MAX_UNRESOLVED_ISSUES);
     }
-    if (reason.includes("awaiting-worker-final-output")) {
+    if (reason === BlackboardConvergenceReason.AwaitingWorkerFinalOutput) {
         return [
             "Confirm whether the board should continue even though workers did not return a structured final outcome.",
         ];
     }
-    if (reason.includes("awaiting-worker-consensus")) {
+    if (reason === BlackboardConvergenceReason.AwaitingWorkerConsensus) {
         return [
             "Confirm which remaining disagreement should decide the next round because workers did not return structured agreement.",
         ];

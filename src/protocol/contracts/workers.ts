@@ -92,5 +92,13 @@ export interface BlackboardWorkerDiscussion {
     role: string;
     content: string;
     visibility?: "debug" | "internal" | "public";
-    metadata?: Record<string, unknown>;
+    metadata?: BlackboardWorkerDiscussionMetadata;
+}
+
+export interface BlackboardWorkerDiscussionMetadata extends Record<string, unknown> {
+    /**
+     * Explicit worker-side signal that a public-looking entry is protocol/debug text.
+     * The blackboard must not infer this from natural-language content.
+     */
+    internalDiagnostic?: boolean;
 }

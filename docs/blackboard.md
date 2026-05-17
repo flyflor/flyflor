@@ -132,7 +132,18 @@ interface BlackboardWorkerResult {
     blockers?: string[];
     newFacts?: string[];
 }
+
+interface BlackboardWorkerDiscussion {
+    role: string;
+    content: string;
+    visibility?: "debug" | "internal" | "public";
+    metadata?: {
+        internalDiagnostic?: boolean;
+    };
+}
 ```
+
+公开讨论显示遵守零字符匹配红线：`BlackboardModule` 不用正则或关键词判断 worker 文本是不是诊断日志。外部 worker 如果必须提交公开可见但应隐藏的协议片段，必须在该 `discussion[]` 条目上写 `metadata.internalDiagnostic = true`；黑板只读取这个结构化字段并降级成阶段性占位发言。模型 worker 默认应直接返回自然语言 public dialogue，诊断内容应改用 `visibility = "internal"`。
 
 `json-process` / `persistent-json-process` 协议：
 
