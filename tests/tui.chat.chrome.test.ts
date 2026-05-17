@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
     buildChatResourceSnapshot,
     buildChatTodoSnapshot,
+    CHAT_SIDE_PANEL_SECTIONS,
     CHAT_SCROLL_LOCK_CONTRACT,
     chatChromeLayout,
     NO_PLAN_TEXT,
@@ -18,8 +19,16 @@ describe("TUI chat chrome", () => {
         expect(layout.defaultSidePanelMode).toBe("blackboard");
         expect(layout.sidePanelVisible).toBe(true);
         expect(layout.sidePanelWidth).toBe(44);
-        expect(layout.metricsPanelHeight).toBe(12);
-        expect(layout.todoPanelHeight).toBe(9);
+        expect(layout.metricsPanelHeight).toBe(13);
+        expect(layout.todoPanelHeight).toBe(12);
+        expect(CHAT_SIDE_PANEL_SECTIONS).toEqual([
+            "Questions",
+            "Blackboard",
+            "TODO List",
+            "MODEL",
+            "TOKENS",
+            "CONTEXT WINDOW",
+        ]);
         expect(layout.sendIconText).toBe("➤➤➤");
         expect(layout.sendIconText.length).toBeGreaterThanOrEqual(3);
         expect(layout.inputStatusText).toContain("Enter 发送");
@@ -70,8 +79,8 @@ describe("TUI chat chrome", () => {
 
         expect(layout.sidePanelVisible).toBe(false);
         expect(layout.sidePanelWidth).toBe(0);
-        expect(layout.metricsPanelHeight).toBe(9);
-        expect(layout.todoPanelHeight).toBe(6);
+        expect(layout.metricsPanelHeight).toBe(12);
+        expect(layout.todoPanelHeight).toBe(8);
     });
 
     test("renders model and memory resource bars instead of the old avatar rail", () => {
@@ -97,6 +106,13 @@ describe("TUI chat chrome", () => {
         expect(snapshot.modelLine).toBe("test-provider · test-model");
         expect(snapshot.memoryLine).toContain("actions 1");
         expect(snapshot.memoryLine).toContain("project on");
+        expect(snapshot.tokens).toEqual({
+            draft: 0,
+            input: 2,
+            output: 3,
+            total: 5,
+        });
+        expect(snapshot.contextWindow.usedLabel).toBe("5 / 100");
         expect(snapshot.metrics.map((metric) => metric.label)).toEqual([
             "context",
             "reply",
@@ -133,8 +149,9 @@ describe("TUI chat chrome", () => {
         expect(appSource).toContain("visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars");
         expect(appSource).toContain("useDetachedScrollBars(scrollBox)");
         expect(appSource).toContain("createVirtualScrollBar(renderer, scrollBox");
-        expect(appSource).toContain("createVirtualScrollBar(renderer, todoScrollBox");
-        expect(appSource).toContain("createVirtualScrollBar(renderer, detailScrollBox");
+        expect(appSource).not.toContain("createVirtualScrollBar(renderer, todoScrollBox");
+        expect(appSource).not.toContain("createVirtualScrollBar(renderer, detailScrollBox");
+        expect(appSource).not.toContain("appendConversationSummary(lines)");
         expect(entrySource).toContain("withPinnedAlternateScreen(");
         expect(entrySource).toContain("pinRendererAlternateScreen(instance)");
         expect(entrySource).toContain("pinTerminalMouseScreen()");
@@ -142,6 +159,7 @@ describe("TUI chat chrome", () => {
             "BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)",
         );
         const screenSource = await readFile(join(import.meta.dir, "../src/command/tui/screen.composition.ts"), "utf8");
+        expect(screenSource).toContain("\\x1b[3J");
         expect(screenSource).toContain("\\x1b[?1003h");
         expect(screenSource).toContain("\\x1b[?1049l");
     });

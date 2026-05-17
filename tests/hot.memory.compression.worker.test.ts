@@ -3,12 +3,12 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { BrainStore } from "../src/components/memory/brain.store.ts";
+import { BrainStore } from "../src/neural/memory/brain/store.ts";
 import {
     HotMemoryCompressionWorker,
     parseHotMemoryCompressionDecision,
 } from "../src/neural/memory/hot.memory.compression.worker.ts";
-import type { EpisodeRecord } from "../src/components/memory/working.store.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working/types.ts";
 import { MemoryEventType, ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";

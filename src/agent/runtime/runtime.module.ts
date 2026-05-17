@@ -18,7 +18,7 @@ import {
     GhostContextReason,
     ModelRole,
 } from "../../protocol/contracts/index.ts";
-import { Runtime as RuntimeBoundary } from "../components.ts";
+import { Runtime as RuntimeBoundary } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions } from "../../neural/memory/actions.ts";
@@ -74,8 +74,8 @@ import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
 import { formatMcpResultSummary, mcpExecutionsToProvenance } from "./mcp/provenance.ts";
 import { filterMcpServersByToolset, mcpCatalogCacheKey } from "./mcp/toolset.ts";
-import { parsePlanningBlocks } from "./planning/blocks.ts";
-import { buildPlanningMetadata } from "./planning/metadata.ts";
+import { PlanningBlockParser } from "./planning/blocks.ts";
+import { PlanningMetadataBuilder } from "./planning/metadata.ts";
 import {
     buildBypassDecision,
     evaluateFastRoute,
@@ -166,6 +166,8 @@ export class RuntimeModule extends RuntimeBoundary {
     private readonly mcpToolCatalogCache = new Map<string, CachedMcpToolCatalog>();
     protected readonly sandboxQuota: SandboxQuotaTracker;
     protected readonly inflight: InFlightTracker;
+    protected readonly planningBlockParser: PlanningBlockParser;
+    protected readonly planningMetadataBuilder: PlanningMetadataBuilder;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
@@ -192,6 +194,8 @@ export class RuntimeModule extends RuntimeBoundary {
         });
         this.inflight = new InFlightTracker(config.paths.storageDir);
         this.fastRouteSnapshots = new FileBackedFastRouteSnapshotStore(config.paths.cacheDir);
+        this.planningBlockParser = new PlanningBlockParser();
+        this.planningMetadataBuilder = new PlanningMetadataBuilder();
     }
 
     /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
@@ -556,7 +560,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // Planning/fork/history blocks are model-owned structured output. Runtime
         // validates shape and strips them from the visible reply; persistence happens
         // after the canonical brain event id is available.
-        const planningParsed = parsePlanningBlocks(identityParsed.text, {
+        const planningParsed = this.planningBlockParser.parse(identityParsed.text, {
             blackboardTurnId: blackboardRun?.turnId,
             now: context.now,
             requestId: context.requestId,
@@ -630,7 +634,7 @@ export class RuntimeModule extends RuntimeBoundary {
                           reason: "blackboard-controller-not-configured",
                       },
                 memoryActions: parsed.actions.length,
-                planning: buildPlanningMetadata(
+                planning: this.planningMetadataBuilder.build(
                     planningParsed.taskPlans,
                     planningParsed.contextForks,
                     planningParsed.sceneRecords,

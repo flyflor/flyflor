@@ -67,7 +67,7 @@ import {
 import { EventsComponent } from "../src/protocol/events/index.ts";
 import { ModelComponent } from "../src/llm/index.ts";
 import { RedisComponent, SurrealComponent } from "../src/components/index.ts";
-import type { BrainStore } from "../src/components/memory/brain.store.ts";
+import type { BrainStore } from "../src/neural/memory/brain/store.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
@@ -902,6 +902,32 @@ describe("Agent memory stability and latency", () => {
         await expect(memory.buildPrompt(gatewayMessage("读取项目记忆。"), runtimeContext())).rejects.toThrow(
             "Invalid project memory manifest schemaVersion",
         );
+    });
+
+    test("project scaffold failure blocks project-local memory writes before AGENTS redlines exist", async () => {
+        const config = await testConfig();
+        await rm(join(config.paths.templateDir, "projects"), { recursive: true, force: true });
+        const sink = new CapturingSink();
+        const memory = new MemoryModule({ ...config, memory: { ...config.memory } }, sink);
+
+        await expect(
+            memory.rememberTurn(gatewayMessage("固化一个缺模板项目。"), gatewayReply("准备固化。"), runtimeContext(), [
+                {
+                    action: "add",
+                    target: "memory",
+                    kind: MemoryKind.Rule,
+                    content: "没有 AGENTS 红线时不能写入项目局部记忆。",
+                    confidence: 0.95,
+                    signals: {
+                        projectIntent: 0.95,
+                    },
+                },
+            ]),
+        ).rejects.toThrow("Missing project template");
+
+        expect(await Bun.file(join(config.paths.projectMemoryDir, "project.memory.md")).exists()).toBe(false);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.ProjectScaffoldFailed);
+        expect(sink.events.map((item) => item.type)).not.toContain(RuntimeEventType.MemoryProjectMemoryWritten);
     });
 
     test("crystal candidates keep project-local memory provenance metadata", async () => {

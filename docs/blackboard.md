@@ -7,7 +7,7 @@
 ## 相关代码路径
 
 - `src/agent/blackboard/blackboard.module.ts` — turn / step / decision / lease 控制
-- `src/agent/blackboard/sqlite.ts` — 持久化（turn / step / decision / lease / message）
+- `src/agent/blackboard/store.ts` — 持久化（turn / step / decision / lease / message）
 - `src/agent/blackboard/types.ts` — 公共结构
 - `src/agent/worker/worker.manager.ts` — registry / pool / 超时 / 事件
 - `src/agent/worker/blackboard.worker.ts` — 通用模型 worker 注册
@@ -226,10 +226,10 @@ worker **不能**直接写长期记忆：
 - 黑板 budget 来自 `BlackboardStartRequest.budget`，默认 `minRounds=1 / maxRounds=3 / hardMaxRounds=5 / maxWorkerContextChars=12_000`
 - lease TTL 默认 `DEFAULT_LEASE_TTL_MS = 15 * 60 * 1000`
 
-## 运行边界 / 后续增强
+## 运行边界
 
 - direct-with-watch 升级已接入工具失败 / 上下文压力资源指标，但未读取 worker 内部复杂语义信号。
-- chat TUI 已订阅 `BlackboardWorkerStart` / `BlackboardWorkerEnd` / `BlackboardMessageAppended`，并在 assistant 消息下回填 `BlackboardModule.getTurn(turnId)` 的快照展示 workers / steps / public messages / decision；后续可继续把更细粒度的 step delta 渲染成实时讨论流。
+- chat TUI 已订阅 `BlackboardWorkerStart` / `BlackboardWorkerEnd` / `BlackboardMessageAppended`，并在 assistant 消息下回填 `BlackboardModule.getTurn(turnId)` 的快照展示 workers / steps / public messages / decision；TUI 展示只消费结构化 runtime event 与黑板快照，不读取 worker 原始推理。
 - 线程 / 进程隔离已分层落地：blackboard 与 reflection 的 raw → structured 规范化走 Bun Worker
   线程；`WorkerManager.registerRawStdioProcess` 可把外部 agent-cli 包成子进程 worker。模型调用本身仍由
   runtime 主进程发起，默认 blackboard worker 仍以 in-process 注册为主，后续若把模型 worker 完整迁到

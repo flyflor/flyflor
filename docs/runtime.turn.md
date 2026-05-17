@@ -268,13 +268,13 @@ interface GatewayReply {
 - `config.memory.embedding.dimensions` 决定 embedding 向量长度；`LocalHashEmbeddingProvider` 不联网。
 - `config.metrics.enabled` 关闭时所有 perf 事件不发布。
 
-## 运行边界 / 后续增强
+## 运行边界
 
 - `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/turn/attachments.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/turn/ask.reply.ts`，MCP/skill/planning/streaming helper 均按子目录归位。`runtime.module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走 file-backed cache + 内存热读；损坏或写入失败只降级为 cache miss，并通过 `perf.fast_route_cache_failed` 保持可观测。多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。
-- 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；后续重点是围绕这些证据做诊断展示。
+- 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；当前诊断展示只消费已落库的 behavior-snapshot 与 behavior-correction 结构化证据。
 
 ## 相关测试
 

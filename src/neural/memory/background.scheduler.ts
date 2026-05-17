@@ -7,7 +7,7 @@
  *   2. decay sweep — 对 CrystalComponent memory_node / skill 跑衰减纯函数并把
  *      新 importance 写回（避免假高分长期占据召回）。
  *
- * 设计约束（与 docs/BOUNDARIES.md 对齐）：
+ * 设计约束（与 docs/boundaries.md 对齐）：
  *  - 不依赖系统 cron / node-cron，只用 setInterval；编译进 bun 二进制零风险；
  *  - 用户集合由 trackUser() 显式注册；不扫描工作记忆适配器枚举全量用户；
  *  - 单个 tick 内串行执行同一用户的两条任务，跨用户也串行（避免并发 LLM 风暴）；
@@ -19,12 +19,12 @@ import { event, RuntimeEventType, type EventSink } from "../../protocol/events/i
 import { DecayLayer, DEFAULT_DECAY_PROFILES, decayImportance, type DecayProfile } from "./decay.ts";
 import type { ConsolidationWorker } from "./consolidation.worker.ts";
 import type { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
-import type { MemoryGraphStore } from "../../components/memory/graph.store.ts";
+import type { MemoryGraphStore } from "./graph/types.ts";
 import type { DreamWorker } from "./dream.worker.ts";
 import {
     isWorkingMemoryCircuitCoolingDown,
     type WorkingMemoryHealthSnapshot,
-} from "../../components/memory/working.store.ts";
+} from "./working/types.ts";
 
 export interface BackgroundSchedulerOptions {
     /** 整合 worker 节拍（毫秒）。默认 10 分钟。 */

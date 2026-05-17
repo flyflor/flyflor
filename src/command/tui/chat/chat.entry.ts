@@ -7,8 +7,6 @@
  */
 
 import { addDefaultParsers, createCliRenderer, type CliRendererConfig } from "@opentui/core";
-import { resolve } from "node:path";
-
 import type { RuntimeModule } from "../../../agent/runtime/index.ts";
 import type { BlackboardModule } from "../../../agent/blackboard/index.ts";
 import type { McpToolCallRequest } from "../../../agent/mcp/index.ts";
@@ -51,6 +49,9 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
     const previousTreeSitterWorkerPath = process.env.OTUI_TREE_SITTER_WORKER_PATH;
     process.env.OTUI_TREE_SITTER_WORKER_PATH = "./src/command/tui/chat/parser.worker.ts";
     clearOpenTuiEnvCacheForChat();
+    // Enter the alternate screen before runtime warmup so provider logs or Docker
+    // startup output cannot seed the terminal scrollback behind the chat surface.
+    const restoreTerminalMouseScreen = pinTerminalMouseScreen();
 
     const restoreTreeSitterWorkerPath = () => {
         if (previousTreeSitterWorkerPath === undefined) {
@@ -83,7 +84,6 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
             pinRendererAlternateScreen(instance);
             return instance;
         });
-        const restoreTerminalMouseScreen = pinTerminalMouseScreen();
         renderer.console.onCopySelection = (text) => {
             if (text.trim().length > 0) {
                 renderer.copyToClipboardOSC52(text);
@@ -102,6 +102,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
         });
         return lifecycle.waitForDestroy();
     } catch (error) {
+        restoreTerminalMouseScreen();
         restoreTreeSitterWorkerPath();
         throw error;
     }
@@ -109,24 +110,4 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
 
 export function clearOpenTuiEnvCacheForChat(clearCache?: () => void): void {
     clearOpenTuiEnvCache(clearCache);
-}
-
-export async function loadChatAvatarArt(cwd = process.cwd()): Promise<string> {
-    // The logo is a plain text asset so chat stays compile-friendly and does not depend on image decoders.
-    for (const avatarPath of resolveChatAvatarPaths(cwd)) {
-        try {
-            return (await Bun.file(avatarPath).text()).replace(/\r\n?/gu, "\n").trimEnd();
-        } catch {
-            // Try the next candidate path.
-        }
-    }
-    return "";
-}
-
-export function resolveChatAvatarPaths(cwd = process.cwd()): string[] {
-    return [
-        resolve(import.meta.dir, "../../../../ui/avatar.txt"),
-        resolve("/workspace", "ui", "avatar.txt"),
-        resolve(cwd, "ui", "avatar.txt"),
-    ];
 }

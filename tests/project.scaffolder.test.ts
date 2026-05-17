@@ -127,20 +127,22 @@ describe("ProjectScaffolder", () => {
         expect(sink.events.length).toBe(0);
     });
 
-    test("missing template surfaces a scaffold-failed event", async () => {
+    test("missing template surfaces a scaffold-failed event and fails the project write path", async () => {
         const paths = await buildPaths();
         // 删模板目录模拟未安装情况
         await rm(join(paths.templateDir, "projects"), { recursive: true, force: true });
         const sink = new CapturingSink();
         const scaffolder = new ProjectScaffolder(paths, sink);
-        await scaffolder.scaffold({
-            projectId: "no-template",
-            title: "T",
-            goal: "g",
-            userId: "u",
-            trigger: explicitTrigger,
-            createdAt: new Date().toISOString(),
-        });
+        await expect(
+            scaffolder.scaffold({
+                projectId: "no-template",
+                title: "T",
+                goal: "g",
+                userId: "u",
+                trigger: explicitTrigger,
+                createdAt: new Date().toISOString(),
+            }),
+        ).rejects.toThrow("Missing project template");
         expect(sink.events.find((e) => e.type === RuntimeEventType.ProjectScaffoldFailed)).toBeDefined();
     });
 });

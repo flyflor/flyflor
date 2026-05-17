@@ -1,9 +1,7 @@
 import type { MemoryMatrixConfig } from "../../config/index.ts";
 import type { GatewayMessage, GatewayReply } from "../../protocol/contracts/index.ts";
 import type { MemoryAction } from "./actions.ts";
-import type { MemoryMatrixResult, MemoryWeights } from "../../components/memory/types.ts";
-import TfIdf from "natural/lib/natural/tfidf/tfidf.js";
-import { WordTokenizer } from "natural/lib/natural/tokenizers/regexp_tokenizer.js";
+import type { MemoryMatrixResult, MemoryWeights } from "./types.ts";
 
 interface MatrixInput {
     action: MemoryAction;
@@ -14,9 +12,10 @@ interface MatrixInput {
 
 const ROWS = ["affect", "semantic", "residual", "evidence"];
 const COLUMNS = ["stability", "salience", "utility", "risk"];
-const tokenizer = new WordTokenizer();
 
 export class MemoryMatrixAggregator {
+    private readonly lexical = new MemoryMatrixLexicalCodec();
+
     public constructor(private readonly config: MemoryMatrixConfig) {}
 
     public aggregate(input: MatrixInput): MemoryMatrixResult {
@@ -27,13 +26,13 @@ export class MemoryMatrixAggregator {
         }
         const content = truncate(input.action.content, this.config.maxSourceChars);
         const source = truncate(`${input.message.text}\n${input.reply.text}`, this.config.maxSourceChars);
-        const contentTokens = tokenize(content, this.config.maxTokens);
-        const sourceTokens = tokenize(source, this.config.maxTokens * 2);
-        const replyTokens = tokenize(input.reply.text, this.config.maxTokens);
+        const contentTokens = this.lexical.tokenize(content, this.config.maxTokens);
+        const sourceTokens = this.lexical.tokenize(source, this.config.maxTokens * 2);
+        const replyTokens = this.lexical.tokenize(input.reply.text, this.config.maxTokens);
         // Affect is accepted only from same-turn structured model weights.
         // No sentiment dictionary or text keyword can influence memory routing.
         const structuredAffect = clampSigned(weights.emotionalValence);
-        const tfidfPeak = tfidfPeakScore(contentTokens, sourceTokens, replyTokens);
+        const tfidfPeak = this.lexical.tfidfPeakScore(contentTokens, sourceTokens, replyTokens);
         const lexicalNovelty = clamp01(1 - overlapRatio(contentTokens, [...sourceTokens, ...replyTokens]));
         const uncertainty = clamp01(1 - weights.certainty * weights.confidence);
         const decayRisk = clamp01(1 - weights.durability);
@@ -106,6 +105,58 @@ export class MemoryMatrixAggregator {
     }
 }
 
+/**
+ * Local lexical metrics for MemoryMatrixAggregator.
+ *
+ * This intentionally replaces the previous `natural` dependency: the memory
+ * matrix only needs resource-style token counts, novelty and TF-IDF-like peak
+ * scores. Keeping it local avoids bringing sentiment lexicons, Redis/Mongo/PG
+ * transitive dependencies, and compile-time package assets into the runtime.
+ */
+class MemoryMatrixLexicalCodec {
+    public tokenize(text: string, maxTokens: number): string[] {
+        const normalized = text.toLowerCase();
+        const unicodeTokens = normalized.split(/[^\p{L}\p{N}_-]+/u);
+        const cjkTokens = this.cjkBigrams(normalized);
+        return [...unicodeTokens, ...cjkTokens]
+            .map((token) => token.trim())
+            .filter((token) => token.length >= 2 && token.length <= 64)
+            .slice(0, Math.max(0, maxTokens));
+    }
+
+    public tfidfPeakScore(contentTokens: string[], sourceTokens: string[], replyTokens: string[]): number {
+        if (contentTokens.length === 0) {
+            return 0;
+        }
+        const documents = [contentTokens, sourceTokens, replyTokens];
+        const contentFrequency = this.termFrequency(contentTokens);
+        let peak = 0;
+        for (const [token, count] of contentFrequency.entries()) {
+            const documentFrequency = documents.filter((document) => document.includes(token)).length;
+            const inverseDocumentFrequency = Math.log((documents.length + 1) / (documentFrequency + 1)) + 1;
+            peak = Math.max(peak, count * inverseDocumentFrequency);
+        }
+        return clamp01(Math.log1p(peak) / 3);
+    }
+
+    private cjkBigrams(text: string): string[] {
+        const chars = [...text].filter((char) => /\p{Script=Han}/u.test(char));
+        const tokens: string[] = [];
+        for (let index = 0; index < chars.length - 1; index += 1) {
+            tokens.push(`${chars[index]}${chars[index + 1]}`);
+        }
+        return tokens;
+    }
+
+    private termFrequency(tokens: string[]): Map<string, number> {
+        const frequency = new Map<string, number>();
+        for (const token of tokens) {
+            frequency.set(token, (frequency.get(token) ?? 0) + 1);
+        }
+        return frequency;
+    }
+}
+
 export function applyMatrixImpact(weights: MemoryWeights, matrix: MemoryMatrixResult): MemoryWeights {
     return {
         ...weights,
@@ -126,17 +177,6 @@ export function recallBoostFromMetadata(metadata: Record<string, unknown> | unde
     }
     const value = aggregate.recallBoost;
     return typeof value === "number" && Number.isFinite(value) ? clamp01(value) : 0;
-}
-
-function tokenize(text: string, maxTokens: number): string[] {
-    const normalized = text.toLowerCase();
-    const naturalTokens = tokenizer.tokenize(normalized);
-    const unicodeTokens = normalized.split(/[^\p{L}\p{N}_-]+/u);
-    const cjkTokens = cjkBigrams(normalized);
-    return [...naturalTokens, ...unicodeTokens, ...cjkTokens]
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2 && token.length <= 64)
-        .slice(0, Math.max(0, maxTokens));
 }
 
 function disabledMatrix(weights: MemoryWeights, aggregationMs: number): MemoryMatrixResult {
@@ -172,27 +212,6 @@ function disabledMatrix(weights: MemoryWeights, aggregationMs: number): MemoryMa
         rows: ROWS,
         schemaVersion: 1,
     };
-}
-
-function cjkBigrams(text: string): string[] {
-    const chars = [...text].filter((char) => /\p{Script=Han}/u.test(char));
-    const tokens: string[] = [];
-    for (let index = 0; index < chars.length - 1; index += 1) {
-        tokens.push(`${chars[index]}${chars[index + 1]}`);
-    }
-    return tokens;
-}
-
-function tfidfPeakScore(contentTokens: string[], sourceTokens: string[], replyTokens: string[]): number {
-    if (contentTokens.length === 0) {
-        return 0;
-    }
-    const tfidf = new TfIdf();
-    tfidf.addDocument(contentTokens);
-    tfidf.addDocument(sourceTokens);
-    tfidf.addDocument(replyTokens);
-    const peak = tfidf.listTerms(0)[0]?.tfidf ?? 0;
-    return clamp01(Math.log1p(peak) / 3);
 }
 
 function overlapRatio(left: string[], right: string[]): number {

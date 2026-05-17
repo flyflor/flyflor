@@ -85,7 +85,7 @@ describe("EQ-01 slice C: red-line audit — runtime/decision side does NOT keywo
 
         // 允许列表：
         //   - contracts/eq.ts：协议层封闭枚举本身
-        //   - neural/memory/brain.store.ts：rowToEq 类型断言（不做语义判断）
+        //   - neural/memory/brain/store.ts：rowToEq 类型断言（不做语义判断）
         //   - 任何 *.test.ts（不在 src/ 内但保险起见）
         const allow = new Set<string>([
             join(srcRoot, "protocol", "contracts", "eq.ts"),

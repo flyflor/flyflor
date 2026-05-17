@@ -14,6 +14,7 @@
 - `onSubmit` / 全局 keybind 都能触发提交
 - 回复区走 Markdown 渲染
 - Chat TUI 可以用 Solid signal 管本地状态，但 UI 树必须由 OpenTUI command renderables 显式装配；CLI navigator、dashboard、blackboard browser 不再使用任何额外渲染桥，避免二进制条件差异造成卡死或不刷新
+- `startChatEntry` 发布入口固定加载命令式 OpenTUI app；JSX / Solid 原型只能作为未接入实验文件存在，不能进入二进制依赖图，避免 Bun compile 解析到非发布 transform
 - chat 启动时会先注册 OpenTUI 默认 markdown / code parsers，再创建 renderer，避免 Markdown 退化成裸文本或 code block 解析异常
 - binary 构建必须把 `src/command/tui/chat/parser.worker.ts` 作为第二个 Bun compile entrypoint，避免 OpenTUI TreeSitter worker 在独立二进制里退回到不存在的 `parser.worker.ts`
 - Chat 在设置 OpenTUI `OTUI_*` 环境变量后会尽力清理 OpenTUI env cache；Linux compiled binary 下若 OpenTUI 0.2.x 的内部 env singleton 未初始化，cache clear 会被跳过，不能阻断 TUI 启动
@@ -30,14 +31,15 @@
 - chat 启动后从 `brain.db` 加载当前用户最近历史 turn；向上滚动到顶部时继续按 `ts` 分页加载更早记录；历史 assistant 消息会携带 `TaskPlan` / `ContextFork` / `SceneRecord` 摘要，右侧 `/history` 场景回放直接复用这些摘要，不读取 raw thinking trace
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
-- Chat right rail starts with a fixed LLM resource card (model/provider, estimated context/output/draft tokens, memory ring, recall gate, write count) and then splits into two independent OpenTUI `ScrollBoxRenderable` regions: a fixed `Todo / Progress` panel that shows `暂无计划` when no structured TaskPlan or blackboard progress exists, and a lower `Thinking / Blackboard detail` panel toggled by `Ctrl+B`; all panels consume only structured metadata, RuntimeEvent payloads, config resource limits, and blackboard turns
-- Chat does not attach custom `onMouseScroll` handlers to ScrollBox regions. OpenTUI owns wheel events, scroll acceleration, sticky-bottom state, and content translation; `src/command/tui/scrollbar.composition.ts` removes the built-in visual scrollbar renderables and draws Flyflor's own read-only virtual scrollbar from `scrollTop / scrollHeight / viewport.height`. The virtual rail stays visible even when content has not overflowed yet.
-- `src/command/tui/screen.composition.ts` pins mouse-enabled command TUI renderers to alternate screen and emits a terminal fallback for SGR mouse tracking (`1000/1002/1003/1006`) plus explicit restore (`1049l`) so terminal scrollback/native scrollbars do not become the viewport.
+- Chat right rail follows the target screenshot order: `Blackboard [Ctrl+B Thinking]`, `Questions`, streaming `Blackboard` detail, `TODO List`, then fixed `MODEL` / `TOKENS` / `CONTEXT WINDOW` resource lines. It shows `暂无计划` when no structured TaskPlan or blackboard progress exists; all panels consume only structured metadata, RuntimeEvent payloads, config resource limits, and blackboard turns.
+- Chat does not attach custom `onMouseScroll` handlers to ScrollBox regions. OpenTUI owns wheel events, scroll acceleration, sticky-bottom state, and content translation; `src/command/tui/scrollbar.composition.ts` removes the built-in visual scrollbar renderables. The chat pane draws the target screenshot virtual rail (`▲`, dotted track, `██` thumb, `▼`); the right-side stream panels stay scrollable but do not draw extra dotted rails.
+- `src/command/tui/screen.composition.ts` pins mouse-enabled command TUI renderers to alternate screen, clears terminal scrollback (`CSI 3 J`), and emits a terminal fallback for SGR mouse tracking (`1000/1002/1003/1006`) plus explicit restore (`1049l`) so terminal scrollback/native scrollbars do not become the viewport. Chat enters this pinned screen before runtime warmup so Docker/provider startup output cannot seed the main-screen scrollback.
 - Chat message history and both right-rail stream panels use OpenTUI `stickyScroll` with `stickyStart: "bottom"`; streamed thinking / blackboard detail follows the latest output until the user manually scrolls the panel
 - During a live turn, the side rail follows the latest turn by default; `/thinking` and `/blackboard` open a selectable question preview with Up/Down or `j/k`, and the next user message restores follow-latest mode
 - Chat scroll behavior is a fixed OpenTUI contract: chat and side-panel scrollboxes use sticky bottom mode, wheel routing stays inside OpenTUI scrollboxes, and chat always starts in alternate-screen mode with mouse selection enabled
 - Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
-- `ui/头像.png` remains the Flyflor bitmap logo asset, but Chat TUI no longer renders a text/pixel avatar in the right rail; terminal image fidelity is intentionally avoided in favor of the LLM resource card
+- Chat TUI no longer reads or renders `ui/avatar.txt`; the right rail is reserved for structured thinking, TODO, model, token, and context resources.
+- The bitmap logo asset is kept for product surfaces outside terminal chat. Terminal image/text avatar rendering is intentionally avoided because it competes with the resource rail and is fragile across terminals.
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情
 - `flyflor tui` 仪表盘 Overview 与 CLI navigator 的 Overview / Memory 页保持同一状态口径：展示 working-memory breaker 健康，以及 local MemoryComponent 的 snapshot / backup / WAL 恢复文件元数据；刷新路径只做 `stat`，不解析热数据
 

@@ -5,10 +5,25 @@ import { basename, join, relative } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 const SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
+const SECRET_SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const DOT_SEGMENTED_FILE = /^[a-z0-9]+(?:\.[a-z0-9]+)*\.[a-z0-9]+$/u;
+const OPENAI_SECRET_PATTERN = /\bsk-[a-zA-Z0-9]{16,}\b/u;
 const CANONICAL_MEMORY_TEMPLATE = /^(MEMORY|SELF|SOUL|USER)(?:\.zh\.cn)?\.md$/u;
 // 首页类知识文档约定大写：README/TODO/AGENTS/BOUNDARIES/DESIGN（顶层 + docs/ + templates/projects/ 共用）。
 const CANONICAL_FRONTPAGE_DOC = /^(README|TODO|AGENTS|BOUNDARIES|DESIGN)\.md$/u;
+const LEGACY_MEMORY_PATH_REFERENCES = [
+    "src/components/memory/",
+    "src/components/crystal/",
+    "components/memory/",
+    "components/crystal/",
+    "neural/memory/brain.store.ts",
+    "neural/memory/working.store.ts",
+    "neural/memory/markdown.store.ts",
+    "project.memory.store.ts",
+    "context.fork.store.ts",
+    "sqlite.memory.store.ts",
+    "sqlite.graph.store.ts",
+];
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
@@ -44,6 +59,54 @@ describe("repository naming boundary", () => {
 
         // Directory entrypoints are public API maps. Keeping implementation
         // out of index.ts prevents hidden helpers from bypassing module shape.
+        expect(violations).toEqual([]);
+    });
+
+    test("module-owned stores do not leave compatibility shells under components", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "src"))).map((file) => relative(REPO_ROOT, file));
+        const violations = files.filter(
+            (file) => file.startsWith("src/components/memory/") || file.startsWith("src/components/crystal/"),
+        );
+
+        // Component base classes live in src/components. Domain stores and
+        // domain compatibility exports must stay with their owner modules.
+        expect(violations).toEqual([]);
+    });
+
+    test("active docs and source do not point at legacy memory component paths", async () => {
+        const files = (await Promise.all(SCANNED_DIRS.map((dir) => listFiles(join(REPO_ROOT, dir)))))
+            .flat()
+            .filter((file) => !relative(REPO_ROOT, file).startsWith("docs/old-docs/"));
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const rel = relative(REPO_ROOT, file);
+            if (rel === "tests/naming.boundaries.test.ts") continue;
+            const text = await Bun.file(file).text();
+            for (const needle of LEGACY_MEMORY_PATH_REFERENCES) {
+                if (text.includes(needle)) {
+                    violations.push(`${rel}: ${needle}`);
+                }
+            }
+        }
+
+        // The memory migration is directory-contract driven. References to old
+        // component-domain paths are as harmful as the files themselves.
+        expect(violations).toEqual([]);
+    });
+
+    test("release surface does not contain OpenAI-looking secret keys", async () => {
+        const files = (await Promise.all(SECRET_SCANNED_DIRS.map((dir) => listFiles(join(REPO_ROOT, dir))))).flat();
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const text = await Bun.file(file).text();
+            if (!OPENAI_SECRET_PATTERN.test(text)) continue;
+            violations.push(relative(REPO_ROOT, file));
+        }
+
+        // Test credentials should use obvious non-provider placeholders so
+        // release scans can treat any sk-* match as suspicious.
         expect(violations).toEqual([]);
     });
 });

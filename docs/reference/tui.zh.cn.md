@@ -14,6 +14,7 @@
 - `onSubmit` / 全局 keybind 都能触发提交
 - 回复区走 Markdown 渲染
 - Chat TUI 可以用 Solid signal 管本地状态，但 UI 树必须由 OpenTUI command renderables 显式装配；CLI navigator、dashboard、blackboard browser 不再使用任何额外渲染桥，避免二进制条件差异造成卡死或不刷新
+- `startChatEntry` 发布入口固定加载命令式 OpenTUI app；JSX / Solid 原型只能作为未接入实验文件存在，不能进入二进制依赖图，避免 Bun compile 解析到非发布 transform
 - chat 启动时会先注册 OpenTUI 默认的 markdown / code parsers，再创建 renderer，避免 Markdown 退化成裸文本或 code block 解析异常
 - binary 构建必须把 `src/command/tui/chat/parser.worker.ts` 作为第二个 Bun compile entrypoint，避免 OpenTUI TreeSitter worker 在独立二进制里退回到不存在的 `parser.worker.ts`
 - Chat 在设置 OpenTUI `OTUI_*` 环境变量后会尽力清理 OpenTUI env cache；Linux compiled binary 下若 OpenTUI 0.2.x 的内部 env singleton 未初始化，cache clear 会被跳过，不能阻断 TUI 启动
@@ -30,14 +31,15 @@
 - chat 启动后从 `brain.db` 加载当前用户最近历史 turn；向上滚动到顶部时继续按 `ts` 分页加载更早记录；历史 assistant 消息会携带 `TaskPlan` / `ContextFork` / `SceneRecord` 摘要，右侧 `/history` 场景回放直接复用这些摘要，不读取 raw thinking trace
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
-- Chat 右侧 rail 顶部先展示固定 LLM 资源卡片（model/provider、估算 context/output/draft token、记忆 ring、recall gate、写入计数），下面分成两个独立 OpenTUI `ScrollBoxRenderable`：顶部固定 `Todo / Progress`，没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`；底部展示 `深度思考 / 黑板详情`，`Ctrl+B` 切换，所有面板都只消费结构化 metadata、RuntimeEvent、配置资源上限和 blackboard turn，不从自然语言文本反推状态
-- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、滚动加速度、sticky-bottom 状态和 content translate 交给 OpenTUI 维护；`src/command/tui/scrollbar.composition.ts` 统一移除 OpenTUI 自带的可视滚动条 renderable，并根据 `scrollTop / scrollHeight / viewport.height` 绘制 Flyflor 自己的只读虚拟滚动条。虚拟滚动条在内容尚未 overflow 时也保持可见，避免启动阶段看起来像没有滚动轨道。
-- `src/command/tui/screen.composition.ts` 会把启用 mouse 的命令式 TUI 固定到 alternate screen，并额外发出 SGR mouse tracking 兜底序列（`1000/1002/1003/1006`）和显式恢复（`1049l`），避免终端回滚区或原生滚动条成为视图。
+- Chat 右侧 rail 按目标截图顺序还原：`Blackboard [Ctrl+B Thinking]`、`Questions`、流式 `Blackboard` 详情、`TODO List`，底部固定 `MODEL` / `TOKENS` / `CONTEXT WINDOW` 资源区；没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`。这些面板只消费结构化 metadata、RuntimeEvent、配置资源上限和 blackboard turn，不从自然语言文本反推状态。
+- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、滚动加速度、sticky-bottom 状态和 content translate 交给 OpenTUI 维护；`src/command/tui/scrollbar.composition.ts` 统一移除 OpenTUI 自带的可视滚动条 renderable。聊天主面板边缘绘制目标截图样式的虚拟滚动条（`▲`、点阵 track、`██` thumb、`▼`）；右侧流式面板保留 ScrollBox 滚动能力，但不额外绘制点阵滚动轨。
+- `src/command/tui/screen.composition.ts` 会把启用 mouse 的命令式 TUI 固定到 alternate screen，清空终端回滚区（`CSI 3 J`），并额外发出 SGR mouse tracking 兜底序列（`1000/1002/1003/1006`）和显式恢复（`1049l`），避免终端回滚区或原生滚动条成为视图。Chat 入口会在 runtime warmup 前先进入该屏幕，避免 Docker/provider 启动输出先写入主屏幕回滚区。
 - Chat 消息区和右侧两个流式面板都使用 OpenTUI `stickyScroll` + `stickyStart: "bottom"`；深度思考 / 黑板详情在流式输出期间默认跟随最新内容，用户手动滚动面板后由 OpenTUI 接管当前位置
 - 对话进行中默认跟随最新 turn；用户通过 `/thinking` 或 `/blackboard` 打开问题选择后可以用上下 / `j/k` 预览历史 turn，下一条新消息开始时自动恢复跟随最新
 - Chat 滚动行为是固定 OpenTUI 契约：主消息区和右栏 scrollbox 都保持底部 sticky，滚轮事件交给 OpenTUI scrollbox，chat 固定 alternate-screen 并开启鼠标选择
 - Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
-- `ui/头像.png` 仍是 Flyflor 正式 bitmap logo 资产，但 Chat TUI 右侧栏不再渲染文本/像素头像；终端图片保真度不稳定，右栏改用 LLM 资源卡片
+- Chat TUI 不再读取或渲染 `ui/avatar.txt`；右侧栏只保留结构化 thinking、TODO、model、token 和 context 资源信息。
+- bitmap logo 资产只用于终端 chat 以外的产品表面；终端图片/文本头像会挤占资源栏，而且跨终端表现不稳定，因此不进入 Chat TUI。
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情
 - `flyflor tui` 仪表盘 Overview 与 CLI navigator 的 Overview / Memory 页保持同一状态口径：展示 working-memory breaker 健康，以及 local MemoryComponent 的 snapshot / backup / WAL 恢复文件元数据；刷新路径只做 `stat`，不解析热数据
 

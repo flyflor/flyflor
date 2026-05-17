@@ -5,5 +5,5 @@ export * from "./identity/index.ts";
 export * from "./dormant/index.ts";
 export * from "./embedding/index.ts";
 export * from "../context/index.ts";
-export * from "../components/memory/types.ts";
+export * from "./memory/types.ts";
 export * from "./memory/matrix.ts";

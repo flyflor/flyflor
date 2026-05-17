@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { join } from "node:path";
 import { mkdir, stat, writeFile } from "node:fs/promises";
-import { BrainStore } from "../../../components/memory/brain.store.ts";
+import { BrainStore } from "../../../neural/memory/brain/store.ts";
 import { loadConfig } from "../../../config/index.ts";
 import { ProjectScaffolder } from "../../../neural/project/scaffolder.ts";
 import { promoteCodename as promoteCodenameHelper } from "../../../neural/project/codename.promote.ts";

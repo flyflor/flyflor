@@ -4,7 +4,7 @@
  * 输入：当前 query embedding + 热点概念列表 + episode 候选（带 embedding/concepts/importance）。
  * 输出：按激活分数排序后的 episode 子集。
  *
- * 设计约束（与 docs/BOUNDARIES.md 对齐）：
+ * 设计约束（与 docs/boundaries.md 对齐）：
  * - **零字符串匹配**：query 与 episode 之间不做 text.includes 或正则；
  *   仅依赖向量余弦 + 概念集合交集 + importance/recency 这些资源指标。
  * - 无 I/O，无 clock 依赖（now 由调用方注入），方便测试与编译进二进制。

@@ -217,10 +217,10 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 候选来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升、黑板收敛 / MCP 增强证据与 brain 事件状态；外部 Skill promotion 只作为能力包物化证据，不再和 Gem 本体混名。
 
-**双质量门：**
+当前是双轨固化，避免把 runtime 反思和长期图整合混成一个隐式流程：
 
-- 门 1：episode cluster sourceKind weight gate
-- 门 2：memory_node confidence > 0.5 AND evidenceCount ≥ 3 → 升格 Gem
+- `CrystalGemComponent`：同轮模型已经给出结构化 `ReflectionCandidate` 后，只按证据权重计算 `evidenceScore`；`evidenceScore <= 0` 只保存 candidate，不写 atom / Gem；`evidenceScore > 0` 写 atom 并按 `bucket + symbols` 合并 Gem，重复命中增加 `support`。
+- `ConsolidationWorker` / `CrystalComponent` 长期图：working-memory episode 异步聚合为 `memory_node`，再通过 graph 关系、support、confidence、contradiction 信号维护 Gem。`memory_node.evidenceCount` 是长期图证据计数字段，不是 runtime reflection Gem 的硬门槛。
 
 Evidence Weight 裁判表：
 
@@ -323,7 +323,8 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 - DI key 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；`*.component.ts` 必须是有边界职责的真实组件，不能只是空壳 token；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
 - OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
 - `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
-- SQLite 访问按 `repo -> store -> component` 分层；新增 SQL 优先放到 `tablename.repo.ts`，repo 只做 row model + SQL function，不做 service 层业务，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
+- SQLite 访问按 `entity/repo -> store -> component` 分层；新增 SQL 优先放到 `src/entities/<domain>/tablename.repo.ts`，repo 只做 row/entity 映射 + SQL function，不做 service 层业务，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
+- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/store.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
 - 实现文件使用点分后缀：`*.module.ts`、`*.component.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`、`*.repo.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
@@ -344,6 +345,7 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 - 业务配置不走环境变量；凭据、沙箱策略走 config/secrets provider
 - 新增运行时依赖前确认兼容 `bun build --compile`（无 native addon、无 postinstall、无动态 require）
 - 不把密钥、日志、会话数据库、用户数据编译进二进制
+- 测试和文档不得使用 `sk-*` 等真实厂商密钥形态；占位值必须明显不可用，避免污染发布扫描
 - 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化
 - 修改边界、高风险工具或依赖策略时同步更新 `docs/boundaries.md`
 
@@ -364,7 +366,6 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
 | [docs/cli.commands.md](docs/cli.commands.md)                 | CLI 命令现状                           |
-| [TODO.md](TODO.md)                                           | 运行边界 / 后续计划                    |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 
@@ -472,9 +473,9 @@ Every template must guarantee:
 
 Runtime-injected templates should only contain instructions the model can act on directly: when to use them, what structure to emit, what each field means, and how to resolve conflicts. Internal route ids, TODO ids, phase names, and implementation metaphors must not appear in runtime prompts, including `LF-R*` or engineering-only labels such as “hippocampus / crystal / Dream / Gem.”
 
-Internal identifiers may stay in `TODO.md`, design docs, code comments, and test names; model-facing templates must translate them into plain source labels and behavior descriptions such as “recently activated memory,” “current project notes,” “open items,” and “quiet maintenance phase.”
+Internal identifiers may stay in archived planning docs, design docs, code comments, and test names; model-facing templates must translate them into plain source labels and behavior descriptions such as “recently activated memory,” “current project notes,” “open items,” and “quiet maintenance phase.”
 
-## Risks / Known Gaps
+## Release Checks
 
 - Template lint already checks required files, non-empty content, required placeholders, and unknown prompt files, and it blocks runtime prompt bodies that expose internal route ids or unexplained engineering metaphors; the bundle manifest version and template catalog are validated too.
 - The manifest integrity test compares the canonical templates under `templates/prompts/`; unregistered runtime prompt files must not appear in the directory, and `lintPromptTemplates` performs the same checks in the user directory.

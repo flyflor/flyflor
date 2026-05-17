@@ -1,16 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const TODO_PATH = join(import.meta.dir, "..", "TODO.md");
+const ROOT_TODO_PATH = join(import.meta.dir, "..", "TODO.md");
+const ARCHIVED_TODO_PATH = join(import.meta.dir, "..", "docs", "old-docs", "todo.next.md");
 const BLACKBOARD_DOC_PATH = join(import.meta.dir, "..", "docs", "blackboard.md");
 const SANDBOX_DOC_PATH = join(import.meta.dir, "..", "docs", "sandbox.capabilities.md");
 const ARCHITECTURE_DOC_PATH = join(import.meta.dir, "..", "docs", "architecture.md");
 const CLI_DOC_PATH = join(import.meta.dir, "..", "docs", "cli.commands.md");
+const PLUGIN_REGISTRY_PATH = join(import.meta.dir, "..", "src", "agent", "plugin", "registry.ts");
 
 describe("TODO status", () => {
     test("does not keep stale documentation automation gaps after docs:check", async () => {
-        const todo = await readFile(TODO_PATH, "utf8");
+        const todo = await readFile(ARCHIVED_TODO_PATH, "utf8");
         const stalePhrases = [
             "待后续自动生成",
             "CLI / TODO 侧",
@@ -22,6 +24,10 @@ describe("TODO status", () => {
         const present = stalePhrases.filter((phrase) => todo.includes(phrase));
         expect(present).toEqual([]);
         expect(todo).toContain("docs:check");
+    });
+
+    test("root release docs do not expose an active TODO roadmap", async () => {
+        expect(await exists(ROOT_TODO_PATH)).toBe(false);
     });
 
     test("blackboard docs reflect current worker isolation status", async () => {
@@ -54,6 +60,8 @@ describe("TODO status", () => {
         const combined = `${sandboxDoc}\n${architectureDoc}`;
         const present = stalePhrases.filter((phrase) => combined.includes(phrase));
         expect(present).toEqual([]);
+        expect(sandboxDoc).not.toContain("src/agent/plugins/*");
+        expect(sandboxDoc).toContain("src/agent/plugin/plugin.runner.ts");
         expect(sandboxDoc).toContain("gateCapabilityExecution");
         expect(sandboxDoc).toContain("SandboxQuotaTracker");
         expect(sandboxDoc).toContain("HttpAuditSink");
@@ -75,4 +83,22 @@ describe("TODO status", () => {
         expect(doc).not.toContain("`focus` 是当前注意力指针的唯一计算入口");
         expect(doc).toContain("`FocusPointer` 协议字段");
     });
+
+    test("plugin registry comments match the shipped sandboxed runner", async () => {
+        const source = await readFile(PLUGIN_REGISTRY_PATH, "utf8");
+        // Plugin execution is implemented by PluginRunner. Active source
+        // comments must not keep the old planning note that execution is absent.
+        expect(source).not.toContain("不在本批次实现 plugin 加载/执行");
+        expect(source).toContain("PluginRunner");
+        expect(source).toContain("CapabilityExecutionKind.Plugin");
+    });
 });
+
+async function exists(path: string): Promise<boolean> {
+    try {
+        await stat(path);
+        return true;
+    } catch {
+        return false;
+    }
+}

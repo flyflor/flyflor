@@ -350,6 +350,7 @@ describe("CLI TUI navigator", () => {
         restore();
 
         expect(writes[0]).toContain("\x1b[?1049h");
+        expect(writes[0]).toContain("\x1b[3J");
         expect(writes[0]).toContain("\x1b[?1003h");
         expect(writes[0]).toContain("\x1b[?1006h");
         expect(writes[1]).toContain("\x1b[?1049l");

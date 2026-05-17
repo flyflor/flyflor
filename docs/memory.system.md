@@ -8,19 +8,19 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 
 ## 相关代码路径
 
-- `src/components/memory/markdown.store.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
-- `src/components/memory/brain.store.ts` — `brain.db` 单库生命周期、schema 初始化与对外门面（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
-- `src/components/memory/brain.*.repo.ts` — `memory_events`、`memory_state`、`projects`、`task_plans`、`context_forks`、`scene_records`、`memory_summary`、`memory_links`、`codenames`、`memory_eq_state` 的 row model + SQL function；repo 只做数据映射，不做业务决策
+- `src/neural/memory/markdown/store.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
+- `src/neural/memory/brain/store.ts` — `brain.db` 单库生命周期、schema 初始化与对外门面（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
+- `src/entities/memory/brain.*.entity.ts` / `brain.*.repo.ts` — `memory_events`、`memory_state`、`projects`、`task_plans`、`context_forks`、`scene_records`、`memory_summary`、`memory_links`、`codenames`、`memory_eq_state` 的 row/record 映射与 SQL function；repo 只做数据访问，不做业务决策
 - `src/neural/memory/brain.archive.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
-- `src/components/memory/local.working.store.ts` — local WAL/snapshot 工作记忆后端
+- `src/neural/memory/working/store.ts` — local WAL/snapshot 工作记忆后端
 - `src/neural/memory/hot.memory.compression.worker.ts` — 到期工作记忆隔离压缩审计
-- `src/components/memory/sqlite.memory.store.ts` — candidates / offers / search
+- `src/neural/memory/sqlite/store.ts` — candidates / offers / search
 - `src/neural/memory/activation.ts` — spreading activation
 - `src/neural/memory/consolidation.worker.ts` — working memory → crystal graph 升格
 - `src/neural/memory/decay.ts` — 双轨衰减
 - `src/neural/memory/anti.bloat.ts` — 容量阀门
-- `src/components/memory/project.memory.store.ts` — 项目局部记忆
-- `src/components/memory/context.fork.store.ts` — fork 低频 replay sidecar；`brain.db` 只保留摘要索引
+- `src/neural/memory/project/store.ts` — 项目局部记忆
+- `src/neural/memory/fork/store.ts` — fork 低频 replay sidecar；`brain.db` 只保留摘要索引
 - `src/neural/memory/background.scheduler.ts` — consolidation / hot compression / summary / decay / dream / dormant 节拍
 - `src/neural/memory/dream.worker.ts` — Dream 三类动作
 - `src/neural/memory/actions.ts` — `<flyflor_memory_actions>` 解析
@@ -85,7 +85,7 @@ flowchart LR
 | `context_forks`   | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算                                 |
 | `scene_records`   | 黑板 / 深度思考 / 反思场景回放摘要；`/history` 右侧复用，不存 chain-of-thought                           |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row model 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/neural/memory/feedback.interpreter.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `src/entities/memory/brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row/entity 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/neural/memory/feedback.interpreter.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
 TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
 
@@ -100,21 +100,21 @@ Ghost Context 不被压平成普通 prompt atom。它以 `[ghost-hint]` 单独�
 热记忆压缩同样不被压平成普通 prompt atom。`HotMemoryCompressionWorker` 只把到期 working-memory episode 批次压缩为 `memory_events.type='hot-memory-compression'` 审计事件，`content.isolation` 固定声明 `promptVisible=false`、`memorySummary=false`、`graphCandidate=false`、`gemCandidate=false`。这条记录不是 `memory_summary`，`SummaryWorker` 也会跳过该审计事件；它不写 `CrystalComponent` 长期图。未来如果要把它作为证据，必须走显式 gate。
 调度层和 `MemoryModule` 降级 root timer 都把热压缩与 summary / brain archive 视为同一条 brain.db 维护通道，默认串行，避免同库写入互撞。
 
-## 升格双质量门
+## Gem 升格与长期图整合
 
 ```mermaid
 stateDiagram-v2
     [*] --> episode_working: writeEpisodeToWorkingMemory
     episode_working --> cluster_working: ConsolidationWorker drain
-    cluster_working --> gate1{"门 1<br/>sourceKind weight gate"}
-    gate1 -- weight >= 0.65 --> memory_node
-    gate1 -- weight < 0.65 --> discard
-    memory_node --> gate2{"门 2<br/>confidence > 0.5 AND<br/>evidenceCount >= 3"}
-    gate2 -- 通过 --> gem
-    gate2 -- 未通过 --> memory_node
+    cluster_working --> model_json: LLM consolidation JSON
+    model_json --> memory_node: upsert memory_node
+    memory_node --> gem: graph support / proven_as / proven_by
+    gem --> gem: support + confidence 维护
     gem --> gem_snapshot: drift-repair 时写存档
     gem --> deprecated: contradictionCount >= 2 → 归档
 ```
+
+Runtime reflection 还有一条更短的 Gem 候选链：同轮模型输出 `ReflectionCandidate` 后，`CrystalGemComponent` 只用结构化 evidence 权重计算 `evidenceScore`；分数为 0 时只保留 candidate，分数大于 0 时写 atom 并合并 Gem。这里的 `support` / `evidenceScore` 是 runtime Crystal Gem 字段；`memory_node.evidenceCount` 只属于长期图 consolidation 数据面，不是 runtime Gem 的隐藏硬门槛。
 
 Evidence weight 裁判：
 
@@ -254,6 +254,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 显式 project intent 或 TUI `/project` 激活后，候选写入当前 project 的 `.flyflor/memory/`：
 
+- project scaffold 必须先成功写入 `AGENTS.md` / `TODO.md` / `README.md` 和 `.flyflor/{memory,skills,mcp,plugins}`；模板缺失或写入失败会发布 `ProjectScaffoldFailed` 并中止本轮 project-local memory 写入，避免没有项目红线的孤儿记忆目录。
 - `project.memory.md` — 人可读
 - `episodes.jsonl` / `candidates.jsonl` / `events.jsonl` / `recalls.jsonl` — 闭环证据链
 - `manifest.json` — provenance
@@ -313,7 +314,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 - `config.memory.tuning.hotMemoryCompression.batchSize` — 单用户单轮压缩上限，默认 16
 - `config.memory.tuning.contextFork.sidecarTtlDays` — fork 冷详情 sidecar TTL，默认 90；0 表示关闭自动清理
 
-## 运行边界 / 后续增强
+## 运行边界
 
 - 任何新召回或 CLI 可视化能力必须直接扩展 brain events/state，不得新增 sidecar 事件库回到 prompt path。
 - `RETROSPECTIVE.md` 是晶体升格与丢弃决策的可复核证据；写入失败必须显式失败，后台整合 Worker 只发布 failure event 并保留候选，不做静默吞错。

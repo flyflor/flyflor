@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { MemoryModule } from "../src/agent/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
-import { BrainStore } from "../src/components/memory/brain.store.ts";
-import type { MemoryGraphStore, SummaryEmbeddingInput } from "../src/components/memory/graph.store.ts";
+import { BrainStore } from "../src/neural/memory/brain/store.ts";
+import type { MemoryGraphStore, SummaryEmbeddingInput } from "../src/neural/memory/graph/types.ts";
 import {
     Channel,
     ChatType,

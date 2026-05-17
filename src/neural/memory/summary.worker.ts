@@ -13,7 +13,7 @@
  */
 
 import { SummaryRange, MemoryEventType, type MemoryEventRecord } from "../../protocol/contracts/index.ts";
-import { type BrainStore } from "../../components/memory/brain.store.ts";
+import { type BrainStore } from "./brain/store.ts";
 
 export interface SummaryWorkerOptions {
     /** 滚动窗口天数（仅 trigger='rolling'）；calendar 模式下忽略此值。 */

@@ -13,7 +13,7 @@
  * 阈值常量在 README.md §12.2 单点定义；后续若需 expose 给 config 在此聚合即可。
  */
 
-import type { MemoryNodeRecord, GemRecord, MemoryGraphStore } from "../../components/memory/graph.store.ts";
+import type { MemoryNodeRecord, GemRecord, MemoryGraphStore } from "./graph/types.ts";
 
 export const DREAM_THRESHOLDS = {
     /** drift: Gem 上 contradictionCount 达到此值即列入修复审计候选。 */

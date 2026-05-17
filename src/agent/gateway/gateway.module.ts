@@ -8,7 +8,7 @@ import {
     type RuntimeContext,
 } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import { Gateway } from "../components.ts";
+import { Gateway } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { buildGatewayStatusSnapshot, type ChannelRuntimeState } from "./channels/status.ts";
 import type { ChannelAdapter, StreamingMessageDispatcher } from "./channels/types.ts";

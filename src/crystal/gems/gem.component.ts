@@ -1,16 +1,10 @@
 import type { CrystalMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
 import { CrystalComponent } from "../../components/index.ts";
-import { LocalCrystalMemoryStore } from "../../components/crystal/local.crystal.store.ts";
-import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../components/memory/types.ts";
-import { MemoryKind, MemoryLayer } from "../../protocol/contracts/index.ts";
-import {
-    buildReflectionCandidate,
-    crystallizeCandidate,
-    evidence,
-    mergeCrystalGem,
-    recallCrystalGems,
-} from "../reflection/index.ts";
+import { LocalCrystalMemoryStore } from "../memory/store.ts";
+import type { MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
+import { MemoryKind, MemoryLayer, type CrystalGem, type ReflectionCandidate } from "../../protocol/contracts/index.ts";
+import { CrystalReflectionComponent } from "../reflection/index.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS } from "../memory/vector.index.ts";
 import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "../memory/types.ts";
 
@@ -23,6 +17,7 @@ import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "..
 @Component()
 export class CrystalGemComponent extends CrystalComponent {
     private readonly store: CrystalMemoryStore;
+    private readonly reflection = new CrystalReflectionComponent();
 
     public constructor(
         private readonly config: CrystalMemoryConfig,
@@ -38,8 +33,8 @@ export class CrystalGemComponent extends CrystalComponent {
             return [];
         }
         await this.store.initialize();
-        const candidate = buildReflectionCandidate({
-            id: `query-${hashText(request.query)}`,
+        const candidate = this.reflection.buildCandidate({
+            id: `query-${this.hashText(request.query)}`,
             sourceId: request.scope,
             sourceKind: "query",
             content: request.query,
@@ -51,7 +46,7 @@ export class CrystalGemComponent extends CrystalComponent {
             symbols: candidate.symbols,
             limit: request.limit,
         });
-        return recallCrystalGems(
+        return this.reflection.recallGems(
             {
                 query: request.query,
                 symbols: candidate.symbols,
@@ -61,7 +56,7 @@ export class CrystalGemComponent extends CrystalComponent {
         ).map((result) => ({
             layer: MemoryLayer.Crystal,
             score: result.score,
-            record: crystalGemToMemoryRecord(result.gem),
+            record: this.crystalGemToMemoryRecord(result.gem),
         }));
     }
 
@@ -72,19 +67,19 @@ export class CrystalGemComponent extends CrystalComponent {
         await this.store.initialize();
 
         const candidates = [
-            ...input.promoted.map((record) => candidateFromPromotedMemory(record, input.now)),
-            ...(input.reflectionCandidates ?? []).map((candidate) => buildReflectionCandidate(candidate)),
+            ...input.promoted.map((record) => this.candidateFromPromotedMemory(record, input.now)),
+            ...(input.reflectionCandidates ?? []).map((candidate) => this.reflection.buildCandidate(candidate)),
         ];
         const atoms = [];
         const gems = [];
         for (const candidate of candidates) {
             await this.store.upsertCandidate(candidate);
-            const crystallized = crystallizeCandidate(candidate);
+            const crystallized = this.reflection.crystallizeCandidate(candidate);
             if (!crystallized) {
                 continue;
             }
             const existing = await this.store.findGem(crystallized.gem.id);
-            const merged = mergeCrystalGem(existing, crystallized.gem);
+            const merged = this.reflection.mergeGem(existing, crystallized.gem);
             await this.store.upsertAtom(crystallized.atom);
             await this.store.upsertGem(merged);
             atoms.push(crystallized.atom);
@@ -92,51 +87,65 @@ export class CrystalGemComponent extends CrystalComponent {
         }
         return { candidates, atoms, gems };
     }
-}
 
-function candidateFromPromotedMemory(record: MemoryRecord, now: string) {
-    return buildReflectionCandidate({
-        id: `reflection-${record.id}`,
-        sourceId: record.id,
-        sourceKind: "promoted-memory",
-        content: record.content,
-        createdAt: record.createdAt || now,
-        evidence: [
-            evidence("promoted-memory-confidence", record.confidence, record.id, "promoted memory confidence"),
-            evidence("promoted-memory-importance", record.importance, record.id, "promoted memory importance"),
-        ],
-        metadata: {
-            memoryKind: record.kind,
-            memoryMetadata: record.metadata ?? {},
-            scope: record.scope,
-        },
-    });
-}
-
-function crystalGemToMemoryRecord(gem: Awaited<CrystalTurnResult["gems"][number]>): MemoryRecord {
-    return {
-        id: gem.id,
-        kind: MemoryKind.Gem,
-        content: `${gem.title}: ${gem.method}`,
-        scope: "global",
-        importance: gem.evidenceScore,
-        confidence: gem.confidence,
-        createdAt: gem.createdAt,
-        updatedAt: gem.updatedAt,
-        metadata: {
-            bucket: gem.bucket,
-            sourceAtomIds: gem.sourceAtomIds,
-            symbols: gem.symbols,
-        },
-    };
-}
-
-function hashText(text: string): string {
-    const bytes = new TextEncoder().encode(text);
-    let hash = 2166136261;
-    for (const byte of bytes) {
-        hash ^= byte;
-        hash = Math.imul(hash, 16777619);
+    /**
+     * Promoted markdown/brain memory is a candidate source for gems, but the
+     * memory record remains the source of truth until support is accumulated.
+     */
+    private candidateFromPromotedMemory(record: MemoryRecord, now: string): ReflectionCandidate {
+        return this.reflection.buildCandidate({
+            id: `reflection-${record.id}`,
+            sourceId: record.id,
+            sourceKind: "promoted-memory",
+            content: record.content,
+            createdAt: record.createdAt || now,
+            evidence: [
+                this.reflection.evidence(
+                    "promoted-memory-confidence",
+                    record.confidence,
+                    record.id,
+                    "promoted memory confidence",
+                ),
+                this.reflection.evidence(
+                    "promoted-memory-importance",
+                    record.importance,
+                    record.id,
+                    "promoted memory importance",
+                ),
+            ],
+            metadata: {
+                memoryKind: record.kind,
+                memoryMetadata: record.metadata ?? {},
+                scope: record.scope,
+            },
+        });
     }
-    return (hash >>> 0).toString(16);
+
+    private crystalGemToMemoryRecord(gem: CrystalGem): MemoryRecord {
+        return {
+            id: gem.id,
+            kind: MemoryKind.Gem,
+            content: `${gem.title}: ${gem.method}`,
+            scope: "global",
+            importance: gem.evidenceScore,
+            confidence: gem.confidence,
+            createdAt: gem.createdAt,
+            updatedAt: gem.updatedAt,
+            metadata: {
+                bucket: gem.bucket,
+                sourceAtomIds: gem.sourceAtomIds,
+                symbols: gem.symbols,
+            },
+        };
+    }
+
+    private hashText(text: string): string {
+        const bytes = new TextEncoder().encode(text);
+        let hash = 2166136261;
+        for (const byte of bytes) {
+            hash ^= byte;
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16);
+    }
 }

@@ -5,9 +5,10 @@
  * - global manifest：`~/.flyflor/plugins/plugins.json`
  * - project manifest：`./.flyflor/plugins/plugins.json`（项目级覆盖全局）
  *
- * 范围（D 批次）：
- * - 仅做 **声明 + 启停**；不在本批次实现 plugin 加载/执行（属于沙箱+扩展机制后续）
- * - 加载/执行链落地时再补，避免无 sandbox 的情况下泄漏越权
+ * 边界：
+ * - 本文件只管理 manifest 的声明、启停和 project/global 覆盖关系；
+ * - 执行统一交给 `PluginRunner`，并必须经过 `CapabilityExecutionKind.Plugin`
+ *   的 sandbox 审批和命令白名单，避免 registry 绕过沙箱直接 spawn。
  *
  * Manifest 形态（JSONC，与 mcp.json 一致风格）：
  * ```jsonc

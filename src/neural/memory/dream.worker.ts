@@ -11,7 +11,7 @@
  * 候选来自晶体图查询（dream.candidates.ts），不读 text；语义判断只由 LLM 在
  * memory.dream 提示词模板中产出结构化 JSON，本文件做 enum + JSON shape 校验。
  *
- * 红线（与 docs/BOUNDARIES.md 对齐）：
+ * 红线（与 docs/boundaries.md 对齐）：
  *  - 零业务字符串匹配；
  *  - 任何 Gem 写入必须先 writeGemSnapshot；
  *  - protected = true 的 Gem 不参与 dream（候选层就过滤掉）；
@@ -28,7 +28,7 @@ import {
     type DreamCandidate,
 } from "./dream.candidates.ts";
 import { DreamActionKind, parseDreamDecisions, type DreamDecision } from "./dream.decisions.ts";
-import type { MemoryGraphStore } from "../../components/memory/graph.store.ts";
+import type { MemoryGraphStore } from "./graph/types.ts";
 
 export { DreamActionKind, parseDreamDecisions } from "./dream.decisions.ts";
 export type { DreamDecision } from "./dream.decisions.ts";

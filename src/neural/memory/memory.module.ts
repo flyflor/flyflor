@@ -52,20 +52,20 @@ import { ProjectScaffolder } from "../project/scaffolder.ts";
 import { spreadActivation, type ActivationCandidate } from "./activation.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding/index.ts";
-import { MarkdownMemoryStore } from "../../components/memory/markdown.store.ts";
-import { ProjectMemoryStore } from "../../components/memory/project.memory.store.ts";
-import { ContextForkStore, type ContextForkStoreSource } from "../../components/memory/context.fork.store.ts";
-import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "../../components/memory/brain.store.ts";
+import { MarkdownMemoryStore } from "./markdown/store.ts";
+import { ProjectMemoryStore } from "./project/store.ts";
+import { ContextForkStore, type ContextForkStoreSource } from "./fork/store.ts";
+import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain/store.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary.worker.ts";
 import { AskReason, MemoryEventStatus, MemoryEventType, SceneRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ProjectRecord, type SceneRecord, type TaskPlanRecord } from "../../protocol/contracts/index.ts";
 import { applyMatrixImpact, MemoryMatrixAggregator } from "./matrix.ts";
 import { CrystalMemoryComponent } from "../../crystal/memory/index.ts";
-import { SQLiteMemoryStore } from "../../components/memory/sqlite.memory.store.ts";
-import type { PendingProjectOffer, PendingSkillOffer } from "../../components/memory/sqlite.memory.store.ts";
-import { LocalWorkingMemoryStore } from "../../components/memory/local.working.store.ts";
-import type { EpisodeRecord, WorkingMemoryStore } from "../../components/memory/working.store.ts";
-import type { MemoryGraphStore } from "../../components/memory/graph.store.ts";
-import { SQLiteGraphStore } from "../../components/memory/sqlite.graph.store.ts";
+import { SQLiteMemoryStore } from "./sqlite/store.ts";
+import type { PendingProjectOffer, PendingSkillOffer } from "./sqlite/store.ts";
+import { LocalWorkingMemoryStore } from "./working/store.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "./working/types.ts";
+import type { MemoryGraphStore } from "./graph/types.ts";
+import { SQLiteGraphStore } from "./graph/store.ts";
 import { ConsolidationWorker } from "./consolidation.worker.ts";
 import { HotMemoryCompressionWorker } from "./hot.memory.compression.worker.ts";
 import { RetrospectiveLog } from "./retrospective.ts";
@@ -84,16 +84,16 @@ import type {
     MemorySearchResult,
     MemoryWeights,
     TurnMemoryResult,
-} from "../../components/memory/types.ts";
-import type { WorkingMemoryHealthSnapshot } from "../../components/memory/working.store.ts";
+} from "./types.ts";
+import type { WorkingMemoryHealthSnapshot } from "./working/types.ts";
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions.ts";
-export { MarkdownMemoryStore } from "../../components/memory/markdown.store.ts";
-export { ProjectMemoryStore } from "../../components/memory/project.memory.store.ts";
+export { MarkdownMemoryStore } from "./markdown/store.ts";
+export { ProjectMemoryStore } from "./project/store.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./retrospective.ts";
 export { HotMemoryCompressionWorker, parseHotMemoryCompressionDecision } from "./hot.memory.compression.worker.ts";
-export { SQLiteMemoryStore } from "../../components/memory/sqlite.memory.store.ts";
-export { SQLiteGraphStore } from "../../components/memory/sqlite.graph.store.ts";
+export { SQLiteMemoryStore } from "./sqlite/store.ts";
+export { SQLiteGraphStore } from "./graph/store.ts";
 export type { MemoryAction } from "./actions.ts";
 export type {
     MemoryCandidate,
@@ -104,7 +104,7 @@ export type {
     MemorySearchResult,
     MemoryWeights,
     TurnMemoryResult,
-} from "../../components/memory/types.ts";
+} from "./types.ts";
 
 export interface BehaviorSnapshotRecord {
     corrections: MemoryEventRecord[];
@@ -608,8 +608,8 @@ export class MemoryModule extends Memory {
             this.sqlite.getSkillOffer(message.user.id),
         ]);
         const nudges: string[] = [];
-        if (offer) nudges.push(renderProjectOfferNudge(offer));
-        if (skillOffer) nudges.push(renderSkillOfferNudge(skillOffer));
+        if (offer) nudges.push(this.renderProjectOfferNudge(offer));
+        if (skillOffer) nudges.push(this.renderSkillOfferNudge(skillOffer));
 
         // LF-R3 Ask 一等公民：若 brain 中存在 pending ask，把 [continuation] 块拼到顶部，
         // 让模型把用户下一条消息当作对该 ask 的答复处理。零字符匹配——是否注入只看
@@ -1826,7 +1826,7 @@ export class MemoryModule extends Memory {
             ageBucket,
             arousal: decayed.arousal.toFixed(2),
             confidence: decayed.confidence.toFixed(2),
-            directive: renderEqDirectiveLine(deriveEqDirective(decayed)),
+            directive: this.renderEqDirectiveLine(deriveEqDirective(decayed)),
             dominance: decayed.dominance.toFixed(2),
             label: decayed.label,
             valence: decayed.valence.toFixed(2),
@@ -1861,8 +1861,8 @@ export class MemoryModule extends Memory {
      * decayScore 资源指标排序（不解析任何文本语义），最多展示 3 条。pending ask
      * 的 sibling ghost 已通过 `[continuation]` 单独注入，这里跳过避免重复。
      *
-     * 模型可显式输出 `kind: 'fork' | 'fresh' | 'resume'` 的处理方式（slice D 后续完善），
-     * 当前仅暴露候选清单，由模型同轮自行判断是否需要 fork / fresh。
+     * 模型可显式输出 `<flyflor_ghost_decisions>`，由 `applyGhostDecisions`
+     * 落库处理 `fork` / `fresh` / `resume`；这里不从自然语言推断分支关系。
      */
     private renderGhostHint(userId: string): string | undefined {
         if (!this.brainOpened) return undefined;
@@ -3086,29 +3086,35 @@ export class MemoryModule extends Memory {
             );
         }
     }
-}
 
-function renderProjectOfferNudge(offer: PendingProjectOffer): string {
-    return renderProjectOfferPrompt({
-        evidenceScore: offer.evidenceScore.toFixed(2),
-        relatedCount: String(offer.relatedIds.length),
-        remainingTurns: String(offer.ttlTurns),
-        title: offer.title,
-    });
-}
+    /**
+     * Pending project offer 是 prompt nudge，不是文本意图检测。
+     * 渲染由 MemoryModule 持有，避免散落 helper 重新引入隐式业务入口。
+     */
+    private renderProjectOfferNudge(offer: PendingProjectOffer): string {
+        return renderProjectOfferPrompt({
+            evidenceScore: offer.evidenceScore.toFixed(2),
+            relatedCount: String(offer.relatedIds.length),
+            remainingTurns: String(offer.ttlTurns),
+            title: offer.title,
+        });
+    }
 
-function renderSkillOfferNudge(offer: PendingSkillOffer): string {
-    return renderSkillOfferPrompt({
-        confidence: offer.confidence.toFixed(2),
-        name: offer.name,
-        remainingTurns: String(offer.ttlTurns),
-        support: String(offer.support),
-        tools: offer.mcpTools.join(", "),
-    });
-}
+    /** Skill offer nudge 只消费 SQLite pending offer 结构字段，不读取用户文本语义。 */
+    private renderSkillOfferNudge(offer: PendingSkillOffer): string {
+        return renderSkillOfferPrompt({
+            confidence: offer.confidence.toFixed(2),
+            name: offer.name,
+            remainingTurns: String(offer.ttlTurns),
+            support: String(offer.support),
+            tools: offer.mcpTools.join(", "),
+        });
+    }
 
-function renderEqDirectiveLine(directive: string | null): string {
-    return directive ? `- directive=${directive}` : "";
+    /** EQ directive 是结构化 state 的提示行；没有 directive 时不注入噪音。 */
+    private renderEqDirectiveLine(directive: string | null): string {
+        return directive ? `- directive=${directive}` : "";
+    }
 }
 
 function extractEpisodeMcpTools(metadata: Record<string, unknown> | undefined): string[] {

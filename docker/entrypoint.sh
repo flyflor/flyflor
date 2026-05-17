@@ -1,12 +1,19 @@
 #!/bin/sh
 set -eu
 
-SOURCE_BIN="/mounted/flyflor-linux"
+WORKSPACE_BIN="/workspace/dist/flyflor-linux"
+MOUNTED_BIN="/mounted/flyflor-linux"
 LOCAL_BIN="/tmp/flyflor-linux"
 LINK_BIN="/usr/local/bin/flyflor"
 
+if [ -f "$WORKSPACE_BIN" ]; then
+    SOURCE_BIN="$WORKSPACE_BIN"
+else
+    SOURCE_BIN="$MOUNTED_BIN"
+fi
+
 if [ ! -f "$SOURCE_BIN" ]; then
-    echo "Missing Flyflor binary: $SOURCE_BIN" >&2
+    echo "Missing Flyflor binary: $WORKSPACE_BIN or $MOUNTED_BIN" >&2
     exit 1
 fi
 

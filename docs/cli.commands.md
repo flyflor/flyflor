@@ -121,7 +121,7 @@ flowchart TB
 | `flyflor config show/path/env-path` | ✅ | TTY mode opens the CLI TUI navigator on Config; non-interactive mode prints the requested value. |
 | `flyflor memory status/reset/retrospective` | ✅ | Status shows working-memory health and recovery metadata; reset supports clearing allowlisted files; retrospective shows consolidation audit logs. |
 | `flyflor blackboard` | ✅ | Opens the blackboard browser TUI in a terminal: it lists recent turns by default, supports `/` search, up/down selection, Enter to open details, and Esc/q to go back or quit. |
-| `flyflor blackboard list/show` | ✅ | Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted debugging. |
+| `flyflor blackboard list/show` | ✅ | Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted inspection. |
 | `flyflor skills *` | ✅ | TTY mode opens the CLI TUI navigator on Skills; non-interactive mode supports install / reset / usage / validate. |
 | `flyflor tools enable/disable` | ✅ | Enables or disables tool names per MCP server. |
 | `flyflor mcp *` | ✅ | TTY mode opens the CLI TUI navigator on MCP; non-interactive mode supports list / show / validate / add / enable / disable / remove / tools / call. |
@@ -138,10 +138,10 @@ flowchart TB
 - `2` interactive TUI requested without both stdin and stdout TTYs
 - other built-in `commander` errors
 
-## Risks / Known Gaps
+## Release Checks
 
-- The command surface is growing quickly, so the CLI docs are generated from the command spec and checked for drift by `docs:check`.
-- Daemon mode has PID helpers and a service-file planning command; cross-platform launchd/systemd long-running behavior still needs real-world validation.
+- The CLI docs are generated from the command spec and checked for drift by `docs:check`.
+- Daemon mode has PID helpers and deterministic systemd / launchd service-file planning.
 - The implementation status table has spec coverage checks; newly added command leaves must be documented before tests pass.
 
 ## Related Tests

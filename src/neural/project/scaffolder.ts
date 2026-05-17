@@ -4,7 +4,7 @@
  * 当 detectExplicitIntent / detectClusterCandidate 返回非 None 的 trigger 时，
  * 在 workspace/projects/{projectId}/{AGENTS,TODO,README}.md 落盘项目骨架，并预建项目 `.flyflor/memory`。
  *
- * 设计约束（与 docs/BOUNDARIES.md 对齐）：
+ * 设计约束（与 docs/boundaries.md 对齐）：
  *  - 模板源文件使用小写点分名，由 install.templates.ts 拷贝到 paths.templateDir/projects；
  *  - 路径用 paths.workspaceDir/projects/{projectId}，每个 projectId 单独目录；
  *  - 文件已存在时不覆盖（幂等），便于多轮触发；
@@ -127,9 +127,10 @@ export class ProjectScaffolder {
                     error: String(err),
                 }),
             );
-            // Scaffolding is a side effect of explicit memory intent; failure must be visible by event,
-            // but the caller should keep the turn alive instead of losing the whole interaction.
-            return result;
+            // Project-local memory is only valid after AGENTS.md and the project
+            // redlines exist. Failing loudly prevents later memory writes from
+            // creating a project directory without its governing constitution.
+            throw err;
         }
         return result;
     }

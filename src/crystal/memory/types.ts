@@ -6,7 +6,7 @@ import type {
     ReflectionAtom,
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
-import type { MemoryCandidate, MemoryRecord } from "../../components/memory/types.ts";
+import type { MemoryCandidate, MemoryRecord } from "../../neural/memory/types.ts";
 
 export interface CrystalTurnInput {
     requestId?: string;

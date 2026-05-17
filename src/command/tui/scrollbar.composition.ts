@@ -79,17 +79,31 @@ export function createVirtualScrollBar(
         }
         if (height === 0) return;
 
+        const scrollAreaHeight = Math.max(0, height - 2);
         const viewportHeight = Math.max(1, scrollBox.viewport.height);
         const scrollHeight = Math.max(viewportHeight, scrollBox.scrollHeight);
         const overflow = Math.max(0, scrollHeight - viewportHeight);
-        const thumbHeight = overflow === 0 ? 0 : Math.max(1, Math.round((viewportHeight / scrollHeight) * height));
-        const maxThumbTop = Math.max(0, height - thumbHeight);
+        const thumbHeight = overflow === 0
+            ? 0
+            : Math.max(1, Math.round((viewportHeight / scrollHeight) * scrollAreaHeight));
+        const maxThumbTop = Math.max(0, scrollAreaHeight - thumbHeight);
         const thumbTop = overflow === 0 ? 0 : Math.round((scrollBox.scrollTop / overflow) * maxThumbTop);
 
         for (let index = 0; index < lines.length; index += 1) {
-            const inThumb = index >= thumbTop && index < thumbTop + thumbHeight;
             const line = lines[index]!;
-            line.content = inThumb ? "██" : "░░";
+            if (index === 0) {
+                line.content = "▲ ";
+                line.fg = options.trackColor;
+                continue;
+            }
+            if (index === lines.length - 1) {
+                line.content = "▼ ";
+                line.fg = options.trackColor;
+                continue;
+            }
+            const railIndex = index - 1;
+            const inThumb = overflow > 0 && railIndex >= thumbTop && railIndex < thumbTop + thumbHeight;
+            line.content = inThumb ? "██" : " •";
             line.fg = inThumb ? options.thumbColor : options.trackColor;
         }
     };

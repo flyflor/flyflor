@@ -6,7 +6,7 @@ const REPO_ROOT = join(import.meta.dir, "..");
 
 describe("documentation references", () => {
     test("referenced test files exist", async () => {
-        const docs = ["README.md", "TODO.md", ...(await listMarkdownFiles(join(REPO_ROOT, "docs")))];
+        const docs = ["README.md", ...(await listMarkdownFiles(join(REPO_ROOT, "docs")))];
         const refs: string[] = [];
         for (const doc of docs) {
             const text = await Bun.file(join(REPO_ROOT, doc)).text();
@@ -24,6 +24,27 @@ describe("documentation references", () => {
 
         expect(missing).toEqual([]);
     });
+
+    test("crystal docs keep runtime Gem gate distinct from graph evidence count", async () => {
+        const docs = ["README.md", "docs/crystal.reflection.md", "docs/memory.system.md"];
+        const staleClaims: string[] = [];
+
+        for (const doc of docs) {
+            const text = await Bun.file(join(REPO_ROOT, doc)).text();
+            if (/memory_node\s+confidence\s*>\s*0\.5\s+AND\s+evidenceCount\s*(?:>=|≥)\s*3/iu.test(text)) {
+                staleClaims.push(doc);
+            }
+        }
+
+        expect(staleClaims).toEqual([]);
+    });
+
+    test("gateway docs use the shipped GatewayMessage id field", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "gateway.channels.md")).text();
+        expect(doc).toContain("interface GatewayMessage");
+        expect(doc).toContain("id: string;");
+        expect(doc).not.toContain("interface GatewayMessage {\n    messageId: string;");
+    });
 });
 
 async function listMarkdownFiles(root: string): Promise<string[]> {
@@ -32,6 +53,9 @@ async function listMarkdownFiles(root: string): Promise<string[]> {
         entries.map(async (entry) => {
             const path = join(root, entry.name);
             if (entry.isDirectory()) {
+                if (entry.name === "scripts") {
+                    return [];
+                }
                 return listMarkdownFiles(path);
             }
             if (entry.isFile() && entry.name.endsWith(".md")) {

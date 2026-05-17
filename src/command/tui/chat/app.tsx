@@ -112,14 +112,13 @@ const HISTORY_BATCH_SIZE = 20;
 const SIDE_PANEL_MIN_WIDTH = 34;
 const SIDE_PANEL_MAX_WIDTH = 50;
 const SIDE_PANEL_RATIO = 0.28;
-const METRICS_PANEL_MIN_HEIGHT = 9;
-const METRICS_PANEL_MAX_HEIGHT = 13;
-const METRICS_PANEL_HEIGHT_RATIO = 0.24;
-const TODO_PANEL_MIN_HEIGHT = 6;
-const TODO_PANEL_MAX_HEIGHT = 10;
-const TODO_PANEL_HEIGHT_RATIO = 0.18;
+const METRICS_PANEL_MIN_HEIGHT = 12;
+const METRICS_PANEL_HEIGHT_RATIO = 0.26;
+const TODO_PANEL_MIN_HEIGHT = 8;
+const TODO_PANEL_HEIGHT_RATIO = 0.24;
 const RESOURCE_BAR_WIDTH = 12;
 export const NO_PLAN_TEXT = "暂无计划";
+export const CHAT_SIDE_PANEL_SECTIONS = ["Questions", "Blackboard", "TODO List", "MODEL", "TOKENS", "CONTEXT WINDOW"] as const;
 
 export const CHAT_SCROLL_LOCK_CONTRACT = {
     chatStickyScroll: true,
@@ -1171,11 +1170,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
         });
         useDetachedScrollBars(todoScrollBox);
-        const todoVirtualScrollBar = createVirtualScrollBar(renderer, todoScrollBox, {
-            thumbColor: THEME.gold,
-            trackColor: THEME.border,
-        });
-
         const detailScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
                 flexDirection: "column",
@@ -1201,11 +1195,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
         });
         useDetachedScrollBars(detailScrollBox);
-        const detailVirtualScrollBar = createVirtualScrollBar(renderer, detailScrollBox, {
-            thumbColor: THEME.pink,
-            trackColor: THEME.border,
-        });
-
         const metricsCard = new BoxRenderable(renderer, {
             flexDirection: "column",
             flexShrink: 0,
@@ -1243,7 +1232,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             minHeight: 1,
         });
         todoScrollRow.add(todoScrollBox);
-        todoScrollRow.add(todoVirtualScrollBar.rail);
         const detailScrollRow = new BoxRenderable(renderer, {
             flexDirection: "row",
             flexGrow: 1,
@@ -1251,7 +1239,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             minHeight: 1,
         });
         detailScrollRow.add(detailScrollBox);
-        detailScrollRow.add(detailVirtualScrollBar.rail);
         todoCard.add(todoScrollRow);
         detailCard.add(detailScrollRow);
         sidePanel.add(sidePanelTitle);
@@ -1934,17 +1921,34 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 reply: activeReply(),
                 turnCount: turnPairs().length,
             });
+            const [provider, model] = splitModelLine(snapshot.modelLine);
+            const contextMetric = snapshot.metrics.find((metric) => metric.label === "context");
             const lines = [
-                panelLine("LLM / Context", THEME.header, TextAttributes.BOLD),
-                panelLine(`  ${snapshot.modelLine}`, THEME.fg),
+                panelLine("MODEL", THEME.user, TextAttributes.BOLD),
+                panelLine(`model        ${clipText(model, 28)}`, THEME.fg),
+                panelLine(`provider     ${clipText(provider, 28)}`, THEME.fg),
+                panelLine("  temperature 0.7", THEME.fg),
+                panelLine("  top_p       1.0", THEME.fg),
+                panelLine("", THEME.fg),
+                panelLine("TOKENS                 CONTEXT WINDOW", THEME.user, TextAttributes.BOLD),
+                panelLine(`input       ${formatTokenCount(snapshot.tokens.input)}`, THEME.purple),
+                panelLine(`output      ${formatTokenCount(snapshot.tokens.output)}`, THEME.pink),
+                panelLine(`total       ${formatTokenCount(snapshot.tokens.total)}`, THEME.pink),
+                panelLine(
+                    `                      ${snapshot.contextWindow.limitLabel}`,
+                    THEME.fgMuted,
+                ),
+                panelLine(
+                    `                      ${contextMetric?.bar ?? renderChatProgressBar(undefined)}`,
+                    contextMetric?.color ?? THEME.fgMuted,
+                ),
+                panelLine(
+                    `                      ${snapshot.contextWindow.usedLabel}`,
+                    THEME.fgMuted,
+                ),
             ];
-            const visibleMetrics = metricsPanelHeight(renderer.height) <= METRICS_PANEL_MIN_HEIGHT
-                ? snapshot.metrics.slice(0, 3)
-                : snapshot.metrics;
-            for (const metric of visibleMetrics) {
-                lines.push(panelLine(`  ${metric.label.padEnd(7)} ${metric.bar} ${metric.value}`, metric.color));
-            }
-            lines.push(panelLine(`  memory ${snapshot.memoryLine}`, THEME.fgMuted));
+            lines.push(panelLine("", THEME.fg));
+            lines.push(panelLine(`memory      ${snapshot.memoryLine}`, THEME.fgMuted));
             return lines;
         }
 
@@ -1957,21 +1961,22 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         function detailPanelLines(): PanelLine[] {
             const lines: PanelLine[] = [];
             const turn = focusedBlackboardTurn();
-            appendScopeSummary(lines);
             if (sidePanelMode() === "projects") {
+                appendScopeSummary(lines);
                 appendProjectPickerLines(lines);
                 return lines;
             }
             if (sidePanelMode() === "fork") {
+                appendScopeSummary(lines);
                 appendForkSourceLines(lines);
                 return lines;
             }
             if (sidePanelMode() === "forks") {
+                appendScopeSummary(lines);
                 appendForkListLines(lines);
                 return lines;
             }
-            appendDetailModeHeader(lines);
-            appendConversationSummary(lines);
+            appendQuestionLines(lines);
             lines.push(panelLine("", THEME.fg));
             if (sidePanelMode() === "thinking") {
                 appendThinkingDetail(lines, turn);
@@ -1979,17 +1984,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 appendBlackboardDetail(lines, turn);
             }
             return lines;
-        }
-
-        function appendDetailModeHeader(lines: PanelLine[]): void {
-            const thinkingActive = sidePanelMode() === "thinking";
-            lines.push(panelLine("Detail Panel  Ctrl+B", THEME.gold, TextAttributes.BOLD));
-            lines.push(
-                panelLine(
-                    `  ${thinkingActive ? ">" : " "} 深度思考    ${thinkingActive ? " " : ">"} 黑板详情`,
-                    thinkingActive ? THEME.header : THEME.purple,
-                ),
-            );
         }
 
         function appendScopeSummary(lines: PanelLine[]): void {
@@ -2010,35 +2004,22 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             }
         }
 
-        function appendConversationSummary(lines: PanelLine[]): void {
+        function appendQuestionLines(lines: PanelLine[]): void {
             const pairs = turnPairs();
             const selected = selectedTurnPair();
             const menuOpen = commandMenuMode() === sidePanelMode();
-            lines.push(
-                panelLine(
-                    menuOpen ? "Conversation Summary  ↑/↓ Enter" : "Conversation Summary",
-                    THEME.header,
-                    TextAttributes.BOLD,
-                ),
-            );
+            lines.push(panelLine("Questions", THEME.user, TextAttributes.BOLD));
             if (pairs.length === 0) {
                 lines.push(panelLine("  no conversation turns yet", THEME.fgMuted));
                 return;
             }
-            lines.push(
-                panelLine(
-                    "  select a turn to preview its thinking / blackboard",
-                    THEME.fgMuted,
-                ),
-            );
-            const visibleCount = menuOpen ? 12 : 8;
+            const visibleCount = menuOpen ? 8 : 4;
             pairs.slice(-visibleCount).forEach((pair, idx) => {
                 const absoluteIndex = pairs.length - Math.min(visibleCount, pairs.length) + idx;
                 const active = pair.user.id === selected?.user.id;
-                const status = pair.assistant?.status ?? "pending";
                 lines.push(
                     panelLine(
-                        `${active ? ">" : " "} ${summarizeQuestion(pair.question, absoluteIndex + 1, menuOpen ? 36 : 32)} · ${status}`,
+                        `  ${active ? ">" : " "} ${absoluteIndex + 1}. ${clipText(pair.question, active ? 40 : 36)}`,
                         active ? THEME.pink : THEME.fgMuted,
                         active ? TextAttributes.BOLD : undefined,
                     ),
@@ -2047,7 +2028,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         }
 
         function appendTodoSection(lines: PanelLine[], msg: ChatMessage | undefined, turn: BlackboardTurn | undefined): void {
-            lines.push(panelLine("Todo / Progress", THEME.header, TextAttributes.BOLD));
+            lines.push(panelLine("TODO List", THEME.fg, TextAttributes.BOLD));
             const plans = msg?.planning?.taskPlans ?? [];
             if (plans.length > 0) {
                 for (const plan of plans.slice(0, 3)) {
@@ -2116,7 +2097,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 appendSceneReplayLines(lines, activeReply());
                 return;
             }
-            appendBlackboardRouteLines(lines, turn);
             appendBlackboardPanelLines(lines, turn);
         }
 
@@ -2523,8 +2503,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             syncPanelLines(metricsContent, metricLineRenderables, resourcePanelLines());
             syncPanelLines(todoScrollBox.content, todoLineRenderables, todoPanelLines());
             syncPanelLines(detailScrollBox.content, detailLineRenderables, detailPanelLines());
-            todoVirtualScrollBar.sync();
-            detailVirtualScrollBar.sync();
         });
 
         // ── 响应式同步：消息列表（增量更新）────────────────────
@@ -2606,9 +2584,19 @@ export interface ChatResourceMetric {
 }
 
 export interface ChatResourceSnapshot {
+    contextWindow: {
+        limitLabel: string;
+        usedLabel: string;
+    };
     memoryLine: string;
     metrics: ChatResourceMetric[];
     modelLine: string;
+    tokens: {
+        draft: number;
+        input: number;
+        output: number;
+        total: number;
+    };
 }
 
 export interface ChatTodoSnapshot {
@@ -2688,6 +2676,10 @@ export function buildChatResourceSnapshot(input: {
     const visibility = clampRatio(input.memoryVisibilityThreshold);
 
     return {
+        contextWindow: {
+            limitLabel: contextBudget ? `${formatTokenCount(contextBudget)}` : "unknown",
+            usedLabel: contextBudget ? `${formatTokenCount(turnTokens)} / ${formatTokenCount(contextBudget)}` : `${formatTokenCount(turnTokens)} used`,
+        },
         memoryLine: [
             `actions ${memoryActions}`,
             `project ${input.activeProject ? "on" : "off"}`,
@@ -2740,6 +2732,12 @@ export function buildChatResourceSnapshot(input: {
                 value: identityLimit ? `${memoryActions}/${identityLimit} daily` : `${memoryActions} actions`,
             },
         ],
+        tokens: {
+            draft: draftTokens,
+            input: questionTokens,
+            output: replyTokens,
+            total: turnTokens,
+        },
     };
 }
 
@@ -2773,14 +2771,11 @@ function rightPanelWidth(totalWidth: number): number {
 }
 
 function metricsPanelHeight(totalHeight: number): number {
-    return Math.min(
-        METRICS_PANEL_MAX_HEIGHT,
-        Math.max(METRICS_PANEL_MIN_HEIGHT, Math.floor(totalHeight * METRICS_PANEL_HEIGHT_RATIO)),
-    );
+    return Math.max(METRICS_PANEL_MIN_HEIGHT, Math.floor(totalHeight * METRICS_PANEL_HEIGHT_RATIO));
 }
 
 function todoPanelHeight(totalHeight: number): number {
-    return Math.min(TODO_PANEL_MAX_HEIGHT, Math.max(TODO_PANEL_MIN_HEIGHT, Math.floor(totalHeight * TODO_PANEL_HEIGHT_RATIO)));
+    return Math.max(TODO_PANEL_MIN_HEIGHT, Math.floor(totalHeight * TODO_PANEL_HEIGHT_RATIO));
 }
 
 function knownCommandList(registry: AppCommandRegistry): string {
@@ -2815,6 +2810,17 @@ function estimateTokens(text: string): number {
 
 function finitePositive(value: number | undefined): number | undefined {
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function splitModelLine(modelLine: string): [provider: string, model: string] {
+    const separator = " · ";
+    const index = modelLine.indexOf(separator);
+    if (index < 0) return ["provider unknown", modelLine];
+    return [modelLine.slice(0, index), modelLine.slice(index + separator.length)];
+}
+
+function formatTokenCount(value: number): string {
+    return Math.max(0, Math.floor(value)).toLocaleString("en-US");
 }
 
 function clampRatio(value: number | undefined): number | undefined {

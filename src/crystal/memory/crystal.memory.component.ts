@@ -2,12 +2,12 @@ import type { CrystalMemoryConfig } from "../../config/index.ts";
 import { CrystalComponent } from "../../components/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS } from "./vector.index.ts";
-import type { MemorySearchRequest, MemorySearchResult } from "../../components/memory/types.ts";
-import { LocalCrystalMemoryStore } from "../../components/crystal/local.crystal.store.ts";
+import type { MemorySearchRequest, MemorySearchResult } from "../../neural/memory/types.ts";
+import { LocalCrystalMemoryStore } from "./store.ts";
 import { CrystalGemComponent, InMemoryCrystalMemoryStore } from "../gems/index.ts";
 import type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 
-export { LocalCrystalMemoryStore } from "../../components/crystal/local.crystal.store.ts";
+export { LocalCrystalMemoryStore } from "./store.ts";
 export { CrystalGemComponent, InMemoryCrystalMemoryStore } from "../gems/index.ts";
 export type { CrystalMemoryStore, CrystalTurnInput, CrystalTurnResult } from "./types.ts";
 

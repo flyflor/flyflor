@@ -54,8 +54,8 @@
         "build:binary:linux-x64": "bun build --compile --target=bun-linux-x64 --packages=bundle --conditions=browser --allow-unresolved=\"\" --define process.env.FLYFLOR_BUILD_COMMIT=\"'$(git rev-parse --short HEAD 2>/dev/null || echo dev)'\" --define process.env.FLYFLOR_BUILD_TARGET=\"'linux-x64'\" --outfile dist/flyflor-linux-x64 app.ts src/command/tui/chat/parser.worker.ts"
     },
     "devDependencies": {
-        "@opentui/core-linux-arm64": "0.2.8",
-        "@opentui/core-linux-x64": "0.2.8",
+        "@opentui/core-linux-arm64": "^0.2.12",
+        "@opentui/core-linux-x64": "^0.2.12",
         "@types/bun": "latest",
         "@types/lodash-es": "^4.17.12",
         "@types/markdown-it": "^14.1.2",
@@ -66,13 +66,13 @@
     },
     "dependencies": {
         "@clack/prompts": "^1.3.0",
-        "@opentui/core": "0.2.8",
+        "@opentui/core": "^0.2.12",
+        "@opentui/solid": "^0.2.12",
         "cli-table3": "^0.6.5",
         "commander": "^14.0.3",
         "lodash-es": "^4.18.1",
-        "solid-js": "^1.9.12",
         "markdown-it": "^14.1.1",
-        "natural": "8.1.1",
-        "picocolors": "^1.1.1"
+        "picocolors": "^1.1.1",
+        "solid-js": "^1.9.12"
     }
 }

@@ -77,7 +77,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     {
         path: "blackboard list/show",
         status: "✅",
-        note: "Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted debugging.",
+        note: "Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted inspection.",
         covers: ["blackboard list", "blackboard show"],
     },
     {
@@ -163,10 +163,10 @@ export function renderCliCommandsDoc(): string {
     lines.push("- `2` interactive TUI requested without both stdin and stdout TTYs");
     lines.push("- other built-in `commander` errors");
     lines.push("");
-    lines.push("## Risks / Known Gaps");
+    lines.push("## Release Checks");
     lines.push("");
-    lines.push("- The command surface is growing quickly, so the CLI docs are generated from the command spec and checked for drift by `docs:check`.");
-    lines.push("- Daemon mode has PID helpers and a service-file planning command; cross-platform launchd/systemd long-running behavior still needs real-world validation.");
+    lines.push("- The CLI docs are generated from the command spec and checked for drift by `docs:check`.");
+    lines.push("- Daemon mode has PID helpers and deterministic systemd / launchd service-file planning.");
     lines.push("- The implementation status table has spec coverage checks; newly added command leaves must be documented before tests pass.");
     lines.push("");
     lines.push("## Related Tests");

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { isSecretKey, redactSecret, renderConfigView } from "../src/command/config.view.ts";
 import type { FlyflorConfig } from "../src/config/index.ts";
 
+const TEST_MODEL_API_KEY = "test-openai-key-abcdef1234567890";
+
 const fakeConfig = (): FlyflorConfig =>
     ({
         paths: {
@@ -17,7 +19,7 @@ const fakeConfig = (): FlyflorConfig =>
             providerId: "openai",
             model: "gpt-4o",
             apiMode: "responses",
-            apiKey: "sk-abcdef1234567890",
+            apiKey: TEST_MODEL_API_KEY,
             baseUrl: "https://api.openai.com",
         },
         gateway: {
@@ -44,7 +46,7 @@ const fakeConfig = (): FlyflorConfig =>
 
 describe("config view", () => {
     test("redactSecret keeps prefix/suffix only", () => {
-        expect(redactSecret("sk-abcdef1234567890")).toBe("sk-a…90");
+        expect(redactSecret(TEST_MODEL_API_KEY)).toBe("test…90");
         expect(redactSecret("short")).toBe("***");
         expect(redactSecret("")).toBe("(unset)");
     });
@@ -61,16 +63,16 @@ describe("config view", () => {
         const out = renderConfigView(fakeConfig());
         expect(out).toContain("provider: openai");
         expect(out).toContain("model: gpt-4o");
-        expect(out).toContain("apiKey: sk-a…90");
+        expect(out).toContain("apiKey: test…90");
         expect(out).toContain("mcpToolApproval: ask");
         expect(out).toContain("shellHookApproval: allow");
         expect(out).toContain("pluginApproval: deny");
-        expect(out).not.toContain("sk-abcdef1234567890");
+        expect(out).not.toContain(TEST_MODEL_API_KEY);
     });
 
     test("text view shows secrets when redact disabled", () => {
         const out = renderConfigView(fakeConfig(), { redact: false });
-        expect(out).toContain("sk-abcdef1234567890");
+        expect(out).toContain(TEST_MODEL_API_KEY);
     });
 
     test("text view marks channels missing secrets as incomplete", () => {
@@ -84,7 +86,7 @@ describe("config view", () => {
     test("json view is parseable and contains redacted secrets", () => {
         const out = renderConfigView(fakeConfig(), { format: "json" });
         const parsed = JSON.parse(out);
-        expect(parsed.model.apiKey).toBe("sk-a…90");
+        expect(parsed.model.apiKey).toBe("test…90");
         expect(parsed.gateway.allowedChannels).toEqual(["telegram", "slack"]);
         expect(parsed.sandbox).toEqual({
             mode: "off",
@@ -104,6 +106,6 @@ describe("config view", () => {
     test("json view honors redact=false", () => {
         const out = renderConfigView(fakeConfig(), { format: "json", redact: false });
         const parsed = JSON.parse(out);
-        expect(parsed.model.apiKey).toBe("sk-abcdef1234567890");
+        expect(parsed.model.apiKey).toBe(TEST_MODEL_API_KEY);
     });
 });

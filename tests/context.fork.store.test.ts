@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ContextForkStore } from "../src/components/memory/context.fork.store.ts";
+import { ContextForkStore } from "../src/neural/memory/fork/store.ts";
 
 describe("ContextForkStore", () => {
     test("writes cold fork replay outside brain.db and cleans expired sidecars", async () => {

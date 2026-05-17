@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { stat } from "node:fs/promises";
 import { type FlyFlor } from "../../../app.ts";
-import { BrainStore } from "../../../components/memory/brain.store.ts";
+import { BrainStore } from "../../../neural/memory/brain/store.ts";
 import { ConfigComponent } from "../../../config/index.ts";
 import {
     MemoryEventStatus,

@@ -8,8 +8,8 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 
 - `app.ts` — 程序入口，仅做版本输出与命令分派
 - `src/app.ts` — `FlyFlor` composition root，显式 DI 装配
-- `src/components/` — shared component base classes `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `RedisComponent` / `SurrealComponent`
-- `src/agent/components.ts` — legacy compatibility re-export, 新代码应直接依赖 `src/components`
+- `src/components/` — shared component base classes `Gateway` / `Blackboard` / `Runtime` / `Memory` / `Sandbox` / `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `RedisComponent` / `SurrealComponent` plus cross-module primitives such as SQL tagged templates; no domain `components/<domain>` directories
+- `src/entities/` — memory / crystal / blackboard 领域实体、row 映射与 repo SQL；公共 repo 才进入 `src/entities/repo/`
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、事件、进程信封
 - `src/neural/project/` — codename / project 固化、项目脚手架与资源指标触发器
@@ -104,7 +104,7 @@ sequenceDiagram
 
 ## 边界继承约定
 
-所有边界模块继承 `src/components/index.ts` 中的 Flyflor 组件基类来表达语义；`src/agent/components.ts` 仅保留旧路径兼容，不再作为新代码入口：
+所有边界模块继承 `src/components/index.ts` 中的 Flyflor 组件基类来表达语义；新代码必须直接依赖 `src/components`：
 
 ```ts
 abstract class FlyflorComponent {}
@@ -147,13 +147,14 @@ abstract class CrystalComponent extends FlyflorComponent {}
 
 ## Repo / SQL 分层
 
-SQLite 数据访问按 `repo -> store -> component` 分层：
+SQLite 数据访问按 `entity/repo -> store -> component` 分层：
 
-- `*.repo.ts`：表 row model、写入 DTO、SQL function、row 映射。只做数据模型层，不承载业务决策。
-- `*.store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery。
+- `src/entities/**/*.entity.ts`：表 row / record 映射、JSON 列编解码与轻量 shape 校验。
+- `src/entities/**/*.repo.ts`：写入 DTO、SQL function、row 查询。只做数据访问层，不承载业务决策。
+- 模块内 `store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery；当一个模块有多个 store，用子目录表达语义后仍命名为 `store.ts`，例如 `src/neural/memory/brain/store.ts`。
 - `*.component.ts`：向 runtime / neural / crystal 暴露能力边界。
 
-Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `brain.*.repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
+Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `src/entities/memory/brain.*.repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
 
 ## 模块边界硬约束
 
@@ -215,9 +216,9 @@ interface FlyFlorDependencies {
 
 `MemoryModule` 已在 composition root 中显式构造并注入 `RuntimeModule`，测试可通过 `FlyFlor.create({ memory })` 替换实现。
 
-## 运行边界 / 后续增强
+## 运行边界
 
-- `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；下一步适合继续拆工具循环、reply 解析和 persist helper。
-- `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；后续如果新增可执行能力，必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
-- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向需要继续收敛。已收口的边界：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；`DreamWorker` 与 feedback interpreter 已迁入 `src/neural/memory`，runtime 不再保留兼容壳。
+- `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；工具循环、reply 解析和 persist helper 必须继续留在 runtime 子目录 owner 内，不回流到根 module。
+- `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；新增可执行能力必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
+- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向以当前子目录 owner 为准：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；`DreamWorker` 与 feedback interpreter 已迁入 `src/neural/memory`，runtime 不再保留兼容壳。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot、TaskPlan / ContextFork / SceneRecord 摘要与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

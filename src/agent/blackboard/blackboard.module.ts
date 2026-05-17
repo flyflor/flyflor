@@ -3,19 +3,18 @@ import {
     BlackboardConvergenceReason,
     BlackboardMode,
     BlackboardTurnStatus,
-    BlackboardWorkerOutcome,
     WorkerTaskStatus,
 } from "../../protocol/contracts/index.ts";
 import { BLACKBOARD_MODEL_WORKER_NAME, WorkerManager } from "../worker/index.ts";
-import { Blackboard } from "../components.ts";
+import { Blackboard } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, type EventSink, RuntimeEventType, NullEventSink } from "../../protocol/events/index.ts";
 import {
     renderBlackboardDecisionOptions,
     renderBlackboardDecisionPrompt,
-    renderBlackboardWorkerEnvelope,
 } from "../prompts/index.ts";
-import { SQLiteBlackboardStore } from "./sqlite.ts";
+import { blackboardComposition } from "./blackboard.composition.ts";
+import { SQLiteBlackboardStore } from "./store.ts";
 import type {
     BlackboardDecision,
     BlackboardDecisionInput,
@@ -27,14 +26,9 @@ import type {
     BlackboardStepInput,
     BlackboardStore,
     BlackboardTurn,
-    BlackboardConvergenceResult,
-    BlackboardContract,
-    BlackboardDiscussionPlan,
-    BlackboardWorkerPlanInput,
     BlackboardWorkerRunInput,
     BlackboardWorkerTask,
     BlackboardWorkerResult,
-    BlackboardWorkerState,
 } from "./types.ts";
 
 const DEFAULT_LEASE_TTL_MS = 15 * 60 * 1000;
@@ -42,7 +36,6 @@ const DEFAULT_MIN_ROUNDS = 1;
 const DEFAULT_MAX_ROUNDS = 3;
 const DEFAULT_HARD_MAX_ROUNDS = 5;
 const DEFAULT_MAX_WORKER_CONTEXT_CHARS = 12_000;
-const MAX_UNRESOLVED_ISSUES = 8;
 
 export interface BlackboardProgressEvent {
     round: number;
@@ -82,7 +75,7 @@ export class BlackboardModule extends Blackboard {
             return lease;
         }
 
-        const plannedWorkers = workersFromPlan(request.workers, request.now);
+        const plannedWorkers = blackboardComposition.workersFromPlan(request.workers, request.now);
         const turn: BlackboardTurn = {
             id: turnId,
             projectConstraintId: request.projectConstraintId,
@@ -105,8 +98,8 @@ export class BlackboardModule extends Blackboard {
             updatedAt: request.now,
             metadata: {
                 ...(request.metadata ?? {}),
-                blackboardContract: readExplicitBlackboardContract(request.metadata?.blackboardContract),
-                blackboardPlan: buildBlackboardPlan(request.goal, plannedWorkers),
+                blackboardContract: blackboardComposition.readExplicitBlackboardContract(request.metadata?.blackboardContract),
+                blackboardPlan: blackboardComposition.buildBlackboardPlan(request.goal, plannedWorkers),
             },
         };
 
@@ -150,24 +143,24 @@ export class BlackboardModule extends Blackboard {
             if (!t) throw new Error(`Blackboard turn not found: ${turnId}`);
             return t;
         });
-        ensureRunning(turn);
+        blackboardComposition.ensureRunning(turn);
 
-        const workers = runnableWorkers(turn);
+        const workers = blackboardComposition.runnableWorkers(turn);
         const hardMaxRounds = Math.max(1, turn.budget.hardMaxRounds);
         const minRounds = Math.min(Math.max(1, turn.budget.minRounds), hardMaxRounds);
-        const convergencePolicy = convergencePolicyFor(turn);
+        const convergencePolicy = blackboardComposition.convergencePolicyFor(turn);
         const effectiveMaxRounds = hardMaxRounds;
-        const startRound = nextRound(turn);
+        const startRound = blackboardComposition.nextRound(turn);
 
         for (let round = startRound; round <= hardMaxRounds; round += 1) {
             for (const worker of workers) {
-                ensureRunning(turn);
+                blackboardComposition.ensureRunning(turn);
                 await this.runWorker(
                     turnId,
                     {
                         round,
                         workerRole: worker.role,
-                        prompt: workerPrompt(turn, worker, round),
+                        prompt: blackboardComposition.workerPrompt(turn, worker, round),
                         createdAt: input.createdAt,
                         timeoutMs: input.timeoutMs,
                         metadata: {
@@ -178,7 +171,7 @@ export class BlackboardModule extends Blackboard {
                     },
                     turn,
                 ).then((step) => {
-                    turn = appendStepToTurn(turn, step);
+                    turn = blackboardComposition.appendStepToTurn(turn, step);
                     return input.onWorkerDone?.({
                         round,
                         workerRole: worker.role,
@@ -205,7 +198,7 @@ export class BlackboardModule extends Blackboard {
                     input.createdAt,
                 );
             }
-            const convergence = evaluateConvergence(turn, round, workers.length);
+            const convergence = blackboardComposition.evaluateConvergence(turn, round, workers.length);
             if (convergence.status === BlackboardTurnStatus.Converged) {
                 return this.finishTurn(turnId, BlackboardTurnStatus.Converged, input.createdAt);
             }
@@ -256,7 +249,7 @@ export class BlackboardModule extends Blackboard {
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
         }
-        ensureRunning(turn);
+        blackboardComposition.ensureRunning(turn);
 
         this.events.publish(
             event(
@@ -314,7 +307,7 @@ export class BlackboardModule extends Blackboard {
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
         }
-        ensureRunning(turn);
+        blackboardComposition.ensureRunning(turn);
 
         const decision = await this.store.appendDecision(turnId, input);
         this.events.publish(
@@ -345,21 +338,25 @@ export class BlackboardModule extends Blackboard {
         if (!turn) {
             throw new Error(`Blackboard turn not found: ${turnId}`);
         }
-        ensureRunning(turn);
+        blackboardComposition.ensureRunning(turn);
 
         const task: BlackboardWorkerTask = {
             turnId,
             projectConstraintId: turn.projectConstraintId,
             requestId: turn.requestId,
             goal: turn.goal,
-            contract: blackboardContractFor(turn),
-            convergencePolicy: convergencePolicyFor(turn),
-            discussionPlan: blackboardPlanFor(turn),
+            contract: blackboardComposition.blackboardContractFor(turn),
+            convergencePolicy: blackboardComposition.convergencePolicyFor(turn),
+            discussionPlan: blackboardComposition.blackboardPlanFor(turn),
             round: input.round,
             workerRole: input.workerRole,
             prompt: input.prompt,
-            currentRoundSteps: turn.steps.filter((step) => step.round === input.round).map(stepToWorkerTaskStep),
-            previousSteps: turn.steps.filter((step) => step.round < input.round).map(stepToWorkerTaskStep),
+            currentRoundSteps: turn.steps
+                .filter((step) => step.round === input.round)
+                .map((step) => blackboardComposition.stepToWorkerTaskStep(step)),
+            previousSteps: turn.steps
+                .filter((step) => step.round < input.round)
+                .map((step) => blackboardComposition.stepToWorkerTaskStep(step)),
             decisions: turn.decisions.map((decision) => ({
                 kind: decision.kind,
                 prompt: decision.prompt,
@@ -412,10 +409,10 @@ export class BlackboardModule extends Blackboard {
                 role: item.role,
                 content:
                     visibility === "public"
-                        ? userFacingDiscussionContent(
+                        ? blackboardComposition.userFacingDiscussionContent(
                               item.content,
                               result.output.outputSummary,
-                              stringMetadata(input.metadata?.workerName) ?? input.workerRole,
+                              blackboardComposition.stringMetadata(input.metadata?.workerName) ?? input.workerRole,
                               item.metadata,
                           )
                         : item.content,
@@ -509,7 +506,7 @@ export class BlackboardModule extends Blackboard {
         input: { reason: string; reasonCode: BlackboardConvergenceReason; round: number },
         now: string,
     ): Promise<BlackboardTurn | undefined> {
-        const unresolvedIssues = latestUnresolvedIssues(turn, input.reasonCode);
+        const unresolvedIssues = blackboardComposition.latestUnresolvedIssues(turn, input.reasonCode);
         const options = renderBlackboardDecisionOptions();
         const prompt = renderBlackboardDecisionPrompt({
             reason: input.reason,
@@ -544,366 +541,5 @@ export class BlackboardModule extends Blackboard {
     }
 }
 
-export { SQLiteBlackboardStore } from "./sqlite.ts";
+export { SQLiteBlackboardStore } from "./store.ts";
 export type * from "./types.ts";
-
-function ensureRunning(turn: BlackboardTurn): void {
-    if (turn.status !== BlackboardTurnStatus.Running) {
-        throw new Error(`Blackboard turn is not running: ${turn.id}`);
-    }
-}
-
-function workersFromPlan(workers: BlackboardWorkerPlanInput[] | undefined, now: string): BlackboardWorkerState[] {
-    if (!workers || workers.length === 0) {
-        throw new Error("Blackboard requires a prompt-generated worker plan.");
-    }
-    const deduped = dedupeWorkers(workers);
-    const roles = new Set(deduped.map((worker) => worker.role));
-    const normalized = deduped.map((worker) => ({
-        ...worker,
-        dependsOn: (worker.dependsOn ?? []).filter((dependency) => roles.has(dependency) && dependency !== worker.role),
-    }));
-    return sortWorkersByDependencies(normalized).map((worker, index) => ({
-        capabilities: worker.capabilities ?? ["general-worker"],
-        dependsOn: worker.dependsOn ?? [],
-        handoff: worker.handoff ?? "proposal",
-        role: worker.role,
-        name: worker.name ?? worker.role,
-        stage: worker.stage ?? `worker-${index + 1}`,
-        status: "idle",
-        updatedAt: now,
-    }));
-}
-
-function dedupeWorkers(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {
-    const seen = new Set<string>();
-    const result: BlackboardWorkerPlanInput[] = [];
-    for (const worker of workers) {
-        if (seen.has(worker.role)) {
-            continue;
-        }
-        seen.add(worker.role);
-        result.push(worker);
-    }
-    return result;
-}
-
-function sortWorkersByDependencies(workers: BlackboardWorkerPlanInput[]): BlackboardWorkerPlanInput[] {
-    const pending = new Map(workers.map((worker) => [worker.role, worker]));
-    const emitted = new Set<string>();
-    const sorted: BlackboardWorkerPlanInput[] = [];
-
-    while (pending.size > 0) {
-        const ready = [...pending.values()].find((worker) =>
-            (worker.dependsOn ?? []).every((dependency) => emitted.has(dependency)),
-        );
-        if (!ready) {
-            sorted.push(...pending.values());
-            break;
-        }
-        sorted.push(ready);
-        emitted.add(ready.role);
-        pending.delete(ready.role);
-    }
-
-    return sorted;
-}
-
-function runnableWorkers(turn: BlackboardTurn): BlackboardWorkerState[] {
-    if (turn.workers.length === 0) {
-        throw new Error("Blackboard turn has no workers.");
-    }
-    return turn.workers;
-}
-
-export function buildBlackboardPlan(goal: string, workers: BlackboardWorkerState[] = []): BlackboardDiscussionPlan {
-    const objective = summarizeObjective(goal);
-    const participants = workers.map((worker, index) => ({
-        capabilities: worker.capabilities,
-        dependsOn: worker.dependsOn,
-        handoff: worker.handoff,
-        name: worker.name,
-        order: index + 1,
-        role: worker.role,
-        stage: worker.stage,
-    }));
-    const workstreams =
-        participants.length > 0
-            ? participants.map((participant) => `${participant.stage}:${participant.handoff}`)
-            : [
-                  "analysis:define-objective-input-boundaries-and-acceptance",
-                  "proposal:split-executable-work-units-and-worker-focus",
-                  "review:surface-gaps-risks-and-conflicts-through-worker-qa",
-                  "structure:summarize-only-after-open-issues-are-empty",
-              ];
-    return {
-        objective,
-        participants,
-        qaGoal: "Workers exchange structured questions and answers. The scheduler never invents consensus.",
-        workstreams,
-    };
-}
-
-function blackboardPlanFor(turn: BlackboardTurn): BlackboardDiscussionPlan {
-    const plan = turn.metadata.blackboardPlan;
-    if (isBlackboardPlan(plan)) {
-        return plan;
-    }
-    return buildBlackboardPlan(turn.goal, turn.workers);
-}
-
-function isBlackboardPlan(value: unknown): value is BlackboardDiscussionPlan {
-    if (!value || typeof value !== "object") {
-        return false;
-    }
-    const candidate = value as Partial<BlackboardDiscussionPlan>;
-    return (
-        typeof candidate.objective === "string" &&
-        typeof candidate.qaGoal === "string" &&
-        Array.isArray(candidate.participants) &&
-        Array.isArray(candidate.workstreams)
-    );
-}
-
-function stepToWorkerTaskStep(step: BlackboardStep): BlackboardWorkerTask["previousSteps"][number] {
-    return {
-        round: step.round,
-        workerRole: step.workerRole,
-        outputSummary: step.outputSummary,
-        newFacts: step.newFacts,
-        blockers: step.blockers,
-        agreement: readMetadataBoolean(step.metadata.qaAgreement),
-        answers: readMetadataStringArray(step.metadata.qaAnswers),
-        outcome: readMetadataWorkerOutcome(step.metadata.qaOutcome),
-        openIssues: readMetadataStringArray(step.metadata.qaOpenIssues),
-        questions: readMetadataStringArray(step.metadata.qaQuestions),
-    };
-}
-
-function nextRound(turn: BlackboardTurn): number {
-    const maxRound = turn.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
-    return maxRound + 1;
-}
-
-function workerPrompt(turn: BlackboardTurn, worker: BlackboardWorkerState, round: number): string {
-    const minRounds = Math.max(1, turn.budget.minRounds);
-    const phase = workerPhase(turn, worker, round, minRounds);
-    const convergencePolicy = convergencePolicyFor(turn);
-    return renderBlackboardWorkerEnvelope({
-        contract: blackboardContractFor(turn),
-        convergencePolicy,
-        currentRoundSteps: turn.steps.filter((step) => step.round === round).map(stepToWorkerTaskStep),
-        discussionPlan: blackboardPlanFor(turn),
-        goal: turn.goal,
-        minRounds,
-        participant: worker.name,
-        phase,
-        previousSteps: turn.steps.filter((step) => step.round < round).map(stepToWorkerTaskStep),
-        round,
-    });
-}
-
-function workerPhase(turn: BlackboardTurn, worker: BlackboardWorkerState, round: number, minRounds: number): string {
-    if (round < minRounds) {
-        return "explore-and-question";
-    }
-    if (round === 1) {
-        return worker.dependsOn.length > 0 ? "respond-to-upstream-and-propose" : "decompose-and-propose";
-    }
-    const priorOpenIssues = turn.steps
-        .filter((step) => step.round < round)
-        .flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues));
-    return priorOpenIssues.length > 0 ? "answer-open-issues-and-converge" : "converge-or-defer";
-}
-
-export function convergencePolicyFor(turnOrGoal: BlackboardTurn | string): { forceHardCap: boolean; reason: string } {
-    const contract = typeof turnOrGoal === "string" ? normalBlackboardContract() : blackboardContractFor(turnOrGoal);
-    if (contract.mode === "non-convergent") {
-        return {
-            forceHardCap: true,
-            reason: contract.policyReason,
-        };
-    }
-    return {
-        forceHardCap: false,
-        reason: "default-convergence",
-    };
-}
-
-function normalBlackboardContract(): BlackboardContract {
-    return {
-        contradictions: [],
-        evidence: [],
-        mode: "normal",
-        policyReason: "default-convergence",
-    };
-}
-
-function readExplicitBlackboardContract(value: unknown): BlackboardContract {
-    return isBlackboardContract(value) ? value : normalBlackboardContract();
-}
-
-function blackboardContractFor(turn: BlackboardTurn): BlackboardContract {
-    const contract = turn.metadata.blackboardContract;
-    if (isBlackboardContract(contract)) {
-        return contract;
-    }
-    return normalBlackboardContract();
-}
-
-function isBlackboardContract(value: unknown): value is BlackboardContract {
-    if (!value || typeof value !== "object") {
-        return false;
-    }
-    const candidate = value as Partial<BlackboardContract>;
-    return candidate.mode === "normal" || candidate.mode === "non-convergent";
-}
-
-function summarizeObjective(goal: string): string {
-    const firstLine = goal
-        .split(/\n+/u)
-        .map((line) => line.trim())
-        .find(Boolean);
-    const summary = firstLine ?? goal.trim();
-    return summary.length <= 120 ? summary : `${summary.slice(0, 120)}...`;
-}
-
-function readMetadataBoolean(value: unknown): boolean | undefined {
-    return typeof value === "boolean" ? value : undefined;
-}
-
-function readMetadataStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-    return value.filter((item): item is string => typeof item === "string");
-}
-
-function stringMetadata(value: unknown): string | undefined {
-    return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function userFacingDiscussionContent(
-    content: string,
-    fallback: string,
-    participant: string,
-    metadata?: Record<string, unknown>,
-): string {
-    if (metadata?.internalDiagnostic === true) {
-        return `${participant} 提出了阶段性意见，等待同伴继续交叉检查。`;
-    }
-    const clean = content.trim();
-    if (clean) {
-        return clean;
-    }
-    const fallbackText = fallback.trim();
-    if (fallbackText) {
-        return fallbackText;
-    }
-    return `${participant} 提出了阶段性意见，等待同伴继续交叉检查。`;
-}
-
-function readMetadataWorkerOutcome(value: unknown): BlackboardWorkerOutcome | undefined {
-    if (
-        value === BlackboardWorkerOutcome.Blocked ||
-        value === BlackboardWorkerOutcome.Continue ||
-        value === BlackboardWorkerOutcome.Final
-    ) {
-        return value;
-    }
-    return undefined;
-}
-
-function evaluateConvergence(
-    turn: BlackboardTurn,
-    round: number,
-    expectedWorkerCount: number,
-): BlackboardConvergenceResult {
-    const currentSteps = turn.steps.filter((step) => step.round === round);
-    if (currentSteps.length < expectedWorkerCount) {
-        return { status: "continue", reason: BlackboardConvergenceReason.WaitingForWorkers };
-    }
-
-    const openIssues = normalizedUnique([
-        ...currentSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues)),
-        ...currentSteps.flatMap((step) => step.blockers),
-    ]);
-    const agreements = currentSteps.map((step) => readMetadataBoolean(step.metadata.qaAgreement));
-    const hasExplicitRejection = agreements.some((agreement) => agreement === false);
-    const outcomes = currentSteps.map((step) => readMetadataWorkerOutcome(step.metadata.qaOutcome));
-    const hasFinalOutputs =
-        outcomes.length === expectedWorkerCount &&
-        outcomes.every((outcome) => outcome === BlackboardWorkerOutcome.Final);
-    const hasBlockedOutputs =
-        outcomes.length === expectedWorkerCount &&
-        outcomes.every((outcome) => outcome === BlackboardWorkerOutcome.Blocked);
-    if (hasFinalOutputs && !hasExplicitRejection && openIssues.length === 0) {
-        return { status: BlackboardTurnStatus.Converged, reason: BlackboardConvergenceReason.WorkersReachedConsensus };
-    }
-    if (hasBlockedOutputs && openIssues.length > 0) {
-        return { status: BlackboardTurnStatus.NeedsUser, reason: BlackboardConvergenceReason.PeerQaOpenIssues };
-    }
-
-    if (openIssues.length > 0) {
-        return { status: "continue", reason: BlackboardConvergenceReason.PeerQaOpenIssues };
-    }
-    if (!hasFinalOutputs) {
-        return { status: "continue", reason: BlackboardConvergenceReason.AwaitingWorkerFinalOutput };
-    }
-    if (hasExplicitRejection) {
-        return { status: "continue", reason: BlackboardConvergenceReason.AwaitingWorkerConsensus };
-    }
-
-    return { status: "continue", reason: BlackboardConvergenceReason.AwaitingWorkerConsensus };
-}
-
-function latestUnresolvedIssues(turn: BlackboardTurn, reason: BlackboardConvergenceReason): string[] {
-    const latestRound = turn.steps.reduce((highest, step) => Math.max(highest, step.round), 0);
-    const useFullTurn = reason === BlackboardConvergenceReason.HardRoundBudgetExhausted;
-    const sourceSteps = useFullTurn ? turn.steps : turn.steps.filter((step) => step.round === latestRound);
-    const contract = blackboardContractFor(turn);
-    const issues = normalizedUnique([
-        ...sourceSteps.flatMap((step) => step.blockers),
-        ...sourceSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaOpenIssues)),
-        ...sourceSteps.flatMap((step) => readMetadataStringArray(step.metadata.qaQuestions)),
-        ...contract.contradictions.map((item) => `${item.left} / ${item.right}: ${item.reason}`),
-    ]);
-    if (issues.length > 0) {
-        return issues.slice(0, MAX_UNRESOLVED_ISSUES);
-    }
-    if (reason === BlackboardConvergenceReason.AwaitingWorkerFinalOutput) {
-        return [
-            "Confirm whether the board should continue even though workers did not return a structured final outcome.",
-        ];
-    }
-    if (reason === BlackboardConvergenceReason.AwaitingWorkerConsensus) {
-        return [
-            "Confirm which remaining disagreement should decide the next round because workers did not return structured agreement.",
-        ];
-    }
-    return [
-        "Confirm whether to narrow the task, accept the remaining risk, or provide new facts because the board reached its discussion limit without structured convergence.",
-    ];
-}
-
-function normalizedUnique(values: string[]): string[] {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const value of values) {
-        const normalized = normalizeText(value);
-        if (!normalized || seen.has(normalized)) {
-            continue;
-        }
-        seen.add(normalized);
-        result.push(value.trim());
-    }
-    return result;
-}
-
-function normalizeText(value: string): string {
-    return value.trim().toLowerCase().replace(/\s+/gu, " ");
-}
-
-function appendStepToTurn(turn: BlackboardTurn, step: BlackboardStep): BlackboardTurn {
-    return { ...turn, steps: [...turn.steps, step] };
-}

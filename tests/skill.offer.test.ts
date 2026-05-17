@@ -5,13 +5,13 @@ import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
-import { SQLiteMemoryStore, type PendingSkillOffer } from "../src/components/memory/sqlite.memory.store.ts";
+import { SQLiteMemoryStore, type PendingSkillOffer } from "../src/neural/memory/sqlite/store.ts";
 import {
     detectExplicitSkillIntent,
     detectSkillCandidate,
     ProjectTriggerKind,
 } from "../src/neural/project/index.ts";
-import type { EpisodeRecord } from "../src/components/memory/working.store.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working/types.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { ModelClient, ModelMessage, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";

@@ -68,7 +68,7 @@ interface SkillUsage {
 }
 ```
 
-落到 SQLite `skill_usage` 表，并汇总到 `skill.usage.summary.json`；后续选择排序和 promotion 已会消费这些数据。
+落到 SQLite `skill_usage` 表，并汇总到 `skill.usage.summary.json`；自动选择排序和 promotion 都消费这些数据。
 
 ## Promotion（已落地）
 
@@ -100,11 +100,11 @@ interface SkillUsage {
 | `memory.skill.installed` | skill 包安装完成 |
 | `memory.skill.install.failed` | 安装失败 |
 
-## 运行边界 / 后续增强
+## 运行边界
 
 - 自动选择已经接入一次性查询 embedding 的轻量语义召回，但仍以 `skill_usage.summary.json` 的 usage / recency / MCP 成功率为主。
 - promotion 主要消费显式意图和 cluster 证据，尚未做更细粒度的人机协同确认流。
-- skill 模板已有 schema 兼容检查；安装包内容漂移必须由 `validate` / `doctor` 明示报错。后续若增加 `skill-drift` 修复 worker，必须走 Skill 包目录与 manifest 写入路径，不能复用 Memory Dream 的 `gem-drift`。
+- skill 模板已有 schema 兼容检查；安装包内容漂移必须由 `validate` / `doctor` 明示报错。Skill 漂移修复必须走 Skill 包目录与 manifest 写入路径，不能复用 Memory Dream 的 `gem-drift`。
 
 ## 相关测试
 
