@@ -85,20 +85,45 @@ async function checkDockerPromptBundle(root: string): Promise<SmokeCheck[]> {
 }
 
 async function checkCompiledDockerBinary(root: string): Promise<SmokeCheck> {
+    const binary = join(root, "dist", "flyflor-linux");
     try {
-        const info = await stat(join(root, "dist", "flyflor-linux"));
+        const info = await stat(binary);
+        const probe = await probeCompiledDockerBinary(binary);
         return {
-            name: "compiled docker binary exists",
-            ok: info.isFile() && info.size > 0,
-            detail: `${info.size} bytes`,
+            name: "compiled docker binary exists and starts",
+            ok: info.isFile() && info.size > 0 && probe.ok,
+            detail: `${info.size} bytes${probe.detail ? `; ${probe.detail}` : ""}`,
         };
     } catch (error) {
         return {
-            name: "compiled docker binary exists",
+            name: "compiled docker binary exists and starts",
             ok: false,
             detail: error instanceof Error ? error.message : String(error),
         };
     }
+}
+
+async function probeCompiledDockerBinary(binary: string): Promise<{ detail?: string; ok: boolean }> {
+    // Docker dev ships a Linux binary even on macOS hosts, so the smoke check
+    // executes it through the same Debian baseline image used by compose.
+    const command =
+        process.platform === "linux"
+            ? [binary, "--version"]
+            : ["docker", "run", "--rm", "-v", `${binary}:/flyflor:ro`, "debian:bookworm-slim", "/flyflor", "--version"];
+    const subprocess = Bun.spawn(command, {
+        stderr: "pipe",
+        stdout: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(subprocess.stdout).text(),
+        new Response(subprocess.stderr).text(),
+        subprocess.exited,
+    ]);
+    const output = `${stdout}${stderr}`.trim().replace(/\s+/gu, " ");
+    return {
+        detail: output.slice(0, 240),
+        ok: exitCode === 0 && output.includes("flyflor"),
+    };
 }
 
 function push(checks: SmokeCheck[], name: string, ok: boolean, detail?: string): void {

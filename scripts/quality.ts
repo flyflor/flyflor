@@ -23,7 +23,7 @@ const gates: Record<GateName, string[][]> = {
         ["bun", "run", "docs:check"],
         ["bun", "run", "check"],
         ["bun", "run", "test"],
-        ["bun", "run", "build:binary:release"],
+        ["bun", "run", "build:release"],
         ["bun", "run", "smoke:gateway:service"],
         ["bun", "run", "smoke:recovery"],
         ["bun", "run", "docker:up"],

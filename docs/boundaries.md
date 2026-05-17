@@ -116,7 +116,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 运行时不依赖用户机器存在 `node_modules`。
 - 不从依赖包目录读取 schema / wasm / 二进制 / 模板，除非构建明确把它们复制到产物旁。
 - 内部提示词模板必须由安装脚本复制到 `~/.flyflor/prompts` 与 `~/.flyflor/templates/*`；缺失即报错，不写兜底。
-- 安装分发固定三条路径：`install.sh` 只做 release 二进制 + 模板包安装；`install.source.sh` / `install.ps1` 必须把源码 checkout 留在用户本机；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。
+- 安装分发固定三条路径：`install.sh` 只做 release 二进制 + 模板包安装；`install.source.sh` / `install.ps1` 必须把源码 checkout 留在用户本机；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。`flyflor-templates.tar.gz` 必须由 `build:templates:release` 生成，tar 根布局直接对应安装前缀，禁止发布时手工拼包。
 - curl-pipe / PowerShell bootstrap 脚本属于发布协议，新增选项必须同步 README 与 `tests/install.script.test.ts`，避免安装入口漂移。
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
@@ -291,7 +291,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 ```bash
 bun run check         # tsc --noEmit
 bun run test          # 已注册确定性测试套件
-bun run build:binary:release  # 本机 + GitHub Release 资产名对齐的 Linux x64 / arm64 二进制可编译
+bun run build:release  # 本机 + GitHub Release 资产名对齐的二进制与模板包可构建
 ```
 
 默认测试套件必须离线、确定性、无真实 provider 消耗；模型调用用 stub / mock 覆盖协议与错误边界。需要验证当前真实配置时，显式运行 `bun run test:live`（`~/.flyflor/config.jsonc`）或 `bun run test:live:docker`（`./docker/config/config.jsonc`），这类 live 冒烟不进入 `ci` / `release:check` 的默认门禁。

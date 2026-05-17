@@ -40,7 +40,7 @@ flyflor update -y
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-二进制安装从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`，默认安装到 `~/.flyflor`。`--uninstall` 保留配置和数据。
+二进制安装从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`，默认安装到 `~/.flyflor`。模板包由 `bun run build:templates:release` 生成，根目录布局直接对应安装前缀下的 `prompts/`、`templates/` 和 `commands.jsonc`；`--uninstall` 保留配置和数据。
 
 ### 安装方式
 
@@ -92,6 +92,8 @@ bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.js
 bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
 bun run build:binary # 编译本机二进制
 bun run build:binary:release # 编译本机 + GitHub Release 资产名对齐的 Linux x64 / arm64 二进制
+bun run build:templates:release # 打包 GitHub Release 使用的 flyflor-templates.tar.gz
+bun run build:release # 构建并检查发布所需的二进制 + 模板包
 ```
 
 ## Docker Dev
@@ -101,13 +103,13 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 ```bash
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 直接进入 chat TUI
-bun run smoke:docker                      # 不启动容器，检查 compose / binary / prompt bundle
+bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
 bun run smoke:gateway:service             # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
-bun run smoke:release                     # docs + type + tests + release binaries + gateway service + docker smoke
+bun run smoke:release                     # docs + type + tests + release assets + gateway service + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互
