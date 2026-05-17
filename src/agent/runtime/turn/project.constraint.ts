@@ -6,9 +6,20 @@
  */
 
 import type { GatewayMessage } from "../../../protocol/contracts/index.ts";
+import { Component } from "../../../agent/di/decorators/index.ts";
+import { Runtime } from "../../../components/component.ts";
+
+@Component()
+export class ProjectConstraintBuilder extends Runtime {
+    public projectConstraintIdForMessage(message: GatewayMessage): string {
+        return [message.route.channel, message.route.accountId, message.route.chatId, message.route.threadId]
+            .filter(Boolean)
+            .join(":");
+    }
+}
+
+const defaultProjectConstraintBuilder = new ProjectConstraintBuilder();
 
 export function projectConstraintIdForMessage(message: GatewayMessage): string {
-    return [message.route.channel, message.route.accountId, message.route.chatId, message.route.threadId]
-        .filter(Boolean)
-        .join(":");
+    return defaultProjectConstraintBuilder.projectConstraintIdForMessage(message);
 }
