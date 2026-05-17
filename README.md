@@ -88,7 +88,7 @@ flyflor gateway service plan --target systemd --write # 写入用户级 systemd 
 bun run check        # TypeScript 类型检查
 bun run test         # 确定性单元测试：离线、stub model、无真实 API 消耗
 bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的当前 provider；无 apiKey 时跳过
-bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc
+bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc，并覆盖 runtime + memory 临时状态链路
 bun run smoke:agent  # 确定性智能体主路径冒烟：runtime + memory + planning + brain.db
 bun run smoke:agent:live # 真实模型 + runtime + memory + brain.db 冒烟；状态写入临时 HOME，无 apiKey 时跳过
 bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
