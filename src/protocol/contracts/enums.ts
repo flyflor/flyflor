@@ -27,6 +27,7 @@ export const Channel = {
     WeChat: "wechat",
     Webhook: "webhook",
     WhatsApp: "whatsapp",
+    Ws: "ws",
     WeixinIlink: "weixin-ilink",
     Yuanbao: "yuanbao",
     Zalo: "zalo",
@@ -196,6 +197,34 @@ export const ChannelTransport = {
 } as const;
 
 export type ChannelTransport = (typeof ChannelTransport)[keyof typeof ChannelTransport];
+
+export const GatewayControlProtocol = {
+    EventV1: "flyflor.event.v1",
+    WsV1: "flyflor.ws.v1",
+} as const;
+
+export type GatewayControlProtocol = (typeof GatewayControlProtocol)[keyof typeof GatewayControlProtocol];
+
+export const GatewayControlMessageType = {
+    Ack: "ack",
+    ClientHello: "client.hello",
+    Error: "error",
+    EventPublish: "event.publish",
+    EventSubscribe: "event.subscribe",
+    EventUnsubscribe: "event.unsubscribe",
+    GatewayMessageSend: "gateway.message.send",
+    GatewayStatusGet: "gateway.status.get",
+    GatewayStatusSnapshot: "gateway.status.snapshot",
+    Ping: "ping",
+    Pong: "pong",
+    ServerHello: "server.hello",
+    TurnDelta: "turn.delta",
+    TurnError: "turn.error",
+    TurnFinal: "turn.final",
+} as const;
+
+export type GatewayControlMessageType =
+    (typeof GatewayControlMessageType)[keyof typeof GatewayControlMessageType];
 
 export const ChannelLinkState = {
     Connected: "connected",

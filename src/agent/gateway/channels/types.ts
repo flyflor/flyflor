@@ -8,11 +8,19 @@ import type {
     GatewayMessage,
     GatewayReply,
     GatewayRoute,
+    RuntimeContext,
 } from "../../../protocol/contracts/index.ts";
+
+export interface StreamingDispatchOptions {
+    /** Runtime-visible scope supplied by control transports such as WS project/fork clients. */
+    context?: RuntimeContext;
+    /** Streaming is only exposed to protocol surfaces that explicitly support deltas. */
+    onTextDelta?: (text: string) => void | Promise<void>;
+}
 
 export type StreamingMessageDispatcher = (
     message: GatewayMessage,
-    options?: { onTextDelta?: (text: string) => void | Promise<void> },
+    options?: StreamingDispatchOptions,
 ) => Promise<GatewayReply>;
 export type MessageDispatcher = StreamingMessageDispatcher;
 

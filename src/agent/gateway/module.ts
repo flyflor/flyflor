@@ -7,11 +7,12 @@ import {
     type GatewayReply,
     type RuntimeContext,
 } from "../../protocol/contracts/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, globalEvents, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { Gateway } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { buildGatewayStatusSnapshot, type ChannelRuntimeState } from "./channels/status.ts";
-import type { ChannelAdapter, StreamingMessageDispatcher } from "./channels/types.ts";
+import type { ChannelAdapter, StreamingDispatchOptions, StreamingMessageDispatcher } from "./channels/types.ts";
+import { GatewayControlHub, type GatewayControlPeer } from "./control.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.ts";
 
 @Module()
@@ -20,6 +21,7 @@ export class GatewayModule extends Gateway {
     protected running = false;
     protected serverUrl?: string;
     protected startedAt?: string;
+    protected controlHub?: GatewayControlHub;
 
     public constructor(
         protected readonly config: GatewayConfig,
@@ -37,10 +39,21 @@ export class GatewayModule extends Gateway {
         }
         this.running = true;
         this.startedAt = new Date().toISOString();
-        const server = Bun.serve({
+        this.controlHub = new GatewayControlHub({
+            config: this.config,
+            dispatch: this.createTrackedDispatcher("ws"),
+            events: globalEvents,
+            status: () => this.getStatusSnapshot(),
+        });
+        const server = Bun.serve<GatewayControlPeer>({
             hostname: this.config.host,
             port: this.config.port,
-            fetch: (request) => this.handleRequest(request),
+            fetch: (request, server) => this.handleRequest(request, server),
+            websocket: {
+                close: (socket) => this.controlHub?.close(socket),
+                message: (socket, raw) => void this.controlHub?.message(socket, raw),
+                open: (socket) => this.controlHub?.open(socket),
+            },
         });
         this.serverUrl = server.url.toString();
 
@@ -59,8 +72,15 @@ export class GatewayModule extends Gateway {
         }
     }
 
-    protected async handleRequest(request: Request): Promise<Response> {
+    protected async handleRequest(request: Request, server?: Bun.Server<GatewayControlPeer>): Promise<Response | undefined> {
         const url = new URL(request.url);
+        if (request.method === "GET" && url.pathname === "/ws") {
+            if (!server || !this.controlHub) {
+                return json({ error: "gateway_control_not_ready" }, 503);
+            }
+            return this.controlHub.upgrade(request, server);
+        }
+
         if (request.method === "GET" && url.pathname === "/health") {
             return json({ ok: true });
         }
@@ -150,9 +170,9 @@ export class GatewayModule extends Gateway {
 
     protected async dispatch(
         message: GatewayMessage,
-        options: { onTextDelta?: (text: string) => void | Promise<void> } = {},
+        options: StreamingDispatchOptions = {},
     ) {
-        const context: RuntimeContext = {
+        const context: RuntimeContext = options.context ?? {
             requestId: crypto.randomUUID(),
             now: new Date().toISOString(),
         };
@@ -272,6 +292,7 @@ export class GatewayModule extends Gateway {
             let emittedDelta = false;
             try {
                 const reply = await this.dispatch(message, {
+                    context: options.context,
                     onTextDelta: async (text) => {
                         if (!emittedDelta) {
                             emittedDelta = true;

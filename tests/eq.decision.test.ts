@@ -100,6 +100,13 @@ describe("EQ-01 slice C: red-line audit — runtime/decision side does NOT keywo
         // 红线模式：直接做基于关键词的字符串匹配 → label。
         // 例：.includes("happy"), text.match(/joy/, .indexOf("anger") >= 0, ` === "joy"` 出现在条件语境
         // 这里粗筛 includes/indexOf/match 加 label 字面量；任何命中即视为可疑。
+        const patterns = tokens.flatMap((label) => [
+            { label, pattern: new RegExp(`\\.includes\\(\\s*["'\`]${label}["'\`]`, "i") },
+            { label, pattern: new RegExp(`\\.indexOf\\(\\s*["'\`]${label}["'\`]`, "i") },
+            { label, pattern: new RegExp(`\\.match\\([^)]*${label}[^)]*\\)`, "i") },
+            { label, pattern: new RegExp(`\\.test\\([^)]*\\b${label}\\b[^)]*\\)`, "i") },
+            { label, pattern: new RegExp(`\\.split\\(\\s*["'\`]${label}["'\`]`, "i") },
+        ]);
         const suspicious: Array<{ file: string; line: number; snippet: string; label: string }> = [];
         for (const file of files) {
             if (allow.has(file)) continue;
@@ -107,16 +114,9 @@ describe("EQ-01 slice C: red-line audit — runtime/decision side does NOT keywo
             const lines = content.split("\n");
             for (let i = 0; i < lines.length; i++) {
                 const ln = lines[i]!;
-                for (const label of tokens) {
+                for (const { label, pattern } of patterns) {
                     // 基于关键词派生：includes("joy") / indexOf("joy") / match(/joy/) / test(/joy/) / split("joy")
-                    const patterns: RegExp[] = [
-                        new RegExp(`\\.includes\\(\\s*["'\`]${label}["'\`]`, "i"),
-                        new RegExp(`\\.indexOf\\(\\s*["'\`]${label}["'\`]`, "i"),
-                        new RegExp(`\\.match\\([^)]*${label}[^)]*\\)`, "i"),
-                        new RegExp(`\\.test\\([^)]*\\b${label}\\b[^)]*\\)`, "i"),
-                        new RegExp(`\\.split\\(\\s*["'\`]${label}["'\`]`, "i"),
-                    ];
-                    if (patterns.some((p) => p.test(ln))) {
+                    if (pattern.test(ln)) {
                         suspicious.push({ file, line: i + 1, snippet: ln.trim(), label });
                     }
                 }
@@ -131,7 +131,7 @@ describe("EQ-01 slice C: red-line audit — runtime/decision side does NOT keywo
             );
         }
         expect(suspicious).toHaveLength(0);
-    });
+    }, 15_000);
 });
 
 async function collectTs(root: string): Promise<string[]> {

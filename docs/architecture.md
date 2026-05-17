@@ -60,6 +60,8 @@ flowchart TB
     Workers --> JsonProcess["json-process / persistent"]
 
     Gateway --> Channels["channel adapters<br/>api / stdio / webhook / ..."]
+    Gateway --> ControlWs["GatewayControlHub<br/>/ws control/event transport"]
+    Events["EventsComponent<br/>GlobalEventBus"] -. RuntimeEvent .-> ControlWs
 
     Protocol["src/protocol<br/>枚举 / 事件 / 进程信封"] -.- AppRoot
     Protocol -.- Runtime
@@ -162,7 +164,7 @@ Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只
 | --- | --- | --- |
 | `app.ts` / `src/app.ts` | 装配、显式注入 | 业务逻辑、领域协议 |
 | `src/command` | CLI/TUI 入口、状态展示 | 直接驱动 agent loop、绕过 Gateway/Runtime |
-| `src/agent/gateway` | 渠道归一、status 快照 | 调用模型、写记忆 |
+| `src/agent/gateway` | 渠道归一、status 快照、`/ws` control/event transport | 调用模型、写记忆 |
 | `src/agent/runtime` | turn 编排、上下文装配、事件发布 | 持有渠道私有协议、储存驱动细节 |
 | `src/agent/blackboard` | turn/step/decision/lease | 执行工具、写长期记忆 |
 | `src/agent/worker` | registry / pool / adapter / 超时 | 动态扫描、动态 import、绕过 Sandbox |
@@ -195,6 +197,8 @@ flowchart LR
 ```
 
 所有跨进程消息走 `src/protocol/processes/protocol.ts` 信封，要求 JSON 可序列化、有 start/ready/stop/crash/restart backoff 生命周期。
+
+Gateway 控制面走 `src/protocol/control/envelope.ts` 信封：`/ws` 只接受 JSON control envelope，支持 gateway status、message dispatch、RuntimeEvent subscription 和 turn delta/final。普通 IM channel 仍只发送 final reply；`/ws` 和 `/v1` SSE 是显式流式协议面。
 
 ## 关键数据结构
 

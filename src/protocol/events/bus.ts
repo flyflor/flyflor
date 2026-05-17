@@ -1,7 +1,7 @@
 import type { RuntimeEvent } from "../contracts/index.ts";
 import type { EventSink } from "./types.ts";
 
-export class RuntimeEventBus implements EventSink {
+export class GlobalEventBus implements EventSink {
     private readonly sinks = new Set<EventSink>();
 
     public subscribe(sink: EventSink): () => void {
@@ -16,5 +16,5 @@ export class RuntimeEventBus implements EventSink {
     }
 }
 
-export const globalEvents = new RuntimeEventBus();
-export { RuntimeEventBus as FpcEventBus };
+export const globalEvents = new GlobalEventBus();
+export { GlobalEventBus as FpcEventBus, GlobalEventBus as RuntimeEventBus };

@@ -382,7 +382,9 @@ describe("Gateway channel boundaries", () => {
 
         const adapters = createChannelAdapters(gateway);
 
-        expect([...adapters.keys()].sort()).toEqual(Object.values(Channel).sort());
+        // WS is the gateway control/event transport, not a normal channel adapter.
+        const adapterChannels = Object.values(Channel).filter((channel) => channel !== Channel.Ws);
+        expect([...adapters.keys()].sort()).toEqual(adapterChannels.sort());
         expect([...adapters.values()].map((adapter) => adapter.constructor.name)).not.toContain(
             "UnsupportedChannelAdapter",
         );

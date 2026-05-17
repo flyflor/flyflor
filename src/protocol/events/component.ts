@@ -2,7 +2,7 @@ import { FlyflorComponent } from "../../components/index.ts";
 import { createRuntimeEvent } from "./runtime.event.ts";
 import { readEventMetadata, type EventHandler } from "../../agent/di/composition/index.ts";
 import type { RuntimeEvent } from "../contracts/index.ts";
-import { globalEvents, RuntimeEventBus } from "./bus.ts";
+import { globalEvents, GlobalEventBus } from "./bus.ts";
 import type { EventSink, RuntimeEventType } from "./types.ts";
 
 /**
@@ -15,7 +15,7 @@ import type { EventSink, RuntimeEventType } from "./types.ts";
 export class EventsComponent extends FlyflorComponent implements EventSink {
     private readonly pendingHooks = new Set<Promise<void>>();
 
-    public constructor(private readonly sink: EventSink, private readonly bus: RuntimeEventBus = globalEvents) {
+    public constructor(private readonly sink: EventSink, private readonly bus: GlobalEventBus = globalEvents) {
         super();
     }
 
@@ -73,7 +73,7 @@ export class EventsComponent extends FlyflorComponent implements EventSink {
         return this;
     }
 
-    public asBus(): RuntimeEventBus {
+    public asBus(): GlobalEventBus {
         return this.bus;
     }
 

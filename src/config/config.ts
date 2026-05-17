@@ -70,6 +70,15 @@ export interface GatewayConfig {
     allowedChannels: string[];
     channelReplyUrls: Record<string, string>;
     channels: ChannelConfigs;
+    control?: GatewayControlConfig;
+}
+
+export interface GatewayControlConfig {
+    /**
+     * Gateway Control/Event transport token. Omitted token allows localhost-only
+     * clients so local TUI/web consoles can connect without storing secrets.
+     */
+    token?: SecretRef | string;
 }
 
 export interface ChannelConfigs {
@@ -606,6 +615,7 @@ export async function loadConfigForPaths(
                 allowedChannels: [Channel.Api, Channel.Webhook, Channel.Stdio],
                 channelReplyUrls: {},
                 channels: createDefaultChannelConfigs(),
+                control: {},
             },
             configFile.gateway,
         ),
@@ -711,6 +721,7 @@ function resolveGatewaySecrets(gateway: GatewayConfig, secrets: Record<string, s
     return {
         ...gateway,
         channels: resolveSecretTree(gateway.channels, secrets) as GatewayConfig["channels"],
+        control: resolveSecretTree(gateway.control ?? {}, secrets) as GatewayConfig["control"],
     };
 }
 

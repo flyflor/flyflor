@@ -7,6 +7,7 @@ Gateway 是 Flyflor 对外通讯的唯一入口：归一化 31 种 channel 入�
 ## 相关代码路径
 
 - `src/agent/gateway/module.ts` — Gateway 主类
+- `src/agent/gateway/control.ts` — Gateway Control/Event WebSocket transport
 - `src/agent/gateway/channels/index.ts` — channel adapter 工厂
 - `src/agent/gateway/channels/types.ts` — `ChannelAdapter` 与 `MessageDispatcher` 接口
 - `src/agent/gateway/channels/delivery.protocol.ts` — thread / 引用 / 评论回送元数据统一出口
@@ -14,6 +15,7 @@ Gateway 是 Flyflor 对外通讯的唯一入口：归一化 31 种 channel 入�
 - `src/agent/gateway/channels/status.ts` — registry / status snapshot
 - `src/agent/gateway/channels/api.ts` / `stdio.ts` / `webhook.ts` / `wechat.ts` / `wecom.callback.ts` / `weixin.ilink.ts` / `telegram.ts` / `discord.ts` / `feishu.ts` / `bluebubbles.ts` / `slack.ts` / `line.ts` / `mattermost.ts` / `dingtalk.ts` / `http.platforms.ts`
 - `src/protocol/contracts/enums.ts` — `Channel` enum
+- `src/protocol/control/envelope.ts` — control/event envelope 协议
 - `src/protocol/contracts/types.ts` — `GatewayMessage` / `GatewayReply`
 
 ## Hermes 对齐原则
@@ -62,6 +64,7 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 | WeCom                   | `wecom`                    | `HttpPlatformAdapter`          | ✅ 企业微信通用 HTTP 归一化                                                    |
 | WeCom Callback          | `wecom_callback`           | `WeComCallbackAdapter`         | ✅ 官方 callback；URL verify + AES 解密 + 主动 `message/send` 回复             |
 | WhatsApp                | `whatsapp`                 | `HttpPlatformAdapter`          | ✅ verifyToken 握手 + Cloud API message 归一化 / 回复                          |
+| WS Control              | `ws`                       | `GatewayControlHub`            | ✅ `/ws` first-party control/event transport；不进入普通 adapter registry      |
 | Yuanbao                 | `yuanbao`                  | `HttpPlatformAdapter`          | ✅ TIM-style MsgBody 归一化 + reply URL 回发                                   |
 | Zalo                    | `zalo`                     | `HttpPlatformAdapter`          | ✅ sender/recipient/message 归一化 + reply URL 回发                            |
 
@@ -85,6 +88,34 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 | 其他 HTTP channel    | ✅ / reply URL                     | —                                        | 结构化保留                       | 结构化保留                 | —                         | —           | 结构化保留           |
 
 状态接口 `/channels` 会返回每个 adapter 的 `capabilities`，用于 CLI/TUI 和后续健康检查判断哪些细节是原生支持、哪些是显式降级。
+
+## Gateway Control / Event Transport
+
+Gateway 额外开放 `/ws` 作为本地 TUI、Web 控制台和未来 first-party app 的通用控制面。它不是某个 TUI 的兼容补丁，而是 `src/protocol/control/envelope.ts` 定义的结构化协议：
+
+| Message type | 方向 | 用途 |
+| --- | --- | --- |
+| `client.hello` / `server.hello` | 双向 | 能力握手；server 返回支持的 command、当前 gateway status |
+| `event.subscribe` / `event.unsubscribe` | client → server | 按 `RuntimeEvent.type` 或 `requestId` 订阅全局事件流 |
+| `event.publish` | server → client | 推送 JSON 可序列化 `RuntimeEvent` |
+| `gateway.status.get` / `gateway.status.snapshot` | 双向 | 拉取 `/channels` 同源 status snapshot |
+| `gateway.message.send` | client → server | 发送一轮结构化 `GatewayMessage`，channel 固定归一为 `ws` |
+| `turn.delta` / `turn.final` / `turn.error` | server → client | 控制面 turn 生命周期；WS 可收 delta，IM channel 仍 final-only |
+| `ping` / `pong` / `ack` / `error` | 双向 | 心跳、确认和机器可读错误 |
+
+Envelope 固定包含 `protocol`、`id`、`type`、`at`，可选 `requestId` / `correlationId` / `payload`。`gateway.message.send.payload.context` 可显式携带 `activeProject`、`contextForkId`、`skillNames`；这些字段直接进入 `RuntimeContext`，保持无 session 设计，不从自然语言或终端状态推断当前 project/fork。
+
+鉴权规则：
+
+- 配置 `gateway.control.token` 后，客户端必须使用 `Authorization: Bearer <token>` 或 `?token=`。
+- 未配置 token 时只允许 localhost 连接，方便本机 TUI / Web 面板零配置调试。
+- token 仍走 `config/secrets provider`，禁止环境变量。
+
+事件模型：
+
+- `EventsComponent` 会把所有 `RuntimeEvent` fan-out 到 `GlobalEventBus`；`GatewayControlHub` 只订阅这个全局事件入口。
+- WS 事件订阅只按结构化 `type` / `requestId` 过滤，不读取自然语言内容。
+- 外部 IM channel 不消费 `turn.delta`，也不会逐字推送；只有 `/v1` API SSE 和 `/ws` 控制面属于显式流式协议。
 
 ## 注册与状态时序
 
@@ -123,6 +154,28 @@ flowchart LR
     Reply --> GW
     GW --> Adapter2["adapter.send"]
     Adapter2 --> External
+```
+
+## Control/Event 时序
+
+```mermaid
+sequenceDiagram
+    participant Client as TUI/Web/App
+    participant WS as GatewayControlHub /ws
+    participant GW as GatewayModule
+    participant RT as RuntimeModule
+    participant Bus as GlobalEventBus
+
+    Client->>WS: websocket upgrade
+    WS-->>Client: server.hello(status, capabilities)
+    Client->>WS: event.subscribe(types/requestId)
+    Client->>WS: gateway.message.send(text, context)
+    WS->>GW: StreamingMessageDispatcher(message, context)
+    GW->>RT: handleMessage(GatewayMessage, RuntimeContext)
+    RT-. RuntimeEvent .->Bus
+    Bus-. event.publish .->WS
+    WS-->>Client: turn.delta*
+    WS-->>Client: turn.final(reply)
 ```
 
 ## 数据结构
@@ -184,6 +237,7 @@ interface GatewayChannelCapabilities {
 
 - 多数 HTTP channel 共用 `HttpPlatformAdapter`，但保留 channel-specific normalize / verify / send 分支；Slack、Line、Mattermost、DingTalk、WeChat official account、WeCom Callback 等已拆独立适配器，凭据不完整时不会回退到未校验的通用入口。
 - 外部聊天 / 平台 channel 只发送最终 `GatewayReply.text`，不把 runtime 的 token delta 拆成多条平台消息；显式 OpenAI-compatible `/v1/*` API SSE 属于 API 协议面，单独处理。
+- `/ws` 是 Gateway Control/Event Transport，允许 `turn.delta` 给 first-party 客户端做低延迟渲染；这不改变 IM channel final-only 规则。
 - `typing.start` / `typing.stop` 只作为 best-effort lifecycle；失败会记录 `gateway.operation.failed` / `gateway.typing.failed`，不会阻断 final reply。Weixin iLink 只有拿到 `getconfig.typing_ticket` 后才调用官方 `sendtyping`，缺 ticket 时 no-op；最终回复仍必须走同一条入站 update 的官方 `sendmessage + context_token`，不能被 lifecycle operation 吞掉。若 iLink 返回结构化 `ret=-14`，adapter 会按官方过期信号重试一次不带 `context_token` 的 `sendmessage`；该分支不读取错误文案。
 - Discord slash command 先按官方 interaction 协议返回 deferred ACK，再用 `PATCH /webhooks/{application_id}/{token}/messages/@original` 写入最终文本；不要改成 followup POST 造成重复消息。
 - LINE 的 `replyToken` 是短生命周期发送凭据，不是引用锚点；引用回复只使用 message `quoteToken`。Direct chat 可用官方 loading animation，replyToken 失败后按官方 push API 回退，仍只发送最终文本。
