@@ -8,7 +8,8 @@ import {
     loadConfigForPaths,
     createDefaultMemoryTuning,
     type FlyflorConfig,
-    type FlyflorPaths} from "../src/config/index.ts";
+    type FlyflorPaths,
+} from "../src/config/index.ts";
 import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
 import {
     MemoryModule,
@@ -21,10 +22,12 @@ import {
     SQLiteBlackboardStore,
     SQLiteMemoryStore,
     WorkerManager,
-    type MemoryRecord} from "../src/agent/index.ts";
+    type MemoryRecord,
+} from "../src/agent/index.ts";
 import { FlyFlor, FlyFlorModule } from "../src/app.ts";
 import { assertPlatformResponse } from "../src/agent/gateway/channels/helpers.ts";
 import { WeixinIlinkAdapter } from "../src/agent/gateway/channels/weixin.ilink.ts";
+import { readDockerDevConfigText } from "../scripts/docker.dev.smoke.ts";
 import {
     BlackboardTurnStatus,
     BlackboardWorkerOutcome,
@@ -37,7 +40,8 @@ import {
     ModelProviderKind,
     MemoryKind,
     RuntimeModeComponent,
-    RuntimeMode} from "../src/protocol/contracts/index.ts";
+    RuntimeMode,
+} from "../src/protocol/contracts/index.ts";
 import type {
     GatewayMessage,
     GatewayReply,
@@ -46,7 +50,8 @@ import type {
     BlackboardWorkerResult,
     BlackboardWorkerTask,
     RuntimeContext,
-    RuntimeEvent} from "../src/protocol/contracts/index.ts";
+    RuntimeEvent,
+} from "../src/protocol/contracts/index.ts";
 import {
     Inject,
     Component,
@@ -57,7 +62,8 @@ import {
     RuntimeEventType,
     readInjectionMetadata,
     Worker,
-    type EventSink} from "../src/agent/di/index.ts";
+    type EventSink,
+} from "../src/agent/di/index.ts";
 import { EventsComponent } from "../src/protocol/events/index.ts";
 import { ModelComponent } from "../src/llm/index.ts";
 import { RedisComponent, SurrealComponent } from "../src/components/index.ts";
@@ -155,7 +161,8 @@ describe("config JSONC boundaries", () => {
             captured.modelsUrl = String(input);
             captured.authHeader = new Headers(init?.headers).get("authorization");
             return new Response(JSON.stringify({ data: [{ id: "gpt-5.5" }, { id: "gpt-5.4" }] }), {
-                headers: { "content-type": "application/json" }});
+                headers: { "content-type": "application/json" },
+            });
         }) as unknown as typeof fetch;
         try {
             await Bun.write(
@@ -237,7 +244,10 @@ describe("Internal infrastructure deployment boundaries", () => {
     test("runtime helpers are grouped by semantic subdirectory", async () => {
         const runtimeRoot = join(import.meta.dir, "..", "src", "agent", "runtime");
         const entries = await readdir(runtimeRoot, { withFileTypes: true });
-        const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+        const dirs = entries
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => entry.name)
+            .sort();
         const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
         const moduleSource = await readFile(join(runtimeRoot, "runtime.module.ts"), "utf8");
 
@@ -277,7 +287,7 @@ describe("Internal infrastructure deployment boundaries", () => {
 
     test("docker dev defaults to local working memory without Redis service", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
-        const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();
+        const config = await readDockerDevConfigText();
 
         expect(compose).not.toContain("redis:7.4-alpine");
         expect(config).toContain('"backend": "local"');
@@ -299,7 +309,7 @@ describe("Internal infrastructure deployment boundaries", () => {
 
     test("docker dev omits SurrealDB service and adapter config", async () => {
         const compose = await Bun.file(join(import.meta.dir, "..", "docker-compose.yml")).text();
-        const config = await Bun.file(join(import.meta.dir, "..", "docker", "config", "config.jsonc")).text();
+        const config = await readDockerDevConfigText();
 
         expect(compose).not.toContain("surrealdb/surrealdb");
         expect(config).not.toContain('"surreal":');
@@ -332,34 +342,43 @@ describe("Gateway channel boundaries", () => {
                 ...config.gateway.channels,
                 bluebubbles: {
                     password: "bluebubbles-password",
-                    serverUrl: "https://bluebubbles.test"},
+                    serverUrl: "https://bluebubbles.test",
+                },
                 dingtalk: {
                     accessToken: "dingtalk-token",
-                    webhookUrl: "https://dingtalk.test/webhook"},
+                    webhookUrl: "https://dingtalk.test/webhook",
+                },
                 telegram: { botToken: "telegram-token" },
                 discord: { applicationId: "discord-app", publicKey: "00" },
                 feishu: { appId: "feishu-app", appSecret: "feishu-secret" },
                 imessage: {
                     password: "imessage-password",
-                    serverUrl: "https://bluebubbles.test"},
+                    serverUrl: "https://bluebubbles.test",
+                },
                 line: {
                     channelAccessToken: "line-access-token",
-                    channelSecret: "line-secret"},
+                    channelSecret: "line-secret",
+                },
                 mattermost: { webhookToken: "mattermost-token" },
                 slack: {
                     botToken: "slack-bot-token",
-                    signingSecret: "slack-signing-secret"},
+                    signingSecret: "slack-signing-secret",
+                },
                 wechat: { token: "wechat-token" },
                 wecomCallback: { corpId: "corp-1", token: "wecom-token" },
                 whatsapp: {
                     accessToken: "whatsapp-token",
                     phoneNumberId: "phone-1",
-                    verifyToken: "whatsapp-verify-token"},
+                    verifyToken: "whatsapp-verify-token",
+                },
                 weixinIlink: {
                     apiBaseUrl: "https://ilinkai.weixin.qq.com",
                     baseInfo: { channel_version: "2.2.0" },
                     pollIntervalMs: 1500,
-                    token: "weixin-token"}}};
+                    token: "weixin-token",
+                },
+            },
+        };
 
         const adapters = createChannelAdapters(gateway);
 
@@ -380,7 +399,10 @@ describe("Gateway channel boundaries", () => {
             channels: {
                 ...config.gateway.channels,
                 weixinIlink: {
-                    pollIntervalMs: 1500}}});
+                    pollIntervalMs: 1500,
+                },
+            },
+        });
 
         expect(adapters.has(Channel.Api)).toBe(true);
         expect(adapters.has(Channel.WeChat)).toBe(false);
@@ -392,14 +414,16 @@ describe("Gateway channel boundaries", () => {
             apiBaseUrl: "https://ilinkai.weixin.qq.com",
             baseInfo: { channel_version: "2.2.0" },
             pollIntervalMs: 1500,
-            token: "token"});
+            token: "token",
+        });
 
         const message = adapter.normalize({
             from_user_id: "wxid-user",
             msg_type: 1,
             msg_id: "msg-1",
             text: "hello",
-            to_user_id: "bot@im.bot"});
+            to_user_id: "bot@im.bot",
+        });
 
         expect(message.route.chatId).toBe("wxid-user");
         expect(message.route.chatType).toBe(ChatType.Direct);
@@ -410,14 +434,16 @@ describe("Gateway channel boundaries", () => {
             apiBaseUrl: "https://ilinkai.weixin.qq.com",
             baseInfo: { channel_version: "2.2.0" },
             pollIntervalMs: 1500,
-            token: "token"});
+            token: "token",
+        });
 
         const message = adapter.normalize({
             from_user_id: "wxid-user",
             msg_id: "msg-1",
             room_id: "group@chatroom",
             text: "hello group",
-            to_user_id: "bot@im.bot"});
+            to_user_id: "bot@im.bot",
+        });
 
         expect(message.route.chatId).toBe("group@chatroom");
         expect(message.route.chatType).toBe(ChatType.Group);
@@ -442,7 +468,8 @@ describe("Gateway channel boundaries", () => {
         const config = await testConfig();
         const adapter = createChannelAdapters({
             ...config.gateway,
-            allowedChannels: [Channel.Api]}).get(Channel.Api);
+            allowedChannels: [Channel.Api],
+        }).get(Channel.Api);
         if (!adapter) {
             throw new Error("api adapter missing");
         }
@@ -454,7 +481,9 @@ describe("Gateway channel boundaries", () => {
                 body: JSON.stringify({
                     model: "flyflor",
                     stream: true,
-                    messages: [{ role: "user", content: "hello" }]})}),
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            }),
             async (message, options) => {
                 expect(message.text).toBe("hello");
                 await options?.onTextDelta?.("he");
@@ -462,7 +491,8 @@ describe("Gateway channel boundaries", () => {
                 return {
                     messageId: "reply-api",
                     route: message.route,
-                    text: "hello"};
+                    text: "hello",
+                };
             },
         );
         const text = await response.text();
@@ -478,7 +508,8 @@ describe("Gateway channel boundaries", () => {
         const config = await testConfig();
         const adapter = createChannelAdapters({
             ...config.gateway,
-            allowedChannels: [Channel.Api]}).get(Channel.Api);
+            allowedChannels: [Channel.Api],
+        }).get(Channel.Api);
         if (!adapter) {
             throw new Error("api adapter missing");
         }
@@ -490,11 +521,14 @@ describe("Gateway channel boundaries", () => {
                 body: JSON.stringify({
                     model: "flyflor",
                     stream: true,
-                    messages: [{ role: "user", content: "hello" }]})}),
+                    messages: [{ role: "user", content: "hello" }],
+                }),
+            }),
             async (message) => ({
                 messageId: "reply-api",
                 route: message.route,
-                text: "final text"}),
+                text: "final text",
+            }),
         );
         const text = await response.text();
 
@@ -535,7 +569,6 @@ describe("Markdown memory boundaries", () => {
         expect(content.match(/## Flyflor Managed Memory/g)?.length).toBe(1);
         expect(content).toContain(first.content);
         expect(content).toContain(second.content);
-
     });
 
     test("does not duplicate identical managed memory entries", async () => {
@@ -575,12 +608,8 @@ describe("SQLite memory boundaries", () => {
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
 
         await store.addSearchRecord(memoryRecord("global", "global", "Bun-only dependency policy"));
-        await store.addSearchRecord(
-            memoryRecord("same-user", "project:inbox", "SQLite scoped project note", "user-a"),
-        );
-        await store.addSearchRecord(
-            memoryRecord("other-user", "project:inbox", "private other user note", "user-b"),
-        );
+        await store.addSearchRecord(memoryRecord("same-user", "project:inbox", "SQLite scoped project note", "user-a"));
+        await store.addSearchRecord(memoryRecord("other-user", "project:inbox", "private other user note", "user-b"));
         await store.addSearchRecord(
             memoryRecord("other-scope", "project:other", "different project qdrant detail", "user-a"),
         );
@@ -589,7 +618,8 @@ describe("SQLite memory boundaries", () => {
             query: "SQLite Bun private qdrant",
             scope: "project:inbox",
             subjectId: "user-a",
-            limit: 10});
+            limit: 10,
+        });
         const ids = results.map((result) => result.record.id);
 
         expect(ids).toContain("global");
@@ -602,18 +632,15 @@ describe("SQLite memory boundaries", () => {
         const config = await testConfig();
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
 
-        await store.addSearchRecord(
-            memoryRecord("first", "project:inbox", "stable duplicate memory", "user-a"),
-        );
-        await store.addSearchRecord(
-            memoryRecord("second", "project:inbox", "stable duplicate memory", "user-a"),
-        );
+        await store.addSearchRecord(memoryRecord("first", "project:inbox", "stable duplicate memory", "user-a"));
+        await store.addSearchRecord(memoryRecord("second", "project:inbox", "stable duplicate memory", "user-a"));
 
         const results = await store.search({
             query: "stable duplicate memory",
             scope: "project:inbox",
             subjectId: "user-a",
-            limit: 10});
+            limit: 10,
+        });
 
         expect(results.map((result) => result.record.content)).toEqual(["stable duplicate memory"]);
     });
@@ -682,7 +709,8 @@ describe("Agent memory stability and latency", () => {
         const prompt = await memory.buildPrompt({
             ...baseMessage,
             id: "same-focus",
-            text: "继续上一轮。"});
+            text: "继续上一轮。",
+        });
 
         expect(prompt).not.toContain("# Recent Conversation Context");
         expect(prompt).not.toContain("第一轮回答里的短期上下文。");
@@ -703,7 +731,8 @@ describe("Agent memory stability and latency", () => {
             gatewayReply("第二轮回复。"),
             {
                 ...runtimeContext(),
-                now: "2026-05-09T02:01:00.000Z"},
+                now: "2026-05-09T02:01:00.000Z",
+            },
         );
 
         const prompt = await memory.buildPrompt({ ...message, id: "message-3", text: "继续。" });
@@ -729,12 +758,14 @@ describe("Agent memory stability and latency", () => {
                 maxContextTokens: 4096,
                 inheritedEventIds: ["turn-a", "turn-b"],
                 createdAt: "2026-05-09T02:00:00.000Z",
-                updatedAt: "2026-05-09T02:00:00.000Z"});
+                updatedAt: "2026-05-09T02:00:00.000Z",
+            });
 
             const withoutFork = await memory.buildPrompt(gatewayMessage("继续。"), runtimeContext());
             const withFork = await memory.buildPrompt(gatewayMessage("继续。"), {
                 ...runtimeContext(),
-                contextForkId: "fork-explicit"});
+                contextForkId: "fork-explicit",
+            });
             const otherUser = await memory.buildPrompt(
                 { ...gatewayMessage("继续。"), user: { id: "other-user" } },
                 { ...runtimeContext(), contextForkId: "fork-explicit" },
@@ -761,13 +792,15 @@ describe("Agent memory stability and latency", () => {
                 target: "soul",
                 kind: MemoryKind.Rule,
                 content: "助手应自称或被称为“飞花”。",
-                confidence: 0.95},
+                confidence: 0.95,
+            },
             {
                 action: "add",
                 target: "user",
                 kind: MemoryKind.Profile,
                 content: "用户自称“你的主人”。这不是安全或权限边界。",
-                confidence: 0.95},
+                confidence: 0.95,
+            },
         ]);
         const soul = await Bun.file(join(config.paths.workspaceDir, MarkdownMemoryFile.Soul)).text();
         const user = await Bun.file(join(config.paths.workspaceDir, MarkdownMemoryFile.User)).text();
@@ -802,7 +835,9 @@ describe("Agent memory stability and latency", () => {
                 signals: {
                     projectIntent: 0.95,
                     durability: 0.9,
-                    relevance: 0.9}},
+                    relevance: 0.9,
+                },
+            },
         ]);
         const projectMemory = await Bun.file(join(config.paths.projectMemoryDir, "project.memory.md")).text();
         const candidates = await Bun.file(join(config.paths.projectMemoryDir, "candidates.jsonl")).text();
@@ -875,7 +910,8 @@ describe("Agent memory stability and latency", () => {
         const crystal = new CrystalMemoryComponent(
             {
                 ...config.memory.crystal,
-                enabled: true},
+                enabled: true,
+            },
             store,
         );
         const record = memoryRecord("project-record-1", config.paths.projectDir, "项目局部记忆进入晶体层。");
@@ -884,7 +920,8 @@ describe("Agent memory stability and latency", () => {
             projectId: "project-a",
             projectDir: config.paths.projectDir,
             projectMemoryPath: join(config.paths.projectMemoryDir, "project.memory.md"),
-            memoryLayer: "project"};
+            memoryLayer: "project",
+        };
 
         await crystal.recordTurn({
             requestId: "req-1",
@@ -892,7 +929,8 @@ describe("Agent memory stability and latency", () => {
             candidates: [],
             promoted: [record],
             historyEntries: [],
-            reflectionCandidates: []});
+            reflectionCandidates: [],
+        });
         const candidate = store.candidates.get("reflection-project-record-1");
         const metadata = candidate?.metadata?.memoryMetadata as Record<string, unknown> | undefined;
 
@@ -917,7 +955,8 @@ describe("Agent memory stability and latency", () => {
                     content: "Qdrant 必须作为内部基础设施自动管理，不对外暴露端口。",
                     confidence: 0.98,
                     affect: { arousal: 0.82, dominance: 0.86, valence: -0.12 },
-                    signals: { actionability: 0.98, certainty: 0.98, durability: 1, relevance: 1 }},
+                    signals: { actionability: 0.98, certainty: 0.98, durability: 1, relevance: 1 },
+                },
             ],
         );
         const candidate = result.candidates[0];
@@ -961,7 +1000,8 @@ describe("Agent memory stability and latency", () => {
                             target: "soul",
                             kind: "rule",
                             content: "助手应自称或被称为“飞花”。",
-                            confidence: 0.95},
+                            confidence: 0.95,
+                        },
                     ]),
                     "</flyflor_memory_actions>",
                 ].join("\n"),
@@ -993,7 +1033,8 @@ describe("Agent memory stability and latency", () => {
                         target: "soul",
                         kind: "rule",
                         content: "助手流式输出时仍隐藏 memory action。",
-                        confidence: 0.95},
+                        confidence: 0.95,
+                    },
                 ]),
                 "\n</flyflor_memory_actions>",
             ]),
@@ -1004,7 +1045,8 @@ describe("Agent memory stability and latency", () => {
         const reply = await runtime.handleMessage(gatewayMessage("流式自我介绍。"), runtimeContext(), {
             onTextDelta: (text) => {
                 deltas.push(text);
-            }});
+            },
+        });
         const soul = await Bun.file(join(config.paths.workspaceDir, MarkdownMemoryFile.Soul)).text();
 
         expect(deltas.join("")).toBe("宝宝你好，我是飞花。\n");
@@ -1026,7 +1068,8 @@ describe("Agent memory stability and latency", () => {
         const reply = await runtime.handleMessage(gatewayMessage("非流式模型。"), runtimeContext(), {
             onTextDelta: (text) => {
                 deltas.push(text);
-            }});
+            },
+        });
 
         expect(deltas).toEqual(["一次性回答。"]);
         expect(reply.text).toBe("一次性回答。");
@@ -1045,7 +1088,8 @@ describe("Agent memory stability and latency", () => {
             runtime.handleMessage(gatewayMessage("流接口不可用。"), runtimeContext(), {
                 onTextDelta: (text) => {
                     deltas.push(text);
-                }}),
+                },
+            }),
         ).rejects.toThrow("stream_not_supported");
 
         expect(deltas).toEqual([]);
@@ -1055,7 +1099,8 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory }};
+            memory: { ...config.memory },
+        };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
         workers.register(new AnalysisQaWorker());
@@ -1080,7 +1125,8 @@ describe("Agent memory stability and latency", () => {
         expect(reply.text).not.toContain("本不应出现在 reply 里的最终回答");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
-            status: BlackboardTurnStatus.NeedsUser});
+            status: BlackboardTurnStatus.NeedsUser,
+        });
         expect(turns[0]?.status).toBe(BlackboardTurnStatus.NeedsUser);
         // 黑板封顶不再写 `flyflor-decision-form` 系统消息。
         expect(turns[0]?.messages.some((item) => item.content.includes("flyflor-decision-form"))).toBe(false);
@@ -1091,7 +1137,8 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory }};
+            memory: { ...config.memory },
+        };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
         workers.register(new AnalysisQaWorker());
@@ -1107,7 +1154,8 @@ describe("Agent memory stability and latency", () => {
         const reply = await runtime.handleMessage(gatewayMessage("请拆分实现和验证。"), runtimeContext(), {
             onTextDelta: (text) => {
                 deltas.push(text);
-            }});
+            },
+        });
         const streamed = deltas.join("");
 
         // 短路下不应该流式输出"最终回答"，但 ask reply 仍应作为单帧 delta 直接落给用户。
@@ -1122,7 +1170,8 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory }};
+            memory: { ...config.memory },
+        };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
         workers.register(new FinalWithoutAgreementWorker());
@@ -1137,11 +1186,14 @@ describe("Agent memory stability and latency", () => {
                         {
                             left: "must reach converged",
                             right: "every reviewer output is pre-judged as wrong",
-                            reason: "self-referential loop"},
+                            reason: "self-referential loop",
+                        },
                     ],
                     proposition: "planner-reviewer-proof-game",
-                    reviewerTrigger: "any reviewer response"},
-                workers: [{ role: "final-without-agreement", name: "Final worker", handoff: "summary" }]}),
+                    reviewerTrigger: "any reviewer response",
+                },
+                workers: [{ role: "final-without-agreement", name: "Final worker", handoff: "summary" }],
+            }),
             "这是最终回答，但不应该阻止黑板硬封顶。",
             "[]",
         ]);
@@ -1154,7 +1206,8 @@ describe("Agent memory stability and latency", () => {
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "blackboard",
             status: BlackboardTurnStatus.NeedsUser,
-            reason: "needs hard cap"});
+            reason: "needs hard cap",
+        });
         expect(turns[0]?.status).toBe(BlackboardTurnStatus.NeedsUser);
         expect(turns[0]?.steps).toHaveLength(5);
         expect(turns[0]?.steps.every((step) => step.metadata.qaOutcome === BlackboardWorkerOutcome.Final)).toBe(true);
@@ -1169,7 +1222,8 @@ describe("Agent memory stability and latency", () => {
         const config = await testConfig();
         const runtimeConfig = {
             ...config,
-            memory: { ...config.memory }};
+            memory: { ...config.memory },
+        };
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
         workers.register(new AnalysisQaWorker());
@@ -1191,7 +1245,8 @@ describe("Agent memory stability and latency", () => {
         expect(reply.text).not.toContain("previousSteps");
         expect(reply.metadata?.blackboard).toMatchObject({
             mode: "direct",
-            reason: "model selected direct"});
+            reason: "model selected direct",
+        });
     });
 });
 
@@ -1213,7 +1268,8 @@ describe("FlyFlor composition root", () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     name: "blackboard-model-worker",
-                    tags: expect.arrayContaining(["model-backed"])}),
+                    tags: expect.arrayContaining(["model-backed"]),
+                }),
             ]),
         );
         expect(app.resolve(ModelComponent).unwrap()).toBe(model);
@@ -1229,10 +1285,12 @@ describe("FCP provider metadata", () => {
 
         expect(gateway).toMatchObject({
             kind: ComponentKind.Gateway,
-            provider: { scope: "singleton", token: "control.gateway" }});
+            provider: { scope: "singleton", token: "control.gateway" },
+        });
         expect(memory).toMatchObject({
             kind: ComponentKind.Memory,
-            provider: { scope: "singleton", token: "control.memory" }});
+            provider: { scope: "singleton", token: "control.memory" },
+        });
     });
 
     test("keeps Redis and Surreal as named Component prototypes", () => {
@@ -1243,10 +1301,12 @@ describe("FCP provider metadata", () => {
         expect(new TestSurrealComponent()).toBeInstanceOf(SurrealComponent);
         expect(redis).toMatchObject({
             kind: ComponentKind.Component,
-            provider: { scope: "singleton", token: "capability.test-redis" }});
+            provider: { scope: "singleton", token: "capability.test-redis" },
+        });
         expect(surreal).toMatchObject({
             kind: ComponentKind.Component,
-            provider: { scope: "singleton", token: "capability.test-surreal" }});
+            provider: { scope: "singleton", token: "capability.test-surreal" },
+        });
     });
 });
 
@@ -1257,11 +1317,13 @@ describe("FCP dependency container", () => {
 
         expect(service).toMatchObject({
             kind: ComponentKind.Component,
-            provider: { scope: "singleton", token: "capability.test" }});
+            provider: { scope: "singleton", token: "capability.test" },
+        });
         expect(injections).toEqual([
             expect.objectContaining({
                 parameterIndex: 0,
-                token: TestComponent}),
+                token: TestComponent,
+            }),
         ]);
     });
 
@@ -1340,38 +1402,49 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
                 wecom: {},
                 whatsapp: {},
                 weixinIlink: { pollIntervalMs: 1500 },
-                zalo: {}}},
+                zalo: {},
+            },
+        },
         memory: {
             analyzer: {
                 enabled: true,
                 candidateThreshold: 0.65,
                 keyphraseLimit: 12,
-                minimumTextChars: 4},
+                minimumTextChars: 4,
+            },
             enabled: true,
             candidates: {
                 autoPromoteExplicit: true,
-                maxCandidatesPerTurn: 3},
+                maxCandidatesPerTurn: 3,
+            },
             crystal: {
                 enabled: false,
                 backend: CrystalMemoryBackend.Local,
                 local: {
-                    dbFile: join(paths.storageDir, "crystal", "crystal.db")}},
+                    dbFile: join(paths.storageDir, "crystal", "crystal.db"),
+                },
+            },
             matrix: {
                 enabled: true,
                 maxSourceChars: 4096,
                 maxTokens: 128,
-                naturalSentiment: true},
+                naturalSentiment: true,
+            },
             markdown: {
                 enabled: true,
-                maxPromptChars: 12_000},
+                maxPromptChars: 12_000,
+            },
             sqlite: {
                 enabled: true,
-                maxPromptItems: 8},
+                maxPromptItems: 8,
+            },
             embedding: {
-                dimensions: 32},
+                dimensions: 32,
+            },
             retrieval: {
                 maxPromptChars: 18_000,
-                maxResults: 12},
+                maxResults: 12,
+            },
             tuning: createDefaultMemoryTuning(),
             weights: {
                 actionability: 0.7,
@@ -1385,7 +1458,9 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
                 recurrence: 1,
                 relevance: 0.8,
                 sourceDiversity: 1,
-                validationCount: 1}},
+                validationCount: 1,
+            },
+        },
         model: {
             apiMode: "chat-completions",
             providerId: "openai",
@@ -1395,17 +1470,22 @@ async function testConfig(_options: Record<string, never> = {}): Promise<Flyflor
             maxTokens: 4096,
             model: "gpt-5.5",
             temperature: 0.2,
-            timeoutMs: 60_000},
+            timeoutMs: 60_000,
+        },
         paths,
         sandbox: {
-            mode: "off"},
+            mode: "off",
+        },
         routing: {
             fastRouteEnabled: false,
             routeHintTtlMs: 5_000,
             similarityBypassThreshold: 0.85,
-            routeBypassTokenBudget: 32},
+            routeBypassTokenBudget: 32,
+        },
         metrics: {
-            enabled: true}};
+            enabled: true,
+        },
+    };
     await installTestTemplates(config.paths);
     await loadPromptTemplates(config.paths);
     return config;
@@ -1418,11 +1498,14 @@ function gatewayMessage(text: string): GatewayMessage {
             channel: Channel.Stdio,
             chatId: "chat-a",
             chatType: ChatType.Direct,
-            threadId: "thread-a"},
+            threadId: "thread-a",
+        },
         user: {
-            id: "user-a"},
+            id: "user-a",
+        },
         text,
-        receivedAt: "2026-05-09T02:00:00.000Z"};
+        receivedAt: "2026-05-09T02:00:00.000Z",
+    };
 }
 
 function projectConstraintIdForMessage(message: GatewayMessage): string {
@@ -1435,13 +1518,15 @@ function gatewayReply(text: string): GatewayReply {
     return {
         messageId: crypto.randomUUID(),
         route: gatewayMessage("").route,
-        text};
+        text,
+    };
 }
 
 function runtimeContext(): RuntimeContext {
     return {
         requestId: crypto.randomUUID(),
-        now: "2026-05-09T02:00:00.000Z"};
+        now: "2026-05-09T02:00:00.000Z",
+    };
 }
 
 function memoryCandidate(config: FlyflorConfig, content: string) {
@@ -1460,7 +1545,9 @@ function memoryCandidate(config: FlyflorConfig, content: string) {
         createdAt: "2026-05-09T02:00:00.000Z",
         weights: config.memory.weights,
         metadata: {
-            schemaVersion: 1}} as const;
+            schemaVersion: 1,
+        },
+    } as const;
 }
 
 function memoryRecord(id: string, scope: string, content: string, subjectId?: string): MemoryRecord {
@@ -1473,7 +1560,8 @@ function memoryRecord(id: string, scope: string, content: string, subjectId?: st
         importance: 0.7,
         confidence: 0.9,
         createdAt: "2026-05-09T02:00:00.000Z",
-        updatedAt: "2026-05-09T02:00:00.000Z"};
+        updatedAt: "2026-05-09T02:00:00.000Z",
+    };
 }
 
 function testPaths(root: string): FlyflorPaths {
@@ -1495,7 +1583,8 @@ function testPaths(root: string): FlyflorPaths {
         promptDir: join(root, "home", "prompts"),
         skillDir: join(root, "home", "skills"),
         templateDir: join(root, "home", "templates"),
-        mcpDir: join(root, "home", "mcp")};
+        mcpDir: join(root, "home", "mcp"),
+    };
 }
 
 async function installTestTemplates(paths: FlyflorPaths): Promise<void> {
@@ -1633,9 +1722,11 @@ function routeDecision(
                       mode: "normal",
                       policyReason: "default-convergence",
                       evidence: [],
-                      contradictions: []}
+                      contradictions: [],
+                  }
                 : undefined),
-        workers: mode === "blackboard" ? (options.workers ?? testWorkerPlan()) : []});
+        workers: mode === "blackboard" ? (options.workers ?? testWorkerPlan()) : [],
+    });
 }
 
 @Worker(TEST_ANALYSIS_ROLE)
@@ -1663,7 +1754,8 @@ class AnalysisQaWorker {
             openIssues: ["analysis_has_no_final_outcome"],
             blockers: [],
             risk: "medium",
-            discussion: [{ role: "worker", content: "analysis worker continues.", visibility: "public" }]};
+            discussion: [{ role: "worker", content: "analysis worker continues.", visibility: "public" }],
+        };
     }
 }
 
@@ -1689,7 +1781,8 @@ class ReviewQaWorker {
             openIssues: ["review_has_no_final_outcome"],
             blockers: [],
             risk: "medium",
-            discussion: [{ role: "worker", content: "review worker continues.", visibility: "public" }]};
+            discussion: [{ role: "worker", content: "review worker continues.", visibility: "public" }],
+        };
     }
 }
 
@@ -1711,7 +1804,8 @@ class FinalWithoutAgreementWorker {
             openIssues: [],
             blockers: [],
             risk: "low",
-            discussion: [{ role: "worker", content: "Final worker: 我认为已经完成。", visibility: "public" }]};
+            discussion: [{ role: "worker", content: "Final worker: 我认为已经完成。", visibility: "public" }],
+        };
     }
 }
 

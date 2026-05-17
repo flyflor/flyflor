@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderPromptTemplatesDoc } from "../src/agent/prompts/template.docs.ts";
@@ -92,6 +92,41 @@ describe("prompt template docs generator", () => {
             }
             expect(await Bun.file(join(root, "commands.jsonc")).exists()).toBe(true);
             expect(await Bun.file(join(root, "commands.jsonc")).text()).toContain('"run"');
+        } finally {
+            await rm(root, { force: true, recursive: true });
+        }
+    });
+
+    test("docker template install initializes config once and preserves local secrets", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-docker-templates-"));
+        try {
+            const first = Bun.spawn(
+                ["bun", "run", "scripts/install.templates.ts", "--docker", "--target", root, "--force"],
+                {
+                    cwd: join(import.meta.dir, ".."),
+                    stderr: "pipe",
+                    stdout: "pipe",
+                },
+            );
+            expect(await first.exited).toBe(0);
+            const configPath = join(root, "config.jsonc");
+            const generated = await readFile(configPath, "utf8");
+            expect(generated).toContain('"crystal"');
+            expect(generated).toContain('"enabled": true');
+
+            await writeFile(configPath, '{ "model": { "providers": { "fastai": { "apiKey": "sk-live" } } } }\n');
+            const second = Bun.spawn(
+                ["bun", "run", "scripts/install.templates.ts", "--docker", "--target", root, "--force"],
+                {
+                    cwd: join(import.meta.dir, ".."),
+                    stderr: "pipe",
+                    stdout: "pipe",
+                },
+            );
+            const [exit, stdout] = await Promise.all([second.exited, new Response(second.stdout).text()]);
+            expect(exit).toBe(0);
+            expect(stdout).toContain("preserve config.jsonc");
+            expect(await readFile(configPath, "utf8")).toContain("sk-live");
         } finally {
             await rm(root, { force: true, recursive: true });
         }

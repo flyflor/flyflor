@@ -15,11 +15,11 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进
 
 Flyflor 当前支持 31 个 channel，分为三类：
 
-| 类别 | 渠道 |
-| --- | --- |
-| 核心入口 | API、STDIO、Webhook |
-| 官方协议 / 独立适配 | WeChat official account、WeCom Callback、Weixin iLink、Telegram、Discord、Feishu、Slack、Line、Mattermost、DingTalk、BlueBubbles / iMessage |
-| 共享 HTTP 协议适配 | API Server、Google Chat、IRC、Email、Home Assistant、Matrix、MS Graph Webhook、QQ、QQBot、Signal、SMS、Teams、WeCom、WhatsApp、Yuanbao、Zalo |
+| 类别                | 渠道                                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 核心入口            | API、STDIO、Webhook                                                                                                                          |
+| 官方协议 / 独立适配 | WeChat official account、WeCom Callback、Weixin iLink、Telegram、Discord、Feishu、Slack、Line、Mattermost、DingTalk、BlueBubbles / iMessage  |
+| 共享 HTTP 协议适配  | API Server、Google Chat、IRC、Email、Home Assistant、Matrix、MS Graph Webhook、QQ、QQBot、Signal、SMS、Teams、WeCom、WhatsApp、Yuanbao、Zalo |
 
 Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除、卡片更新等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。`/channels` 状态会暴露每个 adapter 的 capability：Telegram 已支持 typing / thread / reply / message edit，Discord 使用 official deferred interaction + original message patch，Slack 支持 thread / update / reaction，Feishu 支持 thread reply / message update，LINE 支持 loading animation / quoteToken / push fallback，Mattermost 支持 REST typing / thread / post patch，Weixin iLink 支持官方 `sendtyping` ticket 生命周期，WeChat official、WeCom Callback 坚持官方协议并按平台能力稳定降级。
 
@@ -123,13 +123,13 @@ docker exec -it flyflor-dev flyflor       # 进入容器交互
 
 挂载路径：
 
-| 宿主路径               | 容器路径                       | 用途                    |
-| ---------------------- | ------------------------------ | ----------------------- |
-| `./docker/config`      | `/root/.flyflor`               | dev 配置 + 提示词模板   |
-| `./docker/workspace`   | `/root/.flyflor/workspace`     | 工作区数据              |
-| `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor`| 编译好的二进制          |
+| 宿主路径               | 容器路径                        | 用途                  |
+| ---------------------- | ------------------------------- | --------------------- |
+| `./docker/config`      | `/root/.flyflor`                | dev 配置 + 提示词模板 |
+| `./docker/workspace`   | `/root/.flyflor/workspace`      | 工作区数据            |
+| `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor` | 编译好的二进制        |
 
-默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆会落到 `flyflor_data` 卷；`brain.db` 和 `crystal.db` 分别承载生命事件与晶体图。架构变更后重新编译 + 重启：
+默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆与 local CrystalComponent 都已启用；`docker/config.default.jsonc` 只在 `docker/config/config.jsonc` 缺失时初始化，避免覆盖本地 provider 密钥；`brain.db` 和 `crystal.db` 分别承载生命事件与晶体图。架构变更后重新编译 + 重启：
 
 ```bash
 bun run docker:up   # = 重编 binary + force-recreate compose
@@ -141,20 +141,20 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 ```jsonc
 {
-  "model": {
-    "activeProvider": "openai",
-    "activeModel": "gpt-5.5",
-    "providers": {
-      "fastai": {
-        "baseUrl": "https://api.openai.com",
-        "apiKey": "openai-api-key",
-        "defaultModel": "gpt-5.5"
-      }
+    "model": {
+        "activeProvider": "openai",
+        "activeModel": "gpt-5.5",
+        "providers": {
+            "fastai": {
+                "baseUrl": "https://api.openai.com",
+                "apiKey": "openai-api-key",
+                "defaultModel": "gpt-5.5",
+            },
+        },
+        "secrets": {
+            "openai-api-key": "...",
+        },
     },
-    "secrets": {
-      "openai-api-key": "..."
-    }
-  }
 }
 ```
 
@@ -164,19 +164,19 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 ### 目录结构
 
-| 路径              | 职责                                                           |
-| ----------------- | -------------------------------------------------------------- |
-| `app.ts`          | 薄入口，启动 FlyFlor 主类                                      |
-| `src/app.ts`      | FlyFlor composition root，显式 DI 容器                        |
-| `src/command`     | CLI、TUI、命令注册、终端渲染                                   |
-| `src/agent`       | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin |
-| `src/agent/di`    | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器  |
-| `src/llm`         | 模型 provider（OpenAI/Anthropic 兼容协议层）                   |
-| `src/crystal`     | 晶体智力：episode、memory_node、Gem、consolidation、dream      |
-| `src/neural`      | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩 |
-| `src/context`     | 显式 project / fork / capability scope 装配；与 neural 平级，不承载 session |
-| `src/protocol`    | 公共协议、枚举、事件、进程 envelope                            |
-| `templates`       | 提示词和记忆 Markdown 模板                                     |
+| 路径           | 职责                                                                        |
+| -------------- | --------------------------------------------------------------------------- |
+| `app.ts`       | 薄入口，启动 FlyFlor 主类                                                   |
+| `src/app.ts`   | FlyFlor composition root，显式 DI 容器                                      |
+| `src/command`  | CLI、TUI、命令注册、终端渲染                                                |
+| `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin         |
+| `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
+| `src/llm`      | 模型 provider（OpenAI/Anthropic 兼容协议层）                                |
+| `src/crystal`  | 晶体智力：episode、memory_node、Gem、consolidation、dream                   |
+| `src/neural`   | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩         |
+| `src/context`  | 显式 project / fork / capability scope 装配；与 neural 平级，不承载 session |
+| `src/protocol` | 公共协议、枚举、事件、进程 envelope                                         |
+| `templates`    | 提示词和记忆 Markdown 模板                                                  |
 
 ### 三层智能模型
 
@@ -199,13 +199,13 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 ## 记忆系统
 
-| 层               | 后端      | 职责                                                             |
-| ---------------- | --------- | ---------------------------------------------------------------- |
-| 宪法层           | Markdown  | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）           |
-| 生命事件层       | SQLite `brain.db` | `memory_events` append-only + `memory_state` 当前可见性；projects / TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
-| 工作记忆         | `MemoryComponent`：Local WAL/snapshot | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据 |
-| 长期记忆图       | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系 |
-| 索引 / 审计      | SQLite    | blackboard、candidate、offer、skill/plugin/mcp 辅助状态          |
+| 层          | 后端                                           | 职责                                                                                                                                                               |
+| ----------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 宪法层      | Markdown                                       | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）                                                                                                           |
+| 生命事件层  | SQLite `brain.db`                              | `memory_events` append-only + `memory_state` 当前可见性；projects / TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
+| 工作记忆    | `MemoryComponent`：Local WAL/snapshot          | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据                                           |
+| 长期记忆图  | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系                                                                                                         |
+| 索引 / 审计 | SQLite                                         | blackboard、candidate、offer、skill/plugin/mcp 辅助状态                                                                                                            |
 
 `RedisComponent` / `SurrealComponent` 作为原型定位基类保留，方便后续恢复外部后端时保持边界清晰；默认正式版不启用 Redis / SurrealDB 服务，外部后端不能绕过 Component 接入。
 
@@ -218,17 +218,18 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 候选来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升、黑板收敛 / MCP 增强证据与 brain 事件状态；外部 Skill promotion 只作为能力包物化证据，不再和 Gem 本体混名。
 
 **双质量门：**
+
 - 门 1：episode cluster sourceKind weight gate
 - 门 2：memory_node confidence > 0.5 AND evidenceCount ≥ 3 → 升格 Gem
 
 Evidence Weight 裁判表：
 
-| sourceKind             | weight |
-| ---------------------- | ------ |
-| direct / unverified    | 0.0    |
-| blackboard-needs-user  | 0.65   |
-| blackboard-converged   | 0.8    |
-| explicit               | 0.9    |
+| sourceKind            | weight |
+| --------------------- | ------ |
+| direct / unverified   | 0.0    |
+| blackboard-needs-user | 0.65   |
+| blackboard-converged  | 0.8    |
+| explicit              | 0.9    |
 
 ### 遗忘与防膨胀
 
@@ -242,15 +243,16 @@ Evidence Weight 裁判表：
 
 Dream 是长期晶体层的主动维护 worker，经 `CrystalComponent` 读写本地 `crystal.db`（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
 
-| Worker        | 作用层             | 唯一职责                                                       |
-| ------------- | ------------------ | -------------------------------------------------------------- |
-| Consolidation | Working memory → Crystal graph | 升格通道：到期 episode → reinforce / consolidate / discard     |
-| Hot compression | Working memory → brain.db | 清理通道：到期 episode → 隔离压缩审计 → 删除热窗口 episode     |
-| Decay         | Crystal graph（纯函数）| 被动衰减：importance × 时间 / verification age                 |
-| Anti-bloat    | Working memory & Crystal graph | 容量阀门：超额强制遗忘 / 归档                                  |
-| Dream         | Crystal graph only | 晶体维护：drift-repair / recall-reinforce / contradiction-audit|
+| Worker          | 作用层                         | 唯一职责                                                        |
+| --------------- | ------------------------------ | --------------------------------------------------------------- |
+| Consolidation   | Working memory → Crystal graph | 升格通道：到期 episode → reinforce / consolidate / discard      |
+| Hot compression | Working memory → brain.db      | 清理通道：到期 episode → 隔离压缩审计 → 删除热窗口 episode      |
+| Decay           | Crystal graph（纯函数）        | 被动衰减：importance × 时间 / verification age                  |
+| Anti-bloat      | Working memory & Crystal graph | 容量阀门：超额强制遗忘 / 归档                                   |
+| Dream           | Crystal graph only             | 晶体维护：drift-repair / recall-reinforce / contradiction-audit |
 
 三类动作：
+
 - `drift-repair`：先写 `gem_snapshot` 存档，再收窄 scope/precondition 或转 deprecated
 - `recall-reinforce`：importance × 1.1，追加 `proven_by` 边
 - `contradiction-audit`：弱侧 `contradictionCount += 1`，confidence × 0.7；< 0.1 → deprecated 归档
@@ -268,6 +270,7 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 - `blackboard`：动态 worker 多轮讨论
 
 黑板特性：
+
 - 同 project constraint 同时只能一个 turn（lease 机制）
 - 目标 3 轮收敛，5 轮硬上限
 - livelock 检测（两轮无新事实、重复争议、重复失败工具）
@@ -348,20 +351,20 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 
 完整文档索引见 [docs/README.md](docs/README.md)。核心文档：
 
-| 文档 | 用途 |
-| --- | --- |
-| [docs/architecture.md](docs/architecture.md) | 分层架构 / composition root / 进程模型 |
-| [docs/boundaries.md](docs/boundaries.md) | 工程边界与红线 |
-| [docs/runtime.turn.md](docs/runtime.turn.md) | 单轮请求完整流程 |
-| [docs/memory.system.md](docs/memory.system.md) | 四层记忆 / 升格 / 衰减 / Dream |
-| [docs/blackboard.md](docs/blackboard.md) | 黑板路由 / 收敛 / Worker 协议 |
-| [docs/gateway.channels.md](docs/gateway.channels.md) | Gateway 与渠道矩阵 |
-| [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计 |
-| [docs/mcp.tools.md](docs/mcp.tools.md) | MCP 工具循环 |
-| [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection → Gem |
-| [docs/skill.system.md](docs/skill.system.md) | Skill 加载与升格 |
-| [docs/cli.commands.md](docs/cli.commands.md) | CLI 命令现状 |
-| [TODO.md](TODO.md) | 运行边界 / 后续计划 |
+| 文档                                                         | 用途                                   |
+| ------------------------------------------------------------ | -------------------------------------- |
+| [docs/architecture.md](docs/architecture.md)                 | 分层架构 / composition root / 进程模型 |
+| [docs/boundaries.md](docs/boundaries.md)                     | 工程边界与红线                         |
+| [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
+| [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
+| [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
+| [docs/gateway.channels.md](docs/gateway.channels.md)         | Gateway 与渠道矩阵                     |
+| [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
+| [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
+| [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
+| [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
+| [docs/cli.commands.md](docs/cli.commands.md)                 | CLI 命令现状                           |
+| [TODO.md](TODO.md)                                           | 运行边界 / 后续计划                    |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 

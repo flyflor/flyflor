@@ -110,7 +110,10 @@ describe("TUI chat chrome", () => {
     });
 
     test("keeps stream panels locked to OpenTUI scrollboxes", async () => {
-        const source = await readFile(join(import.meta.dir, "../src/command/tui/chat/app.tsx"), "utf8");
+        const [appSource, entrySource] = await Promise.all([
+            readFile(join(import.meta.dir, "../src/command/tui/chat/app.tsx"), "utf8"),
+            readFile(join(import.meta.dir, "../src/command/tui/chat/chat.entry.ts"), "utf8"),
+        ]);
 
         expect(CHAT_SCROLL_LOCK_CONTRACT).toMatchObject({
             chatStickyScroll: true,
@@ -123,12 +126,14 @@ describe("TUI chat chrome", () => {
             terminalScreenMode: "alternate-screen",
             wheelRouting: "opentui-scrollbox",
         });
-        expect(source).not.toContain("onMouseScroll");
-        expect(source).not.toContain("applyChatScrollWheel");
-        expect(source).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
-        expect(source).toContain("stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll");
-        expect(source).toContain("visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars");
-        expect(source).toContain("useDetachedScrollBars(scrollBox)");
+        expect(appSource).not.toContain("onMouseScroll");
+        expect(appSource).not.toContain("applyChatScrollWheel");
+        expect(appSource).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
+        expect(appSource).toContain("stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll");
+        expect(appSource).toContain("visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars");
+        expect(appSource).toContain("useDetachedScrollBars(scrollBox)");
+        expect(entrySource).toContain("withPinnedAlternateScreen(");
+        expect(entrySource).toContain("pinRendererAlternateScreen(instance)");
         expect(await readFile(join(import.meta.dir, "../src/command/tui/scrollbar.composition.ts"), "utf8")).toContain(
             "BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)",
         );

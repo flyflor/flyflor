@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 interface InstallOptions {
+    docker: boolean;
     force: boolean;
     targetHome: string;
 }
@@ -12,6 +13,7 @@ const repoRoot = join(import.meta.dir, "..");
 const args = new Set(process.argv.slice(2));
 const explicitTarget = readArgValue("--target");
 const options: InstallOptions = {
+    docker: args.has("--docker"),
     force: args.has("--force"),
     targetHome:
         explicitTarget ?? (args.has("--docker") ? join(repoRoot, "docker", "config") : join(homedir(), ".flyflor")),
@@ -40,6 +42,13 @@ await installTemplateFile({
     force: options.force,
     source: join(repoRoot, "templates", "app.commands.jsonc"),
 });
+
+if (options.docker) {
+    await installDockerDefaultConfig({
+        destination: join(options.targetHome, "config.jsonc"),
+        source: join(repoRoot, "docker", "config.default.jsonc"),
+    });
+}
 
 console.log(`Template install complete: ${options.targetHome}`);
 
@@ -71,6 +80,19 @@ async function installTemplateFile(input: { destination: string; force: boolean;
     }
     await copyFile(input.source, input.destination);
     console.log(`${input.force ? "write" : "copy"} ${basename(input.destination)}`);
+}
+
+async function installDockerDefaultConfig(input: { destination: string; source: string }): Promise<void> {
+    await mkdir(dirname(input.destination), { recursive: true });
+    const destination = Bun.file(input.destination);
+    if (await destination.exists()) {
+        // Docker config carries local provider secrets. Even --force template
+        // refreshes must preserve this file and only update prompts/commands.
+        console.log(`preserve ${basename(input.destination)}`);
+        return;
+    }
+    await copyFile(input.source, input.destination);
+    console.log(`copy ${basename(input.destination)}`);
 }
 
 function readArgValue(name: string): string | undefined {

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
+import { BoxRenderable, ScrollBarRenderable, ScrollBoxRenderable, TextRenderable } from "@opentui/core";
+import { createTestRenderer } from "@opentui/core/testing";
 import {
     listCliTuiPages,
     nextCliTuiPage,
@@ -8,6 +10,8 @@ import {
 } from "../src/command/tui/cli/command.route.ts";
 import { nextDashboardTab, renderDashboardLines } from "../src/command/tui/index.tsx";
 import { filterBlackboardTurns, listWindow, renderDetailLines } from "../src/command/tui/cli/blackboard.browser.tsx";
+import { useDetachedScrollBars } from "../src/command/tui/scrollbar.composition.ts";
+import { withPinnedAlternateScreen } from "../src/command/tui/screen.composition.ts";
 
 describe("CLI TUI navigator", () => {
     test("covers the major interactive command pages", () => {
@@ -98,7 +102,9 @@ describe("CLI TUI navigator", () => {
 
         expect(renderDashboardLines("overview", snapshot as never).map((line) => line.text)).toContain("◆ Runtime");
         expect(renderDashboardLines("channels", snapshot as never).map((line) => line.text)).toContain("◆ Channels");
-        expect(renderDashboardLines("blackboard", snapshot as never).map((line) => line.text)).toContain("◆ Blackboard");
+        expect(renderDashboardLines("blackboard", snapshot as never).map((line) => line.text)).toContain(
+            "◆ Blackboard",
+        );
     });
 
     test("blackboard browser filters, windows and renders details deterministically", () => {
@@ -184,10 +190,82 @@ describe("CLI TUI navigator", () => {
 
         for (const source of sources) {
             expect(source).toContain("const SHOW_SCROLLBARS = false");
+            expect(source).toContain("withPinnedAlternateScreen(");
+            expect(source).toContain("pinRendererAlternateScreen(instance)");
             expect(source).toContain("useDetachedScrollBars(");
             expect(source).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
             expect(source).not.toMatch(/visible:\s*true,\s*\n\s*width:\s*2/u);
         }
         expect(composition).toContain("BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)");
+    });
+
+    test("detaches scrollbox scrollbar renderables at runtime", async () => {
+        const testRenderer = await createTestRenderer({
+            width: 24,
+            height: 8,
+            screenMode: "alternate-screen",
+        });
+
+        try {
+            const scrollBox = new ScrollBoxRenderable(testRenderer.renderer, {
+                flexGrow: 1,
+                flexShrink: 1,
+                contentOptions: {
+                    flexDirection: "column",
+                },
+                horizontalScrollbarOptions: {
+                    visible: false,
+                    height: 0,
+                },
+                verticalScrollbarOptions: {
+                    visible: false,
+                    width: 0,
+                    showArrows: false,
+                },
+            });
+            useDetachedScrollBars(scrollBox);
+            testRenderer.renderer.root.add(scrollBox);
+
+            for (let index = 0; index < 20; index += 1) {
+                scrollBox.content.add(new TextRenderable(testRenderer.renderer, { content: `line ${index}` }));
+            }
+
+            await testRenderer.renderOnce();
+
+            const directChildren = BoxRenderable.prototype.getChildren.call(scrollBox) as unknown[];
+            expect(directChildren.some((child) => child instanceof ScrollBarRenderable)).toBe(false);
+            expect(scrollBox.wrapper.getChildren().some((child) => child instanceof ScrollBarRenderable)).toBe(false);
+            expect(scrollBox.verticalScrollBar.parent).toBeNull();
+            expect(scrollBox.horizontalScrollBar.parent).toBeNull();
+            expect(testRenderer.captureCharFrame()).not.toContain("▌");
+        } finally {
+            testRenderer.renderer.destroy();
+        }
+    });
+
+    test("pins OpenTUI to alternate screen while creating renderers", async () => {
+        const previous = process.env.OTUI_USE_ALTERNATE_SCREEN;
+        process.env.OTUI_USE_ALTERNATE_SCREEN = "0";
+
+        try {
+            let observedDuringCreate = "";
+            const result = await withPinnedAlternateScreen(
+                async () => {
+                    observedDuringCreate = String(process.env.OTUI_USE_ALTERNATE_SCREEN ?? "");
+                    return "ok";
+                },
+                () => {},
+            );
+
+            expect(result).toBe("ok");
+            expect(observedDuringCreate).toBe("1");
+            expect(process.env.OTUI_USE_ALTERNATE_SCREEN).toBe("0");
+        } finally {
+            if (previous === undefined) {
+                delete process.env.OTUI_USE_ALTERNATE_SCREEN;
+            } else {
+                process.env.OTUI_USE_ALTERNATE_SCREEN = previous;
+            }
+        }
     });
 });

@@ -1,11 +1,4 @@
-import {
-    BoxRenderable,
-    CliRenderEvents,
-    createCliRenderer,
-    RGBA,
-    TextAttributes,
-    TextRenderable,
-} from "@opentui/core";
+import { BoxRenderable, CliRenderEvents, createCliRenderer, RGBA, TextAttributes, TextRenderable } from "@opentui/core";
 import type { FlyFlor } from "../../../app.ts";
 import {
     fetchBlackboardTurnDetail,
@@ -14,6 +7,7 @@ import {
     type BlackboardTurnItem,
 } from "../../cli/handlers/blackboard.handler.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
+import { pinRendererAlternateScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -51,12 +45,16 @@ export function listWindow<TValue>(
 }
 
 export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
-    const renderer = await createCliRenderer({
-        targetFps: 30,
-        exitOnCtrlC: false,
-        screenMode: "alternate-screen",
-        useMouse: false,
-        externalOutputMode: "passthrough",
+    const renderer = await withPinnedAlternateScreen(async () => {
+        const instance = await createCliRenderer({
+            targetFps: 30,
+            exitOnCtrlC: false,
+            screenMode: "alternate-screen",
+            useMouse: false,
+            externalOutputMode: "passthrough",
+        });
+        pinRendererAlternateScreen(instance);
+        return instance;
     });
 
     let turns: BlackboardTurnItem[] = [];
@@ -191,10 +189,18 @@ export async function startBlackboardBrowser(app: FlyFlor): Promise<void> {
         const total = filtered.length;
         const window = listWindow(filtered, selectedIndex, Math.max(6, renderer.height - 8));
         const lines: Array<{ text: string; color: RGBA; bg?: RGBA; bold?: boolean }> = [
-            { text: loading ? "loading..." : `${total} turn(s)${turns.length !== total ? ` from ${turns.length}` : ""}`, color: THEME.fgMuted },
+            {
+                text: loading
+                    ? "loading..."
+                    : `${total} turn(s)${turns.length !== total ? ` from ${turns.length}` : ""}`,
+                color: THEME.fgMuted,
+            },
         ];
         if (total === 0) {
-            lines.push({ text: query ? "No matching blackboard turns." : "No blackboard turns yet.", color: THEME.fgMuted });
+            lines.push({
+                text: query ? "No matching blackboard turns." : "No blackboard turns yet.",
+                color: THEME.fgMuted,
+            });
             return lines;
         }
         for (let local = 0; local < window.items.length; local += 1) {
@@ -400,7 +406,9 @@ export function renderDetailLines(turn: BlackboardTurnDetail): string[] {
     lines.push("");
     lines.push("◆ Workers");
     for (const worker of turn.workers) {
-        lines.push(`  ${worker.role} · ${worker.name} · ${worker.status} · ${worker.stage} · handoff=${worker.handoff}`);
+        lines.push(
+            `  ${worker.role} · ${worker.name} · ${worker.status} · ${worker.stage} · handoff=${worker.handoff}`,
+        );
         if (worker.capabilities.length > 0) {
             lines.push(`    capabilities: ${worker.capabilities.join(", ")}`);
         }

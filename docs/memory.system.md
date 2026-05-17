@@ -72,20 +72,20 @@ flowchart LR
 
 `brain.db` 是 LF-R1 之后的单文件大脑，当前已包含：
 
-| 表 | 职责 |
-| --- | --- |
-| `memory_events` | append-only 事实事件；turn、ask、ghost、identity、热记忆压缩审计等都以事件表达 |
-| `memory_state` | 可变状态层；visibility、decay、status、accessCount 等 |
-| `memory_summary` | day / week / rolling summary；`embedding_id` 指向长期图 `summary_embedding` 节点 |
-| `memory_links` | contradicts / causal / derived / supersedes 等证据关系 |
-| `codenames` | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶 |
-| `projects` | `/project` 显式创建 / 使用的项目注册表；存 projectDir、projectMemoryDir、useCount，不承担 session 连续性 |
-| `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示 |
-| `task_plans` | 模型同轮输出的 TODO / 计划摘要；TUI 侧栏展示进度，不存原始推理 |
-| `context_forks` | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算 |
-| `scene_records` | 黑板 / 深度思考 / 反思场景回放摘要；`/history` 右侧复用，不存 chain-of-thought |
+| 表                | 职责                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------- |
+| `memory_events`   | append-only 事实事件；turn、ask、ghost、identity、热记忆压缩审计等都以事件表达                           |
+| `memory_state`    | 可变状态层；visibility、decay、status、accessCount 等                                                    |
+| `memory_summary`  | day / week / rolling summary；`embedding_id` 指向长期图 `summary_embedding` 节点                         |
+| `memory_links`    | contradicts / causal / derived / supersedes 等证据关系                                                   |
+| `codenames`       | 用户显式工作锚点，支持 useCount、project 绑定和 inbox 分桶                                               |
+| `projects`        | `/project` 显式创建 / 使用的项目注册表；存 projectDir、projectMemoryDir、useCount，不承担 session 连续性 |
+| `memory_eq_state` | 最新 EQ 状态，latest-only UPSERT；仅用于语气、暖度和节奏提示                                             |
+| `task_plans`      | 模型同轮输出的 TODO / 计划摘要；TUI 侧栏展示进度，不存原始推理                                           |
+| `context_forks`   | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算                                 |
+| `scene_records`   | 黑板 / 深度思考 / 反思场景回放摘要；`/history` 右侧复用，不存 chain-of-thought                           |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row model 映射；`BrainStore` 不承载 service 层语义。Feedback 分类器归属 `src/neural/memory/feedback.interpreter.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row model 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/neural/memory/feedback.interpreter.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
 TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
 
@@ -118,12 +118,12 @@ stateDiagram-v2
 
 Evidence weight 裁判：
 
-| sourceKind | weight |
-| --- | --- |
-| `direct` / `unverified` | 0.0 |
-| `blackboard-needs-user` | 0.65 |
-| `blackboard-converged` / `mcp-augmented` | 0.8 |
-| `explicit` | 0.9 |
+| sourceKind                               | weight |
+| ---------------------------------------- | ------ |
+| `direct` / `unverified`                  | 0.0    |
+| `blackboard-needs-user`                  | 0.65   |
+| `blackboard-converged` / `mcp-augmented` | 0.8    |
+| `explicit`                               | 0.9    |
 
 ## 晶体图后端
 
@@ -174,11 +174,11 @@ sequenceDiagram
 
 ## 双轨衰减
 
-| 实体 | 日衰减率 | 备注 |
-| --- | --- | --- |
-| episode | 5% | `lastVerifiedAt > 30d` 时额外打折 |
-| memory_node | 2% | 同上 |
-| gem | 0.5% | 长期稳定 |
+| 实体        | 日衰减率 | 备注                              |
+| ----------- | -------- | --------------------------------- |
+| episode     | 5%       | `lastVerifiedAt > 30d` 时额外打折 |
+| memory_node | 2%       | 同上                              |
+| gem         | 0.5%     | 长期稳定                          |
 
 判定阈值：`contradictionCount ≥ 2 → drift-repair`，`confidence < 0.1 → deprecated 归档`。
 
@@ -220,16 +220,16 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 ```json
 [
-  {
-    "action": "add",
-    "target": "soul | self | user | memory",
-    "kind": "fact | profile | rule",
-    "content": "...",
-    "confidence": 0.85,
-    "signals": { "projectIntent": 0.0, "eventIntent": 0.0, "skillPromotionIntent": 0.0 },
-    "codename": { "name": "fly", "workingDir": "/abs/path", "description": "..." },
-    "eq": { "label": "neutral", "valence": 0, "arousal": 0, "dominance": 0, "confidence": 0.8 }
-  }
+    {
+        "action": "add",
+        "target": "soul | self | user | memory",
+        "kind": "fact | profile | rule",
+        "content": "...",
+        "confidence": 0.85,
+        "signals": { "projectIntent": 0.0, "eventIntent": 0.0, "skillPromotionIntent": 0.0 },
+        "codename": { "name": "fly", "workingDir": "/abs/path", "description": "..." },
+        "eq": { "label": "neutral", "valence": 0, "arousal": 0, "dominance": 0, "confidence": 0.8 }
+    }
 ]
 ```
 
@@ -243,11 +243,11 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 ## Markdown 文件用途
 
-| 文件 | 内容 | 写入触发 |
-| --- | --- | --- |
-| `SELF.md` | Flyflor 自我模型 | 模型 `target: self` action 或手编辑 |
-| `SOUL.md` | 长期语气、行为原则 | `target: soul` action |
-| `USER.md` | 用户画像、偏好 | `target: user` action |
+| 文件        | 内容                 | 写入触发                                       |
+| ----------- | -------------------- | ---------------------------------------------- |
+| `SELF.md`   | Flyflor 自我模型     | 模型 `target: self` action 或手编辑            |
+| `SOUL.md`   | 长期语气、行为原则   | `target: soul` action                          |
+| `USER.md`   | 用户画像、偏好       | `target: user` action                          |
 | `MEMORY.md` | 项目事实、长期上下文 | `target: memory` 默认通道；history consolidate |
 
 ## 项目局部记忆
@@ -278,24 +278,24 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 
 ## 事件清单
 
-| 事件 | 触发点 |
-| --- | --- |
-| `memory.episode.written` | working-memory episode 写入完成 |
-| `memory.consolidation.completed` / `failed` | 升格 worker |
-| `memory.decay.swept` | 一轮衰减 sweep |
-| `memory.summary.written` | daily / weekly summary 写入 |
-| `memory.summary.embedding.written` | summary embedding 写入长期图并回填 `embedding_id` |
-| `memory.hot.compression.written` / `failed` | 到期工作记忆压缩审计写入 / 失败 |
-| `memory.dream.completed` / `failed` | Dream pass 完成 |
-| `memory.brain.archive.completed` / `failed` | brain.db 月级冷归档完成 / 失败 |
-| `memory.drift.repaired` | drift-repair 动作 |
-| `memory.recall.reinforced` | recall-reinforce 动作 |
-| `memory.contradiction.flagged` | contradiction-audit 动作 |
-| `memory.prompt.built` | buildPrompt 完成 |
-| `memory.reflection.failed` | reflection 异步失败 |
-| `memory.feedback.classified` / `failed` | feedback interpreter |
-| `memory.project.candidate.recorded` / `memory.written` / `memory.recalled` | 项目记忆闭环 |
-| `memory.warmup.complete` | working-memory warmup |
+| 事件                                                                       | 触发点                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------- |
+| `memory.episode.written`                                                   | working-memory episode 写入完成                   |
+| `memory.consolidation.completed` / `failed`                                | 升格 worker                                       |
+| `memory.decay.swept`                                                       | 一轮衰减 sweep                                    |
+| `memory.summary.written`                                                   | daily / weekly summary 写入                       |
+| `memory.summary.embedding.written`                                         | summary embedding 写入长期图并回填 `embedding_id` |
+| `memory.hot.compression.written` / `failed`                                | 到期工作记忆压缩审计写入 / 失败                   |
+| `memory.dream.completed` / `failed`                                        | Dream pass 完成                                   |
+| `memory.brain.archive.completed` / `failed`                                | brain.db 月级冷归档完成 / 失败                    |
+| `memory.drift.repaired`                                                    | drift-repair 动作                                 |
+| `memory.recall.reinforced`                                                 | recall-reinforce 动作                             |
+| `memory.contradiction.flagged`                                             | contradiction-audit 动作                          |
+| `memory.prompt.built`                                                      | buildPrompt 完成                                  |
+| `memory.reflection.failed`                                                 | reflection 异步失败                               |
+| `memory.feedback.classified` / `failed`                                    | feedback interpreter                              |
+| `memory.project.candidate.recorded` / `memory.written` / `memory.recalled` | 项目记忆闭环                                      |
+| `memory.warmup.complete`                                                   | working-memory warmup                             |
 
 ## 配置要点
 
@@ -321,7 +321,7 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 - Ghost content patch 属于状态修复写路径；若原始 ghost event content 已不是合法 JSON object，patch 必须失败，不允许用空对象覆盖坏数据。
 - `BackgroundScheduler` 按后端可用性降级；默认本地开发环境可运行 local working memory 与 local crystal graph，brain archive 与热记忆压缩由 `MemoryModule` 根 timer 保底，且共用同一条 brain.db 维护锁。
 - Reflection 已拆为 `ReflectionWorker`；Runtime 仅投递异步任务，抽取与落库不再挂在 `RuntimeModule` 私有方法里。
-- 本地 working memory 恢复与 MCP transport 恢复已纳入 `smoke:recovery`；`status` / `doctor` / TUI Overview 只读取 snapshot / backup / WAL 文件元数据展示恢复状态，不解析热数据；Docker doctor/status/recovery 纳入 `smoke:runtime` 与本地 `release:check`。真实模型 chat probe 需要真实 API key，单独由 `smoke:runtime:live` 覆盖；不配置 GitHub Actions 跑仓库侧 CI。
+- 本地 working memory 恢复与 MCP transport 恢复已纳入 `smoke:recovery`；`status` / `doctor` / TUI Overview 只读取 snapshot / backup / WAL 文件元数据展示恢复状态，不解析热数据；Docker dev 默认模板 `docker/config.default.jsonc` 启用 local working memory 与 local CrystalComponent，`docker:templates` 只在缺失时初始化 `docker/config/config.jsonc`，不覆盖本地 provider 密钥；Docker doctor/status/recovery 纳入 `smoke:runtime` 与本地 `release:check`。真实模型 chat probe 需要真实 API key，单独由 `smoke:runtime:live` 覆盖；不配置 GitHub Actions 跑仓库侧 CI。
 
 ## 相关测试
 

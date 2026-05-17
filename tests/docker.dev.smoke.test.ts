@@ -15,6 +15,7 @@ describe("Docker dev smoke", () => {
 
         expect(failed).toEqual([]);
         expect(checks.map((check) => check.name)).toContain("compose exposes no host ports");
+        expect(checks.map((check) => check.name)).toContain("docker config enables local crystal graph");
         expect(checks.map((check) => check.name)).toContain("docker prompt manifest matches runtime");
     });
 

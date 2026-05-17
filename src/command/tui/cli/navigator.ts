@@ -11,7 +11,8 @@ import {
     RGBA,
     ScrollBoxRenderable,
     TextAttributes,
-    TextRenderable} from "@opentui/core";
+    TextRenderable,
+} from "@opentui/core";
 import type { FlyFlor } from "../../../app.ts";
 import { ConfigComponent } from "../../../config/index.ts";
 import { fetchOverviewData } from "../../cli/handlers/overview.handler.ts";
@@ -28,12 +29,14 @@ import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
 import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
 import { useDetachedScrollBars } from "../scrollbar.composition.ts";
+import { pinRendererAlternateScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
 import {
     CLI_TUI_PAGE_ITEMS,
     listCliTuiPages,
     nextGenericCliTuiPage,
     type CliPage,
-    type GenericCliPage} from "./command.route.ts";
+    type GenericCliPage,
+} from "./command.route.ts";
 
 export { listCliTuiPages, nextCliTuiPage, resolveCommandTuiPage, type CliPage } from "./command.route.ts";
 
@@ -48,7 +51,8 @@ const THEME = {
     purple: RGBA.fromInts(188, 171, 255),
     red: RGBA.fromInts(255, 111, 127),
     border: RGBA.fromInts(76, 106, 126),
-    selectedBg: RGBA.fromInts(24, 34, 47)};
+    selectedBg: RGBA.fromInts(24, 34, 47),
+};
 
 const HIDDEN_SCROLLBAR_SIZE = 0;
 const SHOW_SCROLLBARS = false;
@@ -86,8 +90,12 @@ function overviewLoader(): PageLoader {
             lines.push("◆ Memory");
             lines.push(`  Enabled: ${data.memory.memoryEnabled ? "yes" : "no"}`);
             lines.push(`  Crystal: ${data.memory.crystalEnabled ? "yes" : "no"}`);
-            lines.push(`  Working: ${data.memory.workingMemoryStatus.status} · ${data.memory.workingMemoryStatus.detail}`);
-            lines.push(`  Recovery: ${data.memory.workingRecoveryStatus.status} · ${data.memory.workingRecoveryStatus.detail}`);
+            lines.push(
+                `  Working: ${data.memory.workingMemoryStatus.status} · ${data.memory.workingMemoryStatus.detail}`,
+            );
+            lines.push(
+                `  Recovery: ${data.memory.workingRecoveryStatus.status} · ${data.memory.workingRecoveryStatus.detail}`,
+            );
             lines.push("");
             lines.push("◆ Doctor");
             for (const check of data.doctor) {
@@ -95,7 +103,8 @@ function overviewLoader(): PageLoader {
                 lines.push(`  ${icon} ${check.name}: ${check.detail}`);
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function configLoader(): PageLoader {
@@ -120,7 +129,8 @@ function configLoader(): PageLoader {
             lines.push(`  Enabled: ${data.memory.enabled ? "yes" : "no"}`);
             lines.push(`  Embedding: ${data.memory.embeddingDimensions}d`);
             return lines;
-        }};
+        },
+    };
 }
 
 function skillsLoader(): PageLoader {
@@ -136,7 +146,8 @@ function skillsLoader(): PageLoader {
                 if (item.description) lines.push(`    ${item.description}`);
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function mcpLoader(): PageLoader {
@@ -153,7 +164,8 @@ function mcpLoader(): PageLoader {
                 if (item.toolCount !== undefined) lines.push(`    Tools: ${item.toolCount}`);
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function pluginsLoader(): PageLoader {
@@ -169,7 +181,8 @@ function pluginsLoader(): PageLoader {
                 lines.push(`  ${status} ${item.name}`);
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function sandboxLoader(): PageLoader {
@@ -193,7 +206,8 @@ function sandboxLoader(): PageLoader {
                 lines.push(`    · ${entry.value} (${entry.source})`);
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function blackboardLoader(): PageLoader {
@@ -208,7 +222,8 @@ function blackboardLoader(): PageLoader {
                 lines.push(`    Steps: ${item.stepCount} · Workers: ${item.workerCount} · ${item.updatedAt}`);
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function memoryLoader(): PageLoader {
@@ -227,7 +242,8 @@ function memoryLoader(): PageLoader {
             lines.push(`  Recovery: ${data.workingRecoveryStatus.status} · ${data.workingRecoveryStatus.detail}`);
             lines.push(`  Retrospective: ${data.retrospectiveEntryCount} entries`);
             return lines;
-        }};
+        },
+    };
 }
 
 function ghostsLoader(): PageLoader {
@@ -248,7 +264,8 @@ function ghostsLoader(): PageLoader {
                 }
             }
             return lines;
-        }};
+        },
+    };
 }
 
 function dreamLoader(): PageLoader {
@@ -262,7 +279,8 @@ function dreamLoader(): PageLoader {
             lines.push(`  Busy: ${data.busy ? "yes" : "no"}`);
             lines.push(`  Users: ${data.users}`);
             return lines;
-        }};
+        },
+    };
 }
 
 function getLoader(page: CliPage): PageLoader {
@@ -298,19 +316,25 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     }
     const firstPage: GenericCliPage = initialPage;
 
-    const renderer = await createCliRenderer({
-        targetFps: 30,
-        exitOnCtrlC: false,
-        screenMode: "alternate-screen",
-        consoleMode: "disabled",
-        useMouse: true,
-        enableMouseMovement: true,
-        externalOutputMode: "passthrough",
-        consoleOptions: {
-            onCopySelection: (text) => {
-                copyTextToTerminalClipboard(text);
-                renderer.clearSelection();
-            }}});
+    const renderer = await withPinnedAlternateScreen(async () => {
+        const instance = await createCliRenderer({
+            targetFps: 30,
+            exitOnCtrlC: false,
+            screenMode: "alternate-screen",
+            consoleMode: "disabled",
+            useMouse: true,
+            enableMouseMovement: true,
+            externalOutputMode: "passthrough",
+            consoleOptions: {
+                onCopySelection: (text) => {
+                    copyTextToTerminalClipboard(text);
+                    renderer.clearSelection();
+                },
+            },
+        });
+        pinRendererAlternateScreen(instance);
+        return instance;
+    });
 
     let activePage = firstPage;
     let lines: string[] = [];
@@ -324,25 +348,30 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         backgroundColor: THEME.bg,
         flexDirection: "column",
         height: renderer.height,
-        width: renderer.width});
+        width: renderer.width,
+    });
     const headerBox = new BoxRenderable(renderer, {
         border: ["bottom"],
         borderColor: THEME.border,
         flexDirection: "column",
         flexShrink: 0,
-        padding: 1});
+        padding: 1,
+    });
     const headerTitle = new TextRenderable(renderer, {
         content: "",
         fg: THEME.cyan,
-        attributes: TextAttributes.BOLD});
+        attributes: TextAttributes.BOLD,
+    });
     const headerHelp = new TextRenderable(renderer, {
         content: "↑/↓ select page · r refresh · q/Esc quit · Cmd/Ctrl+C copy selection",
         fg: THEME.fgMuted,
-        selectable: false});
+        selectable: false,
+    });
     const errorText = new TextRenderable(renderer, {
         content: "",
         fg: THEME.red,
-        selectable: true});
+        selectable: true,
+    });
     errorText.visible = false;
     headerBox.add(headerTitle);
     headerBox.add(headerHelp);
@@ -352,7 +381,8 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     const bodyBox = new BoxRenderable(renderer, {
         flexDirection: "row",
         flexGrow: 1,
-        flexShrink: 1});
+        flexShrink: 1,
+    });
     mainBox.add(bodyBox);
 
     const navBox = new BoxRenderable(renderer, {
@@ -363,7 +393,8 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         paddingLeft: 1,
         paddingRight: 1,
         paddingTop: 1,
-        width: navWidthFor(renderer.width)});
+        width: navWidthFor(renderer.width),
+    });
     bodyBox.add(navBox);
 
     const navItems = CLI_TUI_PAGE_ITEMS.map((item, index) => {
@@ -372,7 +403,8 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             paddingBottom: 0,
             paddingLeft: 1,
             paddingRight: 1,
-            paddingTop: index === 0 ? 0 : 1});
+            paddingTop: index === 0 ? 0 : 1,
+        });
         const title = new TextRenderable(renderer, { content: "", fg: THEME.fg, selectable: false });
         const detail = new TextRenderable(renderer, { content: "", fg: THEME.fgMuted, selectable: false });
         box.add(title);
@@ -393,7 +425,10 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             showArrows: false,
             trackOptions: {
                 backgroundColor: THEME.selectedBg,
-                foregroundColor: THEME.purple}}});
+                foregroundColor: THEME.purple,
+            },
+        },
+    });
     useDetachedScrollBars(contentBox);
     bodyBox.add(contentBox);
 
@@ -402,12 +437,14 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         flexShrink: 0,
         height: 1,
         paddingLeft: 1,
-        paddingRight: 1});
+        paddingRight: 1,
+    });
     const statusText = new TextRenderable(renderer, {
         content: status,
         fg: THEME.fgMuted,
         selectable: false,
-        truncate: true});
+        truncate: true,
+    });
     statusBox.add(statusText);
     mainBox.add(statusBox);
     root.add(mainBox);
@@ -504,7 +541,8 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
                 attributes: line.startsWith("◆") ? TextAttributes.BOLD : TextAttributes.NONE,
                 selectable: true,
                 width: "100%",
-                wrapMode: "word"});
+                wrapMode: "word",
+            });
             lineRenderables.push(renderable);
             contentBox.content.add(renderable);
         }
@@ -538,7 +576,8 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             renderer.keyInput.off("keypress", keyHandler);
             renderer.off(CliRenderEvents.RESIZE, resizeHandler);
             root.remove(mainBox.id);
-        }});
+        },
+    });
     syncUi();
     void refresh(initialPage);
 

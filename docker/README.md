@@ -4,8 +4,8 @@
 
 ## 服务拓扑
 
-| 服务 | 镜像 | 角色 | 暴露 |
-| --- | --- | --- | --- |
+| 服务      | 镜像                                           | 角色                                          | 暴露        |
+| --------- | ---------------------------------------------- | --------------------------------------------- | ----------- |
 | `flyflor` | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / gateway / local working memory | 仅 internal |
 
 `flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要临时暴露 gateway 时，用本地 `docker-compose.override.yml` 加端口映射，不提交到仓库。
@@ -24,14 +24,14 @@
 
 ## Dev 配置要点
 
-`docker/config/config.jsonc` 是 JSONC 配置，容器按 `~/.flyflor/config.jsonc` 读取。默认记忆配置：
+`docker/config/config.jsonc` 是 JSONC 配置，容器按 `~/.flyflor/config.jsonc` 读取。该文件不进 git；`docker/config.default.jsonc` 是干净 checkout 的默认模板，`bun run docker:templates` 只会在缺失时复制它，已有密钥会保留。默认记忆配置：
 
 ```jsonc
 {
-  "memory": {
-    "working": { "backend": "local" },
-    "crystal": { "backend": "local" }
-  }
+    "memory": {
+        "working": { "backend": "local" },
+        "crystal": { "backend": "local" },
+    },
 }
 ```
 

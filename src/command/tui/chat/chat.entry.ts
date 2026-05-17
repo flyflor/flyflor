@@ -6,7 +6,7 @@
  * 兼容 bun build --compile，不依赖框架渲染桥。
  */
 
-import { addDefaultParsers, clearEnvCache, createCliRenderer, type CliRendererConfig } from "@opentui/core";
+import { addDefaultParsers, createCliRenderer, type CliRendererConfig } from "@opentui/core";
 import { resolve } from "node:path";
 
 import type { RuntimeModule } from "../../../agent/runtime/index.ts";
@@ -17,6 +17,7 @@ import type { AppCommandRegistry } from "../../app.commands.ts";
 import { CHAT_SCROLL_LOCK_CONTRACT, createChatApp } from "./app.tsx";
 import { loadChatParsers } from "./parsers.config.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
+import { clearOpenTuiEnvCache, pinRendererAlternateScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
 
 export interface ChatEntryOptions {
     runtime: RuntimeModule;
@@ -58,39 +59,25 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
     try {
         await options.runtime.warmup();
         addDefaultParsers(await loadChatParsers());
-        // OpenTUI lets OTUI_USE_ALTERNATE_SCREEN override screenMode. Chat must stay in
-        // alternate screen so terminal scrollback/native scrollbars never become the chat viewport.
-        const previousAlternateScreen = process.env.OTUI_USE_ALTERNATE_SCREEN;
-        process.env.OTUI_USE_ALTERNATE_SCREEN = "1";
-        const renderer = await (async () => {
-            try {
-                const instance = await createCliRenderer({
-                    targetFps: 60,
-                    exitOnCtrlC: false,
-                    screenMode: CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode,
-                    clearOnShutdown: true,
-                    consoleMode: "disabled",
-                    // Chat uses OpenTUI selection so the in-app scrollbar and Ctrl+Y copy path work together.
-                    useMouse: CHAT_SCROLL_LOCK_CONTRACT.terminalMouse,
-                    enableMouseMovement: true,
-                    externalOutputMode: "passthrough",
-                    autoFocus: false,
-                    consoleOptions: {
-                        keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
-                    },
-                } satisfies CliRendererConfig);
-                if (instance.screenMode !== "alternate-screen") {
-                    instance.screenMode = "alternate-screen";
-                }
-                return instance;
-            } finally {
-                if (previousAlternateScreen === undefined) {
-                    delete process.env.OTUI_USE_ALTERNATE_SCREEN;
-                } else {
-                    process.env.OTUI_USE_ALTERNATE_SCREEN = previousAlternateScreen;
-                }
-            }
-        })();
+        const renderer = await withPinnedAlternateScreen(async () => {
+            const instance = await createCliRenderer({
+                targetFps: 60,
+                exitOnCtrlC: false,
+                screenMode: CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode,
+                clearOnShutdown: true,
+                consoleMode: "disabled",
+                // Chat uses OpenTUI selection so the in-app scrollbar and Ctrl+Y copy path work together.
+                useMouse: CHAT_SCROLL_LOCK_CONTRACT.terminalMouse,
+                enableMouseMovement: true,
+                externalOutputMode: "passthrough",
+                autoFocus: false,
+                consoleOptions: {
+                    keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
+                },
+            } satisfies CliRendererConfig);
+            pinRendererAlternateScreen(instance);
+            return instance;
+        });
         renderer.console.onCopySelection = (text) => {
             if (text.trim().length > 0) {
                 renderer.copyToClipboardOSC52(text);
@@ -113,25 +100,8 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
     }
 }
 
-export function clearOpenTuiEnvCacheForChat(clearCache: () => void = clearEnvCache): void {
-    try {
-        clearCache();
-    } catch (cause) {
-        // OpenTUI 0.2.x can leave its env singleton undefined inside Bun's
-        // Linux compiled bundle. Cache clearing is best-effort; chat still
-        // sets process.env before renderer creation on the same turn.
-        if (isOpenTuiCompiledEnvCacheMiss(cause)) return;
-        throw cause;
-    }
-}
-
-function isOpenTuiCompiledEnvCacheMiss(cause: unknown): boolean {
-    if (!(cause instanceof TypeError)) return false;
-    const message = cause.message;
-    return (
-        (message.includes("undefined is not an object") || message.includes("Cannot read properties of undefined")) &&
-        message.includes("clearCache")
-    );
+export function clearOpenTuiEnvCacheForChat(clearCache?: () => void): void {
+    clearOpenTuiEnvCache(clearCache);
 }
 
 export async function loadChatAvatarArt(cwd = process.cwd()): Promise<string> {

@@ -24,19 +24,36 @@ export async function runDockerDevSmoke(options: DockerDevSmokeOptions = {}): Pr
     const checks: SmokeCheck[] = [];
     const composePath = join(root, "docker-compose.yml");
     const compose = await Bun.file(composePath).text();
-    const config = await Bun.file(join(root, "docker", "config", "config.jsonc")).text();
+    const config = await readDockerDevConfigText(root);
     const buildScript = await Bun.file(join(root, "scripts", "build.docker.binary.ts")).text();
     const entrypoint = await Bun.file(join(root, "docker", "entrypoint.sh")).text();
 
     push(checks, "compose omits redis baseline service", !compose.includes("redis:7.4-alpine"));
     push(checks, "compose omits surrealdb baseline service", !compose.includes("surrealdb/surrealdb"));
-    push(checks, "compose defines flyflor dev service", compose.includes("flyflor:") && compose.includes("flyflor-dev"));
+    push(
+        checks,
+        "compose defines flyflor dev service",
+        compose.includes("flyflor:") && compose.includes("flyflor-dev"),
+    );
     push(checks, "compose exposes no host ports", !/^\s*ports\s*:/mu.test(compose));
-    push(checks, "compose mounts compiled linux binary", compose.includes("./dist/flyflor-linux:/mounted/flyflor-linux:ro"));
+    push(
+        checks,
+        "compose mounts compiled linux binary",
+        compose.includes("./dist/flyflor-linux:/mounted/flyflor-linux:ro"),
+    );
     push(checks, "compose mounts docker config as home", compose.includes("./docker/config:/root/.flyflor"));
     push(checks, "compose mounts docker workspace", compose.includes("./docker/workspace:/root/.flyflor/workspace"));
     push(checks, "compose has no external backend health dependency", !compose.includes("condition: service_healthy"));
-    push(checks, "docker config uses local working memory", backendConfigured(config, "working", "\"backend\"\\s*:\\s*\"local\""));
+    push(
+        checks,
+        "docker config uses local working memory",
+        backendConfigured(config, "working", '"backend"\\s*:\\s*"local"'),
+    );
+    push(
+        checks,
+        "docker config enables local crystal graph",
+        backendConfigured(config, "crystal", '"enabled"\\s*:\\s*true[^}]*"backend"\\s*:\\s*"local"'),
+    );
     // Redis / SurrealDB compatibility adapters are no longer part of the dev
     // baseline; absence is the contract, not `enabled: false` placeholders.
     push(checks, "docker config omits redis adapter by default", !backendExists(config, "redis"));
@@ -52,6 +69,16 @@ export async function runDockerDevSmoke(options: DockerDevSmokeOptions = {}): Pr
         checks.push(await checkCompiledDockerBinary(root));
     }
     return checks;
+}
+
+export async function readDockerDevConfigText(root: string = join(import.meta.dir, "..")): Promise<string> {
+    const localConfig = Bun.file(join(root, "docker", "config", "config.jsonc"));
+    if (await localConfig.exists()) {
+        return localConfig.text();
+    }
+    // Fresh checkouts do not track docker/config/config.jsonc because it may
+    // contain secrets. The tracked default is the release contract for smoke.
+    return Bun.file(join(root, "docker", "config.default.jsonc")).text();
 }
 
 if (import.meta.main) {
@@ -74,8 +101,16 @@ async function checkDockerPromptBundle(root: string): Promise<SmokeCheck[]> {
     const manifestText = await Bun.file(manifestPath).text();
     const manifest = JSON.parse(manifestText) as typeof PROMPT_TEMPLATE_BUNDLE_MANIFEST;
 
-    push(checks, "docker prompt manifest version matches runtime", manifest.schemaVersion === PROMPT_TEMPLATE_BUNDLE_VERSION);
-    push(checks, "docker prompt manifest matches runtime", JSON.stringify(manifest) === JSON.stringify(PROMPT_TEMPLATE_BUNDLE_MANIFEST));
+    push(
+        checks,
+        "docker prompt manifest version matches runtime",
+        manifest.schemaVersion === PROMPT_TEMPLATE_BUNDLE_VERSION,
+    );
+    push(
+        checks,
+        "docker prompt manifest matches runtime",
+        JSON.stringify(manifest) === JSON.stringify(PROMPT_TEMPLATE_BUNDLE_MANIFEST),
+    );
     for (const key of PROMPT_TEMPLATE_ORDER) {
         const spec = PROMPT_TEMPLATE_DEFINITIONS[key];
         const file = Bun.file(join(root, "docker", "config", "prompts", spec.filename));
@@ -132,10 +167,7 @@ function push(checks: SmokeCheck[], name: string, ok: boolean, detail?: string):
 
 function backendConfigured(config: string, key: string, pattern: string): boolean {
     const escapedKey = escapeRegex(key);
-    return new RegExp(
-        `"${escapedKey}"\\s*:\\s*\\{[^}]*${pattern}`,
-        "u",
-    ).test(config);
+    return new RegExp(`"${escapedKey}"\\s*:\\s*\\{[^}]*${pattern}`, "u").test(config);
 }
 
 function backendExists(config: string, key: string): boolean {
