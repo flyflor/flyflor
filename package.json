@@ -1,6 +1,7 @@
 {
     "name": "flyflor",
     "version": "0.1.0",
+    "homepage": "https://flyflor.qingshen.xin",
     "module": "app.ts",
     "type": "module",
     "scripts": {

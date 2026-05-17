@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "..");
+const OFFICIAL_HOMEPAGE = "https://flyflor.qingshen.xin";
 
 describe("documentation index", () => {
     test("docs/README links every top-level canonical docs page", async () => {
@@ -33,5 +34,15 @@ describe("documentation index", () => {
         const missing = coreDocLinks.filter((href) => !rootReadme.includes(`](docs/${href})`));
 
         expect(missing).toEqual([]);
+    });
+
+    test("public docs and package metadata point at the official homepage", async () => {
+        const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
+        const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
+        const packageJson = JSON.parse(await readFile(join(REPO_ROOT, "package.json"), "utf8")) as { homepage?: string };
+
+        expect(rootReadme).toContain(OFFICIAL_HOMEPAGE);
+        expect(docsReadme).toContain(OFFICIAL_HOMEPAGE);
+        expect(packageJson.homepage).toBe(OFFICIAL_HOMEPAGE);
     });
 });

@@ -4,6 +4,8 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进
 
 核心设计：LLM 负责流体智力，反思沉淀晶体智力（Gem），海马体负责工作记忆与长期记忆图，黑板协作处理复杂任务。
 
+官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
+
 ## 设计哲学
 
 - LLM 负责当下推理与生成，记忆系统只负责沉淀、召回和偏移修正。

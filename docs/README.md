@@ -2,6 +2,8 @@
 
 本目录是 Flyflor 工程文档的唯一入口。主文档只描述当前运行契约；已经落地或迁移完成的提案、历史背景统一归入 [old-docs/](old-docs/)。
 
+官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
+
 ## 阅读顺序
 
 新加入者按下面顺序读，可以在最短路径建立完整心智模型：
