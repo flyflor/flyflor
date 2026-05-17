@@ -35,9 +35,9 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     { path: "gateway setup", status: "✅", note: "Interactive configuration." },
     { path: "model", status: "✅", note: "Lists or sets the default provider and model." },
     { path: "setup", status: "✅", note: "Initialization wizard." },
-    { path: "status", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus` and reports working-memory recovery visibility." },
-    { path: "channels", status: "✅", note: "TTY mode opens the CLI TUI navigator; non-interactive mode lists channel adapter status." },
-    { path: "doctor", status: "✅", note: "`--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward; diagnostics include lightweight working-memory recovery metadata." },
+    { path: "status", status: "✅", note: "Prints `renderStatus` by default and reports working-memory recovery visibility; add explicit `--tui` to open the CLI navigator." },
+    { path: "channels", status: "✅", note: "Lists channel adapter status by default; add explicit `--tui` to open the CLI navigator." },
+    { path: "doctor", status: "✅", note: "`--fix` creates missing directories, then prints diagnostics by default; add explicit `--tui` to open the CLI navigator." },
     {
         path: "codename list/use/promote",
         status: "✅",
@@ -60,7 +60,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     {
         path: "config show/path/env-path",
         status: "✅",
-        note: "TTY mode opens the CLI TUI navigator on Config; non-interactive mode prints the requested value.",
+        note: "Prints the requested value by default; add explicit `--tui` to open the CLI navigator on Config.",
         covers: ["config show", "config path", "config env-path"],
     },
     {
@@ -83,7 +83,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
     {
         path: "skills *",
         status: "✅",
-        note: "TTY mode opens the CLI TUI navigator on Skills; non-interactive mode supports install / reset / usage / validate.",
+        note: "Supports install / reset / usage / validate by default; add explicit `--tui` to open the CLI navigator on Skills.",
         covers: childCommandPaths("skills"),
     },
     {
@@ -92,23 +92,23 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
         note: "Enables or disables tool names per MCP server.",
         covers: ["tools enable", "tools disable"],
     },
-    { path: "mcp *", status: "✅", note: "TTY mode opens the CLI TUI navigator on MCP; non-interactive mode supports list / show / validate / add / enable / disable / remove / tools / call.", covers: childCommandPaths("mcp") },
+    { path: "mcp *", status: "✅", note: "Supports list / show / validate / add / enable / disable / remove / tools / call by default; add explicit `--tui` to open the CLI navigator on MCP.", covers: childCommandPaths("mcp") },
     {
         path: "plugins *",
         status: "✅",
-        note: "TTY mode opens the CLI TUI navigator on Plugins; non-interactive mode supports list / show / validate / add / enable / disable / remove / run.",
+        note: "Supports list / show / validate / add / enable / disable / remove / run by default; add explicit `--tui` to open the CLI navigator on Plugins.",
         covers: childCommandPaths("plugins"),
     },
     {
         path: "dream status/run",
         status: "✅",
-        note: "TTY mode opens the CLI TUI navigator on Dream; non-interactive mode manually triggers a Dream pass.",
+        note: "Manually triggers a Dream pass by default; add explicit `--tui` to open the CLI navigator on Dream.",
         covers: ["dream status", "dream run"],
     },
     {
         path: "sandbox list/allow/deny",
         status: "✅",
-        note: "TTY mode opens the CLI TUI navigator on Sandbox; non-interactive mode manages persistent sandbox allowlists.",
+        note: "Manages persistent sandbox allowlists by default; add explicit `--tui` to open the CLI navigator on Sandbox.",
         covers: ["sandbox list", "sandbox allow", "sandbox deny"],
     },
     { path: "update", status: "✅", note: "`--check` compares versions; `-y` runs `install.sh` to update." },

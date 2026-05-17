@@ -181,6 +181,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
 - OpenAI-compatible provider 的最小配置是 `baseUrl` + `apiKey` + 当前模型；`type`、默认 `chat-completions` 和模型列表由加载器推断 / 探测。自动化代理不得把用户本地 `config.jsonc` 中正在使用的 `apiKey` 改成占位符。
+- CLI 诊断 / 管理命令默认保持文本输出；命令式 navigator 只能由显式 `--tui` 打开，不能因为 stdin 是 TTY 或 Docker `-it` 自动创建 OpenTUI renderer。
 - provider key / MCP token / 插件 token 不得写入日志、事件 payload、错误详情或记忆。
 - 配置对象进入核心后视为只读。
 - 默认配置必须能离线启动；需要联网的能力必须显式启用。

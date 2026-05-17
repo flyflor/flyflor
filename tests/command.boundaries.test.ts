@@ -141,6 +141,17 @@ describe("Command boundary", () => {
         expect(setupBranch).not.toContain("startCliTui");
     });
 
+    test("diagnostic commands require explicit --tui before opening CLI navigator", async () => {
+        const source = await Bun.file("src/command/cli/commands.ts").text();
+        const helper = source.slice(source.indexOf("async function maybeStartCommandTui"), source.indexOf("async function runDoctorFix"));
+        const doctorBranch = source.slice(source.indexOf('if (root === "doctor")'), source.indexOf('if (root === "config")'));
+
+        expect(helper).toContain("optsWithGlobals");
+        expect(helper).toContain("if (!opts.tui) return false");
+        expect(doctorBranch).toContain("console.log(await renderDoctor(app))");
+        expect(doctorBranch.indexOf("maybeStartCommandTui")).toBeLessThan(doctorBranch.indexOf("renderDoctor"));
+    });
+
     test("config command surface only exposes supported configuration operations", () => {
         const config = listFlyflorCommandSpecs().find((spec) => spec.name === "config");
         const subcommands = config?.subcommands?.map((spec) => spec.name) ?? [];

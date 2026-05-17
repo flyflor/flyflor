@@ -837,7 +837,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "status") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         const app = await cliApp();
@@ -849,7 +849,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "channels") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         const app = await cliApp();
@@ -862,28 +862,28 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         if (opts.fix) {
             await runDoctorFix(app);
         }
-        if (await maybeStartCommandTui(root, sub, app)) {
+        if (await maybeStartCommandTui(root, sub, command, app)) {
             return;
         }
         console.log(await renderDoctor(app));
         return;
     }
     if (root === "config") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runConfig(sub, command);
         return;
     }
     if (root === "memory") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runMemory(sub, command);
         return;
     }
     if (root === "blackboard") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runBlackboard(sub, command);
@@ -910,14 +910,14 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "skills") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runSkills(sub, command);
         return;
     }
     if (root === "mcp") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runMcp(sub, command);
@@ -928,28 +928,28 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "sandbox") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runSandbox(sub, command);
         return;
     }
     if (root === "plugins") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runPlugins(sub, command);
         return;
     }
     if (root === "dream") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runDream(sub, command);
         return;
     }
     if (root === "model") {
-        if (await maybeStartCommandTui(root, sub)) {
+        if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
         await runModelWizard(command);
@@ -970,7 +970,9 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
     throwUnsupportedCommand(path);
 }
 
-async function maybeStartCommandTui(root: string, sub?: string, app?: FlyFlor): Promise<boolean> {
+async function maybeStartCommandTui(root: string, sub: string | undefined, command: Command, app?: FlyFlor): Promise<boolean> {
+    const opts = command.optsWithGlobals<{ tui?: boolean }>();
+    if (!opts.tui) return false;
     const page = resolveCommandTuiPage(root, sub);
     if (!page || !process.stdin.isTTY) return false;
     const resolvedApp = app ?? (await cliApp());

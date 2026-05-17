@@ -111,23 +111,23 @@ flowchart TB
 | `flyflor gateway setup` | ✅ | Interactive configuration. |
 | `flyflor model` | ✅ | Lists or sets the default provider and model. |
 | `flyflor setup` | ✅ | Initialization wizard. |
-| `flyflor status` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode uses `renderStatus` and reports working-memory recovery visibility. |
-| `flyflor channels` | ✅ | TTY mode opens the CLI TUI navigator; non-interactive mode lists channel adapter status. |
-| `flyflor doctor` | ✅ | `--fix` creates missing directories; TTY mode opens the CLI TUI navigator afterward; diagnostics include lightweight working-memory recovery metadata. |
+| `flyflor status` | ✅ | Prints `renderStatus` by default and reports working-memory recovery visibility; add explicit `--tui` to open the CLI navigator. |
+| `flyflor channels` | ✅ | Lists channel adapter status by default; add explicit `--tui` to open the CLI navigator. |
+| `flyflor doctor` | ✅ | `--fix` creates missing directories, then prints diagnostics by default; add explicit `--tui` to open the CLI navigator. |
 | `flyflor codename list/use/promote` | ✅ | Brain.db codename anchors and project promotion. |
 | `flyflor inbox list` | ✅ | Visualizes inbox atoms by codename bucket. |
 | `flyflor ghost list/show/resume/drop/pin` | ✅ | Ghost Context management. |
 | `flyflor identity list/revert` | ✅ | Audit and revert user-authored identity entries. |
-| `flyflor config show/path/env-path` | ✅ | TTY mode opens the CLI TUI navigator on Config; non-interactive mode prints the requested value. |
+| `flyflor config show/path/env-path` | ✅ | Prints the requested value by default; add explicit `--tui` to open the CLI navigator on Config. |
 | `flyflor memory status/reset/retrospective` | ✅ | Status shows working-memory health and recovery metadata; reset supports clearing allowlisted files; retrospective shows consolidation audit logs. |
 | `flyflor blackboard` | ✅ | Opens the blackboard browser TUI in a terminal: it lists recent turns by default, supports `/` search, up/down selection, Enter to open details, and Esc/q to go back or quit. |
 | `flyflor blackboard list/show` | ✅ | Provides non-interactive table / JSON output directly from SQLite; `show <turnId>` remains useful for scripted inspection. |
-| `flyflor skills *` | ✅ | TTY mode opens the CLI TUI navigator on Skills; non-interactive mode supports install / reset / usage / validate. |
+| `flyflor skills *` | ✅ | Supports install / reset / usage / validate by default; add explicit `--tui` to open the CLI navigator on Skills. |
 | `flyflor tools enable/disable` | ✅ | Enables or disables tool names per MCP server. |
-| `flyflor mcp *` | ✅ | TTY mode opens the CLI TUI navigator on MCP; non-interactive mode supports list / show / validate / add / enable / disable / remove / tools / call. |
-| `flyflor plugins *` | ✅ | TTY mode opens the CLI TUI navigator on Plugins; non-interactive mode supports list / show / validate / add / enable / disable / remove / run. |
-| `flyflor dream status/run` | ✅ | TTY mode opens the CLI TUI navigator on Dream; non-interactive mode manually triggers a Dream pass. |
-| `flyflor sandbox list/allow/deny` | ✅ | TTY mode opens the CLI TUI navigator on Sandbox; non-interactive mode manages persistent sandbox allowlists. |
+| `flyflor mcp *` | ✅ | Supports list / show / validate / add / enable / disable / remove / tools / call by default; add explicit `--tui` to open the CLI navigator on MCP. |
+| `flyflor plugins *` | ✅ | Supports list / show / validate / add / enable / disable / remove / run by default; add explicit `--tui` to open the CLI navigator on Plugins. |
+| `flyflor dream status/run` | ✅ | Manually triggers a Dream pass by default; add explicit `--tui` to open the CLI navigator on Dream. |
+| `flyflor sandbox list/allow/deny` | ✅ | Manages persistent sandbox allowlists by default; add explicit `--tui` to open the CLI navigator on Sandbox. |
 | `flyflor update` | ✅ | `--check` compares versions; `-y` runs `install.sh` to update. |
 | `flyflor version` | ✅ |  |
 
