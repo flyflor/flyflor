@@ -5,7 +5,7 @@
  * PerfMetrics/event consumers.
  */
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { Runtime } from "../../../components/base.component.ts";
+import { Runtime } from "../../../components/component.ts";
 
 @Component()
 export class TurnTiming extends Runtime {

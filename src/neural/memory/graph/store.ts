@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import type { LocalCrystalMemoryConfig } from "../../../config/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { GraphComponent } from "../../../components/base.component.ts";
+import { GraphComponent } from "../../../components/component.ts";
 import { LruCache } from "../cache/lru.ts";
 import { DEFAULT_CRYSTAL_VECTOR_DIMENSIONS } from "../../../crystal/memory/vector.index.ts";
 import {

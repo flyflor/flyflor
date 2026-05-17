@@ -2,11 +2,9 @@ export { BlackboardModule, SQLiteBlackboardStore } from "./blackboard.module.ts"
 export {
     BlackboardComposition,
     blackboardComposition,
-} from "./blackboard.composition.ts";
-export {
     buildBlackboardPlan,
     convergencePolicyFor,
-} from "./blackboard.helpers.ts";
+} from "./blackboard.composition.ts";
 export {
     BlackboardModel,
     blackboardModel,

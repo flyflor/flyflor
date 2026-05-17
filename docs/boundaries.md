@@ -32,7 +32,7 @@ templates/        提示词与记忆 Markdown 模板
 命名规则（点分后缀是硬规则）：
 
 - 目录入口统一 `index.ts`；跨目录导入优先指向 `index.ts`。
-- 实现文件按角色加点分后缀：`*.module.ts` / `*.component.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。
+- 实现文件按角色加点分后缀：`*.module.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。目录内唯一 Component owner 必须直接命名为 `component.ts`；只有同目录存在多个组件边界时才使用 `*.component.ts` 加限定前缀。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
@@ -82,13 +82,14 @@ flowchart LR
 - Runtime 副作用优先事件化：主 turn pipeline 可以发布结构化 RuntimeEvent，统计、审计、usage、后处理等非路由关键路径放在 `*.event.ts` handler；handler 只能消费 JSON payload 和显式注入组件，不能反向读取自然语言做业务判断。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定；允许 `DependencyContainer.bindClass()` 按构造函数 `@Inject(ClassToken)` 自动实例化，但注册目标仍必须由 composition root 显式列出。
-- DI key 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。`ConfigComponent` / `RuntimeModeComponent` / `EventsComponent` / `ModelComponent` / `AdaptersComponent` 这类边界必须是域内 `*.component.ts` 的真实组件，不能只是空壳 token；只有非 class 值才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
+- DI key 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。`ConfigComponent` / `RuntimeModeComponent` / `EventsComponent` / `ModelComponent` / `AdaptersComponent` 这类边界必须是域内 `component.ts` 的真实组件，不能只是空壳 token；只有非 class 值才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
 - 公开 API 必须显式写 `public`；内部状态和 helper 保持 `private` / `protected`，避免隐式可见性漂移。可被子类定制的生命周期、factory、storage hook 预留 `protected`，不要为了“封闭”而把扩展点无脑写死为 `private`。
 
 ## 4.1 OOP + use composition 编程风格
 
 - 业务能力默认用 class / Component / Module / Repo 表达；局部 helper 应优先变成 `private` / `protected` class 方法，不能散落在文件底部形成“函数垃圾区”。
 - 跨 class 的组合入口统一使用 `useXxx()` composition。`useXxx()` 可以返回 class 实例或装配对象，但它只做装配，不承载复杂业务流程。
+- 目录约定优先于文件长名：`src/config/component.ts` 已经表达 config 域，不再写 `config.component.ts`；`src/llm/component.ts` 已经表达 model provider 域，不再写 `model.component.ts`。长名只用于同目录多 owner 或协议需要显式区分时。
 - 允许的函数形态只有：`useXxx()` composition 入口、CLI / script / app 的薄入口、框架强制导出的 handler、测试 fixture、小型纯协议 adapter（例如 tagged template `query`）以及 TypeScript 类型守卫。除此之外新增顶层 `function` 前必须先考虑 class 方法或 `*.composition.ts`。
 - 已存在的大型函数式模块要按触碰即迁移原则处理：改到该文件时必须把同一职责的 helper 收进 class / Component，或者抽到同目录 `*.composition.ts` 并用 `useXxx()` 命名；禁止继续追加新的无归属 helper。
 - Crystal / Gem 这类晶体智力流程必须有明确 Component owner；保留的顶层函数只能作为兼容旧 public API 的薄壳，新增调用优先依赖 `CrystalReflectionComponent` / `CrystalGemComponent` 等组件实例。
@@ -106,7 +107,7 @@ flowchart LR
 
 ## 4.2 数据模型与 SQL Repo
 
-- SQLite 访问分三层：`src/entities/**/*.repo.ts` 是表模型 + SQL function，模块内 `store.ts` 负责连接生命周期 / schema / 事务组合，`*.component.ts` 对上表达能力边界。
+- SQLite 访问分三层：`src/entities/**/*.repo.ts` 是表模型 + SQL function，模块内 `store.ts` 负责连接生命周期 / schema / 事务组合，模块 `component.ts` 对上表达能力边界。
 - `*.entity.ts` 是 data entity layer，只负责 row / record 映射、JSON 列编解码和轻量 shape 校验，不写 SQL；例如 `src/entities/memory/*.entity.ts`、`src/entities/crystal/*.entity.ts` 与 `src/entities/blackboard/*.entity.ts`。
 - Repo 不是 service 层：不得调用 LLM、prompt、runtime、gateway、TUI 或业务决策；只能接收结构化 DTO、执行 SQL、映射 row。
 - 新增表或高频 SQL 必须优先建立 `src/entities/<domain>/tablename.repo.ts`，例如 `brain.event.repo.ts`、`brain.state.repo.ts`、`brain.summary.repo.ts`、`local.crystal.repo.ts`；确实跨领域公用的 repo 才放 `src/entities/repo/`。

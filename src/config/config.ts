@@ -18,7 +18,7 @@ import {
     type ToolApprovalMode as ToolApprovalModeType,
 } from "../protocol/contracts/index.ts";
 
-export { ConfigComponent } from "./config.component.ts";
+export { ConfigComponent } from "./component.ts";
 
 export interface FlyflorConfig {
     gateway: GatewayConfig;

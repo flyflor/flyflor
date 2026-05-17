@@ -24,6 +24,17 @@ const LEGACY_MEMORY_PATH_REFERENCES = [
     "sqlite.memory.store.ts",
     "sqlite.graph.store.ts",
 ];
+const SINGLE_OWNER_COMPONENT_FILES = [
+    "src/agent/gateway/adapters.component.ts",
+    "src/components/base.component.ts",
+    "src/config/config.component.ts",
+    "src/context/context.scope.component.ts",
+    "src/crystal/gems/gem.component.ts",
+    "src/crystal/memory/crystal.memory.component.ts",
+    "src/llm/model.component.ts",
+    "src/protocol/contracts/mode.component.ts",
+    "src/protocol/events/events.component.ts",
+];
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
@@ -70,6 +81,16 @@ describe("repository naming boundary", () => {
 
         // Component base classes live in src/components. Domain stores and
         // domain compatibility exports must stay with their owner modules.
+        expect(violations).toEqual([]);
+    });
+
+    test("single-owner component modules use directory-first component filenames", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "src"))).map((file) => relative(REPO_ROOT, file));
+        const violations = SINGLE_OWNER_COMPONENT_FILES.filter((file) => files.includes(file));
+
+        // Directory names carry the domain. A lone component owner should be
+        // `component.ts`; repeat the domain only when a directory has several
+        // component owners that need disambiguation.
         expect(violations).toEqual([]);
     });
 

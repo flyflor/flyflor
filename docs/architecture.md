@@ -130,7 +130,7 @@ abstract class CrystalComponent extends FlyflorComponent {}
 - 类名推断 `name`：去掉 `Module/Component/Store` 后转 kebab-case。
 - provider 默认 singleton；需要重新 `new` 的组件显式使用 `ProviderScope.Factory`。
 - 只有默认推断不够表达边界时才写 `kind/layer/name/provider`，避免装饰器参数变成重复配置。
-- DI key 优先是 class 对象本身，例如 `@Inject(RuntimeModule)`、`container.resolve(ConfigComponent)`；`*.component.ts` 必须定义真实组件边界，禁止新增只为当 token 存在的空壳类。
+- DI key 优先是 class 对象本身，例如 `@Inject(RuntimeModule)`、`container.resolve(ConfigComponent)`；域内 `component.ts` 必须定义真实组件边界，禁止新增只为当 token 存在的空壳类。
 
 ## DI 容器
 
@@ -143,7 +143,7 @@ abstract class CrystalComponent extends FlyflorComponent {}
 - `@Module` / `@Provide` / `@Inject` / `@Component` / `@Event` / `@Worker` / `@Channel` / `@Plugin` 仅登记 metadata，**不做反射扫描或自动加载**。
 - `EventsComponent` 是运行时全局事件入口：`emit()` 发布结构化 RuntimeEvent，`on()` 注册显式 handler，`registerHooks(instance)` 只读取实例类上由 `@Event(type)` 写入的 metadata。
 - Runtime 只保留 turn pipeline 主干；可旁路的统计 / 审计 / 后处理优先抽成 `src/agent/runtime/events/*.event.ts` 全局 handler。当前 `RuntimeSkillUsageEventHandler` 通过 `skill.context.built` / `mcp.tool.call.executed` / `agent.turn.end` 聚合并写 usage sidecar。
-- DI 入口不再维护 `FlyFlorTokens` 这种集中式 token 目录；`RuntimeModeComponent / ConfigComponent / EventsComponent / ModelComponent / AdaptersComponent` 这类边界直接用各自域内的真实 `*.component.ts` 类作为 DI key，composition root 显式构造并 `bindSingleton` / `resolve`。
+- DI 入口不再维护 `FlyFlorTokens` 这种集中式 token 目录；`RuntimeModeComponent / ConfigComponent / EventsComponent / ModelComponent / AdaptersComponent` 这类边界直接用各自域内的真实 `component.ts` 类作为 DI key，composition root 显式构造并 `bindSingleton` / `resolve`。
 
 ## Repo / SQL 分层
 
@@ -152,7 +152,7 @@ SQLite 数据访问按 `entity/repo -> store -> component` 分层：
 - `src/entities/**/*.entity.ts`：表 row / record 映射、JSON 列编解码与轻量 shape 校验。
 - `src/entities/**/*.repo.ts`：写入 DTO、SQL function、row 查询。只做数据访问层，不承载业务决策。
 - 模块内 `store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery；当一个模块有多个 store，用子目录表达语义后仍命名为 `store.ts`，例如 `src/neural/memory/brain/store.ts`。
-- `*.component.ts`：向 runtime / neural / crystal 暴露能力边界。
+- `component.ts`：模块唯一组件 owner，向 runtime / neural / crystal 暴露能力边界；同目录多组件时才使用限定前缀。
 
 Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `src/entities/memory/brain.*.repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
 

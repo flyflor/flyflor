@@ -21,7 +21,7 @@ import {
     Sandbox,
     SQLiteComponent,
     SurrealComponent,
-} from "../../../components/base.component.ts";
+} from "../../../components/component.ts";
 
 export interface ComponentCompatibility {
     protocol?: string;

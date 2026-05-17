@@ -1,6 +1,6 @@
 import type { AgentAsk, AgentAskChoice } from "../../../protocol/contracts/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { Runtime } from "../../../components/base.component.ts";
+import { Runtime } from "../../../components/component.ts";
 
 /**
  * Render AgentAsk into the visible reply sent to the user.

@@ -1,4 +1,4 @@
-export { AdaptersComponent } from "./adapters.component.ts";
+export { AdaptersComponent } from "./component.ts";
 export {
     buildChannelStatusSnapshot,
     buildGatewayStatusSnapshot,

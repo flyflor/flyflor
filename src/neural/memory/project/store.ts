@@ -2,7 +2,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../../config/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../../../components/base.component.ts";
+import { MemoryComponent } from "../../../components/component.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
 import { MemoryKind, MemoryLayer } from "../../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../../protocol/contracts/index.ts";

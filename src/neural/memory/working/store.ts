@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/pr
 import { dirname, join } from "node:path";
 import type { LocalWorkingMemoryConfig } from "../../../config/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../../../components/base.component.ts";
+import { MemoryComponent } from "../../../components/component.ts";
 import { WorkingMemoryWalOperation } from "../../../protocol/contracts/index.ts";
 import type {
     EpisodeRecord,

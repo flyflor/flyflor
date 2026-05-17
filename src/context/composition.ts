@@ -1,5 +1,5 @@
 import type { FlyflorPaths } from "../config/index.ts";
-import { ContextScopeComponent } from "./context.scope.component.ts";
+import { ContextScopeComponent } from "./component.ts";
 
 /**
  * Context composition entry. `use*` functions are the only place where this

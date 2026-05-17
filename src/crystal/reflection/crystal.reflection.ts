@@ -9,7 +9,7 @@ import type {
     ReflectionCandidate,
 } from "../../protocol/contracts/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { CrystalComponent } from "../../components/base.component.ts";
+import { CrystalComponent } from "../../components/component.ts";
 
 export interface CrystalCandidateInput {
     id: string;

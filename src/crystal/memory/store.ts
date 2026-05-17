@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import type { LocalCrystalMemoryConfig } from "../../config/index.ts";
 import { Component } from "../../agent/di/decorators/index.ts";
-import { CrystalComponent } from "../../components/base.component.ts";
+import { CrystalComponent } from "../../components/component.ts";
 import type {
     CrystalRecallRequest,
     CrystalGem,

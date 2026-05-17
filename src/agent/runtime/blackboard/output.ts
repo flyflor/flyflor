@@ -16,7 +16,7 @@ import {
     type BlackboardTurnStatus as BlackboardTurnStatusType,
 } from "../../../protocol/contracts/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { Runtime } from "../../../components/base.component.ts";
+import { Runtime } from "../../../components/component.ts";
 import { renderBlackboardAdvisoryPrompt } from "../../prompts/index.ts";
 import type { BlackboardDecision, BlackboardMessage, BlackboardStep, BlackboardTurn } from "../../blackboard/index.ts";
 import type { RuntimeBlackboardRouteDecision } from "./route.ts";

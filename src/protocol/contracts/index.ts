@@ -1,4 +1,4 @@
-export { RuntimeModeComponent } from "./mode.component.ts";
+export { RuntimeModeComponent } from "./component.ts";
 export * from "./ask.ts";
 export * from "./brain.ts";
 export * from "./eq.ts";

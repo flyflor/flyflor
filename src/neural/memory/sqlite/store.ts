@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import type { FlyflorPaths, SQLiteMemoryConfig } from "../../../config/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { SQLiteComponent } from "../../../components/base.component.ts";
+import { SQLiteComponent } from "../../../components/component.ts";
 import { getQuery, query } from "../../../components/sql/index.ts";
 import type {
     MemoryCandidate,

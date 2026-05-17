@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { BrainComponent } from "../../../components/base.component.ts";
+import { BrainComponent } from "../../../components/component.ts";
 import {
     type AtomScore,
     type MemoryAtom,

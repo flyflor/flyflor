@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths, MarkdownMemoryConfig } from "../../../config/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../../../components/base.component.ts";
+import { MemoryComponent } from "../../../components/component.ts";
 import { MarkdownMemoryFile, MemoryLayer } from "../../../protocol/contracts/index.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchResult } from "../types.ts";
 

@@ -1,7 +1,7 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Component } from "../../../agent/di/decorators/index.ts";
-import { MemoryComponent } from "../../../components/base.component.ts";
+import { MemoryComponent } from "../../../components/component.ts";
 import type { ContextForkRecord } from "../../../protocol/contracts/index.ts";
 
 const FORK_STORE_SCHEMA_VERSION = 1;
