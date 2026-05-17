@@ -21,6 +21,7 @@ import {
     pinTerminalMouseScreen,
     withPinnedAlternateScreen,
 } from "../screen.composition.ts";
+import { useTuiRendererConfig } from "../renderer.composition.ts";
 
 export interface ChatEntryOptions {
     runtime: RuntimeModule;
@@ -66,7 +67,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
         await options.runtime.warmup();
         addDefaultParsers(await loadChatParsers());
         const renderer = await withPinnedAlternateScreen(async () => {
-            const instance = await createCliRenderer({
+            const instance = await createCliRenderer(useTuiRendererConfig({
                 targetFps: 60,
                 exitOnCtrlC: false,
                 screenMode: CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode,
@@ -74,13 +75,12 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
                 consoleMode: "disabled",
                 // Chat uses OpenTUI selection so the in-app scrollbar and Ctrl+Y copy path work together.
                 useMouse: CHAT_SCROLL_LOCK_CONTRACT.terminalMouse,
-                enableMouseMovement: true,
                 externalOutputMode: "passthrough",
                 autoFocus: false,
                 consoleOptions: {
                     keyBindings: [{ name: "y", ctrl: true, action: "copy-selection" }],
                 },
-            } satisfies CliRendererConfig);
+            } satisfies CliRendererConfig));
             pinRendererAlternateScreen(instance);
             return instance;
         });

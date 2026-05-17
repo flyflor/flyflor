@@ -44,17 +44,9 @@ export function createVirtualScrollBar(
         flexDirection: "column",
         flexShrink: 0,
         width: 2,
-        onMouseScroll: (event) => {
-            const direction = event.scroll?.direction;
-            if (direction === "up") {
-                scrollBox.scrollBy({ x: 0, y: -3 });
-            } else if (direction === "down") {
-                scrollBox.scrollBy({ x: 0, y: 3 });
-            }
-            controller?.sync();
-            event.preventDefault();
-            event.stopPropagation();
-        },
+        // This rail is paint-only. Wheel input must stay with the adjacent
+        // ScrollBox so terminal scroll acceleration and sticky-bottom state keep
+        // a single owner across iTerm2, Docker exec and local shells.
         onSizeChange: () => {
             controller?.sync();
         },

@@ -26,6 +26,7 @@ import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { createTuiLifecycle } from "./lifecycle.ts";
+import { useTuiRendererConfig } from "./renderer.composition.ts";
 import { createVirtualScrollBar, useDetachedScrollBars } from "./scrollbar.composition.ts";
 import { pinRendererAlternateScreen, pinTerminalMouseScreen, withPinnedAlternateScreen } from "./screen.composition.ts";
 
@@ -130,7 +131,7 @@ export function renderDashboardLines(
 
 export async function startTui(app: FlyFlor): Promise<void> {
     const renderer = await withPinnedAlternateScreen(async () => {
-        const instance = await createCliRenderer({
+        const instance = await createCliRenderer(useTuiRendererConfig({
             targetFps: 30,
             exitOnCtrlC: false,
             screenMode: "alternate-screen",
@@ -141,7 +142,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
                     void Bun.write(Bun.stdout, text);
                 },
             },
-        });
+        }));
         pinRendererAlternateScreen(instance);
         return instance;
     });

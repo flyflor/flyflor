@@ -28,6 +28,7 @@ import { fetchGhostList } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
 import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
+import { useTuiRendererConfig } from "../renderer.composition.ts";
 import { createVirtualScrollBar, useDetachedScrollBars } from "../scrollbar.composition.ts";
 import { pinRendererAlternateScreen, pinTerminalMouseScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
 import {
@@ -317,13 +318,12 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
     const firstPage: GenericCliPage = initialPage;
 
     const renderer = await withPinnedAlternateScreen(async () => {
-        const instance = await createCliRenderer({
+        const instance = await createCliRenderer(useTuiRendererConfig({
             targetFps: 30,
             exitOnCtrlC: false,
             screenMode: "alternate-screen",
             consoleMode: "disabled",
             useMouse: true,
-            enableMouseMovement: true,
             externalOutputMode: "passthrough",
             consoleOptions: {
                 onCopySelection: (text) => {
@@ -331,7 +331,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
                     renderer.clearSelection();
                 },
             },
-        });
+        }));
         pinRendererAlternateScreen(instance);
         return instance;
     });

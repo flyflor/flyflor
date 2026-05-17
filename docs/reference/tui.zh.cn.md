@@ -35,6 +35,7 @@
 - Chat 右侧 rail 按目标截图顺序还原：`Blackboard [Ctrl+B Thinking]`、`Questions`、流式 `Blackboard` 详情、`TODO List`，底部固定 `MODEL` / `TOKENS` / `CONTEXT WINDOW` 资源区；没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`。这些面板只消费结构化 metadata、RuntimeEvent、配置资源上限和 blackboard turn，不从自然语言文本反推状态。
 - Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、滚动加速度、sticky-bottom 状态和 content translate 交给 OpenTUI 维护；`src/command/tui/scrollbar.composition.ts` 统一移除 OpenTUI 自带的可视滚动条 renderable。聊天主面板边缘绘制目标截图样式的虚拟滚动条（`▲`、点阵 track、`██` thumb、`▼`）；右侧流式面板保留 ScrollBox 滚动能力，但不额外绘制点阵滚动轨。
 - `src/command/tui/screen.composition.ts` 会把命令式 TUI 固定到 alternate screen，并在 runtime warmup 前清空终端回滚区（`CSI 3 J`），避免 Docker/provider 启动输出先写入主屏幕回滚区。Mouse tracking 只能由 OpenTUI renderer config 拥有；Flyflor 禁止额外发出 all-motion tracking（`1003`），因为 iTerm2/Bash 会把大量移动事件灌入 stdin 并触发 parser failure。
+- `src/command/tui/renderer.composition.ts` 是唯一的 OpenTUI renderer mouse 默认值收口点。Flyflor 可以开启 `useMouse` 支持点击、滚轮和选区，但必须固定 `enableMouseMovement: false`；OpenTUI 这个字段默认是 true，即使 Flyflor 自己不写终端 mouse escape sequence，也会重新打开 all-motion tracking。
 - iTerm2 shell 缺少 `COLORTERM` 时，renderer 创建期间临时规范化为 `truecolor`，随后恢复原值；这只修正 macOS Bash 颜色能力探测，不写用户配置。
 - Chat 消息区和右侧两个流式面板都使用 OpenTUI `stickyScroll` + `stickyStart: "bottom"`；深度思考 / 黑板详情在流式输出期间默认跟随最新内容，用户手动滚动面板后由 OpenTUI 接管当前位置
 - 对话进行中默认跟随最新 turn；用户通过 `/thinking` 或 `/blackboard` 打开问题选择后可以用上下 / `j/k` 预览历史 turn，下一条新消息开始时自动恢复跟随最新

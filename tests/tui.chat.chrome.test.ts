@@ -153,6 +153,8 @@ describe("TUI chat chrome", () => {
         expect(appSource).not.toContain("createVirtualScrollBar(renderer, detailScrollBox");
         expect(appSource).not.toContain("appendConversationSummary(lines)");
         expect(entrySource).toContain("withPinnedAlternateScreen(");
+        expect(entrySource).toContain("useTuiRendererConfig({");
+        expect(entrySource).not.toContain("enableMouseMovement: true");
         expect(entrySource).toContain("pinRendererAlternateScreen(instance)");
         expect(entrySource).toContain("pinTerminalMouseScreen()");
         expect(await readFile(join(import.meta.dir, "../src/command/tui/scrollbar.composition.ts"), "utf8")).toContain(

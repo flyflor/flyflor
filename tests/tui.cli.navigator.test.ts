@@ -10,6 +10,7 @@ import {
 } from "../src/command/tui/cli/command.route.ts";
 import { nextDashboardTab, renderDashboardLines } from "../src/command/tui/index.tsx";
 import { filterBlackboardTurns, listWindow, renderDetailLines } from "../src/command/tui/cli/blackboard.browser.tsx";
+import { useTuiRendererConfig } from "../src/command/tui/renderer.composition.ts";
 import { createVirtualScrollBar, useDetachedScrollBars } from "../src/command/tui/scrollbar.composition.ts";
 import {
     pinTerminalMouseScreen,
@@ -203,6 +204,22 @@ describe("CLI TUI navigator", () => {
         expect(composition).toContain("BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)");
     });
 
+    test("mouse-enabled renderer config disables noisy all-motion movement reports", async () => {
+        const sources = await Promise.all([
+            readFile("src/command/tui/chat/chat.entry.ts", "utf8"),
+            readFile("src/command/tui/cli/navigator.ts", "utf8"),
+            readFile("src/command/tui/index.tsx", "utf8"),
+        ]);
+
+        for (const source of sources) {
+            expect(source).toContain("useTuiRendererConfig({");
+            expect(source).not.toContain("enableMouseMovement: true");
+        }
+        expect(useTuiRendererConfig({ useMouse: true }).enableMouseMovement).toBe(false);
+        expect(useTuiRendererConfig({ useMouse: false }).enableMouseMovement).toBeUndefined();
+        expect(useTuiRendererConfig({}).enableMouseMovement).toBe(false);
+    });
+
     test("detaches scrollbox scrollbar renderables at runtime", async () => {
         const testRenderer = await createTestRenderer({
             width: 24,
@@ -260,7 +277,7 @@ describe("CLI TUI navigator", () => {
         }
     });
 
-    test("routes wheel events into detached scrollboxes and keeps the virtual rail visible", async () => {
+    test("routes wheel events through OpenTUI scrollboxes while virtual rail stays paint-only", async () => {
         const testRenderer = await createTestRenderer({
             width: 24,
             height: 8,
@@ -310,6 +327,8 @@ describe("CLI TUI navigator", () => {
 
             expect(scrollBox.scrollTop).toBeGreaterThan(0);
             expect(testRenderer.captureCharFrame()).toContain("█");
+            const composition = await readFile("src/command/tui/scrollbar.composition.ts", "utf8");
+            expect(composition).not.toContain("onMouseScroll");
         } finally {
             testRenderer.renderer.destroy();
         }
