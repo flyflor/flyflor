@@ -24,31 +24,33 @@
                     </p>
                 </div>
 
-                <div class="admin-summary">
-                    <article v-for="item in summaryCards" :key="item.label" class="admin-summary__item">
-                        <span>{{ item.label }}</span>
-                        <strong>{{ item.value }}</strong>
-                    </article>
-                </div>
+                <div class="admin-drawer__body">
+                    <div class="admin-summary">
+                        <article v-for="item in summaryCards" :key="item.label" class="admin-summary__item">
+                            <span>{{ item.label }}</span>
+                            <strong>{{ item.value }}</strong>
+                        </article>
+                    </div>
 
-                <nav class="admin-nav" aria-label="Admin sections">
-                    <button
-                        v-for="item in navItems"
-                        :key="item.id"
-                        :class="{ 'is-active': activeSection === item.id }"
-                        type="button"
-                        @click="jumpTo(item.id)"
-                    >
-                        <Icon :name="item.icon" />
-                        <span>{{ item.label }}</span>
-                        <small>{{ item.count }}</small>
-                    </button>
-                </nav>
+                    <nav class="admin-nav" aria-label="Admin sections">
+                        <button
+                            v-for="item in navItems"
+                            :key="item.id"
+                            :class="{ 'is-active': activeSection === item.id }"
+                            type="button"
+                            @click="jumpTo(item.id)"
+                        >
+                            <Icon :name="item.icon" />
+                            <span>{{ item.label }}</span>
+                            <small>{{ item.count }}</small>
+                        </button>
+                    </nav>
 
-                <div class="admin-drawer__foot">
-                    <span>{{ t("当前管理员", "Current admin") }}</span>
-                    <strong>{{ user?.email }}</strong>
-                    <small v-if="statusMessage">{{ statusMessage }}</small>
+                    <div class="admin-drawer__foot">
+                        <span>{{ t("当前管理员", "Current admin") }}</span>
+                        <strong>{{ user?.email }}</strong>
+                        <small v-if="statusMessage">{{ statusMessage }}</small>
+                    </div>
                 </div>
             </aside>
 
@@ -1127,14 +1129,23 @@ useHead({
     gap: 22px;
     grid-column: 2;
     grid-row: 1;
+    grid-template-rows: auto minmax(0, 1fr);
     max-height: calc(100vh - 32px);
     min-width: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-gutter: stable;
+    overflow: hidden;
     padding: 20px;
     position: sticky;
     top: 16px;
+}
+
+.admin-drawer__body {
+    display: grid;
+    gap: 22px;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-gutter: stable;
 }
 
 .admin-drawer__head h1,
@@ -1503,7 +1514,7 @@ useHead({
         grid-row: auto;
         left: auto;
         max-height: calc(100vh - 32px);
-        overflow: auto;
+        overflow: hidden;
         position: fixed;
         right: 16px;
         top: 16px;
