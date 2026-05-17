@@ -11,7 +11,11 @@ import {
 import { nextDashboardTab, renderDashboardLines } from "../src/command/tui/index.tsx";
 import { filterBlackboardTurns, listWindow, renderDetailLines } from "../src/command/tui/cli/blackboard.browser.tsx";
 import { createVirtualScrollBar, useDetachedScrollBars } from "../src/command/tui/scrollbar.composition.ts";
-import { pinTerminalMouseScreen, withPinnedAlternateScreen } from "../src/command/tui/screen.composition.ts";
+import {
+    pinTerminalMouseScreen,
+    useTuiTerminalEnvironment,
+    withPinnedAlternateScreen,
+} from "../src/command/tui/screen.composition.ts";
 
 describe("CLI TUI navigator", () => {
     test("covers the major interactive command pages", () => {
@@ -337,7 +341,7 @@ describe("CLI TUI navigator", () => {
         }
     });
 
-    test("pins terminal alternate screen and mouse tracking as a fallback", () => {
+    test("pins terminal alternate screen without duplicating OpenTUI mouse tracking", () => {
         const writes: string[] = [];
         const restore = pinTerminalMouseScreen({
             isTTY: true,
@@ -351,10 +355,24 @@ describe("CLI TUI navigator", () => {
 
         expect(writes[0]).toContain("\x1b[?1049h");
         expect(writes[0]).toContain("\x1b[3J");
-        expect(writes[0]).toContain("\x1b[?1003h");
-        expect(writes[0]).toContain("\x1b[?1006h");
+        expect(writes[0]).not.toContain("\x1b[?1003h");
+        expect(writes[0]).not.toContain("\x1b[?1006h");
         expect(writes[1]).toContain("\x1b[?1049l");
-        expect(writes[1]).toContain("\x1b[?1003l");
-        expect(writes[1]).toContain("\x1b[?1006l");
+        expect(writes[1]).not.toContain("\x1b[?1003l");
+        expect(writes[1]).not.toContain("\x1b[?1006l");
+    });
+
+    test("normalizes iTerm2 color env only when the shell omits color capability", () => {
+        const env: NodeJS.ProcessEnv = { TERM: "xterm-256color", TERM_PROGRAM: "iTerm.app" };
+        const restore = useTuiTerminalEnvironment(env);
+        expect(env.COLORTERM).toBe("truecolor");
+        restore();
+        expect(env.COLORTERM).toBeUndefined();
+
+        const explicitEnv: NodeJS.ProcessEnv = { COLORTERM: "24bit", TERM_PROGRAM: "iTerm.app" };
+        const restoreExplicit = useTuiTerminalEnvironment(explicitEnv);
+        expect(explicitEnv.COLORTERM).toBe("24bit");
+        restoreExplicit();
+        expect(explicitEnv.COLORTERM).toBe("24bit");
     });
 });

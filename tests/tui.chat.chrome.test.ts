@@ -160,7 +160,7 @@ describe("TUI chat chrome", () => {
         );
         const screenSource = await readFile(join(import.meta.dir, "../src/command/tui/screen.composition.ts"), "utf8");
         expect(screenSource).toContain("\\x1b[3J");
-        expect(screenSource).toContain("\\x1b[?1003h");
+        expect(screenSource).not.toContain("\\x1b[?1003h");
         expect(screenSource).toContain("\\x1b[?1049l");
     });
 });
