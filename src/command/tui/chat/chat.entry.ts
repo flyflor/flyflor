@@ -34,7 +34,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
     // Point it at our compile entrypoint so Bun can run the bundled worker inside the binary.
     const previousTreeSitterWorkerPath = process.env.OTUI_TREE_SITTER_WORKER_PATH;
     process.env.OTUI_TREE_SITTER_WORKER_PATH = "./src/command/tui/chat/parser.worker.ts";
-    clearEnvCache();
+    clearOpenTuiEnvCacheForChat();
 
     const restoreTreeSitterWorkerPath = () => {
         if (previousTreeSitterWorkerPath === undefined) {
@@ -42,7 +42,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
         } else {
             process.env.OTUI_TREE_SITTER_WORKER_PATH = previousTreeSitterWorkerPath;
         }
-        clearEnvCache();
+        clearOpenTuiEnvCacheForChat();
     };
 
     try {
@@ -103,6 +103,27 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
         restoreTreeSitterWorkerPath();
         throw error;
     }
+}
+
+export function clearOpenTuiEnvCacheForChat(clearCache: () => void = clearEnvCache): void {
+    try {
+        clearCache();
+    } catch (cause) {
+        // OpenTUI 0.2.x can leave its env singleton undefined inside Bun's
+        // Linux compiled bundle. Cache clearing is best-effort; chat still
+        // sets process.env before renderer creation on the same turn.
+        if (isOpenTuiCompiledEnvCacheMiss(cause)) return;
+        throw cause;
+    }
+}
+
+function isOpenTuiCompiledEnvCacheMiss(cause: unknown): boolean {
+    if (!(cause instanceof TypeError)) return false;
+    const message = cause.message;
+    return (
+        (message.includes("undefined is not an object") || message.includes("Cannot read properties of undefined")) &&
+        message.includes("clearCache")
+    );
 }
 
 export async function loadChatAvatarArt(cwd = process.cwd()): Promise<string> {
