@@ -14,8 +14,8 @@ import type { CrystalMemoryStore } from "../../crystal/memory/types.ts";
 import {
     DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
     FlatBruteForceVectorIndex,
-    embedCrystalText,
-    toCrystalSearchText,
+    crystalVectorCodec,
+    type CrystalVectorCodec,
 } from "../../crystal/memory/vector.index.ts";
 import { LocalCrystalRepo } from "../../entities/crystal/local.crystal.repo.ts";
 
@@ -29,10 +29,11 @@ export class LocalCrystalMemoryStore extends CrystalComponent implements Crystal
     public constructor(
         private readonly config: LocalCrystalMemoryConfig,
         vectorDimensions = DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
+        private readonly vectorCodec: CrystalVectorCodec = crystalVectorCodec,
     ) {
         super();
         this.vectorDimensions = vectorDimensions;
-        this.index = new FlatBruteForceVectorIndex(vectorDimensions);
+        this.index = new FlatBruteForceVectorIndex(vectorDimensions, vectorCodec);
     }
 
     public async initialize(): Promise<void> {
@@ -130,8 +131,8 @@ export class LocalCrystalMemoryStore extends CrystalComponent implements Crystal
 
     public async upsertGem(gem: CrystalGem): Promise<void> {
         await this.initialize();
-        const searchableText = toCrystalSearchText(gem);
-        const embedding = embedCrystalText(searchableText, this.vectorDimensions);
+        const searchableText = this.vectorCodec.toCrystalSearchText(gem);
+        const embedding = this.vectorCodec.embedCrystalText(searchableText, this.vectorDimensions);
         this.requiredRepo().upsertGem(gem, embedding, searchableText);
         this.index.upsert(gem);
     }

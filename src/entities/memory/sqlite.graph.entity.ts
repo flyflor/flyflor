@@ -1,6 +1,7 @@
 import {
     DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
-    embedCrystalText,
+    crystalVectorCodec,
+    type CrystalVectorCodec,
 } from "../../crystal/memory/vector.index.ts";
 import type {
     GemRecord,
@@ -142,6 +143,8 @@ export interface GemSnapshotRecord {
  * hydration, vector fallback and numeric scoring helpers used by recall.
  */
 export class SQLiteGraphModel {
+    public constructor(private readonly vectorCodec: CrystalVectorCodec = crystalVectorCodec) {}
+
     public rowToEpisode(row: EpisodeRow): MemoryEpisodeRecord {
         return {
             id: row.id,
@@ -247,7 +250,7 @@ export class SQLiteGraphModel {
         if (input.embedding && input.embedding.length > 0) {
             return input.embedding;
         }
-        return embedCrystalText(this.buildQueryText(input), dimensions);
+        return this.vectorCodec.embedCrystalText(this.buildQueryText(input), dimensions);
     }
 
     public buildQueryText(input: GraphRecallInput): string {
@@ -274,7 +277,7 @@ export class SQLiteGraphModel {
         if (Array.isArray(input) && input.length > 0) {
             return input.map((value) => (typeof value === "number" && Number.isFinite(value) ? value : 0));
         }
-        return embedCrystalText(fallbackText, dimensions);
+        return this.vectorCodec.embedCrystalText(fallbackText, dimensions);
     }
 
     public normalizeRecord(value?: Record<string, unknown>): Record<string, unknown> | undefined {

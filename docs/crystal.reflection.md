@@ -120,6 +120,7 @@ sequenceDiagram
 
 - Reflection 已拆为独立 `ReflectionWorker`；Runtime 只投递异步任务，worker 自己处理抽取、规范化与失败事件。
 - 本地后端已落地 `crystal.db + VectorIndex`。上层调用统一经 `CrystalComponent` 约束，不直接依赖后端实现。
+- 本地向量编码统一由 `CrystalVectorCodec` 拥有；生产代码持有 codec 实例，`embedCrystalText()` / `toCrystalSearchText()` 等函数只保留给旧 public API 与测试。
 - Runtime Crystal 主路径由 `CrystalGemComponent` 持有 `CrystalReflectionComponent` 实例；`buildReflectionCandidate()` / `crystallizeCandidate()` 等顶层导出只为旧 public API 与测试兼容，新增业务代码不得再依赖函数式结晶入口。
 - Runtime reflection 的固化门槛只看结构化 evidence score；长期图 consolidation 另行维护 `memory_node`、`support`、`confidence` 和 graph edges。
 - contradictionCount 只在 dream pass 修复，runtime 路径不会清零（即便后续有大量正向证据）。
