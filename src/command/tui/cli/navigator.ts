@@ -49,6 +49,9 @@ const THEME = {
     border: RGBA.fromInts(76, 106, 126),
     selectedBg: RGBA.fromInts(24, 34, 47)};
 
+const HIDDEN_SCROLLBAR_SIZE = 0;
+const SHOW_SCROLLBARS = false;
+
 interface PageLoader {
     title: string;
     load: (app: FlyFlor) => Promise<string[]>;
@@ -382,16 +385,18 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         flexGrow: 1,
         flexShrink: 1,
         padding: 1,
-        horizontalScrollbarOptions: { height: 0, visible: false },
+        horizontalScrollbarOptions: { height: HIDDEN_SCROLLBAR_SIZE, visible: SHOW_SCROLLBARS },
         verticalScrollbarOptions: {
-            visible: true,
-            width: 2,
+            visible: SHOW_SCROLLBARS,
+            width: HIDDEN_SCROLLBAR_SIZE,
             showArrows: false,
             trackOptions: {
                 backgroundColor: THEME.selectedBg,
                 foregroundColor: THEME.purple}}});
-    contentBox.horizontalScrollBar.visible = false;
-    contentBox.horizontalScrollBar.height = 0;
+    contentBox.horizontalScrollBar.visible = SHOW_SCROLLBARS;
+    contentBox.horizontalScrollBar.height = HIDDEN_SCROLLBAR_SIZE;
+    contentBox.verticalScrollBar.visible = SHOW_SCROLLBARS;
+    contentBox.verticalScrollBar.width = HIDDEN_SCROLLBAR_SIZE;
     bodyBox.add(contentBox);
 
     const statusBox = new BoxRenderable(renderer, {

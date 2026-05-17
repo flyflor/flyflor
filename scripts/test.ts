@@ -11,6 +11,8 @@ import { join } from "node:path";
 
 type SuiteName = "all" | "docs" | "live" | "live:docker";
 
+const LIVE_TEST_FILES = new Set(["live.agent.test.ts", "live.model.test.ts"]);
+
 const suites: Record<SuiteName, true> = { all: true, docs: true, live: true, "live:docker": true };
 const suite = readSuiteName(process.argv[2]);
 const subprocess = Bun.spawn(await buildCommand(suite), {
@@ -44,11 +46,13 @@ async function buildCommand(suite: SuiteName): Promise<string[]> {
         ];
     }
     if (suite === "live" || suite === "live:docker") {
-        return ["bun", "test", "tests/live.model.test.ts"];
+        // Live suites intentionally exercise the user's configured provider.
+        // They stay opt-in so the deterministic gate never consumes API quota.
+        return ["bun", "test", "tests/live.model.test.ts", "tests/live.agent.test.ts"];
     }
     const testsDir = join(import.meta.dir, "..", "tests");
     const files = (await readdir(testsDir))
-        .filter((file) => file.endsWith(".test.ts") && file !== "live.model.test.ts")
+        .filter((file) => file.endsWith(".test.ts") && !LIVE_TEST_FILES.has(file))
         .sort()
         .map((file) => `tests/${file}`);
     return ["bun", "test", ...files];

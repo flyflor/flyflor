@@ -87,8 +87,10 @@ flyflor gateway service plan --target systemd --write # 写入用户级 systemd 
 ```bash
 bun run check        # TypeScript 类型检查
 bun run test         # 确定性单元测试：离线、stub model、无真实 API 消耗
-bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的当前 provider
+bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的当前 provider；无 apiKey 时跳过
 bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc
+bun run smoke:agent  # 确定性智能体主路径冒烟：runtime + memory + planning + brain.db
+bun run smoke:agent:live # 真实模型 + runtime + memory + brain.db 冒烟；状态写入临时 HOME，无 apiKey 时跳过
 bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
 bun run build:binary # 编译本机二进制
 bun run build:binary:release # 编译本机 + GitHub Release 资产名对齐的 Linux x64 / arm64 二进制
@@ -104,12 +106,14 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 直接进入 chat TUI
 bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
+bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Scene 与 brain.db 写入
+bun run smoke:agent:live                  # 读取真实 provider，临时 HOME 内检查完整 agent turn
 bun run smoke:gateway:service             # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
-bun run smoke:release                     # docs + type + tests + release assets + gateway service + docker smoke
+bun run smoke:release                     # docs + type + tests + agent smoke + release assets + gateway service + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互

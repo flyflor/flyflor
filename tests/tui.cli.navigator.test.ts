@@ -174,4 +174,17 @@ describe("CLI TUI navigator", () => {
             expect(source).not.toContain("render(()");
         }
     });
+
+    test("command TUI scrollboxes do not render built-in scrollbars", async () => {
+        const sources = await Promise.all([
+            readFile("src/command/tui/cli/navigator.ts", "utf8"),
+            readFile("src/command/tui/index.tsx", "utf8"),
+        ]);
+
+        for (const source of sources) {
+            expect(source).toContain("const SHOW_SCROLLBARS = false");
+            expect(source).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
+            expect(source).not.toMatch(/visible:\s*true,\s*\n\s*width:\s*2/u);
+        }
+    });
 });

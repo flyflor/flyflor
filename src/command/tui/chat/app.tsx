@@ -105,6 +105,8 @@ const THEME = {
 const CHAT_HEADER_BRAND = "◉ flyflor-chat · powered by OpenTUI";
 const DEFAULT_STATUS_TEXT = "Enter 发送  |  ↑/↓ 历史  |  Tab 切换  |  Ctrl+C 清屏  |  Cmd/Ctrl+C 复制";
 const SEND_ICON_TEXT = "➤➤➤";
+const CHAT_SCROLL_STICKY_START = "bottom" as const;
+const CHAT_TERMINAL_SCREEN_MODE = "alternate-screen" as const;
 const HISTORY_BATCH_SIZE = 20;
 const SIDE_PANEL_MIN_WIDTH = 34;
 const SIDE_PANEL_MAX_WIDTH = 50;
@@ -117,6 +119,18 @@ const TODO_PANEL_MAX_HEIGHT = 10;
 const TODO_PANEL_HEIGHT_RATIO = 0.18;
 const RESOURCE_BAR_WIDTH = 12;
 export const NO_PLAN_TEXT = "暂无计划";
+
+export const CHAT_SCROLL_LOCK_CONTRACT = {
+    chatStickyScroll: true,
+    chatStickyStart: CHAT_SCROLL_STICKY_START,
+    hiddenScrollbarSize: 0,
+    showScrollbars: false,
+    sidePanelStickyScroll: true,
+    sidePanelStickyStart: CHAT_SCROLL_STICKY_START,
+    terminalMouse: true,
+    terminalScreenMode: CHAT_TERMINAL_SCREEN_MODE,
+    wheelRouting: "opentui-scrollbox",
+} as const;
 
 interface MsgRenderable {
     id: string;
@@ -1013,12 +1027,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             backgroundColor: THEME.panelBg,
             paddingLeft: 0,
             paddingRight: 0,
-            stickyScroll: true,
-            stickyStart: "bottom",
-            horizontalScrollbarOptions: { height: 0, visible: false },
+            stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.chatStickyScroll,
+            stickyStart: CHAT_SCROLL_LOCK_CONTRACT.chatStickyStart,
+            horizontalScrollbarOptions: {
+                height: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
+                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
+            },
             verticalScrollbarOptions: {
-                visible: true,
-                width: 2,
+                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
+                width: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
                 showArrows: false,
                 trackOptions: {
                     backgroundColor: THEME.violetBg,
@@ -1026,8 +1043,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 },
             },
         });
-        scrollBox.horizontalScrollBar.visible = false;
-        scrollBox.horizontalScrollBar.height = 0;
+        scrollBox.horizontalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
+        scrollBox.horizontalScrollBar.height = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
+        scrollBox.verticalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
+        scrollBox.verticalScrollBar.width = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
         messagesRow.add(scrollBox);
 
         // Input area
@@ -1118,10 +1137,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexGrow: 1,
             flexShrink: 1,
             backgroundColor: THEME.panelBg,
-            horizontalScrollbarOptions: { height: 0, visible: false },
+            stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll,
+            stickyStart: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyStart,
+            horizontalScrollbarOptions: {
+                height: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
+                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
+            },
             verticalScrollbarOptions: {
-                visible: true,
-                width: 2,
+                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
+                width: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
                 showArrows: false,
                 trackOptions: {
                     backgroundColor: THEME.violetBg,
@@ -1129,10 +1153,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 },
             },
         });
-        todoScrollBox.horizontalScrollBar.visible = false;
-        todoScrollBox.horizontalScrollBar.height = 0;
-        todoScrollBox.verticalScrollBar.visible = true;
-        todoScrollBox.verticalScrollBar.width = 2;
+        todoScrollBox.horizontalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
+        todoScrollBox.horizontalScrollBar.height = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
+        todoScrollBox.verticalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
+        todoScrollBox.verticalScrollBar.width = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
 
         const detailScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
@@ -1142,10 +1166,15 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexGrow: 1,
             flexShrink: 1,
             backgroundColor: THEME.panelBg,
-            horizontalScrollbarOptions: { height: 0, visible: false },
+            stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll,
+            stickyStart: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyStart,
+            horizontalScrollbarOptions: {
+                height: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
+                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
+            },
             verticalScrollbarOptions: {
-                visible: true,
-                width: 2,
+                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
+                width: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
                 showArrows: false,
                 trackOptions: {
                     backgroundColor: THEME.violetBg,
@@ -1153,10 +1182,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 },
             },
         });
-        detailScrollBox.horizontalScrollBar.visible = false;
-        detailScrollBox.horizontalScrollBar.height = 0;
-        detailScrollBox.verticalScrollBar.visible = true;
-        detailScrollBox.verticalScrollBar.width = 2;
+        detailScrollBox.horizontalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
+        detailScrollBox.horizontalScrollBar.height = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
+        detailScrollBox.verticalScrollBar.visible = CHAT_SCROLL_LOCK_CONTRACT.showScrollbars;
+        detailScrollBox.verticalScrollBar.width = CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize;
 
         const metricsCard = new BoxRenderable(renderer, {
             flexDirection: "column",

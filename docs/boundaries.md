@@ -291,6 +291,8 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 ```bash
 bun run check         # tsc --noEmit
 bun run test          # 已注册确定性测试套件
+bun run smoke:agent   # runtime + memory + planning + brain.db 确定性主路径冒烟
+bun run smoke:agent:live # 真实 provider + 临时 HOME，验证完整 agent turn；无 apiKey 时跳过
 bun run build:release  # 本机 + GitHub Release 资产名对齐的二进制与模板包可构建
 ```
 

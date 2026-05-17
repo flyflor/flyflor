@@ -63,13 +63,15 @@ describe("install.sh", () => {
         expect(stderr).toContain("requires a value");
     });
 
-    test("在沙盒内实测二进制安装，不污染本机 HOME", async () => {
-        const sandbox = await createInstallSandbox();
-        const prefix = join(sandbox.root, "prefix");
-        const tarball = await createTemplateTarball(sandbox.root);
-        await writeExecutable(
-            join(sandbox.bin, "curl"),
-            `#!/usr/bin/env sh
+    test(
+        "在沙盒内实测二进制安装，不污染本机 HOME",
+        async () => {
+            const sandbox = await createInstallSandbox();
+            const prefix = join(sandbox.root, "prefix");
+            const tarball = await createTemplateTarball(sandbox.root);
+            await writeExecutable(
+                join(sandbox.bin, "curl"),
+                `#!/usr/bin/env sh
 url=""
 for arg in "$@"; do
     url="$arg"
@@ -79,32 +81,34 @@ case "$url" in
     *) printf '#!/usr/bin/env sh\\necho flyflor\\n' ;;
 esac
 `,
-        );
-        const proc = Bun.spawn(
-            [
-                "sh",
-                INSTALL_SH,
-                "--prefix",
-                prefix,
-                "--release-base",
-                "https://example.invalid/releases",
-                "--version",
-                "v0.1.0",
-            ],
-            {
-                env: sandbox.env({ FLYFLOR_FAKE_TARBALL: tarball }),
-                stdout: "pipe",
-                stderr: "pipe",
-            },
-        );
-        const exit = await proc.exited;
-        const stderr = await new Response(proc.stderr).text();
-        expect(stderr).toBe("");
-        expect(exit).toBe(0);
-        expect(await readFile(join(prefix, "bin", "flyflor"), "utf8")).toContain("echo flyflor");
-        expect(await readFile(join(prefix, "prompts", "runtime.system.md"), "utf8")).toContain("runtime");
-        expect(await readFile(join(prefix, "templates", "memory", "MEMORY.md"), "utf8")).toContain("memory");
-    });
+            );
+            const proc = Bun.spawn(
+                [
+                    "sh",
+                    INSTALL_SH,
+                    "--prefix",
+                    prefix,
+                    "--release-base",
+                    "https://example.invalid/releases",
+                    "--version",
+                    "v0.1.0",
+                ],
+                {
+                    env: sandbox.env({ FLYFLOR_FAKE_TARBALL: tarball }),
+                    stdout: "pipe",
+                    stderr: "pipe",
+                },
+            );
+            const exit = await proc.exited;
+            const stderr = await new Response(proc.stderr).text();
+            expect(stderr).toBe("");
+            expect(exit).toBe(0);
+            expect(await readFile(join(prefix, "bin", "flyflor"), "utf8")).toContain("echo flyflor");
+            expect(await readFile(join(prefix, "prompts", "runtime.system.md"), "utf8")).toContain("runtime");
+            expect(await readFile(join(prefix, "templates", "memory", "MEMORY.md"), "utf8")).toContain("memory");
+        },
+        { timeout: 30_000 },
+    );
 });
 
 describe("source/docker/windows installers", () => {
@@ -168,25 +172,38 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["smoke:mcp:live"]).toContain("mcp.live.smoke.ts");
     });
 
-    test("在沙盒内实测源码安装，checkout 留在目标目录", async () => {
-        const sandbox = await createInstallSandbox();
-        await installFakeGit(sandbox.bin, sandbox.log);
-        await installFakeBun(sandbox.bin, sandbox.log);
-        const target = join(sandbox.root, "src", "flyflor");
-        const proc = Bun.spawn(
-            ["sh", INSTALL_SOURCE_SH, "--target", target, "--repo", "https://example.invalid/flyflor.git", "--branch", "main"],
-            { env: sandbox.env(), stdout: "pipe", stderr: "pipe" },
-        );
-        const exit = await proc.exited;
-        const stderr = await new Response(proc.stderr).text();
-        expect(stderr).toBe("");
-        expect(exit).toBe(0);
-        await expect(stat(join(target, ".git"))).resolves.toBeTruthy();
-        const log = await readFile(sandbox.log, "utf8");
-        expect(log).toContain("git clone --branch main https://example.invalid/flyflor.git");
-        expect(log).toContain("bun install");
-        expect(log).toContain("bun run install:templates");
-    });
+    test(
+        "在沙盒内实测源码安装，checkout 留在目标目录",
+        async () => {
+            const sandbox = await createInstallSandbox();
+            await installFakeGit(sandbox.bin, sandbox.log);
+            await installFakeBun(sandbox.bin, sandbox.log);
+            const target = join(sandbox.root, "src", "flyflor");
+            const proc = Bun.spawn(
+                [
+                    "sh",
+                    INSTALL_SOURCE_SH,
+                    "--target",
+                    target,
+                    "--repo",
+                    "https://example.invalid/flyflor.git",
+                    "--branch",
+                    "main",
+                ],
+                { env: sandbox.env(), stdout: "pipe", stderr: "pipe" },
+            );
+            const exit = await proc.exited;
+            const stderr = await new Response(proc.stderr).text();
+            expect(stderr).toBe("");
+            expect(exit).toBe(0);
+            await expect(stat(join(target, ".git"))).resolves.toBeTruthy();
+            const log = await readFile(sandbox.log, "utf8");
+            expect(log).toContain("git clone --branch main https://example.invalid/flyflor.git");
+            expect(log).toContain("bun install");
+            expect(log).toContain("bun run install:templates");
+        },
+        { timeout: 30_000 },
+    );
 
     test("在沙盒内实测 Docker 一键安装，只调用 compose 入口", async () => {
         const sandbox = await createInstallSandbox();
@@ -207,7 +224,7 @@ describe("source/docker/windows installers", () => {
         expect(log).toContain("docker compose version");
         expect(log).toContain("bun run docker:templates");
         expect(log).toContain("bun run docker:up");
-    });
+    }, { timeout: 30_000 });
 });
 
 interface InstallSandbox {

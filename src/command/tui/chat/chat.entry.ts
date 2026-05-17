@@ -14,7 +14,7 @@ import type { BlackboardModule } from "../../../agent/blackboard/index.ts";
 import type { McpToolCallRequest } from "../../../agent/mcp/index.ts";
 import { RuntimeEventBus, type EventSink } from "../../../protocol/events/index.ts";
 import type { AppCommandRegistry } from "../../app.commands.ts";
-import { createChatApp } from "./app.tsx";
+import { CHAT_SCROLL_LOCK_CONTRACT, createChatApp } from "./app.tsx";
 import { loadChatParsers } from "./parsers.config.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
 
@@ -67,11 +67,11 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
                 const instance = await createCliRenderer({
                     targetFps: 60,
                     exitOnCtrlC: false,
-                    screenMode: "alternate-screen",
+                    screenMode: CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode,
                     clearOnShutdown: true,
                     consoleMode: "disabled",
                     // Chat uses OpenTUI selection so the in-app scrollbar and Ctrl+Y copy path work together.
-                    useMouse: true,
+                    useMouse: CHAT_SCROLL_LOCK_CONTRACT.terminalMouse,
                     enableMouseMovement: true,
                     externalOutputMode: "passthrough",
                     autoFocus: false,

@@ -36,6 +36,9 @@ const THEME = {
     border: RGBA.fromInts(76, 106, 126),
     selectedBg: RGBA.fromInts(24, 34, 47)};
 
+const HIDDEN_SCROLLBAR_SIZE = 0;
+const SHOW_SCROLLBARS = false;
+
 export type DashboardTab = "overview" | "channels" | "blackboard";
 
 interface TuiSnapshot {
@@ -197,7 +200,16 @@ export async function startTui(app: FlyFlor): Promise<void> {
         contentOptions: { flexDirection: "column" },
         flexGrow: 1,
         flexShrink: 1,
-        padding: 1});
+        padding: 1,
+        horizontalScrollbarOptions: { height: HIDDEN_SCROLLBAR_SIZE, visible: SHOW_SCROLLBARS },
+        verticalScrollbarOptions: {
+            visible: SHOW_SCROLLBARS,
+            width: HIDDEN_SCROLLBAR_SIZE,
+            showArrows: false}});
+    content.horizontalScrollBar.visible = SHOW_SCROLLBARS;
+    content.horizontalScrollBar.height = HIDDEN_SCROLLBAR_SIZE;
+    content.verticalScrollBar.visible = SHOW_SCROLLBARS;
+    content.verticalScrollBar.width = HIDDEN_SCROLLBAR_SIZE;
     row.add(content);
     root.add(mainBox);
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
     buildChatResourceSnapshot,
     buildChatTodoSnapshot,
+    CHAT_SCROLL_LOCK_CONTRACT,
     chatChromeLayout,
     NO_PLAN_TEXT,
     renderChatProgressBar,
@@ -108,10 +109,24 @@ describe("TUI chat chrome", () => {
         expect(renderChatProgressBar(0.5, 4)).toBe("██░░ 50%");
     });
 
-    test("lets OpenTUI ScrollBox own mouse wheel scrolling", async () => {
+    test("keeps stream panels locked to OpenTUI scrollboxes", async () => {
         const source = await readFile(join(import.meta.dir, "../src/command/tui/chat/app.tsx"), "utf8");
 
+        expect(CHAT_SCROLL_LOCK_CONTRACT).toMatchObject({
+            chatStickyScroll: true,
+            chatStickyStart: "bottom",
+            hiddenScrollbarSize: 0,
+            showScrollbars: false,
+            sidePanelStickyScroll: true,
+            sidePanelStickyStart: "bottom",
+            terminalMouse: true,
+            terminalScreenMode: "alternate-screen",
+            wheelRouting: "opentui-scrollbox",
+        });
         expect(source).not.toContain("onMouseScroll");
         expect(source).not.toContain("applyChatScrollWheel");
+        expect(source).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
+        expect(source).toContain("stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll");
+        expect(source).toContain("visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars");
     });
 });

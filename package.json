@@ -33,6 +33,8 @@
         "inspect:blackboard": "bun run scripts/blackboard.inspect.ts",
         "smoke:docker": "bun run scripts/docker.dev.smoke.ts",
         "smoke:docker:binary": "bun run scripts/docker.dev.smoke.ts --require-binary",
+        "smoke:agent": "bun run scripts/agent.functional.smoke.ts",
+        "smoke:agent:live": "bun test tests/live.agent.test.ts",
         "smoke:gateway:service": "bun run scripts/gateway.service.smoke.ts",
         "smoke:runtime": "bun run scripts/docker.runtime.smoke.ts",
         "smoke:runtime:live": "bun run scripts/docker.runtime.smoke.ts --require-provider-key --chat-probe",
