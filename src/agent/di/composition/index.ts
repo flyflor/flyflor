@@ -9,15 +9,15 @@ export {
     type ComponentProviderOptions,
     type ComponentConstructor,
     type FpcComponentConstructor,
-} from "./component.metadata.ts";
-export { readInjectionMetadata, registerInjectionMetadata, type InjectionMetadata } from "./injection.metadata.ts";
+} from "./component.ts";
+export { readInjectionMetadata, registerInjectionMetadata, type InjectionMetadata } from "./injection.ts";
 export {
     readEventMetadata,
     registerEventMetadata,
     type EventHandler,
     type EventHandlerMetadata,
     type EventHandlerSelector,
-} from "./event.metadata.ts";
+} from "./event.ts";
 export {
     assertModuleMetadata,
     readModuleMetadata,
@@ -25,4 +25,4 @@ export {
     type ModuleDecoratorOptions,
     type ModuleMetadata,
     type ModuleProviderToken,
-} from "./module.metadata.ts";
+} from "./module.ts";

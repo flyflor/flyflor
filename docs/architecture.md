@@ -134,7 +134,7 @@ abstract class CrystalComponent extends FlyflorComponent {}
 
 ## DI 容器
 
-- `DependencyContainer`（`src/agent/di/factory/dependency.container.ts`）只暴露三种绑定：
+- `DependencyContainer`（`src/agent/di/factory/container.ts`）只暴露三种绑定：
   - `bindSingleton(token, value)` — 已构造的稳定依赖
   - `bindProvider(token, factory)` — 懒加载单例
   - `bindFactory(token, factory)` / `bindTransient(token, factory)` — 每次 resolve 创建新实例
@@ -220,5 +220,5 @@ interface FlyFlorDependencies {
 
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；工具循环、reply 解析和 persist helper 必须继续留在 runtime 子目录 owner 内，不回流到根 module。
 - `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；新增可执行能力必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
-- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向以当前子目录 owner 为准：`neural/memory/actions.ts` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；`DreamWorker` 与 feedback interpreter 已迁入 `src/neural/memory`，runtime 不再保留兼容壳。
+- 三层智能模型在代码上仍有少量回流依赖：`neural/memory` 会 import prompt 渲染与 project promotion；导入方向以当前子目录 owner 为准：`neural/memory/actions/` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；Dream worker 与 feedback interpreter 分别归入 `src/neural/memory/dream/` 和 `src/neural/memory/feedback/`，runtime 不再保留兼容壳。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot、TaskPlan / ContextFork / SceneRecord 摘要与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

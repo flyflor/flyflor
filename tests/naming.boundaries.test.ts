@@ -35,6 +35,26 @@ const SINGLE_OWNER_COMPONENT_FILES = [
     "src/protocol/contracts/mode.component.ts",
     "src/protocol/events/events.component.ts",
 ];
+const DIRECTORY_REPEATED_INFRA_FILES = [
+    "src/agent/di/composition/component.metadata.ts",
+    "src/agent/di/composition/event.metadata.ts",
+    "src/agent/di/composition/injection.metadata.ts",
+    "src/agent/di/composition/module.metadata.ts",
+    "src/agent/di/factory/component.factory.ts",
+    "src/agent/di/factory/dependency.container.ts",
+    "src/agent/runtime/streaming/protocol.visibility.ts",
+];
+const DIRECTORY_OWNER_PREFIX_ALLOWLIST = new Set([
+    "src/config/config.ts",
+    "src/command/command.ts",
+    "src/command/cli/cli.ts",
+    "src/command/tui/chat/chat.entry.ts",
+]);
+const DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES = [
+    "src/entities/",
+    "templates/prompts/",
+    "docs/old-docs/",
+];
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
@@ -94,6 +114,46 @@ describe("repository naming boundary", () => {
         expect(violations).toEqual([]);
     });
 
+    test("directory-owned infrastructure avoids repeated role filenames", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "src"))).map((file) => relative(REPO_ROOT, file));
+        const violations = [
+            ...files.filter((file) => file.endsWith(".exports.ts")),
+            ...DIRECTORY_REPEATED_INFRA_FILES.filter((file) => files.includes(file)),
+        ].sort();
+
+        // `index.ts` is the export surface. DI composition/factory and runtime
+        // streaming directories already carry the role, so files stay short:
+        // metadata.ts -> component.ts/event.ts/etc, container.ts, visibility.ts.
+        expect(violations).toEqual([]);
+    });
+
+    test("directory-owned files do not repeat their owner prefix", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "src"))).map((file) => relative(REPO_ROOT, file));
+        const violations = files.filter((file) => hasRepeatedDirectoryOwnerPrefix(file)).sort();
+
+        // Directory is the first convention. Once `src/agent/blackboard/` or
+        // `src/neural/ask/` names the owner, files use role names such as
+        // `module.ts`, `composition.ts`, `parse.ts`, or `manager.ts`.
+        expect(violations).toEqual([]);
+    });
+
+    test("neural memory capability subdirectories expose an index entrypoint", async () => {
+        const dirs = await listDirs(join(REPO_ROOT, "src", "neural", "memory"));
+        const violations: string[] = [];
+
+        for (const dir of dirs) {
+            const rel = relative(REPO_ROOT, dir);
+            if (!(await exists(join(dir, "index.ts")))) {
+                violations.push(rel);
+            }
+        }
+
+        // Memory is intentionally split by lifecycle/capability. Every child
+        // directory has an index.ts so callers can depend on the owner boundary
+        // instead of drilling into store/worker/parser implementation files.
+        expect(violations.sort()).toEqual([]);
+    });
+
     test("active docs and source do not point at legacy memory component paths", async () => {
         const files = (await Promise.all(SCANNED_DIRS.map((dir) => listFiles(join(REPO_ROOT, dir)))))
             .flat()
@@ -143,6 +203,24 @@ function isAllowedFilename(file: string): boolean {
     return DOT_SEGMENTED_FILE.test(name);
 }
 
+function hasRepeatedDirectoryOwnerPrefix(file: string): boolean {
+    if (DIRECTORY_OWNER_PREFIX_ALLOWLIST.has(file)) {
+        return false;
+    }
+    if (DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES.some((prefix) => file.startsWith(prefix))) {
+        return false;
+    }
+
+    const parts = file.split("/");
+    const filename = parts.at(-1);
+    const owner = parts.at(-2);
+    if (!filename || !owner || !filename.endsWith(".ts")) {
+        return false;
+    }
+    const base = filename.slice(0, -".ts".length);
+    return base === owner || base.startsWith(`${owner}.`);
+}
+
 async function listFiles(root: string): Promise<string[]> {
     const entries = await readdir(root, { withFileTypes: true });
     const nested = await Promise.all(
@@ -155,6 +233,20 @@ async function listFiles(root: string): Promise<string[]> {
         }),
     );
     return nested.flat();
+}
+
+async function listDirs(root: string): Promise<string[]> {
+    const entries = await readdir(root, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => join(root, entry.name));
+}
+
+async function exists(path: string): Promise<boolean> {
+    try {
+        await Bun.file(path).stat();
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 async function findImplicitClassMembers(file: string): Promise<string[]> {

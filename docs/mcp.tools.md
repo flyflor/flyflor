@@ -12,7 +12,7 @@ Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / S
 - `src/agent/mcp/index.ts` — 传输分派、结果渲染、公共类型
 - `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
 - `src/agent/mcp/schema.validate.ts` — tool inputSchema 轻量校验
-- `src/agent/runtime/runtime.module.ts` — catalog TTL/LRU 缓存 + 工具循环
+- `src/agent/runtime/module.ts` — catalog TTL/LRU 缓存 + 工具循环
 - `src/agent/prompts/index.ts` — `renderMcpContextPrompt`
 - `templates/prompts/mcp.context.md` — 模型协议提示与工具目录说明
 

@@ -211,4 +211,4 @@ export {
     type PluginRunnerOptions,
     type PluginSpawnFn,
     type PluginSpawnHandle,
-} from "./plugin.runner.ts";
+} from "./runner.ts";

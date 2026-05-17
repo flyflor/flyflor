@@ -21,8 +21,8 @@ import {
     DreamWorkerImpl,
     NullDreamWorker,
     parseDreamDecisions,
-} from "../src/neural/memory/dream.worker.ts";
-import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph/types.ts";
+} from "../src/neural/memory/dream/index.ts";
+import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph/index.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 

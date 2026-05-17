@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayModule } from "../src/agent/gateway/gateway.module.ts";
+import { GatewayModule } from "../src/agent/gateway/module.ts";
 import { buildDedupKey, InMemoryDedupStore } from "../src/agent/gateway/dedup.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import {

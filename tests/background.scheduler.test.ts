@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { BackgroundScheduler } from "../src/neural/memory/background.scheduler.ts";
-import { ConsolidationDecisionKind, type ConsolidationRunResult } from "../src/neural/memory/consolidation.worker.ts";
+import { BackgroundScheduler } from "../src/neural/memory/lifecycle/index.ts";
+import { ConsolidationDecisionKind, type ConsolidationRunResult } from "../src/neural/memory/consolidation/index.ts";
 import { RuntimeEventType } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
-import type { WorkingMemoryHealthSnapshot } from "../src/neural/memory/working/types.ts";
+import type { WorkingMemoryHealthSnapshot } from "../src/neural/memory/working/index.ts";
 
 class FakeEvents {
     public readonly published: RuntimeEvent[] = [];

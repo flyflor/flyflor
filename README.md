@@ -323,8 +323,10 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 - DI key 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；模块唯一组件 owner 统一命名为 `component.ts` 且必须有真实边界职责，不能只是空壳 token；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
 - OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
 - `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
+- 禁止 `*.exports.ts`；目录导出统一进 `index.ts`。目录已经表达职责时用短名，例如 DI composition 下用 `component.ts` / `event.ts` / `injection.ts` / `module.ts`，factory 下用 `container.ts`
+- 目录 owner 是第一语义：模块内文件不重复目录名前缀，`src/neural/memory/dream/worker.ts`、`consolidation/worker.ts`、`lifecycle/scheduler.ts` 这类按生命周期分组；对外优先导入子目录 `index.ts`
 - SQLite 访问按 `entity/repo -> store -> component` 分层；新增 SQL 优先放到 `src/entities/<domain>/tablename.repo.ts`，repo 只做 row/entity 映射 + SQL function，不做 service 层业务，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
-- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/store.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
+- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/index.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
 - 实现文件使用点分后缀：`*.module.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`、`*.repo.ts`；目录内唯一组件 owner 直接叫 `component.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件

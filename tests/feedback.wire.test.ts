@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
-import { FeedbackCategory } from "../src/neural/memory/feedback.interpreter.ts";
+import { FeedbackCategory } from "../src/neural/memory/feedback/index.ts";
 import {
     ChatType,
     Channel,

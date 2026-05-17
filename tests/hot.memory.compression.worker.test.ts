@@ -7,8 +7,8 @@ import { BrainStore } from "../src/neural/memory/brain/store.ts";
 import {
     HotMemoryCompressionWorker,
     parseHotMemoryCompressionDecision,
-} from "../src/neural/memory/hot.memory.compression.worker.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working/types.ts";
+} from "../src/neural/memory/hot/index.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working/index.ts";
 import { MemoryEventType, ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";

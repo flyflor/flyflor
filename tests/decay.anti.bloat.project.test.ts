@@ -4,14 +4,14 @@ import {
     DEFAULT_DECAY_PROFILES,
     decayImportance,
     reinforceImportance,
-} from "../src/neural/memory/decay.ts";
+} from "../src/neural/memory/lifecycle/index.ts";
 import {
     dedupeGems,
     isContradiction,
     isStale,
     shouldMergeGems,
     type GemCandidate,
-} from "../src/neural/memory/anti.bloat.ts";
+} from "../src/neural/memory/lifecycle/index.ts";
 import {
     clusterEvidenceScore,
     detectClusterCandidate,
@@ -20,7 +20,7 @@ import {
     ProjectTriggerKind,
 } from "../src/neural/project/index.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working/types.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working/index.ts";
 
 const HOUR = 3_600_000;
 const NOW = 1_700_000_000_000;

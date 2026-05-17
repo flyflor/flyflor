@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayModule } from "../src/agent/gateway/gateway.module.ts";
+import { GatewayModule } from "../src/agent/gateway/module.ts";
 import { Channel, ChannelLinkState, RuntimeEventType, type EventSink } from "../src/protocol/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import type { GatewayConfig } from "../src/config/index.ts";

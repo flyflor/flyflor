@@ -1,1 +1,1 @@
-export * from "./ghost.decisions.ts";
+export * from "./decisions.ts";

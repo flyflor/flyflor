@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { DreamWorkerImpl } from "../src/neural/memory/dream.worker.ts";
-import type { GemRecord, MemoryNodeRecord, MemoryGraphStore } from "../src/neural/memory/graph/types.ts";
+import { DreamWorkerImpl } from "../src/neural/memory/dream/index.ts";
+import type { GemRecord, MemoryNodeRecord, MemoryGraphStore } from "../src/neural/memory/graph/index.ts";
 import { ModelRole, type ModelClient } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 

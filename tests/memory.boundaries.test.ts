@@ -200,7 +200,7 @@ describe("config JSONC boundaries", () => {
 
 describe("Internal infrastructure deployment boundaries", () => {
     test("neural memory action parser does not import agent prompt registry", async () => {
-        const source = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "actions.ts"), "utf8");
+        const source = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "actions", "parser.ts"), "utf8");
 
         // Prompt rendering belongs to the runtime/prompt registry boundary.
         // The neural parser only validates the structured MemoryActions block,
@@ -211,19 +211,19 @@ describe("Internal infrastructure deployment boundaries", () => {
 
     test("neural memory module owns dream worker instead of importing runtime", async () => {
         const [memoryModule, scheduler] = await Promise.all([
-            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "memory.module.ts"), "utf8"),
-            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "background.scheduler.ts"), "utf8"),
+            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "module.ts"), "utf8"),
+            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "lifecycle", "scheduler.ts"), "utf8"),
         ]);
 
         // Dream mutates the long-term memory graph; keeping the implementation
         // inside neural/memory avoids a runtime -> memory -> runtime cycle.
         expect(`${memoryModule}\n${scheduler}`).not.toContain("../../agent/runtime/dream.worker");
-        expect(memoryModule).toContain('from "./dream.worker.ts"');
-        expect(scheduler).toContain('from "./dream.worker.ts"');
+        expect(memoryModule).toContain('from "./dream/index.ts"');
+        expect(scheduler).toContain('from "../dream/worker.ts"');
     });
 
     test("memory matrix does not use sentiment lexicons for semantic scoring", async () => {
-        const matrix = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "matrix.ts"), "utf8");
+        const matrix = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "recall", "matrix.ts"), "utf8");
 
         // Affect can only come from structured model fields. Lexicon sentiment
         // would reintroduce forbidden text-keyword routing into memory scores.
@@ -249,7 +249,7 @@ describe("Internal infrastructure deployment boundaries", () => {
             .map((entry) => entry.name)
             .sort();
         const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
-        const moduleSource = await readFile(join(runtimeRoot, "runtime.module.ts"), "utf8");
+        const moduleSource = await readFile(join(runtimeRoot, "module.ts"), "utf8");
 
         // RuntimeModule is the turn orchestration class. MCP/skill/planning/
         // blackboard/event rendering helpers live in named folders so the hot

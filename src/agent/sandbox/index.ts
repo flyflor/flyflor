@@ -1,1 +1,1 @@
-export * from "./sandbox.policy.ts";
+export * from "./policy.ts";

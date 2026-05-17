@@ -1,1 +1,1 @@
-export * from "./dormant.supervisor.ts";
+export * from "./supervisor.ts";

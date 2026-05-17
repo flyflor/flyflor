@@ -319,7 +319,7 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 | R11 Behavior Snapshot | ✅ done — 每轮写 `behavior-snapshot`，后续用户纠正写 `behavior-correction`；ask / ask-answer / reply metadata 共用 `snapshotId`，用于回放行为原因 |
 | R12 提示词优先级冲突表 | ✅ done — `behavior.priority.md` 注入 runtime system；模型看到的是可执行来源优先级和 ask 多问题结构，不暴露路线编号或内部隐喻 |
 | R13 Summary embeddingId 补全 | ✅ done — `SummaryWorker` 写 daily / weekly summary 后，`MemoryModule` 计算 summary content embedding，写入 `CrystalComponent` 的 `summary_embedding` 节点并回填 `memory_summary.embedding_id`；summary 主记录先写，若 embedding 同步失败会显式抛出，便于上层重试 |
-| R14 brain.db 月度归档自动化 | ✅ done — `src/neural/memory/brain.archive.ts` 统一 admin 脚本与 runtime；`MemoryModule.runBrainArchiveOnce` 只搬 `state=archived` 且早于 cutoff 的事件和同月 summary，发布 `MemoryBrainArchiveCompleted/Failed`；`BackgroundScheduler` 场景避开 summary / dream busy，降级场景由根 timer 继续维护 |
+| R14 brain.db 月度归档自动化 | ✅ done — `src/neural/memory/brain/index.ts` 统一 admin 脚本与 runtime；`MemoryModule.runBrainArchiveOnce` 只搬 `state=archived` 且早于 cutoff 的事件和同月 summary，发布 `MemoryBrainArchiveCompleted/Failed`；`BackgroundScheduler` 场景避开 summary / dream busy，降级场景由根 timer 继续维护 |
 | R15 热记忆隔离压缩 | ✅ done — `HotMemoryCompressionWorker` 对工作记忆 Component 到期 episode 调用专用模板输出结构化压缩审计，写 `memory_events.type='hot-memory-compression'` 后删除对应 episode；事件固定声明不进入 prompt recall，`SummaryWorker` 跳过该事件，不进入 CrystalComponent 或 Gem 候选；scheduler 与 `MemoryModule` root timer 两层都和 summary / brain archive 串行化；Consolidation reinforce 会延长工作记忆 TTL 并后移 reviewAt，避免仍有价值的工作记忆被立刻压缩；有完整 `BackgroundScheduler` 时随调度器运行，缺 CrystalComponent 时由 `MemoryModule` 根 timer 保底 |
 
 ## 与上一版的作废清单

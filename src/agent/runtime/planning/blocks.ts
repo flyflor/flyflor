@@ -2,7 +2,7 @@ import {
     PlanningBlockParser,
     type ParsedPlanningBlocks,
     type PlanningBlockParseContext,
-} from "./planning.block.parser.ts";
+} from "./block.parser.ts";
 
 export { PlanningBlockParser, type ParsedPlanningBlocks, type PlanningBlockParseContext };
 

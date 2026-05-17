@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { BackgroundScheduler } from "../src/neural/memory/background.scheduler.ts";
+import { BackgroundScheduler } from "../src/neural/memory/lifecycle/index.ts";
 import { NullEventSink } from "../src/protocol/events/index.ts";
-import type { DreamWorker, DreamRunResult } from "../src/neural/memory/dream.worker.ts";
+import type { DreamWorker, DreamRunResult } from "../src/neural/memory/dream/index.ts";
 
 const ZERO: DreamRunResult = {
     scanned: 0,

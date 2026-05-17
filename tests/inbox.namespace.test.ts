@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 
 import { MemoryModule } from "../src/agent/index.ts";
 import { inboxProjectIdFor, isInboxProjectId } from "../src/neural/memory/index.ts";
-import type { MemoryAction } from "../src/neural/memory/actions.ts";
+import type { MemoryAction } from "../src/neural/memory/actions/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
     Channel,

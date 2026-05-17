@@ -1,4 +1,4 @@
-export { ComponentRegistry, FpcComponentFactory, componentRegistry, fpcComponents } from "./component.factory.ts";
+export { ComponentRegistry, FpcComponentFactory, componentRegistry, fpcComponents } from "./component.ts";
 export {
     DependencyContainer,
     DependencyContainer as FcpDependencyContainer,
@@ -11,4 +11,4 @@ export {
     type ClassToken,
     type Constructable,
     type DependencyToken,
-} from "./dependency.container.ts";
+} from "./container.ts";

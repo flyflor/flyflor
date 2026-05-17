@@ -6,15 +6,15 @@ Sandbox 是 MCP 工具、Plugin、Shell hook 三类可执行能力的统一闸�
 
 ## 相关代码路径
 
-- `src/agent/sandbox/sandbox.module.ts` — `SandboxModule`、策略解析与统一 capability gate
+- `src/agent/sandbox/module.ts` — `SandboxModule`、策略解析与统一 capability gate
 - `src/agent/sandbox/allowlist.store.ts` — 项目 / 全局 `sandbox.allow.jsonc`
 - `src/agent/sandbox/quota.ts` — 单请求 quota 与 YOLO 冷却
 - `src/agent/sandbox/audit.sink.ts` — file / http 审计 sink
 - `src/protocol/contracts/enums.ts` — `SandboxMode` / `CapabilityExecutionKind` / `ToolApprovalMode`
 - `src/agent/mcp/tool.calls.ts` — MCP 调用接入点
 - `src/agent/plugin/registry.ts` — Plugin manifest 声明、启停和 project/global 覆盖
-- `src/agent/plugin/plugin.runner.ts` — Plugin 子进程执行入口，启动前必须走 sandbox gate
-- `src/agent/runtime/runtime.module.ts` — MCP tool gate 与 request quota 清理
+- `src/agent/plugin/runner.ts` — Plugin 子进程执行入口，启动前必须走 sandbox gate
+- `src/agent/runtime/module.ts` — MCP tool gate 与 request quota 清理
 
 ## 能力枚举
 

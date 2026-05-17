@@ -32,7 +32,10 @@ templates/        提示词与记忆 Markdown 模板
 命名规则（点分后缀是硬规则）：
 
 - 目录入口统一 `index.ts`；跨目录导入优先指向 `index.ts`。
+- `index.ts` 是唯一目录导出面；禁止新增 `*.exports.ts`，已有 public API 必须直接在目录 `index.ts` 汇总。
 - 实现文件按角色加点分后缀：`*.module.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。目录内唯一 Component owner 必须直接命名为 `component.ts`；只有同目录存在多个组件边界时才使用 `*.component.ts` 加限定前缀。
+- 目录已表达职责时不重复写长前缀：`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
+- 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如 `src/neural/memory/dream/worker.ts`、`consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
@@ -102,7 +105,7 @@ flowchart LR
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
 - `src/neural/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；兼容函数只能转发，不得继续扩散 helper。
 - 约定优先于抽象：迁移不是为了消灭重复代码，而是为了让生命周期、状态、IO 副作用和协议边界有明确 owner。重复的 5-10 行值转换可以保留在对应 class 内，不为了“复用”抽成跨域工具函数。
-- 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/store.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
+- 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
 - `src/components` 只承载共享 Component 基类与真正跨模块基础设施（例如 SQL tagged template）；不得按领域开 `components/<domain>` 目录。
 
 ## 4.2 数据模型与 SQL Repo

@@ -6,7 +6,7 @@ Gateway 是 Flyflor 对外通讯的唯一入口：归一化 31 种 channel 入�
 
 ## 相关代码路径
 
-- `src/agent/gateway/gateway.module.ts` — Gateway 主类
+- `src/agent/gateway/module.ts` — Gateway 主类
 - `src/agent/gateway/channels/index.ts` — channel adapter 工厂
 - `src/agent/gateway/channels/types.ts` — `ChannelAdapter` 与 `MessageDispatcher` 接口
 - `src/agent/gateway/channels/delivery.protocol.ts` — thread / 引用 / 评论回送元数据统一出口

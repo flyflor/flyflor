@@ -1,16 +1,16 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { LruCache } from "../src/neural/memory/cache/lru.ts";
+import { LruCache } from "../src/neural/memory/cache/index.ts";
 import {
     ConsolidationDecisionKind,
     ConsolidationWorker,
     parseConsolidationDecision,
     type ConsolidationDecision,
-} from "../src/neural/memory/consolidation.worker.ts";
-import type { RetrospectiveLog } from "../src/neural/memory/retrospective.ts";
-import type { EpisodeRecord, WorkingMemoryStore } from "../src/neural/memory/working/types.ts";
-import type { MemoryGraphStore } from "../src/neural/memory/graph/types.ts";
+} from "../src/neural/memory/consolidation/index.ts";
+import type { RetrospectiveLog } from "../src/neural/memory/consolidation/index.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "../src/neural/memory/working/index.ts";
+import type { MemoryGraphStore } from "../src/neural/memory/graph/index.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
 

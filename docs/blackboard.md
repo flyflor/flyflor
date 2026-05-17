@@ -6,11 +6,11 @@
 
 ## 相关代码路径
 
-- `src/agent/blackboard/blackboard.module.ts` — turn / step / decision / lease 控制
+- `src/agent/blackboard/module.ts` — turn / step / decision / lease 控制
 - `src/agent/blackboard/store.ts` — 持久化（turn / step / decision / lease / message）
 - `src/agent/blackboard/types.ts` — 公共结构
-- `src/agent/worker/worker.manager.ts` — registry / pool / 超时 / 事件
-- `src/agent/worker/blackboard.worker.ts` — 通用模型 worker 注册
+- `src/agent/worker/manager.ts` — registry / pool / 超时 / 事件
+- `src/agent/worker/blackboard.ts` — 通用模型 worker 注册
 - `src/agent/worker/types.ts` — runtime kind / interaction kind
 - `src/agent/runtime/blackboard/route.ts` — `blackboard.route.md` 调用与 JSON 校验
 - `templates/prompts/blackboard.route.md` / `blackboard.worker.envelope.md` / `blackboard.worker.system.md` / `blackboard.decision.md` / `blackboard.advisory.md`

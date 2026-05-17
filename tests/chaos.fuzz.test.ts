@@ -12,30 +12,30 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LruCache } from "../src/neural/memory/cache/lru.ts";
+import { LruCache } from "../src/neural/memory/cache/index.ts";
 import { BrainStore, type BrainPromptAtomWrite } from "../src/neural/memory/brain/store.ts";
-import { spreadActivation } from "../src/neural/memory/activation.ts";
+import { spreadActivation } from "../src/neural/memory/recall/index.ts";
 import {
     DecayLayer,
     decayImportance,
     reinforceImportance,
     DEFAULT_DECAY_PROFILES,
-} from "../src/neural/memory/decay.ts";
+} from "../src/neural/memory/lifecycle/index.ts";
 import {
     dedupeGems,
     isContradiction,
     isStale,
     shouldMergeGems,
     type GemCandidate,
-} from "../src/neural/memory/anti.bloat.ts";
-import { parseConsolidationDecision } from "../src/neural/memory/consolidation.worker.ts";
+} from "../src/neural/memory/lifecycle/index.ts";
+import { parseConsolidationDecision } from "../src/neural/memory/consolidation/index.ts";
 import {
     detectClusterCandidate,
     detectExplicitIntent,
     detectSkillPromotion,
     ProjectTriggerKind,
 } from "../src/neural/project/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working/types.ts";
+import type { EpisodeRecord } from "../src/neural/memory/working/index.ts";
 import { AtomStage, MemoryEventType, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────

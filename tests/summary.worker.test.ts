@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BrainStore } from "../src/neural/memory/brain/store.ts";
-import { SummaryWorker, aggregate } from "../src/neural/memory/summary.worker.ts";
+import { SummaryWorker, aggregate } from "../src/neural/memory/summary/index.ts";
 import {
     MemoryEventType,
     ModelRole,

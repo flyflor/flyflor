@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayModule } from "../src/agent/gateway/gateway.module.ts";
+import { GatewayModule } from "../src/agent/gateway/module.ts";
 import { buildDeliveryMetadata } from "../src/agent/gateway/channels/delivery.protocol.ts";
 import { dispatchWithDelivery } from "../src/agent/gateway/channels/helpers.ts";
 import {

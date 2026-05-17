@@ -18,9 +18,9 @@ import {
     DreamActionKind,
     DreamWorkerImpl,
     type DreamRunResult,
-} from "../src/neural/memory/dream.worker.ts";
-import { DreamCandidateKind } from "../src/neural/memory/dream.candidates.ts";
-import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph/types.ts";
+} from "../src/neural/memory/dream/index.ts";
+import { DreamCandidateKind } from "../src/neural/memory/dream/index.ts";
+import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/neural/memory/graph/index.ts";
 import type { ModelClient, ModelMessage } from "../src/protocol/contracts/index.ts";
 import type { EventSink } from "../src/protocol/events/index.ts";
 

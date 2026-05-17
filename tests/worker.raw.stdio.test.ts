@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { WorkerManager } from "../src/agent/worker/worker.manager.ts";
-import { RawStdioWorkerAdapter } from "../src/agent/worker/worker.manager.ts";
+import { WorkerManager } from "../src/agent/worker/manager.ts";
+import { RawStdioWorkerAdapter } from "../src/agent/worker/manager.ts";
 import { NullEventSink, WorkerInteractionKind, WorkerRuntimeKind } from "../src/protocol/index.ts";
 import type { WorkerRunContext } from "../src/agent/worker/types.ts";
 

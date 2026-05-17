@@ -1,1 +1,1 @@
-export * from "./memory.module.ts";
+export * from "./module.ts";

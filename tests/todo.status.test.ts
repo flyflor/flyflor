@@ -61,7 +61,7 @@ describe("TODO status", () => {
         const present = stalePhrases.filter((phrase) => combined.includes(phrase));
         expect(present).toEqual([]);
         expect(sandboxDoc).not.toContain("src/agent/plugins/*");
-        expect(sandboxDoc).toContain("src/agent/plugin/plugin.runner.ts");
+        expect(sandboxDoc).toContain("src/agent/plugin/runner.ts");
         expect(sandboxDoc).toContain("gateCapabilityExecution");
         expect(sandboxDoc).toContain("SandboxQuotaTracker");
         expect(sandboxDoc).toContain("HttpAuditSink");
