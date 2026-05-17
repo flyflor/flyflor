@@ -16,7 +16,7 @@
 - `src/agent/runtime/events/skill.usage.event.ts` — `@Event` 聚合 skill usage sidecar，避免 runtime 主流程直接写辅助统计
 - `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
 - `src/agent/runtime/streaming/` — 内部协议块流式可见性过滤
-- `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 helper
+- `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 Component
 - `src/agent/runtime/perf.metrics.ts` — 性能事件采集
 - `src/agent/runtime/chat.ts` — TTY 交互入口
 - `src/neural/memory/index.ts` — `MemoryModule.buildPrompt` / `rememberTurn`
@@ -270,7 +270,7 @@ interface GatewayReply {
 
 ## 运行边界
 
-- `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/turn/index.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/turn/index.ts`，MCP/skill/planning/streaming helper 均按子目录归位。`module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
+- `RuntimeModule` 已拆 phase；附件摘要渲染由 `AttachmentSummaryRenderer` 拥有，Ask 可见回复与 metadata 由 `AskReplyRenderer` 拥有，MCP/skill/planning/streaming helper 均按子目录归位。`module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走 file-backed cache + 内存热读；损坏或写入失败只降级为 cache miss，并通过 `perf.fast_route_cache_failed` 保持可观测。多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。
