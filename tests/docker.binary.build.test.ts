@@ -7,4 +7,15 @@ describe("Docker binary build", () => {
         expect(script).toContain('"--conditions=browser"');
         expect(script).toContain('"--allow-unresolved="');
     });
+
+    test("release binary build installs cross Linux native packages before compiling targets", async () => {
+        const script = await Bun.file("scripts/build.release.binaries.ts").text();
+        const packageJson = JSON.parse(await Bun.file("package.json").text()) as { scripts?: Record<string, string> };
+
+        expect(packageJson.scripts?.["build:binary:release"]).toContain("build.release.binaries.ts");
+        expect(script).toContain('"--os=linux"');
+        expect(script).toContain('"--cpu=*"');
+        expect(script).toContain('"build:binary:linux-x64"');
+        expect(script).toContain('"build:binary:linux-arm64"');
+    });
 });

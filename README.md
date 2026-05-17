@@ -91,6 +91,7 @@ bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的�
 bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc
 bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
 bun run build:binary # 编译本机二进制
+bun run build:binary:release # 编译本机 + Linux x64 + Linux arm64 发布二进制
 ```
 
 ## Docker Dev
@@ -106,7 +107,7 @@ bun run smoke:runtime                     # 已启动 compose 后，检查 docto
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
-bun run smoke:release                     # docs + type + tests + binary + gateway service + docker smoke
+bun run smoke:release                     # docs + type + tests + release binaries + gateway service + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互

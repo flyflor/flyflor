@@ -45,6 +45,7 @@
         "format:check": "prettier --check .",
         "build:binary": "bun build --compile --target=bun --packages=bundle --conditions=browser --allow-unresolved=\"\" --define process.env.FLYFLOR_BUILD_COMMIT=\"'$(git rev-parse --short HEAD 2>/dev/null || echo dev)'\" --define process.env.FLYFLOR_BUILD_TARGET=\"'bun'\" --outfile dist/flyflor app.ts src/command/tui/chat/parser.worker.ts",
         "build:binary:docker": "bun run scripts/build.docker.binary.ts",
+        "build:binary:release": "bun run scripts/build.release.binaries.ts",
         "build:binary:linux-arm64": "bun build --compile --target=bun-linux-arm64 --packages=bundle --conditions=browser --allow-unresolved=\"\" --define process.env.FLYFLOR_BUILD_COMMIT=\"'$(git rev-parse --short HEAD 2>/dev/null || echo dev)'\" --define process.env.FLYFLOR_BUILD_TARGET=\"'linux-arm64'\" --outfile dist/flyflor-linux-arm64 app.ts src/command/tui/chat/parser.worker.ts",
         "build:binary:linux-x64": "bun build --compile --target=bun-linux-x64 --packages=bundle --conditions=browser --allow-unresolved=\"\" --define process.env.FLYFLOR_BUILD_COMMIT=\"'$(git rev-parse --short HEAD 2>/dev/null || echo dev)'\" --define process.env.FLYFLOR_BUILD_TARGET=\"'linux-x64'\" --outfile dist/flyflor-linux app.ts src/command/tui/chat/parser.worker.ts"
     },
