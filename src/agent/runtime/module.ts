@@ -22,9 +22,9 @@ import { Runtime as RuntimeBoundary } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
 import { parseMemoryActions } from "../../neural/memory/actions/index.ts";
-import { parseAgentAsk } from "../../neural/ask/index.ts";
-import { parseGhostDecisions } from "../../neural/ghost/index.ts";
-import { parseIdentityAppends } from "../../neural/identity/index.ts";
+import { AgentAskParser } from "../../neural/ask/index.ts";
+import { GhostDecisionParser } from "../../neural/ghost/index.ts";
+import { IdentityAppendParser } from "../../neural/identity/index.ts";
 import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
 import { LocalHashEmbeddingProvider } from "../../neural/embedding/index.ts";
 import {
@@ -166,6 +166,9 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly planningMetadataBuilder: PlanningMetadataBuilder;
     protected readonly blackboardRoute: RuntimeBlackboardRouteComponent;
     protected readonly blackboardOutput: RuntimeBlackboardOutputComponent;
+    protected readonly agentAskParser: AgentAskParser;
+    protected readonly ghostDecisionParser: GhostDecisionParser;
+    protected readonly identityAppendParser: IdentityAppendParser;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
@@ -196,6 +199,9 @@ export class RuntimeModule extends RuntimeBoundary {
         this.planningMetadataBuilder = new PlanningMetadataBuilder();
         this.blackboardRoute = new RuntimeBlackboardRouteComponent();
         this.blackboardOutput = new RuntimeBlackboardOutputComponent();
+        this.agentAskParser = new AgentAskParser();
+        this.ghostDecisionParser = new GhostDecisionParser();
+        this.identityAppendParser = new IdentityAppendParser();
     }
 
     /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
@@ -542,13 +548,13 @@ export class RuntimeModule extends RuntimeBoundary {
         const parsed = parseMemoryActions(rawText, this.config.memory.candidates.maxCandidatesPerTurn);
         // LF-R4 fork/fresh hint：先剥离 <flyflor_ghost_decisions> 块，再交给 ask 解析。
         // 仅消费结构化 {ghostId, kind}，runtime 不读 ghost 关联的自然语言语义。
-        const ghostDecisions = parseGhostDecisions(parsed.text);
+        const ghostDecisions = this.ghostDecisionParser.parse(parsed.text);
         if (ghostDecisions.decisions.length > 0) {
             this.memory.applyGhostDecisions(ghostDecisions.decisions);
         }
         // LF-R5 identity 自写：从剩余文本里剥离 <flyflor_identity_append> 块。
         // 仅消费结构化 {kind, content, confidence}，runtime 不读 content 文本含义。
-        const identityParsed = parseIdentityAppends(ghostDecisions.text);
+        const identityParsed = this.identityAppendParser.parse(ghostDecisions.text);
         if (identityParsed.candidates.length > 0) {
             this.memory.applyIdentityAppends({
                 userId: message.user.id,
@@ -569,7 +575,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // LF-R3 Ask 一等公民：从剥离 memory_actions + ghost_decisions + identity 后的剩余文本里解析
         // <flyflor_agent_ask> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
         // 渲染，原模型 reply 文本忽略。
-        const askParsed = parseAgentAsk(planningParsed.text);
+        const askParsed = this.agentAskParser.parse(planningParsed.text);
         const visibleSource = parseMcpToolCalls(askParsed.text || rawText).text || askParsed.text || rawText;
         if (askParsed.dropped > 0) {
             this.events.publish(

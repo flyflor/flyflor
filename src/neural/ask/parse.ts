@@ -26,128 +26,142 @@ export interface ParsedAgentAsk {
 
 const VALID_REASONS: ReadonlySet<string> = new Set(Object.values(AskReasonEnum));
 
-export function parseAgentAsk(rawText: string): ParsedAgentAsk {
-    let firstAsk: AgentAsk | undefined;
-    let dropped = 0;
-    // 协议边界统一从 protocol registry 提取；本模块只负责 AgentAsk payload 的结构化校验。
-    const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.AgentAsk);
-    for (const block of extracted.blocks) {
-        try {
-            const candidate = readAsk(block.content);
-            if (firstAsk) {
+/**
+ * AgentAsk structured block parser.
+ *
+ * Runtime production paths should hold this parser. The exported function at
+ * the bottom is a compatibility shim for tests and existing public imports.
+ */
+export class AgentAskParser {
+    public parse(rawText: string): ParsedAgentAsk {
+        let firstAsk: AgentAsk | undefined;
+        let dropped = 0;
+        // 协议边界统一从 protocol registry 提取；本模块只负责 AgentAsk payload 的结构化校验。
+        const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.AgentAsk);
+        for (const block of extracted.blocks) {
+            try {
+                const candidate = this.readAsk(block.content);
+                if (firstAsk) {
+                    dropped += 1;
+                    continue;
+                }
+                firstAsk = candidate;
+            } catch {
                 dropped += 1;
-                continue;
             }
-            firstAsk = candidate;
-        } catch {
-            dropped += 1;
         }
+        return { ask: firstAsk, text: extracted.text, dropped };
     }
-    return { ask: firstAsk, text: extracted.text, dropped };
-}
 
-function readAsk(rawJson: string): AgentAsk {
-    const payload = parseStructuredJson(rawJson);
-    if (!payload || typeof payload !== "object") {
-        throw new Error("flyflor_agent_ask must be a JSON object.");
-    }
-    const obj = payload as Record<string, unknown>;
-    const reason = normalizeReason(obj.reason);
-    if (!reason) throw new Error(`flyflor_agent_ask has invalid reason: ${String(obj.reason)}`);
-    const prompt = typeof obj.prompt === "string" ? obj.prompt.trim() : "";
-    if (!prompt) throw new Error("flyflor_agent_ask requires non-empty prompt.");
-    const choices = normalizeChoices(obj.choices);
-    const questions = normalizeQuestions(obj.questions);
-    const freeform = typeof obj.freeform === "boolean" ? obj.freeform : true;
-    const relatedIds = normalizeStringArray(obj.relatedIds);
-    const rationale = typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 500) : undefined;
-    const ghostHint = normalizeGhostHint(obj.ghostHint);
-    const ask: AgentAsk = {
-        reason,
-        prompt: prompt.slice(0, 2000),
-        freeform,
-    };
-    if (choices && choices.length > 0) ask.choices = choices;
-    if (questions && questions.length > 0) ask.questions = questions;
-    if (relatedIds && relatedIds.length > 0) ask.relatedIds = relatedIds;
-    if (rationale) ask.rationale = rationale;
-    if (ghostHint) ask.ghostHint = ghostHint;
-    return ask;
-}
-
-function normalizeGhostHint(value: unknown): { title: string; contextHint?: string } | undefined {
-    if (!value || typeof value !== "object") {
-        return undefined;
-    }
-    const obj = value as Record<string, unknown>;
-    const title = typeof obj.title === "string" ? obj.title.trim().slice(0, 120) : undefined;
-    const contextHint = typeof obj.contextHint === "string" ? obj.contextHint.trim().slice(0, 500) : undefined;
-    if (!title) {
-        return undefined;
-    }
-    const out: { title: string; contextHint?: string } = { title };
-    if (contextHint) out.contextHint = contextHint;
-    return out;
-}
-
-function normalizeReason(value: unknown): AskReason | undefined {
-    if (typeof value !== "string") return undefined;
-    const trimmed = value.trim();
-    if (!VALID_REASONS.has(trimmed)) return undefined;
-    return trimmed as AskReason;
-}
-
-function normalizeChoices(value: unknown): AgentAskChoice[] | undefined {
-    if (!Array.isArray(value)) return undefined;
-    const out: AgentAskChoice[] = [];
-    for (const raw of value) {
-        if (!raw || typeof raw !== "object") continue;
-        const obj = raw as Record<string, unknown>;
-        const label = typeof obj.label === "string" ? obj.label.trim().slice(0, 200) : "";
-        if (!label) continue;
-        const choice: AgentAskChoice = { label };
-        if (typeof obj.value === "string" && obj.value.trim()) choice.value = obj.value.trim().slice(0, 200);
-        if (typeof obj.description === "string" && obj.description.trim()) {
-            choice.description = obj.description.trim().slice(0, 500);
+    private readAsk(rawJson: string): AgentAsk {
+        const payload = parseStructuredJson(rawJson);
+        if (!payload || typeof payload !== "object") {
+            throw new Error("flyflor_agent_ask must be a JSON object.");
         }
-        out.push(choice);
-        if (out.length >= 12) break;
+        const obj = payload as Record<string, unknown>;
+        const reason = this.normalizeReason(obj.reason);
+        if (!reason) throw new Error(`flyflor_agent_ask has invalid reason: ${String(obj.reason)}`);
+        const prompt = typeof obj.prompt === "string" ? obj.prompt.trim() : "";
+        if (!prompt) throw new Error("flyflor_agent_ask requires non-empty prompt.");
+        const choices = this.normalizeChoices(obj.choices);
+        const questions = this.normalizeQuestions(obj.questions);
+        const freeform = typeof obj.freeform === "boolean" ? obj.freeform : true;
+        const relatedIds = this.normalizeStringArray(obj.relatedIds);
+        const rationale = typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 500) : undefined;
+        const ghostHint = this.normalizeGhostHint(obj.ghostHint);
+        const ask: AgentAsk = {
+            reason,
+            prompt: prompt.slice(0, 2000),
+            freeform,
+        };
+        if (choices && choices.length > 0) ask.choices = choices;
+        if (questions && questions.length > 0) ask.questions = questions;
+        if (relatedIds && relatedIds.length > 0) ask.relatedIds = relatedIds;
+        if (rationale) ask.rationale = rationale;
+        if (ghostHint) ask.ghostHint = ghostHint;
+        return ask;
     }
-    return out;
-}
 
-function normalizeQuestions(value: unknown): AgentAskQuestion[] | undefined {
-    if (!Array.isArray(value)) return undefined;
-    const out: AgentAskQuestion[] = [];
-    for (const raw of value) {
-        if (!raw || typeof raw !== "object") continue;
-        const obj = raw as Record<string, unknown>;
-        const prompt = typeof obj.prompt === "string" ? obj.prompt.trim().slice(0, 500) : "";
-        if (!prompt) continue;
-        const question: AgentAskQuestion = { prompt };
-        if (typeof obj.id === "string" && obj.id.trim()) question.id = obj.id.trim().slice(0, 100);
-        const choices = normalizeChoices(obj.choices);
-        if (choices && choices.length > 0) question.choices = choices;
-        if (typeof obj.freeform === "boolean") question.freeform = obj.freeform;
-        const relatedIds = normalizeStringArray(obj.relatedIds);
-        if (relatedIds && relatedIds.length > 0) question.relatedIds = relatedIds;
-        if (typeof obj.rationale === "string" && obj.rationale.trim()) {
-            question.rationale = obj.rationale.trim().slice(0, 500);
+    private normalizeGhostHint(value: unknown): { title: string; contextHint?: string } | undefined {
+        if (!value || typeof value !== "object") {
+            return undefined;
         }
-        out.push(question);
-        if (out.length >= 8) break;
+        const obj = value as Record<string, unknown>;
+        const title = typeof obj.title === "string" ? obj.title.trim().slice(0, 120) : undefined;
+        const contextHint = typeof obj.contextHint === "string" ? obj.contextHint.trim().slice(0, 500) : undefined;
+        if (!title) {
+            return undefined;
+        }
+        const out: { title: string; contextHint?: string } = { title };
+        if (contextHint) out.contextHint = contextHint;
+        return out;
     }
-    return out;
+
+    private normalizeReason(value: unknown): AskReason | undefined {
+        if (typeof value !== "string") return undefined;
+        const trimmed = value.trim();
+        if (!VALID_REASONS.has(trimmed)) return undefined;
+        return trimmed as AskReason;
+    }
+
+    private normalizeChoices(value: unknown): AgentAskChoice[] | undefined {
+        if (!Array.isArray(value)) return undefined;
+        const out: AgentAskChoice[] = [];
+        for (const raw of value) {
+            if (!raw || typeof raw !== "object") continue;
+            const obj = raw as Record<string, unknown>;
+            const label = typeof obj.label === "string" ? obj.label.trim().slice(0, 200) : "";
+            if (!label) continue;
+            const choice: AgentAskChoice = { label };
+            if (typeof obj.value === "string" && obj.value.trim()) choice.value = obj.value.trim().slice(0, 200);
+            if (typeof obj.description === "string" && obj.description.trim()) {
+                choice.description = obj.description.trim().slice(0, 500);
+            }
+            out.push(choice);
+            if (out.length >= 12) break;
+        }
+        return out;
+    }
+
+    private normalizeQuestions(value: unknown): AgentAskQuestion[] | undefined {
+        if (!Array.isArray(value)) return undefined;
+        const out: AgentAskQuestion[] = [];
+        for (const raw of value) {
+            if (!raw || typeof raw !== "object") continue;
+            const obj = raw as Record<string, unknown>;
+            const prompt = typeof obj.prompt === "string" ? obj.prompt.trim().slice(0, 500) : "";
+            if (!prompt) continue;
+            const question: AgentAskQuestion = { prompt };
+            if (typeof obj.id === "string" && obj.id.trim()) question.id = obj.id.trim().slice(0, 100);
+            const choices = this.normalizeChoices(obj.choices);
+            if (choices && choices.length > 0) question.choices = choices;
+            if (typeof obj.freeform === "boolean") question.freeform = obj.freeform;
+            const relatedIds = this.normalizeStringArray(obj.relatedIds);
+            if (relatedIds && relatedIds.length > 0) question.relatedIds = relatedIds;
+            if (typeof obj.rationale === "string" && obj.rationale.trim()) {
+                question.rationale = obj.rationale.trim().slice(0, 500);
+            }
+            out.push(question);
+            if (out.length >= 8) break;
+        }
+        return out;
+    }
+
+    private normalizeStringArray(value: unknown): string[] | undefined {
+        if (!Array.isArray(value)) return undefined;
+        const out: string[] = [];
+        for (const raw of value) {
+            if (typeof raw !== "string") continue;
+            const trimmed = raw.trim();
+            if (trimmed) out.push(trimmed.slice(0, 200));
+            if (out.length >= 16) break;
+        }
+        return out;
+    }
 }
 
-function normalizeStringArray(value: unknown): string[] | undefined {
-    if (!Array.isArray(value)) return undefined;
-    const out: string[] = [];
-    for (const raw of value) {
-        if (typeof raw !== "string") continue;
-        const trimmed = raw.trim();
-        if (trimmed) out.push(trimmed.slice(0, 200));
-        if (out.length >= 16) break;
-    }
-    return out;
+export const agentAskParser = new AgentAskParser();
+
+export function parseAgentAsk(rawText: string): ParsedAgentAsk {
+    return agentAskParser.parse(rawText);
 }

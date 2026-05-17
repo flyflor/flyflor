@@ -102,6 +102,7 @@ flowchart LR
 - Runtime 黑板路由 prompt 调用、JSON 校验、worker plan 归一化和 contract 读取必须由 `RuntimeBlackboardRouteComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`route.ts` 兼容函数只能委托该组件。
 - Runtime 黑板文本投影、history scene、ask handoff 必须由 `RuntimeBlackboardOutputComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`output.ts` 可以保留兼容导出，但不能继续追加新的格式化 helper。
 - Runtime Ask 渲染、附件摘要、project constraint、turn timing 和 working-memory 健康判定分别由 `AskReplyRenderer`、`AttachmentSummaryRenderer`、`ProjectConstraintBuilder`、`TurnTiming`、`WorkingMemoryHealthInspector` 负责；兼容函数只作转发。
+- Runtime 对模型输出的 AgentAsk / GhostDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`GhostDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
 - `src/neural/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
 - `src/neural/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。

@@ -27,49 +27,63 @@ export interface ParsedGhostDecisions {
     dropped: number;
 }
 
-export function parseGhostDecisions(rawText: string, maxDecisions = 8): ParsedGhostDecisions {
-    const seen = new Set<string>();
-    const decisions: GhostDecision[] = [];
-    let dropped = 0;
-    // tag 与剥离规则由 protocol registry 统一管理；这里仅消费 {ghostId, kind} 结构字段。
-    const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.GhostDecisions);
-    for (const block of extracted.blocks) {
-        let parsed: GhostDecision[];
-        try {
-            parsed = readDecisions(block.content);
-        } catch {
-            dropped += 1;
-            continue;
-        }
-        for (const item of parsed) {
-            if (decisions.length >= maxDecisions) {
+/**
+ * Ghost decision structured block parser.
+ *
+ * Runtime production paths should hold this parser so fork/fresh decisions are
+ * owned by the ghost module instead of scattered as top-level business logic.
+ */
+export class GhostDecisionParser {
+    public parse(rawText: string, maxDecisions = 8): ParsedGhostDecisions {
+        const seen = new Set<string>();
+        const decisions: GhostDecision[] = [];
+        let dropped = 0;
+        // tag 与剥离规则由 protocol registry 统一管理；这里仅消费 {ghostId, kind} 结构字段。
+        const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.GhostDecisions);
+        for (const block of extracted.blocks) {
+            let parsed: GhostDecision[];
+            try {
+                parsed = this.readDecisions(block.content);
+            } catch {
                 dropped += 1;
                 continue;
             }
-            if (seen.has(item.ghostId)) {
-                dropped += 1;
-                continue;
+            for (const item of parsed) {
+                if (decisions.length >= maxDecisions) {
+                    dropped += 1;
+                    continue;
+                }
+                if (seen.has(item.ghostId)) {
+                    dropped += 1;
+                    continue;
+                }
+                seen.add(item.ghostId);
+                decisions.push(item);
             }
-            seen.add(item.ghostId);
-            decisions.push(item);
         }
+        return { decisions, text: extracted.text, dropped };
     }
-    return { decisions, text: extracted.text, dropped };
+
+    private readDecisions(rawJson: string): GhostDecision[] {
+        const payload = parseStructuredJson(rawJson);
+        if (!Array.isArray(payload)) {
+            throw new Error("flyflor_ghost_decisions must be a JSON array.");
+        }
+        const out: GhostDecision[] = [];
+        for (const item of payload) {
+            if (!item || typeof item !== "object") continue;
+            const record = item as Record<string, unknown>;
+            const ghostId = typeof record.ghostId === "string" ? record.ghostId.trim() : "";
+            const kind = typeof record.kind === "string" ? record.kind.trim() : "";
+            if (!ghostId || !VALID_KINDS.has(kind)) continue;
+            out.push({ ghostId, kind: kind as GhostDecision["kind"] });
+        }
+        return out;
+    }
 }
 
-function readDecisions(rawJson: string): GhostDecision[] {
-    const payload = parseStructuredJson(rawJson);
-    if (!Array.isArray(payload)) {
-        throw new Error("flyflor_ghost_decisions must be a JSON array.");
-    }
-    const out: GhostDecision[] = [];
-    for (const item of payload) {
-        if (!item || typeof item !== "object") continue;
-        const record = item as Record<string, unknown>;
-        const ghostId = typeof record.ghostId === "string" ? record.ghostId.trim() : "";
-        const kind = typeof record.kind === "string" ? record.kind.trim() : "";
-        if (!ghostId || !VALID_KINDS.has(kind)) continue;
-        out.push({ ghostId, kind: kind as GhostDecision["kind"] });
-    }
-    return out;
+export const ghostDecisionParser = new GhostDecisionParser();
+
+export function parseGhostDecisions(rawText: string, maxDecisions = 8): ParsedGhostDecisions {
+    return ghostDecisionParser.parse(rawText, maxDecisions);
 }
