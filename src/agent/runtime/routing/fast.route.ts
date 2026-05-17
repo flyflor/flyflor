@@ -66,91 +66,109 @@ export const FastRouteReason = {
 } as const;
 export type FastRouteReason = (typeof FastRouteReason)[keyof typeof FastRouteReason];
 
-export function evaluateFastRoute(input: FastRouteInput): FastRouteResult {
-    const { config, snapshot, nowMs, currentEmbedding, messageChars } = input;
+/**
+ * Runtime fast-route owner.
+ *
+ * Production code should hold this class; the exported functions below are
+ * compatibility shims for tests and older public imports.
+ */
+export class FastRouteEvaluator {
+    public evaluate(input: FastRouteInput): FastRouteResult {
+        const { config, snapshot, nowMs, currentEmbedding, messageChars } = input;
 
-    if (!config.fastRouteEnabled) {
-        return { bypass: false, reason: FastRouteReason.Disabled };
-    }
+        if (!config.fastRouteEnabled) {
+            return { bypass: false, reason: FastRouteReason.Disabled };
+        }
 
-    // 资源指标 1：token 预算超低（短消息）→ 一定 bypass。
-    const estimatedTokens = Math.ceil(Math.max(0, messageChars) / 4);
-    if (estimatedTokens > 0 && estimatedTokens < config.routeBypassTokenBudget) {
-        return {
-            bypass: true,
-            reason: FastRouteReason.BypassByBudget,
-            metrics: { estimatedTokens },
-        };
-    }
-
-    if (!snapshot) {
-        return { bypass: false, reason: FastRouteReason.NoSnapshot };
-    }
-
-    // 资源指标 2：上一轮模型 hint 仍有效 → 直接 bypass。
-    const age = nowMs - snapshot.recordedAt;
-    if (snapshot.nextRouteHint === BlackboardMode.Direct && age >= 0 && age < config.routeHintTtlMs) {
-        return { bypass: true, reason: FastRouteReason.BypassByHint, metrics: { estimatedTokens } };
-    }
-
-    // 资源指标 3：当前 vs 上一轮 embedding 相似度高，且上一轮就是 direct → 复用结论。
-    if (currentEmbedding && snapshot.embedding && snapshot.lastMode === BlackboardMode.Direct) {
-        const similarity = cosineSimilarity(currentEmbedding, snapshot.embedding);
-        if (similarity > config.similarityBypassThreshold) {
+        // 资源指标 1：token 预算超低（短消息）→ 一定 bypass。
+        const estimatedTokens = Math.ceil(Math.max(0, messageChars) / 4);
+        if (estimatedTokens > 0 && estimatedTokens < config.routeBypassTokenBudget) {
             return {
                 bypass: true,
-                reason: FastRouteReason.BypassBySimilarity,
+                reason: FastRouteReason.BypassByBudget,
+                metrics: { estimatedTokens },
+            };
+        }
+
+        if (!snapshot) {
+            return { bypass: false, reason: FastRouteReason.NoSnapshot };
+        }
+
+        // 资源指标 2：上一轮模型 hint 仍有效 → 直接 bypass。
+        const age = nowMs - snapshot.recordedAt;
+        if (snapshot.nextRouteHint === BlackboardMode.Direct && age >= 0 && age < config.routeHintTtlMs) {
+            return { bypass: true, reason: FastRouteReason.BypassByHint, metrics: { estimatedTokens } };
+        }
+
+        // 资源指标 3：当前 vs 上一轮 embedding 相似度高，且上一轮就是 direct → 复用结论。
+        if (currentEmbedding && snapshot.embedding && snapshot.lastMode === BlackboardMode.Direct) {
+            const similarity = this.cosineSimilarity(currentEmbedding, snapshot.embedding);
+            if (similarity > config.similarityBypassThreshold) {
+                return {
+                    bypass: true,
+                    reason: FastRouteReason.BypassBySimilarity,
+                    metrics: { similarity, estimatedTokens },
+                };
+            }
+            return {
+                bypass: false,
+                reason: FastRouteReason.SimilarityBelowThreshold,
                 metrics: { similarity, estimatedTokens },
             };
         }
+
+        if (snapshot.nextRouteHint && snapshot.nextRouteHint !== BlackboardMode.Direct) {
+            return { bypass: false, reason: FastRouteReason.HintNotDirect, metrics: { estimatedTokens } };
+        }
+        return { bypass: false, reason: FastRouteReason.HintExpired, metrics: { estimatedTokens } };
+    }
+
+    /**
+     * 命中 fastRoute 时直接构造 direct 路由决策，跳过 LLM 调用。
+     */
+    public buildBypassDecision(reason: FastRouteReason): RuntimeBlackboardRouteDecision {
         return {
-            bypass: false,
-            reason: FastRouteReason.SimilarityBelowThreshold,
-            metrics: { similarity, estimatedTokens },
+            mode: BlackboardMode.Direct,
+            score: 0,
+            reason: `fastroute:${reason}`,
+            signals: [],
+            needsReflectionCandidate: false,
+            blackboardContract: {
+                contradictions: [],
+                evidence: [],
+                mode: "normal",
+                policyReason: "fastroute-bypass",
+            },
+            workers: [],
+            raw: "",
         };
     }
 
-    if (snapshot.nextRouteHint && snapshot.nextRouteHint !== BlackboardMode.Direct) {
-        return { bypass: false, reason: FastRouteReason.HintNotDirect, metrics: { estimatedTokens } };
+    private cosineSimilarity(a: number[], b: number[]): number {
+        if (a.length === 0 || b.length === 0 || a.length !== b.length) {
+            return 0;
+        }
+        let dot = 0;
+        let magA = 0;
+        let magB = 0;
+        for (let i = 0; i < a.length; i += 1) {
+            const av = a[i] ?? 0;
+            const bv = b[i] ?? 0;
+            dot += av * bv;
+            magA += av * av;
+            magB += bv * bv;
+        }
+        if (magA === 0 || magB === 0) return 0;
+        return dot / (Math.sqrt(magA) * Math.sqrt(magB));
     }
-    return { bypass: false, reason: FastRouteReason.HintExpired, metrics: { estimatedTokens } };
 }
 
-/**
- * 命中 fastRoute 时直接构造 direct 路由决策，跳过 LLM 调用。
- */
+export const fastRouteEvaluator = new FastRouteEvaluator();
+
+export function evaluateFastRoute(input: FastRouteInput): FastRouteResult {
+    return fastRouteEvaluator.evaluate(input);
+}
+
 export function buildBypassDecision(reason: FastRouteReason): RuntimeBlackboardRouteDecision {
-    return {
-        mode: BlackboardMode.Direct,
-        score: 0,
-        reason: `fastroute:${reason}`,
-        signals: [],
-        needsReflectionCandidate: false,
-        blackboardContract: {
-            contradictions: [],
-            evidence: [],
-            mode: "normal",
-            policyReason: "fastroute-bypass",
-        },
-        workers: [],
-        raw: "",
-    };
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length === 0 || b.length === 0 || a.length !== b.length) {
-        return 0;
-    }
-    let dot = 0;
-    let magA = 0;
-    let magB = 0;
-    for (let i = 0; i < a.length; i += 1) {
-        const av = a[i] ?? 0;
-        const bv = b[i] ?? 0;
-        dot += av * bv;
-        magA += av * av;
-        magB += bv * bv;
-    }
-    if (magA === 0 || magB === 0) return 0;
-    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+    return fastRouteEvaluator.buildBypassDecision(reason);
 }

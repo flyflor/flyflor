@@ -68,11 +68,9 @@ import { InFlightTracker } from "./inflight.tracker.ts";
 import { formatMcpResultSummary, filterMcpServersByToolset, mcpCatalogCacheKey, mcpExecutionsToProvenance } from "./mcp/index.ts";
 import { PlanningBlockParser, PlanningMetadataBuilder } from "./planning/index.ts";
 import {
-    buildBypassDecision,
-    decideRouteEscalation,
-    evaluateFastRoute,
+    FastRouteEvaluator,
     FileBackedFastRouteSnapshotStore,
-    nextEscalationCounters,
+    RouteEscalationPolicy,
     type FastRouteSnapshot,
     type FastRouteResult,
     type FastRouteSnapshotStore,
@@ -169,6 +167,8 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly agentAskParser: AgentAskParser;
     protected readonly ghostDecisionParser: GhostDecisionParser;
     protected readonly identityAppendParser: IdentityAppendParser;
+    protected readonly fastRouteEvaluator: FastRouteEvaluator;
+    protected readonly routeEscalationPolicy: RouteEscalationPolicy;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照（per (channel, chatId, user) 维度）。
@@ -202,6 +202,8 @@ export class RuntimeModule extends RuntimeBoundary {
         this.agentAskParser = new AgentAskParser();
         this.ghostDecisionParser = new GhostDecisionParser();
         this.identityAppendParser = new IdentityAppendParser();
+        this.fastRouteEvaluator = new FastRouteEvaluator();
+        this.routeEscalationPolicy = new RouteEscalationPolicy();
     }
 
     /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
@@ -368,7 +370,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const enrichedContext: RuntimeContext = { ...context, embedding };
         const snapshotKey = this.snapshotKeyFor(message);
         const fastRouteSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
-        const fastRoute = evaluateFastRoute({
+        const fastRoute = this.fastRouteEvaluator.evaluate({
             config: this.config.routing,
             snapshot: fastRouteSnapshot,
             nowMs: Date.now(),
@@ -805,7 +807,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const totalToolCalls = mcpCallProvenance.length;
         const toolFailureRatio =
             totalToolCalls > 0 ? mcpCallProvenance.filter((call) => !call.ok).length / totalToolCalls : 0;
-        const counters = nextEscalationCounters({
+        const counters = this.routeEscalationPolicy.nextCounters({
             actualMode: lastMode,
             blackboardStatus: blackboardRun?.status,
             previousWatch: previousSnapshot?.consecutiveWatchTurns ?? 0,
@@ -935,7 +937,7 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<RuntimeBlackboardRouteDecision | undefined> {
         if (!this.blackboard) return undefined;
         if (fastRoute.bypass) {
-            return buildBypassDecision(fastRoute.reason);
+            return this.fastRouteEvaluator.buildBypassDecision(fastRoute.reason);
         }
         return this.blackboardRoute.decideBlackboardRoute(this.model, message.text);
     }
@@ -956,7 +958,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const budget = this.config.routing.contextPressureBudgetTokens ?? 0;
         const estimatedTokens = Math.ceil(currentMessageChars / 4);
         const pressureRatio = budget > 0 ? estimatedTokens / budget : 0;
-        const decision = decideRouteEscalation({
+        const decision = this.routeEscalationPolicy.decide({
             currentMode: original.mode,
             consecutiveWatchTurns: snapshot?.consecutiveWatchTurns ?? 0,
             consecutiveBlackboardFailures: snapshot?.consecutiveBlackboardFailures ?? 0,

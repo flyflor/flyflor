@@ -101,6 +101,7 @@ flowchart LR
 - Runtime planning 的回复 metadata 压缩必须由 `PlanningMetadataBuilder` 拥有；runtime 主链直接持有 builder 实例，metadata 文件只允许暴露 builder 和兼容薄入口，不能继续追加游离 compact helper。
 - Runtime 黑板路由 prompt 调用、JSON 校验、worker plan 归一化和 contract 读取必须由 `RuntimeBlackboardRouteComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`route.ts` 兼容函数只能委托该组件。
 - Runtime 黑板文本投影、history scene、ask handoff 必须由 `RuntimeBlackboardOutputComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`output.ts` 可以保留兼容导出，但不能继续追加新的格式化 helper。
+- Runtime fastRoute 与 route escalation 只能使用资源指标和结构化 snapshot；生产主链必须通过 `FastRouteEvaluator` / `RouteEscalationPolicy`，`evaluateFastRoute()`、`buildBypassDecision()`、`decideRouteEscalation()`、`nextEscalationCounters()` 只作为兼容薄入口。
 - Runtime Ask 渲染、附件摘要、project constraint、turn timing 和 working-memory 健康判定分别由 `AskReplyRenderer`、`AttachmentSummaryRenderer`、`ProjectConstraintBuilder`、`TurnTiming`、`WorkingMemoryHealthInspector` 负责；兼容函数只作转发。
 - Runtime 对模型输出的 AgentAsk / GhostDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`GhostDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。

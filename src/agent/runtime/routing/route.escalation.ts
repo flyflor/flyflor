@@ -46,67 +46,99 @@ export interface RouteEscalationDecision {
     reason: RouteEscalationReason;
 }
 
-export function decideRouteEscalation(input: RouteEscalationInput): RouteEscalationDecision {
-    const watchActive = input.watchThreshold > 0;
-    const failureActive = input.failureThreshold > 0;
-    const toolThreshold = input.toolFailureThreshold ?? 0;
-    const pressureTrigger = input.contextPressureTrigger ?? 0;
-    const toolActive = toolThreshold > 0;
-    const pressureActive = pressureTrigger > 0;
-    const toolTurns = input.consecutiveToolFailureTurns ?? 0;
-    const pressureRatio = input.contextPressureRatio ?? 0;
-    const isWatchOrDirect =
-        input.currentMode === BlackboardMode.DirectWithWatch || input.currentMode === BlackboardMode.Direct;
+/**
+ * Runtime route escalation owner.
+ *
+ * Keeps watch/failure/tool/context-pressure counters as resource metrics and
+ * prevents escalation policy from spreading as loose runtime helpers.
+ */
+export class RouteEscalationPolicy {
+    public decide(input: RouteEscalationInput): RouteEscalationDecision {
+        const watchActive = input.watchThreshold > 0;
+        const failureActive = input.failureThreshold > 0;
+        const toolThreshold = input.toolFailureThreshold ?? 0;
+        const pressureTrigger = input.contextPressureTrigger ?? 0;
+        const toolActive = toolThreshold > 0;
+        const pressureActive = pressureTrigger > 0;
+        const toolTurns = input.consecutiveToolFailureTurns ?? 0;
+        const pressureRatio = input.contextPressureRatio ?? 0;
+        const isWatchOrDirect =
+            input.currentMode === BlackboardMode.DirectWithWatch || input.currentMode === BlackboardMode.Direct;
 
-    if (pressureActive && isWatchOrDirect && pressureRatio >= pressureTrigger) {
+        if (pressureActive && isWatchOrDirect && pressureRatio >= pressureTrigger) {
+            return {
+                escalated: true,
+                targetMode: BlackboardMode.Blackboard,
+                reason: RouteEscalationReason.ContextPressure,
+            };
+        }
+
+        if (failureActive && isWatchOrDirect && input.consecutiveBlackboardFailures >= input.failureThreshold) {
+            return {
+                escalated: true,
+                targetMode: BlackboardMode.Blackboard,
+                reason: RouteEscalationReason.BlackboardFailureRetry,
+            };
+        }
+
+        if (toolActive && isWatchOrDirect && toolTurns >= toolThreshold) {
+            return {
+                escalated: true,
+                targetMode: BlackboardMode.Blackboard,
+                reason: RouteEscalationReason.ToolFailureSaturation,
+            };
+        }
+
+        if (
+            watchActive &&
+            input.currentMode === BlackboardMode.DirectWithWatch &&
+            input.consecutiveWatchTurns >= input.watchThreshold
+        ) {
+            return {
+                escalated: true,
+                targetMode: BlackboardMode.Blackboard,
+                reason: RouteEscalationReason.WatchSaturation,
+            };
+        }
+
         return {
-            escalated: true,
-            targetMode: BlackboardMode.Blackboard,
-            reason: RouteEscalationReason.ContextPressure,
+            escalated: false,
+            targetMode: input.currentMode,
+            reason: RouteEscalationReason.None,
         };
     }
 
-    if (failureActive && isWatchOrDirect && input.consecutiveBlackboardFailures >= input.failureThreshold) {
-        return {
-            escalated: true,
-            targetMode: BlackboardMode.Blackboard,
-            reason: RouteEscalationReason.BlackboardFailureRetry,
-        };
-    }
+    /**
+     * 给定一轮的实际 mode + blackboard 终态 + 工具失败率，返回更新后的 snapshot 计数。
+     * direct → watch 清零；direct-with-watch → 增 watch；blackboard 收敛 → 全部清零。
+     * 工具失败计数：本轮失败率 ≥ trigger 时 +1，否则清零（一旦本轮稳住即视为复位）。
+     */
+    public nextCounters(input: RouteEscalationCounterInput): RouteEscalationCounters {
+        const previousToolFailure = input.previousToolFailure ?? 0;
+        const trigger = input.toolFailureRatioTrigger ?? 0;
+        const toolFailure =
+            trigger > 0 && (input.toolFailureRatio ?? 0) >= trigger ? previousToolFailure + 1 : 0;
 
-    if (toolActive && isWatchOrDirect && toolTurns >= toolThreshold) {
-        return {
-            escalated: true,
-            targetMode: BlackboardMode.Blackboard,
-            reason: RouteEscalationReason.ToolFailureSaturation,
-        };
+        if (input.actualMode === BlackboardMode.Direct) {
+            return { watch: 0, failure: input.previousFailure, toolFailure };
+        }
+        if (input.actualMode === BlackboardMode.DirectWithWatch) {
+            return { watch: input.previousWatch + 1, failure: input.previousFailure, toolFailure };
+        }
+        if (input.blackboardStatus === BlackboardTurnStatus.Converged) {
+            return { watch: 0, failure: 0, toolFailure: 0 };
+        }
+        if (
+            input.blackboardStatus === BlackboardTurnStatus.NeedsUser ||
+            input.blackboardStatus === BlackboardTurnStatus.Failed
+        ) {
+            return { watch: 0, failure: input.previousFailure + 1, toolFailure };
+        }
+        return { watch: input.previousWatch, failure: input.previousFailure, toolFailure };
     }
-
-    if (
-        watchActive &&
-        input.currentMode === BlackboardMode.DirectWithWatch &&
-        input.consecutiveWatchTurns >= input.watchThreshold
-    ) {
-        return {
-            escalated: true,
-            targetMode: BlackboardMode.Blackboard,
-            reason: RouteEscalationReason.WatchSaturation,
-        };
-    }
-
-    return {
-        escalated: false,
-        targetMode: input.currentMode,
-        reason: RouteEscalationReason.None,
-    };
 }
 
-/**
- * 给定一轮的实际 mode + blackboard 终态 + 工具失败率，返回更新后的 snapshot 计数。
- * direct → watch 清零；direct-with-watch → 增 watch；blackboard 收敛 → 全部清零。
- * 工具失败计数：本轮失败率 ≥ trigger 时 +1，否则清零（一旦本轮稳住即视为复位）。
- */
-export function nextEscalationCounters(input: {
+export interface RouteEscalationCounterInput {
     actualMode: BlackboardMode;
     blackboardStatus?: BlackboardTurnStatusType;
     previousWatch: number;
@@ -116,26 +148,20 @@ export function nextEscalationCounters(input: {
     toolFailureRatio?: number;
     /** 本轮工具失败计入的阈值；通常等于配置 toolFailureRatioTrigger。 */
     toolFailureRatioTrigger?: number;
-}): { watch: number; failure: number; toolFailure: number } {
-    const previousToolFailure = input.previousToolFailure ?? 0;
-    const trigger = input.toolFailureRatioTrigger ?? 0;
-    const toolFailure =
-        trigger > 0 && (input.toolFailureRatio ?? 0) >= trigger ? previousToolFailure + 1 : 0;
+}
 
-    if (input.actualMode === BlackboardMode.Direct) {
-        return { watch: 0, failure: input.previousFailure, toolFailure };
-    }
-    if (input.actualMode === BlackboardMode.DirectWithWatch) {
-        return { watch: input.previousWatch + 1, failure: input.previousFailure, toolFailure };
-    }
-    if (input.blackboardStatus === BlackboardTurnStatus.Converged) {
-        return { watch: 0, failure: 0, toolFailure: 0 };
-    }
-    if (
-        input.blackboardStatus === BlackboardTurnStatus.NeedsUser ||
-        input.blackboardStatus === BlackboardTurnStatus.Failed
-    ) {
-        return { watch: 0, failure: input.previousFailure + 1, toolFailure };
-    }
-    return { watch: input.previousWatch, failure: input.previousFailure, toolFailure };
+export interface RouteEscalationCounters {
+    watch: number;
+    failure: number;
+    toolFailure: number;
+}
+
+export const routeEscalationPolicy = new RouteEscalationPolicy();
+
+export function decideRouteEscalation(input: RouteEscalationInput): RouteEscalationDecision {
+    return routeEscalationPolicy.decide(input);
+}
+
+export function nextEscalationCounters(input: RouteEscalationCounterInput): RouteEscalationCounters {
+    return routeEscalationPolicy.nextCounters(input);
 }
