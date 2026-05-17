@@ -255,11 +255,11 @@ export class GatewayControlHub implements EventSink {
             const urlToken = new URL(request.url).searchParams.get("token");
             return auth === `Bearer ${token}` || urlToken === token;
         }
-        return isLocalRequest(request);
+        return this.isLocalRequest(request);
     }
-}
 
-function isLocalRequest(request: Request): boolean {
-    const url = new URL(request.url);
-    return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+    private isLocalRequest(request: Request): boolean {
+        const url = new URL(request.url);
+        return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+    }
 }

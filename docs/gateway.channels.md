@@ -254,6 +254,7 @@ interface GatewayChannelCapabilities {
 - `tests/gateway.channel.events.test.ts`
 - `tests/gateway.daemon.test.ts`
 - `tests/gateway.dedup.test.ts`
+- `tests/gateway.ws.test.ts`
 - `tests/channels.delivery.test.ts`
 - `tests/channels.bluebubbles.test.ts`
 - `tests/channels.dingtalk.test.ts`

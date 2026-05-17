@@ -33,6 +33,19 @@ class FakeSocket {
     }
 }
 
+class FakeUpgradeServer {
+    public upgradeCalls = 0;
+
+    public upgrade(_request: Request, _options: { data: GatewayControlPeer }): boolean {
+        this.upgradeCalls += 1;
+        return true;
+    }
+
+    public asBunServer(): Bun.Server<GatewayControlPeer> & { upgradeCalls: number } {
+        return this as unknown as Bun.Server<GatewayControlPeer> & { upgradeCalls: number };
+    }
+}
+
 describe("GatewayControlHub", () => {
     test("announces server capabilities on open", () => {
         const hub = createHub();
@@ -165,6 +178,39 @@ describe("GatewayControlHub", () => {
         });
         hub.dispose();
     });
+
+    test("requires control token for non-local upgrade requests", async () => {
+        const hub = createHub({ config: fakeConfig({ control: { token: "secret-token" } }) });
+        const server = new FakeUpgradeServer().asBunServer();
+
+        const denied = hub.upgrade(new Request("http://127.0.0.1/ws"), server);
+        expect(denied?.status).toBe(401);
+        expect(await denied?.json()).toEqual({ error: "gateway_control_unauthorized" });
+        expect(server.upgradeCalls).toBe(0);
+
+        const allowed = hub.upgrade(
+            new Request("http://127.0.0.1/ws", {
+                headers: { authorization: "Bearer secret-token" },
+            }),
+            server,
+        );
+        expect(allowed).toBeUndefined();
+        expect(server.upgradeCalls).toBe(1);
+        hub.dispose();
+    });
+
+    test("allows localhost upgrade without token and rejects non-localhost without token", async () => {
+        const hub = createHub();
+        const server = new FakeUpgradeServer().asBunServer();
+
+        expect(hub.upgrade(new Request("http://localhost/ws"), server)).toBeUndefined();
+        expect(server.upgradeCalls).toBe(1);
+
+        const denied = hub.upgrade(new Request("http://example.com/ws"), server);
+        expect(denied?.status).toBe(401);
+        expect(server.upgradeCalls).toBe(1);
+        hub.dispose();
+    });
 });
 
 function createHub(overrides: Partial<ConstructorParameters<typeof GatewayControlHub>[0]> = {}): GatewayControlHub {
@@ -202,7 +248,7 @@ function sent(socket: GatewayControlSocket): GatewayControlEnvelope[] {
     return (socket as unknown as FakeSocket).sent;
 }
 
-function fakeConfig(): GatewayConfig {
+function fakeConfig(patch: Partial<GatewayConfig> = {}): GatewayConfig {
     return {
         host: "127.0.0.1",
         port: 0,
@@ -211,5 +257,6 @@ function fakeConfig(): GatewayConfig {
         channels: {},
         control: {},
         stdio: false,
+        ...patch,
     } as unknown as GatewayConfig;
 }
