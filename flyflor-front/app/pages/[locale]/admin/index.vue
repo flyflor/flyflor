@@ -25,13 +25,6 @@
                 </div>
 
                 <div class="admin-drawer__body">
-                    <div class="admin-summary">
-                        <article v-for="item in summaryCards" :key="item.label" class="admin-summary__item">
-                            <span>{{ item.label }}</span>
-                            <strong>{{ item.value }}</strong>
-                        </article>
-                    </div>
-
                     <nav class="admin-nav" aria-label="Admin sections">
                         <button
                             v-for="item in navItems"
@@ -42,7 +35,6 @@
                         >
                             <Icon :name="item.icon" />
                             <span>{{ item.label }}</span>
-                            <small>{{ item.count }}</small>
                         </button>
                     </nav>
 
@@ -778,29 +770,6 @@ const filteredComments = computed(() => {
     });
 });
 
-const summaryCards = computed(() => [
-    {
-        label: t("用户", "Users"),
-        value: String(userForms.value.length),
-    },
-    {
-        label: t("帖子", "Topics"),
-        value: String(topicForms.value.length),
-    },
-    {
-        label: t("公告", "Announcements"),
-        value: String(announcementForms.value.length),
-    },
-    {
-        label: t("评论", "Comments"),
-        value: String(commentForms.value.length),
-    },
-    {
-        label: t("板块", "Boards"),
-        value: String(boardForms.value.length),
-    },
-]);
-
 const overviewMetrics = computed(() => [
     {
         label: t("总用户", "Total users"),
@@ -822,47 +791,50 @@ const overviewMetrics = computed(() => [
         note: t("内容热度指标", "Engagement signal"),
         value: String(topicForms.value.reduce((sum, item) => sum + Number(item.likes || 0), 0)),
     },
+    {
+        label: t("总公告", "Total announcements"),
+        note: t("站点公告数量", "Announcement count"),
+        value: String(announcementForms.value.length),
+    },
+    {
+        label: t("总板块", "Total boards"),
+        note: t("可管理板块数量", "Board count"),
+        value: String(boardForms.value.length),
+    },
 ]);
 
 const navItems = computed(() => [
     {
-        count: String(overviewMetrics.value.length),
         id: "overview" as const,
         icon: "lucide:layout-dashboard",
         label: t("概览", "Overview"),
     },
     {
-        count: String(1),
         id: "settings" as const,
         icon: "lucide:settings-2",
         label: t("站点", "Site"),
     },
     {
-        count: String(announcementForms.value.length),
         id: "announcements" as const,
         icon: "lucide:megaphone",
         label: t("公告", "Announcements"),
     },
     {
-        count: String(boardForms.value.length),
         id: "boards" as const,
         icon: "lucide:blocks",
         label: t("板块", "Boards"),
     },
     {
-        count: String(userForms.value.length),
         id: "users" as const,
         icon: "lucide:users",
         label: t("用户", "Users"),
     },
     {
-        count: String(topicForms.value.length),
         id: "topics" as const,
         icon: "lucide:file-text",
         label: t("帖子", "Topics"),
     },
     {
-        count: String(commentForms.value.length),
         id: "comments" as const,
         icon: "lucide:message-square",
         label: t("评论", "Comments"),
@@ -1107,7 +1079,7 @@ useHead({
     align-items: start;
     display: grid;
     gap: 20px;
-    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-columns: 280px minmax(0, 1fr);
     margin: 0 auto;
     max-width: 1440px;
     padding: 18px 24px 88px;
@@ -1127,7 +1099,7 @@ useHead({
     align-self: start;
     display: grid;
     gap: 22px;
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
     grid-template-rows: auto minmax(0, 1fr);
     max-height: calc(100vh - 32px);
@@ -1250,7 +1222,7 @@ useHead({
 .admin-content {
     display: grid;
     gap: 18px;
-    grid-column: 1;
+    grid-column: 2;
     grid-row: 1;
     min-width: 0;
 }
@@ -1505,20 +1477,20 @@ useHead({
 
     .admin-drawer-toggle {
         display: inline-flex;
-        justify-self: end;
+        justify-self: start;
     }
 
     .admin-drawer {
         bottom: 16px;
         grid-column: auto;
         grid-row: auto;
-        left: auto;
+        left: 16px;
         max-height: calc(100vh - 32px);
         overflow: hidden;
         position: fixed;
-        right: 16px;
+        right: auto;
         top: 16px;
-        transform: translateX(calc(100% + 24px));
+        transform: translateX(calc(-100% - 24px));
         transition: transform 220ms ease;
         width: min(86vw, 320px);
         z-index: 30;
