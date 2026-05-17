@@ -138,9 +138,9 @@ describe("TUI chat chrome", () => {
             showScrollbars: false,
             sidePanelStickyScroll: true,
             sidePanelStickyStart: "bottom",
-            terminalMouse: true,
+            terminalMouse: false,
             terminalScreenMode: "alternate-screen",
-            wheelRouting: "opentui-scrollbox",
+            wheelRouting: "keyboard-and-native-terminal",
         });
         expect(appSource).not.toContain("onMouseScroll");
         expect(appSource).not.toContain("applyChatScrollWheel");
@@ -152,6 +152,9 @@ describe("TUI chat chrome", () => {
         expect(appSource).not.toContain("createVirtualScrollBar(renderer, todoScrollBox");
         expect(appSource).not.toContain("createVirtualScrollBar(renderer, detailScrollBox");
         expect(appSource).not.toContain("appendConversationSummary(lines)");
+        expect(appSource).not.toContain("startSelection");
+        expect(appSource).not.toContain("updateSelection");
+        expect(appSource).not.toContain("requestSelectionUpdate");
         expect(entrySource).toContain("withPinnedAlternateScreen(");
         expect(entrySource).toContain("useTuiRendererConfig({");
         expect(entrySource).not.toContain("enableMouseMovement: true");

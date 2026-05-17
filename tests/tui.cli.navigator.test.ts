@@ -388,6 +388,12 @@ describe("CLI TUI navigator", () => {
         restore();
         expect(env.COLORTERM).toBeUndefined();
 
+        const terminalEnv: NodeJS.ProcessEnv = { TERM: "xterm-256color", TERM_PROGRAM: "Apple_Terminal" };
+        const restoreTerminal = useTuiTerminalEnvironment(terminalEnv);
+        expect(terminalEnv.COLORTERM).toBe("truecolor");
+        restoreTerminal();
+        expect(terminalEnv.COLORTERM).toBeUndefined();
+
         const explicitEnv: NodeJS.ProcessEnv = { COLORTERM: "24bit", TERM_PROGRAM: "iTerm.app" };
         const restoreExplicit = useTuiTerminalEnvironment(explicitEnv);
         expect(explicitEnv.COLORTERM).toBe("24bit");

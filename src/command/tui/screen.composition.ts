@@ -83,5 +83,7 @@ function isOpenTuiCompiledEnvCacheMiss(cause: unknown): boolean {
 
 function shouldPreferTrueColor(env: TuiEnv): boolean {
     if (env.NO_COLOR !== undefined || env.COLORTERM !== undefined) return false;
-    return env.TERM_PROGRAM === "iTerm.app";
+    if (env.TERM_PROGRAM === "iTerm.app" || env.TERM_PROGRAM === "Apple_Terminal") return true;
+    const term = env.TERM ?? "";
+    return term.includes("24bit") || term.includes("truecolor");
 }

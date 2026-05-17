@@ -18,5 +18,6 @@ export function useTuiRendererConfig<TConfig extends CliRendererConfig>(config: 
         ...config,
         enableMouseMovement: mouseEnabled ? false : config.enableMouseMovement,
         useMouse: mouseEnabled,
+        useKittyKeyboard: config.useKittyKeyboard ?? null,
     };
 }

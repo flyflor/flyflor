@@ -26,21 +26,21 @@
 - Chat slash commands 由 `~/.flyflor/commands.jsonc` 的 rule registry 驱动：`match.slash` 定义触发词，`run.type` / `run.action` 定义行为。内置规则按 action 覆盖，用户自定义 `send-message` 规则可扩展 `/review` 等本地命令。
 - Chat 内置 `/project [path]` 会在路径下创建 / 复用项目骨架与 `.flyflor/{memory,skills,mcp,plugins}`，并把该项目作为后续 turn 的 `RuntimeContext.activeProject` 显式传入；`/projects` 从 `brain.db.projects` 列表选择项目，Enter 激活。
 - Chat 内置 `/fork` 从历史 turn 摘要创建 ContextFork，`a` 加载更多历史，Enter 后把 fork id 显式带入后续 turn；`/forks` 选择已有 fork。fork 不是 session，不会靠自然语言或 chatId 自动续命。
-- macOS 本地复制优先走 `pbcopy`；Docker / 远端终端继续走 OSC52；Chat 会按选区起点限制在消息区或右侧详情区，避免跨 panel 复制混入无关内容
+- Chat 不接管鼠标拖选复制；macOS Terminal、iTerm2、Docker TTY 的文本选择交给终端原生能力，避免 OpenTUI selection 在复杂 panel 树上递归爆栈。复制交互优先使用终端自身快捷键 / 菜单。
 - ask 回复会在消息正文和 TUI 详情里保留结构化列表；只要有选项，就自动附带 `Other — type your own answer`，方便用户直接输入自定义回答
 - ask metadata 严格校验；缺字段或选项结构不合法会直接报错，不做静默兜底
 - chat 启动后从 `brain.db` 加载当前用户最近历史 turn；向上滚动到顶部时继续按 `ts` 分页加载更早记录；历史 assistant 消息会携带 `TaskPlan` / `ContextFork` / `SceneRecord` 摘要，右侧 `/history` 场景回放直接复用这些摘要，不读取 raw thinking trace
 - 历史消息只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText` 字段；字段缺失视为数据错误并显式报错
 - 黑板 turn 详情从 `BlackboardModule.getTurn(turnId)` 拉取后挂在对应 assistant 消息下，展示 workers / steps / public messages / decision
 - Chat 右侧 rail 按目标截图顺序还原：`Blackboard [Ctrl+B Thinking]`、`Questions`、流式 `Blackboard` 详情、`TODO List`，底部固定 `MODEL` / `TOKENS` / `CONTEXT WINDOW` 资源区；没有结构化 TaskPlan 或黑板进度时显示 `暂无计划`。这些面板只消费结构化 metadata、RuntimeEvent、配置资源上限和 blackboard turn，不从自然语言文本反推状态。
-- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。滚轮、滚动加速度、sticky-bottom 状态和 content translate 交给 OpenTUI 维护；`src/command/tui/scrollbar.composition.ts` 统一移除 OpenTUI 自带的可视滚动条 renderable。聊天主面板边缘绘制目标截图样式的虚拟滚动条（`▲`、点阵 track、`██` thumb、`▼`）；右侧流式面板保留 ScrollBox 滚动能力，但不额外绘制点阵滚动轨。
+- Chat 不给 ScrollBox 区域挂自定义 `onMouseScroll`。PageUp/PageDown/Home/End 是可移植滚动入口；Chat 不启用 OpenTUI mouse mode，因此终端原生拖选仍可用。`src/command/tui/scrollbar.composition.ts` 统一移除 OpenTUI 自带的可视滚动条 renderable，聊天主面板边缘只绘制目标截图样式的虚拟滚动条（`▲`、点阵 track、`██` thumb、`▼`）。
 - `src/command/tui/screen.composition.ts` 会把命令式 TUI 固定到 alternate screen，并在 runtime warmup 前清空终端回滚区（`CSI 3 J`），避免 Docker/provider 启动输出先写入主屏幕回滚区。Mouse tracking 只能由 OpenTUI renderer config 拥有；Flyflor 禁止额外发出 all-motion tracking（`1003`），因为 iTerm2/Bash 会把大量移动事件灌入 stdin 并触发 parser failure。
-- `src/command/tui/renderer.composition.ts` 是唯一的 OpenTUI renderer mouse 默认值收口点。Flyflor 可以开启 `useMouse` 支持点击、滚轮和选区，但必须固定 `enableMouseMovement: false`；OpenTUI 这个字段默认是 true，即使 Flyflor 自己不写终端 mouse escape sequence，也会重新打开 all-motion tracking。
-- iTerm2 shell 缺少 `COLORTERM` 时，renderer 创建期间临时规范化为 `truecolor`，随后恢复原值；这只修正 macOS Bash 颜色能力探测，不写用户配置。
-- Chat 消息区和右侧两个流式面板都使用 OpenTUI `stickyScroll` + `stickyStart: "bottom"`；深度思考 / 黑板详情在流式输出期间默认跟随最新内容，用户手动滚动面板后由 OpenTUI 接管当前位置
+- `src/command/tui/renderer.composition.ts` 是唯一的 OpenTUI renderer 默认值收口点。Chat 固定 `useMouse: false`，让终端选择和 macOS 滚动行为保持原生；命令式 navigator 如需开启 mouse，仍必须固定 `enableMouseMovement: false`，因为 OpenTUI 这个字段默认是 true。
+- macOS Terminal / iTerm2 shell 缺少 `COLORTERM` 时，renderer 创建期间临时规范化为 `truecolor`，随后恢复原值；这只修正 Bash 颜色能力探测，不写用户配置。
+- Chat 消息区和右侧两个流式面板都使用 OpenTUI `stickyScroll` + `stickyStart: "bottom"`；深度思考 / 黑板详情在流式输出期间默认跟随最新内容，用户用键盘滚动后由 OpenTUI 接管当前位置
 - 对话进行中默认跟随最新 turn；用户通过 `/thinking` 或 `/blackboard` 打开问题选择后可以用上下 / `j/k` 预览历史 turn，下一条新消息开始时自动恢复跟随最新
-- Chat 滚动行为是固定 OpenTUI 契约：主消息区和右栏 scrollbox 都保持底部 sticky，滚轮事件交给 OpenTUI scrollbox，chat 固定 alternate-screen 并开启鼠标选择
-- Chat 消息正文与内嵌黑板详情需要保持可选中；复制选区走 renderer `copyToClipboardOSC52`，不要把复制内容写回屏幕
+- Chat 滚动行为是固定的终端安全契约：主消息区和右栏 scrollbox 都保持底部 sticky，PageUp/PageDown/Home/End 是可移植滚动控制，Chat 固定 alternate-screen 且不启用 OpenTUI mouse selection。
+- Chat 消息正文与内嵌黑板详情不要接入 OpenTUI 应用级 selection scope；终端原生拖选比跨 panel renderer selection 更稳定。
 - Chat TUI 不再读取或渲染 `ui/avatar.txt`；右侧栏只保留结构化 thinking、TODO、model、token 和 context 资源信息。
 - bitmap logo 资产只用于终端 chat 以外的产品表面；终端图片/文本头像会挤占资源栏，而且跨终端表现不稳定，因此不进入 Chat TUI。
 - 独立 `flyflor blackboard` 浏览器关闭 OpenTUI mouse tracking，优先保留终端原生拖选复制；列表选择走键盘，上下 / `j/k` 移动，Enter / `o` / 右方向进入详情

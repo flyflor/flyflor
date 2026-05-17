@@ -73,7 +73,6 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
                 screenMode: CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode,
                 clearOnShutdown: true,
                 consoleMode: "disabled",
-                // Chat uses OpenTUI selection so the in-app scrollbar and Ctrl+Y copy path work together.
                 useMouse: CHAT_SCROLL_LOCK_CONTRACT.terminalMouse,
                 externalOutputMode: "passthrough",
                 autoFocus: false,
@@ -87,7 +86,6 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
         renderer.console.onCopySelection = (text) => {
             if (text.trim().length > 0) {
                 renderer.copyToClipboardOSC52(text);
-                renderer.clearSelection();
             }
         };
 

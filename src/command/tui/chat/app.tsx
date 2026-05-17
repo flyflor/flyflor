@@ -15,7 +15,6 @@ import {
     RGBA,
     TextAttributes,
     SyntaxStyle,
-    type Selection,
 } from "@opentui/core";
 import { createSignal, createEffect, createRoot, batch } from "solid-js";
 import {
@@ -31,7 +30,6 @@ import { resolve } from "node:path";
 import { RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
 import type { ChatEntryOptions } from "./index.ts";
 import { formatAskSummaryLines } from "./ask.render.ts";
-import { copyTextToTerminalClipboard } from "./clipboard.ts";
 import { readAskMeta, readBlackboardMeta, readMcpTrace, readPlanningMeta, readRecord, readStringArray } from "./metadata.parse.ts";
 import type { ChatMessage, McpTrace, Phase } from "./types.ts";
 import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
@@ -127,9 +125,9 @@ export const CHAT_SCROLL_LOCK_CONTRACT = {
     showScrollbars: false,
     sidePanelStickyScroll: true,
     sidePanelStickyStart: CHAT_SCROLL_STICKY_START,
-    terminalMouse: true,
+    terminalMouse: false,
     terminalScreenMode: CHAT_TERMINAL_SCREEN_MODE,
-    wheelRouting: "opentui-scrollbox",
+    wheelRouting: "keyboard-and-native-terminal",
 } as const;
 
 interface MsgRenderable {
@@ -151,7 +149,6 @@ interface PanelLine {
 
 export type SidePanelMode = "blackboard" | "thinking" | "projects" | "fork" | "forks";
 type CommandMenuMode = SidePanelMode | null;
-type SelectionScope = "chat" | "side" | null;
 
 interface ForkHistorySource {
     assistantText: string;
@@ -159,17 +156,6 @@ interface ForkHistorySource {
     ts: number;
     userText: string;
 }
-
-type SelectionScopedRenderer = CliRenderer & {
-    clearSelection: () => void;
-    startSelection: (renderable: Renderable, x: number, y: number) => void;
-    updateSelection: (
-        renderable: Renderable | undefined,
-        x: number,
-        y: number,
-        options?: { finishDragging?: boolean },
-    ) => void;
-};
 
 export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions): () => void {
     return createRoot((disposeSolid) => {
@@ -227,12 +213,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         let historyExhausted = false;
         let historyLoading = false;
         let oldestHistoryTs: number | undefined;
-        const selectionRenderer = renderer as SelectionScopedRenderer;
-        const originalStartSelection = selectionRenderer.startSelection?.bind(renderer);
-        const originalUpdateSelection = selectionRenderer.updateSelection.bind(renderer);
-        const originalClearSelection = selectionRenderer.clearSelection.bind(renderer);
-        let selectionScope: SelectionScope = null;
-        let suppressSelectionReset = false;
         const queuedInputs: string[] = [];
 
         // ── 动画帧 ────────────────────────────────────────────
@@ -319,48 +299,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 return cause.name && cause.name !== "Error" ? `${cause.name}: ${cause.message}` : cause.message;
             }
             return String(cause);
-        }
-
-        function copySelectionToClipboard(): boolean {
-            const text = selectedTextForScope(renderer.getSelection(), selectionScope ?? inferredSelectionScope(), {
-                chat: scrollBox.content,
-                side: sidePanel,
-            });
-            if (text.trim().length === 0) return false;
-            try {
-                copyTextToTerminalClipboard(text);
-                renderer.clearSelection();
-                showStatusNotice(`Copied ${text.length} chars`);
-                return true;
-            } catch (cause) {
-                const messageText = describeError(cause);
-                setError(`Copy failed: ${messageText}`);
-                console.error(cause);
-                return false;
-            }
-        }
-
-        function inferredSelectionScope(): SelectionScope {
-            const selected = renderer.getSelection()?.selectedRenderables ?? [];
-            for (const renderable of selected) {
-                const scope = scopeForRenderable(renderable);
-                if (scope) return scope;
-            }
-            return null;
-        }
-
-        function pruneSelectionToScope(): void {
-            const selection = renderer.getSelection();
-            const scope = selectionScope ?? inferredSelectionScope();
-            if (!selection || !scope) return;
-            const container = scope === "chat" ? scrollBox.content : sidePanel;
-            selection.updateSelectedRenderables(
-                selection.selectedRenderables.filter((renderable) => isWithin(renderable, container)),
-            );
-            selection.updateTouchedRenderables(
-                selection.touchedRenderables.filter((renderable) => isWithin(renderable, container)),
-            );
-            renderer.requestSelectionUpdate();
         }
 
         function createMarkdownSyntaxStyle(): SyntaxStyle {
@@ -1249,63 +1187,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
 
         root.add(mainBox);
 
-        function isWithin(renderable: Renderable | undefined, container: Renderable): boolean {
-            let current: Renderable | null | undefined = renderable;
-            while (current) {
-                if (current === container) return true;
-                current = current.parent;
-            }
-            return false;
-        }
-
-        function setSelectableDeep(renderable: Renderable, selectable: boolean): void {
-            renderable.selectable = selectable;
-            for (const child of renderable.getChildren()) {
-                setSelectableDeep(child, selectable);
-            }
-        }
-
-        function applySelectionScope(scope: SelectionScope): void {
-            selectionScope = scope;
-            setSelectableDeep(scrollBox.content, scope !== "side");
-            setSelectableDeep(sidePanel, scope !== "chat");
-        }
-
-        function scopeForRenderable(renderable: Renderable | undefined): SelectionScope {
-            if (isWithin(renderable, sidePanel)) return "side";
-            if (isWithin(renderable, scrollBox.content)) return "chat";
-            return null;
-        }
-
-        if (originalStartSelection) {
-            // OpenTUI expands a drag selection to parent containers when the pointer leaves
-            // the starting renderable. Locking the non-origin panel out before selection starts
-            // keeps copied text inside the panel where the drag began.
-            selectionRenderer.startSelection = (renderable, x, y) => {
-                applySelectionScope(scopeForRenderable(renderable));
-                suppressSelectionReset = true;
-                try {
-                    originalStartSelection(renderable, x, y);
-                    pruneSelectionToScope();
-                } finally {
-                    suppressSelectionReset = false;
-                }
-            };
-        }
-        selectionRenderer.updateSelection = (renderable, x, y, options) => {
-            const nextScope = scopeForRenderable(renderable);
-            const scopedRenderable =
-                selectionScope && nextScope && nextScope !== selectionScope ? undefined : renderable;
-            originalUpdateSelection(scopedRenderable, x, y, options);
-            pruneSelectionToScope();
-        };
-        selectionRenderer.clearSelection = () => {
-            originalClearSelection();
-            if (!suppressSelectionReset && selectionScope !== null) {
-                applySelectionScope(null);
-            }
-        };
-
         // Wire input events directly
         input.focus();
         renderer.requestRender();
@@ -1340,25 +1221,11 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         }) => {
             const isMac = process.platform === "darwin";
             const name = event.name ?? "";
-            if (((isMac && event.meta) || (!isMac && event.ctrl)) && name === "c") {
-                if (copySelectionToClipboard()) {
-                    event.preventDefault?.();
-                    event.stopPropagation?.();
-                    return;
-                }
-                if (!isMac && event.ctrl && inputRef?.focused) {
-                    handleExit();
-                    event.preventDefault?.();
-                    event.stopPropagation?.();
-                    return;
-                }
-            }
-            if ((event.ctrl && event.shift && name === "c") || (event.ctrl && name === "y")) {
-                if (copySelectionToClipboard()) {
-                    event.preventDefault?.();
-                    event.stopPropagation?.();
-                    return;
-                }
+            if (!isMac && event.ctrl && name === "c" && inputRef?.focused) {
+                handleExit();
+                event.preventDefault?.();
+                event.stopPropagation?.();
+                return;
             }
             if (handleSideMenuKey(name, event.sequence)) {
                 event.preventDefault?.();
@@ -1627,14 +1494,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         function commandSuggestions(prefix: string): AppCommandSuggestion[] {
             return appCommandSuggestions(appCommands, prefix);
         }
-
-        const selectionHandler = () => {
-            const text = renderer.getSelection()?.getSelectedText() ?? "";
-            if (text.trim().length > 0) {
-                showStatusNotice(`${text.length} chars selected`);
-            }
-        };
-        renderer.on(CliRenderEvents.SELECTION, selectionHandler);
 
         // ── 辅助：构建单条消息的 renderables ──────────────────
         function buildMessageBox(msg: ChatMessage): MsgRenderable {
@@ -2549,12 +2408,6 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             if (statusNoticeTimer) clearTimeout(statusNoticeTimer);
             renderer.keyInput.off("keypress", keyHandler);
             renderer.off(CliRenderEvents.RESIZE, resizeHandler);
-            renderer.off(CliRenderEvents.SELECTION, selectionHandler);
-            if (originalStartSelection) {
-                selectionRenderer.startSelection = originalStartSelection;
-            }
-            selectionRenderer.updateSelection = originalUpdateSelection;
-            selectionRenderer.clearSelection = originalClearSelection;
             unsubscribeEvents?.();
             // remove main tree
             root.remove(mainBox.id);
@@ -2787,22 +2640,6 @@ function knownCommandList(registry: AppCommandRegistry): string {
     return names.length > 0 ? names.join(", ") : "configured commands";
 }
 
-export function selectedTextForScope(
-    selection: Selection | null,
-    scope: SelectionScope,
-    containers: { chat: Renderable; side: Renderable },
-): string {
-    if (!selection) return "";
-    if (!scope) return selection.getSelectedText();
-    const container = scope === "chat" ? containers.chat : containers.side;
-    return selection.selectedRenderables
-        .filter((renderable) => isRenderableWithin(renderable, container))
-        .sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y))
-        .map((renderable) => renderable.getSelectedText())
-        .filter((text) => text.length > 0)
-        .join("\n");
-}
-
 function estimateTokens(text: string): number {
     const chars = text.trim().length;
     return chars === 0 ? 0 : Math.ceil(chars / 4);
@@ -2831,15 +2668,6 @@ function clampRatio(value: number | undefined): number | undefined {
 function numberValueFromRecord(record: Record<string, unknown> | null | undefined, key: string): number | undefined {
     const value = record?.[key];
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function isRenderableWithin(renderable: Renderable | undefined, container: Renderable): boolean {
-    let current: Renderable | null | undefined = renderable;
-    while (current) {
-        if (current === container) return true;
-        current = current.parent;
-    }
-    return false;
 }
 
 function clamp(value: number, min: number, max: number): number {
