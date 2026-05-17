@@ -19,6 +19,7 @@ import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./ded
 export class GatewayModule extends Gateway {
     protected readonly channelRuntime = new Map<ChannelName, ChannelRuntimeState>();
     protected running = false;
+    protected server?: Bun.Server<GatewayControlPeer>;
     protected serverUrl?: string;
     protected startedAt?: string;
     protected controlHub?: GatewayControlHub;
@@ -45,7 +46,7 @@ export class GatewayModule extends Gateway {
             events: globalEvents,
             status: () => this.getStatusSnapshot(),
         });
-        const server = Bun.serve<GatewayControlPeer>({
+        this.server = Bun.serve<GatewayControlPeer>({
             hostname: this.config.host,
             port: this.config.port,
             fetch: (request, server) => this.handleRequest(request, server),
@@ -55,9 +56,9 @@ export class GatewayModule extends Gateway {
                 open: (socket) => this.controlHub?.open(socket),
             },
         });
-        this.serverUrl = server.url.toString();
+        this.serverUrl = this.server.url.toString();
 
-        this.events.publish(event(RuntimeEventType.GatewayStart, { url: server.url.toString() }));
+        this.events.publish(event(RuntimeEventType.GatewayStart, { url: this.server.url.toString() }));
 
         // Component warmup is fire-and-forget; first real turn still awaits the
         // same promise, but gateway startup does not block on local store recovery.
@@ -70,6 +71,17 @@ export class GatewayModule extends Gateway {
         if (this.config.stdio) {
             void this.startStdio();
         }
+    }
+
+    public stop(): void {
+        if (!this.running) {
+            return;
+        }
+        this.controlHub?.dispose();
+        this.controlHub = undefined;
+        this.server?.stop(true);
+        this.server = undefined;
+        this.running = false;
     }
 
     protected async handleRequest(request: Request, server?: Bun.Server<GatewayControlPeer>): Promise<Response | undefined> {
