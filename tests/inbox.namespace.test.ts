@@ -130,7 +130,7 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
                 ctx(),
                 [actionAdd("just a note")],
             );
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const event = db
                     .query("SELECT content FROM memory_events WHERE type = ? ORDER BY ts DESC LIMIT 1")
@@ -164,7 +164,7 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
             expect(codenameId.startsWith("cn-")).toBe(true);
 
             // 同样 brain.codenames 表也写入了
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const event = db
                     .query("SELECT content FROM memory_events WHERE type = ? ORDER BY ts DESC LIMIT 1")

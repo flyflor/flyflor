@@ -270,7 +270,7 @@ function describeIlinkState(config: FlyflorConfig): string {
  * 缺失（warmup 前 / 未启用记忆）显示为 "not-yet"，不报错。
  */
 export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: string; detail: string }> {
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     let mainSize = 0;
     try {
         const info = await stat(brainPath);
@@ -278,7 +278,7 @@ export async function describeBrainDb(config: FlyflorConfig): Promise<{ status: 
     } catch {
         return { status: "warn", detail: "brain.db not initialized yet (will appear after first turn warmup)" };
     }
-    const archiveDir = join(config.paths.home, "archive");
+    const archiveDir = join(config.paths.configDir, "archive");
     let archiveCount = 0;
     try {
         const entries = await readdir(archiveDir);
@@ -300,7 +300,7 @@ export async function describeIdentityActivity(
     config: FlyflorConfig,
     options: { nowMs?: number; windowDays?: number } = {},
 ): Promise<{ status: string; detail: string }> {
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     try {
         await stat(brainPath);
     } catch {

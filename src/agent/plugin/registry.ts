@@ -2,7 +2,7 @@
  * Plugin manifest 注册表。
  *
  * 与 MCP 服务器配置同构：
- * - global manifest：`~/.flyflor/plugins/plugins.json`
+ * - global manifest：`~/.flyflor/.config/plugins/plugins.json`
  * - project manifest：`./.flyflor/plugins/plugins.json`（项目级覆盖全局）
  *
  * 边界：

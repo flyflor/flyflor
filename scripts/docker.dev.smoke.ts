@@ -49,11 +49,11 @@ export class DockerDevSmokeRunner {
             "compose mounts compiled linux binary",
             compose.includes("./dist/flyflor-linux:/mounted/flyflor-linux:ro"),
         );
-        this.push(checks, "compose mounts docker config as home", compose.includes("./docker/config:/root/.flyflor"));
+        this.push(checks, "compose mounts docker config as home", compose.includes("./docker/config:/root/.flyflor/.config"));
         this.push(
             checks,
             "compose mounts docker workspace",
-            compose.includes("./docker/workspace:/root/.flyflor/workspace"),
+            compose.includes("./docker/workspace:/root/.flyflor/.config/workspace"),
         );
         this.push(checks, "compose has no external backend health dependency", !compose.includes("condition: service_healthy"));
         this.push(
@@ -77,7 +77,7 @@ export class DockerDevSmokeRunner {
         this.push(
             checks,
             "entrypoint prefers workspace binary copy",
-            entrypoint.includes('WORKSPACE_BIN="/workspace/dist/flyflor-linux"'),
+            entrypoint.includes('WORKSPACE_BIN="/root/.flyflor/dist/flyflor-linux"'),
         );
         this.push(
             checks,

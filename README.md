@@ -35,27 +35,29 @@ Channel 协议会保留 thread、引用回复、评论、typing、mention、reac
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
 # 固定版本：
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --version v0.4.0
-# 自定义前缀：
-curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --prefix /usr/local/flyflor
+# 自定义 Flyflor home：
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --home ~/.flyflor
+# 纯 release 二进制安装才显式使用 --binary：
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary --prefix /usr/local/flyflor
 # 更新 / 卸载：
 flyflor update -y
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-二进制安装从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`，默认安装到 `~/.flyflor`。模板包由 `bun run build:templates:release` 生成，根目录布局直接对应安装前缀下的 `prompts/`、`templates/` 和 `commands.jsonc`；`--uninstall` 保留配置和数据。
+默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
 
 ### 安装方式
 
-正式版提供三条路径。非二进制路径都会把源码保留在用户本机，方便 Flyflor 自我迭代、手动修改和后续 `git pull`：
+正式版提供三条路径。默认路径与源码路径都会把源码保留在 `~/.flyflor`，配置在 `~/.flyflor/.config`；全局命令始终指向编译后二进制，不直接执行 TypeScript 源码：
 
 ```bash
-# 1. 直接二进制安装，适合只想快速上线的用户
+# 1. 默认一键安装：~/.flyflor 是源码根，~/.flyflor/.config 是配置根
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
 
-# 2. 源码安装，仓库会留在 ~/src/flyflor，可编辑、可拉取、可自迭代
+# 2. 源码安装别名，语义同默认安装，可用 --target 指定源码/配置根
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash
 
-# 3. Docker 一键安装，保留本机源码并直接拉起 compose
+# 3. Docker 一键安装，源码仍在 ~/.flyflor，同时拉起 compose
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash
 
 # Windows：用 PowerShell bootstrap 源码安装
@@ -68,7 +70,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 
 ```bash
 bun install
-bun run install:templates
+bun run install:templates  # copies prompts/templates/commands into ~/.flyflor/.config
 bun run chat
 ```
 
@@ -89,7 +91,7 @@ flyflor gateway service plan --target systemd --write # 写入用户级 systemd 
 ```bash
 bun run check        # TypeScript 类型检查
 bun run test         # 确定性单元测试：离线、stub model、无真实 API 消耗
-bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的当前 provider；无 apiKey 时跳过
+bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/.config/config.jsonc 的当前 provider；无 apiKey 时跳过
 bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc，并覆盖 runtime + memory 临时状态链路
 bun run smoke:agent  # 确定性智能体主路径冒烟：runtime + memory + planning + brain.db
 bun run smoke:agent:live # 真实模型 + runtime + memory + brain.db 冒烟；状态写入临时 HOME，无 apiKey 时跳过
@@ -127,8 +129,8 @@ docker exec -it flyflor-dev flyflor       # 进入容器交互
 
 | 宿主路径               | 容器路径                        | 用途                  |
 | ---------------------- | ------------------------------- | --------------------- |
-| `./docker/config`      | `/root/.flyflor`                | dev 配置 + 提示词模板 |
-| `./docker/workspace`   | `/root/.flyflor/workspace`      | 工作区数据            |
+| `./docker/config`      | `/root/.flyflor/.config`         | dev 配置 + 提示词模板 |
+| `./docker/workspace`   | `/root/.flyflor/.config/workspace` | 工作区数据            |
 | `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor` | 编译好的二进制        |
 
 默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆与 local CrystalComponent 都已启用；`docker/config.default.jsonc` 只在 `docker/config/config.jsonc` 缺失时初始化，避免覆盖本地 provider 密钥；`brain.db` 和 `crystal.db` 分别承载生命事件与晶体图。架构变更后重新编译 + 重启：
@@ -344,8 +346,8 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 ### 其他约束
 
 - 只使用 Bun 命令管理依赖，不要求安装 Node.js
-- 配置走 `~/.flyflor/config.jsonc`（Docker dev：`./docker/config/config.jsonc`），兼容 JSONC
-- 本地 TUI / app slash commands 走 `~/.flyflor/commands.jsonc`，由 `match.slash` + `run.type` / `run.action` 规则驱动；不要混入模型、凭据和网关配置
+- 配置走 `~/.flyflor/.config/config.jsonc`（Docker dev：`./docker/config/config.jsonc`），兼容 JSONC
+- 本地 TUI / app slash commands 走 `~/.flyflor/.config/commands.jsonc`，由 `match.slash` + `run.type` / `run.action` 规则驱动；不要混入模型、凭据和网关配置
 - 业务配置不走环境变量；凭据、沙箱策略走 config/secrets provider
 - 新增运行时依赖前确认兼容 `bun build --compile`（无 native addon、无 postinstall、无动态 require）
 - 不把密钥、日志、会话数据库、用户数据编译进二进制
@@ -386,8 +388,8 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; `*
 - `src/agent/prompts/template.manifest.ts` - template bundle version and file contract
 - `src/agent/prompts/template.docs.ts` - docs generator
 - `templates/prompts/` - built-in templates
-- `scripts/install.templates.ts` - install into the user directory
-- `~/.flyflor/prompts/` - user override directory
+- `scripts/install.templates.ts` - install into the config directory
+- `~/.flyflor/.config/prompts/` - user override directory
 
 ## Bundle Version
 
@@ -446,7 +448,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/prompts/"]
+    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/.config/prompts/"]
     Userdir -- runtime override --> Render["render functions"]
     Builtin -- canonical --> Render
 ```

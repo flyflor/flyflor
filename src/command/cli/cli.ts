@@ -11,7 +11,7 @@ import { renderChannels, renderDoctor, renderFlyflorBanner, renderStatus, resolv
 function renderConfigSummary(app: FlyFlor): string {
     const config = app.resolve(ConfigComponent);
     return [
-        `Config file: ${config.paths.home}/config.jsonc`,
+        `Config file: ${config.paths.configDir}/config.jsonc`,
         `Provider: ${config.model.providerId}`,
         `Model: ${config.model.model}`,
         `API mode: ${config.model.apiMode}`,

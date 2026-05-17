@@ -21,17 +21,17 @@ services:
         image: debian:bookworm-slim
         container_name: flyflor-dev
         restart: unless-stopped
-        working_dir: /root/.flyflor/workspace
-        entrypoint: ["/bin/sh", "/workspace/docker/entrypoint.sh"]
+        working_dir: /root/.flyflor/.config/workspace
+        entrypoint: ["/bin/sh", "/root/.flyflor/docker/entrypoint.sh"]
         command: ["gateway"]
         # Dev mounts are explicit and stable: source tree, JSONC config,
         # workspace, global skills/MCP dirs, local durable data, and binary.
         volumes:
-            - .:/workspace
-            - ./docker/config:/root/.flyflor
-            - ./docker/workspace:/root/.flyflor/workspace
-            - ./docker/skills:/root/.flyflor/skills
-            - ./docker/mcp:/root/.flyflor/mcp
+            - .:/root/.flyflor
+            - ./docker/config:/root/.flyflor/.config
+            - ./docker/workspace:/root/.flyflor/.config/workspace
+            - ./docker/skills:/root/.flyflor/.config/skills
+            - ./docker/mcp:/root/.flyflor/.config/mcp
             - flyflor_data:/root/.local/share/flyflor
             - ./dist/flyflor-linux:/mounted/flyflor-linux:ro
         networks:

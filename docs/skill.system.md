@@ -4,14 +4,14 @@
 
 Skill 是可重用、可热加载的外部「做事方式」工件：manifest.json 描述能力，loader 把 markdown 拼进 prompt，usage 统计会影响自动选择，promotion 已接到 pending skill offer 的物化闭环。内部晶体智力统一叫 Gem，由 Crystal 子系统维护；Skill 只表示 `SKILL.md` 能力包。
 
-Skill drift 与 Gem drift 必须分开：`skill-drift` 指 `SKILL.md` 包的 manifest、兼容版本、依赖或内容漂移；`gem-drift` 指 Crystal graph 里已结晶 Gem 的范围、置信度或矛盾漂移。Skill 维护不能写 `gem_snapshot`，Gem 维护也不能直接改 `~/.flyflor/skills`。
+Skill drift 与 Gem drift 必须分开：`skill-drift` 指 `SKILL.md` 包的 manifest、兼容版本、依赖或内容漂移；`gem-drift` 指 Crystal graph 里已结晶 Gem 的范围、置信度或矛盾漂移。Skill 维护不能写 `gem_snapshot`，Gem 维护也不能直接改 `~/.flyflor/.config/skills`。
 
 ## 相关代码路径
 
 - `src/skills/index.ts` — SkillLoader / 选择 / usage / promotion
 - `src/agent/prompts/index.ts` — `renderSkillContextPrompt`
 - `templates/skills/*` — 内置默认 skill 模板
-- `~/.flyflor/skills/` — 用户 skill 安装目录
+- `~/.flyflor/.config/skills/` — 用户 skill 安装目录
 
 ## 数据结构
 
@@ -33,7 +33,7 @@ interface SkillManifest {
 ```mermaid
 flowchart LR
     Builtin["templates/skills/<id>/"] --> Install["scripts/install.skills.ts"]
-    Install --> Userdir["~/.flyflor/skills/<id>/"]
+    Install --> Userdir["~/.flyflor/.config/skills/<id>/"]
     Userdir --> Loader["SkillLoader.scan"]
     Loader --> Memo["skills: SkillManifest[]"]
     Memo --> Select["selectSkills / runtime.selectRuntimeSkills"]
@@ -76,14 +76,14 @@ interface SkillUsage {
 
 - 候选来源：MCP/工具工作流聚合、用户显式保存 Skill 的意图、现有 skill offer 计时器；Reflection 产生的是 Gem 候选，不直接等同 Skill。
 - 触发：cluster support + confidence，或显式 `skillPromotionIntent`。
-- 输出：在 `~/.flyflor/skills/<name>/` 写 `SKILL.md` + `skill.json`，并补 `RETROSPECTIVE.md` 的 `skill-promoted` 记录；回顾日志写失败会让 promotion 显式失败，避免技能证据链静默缺块。
+- 输出：在 `~/.flyflor/.config/skills/<name>/` 写 `SKILL.md` + `skill.json`，并补 `RETROSPECTIVE.md` 的 `skill-promoted` 记录；回顾日志写失败会让 promotion 显式失败，避免技能证据链静默缺块。
 
 - 过期路径：`noteSkillOfferTurn` 会递减 ttl，确认不了就自动过期。
 
 ## 配置
 
 - `config.skills.enabled`
-- `config.skills.userDir` — 默认 `~/.flyflor/skills`
+- `config.skills.userDir` — 默认 `~/.flyflor/.config/skills`
 - `config.skills.maxAutoSelect` — slice 上限
 - `config.skills.allowExplicitOnly` — true 时只走显式名称
 

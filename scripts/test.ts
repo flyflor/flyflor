@@ -3,7 +3,7 @@
  *
  * package.json stays readable by delegating test suites here. The default
  * suite is deterministic and offline; live model probes are opt-in because
- * they use the user's real ~/.flyflor/config.jsonc provider credentials.
+ * they use the user's real ~/.flyflor/.config/config.jsonc provider credentials.
  */
 
 import { readdir } from "node:fs/promises";

@@ -28,7 +28,16 @@ describe("install.sh", () => {
 
     test("覆盖关键 CLI 选项与降级路径", async () => {
         const text = await Bun.file(INSTALL_SH).text();
-        for (const flag of ["--version", "--prefix", "--release-base", "--uninstall", "--update"]) {
+        for (const flag of [
+            "--version",
+            "--home",
+            "--global-bin",
+            "--binary",
+            "--prefix",
+            "--release-base",
+            "--uninstall",
+            "--update",
+        ]) {
             expect(text).toContain(flag);
         }
         // 必须支持 curl 与 wget 二选一
@@ -45,7 +54,9 @@ describe("install.sh", () => {
         const out = await new Response(proc.stdout).text();
         await proc.exited;
         expect(out).toContain("--version");
-        expect(out).toContain("--prefix");
+        expect(out).toContain("--home");
+        expect(out).toContain("--global-bin");
+        expect(out).toContain("--binary");
         expect(out).toContain("--uninstall");
     });
 
@@ -86,8 +97,11 @@ esac
                 [
                     "sh",
                     INSTALL_SH,
+                    "--binary",
                     "--prefix",
                     prefix,
+                    "--global-bin",
+                    join(sandbox.root, "global-bin"),
                     "--release-base",
                     "https://example.invalid/releases",
                     "--version",
@@ -104,8 +118,47 @@ esac
             expect(stderr).toBe("");
             expect(exit).toBe(0);
             expect(await readFile(join(prefix, "bin", "flyflor"), "utf8")).toContain("echo flyflor");
+            expect(await readFile(join(sandbox.root, "global-bin", "flyflor"), "utf8")).toContain("echo flyflor");
             expect(await readFile(join(prefix, "prompts", "runtime.system.md"), "utf8")).toContain("runtime");
             expect(await readFile(join(prefix, "templates", "memory", "MEMORY.md"), "utf8")).toContain("memory");
+        },
+        { timeout: 30_000 },
+    );
+
+    test(
+        "默认一键安装把源码和配置放到 ~/.flyflor，并全局链接编译后二进制",
+        async () => {
+            const sandbox = await createInstallSandbox();
+            await installFakeGit(sandbox.bin, sandbox.log);
+            await installFakeBun(sandbox.bin, sandbox.log);
+            const proc = Bun.spawn(
+                [
+                    "sh",
+                    INSTALL_SH,
+                    "--repo",
+                    "https://example.invalid/flyflor.git",
+                    "--branch",
+                    "main",
+                    "--global-bin",
+                    join(sandbox.root, "global-bin"),
+                ],
+                { env: sandbox.env(), stdout: "pipe", stderr: "pipe" },
+            );
+            const exit = await proc.exited;
+            const stderr = await new Response(proc.stderr).text();
+            expect(stderr).toBe("");
+            expect(exit).toBe(0);
+            await expect(stat(join(sandbox.home, ".flyflor", ".git"))).resolves.toBeTruthy();
+            await expect(stat(join(sandbox.home, ".flyflor", "dist", "flyflor"))).resolves.toBeTruthy();
+            const linked = await readLinkText(join(sandbox.root, "global-bin", "flyflor"));
+            expect(linked).toContain(join(sandbox.home, ".flyflor", "dist", "flyflor"));
+            const log = await readFile(sandbox.log, "utf8");
+            expect(log).toContain("git clone --branch main https://example.invalid/flyflor.git");
+            expect(log).toContain("bun install");
+            expect(log).toContain(
+                `bun run install:templates -- --target ${join(sandbox.home, ".flyflor", ".config")}`,
+            );
+            expect(log).toContain("bun run build:binary");
         },
         { timeout: 30_000 },
     );
@@ -120,7 +173,9 @@ describe("source/docker/windows installers", () => {
         expect(text).toContain("git clone");
         expect(text).toContain("git -C \"$TARGET_DIR\" pull --ff-only");
         expect(text).toContain("bun install");
-        expect(text).toContain("bun run install:templates");
+        expect(text).toContain('bun run install:templates -- --target "$CONFIG_DIR"');
+        expect(text).toContain("bun run build:binary");
+        expect(text).toContain("ln -sf \"$TARGET_DIR/dist/flyflor\"");
         expect(text).toContain(`curl -fsSL ${GITHUB_SCRIPT_BASE}/install.source.sh | bash`);
         const proc = Bun.spawn(["sh", INSTALL_SOURCE_SH, "--target"], { stderr: "pipe" });
         const exit = await proc.exited;
@@ -137,15 +192,20 @@ describe("source/docker/windows installers", () => {
         expect(text).toContain("docker compose version");
         expect(text).toContain("bun run docker:templates");
         expect(text).toContain("bun run docker:up");
+        expect(text).toContain("bun run build:binary");
+        expect(text).toContain("ln -sf \"$TARGET_DIR/dist/flyflor\"");
         expect(text).toContain(`curl -fsSL ${GITHUB_SCRIPT_BASE}/install.docker.sh | bash`);
     });
 
     test("windows bootstrapper uses PowerShell and keeps the source checkout local", async () => {
         const text = await Bun.file(INSTALL_PS1).text();
         expect(text).toContain("Set-StrictMode -Version Latest");
+        expect(text).toContain('$Target = "$HOME\\.flyflor"');
         expect(text).toContain("git clone");
         expect(text).toContain("bun install");
-        expect(text).toContain("bun run install:templates");
+        expect(text).toContain("bun run install:templates -- --target $ConfigDir");
+        expect(text).toContain("bun run build:binary");
+        expect(text).toContain("flyflor.cmd");
     });
 
     test("README documents remote-first install commands", async () => {
@@ -200,7 +260,10 @@ describe("source/docker/windows installers", () => {
             const log = await readFile(sandbox.log, "utf8");
             expect(log).toContain("git clone --branch main https://example.invalid/flyflor.git");
             expect(log).toContain("bun install");
-            expect(log).toContain("bun run install:templates");
+            expect(log).toContain(`bun run install:templates -- --target ${join(target, ".config")}`);
+            expect(log).toContain("bun run build:binary");
+            const linked = await readLinkText(join(sandbox.home, ".local", "bin", "flyflor"));
+            expect(linked).toContain(join(target, "dist", "flyflor"));
         },
         { timeout: 30_000 },
     );
@@ -222,14 +285,19 @@ describe("source/docker/windows installers", () => {
         await expect(stat(join(target, ".git"))).resolves.toBeTruthy();
         const log = await readFile(sandbox.log, "utf8");
         expect(log).toContain("docker compose version");
+        expect(log).toContain(`bun run install:templates -- --target ${join(target, ".config")}`);
         expect(log).toContain("bun run docker:templates");
         expect(log).toContain("bun run docker:up");
+        expect(log).toContain("bun run build:binary");
+        const linked = await readLinkText(join(sandbox.home, ".local", "bin", "flyflor"));
+        expect(linked).toContain(join(target, "dist", "flyflor"));
     }, { timeout: 30_000 });
 });
 
 interface InstallSandbox {
     root: string;
     bin: string;
+    home: string;
     log: string;
     env(extra?: Record<string, string>): Record<string, string | undefined>;
 }
@@ -245,6 +313,7 @@ async function createInstallSandbox(): Promise<InstallSandbox> {
     return {
         root,
         bin,
+        home,
         log,
         env(extra = {}) {
             return {
@@ -302,6 +371,11 @@ async function installFakeBun(bin: string, log: string): Promise<void> {
         join(bin, "bun"),
         `#!/usr/bin/env sh
 echo "bun $*" >> "${log}"
+if [ "$1" = "run" ] && [ "$2" = "build:binary" ]; then
+    mkdir -p dist
+    printf '#!/usr/bin/env sh\\necho flyflor-binary\\n' > dist/flyflor
+    chmod +x dist/flyflor
+fi
 exit 0
 `,
     );
@@ -315,4 +389,12 @@ echo "docker $*" >> "${log}"
 exit 0
 `,
     );
+}
+
+async function readLinkText(path: string): Promise<string> {
+    const proc = Bun.spawn(["readlink", path], { stdout: "pipe", stderr: "pipe" });
+    const out = await new Response(proc.stdout).text();
+    const exit = await proc.exited;
+    if (exit === 0) return out.trim();
+    return readFile(path, "utf8");
 }

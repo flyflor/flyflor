@@ -36,7 +36,7 @@ export interface GhostListData {
 
 export async function fetchGhostList(app: FlyFlor, userId: string, limit = 60): Promise<GhostListData> {
     const config = app.resolve(ConfigComponent);
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     try {
         await stat(brainPath);
     } catch {

@@ -238,7 +238,7 @@ const RELAY_PROTOCOL_CHOICES: RelayProtocolChoice[] = [
 ];
 
 export function getFlyflorConfigPath(): string {
-    return join(homedir(), ".flyflor", "config.jsonc");
+    return join(homedir(), ".flyflor", ".config", "config.jsonc");
 }
 
 export async function initializeFlyflorConfig(options: InitConfigOptions = {}): Promise<InitConfigResult | undefined> {
@@ -426,7 +426,7 @@ export function buildConfigJsonc(input: {
         },
     };
 
-    return `// Flyflor user config. This file is JSONC and is loaded from ~/.flyflor/config.jsonc.
+    return `// Flyflor user config. This file is JSONC and is loaded from ~/.flyflor/.config/config.jsonc.
 ${JSON.stringify(config, null, 4)}
 `;
 }
@@ -1385,7 +1385,7 @@ async function writeUserConfigObject(configPath: string, config: Record<string, 
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(
         configPath,
-        `// Flyflor user config. This file is JSONC and is loaded from ~/.flyflor/config.jsonc.
+        `// Flyflor user config. This file is JSONC and is loaded from ~/.flyflor/.config/config.jsonc.
 ${JSON.stringify(config, null, 4)}
 `,
         "utf8",

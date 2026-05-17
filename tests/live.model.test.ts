@@ -1,7 +1,7 @@
 /**
  * Live model smoke tests.
  *
- * This file intentionally uses the user's real ~/.flyflor/config.jsonc via
+ * This file intentionally uses the user's real ~/.flyflor/.config/config.jsonc via
  * loadConfig(). It is not part of the default deterministic unit suite; run
  * it with `bun run test:live` when provider credentials should be exercised.
  * The docker variant is selected by the local test runner environment because

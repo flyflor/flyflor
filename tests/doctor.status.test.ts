@@ -25,7 +25,7 @@ import {
     ToolApprovalMode} from "../src/protocol/contracts/index.ts";
 
 function configForHome(home: string): FlyflorConfig {
-    return { paths: { home } } as FlyflorConfig;
+    return { paths: { configDir: home, home } } as FlyflorConfig;
 }
 
 function doctorConfigForHome(home: string): FlyflorConfig {

@@ -121,7 +121,7 @@ describe("LF-R3 Ask first-class wiring", () => {
                 { behaviorSnapshotId: snapshotId },
                 askA,
             );
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const rows = db
                     .query("SELECT id, type, parent_id, content FROM memory_events WHERE type = 'ask' ORDER BY ts DESC")
@@ -170,7 +170,7 @@ describe("LF-R3 Ask first-class wiring", () => {
                 gatewayReply("Got it.", "rep-2"),
                 runtimeContext(),
             );
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const ans = db
                     .query("SELECT parent_id, content FROM memory_events WHERE type = 'ask-answer-pair'")

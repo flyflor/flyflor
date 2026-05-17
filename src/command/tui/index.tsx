@@ -74,7 +74,7 @@ export function renderDashboardLines(
     const lines: Array<{ color: RGBA; text: string; bold?: boolean }> = [];
     if (view === "overview") {
         lines.push(heading("◆ Runtime"));
-        lines.push(normal(`Config: ${snapshot.config.paths.home}/config.jsonc`));
+        lines.push(normal(`Config: ${snapshot.config.paths.configDir}/config.jsonc`));
         lines.push(normal(`Gateway: ${snapshot.gateway.host}:${snapshot.gateway.port}`));
         lines.push(normal(`API mode: ${snapshot.config.model.apiMode}`));
         lines.push(normal(`Sandbox: ${snapshot.config.sandbox.mode}`));

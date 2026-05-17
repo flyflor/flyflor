@@ -120,7 +120,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
             const res = await memory.runSummaryOnce("user-1", now);
             expect(res?.written).toBe(2);
 
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const dayId = "summary-user-1-day-2026-05-13";
                 const row = db.query("SELECT content FROM memory_summary WHERE id = ?").get(dayId) as
@@ -157,7 +157,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
             await waitFor(() => graph.inputs.length > 0);
             expect(graph.inputs[0]?.summaryId).toMatch(/^summary-user-1-/);
             expect(sink.types).toContain(RuntimeEventType.MemorySummaryEmbeddingWritten);
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const rows = db
                     .query("SELECT embedding_id FROM memory_summary WHERE embedding_id IS NOT NULL")

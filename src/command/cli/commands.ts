@@ -1275,11 +1275,13 @@ async function runConfig(sub: string | undefined, command: Command): Promise<voi
         return;
     }
     if (sub === "path") {
-        console.log(`${config.paths.home}/config.jsonc`);
+        // Config paths come from the resolved runtime config so Docker, tests,
+        // and source-first installs all report the same layout they actually use.
+        console.log(join(config.paths.configDir, "config.jsonc"));
         return;
     }
     if (sub === "env-path") {
-        console.log(`${config.paths.home}/secrets.jsonc`);
+        console.log(join(config.paths.configDir, "secrets.jsonc"));
         return;
     }
     throwUnsupportedCommand(["config", sub]);

@@ -36,7 +36,7 @@ Markdown 长期记忆工具。
 - signals.actionability / certainty / recurrence / sourceDiversity / validationCount —— 更细粒度的持久性证据。
 - signals.projectIntent —— 0..1；**仅当**用户明确要求把当前工作保存为项目时设为 ≥ 0.7（会生成 `.flyflor/` 脚手架）。
 - signals.eventIntent —— 0..1；**仅当**用户明确要求把当前轮记入项目事件时设为 ≥ 0.7。
-- signals.skillPromotionIntent —— 0..1；**仅当** system prompt 中已有 `[skill-offer]` 自我笔记，且用户明确同意把这套反复出现的工具组合固化为 Skill 时设为 ≥ 0.7（会写入 `~/.flyflor/skills/<name>/SKILL.md`）。
+- signals.skillPromotionIntent —— 0..1；**仅当** system prompt 中已有 `[skill-offer]` 自我笔记，且用户明确同意把这套反复出现的工具组合固化为 Skill 时设为 ≥ 0.7（会写入 `~/.flyflor/.config/skills/<name>/SKILL.md`）。
 - codename —— 用户**明确**给出的工作上下文锚点（"叫它 fly"、"我们继续 fly 这条线"）。结构：`{ "name": "fly", "workingDir": "/abs/path", "description": "一句话摘要" }`。`name` 必填且不含空白；`workingDir` / `description` 可选。**绝不要从对话里猜代号**——只在用户用自然语言明确命名某个工作目录或主题时才填。
 - eq —— 你对当前轮用户情绪的观察。结构：`{ "label": "neutral|joy|anger|sadness|fear|surprise", "valence": -1..1, "arousal": 0..1, "dominance": 0..1, "confidence": 0..1 }`。`label` 必须取这六个封闭枚举值之一，其他字符串会被丢弃。仅在本轮存在明显情绪证据时输出，否则省略。**不要基于用户文本中的关键词派生 `label`**——以整段对话上下文为依据。这个信号只影响语气、暖度和节奏，不改变路由、工具使用、提问数量、是否继续追问，也不参与记忆候选打分。只有当你的判断与上轮 `[eq-context]` 块不一致时才需要刷新。
 

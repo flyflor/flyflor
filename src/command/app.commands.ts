@@ -78,7 +78,7 @@ const DEFAULT_CONTINUE_PROMPT =
 
 /**
  * Built-in command rules for local interactive apps. User overrides live in
- * `~/.flyflor/commands.jsonc`; built-ins merge by `run.action`, custom rules
+ * `~/.flyflor/.config/commands.jsonc`; built-ins merge by `run.action`, custom rules
  * append by slash trigger, so there is no second id namespace to keep in sync.
  */
 export function createDefaultAppCommandRegistry(): AppCommandRegistry {
@@ -117,7 +117,7 @@ export async function loadAppCommandRegistry(paths: FlyflorPaths): Promise<AppCo
 }
 
 export function appCommandsPath(paths: FlyflorPaths): string {
-    return join(paths.home, APP_COMMANDS_FILE_NAME);
+    return join(paths.configDir, APP_COMMANDS_FILE_NAME);
 }
 
 export function builtinActionOf(rule: AppCommandRule): AppCommandAction | undefined {

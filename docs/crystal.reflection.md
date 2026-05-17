@@ -4,7 +4,7 @@
 
 Crystal 子系统负责把结构化反思证据「结晶」为长期可复用的 Gem。当前 runtime reflection 路径是 candidate → atom → Gem；长期图的 episode → memory_node → Gem 由 `ConsolidationWorker` / `CrystalComponent` 维护，不能把两条链路的字段和门槛混写。
 
-Gem 与 Skill 必须分开：Gem 是内部晶体智力，存在 `crystal.db` / Crystal graph；Skill 是外部 `SKILL.md` 能力包，存在 `~/.flyflor/skills` 或项目 skill 目录。`gem-drift` 只修 Crystal graph，不能代替 `skill-drift`。
+Gem 与 Skill 必须分开：Gem 是内部晶体智力，存在 `crystal.db` / Crystal graph；Skill 是外部 `SKILL.md` 能力包，存在 `~/.flyflor/.config/skills` 或项目 skill 目录。`gem-drift` 只修 Crystal graph，不能代替 `skill-drift`。
 
 ## 相关代码路径
 

@@ -121,7 +121,7 @@ describe("LF-R4 Ghost Context wiring", () => {
                 {},
                 askA,
             );
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const askRow = db.query("SELECT id FROM memory_events WHERE type = 'ask'").get() as { id: string };
                 const ghostRows = db
@@ -192,14 +192,14 @@ describe("LF-R4 Ghost Context wiring", () => {
                 askA,
             );
             const ghost = memory.listActiveGhosts("user-1")[0]!;
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             const before = (db.query("SELECT decay_score FROM memory_state WHERE event_id = ?").get(ghost.id) as
                 | { decay_score: number }
                 | null) ?? { decay_score: 1 };
             db.close();
 
             expect(memory.pinGhost(ghost.id)).toBe(true);
-            const db2 = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db2 = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const after = db2.query("SELECT decay_score FROM memory_state WHERE event_id = ?").get(ghost.id) as {
                     decay_score: number;
@@ -229,7 +229,7 @@ describe("LF-R4 Ghost Context wiring", () => {
                 {},
                 askA,
             );
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             const askRow = db.query("SELECT id FROM memory_events WHERE type = 'ask'").get() as { id: string };
             db.close();
             expect(memory.getGhost(askRow.id)).toBeNull();

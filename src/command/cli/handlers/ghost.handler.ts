@@ -28,7 +28,7 @@ export async function runGhost(sub: string | undefined, command: Command): Promi
 
 async function openBrainOrFail(json: boolean | undefined): Promise<BrainStore | null> {
     const config = await loadConfig();
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     try {
         await stat(brainPath);
     } catch {

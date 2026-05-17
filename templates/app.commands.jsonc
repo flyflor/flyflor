@@ -1,6 +1,6 @@
 {
     // Flyflor local app command rules.
-    // Installed as ~/.flyflor/commands.jsonc; kept separate from config.jsonc
+    // Installed as ~/.flyflor/.config/commands.jsonc; kept separate from config.jsonc
     // because this file only customizes local TUI/app slash commands.
     "schemaVersion": 1,
 
@@ -93,7 +93,7 @@
             "enabled": true
         },
 
-        // Example custom extension. Uncomment and edit in ~/.flyflor/commands.jsonc.
+        // Example custom extension. Uncomment and edit in ~/.flyflor/.config/commands.jsonc.
         // {
         //     "match": { "slash": ["/review"] },
         //     "run": {

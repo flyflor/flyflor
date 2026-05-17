@@ -51,7 +51,7 @@ export async function fetchInboxBuckets(
 ): Promise<InboxBucketsResult> {
     const days = clampInt(options.days ?? 7, 1, 31);
     const limit = clampInt(options.limit ?? 100, 1, 500);
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     if (!(await Bun.file(brainPath).exists())) {
         return { buckets: [], atomCount: 0, days, brainPresent: false };
     }

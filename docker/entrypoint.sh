@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-WORKSPACE_BIN="/workspace/dist/flyflor-linux"
+WORKSPACE_BIN="/root/.flyflor/dist/flyflor-linux"
 MOUNTED_BIN="/mounted/flyflor-linux"
 LOCAL_BIN="/tmp/flyflor-linux"
 LINK_BIN="/usr/local/bin/flyflor"

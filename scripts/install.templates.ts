@@ -16,7 +16,10 @@ const options: InstallOptions = {
     docker: args.has("--docker"),
     force: args.has("--force"),
     targetHome:
-        explicitTarget ?? (args.has("--docker") ? join(repoRoot, "docker", "config") : join(homedir(), ".flyflor")),
+        explicitTarget ??
+        // Default local script usage mirrors runtime config resolution:
+        // ~/.flyflor is the source checkout, while templates live under .config.
+        (args.has("--docker") ? join(repoRoot, "docker", "config") : join(homedir(), ".flyflor", ".config")),
 };
 
 await installTemplateGroup({

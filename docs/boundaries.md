@@ -148,8 +148,8 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 - 运行时不依赖用户机器存在 `node_modules`。
 - 不从依赖包目录读取 schema / wasm / 二进制 / 模板，除非构建明确把它们复制到产物旁。
-- 内部提示词模板必须由安装脚本复制到 `~/.flyflor/prompts` 与 `~/.flyflor/templates/*`；缺失即报错，不写兜底。
-- 安装分发固定三条路径：`install.sh` 只做 release 二进制 + 模板包安装；`install.source.sh` / `install.ps1` 必须把源码 checkout 留在用户本机；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。`flyflor-templates.tar.gz` 必须由 `build:templates:release` 生成，tar 根布局直接对应安装前缀，禁止发布时手工拼包。
+- 内部提示词模板必须由安装脚本复制到 `~/.flyflor/.config/prompts` 与 `~/.flyflor/.config/templates/*`；缺失即报错，不写兜底。
+- 安装分发固定三条路径：`install.sh` 默认 source-first，把源码 checkout 放在 `~/.flyflor`，配置/运行态放在 `~/.flyflor/.config`，并把全局 `flyflor` 链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；`install.source.sh` / `install.ps1` 必须保持同一源码根 + `.config` 布局；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。纯 release 二进制安装只能由 `install.sh --binary` 显式触发，`flyflor-templates.tar.gz` 必须由 `build:templates:release` 生成，tar 根布局直接对应配置前缀，禁止发布时手工拼包。
 - curl-pipe / PowerShell bootstrap 脚本属于发布协议，新增选项必须同步 README 与 `tests/install.script.test.ts`，避免安装入口漂移。
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
@@ -177,8 +177,8 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ## 8. 配置与密钥
 
-- 全局：`~/.flyflor/config.jsonc`；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
-- 本地交互命令：`~/.flyflor/commands.jsonc`。它只定义 TUI / app slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
+- 全局：`~/.flyflor/.config/config.jsonc`；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
+- 本地交互命令：`~/.flyflor/.config/commands.jsonc`。它只定义 TUI / app slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
 - `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 project / fork 选择写回 `RuntimeContext.activeProject` / `contextForkId`，不能反向变成隐式 session 容器。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
@@ -194,17 +194,20 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ```
 ~/.flyflor/
-  config.jsonc
-  commands.jsonc              # TUI / app slash command rules
-  prompts/                    # 内部提示词模板（不属于用户工作区）
-  templates/memory/           # MEMORY/SELF/SOUL/USER 初始模板
-  templates/projects/         # 项目骨架模板
-  workspace/                  # 用户工作区（可编辑）
-    SELF.md / SOUL.md / USER.md / MEMORY.md
-    projects/<projectId>/
-    .flyflor/{skills,mcp,plugins,memory}/  # 项目局部 capability
-  skills/ / mcp/ / plugins/   # 全局 capability
-  logs/                       # 审计日志
+  app.ts / src/ / scripts/     # source-first checkout
+  dist/flyflor                 # Bun compiled global command target
+  .config/
+    config.jsonc
+    commands.jsonc            # TUI / app slash command rules
+    prompts/                  # 内部提示词模板（不属于用户工作区）
+    templates/memory/         # MEMORY/SELF/SOUL/USER 初始模板
+    templates/projects/       # 项目骨架模板
+    workspace/                # 用户工作区（可编辑）
+      SELF.md / SOUL.md / USER.md / MEMORY.md
+      projects/<projectId>/
+      .flyflor/{skills,mcp,plugins,memory}/  # 项目局部 capability
+    skills/ / mcp/ / plugins/ # 全局 capability
+    logs/                     # 审计日志
 ```
 
 ## 9. 工具与沙箱
@@ -263,10 +266,10 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ### R2 — Brain.db 是单文件大脑契约
 
-- `~/.flyflor/brain.db` 是用户可见、可手动 inspect 的"生平"，唯一权威记忆库。结构契约：**event / state 分离 + append-only + 时间字段索引**。
+- `~/.flyflor/.config/brain.db` 是用户可见、可手动 inspect 的"生平"，唯一权威记忆库。结构契约：**event / state 分离 + append-only + 时间字段索引**。
 - 禁止把 event 表改成可变行（任何"更新内容"操作必须新写一行 + 状态层指向）；可变性只允许出现在 `memory_state` / `memory_summary` / `codenames` 这类显式状态表。
 - 性能优化必须保持单主库契约：`brain.db` 是唯一 live DB，热路径通过复合索引和 query-plan 测试守住；历史数据只通过月级只读归档外迁。禁止把 live 主库拆成按日 / 按项目 shard。
-- 月级冷归档落 `~/.flyflor/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
+- 月级冷归档落 `~/.flyflor/.config/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
 - `MemoryComponent` 热记忆压缩只能写 `memory_events.type='hot-memory-compression'` 审计事件；不得写入 `memory_summary`、不得生成 prompt atom、不得默认进入 `CrystalComponent` / Gem 候选。若未来要把压缩结果转为长期证据，必须新增显式 gate。
 - 删除操作只能通过显式 CLI（如 `flyflor memory forget`）触发并审计；Dream / sweeper 一律只能改 `memory_state` 字段，不得 DELETE event 行。
 - 旧 `~/.flyflor/journal/<yyyy>/W<ww>/day_*.db` 目录在重构过渡期内只读保留 60 天，期满下线；过渡期内禁止反向写入旧目录。
@@ -331,6 +334,6 @@ bun run smoke:agent:live # 真实 provider + 临时 HOME，验证完整 agent tu
 bun run build:release  # 本机 + GitHub Release 资产名对齐的二进制与模板包可构建
 ```
 
-默认测试套件必须离线、确定性、无真实 provider 消耗；模型调用用 stub / mock 覆盖协议与错误边界。需要验证当前真实配置时，显式运行 `bun run test:live`（`~/.flyflor/config.jsonc`）或 `bun run test:live:docker`（`./docker/config/config.jsonc`），这类 live 冒烟不进入 `ci` / `release:check` 的默认门禁。
+默认测试套件必须离线、确定性、无真实 provider 消耗；模型调用用 stub / mock 覆盖协议与错误边界。需要验证当前真实配置时，显式运行 `bun run test:live`（`~/.flyflor/.config/config.jsonc`）或 `bun run test:live:docker`（`./docker/config/config.jsonc`），这类 live 冒烟不进入 `ci` / `release:check` 的默认门禁。
 
 涉及工具 / MCP / 插件 / 文件系统 / shell / 网络 / 记忆 / provider 时必须补对应测试或最小验证脚本。

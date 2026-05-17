@@ -46,7 +46,7 @@ flowchart TB
     Runtime --> Prompts["Prompts<br/>src/agent/prompts"]
     Runtime --> FastRouteCache["fastRoute cache<br/><cacheDir>/runtime.fast.route.snapshots.json"]
 
-    Memory --> Markdown["Markdown 宪法层<br/>~/.flyflor/workspace/*.md"]
+    Memory --> Markdown["Markdown 宪法层<br/>~/.flyflor/.config/workspace/*.md"]
     Memory --> Working["MemoryComponent<br/>local WAL + snapshot"]
     Memory --> HotCompression["HotMemoryCompressionWorker<br/>隔离压缩审计"]
     Memory --> SQLite["SQLite 索引<br/>candidates/offers/search"]
@@ -85,7 +85,7 @@ sequenceDiagram
     participant DC as DependencyContainer
 
     CLI->>Flyflor: create({mode, argv})
-    Flyflor->>Config: 读 ~/.flyflor/config.jsonc
+    Flyflor->>Config: 读 ~/.flyflor/.config/config.jsonc
     Config-->>Flyflor: FlyflorConfig + paths
     Flyflor->>Tpl: 装载 templates/prompts/*.md
     Flyflor->>Sink: 组合 Console/Null + FileAuditSink
@@ -192,7 +192,7 @@ flowchart LR
     Main -- 多任务复用 --> PersistWorker
     Main -- Bun.spawn --> ShellHook
 
-    Main -. RuntimeEvent .-> Audit["FileAuditSink<br/>~/.flyflor/logs/audit.jsonl"]
+    Main -. RuntimeEvent .-> Audit["FileAuditSink<br/>~/.flyflor/.config/logs/audit.jsonl"]
     Main -. RuntimeEvent .-> Console
 ```
 

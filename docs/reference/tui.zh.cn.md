@@ -19,7 +19,7 @@
 - 显式 `flyflor tui`、`flyflor --tui`、`flyflor chat --tui` 必须同时拥有 stdin/stdout TTY；CI、管道和重定向环境会快速返回 exit code 2；chat 入口即使可用也不创建 renderer
 - CLI navigator 只能由显式 `--tui` 打开；`flyflor doctor`、`status`、`channels`、`config`、`memory`、`skills`、`mcp`、`plugins`、`dream`、`sandbox` 即使在 Docker `-it` 下也默认输出文本，避免脚本和诊断命令误入 OpenTUI renderer
 - Chat `/stop` 通过 `AbortSignal` 传到 Runtime 和模型 HTTP 层，当前回复标记为 stopped；`/continue` 只发送一条普通 continuation prompt，不恢复 session，不绕过无 session 设计
-- Chat slash commands 由 `~/.flyflor/commands.jsonc` 的 rule registry 驱动：`match.slash` 定义触发词，`run.type` / `run.action` 定义行为。内置规则按 action 覆盖，用户自定义 `send-message` 规则可扩展 `/review` 等本地命令。
+- Chat slash commands 由 `~/.flyflor/.config/commands.jsonc` 的 rule registry 驱动：`match.slash` 定义触发词，`run.type` / `run.action` 定义行为。内置规则按 action 覆盖，用户自定义 `send-message` 规则可扩展 `/review` 等本地命令。
 - Chat 内置 `/project [path]` 会在路径下创建 / 复用项目骨架与 `.flyflor/{memory,skills,mcp,plugins}`，并把该项目作为后续 turn 的 `RuntimeContext.activeProject` 显式传入；`/projects` 从 `brain.db.projects` 列表选择项目，Enter 激活。
 - Chat 内置 `/fork` 从历史 turn 摘要创建 ContextFork，`a` 加载更多历史，Enter 后把 fork id 显式带入后续 turn；`/forks` 选择已有 fork。fork 不是 session，不会靠自然语言或 chatId 自动续命。
 - Chat 不接管鼠标拖选复制；macOS Terminal、iTerm2、Docker TTY 的文本选择交给终端原生能力，避免 OpenTUI selection 在复杂 panel 树上递归爆栈。复制交互优先使用终端自身快捷键 / 菜单。

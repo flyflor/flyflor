@@ -132,7 +132,7 @@ Plugin registry 只管理 JSONC manifest，不直接执行 entry；`PluginRunner
 {
     "sandbox": {
         "auditSinks": [
-            { "kind": "file", "path": "~/.flyflor/logs/audit.jsonl" },
+            { "kind": "file", "path": "~/.flyflor/.config/logs/audit.jsonl" },
             { "kind": "http", "url": "https://siem.example.com/ingest", "timeoutMs": 3000 }
         ]
     }

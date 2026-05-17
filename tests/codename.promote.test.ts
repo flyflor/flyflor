@@ -47,7 +47,7 @@ async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; 
     for (const f of ["AGENTS.md", "TODO.md", "README.md"]) {
         await Bun.write(join(paths.templateDir, "projects", f), `# {{title}}\n\nproject={{projectId}} user={{userId}}\ncreated={{createdAt}}\ntrigger={{trigger}}\nrelated={{relatedIds}}\n\n{{goal}}\n`);
     }
-    const brain = new BrainStore({ dbPath: join(paths.home, "brain.db") });
+    const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
     await brain.open();
     const scaffolder = new ProjectScaffolder(paths, new NullSink());
     return { paths, brain, scaffolder, root };
@@ -175,7 +175,7 @@ describe("LF-R2 promoteCodename helper", () => {
                 useCount: 6,
             });
             await promoteCodename(brain, scaffolder, id);
-            const db = new Database(join(paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
             try {
                 const row = db.query("SELECT project_id FROM codenames WHERE id = ?").get(id) as { project_id: string };
                 expect(row.project_id).toBe("cn-verify");

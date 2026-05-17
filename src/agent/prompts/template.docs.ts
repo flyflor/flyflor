@@ -32,8 +32,8 @@ export function renderPromptTemplatesDoc(): string {
     lines.push("- `src/agent/prompts/template.manifest.ts` - template bundle version and file contract");
     lines.push("- `src/agent/prompts/template.docs.ts` - docs generator");
     lines.push("- `templates/prompts/` - built-in templates");
-    lines.push("- `scripts/install.templates.ts` - install into the user directory");
-    lines.push("- `~/.flyflor/prompts/` - user override directory");
+    lines.push("- `scripts/install.templates.ts` - install into the config directory");
+    lines.push("- `~/.flyflor/.config/prompts/` - user override directory");
     lines.push("");
     lines.push("## Bundle Version");
     lines.push("");
@@ -80,7 +80,7 @@ export function renderPromptTemplatesDoc(): string {
     lines.push("");
     lines.push("```mermaid");
     lines.push("flowchart LR");
-    lines.push('    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/prompts/"]');
+    lines.push('    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/.config/prompts/"]');
     lines.push('    Userdir -- runtime override --> Render["render functions"]');
     lines.push('    Builtin -- canonical --> Render');
     lines.push("```");

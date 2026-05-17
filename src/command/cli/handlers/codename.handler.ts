@@ -45,7 +45,7 @@ async function runCodenameList(command: Command): Promise<void> {
     const limit = Math.max(1, Math.min(500, Number(opts.limit ?? "50")));
 
     const config = await loadConfig();
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     try {
         await stat(brainPath);
     } catch {
@@ -100,7 +100,7 @@ class ConsoleEventSink implements EventSink {
 
 async function openBrainOrExit(opts: { json?: boolean }): Promise<{ store: BrainStore; brainPath: string } | null> {
     const config = await loadConfig();
-    const brainPath = join(config.paths.home, "brain.db");
+    const brainPath = join(config.paths.configDir, "brain.db");
     try {
         await stat(brainPath);
     } catch {

@@ -48,7 +48,7 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
                 ],
             );
 
-            const dbPath = join(config.paths.home, "brain.db");
+            const dbPath = join(config.paths.configDir, "brain.db");
             const db = new Database(dbPath, { readonly: true });
             try {
                 const row = db
@@ -98,7 +98,7 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
                 runtimeContext(),
                 [],
             );
-            const dbPath = join(config.paths.home, "brain.db");
+            const dbPath = join(config.paths.configDir, "brain.db");
             const db = new Database(dbPath, { readonly: true });
             try {
                 const row = db.query("SELECT COUNT(*) as n FROM memory_eq_state").get() as { n: number };
@@ -137,7 +137,7 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
                     },
                 ],
             );
-            const dbPath = join(config.paths.home, "brain.db");
+            const dbPath = join(config.paths.configDir, "brain.db");
             const db = new Database(dbPath, { readonly: true });
             try {
                 const row = db.query("SELECT COUNT(*) as n FROM memory_eq_state").get() as { n: number };

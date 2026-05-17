@@ -99,7 +99,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
                 ],
             );
             // 手动把 updated_at 调到很久以前（10 个半衰期），让 decay 把它降到阈值之下
-            const dbPath = join(config.paths.home, "brain.db");
+            const dbPath = join(config.paths.configDir, "brain.db");
             const { Database } = await import("bun:sqlite");
             const db = new Database(dbPath);
             try {

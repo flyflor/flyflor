@@ -365,7 +365,7 @@ export interface MemoryWeightConfig {
  * 生命体重构（LF-P0）配置块。所有字段都有默认值；缺省走 `createDefaultMemoryTuning()`。
  * 详见当前契约 `docs/boundaries.md` R1-R4；历史设计归档在 `docs/old-docs/life.form.md`。
  *
- * R 红线提醒：本块属于内部行为调参，**禁止走环境变量**；必须落 `~/.flyflor/config.jsonc`。
+ * R 红线提醒：本块属于内部行为调参，**禁止走环境变量**；必须落 `~/.flyflor/.config/config.jsonc`。
  */
 export interface MemoryTuningConfig {
     identity: IdentityTuningConfig;
@@ -836,7 +836,7 @@ export function createDefaultMemoryConfig(): MemoryConfig {
 /**
  * 生命体重构默认调参。当前运行边界见 `docs/boundaries.md`，历史设计归档在 `docs/old-docs/life.form.md`。
  *
- * 配置覆盖规则：用户在 `~/.flyflor/config.jsonc` 的 `memory.tuning.*` 下显式覆盖即生效；
+ * 配置覆盖规则：用户在 `~/.flyflor/.config/config.jsonc` 的 `memory.tuning.*` 下显式覆盖即生效；
  * 类型不正确时由 doctor 表 `Memory tuning` 一行高亮（不报错）。
  */
 export function createDefaultMemoryTuning(): MemoryTuningConfig {
@@ -1225,6 +1225,7 @@ function firstKey(record: Record<string, unknown>): string | undefined {
 
 function resolvePaths(): FlyflorPaths {
     const home = join(homedir(), ".flyflor");
+    const configDir = join(home, ".config");
     const xdgData = env("XDG_DATA_HOME") ?? join(homedir(), ".local", "share");
     const xdgCache = env("XDG_CACHE_HOME") ?? join(homedir(), ".cache");
     const projectDir = process.cwd();
@@ -1232,8 +1233,8 @@ function resolvePaths(): FlyflorPaths {
 
     return {
         home,
-        configDir: home,
-        storageDir: join(xdgData, "flyflor"),
+        configDir,
+        storageDir: join(configDir, "storage"),
         cacheDir: join(xdgCache, "flyflor"),
         projectDir,
         projectFlyflorDir,
@@ -1241,14 +1242,14 @@ function resolvePaths(): FlyflorPaths {
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),
         projectMemoryDir: join(projectFlyflorDir, "memory"),
-        workspaceDir: join(home, "workspace"),
-        logDir: join(home, "logs"),
-        memoryDir: join(xdgData, "flyflor", "memory"),
-        pluginDir: join(home, "plugins"),
-        promptDir: join(home, "prompts"),
-        skillDir: join(home, "skills"),
-        templateDir: join(home, "templates"),
-        mcpDir: join(home, "mcp"),
+        workspaceDir: join(configDir, "workspace"),
+        logDir: join(configDir, "logs"),
+        memoryDir: join(configDir, "memory"),
+        pluginDir: join(configDir, "plugins"),
+        promptDir: join(configDir, "prompts"),
+        skillDir: join(configDir, "skills"),
+        templateDir: join(configDir, "templates"),
+        mcpDir: join(configDir, "mcp"),
     };
 }
 

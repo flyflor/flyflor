@@ -5,9 +5,10 @@
  *  - 纯函数，输入 FlyflorConfig + format，输出 string；不读 fs；
  *  - 默认对 API key / token / secret / password 做前缀脱敏：保留前 4 + 后 2 字符；
  *  - JSON 模式输出确定性字段顺序，方便脚本 diff；
- *  - 不暴露 ~/.flyflor/secrets.jsonc 内容；secrets 来源由调用方独立加载。
+ *  - 不暴露 ~/.flyflor/.config/secrets.jsonc 内容；secrets 来源由调用方独立加载。
  */
 
+import { join } from "node:path";
 import type { FlyflorConfig } from "../config/index.ts";
 import { ToolApprovalMode } from "../protocol/contracts/index.ts";
 
@@ -72,8 +73,10 @@ interface ConfigView {
 function buildView(config: FlyflorConfig, redact: boolean): ConfigView {
     const apiKeyRaw = typeof config.model.apiKey === "string" ? config.model.apiKey : "";
     return {
-        configPath: `${config.paths.home}/config.jsonc`,
-        secretsPath: `${config.paths.home}/secrets.jsonc`,
+        // The view must mirror the resolved config directory rather than assuming
+        // the default home path; tests and Docker override configDir deliberately.
+        configPath: join(config.paths.configDir, "config.jsonc"),
+        secretsPath: join(config.paths.configDir, "secrets.jsonc"),
         home: config.paths.home,
         storageDir: config.paths.storageDir,
         memoryDir: config.paths.memoryDir,

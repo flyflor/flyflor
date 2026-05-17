@@ -189,7 +189,7 @@ class LiveAgentHarness {
     }
 
     private inspectBrain(config: FlyflorConfig, events: RecordingSink, replyText: string): LiveAgentReport {
-        const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+        const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
         try {
             return {
                 brainEvents: this.count(db, "memory_events"),

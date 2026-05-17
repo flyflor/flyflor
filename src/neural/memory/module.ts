@@ -186,7 +186,7 @@ export class MemoryModule extends Memory {
         const working = resolveWorkingMemoryConfig(config);
         this.workingMemoryBackend = working.backend;
         this.workingMemoryDefaultTtlSeconds = working.local.defaultTtlSeconds;
-        this.brain = new BrainStore({ dbPath: join(config.paths.home, "brain.db") });
+        this.brain = new BrainStore({ dbPath: join(config.paths.configDir, "brain.db") });
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
         this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
         this.contextForkStore = new ContextForkStore(join(config.paths.storageDir, "forks"));
@@ -2449,7 +2449,7 @@ export class MemoryModule extends Memory {
         this.brainMaintenanceBusy = true;
         try {
             const result = await runBrainArchive({
-                brainPath: join(this.config.paths.home, "brain.db"),
+                brainPath: join(this.config.paths.configDir, "brain.db"),
                 archiveAfterMonths: this.config.memory.tuning.brainDb.archiveAfterMonths,
                 vacuumIntervalDays: this.config.memory.tuning.brainDb.vacuumIntervalDays,
                 vacuumMode: "auto",

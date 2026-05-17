@@ -8,6 +8,7 @@ const fakeConfig = (): FlyflorConfig =>
     ({
         paths: {
             home: "/tmp/flyflor",
+            configDir: "/tmp/flyflor/.config",
             storageDir: "/tmp/flyflor/storage",
             memoryDir: "/tmp/flyflor/memory",
             promptDir: "/tmp/flyflor/prompts",
@@ -61,6 +62,8 @@ describe("config view", () => {
 
     test("text view redacts model.apiKey by default", () => {
         const out = renderConfigView(fakeConfig());
+        expect(out).toContain("Config file: /tmp/flyflor/.config/config.jsonc");
+        expect(out).toContain("Secrets file: /tmp/flyflor/.config/secrets.jsonc");
         expect(out).toContain("provider: openai");
         expect(out).toContain("model: gpt-4o");
         expect(out).toContain("apiKey: test…90");
@@ -86,6 +89,8 @@ describe("config view", () => {
     test("json view is parseable and contains redacted secrets", () => {
         const out = renderConfigView(fakeConfig(), { format: "json" });
         const parsed = JSON.parse(out);
+        expect(parsed.configPath).toBe("/tmp/flyflor/.config/config.jsonc");
+        expect(parsed.secretsPath).toBe("/tmp/flyflor/.config/secrets.jsonc");
         expect(parsed.model.apiKey).toBe("test…90");
         expect(parsed.gateway.allowedChannels).toEqual(["telegram", "slack"]);
         expect(parsed.sandbox).toEqual({

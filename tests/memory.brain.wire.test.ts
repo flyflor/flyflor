@@ -33,7 +33,7 @@ describe("MemoryModule + BrainStore", () => {
                 runtimeContext(),
             );
 
-            const dbPath = join(config.paths.home, "brain.db");
+            const dbPath = join(config.paths.configDir, "brain.db");
             const db = new Database(dbPath, { readonly: true });
             try {
                 const rows = db
@@ -94,7 +94,7 @@ describe("MemoryModule + BrainStore", () => {
                     },
                 ],
             );
-            const dbPath = join(config.paths.home, "brain.db");
+            const dbPath = join(config.paths.configDir, "brain.db");
             const db = new Database(dbPath, { readonly: true });
             try {
                 const rows = db

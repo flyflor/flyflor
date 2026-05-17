@@ -12,19 +12,19 @@
 
 ## 目录映射
 
-- `./` → 容器内 `/workspace`（dev 源码挂载，便于热替换）。
-- `./docker/config` → 容器内 `/root/.flyflor`（global config、secrets、prompt templates）。
-- `./docker/workspace` → 容器内 `/root/.flyflor/workspace`（默认项目根；局部状态写入 `./docker/workspace/.flyflor`）。
-- `./docker/skills` → 容器内 `/root/.flyflor/skills`（显式 `--global` 的全局技能包目录）。
-- `./docker/mcp` → 容器内 `/root/.flyflor/mcp`（显式 `--global` 的 MCP server 配置和状态目录）。
-- `./dist/flyflor-linux` → 容器内 `/mounted/flyflor-linux:ro`（已编译的 Linux 二进制）。entrypoint 会优先读取源码挂载中的 `/workspace/dist/flyflor-linux`，便于本机重新编译后直接重启容器；缺失时再回退到只读挂载。
+- `./` → 容器内 `/root/.flyflor`（dev 源码挂载，模拟用户 source-first 安装根）。
+- `./docker/config` → 容器内 `/root/.flyflor/.config`（global config、secrets、prompt templates）。
+- `./docker/workspace` → 容器内 `/root/.flyflor/.config/workspace`（默认项目根；局部状态写入 `./docker/workspace/.flyflor`）。
+- `./docker/skills` → 容器内 `/root/.flyflor/.config/skills`（显式 `--global` 的全局技能包目录）。
+- `./docker/mcp` → 容器内 `/root/.flyflor/.config/mcp`（显式 `--global` 的 MCP server 配置和状态目录）。
+- `./dist/flyflor-linux` → 容器内 `/mounted/flyflor-linux:ro`（已编译的 Linux 二进制）。entrypoint 会优先读取源码挂载中的 `/root/.flyflor/dist/flyflor-linux`，便于本机重新编译后直接重启容器；缺失时再回退到只读挂载。
 - 具名卷 `flyflor_data` → `/root/.local/share/flyflor`（SQLite、WAL、snapshot 等持久数据）。
 
 `docker/workspace/.flyflor` 只保留目录占位和模板；运行时生成的本地状态已被 `.gitignore` 排除，避免 dev compose 启动后污染仓库。
 
 ## Dev 配置要点
 
-`docker/config/config.jsonc` 是 JSONC 配置，容器按 `~/.flyflor/config.jsonc` 读取。该文件不进 git；`docker/config.default.jsonc` 是干净 checkout 的默认模板，`bun run docker:templates` 只会在缺失时复制它，已有密钥会保留。默认记忆配置：
+`docker/config/config.jsonc` 是 JSONC 配置，容器按 `~/.flyflor/.config/config.jsonc` 读取。该文件不进 git；`docker/config.default.jsonc` 是干净 checkout 的默认模板，`bun run docker:templates` 只会在缺失时复制它，已有密钥会保留。默认记忆配置：
 
 ```jsonc
 {

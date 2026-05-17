@@ -117,7 +117,7 @@ class AgentFunctionalSmoke {
     }
 
     private inspectBrain(config: FlyflorConfig, events: RecordingSink, replyText: string): FunctionalSmokeReport {
-        const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+        const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
         try {
             const brainEvents = this.count(db, "memory_events");
             const taskPlans = this.count(db, "task_plans");

@@ -182,7 +182,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
                 recordedAt: new Date().toISOString(),
                 requestId: "r2",
             });
-            const db = new Database(join(config.paths.home, "brain.db"), { readonly: true });
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
                 const correction = db
                     .query("SELECT content FROM memory_events WHERE type = 'behavior-correction' ORDER BY ts DESC LIMIT 1")
