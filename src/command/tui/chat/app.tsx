@@ -1,22 +1,13 @@
 /**
- * Chat TUI 应用根 — 状态管理 + 事件处理 + 命令式 UI 装配
- * 使用 OpenTUI 纯命令式 API，绕过 Solid reconciler 的 ref/事件绑定问题。
+ * Chat TUI 应用根 — 原生终端消息流
+ *
+ * 这里刻意不创建 OpenTUI renderer / ScrollBox / Textarea：聊天内容直接写入
+ * stdout，输入走 readline，滚动、复制和系统滚动条完全交给终端原生能力。
  */
 
-import {
-    BoxRenderable,
-    CliRenderEvents,
-    MarkdownRenderable,
-    TextRenderable,
-    ScrollBoxRenderable,
-    TextareaRenderable,
-    type CliRenderer,
-    type Renderable,
-    RGBA,
-    TextAttributes,
-    SyntaxStyle,
-} from "@opentui/core";
-import { createSignal, createEffect, createRoot, batch } from "solid-js";
+import { createInterface, type Interface } from "node:readline/promises";
+import { stdin as defaultInput, stdout as defaultOutput } from "node:process";
+import { resolve } from "node:path";
 import {
     Channel,
     ChatType,
@@ -26,14 +17,19 @@ import {
     type RuntimeContext,
     type RuntimeEvent,
 } from "../../../protocol/contracts/index.ts";
-import { resolve } from "node:path";
 import { RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
+import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
 import type { ChatEntryOptions } from "./index.ts";
 import { formatAskSummaryLines } from "./ask.render.ts";
-import { readAskMeta, readBlackboardMeta, readMcpTrace, readPlanningMeta, readRecord, readStringArray } from "./metadata.parse.ts";
+import {
+    readAskMeta,
+    readBlackboardMeta,
+    readMcpTrace,
+    readPlanningMeta,
+    readRecord,
+    readStringArray,
+} from "./metadata.parse.ts";
 import type { ChatMessage, McpTrace, Phase } from "./types.ts";
-import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
-import { createVirtualScrollBar, useDetachedScrollBars } from "../scrollbar.composition.ts";
 import {
     AppCommandAction,
     AppCommandRunType,
@@ -45,110 +41,33 @@ import {
     type AppCommandSuggestion,
 } from "../../app.commands.ts";
 
-const PHASE_DEF: Record<Phase, { label: string; color: RGBA; done: string; frames: string[] }> = {
-    idle: {
-        label: "ready",
-        color: RGBA.fromInts(126, 232, 218),
-        done: "▪",
-        frames: ["▪"],
-    },
-    thinking: {
-        label: "thinking",
-        color: RGBA.fromInts(255, 203, 116),
-        done: "●",
-        frames: ["◐", "◓", "◑", "◒"],
-    },
-    blackboard: {
-        label: "blackboard",
-        color: RGBA.fromInts(188, 171, 255),
-        done: "●",
-        frames: ["◐", "◓", "◑", "◒"],
-    },
-    mcp: {
-        label: "mcp",
-        color: RGBA.fromInts(123, 229, 180),
-        done: "●",
-        frames: ["◐", "◓", "◑", "◒"],
-    },
-    skill: {
-        label: "skill",
-        color: RGBA.fromInts(255, 151, 190),
-        done: "●",
-        frames: ["◐", "◓", "◑", "◒"],
-    },
-    streaming: {
-        label: "streaming",
-        color: RGBA.fromInts(126, 232, 218),
-        done: "●",
-        frames: ["◐", "◓", "◑", "◒"],
-    },
-};
-
-const THEME = {
-    bg: RGBA.fromInts(13, 19, 29),
-    panelBg: RGBA.fromInts(16, 23, 37),
-    panelBgSoft: RGBA.fromInts(20, 28, 44),
-    fg: RGBA.fromInts(235, 244, 246),
-    fgMuted: RGBA.fromInts(132, 154, 169),
-    gold: RGBA.fromInts(219, 190, 136),
-    user: RGBA.fromInts(98, 207, 255),
-    assistant: RGBA.fromInts(241, 248, 248),
-    error: RGBA.fromInts(255, 111, 127),
-    border: RGBA.fromInts(45, 59, 85),
-    header: RGBA.fromInts(126, 232, 218),
-    pink: RGBA.fromInts(255, 151, 190),
-    purple: RGBA.fromInts(188, 171, 255),
-    violetBg: RGBA.fromInts(24, 34, 47),
-};
-
-const CHAT_HEADER_BRAND = "◉ flyflor-chat · powered by OpenTUI";
-const DEFAULT_STATUS_TEXT = "Enter 发送  |  ↑/↓ 历史  |  Tab 切换  |  Ctrl+C 清屏  |  Cmd/Ctrl+C 复制";
-const SEND_ICON_TEXT = "➤➤➤";
-const CHAT_SCROLL_STICKY_START = "bottom" as const;
-const CHAT_TERMINAL_SCREEN_MODE = "alternate-screen" as const;
+const CHAT_HEADER_BRAND = "◉ flyflor-chat";
+const DEFAULT_STATUS_TEXT = "Enter 发送 | /history /project /projects /fork /forks /stop /clear /exit";
+const SEND_ICON_TEXT = ">";
 const HISTORY_BATCH_SIZE = 20;
-const SIDE_PANEL_MIN_WIDTH = 34;
-const SIDE_PANEL_MAX_WIDTH = 50;
-const SIDE_PANEL_RATIO = 0.28;
-const METRICS_PANEL_MIN_HEIGHT = 12;
-const METRICS_PANEL_HEIGHT_RATIO = 0.26;
-const TODO_PANEL_MIN_HEIGHT = 8;
-const TODO_PANEL_HEIGHT_RATIO = 0.24;
 const RESOURCE_BAR_WIDTH = 12;
 export const NO_PLAN_TEXT = "暂无计划";
-export const CHAT_SIDE_PANEL_SECTIONS = ["Questions", "Blackboard", "TODO List", "MODEL", "TOKENS", "CONTEXT WINDOW"] as const;
+export const CHAT_INLINE_SECTIONS = [
+    "Questions",
+    "Blackboard",
+    "TODO List",
+    "MODEL",
+    "TOKENS",
+    "CONTEXT WINDOW",
+] as const;
 
 export const CHAT_SCROLL_LOCK_CONTRACT = {
-    chatStickyScroll: true,
-    chatStickyStart: CHAT_SCROLL_STICKY_START,
-    hiddenScrollbarSize: 0,
-    showScrollbars: false,
-    sidePanelStickyScroll: true,
-    sidePanelStickyStart: CHAT_SCROLL_STICKY_START,
+    chatStickyScroll: false,
+    chatStickyStart: "native-terminal" as const,
     terminalMouse: false,
-    terminalScreenMode: CHAT_TERMINAL_SCREEN_MODE,
-    wheelRouting: "keyboard-and-native-terminal",
+    terminalScreenMode: "main-screen" as const,
+    wheelRouting: "native-terminal-scrollback",
 } as const;
 
-interface MsgRenderable {
-    id: string;
-    box: BoxRenderable;
-    contentBox: BoxRenderable;
-    contentRenderable: TextRenderable | MarkdownRenderable;
-    contentKey: string;
-    extrasKey: string;
-    extraBox?: BoxRenderable;
+interface ChatTerminalAppOptions extends ChatEntryOptions {
+    input?: NodeJS.ReadableStream;
+    output?: NodeJS.WriteStream;
 }
-
-interface PanelLine {
-    attributes?: number;
-    bg?: RGBA;
-    content: string;
-    fg: RGBA;
-}
-
-export type SidePanelMode = "blackboard" | "thinking" | "projects" | "fork" | "forks";
-type CommandMenuMode = SidePanelMode | null;
 
 interface ForkHistorySource {
     assistantText: string;
@@ -157,2280 +76,719 @@ interface ForkHistorySource {
     userText: string;
 }
 
-export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions): () => void {
-    return createRoot((disposeSolid) => {
-        const {
-            runtime,
-            blackboard,
-            eventBus,
-            approveMcpToolCall,
-            agentName = "flyflor",
-            appCommands = createDefaultAppCommandRegistry(),
-            resourceConfig = {},
-            userId = "human",
-        } = options;
+interface ChatTurnState {
+    assistant?: ChatMessage;
+    user: ChatMessage;
+}
 
-        // ── 状态 ──────────────────────────────────────────────
-        const [messages, setMessages] = createSignal<ChatMessage[]>([], { equals: false });
-        const [phase, setPhase] = createSignal<Phase>("idle");
-        const [processing, setProcessing] = createSignal(false);
-        const [error, setError] = createSignal<string | null>(null);
-        const [frameTick, setFrameTick] = createSignal(0);
-        const [inputText, setInputText] = createSignal("");
-        const [statusNotice, setStatusNotice] = createSignal<string | null>(null);
-        const [blackboardTurns, setBlackboardTurns] = createSignal<Record<string, BlackboardTurn>>(
-            {},
-            { equals: false },
+/**
+ * 原生终端 chat app。生命周期边界：start() 独占 readline，stop() 只恢复本实例创建的资源。
+ */
+export class NativeChatApp {
+    private readonly appCommands: AppCommandRegistry;
+    private readonly agentName: string;
+    private readonly input: NodeJS.ReadableStream;
+    private readonly output: NodeJS.WriteStream;
+    private readonly userId: string;
+    private readonly blackboardTurns = new Map<string, BlackboardTurn>();
+    private readonly loadedHistoryEventIds = new Set<string>();
+    private readonly messages: ChatMessage[] = [];
+    private activeFork: ContextForkRecord | null = null;
+    private activeProject: ProjectRecord | null = null;
+    private currentTurnController: AbortController | undefined;
+    private currentTurnId: string | null = null;
+    private destroyed = false;
+    private historyExhausted = false;
+    private oldestHistoryTs: number | undefined;
+    private phase: Phase = "idle";
+    private processing = false;
+    private readline: Interface | undefined;
+    private unsubscribeEvents: (() => void) | undefined;
+
+    public constructor(private readonly options: ChatTerminalAppOptions) {
+        this.agentName = options.agentName ?? "flyflor";
+        this.appCommands = options.appCommands ?? createDefaultAppCommandRegistry();
+        this.input = options.input ?? defaultInput;
+        this.output = options.output ?? defaultOutput;
+        this.userId = options.userId ?? "human";
+    }
+
+    public async start(): Promise<void> {
+        await this.options.runtime.warmup();
+        this.subscribeEvents();
+        this.readline = createInterface({
+            input: this.input,
+            output: this.output,
+            terminal: this.isInteractiveTerminal(),
+        });
+        this.writeLine(`${CHAT_HEADER_BRAND} · ${DEFAULT_STATUS_TEXT}`);
+        this.writeLine("原生终端滚动：不使用虚拟滚动条，不固定聊天框高度。\n");
+        this.renderRecentHistory();
+        while (!this.destroyed) {
+            const prompt = this.processing ? "queued> " : `${SEND_ICON_TEXT} `;
+            const text = await this.readline.question(prompt).catch((cause) => {
+                if (this.destroyed) return "";
+                throw cause;
+            });
+            if (this.destroyed) break;
+            await this.handleInput(text.trim());
+        }
+        this.stop();
+    }
+
+    public stop(): void {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        this.currentTurnController?.abort();
+        this.unsubscribeEvents?.();
+        this.readline?.close();
+    }
+
+    private subscribeEvents(): void {
+        if (!this.options.eventBus) return;
+        const sink: EventSink = {
+            publish: (event: RuntimeEvent) => {
+                const payload = readRecord(event.payload);
+                if (event.type === RuntimeEventType.AgentTurnStart) {
+                    this.phase = "thinking";
+                    return;
+                }
+                if (event.type === RuntimeEventType.McpToolCallExecuted) {
+                    this.phase = "mcp";
+                    this.recordMcpTrace(payload);
+                    return;
+                }
+                if (this.isBlackboardEvent(event.type)) {
+                    this.phase = "blackboard";
+                    void this.applyBlackboardEvent(event.type, payload);
+                    return;
+                }
+                if (event.type === RuntimeEventType.SkillContextBuilt) {
+                    this.phase = "skill";
+                    this.recordSkillNames(payload);
+                }
+            },
+        };
+        this.unsubscribeEvents = this.options.eventBus.subscribe(sink);
+    }
+
+    private isBlackboardEvent(type: string): type is RuntimeEventType {
+        return (
+            type === RuntimeEventType.BlackboardWorkerStart ||
+            type === RuntimeEventType.BlackboardWorkerEnd ||
+            type === RuntimeEventType.BlackboardTurnStart ||
+            type === RuntimeEventType.BlackboardTurnEnd ||
+            type === RuntimeEventType.BlackboardDecisionRequested ||
+            type === RuntimeEventType.BlackboardMessageAppended
         );
-        const [activeReplyId, setActiveReplyId] = createSignal<string | null>(null);
-        const [focusedBlackboardTurnId, setFocusedBlackboardTurnId] = createSignal<string | null>(null);
-        const [selectedQuestionIndex, setSelectedQuestionIndex] = createSignal<number | null>(null);
-        const [sidePanelMode, setSidePanelMode] = createSignal<SidePanelMode>("blackboard");
-        const [commandMenuMode, setCommandMenuMode] = createSignal<CommandMenuMode>(null);
-        const [activeProject, setActiveProject] = createSignal<ProjectRecord | null>(null);
-        const [activeFork, setActiveFork] = createSignal<ContextForkRecord | null>(null);
-        const [projectOptions, setProjectOptions] = createSignal<ProjectRecord[]>([]);
-        const [forkOptions, setForkOptions] = createSignal<ContextForkRecord[]>([]);
-        const [forkSources, setForkSources] = createSignal<ForkHistorySource[]>([]);
-        const [selectedProjectIndex, setSelectedProjectIndex] = createSignal(0);
-        const [selectedForkIndex, setSelectedForkIndex] = createSignal(0);
-        const [selectedForkSourceIndex, setSelectedForkSourceIndex] = createSignal(0);
+    }
 
-        let currentTurnId: string | null = null;
-        let currentTurnController: AbortController | undefined;
-        let inputRef: TextareaRenderable | undefined;
-        let destroyed = false;
-        // Shared markdown syntax style for assistant replies; destroyed with the chat root.
-        const markdownSyntaxStyle = createMarkdownSyntaxStyle();
-        let statusNoticeTimer: ReturnType<typeof setTimeout> | undefined;
-        const messageRenderables: MsgRenderable[] = [];
-        const metricLineRenderables: TextRenderable[] = [];
-        const todoLineRenderables: TextRenderable[] = [];
-        const detailLineRenderables: TextRenderable[] = [];
-        const pendingBlackboardRefreshes = new Set<string>();
-        const loadedHistoryEventIds = new Set<string>();
-        let historyOpen = false;
-        let historyExhausted = false;
-        let historyLoading = false;
-        let oldestHistoryTs: number | undefined;
-        const queuedInputs: string[] = [];
-
-        // ── 动画帧 ────────────────────────────────────────────
-        const animTimer = setInterval(() => {
-            if (processing() && !destroyed) setFrameTick((t) => t + 1);
-        }, 180);
-        let historyPollTimer: ReturnType<typeof setInterval> | undefined;
-
-        // ── 事件订阅 ──────────────────────────────────────────
-        let unsubscribeEvents: (() => void) | undefined;
-        if (eventBus) {
-            const sink: EventSink = {
-                publish: (event: RuntimeEvent) => {
-                    const payload = readRecord(event.payload);
-                    batch(() => {
-                        if (event.type === RuntimeEventType.AgentTurnStart) {
-                            setPhase("thinking");
-                        } else if (event.type === RuntimeEventType.McpToolCallExecuted) {
-                            const trace = readMcpTrace(payload);
-                            if (trace && currentTurnId) {
-                                setMessages((prev) => {
-                                    const last = prev[prev.length - 1];
-                                    if (last && last.id === currentTurnId && last.role === "assistant") {
-                                        const merged = [...(last.mcpCalls ?? [])];
-                                        const key = JSON.stringify([
-                                            trace.server,
-                                            trace.tool,
-                                            trace.ok,
-                                            trace.resultText,
-                                        ]);
-                                        if (
-                                            !merged.some(
-                                                (m) => JSON.stringify([m.server, m.tool, m.ok, m.resultText]) === key,
-                                            )
-                                        ) {
-                                            merged.push(trace);
-                                        }
-                                        last.mcpCalls = merged;
-                                    }
-                                    return prev;
-                                });
-                            }
-                            setPhase("mcp");
-                        } else if (
-                            event.type === RuntimeEventType.BlackboardWorkerStart ||
-                            event.type === RuntimeEventType.BlackboardWorkerEnd ||
-                            event.type === RuntimeEventType.BlackboardTurnStart ||
-                            event.type === RuntimeEventType.BlackboardTurnEnd ||
-                            event.type === RuntimeEventType.BlackboardDecisionRequested ||
-                            event.type === RuntimeEventType.BlackboardMessageAppended
-                        ) {
-                            setPhase("blackboard");
-                            applyBlackboardEvent(event.type, payload);
-                        } else if (event.type === RuntimeEventType.SkillContextBuilt) {
-                            setPhase("skill");
-                            const skillNames = readStringArray(payload?.skillNames);
-                            if (skillNames.length > 0 && currentTurnId) {
-                                setMessages((prev) => {
-                                    const last = prev[prev.length - 1];
-                                    if (last && last.id === currentTurnId && last.role === "assistant") {
-                                        last.skills = Array.from(new Set([...(last.skills ?? []), ...skillNames]));
-                                    }
-                                    return prev;
-                                });
-                            }
-                        }
-                    });
-                },
-            };
-            unsubscribeEvents = eventBus.subscribe(sink);
+    private async handleInput(text: string): Promise<void> {
+        if (!text) return;
+        const matchedCommand = matchAppCommand(this.appCommands, text);
+        const matchedAction = matchedCommand ? builtinActionOf(matchedCommand.rule) : undefined;
+        if (matchedAction && matchedCommand) {
+            await this.runBuiltinCommand(matchedAction, text, matchedCommand);
+            return;
         }
-
-        function showStatusNotice(text: string): void {
-            setStatusNotice(text);
-            if (statusNoticeTimer) clearTimeout(statusNoticeTimer);
-            statusNoticeTimer = setTimeout(() => {
-                statusNoticeTimer = undefined;
-                setStatusNotice(null);
-            }, 1600);
+        if (matchedCommand?.rule.run.type === AppCommandRunType.SendMessage) {
+            await this.sendMessage(matchedCommand.rule.run.prompt);
+            return;
         }
-
-        function describeError(cause: unknown): string {
-            if (cause instanceof Error) {
-                return cause.name && cause.name !== "Error" ? `${cause.name}: ${cause.message}` : cause.message;
-            }
-            return String(cause);
+        if (text.startsWith("/")) {
+            this.writeLine(`Unknown command: ${text}. Try ${this.knownCommandList()}.`);
+            return;
         }
+        await this.sendMessage(text);
+    }
 
-        function createMarkdownSyntaxStyle(): SyntaxStyle {
-            return SyntaxStyle.fromTheme([
-                { scope: ["default"], style: { foreground: THEME.assistant } },
-                { scope: ["markup.heading"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.heading.1"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.heading.2"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.heading.3"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.heading.4"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.heading.5"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.heading.6"], style: { foreground: THEME.header, bold: true } },
-                { scope: ["markup.bold", "markup.strong"], style: { foreground: THEME.assistant, bold: true } },
-                { scope: ["markup.italic"], style: { foreground: THEME.purple, italic: true } },
-                { scope: ["markup.list"], style: { foreground: THEME.pink } },
-                { scope: ["markup.quote"], style: { foreground: THEME.fgMuted, italic: true } },
-                { scope: ["markup.raw", "markup.raw.block"], style: { foreground: THEME.user } },
-                { scope: ["markup.raw.inline"], style: { foreground: THEME.user, background: THEME.violetBg } },
-                { scope: ["markup.link"], style: { foreground: THEME.user, underline: true } },
-                { scope: ["markup.link.label"], style: { foreground: THEME.header, underline: true } },
-                { scope: ["markup.link.url"], style: { foreground: THEME.user, underline: true } },
-                { scope: ["conceal"], style: { foreground: THEME.fgMuted } },
-                { scope: ["label", "spell", "nospell"], style: { foreground: THEME.assistant } },
-            ]);
+    private async runBuiltinCommand(
+        action: AppCommandAction,
+        text: string,
+        matchedCommand: AppCommandSuggestion,
+    ): Promise<void> {
+        if (action === AppCommandAction.Clear) {
+            this.messages.length = 0;
+            this.loadedHistoryEventIds.clear();
+            this.oldestHistoryTs = undefined;
+            this.historyExhausted = false;
+            this.writeLine("conversation view cleared");
+            return;
         }
-
-        function stringValue(value: unknown): string | undefined {
-            return typeof value === "string" ? value : undefined;
+        if (action === AppCommandAction.History) {
+            this.renderOlderHistory("manual");
+            return;
         }
-
-        function applyBlackboardEvent(type: RuntimeEventType, payload: Record<string, unknown> | null): void {
-            const turnId = stringValue(payload?.turnId);
-            if (!turnId) return;
-
-            setFocusedBlackboardTurnId(turnId);
-            setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (!last || last.id !== currentTurnId || last.role !== "assistant") return prev;
-                last.blackboard = {
-                    ...(last.blackboard ?? { mode: "blackboard" }),
-                    mode: "blackboard",
-                    status: type === RuntimeEventType.BlackboardTurnEnd ? stringValue(payload?.status) : "running",
-                    turnId,
-                };
-                return prev;
-            });
-            void refreshBlackboardTurn(turnId);
+        if (action === AppCommandAction.Bottom) {
+            this.writeLine("Already using terminal native scrollback; latest output is below.");
+            return;
         }
-
-        async function refreshBlackboardTurn(turnId: string): Promise<void> {
-            if (!blackboard || pendingBlackboardRefreshes.has(turnId)) return;
-            pendingBlackboardRefreshes.add(turnId);
-            try {
-                const turn = await blackboard.getTurn(turnId);
-                if (!turn) return;
-                setBlackboardTurns((prev) => ({ ...prev, [turnId]: turn }));
-                setMessages((prev) => {
-                    for (const msg of prev) {
-                        if (msg.role !== "assistant" || msg.blackboard?.turnId !== turnId) continue;
-                        msg.blackboard = {
-                            ...(msg.blackboard ?? { mode: turn.mode }),
-                            messages: turn.messages.length,
-                            mode: turn.mode,
-                            status: turn.status,
-                            turnId,
-                        };
-                        msg.blackboardTurn = turn;
-                    }
-                    return prev;
-                });
-            } catch (cause) {
-                const messageText = describeError(cause);
-                setError(`Blackboard refresh failed: ${messageText}`);
-                console.error(cause);
-            } finally {
-                pendingBlackboardRefreshes.delete(turnId);
-            }
+        if (action === AppCommandAction.Stop) {
+            this.stopCurrentTurn();
+            return;
         }
-
-        function historyMessagesForTurn(turn: {
-            assistantText: string;
-            contextForks?: unknown[];
-            eventId: string;
-            scenes?: unknown[];
-            taskPlans?: unknown[];
-            ts: number;
-            userText: string;
-        }): ChatMessage[] {
-            const planning = planningFromHistoryTurn(turn);
-            return [
-                {
-                    id: `history-${turn.eventId}-user`,
-                    role: "user",
-                    content: turn.userText,
-                    status: "done",
-                    history: true,
-                    historyEventId: turn.eventId,
-                    historyTs: turn.ts,
-                },
-                {
-                    id: `history-${turn.eventId}-assistant`,
-                    role: "assistant",
-                    content: turn.assistantText,
-                    status: "done",
-                    history: true,
-                    historyEventId: turn.eventId,
-                    historyTs: turn.ts,
-                    planning,
-                },
-            ];
+        if (action === AppCommandAction.Continue) {
+            await this.sendMessage(matchedCommand.rule.prompt ?? "");
+            return;
         }
-
-        function planningFromHistoryTurn(turn: {
-            contextForks?: unknown[];
-            scenes?: unknown[];
-            taskPlans?: unknown[];
-        }): ChatMessage["planning"] {
-            const planning = readPlanningMeta({
-                planning: {
-                    contextForks: turn.contextForks ?? [],
-                    scenes: turn.scenes ?? [],
-                    taskPlans: (turn.taskPlans ?? []).map((plan) => {
-                        const record = readRecord(plan);
-                        return record ? { ...record, steps: record.step } : plan;
-                    }),
-                },
-            });
-            return planning;
+        if (action === AppCommandAction.OpenThinking || action === AppCommandAction.OpenBlackboard) {
+            this.renderTurnDetails(action === AppCommandAction.OpenThinking ? "thinking" : "blackboard", text);
+            return;
         }
-
-        async function loadOlderHistory(reason: "initial" | "scroll"): Promise<void> {
-            if (!historyOpen) return;
-            if (historyLoading || historyExhausted) return;
-            historyLoading = true;
-            const previousHeight = scrollBox.scrollHeight;
-            const previousTop = scrollBox.scrollTop;
-            try {
-                const turns = runtime.listChatHistory(userId, {
-                    beforeTs: oldestHistoryTs === undefined ? undefined : oldestHistoryTs - 1,
-                    limit: HISTORY_BATCH_SIZE,
-                });
-                if (turns.length === 0) {
-                    historyExhausted = true;
-                    return;
-                }
-                const nextMessages: ChatMessage[] = [];
-                for (const turn of turns) {
-                    if (loadedHistoryEventIds.has(turn.eventId)) continue;
-                    loadedHistoryEventIds.add(turn.eventId);
-                    oldestHistoryTs = oldestHistoryTs === undefined ? turn.ts : Math.min(oldestHistoryTs, turn.ts);
-                    nextMessages.push(...historyMessagesForTurn(turn));
-                }
-                if (nextMessages.length === 0) {
-                    historyExhausted = true;
-                    return;
-                }
-                setMessages((prev) => [...nextMessages, ...prev]);
-                if (reason === "initial") {
-                    showStatusNotice(`Loaded ${nextMessages.length / 2} history turns`);
-                }
-                queueMicrotask(() => {
-                    if (reason === "scroll") {
-                        const delta = scrollBox.scrollHeight - previousHeight;
-                        scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: previousTop + Math.max(0, delta) });
-                        return;
-                    }
-                    scrollBox.scrollTo({
-                        x: scrollBox.scrollLeft,
-                        y: Math.max(0, scrollBox.scrollHeight - scrollBox.viewport.height),
-                    });
-                });
-            } catch (cause) {
-                const messageText = describeError(cause);
-                setError(`History load failed: ${messageText}`);
-                console.error(cause);
-            } finally {
-                historyLoading = false;
-            }
+        if (action === AppCommandAction.Project) {
+            await this.useProjectFromInput(text);
+            return;
         }
-
-        // ── 发送消息 ──────────────────────────────────────────
-        async function sendMessage(text: string): Promise<void> {
-            if (!text.trim()) return;
-            if (processing()) {
-                enqueueInput(text);
-                return;
-            }
-
-            const turnId = crypto.randomUUID();
-            const startedAt = new Date().toISOString();
-            const controller = new AbortController();
-
-            batch(() => {
-                setMessages((prev) => [
-                    ...prev,
-                    { id: crypto.randomUUID(), role: "user", content: text.trim(), status: "done" },
-                    { id: turnId, role: "assistant", content: "", status: "streaming", mcpCalls: [], skills: [] },
-                ]);
-                // New live turns return the side rail to follow-latest mode; explicit /thinking or /blackboard
-                // selection can still pin older turns until the next user message starts.
-                setSelectedQuestionIndex(null);
-                setProcessing(true);
-                setError(null);
-                setPhase("thinking");
-            });
-
-            currentTurnId = turnId;
-            currentTurnController = controller;
-            setActiveReplyId(turnId);
-
-            const context: RuntimeContext = {
-                now: startedAt,
-                requestId: crypto.randomUUID(),
-                ...(activeFork() ? { contextForkId: activeFork()!.id } : {}),
-                ...(activeProject()
-                    ? {
-                          activeProject: {
-                              id: activeProject()!.id,
-                              title: activeProject()!.title,
-                              projectDir: activeProject()!.projectDir,
-                              projectMemoryDir: activeProject()!.projectMemoryDir,
-                          },
-                      }
-                    : {}),
-            };
-            const message: GatewayMessage = {
-                id: crypto.randomUUID(),
-                receivedAt: startedAt,
-                route: {
-                    channel: Channel.Stdio,
-                    chatId: "chat-entry",
-                    chatType: ChatType.Direct,
-                },
-                text: text.trim(),
-                user: { id: userId },
-            };
-
-            try {
-                const reply = await runtime.handleMessage(message, context, {
-                    approveMcpToolCall: approveMcpToolCall ?? (async () => true),
-                    signal: controller.signal,
-                    onTextDelta: (chunk: string) => {
-                        if (controller.signal.aborted) return;
-                        setMessages((prev) => {
-                            const last = prev[prev.length - 1];
-                            if (last && last.id === turnId && last.role === "assistant") {
-                                last.content += chunk;
-                            }
-                            return prev;
-                        });
-                        setPhase("streaming");
-                    },
-                });
-
-                const metadata = readRecord(reply.metadata) ?? null;
-                const askMeta = readAskMeta(metadata);
-                const blackboardMeta = readBlackboardMeta(metadata);
-                const planningMeta = readPlanningMeta(metadata);
-                if (blackboardMeta?.turnId) {
-                    setFocusedBlackboardTurnId(blackboardMeta.turnId);
-                    void refreshBlackboardTurn(blackboardMeta.turnId);
-                }
-
-                setMessages((prev) => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.id === turnId && last.role === "assistant") {
-                        last.content = reply.text;
-                        last.status = "done";
-                        last.ask = askMeta;
-                        last.blackboard = blackboardMeta;
-                        last.planning = planningMeta;
-                        last.metadata = metadata;
-                        const executions = metadata?.mcpToolExecutions;
-                        if (Array.isArray(executions)) {
-                            const newTraces = executions
-                                .map((e) => readMcpTrace(e))
-                                .filter((t): t is McpTrace => Boolean(t));
-                            const merged = [...(last.mcpCalls ?? [])];
-                            for (const trace of newTraces) {
-                                const key = JSON.stringify([trace.server, trace.tool, trace.ok, trace.resultText]);
-                                if (
-                                    !merged.some((m) => JSON.stringify([m.server, m.tool, m.ok, m.resultText]) === key)
-                                ) {
-                                    merged.push(trace);
-                                }
-                            }
-                            last.mcpCalls = merged;
-                        }
-                        const skills = readStringArray(metadata?.skills);
-                        if (skills.length > 0) {
-                            last.skills = Array.from(new Set([...(last.skills ?? []), ...skills]));
-                        }
-                    }
-                    return prev;
-                });
-            } catch (cause) {
-                if (controller.signal.aborted || isAbortError(cause)) {
-                    setError("Stopped current reply.");
-                    setMessages((prev) => {
-                        const last = prev[prev.length - 1];
-                        if (last && last.id === turnId && last.role === "assistant") {
-                            last.content = last.content || "Stopped.";
-                            last.status = "stopped";
-                        }
-                        return prev;
-                    });
-                    return;
-                }
-                const messageText = describeError(cause);
-                setError(messageText);
-                setMessages((prev) => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.id === turnId && last.role === "assistant") {
-                        last.content = last.content || `Error: ${messageText}`;
-                        last.status = "error";
-                    }
-                    return prev;
-                });
-            } finally {
-                currentTurnId = null;
-                if (currentTurnController === controller) {
-                    currentTurnController = undefined;
-                }
-                setActiveReplyId(null);
-                batch(() => {
-                    setProcessing(false);
-                    setPhase("idle");
-                });
-                queueMicrotask(processQueuedInput);
-            }
+        if (action === AppCommandAction.Projects) {
+            this.renderProjectList();
+            return;
         }
-
-        function stopCurrentTurn(): boolean {
-            if (!processing() || !currentTurnController) return false;
-            currentTurnController.abort();
-            setPhase("idle");
-            showStatusNotice("Stopping current reply...");
-            return true;
+        if (action === AppCommandAction.Fork) {
+            await this.forkFromHistory(text);
+            return;
         }
-
-        function enqueueInput(text: string): void {
-            queuedInputs.push(text.trim());
-            showStatusNotice(`Queued ${queuedInputs.length} message${queuedInputs.length === 1 ? "" : "s"}`);
+        if (action === AppCommandAction.Forks) {
+            this.renderForkList();
+            return;
         }
-
-        function processQueuedInput(): void {
-            if (destroyed || processing()) return;
-            const next = queuedInputs.shift();
-            if (!next) return;
-            showStatusNotice(queuedInputs.length > 0 ? `Sending queued message · ${queuedInputs.length} left` : "Sending queued message");
-            void sendMessage(next);
+        if (action === AppCommandAction.Exit) {
+            this.stop();
         }
+    }
 
-        function isAbortError(cause: unknown): boolean {
-            return cause instanceof Error && cause.name === "AbortError";
+    private async sendMessage(text: string): Promise<void> {
+        if (!text.trim()) return;
+        if (this.processing) {
+            this.writeLine("A reply is already running. Use /stop before sending another message.");
+            return;
         }
+        const turnId = crypto.randomUUID();
+        const startedAt = new Date().toISOString();
+        const controller = new AbortController();
+        this.currentTurnId = turnId;
+        this.currentTurnController = controller;
+        this.processing = true;
+        this.phase = "thinking";
 
-        // ── 退出处理 ──────────────────────────────────────────
-        function handleExit(): void {
-            if (processing()) {
-                setError("Wait for the current turn to finish before exiting.");
-                return;
-            }
-            if (inputRef && inputRef.plainText.length > 0) {
-                inputRef.clear();
-                setError("Input cleared. Type /exit to quit.");
-                return;
-            }
-            setError("Type /exit to quit Flyflor chat.");
-        }
-
-        // ── 提交处理 ──────────────────────────────────────────
-        function onSubmit() {
-            if (!inputRef) return;
-            const text = inputRef.plainText.trim();
-            if (!text) return;
-            const matchedCommand = matchAppCommand(appCommands, text);
-            const matchedAction = matchedCommand ? builtinActionOf(matchedCommand.rule) : undefined;
-            if (matchedAction === AppCommandAction.Clear) {
-                batch(() => {
-                    setMessages([]);
-                    setError(null);
-                    setCommandMenuMode(null);
-                    historyOpen = false;
-                    historyExhausted = false;
-                    historyLoading = false;
-                    oldestHistoryTs = undefined;
-                    loadedHistoryEventIds.clear();
-                    setBlackboardTurns({});
-                    setFocusedBlackboardTurnId(null);
-                    setActiveProject(null);
-                    setActiveFork(null);
-                    setProjectOptions([]);
-                    setForkOptions([]);
-                    setForkSources([]);
-                    setSelectedProjectIndex(0);
-                    setSelectedForkIndex(0);
-                    setSelectedForkSourceIndex(0);
-                });
-                inputRef.clear();
-                return;
-            }
-            if (matchedAction === AppCommandAction.History) {
-                inputRef.clear();
-                historyOpen = true;
-                historyExhausted = false;
-                historyLoading = false;
-                oldestHistoryTs = undefined;
-                loadedHistoryEventIds.clear();
-                showStatusNotice("History mode opened");
-                void loadOlderHistory("initial");
-                return;
-            }
-            if (matchedAction === AppCommandAction.Bottom) {
-                inputRef.clear();
-                scrollToBottom();
-                showStatusNotice("Jumped to latest");
-                return;
-            }
-            if (matchedAction === AppCommandAction.Stop) {
-                inputRef.clear();
-                if (!stopCurrentTurn()) {
-                    showStatusNotice("No active reply to stop");
-                }
-                return;
-            }
-            if (matchedAction === AppCommandAction.Continue) {
-                inputRef.clear();
-                void sendMessage(matchedCommand?.rule.prompt ?? "");
-                return;
-            }
-            if (matchedAction === AppCommandAction.OpenThinking) {
-                inputRef.clear();
-                openQuestionMenu("thinking", text);
-                return;
-            }
-            if (matchedAction === AppCommandAction.OpenBlackboard) {
-                inputRef.clear();
-                openQuestionMenu("blackboard", text);
-                return;
-            }
-            if (matchedAction === AppCommandAction.Project) {
-                inputRef.clear();
-                void useProjectFromInput(text);
-                return;
-            }
-            if (matchedAction === AppCommandAction.Projects) {
-                inputRef.clear();
-                void openProjectMenu();
-                return;
-            }
-            if (matchedAction === AppCommandAction.Fork) {
-                inputRef.clear();
-                void openForkMenu(text);
-                return;
-            }
-            if (matchedAction === AppCommandAction.Forks) {
-                inputRef.clear();
-                void openForkListMenu();
-                return;
-            }
-            if (matchedAction === AppCommandAction.Exit) {
-                destroyed = true;
-                renderer.destroy();
-                return;
-            }
-            if (matchedCommand?.rule.run.type === AppCommandRunType.SendMessage) {
-                inputRef.clear();
-                void sendMessage(matchedCommand.rule.run.prompt);
-                return;
-            }
-            if (text.startsWith("/")) {
-                setError(`Unknown command: ${text}. Press Tab to complete or use ${knownCommandList(appCommands)}.`);
-                return;
-            }
-            inputRef.clear();
-            setError(null);
-            void sendMessage(text);
-        }
-
-        function selectQuestionFromCommand(text: string): void {
-            const rawIndex = text.split(/\s+/u)[1];
-            if (!rawIndex) return;
-            const index = Number.parseInt(rawIndex, 10);
-            if (!Number.isFinite(index)) return;
-            setSelectedQuestionIndex(clamp(index - 1, 0, Math.max(0, turnPairs().length - 1)));
-        }
-
-        function openQuestionMenu(mode: SidePanelMode, text: string): void {
-            setSidePanelMode(mode);
-            const hasExplicitSelection = text.trim().split(/\s+/u).length > 1;
-            selectQuestionFromCommand(text);
-            const pairs = turnPairs();
-            if (pairs.length === 0) {
-                setCommandMenuMode(null);
-                showStatusNotice(`/${mode} has no sent questions yet`);
-                return;
-            }
-            if (selectedQuestionIndex() === null) {
-                setSelectedQuestionIndex(pairs.length - 1);
-            }
-            setCommandMenuMode(hasExplicitSelection ? null : mode);
-            showStatusNotice(
-                hasExplicitSelection ? `Showing /${mode}` : `/${mode}: Up/Down choose a question, Enter open`,
-            );
-        }
-
-        async function useProjectFromInput(text: string): Promise<void> {
-            const raw = text.trim().split(/\s+/u).slice(1).join(" ").trim();
-            const path = raw.length > 0 ? resolve(raw) : process.cwd();
-            try {
-                const project = await runtime.createOrUseProject({
-                    path,
-                    title: raw.length > 0 ? raw : undefined,
-                    userId,
-                    now: Date.now(),
-                });
-                setActiveProject(project);
-                setSidePanelMode("projects");
-                setProjectOptions((prev) => {
-                    const next = [project, ...prev.filter((item) => item.id !== project.id)];
-                    setSelectedProjectIndex(0);
-                    return next;
-                });
-                showStatusNotice(`Project active: ${project.title}`);
-            } catch (cause) {
-                setError(`Project setup failed: ${describeError(cause)}`);
-            }
-        }
-
-        async function openProjectMenu(): Promise<void> {
-            const projects = runtime.listProjects(userId, { limit: 50 });
-            setProjectOptions(projects);
-            setSelectedProjectIndex(0);
-            setCommandMenuMode("projects");
-            setSidePanelMode("projects");
-            if (projects.length === 0) {
-                showStatusNotice("/projects has no saved projects yet");
-            } else {
-                showStatusNotice("/projects: Up/Down choose, Enter activate");
-            }
-        }
-
-        async function openForkMenu(text: string, loadAll = false): Promise<void> {
-            const turns = runtime.listChatHistory(userId, { limit: loadAll ? 200 : 20 });
-            setForkSources(
-                turns.map((turn) => ({
-                    assistantText: turn.assistantText,
-                    eventId: turn.eventId,
-                    ts: turn.ts,
-                    userText: turn.userText,
-                })),
-            );
-            setSelectedForkSourceIndex(Math.max(0, turns.length - 1));
-            setSidePanelMode("fork");
-            setCommandMenuMode("fork");
-            if (turns.length === 0) {
-                showStatusNotice("/fork has no history yet");
-                return;
-            }
-            const explicit = text.trim().split(/\s+/u).length > 1;
-            showStatusNotice(explicit ? "Showing /fork source" : "/fork: Up/Down choose, a loads more, Enter fork");
-        }
-
-        async function openForkListMenu(): Promise<void> {
-            const forks = runtime.listContextForks(userId, { limit: 50 });
-            setForkOptions(forks);
-            setSelectedForkIndex(0);
-            setSidePanelMode("forks");
-            setCommandMenuMode("forks");
-            showStatusNotice(forks.length === 0 ? "/forks has no saved forks yet" : "/forks: Up/Down choose, Enter activate");
-        }
-
-        // ── 命令式 UI 树 ──────────────────────────────────────
-        const root = renderer.root;
-
-        // 主容器
-        const mainBox = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            width: renderer.width,
-            height: renderer.height,
-            backgroundColor: THEME.bg,
-            paddingLeft: 1,
-            paddingRight: 1,
-            paddingBottom: 1,
-        });
-
-        // Header
-        const headerBox = new BoxRenderable(renderer, {
-            flexDirection: "row",
-            alignItems: "center",
-            height: 2,
-            paddingLeft: 1,
-            paddingRight: 1,
-            flexShrink: 0,
-        });
-        const brandText = new TextRenderable(renderer, {
-            content: CHAT_HEADER_BRAND,
-            fg: THEME.purple,
-            selectable: false,
-        });
-        const headerSpacer = new BoxRenderable(renderer, {
-            flexGrow: 1,
-            flexShrink: 1,
-        });
-        const topStatusText = new TextRenderable(renderer, {
+        const userMessage: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: "user",
+            content: text.trim(),
+            status: "done",
+        };
+        const assistantMessage: ChatMessage = {
+            id: turnId,
+            role: "assistant",
             content: "",
-            fg: THEME.header,
-            attributes: TextAttributes.BOLD,
-            selectable: false,
-        });
-        headerBox.add(brandText);
-        headerBox.add(headerSpacer);
-        headerBox.add(topStatusText);
-        mainBox.add(headerBox);
-
-        // Error line
-        const errorText = new TextRenderable(renderer, {
-            content: "",
-            fg: THEME.error,
-        });
-        errorText.visible = false;
-        mainBox.add(errorText);
-
-        const contentRow = new BoxRenderable(renderer, {
-            flexDirection: "row",
-            flexGrow: 1,
-            flexShrink: 1,
-            columnGap: 1,
-        });
-        mainBox.add(contentRow);
-
-        const chatPane = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            flexGrow: 1,
-            flexShrink: 1,
-            rowGap: 1,
-        });
-        contentRow.add(chatPane);
-
-        const messagesRow = new BoxRenderable(renderer, {
-            flexDirection: "row",
-            flexGrow: 1,
-            flexShrink: 1,
-            minHeight: 1,
-            border: true,
-            borderColor: THEME.border,
-            backgroundColor: THEME.panelBg,
-            paddingLeft: 1,
-            paddingRight: 0,
-            paddingTop: 1,
-            paddingBottom: 0,
-        });
-        chatPane.add(messagesRow);
-
-        // Messages flow inside content; keep the ScrollBox root on its default row axis so the vertical bar stays right.
-        const scrollBox = new ScrollBoxRenderable(renderer, {
-            contentOptions: {
-                flexDirection: "column",
-                paddingRight: 1,
-            },
-            flexGrow: 1,
-            flexShrink: 1,
-            backgroundColor: THEME.panelBg,
-            paddingLeft: 0,
-            paddingRight: 0,
-            stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.chatStickyScroll,
-            stickyStart: CHAT_SCROLL_LOCK_CONTRACT.chatStickyStart,
-            horizontalScrollbarOptions: {
-                height: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
-                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
-            },
-            verticalScrollbarOptions: {
-                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
-                width: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
-                showArrows: false,
-                trackOptions: {
-                    backgroundColor: THEME.violetBg,
-                    foregroundColor: THEME.pink,
-                },
-            },
-        });
-        useDetachedScrollBars(scrollBox);
-        const messageVirtualScrollBar = createVirtualScrollBar(renderer, scrollBox, {
-            thumbColor: THEME.pink,
-            trackColor: THEME.border,
-        });
-        messagesRow.add(scrollBox);
-        messagesRow.add(messageVirtualScrollBar.rail);
-
-        // Input area
-        const inputBox = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            border: true,
-            borderColor: THEME.border,
-            backgroundColor: THEME.panelBg,
-            flexShrink: 0,
-            paddingLeft: 1,
-            paddingRight: 1,
-            paddingTop: 1,
-            paddingBottom: 0,
-        });
-        const inputRow = new BoxRenderable(renderer, {
-            flexDirection: "row",
-            alignItems: "center",
-            minHeight: 1,
-        });
-        const input = new TextareaRenderable(renderer, {
-            placeholder: "Ask anything...",
-            placeholderColor: THEME.fgMuted,
-            backgroundColor: THEME.panelBg,
-            focusedBackgroundColor: THEME.panelBg,
-            textColor: THEME.fg,
-            focusedTextColor: THEME.fg,
-            cursorColor: THEME.fg,
-            showCursor: true,
-            flexGrow: 1,
-            flexShrink: 1,
-            minHeight: 1,
-            maxHeight: 6,
-            wrapMode: "word",
-            onContentChange: () => {
-                setInputText(input.plainText);
-            },
-            keyBindings: [
-                { name: "return", action: "submit" },
-                { name: "linefeed", action: "submit" },
-            ],
-            onSubmit,
-        });
-        const sendIcon = new TextRenderable(renderer, {
-            content: SEND_ICON_TEXT,
-            fg: THEME.purple,
-            attributes: TextAttributes.BOLD,
-            selectable: false,
-            width: 5,
-        });
-        inputRow.add(input);
-        inputRow.add(sendIcon);
-        inputBox.add(inputRow);
-        inputRef = input;
-        input.onSubmit = () => {
-            onSubmit();
+            status: "streaming",
+            mcpCalls: [],
+            skills: [],
         };
+        this.messages.push(userMessage, assistantMessage);
+        this.writeLine(`\nYou: ${userMessage.content}`);
+        this.write(`${this.agentName}: `);
 
-        // Status bar
-        const statusBox = new BoxRenderable(renderer, {
-            backgroundColor: THEME.panelBg,
-            height: 1,
-            paddingLeft: 1,
-            paddingRight: 1,
-        });
-        const statusText = new TextRenderable(renderer, {
-            content: DEFAULT_STATUS_TEXT,
-            fg: THEME.fgMuted,
-            selectable: false,
-            truncate: true,
-            width: "100%",
-        });
-        statusBox.add(statusText);
-        inputBox.add(statusBox);
-        chatPane.add(inputBox);
-
-        // 右侧栏只展示结构化运行态：路由分析、黑板讨论和 turn 进度。
-        const sidePanel = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            border: true,
-            borderColor: THEME.border,
-            backgroundColor: THEME.panelBg,
-            paddingLeft: 1,
-            paddingRight: 1,
-            paddingTop: 1,
-            paddingBottom: 1,
-            flexShrink: 0,
-            rowGap: 1,
-            width: rightPanelWidth(renderer.width),
-        });
-        const sidePanelTitle = new TextRenderable(renderer, {
-            content: "Blackboard   [Ctrl+B Thinking]",
-            fg: THEME.fg,
-            attributes: TextAttributes.BOLD,
-            selectable: false,
-            width: "100%",
-        });
-        const todoScrollBox = new ScrollBoxRenderable(renderer, {
-            contentOptions: {
-                flexDirection: "column",
-                paddingRight: 1,
-            },
-            flexGrow: 1,
-            flexShrink: 1,
-            backgroundColor: THEME.panelBg,
-            stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll,
-            stickyStart: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyStart,
-            horizontalScrollbarOptions: {
-                height: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
-                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
-            },
-            verticalScrollbarOptions: {
-                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
-                width: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
-                showArrows: false,
-                trackOptions: {
-                    backgroundColor: THEME.violetBg,
-                    foregroundColor: THEME.gold,
+        const context = this.buildRuntimeContext(startedAt);
+        const message = this.buildGatewayMessage(text.trim(), startedAt);
+        let streamed = false;
+        try {
+            const reply = await this.options.runtime.handleMessage(message, context, {
+                approveMcpToolCall: this.options.approveMcpToolCall ?? (async () => true),
+                signal: controller.signal,
+                onTextDelta: (chunk) => {
+                    if (controller.signal.aborted) return;
+                    streamed = true;
+                    assistantMessage.content += chunk;
+                    this.write(chunk);
+                    this.phase = "streaming";
                 },
+            });
+            const metadata = readRecord(reply.metadata) ?? null;
+            assistantMessage.content = reply.text;
+            assistantMessage.status = "done";
+            assistantMessage.ask = readAskMeta(metadata);
+            assistantMessage.blackboard = readBlackboardMeta(metadata);
+            assistantMessage.planning = readPlanningMeta(metadata);
+            assistantMessage.metadata = metadata;
+            assistantMessage.mcpCalls = this.mergeMcpTraces(
+                assistantMessage.mcpCalls ?? [],
+                metadata?.mcpToolExecutions,
+            );
+            const skills = readStringArray(metadata?.skills);
+            if (skills.length > 0)
+                assistantMessage.skills = Array.from(new Set([...(assistantMessage.skills ?? []), ...skills]));
+            if (!streamed) this.write(reply.text);
+            this.writeLine("");
+            await this.refreshBlackboardForMessage(assistantMessage);
+            this.renderMessageExtras(assistantMessage, text);
+        } catch (cause) {
+            assistantMessage.status = controller.signal.aborted ? "stopped" : "error";
+            assistantMessage.content = controller.signal.aborted ? "Stopped." : this.describeError(cause);
+            this.writeLine(controller.signal.aborted ? "\nStopped." : `\nerror: ${assistantMessage.content}`);
+        } finally {
+            this.currentTurnId = null;
+            if (this.currentTurnController === controller) this.currentTurnController = undefined;
+            this.processing = false;
+            this.phase = "idle";
+        }
+    }
+
+    private buildRuntimeContext(now: string): RuntimeContext {
+        return {
+            now,
+            requestId: crypto.randomUUID(),
+            ...(this.activeFork ? { contextForkId: this.activeFork.id } : {}),
+            ...(this.activeProject
+                ? {
+                      activeProject: {
+                          id: this.activeProject.id,
+                          title: this.activeProject.title,
+                          projectDir: this.activeProject.projectDir,
+                          projectMemoryDir: this.activeProject.projectMemoryDir,
+                      },
+                  }
+                : {}),
+        };
+    }
+
+    private buildGatewayMessage(text: string, receivedAt: string): GatewayMessage {
+        return {
+            id: crypto.randomUUID(),
+            receivedAt,
+            route: { channel: Channel.Stdio, chatId: "chat-entry", chatType: ChatType.Direct },
+            text,
+            user: { id: this.userId },
+        };
+    }
+
+    private stopCurrentTurn(): void {
+        if (!this.processing || !this.currentTurnController) {
+            this.writeLine("No active reply to stop.");
+            return;
+        }
+        this.currentTurnController.abort();
+        this.writeLine("Stopping current reply...");
+    }
+
+    private renderRecentHistory(): void {
+        const turns = this.options.runtime.listChatHistory(this.userId, { limit: HISTORY_BATCH_SIZE }).reverse();
+        if (turns.length === 0) return;
+        this.writeLine("Recent history:");
+        for (const turn of turns) this.renderHistoryTurn(turn);
+        this.writeLine("");
+    }
+
+    private renderOlderHistory(reason: "manual" | "startup"): void {
+        if (this.historyExhausted) {
+            this.writeLine("No older history.");
+            return;
+        }
+        const turns = this.options.runtime.listChatHistory(this.userId, {
+            beforeTs: this.oldestHistoryTs === undefined ? undefined : this.oldestHistoryTs - 1,
+            limit: HISTORY_BATCH_SIZE,
+        });
+        if (turns.length === 0) {
+            this.historyExhausted = true;
+            this.writeLine(reason === "manual" ? "No history turns." : "");
+            return;
+        }
+        this.writeLine("History:");
+        for (const turn of turns.reverse()) this.renderHistoryTurn(turn);
+        this.writeLine("");
+    }
+
+    private renderHistoryTurn(turn: {
+        assistantText: string;
+        contextForks?: unknown[];
+        eventId: string;
+        scenes?: unknown[];
+        taskPlans?: unknown[];
+        ts: number;
+        userText: string;
+    }): void {
+        if (this.loadedHistoryEventIds.has(turn.eventId)) return;
+        this.loadedHistoryEventIds.add(turn.eventId);
+        this.oldestHistoryTs = this.oldestHistoryTs === undefined ? turn.ts : Math.min(this.oldestHistoryTs, turn.ts);
+        this.writeLine(`- ${new Date(turn.ts).toLocaleString()}`);
+        this.writeLine(`  You: ${this.clipText(turn.userText, 140)}`);
+        this.writeLine(`  ${this.agentName}: ${this.clipText(turn.assistantText, 180)}`);
+        const planning = readPlanningMeta({
+            planning: {
+                taskPlans: turn.taskPlans ?? [],
+                contextForks: turn.contextForks ?? [],
+                scenes: turn.scenes ?? [],
             },
         });
-        useDetachedScrollBars(todoScrollBox);
-        const detailScrollBox = new ScrollBoxRenderable(renderer, {
-            contentOptions: {
-                flexDirection: "column",
-                paddingRight: 1,
-            },
-            flexGrow: 1,
-            flexShrink: 1,
-            backgroundColor: THEME.panelBg,
-            stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll,
-            stickyStart: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyStart,
-            horizontalScrollbarOptions: {
-                height: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
-                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
-            },
-            verticalScrollbarOptions: {
-                visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars,
-                width: CHAT_SCROLL_LOCK_CONTRACT.hiddenScrollbarSize,
-                showArrows: false,
-                trackOptions: {
-                    backgroundColor: THEME.violetBg,
-                    foregroundColor: THEME.pink,
+        if (planning) this.renderPlanningLines(planning, "  ");
+    }
+
+    private renderTurnDetails(mode: "blackboard" | "thinking", text: string): void {
+        const pair = this.selectedTurnPair(text);
+        if (!pair?.assistant) {
+            this.writeLine(`/${mode} has no sent questions yet.`);
+            return;
+        }
+        this.writeLine(`${mode}: ${this.clipText(pair.user.content, 120)}`);
+        const turn = this.blackboardTurnFor(pair.assistant);
+        if (turn) this.renderBlackboardTurn(turn, "  ");
+        if (pair.assistant.planning) this.renderPlanningLines(pair.assistant.planning, "  ");
+        this.renderMessageExtras(pair.assistant, pair.user.content);
+    }
+
+    private selectedTurnPair(text: string): ChatTurnState | undefined {
+        const pairs = this.turnPairs();
+        if (pairs.length === 0) return undefined;
+        const rawIndex = text.trim().split(/\s+/u)[1];
+        const index = rawIndex ? Number.parseInt(rawIndex, 10) : pairs.length;
+        if (!Number.isFinite(index)) return pairs[pairs.length - 1];
+        return pairs[this.clamp(index - 1, 0, pairs.length - 1)];
+    }
+
+    private turnPairs(): ChatTurnState[] {
+        const out: ChatTurnState[] = [];
+        for (let i = 0; i < this.messages.length; i += 1) {
+            const msg = this.messages[i];
+            if (!msg || msg.role !== "user" || msg.history) continue;
+            const assistant = this.messages.slice(i + 1).find((entry) => entry.role === "assistant" && !entry.history);
+            out.push({ user: msg, assistant });
+        }
+        return out;
+    }
+
+    private async useProjectFromInput(text: string): Promise<void> {
+        const raw = text.trim().split(/\s+/u).slice(1).join(" ").trim();
+        const path = raw.length > 0 ? resolve(raw) : process.cwd();
+        try {
+            const project = await this.options.runtime.createOrUseProject({
+                path,
+                title: raw.length > 0 ? raw : undefined,
+                userId: this.userId,
+                now: Date.now(),
+            });
+            this.activeProject = project;
+            this.writeLine(`Project active: ${project.title}`);
+            this.writeLine(`  ${project.projectDir}`);
+        } catch (cause) {
+            this.writeLine(`Project setup failed: ${this.describeError(cause)}`);
+        }
+    }
+
+    private renderProjectList(): void {
+        const projects = this.options.runtime.listProjects(this.userId, { limit: 50 });
+        if (projects.length === 0) {
+            this.writeLine("No saved projects yet.");
+            return;
+        }
+        this.writeLine("Projects:");
+        projects.forEach((project, index) => {
+            this.writeLine(`  ${index + 1}. ${project.title} · ${project.projectDir}`);
+        });
+        const first = projects[0];
+        if (first) {
+            this.activeProject = first;
+            this.writeLine(`Project active: ${first.title}`);
+        }
+    }
+
+    private async forkFromHistory(text: string): Promise<void> {
+        const loadAll = text
+            .trim()
+            .split(/\s+/u)
+            .some((part) => part === "all");
+        const turns = this.options.runtime.listChatHistory(this.userId, { limit: loadAll ? 200 : 20 });
+        if (turns.length === 0) {
+            this.writeLine("No history turns to fork.");
+            return;
+        }
+        const rawIndex = text
+            .trim()
+            .split(/\s+/u)
+            .find((part) => /^\d+$/u.test(part));
+        const selected = rawIndex ? this.clamp(Number.parseInt(rawIndex, 10) - 1, 0, turns.length - 1) : 0;
+        const source = this.historySource(turns[selected]!);
+        try {
+            const fork = await this.options.runtime.createContextFork(
+                {
+                    id: `fork-${source.eventId}`,
+                    userId: this.userId,
+                    title: this.clipText(source.userText, 60),
+                    summary: this.clipText(`${source.userText} / ${source.assistantText}`, 160),
+                    scopeSummary: this.clipText(source.assistantText || source.userText, 180),
+                    maxContextTokens: 4096,
+                    inheritedEventIds: [source.eventId],
+                    createdAt: new Date(source.ts).toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    sourceEventId: source.eventId,
                 },
-            },
-        });
-        useDetachedScrollBars(detailScrollBox);
-        const metricsCard = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            flexShrink: 0,
-            height: metricsPanelHeight(renderer.height),
-            border: ["top"],
-            borderColor: THEME.border,
-            backgroundColor: THEME.panelBg,
-            paddingTop: 1,
-        });
-        const metricsContent = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            width: "100%",
-        });
-        metricsCard.add(metricsContent);
-
-        const todoCard = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            flexShrink: 0,
-            height: todoPanelHeight(renderer.height),
-            border: ["top"],
-            borderColor: THEME.border,
-            backgroundColor: THEME.panelBg,
-            paddingTop: 1,
-        });
-        const detailCard = new BoxRenderable(renderer, {
-            flexDirection: "column",
-            flexGrow: 1,
-            flexShrink: 1,
-            backgroundColor: THEME.panelBg,
-        });
-        const todoScrollRow = new BoxRenderable(renderer, {
-            flexDirection: "row",
-            flexGrow: 1,
-            flexShrink: 1,
-            minHeight: 1,
-        });
-        todoScrollRow.add(todoScrollBox);
-        const detailScrollRow = new BoxRenderable(renderer, {
-            flexDirection: "row",
-            flexGrow: 1,
-            flexShrink: 1,
-            minHeight: 1,
-        });
-        detailScrollRow.add(detailScrollBox);
-        todoCard.add(todoScrollRow);
-        detailCard.add(detailScrollRow);
-        sidePanel.add(sidePanelTitle);
-        sidePanel.add(detailCard);
-        sidePanel.add(todoCard);
-        sidePanel.add(metricsCard);
-        contentRow.add(sidePanel);
-
-        root.add(mainBox);
-
-        // Wire input events directly
-        input.focus();
-        renderer.requestRender();
-        input.showCursor = true;
-        input.cursorColor = THEME.fg;
-        input.cursorStyle = { style: "line", blinking: true };
-        const resizeHandler = () => {
-            mainBox.width = renderer.width;
-            mainBox.height = renderer.height;
-            sidePanel.width = rightPanelWidth(renderer.width);
-            metricsCard.height = metricsPanelHeight(renderer.height);
-            todoCard.height = todoPanelHeight(renderer.height);
-        };
-        renderer.on(CliRenderEvents.RESIZE, resizeHandler);
-        historyPollTimer = setInterval(() => {
-            if (destroyed) return;
-            if (!historyOpen || historyLoading || historyExhausted) return;
-            if (scrollBox.scrollTop <= 1 && messages().length > 0) {
-                void loadOlderHistory("scroll");
-            }
-        }, 250);
-
-        // Keyboard handler
-        const keyHandler = (event: {
-            name?: string;
-            ctrl?: boolean;
-            meta?: boolean;
-            preventDefault?: () => void;
-            shift?: boolean;
-            stopPropagation?: () => void;
-            sequence?: string;
-        }) => {
-            const isMac = process.platform === "darwin";
-            const name = event.name ?? "";
-            if (!isMac && event.ctrl && name === "c" && inputRef?.focused) {
-                handleExit();
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (handleSideMenuKey(name, event.sequence)) {
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (name === "tab" && completeCommandInput()) {
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (name === "pageup" || event.sequence === "\u001b[5~") {
-                scrollMessages(-1);
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (name === "pagedown" || event.sequence === "\u001b[6~") {
-                scrollMessages(1);
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (name === "home" || event.sequence === "\u001b[H" || event.sequence === "\u001b[1~") {
-                scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: 0 });
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (name === "end" || event.sequence === "\u001b[F" || event.sequence === "\u001b[4~") {
-                scrollToBottom();
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (event.ctrl && name === "b") {
-                setSidePanelMode(sidePanelMode() === "blackboard" ? "thinking" : "blackboard");
-                setCommandMenuMode(null);
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                return;
-            }
-            if (
-                inputRef?.focused &&
-                (name === "return" ||
-                    name === "enter" ||
-                    name === "linefeed" ||
-                    event.sequence === "\n" ||
-                    event.sequence === "\r")
-            ) {
-                event.preventDefault?.();
-                event.stopPropagation?.();
-                onSubmit();
-            }
-        };
-        renderer.keyInput.on("keypress", keyHandler);
-
-        function handleSideMenuKey(name: string, sequence?: string): boolean {
-            const mode = commandMenuMode();
-            if (!mode) return false;
-            if (mode === "blackboard" || mode === "thinking") {
-                const pairs = turnPairs();
-                if (pairs.length === 0) {
-                    setCommandMenuMode(null);
-                    return false;
-                }
-                const selected = selectedQuestionIndex() ?? pairs.length - 1;
-                if (name === "up" || name === "k" || sequence === "\u001b[A") {
-                    setSelectedQuestionIndex(clamp(selected - 1, 0, pairs.length - 1));
-                    return true;
-                }
-                if (name === "down" || name === "j" || sequence === "\u001b[B") {
-                    setSelectedQuestionIndex(clamp(selected + 1, 0, pairs.length - 1));
-                    return true;
-                }
-                if (
-                    name === "return" ||
-                    name === "enter" ||
-                    name === "linefeed" ||
-                    name === "right" ||
-                    name === "o" ||
-                    sequence === "\n" ||
-                    sequence === "\r" ||
-                    sequence === "\u001b[C"
-                ) {
-                    setCommandMenuMode(null);
-                    showStatusNotice(`Showing /${mode} for selected question`);
-                    return true;
-                }
-                if (name === "escape" || sequence === "\u001b") {
-                    setCommandMenuMode(null);
-                    showStatusNotice("Question menu closed");
-                    return true;
-                }
-                return false;
-            }
-            if (mode === "projects") {
-                const projects = projectOptions();
-                if (projects.length === 0) {
-                    setCommandMenuMode(null);
-                    return false;
-                }
-                const selected = selectedProjectIndex();
-                if (name === "up" || name === "k" || sequence === "\u001b[A") {
-                    setSelectedProjectIndex(clamp(selected - 1, 0, projects.length - 1));
-                    return true;
-                }
-                if (name === "down" || name === "j" || sequence === "\u001b[B") {
-                    setSelectedProjectIndex(clamp(selected + 1, 0, projects.length - 1));
-                    return true;
-                }
-                if (name === "escape" || sequence === "\u001b") {
-                    setCommandMenuMode(null);
-                    showStatusNotice("Project picker closed");
-                    return true;
-                }
-                if (
-                    name === "return" ||
-                    name === "enter" ||
-                    name === "linefeed" ||
-                    sequence === "\n" ||
-                    sequence === "\r"
-                ) {
-                    const project = projects[clamp(selected, 0, projects.length - 1)];
-                    if (project) {
-                        setActiveProject(project);
-                        showStatusNotice(`Project active: ${project.title}`);
-                    }
-                    setCommandMenuMode(null);
-                    return true;
-                }
-                return false;
-            }
-            if (mode === "fork") {
-                const sources = forkSources();
-                if (sources.length === 0) {
-                    setCommandMenuMode(null);
-                    return false;
-                }
-                const selected = selectedForkSourceIndex();
-                if (name === "a") {
-                    void openForkMenu("/fork all", true);
-                    return true;
-                }
-                if (name === "up" || name === "k" || sequence === "\u001b[A") {
-                    setSelectedForkSourceIndex(clamp(selected - 1, 0, sources.length - 1));
-                    return true;
-                }
-                if (name === "down" || name === "j" || sequence === "\u001b[B") {
-                    setSelectedForkSourceIndex(clamp(selected + 1, 0, sources.length - 1));
-                    return true;
-                }
-                if (name === "escape" || sequence === "\u001b") {
-                    setCommandMenuMode(null);
-                    showStatusNotice("Fork picker closed");
-                    return true;
-                }
-                if (
-                    name === "return" ||
-                    name === "enter" ||
-                    name === "linefeed" ||
-                    sequence === "\n" ||
-                    sequence === "\r"
-                ) {
-                    const source = sources[clamp(selected, 0, sources.length - 1)];
-                    if (source) {
-                        void activateForkFromSource(source);
-                    }
-                    setCommandMenuMode(null);
-                    return true;
-                }
-                return false;
-            }
-            if (mode === "forks") {
-                const forks = forkOptions();
-                if (forks.length === 0) {
-                    setCommandMenuMode(null);
-                    return false;
-                }
-                const selected = selectedForkIndex();
-                if (name === "up" || name === "k" || sequence === "\u001b[A") {
-                    setSelectedForkIndex(clamp(selected - 1, 0, forks.length - 1));
-                    return true;
-                }
-                if (name === "down" || name === "j" || sequence === "\u001b[B") {
-                    setSelectedForkIndex(clamp(selected + 1, 0, forks.length - 1));
-                    return true;
-                }
-                if (name === "escape" || sequence === "\u001b") {
-                    setCommandMenuMode(null);
-                    showStatusNotice("Fork list closed");
-                    return true;
-                }
-                if (
-                    name === "return" ||
-                    name === "enter" ||
-                    name === "linefeed" ||
-                    sequence === "\n" ||
-                    sequence === "\r"
-                ) {
-                    const fork = forks[clamp(selected, 0, forks.length - 1)];
-                    if (fork) {
-                        setActiveFork(fork);
-                        showStatusNotice(`Fork active: ${fork.title}`);
-                    }
-                    setCommandMenuMode(null);
-                    return true;
-                }
-                return false;
-            }
-            return false;
+                { assistantText: source.assistantText, eventId: source.eventId, userText: source.userText },
+            );
+            this.activeFork = fork;
+            this.writeLine(`Fork active: ${fork.title}`);
+        } catch (cause) {
+            this.writeLine(`Fork setup failed: ${this.describeError(cause)}`);
         }
+    }
 
-        async function activateForkFromSource(source: ForkHistorySource): Promise<void> {
-            try {
-                const fork = await runtime.createContextFork(
-                    {
-                        id: `fork-${source.eventId}`,
-                        userId,
-                        title: clipText(source.userText, 60),
-                        summary: clipText(`${source.userText} / ${source.assistantText}`, 160),
-                        scopeSummary: clipText(source.assistantText || source.userText, 180),
-                        maxContextTokens: 4096,
-                        inheritedEventIds: [source.eventId],
-                        createdAt: new Date(source.ts).toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        sourceEventId: source.eventId,
-                    },
-                    {
-                        assistantText: source.assistantText,
-                        eventId: source.eventId,
-                        userText: source.userText,
-                    },
-                );
-                setActiveFork(fork);
-                setForkOptions((prev) => [fork, ...prev.filter((item) => item.id !== fork.id)]);
-                showStatusNotice(`Fork active: ${fork.title}`);
-            } catch (cause) {
-                setError(`Fork setup failed: ${describeError(cause)}`);
-            }
+    private renderForkList(): void {
+        const forks = this.options.runtime.listContextForks(this.userId, { limit: 50 });
+        if (forks.length === 0) {
+            this.writeLine("No saved forks yet.");
+            return;
         }
-
-        function scrollMessages(direction: -1 | 1): void {
-            const page = Math.max(4, scrollBox.viewport.height - 2);
-            scrollBox.scrollBy({ x: 0, y: direction * page });
+        this.writeLine("Forks:");
+        forks.forEach((fork, index) =>
+            this.writeLine(`  ${index + 1}. ${fork.title} · ${fork.maxContextTokens} tokens`),
+        );
+        const first = forks[0];
+        if (first) {
+            this.activeFork = first;
+            this.writeLine(`Fork active: ${first.title}`);
         }
+    }
 
-        function scrollToBottom(): void {
-            scrollBox.scrollTo({ x: scrollBox.scrollLeft, y: scrollBox.scrollHeight });
-        }
+    private historySource(turn: {
+        assistantText: string;
+        eventId: string;
+        ts: number;
+        userText: string;
+    }): ForkHistorySource {
+        return { assistantText: turn.assistantText, eventId: turn.eventId, ts: turn.ts, userText: turn.userText };
+    }
 
-        function completeCommandInput(): boolean {
-            if (!inputRef) return false;
-            const text = inputRef.plainText.trim();
-            if (!text.startsWith("/")) return false;
-            const matches = commandSuggestions(text);
-            const selected = matches[0];
-            if (!selected) return false;
-            inputRef.clear();
-            inputRef.insertText(selected.name);
-            setInputText(selected.name);
-            showStatusNotice(`${selected.name} — ${selected.detail}`);
-            return true;
-        }
-
-        function commandSuggestions(prefix: string): AppCommandSuggestion[] {
-            return appCommandSuggestions(appCommands, prefix);
-        }
-
-        // ── 辅助：构建单条消息的 renderables ──────────────────
-        function buildMessageBox(msg: ChatMessage): MsgRenderable {
-            const box = new BoxRenderable(renderer, {
-                flexDirection: "column",
-                paddingTop: 1,
-                paddingBottom: 1,
-                paddingLeft: 1,
-                paddingRight: 1,
-            });
-
-            const roleText = new TextRenderable(renderer, {
-                content: `${msg.role === "user" ? "You" : agentName}${msg.history ? " · history" : ""}`,
-                fg: msg.role === "user" ? THEME.user : THEME.assistant,
-                attributes: TextAttributes.BOLD,
-                selectable: true,
-            });
-            box.add(roleText);
-
-            const contentBox = new BoxRenderable(renderer, {
-                flexDirection: "column",
-                width: "100%",
-            });
-            const contentRenderable = createMessageContentRenderable(msg);
-            contentBox.add(contentRenderable);
-            box.add(contentBox);
-
-            const extraBox = buildExtras(msg);
-            if (extraBox) {
-                box.add(extraBox);
-            }
-
-            return {
-                id: msg.id,
-                box,
-                contentBox,
-                contentKey: messageContentKey(msg),
-                contentRenderable,
-                extrasKey: messageExtrasKey(msg),
-                extraBox,
+    private async applyBlackboardEvent(type: RuntimeEventType, payload: Record<string, unknown> | null): Promise<void> {
+        const turnId = this.stringValue(payload?.turnId);
+        if (!turnId) return;
+        const msg = this.currentAssistantMessage();
+        if (msg) {
+            msg.blackboard = {
+                ...(msg.blackboard ?? { mode: "blackboard" }),
+                mode: "blackboard",
+                status: type === RuntimeEventType.BlackboardTurnEnd ? this.stringValue(payload?.status) : "running",
+                turnId,
             };
         }
+        await this.refreshBlackboardTurn(turnId);
+    }
 
-        function createMessageContentRenderable(msg: ChatMessage): TextRenderable | MarkdownRenderable {
-            if (msg.role === "assistant") {
-                // Let OpenTUI own markdown parsing so tables, rules, code blocks, and links stay intact.
-                return new MarkdownRenderable(renderer, {
-                    content: msg.content,
-                    syntaxStyle: markdownSyntaxStyle,
-                    fg: THEME.assistant,
-                    bg: THEME.bg,
-                    width: "100%",
-                    conceal: true,
-                    concealCode: false,
-                    streaming: msg.status === "streaming",
-                    internalBlockMode: "top-level",
-                    tableOptions: {
-                        style: "grid",
-                        widthMode: "full",
-                        wrapMode: "word",
-                        cellPaddingX: 1,
-                        cellPaddingY: 0,
-                        selectable: true,
-                        borders: true,
-                        outerBorder: true,
-                        borderColor: THEME.border,
-                    },
-                });
+    private async refreshBlackboardForMessage(msg: ChatMessage): Promise<void> {
+        const turnId = msg.blackboard?.turnId;
+        if (turnId) await this.refreshBlackboardTurn(turnId);
+    }
+
+    private async refreshBlackboardTurn(turnId: string): Promise<void> {
+        if (!this.options.blackboard) return;
+        const turn = await this.options.blackboard.getTurn(turnId).catch(() => undefined);
+        if (!turn) return;
+        this.blackboardTurns.set(turnId, turn);
+        for (const msg of this.messages) {
+            if (msg.role !== "assistant" || msg.blackboard?.turnId !== turnId) continue;
+            msg.blackboardTurn = turn;
+            msg.blackboard = {
+                ...(msg.blackboard ?? { mode: turn.mode }),
+                mode: turn.mode,
+                status: turn.status,
+                turnId,
+            };
+        }
+    }
+
+    private recordMcpTrace(payload: Record<string, unknown> | null): void {
+        const trace = readMcpTrace(payload);
+        const msg = this.currentAssistantMessage();
+        if (!trace || !msg) return;
+        msg.mcpCalls = this.mergeMcpTraces(msg.mcpCalls ?? [], [trace]);
+    }
+
+    private recordSkillNames(payload: Record<string, unknown> | null): void {
+        const names = readStringArray(payload?.skillNames);
+        const msg = this.currentAssistantMessage();
+        if (names.length === 0 || !msg) return;
+        msg.skills = Array.from(new Set([...(msg.skills ?? []), ...names]));
+    }
+
+    private currentAssistantMessage(): ChatMessage | undefined {
+        const id = this.currentTurnId;
+        return id ? this.messages.find((msg) => msg.id === id && msg.role === "assistant") : undefined;
+    }
+
+    private mergeMcpTraces(existing: McpTrace[], raw: unknown): McpTrace[] {
+        const next = [...existing];
+        const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+        for (const item of values) {
+            const trace = readMcpTrace(item);
+            if (!trace) continue;
+            const key = JSON.stringify([trace.server, trace.tool, trace.ok, trace.resultText]);
+            if (!next.some((entry) => JSON.stringify([entry.server, entry.tool, entry.ok, entry.resultText]) === key)) {
+                next.push(trace);
             }
+        }
+        return next;
+    }
 
-            return new TextRenderable(renderer, {
-                content: msg.content,
-                fg: THEME.fg,
-                selectable: true,
-                width: "100%",
-                wrapMode: "word",
+    private renderMessageExtras(msg: ChatMessage, questionText = ""): void {
+        const lines = this.messageExtraLines(msg, questionText);
+        if (lines.length === 0) return;
+        for (const line of lines) this.writeLine(line);
+        this.writeLine("");
+    }
+
+    private messageExtraLines(msg: ChatMessage, questionText: string): string[] {
+        const lines: string[] = [];
+        if (msg.ask) {
+            lines.push("ask:");
+            lines.push(...formatAskSummaryLines(msg.ask).map((line) => `  ${line.trim()}`));
+        }
+        if (msg.mcpCalls && msg.mcpCalls.length > 0) {
+            for (const call of msg.mcpCalls) {
+                lines.push(`mcp: ${call.ok ? "ok" : "fail"} ${call.server}.${call.tool}`);
+                if (call.resultText) lines.push(`  ${this.clipText(call.resultText, 140)}`);
+            }
+        }
+        if (msg.skills && msg.skills.length > 0) lines.push(`skills: ${msg.skills.join(", ")}`);
+        if (msg.planning) this.appendPlanningLines(lines, msg.planning);
+        const turn = this.blackboardTurnFor(msg);
+        if (turn) this.appendBlackboardLines(lines, turn);
+        else if (msg.blackboard?.turnId) lines.push(`blackboard: ${msg.blackboard.status ?? "running"}`);
+        if (msg.role === "assistant" && !msg.history) {
+            const snapshot = ChatResourceSnapshotBuilder.default.build({
+                activeFork: this.activeFork,
+                activeProject: this.activeProject,
+                draftText: "",
+                maxOutputTokens: this.options.resourceConfig?.maxOutputTokens,
+                contextPressureBudgetTokens: this.options.resourceConfig?.contextPressureBudgetTokens,
+                contextRingSize: this.options.resourceConfig?.contextRingSize,
+                identityAppendDailyLimit: this.options.resourceConfig?.identityAppendDailyLimit,
+                memoryVisibilityThreshold: this.options.resourceConfig?.memoryVisibilityThreshold,
+                model: this.options.resourceConfig?.model,
+                providerId: this.options.resourceConfig?.providerId,
+                questionText,
+                reply: msg,
+                turnCount: this.turnPairs().length,
             });
-        }
-
-        function messageContentKey(msg: ChatMessage): string {
-            return `${msg.role}:${msg.status}:${msg.content}`;
-        }
-
-        function updateMessageContent(renderable: MsgRenderable, msg: ChatMessage): void {
-            const nextKey = messageContentKey(msg);
-            const nextIsMarkdown = msg.role === "assistant";
-            if (renderable.contentKey === nextKey && (renderable.contentRenderable instanceof MarkdownRenderable) === nextIsMarkdown) {
-                return;
-            }
-            if (nextIsMarkdown && renderable.contentRenderable instanceof MarkdownRenderable) {
-                renderable.contentRenderable.content = msg.content;
-                renderable.contentRenderable.streaming = msg.status === "streaming";
-                renderable.contentKey = nextKey;
-                return;
-            }
-            if (!nextIsMarkdown && renderable.contentRenderable instanceof TextRenderable) {
-                renderable.contentRenderable.content = msg.content;
-                renderable.contentKey = nextKey;
-                return;
-            }
-
-            renderable.contentBox.remove(renderable.contentRenderable.id);
-            renderable.contentRenderable.destroy();
-            renderable.contentRenderable = createMessageContentRenderable(msg);
-            renderable.contentBox.add(renderable.contentRenderable);
-            renderable.contentKey = nextKey;
-        }
-
-        function messageExtrasKey(msg: ChatMessage): string {
-            return JSON.stringify({
-                ask: msg.ask ?? null,
-                mcpCalls: msg.mcpCalls ?? [],
-                phase: msg.status === "streaming" && !msg.content ? phase() : undefined,
-                planning: msg.planning ?? null,
-                skills: msg.skills ?? [],
-                status: msg.status,
-                tick: msg.status === "streaming" && !msg.content ? frameTick() : undefined,
-            });
-        }
-
-        function buildExtras(msg: ChatMessage): BoxRenderable | undefined {
-            const extras: TextRenderable[] = [];
-
-            if (msg.status === "streaming" && !msg.content) {
-                const ph = phase();
-                const def = PHASE_DEF[ph];
-                const frame = def.frames[frameTick() % def.frames.length] ?? def.done;
-                extras.push(
-                    new TextRenderable(renderer, {
-                        content: `${frame} ${def.label}...`,
-                        fg: def.color,
-                        selectable: true,
-                    }),
-                );
-            }
-
-            if (msg.mcpCalls && msg.mcpCalls.length > 0) {
-                for (const call of msg.mcpCalls) {
-                    const icon = call.ok ? "ok" : "fail";
-                    const color = call.ok ? THEME.user : THEME.error;
-                    extras.push(
-                        new TextRenderable(renderer, {
-                            content: `  ${icon} ${call.server}.${call.tool}`,
-                            fg: color,
-                            selectable: true,
-                        }),
-                    );
-                    if (call.resultText) {
-                        extras.push(
-                            new TextRenderable(renderer, {
-                                content: `    ${clipText(call.resultText, 120)}`,
-                                fg: THEME.fgMuted,
-                                selectable: true,
-                            }),
-                        );
-                    }
-                }
-            }
-
-            if (msg.skills && msg.skills.length > 0) {
-                extras.push(
-                    new TextRenderable(renderer, {
-                        content: `  skills: ${msg.skills.join(", ")}`,
-                        fg: THEME.pink,
-                        selectable: true,
-                    }),
-                );
-            }
-
-            if (msg.ask) {
-                const ask = msg.ask;
-                const detail = [
-                    ask.reason ? `reason=${ask.reason}` : undefined,
-                    ask.questionCount !== undefined ? `questions=${ask.questionCount}` : undefined,
-                    ask.choiceCount !== undefined ? `choices=${ask.choiceCount}` : undefined,
-                    ask.snapshotId ? `snapshot=${ask.snapshotId}` : undefined,
-                ]
-                    .filter(Boolean)
-                    .join(" · ");
-                extras.push(
-                    new TextRenderable(renderer, {
-                        content: `  ask: ${detail}`,
-                        fg: THEME.pink,
-                        selectable: true,
-                    }),
-                );
-                for (const line of formatAskSummaryLines(ask)) {
-                    extras.push(extraLine(line, THEME.pink));
-                }
-            }
-
-            if (msg.planning?.taskPlans && msg.planning.taskPlans.length > 0) {
-                for (const plan of msg.planning.taskPlans.slice(0, 2)) {
-                    extras.push(
-                        new TextRenderable(renderer, {
-                            content: `  todo: ${plan.title} · ${plan.status} · ${Math.round(plan.progress * 100)}%`,
-                            fg: THEME.header,
-                            selectable: true,
-                        }),
-                    );
-                }
-            }
-
-            if (msg.planning?.contextForks && msg.planning.contextForks.length > 0) {
-                for (const fork of msg.planning.contextForks.slice(0, 2)) {
-                    extras.push(extraLine(`  fork: ${fork.title} · budget=${fork.maxContextTokens}`, THEME.purple));
-                }
-            }
-
-            if (extras.length === 0) return undefined;
-            const box = new BoxRenderable(renderer, { flexDirection: "column" });
-            for (const t of extras) box.add(t);
-            return box;
-        }
-
-        function blackboardTurnFor(msg: ChatMessage): BlackboardTurn | undefined {
-            if (msg.blackboardTurn) return msg.blackboardTurn;
-            const turnId = msg.blackboard?.turnId;
-            return turnId ? blackboardTurns()[turnId] : undefined;
-        }
-
-        function activeReply(): ChatMessage | undefined {
-            const selected = selectedTurnPair();
-            if (selected?.assistant) return selected.assistant;
-            const id = activeReplyId();
-            if (id) {
-                const active = messages().find((msg) => msg.id === id);
-                if (active) return active;
-            }
-            return [...messages()].reverse().find((msg) => msg.role === "assistant" && !msg.history);
-        }
-
-        function focusedBlackboardTurn(): BlackboardTurn | undefined {
-            const selected = selectedTurnPair();
-            if (selected?.assistant) {
-                const turn = blackboardTurnFor(selected.assistant);
-                if (turn) return turn;
-            }
-            const turnId = focusedBlackboardTurnId();
-            if (turnId) {
-                const turn = blackboardTurns()[turnId];
-                if (turn) return turn;
-            }
-            const msg = [...messages()]
-                .reverse()
-                .find((entry) => entry.role === "assistant" && entry.blackboard?.turnId);
-            return msg ? blackboardTurnFor(msg) : undefined;
-        }
-
-        function turnPairs(): Array<{ assistant?: ChatMessage; question: string; user: ChatMessage }> {
-            const out: Array<{ assistant?: ChatMessage; question: string; user: ChatMessage }> = [];
-            const msgs = messages();
-            for (let i = 0; i < msgs.length; i += 1) {
-                const msg = msgs[i];
-                if (!msg || msg.role !== "user" || msg.history) continue;
-                const assistant = msgs.slice(i + 1).find((entry) => entry.role === "assistant" && !entry.history);
-                out.push({ assistant, question: msg.content, user: msg });
-            }
-            return out;
-        }
-
-        function selectedTurnPair(): { assistant?: ChatMessage; question: string; user: ChatMessage } | undefined {
-            const pairs = turnPairs();
-            if (pairs.length === 0) return undefined;
-            const selected = selectedQuestionIndex();
-            if (selected === null) return pairs[pairs.length - 1];
-            return pairs[clamp(selected, 0, pairs.length - 1)];
-        }
-
-        function resourcePanelLines(): PanelLine[] {
-            const pair = selectedTurnPair();
-            const snapshot = buildChatResourceSnapshot({
-                activeFork: activeFork(),
-                activeProject: activeProject(),
-                draftText: inputText(),
-                maxOutputTokens: resourceConfig.maxOutputTokens,
-                contextPressureBudgetTokens: resourceConfig.contextPressureBudgetTokens,
-                contextRingSize: resourceConfig.contextRingSize,
-                identityAppendDailyLimit: resourceConfig.identityAppendDailyLimit,
-                memoryVisibilityThreshold: resourceConfig.memoryVisibilityThreshold,
-                model: resourceConfig.model,
-                providerId: resourceConfig.providerId,
-                questionText: pair?.question,
-                reply: activeReply(),
-                turnCount: turnPairs().length,
-            });
-            const [provider, model] = splitModelLine(snapshot.modelLine);
-            const contextMetric = snapshot.metrics.find((metric) => metric.label === "context");
-            const lines = [
-                panelLine("MODEL", THEME.user, TextAttributes.BOLD),
-                panelLine(`model        ${clipText(model, 28)}`, THEME.fg),
-                panelLine(`provider     ${clipText(provider, 28)}`, THEME.fg),
-                panelLine("  temperature 0.7", THEME.fg),
-                panelLine("  top_p       1.0", THEME.fg),
-                panelLine("", THEME.fg),
-                panelLine("TOKENS                 CONTEXT WINDOW", THEME.user, TextAttributes.BOLD),
-                panelLine(`input       ${formatTokenCount(snapshot.tokens.input)}`, THEME.purple),
-                panelLine(`output      ${formatTokenCount(snapshot.tokens.output)}`, THEME.pink),
-                panelLine(`total       ${formatTokenCount(snapshot.tokens.total)}`, THEME.pink),
-                panelLine(
-                    `                      ${snapshot.contextWindow.limitLabel}`,
-                    THEME.fgMuted,
-                ),
-                panelLine(
-                    `                      ${contextMetric?.bar ?? renderChatProgressBar(undefined)}`,
-                    contextMetric?.color ?? THEME.fgMuted,
-                ),
-                panelLine(
-                    `                      ${snapshot.contextWindow.usedLabel}`,
-                    THEME.fgMuted,
-                ),
-            ];
-            lines.push(panelLine("", THEME.fg));
-            lines.push(panelLine(`memory      ${snapshot.memoryLine}`, THEME.fgMuted));
-            return lines;
-        }
-
-        function todoPanelLines(): PanelLine[] {
-            const lines: PanelLine[] = [];
-            appendTodoSection(lines, activeReply(), focusedBlackboardTurn());
-            return lines;
-        }
-
-        function detailPanelLines(): PanelLine[] {
-            const lines: PanelLine[] = [];
-            const turn = focusedBlackboardTurn();
-            if (sidePanelMode() === "projects") {
-                appendScopeSummary(lines);
-                appendProjectPickerLines(lines);
-                return lines;
-            }
-            if (sidePanelMode() === "fork") {
-                appendScopeSummary(lines);
-                appendForkSourceLines(lines);
-                return lines;
-            }
-            if (sidePanelMode() === "forks") {
-                appendScopeSummary(lines);
-                appendForkListLines(lines);
-                return lines;
-            }
-            appendQuestionLines(lines);
-            lines.push(panelLine("", THEME.fg));
-            if (sidePanelMode() === "thinking") {
-                appendThinkingDetail(lines, turn);
-            } else {
-                appendBlackboardDetail(lines, turn);
-            }
-            return lines;
-        }
-
-        function appendScopeSummary(lines: PanelLine[]): void {
-            const project = activeProject();
-            const fork = activeFork();
-            lines.push(panelLine("Scope", THEME.header, TextAttributes.BOLD));
+            lines.push(`model: ${snapshot.modelLine}`);
             lines.push(
-                panelLine(
-                    `  project: ${project ? project.title : "none"} · fork: ${fork ? fork.title : "none"}`,
-                    THEME.fg,
-                ),
+                `tokens: input ${this.formatTokenCount(snapshot.tokens.input)} · output ${this.formatTokenCount(snapshot.tokens.output)} · total ${this.formatTokenCount(snapshot.tokens.total)}`,
             );
-            if (project) {
-                lines.push(panelLine(`  dir: ${clipText(project.projectDir, 96)}`, THEME.fgMuted));
-            }
-            if (fork) {
-                lines.push(panelLine(`  fork scope: ${clipText(fork.scopeSummary, 96)}`, THEME.fgMuted));
-            }
+            lines.push(`context: ${snapshot.contextWindow.usedLabel}`);
+            lines.push(`memory: ${snapshot.memoryLine}`);
         }
+        return lines;
+    }
 
-        function appendQuestionLines(lines: PanelLine[]): void {
-            const pairs = turnPairs();
-            const selected = selectedTurnPair();
-            const menuOpen = commandMenuMode() === sidePanelMode();
-            lines.push(panelLine("Questions", THEME.user, TextAttributes.BOLD));
-            if (pairs.length === 0) {
-                lines.push(panelLine("  no conversation turns yet", THEME.fgMuted));
-                return;
-            }
-            const visibleCount = menuOpen ? 8 : 4;
-            pairs.slice(-visibleCount).forEach((pair, idx) => {
-                const absoluteIndex = pairs.length - Math.min(visibleCount, pairs.length) + idx;
-                const active = pair.user.id === selected?.user.id;
-                lines.push(
-                    panelLine(
-                        `  ${active ? ">" : " "} ${absoluteIndex + 1}. ${clipText(pair.question, active ? 40 : 36)}`,
-                        active ? THEME.pink : THEME.fgMuted,
-                        active ? TextAttributes.BOLD : undefined,
-                    ),
-                );
-            });
+    private renderPlanningLines(planning: NonNullable<ChatMessage["planning"]>, prefix: string): void {
+        const lines: string[] = [];
+        this.appendPlanningLines(lines, planning);
+        for (const line of lines) this.writeLine(`${prefix}${line}`);
+    }
+
+    private appendPlanningLines(lines: string[], planning: NonNullable<ChatMessage["planning"]>): void {
+        for (const plan of planning.taskPlans.slice(0, 3)) {
+            lines.push(`todo: ${plan.title} · ${plan.status} · ${Math.round(plan.progress * 100)}%`);
+            for (const step of (plan.steps ?? []).slice(0, 5)) lines.push(`  ${step.status} ${step.title}`);
         }
-
-        function appendTodoSection(lines: PanelLine[], msg: ChatMessage | undefined, turn: BlackboardTurn | undefined): void {
-            lines.push(panelLine("TODO List", THEME.fg, TextAttributes.BOLD));
-            const plans = msg?.planning?.taskPlans ?? [];
-            if (plans.length > 0) {
-                for (const plan of plans.slice(0, 3)) {
-                    lines.push(
-                        panelLine(
-                            `  ${plan.title} · ${plan.status} · ${Math.round(plan.progress * 100)}%`,
-                            THEME.fg,
-                        ),
-                    );
-                    for (const step of (plan.steps ?? []).slice(0, 5)) {
-                        lines.push(panelLine(`    ${step.status} ${step.title}`, THEME.purple));
-                    }
-                }
-                return;
-            }
-            if (!turn) {
-                lines.push(panelLine(`  ${NO_PLAN_TEXT}`, THEME.fgMuted));
-                return;
-            }
-            const snapshot = buildChatTodoSnapshot(turn);
-            if (snapshot.stepCount === 0 && snapshot.workstreamCount === 0) {
-                lines.push(panelLine(`  ${NO_PLAN_TEXT}`, THEME.fgMuted));
-                if (snapshot.workerLine) {
-                    lines.push(panelLine(`  ${snapshot.workerLine}`, THEME.fgMuted));
-                }
-                return;
-            }
-            lines.push(panelLine(`  ${snapshot.progressLine}`, THEME.fg));
-            if (snapshot.workerLine) {
-                lines.push(panelLine(`  ${snapshot.workerLine}`, THEME.fgMuted));
-            }
-            if (snapshot.workstreams.length > 0) {
-                lines.push(panelLine("  workstreams", THEME.fgMuted));
-                for (const item of snapshot.workstreams) {
-                    lines.push(panelLine(`    ${item}`, THEME.fg));
-                }
-            }
-            if (snapshot.steps.length > 0) {
-                lines.push(panelLine("  steps", THEME.fgMuted));
-                for (const item of snapshot.steps) {
-                    lines.push(panelLine(`    ${item}`, THEME.purple));
-                }
-            }
+        for (const scene of planning.scenes.slice(0, 2)) {
+            lines.push(`replay: ${scene.kind} · ${scene.title}`);
+            lines.push(`  ${this.clipText(scene.summary, 140)}`);
         }
+        for (const fork of planning.contextForks.slice(0, 2))
+            lines.push(`fork: ${fork.title} · budget=${fork.maxContextTokens}`);
+    }
 
-        function appendThinkingDetail(lines: PanelLine[], turn: BlackboardTurn | undefined): void {
-            const msg = activeReply();
-            const ph = phase();
-            const def = PHASE_DEF[ph];
-            const running = processing();
-            const frame = running ? (def.frames[frameTick() % def.frames.length] ?? def.done) : def.done;
-            lines.push(panelLine("Thinking", THEME.header, TextAttributes.BOLD));
-            lines.push(panelLine(`${frame} ${running ? def.label : "ready"}`, running ? def.color : THEME.fgMuted));
-            if (turn) {
-                appendBlackboardRouteLines(lines, turn);
-                appendBlackboardStatusLines(lines, turn, 4);
-            } else {
-                appendSceneReplayLines(lines, msg);
-            }
-            appendReplySummaryLines(lines, msg);
+    private renderBlackboardTurn(turn: BlackboardTurn, prefix: string): void {
+        const lines: string[] = [];
+        this.appendBlackboardLines(lines, turn);
+        for (const line of lines) this.writeLine(`${prefix}${line}`);
+    }
+
+    private appendBlackboardLines(lines: string[], turn: BlackboardTurn): void {
+        lines.push(`blackboard: ${turn.status} · ${turn.steps.length} steps · ${turn.decisions.length} decisions`);
+        const snapshot = ChatTodoSnapshotBuilder.default.build(turn);
+        if (snapshot.stepCount === 0 && snapshot.workstreamCount === 0) lines.push(`todo: ${NO_PLAN_TEXT}`);
+        else {
+            lines.push(`todo: ${snapshot.progressLine}`);
+            if (snapshot.workerLine) lines.push(`  ${snapshot.workerLine}`);
+            for (const item of snapshot.workstreams) lines.push(`  ${item}`);
         }
+        for (const step of turn.steps.slice(-4))
+            lines.push(`  r${step.round} ${step.workerRole}: ${this.clipText(step.outputSummary, 120)}`);
+        const decision = turn.decisions[turn.decisions.length - 1];
+        if (decision) lines.push(`decision: ${this.clipText(decision.prompt, 160)}`);
+    }
 
-        function appendBlackboardDetail(lines: PanelLine[], turn: BlackboardTurn | undefined): void {
-            if (!turn) {
-                lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
-                appendSceneReplayLines(lines, activeReply());
-                return;
-            }
-            appendBlackboardPanelLines(lines, turn);
-        }
+    private blackboardTurnFor(msg: ChatMessage): BlackboardTurn | undefined {
+        if (msg.blackboardTurn) return msg.blackboardTurn;
+        const turnId = msg.blackboard?.turnId;
+        return turnId ? this.blackboardTurns.get(turnId) : undefined;
+    }
 
-        function appendSceneReplayLines(lines: PanelLine[], msg: ChatMessage | undefined): void {
-            const scenes = msg?.planning?.scenes ?? [];
-            if (scenes.length === 0) {
-                lines.push(panelLine("  no replay summary yet", THEME.fgMuted));
-                return;
-            }
-            lines.push(panelLine("Scene Replay", THEME.purple, TextAttributes.BOLD));
-            for (const scene of scenes.slice(0, 5)) {
-                lines.push(panelLine(`  ${scene.kind}: ${scene.title}`, THEME.purple));
-                lines.push(panelLine(`    ${clipText(scene.summary, 120)}`, THEME.fgMuted));
-                if (scene.detail) {
-                    lines.push(panelLine(`    ${clipText(scene.detail, 180)}`, THEME.fgMuted));
-                }
-            }
-        }
+    private knownCommandList(): string {
+        const names = this.appCommands.rules
+            .filter((rule) => rule.enabled)
+            .map((rule) => rule.match.slash[0])
+            .filter((name): name is string => typeof name === "string" && name.length > 0)
+            .slice(0, 10);
+        const suggestions = appCommandSuggestions(this.appCommands, "/").map((item) => item.name);
+        return names.length > 0 ? names.join(", ") : suggestions.join(", ");
+    }
 
-        function appendReplySummaryLines(lines: PanelLine[], msg: ChatMessage | undefined): void {
-            if (msg?.skills && msg.skills.length > 0) {
-                lines.push(panelLine("Skills", THEME.pink, TextAttributes.BOLD));
-                for (const skill of msg.skills) {
-                    lines.push(panelLine(`  ${skill}`, THEME.fg));
-                }
-            }
+    private clipText(value: string, max = 140): string {
+        const text = value.replace(/\s+/gu, " ").trim();
+        return text.length > max ? `${text.slice(0, Math.max(0, max - 1))}…` : text;
+    }
 
-            if (msg?.mcpCalls && msg.mcpCalls.length > 0) {
-                lines.push(panelLine("MCP", THEME.user, TextAttributes.BOLD));
-                for (const call of msg.mcpCalls.slice(-8)) {
-                    lines.push(
-                        panelLine(
-                            `  ${call.ok ? "ok" : "fail"} ${call.server}.${call.tool}`,
-                            call.ok ? THEME.fg : THEME.error,
-                        ),
-                    );
-                    if (call.resultText) {
-                        lines.push(panelLine(`    ${clipText(call.resultText, 96)}`, THEME.fgMuted));
-                    }
-                }
-            }
+    private describeError(cause: unknown): string {
+        if (cause instanceof Error)
+            return cause.name && cause.name !== "Error" ? `${cause.name}: ${cause.message}` : cause.message;
+        return String(cause);
+    }
 
-            if (!msg) {
-                lines.push(panelLine("Reply", THEME.header, TextAttributes.BOLD));
-                lines.push(panelLine("  no active reply yet", THEME.fgMuted));
-                return;
-            }
+    private stringValue(value: unknown): string | undefined {
+        return typeof value === "string" ? value : undefined;
+    }
 
-            lines.push(panelLine("Reply", THEME.header, TextAttributes.BOLD));
-            lines.push(panelLine(`  ${msg.status}${msg.content ? ` · ${msg.content.length} chars` : ""}`, THEME.fg));
-        }
+    private formatTokenCount(value: number): string {
+        return Math.max(0, Math.floor(value)).toLocaleString("en-US");
+    }
 
-        function appendBlackboardStatusLines(lines: PanelLine[], turn: BlackboardTurn, recentCount: number): void {
-            lines.push(panelLine("Discussion", THEME.purple, TextAttributes.BOLD));
-            const recentSteps = turn.steps.slice(-recentCount);
-            if (recentSteps.length === 0) {
-                lines.push(panelLine("  waiting for worker output", THEME.fgMuted));
-                return;
-            }
-            for (const step of recentSteps) {
-                lines.push(
-                    panelLine(
-                        `  r${step.round} ${step.workerRole}: ${clipText(step.outputSummary, 110)}`,
-                        THEME.purple,
-                    ),
-                );
-            }
-        }
+    private clamp(value: number, min: number, max: number): number {
+        return Math.max(min, Math.min(max, value));
+    }
 
-        function appendProjectPickerLines(lines: PanelLine[]): void {
-            const projects = projectOptions();
-            if (projects.length === 0) {
-                lines.push(panelLine("  no saved projects", THEME.fgMuted));
-                return;
-            }
-            lines.push(panelLine("Project Picker", THEME.purple, TextAttributes.BOLD));
-            for (const [idx, project] of projects.entries()) {
-                const active = idx === selectedProjectIndex();
-                lines.push(
-                    panelLine(
-                        `  ${active ? ">" : " "} ${project.title} · ${clipText(project.projectDir, 64)}`,
-                        active ? THEME.pink : THEME.fg,
-                    ),
-                );
-            }
-        }
+    private isInteractiveTerminal(): boolean {
+        const input = this.input as NodeJS.ReadableStream & { isTTY?: boolean };
+        const output = this.output as NodeJS.WriteStream & { isTTY?: boolean };
+        return input.isTTY === true && output.isTTY === true;
+    }
 
-        function appendForkSourceLines(lines: PanelLine[]): void {
-            const sources = forkSources();
-            if (sources.length === 0) {
-                lines.push(panelLine("  no history turns", THEME.fgMuted));
-                return;
-            }
-            lines.push(panelLine("Fork Source History", THEME.purple, TextAttributes.BOLD));
-            for (const [idx, source] of sources.entries()) {
-                const active = idx === selectedForkSourceIndex();
-                lines.push(
-                    panelLine(
-                        `  ${active ? ">" : " "} ${clipText(source.userText, 30)} → ${clipText(source.assistantText, 42)}`,
-                        active ? THEME.pink : THEME.fg,
-                    ),
-                );
-            }
-        }
+    private write(text: string): void {
+        this.output.write(text);
+    }
 
-        function appendForkListLines(lines: PanelLine[]): void {
-            const forks = forkOptions();
-            if (forks.length === 0) {
-                lines.push(panelLine("  no saved forks", THEME.fgMuted));
-                return;
-            }
-            lines.push(panelLine("Fork Picker", THEME.purple, TextAttributes.BOLD));
-            for (const [idx, fork] of forks.entries()) {
-                const active = idx === selectedForkIndex();
-                lines.push(
-                    panelLine(
-                        `  ${active ? ">" : " "} ${fork.title} · ${Math.round(fork.maxContextTokens)} tokens`,
-                        active ? THEME.pink : THEME.fg,
-                    ),
-                );
-                lines.push(panelLine(`    ${clipText(fork.summary, 88)}`, THEME.fgMuted));
-            }
-        }
+    private writeLine(text: string): void {
+        this.output.write(`${text}\n`);
+    }
+}
 
-        function appendBlackboardRouteLines(lines: PanelLine[], turn: BlackboardTurn): void {
-            const metadata = readRecord(turn.metadata);
-            const routeReason = stringValue(metadata?.routeReason);
-            const routeScore = numberValue(metadata?.routeScore);
-            const routeSignals = readStringArray(metadata?.routeSignals);
-            const needsReflectionCandidate = metadata?.routeNeedsReflectionCandidate === true;
-            const contract = readRecord(metadata?.blackboardContract);
-            const plan = readRecord(metadata?.blackboardPlan);
-
-            lines.push(panelLine("Route / Complexity", THEME.header, TextAttributes.BOLD));
-            lines.push(
-                panelLine(
-                    `  ${routeScore !== undefined ? `score=${routeScore.toFixed(2)}` : "score=-"} · ${
-                        routeReason ?? "reason=-"
-                    }`,
-                    THEME.fg,
-                ),
-            );
-            if (needsReflectionCandidate) {
-                lines.push(panelLine("  reflection candidate: yes", THEME.fgMuted));
-            }
-            if (routeSignals.length > 0) {
-                lines.push(panelLine(`  signals: ${routeSignals.join(" · ")}`, THEME.fgMuted));
-            }
-            if (contract) {
-                const contractMode = stringValue(contract.mode) ?? "normal";
-                const policyReason = stringValue(contract.policyReason) ?? "default-convergence";
-                lines.push(panelLine(`  contract: ${contractMode} · policy=${policyReason}`, THEME.fg));
-                const evidence = readStringArray(contract.evidence);
-                if (evidence.length > 0) {
-                    lines.push(
-                        panelLine(`  evidence: ${evidence.map((item) => clipText(item, 42)).join(" · ")}`, THEME.fgMuted),
-                    );
-                }
-                for (const contradiction of readBlackboardContradictions(contract)) {
-                    lines.push(
-                        panelLine(
-                            `  conflict: ${clipText(contradiction.left, 28)} ↔ ${clipText(contradiction.right, 28)} · ${clipText(
-                                contradiction.reason,
-                                48,
-                            )}`,
-                            THEME.fgMuted,
-                        ),
-                    );
-                }
-            }
-            if (plan) {
-                const objective = stringValue(plan.objective);
-                const qaGoal = stringValue(plan.qaGoal);
-                const workstreams = readStringArray(plan.workstreams);
-                lines.push(panelLine("  plan", THEME.fgMuted));
-                if (objective) {
-                    lines.push(panelLine(`    objective: ${clipText(objective, 118)}`, THEME.fgMuted));
-                }
-                if (qaGoal) {
-                    lines.push(panelLine(`    qa: ${clipText(qaGoal, 118)}`, THEME.fgMuted));
-                }
-                if (workstreams.length > 0) {
-                    lines.push(panelLine(`    workstreams: ${workstreams.join(" / ")}`, THEME.fgMuted));
-                }
-            }
-            if (turn.workers.length > 0) {
-                lines.push(panelLine("  workers", THEME.fgMuted));
-                for (const worker of turn.workers) {
-                    const dependsOn = worker.dependsOn.length > 0 ? ` ← ${worker.dependsOn.join(",")}` : "";
-                    lines.push(
-                        panelLine(
-                            `    ${worker.name} · ${worker.role} · ${worker.status} · ${worker.stage} · ${worker.handoff}${dependsOn}`,
-                            THEME.fgMuted,
-                        ),
-                    );
-                }
-            }
-            lines.push(panelLine("", THEME.fg));
-        }
-
-        function appendBlackboardPanelLines(lines: PanelLine[], turn: BlackboardTurn): void {
-            const detailColor = THEME.purple;
-            lines.push(panelLine("Blackboard", THEME.purple, TextAttributes.BOLD));
-            lines.push(
-                panelLine(
-                    `  ${turn.status} · ${turn.steps.length} steps · ${turn.decisions.length} decisions`,
-                    THEME.fg,
-                ),
-            );
-            if (turn.goal.trim()) {
-                lines.push(panelLine(`  goal: ${clipText(turn.goal, 160)}`, THEME.fgMuted));
-            }
-            for (const step of turn.steps) {
-                const factCount = step.newFacts.length;
-                const blockerCount = step.blockers.length;
-                const suffix = [
-                    `risk=${step.risk}`,
-                    factCount > 0 ? `facts=${factCount}` : undefined,
-                    blockerCount > 0 ? `blockers=${blockerCount}` : undefined,
-                ]
-                    .filter(Boolean)
-                    .join(" · ");
-                lines.push(
-                    panelLine(
-                        `  r${step.round} ${step.workerRole}: ${clipText(step.outputSummary)}${suffix ? ` (${suffix})` : ""}`,
-                        detailColor,
-                    ),
-                );
-            }
-            const publicMessages = turn.messages.filter((message) => message.visibility === "public");
-            for (const message of publicMessages) {
-                const speaker = message.workerRole ?? message.role;
-                const round = message.round !== undefined ? `r${message.round} ` : "";
-                lines.push(panelLine(`  ${round}${speaker}: ${clipText(message.content)}`, detailColor));
-            }
-            const decision = turn.decisions[turn.decisions.length - 1];
-            if (decision) {
-                lines.push(panelLine(`  decision: ${clipText(decision.prompt, 180)}`, THEME.pink));
-                if (decision.options.length > 0) {
-                    lines.push(
-                        panelLine(
-                            `  options: ${decision.options.map((option) => option.label).join(" / ")}`,
-                            THEME.pink,
-                        ),
-                    );
-                }
-            }
-        }
-
-        function panelLine(content: string, fg: RGBA, attributes?: number, bg?: RGBA): PanelLine {
-            return { attributes, bg, content, fg };
-        }
-
-        function extraLine(content: string, fg: RGBA): TextRenderable {
-            return new TextRenderable(renderer, {
-                content,
-                fg,
-                selectable: true,
-                width: "100%",
-            });
-        }
-
-        function clipText(value: string, max = 140): string {
-            const text = value.replace(/\s+/gu, " ").trim();
-            return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-        }
-
-        function numberValue(value: unknown): number | undefined {
-            return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-        }
-
-        function summarizeQuestion(question: string, ordinal: number, max: number): string {
-            return `${ordinal}. ${clipText(question, max)}`;
-        }
-
-        function updateMessageExtras(renderable: MsgRenderable, msg: ChatMessage) {
-            const nextKey = messageExtrasKey(msg);
-            if (renderable.extrasKey === nextKey) return;
-            if (renderable.extraBox) {
-                renderable.box.remove(renderable.extraBox.id);
-                renderable.extraBox = undefined;
-            }
-            const extraBox = buildExtras(msg);
-            if (extraBox) {
-                renderable.extraBox = extraBox;
-                renderable.box.add(extraBox);
-            }
-            renderable.extrasKey = nextKey;
-        }
-
-        function hasMessageOrderChanged(msgs: ChatMessage[]): boolean {
-            const sharedLength = Math.min(msgs.length, messageRenderables.length);
-            for (let i = 0; i < sharedLength; i += 1) {
-                if (msgs[i]?.id !== messageRenderables[i]?.id) return true;
-            }
-            return false;
-        }
-
-        function rebuildMessageList(msgs: ChatMessage[]): void {
-            const content = scrollBox.content;
-            while (messageRenderables.length > 0) {
-                const item = messageRenderables.pop()!;
-                content.remove(item.box.id);
-            }
-            for (const msg of msgs) {
-                const item = buildMessageBox(msg);
-                messageRenderables.push(item);
-                content.add(item.box);
-            }
-            messageVirtualScrollBar.sync();
-        }
-
-        // ── 响应式同步：Header ───────────────────────────────
-        createEffect(() => {
-            const ph = phase();
-            const def = PHASE_DEF[ph];
-            const processing_ = processing();
-            const frame = processing_ ? (def.frames[frameTick() % def.frames.length] ?? def.done) : def.done;
-            const turnCount = messages().filter((m) => m.role === "user").length;
-            topStatusText.content = `${frame} ${agentName} · ${processing_ ? def.label : "ready"} · ${turnCount} turns`;
-            topStatusText.fg = processing_ ? def.color : THEME.header;
-        });
-
-        // ── 响应式同步：Error line ────────────────────────────
-        createEffect(() => {
-            const err = error();
-            if (err) {
-                errorText.content = `⚠ ${err}`;
-                errorText.visible = true;
-            } else {
-                errorText.visible = false;
-            }
-        });
-
-        createEffect(() => {
-            statusText.content = statusNotice() ?? commandHintText(inputText()) ?? DEFAULT_STATUS_TEXT;
-        });
-
-        function commandHintText(text: string): string | undefined {
-            const trimmed = text.trim();
-            if (!trimmed.startsWith("/")) return undefined;
-            const matched = matchAppCommand(appCommands, trimmed);
-            if (matched && builtinActionOf(matched.rule) === AppCommandAction.OpenBlackboard) {
-                return questionCommandHint(matched.name);
-            }
-            if (matched && builtinActionOf(matched.rule) === AppCommandAction.OpenThinking) {
-                return questionCommandHint(matched.name);
-            }
-            const suggestions = commandSuggestions(trimmed);
-            if (suggestions.length === 0) return "Unknown command · Tab cannot complete";
-            return suggestions.map((command) => `${command.name} ${command.detail}`).join(" · ");
-        }
-
-        function questionCommandHint(command: string): string {
-            const pairs = turnPairs();
-            const items = pairs.slice(-4);
-            if (items.length === 0) return `${command} has no sent questions yet`;
-            if (inputText().trim() === command) return `${command}: Enter opens a question menu · Up/Down select`;
-            return items
-                .map(
-                    (item, idx) =>
-                        `${command} ${summarizeQuestion(item.question, pairs.length - items.length + idx + 1, 24)}`,
-                )
-                .join(" · ");
-        }
-
-        function syncPanelLines(
-            content: BoxRenderable,
-            renderables: TextRenderable[],
-            lines: PanelLine[],
-        ): void {
-            while (renderables.length > lines.length) {
-                const stale = renderables.pop()!;
-                content.remove(stale.id);
-            }
-            for (let i = renderables.length; i < lines.length; i += 1) {
-                const line = lines[i]!;
-                const item = new TextRenderable(renderer, {
-                    attributes: line.attributes,
-                    bg: line.bg,
-                    content: line.content,
-                    fg: line.fg,
-                    selectable: true,
-                    width: "100%",
-                });
-                renderables.push(item);
-                content.add(item);
-            }
-            for (let i = 0; i < lines.length; i += 1) {
-                const line = lines[i]!;
-                const item = renderables[i]!;
-                item.content = line.content;
-                item.fg = line.fg;
-                item.bg = line.bg;
-                item.attributes = line.attributes ?? TextAttributes.NONE;
-            }
-        }
-
-        // ── 响应式同步：右侧 todo / 思考 / 黑板面板 ─────────────
-        createEffect(() => {
-            const panelVisible = renderer.width >= 88;
-            sidePanel.visible = panelVisible;
-            if (!panelVisible) return;
-            syncPanelLines(metricsContent, metricLineRenderables, resourcePanelLines());
-            syncPanelLines(todoScrollBox.content, todoLineRenderables, todoPanelLines());
-            syncPanelLines(detailScrollBox.content, detailLineRenderables, detailPanelLines());
-        });
-
-        // ── 响应式同步：消息列表（增量更新）────────────────────
-        createEffect(() => {
-            const msgs = messages();
-            const content = scrollBox.content;
-
-            if (hasMessageOrderChanged(msgs)) {
-                rebuildMessageList(msgs);
-                return;
-            }
-
-            // 移除多余的消息 renderables
-            while (messageRenderables.length > msgs.length) {
-                const r = messageRenderables.pop()!;
-                content.remove(r.box.id);
-            }
-
-            // 添加新消息
-            for (let i = messageRenderables.length; i < msgs.length; i++) {
-                const msg = msgs[i];
-                if (!msg) continue;
-                const r = buildMessageBox(msg);
-                messageRenderables.push(r);
-                content.add(r.box);
-            }
-
-            // 同步已有消息：内容 + extras
-            for (let i = 0; i < msgs.length && i < messageRenderables.length; i++) {
-                const msg = msgs[i];
-                const renderable = messageRenderables[i];
-                if (!msg || !renderable) continue;
-                updateMessageContent(renderable, msg);
-                updateMessageExtras(renderable, msg);
-            }
-            messageVirtualScrollBar.sync();
-        });
-
-        // ── Cleanup ───────────────────────────────────────────
-        return () => {
-            destroyed = true;
-            clearInterval(animTimer);
-            if (historyPollTimer) clearInterval(historyPollTimer);
-            if (statusNoticeTimer) clearTimeout(statusNoticeTimer);
-            renderer.keyInput.off("keypress", keyHandler);
-            renderer.off(CliRenderEvents.RESIZE, resizeHandler);
-            unsubscribeEvents?.();
-            // remove main tree
-            root.remove(mainBox.id);
-            markdownSyntaxStyle.destroy();
-            disposeSolid();
-        };
-    });
+export async function startNativeChatApp(options: ChatTerminalAppOptions): Promise<void> {
+    const app = new NativeChatApp(options);
+    await app.start();
 }
 
 export interface ChatChromeLayout {
-    defaultSidePanelMode: SidePanelMode;
     headerBrand: string;
+    inlineSections: readonly string[];
     inputStatusText: string;
-    metricsPanelHeight: number;
     sendIconText: string;
     sidePanelVisible: boolean;
-    todoPanelHeight: number;
     sidePanelWidth: number;
+    terminalScreenMode: typeof CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode;
+    usesFixedMessageViewport: boolean;
+    usesOpenTuiRenderer: boolean;
+    usesVirtualScrollbar: boolean;
 }
 
 export interface ChatResourceMetric {
     bar: string;
-    color: RGBA;
     label: string;
     ratio?: number;
     value: string;
@@ -2461,44 +819,7 @@ export interface ChatTodoSnapshot {
     workstreams: string[];
 }
 
-export function buildChatTodoSnapshot(turn: BlackboardTurn | undefined): ChatTodoSnapshot {
-    if (!turn) {
-        return {
-            progressLine: "no todo list yet",
-            stepCount: 0,
-            steps: [],
-            workstreamCount: 0,
-            workstreams: [],
-        };
-    }
-
-    const metadata = readRecord(turn.metadata);
-    const plan = readRecord(metadata?.blackboardPlan);
-    const workstreams = readStringArray(plan?.workstreams).slice(0, 6);
-    const totalRounds = Math.max(1, turn.budget.maxRounds);
-    const stepCount = turn.steps.length;
-    const doneWorkers = turn.workers.filter((worker) => worker.status === "done").length;
-    const runningWorkers = turn.workers.filter((worker) => worker.status === "running").length;
-    const blockedWorkers = turn.workers.filter((worker) => worker.status === "blocked").length;
-    const clip = (value: string, max = 96): string => {
-        const text = value.replace(/\s+/gu, " ").trim();
-        return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-    };
-
-    return {
-        progressLine: `progress ${stepCount}/${totalRounds} rounds · workers ${doneWorkers}/${turn.workers.length}`,
-        stepCount,
-        steps: turn.steps.slice(-4).map((step) => `r${step.round} ${step.workerRole}: ${clip(step.outputSummary)}`),
-        workerLine:
-            turn.workers.length > 0
-                ? `workers ${doneWorkers} done · ${runningWorkers} running · ${blockedWorkers} blocked`
-                : undefined,
-        workstreamCount: workstreams.length,
-        workstreams,
-    };
-}
-
-export function buildChatResourceSnapshot(input: {
+export interface ChatResourceSnapshotInput {
     activeFork?: ContextForkRecord | null;
     activeProject?: ProjectRecord | null;
     contextPressureBudgetTokens?: number;
@@ -2512,185 +833,193 @@ export function buildChatResourceSnapshot(input: {
     questionText?: string;
     reply?: ChatMessage;
     turnCount?: number;
-}): ChatResourceSnapshot {
-    const replyTokens = estimateTokens(input.reply?.content ?? "");
-    const questionTokens = estimateTokens(input.questionText ?? "");
-    const draftTokens = estimateTokens(input.draftText ?? "");
-    const turnTokens = questionTokens + replyTokens;
-    const contextBudget = finitePositive(input.activeFork?.maxContextTokens)
-        ?? finitePositive(input.contextPressureBudgetTokens)
-        ?? finitePositive(input.maxOutputTokens);
-    const outputBudget = finitePositive(input.maxOutputTokens);
-    const ringSize = finitePositive(input.contextRingSize);
-    const identityLimit = finitePositive(input.identityAppendDailyLimit);
-    const memoryActions = numberValueFromRecord(input.reply?.metadata, "memoryActions") ?? 0;
-    const model = input.model && input.model.trim().length > 0 ? input.model : "model unknown";
-    const provider = input.providerId && input.providerId.trim().length > 0 ? input.providerId : "provider unknown";
-    const visibility = clampRatio(input.memoryVisibilityThreshold);
+}
 
-    return {
-        contextWindow: {
-            limitLabel: contextBudget ? `${formatTokenCount(contextBudget)}` : "unknown",
-            usedLabel: contextBudget ? `${formatTokenCount(turnTokens)} / ${formatTokenCount(contextBudget)}` : `${formatTokenCount(turnTokens)} used`,
-        },
-        memoryLine: [
-            `actions ${memoryActions}`,
-            `project ${input.activeProject ? "on" : "off"}`,
-            `fork ${input.activeFork ? "on" : "off"}`,
-        ].join(" · "),
-        modelLine: `${provider} · ${model}`,
-        metrics: [
-            {
-                bar: renderChatProgressBar(contextBudget ? turnTokens / contextBudget : undefined),
-                color: THEME.header,
-                label: "context",
-                ratio: contextBudget ? clampRatio(turnTokens / contextBudget) : undefined,
-                value: contextBudget ? `${turnTokens}/${contextBudget} tok` : `${turnTokens} tok`,
+/**
+ * TODO 摘要只消费结构化 blackboard turn，不从消息文本反推计划状态。
+ */
+export class ChatTodoSnapshotBuilder {
+    public static readonly default = new ChatTodoSnapshotBuilder();
+
+    public build(turn: BlackboardTurn | undefined): ChatTodoSnapshot {
+        if (!turn)
+            return { progressLine: "no todo list yet", stepCount: 0, steps: [], workstreamCount: 0, workstreams: [] };
+        const metadata = readRecord(turn.metadata);
+        const plan = readRecord(metadata?.blackboardPlan);
+        const workstreams = readStringArray(plan?.workstreams).slice(0, 6);
+        const totalRounds = Math.max(1, turn.budget.maxRounds);
+        const stepCount = turn.steps.length;
+        const doneWorkers = turn.workers.filter((worker) => worker.status === "done").length;
+        const runningWorkers = turn.workers.filter((worker) => worker.status === "running").length;
+        const blockedWorkers = turn.workers.filter((worker) => worker.status === "blocked").length;
+        return {
+            progressLine: `progress ${stepCount}/${totalRounds} rounds · workers ${doneWorkers}/${turn.workers.length}`,
+            stepCount,
+            steps: turn.steps
+                .slice(-4)
+                .map((step) => `r${step.round} ${step.workerRole}: ${this.clip(step.outputSummary)}`),
+            workerLine:
+                turn.workers.length > 0
+                    ? `workers ${doneWorkers} done · ${runningWorkers} running · ${blockedWorkers} blocked`
+                    : undefined,
+            workstreamCount: workstreams.length,
+            workstreams,
+        };
+    }
+
+    private clip(value: string, max = 96): string {
+        const text = value.replace(/\s+/gu, " ").trim();
+        return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    }
+}
+
+/**
+ * Chat resource 摘要是终端 UI 展示协议，输入必须是 runtime metadata / 配置数值。
+ */
+export class ChatResourceSnapshotBuilder {
+    public static readonly default = new ChatResourceSnapshotBuilder();
+
+    public build(input: ChatResourceSnapshotInput): ChatResourceSnapshot {
+        const replyTokens = this.estimateTokens(input.reply?.content ?? "");
+        const questionTokens = this.estimateTokens(input.questionText ?? "");
+        const draftTokens = this.estimateTokens(input.draftText ?? "");
+        const turnTokens = questionTokens + replyTokens;
+        const contextBudget =
+            this.finitePositive(input.activeFork?.maxContextTokens) ??
+            this.finitePositive(input.contextPressureBudgetTokens) ??
+            this.finitePositive(input.maxOutputTokens);
+        const outputBudget = this.finitePositive(input.maxOutputTokens);
+        const ringSize = this.finitePositive(input.contextRingSize);
+        const identityLimit = this.finitePositive(input.identityAppendDailyLimit);
+        const memoryActions = this.numberValueFromRecord(input.reply?.metadata, "memoryActions") ?? 0;
+        const model = input.model && input.model.trim().length > 0 ? input.model : "model unknown";
+        const provider = input.providerId && input.providerId.trim().length > 0 ? input.providerId : "provider unknown";
+        const visibility = this.clampRatio(input.memoryVisibilityThreshold);
+        return {
+            contextWindow: {
+                limitLabel: contextBudget ? `${this.formatTokenCount(contextBudget)}` : "unknown",
+                usedLabel: contextBudget
+                    ? `${this.formatTokenCount(turnTokens)} / ${this.formatTokenCount(contextBudget)}`
+                    : `${this.formatTokenCount(turnTokens)} used`,
             },
-            {
-                bar: renderChatProgressBar(outputBudget ? replyTokens / outputBudget : undefined),
-                color: THEME.purple,
-                label: "reply",
-                ratio: outputBudget ? clampRatio(replyTokens / outputBudget) : undefined,
-                value: outputBudget ? `${replyTokens}/${outputBudget} tok` : `${replyTokens} tok`,
-            },
-            {
-                bar: renderChatProgressBar(outputBudget ? draftTokens / outputBudget : undefined),
-                color: THEME.gold,
-                label: "draft",
-                ratio: outputBudget ? clampRatio(draftTokens / outputBudget) : undefined,
-                value: outputBudget ? `${draftTokens}/${outputBudget} tok` : `${draftTokens} tok`,
-            },
-            {
-                bar: renderChatProgressBar(ringSize ? (input.turnCount ?? 0) / ringSize : undefined),
-                color: THEME.pink,
-                label: "memory",
-                ratio: ringSize ? clampRatio((input.turnCount ?? 0) / ringSize) : undefined,
-                value: ringSize ? `${input.turnCount ?? 0}/${ringSize} turns` : `${input.turnCount ?? 0} turns`,
-            },
-            {
-                bar: renderChatProgressBar(visibility),
-                color: THEME.fgMuted,
-                label: "recall",
-                ratio: visibility,
-                value: input.memoryVisibilityThreshold === undefined
-                    ? "gate unknown"
-                    : `gate ${input.memoryVisibilityThreshold.toFixed(2)}`,
-            },
-            {
-                bar: renderChatProgressBar(identityLimit ? memoryActions / identityLimit : undefined),
-                color: THEME.user,
-                label: "write",
-                ratio: identityLimit ? clampRatio(memoryActions / identityLimit) : undefined,
-                value: identityLimit ? `${memoryActions}/${identityLimit} daily` : `${memoryActions} actions`,
-            },
-        ],
-        tokens: {
-            draft: draftTokens,
-            input: questionTokens,
-            output: replyTokens,
-            total: turnTokens,
-        },
-    };
+            memoryLine: [
+                `actions ${memoryActions}`,
+                `project ${input.activeProject ? "on" : "off"}`,
+                `fork ${input.activeFork ? "on" : "off"}`,
+            ].join(" · "),
+            modelLine: `${provider} · ${model}`,
+            metrics: [
+                this.metric(
+                    "context",
+                    contextBudget ? turnTokens / contextBudget : undefined,
+                    contextBudget ? `${turnTokens}/${contextBudget} tok` : `${turnTokens} tok`,
+                ),
+                this.metric(
+                    "reply",
+                    outputBudget ? replyTokens / outputBudget : undefined,
+                    outputBudget ? `${replyTokens}/${outputBudget} tok` : `${replyTokens} tok`,
+                ),
+                this.metric(
+                    "draft",
+                    outputBudget ? draftTokens / outputBudget : undefined,
+                    outputBudget ? `${draftTokens}/${outputBudget} tok` : `${draftTokens} tok`,
+                ),
+                this.metric(
+                    "memory",
+                    ringSize ? (input.turnCount ?? 0) / ringSize : undefined,
+                    ringSize ? `${input.turnCount ?? 0}/${ringSize} turns` : `${input.turnCount ?? 0} turns`,
+                ),
+                this.metric(
+                    "recall",
+                    visibility,
+                    input.memoryVisibilityThreshold === undefined
+                        ? "gate unknown"
+                        : `gate ${input.memoryVisibilityThreshold.toFixed(2)}`,
+                ),
+                this.metric(
+                    "write",
+                    identityLimit ? memoryActions / identityLimit : undefined,
+                    identityLimit ? `${memoryActions}/${identityLimit} daily` : `${memoryActions} actions`,
+                ),
+            ],
+            tokens: { draft: draftTokens, input: questionTokens, output: replyTokens, total: turnTokens },
+        };
+    }
+
+    public renderProgressBar(ratio: number | undefined, width = RESOURCE_BAR_WIDTH): string {
+        const size = Math.max(1, Math.floor(width));
+        if (ratio === undefined || !Number.isFinite(ratio)) return `${"·".repeat(size)} --%`;
+        const bounded = Math.min(1, Math.max(0, ratio));
+        const filled = Math.min(size, Math.max(0, Math.round(bounded * size)));
+        return `${"█".repeat(filled)}${"░".repeat(size - filled)} ${Math.round(bounded * 100)
+            .toString()
+            .padStart(2, " ")}%`;
+    }
+
+    private metric(label: string, ratio: number | undefined, value: string): ChatResourceMetric {
+        return { bar: this.renderProgressBar(ratio), label, ratio: this.clampRatio(ratio), value };
+    }
+
+    private estimateTokens(text: string): number {
+        const chars = text.trim().length;
+        return chars === 0 ? 0 : Math.ceil(chars / 4);
+    }
+
+    private finitePositive(value: number | undefined): number | undefined {
+        return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+    }
+
+    private formatTokenCount(value: number): string {
+        return Math.max(0, Math.floor(value)).toLocaleString("en-US");
+    }
+
+    private clampRatio(value: number | undefined): number | undefined {
+        if (value === undefined || !Number.isFinite(value)) return undefined;
+        return Math.min(1, Math.max(0, value));
+    }
+
+    private numberValueFromRecord(record: Record<string, unknown> | null | undefined, key: string): number | undefined {
+        const value = record?.[key];
+        return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    }
+}
+
+/**
+ * Chrome contract 只描述 chat 对终端能力的占用，保证不会回退到固定高度 UI。
+ */
+export class ChatChromeContractBuilder {
+    public static readonly default = new ChatChromeContractBuilder();
+
+    public build(totalWidth: number, totalHeight: number): ChatChromeLayout {
+        void totalWidth;
+        void totalHeight;
+        return {
+            headerBrand: CHAT_HEADER_BRAND,
+            inlineSections: CHAT_INLINE_SECTIONS,
+            inputStatusText: DEFAULT_STATUS_TEXT,
+            sendIconText: SEND_ICON_TEXT,
+            sidePanelVisible: false,
+            sidePanelWidth: 0,
+            terminalScreenMode: CHAT_SCROLL_LOCK_CONTRACT.terminalScreenMode,
+            usesFixedMessageViewport: false,
+            usesOpenTuiRenderer: false,
+            usesVirtualScrollbar: false,
+        };
+    }
+}
+
+export function buildChatTodoSnapshot(turn: BlackboardTurn | undefined): ChatTodoSnapshot {
+    return ChatTodoSnapshotBuilder.default.build(turn);
+}
+
+export function buildChatResourceSnapshot(input: ChatResourceSnapshotInput): ChatResourceSnapshot {
+    return ChatResourceSnapshotBuilder.default.build(input);
 }
 
 export function renderChatProgressBar(ratio: number | undefined, width = RESOURCE_BAR_WIDTH): string {
-    const size = Math.max(1, Math.floor(width));
-    if (ratio === undefined || !Number.isFinite(ratio)) return `${"·".repeat(size)} --%`;
-    const bounded = Math.min(1, Math.max(0, ratio));
-    const filled = Math.min(size, Math.max(0, Math.round(bounded * size)));
-    return `${"█".repeat(filled)}${"░".repeat(size - filled)} ${Math.round(bounded * 100)
-        .toString()
-        .padStart(2, " ")}%`;
+    return ChatResourceSnapshotBuilder.default.renderProgressBar(ratio, width);
 }
 
 export function chatChromeLayout(totalWidth: number, totalHeight: number): ChatChromeLayout {
-    const sidePanelWidth = rightPanelWidth(totalWidth);
-    return {
-        defaultSidePanelMode: "blackboard",
-        headerBrand: CHAT_HEADER_BRAND,
-        inputStatusText: DEFAULT_STATUS_TEXT,
-        metricsPanelHeight: metricsPanelHeight(totalHeight),
-        sendIconText: SEND_ICON_TEXT,
-        sidePanelVisible: sidePanelWidth > 0,
-        todoPanelHeight: todoPanelHeight(totalHeight),
-        sidePanelWidth,
-    };
-}
-
-function rightPanelWidth(totalWidth: number): number {
-    if (totalWidth < 88) return 0;
-    return Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(SIDE_PANEL_MIN_WIDTH, Math.floor(totalWidth * SIDE_PANEL_RATIO)));
-}
-
-function metricsPanelHeight(totalHeight: number): number {
-    return Math.max(METRICS_PANEL_MIN_HEIGHT, Math.floor(totalHeight * METRICS_PANEL_HEIGHT_RATIO));
-}
-
-function todoPanelHeight(totalHeight: number): number {
-    return Math.max(TODO_PANEL_MIN_HEIGHT, Math.floor(totalHeight * TODO_PANEL_HEIGHT_RATIO));
-}
-
-function knownCommandList(registry: AppCommandRegistry): string {
-    const names = registry.rules
-        .filter((rule) => rule.enabled)
-        .map((rule) => rule.match.slash[0])
-        .filter((name): name is string => typeof name === "string" && name.length > 0)
-        .slice(0, 8);
-    return names.length > 0 ? names.join(", ") : "configured commands";
-}
-
-function estimateTokens(text: string): number {
-    const chars = text.trim().length;
-    return chars === 0 ? 0 : Math.ceil(chars / 4);
-}
-
-function finitePositive(value: number | undefined): number | undefined {
-    return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
-}
-
-function splitModelLine(modelLine: string): [provider: string, model: string] {
-    const separator = " · ";
-    const index = modelLine.indexOf(separator);
-    if (index < 0) return ["provider unknown", modelLine];
-    return [modelLine.slice(0, index), modelLine.slice(index + separator.length)];
-}
-
-function formatTokenCount(value: number): string {
-    return Math.max(0, Math.floor(value)).toLocaleString("en-US");
-}
-
-function clampRatio(value: number | undefined): number | undefined {
-    if (value === undefined || !Number.isFinite(value)) return undefined;
-    return Math.min(1, Math.max(0, value));
-}
-
-function numberValueFromRecord(record: Record<string, unknown> | null | undefined, key: string): number | undefined {
-    const value = record?.[key];
-    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function clamp(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
-}
-
-function readBlackboardContradictions(
-    contract: Record<string, unknown>,
-): Array<{ left: string; reason: string; right: string }> {
-    const contradictions = contract.contradictions;
-    if (!Array.isArray(contradictions)) {
-        return [];
-    }
-    return contradictions
-        .filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
-        .map((item) => ({
-            left: typeof item.left === "string" ? item.left : "",
-            reason: typeof item.reason === "string" ? item.reason : "",
-            right: typeof item.right === "string" ? item.right : "",
-        }))
-        .filter((item) => item.left.length > 0 && item.right.length > 0 && item.reason.length > 0);
-}
-
-function readBoolean(value: unknown): boolean | undefined {
-    return typeof value === "boolean" ? value : undefined;
+    return ChatChromeContractBuilder.default.build(totalWidth, totalHeight);
 }

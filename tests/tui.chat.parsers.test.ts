@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { clearOpenTuiEnvCacheForChat } from "../src/command/tui/chat/index.ts";
 import { loadChatParsers } from "../src/command/tui/chat/parsers.config.ts";
 
 describe("TUI chat markdown parsers", () => {
@@ -16,20 +15,12 @@ describe("TUI chat markdown parsers", () => {
     });
 });
 
-describe("TUI chat OpenTUI env cache", () => {
-    test("does not crash when compiled OpenTUI env singleton is missing", () => {
-        expect(() =>
-            clearOpenTuiEnvCacheForChat(() => {
-                throw new TypeError("undefined is not an object (evaluating 'envStore.clearCache')");
-            }),
-        ).not.toThrow();
-    });
+describe("TUI chat native terminal entry", () => {
+    test("does not depend on OpenTUI env cache handling", async () => {
+        const source = await Bun.file("src/command/tui/chat/chat.entry.ts").text();
 
-    test("surfaces unrelated OpenTUI env cache errors", () => {
-        expect(() =>
-            clearOpenTuiEnvCacheForChat(() => {
-                throw new TypeError("permission denied while clearing cache");
-            }),
-        ).toThrow("permission denied");
+        expect(source).not.toContain("clearOpenTuiEnvCache");
+        expect(source).not.toContain("OTUI_USE_ALTERNATE_SCREEN");
+        expect(source).toContain("startNativeChatApp");
     });
 });

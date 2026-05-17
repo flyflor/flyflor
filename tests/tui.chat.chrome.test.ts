@@ -4,7 +4,7 @@ import { join } from "node:path";
 import {
     buildChatResourceSnapshot,
     buildChatTodoSnapshot,
-    CHAT_SIDE_PANEL_SECTIONS,
+    CHAT_INLINE_SECTIONS,
     CHAT_SCROLL_LOCK_CONTRACT,
     chatChromeLayout,
     NO_PLAN_TEXT,
@@ -12,16 +12,17 @@ import {
 } from "../src/command/tui/chat/app.tsx";
 
 describe("TUI chat chrome", () => {
-    test("matches the screenshot-style chat layout contract", () => {
+    test("matches the single-column performance chat layout contract", () => {
         const layout = chatChromeLayout(160, 50);
 
-        expect(layout.headerBrand).toBe("◉ flyflor-chat · powered by OpenTUI");
-        expect(layout.defaultSidePanelMode).toBe("blackboard");
-        expect(layout.sidePanelVisible).toBe(true);
-        expect(layout.sidePanelWidth).toBe(44);
-        expect(layout.metricsPanelHeight).toBe(13);
-        expect(layout.todoPanelHeight).toBe(12);
-        expect(CHAT_SIDE_PANEL_SECTIONS).toEqual([
+        expect(layout.headerBrand).toBe("◉ flyflor-chat");
+        expect(layout.sidePanelVisible).toBe(false);
+        expect(layout.sidePanelWidth).toBe(0);
+        expect(layout.terminalScreenMode).toBe("main-screen");
+        expect(layout.usesFixedMessageViewport).toBe(false);
+        expect(layout.usesOpenTuiRenderer).toBe(false);
+        expect(layout.usesVirtualScrollbar).toBe(false);
+        expect(layout.inlineSections).toEqual([
             "Questions",
             "Blackboard",
             "TODO List",
@@ -29,13 +30,15 @@ describe("TUI chat chrome", () => {
             "TOKENS",
             "CONTEXT WINDOW",
         ]);
-        expect(layout.sendIconText).toBe("➤➤➤");
-        expect(layout.sendIconText.length).toBeGreaterThanOrEqual(3);
+        expect(layout.inlineSections).toEqual(CHAT_INLINE_SECTIONS);
+        expect(layout.sendIconText).toBe(">");
+        expect(layout.sendIconText.length).toBe(1);
         expect(layout.inputStatusText).toContain("Enter 发送");
-        expect(layout.inputStatusText).toContain("Cmd/Ctrl+C 复制");
+        expect(layout.inputStatusText).toContain("/history");
+        expect(layout.inputStatusText).toContain("/exit");
     });
 
-    test("keeps a stable no-plan label for the todo rail", () => {
+    test("keeps a stable no-plan label for inline todo summaries", () => {
         const snapshot = buildChatTodoSnapshot(undefined);
 
         expect(NO_PLAN_TEXT).toBe("暂无计划");
@@ -56,11 +59,7 @@ describe("TUI chat chrome", () => {
                 { round: 1, workerRole: "architect", outputSummary: "shape the plan" },
                 { round: 2, workerRole: "reviewer", outputSummary: "check the edge cases" },
             ] as never,
-            workers: [
-                { status: "done" },
-                { status: "running" },
-                { status: "blocked" },
-            ] as never,
+            workers: [{ status: "done" }, { status: "running" }, { status: "blocked" }] as never,
         } as never);
 
         expect(snapshot.progressLine).toContain("progress 2/8 rounds");
@@ -74,18 +73,22 @@ describe("TUI chat chrome", () => {
         expect(snapshot.steps[1]).toContain("r2 reviewer");
     });
 
-    test("hides the right visual rail on narrow terminals", () => {
+    test("keeps the single-column layout on narrow terminals", () => {
         const layout = chatChromeLayout(87, 24);
 
         expect(layout.sidePanelVisible).toBe(false);
         expect(layout.sidePanelWidth).toBe(0);
-        expect(layout.metricsPanelHeight).toBe(12);
-        expect(layout.todoPanelHeight).toBe(8);
+        expect(layout.terminalScreenMode).toBe("main-screen");
     });
 
     test("renders model and memory resource bars instead of the old avatar rail", () => {
         const snapshot = buildChatResourceSnapshot({
-            activeProject: { id: "p1", projectDir: "/p", projectMemoryDir: "/p/.flyflor/memory", title: "Project" } as never,
+            activeProject: {
+                id: "p1",
+                projectDir: "/p",
+                projectMemoryDir: "/p/.flyflor/memory",
+                title: "Project",
+            } as never,
             contextRingSize: 12,
             identityAppendDailyLimit: 3,
             maxOutputTokens: 100,
@@ -125,47 +128,45 @@ describe("TUI chat chrome", () => {
         expect(renderChatProgressBar(0.5, 4)).toBe("██░░ 50%");
     });
 
-    test("keeps stream panels locked to OpenTUI scrollboxes", async () => {
+    test("uses native terminal scrollback instead of an OpenTUI fixed viewport", async () => {
         const [appSource, entrySource] = await Promise.all([
             readFile(join(import.meta.dir, "../src/command/tui/chat/app.tsx"), "utf8"),
             readFile(join(import.meta.dir, "../src/command/tui/chat/chat.entry.ts"), "utf8"),
         ]);
 
         expect(CHAT_SCROLL_LOCK_CONTRACT).toMatchObject({
-            chatStickyScroll: true,
-            chatStickyStart: "bottom",
-            hiddenScrollbarSize: 0,
-            showScrollbars: false,
-            sidePanelStickyScroll: true,
-            sidePanelStickyStart: "bottom",
+            chatStickyScroll: false,
+            chatStickyStart: "native-terminal",
             terminalMouse: false,
-            terminalScreenMode: "alternate-screen",
-            wheelRouting: "keyboard-and-native-terminal",
+            terminalScreenMode: "main-screen",
+            wheelRouting: "native-terminal-scrollback",
         });
+        expect(appSource).not.toContain("@opentui/core");
+        expect(appSource).not.toContain("CliRenderer");
+        expect(appSource).not.toContain("createCliRenderer");
+        expect(appSource).not.toContain("ScrollBoxRenderable");
+        expect(appSource).not.toContain("TextareaRenderable");
+        expect(appSource).not.toContain("height: renderer.height");
+        expect(appSource).not.toContain("maxHeight");
+        expect(appSource).toContain("node:readline/promises");
+        expect(appSource).toContain("stdout");
         expect(appSource).not.toContain("onMouseScroll");
         expect(appSource).not.toContain("applyChatScrollWheel");
-        expect(appSource).not.toMatch(/verticalScrollBar\.visible\s*=\s*true/u);
-        expect(appSource).toContain("stickyScroll: CHAT_SCROLL_LOCK_CONTRACT.sidePanelStickyScroll");
-        expect(appSource).toContain("visible: CHAT_SCROLL_LOCK_CONTRACT.showScrollbars");
-        expect(appSource).toContain("useDetachedScrollBars(scrollBox)");
-        expect(appSource).toContain("createVirtualScrollBar(renderer, scrollBox");
-        expect(appSource).not.toContain("createVirtualScrollBar(renderer, todoScrollBox");
-        expect(appSource).not.toContain("createVirtualScrollBar(renderer, detailScrollBox");
+        expect(appSource).not.toContain("verticalScrollbarOptions");
+        expect(appSource).not.toContain("horizontalScrollbarOptions");
+        expect(appSource).not.toContain("useDetachedScrollBars(");
+        expect(appSource).not.toContain("createVirtualScrollBar(");
+        expect(appSource).not.toContain("contentRow.add(sidePanel)");
         expect(appSource).not.toContain("appendConversationSummary(lines)");
         expect(appSource).not.toContain("startSelection");
         expect(appSource).not.toContain("updateSelection");
         expect(appSource).not.toContain("requestSelectionUpdate");
-        expect(entrySource).toContain("withPinnedAlternateScreen(");
-        expect(entrySource).toContain("useTuiRendererConfig({");
+        expect(entrySource).not.toContain("@opentui/core");
+        expect(entrySource).not.toContain("createCliRenderer");
+        expect(entrySource).not.toContain("withPinnedAlternateScreen(");
+        expect(entrySource).not.toContain("useTuiRendererConfig(");
         expect(entrySource).not.toContain("enableMouseMovement: true");
-        expect(entrySource).toContain("pinRendererAlternateScreen(instance)");
-        expect(entrySource).toContain("pinTerminalMouseScreen()");
-        expect(await readFile(join(import.meta.dir, "../src/command/tui/scrollbar.composition.ts"), "utf8")).toContain(
-            "BoxRenderable.prototype.remove.call(scrollBox, scrollBox.verticalScrollBar.id)",
-        );
-        const screenSource = await readFile(join(import.meta.dir, "../src/command/tui/screen.composition.ts"), "utf8");
-        expect(screenSource).toContain("\\x1b[3J");
-        expect(screenSource).not.toContain("\\x1b[?1003h");
-        expect(screenSource).toContain("\\x1b[?1049l");
+        expect(entrySource).not.toContain("pinRendererAlternateScreen(");
+        expect(entrySource).not.toContain("pinTerminalMouseScreen(");
     });
 });

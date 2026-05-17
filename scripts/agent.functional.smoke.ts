@@ -35,7 +35,7 @@ interface FunctionalSmokeReport {
  *
  * This probes the intelligence hot path without real provider cost: runtime
  * warmup, model-visible protocol parsing, memory action persistence, planning
- * metadata, brain.db writes, history side-panel records, and event emission.
+ * metadata, brain.db writes, history replay records, and event emission.
  */
 class AgentFunctionalSmoke {
     private runtime: RuntimeModule | undefined;

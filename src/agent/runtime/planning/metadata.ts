@@ -2,8 +2,8 @@
  * Compact planning metadata for TUI/history surfaces.
  *
  * Brain.db stores full TaskPlan / ContextFork / SceneRecord structures. Runtime
- * reply metadata only needs stable summaries that side panels can render without
- * re-parsing event payloads or leaking long internal records.
+ * reply metadata only needs stable summaries that chat/history surfaces can
+ * render inline without re-parsing event payloads or leaking long internal records.
  */
 
 import type { ContextForkRecord, SceneRecord, TaskPlanRecord } from "../../../protocol/contracts/index.ts";

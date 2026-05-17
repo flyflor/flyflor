@@ -8,7 +8,8 @@ describe("Human chat input boundary", () => {
         const commandSource = await Bun.file("src/command/cli/commands.ts").text();
 
         expect(humanChatSource).toContain("await runtime.warmup()");
-        expect(tuiChatSource).toContain("await options.runtime.warmup()");
+        expect(tuiChatSource).toContain("startNativeChatApp(options)");
+        expect(await Bun.file("src/command/tui/chat/app.tsx").text()).toContain("await this.options.runtime.warmup()");
         expect(commandSource).toContain("await runtime.warmup()");
     });
 

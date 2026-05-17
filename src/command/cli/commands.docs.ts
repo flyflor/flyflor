@@ -16,7 +16,7 @@ const COMMAND_STATUS_ROWS: CommandStatusRow[] = [
         path: "chat",
         status: "✅",
         note:
-            "Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; `--tui` is TTY-gated, the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`.",
+            "Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; `--tui` is TTY-gated, the chat surface uses native terminal readline/stdout instead of an OpenTUI renderer, replies stream into normal scrollback without a fixed-height message viewport or virtual scrollbar, startup shows the current user's history, ask lists append an `Other` freeform option when choices are present, and blackboard/TODO/history replay/model/token/context/memory summaries render inline as plain text.",
     },
     { path: "tui", status: "✅", note: "Requires an interactive stdin/stdout TTY and uses the same lifecycle guard as `chat --tui`, but launches the dashboard instead of the chat surface; the dashboard Overview shows working-memory health and recovery file metadata and exits through a one-shot renderer teardown path." },
     { path: "gateway run", status: "✅", note: "Runs in the foreground." },

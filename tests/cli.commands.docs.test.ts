@@ -15,10 +15,11 @@ describe("cli command docs generator", () => {
         expect(renderCliCommandsDoc()).toContain("flyflor blackboard");
     });
 
-    test("command docs mention scoped TUI copy and explicit CLI navigator entry", () => {
+    test("command docs mention native chat scrollback and explicit CLI navigator entry", () => {
         const doc = renderCliCommandsDoc();
 
-        expect(doc).toContain("copied within the panel where selection starts");
+        expect(doc).toContain("native terminal readline/stdout");
+        expect(doc).toContain("normal scrollback without a fixed-height message viewport or virtual scrollbar");
         expect(doc).toContain("add explicit `--tui` to open the CLI navigator");
     });
 

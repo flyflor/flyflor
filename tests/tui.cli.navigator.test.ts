@@ -161,14 +161,18 @@ describe("CLI TUI navigator", () => {
             readFile("src/command/tui/index.tsx", "utf8"),
             readFile("src/command/tui/cli/navigator.ts", "utf8"),
             readFile("src/command/tui/cli/blackboard.browser.tsx", "utf8"),
-            readFile("src/command/tui/chat/chat.entry.ts", "utf8"),
         ]);
+        const chatEntry = await readFile("src/command/tui/chat/chat.entry.ts", "utf8");
 
         for (const source of files) {
             expect(source).toContain("createTuiLifecycle");
             expect(source).not.toContain('process.once("SIGINT"');
             expect(source).not.toContain('process.once("SIGTERM"');
         }
+        expect(chatEntry).toContain("startNativeChatApp(options)");
+        expect(chatEntry).not.toContain("createTuiLifecycle");
+        expect(chatEntry).not.toContain('process.once("SIGINT"');
+        expect(chatEntry).not.toContain('process.once("SIGTERM"');
     });
 
     test("all command TUI surfaces use command renderables instead of Solid rendering", async () => {
@@ -206,15 +210,17 @@ describe("CLI TUI navigator", () => {
 
     test("mouse-enabled renderer config disables noisy all-motion movement reports", async () => {
         const sources = await Promise.all([
-            readFile("src/command/tui/chat/chat.entry.ts", "utf8"),
             readFile("src/command/tui/cli/navigator.ts", "utf8"),
             readFile("src/command/tui/index.tsx", "utf8"),
         ]);
+        const chatEntry = await readFile("src/command/tui/chat/chat.entry.ts", "utf8");
 
         for (const source of sources) {
             expect(source).toContain("useTuiRendererConfig({");
             expect(source).not.toContain("enableMouseMovement: true");
         }
+        expect(chatEntry).not.toContain("useTuiRendererConfig({");
+        expect(chatEntry).not.toContain("enableMouseMovement: true");
         expect(useTuiRendererConfig({ useMouse: true }).enableMouseMovement).toBe(false);
         expect(useTuiRendererConfig({ useMouse: false }).enableMouseMovement).toBeUndefined();
         expect(useTuiRendererConfig({}).enableMouseMovement).toBe(false);
