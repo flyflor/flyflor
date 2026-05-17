@@ -103,6 +103,34 @@ export class MemoryMatrixAggregator {
             schemaVersion: 1,
         };
     }
+
+    /**
+     * Apply matrix aggregate values back to durable memory weights.
+     *
+     * This is intentionally owned by the matrix component because the exact
+     * blend is part of the matrix contract, not a free-floating memory helper.
+     */
+    public applyImpact(weights: MemoryWeights, matrix: MemoryMatrixResult): MemoryWeights {
+        return {
+            ...weights,
+            importance: clamp01(
+                weights.importance * 0.88 + matrix.aggregate.recallBoost * 0.08 + matrix.aggregate.residualValue * 0.04,
+            ),
+        };
+    }
+
+    public recallBoostFromMetadata(metadata: Record<string, unknown> | undefined): number {
+        const matrix = metadata?.matrix;
+        if (!isRecord(matrix)) {
+            return 0;
+        }
+        const aggregate = matrix.aggregate;
+        if (!isRecord(aggregate)) {
+            return 0;
+        }
+        const value = aggregate.recallBoost;
+        return typeof value === "number" && Number.isFinite(value) ? clamp01(value) : 0;
+    }
 }
 
 /**
@@ -158,26 +186,19 @@ class MemoryMatrixLexicalCodec {
 }
 
 export function applyMatrixImpact(weights: MemoryWeights, matrix: MemoryMatrixResult): MemoryWeights {
-    return {
-        ...weights,
-        importance: clamp01(
-            weights.importance * 0.88 + matrix.aggregate.recallBoost * 0.08 + matrix.aggregate.residualValue * 0.04,
-        ),
-    };
+    return DEFAULT_MATRIX_AGGREGATOR.applyImpact(weights, matrix);
 }
 
 export function recallBoostFromMetadata(metadata: Record<string, unknown> | undefined): number {
-    const matrix = metadata?.matrix;
-    if (!isRecord(matrix)) {
-        return 0;
-    }
-    const aggregate = matrix.aggregate;
-    if (!isRecord(aggregate)) {
-        return 0;
-    }
-    const value = aggregate.recallBoost;
-    return typeof value === "number" && Number.isFinite(value) ? clamp01(value) : 0;
+    return DEFAULT_MATRIX_AGGREGATOR.recallBoostFromMetadata(metadata);
 }
+
+const DEFAULT_MATRIX_AGGREGATOR = new MemoryMatrixAggregator({
+    enabled: true,
+    maxSourceChars: 0,
+    maxTokens: 0,
+    naturalSentiment: false,
+});
 
 function disabledMatrix(weights: MemoryWeights, aggregationMs: number): MemoryMatrixResult {
     return {

@@ -46,7 +46,7 @@ import {
 } from "../project/index.ts";
 import { CodenamePromotionComponent } from "../project/codename.promote.ts";
 import { ProjectScaffolder } from "../project/scaffolder.ts";
-import { spreadActivation, type ActivationCandidate } from "./recall/index.ts";
+import { SpreadingActivationEngine, type ActivationCandidate } from "./recall/index.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions/index.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding/index.ts";
 import { MarkdownMemoryStore } from "./markdown/index.ts";
@@ -55,7 +55,7 @@ import { ContextForkStore, type ContextForkStoreSource } from "./fork/index.ts";
 import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain/index.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary/index.ts";
 import { AskReason, MemoryEventStatus, MemoryEventType, SceneRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ProjectRecord, type SceneRecord, type TaskPlanRecord } from "../../protocol/contracts/index.ts";
-import { applyMatrixImpact, MemoryMatrixAggregator } from "./recall/index.ts";
+import { MemoryMatrixAggregator } from "./recall/index.ts";
 import { CrystalMemoryComponent } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore, type PendingProjectOffer, type PendingSkillOffer } from "./sqlite/index.ts";
 import { LocalWorkingMemoryStore, type EpisodeRecord, type WorkingMemoryStore } from "./working/index.ts";
@@ -147,6 +147,8 @@ export class MemoryModule extends Memory {
     private readonly contextForkStore: ContextForkStore;
     private readonly contextScope: ContextScopeComponent;
     private readonly matrix: MemoryMatrixAggregator;
+    /** Hippocampus 热记忆召回的扩散激活 owner，只消费向量/概念/recency 资源指标。 */
+    private readonly activation: SpreadingActivationEngine;
     private readonly sqlite: SQLiteMemoryStore;
     private readonly crystal: CrystalMemoryComponent;
     /** 工作记忆 Component；主线实现是本地 WAL/snapshot。 */
@@ -190,6 +192,7 @@ export class MemoryModule extends Memory {
         this.contextForkStore = new ContextForkStore(join(config.paths.storageDir, "forks"));
         this.contextScope = useContextScope(config.paths);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
+        this.activation = new SpreadingActivationEngine();
         this.sqlite = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         this.crystal = new CrystalMemoryComponent(
             config.memory.crystal,
@@ -706,7 +709,7 @@ export class MemoryModule extends Memory {
                 ? context.embedding
                 : await this.embeddings.embed(message.text);
         const topK = Math.min(8, ringSize);
-        const activated = spreadActivation({
+        const activated = this.activation.spread({
             queryEmbedding,
             hotConcepts,
             candidates,
@@ -3276,7 +3279,7 @@ function candidateFromAction(
 ): MemoryCandidate {
     const baseWeights = weightsFromAction(defaults, action);
     const matrix = matrixAggregator.aggregate({ action, message, reply, weights: baseWeights });
-    const weights = applyMatrixImpact(baseWeights, matrix);
+    const weights = matrixAggregator.applyImpact(baseWeights, matrix);
     return {
         id: crypto.randomUUID(),
         targetFile: targetFileForMemoryAction(action),
@@ -3478,7 +3481,7 @@ function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWr
         reply: input.reply,
         weights: baseWeights,
     });
-    const weights = applyMatrixImpact(baseWeights, matrix);
+    const weights = input.matrix.applyImpact(baseWeights, matrix);
     const inboxDecayMultiplier = Math.max(1, input.inboxDecayMultiplier);
     const recency =
         isInboxProjectId(input.projectConstraintId) ? clamp01(1 / inboxDecayMultiplier) : 1;

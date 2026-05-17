@@ -105,6 +105,7 @@ flowchart LR
 - Runtime Ask 渲染、附件摘要、project constraint、turn timing 和 working-memory 健康判定分别由 `AskReplyRenderer`、`AttachmentSummaryRenderer`、`ProjectConstraintBuilder`、`TurnTiming`、`WorkingMemoryHealthInspector` 负责；兼容函数只作转发。
 - Runtime 对模型输出的 AgentAsk / GhostDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`GhostDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
+- Memory hippocampus 召回必须由 `SpreadingActivationEngine` 拥有，生产路径只消费向量、概念、importance 和 recency 资源指标；`spreadActivation()` 只作为兼容薄入口。Memory matrix 聚合与权重回写必须由 `MemoryMatrixAggregator` 拥有，`applyMatrixImpact()` / `recallBoostFromMetadata()` 只作为兼容薄入口。
 - `src/neural/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
 - `src/neural/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
 - 约定优先于抽象：迁移不是为了消灭重复代码，而是为了让生命周期、状态、IO 副作用和协议边界有明确 owner。重复的 5-10 行值转换可以保留在对应 class 内，不为了“复用”抽成跨域工具函数。
