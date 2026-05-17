@@ -26,8 +26,8 @@ import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
 import { createTuiLifecycle } from "./lifecycle.ts";
-import { useDetachedScrollBars } from "./scrollbar.composition.ts";
-import { pinRendererAlternateScreen, withPinnedAlternateScreen } from "./screen.composition.ts";
+import { createVirtualScrollBar, useDetachedScrollBars } from "./scrollbar.composition.ts";
+import { pinRendererAlternateScreen, pinTerminalMouseScreen, withPinnedAlternateScreen } from "./screen.composition.ts";
 
 const THEME = {
     bg: RGBA.fromInts(13, 19, 29),
@@ -145,6 +145,7 @@ export async function startTui(app: FlyFlor): Promise<void> {
         pinRendererAlternateScreen(instance);
         return instance;
     });
+    const restoreTerminalMouseScreen = pinTerminalMouseScreen();
 
     const loadSnapshot = async (): Promise<TuiSnapshot> => {
         const config = app.resolve(ConfigComponent);
@@ -231,7 +232,12 @@ export async function startTui(app: FlyFlor): Promise<void> {
         },
     });
     useDetachedScrollBars(content);
+    const contentVirtualScrollBar = createVirtualScrollBar(renderer, content, {
+        thumbColor: THEME.cyan,
+        trackColor: THEME.border,
+    });
     row.add(content);
+    row.add(contentVirtualScrollBar.rail);
     root.add(mainBox);
 
     const lineRenderables: TextRenderable[] = [];
@@ -309,17 +315,20 @@ export async function startTui(app: FlyFlor): Promise<void> {
             text.fg = line.color;
             text.attributes = line.bold ? TextAttributes.BOLD : TextAttributes.NONE;
         }
+        contentVirtualScrollBar.sync();
         renderer.requestRender();
     }
 
     const resizeHandler = () => {
         mainBox.width = renderer.width;
         mainBox.height = renderer.height;
+        contentVirtualScrollBar.sync();
     };
     renderer.on(CliRenderEvents.RESIZE, resizeHandler);
     renderer.keyInput.on("keypress", keyHandler);
     const lifecycle = createTuiLifecycle(renderer, {
         cleanup: () => {
+            restoreTerminalMouseScreen();
             renderer.keyInput.off("keypress", keyHandler);
             renderer.off(CliRenderEvents.RESIZE, resizeHandler);
             clearInterval(timer);

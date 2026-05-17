@@ -12,6 +12,18 @@ describe("Human chat input boundary", () => {
         expect(commandSource).toContain("await runtime.warmup()");
     });
 
+    test("chat --tui launches the chat TUI, not the dashboard TUI", async () => {
+        const commandSource = await Bun.file("src/command/cli/commands.ts").text();
+        const branchStart = commandSource.indexOf("if (opts.tui)");
+        const tuiBranch = commandSource.slice(branchStart, commandSource.indexOf("const toolsetAllowlist", branchStart));
+        const rootCommandSource = await Bun.file("src/command/command.ts").text();
+
+        expect(tuiBranch).toContain("mode: RuntimeMode.Chat");
+        expect(tuiBranch).toContain("await startChatTui(app)");
+        expect(tuiBranch).not.toContain("startTui");
+        expect(rootCommandSource).toContain('argv.includes("--tui") && argv[2] !== RuntimeMode.Chat');
+    });
+
     test("coalesces pasted multiline content into one turn before /exit", async () => {
         const inputs = await collect(
             coalesceChatInput(

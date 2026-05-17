@@ -31,6 +31,17 @@ export function pinRendererAlternateScreen(renderer: CliRenderer): void {
     }
 }
 
+export function pinTerminalMouseScreen(stdout: NodeJS.WriteStream = process.stdout): () => void {
+    if (!stdout.isTTY) return () => {};
+    // OpenTUI normally emits these through the native renderer. The explicit
+    // fallback keeps Docker exec / terminal scrollback from stealing wheel
+    // events before the ScrollBox sees them.
+    stdout.write("\x1b[?1049h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h");
+    return () => {
+        stdout.write("\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1049l");
+    };
+}
+
 export function clearOpenTuiEnvCache(clearCache: () => void = clearEnvCache): void {
     try {
         clearCache();

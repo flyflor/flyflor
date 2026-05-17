@@ -28,8 +28,8 @@ import { fetchGhostList } from "../../cli/handlers/ghost.list.handler.ts";
 import { fetchDreamData } from "../../cli/handlers/dream.handler.ts";
 import { copyTextToTerminalClipboard } from "../chat/clipboard.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
-import { useDetachedScrollBars } from "../scrollbar.composition.ts";
-import { pinRendererAlternateScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
+import { createVirtualScrollBar, useDetachedScrollBars } from "../scrollbar.composition.ts";
+import { pinRendererAlternateScreen, pinTerminalMouseScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
 import {
     CLI_TUI_PAGE_ITEMS,
     listCliTuiPages,
@@ -335,6 +335,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         pinRendererAlternateScreen(instance);
         return instance;
     });
+    const restoreTerminalMouseScreen = pinTerminalMouseScreen();
 
     let activePage = firstPage;
     let lines: string[] = [];
@@ -430,7 +431,12 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         },
     });
     useDetachedScrollBars(contentBox);
+    const contentVirtualScrollBar = createVirtualScrollBar(renderer, contentBox, {
+        thumbColor: THEME.purple,
+        trackColor: THEME.border,
+    });
     bodyBox.add(contentBox);
+    bodyBox.add(contentVirtualScrollBar.rail);
 
     const statusBox = new BoxRenderable(renderer, {
         backgroundColor: THEME.selectedBg,
@@ -463,11 +469,13 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             err = null;
             status = `Loaded ${currentLoader.title}`;
             syncUi();
+            contentVirtualScrollBar.sync();
         } catch (e) {
             if (token !== refreshToken) return;
             err = e instanceof Error ? e.message : String(e);
             status = "Load failed";
             syncUi();
+            contentVirtualScrollBar.sync();
         }
     };
 
@@ -553,6 +561,7 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
             renderable.fg = lineColor(line);
             renderable.attributes = line.startsWith("◆") ? TextAttributes.BOLD : TextAttributes.NONE;
         }
+        contentVirtualScrollBar.sync();
         renderer.requestRender();
     }
 
@@ -567,11 +576,13 @@ export async function startCliTui(app: FlyFlor, initialPage: CliPage): Promise<v
         mainBox.width = renderer.width;
         mainBox.height = renderer.height;
         navBox.width = navWidthFor(renderer.width);
+        contentVirtualScrollBar.sync();
     };
     renderer.on(CliRenderEvents.RESIZE, resizeHandler);
     renderer.keyInput.on("keypress", keyHandler);
     const lifecycle = createTuiLifecycle(renderer, {
         cleanup: () => {
+            restoreTerminalMouseScreen();
             destroyed = true;
             renderer.keyInput.off("keypress", keyHandler);
             renderer.off(CliRenderEvents.RESIZE, resizeHandler);

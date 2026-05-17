@@ -35,7 +35,7 @@ import { copyTextToTerminalClipboard } from "./clipboard.ts";
 import { readAskMeta, readBlackboardMeta, readMcpTrace, readPlanningMeta, readRecord, readStringArray } from "./metadata.parse.ts";
 import type { ChatMessage, McpTrace, Phase } from "./types.ts";
 import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
-import { useDetachedScrollBars } from "../scrollbar.composition.ts";
+import { createVirtualScrollBar, useDetachedScrollBars } from "../scrollbar.composition.ts";
 import {
     AppCommandAction,
     AppCommandRunType,
@@ -1045,7 +1045,12 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
         });
         useDetachedScrollBars(scrollBox);
+        const messageVirtualScrollBar = createVirtualScrollBar(renderer, scrollBox, {
+            thumbColor: THEME.pink,
+            trackColor: THEME.border,
+        });
         messagesRow.add(scrollBox);
+        messagesRow.add(messageVirtualScrollBar.rail);
 
         // Input area
         const inputBox = new BoxRenderable(renderer, {
@@ -1123,9 +1128,23 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
         // 右侧栏只展示结构化运行态：路由分析、黑板讨论和 turn 进度。
         const sidePanel = new BoxRenderable(renderer, {
             flexDirection: "column",
+            border: true,
+            borderColor: THEME.border,
+            backgroundColor: THEME.panelBg,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: 1,
+            paddingBottom: 1,
             flexShrink: 0,
             rowGap: 1,
             width: rightPanelWidth(renderer.width),
+        });
+        const sidePanelTitle = new TextRenderable(renderer, {
+            content: "Blackboard   [Ctrl+B Thinking]",
+            fg: THEME.fg,
+            attributes: TextAttributes.BOLD,
+            selectable: false,
+            width: "100%",
         });
         const todoScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
@@ -1152,6 +1171,10 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
         });
         useDetachedScrollBars(todoScrollBox);
+        const todoVirtualScrollBar = createVirtualScrollBar(renderer, todoScrollBox, {
+            thumbColor: THEME.gold,
+            trackColor: THEME.border,
+        });
 
         const detailScrollBox = new ScrollBoxRenderable(renderer, {
             contentOptions: {
@@ -1178,18 +1201,19 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             },
         });
         useDetachedScrollBars(detailScrollBox);
+        const detailVirtualScrollBar = createVirtualScrollBar(renderer, detailScrollBox, {
+            thumbColor: THEME.pink,
+            trackColor: THEME.border,
+        });
 
         const metricsCard = new BoxRenderable(renderer, {
             flexDirection: "column",
             flexShrink: 0,
             height: metricsPanelHeight(renderer.height),
-            border: true,
+            border: ["top"],
             borderColor: THEME.border,
-            backgroundColor: THEME.panelBgSoft,
-            paddingLeft: 1,
-            paddingRight: 1,
+            backgroundColor: THEME.panelBg,
             paddingTop: 1,
-            paddingBottom: 1,
         });
         const metricsContent = new BoxRenderable(renderer, {
             flexDirection: "column",
@@ -1201,31 +1225,39 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             flexDirection: "column",
             flexShrink: 0,
             height: todoPanelHeight(renderer.height),
-            border: true,
+            border: ["top"],
             borderColor: THEME.border,
             backgroundColor: THEME.panelBg,
-            paddingLeft: 1,
-            paddingRight: 1,
             paddingTop: 1,
-            paddingBottom: 1,
         });
         const detailCard = new BoxRenderable(renderer, {
             flexDirection: "column",
             flexGrow: 1,
             flexShrink: 1,
-            border: true,
-            borderColor: THEME.border,
             backgroundColor: THEME.panelBg,
-            paddingLeft: 1,
-            paddingRight: 1,
-            paddingTop: 1,
-            paddingBottom: 1,
         });
-        todoCard.add(todoScrollBox);
-        detailCard.add(detailScrollBox);
-        sidePanel.add(metricsCard);
-        sidePanel.add(todoCard);
+        const todoScrollRow = new BoxRenderable(renderer, {
+            flexDirection: "row",
+            flexGrow: 1,
+            flexShrink: 1,
+            minHeight: 1,
+        });
+        todoScrollRow.add(todoScrollBox);
+        todoScrollRow.add(todoVirtualScrollBar.rail);
+        const detailScrollRow = new BoxRenderable(renderer, {
+            flexDirection: "row",
+            flexGrow: 1,
+            flexShrink: 1,
+            minHeight: 1,
+        });
+        detailScrollRow.add(detailScrollBox);
+        detailScrollRow.add(detailVirtualScrollBar.rail);
+        todoCard.add(todoScrollRow);
+        detailCard.add(detailScrollRow);
+        sidePanel.add(sidePanelTitle);
         sidePanel.add(detailCard);
+        sidePanel.add(todoCard);
+        sidePanel.add(metricsCard);
         contentRow.add(sidePanel);
 
         root.add(mainBox);
@@ -2394,6 +2426,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 messageRenderables.push(item);
                 content.add(item.box);
             }
+            messageVirtualScrollBar.sync();
         }
 
         // ── 响应式同步：Header ───────────────────────────────
@@ -2490,6 +2523,8 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
             syncPanelLines(metricsContent, metricLineRenderables, resourcePanelLines());
             syncPanelLines(todoScrollBox.content, todoLineRenderables, todoPanelLines());
             syncPanelLines(detailScrollBox.content, detailLineRenderables, detailPanelLines());
+            todoVirtualScrollBar.sync();
+            detailVirtualScrollBar.sync();
         });
 
         // ── 响应式同步：消息列表（增量更新）────────────────────
@@ -2525,6 +2560,7 @@ export function createChatApp(renderer: CliRenderer, options: ChatEntryOptions):
                 updateMessageContent(renderable, msg);
                 updateMessageExtras(renderable, msg);
             }
+            messageVirtualScrollBar.sync();
         });
 
         // ── Cleanup ───────────────────────────────────────────

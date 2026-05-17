@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { BoxRenderable, ScrollBarRenderable, ScrollBoxRenderable, TextRenderable } from "@opentui/core";
+import { BoxRenderable, RGBA, ScrollBarRenderable, ScrollBoxRenderable, TextRenderable } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
 import {
     listCliTuiPages,
@@ -10,8 +10,8 @@ import {
 } from "../src/command/tui/cli/command.route.ts";
 import { nextDashboardTab, renderDashboardLines } from "../src/command/tui/index.tsx";
 import { filterBlackboardTurns, listWindow, renderDetailLines } from "../src/command/tui/cli/blackboard.browser.tsx";
-import { useDetachedScrollBars } from "../src/command/tui/scrollbar.composition.ts";
-import { withPinnedAlternateScreen } from "../src/command/tui/screen.composition.ts";
+import { createVirtualScrollBar, useDetachedScrollBars } from "../src/command/tui/scrollbar.composition.ts";
+import { pinTerminalMouseScreen, withPinnedAlternateScreen } from "../src/command/tui/screen.composition.ts";
 
 describe("CLI TUI navigator", () => {
     test("covers the major interactive command pages", () => {
@@ -224,12 +224,25 @@ describe("CLI TUI navigator", () => {
                 },
             });
             useDetachedScrollBars(scrollBox);
-            testRenderer.renderer.root.add(scrollBox);
+            const virtualScrollBar = createVirtualScrollBar(testRenderer.renderer, scrollBox, {
+                thumbColor: RGBA.fromInts(255, 151, 190),
+                trackColor: RGBA.fromInts(76, 106, 126),
+            });
+            const row = new BoxRenderable(testRenderer.renderer, {
+                flexDirection: "row",
+                height: 8,
+                width: 24,
+            });
+            row.add(scrollBox);
+            row.add(virtualScrollBar.rail);
+            testRenderer.renderer.root.add(row);
 
             for (let index = 0; index < 20; index += 1) {
                 scrollBox.content.add(new TextRenderable(testRenderer.renderer, { content: `line ${index}` }));
             }
 
+            await testRenderer.renderOnce();
+            virtualScrollBar.sync();
             await testRenderer.renderOnce();
 
             const directChildren = BoxRenderable.prototype.getChildren.call(scrollBox) as unknown[];
@@ -237,7 +250,62 @@ describe("CLI TUI navigator", () => {
             expect(scrollBox.wrapper.getChildren().some((child) => child instanceof ScrollBarRenderable)).toBe(false);
             expect(scrollBox.verticalScrollBar.parent).toBeNull();
             expect(scrollBox.horizontalScrollBar.parent).toBeNull();
-            expect(testRenderer.captureCharFrame()).not.toContain("▌");
+            expect(testRenderer.captureCharFrame()).toContain("█");
+        } finally {
+            testRenderer.renderer.destroy();
+        }
+    });
+
+    test("routes wheel events into detached scrollboxes and keeps the virtual rail visible", async () => {
+        const testRenderer = await createTestRenderer({
+            width: 24,
+            height: 8,
+            screenMode: "alternate-screen",
+        });
+
+        try {
+            const scrollBox = new ScrollBoxRenderable(testRenderer.renderer, {
+                contentOptions: {
+                    flexDirection: "column",
+                },
+                flexGrow: 1,
+                flexShrink: 1,
+                horizontalScrollbarOptions: {
+                    height: 0,
+                    visible: false,
+                },
+                verticalScrollbarOptions: {
+                    showArrows: false,
+                    visible: false,
+                    width: 0,
+                },
+            });
+            useDetachedScrollBars(scrollBox);
+            const virtualScrollBar = createVirtualScrollBar(testRenderer.renderer, scrollBox, {
+                thumbColor: RGBA.fromInts(255, 151, 190),
+                trackColor: RGBA.fromInts(76, 106, 126),
+            });
+            const row = new BoxRenderable(testRenderer.renderer, {
+                flexDirection: "row",
+                height: 8,
+                width: 24,
+            });
+            row.add(scrollBox);
+            row.add(virtualScrollBar.rail);
+            testRenderer.renderer.root.add(row);
+
+            for (let index = 0; index < 30; index += 1) {
+                scrollBox.content.add(new TextRenderable(testRenderer.renderer, { content: `line ${index}` }));
+            }
+
+            await testRenderer.renderOnce();
+            virtualScrollBar.sync();
+            await testRenderer.mockMouse.scroll(2, 2, "down");
+            await testRenderer.renderOnce();
+            virtualScrollBar.sync();
+
+            expect(scrollBox.scrollTop).toBeGreaterThan(0);
+            expect(testRenderer.captureCharFrame()).toContain("█");
         } finally {
             testRenderer.renderer.destroy();
         }
@@ -267,5 +335,25 @@ describe("CLI TUI navigator", () => {
                 process.env.OTUI_USE_ALTERNATE_SCREEN = previous;
             }
         }
+    });
+
+    test("pins terminal alternate screen and mouse tracking as a fallback", () => {
+        const writes: string[] = [];
+        const restore = pinTerminalMouseScreen({
+            isTTY: true,
+            write: (chunk: string) => {
+                writes.push(chunk);
+                return true;
+            },
+        } as never);
+
+        restore();
+
+        expect(writes[0]).toContain("\x1b[?1049h");
+        expect(writes[0]).toContain("\x1b[?1003h");
+        expect(writes[0]).toContain("\x1b[?1006h");
+        expect(writes[1]).toContain("\x1b[?1049l");
+        expect(writes[1]).toContain("\x1b[?1003l");
+        expect(writes[1]).toContain("\x1b[?1006l");
     });
 });

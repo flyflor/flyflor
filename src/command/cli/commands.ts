@@ -80,6 +80,7 @@ import {
 import { formatFlyflorVersion } from "../version.ts";
 import { renderConfigView } from "../config.view.ts";
 import { runUpdate } from "./update.ts";
+import { loadAppCommandRegistry } from "../app.commands.ts";
 import { canStartInteractiveTui, interactiveTuiUnavailableMessage } from "../tui/tty.ts";
 import { resolveCommandTuiPage } from "../tui/cli/command.route.ts";
 
@@ -691,7 +692,6 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             verbose?: boolean;
         }>();
         if (opts.tui) {
-            // `chat --tui` 与 `tui` 对齐：都进入 TUI 主循环，避免两条职责不清的入口。
             if (!canStartInteractiveTui()) {
                 console.error(interactiveTuiUnavailableMessage("flyflor chat --tui"));
                 process.exitCode = 2;
@@ -699,10 +699,13 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             }
             const app = await getFlyFlor({
                 argv: process.argv,
-                mode: RuntimeMode.Tui,
+                mode: RuntimeMode.Chat,
                 config: await configWithRuntimeOverrides(opts)});
-            const { startTui } = await import("../tui/index.tsx");
-            await startTui(app);
+            try {
+                await startChatTui(app);
+            } finally {
+                app.dispose();
+            }
             return;
         }
         const app = await getFlyFlor({
@@ -1153,6 +1156,31 @@ function inferMimeType(path: string): string | undefined {
         ".txt": "text/plain",
         ".md": "text/markdown"};
     return map[ext];
+}
+
+async function startChatTui(app: FlyFlor): Promise<void> {
+    const runtime = app.resolve(RuntimeModule);
+    const blackboard = app.resolve(BlackboardModule);
+    const config = app.resolve(ConfigComponent);
+    const events = app.resolve(EventsComponent);
+    const { startChatEntry } = await import("../tui/chat/index.ts");
+    await startChatEntry({
+        runtime,
+        eventBus: events.asBus(),
+        approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+        agentName: "flyflor",
+        appCommands: await loadAppCommandRegistry(config.paths),
+        resourceConfig: {
+            contextPressureBudgetTokens: config.routing.contextPressureBudgetTokens,
+            contextRingSize: config.memory.working?.local.contextRingSize,
+            identityAppendDailyLimit: config.memory.tuning.identity.appendDailyLimitPerFile,
+            maxOutputTokens: config.model.maxTokens,
+            memoryVisibilityThreshold: config.memory.tuning.atomScore.visibilityThreshold,
+            model: config.model.model,
+            providerId: config.model.providerId,
+        },
+        blackboard,
+    });
 }
 
 async function configWithRuntimeOverrides(options: {

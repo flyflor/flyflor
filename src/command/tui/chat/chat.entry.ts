@@ -17,7 +17,12 @@ import type { AppCommandRegistry } from "../../app.commands.ts";
 import { CHAT_SCROLL_LOCK_CONTRACT, createChatApp } from "./app.tsx";
 import { loadChatParsers } from "./parsers.config.ts";
 import { createTuiLifecycle } from "../lifecycle.ts";
-import { clearOpenTuiEnvCache, pinRendererAlternateScreen, withPinnedAlternateScreen } from "../screen.composition.ts";
+import {
+    clearOpenTuiEnvCache,
+    pinRendererAlternateScreen,
+    pinTerminalMouseScreen,
+    withPinnedAlternateScreen,
+} from "../screen.composition.ts";
 
 export interface ChatEntryOptions {
     runtime: RuntimeModule;
@@ -78,6 +83,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
             pinRendererAlternateScreen(instance);
             return instance;
         });
+        const restoreTerminalMouseScreen = pinTerminalMouseScreen();
         renderer.console.onCopySelection = (text) => {
             if (text.trim().length > 0) {
                 renderer.copyToClipboardOSC52(text);
@@ -89,6 +95,7 @@ export async function startChatEntry(options: ChatEntryOptions): Promise<void> {
 
         const lifecycle = createTuiLifecycle(renderer, {
             cleanup: () => {
+                restoreTerminalMouseScreen();
                 dispose();
                 restoreTreeSitterWorkerPath();
             },

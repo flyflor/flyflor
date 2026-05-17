@@ -22,7 +22,7 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
         );
     }
 
-    if (argv.includes("--tui")) {
+    if (argv.includes("--tui") && argv[2] !== RuntimeMode.Chat) {
         if (!canStartInteractiveTui()) {
             console.error(interactiveTuiUnavailableMessage(tuiRequestLabel(argv)));
             return { exitCode: 2 };

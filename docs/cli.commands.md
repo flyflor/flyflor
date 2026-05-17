@@ -103,7 +103,7 @@ flowchart TB
 | Command | Status | Note |
 | --- | --- | --- |
 | `flyflor chat` | ✅ | Supports `--query` / `--image` / `--toolsets` / `--skills` / `--max-turns` / `--tui`; `--tui` is TTY-gated, the TUI prompt uses a multiline textarea, assistant replies render themed Markdown with full-width tables, startup shows the current user's history, scrolling to the top loads older records, ask lists render inline and append an `Other` freeform option when choices are present, blackboard turn details render inline, message and side-panel text can be copied within the panel where selection starts, and the Docker binary keeps Solid reactive updates through `--conditions=browser`. |
-| `flyflor tui` | ✅ | Requires an interactive stdin/stdout TTY and uses the same TUI lifecycle guard as `chat --tui`; the dashboard Overview shows working-memory health and recovery file metadata and exits through a one-shot renderer teardown path. |
+| `flyflor tui` | ✅ | Requires an interactive stdin/stdout TTY and uses the same lifecycle guard as `chat --tui`, but launches the dashboard instead of the chat surface; the dashboard Overview shows working-memory health and recovery file metadata and exits through a one-shot renderer teardown path. |
 | `flyflor gateway run` | ✅ | Runs in the foreground. |
 | `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
 | `flyflor gateway service plan` | ✅ | Renders deterministic systemd user units or launchd plists; `--write` only writes the file and leaves enable/start commands explicit. |
