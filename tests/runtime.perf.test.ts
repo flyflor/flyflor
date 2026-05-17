@@ -2,8 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildBypassDecision, evaluateFastRoute, FastRouteReason } from "../src/agent/runtime/routing/fast.route.ts";
+import {
+    buildBypassDecision,
+    evaluateFastRoute,
+    FastRouteReason,
+    type FastRouteSnapshot,
+} from "../src/agent/runtime/routing/fast.route.ts";
+import type { FastRouteSnapshotStore } from "../src/agent/runtime/routing/fast.route.store.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
+import { RuntimeModule } from "../src/agent/runtime/index.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/embedding/index.ts";
 import { MemoryModule } from "../src/neural/memory/index.ts";
 import {
@@ -12,6 +19,8 @@ import {
     ChatType,
     type GatewayMessage,
     type GatewayReply,
+    type ModelClient,
+    type ModelMessage,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
@@ -205,6 +214,31 @@ describe("PerfMetrics event emission", () => {
     });
 });
 
+describe("Runtime fastRoute cache observability", () => {
+    test("cache write failure degrades to telemetry without failing the reply", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const runtime = new RuntimeModule(config, new StaticTextModel("fast route reply"), events);
+        (
+            runtime as unknown as {
+                fastRouteSnapshots: FastRouteSnapshotStore;
+            }
+        ).fastRouteSnapshots = new FailingFastRouteSnapshotStore();
+
+        const reply = await runtime.handleMessage(
+            msg("short turn"),
+            withEmbedding(await embedFor(config, "short turn")),
+        );
+
+        expect(reply.text).toBe("fast route reply");
+        const failure = events.findOf(RuntimeEventType.PerfFastRouteCacheFailed);
+        expect(failure?.payload).toMatchObject({
+            channel: Channel.Stdio,
+            error: "fast-route-cache-down",
+        });
+    });
+});
+
 describe("Memory module warmup, embedding reuse, episode capture", () => {
     test("warmup opens the default local working memory when non-local backend is disabled", async () => {
         const config = await buildConfig();
@@ -253,7 +287,10 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
 
         const brain = memory as unknown as {
             brain: {
-                listPromptAtomsWindow(date: Date | string, input: { minScore: number; userId: string }): Array<{
+                listPromptAtomsWindow(
+                    date: Date | string,
+                    input: { minScore: number; userId: string },
+                ): Array<{
                     atom: { text: string };
                     score: { total: number };
                 }>;
@@ -468,4 +505,22 @@ function msg(text: string): GatewayMessage {
 
 function rep(text: string): GatewayReply {
     return { messageId: crypto.randomUUID(), route: msg("").route, text };
+}
+
+class StaticTextModel implements ModelClient {
+    public constructor(private readonly response: string) {}
+
+    public async generate(_messages: ModelMessage[]): Promise<string> {
+        return this.response;
+    }
+}
+
+class FailingFastRouteSnapshotStore implements FastRouteSnapshotStore {
+    public async get(_key: string): Promise<FastRouteSnapshot | undefined> {
+        return undefined;
+    }
+
+    public async set(_key: string, _snapshot: FastRouteSnapshot): Promise<void> {
+        throw new Error("fast-route-cache-down");
+    }
 }

@@ -74,8 +74,11 @@ export class FileBackedFastRouteSnapshotStore implements FastRouteSnapshotStore 
         await this.hydrate();
         this.map.set(key, snapshot);
         this.prune();
-        this.persistQueue = this.persistQueue.then(() => this.persist()).catch(() => undefined);
-        await this.persistQueue;
+        // Keep the write queue usable after a failed fsync/rename while still
+        // surfacing the current failure to Runtime telemetry.
+        const persistTask = this.persistQueue.then(() => this.persist());
+        this.persistQueue = persistTask.catch(() => undefined);
+        await persistTask;
     }
 
     public size(): number {
@@ -157,7 +160,8 @@ function isFastRouteSnapshot(value: unknown): value is FastRouteSnapshot {
         (candidate.consecutiveWatchTurns === undefined || typeof candidate.consecutiveWatchTurns === "number") &&
         (candidate.consecutiveBlackboardFailures === undefined ||
             typeof candidate.consecutiveBlackboardFailures === "number") &&
-        (candidate.consecutiveToolFailureTurns === undefined || typeof candidate.consecutiveToolFailureTurns === "number")
+        (candidate.consecutiveToolFailureTurns === undefined ||
+            typeof candidate.consecutiveToolFailureTurns === "number")
     );
 }
 

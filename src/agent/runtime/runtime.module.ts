@@ -40,7 +40,12 @@ import {
     type McpToolCatalogEntry,
     type McpToolCallRequest,
 } from "../mcp/index.ts";
-import { createSandboxPolicy, decideCapabilityExecution, gateCapabilityExecution, SandboxQuotaTracker } from "../sandbox/index.ts";
+import {
+    createSandboxPolicy,
+    decideCapabilityExecution,
+    gateCapabilityExecution,
+    SandboxQuotaTracker,
+} from "../sandbox/index.ts";
 import {
     loadPromptTemplates,
     renderAskSchemaInstructions,
@@ -51,11 +56,7 @@ import {
     renderSkillContextPrompt,
 } from "../prompts/index.ts";
 import { type BlackboardModule } from "../blackboard/index.ts";
-import {
-    loadSkills,
-    loadSkillUsageSummary,
-    type Skill,
-} from "../../skills/index.ts";
+import { loadSkills, loadSkillUsageSummary, type Skill } from "../../skills/index.ts";
 import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard/route.ts";
 import {
     blackboardRunFromTurn,
@@ -71,14 +72,16 @@ import {
 } from "./blackboard/output.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
-import {
-    formatMcpResultSummary,
-    mcpExecutionsToProvenance,
-} from "./mcp/provenance.ts";
+import { formatMcpResultSummary, mcpExecutionsToProvenance } from "./mcp/provenance.ts";
 import { filterMcpServersByToolset, mcpCatalogCacheKey } from "./mcp/toolset.ts";
 import { parsePlanningBlocks } from "./planning/blocks.ts";
 import { buildPlanningMetadata } from "./planning/metadata.ts";
-import { buildBypassDecision, evaluateFastRoute, type FastRouteSnapshot, type FastRouteResult } from "./routing/fast.route.ts";
+import {
+    buildBypassDecision,
+    evaluateFastRoute,
+    type FastRouteSnapshot,
+    type FastRouteResult,
+} from "./routing/fast.route.ts";
 import { FileBackedFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./routing/fast.route.store.ts";
 import { decideRouteEscalation, nextEscalationCounters } from "./routing/route.escalation.ts";
 import { selectRuntimeSkills } from "./skills/selection.ts";
@@ -737,19 +740,27 @@ export class RuntimeModule extends RuntimeBoundary {
             taskPlans,
         } = generated;
 
-        await this.memory.rememberTurn(message, reply, enrichedContext, parsed.actions, {
-            behaviorSnapshotId,
-            blackboardTurnId: blackboardRun?.turnId,
-            mcpCalls: mcpCallProvenance,
-            skillNames: selectedSkillNames,
-        }, ask, {
-            contextForks,
-            sceneRecords: [
-                ...sceneRecords,
-                ...buildBlackboardSceneRecords(message.user.id, context.now, blackboardRun, context.requestId),
-            ],
-            taskPlans,
-        });
+        await this.memory.rememberTurn(
+            message,
+            reply,
+            enrichedContext,
+            parsed.actions,
+            {
+                behaviorSnapshotId,
+                blackboardTurnId: blackboardRun?.turnId,
+                mcpCalls: mcpCallProvenance,
+                skillNames: selectedSkillNames,
+            },
+            ask,
+            {
+                contextForks,
+                sceneRecords: [
+                    ...sceneRecords,
+                    ...buildBlackboardSceneRecords(message.user.id, context.now, blackboardRun, context.requestId),
+                ],
+                taskPlans,
+            },
+        );
         this.memory.recordBehaviorSnapshot({
             snapshotId: behaviorSnapshotId,
             ask,
@@ -778,9 +789,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const previousSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const totalToolCalls = mcpCallProvenance.length;
         const toolFailureRatio =
-            totalToolCalls > 0
-                ? mcpCallProvenance.filter((call) => !call.ok).length / totalToolCalls
-                : 0;
+            totalToolCalls > 0 ? mcpCallProvenance.filter((call) => !call.ok).length / totalToolCalls : 0;
         const counters = nextEscalationCounters({
             actualMode: lastMode,
             blackboardStatus: blackboardRun?.status,
@@ -790,15 +799,32 @@ export class RuntimeModule extends RuntimeBoundary {
             toolFailureRatio,
             toolFailureRatioTrigger: this.config.routing.toolFailureRatioTrigger ?? 0.5,
         });
-        await this.fastRouteSnapshots.set(snapshotKey, {
-            recordedAt: Date.now(),
-            embedding,
-            lastMode,
-            nextRouteHint: lastMode === BlackboardMode.Direct ? BlackboardMode.Direct : undefined,
-            consecutiveWatchTurns: counters.watch,
-            consecutiveBlackboardFailures: counters.failure,
-            consecutiveToolFailureTurns: counters.toolFailure,
-        });
+        try {
+            await this.fastRouteSnapshots.set(snapshotKey, {
+                recordedAt: Date.now(),
+                embedding,
+                lastMode,
+                nextRouteHint: lastMode === BlackboardMode.Direct ? BlackboardMode.Direct : undefined,
+                consecutiveWatchTurns: counters.watch,
+                consecutiveBlackboardFailures: counters.failure,
+                consecutiveToolFailureTurns: counters.toolFailure,
+            });
+        } catch (error) {
+            // fastRoute is a performance hint, not a memory authority. Disk
+            // cache failures degrade later turns to the normal route path and
+            // must be visible without failing the user-facing reply.
+            this.events.publish(
+                event(
+                    RuntimeEventType.PerfFastRouteCacheFailed,
+                    {
+                        channel: message.route.channel,
+                        error: error instanceof Error ? error.message : String(error),
+                        key: snapshotKey,
+                    },
+                    context.requestId,
+                ),
+            );
+        }
     }
 
     /**
@@ -1030,9 +1056,7 @@ export class RuntimeModule extends RuntimeBoundary {
             const parsedCalls = parseMcpToolCalls(raw);
             if (parsedCalls.calls.length === 0) {
                 if (options.onTextDelta) {
-                    await options.onTextDelta(
-                        `${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`,
-                    );
+                    await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`);
                 }
                 return {
                     rawText: parsedCalls.text || raw,
@@ -1166,17 +1190,18 @@ export class RuntimeModule extends RuntimeBoundary {
             const schemaCheck = catalogEntry
                 ? validateAgainstInputSchema(catalogEntry.tool.inputSchema, call.input)
                 : { ok: true, errors: [] };
-            const preDeny = !catalogKeys.has(key) || !server
-                ? {
-                      reason: "tool-not-in-catalog",
-                      message: `MCP tool is not available this turn: ${key}`,
-                  }
-                : !schemaCheck.ok
-                  ? {
-                        reason: "input-schema-violation",
-                        message: `MCP tool input violates inputSchema for ${key}: ${schemaCheck.errors.join("; ")}`,
-                    }
-                  : undefined;
+            const preDeny =
+                !catalogKeys.has(key) || !server
+                    ? {
+                          reason: "tool-not-in-catalog",
+                          message: `MCP tool is not available this turn: ${key}`,
+                      }
+                    : !schemaCheck.ok
+                      ? {
+                            reason: "input-schema-violation",
+                            message: `MCP tool input violates inputSchema for ${key}: ${schemaCheck.errors.join("; ")}`,
+                        }
+                      : undefined;
             const gate = await gateCapabilityExecution({
                 policy: sandboxPolicy,
                 kind: CapabilityExecutionKind.McpTool,
@@ -1376,5 +1401,4 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
     }
-
 }

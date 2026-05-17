@@ -91,4 +91,20 @@ describe("FileBackedFastRouteSnapshotStore", () => {
             await rm(dir, { force: true, recursive: true });
         }
     });
+
+    test("surfaces persistence failures while keeping the in-memory snapshot hot", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "flyflor-fast-route-"));
+        try {
+            const store = new FileBackedFastRouteSnapshotStore(dir, {
+                filePath: dir,
+                now: () => baseSnapshot.recordedAt,
+            });
+
+            await expect(store.set("hot", baseSnapshot)).rejects.toThrow();
+            expect(await store.get("hot")).toMatchObject({ lastMode: BlackboardMode.Direct });
+            expect(store.size()).toBe(1);
+        } finally {
+            await rm(dir, { force: true, recursive: true });
+        }
+    });
 });

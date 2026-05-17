@@ -95,6 +95,7 @@ export const RuntimeEventType = {
     PerfBuildPrompt: "perf.build_prompt",
     PerfRouteLlm: "perf.route_llm",
     PerfFastRouteEvaluated: "perf.fast_route_evaluated",
+    PerfFastRouteCacheFailed: "perf.fast_route_cache_failed",
     RouteEscalated: "route.escalated",
     RuntimeModeEntered: "runtime.mode.entered",
     RuntimeModeAwakened: "runtime.mode.awakened",
