@@ -32,10 +32,7 @@ async function main(): Promise<void> {
     const tempCacheHome = join(tempHome, ".cache");
     const tempMemoryDir = join(tempDataHome, "flyflor", "memory");
     const tempLogDir = join(tempHome, "logs");
-    const binaryPath = join(repoRoot, "dist", "flyflor-linux");
-    const gatewayCommand = process.platform === "linux" && existsSync(binaryPath)
-        ? [binaryPath, "gateway"]
-        : [process.execPath, "run", "--conditions=browser", "app.ts", "gateway"];
+    const gatewayCommand = resolveGatewayCommand(repoRoot);
 
     try {
         await mkdir(tempConfigHome, { recursive: true });
@@ -85,6 +82,18 @@ async function main(): Promise<void> {
     } finally {
         await rm(tempHome, { recursive: true, force: true });
     }
+}
+
+function resolveGatewayCommand(repoRoot: string): string[] {
+    if (process.platform === "linux") {
+        // Release smoke should exercise the release asset name first; Docker dev
+        // keeps its historical mount artifact as a fallback for local workflows.
+        for (const name of ["flyflor-linux-x64", "flyflor-linux"]) {
+            const binaryPath = join(repoRoot, "dist", name);
+            if (existsSync(binaryPath)) return [binaryPath, "gateway"];
+        }
+    }
+    return [process.execPath, "run", "--conditions=browser", "app.ts", "gateway"];
 }
 
 async function runInstallTemplates(targetHome: string, repoRoot: string): Promise<void> {

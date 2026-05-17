@@ -6,6 +6,12 @@
  * `bun build --compile --target=bun-linux-*` can resolve the target import.
  */
 class ReleaseBinaryBuilder {
+    private readonly expectedArtifacts = [
+        "dist/flyflor",
+        "dist/flyflor-linux-x64",
+        "dist/flyflor-linux-arm64",
+    ];
+
     private readonly commands: string[][] = [
         ["bun", "install", "--frozen-lockfile", "--os=linux", "--cpu=*"],
         ["bun", "run", "build:binary"],
@@ -23,6 +29,17 @@ class ReleaseBinaryBuilder {
             const code = await subprocess.exited;
             if (code !== 0) {
                 process.exit(code);
+            }
+        }
+        await this.assertArtifacts();
+    }
+
+    private async assertArtifacts(): Promise<void> {
+        for (const path of this.expectedArtifacts) {
+            const file = Bun.file(path);
+            if (!(await file.exists()) || file.size === 0) {
+                console.error(`Missing release binary artifact: ${path}`);
+                process.exit(1);
             }
         }
     }

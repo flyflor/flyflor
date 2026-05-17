@@ -91,7 +91,7 @@ bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/config.jsonc 的�
 bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc
 bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
 bun run build:binary # 编译本机二进制
-bun run build:binary:release # 编译本机 + Linux x64 + Linux arm64 发布二进制
+bun run build:binary:release # 编译本机 + GitHub Release 资产名对齐的 Linux x64 / arm64 二进制
 ```
 
 ## Docker Dev

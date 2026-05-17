@@ -13,9 +13,13 @@ describe("Docker binary build", () => {
         const packageJson = JSON.parse(await Bun.file("package.json").text()) as { scripts?: Record<string, string> };
 
         expect(packageJson.scripts?.["build:binary:release"]).toContain("build.release.binaries.ts");
+        expect(packageJson.scripts?.["build:binary:linux-x64"]).toContain("--outfile dist/flyflor-linux-x64");
+        expect(packageJson.scripts?.["build:binary:linux-arm64"]).toContain("--outfile dist/flyflor-linux-arm64");
         expect(script).toContain('"--os=linux"');
         expect(script).toContain('"--cpu=*"');
         expect(script).toContain('"build:binary:linux-x64"');
         expect(script).toContain('"build:binary:linux-arm64"');
+        expect(script).toContain('"dist/flyflor-linux-x64"');
+        expect(script).toContain('"dist/flyflor-linux-arm64"');
     });
 });
