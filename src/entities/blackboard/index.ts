@@ -7,5 +7,5 @@ export {
     type BlackboardStepRow,
     type BlackboardTurnRelations,
     type BlackboardTurnRow,
-} from "./blackboard.entity.ts";
-export { BlackboardRepo } from "./blackboard.repo.ts";
+} from "./entity.ts";
+export { BlackboardRepo } from "./repo.ts";

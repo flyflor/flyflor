@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import type { FlyflorPaths } from "../../config/index.ts";
 import { getQuery, query } from "../../components/sql/index.ts";
 import { Component } from "../di/decorators/index.ts";
-import { BlackboardRepo } from "../../entities/blackboard/blackboard.repo.ts";
+import { BlackboardRepo } from "../../entities/blackboard/index.ts";
 import type {
     BlackboardDecision,
     BlackboardDecisionInput,

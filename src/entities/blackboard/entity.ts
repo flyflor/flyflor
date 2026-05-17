@@ -81,7 +81,7 @@ export interface BlackboardTurnRelations {
 /**
  * Data model mapper for the blackboard SQLite tables.
  *
- * SQL lives in `blackboard.repo.ts`; this class owns row hydration, JSON column
+ * SQL lives in `repo.ts`; this class owns row hydration, JSON column
  * decoding and legacy default values for older persisted turns.
  */
 export class BlackboardModel {

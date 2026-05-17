@@ -1,7 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { BlackboardTurnStatus, type BlackboardTurnStatus as BlackboardTurnStatusType } from "../../protocol/contracts/index.ts";
 import { allQuery, getQuery, query, runQuery } from "../../components/sql/index.ts";
-import { blackboardModel, type BlackboardDecisionRow, type BlackboardLeaseRow, type BlackboardMessageRow, type BlackboardStepRow, type BlackboardTurnRow } from "./blackboard.entity.ts";
+import {
+    blackboardModel,
+    type BlackboardDecisionRow,
+    type BlackboardLeaseRow,
+    type BlackboardMessageRow,
+    type BlackboardStepRow,
+    type BlackboardTurnRow,
+} from "./entity.ts";
 import type {
     BlackboardDecision,
     BlackboardDecisionInput,
@@ -20,7 +27,7 @@ import type {
  * SQL repo for blackboard runtime state.
  *
  * This class owns queries for blackboard tables. Store lifecycle and schema
- * creation stay in `sqlite.ts`; row hydration stays in `blackboard.entity.ts`.
+ * creation stay in `sqlite.ts`; row hydration stays in `entity.ts`.
  */
 export class BlackboardRepo {
     public constructor(private readonly db: Database) {}

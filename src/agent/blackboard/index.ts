@@ -13,6 +13,6 @@ export {
     type BlackboardMessageRow,
     type BlackboardStepRow,
     type BlackboardTurnRow,
-} from "../../entities/blackboard/blackboard.entity.ts";
-export { BlackboardRepo } from "../../entities/blackboard/blackboard.repo.ts";
+} from "../../entities/blackboard/index.ts";
+export { BlackboardRepo } from "../../entities/blackboard/index.ts";
 export type * from "./types.ts";
