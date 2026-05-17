@@ -1105,7 +1105,7 @@ useHead({
     align-items: start;
     display: grid;
     gap: 20px;
-    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 280px;
     margin: 0 auto;
     max-width: 1440px;
     padding: 18px 24px 88px;
@@ -1117,10 +1117,16 @@ useHead({
     display: none;
 }
 
+.admin-drawer-backdrop {
+    display: none;
+}
+
 .admin-drawer {
     align-self: start;
     display: grid;
     gap: 22px;
+    grid-column: 2;
+    grid-row: 1;
     max-height: calc(100vh - 32px);
     min-width: 0;
     overflow-y: auto;
@@ -1233,6 +1239,8 @@ useHead({
 .admin-content {
     display: grid;
     gap: 18px;
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
 }
 
@@ -1464,6 +1472,8 @@ useHead({
     align-items: center;
     display: grid;
     gap: 18px;
+    grid-column: 1;
+    grid-row: 1;
     justify-items: center;
     margin: 0 auto;
     max-width: 560px;
@@ -1484,17 +1494,20 @@ useHead({
 
     .admin-drawer-toggle {
         display: inline-flex;
-        justify-self: start;
+        justify-self: end;
     }
 
     .admin-drawer {
         bottom: 16px;
-        left: 16px;
+        grid-column: auto;
+        grid-row: auto;
+        left: auto;
         max-height: calc(100vh - 32px);
         overflow: auto;
         position: fixed;
+        right: 16px;
         top: 16px;
-        transform: translateX(calc(-100% - 24px));
+        transform: translateX(calc(100% + 24px));
         transition: transform 220ms ease;
         width: min(86vw, 320px);
         z-index: 30;
@@ -1506,6 +1519,7 @@ useHead({
 
     .admin-drawer-backdrop {
         background: rgba(5, 8, 20, 0.42);
+        display: block;
         inset: 0;
         opacity: 0;
         pointer-events: none;
