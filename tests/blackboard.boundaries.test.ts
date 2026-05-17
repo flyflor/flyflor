@@ -21,7 +21,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import type { BlackboardWorkerResult, BlackboardWorkerTask, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, componentRegistry, type EventSink, Worker } from "../src/agent/di/index.ts";
-import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/route.ts";
+import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/index.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";

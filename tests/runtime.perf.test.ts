@@ -7,8 +7,8 @@ import {
     evaluateFastRoute,
     FastRouteReason,
     type FastRouteSnapshot,
-} from "../src/agent/runtime/routing/fast.route.ts";
-import type { FastRouteSnapshotStore } from "../src/agent/runtime/routing/fast.route.store.ts";
+} from "../src/agent/runtime/routing/index.ts";
+import type { FastRouteSnapshotStore } from "../src/agent/runtime/routing/index.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
 import { LocalHashEmbeddingProvider } from "../src/neural/embedding/index.ts";

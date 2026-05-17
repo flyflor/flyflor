@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import {
     FileBackedFastRouteSnapshotStore,
     InMemoryFastRouteSnapshotStore,
-} from "../src/agent/runtime/routing/fast.route.store.ts";
+} from "../src/agent/runtime/routing/index.ts";
 import { BlackboardMode } from "../src/protocol/contracts/index.ts";
-import type { FastRouteSnapshot } from "../src/agent/runtime/routing/fast.route.ts";
+import type { FastRouteSnapshot } from "../src/agent/runtime/routing/index.ts";
 
 const baseSnapshot: FastRouteSnapshot = {
     recordedAt: 1700000000000,

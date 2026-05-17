@@ -57,39 +57,43 @@ import {
 } from "../prompts/index.ts";
 import { type BlackboardModule } from "../blackboard/index.ts";
 import { loadSkills, loadSkillUsageSummary, type Skill } from "../../skills/index.ts";
-import { decideBlackboardRoute, type RuntimeBlackboardRouteDecision } from "./blackboard/route.ts";
 import {
     blackboardRunFromTurn,
     buildBlackboardSceneRecords,
     buildBlackboardStalemateAsk,
+    decideBlackboardRoute,
     renderBlackboardPrompt,
     renderDebateEpisodeText,
     renderReplyPrefix,
     renderReplyStreamingPrefix,
     renderReplyText,
     routeMetadata,
+    type RuntimeBlackboardRouteDecision,
     type RuntimeBlackboardRun,
-} from "./blackboard/output.ts";
+} from "./blackboard/index.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
-import { formatMcpResultSummary, mcpExecutionsToProvenance } from "./mcp/provenance.ts";
-import { filterMcpServersByToolset, mcpCatalogCacheKey } from "./mcp/toolset.ts";
-import { PlanningBlockParser } from "./planning/blocks.ts";
-import { PlanningMetadataBuilder } from "./planning/metadata.ts";
+import { formatMcpResultSummary, filterMcpServersByToolset, mcpCatalogCacheKey, mcpExecutionsToProvenance } from "./mcp/index.ts";
+import { PlanningBlockParser, PlanningMetadataBuilder } from "./planning/index.ts";
 import {
     buildBypassDecision,
+    decideRouteEscalation,
     evaluateFastRoute,
+    FileBackedFastRouteSnapshotStore,
+    nextEscalationCounters,
     type FastRouteSnapshot,
     type FastRouteResult,
-} from "./routing/fast.route.ts";
-import { FileBackedFastRouteSnapshotStore, type FastRouteSnapshotStore } from "./routing/fast.route.store.ts";
-import { decideRouteEscalation, nextEscalationCounters } from "./routing/route.escalation.ts";
-import { selectRuntimeSkills } from "./skills/selection.ts";
-import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/visibility.ts";
-import { buildAskMetadata, renderAskReplyText } from "./turn/ask.reply.ts";
-import { renderUserContentWithAttachments } from "./turn/attachments.ts";
-import { projectConstraintIdForMessage } from "./turn/project.constraint.ts";
-import { elapsed } from "./turn/timing.ts";
+    type FastRouteSnapshotStore,
+} from "./routing/index.ts";
+import { selectRuntimeSkills } from "./skills/index.ts";
+import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/index.ts";
+import {
+    buildAskMetadata,
+    elapsed,
+    projectConstraintIdForMessage,
+    renderAskReplyText,
+    renderUserContentWithAttachments,
+} from "./turn/index.ts";
 import { ReflectionWorker } from "./reflection/worker.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";

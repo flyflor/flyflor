@@ -5,7 +5,7 @@ import {
     ChatType,
     type GatewayMessage,
 } from "../src/protocol/contracts/index.ts";
-import { renderAttachmentSummary, renderUserContentWithAttachments } from "../src/agent/runtime/turn/attachments.ts";
+import { renderAttachmentSummary, renderUserContentWithAttachments } from "../src/agent/runtime/turn/index.ts";
 
 function makeMessage(attachments?: GatewayMessage["attachments"]): GatewayMessage {
     return {

@@ -3,7 +3,7 @@ export {
     decideBlackboardRoute,
     parseBlackboardRouteDecision,
     type RuntimeBlackboardRouteDecision,
-} from "./blackboard/route.ts";
+} from "./blackboard/index.ts";
 export { extractRuntimeReflectionCandidates } from "./reflection/index.ts";
 export {
     ReflectionWorker,

@@ -192,7 +192,7 @@ interface GatewayChannelCapabilities {
 - TUI `flyflor chat --tui` 与 `flyflor tui` 已对齐到同一 bootstrap；chat TUI 已订阅 runtime / blackboard 事件，channel 状态变化仍以 Gateway status snapshot 和 typed events 为准。
 - `gateway start/stop/restart` 已有 daemon helper；后台子进程 stdout / stderr 会写入 `<logDir>/gateway.log`，PID 写 `<cacheDir>/gateway.pid`，便于二进制安装后排障。`gateway service plan` 可生成 systemd user unit 或 launchd plist，`--write` 只写服务文件，启用 / 启动命令保持显式输出。`bun run smoke:gateway:service` 会在临时 HOME 内渲染并写入两类服务文件，不调用 `systemctl` / `launchctl`，并已纳入确定性 `ci` / `smoke:release` 门禁；跨平台长期运行验证属于发布验收，不改变服务文件生成契约。
 - Gateway 已有单进程 `InMemoryDedupStore` 与 `buildDedupKey(channel,messageId)`；dedup 写 reply 或失败释放 claim 出错时会发布 `gateway.dedup.store.failed`，不阻断用户可见最终回复，但会暴露幂等保护降级。多副本部署必须新增独立共享 dedup Component 才能跨节点幂等。若未来恢复 Redis 后端，应继承 `RedisComponent` 表达原型边界，而不是把 gateway 专用 Redis 适配器塞回默认链路。
-- 入站消息 `attachments` 已由 `src/agent/runtime/turn/attachments.ts` 渲染为 `[attachments]` 元数据摘要；runtime 不下载二进制。渠道富媒体下载 / 缓存 / 安全扫描必须作为 gateway attachment pipeline 单独落地，不能混入业务语义判断。
+- 入站消息 `attachments` 已由 `src/agent/runtime/turn/index.ts` 渲染为 `[attachments]` 元数据摘要；runtime 不下载二进制。渠道富媒体下载 / 缓存 / 安全扫描必须作为 gateway attachment pipeline 单独落地，不能混入业务语义判断。
 
 ## 相关测试
 

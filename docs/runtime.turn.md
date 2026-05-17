@@ -7,12 +7,12 @@
 ## 相关代码路径
 
 - `src/agent/runtime/module.ts` — 热路径主入口
-- `src/agent/runtime/routing/fast.route.ts` — 资源指标短路
-- `src/agent/runtime/blackboard/route.ts` — LLM 路由模板调用
-- `src/agent/runtime/routing/route.escalation.ts` — direct-with-watch 升级器
+- `src/agent/runtime/routing/index.ts` — 资源指标短路
+- `src/agent/runtime/blackboard/index.ts` — LLM 路由模板调用
+- `src/agent/runtime/routing/index.ts` — direct-with-watch 升级器
 - `src/agent/runtime/reflection/worker.ts` — 反思调度 worker
 - `src/agent/runtime/mcp/` — MCP toolset 过滤、工具结果 provenance 投影
-- `src/agent/runtime/skills/selection.ts` — 外部 Skill 包选择适配
+- `src/agent/runtime/skills/` — 外部 Skill 包选择适配
 - `src/agent/runtime/events/skill.usage.event.ts` — `@Event` 聚合 skill usage sidecar，避免 runtime 主流程直接写辅助统计
 - `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
 - `src/agent/runtime/streaming/` — 内部协议块流式可见性过滤
@@ -270,7 +270,7 @@ interface GatewayReply {
 
 ## 运行边界
 
-- `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/turn/attachments.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/turn/ask.reply.ts`，MCP/skill/planning/streaming helper 均按子目录归位。`module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
+- `RuntimeModule` 已拆 phase；附件摘要渲染在 `src/agent/runtime/turn/index.ts`，Ask 可见回复与 metadata 在 `src/agent/runtime/turn/index.ts`，MCP/skill/planning/streaming helper 均按子目录归位。`module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
 - `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
 - direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
 - `fastRouteSnapshots` 默认走 file-backed cache + 内存热读；损坏或写入失败只降级为 cache miss，并通过 `perf.fast_route_cache_failed` 保持可观测。多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。

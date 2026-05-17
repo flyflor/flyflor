@@ -154,6 +154,22 @@ describe("repository naming boundary", () => {
         expect(violations.sort()).toEqual([]);
     });
 
+    test("runtime capability subdirectories expose an index entrypoint", async () => {
+        const dirs = await listDirs(join(REPO_ROOT, "src", "agent", "runtime"));
+        const violations: string[] = [];
+
+        for (const dir of dirs) {
+            const rel = relative(REPO_ROOT, dir);
+            if (!(await exists(join(dir, "index.ts")))) {
+                violations.push(rel);
+            }
+        }
+
+        // Runtime phases are directory-scoped capabilities. Public imports use
+        // the directory entrypoint; implementation files remain owner-internal.
+        expect(violations.sort()).toEqual([]);
+    });
+
     test("active docs and source do not point at legacy memory component paths", async () => {
         const files = (await Promise.all(SCANNED_DIRS.map((dir) => listFiles(join(REPO_ROOT, dir)))))
             .flat()
