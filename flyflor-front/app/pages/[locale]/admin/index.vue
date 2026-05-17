@@ -271,7 +271,7 @@
                 </section>
 
                 <section id="users" class="admin-section surface-panel">
-                    <div class="admin-section__head">
+                    <div class="admin-section__head admin-section__head--split">
                         <div>
                             <p class="eyebrow">{{ t("用户", "Users") }}</p>
                             <h2>{{ t("账号管理", "Account management") }}</h2>
@@ -322,7 +322,7 @@
                 </section>
 
                 <section id="topics" class="admin-section surface-panel">
-                    <div class="admin-section__head">
+                    <div class="admin-section__head admin-section__head--split">
                         <div>
                             <p class="eyebrow">{{ t("帖子", "Topics") }}</p>
                             <h2>{{ t("帖子与回复管理", "Topic and reply moderation") }}</h2>
@@ -426,7 +426,7 @@
                 </section>
 
                 <section id="comments" class="admin-section surface-panel">
-                    <div class="admin-section__head">
+                    <div class="admin-section__head admin-section__head--split">
                         <div>
                             <p class="eyebrow">{{ t("评论", "Comments") }}</p>
                             <h2>{{ t("评论管理", "Comment moderation") }}</h2>
@@ -1097,14 +1097,20 @@ useHead({
 </script>
 
 <style scoped>
+.admin-shell {
+    overflow: visible;
+}
+
 .admin-app {
+    align-items: start;
     display: grid;
     gap: 20px;
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
     margin: 0 auto;
     max-width: 1440px;
     padding: 18px 24px 88px;
     position: relative;
+    width: 100%;
 }
 
 .admin-drawer-toggle {
@@ -1115,6 +1121,11 @@ useHead({
     align-self: start;
     display: grid;
     gap: 22px;
+    max-height: calc(100vh - 32px);
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
     padding: 20px;
     position: sticky;
     top: 16px;
@@ -1126,6 +1137,7 @@ useHead({
     font-size: 1.9rem;
     line-height: 1.02;
     margin: 0;
+    overflow-wrap: anywhere;
 }
 
 .admin-drawer__head p,
@@ -1221,29 +1233,43 @@ useHead({
 .admin-content {
     display: grid;
     gap: 18px;
+    min-width: 0;
 }
 
 .admin-section {
     display: grid;
     gap: 18px;
+    min-width: 0;
     padding: 22px;
 }
 
 .admin-section__head {
-    align-items: end;
-    display: flex;
+    align-items: start;
+    display: grid;
     gap: 16px;
-    justify-content: space-between;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .admin-section__head > div {
     max-width: 820px;
+    min-width: 0;
+}
+
+.admin-section__head--split {
+    align-items: end;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+}
+
+.admin-section__head--split > :last-child {
+    justify-self: end;
+    min-width: 0;
+    width: 100%;
 }
 
 .metric-grid {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .metric-card {
@@ -1269,7 +1295,8 @@ useHead({
 .admin-form {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    min-width: 0;
 }
 
 .admin-form--compact {
@@ -1310,21 +1337,24 @@ useHead({
     border-radius: 8px;
     display: grid;
     gap: 14px;
+    min-width: 0;
     padding: 16px;
 }
 
 .editable-card__head,
 .editable-row__meta {
     align-items: start;
-    display: flex;
+    display: grid;
     gap: 14px;
-    justify-content: space-between;
+    grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .editable-card__head strong,
 .editable-row__meta strong {
     display: block;
     line-height: 1.2;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .editable-card__copy {
@@ -1335,7 +1365,8 @@ useHead({
 .editable-grid {
     display: grid;
     gap: 12px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    min-width: 0;
 }
 
 .editable-grid__wide {
@@ -1366,7 +1397,12 @@ useHead({
 .board-create {
     display: grid;
     gap: 10px;
-    grid-template-columns: 0.85fr repeat(4, minmax(0, 1fr)) auto;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    min-width: 0;
+}
+
+.board-create .button {
+    min-width: 150px;
 }
 
 .editable-row--user {
@@ -1380,13 +1416,20 @@ useHead({
 }
 
 .filter-row {
-    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    min-width: 0;
 }
 
 .row-actions {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.admin-app .button:hover {
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--color-orchid) 16%, transparent);
+    transform: none;
 }
 
 .icon-button {
@@ -1476,19 +1519,25 @@ useHead({
         pointer-events: auto;
     }
 
-    .metric-grid,
-    .admin-form,
-    .editable-grid,
-    .board-create,
-    .filter-row {
+    .admin-section__head {
         grid-template-columns: 1fr;
     }
 
-    .admin-section__head,
+    .admin-section__head--split {
+        align-items: start;
+    }
+
+    .admin-section__head--split > :last-child {
+        justify-self: stretch;
+    }
+
     .editable-card__head,
     .editable-row__meta {
-        align-items: start;
-        flex-direction: column;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .row-actions {
+        justify-content: flex-start;
     }
 }
 
@@ -1508,6 +1557,14 @@ useHead({
 
     .admin-drawer-toggle {
         width: 100%;
+    }
+
+    .admin-form,
+    .editable-grid,
+    .board-create,
+    .filter-row,
+    .metric-grid {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>
