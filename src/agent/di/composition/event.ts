@@ -1,5 +1,5 @@
 import type { RuntimeEvent } from "../../../protocol/contracts/index.ts";
-import type { RuntimeEventType } from "../../../protocol/events/types.ts";
+import type { RuntimeEventType } from "../../../events/types.ts";
 
 export type EventHandlerSelector = RuntimeEventType | "*";
 

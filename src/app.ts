@@ -15,7 +15,7 @@ import {
 import { AdaptersComponent } from "./agent/gateway/index.ts";
 import { ConfigComponent, loadConfig, type FlyflorConfig } from "./config/index.ts";
 import { RuntimeSkillUsageEventHandler } from "./agent/runtime/events/index.ts";
-import { createMemory, MemoryModule } from "./neural/memory/index.ts";
+import { createMemory, MemoryModule } from "./fch/hippocampus/memory/index.ts";
 import {
     assertModuleMetadata,
     DependencyContainer,
@@ -23,9 +23,9 @@ import {
     Module,
     type DependencyToken,
 } from "./agent/di/index.ts";
-import { EventsComponent } from "./protocol/events/index.ts";
+import { EventsComponent } from "./events/index.ts";
 import { RuntimeModeComponent } from "./protocol/contracts/index.ts";
-import { createModelClient, ModelComponent } from "./llm/index.ts";
+import { createModelClient, ModelComponent } from "./fch/mindstream/index.ts";
 import {
     ConsoleEventSink,
     NullEventSink,
@@ -35,7 +35,7 @@ import {
     type ModelClient,
     type RuntimeMode as RuntimeModeType,
 } from "./protocol/index.ts";
-import { CompositeEventSink } from "./protocol/events/index.ts";
+import { CompositeEventSink } from "./events/index.ts";
 import { FileAuditSink, HttpAuditSink } from "./agent/sandbox/audit.sink.ts";
 import { join } from "node:path";
 

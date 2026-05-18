@@ -14,8 +14,8 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
-import { createModelClient } from "../src/llm/index.ts";
-import { MemoryModule } from "../src/neural/memory/index.ts";
+import { createModelClient } from "../src/fch/mindstream/index.ts";
+import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
 import {
     loadConfig,
     loadConfigForPaths,
@@ -29,7 +29,7 @@ import {
     type GatewayMessage,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 interface LiveAgentReport {
     brainEvents: number;

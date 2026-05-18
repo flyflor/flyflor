@@ -11,7 +11,7 @@
 import {
     CapabilityExecutionKind,
 } from "../../protocol/contracts/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { gateCapabilityExecution, type SandboxPolicy } from "./module.ts";
 
 export interface ShellHookSpec {

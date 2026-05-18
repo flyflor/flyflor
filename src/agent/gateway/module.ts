@@ -7,7 +7,7 @@ import {
     type GatewayReply,
     type RuntimeContext,
 } from "../../protocol/contracts/index.ts";
-import { event, globalEvents, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, globalEvents, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { Gateway } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { buildGatewayStatusSnapshot, type ChannelRuntimeState } from "./channels/status.ts";

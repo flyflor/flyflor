@@ -2,7 +2,7 @@
 
 Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进制交付。
 
-核心设计：LLM 负责流体智力，反思沉淀晶体智力（Gem），海马体负责工作记忆与长期记忆图，黑板协作处理复杂任务。
+核心设计命名为 **FCH-CTTL Architecture**：FCH 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；CTTL 能力外骨架负责 Capability / Tool / Trust / Loop，让智能体安全地发现能力、调用工具和控制执行回路。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -10,6 +10,7 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进
 
 - LLM 负责当下推理与生成，记忆系统只负责沉淀、召回和偏移修正。
 - 不靠单轮堆叠上下文，而靠三层记忆、遗忘曲线和反思把经验压成稳定能力。
+- 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 简单问题直接回，复杂问题走黑板，保证复杂度和协作成本只在必要时上升。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 
@@ -44,7 +45,7 @@ flyflor update -y
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
+默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在源码根相对的 `.config`，也就是 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
 
 ### 安装方式
 
@@ -70,7 +71,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 
 ```bash
 bun install
-bun run install:templates  # copies prompts/templates/commands into ~/.flyflor/.config
+bun run install:templates  # copies prompts/templates/commands into this checkout's .config
 bun run chat
 ```
 
@@ -82,7 +83,11 @@ bun run status       # 运行状态
 bun run doctor       # 诊断配置与依赖
 bun run doctor --fix # 自动创建缺失目录
 bun run tui          # 仪表板 TUI
-bun run app.ts gateway
+bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
+bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
+./dist/flyflor       # 执行已编译二进制；交互式执行 shell.run 会询问
+./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
+./dist/flyflor gateway run
 flyflor gateway service plan --target systemd --write # 写入用户级 systemd 服务文件；launchd 同理
 ```
 
@@ -175,18 +180,19 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/command`  | CLI、TUI、命令注册、终端渲染                                                |
 | `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin         |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
-| `src/llm`      | 模型 provider（OpenAI/Anthropic 兼容协议层）                                |
-| `src/crystal`  | 晶体智力：episode、memory_node、Gem、consolidation、dream                   |
-| `src/neural`   | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩         |
-| `src/context`  | 显式 project / fork / capability scope 装配；与 neural 平级，不承载 session |
-| `src/protocol` | 公共协议、枚举、事件、进程 envelope                                         |
+| `src/fch/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）                            |
+| `src/fch/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream                |
+| `src/fch/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩 |
+| `src/events`   | RECL / Event Fabric，所有交互事件的订阅广播中枢                            |
+| `src/context`  | 显式 project / fork / capability scope 装配；与 FCH 平级，不承载 session |
+| `src/protocol` | 公共协议、枚举、control envelope、进程 envelope                            |
 | `templates`    | 提示词和记忆 Markdown 模板                                                  |
 
 ### 三层智能模型
 
-- **LLM = 流体智力**：当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策。
-- **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格。
-- **Neural = 海马体**：由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex）。
+- **Mindstream**：心流层，负责 provider 协议转换、流式输出、当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策，目录是 `src/fch/mindstream`。
+- **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格，目录是 `src/fch/crystal`。
+- **Hippocampus = 海马体**：由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex），目录是 `src/fch/hippocampus`。
 
 **核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
@@ -328,9 +334,9 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 - OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
 - `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
 - 禁止 `*.exports.ts`；目录导出统一进 `index.ts`。目录已经表达职责时用短名，例如 DI composition 下用 `component.ts` / `event.ts` / `injection.ts` / `module.ts`，factory 下用 `container.ts`
-- 目录 owner 是第一语义：模块内文件不重复目录名前缀，`src/neural/memory/dream/worker.ts`、`consolidation/worker.ts`、`lifecycle/scheduler.ts` 这类按生命周期分组；对外优先导入子目录 `index.ts`
+- 目录 owner 是第一语义：模块内文件不重复目录名前缀，`src/fch/hippocampus/memory/dream/worker.ts`、`consolidation/worker.ts`、`lifecycle/scheduler.ts` 这类按生命周期分组；对外优先导入子目录 `index.ts`
 - SQLite 访问按 `entity/repo -> store -> component` 分层；新增 SQL 优先放到 `src/entities/<domain>/tablename.repo.ts`，repo 只做 row/entity 映射 + SQL function，不做 service 层业务，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
-- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/index.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
+- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如 `src/fch/hippocampus/memory/brain/store.ts`、`src/fch/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
 - 实现文件使用点分后缀：`*.module.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`、`*.repo.ts`；目录内唯一组件 owner 直接叫 `component.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
@@ -361,7 +367,10 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)                 | 分层架构 / composition root / 进程模型 |
+| [docs/architecture.md](docs/architecture.md)                 | FCH-CTTL 分层架构 / composition root / 进程模型 |
+| [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
+| [docs/cttl.exoskeleton.md](docs/cttl.exoskeleton.md)         | Capability / Tool / Trust / Loop 外骨架 |
+| [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |
 | [docs/boundaries.md](docs/boundaries.md)                     | 工程边界与红线                         |
 | [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
 | [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |

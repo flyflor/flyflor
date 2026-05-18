@@ -7,7 +7,7 @@ import { MemoryModule } from "../src/agent/index.ts";
 import { fetchGhostList } from "../src/command/cli/handlers/ghost.list.handler.ts";
 import { ConfigComponent, loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import { GhostContextReason } from "../src/protocol/contracts/index.ts";
-import { type EventSink } from "../src/protocol/events/index.ts";
+import { type EventSink } from "../src/events/index.ts";
 import { type FlyFlor } from "../src/app.ts";
 
 const roots: string[] = [];

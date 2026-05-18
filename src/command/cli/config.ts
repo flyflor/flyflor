@@ -1,8 +1,8 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import * as prompts from "@clack/prompts";
 import pc from "picocolors";
+import { resolveFlyflorPaths } from "../../config/index.ts";
 import {
     Channel,
     ModelApiMode,
@@ -20,6 +20,9 @@ export interface InitConfigOptions {
     model?: string;
     provider?: string;
     protocol?: string;
+    channel?: string;
+    channelAction?: ChannelSetupAction;
+    profile?: string;
     yes?: boolean;
 }
 
@@ -48,6 +51,47 @@ export interface GatewayConfigResult {
     configPath: string;
     overwritten: boolean;
     channels: string[];
+}
+
+export type ChannelSetupAction = "add" | "edit" | "setup";
+
+export interface ChannelBindingView {
+    channel: string;
+    configured: boolean;
+    enabled: boolean;
+    fields: Record<string, unknown>;
+    profile?: string;
+}
+
+export interface ChannelBindingRemoveResult {
+    channel: string;
+    configPath: string;
+    profile?: string;
+    remainingProfiles: string[];
+    removed: boolean;
+}
+
+interface SetupExistingModel {
+    apiKey?: string;
+    apiMode?: ModelApiModeType;
+    baseUrl?: string;
+    model?: string;
+    provider?: string;
+    providerKind?: ModelProviderKindType;
+}
+
+interface GatewaySetupOptions {
+    action?: ChannelSetupAction;
+    onlyChannel?: string;
+    existingGateway?: Record<string, unknown>;
+    profile?: string;
+}
+
+interface ChannelConfigureOptions {
+    action?: ChannelSetupAction;
+    existingConfig?: Record<string, unknown>;
+    forceProfile?: boolean;
+    profile?: string;
 }
 
 interface ProviderChoice {
@@ -103,7 +147,7 @@ const PROVIDER_CHOICES: ProviderChoice[] = [
         requiresBaseUrl: false,
     },
     {
-        defaultModel: "deepseek-chat",
+        defaultModel: "deepseek-v4-flash",
         label: "DeepSeek",
         provider: ModelProviderId.DeepSeek,
         providerKind: ModelProviderKind.OpenAICompatible,
@@ -238,24 +282,16 @@ const RELAY_PROTOCOL_CHOICES: RelayProtocolChoice[] = [
 ];
 
 export function getFlyflorConfigPath(): string {
-    return join(homedir(), ".flyflor", ".config", "config.jsonc");
+    return join(resolveFlyflorPaths().configDir, "config.jsonc");
 }
 
 export async function initializeFlyflorConfig(options: InitConfigOptions = {}): Promise<InitConfigResult | undefined> {
     const configPath = getFlyflorConfigPath();
     const exists = await fileExists(configPath);
-    if (exists && !options.force && !options.yes) {
-        const overwrite = await prompts.confirm({
-            initialValue: false,
-            message: `${configPath} already exists. Overwrite it?`,
-        });
-        if (prompts.isCancel(overwrite) || !overwrite) {
-            prompts.cancel("Config init cancelled.");
-            return undefined;
-        }
-    }
+    const existing = await readUserConfigObject(configPath);
+    const existingModel = readExistingModel(existing);
 
-    const provider = await resolveProvider(options);
+    const provider = await resolveProvider(options, existingModel);
     if (!provider) {
         return undefined;
     }
@@ -267,23 +303,24 @@ export async function initializeFlyflorConfig(options: InitConfigOptions = {}): 
 
     const protocol = resolveRelayProtocolOverride(options);
 
-    const model = await resolveModel(protocol?.defaultModel ?? resolvedProvider.defaultModel, options);
+    const model = await resolveModel(protocol?.defaultModel ?? resolvedProvider.defaultModel, options, existingModel);
     if (!model) {
         return undefined;
     }
 
-    const gateway = await resolveGatewaySetup(options);
+    const existingGateway = isRecord(existing.gateway) ? existing.gateway : {};
+    const gateway = await resolveGatewaySetup(options, { existingGateway });
     if (!gateway) {
         return undefined;
     }
 
     const providerKind = protocol?.providerKind ?? resolvedProvider.providerKind;
-    const baseUrl = await resolveBaseUrl(resolvedProvider, providerKind, options);
+    const baseUrl = await resolveBaseUrl(resolvedProvider, providerKind, options, existingModel);
     if (baseUrl === undefined) {
         return undefined;
     }
 
-    const apiKey = await resolveApiKey(resolvedProvider, options);
+    const apiKey = await resolveApiKey(resolvedProvider, options, existingModel);
     if (apiKey === undefined) {
         return undefined;
     }
@@ -318,8 +355,9 @@ export async function initializeFlyflorModelConfig(
     const configPath = getFlyflorConfigPath();
     const existing = await readUserConfigObject(configPath);
     const exists = await fileExists(configPath);
+    const existingModel = readExistingModel(existing);
 
-    const provider = await resolveProvider(options);
+    const provider = await resolveProvider(options, existingModel);
     if (!provider) {
         return undefined;
     }
@@ -332,17 +370,17 @@ export async function initializeFlyflorModelConfig(
     const protocol = resolveRelayProtocolOverride(options);
     const providerKind = protocol?.providerKind ?? resolvedProvider.providerKind;
 
-    const model = await resolveModel(protocol?.defaultModel ?? resolvedProvider.defaultModel, options);
+    const model = await resolveModel(protocol?.defaultModel ?? resolvedProvider.defaultModel, options, existingModel);
     if (!model) {
         return undefined;
     }
 
-    const baseUrl = await resolveBaseUrl(resolvedProvider, providerKind, options);
+    const baseUrl = await resolveBaseUrl(resolvedProvider, providerKind, options, existingModel);
     if (baseUrl === undefined) {
         return undefined;
     }
 
-    const apiKey = await resolveApiKey(resolvedProvider, options);
+    const apiKey = await resolveApiKey(resolvedProvider, options, existingModel);
     if (apiKey === undefined) {
         return undefined;
     }
@@ -375,23 +413,112 @@ export async function initializeFlyflorGatewayConfig(
     const configPath = getFlyflorConfigPath();
     const existing = await readUserConfigObject(configPath);
     const exists = await fileExists(configPath);
-    const gateway = await resolveGatewaySetup(options);
+
+    const existingGateway = isRecord(existing.gateway) ? existing.gateway : {};
+    const gateway = await resolveGatewaySetup(options, {
+        action: options.channelAction,
+        existingGateway,
+        onlyChannel: options.channel,
+        profile: options.profile,
+    });
     if (!gateway) {
         return undefined;
     }
-
-    const existingGateway = isRecord(existing.gateway) ? existing.gateway : {};
     const existingPort =
         typeof existingGateway.port === "number" && Number.isFinite(existingGateway.port)
             ? existingGateway.port
             : undefined;
-    existing.gateway = buildGatewayConfig(gateway, normalizePort(options.gatewayPort) ?? existingPort ?? 8787);
+    existing.gateway = buildGatewayConfig(gateway, normalizePort(options.gatewayPort) ?? existingPort ?? 8787, existingGateway);
 
     await writeUserConfigObject(configPath, existing);
     return {
         configPath,
         overwritten: exists,
         channels: gateway.allowedChannels,
+    };
+}
+
+export async function listFlyflorChannelBindings(): Promise<ChannelBindingView[]> {
+    const configPath = getFlyflorConfigPath();
+    const config = await readUserConfigObject(configPath);
+    const gateway = isRecord(config.gateway) ? config.gateway : {};
+    return collectChannelBindingViews(gateway);
+}
+
+export async function getFlyflorChannelBinding(
+    channel: string,
+    profile?: string,
+): Promise<ChannelBindingView | undefined> {
+    const configPath = getFlyflorConfigPath();
+    const config = await readUserConfigObject(configPath);
+    const gateway = isRecord(config.gateway) ? config.gateway : {};
+    const spec = findChannelSetupSpec(channel);
+    if (!spec) {
+        return undefined;
+    }
+    const configKey = spec.configKey ?? spec.allowedChannel;
+    const entries = collectChannelBindingViews(gateway).filter((entry) => entry.channel === configKey);
+    if (profile) {
+        return entries.find((entry) => entry.profile === profile);
+    }
+    return entries[0];
+}
+
+export async function removeFlyflorChannelBinding(
+    channel: string,
+    profile?: string,
+): Promise<ChannelBindingRemoveResult> {
+    const configPath = getFlyflorConfigPath();
+    const config = await readUserConfigObject(configPath);
+    const gateway = isRecord(config.gateway) ? gatewayClone(config.gateway) : {};
+    const spec = findChannelSetupSpec(channel);
+    if (!spec) {
+        throw new Error(`Unsupported channel: ${channel}`);
+    }
+    const configKey = spec.configKey ?? spec.allowedChannel;
+    const channels = isRecord(gateway.channels) ? gateway.channels : {};
+    const rawConfig = isRecord(channels[configKey]) ? { ...channels[configKey] } : {};
+    let removed = false;
+    let remainingProfiles: string[] = [];
+
+    if (isRecord(rawConfig.profiles)) {
+        const profiles = { ...rawConfig.profiles };
+        const targetProfile = profile ?? selectDefaultProfileId(rawConfig);
+        if (targetProfile && Object.hasOwn(profiles, targetProfile)) {
+            delete profiles[targetProfile];
+            removed = true;
+        }
+        remainingProfiles = Object.keys(profiles);
+        if (remainingProfiles.length > 0) {
+            channels[configKey] = {
+                profiles,
+                defaultProfile: remainingProfiles.includes(String(rawConfig.defaultProfile))
+                    ? rawConfig.defaultProfile
+                    : remainingProfiles[0],
+            };
+        } else {
+            channels[configKey] = {};
+        }
+    } else if (hasConfiguredChannelFields(rawConfig)) {
+        channels[configKey] = {};
+        removed = true;
+    }
+
+    gateway.channels = channels;
+    if (removed) {
+        if (remainingProfiles.length === 0) {
+            gateway.allowedChannels = removeAllowedChannel(gateway.allowedChannels, spec.allowedChannel);
+        }
+        config.gateway = gateway;
+        await writeUserConfigObject(configPath, config);
+    }
+
+    return {
+        channel: spec.allowedChannel,
+        configPath,
+        profile,
+        remainingProfiles,
+        removed,
     };
 }
 
@@ -1202,7 +1329,10 @@ const CHANNEL_SETUP_SPECS: ChannelSetupSpec[] = [
     },
 ];
 
-async function resolveProvider(options: InitConfigOptions): Promise<ProviderChoice | undefined> {
+async function resolveProvider(
+    options: InitConfigOptions,
+    existing?: SetupExistingModel,
+): Promise<ProviderChoice | undefined> {
     const byId = new Map(PROVIDER_CHOICES.map((choice) => [choice.provider, choice]));
     if (options.provider) {
         const providerId = normalizeProviderId(options.provider);
@@ -1213,7 +1343,7 @@ async function resolveProvider(options: InitConfigOptions): Promise<ProviderChoi
         return selected;
     }
     if (options.yes) {
-        return byId.get(ModelProviderId.OpenAI)!;
+        return byId.get(existing?.provider ?? ModelProviderId.OpenAI) ?? byId.get(ModelProviderId.OpenAI)!;
     }
 
     const value = await prompts.select({
@@ -1222,6 +1352,7 @@ async function resolveProvider(options: InitConfigOptions): Promise<ProviderChoi
             label: choice.label,
             value: choice.provider,
         })),
+        initialValue: existing?.provider,
     });
     if (prompts.isCancel(value)) {
         prompts.cancel("Config init cancelled.");
@@ -1287,15 +1418,24 @@ function resolveRelayProtocolOverride(options: InitConfigOptions): RelayProtocol
     return selected;
 }
 
-async function resolveModel(defaultModel: string, options: InitConfigOptions): Promise<string | undefined> {
+async function resolveModel(
+    defaultModel: string,
+    options: InitConfigOptions,
+    existing?: SetupExistingModel,
+): Promise<string | undefined> {
     if (options.model) {
         return options.model;
     }
     if (options.yes) {
-        return defaultModel;
+        return existing?.model ?? defaultModel;
+    }
+    const existingModel = existing?.model;
+    if (existingModel) {
+        printPromptDescription(`Existing model: ${existingModel}. Leave blank to keep it.`);
     }
     const value = await prompts.text({
-        defaultValue: defaultModel,
+        defaultValue: existingModel ?? defaultModel,
+        initialValue: existingModel,
         message: "Model",
         placeholder: defaultModel,
     });
@@ -1303,54 +1443,69 @@ async function resolveModel(defaultModel: string, options: InitConfigOptions): P
         prompts.cancel("Config init cancelled.");
         return undefined;
     }
-    return String(value || defaultModel).trim();
+    return String(value || existingModel || defaultModel).trim();
 }
 
 async function resolveBaseUrl(
     provider: ProviderChoice,
     providerKind: ModelProviderKindType,
     options: InitConfigOptions,
+    existing?: SetupExistingModel,
 ): Promise<string | undefined> {
     if (!provider.requiresBaseUrl) {
-        return normalizeProviderBaseUrl(options.baseUrl ?? "", providerKind);
+        return normalizeProviderBaseUrl(options.baseUrl ?? existing?.baseUrl ?? "", providerKind);
     }
     if (options.baseUrl) {
         return normalizeProviderBaseUrl(options.baseUrl, providerKind);
     }
     if (options.yes) {
-        return "";
+        return existing?.baseUrl ?? "";
+    }
+    if (existing?.baseUrl) {
+        printPromptDescription(`Existing relay base URL: ${existing.baseUrl}. Leave blank to keep it.`);
     }
     const value = await prompts.text({
+        defaultValue: existing?.baseUrl,
+        initialValue: existing?.baseUrl,
         message: "Relay base URL",
         placeholder: "https://example.com/v1",
-        validate: (input) => (String(input).trim() ? undefined : "Base URL is required for custom relay providers."),
+        validate: (input) =>
+            String(input).trim() || existing?.baseUrl ? undefined : "Base URL is required for custom relay providers.",
     });
     if (prompts.isCancel(value)) {
         prompts.cancel("Config init cancelled.");
         return undefined;
     }
-    return normalizeProviderBaseUrl(String(value), providerKind);
+    return normalizeProviderBaseUrl(String(value || (existing?.baseUrl ?? "")), providerKind);
 }
 
-async function resolveApiKey(provider: ProviderChoice, options: InitConfigOptions): Promise<string | undefined> {
+async function resolveApiKey(
+    provider: ProviderChoice,
+    options: InitConfigOptions,
+    existing?: SetupExistingModel,
+): Promise<string | undefined> {
     if (!provider.requiresApiKey) {
-        return options.apiKey ?? "";
+        return options.apiKey ?? existing?.apiKey ?? "";
     }
     if (options.apiKey !== undefined) {
         return options.apiKey;
     }
     if (options.yes) {
-        return "";
+        return existing?.apiKey ?? "";
+    }
+    if (existing?.apiKey) {
+        printPromptDescription(`Existing API key: ${redactSecret(existing.apiKey)}. Leave blank to keep it.`);
     }
     const value = await prompts.password({
         message: "API key",
         mask: "*",
+        validate: (input) => (String(input).trim() || existing?.apiKey ? undefined : "API key is required."),
     });
     if (prompts.isCancel(value)) {
         prompts.cancel("Config init cancelled.");
         return undefined;
     }
-    return String(value).trim();
+    return String(value).trim() || existing?.apiKey || "";
 }
 
 function indent(text: string, spaces: number): string {
@@ -1486,9 +1641,30 @@ export function listRelayProtocols(): RelayProtocolChoice[] {
     return [...RELAY_PROTOCOL_CHOICES];
 }
 
-async function resolveGatewaySetup(options: InitConfigOptions): Promise<GatewaySetup | undefined> {
-    const setup = createDefaultGatewaySetup();
+async function resolveGatewaySetup(
+    options: InitConfigOptions,
+    setupOptions: GatewaySetupOptions = {},
+): Promise<GatewaySetup | undefined> {
+    const setup = createGatewaySetupFromExisting(setupOptions.existingGateway);
     if (options.yes) {
+        return setup;
+    }
+
+    if (setupOptions.onlyChannel) {
+        const spec = findChannelSetupSpec(setupOptions.onlyChannel);
+        if (!spec) {
+            throw new Error(`Unsupported channel setup: ${setupOptions.onlyChannel}`);
+        }
+        const existingConfig = readChannelConfig(setupOptions.existingGateway, spec.configKey ?? spec.allowedChannel);
+        const configured = await configureChannel(spec, {
+            action: setupOptions.action,
+            existingConfig,
+            forceProfile: hasProfiles(existingConfig),
+            profile: setupOptions.profile,
+        });
+        if (configured) {
+            mergeGatewaySetup(setup, configured);
+        }
         return setup;
     }
 
@@ -1521,24 +1697,42 @@ async function resolveGatewaySetup(options: InitConfigOptions): Promise<GatewayS
             continue;
         }
 
-        const configured = await configureChannel(spec);
+        const configKey = spec.configKey ?? spec.allowedChannel;
+        const existingConfig = readChannelConfig(setupOptions.existingGateway, configKey);
+        const configured = await configureChannel(spec, {
+            action: setupOptions.action,
+            existingConfig,
+            forceProfile: hasProfiles(existingConfig),
+            profile: setupOptions.profile,
+        });
         if (configured) {
             mergeGatewaySetup(setup, configured);
-            remaining.delete(spec.allowedChannel);
         }
     }
 
     return setup;
 }
 
-async function configureChannel(spec: ChannelSetupSpec): Promise<GatewaySetup | undefined> {
+async function configureChannel(
+    spec: ChannelSetupSpec,
+    options: ChannelConfigureOptions = {},
+): Promise<GatewaySetup | undefined> {
     console.log("");
     console.log(pc.cyan(`  ─── ${spec.label} Setup ───`));
     for (const line of spec.intro ?? []) {
         console.log(`  ${line}`);
     }
 
-    const values: Record<string, unknown> = {};
+    const existingConfig = options.existingConfig ?? {};
+    const targetProfile = await resolveChannelProfileSelection(spec, existingConfig, options);
+    if (targetProfile === null) {
+        return undefined;
+    }
+    const values = readChannelValues(existingConfig, targetProfile ?? undefined);
+    const resolvedByBinding = new Set<string>();
+    const useProfile = Boolean(targetProfile);
+    const profileId = targetProfile ?? undefined;
+
     if (spec.allowedChannel === Channel.WeixinIlink) {
         const bind = await prompts.confirm({
             initialValue: true,
@@ -1552,19 +1746,24 @@ async function configureChannel(spec: ChannelSetupSpec): Promise<GatewaySetup | 
             const linked = await runIlinkBindingFlow();
             if (linked) {
                 Object.assign(values, linked);
+                for (const key of Object.keys(linked)) {
+                    resolvedByBinding.add(key);
+                }
             }
         }
     }
 
     for (const field of spec.fields) {
-        if (Object.hasOwn(values, field.key)) {
+        if (resolvedByBinding.has(field.key)) {
             continue;
         }
-        if (field.help) {
-            console.log(`  ${field.help}`);
-        }
-        const value = await promptChannelField(field);
+        const existingValue = values[field.key];
+        printChannelFieldDescription(field, existingValue);
+        const value = await promptChannelField(field, existingValue);
         if (value === undefined && field.required) {
+            if (existingValue !== undefined) {
+                continue;
+            }
             prompts.cancel(`Skipping ${spec.label}. Required values are missing.`);
             return undefined;
         }
@@ -1581,10 +1780,14 @@ async function configureChannel(spec: ChannelSetupSpec): Promise<GatewaySetup | 
     const setup = createDefaultGatewaySetup();
     setup.allowedChannels = [spec.allowedChannel];
     if (spec.configKey) {
-        setup.channels[spec.configKey] = channelConfig;
+        setup.channels[spec.configKey] = useProfile && profileId
+            ? mergeChannelProfileConfig(existingConfig, profileId, channelConfig)
+            : channelConfig;
     }
     if (spec.allowedChannel === Channel.WeixinIlink) {
-        setup.channels.weixinIlink = channelConfig;
+        setup.channels.weixinIlink = useProfile && profileId
+            ? mergeChannelProfileConfig(existingConfig, profileId, channelConfig)
+            : channelConfig;
     }
     spec.applySetup?.(setup, values, channelConfig);
     return setup;
@@ -1731,8 +1934,8 @@ async function runIlinkBindingFlow(): Promise<Partial<IlinkBindingResult> | unde
     return undefined;
 }
 
-async function promptChannelField(field: ChannelFieldSpec): Promise<unknown | undefined> {
-    const defaultValue = field.defaultValue;
+async function promptChannelField(field: ChannelFieldSpec, existingValue?: unknown): Promise<unknown | undefined> {
+    const defaultValue = existingValue ?? field.defaultValue;
     if (field.kind === "confirm") {
         const answer = await prompts.confirm({
             initialValue: typeof defaultValue === "boolean" ? defaultValue : true,
@@ -1741,16 +1944,40 @@ async function promptChannelField(field: ChannelFieldSpec): Promise<unknown | un
         return prompts.isCancel(answer) ? undefined : Boolean(answer);
     }
 
+    if (field.kind === "password" || isSensitiveField(field.key)) {
+        const answer = await prompts.password({
+            mask: "*",
+            message: field.message,
+            validate: (input) => {
+                if (!field.required) {
+                    return undefined;
+                }
+                return String(input).trim() || existingValue !== undefined ? undefined : "This field is required.";
+            },
+        });
+        if (prompts.isCancel(answer)) {
+            return undefined;
+        }
+        const raw = String(answer).trim();
+        return raw || existingValue;
+    }
+
     const answer = await prompts.text({
         defaultValue:
-            typeof defaultValue === "string" || typeof defaultValue === "number" ? String(defaultValue) : undefined,
+            typeof defaultValue === "string" || typeof defaultValue === "number"
+                ? String(defaultValue)
+                : undefined,
+        initialValue:
+            typeof existingValue === "string" || typeof existingValue === "number"
+                ? String(existingValue)
+                : undefined,
         message: field.message,
         placeholder: field.placeholder,
         validate: (input) => {
             if (!field.required) {
                 return undefined;
             }
-            return String(input).trim() ? undefined : "This field is required.";
+            return String(input).trim() || existingValue !== undefined ? undefined : "This field is required.";
         },
     });
     if (prompts.isCancel(answer)) {
@@ -1758,12 +1985,214 @@ async function promptChannelField(field: ChannelFieldSpec): Promise<unknown | un
     }
     const raw = String(answer).trim();
     if (!raw) {
-        return undefined;
+        return existingValue;
     }
     if (field.parse) {
         return field.parse(raw);
     }
     return raw;
+}
+
+function findChannelSetupSpec(channel: string): ChannelSetupSpec | undefined {
+    const normalized = channel.trim().toLowerCase();
+    return CHANNEL_SETUP_SPECS.find(
+        (spec) =>
+            spec.allowedChannel === normalized ||
+            spec.configKey === normalized ||
+            spec.label.toLowerCase() === normalized,
+    );
+}
+
+function readChannelConfig(
+    gateway: Record<string, unknown> | undefined,
+    configKey: string,
+): Record<string, unknown> | undefined {
+    if (!isRecord(gateway?.channels)) {
+        return undefined;
+    }
+    const value = gateway.channels[configKey];
+    return isRecord(value) ? value : undefined;
+}
+
+function readLegacyChannelValues(config: Record<string, unknown>): Record<string, unknown> {
+    if (isRecord(config.defaultProfile) && typeof config.defaultProfile.id === "string" && isRecord(config.profiles)) {
+        const profile = config.profiles[config.defaultProfile.id];
+        return isRecord(profile) ? { ...profile } : {};
+    }
+    if (typeof config.defaultProfile === "string" && isRecord(config.profiles)) {
+        const profile = config.profiles[config.defaultProfile];
+        return isRecord(profile) ? { ...profile } : {};
+    }
+    const values: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(config)) {
+        if (key === "profiles" || key === "defaultProfile") {
+            continue;
+        }
+        values[key] = value;
+    }
+    return values;
+}
+
+function readChannelValues(config: Record<string, unknown>, profile?: string): Record<string, unknown> {
+    if (profile && isRecord(config.profiles)) {
+        const value = config.profiles[profile];
+        return isRecord(value) ? { ...value } : {};
+    }
+    return readLegacyChannelValues(config);
+}
+
+function hasProfiles(config: Record<string, unknown> | undefined): boolean {
+    return isRecord(config?.profiles);
+}
+
+async function promptChannelProfileId(
+    spec: ChannelSetupSpec,
+    values: Record<string, unknown>,
+    existingConfig: Record<string, unknown>,
+): Promise<string | undefined> {
+    const existingProfiles = isRecord(existingConfig.profiles) ? existingConfig.profiles : {};
+    const fallback =
+        asString(values.accountId) ??
+        `${spec.allowedChannel}-${Object.keys(existingProfiles).length + 1}`;
+    const answer = await prompts.text({
+        defaultValue: fallback,
+        initialValue: fallback,
+        message: "Channel account/profile id",
+        placeholder: fallback,
+        validate: (input) => (String(input).trim() ? undefined : "Profile id is required."),
+    });
+    if (prompts.isCancel(answer)) {
+        prompts.cancel(`Skipping ${spec.label}.`);
+        return undefined;
+    }
+    return String(answer || fallback).trim();
+}
+
+async function resolveChannelProfileSelection(
+    spec: ChannelSetupSpec,
+    existingConfig: Record<string, unknown>,
+    options: ChannelConfigureOptions,
+): Promise<string | null | undefined> {
+    const profileIds = isRecord(existingConfig.profiles) ? Object.keys(existingConfig.profiles) : [];
+    const wantsProfile =
+        options.forceProfile ||
+        shouldStoreChannelProfile(spec, existingConfig) ||
+        options.action === "add" ||
+        Boolean(options.profile);
+    if (!wantsProfile) {
+        return undefined;
+    }
+    if (options.profile) {
+        return options.profile;
+    }
+    if (options.action === "edit" && profileIds.length > 0) {
+        const selected = await prompts.select({
+            message: "Choose binding to edit",
+            options: profileIds.map((profile) => ({ label: profile, value: profile })),
+            initialValue: selectDefaultProfileId(existingConfig),
+        });
+        if (prompts.isCancel(selected)) {
+            prompts.cancel(`Skipping ${spec.label}.`);
+            return null;
+        }
+        return String(selected);
+    }
+    if (profileIds.length > 0 && options.action !== "add") {
+        const selected = await prompts.select({
+            message: "Choose binding",
+            options: [
+                ...profileIds.map((profile) => ({ label: `Edit ${profile}`, value: profile })),
+                { label: "Add new binding", value: "__new__" },
+            ],
+            initialValue: selectDefaultProfileId(existingConfig),
+        });
+        if (prompts.isCancel(selected)) {
+            prompts.cancel(`Skipping ${spec.label}.`);
+            return null;
+        }
+        if (selected !== "__new__") {
+            return String(selected);
+        }
+    }
+    return promptChannelProfileId(spec, {}, existingConfig);
+}
+
+function shouldStoreChannelProfile(spec: ChannelSetupSpec, existingConfig: Record<string, unknown>): boolean {
+    if (spec.allowedChannel === Channel.WeixinIlink) {
+        return hasConfiguredChannelFields(existingConfig);
+    }
+    return false;
+}
+
+function hasConfiguredChannelFields(config: Record<string, unknown>): boolean {
+    return Object.entries(config).some(([key, value]) => {
+        if (key === "profiles" || key === "defaultProfile") {
+            return false;
+        }
+        if (typeof value === "string") {
+            return Boolean(value.trim());
+        }
+        return value !== undefined && value !== null;
+    });
+}
+
+function mergeChannelProfileConfig(
+    existingConfig: Record<string, unknown>,
+    profileId: string,
+    channelConfig: Record<string, unknown>,
+): Record<string, unknown> {
+    const profiles = isRecord(existingConfig.profiles) ? { ...existingConfig.profiles } : {};
+    if (!hasProfiles(existingConfig) && hasConfiguredChannelFields(existingConfig)) {
+        const legacyId = asString(existingConfig.accountId) ?? "default";
+        profiles[legacyId] = readLegacyChannelValues(existingConfig);
+    }
+    profiles[profileId] = channelConfig;
+    return {
+        profiles,
+        defaultProfile:
+            typeof existingConfig.defaultProfile === "string"
+                ? existingConfig.defaultProfile
+                : profileId,
+    };
+}
+
+function selectDefaultProfileId(config: Record<string, unknown>): string | undefined {
+    if (typeof config.defaultProfile === "string") {
+        return config.defaultProfile;
+    }
+    if (isRecord(config.defaultProfile) && typeof config.defaultProfile.id === "string") {
+        return config.defaultProfile.id;
+    }
+    if (isRecord(config.profiles)) {
+        return Object.keys(config.profiles)[0];
+    }
+    return undefined;
+}
+
+function formatExistingValue(field: ChannelFieldSpec, value: unknown): string {
+    if (field.kind === "password" || isSensitiveField(field.key)) {
+        return typeof value === "string" ? redactSecret(value) : "***";
+    }
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        return String(value);
+    }
+    return JSON.stringify(value);
+}
+
+function printChannelFieldDescription(field: ChannelFieldSpec, existingValue: unknown): void {
+    const parts = [
+        field.help,
+        existingValue !== undefined
+            ? `Existing value: ${formatExistingValue(field, existingValue)}. Leave blank to keep it.`
+            : undefined,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+        printPromptDescription(parts.join(" "));
+    }
+}
+
+function printPromptDescription(text: string): void {
+    console.log(pc.dim(`  ${text}`));
 }
 
 function mergeGatewaySetup(target: GatewaySetup, source: GatewaySetup): void {
@@ -1780,6 +2209,70 @@ function mergeGatewaySetup(target: GatewaySetup, source: GatewaySetup): void {
         ...target.channels,
         ...source.channels,
     };
+}
+
+function collectChannelBindingViews(gateway: Record<string, unknown>): ChannelBindingView[] {
+    const channels = isRecord(gateway.channels) ? gateway.channels : {};
+    const allowed = new Set(
+        Array.isArray(gateway.allowedChannels)
+            ? gateway.allowedChannels.filter((item): item is string => typeof item === "string")
+            : [],
+    );
+    const result: ChannelBindingView[] = [];
+    for (const spec of CHANNEL_SETUP_SPECS) {
+        const configKey = spec.configKey ?? spec.allowedChannel;
+        const rawConfig = isRecord(channels[configKey]) ? channels[configKey] : {};
+        if (isRecord(rawConfig.profiles)) {
+            for (const [profile, value] of Object.entries(rawConfig.profiles)) {
+                result.push({
+                    channel: configKey,
+                    configured: hasConfiguredChannelFields(isRecord(value) ? value : {}),
+                    enabled: allowed.has(spec.allowedChannel),
+                    fields: redactChannelFields(isRecord(value) ? value : {}),
+                    profile,
+                });
+            }
+        } else if (hasConfiguredChannelFields(rawConfig) || allowed.has(spec.allowedChannel)) {
+            result.push({
+                channel: configKey,
+                configured: hasConfiguredChannelFields(rawConfig),
+                enabled: allowed.has(spec.allowedChannel),
+                fields: redactChannelFields(rawConfig),
+            });
+        }
+    }
+    return result;
+}
+
+function redactChannelFields(fields: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+        if (key === "profiles" || key === "defaultProfile") {
+            continue;
+        }
+        result[key] = isSensitiveField(key) && typeof value === "string" ? redactSecret(value) : value;
+    }
+    return result;
+}
+
+function isSensitiveField(key: string): boolean {
+    const lower = key.toLowerCase();
+    return lower.includes("token") || lower.includes("secret") || lower.includes("password") || lower.includes("key");
+}
+
+function gatewayClone(gateway: Record<string, unknown>): Record<string, unknown> {
+    return JSON.parse(JSON.stringify(gateway)) as Record<string, unknown>;
+}
+
+function removeAllowedChannel(value: unknown, channel: string): string[] {
+    const defaults = [Channel.Api, Channel.Webhook, Channel.Stdio];
+    const channels = Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === "string")
+        : defaults;
+    if (defaults.includes(channel as never)) {
+        return channels;
+    }
+    return channels.filter((item) => item !== channel);
 }
 
 function createDefaultGatewaySetup(): GatewaySetup {
@@ -1842,18 +2335,23 @@ function buildProviderProfile(
     return profile;
 }
 
-function buildGatewayConfig(gateway: GatewaySetup | undefined, gatewayPort: number): Record<string, unknown> {
-    const base = createDefaultGatewaySetup();
+function buildGatewayConfig(
+    gateway: GatewaySetup | undefined,
+    gatewayPort: number,
+    existingGateway?: Record<string, unknown>,
+): Record<string, unknown> {
+    const base = createGatewaySetupFromExisting(existingGateway);
     if (gateway) {
         mergeGatewaySetup(base, gateway);
     }
     return {
-        host: "0.0.0.0",
+        host: typeof existingGateway?.host === "string" ? existingGateway.host : "0.0.0.0",
         port: gatewayPort,
-        stdio: false,
+        stdio: typeof existingGateway?.stdio === "boolean" ? existingGateway.stdio : false,
         allowedChannels: base.allowedChannels,
         channelReplyUrls: base.channelReplyUrls,
         channels: base.channels,
+        ...(isRecord(existingGateway?.control) ? { control: existingGateway.control } : {}),
     };
 }
 
@@ -1895,6 +2393,72 @@ function buildDefaultChannelConfigs(): Record<string, Record<string, unknown>> {
         yuanbao: {},
         zalo: {},
     };
+}
+
+function createGatewaySetupFromExisting(existingGateway?: Record<string, unknown>): GatewaySetup {
+    const setup = createDefaultGatewaySetup();
+    if (!existingGateway) {
+        return setup;
+    }
+    if (Array.isArray(existingGateway.allowedChannels)) {
+        for (const channel of existingGateway.allowedChannels) {
+            if (typeof channel === "string" && !setup.allowedChannels.includes(channel)) {
+                setup.allowedChannels.push(channel);
+            }
+        }
+    }
+    if (isRecord(existingGateway.channelReplyUrls)) {
+        for (const [channel, value] of Object.entries(existingGateway.channelReplyUrls)) {
+            if (typeof value === "string") {
+                setup.channelReplyUrls[channel] = value;
+            }
+        }
+    }
+    if (isRecord(existingGateway.channels)) {
+        for (const [channel, value] of Object.entries(existingGateway.channels)) {
+            if (isRecord(value)) {
+                setup.channels[channel] = value;
+            }
+        }
+    }
+    return setup;
+}
+
+function readExistingModel(config: Record<string, unknown>): SetupExistingModel | undefined {
+    const model = isRecord(config.model) ? config.model : undefined;
+    if (!model) {
+        return undefined;
+    }
+    const provider = asString(model.activeProvider) ?? asString(model.provider);
+    const activeModel = asString(model.activeModel) ?? asString(model.model);
+    const providers = isRecord(model.providers) ? model.providers : {};
+    const profile = provider && isRecord(providers[provider]) ? providers[provider] : undefined;
+    const secrets = isRecord(model.secrets) ? model.secrets : {};
+    const apiKeyRef = asString(profile?.apiKey) ?? asString(model.apiKey);
+    return {
+        apiKey: apiKeyRef && typeof secrets[apiKeyRef] === "string" ? String(secrets[apiKeyRef]) : apiKeyRef,
+        apiMode: asModelApiMode(profile?.apiMode ?? model.apiMode),
+        baseUrl: asString(profile?.baseUrl ?? profile?.apiBase ?? model.baseUrl),
+        model: activeModel ?? asString(profile?.defaultModel),
+        provider,
+        providerKind: asProviderKind(profile?.type ?? model.provider),
+    };
+}
+
+function asModelApiMode(value: unknown): ModelApiModeType | undefined {
+    return value === ModelApiMode.ChatCompletions || value === ModelApiMode.Responses ? value : undefined;
+}
+
+function asProviderKind(value: unknown): ModelProviderKindType | undefined {
+    return value === ModelProviderKind.OpenAICompatible || value === ModelProviderKind.AnthropicCompatible
+        ? value
+        : undefined;
+}
+
+function redactSecret(value: string): string {
+    if (!value) return "(unset)";
+    if (value.length <= 6) return "***";
+    return `${value.slice(0, 4)}...${value.slice(-2)}`;
 }
 
 function asString(value: unknown): string | undefined {

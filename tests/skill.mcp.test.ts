@@ -26,7 +26,7 @@ import {
     validateSkill,
 } from "../src/skills/index.ts";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
-import { EventsComponent, NullEventSink, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { EventsComponent, NullEventSink, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import {
     CapabilityExecutionKind,
     Channel,
@@ -459,10 +459,10 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({ ok: true, server: "fake", tool: "echo" }),
         ]);
         expect(model.messages).toHaveLength(3);
-        expect(model.messages[1]?.some((message) => message.role === ModelRole.Tool)).toBe(true);
-        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain("from-tool");
-        expect(model.messages[2]?.find((message) => message.role === ModelRole.User)?.content).toContain("mcpCalls");
-        expect(model.messages[2]?.find((message) => message.role === ModelRole.User)?.content).toContain("from-tool");
+        expect(model.messages[1]?.some((message) => message.role === ModelRole.User)).toBe(true);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("from-tool");
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("mcpCalls");
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("from-tool");
         const usage = await loadSkillUsageSummary(paths);
         expect(usage.skills.runtime_helper).toMatchObject({
             mcpCallCount: 1,
@@ -520,7 +520,7 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toBe("Final without MCP result.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(model.messages).toHaveLength(2);
-        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain(
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "not approved",
         );
     });
@@ -563,7 +563,583 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toBe("Allowed final.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(model.messages).toHaveLength(3);
-        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain("allowed");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("allowed");
+    });
+
+    test("runtime exposes and executes built-in shell.run when shell hooks are allowed", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-shell-run-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"pwd"}}]}</flyflor_mcp_calls>',
+            "Shell final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    shellHookApproval: ToolApprovalMode.Allow,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("run pwd"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Shell final.");
+        expect(reply.metadata?.mcpToolCalls).toBe(1);
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "shell", tool: "run" }),
+        ]);
+        expect(model.messages[0]?.find((message) => message.role === ModelRole.System)?.content).toContain(
+            '"name": "shell"',
+        );
+        expect(model.messages[0]?.find((message) => message.role === ModelRole.System)?.content).toContain(
+            '"name": "run"',
+        );
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(paths.projectDir);
+    });
+
+    test("runtime exposes shell.run behind approval when shell hooks ask", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-shell-ask-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"pwd"}}]}</flyflor_mcp_calls>',
+            "Shell ask final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    shellHookApproval: ToolApprovalMode.Ask,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage("can you run pwd"),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            {
+                approveMcpToolCall: async () => true,
+            },
+        );
+
+        expect(reply.text).toBe("Shell ask final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "shell", tool: "run" }),
+        ]);
+        const systemPrompt = model.messages[0]?.find((message) => message.role === ModelRole.System)?.content ?? "";
+        expect(systemPrompt).toContain('"name": "shell"');
+        expect(systemPrompt).toContain("local command discovery");
+    });
+
+    test("runtime exposes and executes read-only git tools when shell hooks are allowed", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-git-tools-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await initGitRepo(root);
+        await writeFile(join(root, "tracked.txt"), "changed\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"git","tool":"status","input":{}},{"server":"git","tool":"diff","input":{"path":"tracked.txt","context":1}}]}</flyflor_mcp_calls>',
+            "Git final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    shellHookApproval: ToolApprovalMode.Allow,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("review local git changes"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Git final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "git", tool: "status" }),
+            expect.objectContaining({ ok: true, server: "git", tool: "diff" }),
+        ]);
+        const systemPrompt = model.messages[0]?.find((message) => message.role === ModelRole.System)?.content ?? "";
+        expect(systemPrompt).toContain('"name": "git"');
+        expect(systemPrompt).toContain('"name": "status"');
+        expect(systemPrompt).toContain('"name": "diff"');
+        const toolResultText = model.messages
+            .flat()
+            .filter((message) => message.role === ModelRole.User)
+            .map((message) => message.content)
+            .join("\n");
+        expect(toolResultText).toContain("tracked.txt");
+        expect(toolResultText).toContain("-initial");
+        expect(toolResultText).toContain("+changed");
+    });
+
+    test("runtime keeps git tools behind shell-hook approval", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-git-ask-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await initGitRepo(root);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"git","tool":"status","input":{}}]}</flyflor_mcp_calls>',
+            "Git denied final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    shellHookApproval: ToolApprovalMode.Ask,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("git status"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Git denied final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "git", tool: "status" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "not approved",
+        );
+    });
+
+    test("runtime exposes read-only workspace tools without shell approval", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "notes.txt"), "alpha\nneedle line\nomega\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</flyflor_mcp_calls>',
+            "Workspace final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    shellHookApproval: ToolApprovalMode.Deny,
+                    mcpToolApproval: ToolApprovalMode.Deny,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("read notes"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Workspace final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        const systemPrompt = model.messages[0]?.find((message) => message.role === ModelRole.System)?.content ?? "";
+        expect(systemPrompt).toContain('"name": "workspace"');
+        expect(systemPrompt).toContain('"name": "read"');
+        expect(systemPrompt).toContain('"name": "search"');
+        expect(systemPrompt).toContain('"name": "glob"');
+        expect(systemPrompt).toContain('"name": "stat"');
+        expect(systemPrompt).not.toContain('"name": "shell"');
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("needle line");
+    });
+
+    test("runtime executes workspace glob and stat for project inspection loops", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-glob-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await mkdir(join(root, "src", "agent"), { recursive: true });
+        await writeFile(join(root, "src", "agent", "tool.ts"), "export const tool = true;\n");
+        await writeFile(join(root, "src", "index.ts"), "export * from './agent/tool';\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"pattern":"**/*.ts","path":"src"}}]}</flyflor_mcp_calls>',
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"stat","input":{"path":"src/agent/tool.ts"}}]}</flyflor_mcp_calls>',
+            "Glob stat final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("inspect source files"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Glob stat final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "glob" }),
+            expect.objectContaining({ ok: true, server: "workspace", tool: "stat" }),
+        ]);
+        const toolResultText = model.messages
+            .flat()
+            .filter((message) => message.role === ModelRole.User)
+            .map((message) => message.content)
+            .join("\n");
+        expect(toolResultText).toContain("src/agent/tool.ts");
+        expect(toolResultText).toContain("src/index.ts");
+        expect(toolResultText).toContain('"type": "file"');
+    });
+
+    test("runtime allows multiple workspace tool turns by default", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-multi-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "package.json"), JSON.stringify({ name: "multi-turn-app" }));
+        await writeFile(join(root, "README.md"), "multi turn readme\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"list","input":{"path":"."}}]}</flyflor_mcp_calls>',
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"package.json"}}]}</flyflor_mcp_calls>',
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"search","input":{"query":"multi turn","path":"README.md"}}]}</flyflor_mcp_calls>',
+            "Multi final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("inspect project"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Multi final.");
+        expect(reply.metadata?.mcpToolCalls).toBe(3);
+        expect(model.messages).toHaveLength(5);
+        expect(model.messages[3]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "multi turn readme",
+        );
+    });
+
+    test("runtime keeps looping beyond the old small default until the model finalizes", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-loop-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const files = Array.from({ length: 8 }, (_, index) => `file${index + 1}.txt`);
+        for (const file of files) {
+            await writeFile(join(root, file), `loop content ${file}`);
+        }
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            ...files.map(
+                (file) =>
+                    `<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"${file}"}}]}</flyflor_mcp_calls>`,
+            ),
+            "Loop final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("loop inspect"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Loop final.");
+        expect(reply.metadata?.mcpToolCalls).toBe(files.length);
+        expect(model.messages).toHaveLength(files.length + 2);
+        expect(model.messages.at(-2)?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "loop content file8.txt",
+        );
+    });
+
+    test("runtime accepts batched workspace calls beyond the old per-message limit", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-batch-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const files = Array.from({ length: 6 }, (_, index) => `batch${index + 1}.txt`);
+        for (const file of files) {
+            await writeFile(join(root, file), `batch content ${file}`);
+        }
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const batchCalls = files.map((file) => ({
+            server: "workspace",
+            tool: "read",
+            input: { path: file },
+        }));
+        const model = new SequencedModel([
+            `<flyflor_mcp_calls>${JSON.stringify({ calls: batchCalls })}</flyflor_mcp_calls>`,
+            "Batch final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("batch inspect"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Batch final.");
+        expect(reply.metadata?.mcpToolCalls).toBe(files.length);
+        expect(reply.metadata?.mcpToolExecutions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+            ]),
+        );
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "batch content batch6.txt",
+        );
+    });
+
+    test("runtime accepts common MCP name/arguments call shape for workspace tools", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-shape-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "shape-compatible read\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"name":"workspace.read","arguments":{"path":"README.md"}}]}</flyflor_mcp_calls>',
+            "Shape final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("read readme"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Shape final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "shape-compatible read",
+        );
+    });
+
+    test("runtime lifts top-level workspace tool arguments into input", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-lift-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "top-level path read\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","path":"README.md"}]}</flyflor_mcp_calls>',
+            "Lift final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("read readme"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Lift final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "top-level path read",
+        );
+    });
+
+    test("runtime accepts OpenAI-style function call shape for workspace tools", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-function-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "function-call path read\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}</flyflor_mcp_calls>',
+            "Function final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("read readme"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Function final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "function-call path read",
+        );
+    });
+
+    test("runtime ignores unrecognized tool call shapes instead of aborting the turn", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-bad-shape-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            'Visible before <flyflor_mcp_calls>{"calls":[{"path":"."}]}</flyflor_mcp_calls> visible after',
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("bad call shape"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Visible before  visible after");
+        expect(reply.metadata?.mcpToolCalls).toBe(0);
+    });
+
+    test("workspace tools require approval for paths outside the project root", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-escape-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "..", "outside.txt"), "outside");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"../outside.txt"}}]}</flyflor_mcp_calls>',
+            "Escape final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("read outside"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Escape final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "not approved",
+        );
+    });
+
+    test("workspace glob requires approval for directories outside the project root", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-glob-escape-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await mkdir(join(root, "..", "outside-dir"), { recursive: true });
+        await writeFile(join(root, "..", "outside-dir", "outside.ts"), "outside");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"path":"../outside-dir","pattern":"*.ts"}}]}</flyflor_mcp_calls>',
+            "Glob escape final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("glob outside"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Glob escape final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "workspace", tool: "glob" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "not approved",
+        );
+    });
+
+    test("workspace tools can read approved absolute paths outside the project root", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-absolute-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const outside = join(root, "..", "outside-approved.txt");
+        await writeFile(outside, "approved outside read");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            `<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":${JSON.stringify(outside)}}}]}</flyflor_mcp_calls>`,
+            "Approved final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage("read approved outside"),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            {
+                approveMcpToolCall: async () => true,
+            },
+        );
+
+        expect(reply.text).toBe("Approved final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "approved outside read",
+        );
     });
 
     test("runtime records denied MCP tool calls when ask policy has no approval callback", async () => {
@@ -602,7 +1178,7 @@ describe("Skill and MCP capability config", () => {
 
         expect(reply.text).toBe("Noninteractive final.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
-        expect(model.messages[1]?.find((message) => message.role === ModelRole.Tool)?.content).toContain(
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "not approved",
         );
     });
@@ -866,6 +1442,32 @@ async function installRuntimeTestSkill(paths: FlyflorPaths): Promise<void> {
             "Keep answers concise.",
         ].join("\n"),
     );
+}
+
+async function initGitRepo(root: string): Promise<void> {
+    await writeFile(join(root, "tracked.txt"), "initial\n");
+    await runGit(root, ["init"]);
+    await runGit(root, ["config", "user.email", "test@example.com"]);
+    await runGit(root, ["config", "user.name", "Test User"]);
+    await runGit(root, ["add", "tracked.txt"]);
+    await runGit(root, ["commit", "-m", "initial"]);
+}
+
+async function runGit(cwd: string, args: string[]): Promise<void> {
+    const child = Bun.spawn({
+        cmd: ["git", ...args],
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+    const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+    ]);
+    if (exitCode !== 0) {
+        throw new Error(`git ${args.join(" ")} failed: ${stdout}${stderr}`);
+    }
 }
 
 async function copyTemplateGroup(source: string, destination: string): Promise<void> {

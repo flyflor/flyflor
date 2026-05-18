@@ -1,7 +1,7 @@
 import { Event } from "../../di/decorators/index.ts";
 import type { FlyflorConfig, FlyflorPaths } from "../../../config/index.ts";
 import type { RuntimeEvent } from "../../../protocol/contracts/index.ts";
-import { RuntimeEventType } from "../../../protocol/events/index.ts";
+import { RuntimeEventType } from "../../../events/index.ts";
 import { recordSkillUsageSelections, type SkillSource, type SkillUsageSelection } from "../../../skills/index.ts";
 
 interface RuntimeSkillUsageDraft {

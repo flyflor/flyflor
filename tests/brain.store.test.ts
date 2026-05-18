@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BrainStore } from "../src/neural/memory/brain/store.ts";
+import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
 import {
     MemoryEventStatus,
     MemoryEventType,

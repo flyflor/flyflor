@@ -1,6 +1,6 @@
 import { MemoryKind } from "../../protocol/contracts/index.ts";
 import { MemoryLayer } from "../../protocol/contracts/index.ts";
-import type { MemoryRecord, MemorySearchResult } from "../../neural/memory/types.ts";
+import type { MemoryRecord, MemorySearchResult } from "../../fch/hippocampus/memory/types.ts";
 
 export interface SQLiteMemoryRow {
     channel?: string;

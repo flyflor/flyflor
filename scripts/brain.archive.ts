@@ -6,11 +6,11 @@
  *
  *   <brainDir>/archive/brain.YYYY-MM.db
  *
- * The reusable implementation lives in `src/neural/memory/brain/archive.ts`
+ * The reusable implementation lives in `src/fch/hippocampus/memory/brain/archive.ts`
  * so runtime automation and this admin script share one contract.
  */
 
-import { runBrainArchive } from "../src/neural/memory/brain/index.ts";
+import { runBrainArchive } from "../src/fch/hippocampus/memory/brain/index.ts";
 
 interface CliOptions {
     brainPath: string;

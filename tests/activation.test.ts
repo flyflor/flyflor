@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { spreadActivation, type ActivationCandidate } from "../src/neural/memory/recall/index.ts";
-import { NullDreamWorker } from "../src/neural/memory/dream/index.ts";
+import { spreadActivation, type ActivationCandidate } from "../src/fch/hippocampus/memory/recall/index.ts";
+import { NullDreamWorker } from "../src/fch/hippocampus/memory/dream/index.ts";
 
 const nowMs = 1_700_000_000_000;
 

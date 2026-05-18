@@ -3,9 +3,13 @@ import { BlackboardModule, type FlyFlor } from "../../app.ts";
 import { ConfigComponent } from "../../config/index.ts";
 import {
     formatInitResult,
+    getFlyflorConfigPath,
+    getFlyflorChannelBinding,
     initializeFlyflorConfig,
     initializeFlyflorGatewayConfig,
-    initializeFlyflorModelConfig} from "./config.ts";
+    initializeFlyflorModelConfig,
+    listFlyflorChannelBindings,
+    removeFlyflorChannelBinding} from "./config.ts";
 import { renderChannels, renderDoctor, renderFlyflorBanner, renderStatus, resolveGatewaySnapshot } from "./status.ts";
 
 function renderConfigSummary(app: FlyFlor): string {
@@ -50,9 +54,13 @@ async function renderBlackboardSummary(app: FlyFlor): Promise<string> {
 
 export {
     formatInitResult,
+    getFlyflorConfigPath,
+    getFlyflorChannelBinding,
     initializeFlyflorConfig,
     initializeFlyflorGatewayConfig,
     initializeFlyflorModelConfig,
+    listFlyflorChannelBindings,
+    removeFlyflorChannelBinding,
     renderChannels,
     renderConfigSummary,
     renderDoctor,

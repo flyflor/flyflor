@@ -35,6 +35,8 @@ Sandbox 是 MCP 工具、Plugin、Shell hook 三类可执行能力的统一闸�
 
 `SandboxModule.policy()` 会把 mode 与三个 per-capability approval 归一成 `SandboxPolicy.approvals`。默认值在 `src/config/index.ts` 中固定为 `mode=off` 且三类能力均 `deny`；用户显式改为 `yolo` 时，未单独覆盖的能力才默认 `allow`。
 
+交互式本地调试时，`./dist/flyflor` / `flyflor chat` 只对本次进程把 `shellHookApproval` 覆盖为 `ask`，模型能看见内置 `shell.run`，但每次执行仍需终端确认；`--accept-hooks` 则覆盖为 `allow`，用于本地已信任的快速调试。Runtime 会把内置 `shell.run` 暴露进 MCP 结构化工具目录，但实际执行仍经过 `ShellHookExecutor`、sandbox gate、超时和输出截断。
+
 ## 决策时序
 
 ```mermaid

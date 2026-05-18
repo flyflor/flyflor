@@ -173,6 +173,80 @@ export const CapabilityExecutionKind = {
 
 export type CapabilityExecutionKind = (typeof CapabilityExecutionKind)[keyof typeof CapabilityExecutionKind];
 
+export const CttlCapabilitySource = {
+    Channel: "channel",
+    Core: "core",
+    Mcp: "mcp",
+    Plugin: "plugin",
+    Skill: "skill",
+    Subagent: "subagent",
+    User: "user",
+} as const;
+
+export type CttlCapabilitySource = (typeof CttlCapabilitySource)[keyof typeof CttlCapabilitySource];
+
+export const CttlToolScope = {
+    Background: "background",
+    Channel: "channel",
+    Chat: "chat",
+    Core: "core",
+    Debug: "debug",
+    Local: "local",
+    Memory: "memory",
+    Project: "project",
+    Subagent: "subagent",
+} as const;
+
+export type CttlToolScope = (typeof CttlToolScope)[keyof typeof CttlToolScope];
+
+export const CttlPermission = {
+    Computer: "computer",
+    Dangerous: "dangerous",
+    Execute: "execute",
+    Message: "message",
+    Network: "network",
+    None: "none",
+    Read: "read",
+    Write: "write",
+} as const;
+
+export type CttlPermission = (typeof CttlPermission)[keyof typeof CttlPermission];
+
+export const CttlToolCategory = {
+    Coding: "coding",
+    Computer: "computer",
+    Integration: "integration",
+    Media: "media",
+    Memory: "memory",
+    Message: "message",
+    Network: "network",
+    System: "system",
+} as const;
+
+export type CttlToolCategory = (typeof CttlToolCategory)[keyof typeof CttlToolCategory];
+
+export const CttlHiddenReason = {
+    Availability: "availability",
+    ChannelCap: "channel-cap",
+    Duplicate: "duplicate",
+    InvalidDescriptor: "invalid-descriptor",
+    PermissionCap: "permission-cap",
+    ScopeMismatch: "scope-mismatch",
+    SourceDisabled: "source-disabled",
+    TrustDenied: "trust-denied",
+} as const;
+
+export type CttlHiddenReason = (typeof CttlHiddenReason)[keyof typeof CttlHiddenReason];
+
+export const CttlLoopGuardReason = {
+    FailedCallRepeat: "failed-call-repeat",
+    MaxCallsExceeded: "max-calls-exceeded",
+    RepeatedCallNoProgress: "repeated-call-no-progress",
+    UnknownToolRepeat: "unknown-tool-repeat",
+} as const;
+
+export type CttlLoopGuardReason = (typeof CttlLoopGuardReason)[keyof typeof CttlLoopGuardReason];
+
 export const RuntimeMode = {
     Chat: "chat",
     Cli: "cli",
@@ -187,6 +261,20 @@ export const RuntimeMode = {
 } as const;
 
 export type RuntimeMode = (typeof RuntimeMode)[keyof typeof RuntimeMode];
+
+export const RuntimeEventClass = {
+    Ask: "ask",
+    Control: "control",
+    Effect: "effect",
+    Error: "error",
+    Lifecycle: "lifecycle",
+    Performance: "performance",
+    Question: "question",
+    Read: "read",
+    Write: "write",
+} as const;
+
+export type RuntimeEventClass = (typeof RuntimeEventClass)[keyof typeof RuntimeEventClass];
 
 export const ChannelTransport = {
     Http: "http",

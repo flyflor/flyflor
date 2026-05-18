@@ -9,7 +9,7 @@ import {
     SandboxMode,
     ToolApprovalMode,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import type { SandboxPolicy } from "../src/agent/sandbox/index.ts";
 
 function policyAllow(): SandboxPolicy {

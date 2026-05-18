@@ -1,6 +1,7 @@
+import { realpathSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import mergeWith from "lodash-es/mergeWith.js";
 import {
     Channel,
@@ -211,7 +212,20 @@ export interface ChannelConfigs {
         accountId?: string;
         apiBaseUrl?: string;
         baseInfo?: Record<string, unknown> | SecretRef | string;
+        defaultProfile?: string;
         pollIntervalMs: number;
+        profiles?: Record<
+            string,
+            {
+                accountId?: string;
+                apiBaseUrl?: string;
+                baseInfo?: Record<string, unknown> | SecretRef | string;
+                pollIntervalMs?: number;
+                syncBuf?: string;
+                token?: SecretRef | string;
+                userId?: string;
+            }
+        >;
         syncBuf?: string;
         token?: SecretRef | string;
         userId?: string;
@@ -594,6 +608,10 @@ export async function loadConfig(options: FlyflorConfigLoadOptions = {}): Promis
     return loadConfigForPaths(paths, options);
 }
 
+export function resolveFlyflorPaths(): FlyflorPaths {
+    return resolvePaths();
+}
+
 export async function loadConfigForPaths(
     paths: FlyflorPaths,
     options: FlyflorConfigLoadOptions = {},
@@ -900,7 +918,10 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
 }
 
 async function resolveModelConfig(config: ModelRegistryConfig | undefined): Promise<ModelConfig> {
-    const providers = mergeConfig(createDefaultModelProviders(), config?.providers ?? {});
+    // User profiles may be partial overrides for built-in providers. Merge
+    // defaults before protocol inference so an apiKey-only profile can inherit
+    // the built-in baseUrl/type contract.
+    const providers = normalizeProviderProfiles(mergeConfig(createDefaultModelProviders(), config?.providers ?? {}));
     const providerId = config?.activeProvider ?? firstKey(providers) ?? ModelProviderId.OpenAI;
     return await buildModelConfig(providers, providerId, config);
 }
@@ -951,8 +972,8 @@ function normalizeModelRegistryConfig(config: ConfigFileShape): ModelRegistryCon
     normalized.activeProvider ??= defaults?.provider;
     normalized.activeModel ??= defaults?.model;
 
-    const topLevelProviders = normalizeProviderProfiles(config.providers ?? {});
-    const nestedProviders = normalized.providers ?? {};
+    const topLevelProviders = coerceProviderProfiles(config.providers ?? {});
+    const nestedProviders = coerceProviderProfiles(normalized.providers ?? {});
     if (Object.keys(topLevelProviders).length > 0 || Object.keys(nestedProviders).length > 0) {
         normalized.providers = mergeProviderProfiles(topLevelProviders, nestedProviders);
     }
@@ -973,14 +994,25 @@ function normalizeProviderProfiles(input: Record<string, ProviderProfileConfig>)
     return providers;
 }
 
+function coerceProviderProfiles(input: Record<string, ProviderProfileConfig>): Record<string, ModelProviderConfig> {
+    const providers: Record<string, ModelProviderConfig> = {};
+    for (const [id, provider] of Object.entries(input)) {
+        providers[id] = {
+            ...provider,
+            baseUrl: provider.baseUrl ?? provider.apiBase,
+        };
+        delete (providers[id] as ProviderProfileConfig).apiBase;
+    }
+    return providers;
+}
+
 function mergeProviderProfiles(
     topLevel: Record<string, ModelProviderConfig>,
     nested: Record<string, ModelProviderConfig>,
 ): Record<string, ModelProviderConfig> {
     const merged = { ...topLevel };
     for (const [id, provider] of Object.entries(nested)) {
-        const normalized = normalizeProviderProfile(id, provider);
-        merged[id] = merged[id] ? mergeConfig(merged[id], normalized) : normalized;
+        merged[id] = merged[id] ? mergeConfig(merged[id], provider) : provider;
     }
     return merged;
 }
@@ -1048,9 +1080,9 @@ function createDefaultModelProviders(): Record<string, ModelProviderConfig> {
         },
         [ModelProviderId.DeepSeek]: {
             type: ModelProviderKind.OpenAICompatible,
-            baseUrl: "https://api.deepseek.com/v1",
-            defaultModel: "deepseek-chat",
-            models: ["deepseek-chat", "deepseek-reasoner"],
+            baseUrl: "https://api.deepseek.com",
+            defaultModel: "deepseek-v4-flash",
+            models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
         },
         [ModelProviderId.Gemini]: {
             type: ModelProviderKind.OpenAICompatible,
@@ -1224,7 +1256,7 @@ function firstKey(record: Record<string, unknown>): string | undefined {
 }
 
 function resolvePaths(): FlyflorPaths {
-    const home = join(homedir(), ".flyflor");
+    const home = resolveFlyflorHome();
     const configDir = join(home, ".config");
     const xdgData = env("XDG_DATA_HOME") ?? join(homedir(), ".local", "share");
     const xdgCache = env("XDG_CACHE_HOME") ?? join(homedir(), ".cache");
@@ -1251,6 +1283,32 @@ function resolvePaths(): FlyflorPaths {
         templateDir: join(configDir, "templates"),
         mcpDir: join(configDir, "mcp"),
     };
+}
+
+function resolveFlyflorHome(): string {
+    const candidates = Bun.main.endsWith("/app.ts")
+        ? [Bun.main, process.argv[1], process.execPath]
+        : [process.execPath, process.argv[1], Bun.main];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        const entrypoint = resolveEntrypointPath(candidate);
+        const parent = dirname(entrypoint);
+        if (parent.endsWith("/dist")) {
+            return dirname(parent);
+        }
+        if (entrypoint.endsWith("/app.ts")) {
+            return parent;
+        }
+    }
+    return resolve(homedir(), ".flyflor");
+}
+
+function resolveEntrypointPath(path: string): string {
+    try {
+        return realpathSync(path);
+    } catch {
+        return resolve(path);
+    }
 }
 
 async function ensureDirectories(paths: FlyflorPaths): Promise<void> {

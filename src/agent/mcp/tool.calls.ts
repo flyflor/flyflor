@@ -38,8 +38,10 @@ export interface McpResultSummary {
 }
 
 const MCP_CALL_BLOCK = structuredBlock(StructuredBlockProtocol.McpCalls);
+// 单条模型消息的批量工具调用上限独立于 runtime loop 上限，避免一次展开过多高风险操作。
+const DEFAULT_MCP_TOOL_CALLS_PER_MESSAGE_LIMIT = 32;
 
-export function parseMcpToolCalls(rawText: string, limit = 4): ParsedMcpToolCalls {
+export function parseMcpToolCalls(rawText: string, limit = DEFAULT_MCP_TOOL_CALLS_PER_MESSAGE_LIMIT): ParsedMcpToolCalls {
     const calls: McpToolCallRequest[] = [];
     // MCP 调用也走统一内部块 registry；本文件只负责工具调用 payload 的安全校验。
     const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.McpCalls);
@@ -183,10 +185,19 @@ function readCalls(rawJson: string): McpToolCallRequest[] {
     try {
         const payload = parseStructuredJson(rawJson);
         if (Array.isArray(payload)) {
-            return payload.map(readMcpToolCall);
+            return payload.flatMap(readMcpToolCall);
         }
         if (isRecord(payload) && Array.isArray(payload.calls)) {
-            return payload.calls.map(readMcpToolCall);
+            return payload.calls.flatMap(readMcpToolCall);
+        }
+        if (isRecord(payload) && Array.isArray(payload.tool_calls)) {
+            return payload.tool_calls.flatMap(readMcpToolCall);
+        }
+        if (isRecord(payload) && Array.isArray(payload.tools)) {
+            return payload.tools.flatMap(readMcpToolCall);
+        }
+        if (isRecord(payload)) {
+            return readMcpToolCall(payload);
         }
     } catch (error) {
         throw error instanceof Error ? error : new Error(String(error));
@@ -194,11 +205,12 @@ function readCalls(rawJson: string): McpToolCallRequest[] {
     throw new Error("MCP tool call block must be an array or an object with calls[].");
 }
 
-function readMcpToolCall(value: unknown): McpToolCallRequest {
-    if (!isMcpToolCall(value)) {
-        throw new Error("MCP tool call block contains an invalid call.");
+function readMcpToolCall(value: unknown): McpToolCallRequest[] {
+    const call = normalizeCallShape(value);
+    if (!call) {
+        return [];
     }
-    return normalizeCall(value);
+    return [normalizeCall(call)];
 }
 
 function isMcpToolCall(value: unknown): value is McpToolCallRequest {
@@ -208,6 +220,99 @@ function isMcpToolCall(value: unknown): value is McpToolCallRequest {
         typeof value.tool === "string" &&
         (value.input === undefined || isRecord(value.input))
     );
+}
+
+function normalizeCallShape(value: unknown): McpToolCallRequest | undefined {
+    if (!isRecord(value)) return undefined;
+    const input = readCallInput(value);
+    const functionCall = readFunctionCall(value);
+    if (functionCall) {
+        return functionCall;
+    }
+    if (typeof value.server === "string" && typeof value.tool === "string") {
+        return {
+            server: value.server,
+            tool: value.tool,
+            input,
+        };
+    }
+    if (typeof value.server === "string" && typeof value.name === "string") {
+        return {
+            server: value.server,
+            tool: value.name,
+            input,
+        };
+    }
+    if (typeof value.name === "string") {
+        const split = splitToolName(value.name);
+        if (split) {
+            return { ...split, input };
+        }
+    }
+    if (typeof value.tool === "string") {
+        const split = splitToolName(value.tool);
+        if (split) {
+            return { ...split, input };
+        }
+    }
+    if (typeof value.server === "string") {
+        const split = splitToolName(value.server);
+        if (split) {
+            return { ...split, input };
+        }
+    }
+    return undefined;
+}
+
+function readCallInput(value: Record<string, unknown>): Record<string, unknown> {
+    if (isRecord(value.input)) return value.input;
+    if (isRecord(value.arguments)) return value.arguments;
+    if (typeof value.arguments === "string") {
+        const parsed = parseJsonRecord(value.arguments);
+        if (parsed) return parsed;
+    }
+    const reserved = new Set(["server", "tool", "name", "input", "arguments", "type", "function", "id"]);
+    const lifted: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+        if (!reserved.has(key)) {
+            lifted[key] = item;
+        }
+    }
+    return lifted;
+}
+
+function readFunctionCall(value: Record<string, unknown>): McpToolCallRequest | undefined {
+    if (!isRecord(value.function)) return undefined;
+    const fn = value.function;
+    const rawName = typeof fn.name === "string" ? fn.name : undefined;
+    if (!rawName) return undefined;
+    const split = splitToolName(rawName);
+    if (!split) return undefined;
+    const input = isRecord(fn.arguments)
+        ? fn.arguments
+        : typeof fn.arguments === "string"
+          ? parseJsonRecord(fn.arguments) ?? {}
+          : {};
+    return { ...split, input };
+}
+
+function splitToolName(name: string): { server: string; tool: string } | undefined {
+    const normalized = name.trim();
+    const dot = normalized.indexOf(".");
+    if (dot <= 0 || dot >= normalized.length - 1) return undefined;
+    return {
+        server: normalized.slice(0, dot),
+        tool: normalized.slice(dot + 1),
+    };
+}
+
+function parseJsonRecord(raw: string): Record<string, unknown> | undefined {
+    try {
+        const parsed = JSON.parse(raw);
+        return isRecord(parsed) ? parsed : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function normalizeCall(call: McpToolCallRequest): McpToolCallRequest {

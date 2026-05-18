@@ -10,13 +10,13 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/fch/crystal/memory/index.ts";
 import {
     buildReflectionCandidate,
     crystallizeCandidate,
     evidence,
     mergeCrystalGem,
-} from "../src/crystal/reflection/index.ts";
+} from "../src/fch/crystal/reflection/index.ts";
 import { extractRuntimeReflectionCandidates } from "../src/agent/runtime/reflection/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { type ModelClient } from "../src/protocol/contracts/index.ts";

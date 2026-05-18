@@ -3,14 +3,14 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { BrainStore } from "../src/neural/memory/brain/store.ts";
+import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
 import {
     HotMemoryCompressionWorker,
     parseHotMemoryCompressionDecision,
-} from "../src/neural/memory/hot/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working/index.ts";
+} from "../src/fch/hippocampus/memory/hot/index.ts";
+import type { EpisodeRecord } from "../src/fch/hippocampus/memory/working/index.ts";
 import { MemoryEventType, ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
 beforeAll(async () => {

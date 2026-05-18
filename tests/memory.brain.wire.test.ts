@@ -12,7 +12,7 @@ import {
     type GatewayReply,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 const tempRoots: string[] = [];
 

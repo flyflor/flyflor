@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
-import { BrainStore } from "../src/neural/memory/brain/store.ts";
-import { ProjectScaffolder } from "../src/neural/project/scaffolder.ts";
-import { detectCodenamePromotion, ProjectTriggerKind } from "../src/neural/project/index.ts";
-import { promoteCodename } from "../src/neural/project/codename.promote.ts";
+import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
+import { ProjectScaffolder } from "../src/fch/hippocampus/project/scaffolder.ts";
+import { detectCodenamePromotion, ProjectTriggerKind } from "../src/fch/hippocampus/project/index.ts";
+import { promoteCodename } from "../src/fch/hippocampus/project/codename.promote.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
-import type { EventSink } from "../src/protocol/events/index.ts";
+import type { EventSink } from "../src/events/index.ts";
 
 const tempRoots: string[] = [];
 afterEach(async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ModelConfig } from "../src/config/index.ts";
-import { createModelClient, OpenAICompatibleClient } from "../src/llm/index.ts";
+import { createModelClient, OpenAICompatibleClient } from "../src/fch/mindstream/index.ts";
 import { ModelApiMode, ModelProviderKind } from "../src/protocol/contracts/index.ts";
 
 describe("LLM client factory", () => {
@@ -67,6 +67,73 @@ describe("LLM client factory", () => {
                 "name",
                 "TimeoutError",
             );
+        } finally {
+            globalThis.fetch = previousFetch;
+        }
+    });
+
+    test("deepseek uses the documented root chat completions endpoint", async () => {
+        const previousFetch = globalThis.fetch;
+        let capturedUrl = "";
+        globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+            capturedUrl = String(input);
+            return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+                headers: { "content-type": "application/json" },
+            });
+        }) as unknown as typeof fetch;
+        try {
+            const client = new OpenAICompatibleClient({
+                apiKey: "test-deepseek-key",
+                apiMode: ModelApiMode.ChatCompletions,
+                baseUrl: "https://api.deepseek.com",
+                headers: {},
+                maxTokens: 4096,
+                model: "deepseek-v4-flash",
+                provider: ModelProviderKind.OpenAICompatible,
+                providerId: "deepseek",
+                temperature: 0.2,
+                timeoutMs: 60_000,
+            });
+
+            await expect(client.generate([{ role: "user", content: "hello" }])).resolves.toBe("ok");
+            expect(capturedUrl).toBe("https://api.deepseek.com/chat/completions");
+        } finally {
+            globalThis.fetch = previousFetch;
+        }
+    });
+
+    test("chat completions requests do not need native tool-role messages for Flyflor tool results", async () => {
+        const previousFetch = globalThis.fetch;
+        let capturedBody: unknown;
+        globalThis.fetch = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            capturedBody = JSON.parse(String(init?.body ?? "{}"));
+            return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+                headers: { "content-type": "application/json" },
+            });
+        }) as unknown as typeof fetch;
+        try {
+            const client = new OpenAICompatibleClient({
+                apiKey: "test-deepseek-key",
+                apiMode: ModelApiMode.ChatCompletions,
+                baseUrl: "https://api.deepseek.com",
+                headers: {},
+                maxTokens: 4096,
+                model: "deepseek-v4-flash",
+                provider: ModelProviderKind.OpenAICompatible,
+                providerId: "deepseek",
+                temperature: 0.2,
+                timeoutMs: 60_000,
+            });
+
+            await expect(
+                client.generate([
+                    { role: "assistant", content: "<flyflor_mcp_calls>{}</flyflor_mcp_calls>" },
+                    { role: "user", content: '{"mcpToolResults":{"results":[]}}' },
+                ]),
+            ).resolves.toBe("ok");
+            const messages = (capturedBody as { messages?: Array<{ role?: string }> }).messages ?? [];
+            expect(messages.map((message) => message.role)).toEqual(["assistant", "user"]);
+            expect(messages.some((message) => message.role === "tool")).toBe(false);
         } finally {
             globalThis.fetch = previousFetch;
         }

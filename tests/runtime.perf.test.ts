@@ -11,8 +11,8 @@ import {
 import type { FastRouteSnapshotStore } from "../src/agent/runtime/routing/index.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
-import { LocalHashEmbeddingProvider } from "../src/neural/embedding/index.ts";
-import { MemoryModule } from "../src/neural/memory/index.ts";
+import { LocalHashEmbeddingProvider } from "../src/fch/hippocampus/embedding/index.ts";
+import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
 import {
     BlackboardMode,
     Channel,
@@ -23,7 +23,7 @@ import {
     type ModelMessage,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import { loadConfigForPaths, type FlyflorConfig } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 

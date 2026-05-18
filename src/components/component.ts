@@ -21,6 +21,8 @@ export abstract class Memory extends FlyflorComponent {}
 
 export abstract class Sandbox extends FlyflorComponent {}
 
+export abstract class CapabilityComponent extends FlyflorComponent {}
+
 export abstract class ContextComponent extends FlyflorComponent {}
 
 export abstract class BrainComponent extends FlyflorComponent {}

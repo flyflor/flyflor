@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile, stat as fsStat } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rm, writeFile, stat as fsStat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";
 import { createHash } from "node:crypto";
 import { Command, CommanderError } from "commander";
@@ -14,8 +14,9 @@ import {
     type GatewayAttachment,
     type GatewayMessage,
     type RuntimeContext} from "../../protocol/contracts/index.ts";
-import { ConsoleEventSink, EventsComponent } from "../../protocol/events/index.ts";
-import { ConfigComponent, loadConfig, type FlyflorConfig } from "../../config/index.ts";
+import { ConsoleEventSink, EventsComponent } from "../../events/index.ts";
+import { ConfigComponent, loadConfig, resolveFlyflorPaths, type FlyflorConfig } from "../../config/index.ts";
+import { PROMPT_TEMPLATE_MANIFEST_FILE } from "../../agent/prompts/template.manifest.ts";
 import type { FlyFlor } from "../../app.ts";
 import { BlackboardModule, GatewayModule, getFlyFlor, RuntimeModule } from "../../app.ts";
 import {
@@ -26,7 +27,7 @@ import {
     startGatewayDaemon,
     stopGatewayDaemon,
     writeGatewayServicePlan} from "../../agent/gateway/index.ts";
-import { RetrospectiveLog } from "../../neural/memory/index.ts";
+import { RetrospectiveLog } from "../../fch/hippocampus/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import {
     callMcpTool,
@@ -73,6 +74,10 @@ import {
 import {
     initializeFlyflorGatewayConfig,
     initializeFlyflorModelConfig,
+    getFlyflorConfigPath,
+    getFlyflorChannelBinding,
+    listFlyflorChannelBindings,
+    removeFlyflorChannelBinding,
     renderChannels,
     renderDoctor,
     renderMemorySummary,
@@ -126,7 +131,7 @@ const COMMAND_SPECS: CommandSpec[] = [
             ["-v, --verbose", "Verbose output"],
             ["-Q, --quiet", "Quiet programmatic output"],
             ["--accept-hooks", "Auto-approve unseen shell hooks"],
-            ["--max-turns <n>", "Maximum tool-calling iterations"],
+            ["--max-turns <n>", "Tool-calling loop safety cap"],
             ["--tui", "Launch TUI"],
         ]},
     { name: "tui", help: "Full-screen terminal interface" },
@@ -160,7 +165,15 @@ const COMMAND_SPECS: CommandSpec[] = [
                             ["--json", "Print machine-readable install plan"],
                         ]},
                 ]},
-            { name: "setup", help: "Configure messaging platforms" },
+            {
+                name: "setup",
+                argument: "[channel]",
+                help: "Configure messaging platforms",
+                options: [
+                    ["--channel <channel>", "Configure only this channel"],
+                    ["--gateway-port <port>", "Gateway port"],
+                    ["-y, --yes", "Accept defaults for missing values"],
+                ]},
         ]},
     {
         name: "model",
@@ -189,7 +202,55 @@ const COMMAND_SPECS: CommandSpec[] = [
         name: "status",
         help: "Show status of all components",
         options: [["--deep", "Run deep checks"]]},
-    { name: "channels", help: "List registered channel adapters" },
+    {
+        name: "channels",
+        help: "List registered channel adapters",
+        subcommands: [
+            {
+                name: "setup",
+                argument: "[channel]",
+                help: "Add or update one channel without running full setup",
+                options: [
+                    ["--channel <channel>", "Configure only this channel"],
+                    ["--gateway-port <port>", "Gateway port"],
+                    ["--profile <profile>", "Channel account/profile id"],
+                    ["-y, --yes", "Accept defaults for missing values"],
+                ]},
+            {
+                name: "add",
+                argument: "[channel]",
+                help: "Add a channel binding",
+                options: [
+                    ["--channel <channel>", "Configure only this channel"],
+                    ["--gateway-port <port>", "Gateway port"],
+                    ["--profile <profile>", "Channel account/profile id"],
+                    ["-y, --yes", "Accept defaults for missing values"],
+                ]},
+            {
+                name: "edit",
+                argument: "[channel]",
+                help: "Edit a channel binding",
+                options: [
+                    ["--channel <channel>", "Configure only this channel"],
+                    ["--gateway-port <port>", "Gateway port"],
+                    ["--profile <profile>", "Channel account/profile id"],
+                ]},
+            { name: "list", aliases: ["ls"], help: "List configured channel bindings" },
+            {
+                name: "show",
+                argument: "<channel>",
+                help: "Show a configured channel binding",
+                options: [["--profile <profile>", "Channel account/profile id"]]},
+            {
+                name: "remove",
+                aliases: ["rm"],
+                argument: "<channel>",
+                help: "Remove a configured channel binding",
+                options: [
+                    ["--profile <profile>", "Channel account/profile id"],
+                    ["-y, --yes", "Skip confirmation"],
+                ]},
+        ]},
     {
         name: "codename",
         help: "Inspect codename anchors stored in brain.db (LF-R2)",
@@ -674,9 +735,56 @@ function addOption(command: Command, flags: string, description: string, default
     }
 }
 
+async function maybeBootstrapSetup(root: string, sub: string | undefined, command: Command): Promise<boolean> {
+    if (isSetupExemptCommand(root, sub)) {
+        return false;
+    }
+    const paths = resolveFlyflorPaths();
+    const configPath = getFlyflorConfigPath();
+    const manifestPath = join(paths.promptDir, PROMPT_TEMPLATE_MANIFEST_FILE);
+    const hasConfig = await exists(configPath);
+    const hasPromptManifest = await exists(manifestPath);
+    if (hasConfig && hasPromptManifest) {
+        return false;
+    }
+
+    if (!hasPromptManifest) {
+        const installed = await installLocalTemplates(paths.configDir);
+        if (installed) {
+            console.log(pc.green(`Installed prompt templates into ${paths.configDir}`));
+        }
+    }
+
+    if (hasConfig) {
+        return false;
+    }
+    if (!process.stdin.isTTY) {
+        console.error(`Flyflor is not configured yet. Run "flyflor setup" first. Config file: ${configPath}`);
+        process.exitCode = 2;
+        return true;
+    }
+
+    console.log(pc.yellow(`Flyflor is not configured yet. Starting setup for ${configPath}.`));
+    await runSetup(command);
+    return true;
+}
+
+function isSetupExemptCommand(root: string, sub: string | undefined): boolean {
+    return (
+        root === "setup" ||
+        root === "model" ||
+        root === "version" ||
+        root === "update" ||
+        (root === "config" && (sub === "path" || sub === "env-path"))
+    );
+}
+
 async function executeCommand(path: string[], command: Command): Promise<void> {
     const root = path[0] ?? "";
     const sub = path[1];
+    if (await maybeBootstrapSetup(root, sub, command)) {
+        return;
+    }
     if (root === "chat") {
         const opts = command.opts<{
             acceptHooks?: boolean;
@@ -700,7 +808,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             const app = await getFlyFlor({
                 argv: process.argv,
                 mode: RuntimeMode.Chat,
-                config: await configWithRuntimeOverrides(opts)});
+                config: await configWithRuntimeOverrides({ ...opts, interactiveTools: true })});
             try {
                 await startChatTui(app);
             } finally {
@@ -711,7 +819,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         const app = await getFlyFlor({
             argv: process.argv,
             mode: RuntimeMode.Chat,
-            config: await configWithRuntimeOverrides(opts),
+            config: await configWithRuntimeOverrides({ ...opts, interactiveTools: process.stdin.isTTY }),
             events: opts.verbose && !opts.quiet ? new ConsoleEventSink() : undefined});
         const toolsetAllowlist = parseToolsetAllowlist(opts.toolsets);
         const maxToolTurns = parseMaxTurns(opts.maxTurns);
@@ -764,7 +872,7 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
             return;
         }
         if (sub === "setup") {
-            await runGatewaySetupWizard(command);
+            await runGatewaySetupWizard(command, path[2]);
             return;
         }
         if (sub === "status") {
@@ -849,6 +957,22 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         return;
     }
     if (root === "channels") {
+        if (sub === "setup" || sub === "add" || sub === "edit") {
+            await runGatewaySetupWizard(command, path[2], sub === "add" ? "add" : sub === "edit" ? "edit" : "setup");
+            return;
+        }
+        if (!sub || sub === "list" || sub === "ls") {
+            console.log(await renderChannelBindings());
+            return;
+        }
+        if (sub === "show") {
+            await runChannelShow(path[2], command);
+            return;
+        }
+        if (sub === "remove" || sub === "rm") {
+            await runChannelRemove(path[2], command);
+            return;
+        }
         if (await maybeStartCommandTui(root, sub, command)) {
             return;
         }
@@ -1187,6 +1311,7 @@ async function startChatTui(app: FlyFlor): Promise<void> {
 
 async function configWithRuntimeOverrides(options: {
     acceptHooks?: boolean;
+    interactiveTools?: boolean;
     model?: string;
     provider?: string;
 }): Promise<FlyflorConfig | undefined> {
@@ -1196,22 +1321,32 @@ async function configWithRuntimeOverrides(options: {
         typeof options.provider === "string" && options.provider.trim().length > 0
             ? options.provider.trim()
             : undefined;
-    const acceptHooks = Boolean(options.acceptHooks);
-    if (!model && !providerId && !acceptHooks) {
+    const shellHookApproval = resolveShellHookApproval(options);
+    if (!model && !providerId && !shellHookApproval) {
         return undefined;
     }
     const config = await loadConfig({
         model: {
             model,
             providerId}});
-    if (!acceptHooks) {
+    if (!shellHookApproval) {
         return config;
     }
     return {
         ...config,
         sandbox: {
             ...config.sandbox,
-            shellHookApproval: ToolApprovalMode.Allow}};
+            shellHookApproval}};
+}
+
+export function resolveShellHookApproval(options: { acceptHooks?: boolean; interactiveTools?: boolean }): ToolApprovalMode | undefined {
+    if (options.acceptHooks) {
+        return ToolApprovalMode.Allow;
+    }
+    if (options.interactiveTools) {
+        return ToolApprovalMode.Ask;
+    }
+    return undefined;
 }
 
 async function runModelWizard(command?: Command): Promise<void> {
@@ -1242,11 +1377,18 @@ async function runModelWizard(command?: Command): Promise<void> {
     prompts.outro(pc.green("Done"));
 }
 
-async function runGatewaySetupWizard(command?: Command): Promise<void> {
+async function runGatewaySetupWizard(
+    command?: Command,
+    channelArg?: string,
+    channelAction: "add" | "edit" | "setup" = "setup",
+): Promise<void> {
     prompts.intro(pc.cyan("Gateway Setup"));
-    const options = command?.opts<{ gatewayPort?: string | number; yes?: boolean }>();
+    const options = command?.opts<{ channel?: string; gatewayPort?: string | number; profile?: string; yes?: boolean }>();
     const result = await initializeFlyflorGatewayConfig({
+        channelAction,
+        channel: options?.channel ?? channelArg,
         gatewayPort: parseOptionalPort(options?.gatewayPort),
+        profile: options?.profile,
         yes: options?.yes});
     if (!result) {
         prompts.cancel("Gateway setup cancelled");
@@ -1264,6 +1406,10 @@ async function runGatewaySetupWizard(command?: Command): Promise<void> {
 }
 
 async function runConfig(sub: string | undefined, command: Command): Promise<void> {
+    if (sub === "path") {
+        console.log(getFlyflorConfigPath());
+        return;
+    }
     const app = await cliApp();
     const config = app.resolve(ConfigComponent);
     if (!sub || sub === "show") {
@@ -1274,17 +1420,75 @@ async function runConfig(sub: string | undefined, command: Command): Promise<voi
         console.log(renderConfigView(config, { format: json ? "json" : "text", redact: !showSecrets }));
         return;
     }
-    if (sub === "path") {
-        // Config paths come from the resolved runtime config so Docker, tests,
-        // and source-first installs all report the same layout they actually use.
-        console.log(join(config.paths.configDir, "config.jsonc"));
-        return;
-    }
     if (sub === "env-path") {
         console.log(join(config.paths.configDir, "secrets.jsonc"));
         return;
     }
     throwUnsupportedCommand(["config", sub]);
+}
+
+async function renderChannelBindings(): Promise<string> {
+    const bindings = await listFlyflorChannelBindings();
+    if (bindings.length === 0) {
+        return "No channel bindings configured.";
+    }
+    const table = new Table({
+        head: ["Channel", "Profile", "Enabled", "Configured", "Fields"],
+        style: { head: [] },
+        wordWrap: true,
+    });
+    for (const binding of bindings) {
+        table.push([
+            binding.channel,
+            binding.profile ?? "-",
+            binding.enabled ? "yes" : "no",
+            binding.configured ? "yes" : "no",
+            Object.keys(binding.fields).join(", ") || "-",
+        ]);
+    }
+    return table.toString();
+}
+
+async function runChannelShow(channel: string | undefined, command: Command): Promise<void> {
+    if (!channel) {
+        throwUnsupportedCommand(["channels", "show"]);
+    }
+    const opts = command.opts<{ profile?: string }>();
+    const binding = await getFlyflorChannelBinding(channel, opts.profile);
+    if (!binding) {
+        console.log(`Channel binding not found: ${channel}${opts.profile ? `/${opts.profile}` : ""}`);
+        return;
+    }
+    console.log(JSON.stringify(binding, null, 2));
+}
+
+async function runChannelRemove(channel: string | undefined, command: Command): Promise<void> {
+    if (!channel) {
+        throwUnsupportedCommand(["channels", "remove"]);
+    }
+    const opts = command.opts<{ profile?: string; yes?: boolean }>();
+    if (!opts.yes) {
+        const confirm = await prompts.confirm({
+            initialValue: false,
+            message: `Remove channel binding ${channel}${opts.profile ? `/${opts.profile}` : ""}?`,
+        });
+        if (prompts.isCancel(confirm) || !confirm) {
+            prompts.cancel("Channel remove cancelled.");
+            return;
+        }
+    }
+    const result = await removeFlyflorChannelBinding(channel, opts.profile);
+    if (!result.removed) {
+        console.log(`Channel binding not found: ${channel}${opts.profile ? `/${opts.profile}` : ""}`);
+        return;
+    }
+    console.log(
+        [
+            `Removed channel binding: ${result.channel}${result.profile ? `/${result.profile}` : ""}`,
+            `Config file: ${result.configPath}`,
+            result.remainingProfiles.length > 0 ? `Remaining profiles: ${result.remainingProfiles.join(", ")}` : "No remaining profiles.",
+        ].join("\n"),
+    );
 }
 
 async function runMemory(sub: string | undefined, command: Command): Promise<void> {
@@ -1930,6 +2134,50 @@ async function resetBuiltInMemory(config: FlyflorConfig): Promise<string[]> {
         removed.push(target);
     }
     return removed;
+}
+
+async function exists(path: string): Promise<boolean> {
+    try {
+        await fsStat(path);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function installLocalTemplates(configDir: string): Promise<boolean> {
+    const repoRoot = resolvePath(import.meta.dir, "..", "..", "..");
+    const promptSource = join(repoRoot, "templates", "prompts");
+    if (!(await exists(join(promptSource, PROMPT_TEMPLATE_MANIFEST_FILE)))) {
+        return false;
+    }
+    await copyTemplateGroup(promptSource, join(configDir, "prompts"));
+    await copyTemplateGroup(join(repoRoot, "templates", "memory"), join(configDir, "templates", "memory"));
+    await copyTemplateGroup(join(repoRoot, "templates", "projects"), join(configDir, "templates", "projects"));
+    await copyTemplateFile(join(repoRoot, "templates", "app.commands.jsonc"), join(configDir, "commands.jsonc"));
+    return true;
+}
+
+async function copyTemplateGroup(source: string, destination: string): Promise<void> {
+    if (!(await exists(source))) {
+        return;
+    }
+    await mkdir(destination, { recursive: true });
+    const entries = await readdir(source, { withFileTypes: true });
+    for (const entry of entries) {
+        if (!entry.isFile()) {
+            continue;
+        }
+        await copyTemplateFile(join(source, entry.name), join(destination, entry.name));
+    }
+}
+
+async function copyTemplateFile(source: string, destination: string): Promise<void> {
+    if (!(await exists(source))) {
+        return;
+    }
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(source, destination);
 }
 
 function throwUnsupportedCommand(path: string[]): never {

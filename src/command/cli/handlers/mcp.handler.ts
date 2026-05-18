@@ -5,7 +5,7 @@ import {
     type McpServerDefinition} from "../../../agent/mcp/index.ts";
 import { type FlyFlor } from "../../../app.ts";
 import type { FlyflorPaths } from "../../../config/index.ts";
-import { EventsComponent } from "../../../protocol/events/index.ts";
+import { EventsComponent } from "../../../events/index.ts";
 
 export interface McpServerListItem {
     name: string;

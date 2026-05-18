@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { MemoryModule } from "../src/neural/memory/index.ts";
-import { SQLiteMemoryStore } from "../src/neural/memory/sqlite/index.ts";
+import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
+import { SQLiteMemoryStore } from "../src/fch/hippocampus/memory/sqlite/index.ts";
 import type { ModelClient, ModelMessage, RuntimeEvent } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 beforeAll(async () => {
     await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);

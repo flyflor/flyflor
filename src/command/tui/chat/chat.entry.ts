@@ -8,7 +8,7 @@
 import type { RuntimeModule } from "../../../agent/runtime/index.ts";
 import type { BlackboardModule } from "../../../agent/blackboard/index.ts";
 import type { McpToolCallRequest } from "../../../agent/mcp/index.ts";
-import { RuntimeEventBus } from "../../../protocol/events/index.ts";
+import { RuntimeEventBus } from "../../../events/index.ts";
 import type { AppCommandRegistry } from "../../app.commands.ts";
 import { startNativeChatApp } from "./app.tsx";
 

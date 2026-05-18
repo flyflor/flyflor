@@ -13,7 +13,7 @@ import {
     type GatewayMessage,
     type GatewayReply,
 } from "../src/protocol/contracts/index.ts";
-import { GlobalEventBus, RuntimeEventType } from "../src/protocol/events/index.ts";
+import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import type { StreamingDispatchOptions } from "../src/agent/gateway/channels/types.ts";
 import type { GatewayStatusSnapshot } from "../src/agent/gateway/channels/status.ts";

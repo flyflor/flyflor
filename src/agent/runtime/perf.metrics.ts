@@ -1,4 +1,4 @@
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import type { MetricsConfig } from "../../config/index.ts";
 
 /**

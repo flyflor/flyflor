@@ -12,7 +12,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { RuntimeEvent } from "../../protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../../events/index.ts";
 
 /** 落盘事件白名单：与 sandbox / 工具执行 / 路由 / 项目 / 关键 worker 失败有关。 */
 export const AUDITED_EVENTS: ReadonlySet<string> = new Set([

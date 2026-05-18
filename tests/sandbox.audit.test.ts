@@ -3,8 +3,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FileAuditSink } from "../src/agent/sandbox/audit.sink.ts";
-import { RuntimeEventType } from "../src/protocol/events/index.ts";
-import { createRuntimeEvent as event } from "../src/protocol/events/runtime.event.ts";
+import { RuntimeEventType } from "../src/events/index.ts";
+import { createRuntimeEvent as event } from "../src/events/runtime.event.ts";
 
 describe("FileAuditSink", () => {
     test("appends whitelisted events as JSONL with ts/type/payload", async () => {

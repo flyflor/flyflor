@@ -14,7 +14,7 @@ import {
     GatewayControlProtocol,
 } from "../src/protocol/contracts/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType } from "../src/protocol/events/index.ts";
+import { RuntimeEventType } from "../src/events/index.ts";
 
 describe("Gateway Control protocol", () => {
     test("roundtrips a typed ws envelope", () => {

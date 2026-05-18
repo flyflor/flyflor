@@ -11,7 +11,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { loadConfig, loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
-import { createModelClient } from "../src/llm/index.ts";
+import { createModelClient } from "../src/fch/mindstream/index.ts";
 import { ModelRole } from "../src/protocol/contracts/index.ts";
 
 describe("live model provider", () => {

@@ -19,7 +19,7 @@
 - `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 Component
 - `src/agent/runtime/perf.metrics.ts` — 性能事件采集
 - `src/agent/runtime/chat.ts` — TTY 交互入口
-- `src/neural/memory/index.ts` — `MemoryModule.buildPrompt` / `rememberTurn`
+- `src/fch/hippocampus/memory/index.ts` — `MemoryModule.buildPrompt` / `rememberTurn`
 - `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
 
 ## 核心阶段

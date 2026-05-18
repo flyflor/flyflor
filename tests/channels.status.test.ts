@@ -72,6 +72,23 @@ describe("gateway channel status snapshots", () => {
         expect(ilink?.detail).toBe("waiting for iLink binding");
     });
 
+    test("configured polling channels explain that a stopped gateway cannot receive messages", () => {
+        const config = gatewayConfig([Channel.WeixinIlink], {
+            weixinIlink: {
+                apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                pollIntervalMs: 1500,
+                token: "ilink-token",
+            },
+        });
+        const snapshot = buildGatewayStatusSnapshot(config, createChannelAdapters(config), new Map(), false);
+
+        const ilink = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
+
+        expect(ilink?.configured).toBe(true);
+        expect(ilink?.state).toBe(ChannelLinkState.Waiting);
+        expect(ilink?.detail).toBe("gateway stopped; polling not started");
+    });
+
     test("marks new HTTP platform channels configured when their own credentials exist", () => {
         const snapshot = buildGatewayStatusSnapshot(
             gatewayConfig(
@@ -164,6 +181,54 @@ describe("gateway channel status snapshots", () => {
             expect(adapters.has(channelName)).toBe(false);
         }
         expect(adapters.get(Channel.GoogleChat)?.constructor.name).toBe("HttpPlatformAdapter");
+    });
+
+    test("creates one logical iLink adapter for multiple configured accounts", () => {
+        const config = gatewayConfig([Channel.WeixinIlink], {
+            weixinIlink: {
+                apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                pollIntervalMs: 1500,
+                profiles: {
+                    first: {
+                        accountId: "first-account",
+                        token: "first-token",
+                    },
+                    second: {
+                        accountId: "second-account",
+                        token: "second-token",
+                    },
+                },
+            },
+        });
+        const adapters = createChannelAdapters(config);
+        const adapter = adapters.get(Channel.WeixinIlink);
+        const snapshot = buildGatewayStatusSnapshot(config, adapters, new Map(), false);
+        const ilink = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
+
+        expect(adapter?.constructor.name).toBe("MultiWeixinIlinkAdapter");
+        expect(ilink?.configured).toBe(true);
+        expect(adapter?.snapshot?.().detail).toContain("2 iLink accounts");
+    });
+
+    test("ignores incomplete iLink profiles when deciding binding readiness", () => {
+        const config = gatewayConfig([Channel.WeixinIlink], {
+            weixinIlink: {
+                apiBaseUrl: "https://ilinkai.weixin.qq.com",
+                pollIntervalMs: 1500,
+                profiles: {
+                    incomplete: {
+                        accountId: "missing-token",
+                    },
+                },
+            },
+        });
+        const adapters = createChannelAdapters(config);
+        const snapshot = buildGatewayStatusSnapshot(config, adapters, new Map(), false);
+        const ilink = snapshot.channels.find((channel) => channel.name === Channel.WeixinIlink);
+
+        expect(adapters.has(Channel.WeixinIlink)).toBe(false);
+        expect(ilink?.configured).toBe(false);
+        expect(ilink?.state).toBe(ChannelLinkState.NeedsBinding);
     });
 
     test("exposes channel capability matrix in status snapshots", () => {

@@ -1,4 +1,4 @@
-import { event, RuntimeEventType, type EventSink } from "../events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import type { ProcessEnvelope, ProcessRole } from "./protocol.ts";
 
 export interface ChildProcessSpec {

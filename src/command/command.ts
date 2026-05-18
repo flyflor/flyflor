@@ -1,7 +1,9 @@
 import { RuntimeMode, type RuntimeMode as RuntimeModeType } from "../protocol/contracts/index.ts";
-import { EventsComponent } from "../protocol/events/index.ts";
+import { EventsComponent } from "../events/index.ts";
 import { ConfigComponent } from "../config/index.ts";
+import { promptApproveMcpToolCall } from "../agent/runtime/index.ts";
 import { loadAppCommandRegistry } from "./app.commands.ts";
+import { resolveShellHookApproval } from "./cli/commands.ts";
 import {
     isFlyflorUtilityCommand,
     parseFlyflorCommand,
@@ -53,7 +55,8 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
     }
 
     const { getFlyFlor } = await import("../app.ts");
-    const app = await getFlyFlor({ argv, mode: parsed });
+    const config = await loadInteractiveConfigOverride(argv, parsed);
+    const app = await getFlyFlor({ argv, mode: parsed, config });
 
     if (parsed === RuntimeMode.Chat && process.stdin.isTTY) {
         const { startChatEntry } = await import("./tui/chat/index.ts");
@@ -66,6 +69,7 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
             await startChatEntry({
                 runtime,
                 eventBus: events.asBus(),
+                approveMcpToolCall: promptApproveMcpToolCall,
                 agentName: "flyflor",
                 appCommands: await loadAppCommandRegistry(config.paths),
                 resourceConfig: {
@@ -86,6 +90,31 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
 
     await app.start();
     return { exitCode: 0 };
+}
+
+async function loadInteractiveConfigOverride(
+    argv: string[],
+    mode: RuntimeModeType,
+): Promise<import("../config/index.ts").FlyflorConfig | undefined> {
+    if (mode !== RuntimeMode.Chat || !process.stdin.isTTY) {
+        return undefined;
+    }
+    const shellHookApproval = resolveShellHookApproval({
+        acceptHooks: argv.includes("--accept-hooks"),
+        interactiveTools: true,
+    });
+    if (!shellHookApproval) {
+        return undefined;
+    }
+    const { loadConfig } = await import("../config/index.ts");
+    const config = await loadConfig();
+    return {
+        ...config,
+        sandbox: {
+            ...config.sandbox,
+            shellHookApproval,
+        },
+    };
 }
 
 export function parseFlyflorMode(argv: string[]): RuntimeModeType | number {

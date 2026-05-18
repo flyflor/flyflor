@@ -3,10 +3,12 @@ import {
     ChatType,
     GatewayControlMessageType,
     GatewayControlProtocol,
+    type RuntimeEventClass,
     type GatewayControlMessageType as GatewayControlMessageTypeValue,
     type GatewayMessage,
     type RuntimeEvent,
 } from "../contracts/index.ts";
+import { classifyRuntimeEvent } from "../../events/index.ts";
 
 export interface GatewayControlEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {
     protocol: typeof GatewayControlProtocol.WsV1;
@@ -30,6 +32,7 @@ export interface GatewayControlEventEnvelope {
 }
 
 export interface GatewayControlSubscription {
+    classes?: RuntimeEventClass[];
     requestId?: string;
     types?: string[];
 }
@@ -156,6 +159,9 @@ export function normalizeGatewayControlMessage(input: GatewayControlMessageInput
 
 export function readGatewayControlSubscription(payload: Record<string, unknown> | undefined): GatewayControlSubscription {
     return {
+        classes: Array.isArray(payload?.classes)
+            ? payload.classes.filter((item): item is RuntimeEventClass => typeof item === "string")
+            : undefined,
         requestId: readString(payload?.requestId),
         types: Array.isArray(payload?.types) ? payload.types.filter((item): item is string => typeof item === "string") : undefined,
     };
@@ -214,6 +220,13 @@ export function shouldDeliverGatewayControlEvent(
     return subscriptions.some((subscription) => {
         if (subscription.requestId && subscription.requestId !== event.requestId) return false;
         if (subscription.types && subscription.types.length > 0 && !subscription.types.includes(event.type)) return false;
+        if (
+            subscription.classes &&
+            subscription.classes.length > 0 &&
+            !subscription.classes.includes(classifyRuntimeEvent(event.type))
+        ) {
+            return false;
+        }
         return true;
     });
 }

@@ -2,8 +2,8 @@ import type { Command } from "commander";
 import { join } from "node:path";
 
 import type { FlyflorConfig } from "../../../config/index.ts";
-import { BrainStore, type BrainVisibleAtom } from "../../../neural/memory/brain/store.ts";
-import { extractCodenameIdFromInboxProjectId, isInboxProjectId } from "../../../neural/memory/index.ts";
+import { BrainStore, type BrainVisibleAtom } from "../../../fch/hippocampus/memory/brain/store.ts";
+import { extractCodenameIdFromInboxProjectId, isInboxProjectId } from "../../../fch/hippocampus/memory/index.ts";
 import { loadConfig } from "../../../config/index.ts";
 
 interface InboxListOptions {

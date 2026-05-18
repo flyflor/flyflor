@@ -25,11 +25,17 @@ flowchart TB
     gateway --> gateway_status["status"]
     gateway --> gateway_service["service"]
     gateway_service --> gateway_service_plan["plan"]
-    gateway --> gateway_setup["setup"]
+    gateway --> gateway_setup["setup [channel]"]
     Root --> model["model"]
     Root --> setup["setup [section]"]
     Root --> status["status"]
     Root --> channels["channels"]
+    channels --> channels_setup["setup [channel]"]
+    channels --> channels_add["add [channel]"]
+    channels --> channels_edit["edit [channel]"]
+    channels --> channels_list["list"]
+    channels --> channels_show["show <channel>"]
+    channels --> channels_remove["remove <channel>"]
     Root --> codename["codename"]
     codename --> codename_list["list"]
     codename --> codename_promote["promote <name>"]
@@ -108,11 +114,13 @@ flowchart TB
 | `flyflor gateway start/stop/restart` | ✅ | Manages the background service through gateway daemon helpers. |
 | `flyflor gateway service plan` | ✅ | Renders deterministic systemd user units or launchd plists; `--write` only writes the file and leaves enable/start commands explicit. |
 | `flyflor gateway status [--deep]` | ✅ | Calls `buildGatewayStatusSnapshot`. |
-| `flyflor gateway setup` | ✅ | Interactive configuration. |
+| `flyflor gateway setup` | ✅ | Interactive configuration; optional channel argument configures one channel. |
 | `flyflor model` | ✅ | Lists or sets the default provider and model. |
 | `flyflor setup` | ✅ | Initialization wizard. |
 | `flyflor status` | ✅ | Prints `renderStatus` by default and reports working-memory recovery visibility; add explicit `--tui` to open the CLI navigator. |
 | `flyflor channels` | ✅ | Lists channel adapter status by default; add explicit `--tui` to open the CLI navigator. |
+| `flyflor channels setup/add/edit` | ✅ | Adds or updates one channel binding without running the full setup wizard. |
+| `flyflor channels list/show/remove` | ✅ | Lists, inspects, and removes configured channel bindings, including individual multi-account profiles. |
 | `flyflor doctor` | ✅ | `--fix` creates missing directories, then prints diagnostics by default; add explicit `--tui` to open the CLI navigator. |
 | `flyflor codename list/use/promote` | ✅ | Brain.db codename anchors and project promotion. |
 | `flyflor inbox list` | ✅ | Visualizes inbox atoms by codename bucket. |

@@ -13,7 +13,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import type { ChannelAdapter } from "../src/agent/gateway/channels/types.ts";
-import type { EventSink } from "../src/protocol/events/index.ts";
+import type { EventSink } from "../src/events/index.ts";
 
 const message: GatewayMessage = {
     id: "m-1",

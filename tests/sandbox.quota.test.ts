@@ -9,7 +9,7 @@ import {
     SandboxMode,
     ToolApprovalMode,
 } from "../src/protocol/contracts/index.ts";
-import type { EventSink } from "../src/protocol/events/index.ts";
+import type { EventSink } from "../src/events/index.ts";
 
 function silentEvents(): EventSink {
     return { publish() {} };

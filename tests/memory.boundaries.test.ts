@@ -10,7 +10,8 @@ import {
     type FlyflorConfig,
     type FlyflorPaths,
 } from "../src/config/index.ts";
-import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/crystal/memory/index.ts";
+import { listProviderChoices } from "../src/command/cli/config.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/fch/crystal/memory/index.ts";
 import {
     MemoryModule,
     RuntimeModule,
@@ -64,10 +65,10 @@ import {
     Worker,
     type EventSink,
 } from "../src/agent/di/index.ts";
-import { EventsComponent } from "../src/protocol/events/index.ts";
-import { ModelComponent } from "../src/llm/index.ts";
+import { EventsComponent } from "../src/events/index.ts";
+import { ModelComponent } from "../src/fch/mindstream/index.ts";
 import { RedisComponent, SurrealComponent } from "../src/components/index.ts";
-import type { BrainStore } from "../src/neural/memory/brain/store.ts";
+import type { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
@@ -152,6 +153,71 @@ describe("config JSONC boundaries", () => {
         expect(config.model.apiMode).toBe(ModelApiMode.ChatCompletions);
     });
 
+    test("built-in provider profiles inherit defaults from apiKey-only wizard config", async () => {
+        const root = await tempRoot();
+        const paths = testPaths(root);
+
+        await Bun.write(
+            join(paths.configDir, "config.jsonc"),
+            [
+                "{",
+                '  "model": {',
+                '    "activeProvider": "deepseek",',
+                '    "activeModel": "deepseek-v4-flash",',
+                '    "secrets": { "deepseek-api-key": "test-deepseek-key" },',
+                '    "providers": {',
+                '      "deepseek": {',
+                '        "apiKey": "deepseek-api-key"',
+                "      }",
+                "    }",
+                "  }",
+                "}",
+            ].join("\n"),
+        );
+
+        const config = await loadConfigForPaths(paths);
+
+        expect(config.model.providerId).toBe("deepseek");
+        expect(config.model.model).toBe("deepseek-v4-flash");
+        expect(config.model.baseUrl).toBe("https://api.deepseek.com");
+        expect(config.model.apiKey).toBe("test-deepseek-key");
+        expect(config.model.provider).toBe(ModelProviderKind.OpenAICompatible);
+        expect(config.model.apiMode).toBe(ModelApiMode.ChatCompletions);
+    });
+
+    test("all wizard provider choices load from apiKey-only profiles", async () => {
+        for (const choice of listProviderChoices().filter((item) => !item.customTemplate)) {
+            const root = await tempRoot();
+            const paths = testPaths(root);
+            const secretId = `${choice.provider}-api-key`;
+
+            await Bun.write(
+                join(paths.configDir, "config.jsonc"),
+                [
+                    "{",
+                    '  "model": {',
+                    `    "activeProvider": "${choice.provider}",`,
+                    `    "activeModel": "${choice.defaultModel}",`,
+                    `    "secrets": { "${secretId}": "test-provider-key" },`,
+                    '    "providers": {',
+                    `      "${choice.provider}": {`,
+                    `        "apiKey": "${secretId}"`,
+                    "      }",
+                    "    }",
+                    "  }",
+                    "}",
+                ].join("\n"),
+            );
+
+            const config = await loadConfigForPaths(paths);
+
+            expect(config.model.providerId).toBe(choice.provider);
+            expect(config.model.model).toBe(choice.defaultModel);
+            expect(config.model.apiKey).toBe("test-provider-key");
+            expect(config.model.baseUrl.length).toBeGreaterThan(0);
+        }
+    });
+
     test("auto-discovers OpenAI-compatible model list when model is omitted", async () => {
         const root = await tempRoot();
         const paths = testPaths(root);
@@ -199,31 +265,40 @@ describe("config JSONC boundaries", () => {
 });
 
 describe("Internal infrastructure deployment boundaries", () => {
-    test("neural memory action parser does not import agent prompt registry", async () => {
-        const source = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "actions", "parser.ts"), "utf8");
+    test("hippocampus memory action parser does not import agent prompt registry", async () => {
+        const source = await readFile(
+            join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "actions", "parser.ts"),
+            "utf8",
+        );
 
         // Prompt rendering belongs to the runtime/prompt registry boundary.
-        // The neural parser only validates the structured MemoryActions block,
+        // The hippocampus parser only validates the structured MemoryActions block,
         // which keeps the memory semantic layer from depending on agent wiring.
         expect(source).not.toContain("../../agent/prompts");
         expect(source).toContain("StructuredBlockProtocol.MemoryActions");
     });
 
-    test("neural memory module owns dream worker instead of importing runtime", async () => {
+    test("hippocampus memory module owns dream worker instead of importing runtime", async () => {
         const [memoryModule, scheduler] = await Promise.all([
-            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "module.ts"), "utf8"),
-            readFile(join(import.meta.dir, "..", "src", "neural", "memory", "lifecycle", "scheduler.ts"), "utf8"),
+            readFile(join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "module.ts"), "utf8"),
+            readFile(
+                join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "lifecycle", "scheduler.ts"),
+                "utf8",
+            ),
         ]);
 
         // Dream mutates the long-term memory graph; keeping the implementation
-        // inside neural/memory avoids a runtime -> memory -> runtime cycle.
+        // inside fch/hippocampus/memory avoids a runtime -> memory -> runtime cycle.
         expect(`${memoryModule}\n${scheduler}`).not.toContain("../../agent/runtime/dream.worker");
         expect(memoryModule).toContain('from "./dream/index.ts"');
         expect(scheduler).toContain('from "../dream/worker.ts"');
     });
 
     test("memory matrix does not use sentiment lexicons for semantic scoring", async () => {
-        const matrix = await readFile(join(import.meta.dir, "..", "src", "neural", "memory", "recall", "matrix.ts"), "utf8");
+        const matrix = await readFile(
+            join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "recall", "matrix.ts"),
+            "utf8",
+        );
 
         // Affect can only come from structured model fields. Lexicon sentiment
         // would reintroduce forbidden text-keyword routing into memory scores.
@@ -236,7 +311,7 @@ describe("Internal infrastructure deployment boundaries", () => {
         const runtimeFiles = await readdir(join(import.meta.dir, "..", "src", "agent", "runtime"));
 
         // Dream and feedback both mutate or classify memory state, so their
-        // implementation lives under neural/memory rather than runtime.
+        // implementation lives under fch/hippocampus/memory rather than runtime.
         expect(runtimeFiles).not.toContain("dream.worker.ts");
         expect(runtimeFiles).not.toContain("feedback.interpreter.ts");
     });
@@ -272,17 +347,22 @@ describe("Internal infrastructure deployment boundaries", () => {
         expect(moduleSource).not.toContain("\nexport function ");
     });
 
-    test("project solidification lives under neural rather than agent", async () => {
-        const [agentFiles, neuralProjectFiles] = await Promise.all([
+    test("project solidification lives under hippocampus rather than agent", async () => {
+        const [agentFiles, hippocampusProjectFiles] = await Promise.all([
             readdir(join(import.meta.dir, "..", "src", "agent")),
-            readdir(join(import.meta.dir, "..", "src", "neural", "project")),
+            readdir(join(import.meta.dir, "..", "src", "fch", "hippocampus", "project")),
         ]);
 
         // Codename promotion and project scaffolding are memory solidification
-        // paths. Agent keeps orchestration modules; neural owns the persistence
-        // semantics and resource-metric triggers.
+        // paths. Agent keeps orchestration modules; hippocampus owns the
+        // persistence semantics and resource-metric triggers.
         expect(agentFiles).not.toContain("project");
-        expect(neuralProjectFiles.sort()).toEqual(["codename.promote.ts", "index.ts", "scaffolder.ts", "triggers.ts"]);
+        expect(hippocampusProjectFiles.sort()).toEqual([
+            "codename.promote.ts",
+            "index.ts",
+            "scaffolder.ts",
+            "triggers.ts",
+        ]);
     });
 
     test("docker dev defaults to local working memory without Redis service", async () => {

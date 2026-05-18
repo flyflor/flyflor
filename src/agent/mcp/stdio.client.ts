@@ -1,5 +1,5 @@
 import type { FlyflorPaths } from "../../config/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import type { McpServerDefinition } from "./index.ts";
 
 export interface McpToolDefinition {

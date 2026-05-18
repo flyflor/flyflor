@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { MemoryModule } from "../src/agent/index.ts";
-import { inboxProjectIdFor, isInboxProjectId } from "../src/neural/memory/index.ts";
-import type { MemoryAction } from "../src/neural/memory/actions/index.ts";
+import { inboxProjectIdFor, isInboxProjectId } from "../src/fch/hippocampus/memory/index.ts";
+import type { MemoryAction } from "../src/fch/hippocampus/memory/actions/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
     Channel,
@@ -16,7 +16,7 @@ import {
     type GatewayReply,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 const tempRoots: string[] = [];
 afterEach(async () => {

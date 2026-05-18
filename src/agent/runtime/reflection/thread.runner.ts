@@ -3,7 +3,7 @@
  * 模型调用仍由 RuntimeModule 在主线程发起；本运行器只承担 raw → CrystalCandidateInput[]
  * 的纯解析/规范化工作，避免长 JSON 在主线程阻塞事件循环。
  */
-import type { CrystalCandidateInput } from "../../../crystal/reflection/index.ts";
+import type { CrystalCandidateInput } from "../../../fch/crystal/reflection/index.ts";
 import { normalizeReflectionRaw, type ReflectionNormalizeSource } from "./normalize.ts";
 
 export interface ReflectionThreadWorkerLike {

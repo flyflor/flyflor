@@ -17,7 +17,7 @@ import {
     type RuntimeContext,
     type RuntimeEvent,
 } from "../../../protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../../../protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../../../events/index.ts";
 import type { BlackboardTurn } from "../../../agent/blackboard/index.ts";
 import type { ChatEntryOptions } from "./index.ts";
 import { formatAskSummaryLines } from "./ask.render.ts";

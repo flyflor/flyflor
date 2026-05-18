@@ -5,7 +5,7 @@ import {
     ToolApprovalMode,
     type CapabilityExecutionKind as CapabilityExecutionKindType,
 } from "../../protocol/contracts/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { Sandbox } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { SandboxQuotaTracker } from "./quota.ts";

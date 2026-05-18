@@ -1,6 +1,11 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { buildConfigJsonc, listProviderChoices, listRelayProtocols } from "../src/command/cli/config.ts";
-import { listFlyflorCommandSpecs, parseFlyflorCommand, runFlyflorUtilityCommand } from "../src/command/cli/commands.ts";
+import {
+    listFlyflorCommandSpecs,
+    parseFlyflorCommand,
+    resolveShellHookApproval,
+    runFlyflorUtilityCommand,
+} from "../src/command/cli/commands.ts";
 import { renderChannelTable } from "../src/command/cli/status.ts";
 import { parseFlyflorMode } from "../src/command/index.ts";
 import { renderMarkdownToPlainText } from "../src/command/render/index.ts";
@@ -11,6 +16,7 @@ import {
     ModelProviderId,
     ModelProviderKind,
     RuntimeMode,
+    ToolApprovalMode,
 } from "../src/protocol/contracts/index.ts";
 
 describe("Command boundary", () => {
@@ -172,6 +178,45 @@ describe("Command boundary", () => {
         error.mockRestore();
     });
 
+    test("channel command surface supports standalone CRUD", () => {
+        const channels = listFlyflorCommandSpecs().find((spec) => spec.name === "channels");
+        const subcommands = channels?.subcommands?.map((spec) => spec.name) ?? [];
+
+        expect(subcommands).toContain("setup");
+        expect(subcommands).toContain("add");
+        expect(subcommands).toContain("edit");
+        expect(subcommands).toContain("list");
+        expect(subcommands).toContain("show");
+        expect(subcommands).toContain("remove");
+        expect(parseFlyflorCommand(["bun", "flyflor", "channels", "setup", "weixin-ilink"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "channels", "add", "--channel", "weixin-ilink"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "channels", "edit", "weixin-ilink", "--profile", "bot-a"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "channels", "list"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "channels", "show", "weixin-ilink", "--profile", "bot-a"])).toBeUndefined();
+        expect(parseFlyflorCommand(["bun", "flyflor", "channels", "remove", "weixin-ilink", "--profile", "bot-a", "-y"])).toBeUndefined();
+    });
+
+    test("setup descriptions redact secrets and password channel fields do not use text prompts", async () => {
+        const source = await Bun.file("src/command/cli/config.ts").text();
+        const formatter = source.slice(source.indexOf("function formatExistingValue"), source.indexOf("function printPromptDescription"));
+        const channelPrompt = source.slice(source.indexOf("async function promptChannelField"), source.indexOf("function findChannelSetupSpec"));
+
+        expect(formatter).toContain("isSensitiveField(field.key)");
+        expect(formatter).toContain("redactSecret(value)");
+        expect(source).toContain("Existing value:");
+        expect(channelPrompt).toContain('field.kind === "password" || isSensitiveField(field.key)');
+        expect(channelPrompt).toContain("await prompts.password");
+    });
+
+    test("config path is a setup-exempt command and does not instantiate the app", async () => {
+        const source = await Bun.file("src/command/cli/commands.ts").text();
+        const runConfig = source.slice(source.indexOf("async function runConfig"), source.indexOf("async function runMemory"));
+        const bootstrap = source.slice(source.indexOf("function isSetupExemptCommand"), source.indexOf("async function executeCommand"));
+
+        expect(runConfig.indexOf('sub === "path"')).toBeLessThan(runConfig.indexOf("await cliApp()"));
+        expect(bootstrap).toContain('root === "config" && (sub === "path" || sub === "env-path")');
+    });
+
     test("version command returns success", async () => {
         const log = spyOn(console, "log").mockImplementation(() => {});
 
@@ -216,6 +261,12 @@ describe("Command boundary", () => {
         ).toBeUndefined();
     });
 
+    test("interactive chat exposes shell tools behind approval by default", () => {
+        expect(resolveShellHookApproval({ interactiveTools: true })).toBe(ToolApprovalMode.Ask);
+        expect(resolveShellHookApproval({ acceptHooks: true, interactiveTools: true })).toBe(ToolApprovalMode.Allow);
+        expect(resolveShellHookApproval({})).toBeUndefined();
+    });
+
     test("markdown renderer produces terminal text without HTML output", () => {
         const output = renderMarkdownToPlainText(["# Title", "- `item`", "plain **bold** text"].join("\n"));
 
@@ -226,9 +277,12 @@ describe("Command boundary", () => {
     });
 
     test("init provider choices only expose real init options", () => {
-        const providerIds = listProviderChoices().map((choice) => choice.provider);
+        const choices = listProviderChoices();
+        const providerIds = choices.map((choice) => choice.provider);
+        const deepseek = choices.find((choice) => choice.provider === ModelProviderId.DeepSeek);
 
         expect(providerIds).toContain(ModelProviderId.Custom);
+        expect(deepseek?.defaultModel).toBe("deepseek-v4-flash");
     });
 
     test("relay protocol choices include openai and anthropic compatibility", () => {

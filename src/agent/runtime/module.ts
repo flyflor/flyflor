@@ -20,13 +20,13 @@ import {
 } from "../../protocol/contracts/index.ts";
 import { Runtime as RuntimeBoundary } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
-import { parseMemoryActions } from "../../neural/memory/actions/index.ts";
-import { AgentAskParser } from "../../neural/ask/index.ts";
-import { GhostDecisionParser } from "../../neural/ghost/index.ts";
-import { IdentityAppendParser } from "../../neural/identity/index.ts";
-import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../neural/memory/index.ts";
-import { LocalHashEmbeddingProvider } from "../../neural/embedding/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
+import { parseMemoryActions } from "../../fch/hippocampus/memory/actions/index.ts";
+import { AgentAskParser } from "../../fch/hippocampus/ask/index.ts";
+import { GhostDecisionParser } from "../../fch/hippocampus/ghost/index.ts";
+import { IdentityAppendParser } from "../../fch/hippocampus/identity/index.ts";
+import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../fch/hippocampus/memory/index.ts";
+import { LocalHashEmbeddingProvider } from "../../fch/hippocampus/embedding/index.ts";
 import {
     callMcpTool,
     describeMcpResult,
@@ -45,6 +45,7 @@ import {
     decideCapabilityExecution,
     gateCapabilityExecution,
     SandboxQuotaTracker,
+    ShellHookExecutor,
 } from "../sandbox/index.ts";
 import {
     loadPromptTemplates,
@@ -65,7 +66,14 @@ import {
 } from "./blackboard/index.ts";
 import { PerfMetrics } from "./perf.metrics.ts";
 import { InFlightTracker } from "./inflight.tracker.ts";
-import { formatMcpResultSummary, filterMcpServersByToolset, mcpCatalogCacheKey, mcpExecutionsToProvenance } from "./mcp/index.ts";
+import {
+    formatMcpResultSummary,
+    filterMcpServersByToolset,
+    GitToolset,
+    mcpCatalogCacheKey,
+    mcpExecutionsToProvenance,
+    WorkspaceToolset,
+} from "./mcp/index.ts";
 import { PlanningBlockParser, PlanningMetadataBuilder } from "./planning/index.ts";
 import {
     FastRouteEvaluator,
@@ -94,8 +102,8 @@ export interface RuntimeStreamOptions {
     /** One-turn cancellation signal from interactive surfaces such as the chat TUI `/stop` command. */
     signal?: AbortSignal;
     /**
-     * MCP tool-call 循环最大轮数。默认 1（与历史行为一致：发起 → 工具结果 → 总结）。
-     * `--max-turns N` 把上限提高到 N，允许模型多轮调用工具；超过上限后下一轮直接总结。
+     * MCP tool-call loop safety cap. Defaults high enough for agentic
+     * inspect/read/search loops; `--max-turns N` narrows the cap for scripted use.
      */
     maxToolTurns?: number;
     /** CLI `--toolsets` 透传的逗号分隔白名单，仅保留这些 MCP server。 */
@@ -112,6 +120,30 @@ interface CachedMcpToolCatalog {
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
+const DEFAULT_MCP_TOOL_LOOP_LIMIT = 64;
+const BUILTIN_SHELL_SERVER = "shell";
+const BUILTIN_SHELL_TOOL = "run";
+const BUILTIN_SHELL_CATALOG_ENTRY: McpToolCatalogEntry = {
+    server: BUILTIN_SHELL_SERVER,
+    tool: {
+        name: BUILTIN_SHELL_TOOL,
+        description:
+            "Run a local command in the user's project workspace. Use for explicit shell requests, local command discovery, and small scripts such as pwd, ls, which, command -v, git, bun, or codex.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                command: { type: "string" },
+                args: { type: "array", items: { type: "string" } },
+                cwd: { type: "string" },
+                stdin: { type: "string" },
+                timeoutMs: { type: "number" },
+            },
+            required: ["command"],
+        },
+    },
+};
+const BUILTIN_WORKSPACE_SERVER = "workspace";
+const BUILTIN_GIT_SERVER = "git";
 
 /** Phase 1 输出：被 phase 2~5 共享的“轮内不可变上下文”。 */
 interface PreparedTurn {
@@ -131,6 +163,9 @@ interface AssembledTurnContext {
     memoryPrompt: string;
     sandbox: ReturnType<typeof createSandboxPolicy>;
     mcpExecution: ReturnType<typeof decideCapabilityExecution>;
+    shellExecution: ReturnType<typeof decideCapabilityExecution>;
+    workspaceToolset: WorkspaceToolset;
+    gitToolset: GitToolset;
     blackboardRun: RuntimeBlackboardRun | undefined;
     mcpToolCatalog: McpToolCatalogEntry[];
 }
@@ -437,6 +472,9 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const sandbox = createSandboxPolicy(this.config.sandbox);
         const mcpExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.McpTool);
+        const shellExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.ShellHook);
+        const workspaceToolset = new WorkspaceToolset(this.config.paths);
+        const gitToolset = new GitToolset(this.config.paths);
 
         const snapshotForEscalation = await this.fastRouteSnapshots.get(snapshotKey);
         const effectivePreRoute = this.applyRouteEscalation(
@@ -448,17 +486,28 @@ export class RuntimeModule extends RuntimeBoundary {
         );
         const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
         const mcpCatalogBuild = await this.buildMcpToolCatalog(mcpServers, mcpExecution.canExecute, context.requestId);
+        const builtinToolCatalog = [
+            ...workspaceToolset.catalog(),
+            ...(shellExecution.canExecute ? gitToolset.catalog() : []),
+            ...(shellExecution.canExecute ? [BUILTIN_SHELL_CATALOG_ENTRY] : []),
+        ];
         const mcpToolCatalog = mcpCatalogBuild.entries;
+        const toolCatalog = [...mcpToolCatalog, ...builtinToolCatalog];
         this.events.publish(
             event(
                 RuntimeEventType.McpToolCatalogBuilt,
                 {
-                    canExecute: mcpExecution.canExecute,
+                    canExecute: mcpExecution.canExecute || shellExecution.canExecute,
                     failedServers: mcpCatalogBuild.failedServers,
-                    requiresApproval: mcpExecution.requiresApproval,
-                    servers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
+                    requiresApproval: mcpExecution.requiresApproval || shellExecution.requiresApproval,
+                    servers: [
+                        ...mcpServers.filter((server) => server.enabled).map((server) => server.name),
+                        BUILTIN_WORKSPACE_SERVER,
+                        ...(shellExecution.canExecute ? [BUILTIN_GIT_SERVER] : []),
+                        ...(shellExecution.canExecute ? [BUILTIN_SHELL_SERVER] : []),
+                    ],
                     staleServers: mcpCatalogBuild.staleServers,
-                    tools: mcpToolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
+                    tools: toolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
                 },
                 context.requestId,
             ),
@@ -471,8 +520,11 @@ export class RuntimeModule extends RuntimeBoundary {
             memoryPrompt,
             sandbox,
             mcpExecution,
+            shellExecution,
+            workspaceToolset,
+            gitToolset,
             blackboardRun,
-            mcpToolCatalog,
+            mcpToolCatalog: toolCatalog,
         };
     }
 
@@ -487,7 +539,18 @@ export class RuntimeModule extends RuntimeBoundary {
         options: RuntimeStreamOptions,
     ): Promise<GeneratedTurn> {
         const { context } = prepared;
-        const { selectedSkills, mcpServers, memoryPrompt, sandbox, mcpExecution, blackboardRun, mcpToolCatalog } =
+        const {
+            selectedSkills,
+            mcpServers,
+            memoryPrompt,
+            sandbox,
+            mcpExecution,
+            shellExecution,
+            workspaceToolset,
+            gitToolset,
+            blackboardRun,
+            mcpToolCatalog,
+        } =
             assembled;
         const behaviorSnapshotId = `behavior-${context.requestId}`;
 
@@ -514,10 +577,10 @@ export class RuntimeModule extends RuntimeBoundary {
                     behaviorPriorityInstructions: renderBehaviorPriorityInstructions(),
                     blackboardContext: this.blackboardOutput.renderBlackboardPrompt(blackboardRun),
                     mcpContext: renderMcpContextPrompt({
-                        servers: mcpServers,
+                        servers: this.builtinMcpServers(mcpServers, workspaceToolset, gitToolset, shellExecution.canExecute),
                         toolContext: renderMcpToolCatalog({
-                            canExecuteTools: sandbox.canExecuteTools,
-                            servers: mcpServers,
+                            canExecuteTools: true,
+                            servers: this.builtinMcpServers(mcpServers, workspaceToolset, gitToolset, shellExecution.canExecute),
                             tools: mcpToolCatalog,
                         }),
                     }),
@@ -537,9 +600,11 @@ export class RuntimeModule extends RuntimeBoundary {
             ? this.blackboardOutput.renderReplyStreamingPrefix(blackboardRun)
             : this.blackboardOutput.renderReplyPrefix(blackboardRun);
         const generated = await this.generateTextWithMcpTools(modelMessages, replyPrefix, options, {
-            canExecuteTools: mcpExecution.canExecute,
-            requiresApproval: mcpExecution.requiresApproval,
+            canExecuteTools: mcpExecution.canExecute || shellExecution.canExecute || workspaceToolset.catalog().length > 0,
+            requiresApproval: mcpExecution.requiresApproval || shellExecution.requiresApproval,
             catalog: mcpToolCatalog,
+            workspaceToolset,
+            gitToolset,
             requestId: context.requestId,
             approveMcpToolCall: options.approveMcpToolCall,
         });
@@ -1052,6 +1117,8 @@ export class RuntimeModule extends RuntimeBoundary {
             canExecuteTools: boolean;
             requiresApproval: boolean;
             catalog: McpToolCatalogEntry[];
+            workspaceToolset: WorkspaceToolset;
+            gitToolset: GitToolset;
             approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
             requestId: string;
         },
@@ -1063,16 +1130,21 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        const maxTurns = Math.max(1, options.maxToolTurns ?? 1);
+        const maxTurns = Math.max(1, options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT);
         const allExecutions: McpToolCallExecution[] = [];
         const transcript: ModelMessage[] = [...messages];
+        const catalogKeys = new Set(mcp.catalog.map((entry) => `${entry.server}.${entry.tool.name}`));
 
         for (let turn = 0; turn < maxTurns; turn++) {
             this.throwIfAborted(options.signal);
-            const raw = await this.model.generate(transcript, { signal: options.signal });
+            const raw =
+                options.onTextDelta && turn === 0
+                    ? await this.generateModelText(transcript, replyPrefix, options)
+                    : await this.model.generate(transcript, { signal: options.signal });
             const parsedCalls = parseMcpToolCalls(raw);
-            if (parsedCalls.calls.length === 0) {
-                if (options.onTextDelta) {
+            const executableCalls = parsedCalls.calls.filter((call) => catalogKeys.has(`${call.server}.${call.tool}`));
+            if (executableCalls.length === 0) {
+                if (options.onTextDelta && turn > 0) {
                     await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`);
                 }
                 return {
@@ -1081,8 +1153,10 @@ export class RuntimeModule extends RuntimeBoundary {
                 };
             }
             const executions = await this.executeMcpToolCalls(
-                parsedCalls.calls,
+                executableCalls,
                 mcp.catalog,
+                mcp.workspaceToolset,
+                mcp.gitToolset,
                 mcp.requestId,
                 mcp.requiresApproval,
                 mcp.approveMcpToolCall,
@@ -1090,13 +1164,27 @@ export class RuntimeModule extends RuntimeBoundary {
             allExecutions.push(...executions);
             transcript.push(
                 { role: ModelRole.Assistant, content: parsedCalls.text || raw },
-                { role: ModelRole.Tool, content: renderMcpToolResults(executions) },
+                {
+                    role: ModelRole.User,
+                    content: renderMcpToolResults(executions),
+                },
             );
         }
 
         // 超过上限：让模型在 tool 结果之上做最终总结，不再开放工具调用。
         return {
-            rawText: await this.generateModelText(transcript, replyPrefix, options),
+            rawText: await this.generateModelText(
+                [
+                    ...transcript,
+                    {
+                        role: ModelRole.User,
+                        content:
+                            "Tool-call budget is exhausted for this turn. Do not emit <flyflor_mcp_calls>. Answer the original user request using only the tool results already shown above.",
+                    },
+                ],
+                replyPrefix,
+                options,
+            ),
             mcpToolCalls: allExecutions,
         };
     }
@@ -1188,6 +1276,8 @@ export class RuntimeModule extends RuntimeBoundary {
     private async executeMcpToolCalls(
         calls: McpToolCallRequest[],
         catalog: McpToolCatalogEntry[],
+        workspaceToolset: WorkspaceToolset,
+        gitToolset: GitToolset,
         requestId: string,
         requiresApproval: boolean,
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
@@ -1201,12 +1291,49 @@ export class RuntimeModule extends RuntimeBoundary {
         const executions: McpToolCallExecution[] = [];
         for (const call of calls) {
             const key = `${call.server}.${call.tool}`;
-            const server = servers.find((candidate) => candidate.name === call.server);
             const descriptor = { server: call.server, tool: call.tool };
             const catalogEntry = catalogByKey.get(key);
             const schemaCheck = catalogEntry
                 ? validateAgainstInputSchema(catalogEntry.tool.inputSchema, call.input)
                 : { ok: true, errors: [] };
+            if (workspaceToolset.canHandle(call)) {
+                const execution = await this.executeWorkspaceToolCall(
+                    call,
+                    workspaceToolset,
+                    catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["workspace tool not in catalog"] },
+                    requestId,
+                    approveMcpToolCall,
+                );
+                executions.push(execution);
+                this.publishMcpToolCallExecution(execution, requestId, false);
+                continue;
+            }
+            if (gitToolset.canHandle(call)) {
+                const execution = await this.executeGitToolCall(
+                    call,
+                    gitToolset,
+                    catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["git tool not in catalog"] },
+                    requestId,
+                    requiresApproval,
+                    approveMcpToolCall,
+                );
+                executions.push(execution);
+                this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
+                continue;
+            }
+            if (key === `${BUILTIN_SHELL_SERVER}.${BUILTIN_SHELL_TOOL}`) {
+                const execution = await this.executeBuiltinShellToolCall(
+                    call,
+                    catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["shell.run not in catalog"] },
+                    requestId,
+                    requiresApproval,
+                    approveMcpToolCall,
+                );
+                executions.push(execution);
+                this.publishMcpToolCallExecution(execution, requestId, requiresApproval);
+                continue;
+            }
+            const server = servers.find((candidate) => candidate.name === call.server);
             const preDeny =
                 !catalogKeys.has(key) || !server
                     ? {
@@ -1259,6 +1386,256 @@ export class RuntimeModule extends RuntimeBoundary {
             }
         }
         return executions;
+    }
+
+    private builtinMcpServers(
+        mcpServers: Awaited<ReturnType<typeof loadMcpServers>>,
+        workspaceToolset: WorkspaceToolset,
+        gitToolset: GitToolset,
+        includeShell: boolean,
+    ): Awaited<ReturnType<typeof loadMcpServers>> {
+        return [
+            ...mcpServers,
+            workspaceToolset.serverDefinition(),
+            ...(includeShell ? [gitToolset.serverDefinition()] : []),
+            ...(includeShell ? [this.builtinShellServerDefinition()] : []),
+        ];
+    }
+
+    private builtinShellServerDefinition(): Awaited<ReturnType<typeof loadMcpServers>>[number] {
+        // Built-in shell is advertised through the MCP block protocol so the
+        // model has one structured tool-call surface; execution still goes
+        // through the sandbox ShellHook boundary instead of MCP transport code.
+        return {
+            name: BUILTIN_SHELL_SERVER,
+            source: "project",
+            transport: "builtin",
+            enabled: true,
+        };
+    }
+
+    private async executeWorkspaceToolCall(
+        call: McpToolCallRequest,
+        workspaceToolset: WorkspaceToolset,
+        schemaCheck: { ok: boolean; errors: string[] },
+        requestId: string,
+        approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+    ): Promise<McpToolCallExecution> {
+        if (!schemaCheck.ok) {
+            return {
+                call,
+                ok: false,
+                error: `workspace tool input violates inputSchema: ${schemaCheck.errors.join("; ")}`,
+            };
+        }
+        try {
+            const access = await this.approveWorkspaceAccess(call, workspaceToolset, requestId, approveMcpToolCall);
+            if (!access.approved) {
+                return {
+                    call,
+                    ok: false,
+                    error: access.reason,
+                };
+            }
+            const result = await workspaceToolset.executeWithAccess(call, access);
+            return {
+                call,
+                ok: !result.isError,
+                result,
+                error: result.isError ? this.workspaceToolError(result.raw) : undefined,
+            };
+        } catch (error) {
+            return {
+                call,
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+            };
+        }
+    }
+
+    private async approveWorkspaceAccess(
+        call: McpToolCallRequest,
+        workspaceToolset: WorkspaceToolset,
+        requestId: string,
+        approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+    ): Promise<{ approved: boolean; reason: string }> {
+        const requested = await workspaceToolset.requiresApproval(call);
+        if (!requested) {
+            return { approved: true, reason: "project-local" };
+        }
+        const descriptor = {
+            server: call.server,
+            tool: call.tool,
+            path: requested.path,
+            target: requested.target,
+        };
+        this.events.publish(
+            event(RuntimeEventType.SandboxToolApprovalRequested, { kind: "workspace-read", ...descriptor }, requestId),
+        );
+        const approved = approveMcpToolCall ? await approveMcpToolCall(call) : false;
+        if (!approved) {
+            this.events.publish(
+                event(RuntimeEventType.SandboxToolApprovalDenied, { kind: "workspace-read", ...descriptor }, requestId),
+            );
+            return {
+                approved: false,
+                reason: `workspace access was not approved: ${requested.target}`,
+            };
+        }
+        return { approved: true, reason: "approved-outside-project" };
+    }
+
+    private workspaceToolError(raw: unknown): string {
+        if (raw && typeof raw === "object" && "error" in raw) {
+            const value = (raw as { error?: unknown }).error;
+            if (typeof value === "string") return value;
+        }
+        return "workspace tool returned an error.";
+    }
+
+    private async executeGitToolCall(
+        call: McpToolCallRequest,
+        gitToolset: GitToolset,
+        schemaCheck: { ok: boolean; errors: string[] },
+        requestId: string,
+        requiresApproval: boolean,
+        approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+    ): Promise<McpToolCallExecution> {
+        if (!schemaCheck.ok) {
+            return {
+                call,
+                ok: false,
+                error: `git tool input violates inputSchema: ${schemaCheck.errors.join("; ")}`,
+            };
+        }
+        const policy = createSandboxPolicy(this.config.sandbox);
+        const executor = new ShellHookExecutor({
+            policy,
+            events: this.events,
+            allowedCommands: ["git"],
+            approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
+        });
+        try {
+            const result = await gitToolset.execute(call, executor);
+            return {
+                call,
+                ok: !result.isError && !this.gitToolError(result.raw),
+                result: {
+                    isError: result.isError || Boolean(this.gitToolError(result.raw)),
+                    raw: result.raw,
+                },
+                error: result.isError ? this.workspaceToolError(result.raw) : this.gitToolError(result.raw),
+            };
+        } catch (error) {
+            return {
+                call,
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+            };
+        }
+    }
+
+    private gitToolError(raw: unknown): string | undefined {
+        if (!raw || typeof raw !== "object") return undefined;
+        const value = raw as { error?: unknown; exitCode?: unknown; timedOut?: unknown };
+        if (typeof value.error === "string") return value.error;
+        if (value.timedOut === true) return "git tool timed out.";
+        if (typeof value.exitCode === "number" && value.exitCode !== 0) {
+            return `git exited with code ${value.exitCode}`;
+        }
+        return undefined;
+    }
+
+    private async executeBuiltinShellToolCall(
+        call: McpToolCallRequest,
+        schemaCheck: { ok: boolean; errors: string[] },
+        requestId: string,
+        _requiresApproval: boolean,
+        approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+    ): Promise<McpToolCallExecution> {
+        if (!schemaCheck.ok) {
+            return {
+                call,
+                ok: false,
+                error: `shell.run input violates inputSchema: ${schemaCheck.errors.join("; ")}`,
+            };
+        }
+        const spec = this.readShellRunSpec(call);
+        if (!spec.ok) {
+            return { call, ok: false, error: spec.error };
+        }
+        const policy = createSandboxPolicy(this.config.sandbox);
+        const executor = new ShellHookExecutor({
+            policy,
+            events: this.events,
+            allowedCommands: [spec.command],
+            approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
+        });
+        const result = await executor.execute({
+            id: `${BUILTIN_SHELL_SERVER}.${BUILTIN_SHELL_TOOL}`,
+            command: spec.command,
+            args: spec.args,
+            cwd: spec.cwd,
+            stdin: spec.stdin,
+            timeoutMs: spec.timeoutMs,
+        });
+        return {
+            call,
+            ok: result.ok,
+            result: {
+                isError: !result.ok,
+                raw: {
+                    stdout: result.stdout,
+                    stderr: result.stderr,
+                    exitCode: result.exitCode,
+                    timedOut: result.timedOut,
+                    truncated: result.truncated,
+                    durationMs: result.durationMs,
+                    error: result.error,
+                },
+            },
+            error: result.error,
+        };
+    }
+
+    private readShellRunSpec(call: McpToolCallRequest):
+        | {
+              ok: true;
+              command: string;
+              args: string[];
+              cwd: string;
+              stdin?: string;
+              timeoutMs?: number;
+          }
+        | { ok: false; error: string } {
+        const command = call.input.command;
+        if (typeof command !== "string" || command.trim().length === 0) {
+            return { ok: false, error: "shell.run requires input.command." };
+        }
+        const args = call.input.args;
+        if (args !== undefined && (!Array.isArray(args) || args.some((item) => typeof item !== "string"))) {
+            return { ok: false, error: "shell.run input.args must be string[]." };
+        }
+        const cwd = call.input.cwd;
+        if (cwd !== undefined && typeof cwd !== "string") {
+            return { ok: false, error: "shell.run input.cwd must be a string." };
+        }
+        const stdin = call.input.stdin;
+        if (stdin !== undefined && typeof stdin !== "string") {
+            return { ok: false, error: "shell.run input.stdin must be a string." };
+        }
+        const timeoutMs = call.input.timeoutMs;
+        if (timeoutMs !== undefined && typeof timeoutMs !== "number") {
+            return { ok: false, error: "shell.run input.timeoutMs must be a number." };
+        }
+        return {
+            ok: true,
+            command: command.trim(),
+            args: Array.isArray(args) ? args : [],
+            cwd: typeof cwd === "string" && cwd.trim() ? cwd.trim() : this.config.paths.projectDir,
+            stdin,
+            timeoutMs,
+        };
     }
 
     private publishMcpToolCallExecution(

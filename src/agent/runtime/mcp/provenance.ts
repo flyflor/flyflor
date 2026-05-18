@@ -11,7 +11,7 @@ import {
     type McpResultSummary,
     type McpToolCallExecution,
 } from "../../mcp/index.ts";
-import type { MemoryEpisodeProvenance } from "../../../neural/memory/index.ts";
+import type { MemoryEpisodeProvenance } from "../../../fch/hippocampus/memory/index.ts";
 
 export function mcpExecutionsToProvenance(
     executions: McpToolCallExecution[],

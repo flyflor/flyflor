@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { MemoryModule, RuntimeModule } from "../src/agent/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import { GhostContextReason, type ModelClient } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 const tempRoots: string[] = [];
 const cleanup = async () => {

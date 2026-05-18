@@ -9,6 +9,7 @@ import {
 import {
     Blackboard,
     BrainComponent,
+    CapabilityComponent,
     ContextComponent,
     CrystalComponent,
     FlyflorComponent,
@@ -126,6 +127,7 @@ function inferComponentKind(target: Function): ComponentKindType {
     }
     if (prototype instanceof Sandbox) return ComponentKind.Sandbox;
     if (prototype instanceof CrystalComponent) return ComponentKind.Crystal;
+    if (prototype instanceof CapabilityComponent) return ComponentKind.Component;
     if (prototype instanceof FlyflorComponent) return ComponentKind.Component;
     return ComponentKind.Component;
 }
@@ -146,7 +148,7 @@ function inferComponentLayer(target: Function): ArchitectureLayerType {
     ) {
         return ArchitectureLayer.Control;
     }
-    if (prototype instanceof RedisComponent || prototype instanceof SurrealComponent) {
+    if (prototype instanceof CapabilityComponent || prototype instanceof RedisComponent || prototype instanceof SurrealComponent) {
         return ArchitectureLayer.Capability;
     }
     return ArchitectureLayer.Capability;

@@ -12,30 +12,30 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LruCache } from "../src/neural/memory/cache/index.ts";
-import { BrainStore, type BrainPromptAtomWrite } from "../src/neural/memory/brain/store.ts";
-import { spreadActivation } from "../src/neural/memory/recall/index.ts";
+import { LruCache } from "../src/fch/hippocampus/memory/cache/index.ts";
+import { BrainStore, type BrainPromptAtomWrite } from "../src/fch/hippocampus/memory/brain/store.ts";
+import { spreadActivation } from "../src/fch/hippocampus/memory/recall/index.ts";
 import {
     DecayLayer,
     decayImportance,
     reinforceImportance,
     DEFAULT_DECAY_PROFILES,
-} from "../src/neural/memory/lifecycle/index.ts";
+} from "../src/fch/hippocampus/memory/lifecycle/index.ts";
 import {
     dedupeGems,
     isContradiction,
     isStale,
     shouldMergeGems,
     type GemCandidate,
-} from "../src/neural/memory/lifecycle/index.ts";
-import { parseConsolidationDecision } from "../src/neural/memory/consolidation/index.ts";
+} from "../src/fch/hippocampus/memory/lifecycle/index.ts";
+import { parseConsolidationDecision } from "../src/fch/hippocampus/memory/consolidation/index.ts";
 import {
     detectClusterCandidate,
     detectExplicitIntent,
     detectSkillPromotion,
     ProjectTriggerKind,
-} from "../src/neural/project/index.ts";
-import type { EpisodeRecord } from "../src/neural/memory/working/index.ts";
+} from "../src/fch/hippocampus/project/index.ts";
+import type { EpisodeRecord } from "../src/fch/hippocampus/memory/working/index.ts";
 import { AtomStage, MemoryEventType, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────

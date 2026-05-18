@@ -8,7 +8,7 @@ import {
 import { BLACKBOARD_MODEL_WORKER_NAME, WorkerManager } from "../worker/index.ts";
 import { Blackboard } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
-import { event, type EventSink, RuntimeEventType, NullEventSink } from "../../protocol/events/index.ts";
+import { event, type EventSink, RuntimeEventType, NullEventSink } from "../../events/index.ts";
 import {
     renderBlackboardDecisionOptions,
     renderBlackboardDecisionPrompt,

@@ -84,9 +84,14 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
 export async function promptApproveMcpToolCall(call: McpToolCallRequest): Promise<boolean> {
     const answer = await prompts.confirm({
         initialValue: false,
-        message: `Allow MCP tool call ${call.server}.${call.tool}?`,
+        message: renderToolApprovalMessage(call),
     });
     return !prompts.isCancel(answer) && Boolean(answer);
+}
+
+function renderToolApprovalMessage(call: McpToolCallRequest): string {
+    const path = typeof call.input.path === "string" ? ` ${call.input.path}` : "";
+    return `Allow tool call ${call.server}.${call.tool}${path}?`;
 }
 
 export async function* coalesceChatInput(source: AsyncIterable<unknown>, settleMs = 35): AsyncGenerator<ChatInput> {

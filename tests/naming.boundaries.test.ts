@@ -16,9 +16,9 @@ const LEGACY_MEMORY_PATH_REFERENCES = [
     "src/components/crystal/",
     "components/memory/",
     "components/crystal/",
-    "neural/memory/brain.store.ts",
-    "neural/memory/working.store.ts",
-    "neural/memory/markdown.store.ts",
+    "fch/hippocampus/memory/brain.store.ts",
+    "fch/hippocampus/memory/working.store.ts",
+    "fch/hippocampus/memory/markdown.store.ts",
     "project.memory.store.ts",
     "context.fork.store.ts",
     "sqlite.memory.store.ts",
@@ -29,11 +29,11 @@ const SINGLE_OWNER_COMPONENT_FILES = [
     "src/components/base.component.ts",
     "src/config/config.component.ts",
     "src/context/context.scope.component.ts",
-    "src/crystal/gems/gem.component.ts",
-    "src/crystal/memory/crystal.memory.component.ts",
-    "src/llm/model.component.ts",
+    "src/fch/crystal/gems/gem.component.ts",
+    "src/fch/crystal/memory/crystal.memory.component.ts",
+    "src/fch/mindstream/model.component.ts",
     "src/protocol/contracts/mode.component.ts",
-    "src/protocol/events/events.component.ts",
+    "src/events/events.component.ts",
 ];
 const DIRECTORY_REPEATED_INFRA_FILES = [
     "src/agent/di/composition/component.metadata.ts",
@@ -56,6 +56,8 @@ const DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES = [
     "templates/prompts/",
     "docs/old-docs/",
 ];
+const LEGACY_FCH_TOP_LEVEL_DIRS = ["llm", "crystal", "neural"];
+const LEGACY_FCH_CHILD_DIRS = ["fluid", "llmriver"];
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
@@ -133,13 +135,44 @@ describe("repository naming boundary", () => {
         const violations = files.filter((file) => hasRepeatedDirectoryOwnerPrefix(file)).sort();
 
         // Directory is the first convention. Once `src/agent/blackboard/` or
-        // `src/neural/ask/` names the owner, files use role names such as
+        // `src/fch/hippocampus/ask/` names the owner, files use role names such as
         // `module.ts`, `composition.ts`, `parse.ts`, or `manager.ts`.
         expect(violations).toEqual([]);
     });
 
-    test("neural memory capability subdirectories expose an index entrypoint", async () => {
-        const dirs = await listDirs(join(REPO_ROOT, "src", "neural", "memory"));
+    test("FCH code stays collected under src/fch", async () => {
+        const dirs = await listDirs(join(REPO_ROOT, "src"));
+        const topLevelNames = new Set(dirs.map((dir) => basename(dir)));
+        const violations = LEGACY_FCH_TOP_LEVEL_DIRS.filter((dir) => topLevelNames.has(dir));
+
+        // FCH is one cognitive-core boundary. Mindstream, crystal and hippocampus
+        // live under src/fch so architecture stays visible in the tree.
+        expect(violations).toEqual([]);
+    });
+
+    test("FCH mindstream does not regress to old transient names", async () => {
+        const dirs = await listDirs(join(REPO_ROOT, "src", "fch"));
+        const childNames = new Set(dirs.map((dir) => basename(dir)));
+        const violations = LEGACY_FCH_CHILD_DIRS.filter((dir) => childNames.has(dir));
+
+        // Mindstream names the current reasoning/generation flow. The old
+        // fluid/llmriver names should not return as real source directories.
+        expect(violations).toEqual([]);
+    });
+
+    test("Event Fabric stays above protocol instead of under protocol/events", async () => {
+        const dirs = await listDirs(join(REPO_ROOT, "src", "protocol"));
+        const childNames = new Set(dirs.map((dir) => basename(dir)));
+
+        // Protocol owns serializable contracts/envelopes. The live event bus,
+        // sinks and classifiers belong to src/events so gateway and TUI can
+        // consume the same fabric without owning it.
+        expect(childNames.has("events")).toBe(false);
+        expect(await exists(join(REPO_ROOT, "src", "events", "index.ts"))).toBe(true);
+    });
+
+    test("hippocampus memory capability subdirectories expose an index entrypoint", async () => {
+        const dirs = await listDirs(join(REPO_ROOT, "src", "fch", "hippocampus", "memory"));
         const violations: string[] = [];
 
         for (const dir of dirs) {

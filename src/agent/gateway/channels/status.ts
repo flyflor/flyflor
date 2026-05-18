@@ -88,7 +88,7 @@ export function buildChannelStatusSnapshot(
         capabilities: adapterSnapshot?.capabilities ?? adapter?.capabilities ?? defaultCapabilities(name),
         configured,
         connected,
-        detail: merged.detail ?? defaultDetailForChannel(config, name, configured, transport),
+        detail: channelDetail(config, name, configured, transport, gatewayRunning, merged.detail),
         implemented,
         lastError,
         lastErrorAt: merged.lastErrorAt,
@@ -99,6 +99,20 @@ export function buildChannelStatusSnapshot(
         streaming: Boolean(merged.streaming),
         transport,
     };
+}
+
+function channelDetail(
+    config: GatewayConfig,
+    name: ChannelName,
+    configured: boolean,
+    transport: ChannelTransport,
+    gatewayRunning: boolean,
+    detail: string | undefined,
+): string {
+    if (configured && transport === ChannelTransport.Polling && !gatewayRunning) {
+        return "gateway stopped; polling not started";
+    }
+    return detail ?? defaultDetailForChannel(config, name, configured, transport);
 }
 
 function mergeSnapshots(
@@ -331,6 +345,9 @@ function defaultCapabilities(
 
 function hasIlinkBinding(config: GatewayConfig): boolean {
     const ilink = config.channels.weixinIlink;
+    if (ilink?.profiles && typeof ilink.profiles === "object") {
+        return Object.values(ilink.profiles).some((profile) => hasText(profile.apiBaseUrl ?? ilink.apiBaseUrl) && hasSecret(profile.token));
+    }
     return Boolean(ilink?.apiBaseUrl && ilink?.token);
 }
 

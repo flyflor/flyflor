@@ -13,6 +13,8 @@ Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / S
 - `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
 - `src/agent/mcp/schema.validate.ts` — tool inputSchema 轻量校验
 - `src/agent/runtime/module.ts` — catalog TTL/LRU 缓存 + 工具循环
+- `src/agent/runtime/mcp/workspace.ts` — 内置只读 workspace 工具（list/read/search/glob/stat）
+- `src/agent/runtime/mcp/git.ts` — 内置只读 git 工具（status/diff/show）
 - `src/agent/prompts/index.ts` — `renderMcpContextPrompt`
 - `templates/prompts/mcp.context.md` — 模型协议提示与工具目录说明
 
@@ -75,6 +77,26 @@ sequenceDiagram
 ````
 
 代码校验 `server / tool` 是否在 catalog，并在调用前对 `input` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。工具目录和工具结果回灌只由代码输出 JSON 数据；调用规则和结果使用说明统一写在 `mcp.context.md` 模板里。
+
+## 内置工具
+
+Runtime 默认会把只读 `workspace` server 注入工具目录，让模型能先看见当前项目再回答本地代码问题：
+
+- `workspace.list`：列出目录项。
+- `workspace.read`：读取 UTF-8 文本文件，带 offset/limit 上限。
+- `workspace.search`：做精确文本搜索，跳过 `.git`、`node_modules`、`dist` 等重目录。
+- `workspace.glob`：按 `**/*.ts` 这类 glob 模式发现文件路径，默认跳过 `.git`、`node_modules`、`dist` 等重目录，并对扫描量和返回量设上限。
+- `workspace.stat`：读取文件或目录元信息，不读取文件内容。
+
+`workspace` 工具不写文件、不 spawn 子进程。项目内相对路径默认可读；绝对路径或 realpath 后逃出 `paths.projectDir` 的上级路径会先走同一套工具审批回调，用户批准后才允许只读访问。执行类能力仍需要 sandbox：例如 `shell.run` 只有在 `shellHookApproval=allow/ask` 时才会出现在工具目录里；本地交互式 chat 默认临时使用 `ask`，`--accept-hooks` 临时使用 `allow`。
+
+当 shell hook 可执行时，Runtime 也会注入只读 `git` server：
+
+- `git.status`：执行 `git status --short --branch --untracked-files=all`，并返回结构化 branch/files 摘要。
+- `git.diff`：执行 bounded `git diff --no-ext-diff`，支持 `cached`、`context` 和单一路径过滤。
+- `git.show`：执行 bounded `git show --no-ext-diff --stat --patch --format=fuller`，默认查看 `HEAD`，支持 revision 和单一路径过滤。
+
+`git` 工具底层仍走 `ShellHookExecutor`，命令白名单固定为 `git`，argv 由代码组装，不接受模型传入任意命令字符串；因此它继承 `shellHookApproval=allow/ask/deny` 的审批、超时、输出截断和审计事件。
 
 ## 数据结构
 

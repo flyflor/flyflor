@@ -79,6 +79,10 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
         this.name = name;
     }
 
+    public get accountId(): string | undefined {
+        return this.config.accountId;
+    }
+
     public async handle(): Promise<Response> {
         return new Response(
             JSON.stringify({
@@ -195,6 +199,7 @@ export class WeixinIlinkAdapter implements ChannelAdapter {
             id: String(update.id ?? update.message_id ?? update.msg_id ?? crypto.randomUUID()),
             route: {
                 channel: this.name,
+                accountId: this.config.accountId,
                 chatId,
                 chatType,
             },

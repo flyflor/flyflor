@@ -7,6 +7,7 @@ const ROOT = join(import.meta.dir, "..");
 const INSTALL_SH = join(ROOT, "scripts", "install.sh");
 const INSTALL_SOURCE_SH = join(ROOT, "scripts", "install.source.sh");
 const INSTALL_DOCKER_SH = join(ROOT, "scripts", "install.docker.sh");
+const INSTALL_TEMPLATES_TS = join(ROOT, "scripts", "install.templates.ts");
 const INSTALL_PS1 = join(ROOT, "scripts", "install.ps1");
 const PACKAGE_JSON = join(ROOT, "package.json");
 const README = join(ROOT, "README.md");
@@ -230,6 +231,12 @@ describe("source/docker/windows installers", () => {
         // deterministic `test` / `ci` gates, but it still needs a stable package
         // entrypoint for real third-party recovery checks.
         expect(packageJson.scripts?.["smoke:mcp:live"]).toContain("mcp.live.smoke.ts");
+    });
+
+    test("local template install defaults to the checkout .config directory", async () => {
+        const text = await Bun.file(INSTALL_TEMPLATES_TS).text();
+        expect(text).toContain('join(repoRoot, ".config")');
+        expect(text).not.toContain('join(homedir(), ".flyflor", ".config")');
     });
 
     test(

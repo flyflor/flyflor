@@ -17,7 +17,7 @@ import {
     type RuntimeContext,
     type RuntimeEvent,
 } from "../../protocol/contracts/index.ts";
-import type { EventSink, RuntimeEventBus } from "../../protocol/events/index.ts";
+import type { EventSink, RuntimeEventBus } from "../../events/index.ts";
 import type { GatewayStatusSnapshot } from "./channels/status.ts";
 import type { StreamingMessageDispatcher } from "./channels/types.ts";
 

@@ -17,7 +17,7 @@ import {
     type ModelClient,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink } from "../src/protocol/events/index.ts";
+import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import { resolve } from "node:path";
 import { mkdir, symlink } from "node:fs/promises";
 

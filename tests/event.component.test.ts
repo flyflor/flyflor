@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { RuntimeSkillUsageEventHandler } from "../src/agent/runtime/events/index.ts";
 import { Event } from "../src/agent/di/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
-import { EventsComponent, NullEventSink, RuntimeEventType, RuntimeEventBus } from "../src/protocol/events/index.ts";
+import { EventsComponent, NullEventSink, RuntimeEventType, RuntimeEventBus } from "../src/events/index.ts";
 import { loadSkillUsageSummary } from "../src/skills/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 

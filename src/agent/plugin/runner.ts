@@ -14,7 +14,7 @@
  * - **可注入 spawn**：测试可替换子进程执行器。
  */
 import { CapabilityExecutionKind } from "../../protocol/contracts/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../protocol/events/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { gateCapabilityExecution, type SandboxPolicy } from "../sandbox/module.ts";
 import type { PluginDefinition } from "./index.ts";
 

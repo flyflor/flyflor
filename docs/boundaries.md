@@ -7,11 +7,14 @@
 ## 1. 项目定位
 
 - 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --allow-unresolved=""`。
+- 整体架构命名为 FCH-CTTL：FCH（Mindstream / Crystal / Hippocampus，心晶海马）是认知内核，CTTL（Capability / Tool / Trust / Loop）是能力外骨架。
 - 输入渠道统一归一化为 `GatewayMessage`。
 - 智能体执行可观察、可中断、可恢复、可审计。
 - 工具 / MCP / 插件 / 技能 / 记忆都有显式边界。
 
 ## 2. 目录与命名
+
+目录是架构协议：目录必须表达边界、生命周期、能力来源和运行态位置；配置只覆盖差异，不允许用配置弥补目录混乱。目录架构详见 [directory.architecture.md](directory.architecture.md)。
 
 ```
 app.ts            程序入口，只做版本/命令分派
@@ -19,15 +22,24 @@ src/app.ts        FlyFlor composition root
 src/command/      CLI / TUI / 命令注册 / 终端渲染
 src/agent/        runtime / gateway / blackboard / sandbox / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
-src/llm/          模型 provider
-src/crystal/      reflection / Gem / drift
-src/neural/       海马体记忆
+src/fch/         FCH 认知内核
+src/fch/mindstream/   Mindstream 心流层
+src/fch/crystal/ reflection / Gem / drift
+src/fch/hippocampus/ 海马体记忆
 src/context/      显式 project / fork / capability scope 装配
 src/entities/     领域实体、row / record 映射、repo SQL
-src/protocol/     枚举 / 事件 / contract / 信封
+src/events/       RECL / Event Fabric / 订阅广播中枢
+src/protocol/     枚举 / contract / control envelope / 进程信封
 src/config/       JSONC 配置 + 默认值 + 路径
 templates/        提示词与记忆 Markdown 模板
 ```
+
+目录归属硬规则：
+
+- 新增顶层或一级源码目录前，必须说明它属于 FCH、CTTL、RECL、protocol、config、command、runtime data 或 user workspace 的哪一层。
+- 新增 capability 目录必须说明来源是 core、MCP、plugin、skill、channel、user tool 还是 subagent，并经 CTTL descriptor registry 进入 Tool Plan。
+- 用户数据、密钥、日志、数据库、缓存和工作区文件只能放运行态目录，不能进入源码约定和二进制产物。
+- 配置文件只表达覆盖项；不能靠配置字段给无 owner 目录补语义。
 
 命名规则（点分后缀是硬规则）：
 
@@ -35,7 +47,7 @@ templates/        提示词与记忆 Markdown 模板
 - `index.ts` 是唯一目录导出面；禁止新增 `*.exports.ts`，已有 public API 必须直接在目录 `index.ts` 汇总。
 - 实现文件按角色加点分后缀：`*.module.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。目录内唯一 Component owner 必须直接命名为 `component.ts`；只有同目录存在多个组件边界时才使用 `*.component.ts` 加限定前缀。
 - 目录已表达职责时不重复写长前缀：`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
-- 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如 `src/neural/memory/dream/worker.ts`、`consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
+- 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如 `src/fch/hippocampus/memory/dream/worker.ts`、`consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
@@ -49,25 +61,28 @@ flowchart LR
     Entry[app.ts] --> Root[src/app.ts]
     Root --> Command
     Root --> Agent[src/agent/*]
-    Agent --> Llm[src/llm]
-    Agent --> Crystal[src/crystal]
-    Agent --> Neural[src/neural]
+    Agent --> Llm[src/fch/mindstream]
+    Agent --> Crystal[src/fch/crystal]
+    Agent --> Neural[src/fch/hippocampus]
     Agent --> Protocol[src/protocol]
     Agent --> DI[src/agent/di]
     Agent --> Config[src/config]
+    Agent --> Events[src/events]
     Llm --> Protocol
     Crystal --> Protocol
     Neural --> Protocol
+    Events --> Protocol
     DI --> Protocol
 ```
 
 硬规则：
 
-- `llm` / `crystal` / `neural` / 能力实现禁止 import `command` 或入口层。
+- `src/fch/mindstream` / `src/fch/crystal` / `src/fch/hippocampus` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/neural/project` 与 `src/neural/memory`。其他目录不得重新实现隐式会话容器。
+- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/fch/hippocampus/project` 与 `src/fch/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
+- `gateway`、`runtime`、`blackboard`、`worker`、`sandbox`、`memory` 都是 Event Fabric 的参与者；`src/events` 拥有事件发布、订阅、分类和 fan-out，gateway 不拥有事件总线。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。
 - `protocol` / `agent/di` 不能成为垃圾桶；只服务单一领域的类型必须回到对应目录。
 
@@ -83,6 +98,7 @@ flowchart LR
 - `@Component()` / `@Module()` 默认无参数、默认单例；只有偏离默认值（例如 factory scope、channel / worker / plugin 特例）时才显式写参数。
 - `@Event(type)` 只登记显式事件 hook metadata，不做反射类型推断、不扫描目录；实例必须由 composition root 或组件 owner 调用 `EventsComponent.registerHooks(instance)` 显式接入。
 - Runtime 副作用优先事件化：主 turn pipeline 可以发布结构化 RuntimeEvent，统计、审计、usage、后处理等非路由关键路径放在 `*.event.ts` handler；handler 只能消费 JSON payload 和显式注入组件，不能反向读取自然语言做业务判断。
+- Event Fabric 是所有交互面的订阅广播中枢，未来外部 TUI 仓库只能依赖 event/control transport，不 import runtime、gateway 或 memory 私有实现。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定；允许 `DependencyContainer.bindClass()` 按构造函数 `@Inject(ClassToken)` 自动实例化，但注册目标仍必须由 composition root 显式列出。
 - DI key 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。`ConfigComponent` / `RuntimeModeComponent` / `EventsComponent` / `ModelComponent` / `AdaptersComponent` 这类边界必须是域内 `component.ts` 的真实组件，不能只是空壳 token；只有非 class 值才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。
@@ -92,7 +108,7 @@ flowchart LR
 
 - 业务能力默认用 class / Component / Module / Repo 表达；局部 helper 应优先变成 `private` / `protected` class 方法，不能散落在文件底部形成“函数垃圾区”。
 - 跨 class 的组合入口统一使用 `useXxx()` composition。`useXxx()` 可以返回 class 实例或装配对象，但它只做装配，不承载复杂业务流程。
-- 目录约定优先于文件长名：`src/config/component.ts` 已经表达 config 域，不再写 `config.component.ts`；`src/llm/component.ts` 已经表达 model provider 域，不再写 `model.component.ts`。长名只用于同目录多 owner 或协议需要显式区分时。
+- 目录约定优先于文件长名：`src/config/component.ts` 已经表达 config 域，不再写 `config.component.ts`；`src/fch/mindstream/component.ts` 已经表达 model provider 域，不再写 `model.component.ts`。长名只用于同目录多 owner 或协议需要显式区分时。
 - 允许的函数形态只有：`useXxx()` composition 入口、CLI / script / app 的薄入口、框架强制导出的 handler、测试 fixture、小型纯协议 adapter（例如 tagged template `query`）以及 TypeScript 类型守卫。除此之外新增顶层 `function` 前必须先考虑 class 方法或 `*.composition.ts`。
 - 已存在的大型函数式模块要按触碰即迁移原则处理：改到该文件时必须把同一职责的 helper 收进 class / Component，或者抽到同目录 `*.composition.ts` 并用 `useXxx()` 命名；禁止继续追加新的无归属 helper。
 - Crystal / Gem 这类晶体智力流程必须有明确 Component owner；保留的顶层函数只能作为兼容旧 public API 的薄壳，新增调用优先依赖 `CrystalReflectionComponent` / `CrystalGemComponent` 等组件实例。
@@ -106,13 +122,41 @@ flowchart LR
 - Runtime 对模型输出的 AgentAsk / GhostDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`GhostDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
 - Memory hippocampus 召回必须由 `SpreadingActivationEngine` 拥有，生产路径只消费向量、概念、importance 和 recency 资源指标；`spreadActivation()` 只作为兼容薄入口。Memory matrix 聚合与权重回写必须由 `MemoryMatrixAggregator` 拥有，`applyMatrixImpact()` / `recallBoostFromMetadata()` 只作为兼容薄入口。
-- `src/neural/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
-- `src/neural/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
+- `src/fch/hippocampus/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
+- `src/fch/hippocampus/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
 - 约定优先于抽象：迁移不是为了消灭重复代码，而是为了让生命周期、状态、IO 副作用和协议边界有明确 owner。重复的 5-10 行值转换可以保留在对应 class 内，不为了“复用”抽成跨域工具函数。
-- 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如 `src/neural/memory/brain/store.ts`、`src/neural/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
+- 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如 `src/fch/hippocampus/memory/brain/store.ts`、`src/fch/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
 - `src/components` 只承载共享 Component 基类与真正跨模块基础设施（例如 SQL tagged template）；不得按领域开 `components/<domain>` 目录。
 
-## 4.2 数据模型与 SQL Repo
+## 4.2 FCH-CTTL 架构边界
+
+FCH 是 `Mindstream / Crystal / Hippocampus`，中文叫心晶海马认知内核：
+
+- `Mindstream` 由 `src/fch/mindstream` 和 runtime turn 编排承载，只负责当前任务理解、推理、生成、临场判断、模型协议转换、流式输出和工具编排意图。
+- `Crystal Intelligence` 由 `src/fch/crystal` 承载，只负责反思候选、Gem 升格、方法论沉淀和稳定知识复用。
+- `Hippocampus` 由 `src/fch/hippocampus` 承载，只负责工作记忆、激活、TTL 遗忘、巩固、淡化和再激活。
+
+CTTL 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任回路层：
+
+- `Capability` 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent。
+- `Tool` 把 capability 适配成模型可调用 schema，声明 scope、permission、readOnly、concurrencySafe、exclusive 和 result limit。
+- `Trust` 根据 channel、sender、group、project、sandbox、approval、permission cap、secrets provider 和 config 计算本次是否可执行。
+- `Loop` 负责 tool plan、并发调度、结果压缩、失败恢复、unknown tool 防护、重复调用防护、无进展检测、审批中断和恢复。
+
+硬规则：
+
+- FCH 不直接执行文件写入、shell、网络、消息发送、鼠标键盘、浏览器控制或外部服务调用；所有外部行动必须通过 CTTL。
+- CTTL 不做业务语义判断；它只能消费结构化协议字段、tool descriptor、config、secrets、sandbox policy、channel capability 和数值资源指标。
+- CTTL 不能退化为固定工具清单。新增能力必须说明 capability 来源、Tool descriptor、Trust 策略和 Loop 行为。
+- MCP `tools/resources/prompts` 都是一等 capability；禁止只包装 tools 而忽略 resources/prompts 的发现和权限规划。
+- 远程 channel 默认最小权限，不能默认获得 `execute`、`computer`、`dangerous`；本地 CLI 的调试放权也必须走本次 invocation 覆盖和审计。
+- 用户自定义工具必须声明 schema、permission、scope、cwd/env 边界、输出限制和审批策略；缺任何一项都不能进入可见 Tool Plan。
+- Tool Plan 必须保留 hidden diagnostics，说明工具不可见是缺配置、缺凭据、平台不可用、权限不足、channel cap、sandbox deny 还是 loop guard 限制。
+- Loop guard 必须能处理 unknown tool 重复调用、工具名漂移、同一失败调用反复执行、无进展循环、过量工具调用和非法 MCP/tool result。
+- CTTL 实现仍遵守 OOP + use composition：业务能力用 class / Component / Module 表达，组合入口使用 `useXxx()`；不得新增专用 decorator、反射扫描、动态 import 或无归属 helper function。
+- CTTL 实现仍遵守 Bun 二进制硬约束：不得依赖运行时读取 `node_modules`、native addon、postinstall 或用户机器额外 Node.js。
+
+## 4.3 数据模型与 SQL Repo
 
 - SQLite 访问分三层：`src/entities/**/*.repo.ts` 是表模型 + SQL function，模块内 `store.ts` 负责连接生命周期 / schema / 事务组合，模块 `component.ts` 对上表达能力边界。
 - `*.entity.ts` 是 data entity layer，只负责 row / record 映射、JSON 列编解码和轻量 shape 校验，不写 SQL；目录已唯一表达领域时使用短名，例如 `src/entities/blackboard/entity.ts` / `repo.ts`；同一目录包含多张表时才使用 `brain.event.entity.ts`、`brain.event.repo.ts` 这类表名前缀。
@@ -126,12 +170,13 @@ flowchart LR
 
 - 公共类型放在领域内 `types.ts` 或 `index.ts`；跨目录必须经过显式 TypeScript 类型。
 - 运行时事件必须可 JSON 序列化，禁止携带 class instance / function / stream / socket。
+- `src/protocol` 只定义可序列化 contract / enum / envelope；事件 bus、sink、classifier、hook 注册和 helper 只能放在 `src/events`。
 - 外部输入进入核心前必须 schema 校验；`unknown` / `any` 只能在第三方边界短暂存在，必须在同一函数收敛。
 - 错误必须保留机器可读 `code`，用户文案与调试信息分离。
 - 协议值使用枚举或常量对象，不裸写字符串。新增协议值先放 `src/protocol/contracts/enums.ts`。
 - 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。当前允许的内部块包括 `AgentAsk`、`GhostDecisions`、`IdentityAppend`、`MemoryActions`、`McpCalls`、`TaskPlan`、`ContextFork`、`SceneRecord`。
 - Gateway 出站生命周期（typing、message edit、card update、reaction、thread create）必须走 `GatewayOutboundOperation` + `GatewayChannelCapabilities`；adapter 不得用自然语言文本、私有字符串或隐式布尔推断平台能力。
-- Gateway Control/Event Transport 必须走 `src/protocol/control/envelope.ts` 的 JSON envelope。`/ws` 可以暴露 `turn.delta`、`turn.final`、status 和 RuntimeEvent subscription，但不得为单个 TUI 写私有补丁协议；普通 IM channel 仍 final-only。
+- Gateway Control/Event Transport 必须走 `src/protocol/control/envelope.ts` 的 JSON envelope。`/ws` 可以暴露 `turn.delta`、`turn.final`、status 和 RuntimeEvent subscription，但事件来源必须是 `src/events`；不得为单个 TUI 写私有补丁协议。普通 IM channel 仍 final-only。
 - `gateway.message.send.payload.context` 是 project/fork/skill scope 的唯一 WS 入口；只能映射到 `RuntimeContext.activeProject` / `contextForkId` / `skillNames`，不得引入 session id 或从自然语言推断当前 project/fork。
 - 新增代码必须带必要注释解释边界、生命周期、副作用或协议意图；修改旧代码时补齐被触碰路径的关键注释。注释应解释“为什么/边界是什么”，避免机械复述代码。
 - 源码、测试、模板、脚本和文档不得出现疑似真实 provider 密钥。测试只能使用明显的非厂商占位值（例如 `test-openai-key-*`），让 `sk-*` 这类厂商格式在发布扫描中保持高信噪比；本机或 Docker dev 的私有配置文件只由用户自己管理，不在清理任务中自动改写。
@@ -177,7 +222,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ## 8. 配置与密钥
 
-- 全局：`~/.flyflor/.config/config.jsonc`；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
+- Flyflor home 相对路径：`<flyflor-home>/.config/config.jsonc`（source install 默认 `<flyflor-home>=~/.flyflor`，本地 dev checkout 为当前源码根）；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
 - 本地交互命令：`~/.flyflor/.config/commands.jsonc`。它只定义 TUI / app slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
 - `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 project / fork 选择写回 `RuntimeContext.activeProject` / `contextForkId`，不能反向变成隐式 session 容器。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。

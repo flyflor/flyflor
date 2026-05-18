@@ -16,6 +16,7 @@ import { GenericWebhookAdapter } from "./webhook.ts";
 import { WeChatOfficialAccountAdapter } from "./wechat.ts";
 import { WeComCallbackAdapter } from "./wecom.callback.ts";
 import { WeixinIlinkAdapter } from "./weixin.ilink.ts";
+import { MultiWeixinIlinkAdapter } from "./weixin.ilink.multi.ts";
 
 export type { ChannelAdapter, MessageDispatcher } from "./types.ts";
 export { buildChannelStatusSnapshot, buildGatewayStatusSnapshot } from "./status.ts";
@@ -230,10 +231,54 @@ export function createChannelAdapters(config: GatewayConfig): Map<ChannelName, C
 }
 
 function hasIlinkToken(config: GatewayConfig): boolean {
-    return typeof config.channels.weixinIlink.token === "string" && Boolean(config.channels.weixinIlink.token.trim());
+    return createIlinkAdapters(config).length > 0;
 }
 
-function createIlinkAdapter(config: GatewayConfig): WeixinIlinkAdapter {
+function createIlinkAdapter(config: GatewayConfig): ChannelAdapter {
+    const adapters = createIlinkAdapters(config);
+    if (adapters.length === 1) {
+        return adapters[0]!;
+    }
+    return new MultiWeixinIlinkAdapter(adapters);
+}
+
+function createIlinkAdapters(config: GatewayConfig): WeixinIlinkAdapter[] {
+    const profiles = config.channels.weixinIlink.profiles;
+    if (profiles && typeof profiles === "object") {
+        return Object.entries(profiles)
+            .map(([profileId, profile]) => createIlinkAdapterForProfile(config, profileId, profile))
+            .filter((adapter): adapter is WeixinIlinkAdapter => Boolean(adapter));
+    }
+    const token = config.channels.weixinIlink.token;
+    if (typeof token !== "string" || !token.trim()) {
+        return [];
+    }
+    return [createLegacyIlinkAdapter(config)];
+}
+
+function createIlinkAdapterForProfile(
+    config: GatewayConfig,
+    profileId: string,
+    profile: NonNullable<GatewayConfig["channels"]["weixinIlink"]["profiles"]>[string],
+): WeixinIlinkAdapter | undefined {
+    if (typeof profile.token !== "string" || !profile.token.trim()) {
+        return undefined;
+    }
+    return new WeixinIlinkAdapter(
+        {
+            accountId: typeof profile.accountId === "string" ? profile.accountId : profileId,
+            apiBaseUrl: profile.apiBaseUrl ?? config.channels.weixinIlink.apiBaseUrl ?? "https://ilinkai.weixin.qq.com",
+            baseInfo: normalizeIlinkBaseInfo(profile.baseInfo ?? config.channels.weixinIlink.baseInfo),
+            pollIntervalMs: profile.pollIntervalMs ?? config.channels.weixinIlink.pollIntervalMs,
+            syncBuf: profile.syncBuf,
+            token: profile.token,
+            userId: typeof profile.userId === "string" ? profile.userId : undefined,
+        },
+        Channel.WeixinIlink,
+    );
+}
+
+function createLegacyIlinkAdapter(config: GatewayConfig): WeixinIlinkAdapter {
     return new WeixinIlinkAdapter(
         {
             accountId:

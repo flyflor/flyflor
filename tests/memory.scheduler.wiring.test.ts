@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { MemoryModule } from "../src/neural/memory/index.ts";
+import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
 import { CrystalMemoryBackend, ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
-import { type EventSink } from "../src/protocol/events/index.ts";
+import { type EventSink } from "../src/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
 beforeAll(async () => {

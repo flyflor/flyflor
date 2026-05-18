@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { HttpAuditSink } from "../src/agent/sandbox/audit.sink.ts";
-import { RuntimeEventType } from "../src/protocol/events/index.ts";
+import { RuntimeEventType } from "../src/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
 function event(type: string, payload: Record<string, unknown> = {}): RuntimeEvent {
