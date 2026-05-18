@@ -1,12 +1,13 @@
 import { stat } from "node:fs/promises";
-import { GatewayModule, MemoryModule, type FlyFlor } from "../../../app.ts";
+import type { FlyFlor } from "../../../app.ts";
 import { lintPromptTemplates } from "../../../agent/prompts/index.ts";
 import { checkSkillSchemaCompatibility } from "../../../agent/skills/index.ts";
 import { getFlyflorConfigPath } from "../config.ts";
-import { ConfigComponent, type FlyflorConfig } from "../../../config/index.ts";
+import type { FlyflorConfig } from "../../../config/index.ts";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../../agent/gateway/index.ts";
 import { ChannelLinkState, CrystalMemoryBackend, MemoryWorkingBackend } from "../../../protocol/contracts/index.ts";
 import { describeModelApiKey, describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles } from "../status.ts";
+import { commandState } from "../../state.adapter.ts";
 
 export interface OverviewData {
     runtime: RuntimeSummary;
@@ -73,10 +74,11 @@ export interface DoctorCheck {
 }
 
 export async function fetchOverviewData(app: FlyFlor): Promise<OverviewData> {
-    const config = app.resolve(ConfigComponent);
-    // Use local snapshot directly to avoid blocking HTTP fetch (500ms timeout)
-    const gateway = app.resolve(GatewayModule).getStatusSnapshot();
-    const workingMemorySnapshot = app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot();
+    const state = commandState(app);
+    const config = state.config();
+    // Use local snapshot directly to avoid blocking HTTP fetch (500ms timeout).
+    const gateway = state.localGatewaySnapshot();
+    const workingMemorySnapshot = state.workingMemoryHealthSnapshot();
 
     return {
         runtime: extractRuntime(config),
@@ -135,7 +137,7 @@ async function extractMemory(config: FlyflorConfig, workingMemorySnapshot: unkno
 }
 
 async function runDoctorChecks(app: FlyFlor, gateway: GatewayStatusSnapshot): Promise<DoctorCheck[]> {
-    const config = app.resolve(ConfigComponent);
+    const config = commandState(app).config();
     const checks: DoctorCheck[] = [];
 
     checks.push({

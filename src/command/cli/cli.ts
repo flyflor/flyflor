@@ -1,6 +1,5 @@
 import Table from "cli-table3";
-import { BlackboardModule, type FlyFlor } from "../../app.ts";
-import { ConfigComponent } from "../../config/index.ts";
+import type { FlyFlor } from "../../app.ts";
 import {
     formatInitResult,
     getFlyflorConfigPath,
@@ -11,9 +10,10 @@ import {
     listFlyflorChannelBindings,
     removeFlyflorChannelBinding} from "./config.ts";
 import { renderChannels, renderDoctor, renderFlyflorBanner, renderStatus, resolveGatewaySnapshot } from "./status.ts";
+import { commandState } from "../state.adapter.ts";
 
 function renderConfigSummary(app: FlyFlor): string {
-    const config = app.resolve(ConfigComponent);
+    const config = commandState(app).config();
     return [
         `Config file: ${config.paths.configDir}/config.jsonc`,
         `Provider: ${config.model.providerId}`,
@@ -25,7 +25,7 @@ function renderConfigSummary(app: FlyFlor): string {
 }
 
 async function renderMemorySummary(app: FlyFlor): Promise<string> {
-    const config = app.resolve(ConfigComponent);
+    const config = commandState(app).config();
     const rows = new Table({ head: ["Field", "Value"], style: { head: [] } });
     rows.push(["Enabled", config.memory.enabled ? "yes" : "no"]);
     rows.push(["Crystal", config.memory.crystal.enabled ? "yes" : "no"]);
@@ -37,8 +37,7 @@ async function renderMemorySummary(app: FlyFlor): Promise<string> {
 }
 
 async function renderBlackboardSummary(app: FlyFlor): Promise<string> {
-    const blackboard = app.resolve(BlackboardModule);
-    const turns = await blackboard.listRecentTurns(5);
+    const turns = await commandState(app).listBlackboardTurns(5);
     if (turns.length === 0) {
         return "No blackboard turns yet.";
     }

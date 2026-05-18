@@ -6,8 +6,9 @@ import pc from "picocolors";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import { lintPromptTemplates } from "../../agent/prompts/index.ts";
 import { checkSkillSchemaCompatibility } from "../../agent/skills/index.ts";
-import { GatewayModule, MemoryModule, type FlyFlor } from "../../app.ts";
-import { ConfigComponent, createDefaultMemoryTuning, type FlyflorConfig } from "../../config/index.ts";
+import type { FlyFlor } from "../../app.ts";
+import { commandState } from "../state.adapter.ts";
+import { createDefaultMemoryTuning, type FlyflorConfig } from "../../config/index.ts";
 import { ChannelLinkState, CrystalMemoryBackend, MemoryEventStatus, MemoryEventType, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";
 import { getFlyflorConfigPath } from "./config.ts";
 
@@ -25,9 +26,10 @@ export function renderFlyflorBanner(): string {
 }
 
 export async function renderStatus(app: FlyFlor): Promise<string> {
-    const config = app.resolve(ConfigComponent);
+    const state = commandState(app);
+    const config = state.config();
     const gateway = await resolveGatewaySnapshot(app);
-    const workingHealth = describeWorkingMemoryHealth(app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot());
+    const workingHealth = describeWorkingMemoryHealth(state.workingMemoryHealthSnapshot());
     const workingRecovery = await describeWorkingMemoryRecoveryFiles(config);
     return [
         section("Runtime", [
@@ -65,7 +67,8 @@ export async function renderChannels(app: FlyFlor): Promise<string> {
 }
 
 export async function renderDoctor(app: FlyFlor): Promise<string> {
-    const config = app.resolve(ConfigComponent);
+    const state = commandState(app);
+    const config = state.config();
     const gateway = await resolveGatewaySnapshot(app);
     const rows: Array<[string, string, string]> = [];
     rows.push(["Config file", (await exists(getFlyflorConfigPath())) ? "ok" : "missing", getFlyflorConfigPath()]);
@@ -125,7 +128,7 @@ export async function renderDoctor(app: FlyFlor): Promise<string> {
     const identitySummary = await describeIdentityActivity(config);
     rows.push(["Identity activity", identitySummary.status, identitySummary.detail]);
 
-    const workingMemorySummary = describeWorkingMemoryHealth(app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot());
+    const workingMemorySummary = describeWorkingMemoryHealth(state.workingMemoryHealthSnapshot());
     rows.push(["Working memory", workingMemorySummary.status, workingMemorySummary.detail]);
 
     const workingRecoverySummary = await describeWorkingMemoryRecoveryFiles(config);
@@ -180,45 +183,7 @@ function isPlaceholderSecret(value: string): boolean {
 }
 
 export async function resolveGatewaySnapshot(app: FlyFlor): Promise<GatewayStatusSnapshot> {
-    const config = app.resolve(ConfigComponent);
-    const local = app.resolve(GatewayModule).getStatusSnapshot();
-    const host = config.gateway.host === "0.0.0.0" ? "127.0.0.1" : config.gateway.host;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 500);
-    try {
-        const response = await fetch(`http://${host}:${config.gateway.port}/channels`, {
-            signal: controller.signal});
-        if (!response.ok) {
-            return local;
-        }
-        const payload = (await response.json()) as unknown;
-        return gatewaySnapshotFromPayload(local, payload);
-    } catch {
-        return local;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-function gatewaySnapshotFromPayload(local: GatewayStatusSnapshot, payload: unknown): GatewayStatusSnapshot {
-    if (!isRecord(payload) || !Array.isArray(payload.channels)) {
-        return local;
-    }
-    const channels = payload.channels.filter(isChannelStatusSnapshot);
-    if (channels.length === 0) {
-        return local;
-    }
-    const gateway = isRecord(payload.gateway) ? payload.gateway : {};
-    return {
-        ...local,
-        channels,
-        connectedCount: channels.filter((channel) => channel.connected).length,
-        degradedCount: channels.filter((channel) => channel.state === ChannelLinkState.Degraded).length,
-        gatewayRunning: readBoolean(gateway.running, true),
-        startedAt: readString(gateway.startedAt) ?? local.startedAt,
-        streamingCount: channels.filter((channel) => channel.streaming).length,
-        uptimeMs: readNumber(gateway.uptimeMs) ?? local.uptimeMs,
-        url: readString(gateway.url) ?? local.url};
+    return commandState(app).gatewaySnapshot();
 }
 
 function renderGatewayLines(snapshot: GatewayStatusSnapshot): string[] {
@@ -587,16 +552,6 @@ function truncate(value: string, limit: number): string {
         return value;
     }
     return `${value.slice(0, Math.max(0, limit - 1))}…`;
-}
-
-function isChannelStatusSnapshot(value: unknown): value is ChannelStatusSnapshot {
-    return (
-        isRecord(value) &&
-        typeof value.name === "string" &&
-        typeof value.transport === "string" &&
-        typeof value.configured === "boolean" &&
-        typeof value.connected === "boolean"
-    );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

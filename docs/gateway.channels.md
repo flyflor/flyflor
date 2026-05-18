@@ -116,6 +116,7 @@ Envelope 固定包含 `protocol`、`id`、`type`、`at`，可选 `requestId` / `
 - `EventsComponent` 会把所有 `RuntimeEvent` fan-out 到 `GlobalEventBus`；`GatewayControlHub` 只订阅这个全局事件入口。
 - WS 事件订阅只按结构化 `type` / `requestId` 过滤，不读取自然语言内容。
 - 外部 CLI / TUI / Web 客户端只依赖四类主干消息：`gateway.message.send`、`turn.delta/final/error`、`event.subscribe/publish`、`gateway.status.get/snapshot`。详细事件协议见 [runtime.events.md](runtime.events.md)。
+- 当前仓库内置 CLI/TUI 仍可本地读取状态，但读取点已收敛到 `src/command/state.adapter.ts`；后续替换为 `gateway.status.get/snapshot` 客户端时，只替换该 adapter。
 - 外部 IM channel 不消费 `turn.delta`，也不会逐字推送；只有 `/v1` API SSE 和 `/ws` 控制面属于显式流式协议。
 - Gateway 停止时必须先 dispose `GatewayControlHub`，再关闭 Bun server；这样 WS 订阅不会在 daemon restart 或测试进程内泄漏。
 

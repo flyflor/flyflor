@@ -78,8 +78,8 @@ docs/
 | `src/cognitive/crystal` | `src/cognitive/crystal`（历史 `src/fch/crystal` 已移除） | 已迁移；新代码禁止回写旧路径 |
 | `src/cognitive/hippocampus` | `src/cognitive/hippocampus`（历史 `src/fch/hippocampus` 已移除） | 已迁移；新代码禁止回写旧路径 |
 | `src/executive` | `src/executive`（历史 `src/cttl` 已移除） | registry/planner/guard/loop 是当前实现路径；新代码禁止回写旧路径 |
-| `src/agent/skills` | `src/agent/skills`（`src/skills` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
-| `src/agent/context` | `src/agent/context`（`src/context` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
+| `src/agent/skills` | `src/agent/skills`（历史 `src/skills` 已移除） | 已迁移；新代码禁止回写旧路径 |
+| `src/agent/context` | `src/agent/context`（历史 `src/context` 已移除） | 已迁移；新代码禁止回写旧路径 |
 
 迁移完成前，未完成目录必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确历史旧路径已移除，不能让读者误以为旧路径仍承载实现。
 

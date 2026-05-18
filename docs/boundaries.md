@@ -37,7 +37,7 @@ templates/        提示词与记忆 Markdown 模板
 目录归属硬规则：
 
 - 新增顶层或一级源码目录前，必须说明它属于 cognitive、executive、agent、events、protocol、config、command、runtime data 或 user workspace 的哪一层。
-- 历史 `src/fch` 与 `src/cttl` 物理路径已移除；迁移期旧物理路径 `src/skills`、`src/context` 只能作为兼容窗口；新公开文档和新代码优先使用 `src/cognitive`、`src/executive`、`src/agent/skills`、`src/agent/context` 的目标语义。
+- 历史 `src/fch`、`src/cttl`、`src/skills` 与 `src/context` 物理路径已移除；新公开文档和新代码只能使用 `src/cognitive`、`src/executive`、`src/agent/skills`、`src/agent/context` 的目标语义。
 - 新增 capability 目录必须说明来源是 core、MCP、plugin、skill、channel、user tool 还是 subagent，并经 executive descriptor registry 进入 Tool Plan。
 - 用户数据、密钥、日志、数据库、缓存和工作区文件只能放运行态目录，不能进入源码约定和二进制产物。
 - 配置文件只表达覆盖项；不能靠配置字段给无 owner 目录补语义。

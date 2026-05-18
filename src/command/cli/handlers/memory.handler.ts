@@ -1,7 +1,7 @@
-import { MemoryModule, type FlyFlor } from "../../../app.ts";
+import type { FlyFlor } from "../../../app.ts";
 import { RetrospectiveLog } from "../../../cognitive/hippocampus/memory/index.ts";
-import { ConfigComponent } from "../../../config/index.ts";
 import { describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles } from "../status.ts";
+import { commandState } from "../../state.adapter.ts";
 
 export interface MemoryData {
     enabled: boolean;
@@ -26,8 +26,9 @@ export interface MemoryData {
 }
 
 export async function fetchMemoryData(app: FlyFlor): Promise<MemoryData> {
-    const config = app.resolve(ConfigComponent);
-    const workingMemorySnapshot = app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot();
+    const state = commandState(app);
+    const config = state.config();
+    const workingMemorySnapshot = state.workingMemoryHealthSnapshot();
     const log = new RetrospectiveLog({ projectMemoryDir: config.paths.projectMemoryDir });
     const path = log.path();
     const exists = await Bun.file(path).exists();

@@ -245,8 +245,15 @@ describe("repository naming boundary", () => {
         }
 
         // R4 moves runtime context and skill loading under src/agent. The old
-        // top-level directories remain compatibility barrels only.
+        // top-level import surfaces are gone, so callers use the owner boundary.
         expect(violations).toEqual([]);
+    });
+
+    test("legacy agent slice physical directories do not return", async () => {
+        // Context and skills are runtime agent capabilities. Keeping top-level
+        // compatibility shells makes the Agent boundary ambiguous.
+        expect(await exists(join(REPO_ROOT, "src", "context"))).toBe(false);
+        expect(await exists(join(REPO_ROOT, "src", "skills"))).toBe(false);
     });
 
     test("hippocampus memory capability subdirectories expose an index entrypoint", async () => {

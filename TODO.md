@@ -2,7 +2,7 @@
 
 ## 当前交接
 
-状态：R4 Agent Shell Split 进行中。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并建立 command runtime adapter，TUI/Gateway 拆分待继续。
+状态：R4 Agent Shell Split 进行中。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并移除旧物理路径，CLI runtime 与只读状态访问已收敛到 command adapters，TUI/Gateway 外部化待继续。
 
 本轮目标：继续 R4 外显层拆分，保持 CLI/TUI/Gateway 通过 event/control/ws 收敛；阶段收尾时必须同步清理主文档、更新本 TODO，并把被替代的旧文档归档到 `docs/old-docs/`。
 
@@ -21,7 +21,7 @@
 - `executive`：执行层，原 CTTL。当前实现路径为 `src/executive`，历史 `src/cttl` 物理路径已移除。包含 `registry`、`planner`、`guard`、`loop`，负责能力发现、工具包装、信任边界、执行规划、失败恢复和 loop 防护。
 - `agent`：运行态外显层。当前包含 `runtime`、`gateway`、`sandbox`、`skills`、`context` 等面向外部世界的编排与适配；重构后 CLI/TUI/Gateway 具体实现逐步外部化。
 
-迁移期说明：历史 `src/fch` 与 `src/cttl` 物理路径已移除，Cognitive / Executive 实现只位于 `src/cognitive` / `src/executive`；当前 `src/skills` 与 `src/context` 仍是兼容出口。文档中的目标目录不代表所有目录已经完成搬迁；实际移动必须按阶段逐步完成并验证。
+迁移期说明：历史 `src/fch`、`src/cttl`、`src/skills` 与 `src/context` 物理路径已移除，Cognitive / Executive / Agent 实现只位于当前目标目录。文档中的目标目录不代表所有目录已经完成外部化；实际移动必须按阶段逐步完成并验证。
 
 ## 重构方向
 
@@ -163,15 +163,15 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 
 ### R4 Agent Shell Split
 
-状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent`；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；TUI/Gateway 拆分待继续）。
+状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent` 并移除旧物理路径；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；CLI/TUI 只读状态访问已收敛到 `src/command/state.adapter.ts`；TUI/Gateway 外部化待继续）。
 
 目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
 
 任务：
 
-1. 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。skills 是做事方式，context 是运行态 scope 装配，二者都不属于认知内核。（已完成）
+1. 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。skills 是做事方式，context 是运行态 scope 装配，二者都不属于认知内核；旧物理路径已移除。（已完成）
 2. 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（已建立 `src/command/runtime.adapter.ts`）
-3. 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。
+3. 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。（已建立 `src/command/state.adapter.ts` 收敛本地只读状态访问）
 4. Gateway 保留最小 control/event transport；具体 channel adapter 进入可插拔 kit 规划。
 5. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述。
 6. 更新 `docs/cli.commands.md`、`docs/gateway.channels.md`、`docs/runtime.events.md`、`docs/refactor.roadmap.md`。
@@ -192,6 +192,9 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 - `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
 - `bun test tests/naming.boundaries.test.ts tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
 - `bun test tests/naming.boundaries.test.ts tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
+- `bun test tests/naming.boundaries.test.ts tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
+- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/skill.schema.compat.test.ts tests/event.component.test.ts --timeout 30000`
+- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
 - `bun run check`
 - `bun run build:binary`
 

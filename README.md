@@ -185,8 +185,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/cognitive/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩；历史 `src/fch/hippocampus` 已移除 |
 | `src/events`   | RECL / Event Fabric，所有交互事件的订阅广播中枢                            |
 | `src/executive` | Capability / Tool / Trust / Loop 执行层；历史 `src/cttl` 已移除 |
-| `src/agent/context` | 显式 project / fork / capability scope 装配；旧 `src/context` 仅兼容 re-export |
-| `src/agent/skills` | Skill manifest、选择、使用计数、promotion；旧 `src/skills` 仅兼容 re-export |
+| `src/agent/context` | 显式 project / fork / capability scope 装配；历史 `src/context` 已移除 |
+| `src/agent/skills` | Skill manifest、选择、使用计数、promotion；历史 `src/skills` 已移除 |
 | `src/protocol` | 公共协议、枚举、control envelope、进程 envelope                            |
 | `templates`    | 提示词和记忆 Markdown 模板                                                  |
 

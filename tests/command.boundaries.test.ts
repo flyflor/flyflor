@@ -37,6 +37,28 @@ describe("Command boundary", () => {
         expect(adapter).toContain("dispatchMessage");
     });
 
+    test("CLI and TUI state reads are concentrated behind command state adapter", async () => {
+        const [status, overview, memory, blackboard, dashboard, cli, adapter] = await Promise.all([
+            Bun.file("src/command/cli/status.ts").text(),
+            Bun.file("src/command/cli/handlers/overview.handler.ts").text(),
+            Bun.file("src/command/cli/handlers/memory.handler.ts").text(),
+            Bun.file("src/command/cli/handlers/blackboard.handler.ts").text(),
+            Bun.file("src/command/tui/index.tsx").text(),
+            Bun.file("src/command/cli/cli.ts").text(),
+            Bun.file("src/command/state.adapter.ts").text(),
+        ]);
+        const stateSurfaces = `${status}\n${overview}\n${memory}\n${blackboard}\n${dashboard}\n${cli}`;
+
+        expect(stateSurfaces).toContain("commandState");
+        expect(stateSurfaces).not.toContain("GatewayModule");
+        expect(stateSurfaces).not.toContain("MemoryModule");
+        expect(stateSurfaces).not.toContain("BlackboardModule");
+        expect(adapter).toContain("GatewayModule");
+        expect(adapter).toContain("MemoryModule");
+        expect(adapter).toContain("BlackboardModule");
+        expect(adapter).toContain("gatewaySnapshot");
+    });
+
     test("commander route defaults to chat and accepts runtime modes without exposing the removed CLI surface", () => {
         expect(parseFlyflorMode(["bun", "flyflor"])).toBe(RuntimeMode.Chat);
         expect(parseFlyflorMode(["bun", "flyflor", "tui"])).toBe(RuntimeMode.Tui);

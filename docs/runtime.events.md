@@ -31,7 +31,7 @@ src/
 
 ## 外部协议主干
 
-后续 CLI / TUI 会移出主仓库，外部客户端只依赖 Gateway Control / Event Transport，不 import runtime、gateway 或 memory 内部类。协议入口是 `/ws`，Envelope 来自 `src/protocol/control/envelope.ts`。
+后续 CLI / TUI 会移出主仓库，外部客户端只依赖 Gateway Control / Event Transport，不 import runtime、gateway 或 memory 内部类。协议入口是 `/ws`，Envelope 来自 `src/protocol/control/envelope.ts`。迁移期内置 CLI/TUI 的本地运行态访问只允许集中在 `src/command/runtime.adapter.ts` 与 `src/command/state.adapter.ts`，后续由 control/ws client 替换。
 
 外部协议只需要记住五类主干消息：
 

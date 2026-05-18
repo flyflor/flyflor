@@ -15,8 +15,7 @@ import {
     TextAttributes,
     TextRenderable,
 } from "@opentui/core";
-import { BlackboardModule, MemoryModule, type FlyFlor } from "../../app.ts";
-import { ConfigComponent } from "../../config/index.ts";
+import type { FlyFlor } from "../../app.ts";
 import {
     describeWorkingMemoryHealth,
     describeWorkingMemoryRecoveryFiles,
@@ -25,6 +24,7 @@ import {
 import type { GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import type { FlyflorConfig } from "../../config/index.ts";
+import { commandState } from "../state.adapter.ts";
 import { createTuiLifecycle } from "./lifecycle.ts";
 import { useTuiRendererConfig } from "./renderer.composition.ts";
 import { createVirtualScrollBar, useDetachedScrollBars } from "./scrollbar.composition.ts";
@@ -149,11 +149,11 @@ export async function startTui(app: FlyFlor): Promise<void> {
     const restoreTerminalMouseScreen = pinTerminalMouseScreen();
 
     const loadSnapshot = async (): Promise<TuiSnapshot> => {
-        const config = app.resolve(ConfigComponent);
+        const state = commandState(app);
+        const config = state.config();
         const gateway = await resolveGatewaySnapshot(app);
-        const blackboard = app.resolve(BlackboardModule);
-        const blackboardTurns = await blackboard.listRecentTurns(3);
-        const workingMemory = describeWorkingMemoryHealth(app.resolve(MemoryModule).getWorkingMemoryHealthSnapshot());
+        const blackboardTurns = await state.listBlackboardTurns(3);
+        const workingMemory = describeWorkingMemoryHealth(state.workingMemoryHealthSnapshot());
         // Recovery visibility intentionally reads only file metadata, so the dashboard stays cheap to refresh.
         const workingRecovery = await describeWorkingMemoryRecoveryFiles(config);
         return { blackboardTurns, config, gateway, loadedAt: new Date().toISOString(), workingMemory, workingRecovery };

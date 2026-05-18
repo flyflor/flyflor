@@ -8,7 +8,7 @@ Skill drift 与 Gem drift 必须分开：`skill-drift` 指 `SKILL.md` 包的 man
 
 ## 相关代码路径
 
-- `src/agent/skills/index.ts` — SkillLoader / 选择 / usage / promotion；旧 `src/skills/index.ts` 仅兼容 re-export
+- `src/agent/skills/index.ts` — SkillLoader / 选择 / usage / promotion；历史 `src/skills/index.ts` 已移除
 - `src/agent/prompts/index.ts` — `renderSkillContextPrompt`
 - `templates/skills/*` — 内置默认 skill 模板
 - `~/.flyflor/.config/skills/` — 用户 skill 安装目录

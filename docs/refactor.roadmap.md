@@ -120,15 +120,15 @@ flowchart TB
 
 ### R4 Agent Shell Split
 
-状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent`；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；TUI/Gateway 拆分待继续）。
+状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent` 并移除旧物理路径；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；CLI/TUI 只读状态访问已收敛到 `src/command/state.adapter.ts`；TUI/Gateway 外部化待继续）。
 
 目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
 
 任务：
 
-- 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。（已完成）
+- 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`，并移除旧物理路径。（已完成）
 - 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（本地 adapter 已建立）
-- 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。
+- 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。（本地只读状态 adapter 已建立）
 - Gateway 保留最小 control/event transport；具体 channel adapter 进入可插拔 kit 规划。
 - 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述。
 
