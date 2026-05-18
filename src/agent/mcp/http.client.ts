@@ -1,6 +1,16 @@
 import type { FlyflorPaths } from "../../config/index.ts";
 import type { McpServerDefinition } from "./index.ts";
-import type { McpCallResult, McpClientOptions, McpToolDefinition } from "./stdio.client.ts";
+import {
+    normalizePrompts,
+    normalizeResources,
+    type McpPromptGetResult,
+    type McpCallResult,
+    type McpClientOptions,
+    type McpPromptDefinition,
+    type McpResourceReadResult,
+    type McpResourceDefinition,
+    type McpToolDefinition,
+} from "./stdio.client.ts";
 
 interface JsonRpcMessage {
     id?: number | string;
@@ -27,6 +37,65 @@ export async function listHttpMcpTools(
     return withHttpSession(paths, server, options, async (session) => {
         const result = await session.request("tools/list", {});
         return normalizeTools(result);
+    });
+}
+
+export async function listHttpMcpResources(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    options: McpClientOptions = {},
+): Promise<McpResourceDefinition[]> {
+    return withHttpSession(paths, server, options, async (session) => {
+        const result = await session.request("resources/list", {});
+        return normalizeResources(result, "MCP HTTP resources/list");
+    });
+}
+
+export async function listHttpMcpPrompts(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    options: McpClientOptions = {},
+): Promise<McpPromptDefinition[]> {
+    return withHttpSession(paths, server, options, async (session) => {
+        const result = await session.request("prompts/list", {});
+        return normalizePrompts(result, "MCP HTTP prompts/list");
+    });
+}
+
+export async function readHttpMcpResource(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    uri: string,
+    options: McpClientOptions = {},
+): Promise<McpResourceReadResult> {
+    return withHttpSession(paths, server, options, async (session) => {
+        const raw = await session.request("resources/read", { uri });
+        const result = isRecord(raw) ? raw : {};
+        return {
+            contents: Array.isArray(result.contents) ? result.contents : undefined,
+            raw,
+        };
+    });
+}
+
+export async function getHttpMcpPrompt(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    name: string,
+    args: Record<string, unknown> = {},
+    options: McpClientOptions = {},
+): Promise<McpPromptGetResult> {
+    return withHttpSession(paths, server, options, async (session) => {
+        const raw = await session.request("prompts/get", {
+            name,
+            arguments: args,
+        });
+        const result = isRecord(raw) ? raw : {};
+        return {
+            description: typeof result.description === "string" ? result.description : undefined,
+            messages: Array.isArray(result.messages) ? result.messages : undefined,
+            raw,
+        };
     });
 }
 

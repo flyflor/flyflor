@@ -1,6 +1,5 @@
 import { CttlLoopGuardReason } from "../protocol/contracts/index.ts";
 import type {
-    CttlJsonObject,
     CttlLoopGuardDecision,
     CttlLoopGuardEvent,
     CttlLoopGuardOptions,
@@ -62,6 +61,22 @@ export class CttlLoopGuard {
         return { allow: true };
     }
 
+    public recordResult(event: CttlLoopGuardEvent): CttlLoopGuardDecision {
+        if (event.ok !== false) {
+            return { allow: true };
+        }
+        const callKey = this.callKey(event.toolName, event.input);
+        const failed = this.increment(this.failedCallRepeatCounts, callKey);
+        if (failed > this.options.maxFailedCallRepeats) {
+            return {
+                allow: false,
+                message: `CTTL loop stopped repeated failed call ${event.toolName}.`,
+                reason: CttlLoopGuardReason.FailedCallRepeat,
+            };
+        }
+        return { allow: true };
+    }
+
     public snapshot(): CttlLoopGuardSnapshot {
         return {
             callRepeatCounts: Object.fromEntries(this.callRepeatCounts),
@@ -96,7 +111,7 @@ export class CttlLoopGuard {
         return next;
     }
 
-    private callKey(toolName: string, input: CttlJsonObject | undefined): string {
+    private callKey(toolName: string, input: Readonly<Record<string, unknown>> | undefined): string {
         return `${toolName}:${stableJson(input ?? {})}`;
     }
 }
@@ -114,4 +129,3 @@ function stableJson(value: unknown): string {
         .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`);
     return `{${entries.join(",")}}`;
 }
-

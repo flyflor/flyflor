@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { RuntimeSkillUsageEventHandler } from "../src/agent/runtime/events/index.ts";
 import { Event } from "../src/agent/di/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
-import { EventsComponent, NullEventSink, RuntimeEventType, RuntimeEventBus } from "../src/events/index.ts";
+import { classifyRuntimeEvent, EventsComponent, NullEventSink, RuntimeEventType, RuntimeEventBus } from "../src/events/index.ts";
 import { loadSkillUsageSummary } from "../src/skills/index.ts";
-import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
+import { RuntimeEventClass, type RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
 class RecordingHook {
     public readonly seen: string[] = [];
@@ -73,6 +73,12 @@ describe("EventsComponent explicit hooks", () => {
         events.emit(RuntimeEventType.AgentTurnStart);
 
         expect(seen).toEqual([RuntimeEventType.AgentTurnStart]);
+    });
+
+    test("CTTL loop guard events are classified as effects", () => {
+        expect(classifyRuntimeEvent(RuntimeEventType.CttlCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
+        expect(classifyRuntimeEvent(RuntimeEventType.CttlLoopGuardBlocked)).toBe(RuntimeEventClass.Effect);
+        expect(classifyRuntimeEvent(RuntimeEventType.McpCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
     });
 
     test("runtime skill usage handler records sidecar usage from structured events", async () => {

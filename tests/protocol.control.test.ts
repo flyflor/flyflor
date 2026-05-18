@@ -66,6 +66,27 @@ describe("Gateway Control protocol", () => {
         expect(message.text).toBe("hello");
     });
 
+    test("roundtrips capability catalog control messages", () => {
+        const getEnvelope = createGatewayControlEnvelope(GatewayControlMessageType.CapabilityCatalogGet, undefined, {
+            id: "cap-get-1",
+        });
+        const snapshotEnvelope = createGatewayControlEnvelope(
+            GatewayControlMessageType.CapabilityCatalogSnapshot,
+            { catalog: null },
+            { correlationId: getEnvelope.id, id: "cap-snapshot-1" },
+        );
+
+        expect(parseGatewayControlEnvelope(JSON.stringify(getEnvelope))).toMatchObject({
+            id: "cap-get-1",
+            type: GatewayControlMessageType.CapabilityCatalogGet,
+        });
+        expect(parseGatewayControlEnvelope(JSON.stringify(snapshotEnvelope))).toMatchObject({
+            correlationId: "cap-get-1",
+            payload: { catalog: null },
+            type: GatewayControlMessageType.CapabilityCatalogSnapshot,
+        });
+    });
+
     test("filters event envelopes by explicit subscription", () => {
         const event: RuntimeEvent = {
             type: RuntimeEventType.GatewayMessageReceived,

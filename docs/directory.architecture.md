@@ -7,9 +7,9 @@ Flyflor 的目录是架构协议。目录先表达边界、生命周期、能力
 ## 核心原则
 
 - 约定大于配置：默认目录、默认 provider、默认 channel registry 和默认 capability 来源由代码和目录约定表达。
-- 目录表达 owner：一个目录必须能看出它属于 FCH、CTTL、RECL、protocol、config、command、runtime data 或 user workspace。
+- 目录表达 owner：一个目录必须能看出它属于 cognitive、executive、agent、events、protocol、config、command、runtime data 或 user workspace。
 - 目录表达生命周期：源码、模板、配置、缓存、日志、数据库、用户工作区、插件/skill/MCP 安装目录必须分开。
-- 目录表达副作用：可执行能力、外部进程、网络、文件写入、消息发送和电脑控制都必须能定位到 CTTL / sandbox / adapter 边界。
+- 目录表达副作用：可执行能力、外部进程、网络、文件写入、消息发送和电脑控制都必须能定位到 executive / sandbox / adapter 边界。
 - 配置只覆盖差异：用户不应该为了让系统知道“这是什么”而写配置；配置只说明“这里和默认有什么不同”。
 
 ## 源码目录
@@ -24,12 +24,16 @@ src/
     gateway/
     blackboard/
     sandbox/
+    context/
+    skills/
     worker/
     mcp/
     plugin/
-  cttl/
-  context/
-  fch/
+  executive/
+    registry/
+    planner/
+    guard/
+  cognitive/
     mindstream/
     crystal/
     hippocampus/
@@ -49,18 +53,35 @@ docs/
 
 | 目录 | 层 | 约定 |
 | --- | --- | --- |
-| `src/fch/mindstream` | FCH / Mindstream | provider 协议转换、流式输出、当下推理流；不读 gateway 状态、不写记忆 |
-| `src/fch/crystal` | FCH / Crystal | Gem、反思、drift、长期方法论沉淀 |
-| `src/fch/hippocampus` | FCH / Hippocampus | 工作记忆、遗忘曲线、brain.db、记忆生命周期 |
-| `src/cttl` | CTTL | Capability / Tool / Trust / Loop 的内核类型、registry、planner、guard |
-| `src/agent/runtime` | Runtime orchestration | turn 编排、上下文装配、事件发布；逐步只消费 CTTL / RECL |
+| `src/cognitive/mindstream` | Cognitive / Mindstream | provider 协议转换、流式输出、当下推理流；不读 gateway 状态、不写记忆 |
+| `src/cognitive/crystal` | Cognitive / Crystal | Gem、反思、drift、长期方法论沉淀 |
+| `src/cognitive/hippocampus` | Cognitive / Hippocampus | 工作记忆、遗忘曲线、brain.db、记忆生命周期 |
+| `src/executive` | Executive | Capability / Tool / Trust / Loop 的内核类型、registry、planner、guard |
+| `src/agent/runtime` | Runtime orchestration | turn 编排、上下文装配、事件发布；逐步只消费 cognitive / executive / events |
 | `src/agent/gateway` | Surface adapter | channel 入站归一、出站投递、control WS；不调用模型 |
 | `src/events` | RECL / Event Fabric | RuntimeEvent 类型、分类、bus、sink、hook 注册和订阅广播中枢 |
 | `src/protocol/control` | RECL / Gateway control | WS/control envelope，不写 TUI 私有协议 |
-| `src/agent/sandbox` | CTTL / Trust | 工具、插件、shell、MCP 副作用审批 |
+| `src/agent/sandbox` | Executive / Trust runtime | 工具、插件、shell、MCP 副作用审批 |
+| `src/agent/context` | Agent runtime context | 显式 project / fork / capability scope 装配；不做业务语义判断 |
+| `src/agent/skills` | Agent runtime skills | Skill manifest、选择、使用计数、promotion；skill 是做事方式，不直接等同 Tool |
 | `src/components` | 继承边界 | 只放共享基类和跨模块基础设施，不按领域开子目录 |
 | `src/entities` | 数据访问 | entity/repo SQL，不能承载业务决策 |
 | `templates` | Prompt / memory templates | 所有提示词工程放这里，`.zh.cn.md` 副本同步 |
+
+## 迁移期路径映射
+
+当前源码仍处在迁移期。目标目录是未来新代码的方向，旧物理路径只作为兼容窗口存在：
+
+| 目标目录 | 当前物理路径 | 迁移规则 |
+| --- | --- | --- |
+| `src/cognitive/mindstream` | `src/fch/mindstream` | P2 统一移动；旧 `src/fch` 只保留薄 barrel |
+| `src/cognitive/crystal` | `src/fch/crystal` | P2 统一移动；不新增旧认知代号专属新文件 |
+| `src/cognitive/hippocampus` | `src/fch/hippocampus` | P2 统一移动；记忆路径测试随迁移更新 |
+| `src/executive` | `src/cttl` | P1 先迁移；registry/planner/guard 是目标子层 |
+| `src/agent/skills` | `src/skills` | P3 迁移；skill 不属于 cognitive core |
+| `src/agent/context` | `src/context` | P3 迁移；context 属于运行态 scope 装配 |
+
+迁移完成前，文档必须同时说明“目标目录”和“当前物理路径”，不能让读者误以为目录已经搬完。
 
 ## 文件命名约定
 
@@ -126,7 +147,7 @@ source-first 安装时，`~/.flyflor` 是源码根，也是默认 Flyflor home�
 规则：
 
 - 工作区是用户可编辑数据，不是源码。
-- project-local capability 放在项目 `.flyflor/` 下，优先级高于全局 capability，但仍必须经过 CTTL 和 sandbox。
+- project-local capability 放在项目 `.flyflor/` 下，优先级高于全局 capability，但仍必须经过 executive 和 sandbox。
 - Markdown 宪法层文件使用领域约定大写名；源码和模板文件仍遵守点分命名。
 - Project / fork / skill scope 必须由结构化 context 传入，不从自然语言或 cwd 隐式猜测。
 
@@ -151,7 +172,7 @@ workspace/projects/<projectId>/.flyflor/
 - `mcp/` 存放 MCP server 配置或 project-local MCP 声明。
 - `plugins/` 存放插件 manifest 和外部 bridge 声明。
 - `tools/` 预留用户自定义 command/http tool manifest；必须声明 schema、permission、scope、cwd/env、输出限制。
-- 所有 capability 来源都必须进入 CTTL descriptor registry，再生成本轮 Tool Plan。
+- 所有 capability 来源都必须进入 executive descriptor registry，再生成本轮 Tool Plan。
 
 ## Docker Dev
 
@@ -176,4 +197,4 @@ dist/
 - 不在 `src/components` 下开领域目录。
 - 不让 `protocol`、`agent/di`、`config` 变成通用垃圾桶。
 - 不新增运行时动态加载 npm 包的目录约定。
-- 不绕过 CTTL / sandbox 直接从目录扫描并执行工具。
+- 不绕过 executive / sandbox 直接从目录扫描并执行工具。

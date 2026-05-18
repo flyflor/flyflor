@@ -45,6 +45,7 @@ export class RuntimeEventClassifier {
             return RuntimeEventClass.Read;
         }
         if (
+            type.startsWith("cttl.") ||
             type.startsWith("sandbox.") ||
             type.startsWith("plugin.") ||
             type.startsWith("mcp.") ||

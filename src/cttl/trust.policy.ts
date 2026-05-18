@@ -2,6 +2,7 @@ import {
     CttlCapabilitySource,
     CttlPermission,
     CttlToolScope,
+    CttlTrustSurface,
     type CttlCapabilitySource as CttlCapabilitySourceType,
 } from "../protocol/contracts/index.ts";
 import type { CttlTrustContext, CttlTrustPolicyInput } from "./types.ts";
@@ -28,14 +29,14 @@ export class CttlTrustPolicy {
 
     private addBaseScopes(scopes: Set<CttlToolScope>, input: CttlTrustPolicyInput): void {
         scopes.add(CttlToolScope.Core);
-        if (input.surface !== "background") {
+        if (input.surface !== CttlTrustSurface.Background) {
             scopes.add(CttlToolScope.Chat);
         }
-        if (input.surface === "channel") {
+        if (input.surface === CttlTrustSurface.Channel) {
             scopes.add(CttlToolScope.Channel);
             return;
         }
-        if (input.surface === "background") {
+        if (input.surface === CttlTrustSurface.Background) {
             scopes.add(CttlToolScope.Background);
             return;
         }
@@ -43,23 +44,23 @@ export class CttlTrustPolicy {
     }
 
     private defaultPermission(input: CttlTrustPolicyInput): CttlPermission {
-        if (input.debug && input.surface === "local") {
+        if (input.debug && input.surface === CttlTrustSurface.Local) {
             return CttlPermission.Dangerous;
         }
-        if (input.surface === "channel") {
+        if (input.surface === CttlTrustSurface.Channel) {
             return CttlPermission.Message;
         }
-        if (input.surface === "background") {
+        if (input.surface === CttlTrustSurface.Background) {
             return CttlPermission.Network;
         }
         return CttlPermission.Write;
     }
 
     private defaultSources(surface: CttlTrustPolicyInput["surface"]): readonly CttlCapabilitySourceType[] {
-        if (surface === "channel") {
+        if (surface === CttlTrustSurface.Channel) {
             return [CttlCapabilitySource.Core, CttlCapabilitySource.Channel, CttlCapabilitySource.Mcp];
         }
-        if (surface === "background") {
+        if (surface === CttlTrustSurface.Background) {
             return [CttlCapabilitySource.Core, CttlCapabilitySource.Mcp, CttlCapabilitySource.Plugin];
         }
         return [

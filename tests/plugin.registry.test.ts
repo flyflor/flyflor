@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { FlyflorPaths } from "../src/config/index.ts";
@@ -12,6 +12,7 @@ import {
     upsertPlugin,
     validatePlugins,
 } from "../src/agent/plugin/index.ts";
+import { CttlPermission, CttlToolCategory, CttlToolScope } from "../src/protocol/contracts/index.ts";
 
 function testPaths(root: string): FlyflorPaths {
     return {
@@ -76,6 +77,54 @@ describe("Plugin registry", () => {
             expect(plugins).toHaveLength(1);
             expect(plugins[0]?.source).toBe("project");
             expect(plugins[0]?.entry).toBe("./project.ts");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("normalizes plugin capability descriptors from JSONC manifest", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-plugin-capability-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectPluginDir, { recursive: true });
+            await writeFile(
+                pluginConfigPath(paths),
+                JSON.stringify({
+                    plugins: {
+                        inspector: {
+                            entry: "./inspector.ts",
+                            capabilities: {
+                                "symbols.scan": {
+                                    description: "Scan project symbols",
+                                    category: CttlToolCategory.Coding,
+                                    permission: CttlPermission.Read,
+                                    scope: [CttlToolScope.Project],
+                                    inputSchema: {
+                                        type: "object",
+                                        properties: { path: { type: "string" } },
+                                    },
+                                    tags: ["lsp"],
+                                },
+                            },
+                        },
+                    },
+                }),
+            );
+
+            const plugin = await findPlugin(paths, "inspector");
+            expect(plugin?.capabilities).toHaveLength(1);
+            expect(plugin?.capabilities[0]).toMatchObject({
+                enabled: true,
+                descriptor: {
+                    category: CttlToolCategory.Coding,
+                    name: "plugin.inspector.symbols.scan",
+                    permission: CttlPermission.Read,
+                    scope: [CttlToolScope.Project],
+                    source: "plugin",
+                    sourceId: "inspector",
+                    tags: ["lsp"],
+                },
+            });
         } finally {
             await rm(root, { recursive: true, force: true });
         }

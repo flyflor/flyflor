@@ -2,7 +2,9 @@
 
 ## 一句话定位
 
-Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；整体设计命名为 **FCH-CTTL Architecture**：内核是 **FCH Cognitive Core（心晶海马认知内核）**，外层是 **CTTL Capability Exoskeleton（能力工具信任回路外骨架）**。入口装配在 `FlyFlor` composition root 完成，热路径由 `RuntimeModule` 编排。
+Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；整体设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**。Cognitive 负责 Mindstream、Crystal、Hippocampus 认知内核，Executive 负责 capability registry、tool planner、trust guard 和 loop 防护，Agent 负责 runtime、gateway、sandbox、skills、context 等外在交互形态。入口装配在 `FlyFlor` composition root 完成，热路径由 `RuntimeModule` 编排。
+
+`FCH` 和 `CTTL` 是迁移期历史代号：当前源码物理路径仍保留 `src/fch` 与 `src/cttl`，目标路径是 `src/cognitive` 与 `src/executive`。文档提到旧路径时只表示兼容窗口，不代表新的公开架构命名。
 
 ## 相关代码路径
 
@@ -13,34 +15,34 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、control envelope、进程信封
 - `src/events/` — RECL / Event Fabric，所有交互事件的订阅广播中枢
-- `src/fch/hippocampus/project/` — codename / project 固化、项目脚手架与资源指标触发器
+- `src/cognitive/hippocampus/project/` — codename / project 固化、项目脚手架与资源指标触发器；迁移期物理路径为 `src/fch/hippocampus/project/`
 - `src/agent/runtime/{blackboard,mcp,planning,routing,reflection,skills,streaming,turn}/` — RuntimeModule 的语义子目录；主 module 只做 turn 编排
-- `src/fch/mindstream/`、`src/fch/crystal/`、`src/fch/hippocampus/`、`src/agent/`、`src/command/`、`src/config/`
+- `src/cognitive/mindstream/`、`src/cognitive/crystal/`、`src/cognitive/hippocampus/`、`src/executive/`、`src/agent/`、`src/command/`、`src/config/`
 
-## FCH 认知内核
+## Cognitive 认知层
 
-FCH 是 Flyflor 的认知内核代号，内部三层是 `Mindstream / Crystal / Hippocampus`，中文叫 **心晶海马架构**。它只描述 Flyflor 的内在智能：Mindstream 负责当下心流、模型协议转换、流式输出和临场推理，晶体智力负责沉淀知识，海马体遗忘曲线负责记忆进入、保留、巩固、淡化和再激活。
+Cognitive 是 Flyflor 的认知层，内部三层是 `Mindstream / Crystal / Hippocampus`，中文叫 **心晶海马认知内核**。它只描述 Flyflor 的内在智能：Mindstream 负责当下心流、模型协议转换、流式输出和临场推理，晶体智力负责沉淀知识，海马体遗忘曲线负责记忆进入、保留、巩固、淡化和再激活。
 
-| FCH 层 | 目录 | 角色 | 后端 |
+| Cognitive 层 | 目标目录 | 迁移期物理路径 | 角色 | 后端 |
 | --- | --- | --- | --- |
-| Mindstream 心流层 | `src/fch/mindstream` | provider 协议转换、流式输出、当前任务的理解、推理、生成、工具意图和临场判断 | OpenAI 兼容 / Anthropic 兼容 |
-| Crystal Intelligence 晶体智力 | `src/fch/crystal` | 反思候选 → Gem 升格、方法论沉淀、稳定知识复用 | local `crystal.db` + VectorIndex |
-| Hippocampus 海马体遗忘曲线 | `src/fch/hippocampus` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计、计划/fork/场景摘要落 brain.db | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
+| Mindstream 心流层 | `src/cognitive/mindstream` | `src/fch/mindstream` | provider 协议转换、流式输出、当前任务的理解、推理、生成、工具意图和临场判断 | OpenAI 兼容 / Anthropic 兼容 |
+| Crystal Intelligence 晶体智力 | `src/cognitive/crystal` | `src/fch/crystal` | 反思候选 → Gem 升格、方法论沉淀、稳定知识复用 | local `crystal.db` + VectorIndex |
+| Hippocampus 海马体遗忘曲线 | `src/cognitive/hippocampus` | `src/fch/hippocampus` | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计、计划/fork/场景摘要落 brain.db | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
 
-FCH 不直接表达文件、shell、MCP、鼠标键盘、消息发送等外部行动能力；这些能力统一进入 CTTL 外骨架，避免认知内核被具体工具实现污染。
+Cognitive 不直接表达文件、shell、MCP、鼠标键盘、消息发送等外部行动能力；这些能力统一进入 Executive 外骨架，避免认知内核被具体工具实现污染。
 
-## CTTL 能力外骨架
+## Executive 执行层
 
-CTTL 是 `Capability / Tool / Trust / Loop` 的缩写，中文叫 **能力工具信任回路层**。它负责把 FCH 的推理安全地转成现实行动：发现能力、包装工具、计算信任、控制执行回路。
+Executive 是能力外骨架，内部保留 `Capability / Tool / Trust / Loop` 四个概念。它负责把 Cognitive 的推理安全地转成现实行动：发现能力、包装工具、计算信任、控制执行回路。
 
-| CTTL 层 | 角色 | 当前承载 | 演进方向 |
+| Executive 子层 | 角色 | 当前承载 | 演进方向 |
 | --- | --- | --- | --- |
-| Capability | 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent | `src/agent/mcp`、`src/agent/plugin`、`src/skills`、`src/agent/gateway` | capability registry，不靠固定工具清单扩张 |
+| Capability | 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent | `src/agent/mcp`、`src/agent/plugin`、迁移期 `src/skills`、`src/agent/gateway` | `src/executive/registry`，不靠固定工具清单扩张 |
 | Tool | 把 capability 适配成模型可调用工具，统一 schema、输出限制、scope、readOnly、concurrencySafe、exclusive | `src/agent/runtime/mcp`、MCP catalog、shell hook | descriptor-driven tool adapter |
-| Trust | 根据 channel、sender、turn/request context、sandbox、approval、permission cap、secrets 和 project policy 决定此时能否执行 | `src/agent/sandbox`、gateway policy、config/secrets provider | permission + scope + channel cap |
-| Loop | 控制工具计划、并发、结果压缩、失败恢复、unknown tool 防护、重复调用防护和 no-progress 诊断 | `RuntimeModule` tool loop、catalog TTL/LRU、quota | tool plan builder + loop guard |
+| Trust | 根据 channel、sender、turn/request context、sandbox、approval、permission cap、secrets 和 project policy 决定此时能否执行 | `src/agent/sandbox`、gateway policy、config/secrets provider | `src/executive/guard` + permission/scope/channel cap |
+| Loop | 控制工具计划、并发、结果压缩、失败恢复、unknown tool 防护、重复调用防护和 no-progress 诊断 | `RuntimeModule` tool loop、catalog TTL/LRU、quota | `src/executive/planner` + loop guard |
 
-CTTL 的专章见 [cttl.exoskeleton.md](cttl.exoskeleton.md)。它是工具系统的架构契约，不替代 OOP + use composition、显式 DI、目录命名、零字符匹配等工程边界。
+Executive 的外骨架专章见 [cttl.exoskeleton.md](cttl.exoskeleton.md)。它是工具系统的架构契约，不替代 OOP + use composition、显式 DI、目录命名、零字符匹配等工程边界。
 
 ## 分层结构图
 
@@ -55,13 +57,13 @@ flowchart TB
     AppRoot --> Runtime["RuntimeModule<br/>src/agent/runtime"]
     AppRoot --> Blackboard["BlackboardModule<br/>src/agent/blackboard"]
     AppRoot --> Workers["WorkerManager<br/>src/agent/worker"]
-    AppRoot --> Model["ModelClient<br/>src/fch/mindstream"]
+    AppRoot --> Model["ModelClient<br/>src/cognitive/mindstream<br/>迁移期 src/fch/mindstream"]
 
-    Runtime --> Memory["MemoryModule<br/>src/fch/hippocampus/memory"]
+    Runtime --> Memory["MemoryModule<br/>src/cognitive/hippocampus/memory<br/>迁移期 src/fch/hippocampus/memory"]
     Runtime --> Sandbox["SandboxModule<br/>src/agent/sandbox"]
     Runtime --> MCP["MCP Client<br/>src/agent/mcp"]
-    Runtime --> Skills["Skill Loader<br/>src/skills"]
-    Runtime --> CTTL["CTTL Exoskeleton<br/>Capability / Tool / Trust / Loop"]
+    Runtime --> Skills["Skill Loader<br/>src/agent/skills<br/>迁移期 src/skills"]
+    Runtime --> Executive["Executive Exoskeleton<br/>Capability / Tool / Trust / Loop"]
     Runtime --> Prompts["Prompts<br/>src/agent/prompts"]
     Runtime --> FastRouteCache["fastRoute cache<br/><cacheDir>/runtime.fast.route.snapshots.json"]
 
@@ -89,9 +91,9 @@ flowchart TB
     Protocol["src/protocol<br/>枚举 / control envelope / 进程信封"] -.- AppRoot
     Protocol -.- Runtime
     Protocol -.- Blackboard
-    CTTL -.- MCP
-    CTTL -.- Sandbox
-    CTTL -.- Skills
+    Executive -.- MCP
+    Executive -.- Sandbox
+    Executive -.- Skills
 ```
 
 ## Composition Root（`FlyFlor.create`）
@@ -180,8 +182,8 @@ SQLite 数据访问按 `entity/repo -> store -> component` 分层：
 
 - `src/entities/**/*.entity.ts`：表 row / record 映射、JSON 列编解码与轻量 shape 校验。
 - `src/entities/**/*.repo.ts`：写入 DTO、SQL function、row 查询。只做数据访问层，不承载业务决策。
-- 模块内 `store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery；当一个模块有多个 store，用子目录表达语义后仍命名为 `store.ts`，例如 `src/fch/hippocampus/memory/brain/store.ts`。
-- `component.ts`：模块唯一组件 owner，向 runtime / FCH 子层暴露能力边界；同目录多组件时才使用限定前缀。
+- 模块内 `store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery；当一个模块有多个 store，用子目录表达语义后仍命名为 `store.ts`，例如目标路径 `src/cognitive/hippocampus/memory/brain/store.ts`，迁移期物理路径 `src/fch/hippocampus/memory/brain/store.ts`。
+- `component.ts`：模块唯一组件 owner，向 runtime / cognitive 子层暴露能力边界；同目录多组件时才使用限定前缀。
 
 Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `src/entities/memory/brain.*.repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
 
@@ -197,10 +199,10 @@ Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只
 | `src/agent/worker` | registry / pool / adapter / 超时 | 动态扫描、动态 import、绕过 Sandbox |
 | `src/agent/sandbox` | mcp-tool / shell-hook / plugin 审批 | 被业务模块绕过 |
 | `src/agent/mcp` | server/client 适配 | 跑非 MCP 工具、维护路由策略 |
-| `src/fch/mindstream` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |
-| `src/fch/crystal` | reflection、`gems`、drift | 持有渠道协议、绕过证据门、直接改写外部 Skill 包 |
-| `src/fch/hippocampus` | 海马体策略、回放、衰减、调度 | 调用模型决策 |
-| `src/context` | 显式 project / fork / capability scope 装配 | 业务语义判断、隐式 session |
+| `src/cognitive/mindstream` | provider 协议转换、流式输出 | 读取渠道状态、写长期记忆 |
+| `src/cognitive/crystal` | reflection、`gems`、drift | 持有渠道协议、绕过证据门、直接改写外部 Skill 包 |
+| `src/cognitive/hippocampus` | 海马体策略、回放、衰减、调度 | 调用模型决策 |
+| `src/agent/context` | 显式 project / fork / capability scope 装配 | 业务语义判断、隐式 session |
 | `src/events` | Event Fabric、事件分类、bus、sink、hook、订阅广播 | 业务语义判断、长期状态存储、直接控制 gateway 私有协议 |
 | `src/protocol` | 枚举、contract、control envelope、进程信封 | 业务决策、状态存储、事件 bus 实现 |
 
@@ -252,5 +254,5 @@ interface FlyFlorDependencies {
 
 - `RuntimeModule` 已拆为 prepare / assemble / generate / persist / async 五个 phase，但文件仍较大；工具循环、reply 解析和 persist helper 必须继续留在 runtime 子目录 owner 内，不回流到根 module。
 - `Sandbox` 已把 MCP tool / plugin / shell-hook 收口到 `gateCapabilityExecution`；新增可执行能力必须先扩展 `CapabilityExecutionKind` 与统一 gate，不允许开旁路。
-- 三层智能模型在代码上仍有少量回流依赖：`fch/hippocampus/memory` 会 import prompt 渲染与 project promotion；导入方向以当前子目录 owner 为准：`fch/hippocampus/memory/actions/` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；Dream worker 与 feedback interpreter 分别归入 `src/fch/hippocampus/memory/dream/` 和 `src/fch/hippocampus/memory/feedback/`，runtime 不再保留兼容壳。
+- 三层智能模型在代码上仍有少量回流依赖：迁移期 `src/fch/hippocampus/memory` 会 import prompt 渲染与 project promotion；导入方向以当前子目录 owner 为准：`hippocampus/memory/actions/` 只解析 `MemoryActions` 结构化块，不再 import agent prompt registry；Dream worker 与 feedback interpreter 分别归入 hippocampus memory 子目录，runtime 不再保留兼容壳。
 - `brain.db` 已成为 prompt recall / turn event write 权威；Behavior Snapshot、TaskPlan / ContextFork / SceneRecord 摘要与提示词优先级冲突表已接入 runtime / memory / prompt 模板链路。

@@ -8,10 +8,10 @@ Gem 与 Skill 必须分开：Gem 是内部晶体智力，存在 `crystal.db` / C
 
 ## 相关代码路径
 
-- `src/fch/crystal/reflection/index.ts` — `CrystalReflectionComponent`，负责 candidate / atom / Gem 的确定性结晶规则；保留少量旧函数导出作为兼容薄壳
-- `src/fch/crystal/gems/index.ts` — `CrystalGemComponent` / `InMemoryCrystalMemoryStore`，内部 Gem 模块边界
-- `src/fch/crystal/memory/index.ts` — `CrystalMemoryComponent` 对外兼容门面 / `LocalCrystalMemoryStore`
-- `src/skills/index.ts` — 外部 Skill 包加载与物化；不属于 Gem 本体（见 `skill.system.md`）
+- `src/cognitive/crystal/reflection/index.ts` — `CrystalReflectionComponent`，负责 candidate / atom / Gem 的确定性结晶规则；迁移期物理路径为 `src/fch/crystal/reflection/index.ts`
+- `src/cognitive/crystal/gems/index.ts` — `CrystalGemComponent` / `InMemoryCrystalMemoryStore`，内部 Gem 模块边界；迁移期物理路径为 `src/fch/crystal/gems/index.ts`
+- `src/cognitive/crystal/memory/index.ts` — `CrystalMemoryComponent` 对外兼容门面 / `LocalCrystalMemoryStore`；迁移期物理路径为 `src/fch/crystal/memory/index.ts`
+- `src/agent/skills/index.ts` — 外部 Skill 包加载与物化；不属于 Gem 本体（见 `skill.system.md`），迁移期物理路径为 `src/skills/index.ts`
 - `src/agent/runtime/reflection/worker.ts` — 反思 worker 调度
 - `templates/prompts/crystal.reflection.md` — 反思抽取提示
 

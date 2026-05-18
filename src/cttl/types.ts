@@ -5,6 +5,7 @@ import type {
     CttlPermission,
     CttlToolCategory,
     CttlToolScope,
+    CttlTrustSurface,
 } from "../protocol/contracts/index.ts";
 
 export type CttlJsonPrimitive = string | number | boolean | null;
@@ -61,8 +62,6 @@ export interface CttlTrustContext {
     readonly unavailableTools?: ReadonlySet<string>;
 }
 
-export type CttlTrustSurface = "channel" | "local" | "background";
-
 export interface CttlTrustPolicyInput {
     readonly surface: CttlTrustSurface;
     readonly projectScoped?: boolean;
@@ -92,9 +91,42 @@ export interface CttlToolPlan {
     readonly hidden: readonly CttlHiddenToolPlanEntry[];
 }
 
+export interface CttlCapabilitySummary {
+    readonly category: CttlToolCategory;
+    readonly concurrencySafe: boolean;
+    readonly exclusive: boolean;
+    readonly name: string;
+    readonly permission: CttlPermission;
+    readonly readOnly: boolean;
+    readonly scope: readonly CttlToolScope[];
+    readonly source: CttlCapabilitySource;
+    readonly sourceId?: string;
+    readonly tags?: readonly string[];
+}
+
+export interface CttlCapabilityCatalogSnapshot {
+    readonly builtAt: string;
+    readonly capabilities: readonly CttlCapabilitySummary[];
+    readonly failedSources: readonly string[];
+    readonly hiddenCapabilities: readonly {
+        readonly name: string;
+        readonly reasons: readonly CttlHiddenReason[];
+    }[];
+    readonly staleSources: readonly string[];
+    readonly totals: {
+        readonly capabilities: number;
+        readonly hidden: number;
+        readonly pluginCapabilities: number;
+        readonly prompts: number;
+        readonly resources: number;
+        readonly tools: number;
+        readonly userTools: number;
+    };
+}
+
 export interface CttlLoopGuardEvent {
     readonly toolName: string;
-    readonly input?: CttlJsonObject;
+    readonly input?: Readonly<Record<string, unknown>>;
     readonly ok?: boolean;
     readonly error?: string;
     readonly knownToolNames?: ReadonlySet<string>;

@@ -2,7 +2,7 @@
 
 Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进制交付。
 
-核心设计命名为 **FCH-CTTL Architecture**：FCH 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；CTTL 能力外骨架负责 Capability / Tool / Trust / Loop，让智能体安全地发现能力、调用工具和控制执行回路。
+核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、gateway、sandbox、skills、context 等外部交互。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -180,19 +180,21 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/command`  | CLI、TUI、命令注册、终端渲染                                                |
 | `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin         |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
-| `src/fch/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）                            |
-| `src/fch/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream                |
-| `src/fch/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩 |
+| `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；迁移期物理路径 `src/fch/mindstream` |
+| `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；迁移期物理路径 `src/fch/crystal` |
+| `src/cognitive/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩；迁移期物理路径 `src/fch/hippocampus` |
 | `src/events`   | RECL / Event Fabric，所有交互事件的订阅广播中枢                            |
-| `src/context`  | 显式 project / fork / capability scope 装配；与 FCH 平级，不承载 session |
+| `src/executive` | Capability / Tool / Trust / Loop 执行层目标目录；迁移期物理路径 `src/cttl` |
+| `src/agent/context` | 显式 project / fork / capability scope 装配；迁移期物理路径 `src/context` |
+| `src/agent/skills` | Skill manifest、选择、使用计数、promotion；迁移期物理路径 `src/skills` |
 | `src/protocol` | 公共协议、枚举、control envelope、进程 envelope                            |
 | `templates`    | 提示词和记忆 Markdown 模板                                                  |
 
 ### 三层智能模型
 
-- **Mindstream**：心流层，负责 provider 协议转换、流式输出、当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策，目录是 `src/fch/mindstream`。
-- **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格，目录是 `src/fch/crystal`。
-- **Hippocampus = 海马体**：由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex），目录是 `src/fch/hippocampus`。
+- **Mindstream**：心流层，负责 provider 协议转换、流式输出、当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策，目标目录是 `src/cognitive/mindstream`。
+- **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格，目标目录是 `src/cognitive/crystal`。
+- **Hippocampus = 海马体**：由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex），目标目录是 `src/cognitive/hippocampus`。
 
 **核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
 
@@ -334,9 +336,9 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 - OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
 - `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
 - 禁止 `*.exports.ts`；目录导出统一进 `index.ts`。目录已经表达职责时用短名，例如 DI composition 下用 `component.ts` / `event.ts` / `injection.ts` / `module.ts`，factory 下用 `container.ts`
-- 目录 owner 是第一语义：模块内文件不重复目录名前缀，`src/fch/hippocampus/memory/dream/worker.ts`、`consolidation/worker.ts`、`lifecycle/scheduler.ts` 这类按生命周期分组；对外优先导入子目录 `index.ts`
+- 目录 owner 是第一语义：模块内文件不重复目录名前缀，目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`、`consolidation/worker.ts`、`lifecycle/scheduler.ts` 这类按生命周期分组；对外优先导入子目录 `index.ts`
 - SQLite 访问按 `entity/repo -> store -> component` 分层；新增 SQL 优先放到 `src/entities/<domain>/tablename.repo.ts`，repo 只做 row/entity 映射 + SQL function，不做 service 层业务，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
-- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如 `src/fch/hippocampus/memory/brain/store.ts`、`src/fch/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
+- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如目标路径 `src/cognitive/hippocampus/memory/brain/store.ts`、`src/cognitive/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
 - 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
 - 实现文件使用点分后缀：`*.module.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`、`*.repo.ts`；目录内唯一组件 owner 直接叫 `component.ts`
 - 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
@@ -367,9 +369,10 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)                 | FCH-CTTL 分层架构 / composition root / 进程模型 |
+| [TODO.md](TODO.md)                                           | 当前中文接续路线 / 迁移状态 / 验收命令 |
+| [docs/architecture.md](docs/architecture.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
 | [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
-| [docs/cttl.exoskeleton.md](docs/cttl.exoskeleton.md)         | Capability / Tool / Trust / Loop 外骨架 |
+| [docs/cttl.exoskeleton.md](docs/cttl.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
 | [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |
 | [docs/boundaries.md](docs/boundaries.md)                     | 工程边界与红线                         |
 | [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |

@@ -1,25 +1,69 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
-import { callHttpMcpTool, listHttpMcpTools } from "./http.client.ts";
-import { callSseMcpTool, listSseMcpTools } from "./sse.client.ts";
+import {
+    callHttpMcpTool,
+    getHttpMcpPrompt,
+    listHttpMcpPrompts,
+    listHttpMcpResources,
+    listHttpMcpTools,
+    readHttpMcpResource,
+} from "./http.client.ts";
+import {
+    callSseMcpTool,
+    getSseMcpPrompt,
+    listSseMcpPrompts,
+    listSseMcpResources,
+    listSseMcpTools,
+    readSseMcpResource,
+} from "./sse.client.ts";
 import {
     callStdioMcpTool,
+    getStdioMcpPrompt,
+    listStdioMcpPrompts,
+    listStdioMcpResources,
     listStdioMcpTools,
+    readStdioMcpResource,
     type McpCallResult,
     type McpClientOptions,
+    type McpPromptGetResult,
+    type McpPromptDefinition,
+    type McpResourceReadResult,
+    type McpResourceDefinition,
     type McpToolDefinition,
 } from "./stdio.client.ts";
 
 export * from "./tool.calls.ts";
 export { validateAgainstInputSchema, type SchemaValidationResult } from "./schema.validate.ts";
-export { callHttpMcpTool, listHttpMcpTools } from "./http.client.ts";
-export { callSseMcpTool, listSseMcpTools } from "./sse.client.ts";
+export {
+    callHttpMcpTool,
+    getHttpMcpPrompt,
+    listHttpMcpPrompts,
+    listHttpMcpResources,
+    listHttpMcpTools,
+    readHttpMcpResource,
+} from "./http.client.ts";
+export {
+    callSseMcpTool,
+    getSseMcpPrompt,
+    listSseMcpPrompts,
+    listSseMcpResources,
+    listSseMcpTools,
+    readSseMcpResource,
+} from "./sse.client.ts";
 export {
     callStdioMcpTool,
+    getStdioMcpPrompt,
+    listStdioMcpPrompts,
+    listStdioMcpResources,
     listStdioMcpTools,
+    readStdioMcpResource,
     type McpCallResult,
     type McpClientOptions,
+    type McpPromptGetResult,
+    type McpPromptDefinition,
+    type McpResourceReadResult,
+    type McpResourceDefinition,
     type McpToolDefinition,
 } from "./stdio.client.ts";
 
@@ -100,6 +144,53 @@ export async function listMcpTools(
     return isSseTransport(server.transport)
         ? listSseMcpTools(paths, server, options)
         : listHttpMcpTools(paths, server, options);
+}
+
+export async function listMcpResources(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    options: McpClientOptions = {},
+): Promise<McpResourceDefinition[]> {
+    if (!server.url) return listStdioMcpResources(paths, server, options);
+    return isSseTransport(server.transport)
+        ? listSseMcpResources(paths, server, options)
+        : listHttpMcpResources(paths, server, options);
+}
+
+export async function listMcpPrompts(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    options: McpClientOptions = {},
+): Promise<McpPromptDefinition[]> {
+    if (!server.url) return listStdioMcpPrompts(paths, server, options);
+    return isSseTransport(server.transport)
+        ? listSseMcpPrompts(paths, server, options)
+        : listHttpMcpPrompts(paths, server, options);
+}
+
+export async function readMcpResource(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    uri: string,
+    options: McpClientOptions = {},
+): Promise<McpResourceReadResult> {
+    if (!server.url) return readStdioMcpResource(paths, server, uri, options);
+    return isSseTransport(server.transport)
+        ? readSseMcpResource(paths, server, uri, options)
+        : readHttpMcpResource(paths, server, uri, options);
+}
+
+export async function getMcpPrompt(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    name: string,
+    args: Record<string, unknown> = {},
+    options: McpClientOptions = {},
+): Promise<McpPromptGetResult> {
+    if (!server.url) return getStdioMcpPrompt(paths, server, name, args, options);
+    return isSseTransport(server.transport)
+        ? getSseMcpPrompt(paths, server, name, args, options)
+        : getHttpMcpPrompt(paths, server, name, args, options);
 }
 
 export async function callMcpTool(

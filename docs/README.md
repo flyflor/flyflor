@@ -1,6 +1,6 @@
 # Flyflor 文档索引
 
-本目录是 Flyflor 工程文档的唯一入口。主文档只描述当前运行契约；已经落地或迁移完成的提案、历史背景统一归入 [old-docs/](old-docs/)。
+本目录是 Flyflor 工程文档的唯一入口。主文档只描述当前运行契约；当前跨 session 接续路线在根目录 [TODO.md](../TODO.md)，已经落地或迁移完成的提案、历史背景统一归入 [old-docs/](old-docs/)。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -8,9 +8,9 @@
 
 新加入者按下面顺序读，可以在最短路径建立完整心智模型：
 
-1. [architecture.md](architecture.md) — FCH-CTTL 顶层分层、composition root、DI 容器、模块边界
+1. [architecture.md](architecture.md) — Cognitive / Executive / Agent 顶层分层、composition root、DI 容器、模块边界
 2. [directory.architecture.md](directory.architecture.md) — 源码、配置、运行态、工作区和 capability 目录约定
-3. [cttl.exoskeleton.md](cttl.exoskeleton.md) — Capability / Tool / Trust / Loop 能力外骨架规则
+3. [cttl.exoskeleton.md](cttl.exoskeleton.md) — Executive 外骨架中的 Capability / Tool / Trust / Loop 规则
 4. [runtime.events.md](runtime.events.md) — RECL / Event Fabric 事件订阅广播中枢
 5. [runtime.turn.md](runtime.turn.md) — 单轮请求从渠道入站到回复落盘的完整流程
 6. [memory.system.md](memory.system.md) — Markdown / MemoryComponent / brain.db / crystal.db 本地记忆系统
@@ -26,4 +26,4 @@
 
 ## 归档区
 
-[old-docs/](old-docs/) 只存放历史材料。当前实现细节以本索引的主文档和根目录 [README.md](../README.md) 为准；不要从归档文档反推运行契约。
+[old-docs/](old-docs/) 只存放历史材料。当前实现细节以本索引的主文档、根目录 [README.md](../README.md) 和 [TODO.md](../TODO.md) 为准；不要从归档文档反推运行契约。

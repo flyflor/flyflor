@@ -6,9 +6,17 @@ import {
     CttlPermission,
     CttlToolCategory,
     CttlToolScope,
+    CttlTrustSurface,
 } from "../src/protocol/contracts/index.ts";
 import { ArchitectureLayer, Component, readComponentMetadata } from "../src/agent/di/index.ts";
-import { CttlComponent, CttlLoopGuard, CttlToolRegistry, isPermissionAllowed, type CttlToolDescriptor } from "../src/cttl/index.ts";
+import {
+    CttlComponent,
+    CttlLoopGuard,
+    CttlMcpCatalogAdapter,
+    CttlToolRegistry,
+    isPermissionAllowed,
+    type CttlToolDescriptor,
+} from "../src/cttl/index.ts";
 
 describe("CTTL core", () => {
     test("registers tools and rejects duplicate names", () => {
@@ -71,7 +79,7 @@ describe("CTTL core", () => {
             scope: [CttlToolScope.Local],
         }));
 
-        const plan = cttl.buildToolPlan(cttl.buildTrustContext({ surface: "channel" }));
+        const plan = cttl.buildToolPlan(cttl.buildTrustContext({ surface: CttlTrustSurface.Channel }));
 
         expect(plan.visible.map((entry) => entry.descriptor.name)).toEqual(["message.send"]);
         expect(hiddenReasons(plan, "shell.run")).toEqual(
@@ -99,7 +107,7 @@ describe("CTTL core", () => {
             scope: [CttlToolScope.Project],
         }));
 
-        const plan = cttl.buildToolPlan(cttl.buildTrustContext({ projectScoped: true, surface: "local" }));
+        const plan = cttl.buildToolPlan(cttl.buildTrustContext({ projectScoped: true, surface: CttlTrustSurface.Local }));
 
         expect(plan.visible.map((entry) => entry.descriptor.name)).toEqual(["workspace.read", "workspace.write"]);
         expect(hiddenReasons(plan, "network.search")).toContain(CttlHiddenReason.PermissionCap);
@@ -116,14 +124,78 @@ describe("CTTL core", () => {
             scope: [CttlToolScope.Debug],
         }));
 
-        const regular = cttl.buildToolPlan(cttl.buildTrustContext({ surface: "local" }));
-        const debug = cttl.buildToolPlan(cttl.buildTrustContext({ debug: true, surface: "local" }));
+        const regular = cttl.buildToolPlan(cttl.buildTrustContext({ surface: CttlTrustSurface.Local }));
+        const debug = cttl.buildToolPlan(cttl.buildTrustContext({ debug: true, surface: CttlTrustSurface.Local }));
 
         expect(regular.visible).toHaveLength(0);
         expect(hiddenReasons(regular, "browser.control")).toEqual(
             expect.arrayContaining([CttlHiddenReason.ScopeMismatch, CttlHiddenReason.PermissionCap]),
         );
         expect(debug.visible.map((entry) => entry.descriptor.name)).toEqual(["browser.control"]);
+    });
+
+    test("MCP catalog adapter maps builtin and remote tools into CTTL descriptors", () => {
+        const adapter = new CttlMcpCatalogAdapter();
+        const workspace = adapter.descriptorFor(mcpEntry("workspace", "read"));
+        const shell = adapter.descriptorFor(mcpEntry("shell", "run"));
+        const remote = adapter.descriptorFor(mcpEntry("browser", "open"));
+        const resource = adapter.resourceDescriptorFor({
+            server: "docs",
+            resource: {
+                uri: "file://README.md",
+                name: "readme",
+                mimeType: "text/markdown",
+            },
+        });
+        const prompt = adapter.promptDescriptorFor({
+            server: "prompts",
+            prompt: {
+                name: "code-review",
+                description: "Review code",
+            },
+        });
+
+        expect(workspace).toMatchObject({
+            category: CttlToolCategory.Coding,
+            name: "workspace.read",
+            permission: CttlPermission.Read,
+            readOnly: true,
+            scope: [CttlToolScope.Project],
+            source: CttlCapabilitySource.Core,
+        });
+        expect(shell).toMatchObject({
+            category: CttlToolCategory.System,
+            concurrencySafe: false,
+            exclusive: true,
+            name: "shell.run",
+            permission: CttlPermission.Execute,
+            readOnly: false,
+            scope: [CttlToolScope.Local],
+            source: CttlCapabilitySource.Core,
+        });
+        expect(remote).toMatchObject({
+            category: CttlToolCategory.Integration,
+            name: "browser.open",
+            permission: CttlPermission.Network,
+            scope: [CttlToolScope.Core],
+            source: CttlCapabilitySource.Mcp,
+        });
+        expect(resource).toMatchObject({
+            name: "docs.resource.file.readme.md",
+            permission: CttlPermission.Read,
+            readOnly: true,
+            source: CttlCapabilitySource.Mcp,
+            sourceId: "file://README.md",
+            tags: ["mcp-resource", "text/markdown"],
+        });
+        expect(prompt).toMatchObject({
+            name: "prompts.prompt.code-review",
+            permission: CttlPermission.Read,
+            readOnly: true,
+            source: CttlCapabilitySource.Mcp,
+            sourceId: "code-review",
+            tags: ["mcp-prompt"],
+        });
     });
 
     test("loop guard stops repeated unknown tools", () => {
@@ -179,6 +251,17 @@ function tool(name: string, overrides: Partial<CttlToolDescriptor> = {}): CttlTo
         scope: [CttlToolScope.Core],
         source: CttlCapabilitySource.Core,
         ...overrides,
+    };
+}
+
+function mcpEntry(server: string, name: string) {
+    return {
+        server,
+        tool: {
+            description: `${server}.${name}`,
+            inputSchema: { type: "object" },
+            name,
+        },
     };
 }
 

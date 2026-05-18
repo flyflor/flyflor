@@ -41,6 +41,7 @@ class CollectSink implements EventSink {
 }
 
 const PLUGIN: PluginDefinition = {
+    capabilities: [],
     name: "demo",
     entry: "./demo.ts",
     enabled: true,

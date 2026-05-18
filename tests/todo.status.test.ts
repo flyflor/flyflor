@@ -26,8 +26,26 @@ describe("TODO status", () => {
         expect(todo).toContain("docs:check");
     });
 
-    test("root release docs do not expose an active TODO roadmap", async () => {
-        expect(await exists(ROOT_TODO_PATH)).toBe(false);
+    test("root TODO is the active Chinese handoff roadmap", async () => {
+        expect(await exists(ROOT_TODO_PATH)).toBe(true);
+        const todo = await readFile(ROOT_TODO_PATH, "utf8");
+
+        expect(todo).toContain("Cognitive-Executive-Agent Architecture");
+        expect(todo).toContain("迁移期说明");
+        expect(todo).toContain("Bun 单文件二进制");
+        expect(todo).toContain("零字符匹配红线");
+        expect(todo).toContain("bun run docs:check");
+        expect(todo).toContain("bun run build:binary");
+        expect(todo).toContain("src/cognitive");
+        expect(todo).toContain("src/executive");
+        expect(todo).toContain("src/agent/skills");
+        expect(todo).toContain("src/agent/context");
+    });
+
+    test("archived active TODO points at the root handoff roadmap", async () => {
+        const archivedActive = await readFile(join(import.meta.dir, "..", "docs", "old-docs", "todo.active.md"), "utf8");
+        expect(archivedActive).toContain("当前接续路线移动到根目录");
+        expect(archivedActive).toContain("../../TODO.md");
     });
 
     test("blackboard docs reflect current worker isolation status", async () => {

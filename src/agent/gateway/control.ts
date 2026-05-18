@@ -17,7 +17,7 @@ import {
     type RuntimeContext,
     type RuntimeEvent,
 } from "../../protocol/contracts/index.ts";
-import type { EventSink, RuntimeEventBus } from "../../events/index.ts";
+import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../../events/index.ts";
 import type { GatewayStatusSnapshot } from "./channels/status.ts";
 import type { StreamingMessageDispatcher } from "./channels/types.ts";
 
@@ -46,9 +46,13 @@ type GatewayControlHandler = (
 export class GatewayControlHub implements EventSink {
     private readonly clients = new Set<GatewayControlSocket>();
     private readonly handlers = new Map<string, GatewayControlHandler>();
+    private capabilityCatalog: Record<string, unknown> | null = null;
     private readonly unsubscribeEvents: () => void;
 
     public constructor(private readonly options: GatewayControlHubOptions) {
+        this.handlers.set(GatewayControlMessageType.CapabilityCatalogGet, (socket, envelope) =>
+            this.handleCapabilityCatalogGet(socket, envelope),
+        );
         this.handlers.set(GatewayControlMessageType.ClientHello, (socket, envelope) =>
             this.handleClientHello(socket, envelope),
         );
@@ -125,6 +129,9 @@ export class GatewayControlHub implements EventSink {
     }
 
     public publish(event: RuntimeEvent): void {
+        if (event.type === RuntimeEventType.CttlCapabilityCatalogBuilt && event.payload) {
+            this.capabilityCatalog = event.payload;
+        }
         const envelope = createGatewayControlEventEnvelope(event);
         for (const client of this.clients) {
             if (shouldDeliverGatewayControlEvent(event, client.data.subscriptions)) {
@@ -145,6 +152,12 @@ export class GatewayControlHub implements EventSink {
         this.send(socket, GatewayControlMessageType.Ack, {
             clientId: socket.data.clientId,
             received: envelope.type,
+        }, envelope);
+    }
+
+    private handleCapabilityCatalogGet(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+        this.send(socket, GatewayControlMessageType.CapabilityCatalogSnapshot, {
+            catalog: this.capabilityCatalog,
         }, envelope);
     }
 

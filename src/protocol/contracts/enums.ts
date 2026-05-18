@@ -185,6 +185,14 @@ export const CttlCapabilitySource = {
 
 export type CttlCapabilitySource = (typeof CttlCapabilitySource)[keyof typeof CttlCapabilitySource];
 
+export const CttlTrustSurface = {
+    Background: "background",
+    Channel: "channel",
+    Local: "local",
+} as const;
+
+export type CttlTrustSurface = (typeof CttlTrustSurface)[keyof typeof CttlTrustSurface];
+
 export const CttlToolScope = {
     Background: "background",
     Channel: "channel",
@@ -295,6 +303,8 @@ export type GatewayControlProtocol = (typeof GatewayControlProtocol)[keyof typeo
 
 export const GatewayControlMessageType = {
     Ack: "ack",
+    CapabilityCatalogGet: "capability.catalog.get",
+    CapabilityCatalogSnapshot: "capability.catalog.snapshot",
     ClientHello: "client.hello",
     Error: "error",
     EventPublish: "event.publish",

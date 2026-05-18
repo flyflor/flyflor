@@ -5,9 +5,13 @@ import { describe, expect, test } from "bun:test";
 import {
     callMcpTool,
     findMcpServer,
+    getMcpPrompt,
+    listMcpPrompts,
+    listMcpResources,
     listMcpTools,
     loadMcpServers,
     removeMcpServer,
+    readMcpResource,
     setMcpServerEnabled,
     upsertMcpServer,
     validateMcpServers,
@@ -31,6 +35,9 @@ import {
     CapabilityExecutionKind,
     Channel,
     ChatType,
+    CttlPermission,
+    CttlToolCategory,
+    CttlToolScope,
     ModelRole,
     SandboxMode,
     ToolApprovalMode,
@@ -39,6 +46,13 @@ import {
     type ModelClient,
     type ModelMessage,
 } from "../src/protocol/contracts/index.ts";
+
+interface TestMcpToolCallProvenance {
+    error?: string;
+    ok: boolean;
+    server: string;
+    tool: string;
+}
 
 describe("Skill and MCP capability config", () => {
     test("sandbox resolves capability approval decisions for MCP tools, shell hooks, and plugins", () => {
@@ -324,6 +338,8 @@ describe("Skill and MCP capability config", () => {
         });
 
         const tools = await listMcpTools(paths, server, { timeoutMs: 2_000 });
+        const resources = await listMcpResources(paths, server, { timeoutMs: 2_000 });
+        const prompts = await listMcpPrompts(paths, server, { timeoutMs: 2_000 });
         expect(tools).toEqual([
             {
                 name: "echo",
@@ -336,10 +352,29 @@ describe("Skill and MCP capability config", () => {
                 },
             },
         ]);
+        expect(resources).toEqual([
+            {
+                uri: "file://notes.md",
+                name: "notes",
+                description: "Project notes",
+                mimeType: "text/markdown",
+            },
+        ]);
+        expect(prompts).toEqual([
+            {
+                name: "review",
+                description: "Review prompt",
+                arguments: [{ name: "path", required: true }],
+            },
+        ]);
 
         const result = await callMcpTool(paths, server, "echo", { text: "hello" }, { timeoutMs: 2_000 });
+        const resource = await readMcpResource(paths, server, "file://notes.md", { timeoutMs: 2_000 });
+        const prompt = await getMcpPrompt(paths, server, "review", { path: "README.md" }, { timeoutMs: 2_000 });
         expect(result.isError).toBe(false);
         expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+        expect(resource.contents).toEqual([{ uri: "file://notes.md", mimeType: "text/markdown", text: "# Notes" }]);
+        expect(prompt.messages).toEqual([{ role: "user", content: { type: "text", text: "Review README.md" } }]);
     });
 
     test("lists and calls tools through a streamable HTTP MCP server", async () => {
@@ -352,7 +387,13 @@ describe("Skill and MCP capability config", () => {
             });
 
             const tools = await listMcpTools(paths, server, { timeoutMs: 2_000 });
+            const resources = await listMcpResources(paths, server, { timeoutMs: 2_000 });
+            const prompts = await listMcpPrompts(paths, server, { timeoutMs: 2_000 });
             const result = await callMcpTool(paths, server, "echo", { text: "remote hello" }, { timeoutMs: 2_000 });
+            const resource = await readMcpResource(paths, server, "https://mcp.test/resource/notes", {
+                timeoutMs: 2_000,
+            });
+            const prompt = await getMcpPrompt(paths, server, "remote-review", { topic: "runtime" }, { timeoutMs: 2_000 });
 
             expect(server.transport).toBe("http");
             expect(tools).toEqual([
@@ -367,8 +408,27 @@ describe("Skill and MCP capability config", () => {
                     },
                 },
             ]);
+            expect(resources).toEqual([
+                {
+                    uri: "https://mcp.test/resource/notes",
+                    name: "remote-notes",
+                    description: "Remote notes",
+                    mimeType: "text/plain",
+                },
+            ]);
+            expect(prompts).toEqual([
+                {
+                    name: "remote-review",
+                    description: "Remote review prompt",
+                    arguments: [{ name: "topic" }],
+                },
+            ]);
             expect(result.isError).toBe(false);
             expect(result.content).toEqual([{ type: "text", text: "remote hello" }]);
+            expect(resource.contents).toEqual([
+                { uri: "https://mcp.test/resource/notes", mimeType: "text/plain", text: "remote notes" },
+            ]);
+            expect(prompt.messages).toEqual([{ role: "user", content: { type: "text", text: "Review runtime" } }]);
         });
     });
 
@@ -406,6 +466,271 @@ describe("Skill and MCP capability config", () => {
             expect(second.failedServers).toEqual(["remote"]);
             expect(second.staleServers).toEqual(["remote"]);
         });
+    });
+
+    test("runtime reads MCP resources through the controlled capability boundary", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-resource-read-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const script = join(root, "fake.mcp.server.js");
+        await writeFile(script, fakeMcpServerScript());
+        await upsertMcpServer(paths, {
+            args: [script],
+            command: process.execPath,
+            name: "fake",
+        });
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mcpToolApproval: ToolApprovalMode.Allow,
+                    mode: SandboxMode.Off,
+                },
+            },
+            new SequencedModel([]),
+            new CapturingSink(),
+        );
+
+        const resource = await runtime.readMcpResource({
+            requestId: "req-resource",
+            server: "fake",
+            uri: "file://notes.md",
+        });
+
+        expect(resource.contents).toEqual([{ uri: "file://notes.md", mimeType: "text/markdown", text: "# Notes" }]);
+    });
+
+    test("runtime gets MCP prompts through the controlled capability boundary", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-prompt-get-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const script = join(root, "fake.mcp.server.js");
+        await writeFile(script, fakeMcpServerScript());
+        await upsertMcpServer(paths, {
+            args: [script],
+            command: process.execPath,
+            name: "fake",
+        });
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mcpToolApproval: ToolApprovalMode.Allow,
+                    mode: SandboxMode.Off,
+                },
+            },
+            new SequencedModel([]),
+            new CapturingSink(),
+        );
+
+        const prompt = await runtime.getMcpPrompt({
+            arguments: { path: "README.md" },
+            requestId: "req-prompt",
+            server: "fake",
+            name: "review",
+        });
+
+        expect(prompt.messages).toEqual([{ role: "user", content: { type: "text", text: "Review README.md" } }]);
+    });
+
+    test("runtime exposes and executes user manifest process-json tools", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-user-tool-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await mkdir(join(root, "tools"), { recursive: true });
+        await mkdir(paths.projectFlyflorDir, { recursive: true });
+        const script = join(root, "tools", "echo.tool.js");
+        await writeFile(script, userToolScript());
+        await writeFile(
+            join(paths.projectFlyflorDir, "tools.jsonc"),
+            JSON.stringify({
+                tools: {
+                    "local.echo": {
+                        description: "Echo through user tool",
+                        inputSchema: {
+                            type: "object",
+                            properties: { text: { type: "string" } },
+                            required: ["text"],
+                        },
+                        permission: CttlPermission.Execute,
+                        scope: [CttlToolScope.Local],
+                        category: CttlToolCategory.System,
+                        readOnly: true,
+                        concurrencySafe: true,
+                        exclusive: false,
+                        executor: {
+                            kind: "process-json",
+                            command: process.execPath,
+                            args: [script],
+                            cwd: "project",
+                        },
+                    },
+                },
+            }),
+        );
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"local.echo","input":{"text":"hello user tool"}}]}</flyflor_mcp_calls>',
+            "Final from user tool.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    pluginApproval: ToolApprovalMode.Allow,
+                },
+            },
+            model,
+            sink,
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("use user tool"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Final from user tool.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "user", tool: "local.echo" }),
+        ]);
+        const toolResultText = model.messages
+            .flat()
+            .filter((message) => message.role === ModelRole.User)
+            .map((message) => message.content)
+            .join("\n");
+        expect(toolResultText).toContain("hello user tool");
+        const catalogEvent = sink.events.find((item) => item.type === RuntimeEventType.McpCapabilityCatalogBuilt);
+        expect(catalogEvent?.payload).toMatchObject({
+            tools: expect.arrayContaining(["user.local.echo"]),
+        });
+    });
+
+    test("runtime denies user manifest tools when plugin sandbox denies execution", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-user-tool-deny-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await mkdir(join(root, "tools"), { recursive: true });
+        await mkdir(paths.projectFlyflorDir, { recursive: true });
+        const script = join(root, "tools", "echo.tool.js");
+        await writeFile(script, userToolScript());
+        await writeFile(
+            join(paths.projectFlyflorDir, "tools.jsonc"),
+            JSON.stringify({
+                tools: {
+                    "local.echo": {
+                        description: "Echo through user tool",
+                        inputSchema: { type: "object" },
+                        permission: CttlPermission.Execute,
+                        scope: [CttlToolScope.Local],
+                        category: CttlToolCategory.System,
+                        executor: {
+                            kind: "process-json",
+                            command: process.execPath,
+                            args: [script],
+                        },
+                    },
+                },
+            }),
+        );
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"local.echo","input":{"text":"blocked"}}]}</flyflor_mcp_calls>',
+            "Denied final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    pluginApproval: ToolApprovalMode.Deny,
+                },
+            },
+            model,
+            new CapturingSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("use blocked user tool"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Denied final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "user", tool: "local.echo" }),
+        ]);
+        const executions = reply.metadata?.mcpToolExecutions as TestMcpToolCallProvenance[] | undefined;
+        expect(executions?.[0]?.error).toContain("plugin execution is denied");
+    });
+
+    test("runtime rejects user manifest tool calls that violate input schema", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-user-tool-schema-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await mkdir(join(root, "tools"), { recursive: true });
+        await mkdir(paths.projectFlyflorDir, { recursive: true });
+        const script = join(root, "tools", "echo.tool.js");
+        await writeFile(script, userToolScript());
+        await writeFile(
+            join(paths.projectFlyflorDir, "tools.jsonc"),
+            JSON.stringify({
+                tools: {
+                    "local.echo": {
+                        description: "Echo through user tool",
+                        inputSchema: {
+                            type: "object",
+                            properties: { text: { type: "string" } },
+                            required: ["text"],
+                        },
+                        permission: CttlPermission.Execute,
+                        scope: [CttlToolScope.Local],
+                        category: CttlToolCategory.System,
+                        executor: {
+                            kind: "process-json",
+                            command: process.execPath,
+                            args: [script],
+                        },
+                    },
+                },
+            }),
+        );
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"local.echo","input":{}}]}</flyflor_mcp_calls>',
+            "Schema final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    pluginApproval: ToolApprovalMode.Allow,
+                },
+            },
+            model,
+            new CapturingSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("use bad user tool"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Schema final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "user", tool: "local.echo" }),
+        ]);
+        const executions = reply.metadata?.mcpToolExecutions as TestMcpToolCallProvenance[] | undefined;
+        expect(executions?.[0]?.error).toContain("inputSchema");
     });
 
     test("runtime executes structured MCP tool calls and uses tool results in the final answer", async () => {
@@ -473,8 +798,15 @@ describe("Skill and MCP capability config", () => {
             dispose();
         }
         expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.SkillContextBuilt);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.McpCapabilityCatalogBuilt);
         expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.McpToolCatalogBuilt);
         expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.McpToolCallExecuted);
+        const capabilityEvent = sink.events.find((item) => item.type === RuntimeEventType.McpCapabilityCatalogBuilt);
+        expect(capabilityEvent?.payload).toMatchObject({
+            prompts: ["fake.review"],
+            resources: ["fake:file://notes.md"],
+            tools: expect.arrayContaining(["fake.echo", "workspace.list"]),
+        });
     });
 
     test("runtime skips MCP execution when approval is denied", async () => {
@@ -648,7 +980,8 @@ describe("Skill and MCP capability config", () => {
         ]);
         const systemPrompt = model.messages[0]?.find((message) => message.role === ModelRole.System)?.content ?? "";
         expect(systemPrompt).toContain('"name": "shell"');
-        expect(systemPrompt).toContain("local command discovery");
+        expect(systemPrompt).toContain("approved local process");
+        expect(systemPrompt).not.toContain("local command discovery");
     });
 
     test("runtime exposes and executes read-only git tools when shell hooks are allowed", async () => {
@@ -845,6 +1178,50 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages).toHaveLength(5);
         expect(model.messages[3]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "multi turn readme",
+        );
+    });
+
+    test("runtime feeds CTTL loop guard diagnostics back after repeated failed tool calls", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-loop-guard-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const repeatedFailure =
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"missing.txt"}}]}</flyflor_mcp_calls>';
+        const model = new SequencedModel([repeatedFailure, repeatedFailure, repeatedFailure, "Guard final.", "[]"]);
+        const events = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, events);
+
+        const reply = await runtime.handleMessage(gatewayMessage("read missing repeatedly"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Guard final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ ok: false, server: "workspace", tool: "read" }),
+            ]),
+        );
+        const toolResultText = model.messages
+            .flat()
+            .filter((message) => message.role === ModelRole.User)
+            .map((message) => message.content)
+            .join("\n");
+        expect(toolResultText).toContain("cttl-loop-guard");
+        expect(toolResultText).toContain("failed-call-repeat");
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.CttlLoopGuardBlocked,
+                    payload: expect.objectContaining({
+                        reason: "failed-call-repeat",
+                        server: "workspace",
+                        tool: "read",
+                    }),
+                }),
+            ]),
         );
     });
 
@@ -1290,12 +1667,43 @@ function handle(message) {
     send({ jsonrpc: "2.0", id: message.id, result: { tools: [{ name: "echo", description: "Echo input text", inputSchema: { type: "object", properties: { text: { type: "string" } } } }] } });
     return;
   }
+  if (message.method === "resources/list") {
+    send({ jsonrpc: "2.0", id: message.id, result: { resources: [{ uri: "file://notes.md", name: "notes", description: "Project notes", mimeType: "text/markdown" }] } });
+    return;
+  }
+  if (message.method === "prompts/list") {
+    send({ jsonrpc: "2.0", id: message.id, result: { prompts: [{ name: "review", description: "Review prompt", arguments: [{ name: "path", required: true }] }] } });
+    return;
+  }
+  if (message.method === "resources/read") {
+    send({ jsonrpc: "2.0", id: message.id, result: { contents: [{ uri: message.params?.uri, mimeType: "text/markdown", text: "# Notes" }] } });
+    return;
+  }
+  if (message.method === "prompts/get") {
+    const path = String(message.params?.arguments?.path ?? "");
+    send({ jsonrpc: "2.0", id: message.id, result: { description: "Review prompt", messages: [{ role: "user", content: { type: "text", text: "Review " + path } }] } });
+    return;
+  }
   if (message.method === "tools/call") {
     send({ jsonrpc: "2.0", id: message.id, result: { isError: false, content: [{ type: "text", text: String(message.params?.arguments?.text ?? "") }] } });
     return;
   }
   send({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "method not found" } });
 }
+`;
+}
+
+function userToolScript(): string {
+    return `
+let body = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  body += chunk;
+});
+process.stdin.on("end", () => {
+  const payload = JSON.parse(body);
+  process.stdout.write(JSON.stringify({ echoed: payload.input?.text ?? null, tool: payload.tool }) + "\\n");
+});
 `;
 }
 
@@ -1330,6 +1738,63 @@ async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promis
         }
         if (payload.method === "tools/list") {
             return jsonResponse({ jsonrpc: "2.0", id: payload.id, result: { tools: [httpEchoTool()] } });
+        }
+        if (payload.method === "resources/list") {
+            return jsonResponse({
+                jsonrpc: "2.0",
+                id: payload.id,
+                result: {
+                    resources: [
+                        {
+                            uri: "https://mcp.test/resource/notes",
+                            name: "remote-notes",
+                            description: "Remote notes",
+                            mimeType: "text/plain",
+                        },
+                    ],
+                },
+            });
+        }
+        if (payload.method === "prompts/list") {
+            return jsonResponse({
+                jsonrpc: "2.0",
+                id: payload.id,
+                result: {
+                    prompts: [
+                        {
+                            name: "remote-review",
+                            description: "Remote review prompt",
+                            arguments: [{ name: "topic" }],
+                        },
+                    ],
+                },
+            });
+        }
+        if (payload.method === "resources/read") {
+            return jsonResponse({
+                jsonrpc: "2.0",
+                id: payload.id,
+                result: {
+                    contents: [
+                        {
+                            uri: payload.params?.uri,
+                            mimeType: "text/plain",
+                            text: "remote notes",
+                        },
+                    ],
+                },
+            });
+        }
+        if (payload.method === "prompts/get") {
+            const args = payload.params?.arguments as { topic?: unknown } | undefined;
+            return jsonResponse({
+                jsonrpc: "2.0",
+                id: payload.id,
+                result: {
+                    description: "Remote review prompt",
+                    messages: [{ role: "user", content: { type: "text", text: `Review ${String(args?.topic ?? "")}` } }],
+                },
+            });
         }
         if (payload.method === "tools/call") {
             const args = payload.params?.arguments as { text?: unknown } | undefined;

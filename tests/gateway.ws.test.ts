@@ -9,6 +9,7 @@ import {
 import {
     Channel,
     ChatType,
+    CttlPermission,
     GatewayControlMessageType,
     type GatewayMessage,
     type GatewayReply,
@@ -90,6 +91,51 @@ describe("GatewayControlHub", () => {
         expect(sent(socket).map((envelope) => envelope.type)).toContain(GatewayControlMessageType.EventPublish);
         const published = sent(socket).find((envelope) => envelope.type === GatewayControlMessageType.EventPublish);
         expect(published?.payload?.event).toMatchObject({ type: RuntimeEventType.ChannelError });
+        hub.dispose();
+    });
+
+    test("keeps the latest CTTL capability catalog available through control snapshot", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.CapabilityCatalogGet)),
+        );
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.CapabilityCatalogSnapshot,
+            payload: { catalog: null },
+        });
+
+        bus.publish({
+            type: RuntimeEventType.CttlCapabilityCatalogBuilt,
+            at: "2026-05-18T12:00:00.000Z",
+            requestId: "req-cttl",
+            payload: {
+                builtAt: "2026-05-18T12:00:00.000Z",
+                capabilities: [{ name: "workspace.read", permission: CttlPermission.Read }],
+                failedSources: [],
+                hiddenCapabilities: [],
+                staleSources: [],
+                totals: { capabilities: 1, hidden: 0, prompts: 0, resources: 0, tools: 1, userTools: 0 },
+            },
+        });
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.CapabilityCatalogGet)),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.CapabilityCatalogSnapshot,
+            payload: {
+                catalog: {
+                    capabilities: [{ name: "workspace.read", permission: CttlPermission.Read }],
+                    totals: { capabilities: 1 },
+                },
+            },
+        });
         hub.dispose();
     });
 

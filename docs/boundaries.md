@@ -7,7 +7,7 @@
 ## 1. 项目定位
 
 - 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --allow-unresolved=""`。
-- 整体架构命名为 FCH-CTTL：FCH（Mindstream / Crystal / Hippocampus，心晶海马）是认知内核，CTTL（Capability / Tool / Trust / Loop）是能力外骨架。
+- 整体架构命名为 Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）：Cognitive（Mindstream / Crystal / Hippocampus）是认知内核，Executive（Capability / Tool / Trust / Loop）是能力外骨架，Agent 是 runtime / gateway / sandbox / skills / context 等外在交互形态。
 - 输入渠道统一归一化为 `GatewayMessage`。
 - 智能体执行可观察、可中断、可恢复、可审计。
 - 工具 / MCP / 插件 / 技能 / 记忆都有显式边界。
@@ -20,13 +20,13 @@
 app.ts            程序入口，只做版本/命令分派
 src/app.ts        FlyFlor composition root
 src/command/      CLI / TUI / 命令注册 / 终端渲染
-src/agent/        runtime / gateway / blackboard / sandbox / worker / mcp / project / plugin
+src/agent/        runtime / gateway / blackboard / sandbox / context / skills / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
-src/fch/         FCH 认知内核
-src/fch/mindstream/   Mindstream 心流层
-src/fch/crystal/ reflection / Gem / drift
-src/fch/hippocampus/ 海马体记忆
-src/context/      显式 project / fork / capability scope 装配
+src/cognitive/    认知内核目标目录
+src/cognitive/mindstream/   Mindstream 心流层
+src/cognitive/crystal/ reflection / Gem / drift
+src/cognitive/hippocampus/ 海马体记忆
+src/executive/    capability registry / planner / guard 目标目录
 src/entities/     领域实体、row / record 映射、repo SQL
 src/events/       RECL / Event Fabric / 订阅广播中枢
 src/protocol/     枚举 / contract / control envelope / 进程信封
@@ -36,8 +36,9 @@ templates/        提示词与记忆 Markdown 模板
 
 目录归属硬规则：
 
-- 新增顶层或一级源码目录前，必须说明它属于 FCH、CTTL、RECL、protocol、config、command、runtime data 或 user workspace 的哪一层。
-- 新增 capability 目录必须说明来源是 core、MCP、plugin、skill、channel、user tool 还是 subagent，并经 CTTL descriptor registry 进入 Tool Plan。
+- 新增顶层或一级源码目录前，必须说明它属于 cognitive、executive、agent、events、protocol、config、command、runtime data 或 user workspace 的哪一层。
+- 迁移期旧物理路径 `src/fch`、`src/cttl`、`src/skills`、`src/context` 只能作为兼容窗口；新公开文档和新代码优先使用 `src/cognitive`、`src/executive`、`src/agent/skills`、`src/agent/context` 的目标语义。
+- 新增 capability 目录必须说明来源是 core、MCP、plugin、skill、channel、user tool 还是 subagent，并经 executive descriptor registry 进入 Tool Plan。
 - 用户数据、密钥、日志、数据库、缓存和工作区文件只能放运行态目录，不能进入源码约定和二进制产物。
 - 配置文件只表达覆盖项；不能靠配置字段给无 owner 目录补语义。
 
@@ -47,7 +48,7 @@ templates/        提示词与记忆 Markdown 模板
 - `index.ts` 是唯一目录导出面；禁止新增 `*.exports.ts`，已有 public API 必须直接在目录 `index.ts` 汇总。
 - 实现文件按角色加点分后缀：`*.module.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。目录内唯一 Component owner 必须直接命名为 `component.ts`；只有同目录存在多个组件边界时才使用 `*.component.ts` 加限定前缀。
 - 目录已表达职责时不重复写长前缀：`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
-- 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如 `src/fch/hippocampus/memory/dream/worker.ts`、`consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
+- 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`，以及 `consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
@@ -61,25 +62,27 @@ flowchart LR
     Entry[app.ts] --> Root[src/app.ts]
     Root --> Command
     Root --> Agent[src/agent/*]
-    Agent --> Llm[src/fch/mindstream]
-    Agent --> Crystal[src/fch/crystal]
-    Agent --> Neural[src/fch/hippocampus]
+    Agent --> Mindstream[src/cognitive/mindstream]
+    Agent --> Crystal[src/cognitive/crystal]
+    Agent --> Hippocampus[src/cognitive/hippocampus]
+    Agent --> Executive[src/executive]
     Agent --> Protocol[src/protocol]
     Agent --> DI[src/agent/di]
     Agent --> Config[src/config]
     Agent --> Events[src/events]
-    Llm --> Protocol
+    Mindstream --> Protocol
     Crystal --> Protocol
-    Neural --> Protocol
+    Hippocampus --> Protocol
+    Executive --> Protocol
     Events --> Protocol
     DI --> Protocol
 ```
 
 硬规则：
 
-- `src/fch/mindstream` / `src/fch/crystal` / `src/fch/hippocampus` / 能力实现禁止 import `command` 或入口层。
+- `src/cognitive/mindstream` / `src/cognitive/crystal` / `src/cognitive/hippocampus` / `src/executive` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/fch/hippocampus/project` 与 `src/fch/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
+- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、目标 `src/cognitive/hippocampus/project` 与 `src/cognitive/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
 - `gateway`、`runtime`、`blackboard`、`worker`、`sandbox`、`memory` 都是 Event Fabric 的参与者；`src/events` 拥有事件发布、订阅、分类和 fan-out，gateway 不拥有事件总线。
@@ -108,7 +111,7 @@ flowchart LR
 
 - 业务能力默认用 class / Component / Module / Repo 表达；局部 helper 应优先变成 `private` / `protected` class 方法，不能散落在文件底部形成“函数垃圾区”。
 - 跨 class 的组合入口统一使用 `useXxx()` composition。`useXxx()` 可以返回 class 实例或装配对象，但它只做装配，不承载复杂业务流程。
-- 目录约定优先于文件长名：`src/config/component.ts` 已经表达 config 域，不再写 `config.component.ts`；`src/fch/mindstream/component.ts` 已经表达 model provider 域，不再写 `model.component.ts`。长名只用于同目录多 owner 或协议需要显式区分时。
+- 目录约定优先于文件长名：`src/config/component.ts` 已经表达 config 域，不再写 `config.component.ts`；目标 `src/cognitive/mindstream/component.ts` 已经表达 model provider 域，不再写 `model.component.ts`。长名只用于同目录多 owner 或协议需要显式区分时。
 - 允许的函数形态只有：`useXxx()` composition 入口、CLI / script / app 的薄入口、框架强制导出的 handler、测试 fixture、小型纯协议 adapter（例如 tagged template `query`）以及 TypeScript 类型守卫。除此之外新增顶层 `function` 前必须先考虑 class 方法或 `*.composition.ts`。
 - 已存在的大型函数式模块要按触碰即迁移原则处理：改到该文件时必须把同一职责的 helper 收进 class / Component，或者抽到同目录 `*.composition.ts` 并用 `useXxx()` 命名；禁止继续追加新的无归属 helper。
 - Crystal / Gem 这类晶体智力流程必须有明确 Component owner；保留的顶层函数只能作为兼容旧 public API 的薄壳，新增调用优先依赖 `CrystalReflectionComponent` / `CrystalGemComponent` 等组件实例。
@@ -122,21 +125,21 @@ flowchart LR
 - Runtime 对模型输出的 AgentAsk / GhostDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`GhostDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
 - Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
 - Memory hippocampus 召回必须由 `SpreadingActivationEngine` 拥有，生产路径只消费向量、概念、importance 和 recency 资源指标；`spreadActivation()` 只作为兼容薄入口。Memory matrix 聚合与权重回写必须由 `MemoryMatrixAggregator` 拥有，`applyMatrixImpact()` / `recallBoostFromMetadata()` 只作为兼容薄入口。
-- `src/fch/hippocampus/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
-- `src/fch/hippocampus/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
+- `src/cognitive/hippocampus/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
+- `src/cognitive/hippocampus/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
 - 约定优先于抽象：迁移不是为了消灭重复代码，而是为了让生命周期、状态、IO 副作用和协议边界有明确 owner。重复的 5-10 行值转换可以保留在对应 class 内，不为了“复用”抽成跨域工具函数。
-- 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如 `src/fch/hippocampus/memory/brain/store.ts`、`src/fch/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
+- 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如目标 `src/cognitive/hippocampus/memory/brain/store.ts`、`src/cognitive/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
 - `src/components` 只承载共享 Component 基类与真正跨模块基础设施（例如 SQL tagged template）；不得按领域开 `components/<domain>` 目录。
 
-## 4.2 FCH-CTTL 架构边界
+## 4.2 Cognitive-Executive-Agent 架构边界
 
-FCH 是 `Mindstream / Crystal / Hippocampus`，中文叫心晶海马认知内核：
+Cognitive 是 `Mindstream / Crystal / Hippocampus`，中文叫心晶海马认知内核：
 
-- `Mindstream` 由 `src/fch/mindstream` 和 runtime turn 编排承载，只负责当前任务理解、推理、生成、临场判断、模型协议转换、流式输出和工具编排意图。
-- `Crystal Intelligence` 由 `src/fch/crystal` 承载，只负责反思候选、Gem 升格、方法论沉淀和稳定知识复用。
-- `Hippocampus` 由 `src/fch/hippocampus` 承载，只负责工作记忆、激活、TTL 遗忘、巩固、淡化和再激活。
+- `Mindstream` 由目标 `src/cognitive/mindstream` 和 runtime turn 编排承载，只负责当前任务理解、推理、生成、临场判断、模型协议转换、流式输出和工具编排意图。
+- `Crystal Intelligence` 由目标 `src/cognitive/crystal` 承载，只负责反思候选、Gem 升格、方法论沉淀和稳定知识复用。
+- `Hippocampus` 由目标 `src/cognitive/hippocampus` 承载，只负责工作记忆、激活、TTL 遗忘、巩固、淡化和再激活。
 
-CTTL 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任回路层：
+Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任回路层：
 
 - `Capability` 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent。
 - `Tool` 把 capability 适配成模型可调用 schema，声明 scope、permission、readOnly、concurrencySafe、exclusive 和 result limit。
@@ -145,16 +148,16 @@ CTTL 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任回路�
 
 硬规则：
 
-- FCH 不直接执行文件写入、shell、网络、消息发送、鼠标键盘、浏览器控制或外部服务调用；所有外部行动必须通过 CTTL。
-- CTTL 不做业务语义判断；它只能消费结构化协议字段、tool descriptor、config、secrets、sandbox policy、channel capability 和数值资源指标。
-- CTTL 不能退化为固定工具清单。新增能力必须说明 capability 来源、Tool descriptor、Trust 策略和 Loop 行为。
+- Cognitive 不直接执行文件写入、shell、网络、消息发送、鼠标键盘、浏览器控制或外部服务调用；所有外部行动必须通过 Executive。
+- Executive 不做业务语义判断；它只能消费结构化协议字段、tool descriptor、config、secrets、sandbox policy、channel capability 和数值资源指标。
+- Executive 不能退化为固定工具清单。新增能力必须说明 capability 来源、Tool descriptor、Trust 策略和 Loop 行为。
 - MCP `tools/resources/prompts` 都是一等 capability；禁止只包装 tools 而忽略 resources/prompts 的发现和权限规划。
 - 远程 channel 默认最小权限，不能默认获得 `execute`、`computer`、`dangerous`；本地 CLI 的调试放权也必须走本次 invocation 覆盖和审计。
 - 用户自定义工具必须声明 schema、permission、scope、cwd/env 边界、输出限制和审批策略；缺任何一项都不能进入可见 Tool Plan。
 - Tool Plan 必须保留 hidden diagnostics，说明工具不可见是缺配置、缺凭据、平台不可用、权限不足、channel cap、sandbox deny 还是 loop guard 限制。
 - Loop guard 必须能处理 unknown tool 重复调用、工具名漂移、同一失败调用反复执行、无进展循环、过量工具调用和非法 MCP/tool result。
-- CTTL 实现仍遵守 OOP + use composition：业务能力用 class / Component / Module 表达，组合入口使用 `useXxx()`；不得新增专用 decorator、反射扫描、动态 import 或无归属 helper function。
-- CTTL 实现仍遵守 Bun 二进制硬约束：不得依赖运行时读取 `node_modules`、native addon、postinstall 或用户机器额外 Node.js。
+- Executive 实现仍遵守 OOP + use composition：业务能力用 class / Component / Module 表达，组合入口使用 `useXxx()`；不得新增专用 decorator、反射扫描、动态 import 或无归属 helper function。
+- Executive 实现仍遵守 Bun 二进制硬约束：不得依赖运行时读取 `node_modules`、native addon、postinstall 或用户机器额外 Node.js。
 
 ## 4.3 数据模型与 SQL Repo
 

@@ -27,11 +27,22 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
+import {
+    CttlCapabilitySource,
+    CttlPermission,
+    CttlToolCategory,
+    CttlToolScope,
+    type CttlPermission as CttlPermissionType,
+    type CttlToolCategory as CttlToolCategoryType,
+    type CttlToolScope as CttlToolScopeType,
+} from "../../protocol/contracts/index.ts";
+import type { CttlJsonObject, CttlToolDescriptor } from "../../cttl/index.ts";
 import { parseJsonc } from "../mcp/index.ts";
 
 export type PluginSource = "project" | "global";
 
 export interface PluginDefinition {
+    capabilities: PluginCapabilityDefinition[];
     name: string;
     description?: string;
     enabled: boolean;
@@ -39,11 +50,33 @@ export interface PluginDefinition {
     source: PluginSource;
 }
 
+export interface PluginCapabilityDefinition {
+    descriptor: CttlToolDescriptor;
+    enabled: boolean;
+}
+
 export interface PluginShape {
+    capabilities?: Record<string, PluginCapabilityShape>;
     description?: string;
     disabled?: boolean;
     enabled?: boolean;
     entry?: string;
+}
+
+export interface PluginCapabilityShape {
+    category?: CttlToolCategoryType;
+    concurrencySafe?: boolean;
+    description?: string;
+    enabled?: boolean;
+    exclusive?: boolean;
+    inputSchema?: unknown;
+    outputSchema?: unknown;
+    permission?: CttlPermissionType;
+    readOnly?: boolean;
+    resultLimit?: { maxChars?: number };
+    scope?: CttlToolScopeType[];
+    sourceId?: string;
+    tags?: string[];
 }
 
 export interface PluginConfigFile {
@@ -180,12 +213,58 @@ export function pluginConfigPath(paths: FlyflorPaths, options: { global?: boolea
 
 function normalizePluginDefinition(name: string, plugin: PluginShape, source: PluginSource): PluginDefinition {
     return {
+        capabilities: normalizePluginCapabilities(name, plugin.capabilities),
         name,
         description: plugin.description,
         enabled: plugin.enabled ?? plugin.disabled !== true,
         entry: plugin.entry ?? "",
         source,
     };
+}
+
+function normalizePluginCapabilities(
+    pluginName: string,
+    capabilities: Record<string, PluginCapabilityShape> | undefined,
+): PluginCapabilityDefinition[] {
+    return Object.entries(capabilities ?? {}).map(([name, shape]) => ({
+        enabled: shape.enabled ?? true,
+        descriptor: {
+            category: shape.category ?? CttlToolCategory.Integration,
+            concurrencySafe: shape.concurrencySafe ?? true,
+            description: shape.description ?? `${pluginName}.${name}`,
+            exclusive: shape.exclusive ?? false,
+            inputSchema: jsonObjectOrDefault(shape.inputSchema, { type: "object" }),
+            name: `plugin.${pluginName}.${name}`,
+            outputSchema: jsonObjectOrUndefined(shape.outputSchema),
+            permission: shape.permission ?? CttlPermission.Read,
+            readOnly: shape.readOnly ?? true,
+            resultLimit: { maxChars: positiveInt(shape.resultLimit?.maxChars, 4_000) },
+            scope: nonEmptyScopes(shape.scope),
+            source: CttlCapabilitySource.Plugin,
+            sourceId: shape.sourceId ?? pluginName,
+            tags: Array.isArray(shape.tags)
+                ? shape.tags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
+                : undefined,
+        },
+    }));
+}
+
+function jsonObjectOrDefault(value: unknown, fallback: CttlJsonObject): CttlJsonObject {
+    return jsonObjectOrUndefined(value) ?? fallback;
+}
+
+function jsonObjectOrUndefined(value: unknown): CttlJsonObject | undefined {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+        ? (value as CttlJsonObject)
+        : undefined;
+}
+
+function nonEmptyScopes(value: CttlToolScopeType[] | undefined): readonly CttlToolScopeType[] {
+    return Array.isArray(value) && value.length > 0 ? value : [CttlToolScope.Core];
+}
+
+function positiveInt(value: unknown, fallback: number): number {
+    return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function sortPluginMap(plugins: Record<string, PluginShape>): Record<string, PluginShape> {

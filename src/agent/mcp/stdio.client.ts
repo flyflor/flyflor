@@ -8,6 +8,30 @@ export interface McpToolDefinition {
     inputSchema?: unknown;
 }
 
+export interface McpResourceDefinition {
+    uri: string;
+    name?: string;
+    description?: string;
+    mimeType?: string;
+}
+
+export interface McpPromptDefinition {
+    name: string;
+    description?: string;
+    arguments?: unknown;
+}
+
+export interface McpResourceReadResult {
+    contents?: unknown[];
+    raw: unknown;
+}
+
+export interface McpPromptGetResult {
+    description?: string;
+    messages?: unknown[];
+    raw: unknown;
+}
+
 export interface McpCallResult {
     content?: unknown[];
     isError?: boolean;
@@ -51,6 +75,65 @@ export async function listStdioMcpTools(
     return withStdioSession(paths, server, options, async (session) => {
         const result = await session.request("tools/list", {});
         return normalizeTools(result);
+    });
+}
+
+export async function listStdioMcpResources(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    options: McpClientOptions = {},
+): Promise<McpResourceDefinition[]> {
+    return withStdioSession(paths, server, options, async (session) => {
+        const result = await session.request("resources/list", {});
+        return normalizeResources(result, "MCP stdio resources/list");
+    });
+}
+
+export async function listStdioMcpPrompts(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    options: McpClientOptions = {},
+): Promise<McpPromptDefinition[]> {
+    return withStdioSession(paths, server, options, async (session) => {
+        const result = await session.request("prompts/list", {});
+        return normalizePrompts(result, "MCP stdio prompts/list");
+    });
+}
+
+export async function readStdioMcpResource(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    uri: string,
+    options: McpClientOptions = {},
+): Promise<McpResourceReadResult> {
+    return withStdioSession(paths, server, options, async (session) => {
+        const raw = await session.request("resources/read", { uri });
+        const result = isRecord(raw) ? raw : {};
+        return {
+            contents: Array.isArray(result.contents) ? result.contents : undefined,
+            raw,
+        };
+    });
+}
+
+export async function getStdioMcpPrompt(
+    paths: FlyflorPaths,
+    server: McpServerDefinition,
+    name: string,
+    args: Record<string, unknown> = {},
+    options: McpClientOptions = {},
+): Promise<McpPromptGetResult> {
+    return withStdioSession(paths, server, options, async (session) => {
+        const raw = await session.request("prompts/get", {
+            name,
+            arguments: args,
+        });
+        const result = isRecord(raw) ? raw : {};
+        return {
+            description: typeof result.description === "string" ? result.description : undefined,
+            messages: Array.isArray(result.messages) ? result.messages : undefined,
+            raw,
+        };
     });
 }
 
@@ -339,7 +422,38 @@ function normalizeTools(result: unknown): McpToolDefinition[] {
     }));
 }
 
+export function normalizeResources(result: unknown, label = "MCP resources/list"): McpResourceDefinition[] {
+    if (!isRecord(result) || !Array.isArray(result.resources)) {
+        throw new Error(`${label} returned invalid resources payload.`);
+    }
+    return result.resources.filter(isResourceDefinition).map((resource) => ({
+        description: typeof resource.description === "string" ? resource.description : undefined,
+        mimeType: typeof resource.mimeType === "string" ? resource.mimeType : undefined,
+        name: typeof resource.name === "string" ? resource.name : undefined,
+        uri: resource.uri,
+    }));
+}
+
+export function normalizePrompts(result: unknown, label = "MCP prompts/list"): McpPromptDefinition[] {
+    if (!isRecord(result) || !Array.isArray(result.prompts)) {
+        throw new Error(`${label} returned invalid prompts payload.`);
+    }
+    return result.prompts.filter(isPromptDefinition).map((prompt) => ({
+        arguments: prompt.arguments,
+        description: typeof prompt.description === "string" ? prompt.description : undefined,
+        name: prompt.name,
+    }));
+}
+
 function isToolDefinition(value: unknown): value is McpToolDefinition {
+    return isRecord(value) && typeof value.name === "string";
+}
+
+function isResourceDefinition(value: unknown): value is McpResourceDefinition {
+    return isRecord(value) && typeof value.uri === "string";
+}
+
+function isPromptDefinition(value: unknown): value is McpPromptDefinition {
     return isRecord(value) && typeof value.name === "string";
 }
 

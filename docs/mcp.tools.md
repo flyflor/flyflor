@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-Flyflor 把 MCP 当成模型可调用工具的标准接入层：支持 stdio / Streamable HTTP / 旧式 SSE 双端点，目录预拉取走 catalog 缓存，运行时调用走 `<flyflor_mcp_calls>` 协议并经 Sandbox 决策。
+Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等 capability。当前 runtime 已执行 tools；resources / prompts 先进入 Executive descriptor 与发现测试，后续再接读取、注入和交互协议。所有执行仍经 Executive Tool Plan、Sandbox 决策和审计事件。
 
 ## 相关代码路径
 
@@ -68,6 +68,18 @@ sequenceDiagram
     end
 ```
 
+## MCP Capability 形态
+
+| MCP surface | Executive source | 默认权限 | 当前状态 |
+| --- | --- | --- | --- |
+| `tools/list` / `tools/call` | `mcp` | 由 tool descriptor 决定，远端默认 `network` | 已进入 runtime 工具循环 |
+| `resources/list` | `mcp` | `read` | 已接发现与 descriptor，不直接注入正文 |
+| `resources/read` | `mcp` | `read` | 已有受控 client API；必须显式读取、带 provenance 与输出限制 |
+| `prompts/list` | `mcp` | `read` | 已接发现与 descriptor，不直接调用或改写系统提示词 |
+| `prompts/get` | `mcp` | `read` | 已有受控 client API；只返回结构化 prompt result，不自动改写系统提示词 |
+
+resources / prompts 只消费 MCP 标准结构化字段，不从描述文本推断语义。后续读取 resource 或获取 prompt 时必须带 result limit、provenance、requestId 和 sandbox / trust 审计。
+
 ## 调用协议（模型侧）
 
 模型在同一轮回复内插入：
@@ -89,6 +101,8 @@ Runtime 默认会把只读 `workspace` server 注入工具目录，让模型能�
 - `workspace.stat`：读取文件或目录元信息，不读取文件内容。
 
 `workspace` 工具不写文件、不 spawn 子进程。项目内相对路径默认可读；绝对路径或 realpath 后逃出 `paths.projectDir` 的上级路径会先走同一套工具审批回调，用户批准后才允许只读访问。执行类能力仍需要 sandbox：例如 `shell.run` 只有在 `shellHookApproval=allow/ask` 时才会出现在工具目录里；本地交互式 chat 默认临时使用 `ask`，`--accept-hooks` 临时使用 `allow`。
+
+项目或全局 `tools.jsonc` 中声明的 user tools 会以虚拟 `user` server 暴露，例如 `user.local.echo`。它们仍复用 `<flyflor_mcp_calls>` 调用协议，但执行不走远端 MCP server，而是走本地 `process-json` bridge 和 Plugin sandbox gate。这样模型侧只有一个工具调用协议，执行侧仍能保留 Executive descriptor、approval、audit、result summary 和 loop guard。
 
 当 shell hook 可执行时，Runtime 也会注入只读 `git` server：
 
@@ -143,6 +157,8 @@ interface McpCallResult {
 
 | 事件 | 触发点 |
 | --- | --- |
+| `cttl.capability.catalog.built` | 本轮通用 capability plan 生成，包含 MCP、内置工具、user manifest tools 与 plugin manifest capabilities 的 descriptor 摘要 |
+| `mcp.capability.catalog.built` | 本轮 tools/resources/prompts capability plan 生成 |
 | `mcp.server.connected` / `disconnected` | client 生命周期 |
 | `mcp.catalog.refreshed` / `failed` | catalog 拉取 |
 | `mcp.tool.called` | 调用发起 |

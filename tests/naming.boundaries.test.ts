@@ -140,17 +140,17 @@ describe("repository naming boundary", () => {
         expect(violations).toEqual([]);
     });
 
-    test("FCH code stays collected under src/fch", async () => {
+    test("legacy cognitive code stays collected under the migration directory", async () => {
         const dirs = await listDirs(join(REPO_ROOT, "src"));
         const topLevelNames = new Set(dirs.map((dir) => basename(dir)));
         const violations = LEGACY_FCH_TOP_LEVEL_DIRS.filter((dir) => topLevelNames.has(dir));
 
-        // FCH is one cognitive-core boundary. Mindstream, crystal and hippocampus
-        // live under src/fch so architecture stays visible in the tree.
+        // During P2 migration, mindstream, crystal and hippocampus still live
+        // under the legacy cognitive directory instead of returning as top-level domains.
         expect(violations).toEqual([]);
     });
 
-    test("FCH mindstream does not regress to old transient names", async () => {
+    test("mindstream does not regress to old transient names", async () => {
         const dirs = await listDirs(join(REPO_ROOT, "src", "fch"));
         const childNames = new Set(dirs.map((dir) => basename(dir)));
         const violations = LEGACY_FCH_CHILD_DIRS.filter((dir) => childNames.has(dir));
