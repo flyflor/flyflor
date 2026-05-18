@@ -1,4 +1,4 @@
-import type { CrystalCandidateInput } from "../../../fch/crystal/reflection/index.ts";
+import type { CrystalCandidateInput } from "../../../cognitive/crystal/reflection/index.ts";
 import { BlackboardMode, ModelRole, type ModelClient, type ModelMessage } from "../../../protocol/contracts/index.ts";
 import { renderCrystalReflectionPrompt } from "../../prompts/index.ts";
 import {

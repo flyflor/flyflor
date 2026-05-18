@@ -17,7 +17,7 @@ import {
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { type EventSink } from "../src/events/index.ts";
-import type { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
+import type { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 
 const tempRoots: string[] = [];
 

@@ -36,7 +36,7 @@ import {
     type CttlToolCategory as CttlToolCategoryType,
     type CttlToolScope as CttlToolScopeType,
 } from "../../protocol/contracts/index.ts";
-import type { CttlJsonObject, CttlToolDescriptor } from "../../cttl/index.ts";
+import type { CttlJsonObject, CttlToolDescriptor } from "../../executive/index.ts";
 import { parseJsonc } from "../mcp/index.ts";
 
 export type PluginSource = "project" | "global";

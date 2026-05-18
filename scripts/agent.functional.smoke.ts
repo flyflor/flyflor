@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
-import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
+import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
     Channel,

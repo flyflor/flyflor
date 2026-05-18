@@ -5,7 +5,7 @@ import {
     FeedbackCategory,
     parseClassification,
     type FeedbackClassification,
-} from "../src/fch/hippocampus/memory/feedback/index.ts";
+} from "../src/cognitive/hippocampus/memory/feedback/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 

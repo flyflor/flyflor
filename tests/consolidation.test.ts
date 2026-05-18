@@ -1,16 +1,16 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { LruCache } from "../src/fch/hippocampus/memory/cache/index.ts";
+import { LruCache } from "../src/cognitive/hippocampus/memory/cache/index.ts";
 import {
     ConsolidationDecisionKind,
     ConsolidationWorker,
     parseConsolidationDecision,
     type ConsolidationDecision,
-} from "../src/fch/hippocampus/memory/consolidation/index.ts";
-import type { RetrospectiveLog } from "../src/fch/hippocampus/memory/consolidation/index.ts";
-import type { EpisodeRecord, WorkingMemoryStore } from "../src/fch/hippocampus/memory/working/index.ts";
-import type { MemoryGraphStore } from "../src/fch/hippocampus/memory/graph/index.ts";
+} from "../src/cognitive/hippocampus/memory/consolidation/index.ts";
+import type { RetrospectiveLog } from "../src/cognitive/hippocampus/memory/consolidation/index.ts";
+import type { EpisodeRecord, WorkingMemoryStore } from "../src/cognitive/hippocampus/memory/working/index.ts";
+import type { MemoryGraphStore } from "../src/cognitive/hippocampus/memory/graph/index.ts";
 import { ModelRole, type ModelClient, type ModelMessage } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 

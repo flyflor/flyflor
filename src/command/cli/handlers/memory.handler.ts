@@ -1,5 +1,5 @@
 import { MemoryModule, type FlyFlor } from "../../../app.ts";
-import { RetrospectiveLog } from "../../../fch/hippocampus/memory/index.ts";
+import { RetrospectiveLog } from "../../../cognitive/hippocampus/memory/index.ts";
 import { ConfigComponent } from "../../../config/index.ts";
 import { describeWorkingMemoryHealth, describeWorkingMemoryRecoveryFiles } from "../status.ts";
 

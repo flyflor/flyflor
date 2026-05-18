@@ -6,7 +6,7 @@ import {
     SKILL_MANIFEST_SCHEMA_VERSION,
     checkSkillSchemaCompatibility,
     validateSkill,
-} from "../src/skills/index.ts";
+} from "../src/agent/skills/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 
 function paths(root: string): FlyflorPaths {

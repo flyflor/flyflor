@@ -14,8 +14,8 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
-import { createModelClient } from "../src/fch/mindstream/index.ts";
-import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
+import { createModelClient } from "../src/cognitive/mindstream/index.ts";
+import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import {
     loadConfig,
     loadConfigForPaths,

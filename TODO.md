@@ -2,23 +2,48 @@
 
 ## 当前交接
 
-状态：文档与架构收口中。上一轮外骨架能力已经完成 MCP tools/resources/prompts 一等包装、用户 `tools.jsonc` manifest、plugin capability descriptor、Executive catalog event/control 快照和 runtime loop guard 接线；已验证 `bun run check`、`bun run docs:check`、`bun run build:binary`、完整 `bun test --timeout 30000` 通过。
+状态：R3 Cognitive Core Migration 收口中。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive`；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive`，旧 `src/fch/*` 只保留兼容 re-export。
 
-本轮目标：先把文档、目录目标和红线对齐，再开始物理目录迁移。后续 session 必须从本文件继续，不再以 `docs/old-docs/*` 里的历史 TODO 作为当前路线。
+本轮目标：完成 R3 验证与文档收口，让 Mindstream / Crystal / Hippocampus 成为公开内核边界。后续每完成一个阶段，都必须同步清理主文档、更新本 TODO，并把被替代的旧文档归档到 `docs/old-docs/`。
+
+当前活跃路线：
+
+- 阶段说明：`docs/refactor.roadmap.md`
+- 工程红线：`docs/boundaries.md`
+- 目录目标：`docs/directory.architecture.md`
+- 外骨架规则：`docs/cttl.exoskeleton.md`
 
 ## 架构命名
 
 公开架构名：**Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**。
 
-- `cognitive`：认知层，原 FCH。包含 `mindstream`、`crystal`、`hippocampus`，只负责思考、反思、记忆和人格连续性。
-- `executive`：执行层，原 CTTL。包含 `registry`、`planner`、`guard`，负责能力发现、工具包装、信任边界和 loop 防护。
-- `agent`：运行态外显层。包含 `runtime`、`gateway`、`sandbox`、`skills`、`context` 等面向外部世界的编排与适配。
+- `cognitive`：认知层，原 FCH。包含 `mindstream`、`crystal`、`hippocampus`，只负责思考、反思、记忆、人格连续性和生命体内在状态。
+- `executive`：执行层，原 CTTL。当前实现路径为 `src/executive`，旧 `src/cttl` 只保留兼容 re-export。包含 `registry`、`planner`、`guard`、`loop`，负责能力发现、工具包装、信任边界、执行规划、失败恢复和 loop 防护。
+- `agent`：运行态外显层。当前包含 `runtime`、`gateway`、`sandbox`、`skills`、`context` 等面向外部世界的编排与适配；重构后 CLI/TUI/Gateway 具体实现逐步外部化。
 
-迁移期说明：当前源码仍有 `src/fch`、`src/cttl`、`src/skills`、`src/context` 物理路径。文档中的目标目录不代表已经完成搬迁；实际移动必须按下面阶段逐步完成并验证。
+迁移期说明：当前 `src/cttl`、`src/fch/*`、`src/skills` 与 `src/context` 已退化为兼容出口。文档中的目标目录不代表所有目录已经完成搬迁；实际移动必须按阶段逐步完成并验证。
+
+## 重构方向
+
+目标不是继续堆 channel 或 CLI 功能，而是把 Flyflor 从单仓 agent app 重塑为：
+
+```text
+Flyflor Core = runtime + cognitive continuity + event/control protocol
+Executive Exoskeleton = capability + tool + trust + loop
+External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / subagents
+```
+
+核心原则：
+
+- 内核只保留生命连续性：brain.db、crystal.db、Memory、Identity、Ghost、Ask、ContextFork、BehaviorSnapshot、RuntimeEvent。
+- 外骨骼提供执行力：Herme-agent / OpenClaw 类能力必须通过 descriptor、Tool Plan、sandbox、approval、audit、loop guard、resume protocol 接入。
+- CLI/TUI/Gateway 具体实现逐步外部化：核心只稳定 event 和 control/ws JSON envelope。
+- 旧文档一旦被新契约替代，必须移动到 `docs/old-docs/` 并更新归档索引。
 
 ## 红线
 
 - coding 前先更新本 TODO 和相关文档；跨 session 交接必须写清“已完成、当前状态、下一步、验证命令”。
+- 每个阶段完成前必须清理主文档、更新本 TODO、归档旧文档到 `docs/old-docs/`。
 - Bun 单文件二进制是硬需求：新增依赖前必须确认兼容 `bun build --compile`，禁止 native addon、postinstall、运行时读取 `node_modules` 资产和动态 require/import。
 - 业务配置不走环境变量；provider、模型、渠道凭据、sandbox、gateway 行为和工具策略都走 JSONC config / secrets provider。
 - 所有提示词工程放在 `templates/`；修改 `.md` 时必须同步 `.zh.cn.md` 副本。
@@ -30,81 +55,192 @@
 - 零字符匹配红线继续有效：意图、路由、记忆动作、反馈分类、复杂度、矛盾检测等语义判断只能来自结构化字段或专用 JSON prompt 输出。
 - Event payload、Tool Plan、tool result 和 control envelope 必须 JSON 可序列化，不携带密钥、函数、stream、socket 或 class instance。
 
-## 迁移路线
+## 阶段路线
 
-### P0 文档与交接收口
+### R0 计划与文档基线
 
-状态：进行中。
+状态：完成。
+
+目标：把“外骨骼重塑内在”的重构目标写成明确阶段计划，避免后续 session 只跟着局部文件漂移。
 
 任务：
 
-1. 建立 root `TODO.md`，作为当前唯一接续路线。
-2. 更新 `README.md`、`docs/README.md`、`docs/architecture.md`、`docs/directory.architecture.md`、`docs/boundaries.md`、`AGENTS.md`。
-3. 将 `docs/old-docs/todo.active.md` 标记为归档指针，避免误当当前路线。
-4. 调整 TODO 状态测试，允许 root `TODO.md` 并检查关键红线。
-5. 去掉内置 shell catalog 和 MCP prompt 中固定命令清单式描述。
+1. 建立 `docs/refactor.roadmap.md`。
+2. 更新 `docs/README.md` 和根 `README.md` 的核心文档索引。
+3. 更新本 `TODO.md`，固定每阶段收尾协议。
+4. 保留 `docs/old-docs/todo.active.md` 为归档指针，后续阶段如替代主文档，必须移动旧材料到 `docs/old-docs/`。
+
+验收：
+
+- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
+- `bun run check`
+
+### R1 Core Boundary Freeze
+
+状态：完成。
+
+目标：冻结内核可依赖的最小边界，让 CLI/TUI/Gateway 拆分时不会反向拉扯 runtime。
+
+任务：
+
+1. 明确 core 只暴露 RuntimeEvent、control envelope、capability snapshot、turn delta/final、memory continuity API。
+2. 梳理 `src/app.ts` composition root，把 CLI/TUI/Gateway 直接耦合点标记为待外部化适配层。
+3. 给 `src/protocol/control` 和 `src/events` 补齐外部 client 需要的契约文档和测试。
+4. 收紧 control payload：project/fork/skill scope 必须完整结构化传入，core 不接受只传 project id 后再猜测项目目录。
+5. 更新 `docs/architecture.md`、`docs/runtime.events.md`、`docs/refactor.roadmap.md`。
+
+验收：
+
+- `bun test tests/protocol.control.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts --timeout 30000`
+- `bun run check`
+
+已验证：
+
+- `bun test tests/protocol.control.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts --timeout 30000`
+- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
+- `bun run check`
+
+### R2 Executive Exoskeleton Upgrade
+
+状态：完成。
+
+目标：把执行层从“工具 catalog + guard”推进到可承载 Herme-agent / OpenClaw 类执行力的外骨骼。
+
+任务：
+
+1. 把 `src/cttl` 迁移到 `src/executive`，并按 `registry`、`planner`、`guard`、`loop` 收拢职责。（已完成）
+2. 迁移期可保留薄 barrel 兼容旧导入，但新代码只能依赖 `src/executive`。（已完成）
+3. 为 delegate、computer、code runner、browser、LSP、message、media 等能力族预留 descriptor，不写固定 prompt 命令清单。
+4. 明确 long-running task 的中断、恢复、审批和审计协议。
+5. 更新 import 与命名边界测试。（已完成）
+6. 更新 `docs/cttl.exoskeleton.md`、`docs/sandbox.capabilities.md`、`docs/refactor.roadmap.md`。（已完成）
+
+验收：
+
+- `bun test tests/cttl.core.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
+- `bun run check`
+- `bun run build:binary`
+
+已验证：
+
+- `bun test tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
+- `bun test tests/naming.boundaries.test.ts tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
+- `bun run check`
+- `bun run build:binary`
+
+### R3 Cognitive Core Migration
+
+状态：完成。
+
+目标：把迁移期 FCH 目录落到 `src/cognitive`，让 Mindstream / Crystal / Hippocampus 成为公开内核边界。
+
+任务：
+
+1. 把 `src/fch/mindstream`、`src/fch/crystal`、`src/fch/hippocampus` 迁移到 `src/cognitive`。（已完成）
+2. 旧 `src/fch` 只保留兼容导出，不再承载新实现。（已完成）
+3. 更新 memory、reflection、runtime、tests 的导入。（已完成）
+4. 确认 Cognitive 不直接执行 shell、MCP、channel send、browser/computer 等副作用。
+5. 保持 brain.db、crystal.db、project/fork/ghost/identity/eq 写入协议不漂移。
+6. 更新 `docs/architecture.md`、`docs/memory.system.md`、`docs/crystal.reflection.md`、`docs/directory.architecture.md`、`docs/refactor.roadmap.md`。
+
+验收：
+
+- `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
+- `bun run check`
+- `bun run build:binary`
+
+已验证：
+
+- `bun test tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts tests/crystal.local.backend.test.ts tests/memory.boundaries.test.ts tests/naming.boundaries.test.ts --timeout 30000`
+- `bun test tests/ask.parse.test.ts tests/ghost.decisions.parse.test.ts tests/identity.parse.test.ts tests/dormant.supervisor.test.ts tests/activation.test.ts tests/brain.store.test.ts tests/brain.archive.test.ts tests/summary.worker.test.ts tests/summary.wire.test.ts tests/dream.worker.test.ts tests/dream.zero.write.test.ts tests/background.scheduler.test.ts tests/memory.scheduler.wiring.test.ts tests/hot.memory.compression.worker.test.ts tests/consolidation.test.ts tests/local.working.store.test.ts tests/context.fork.store.test.ts tests/project.scaffolder.test.ts tests/codename.promote.test.ts --timeout 30000`
+- `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
+- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
+- `bun test tests/memory.boundaries.test.ts tests/naming.boundaries.test.ts tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
+- `bun run check`
+- `bun run build:binary`
+
+### R4 Agent Shell Split
+
+状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent`，CLI/TUI/Gateway 拆分待继续）。
+
+目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
+
+任务：
+
+1. 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。skills 是做事方式，context 是运行态 scope 装配，二者都不属于认知内核。（已完成）
+2. 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。
+3. 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。
+4. Gateway 保留最小 control/event transport；具体 channel adapter 进入可插拔 kit 规划。
+5. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述。
+6. 更新 `docs/cli.commands.md`、`docs/gateway.channels.md`、`docs/runtime.events.md`、`docs/refactor.roadmap.md`。
+
+验收：
+
+- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts --timeout 30000`
+- `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
+- `bun run check`
+- `bun run build:binary`
+
+已验证：
+
+- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/skill.schema.compat.test.ts tests/event.component.test.ts tests/naming.boundaries.test.ts --timeout 30000`
+- `bun run check`
+
+### R5 External Kit Protocol
+
+状态：待开始。
+
+目标：定义外部套件的安装、发现、权限、事件订阅和执行桥协议。
+
+任务：
+
+1. 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。
+2. 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。
+3. plugin、MCP、skill、user tool、subagent 统一进入 Executive registry；不允许套件绕过 sandbox。
+4. 制定 old-docs 归档清单，移动被 kit 协议替代的历史文档。
+5. 新增或更新 kit 协议文档、`docs/refactor.roadmap.md`、`docs/old-docs/README.md`。
+
+验收：
+
+- `bun test tests/plugin.runner.test.ts tests/skill.schema.compat.test.ts tests/mcp.http.transport.test.ts --timeout 30000`
+- `bun run check`
+- `bun run build:binary`
+
+### R6 Release Gate And Cleanup
+
+状态：待开始。
+
+目标：在外部化阶段完成后清理迁移残留，保证文档、测试、目录和发布资产一致。
+
+任务：
+
+1. 删除或归档过时迁移说明，根层 docs 只保留当前运行契约。
+2. `docs/old-docs/README.md` 列出所有被替代材料。
+3. 更新 README、AGENTS、boundaries、directory architecture、TODO 的最终状态。
+4. 跑完整 deterministic release gate。
 
 验收：
 
 - `bun run docs:check`
 - `bun run check`
-- `bun test tests/todo.status.test.ts tests/docs.index.test.ts tests/prompt.lint.test.ts --timeout 30000`
+- `bun run test`
 - `bun run build:binary`
+- `bun run smoke:agent`
 
-### P1 Executive 目录迁移
+## 每阶段收尾协议
 
-状态：待开始。
+每个阶段完成前必须做四件事：
 
-目标：把 `src/cttl` 迁移到 `src/executive`，并按 `registry`、`planner`、`guard` 收拢职责。迁移期可保留薄 barrel 兼容旧导入，但新代码只能依赖 `src/executive`。
-
-验收：
-
-- 更新 import 与命名边界测试。
-- `bun test tests/cttl.core.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-### P2 Cognitive 目录迁移
-
-状态：待开始。
-
-目标：把 `src/fch` 迁移到 `src/cognitive`，保留 `mindstream`、`crystal`、`hippocampus` 三层语义。旧 FCH 只能作为迁移期兼容名，不再作为公开架构名扩散。
-
-验收：
-
-- 更新 memory、reflection、runtime、tests 的导入。
-- `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-### P3 Agent 运行态目录收拢
-
-状态：待开始。
-
-目标：把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。skills 是做事方式，context 是运行态 scope 装配，二者都不属于认知内核。
-
-验收：
-
-- 更新 skill/context tests 与 runtime 导入。
-- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-### P4 外骨架能力继续拉满
-
-状态：待 P0-P3 后继续。
-
-方向：
-
-- capability registry 不靠固定工具列表，支持插件发现、MCP discovery、用户 manifest、channel action 和 subagent descriptor。
-- loop 支持并发安全、独占、预算、重复失败、unknown tool、no-progress、审批恢复。
-- 内置能力按 descriptor 合成：web search/extract、computer use、execute_code、delegate、todo、cron、send_message、image/video/TTS/transcription、screenshot、mouse/keyboard、LSP。
-- TUI/CLI 逐步外部化，只依赖 event/control transport。
+1. 更新 `TODO.md`：状态、完成内容、下一步、跑过的验证命令。
+2. 更新相关主文档：只描述当前契约，不把已经替代的方案留在 docs 根层。
+3. 归档旧文档：被替代或只剩历史价值的文档移入 `docs/old-docs/`，并更新 `docs/old-docs/README.md`。
+4. 验证：至少跑该阶段列出的测试、`bun run check`；涉及构建或发布路径时跑 `bun run build:binary`。
 
 ## 下次接手检查
 
-1. 先读 `TODO.md`、`docs/boundaries.md`、`docs/directory.architecture.md`。
+1. 先读 `TODO.md`、`docs/refactor.roadmap.md`、`docs/boundaries.md`、`docs/directory.architecture.md`。
 2. 用 `git status --short` 看是否有未完成改动，不要回滚用户或其他 session 的文件。
 3. 若改提示词，必须同时改 `.zh.cn.md`。
 4. 若改目录或协议，先补文档和测试护栏。
-5. 收尾必须记录跑过的验证命令。
+5. 每个阶段结束必须清理文档、归档 old docs、更新 TODO。
+6. 收尾必须记录跑过的验证命令。

@@ -11,7 +11,7 @@ import {
     type FlyflorPaths,
 } from "../src/config/index.ts";
 import { listProviderChoices } from "../src/command/cli/config.ts";
-import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/fch/crystal/memory/index.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/cognitive/crystal/memory/index.ts";
 import {
     MemoryModule,
     RuntimeModule,
@@ -66,9 +66,9 @@ import {
     type EventSink,
 } from "../src/agent/di/index.ts";
 import { EventsComponent } from "../src/events/index.ts";
-import { ModelComponent } from "../src/fch/mindstream/index.ts";
+import { ModelComponent } from "../src/cognitive/mindstream/index.ts";
 import { RedisComponent, SurrealComponent } from "../src/components/index.ts";
-import type { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
+import type { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
@@ -267,7 +267,7 @@ describe("config JSONC boundaries", () => {
 describe("Internal infrastructure deployment boundaries", () => {
     test("hippocampus memory action parser does not import agent prompt registry", async () => {
         const source = await readFile(
-            join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "actions", "parser.ts"),
+            join(import.meta.dir, "..", "src", "cognitive", "hippocampus", "memory", "actions", "parser.ts"),
             "utf8",
         );
 
@@ -280,15 +280,24 @@ describe("Internal infrastructure deployment boundaries", () => {
 
     test("hippocampus memory module owns dream worker instead of importing runtime", async () => {
         const [memoryModule, scheduler] = await Promise.all([
-            readFile(join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "module.ts"), "utf8"),
+            readFile(join(import.meta.dir, "..", "src", "cognitive", "hippocampus", "memory", "module.ts"), "utf8"),
             readFile(
-                join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "lifecycle", "scheduler.ts"),
+                join(
+                    import.meta.dir,
+                    "..",
+                    "src",
+                    "cognitive",
+                    "hippocampus",
+                    "memory",
+                    "lifecycle",
+                    "scheduler.ts",
+                ),
                 "utf8",
             ),
         ]);
 
         // Dream mutates the long-term memory graph; keeping the implementation
-        // inside fch/hippocampus/memory avoids a runtime -> memory -> runtime cycle.
+        // inside cognitive/hippocampus/memory avoids a runtime -> memory -> runtime cycle.
         expect(`${memoryModule}\n${scheduler}`).not.toContain("../../agent/runtime/dream.worker");
         expect(memoryModule).toContain('from "./dream/index.ts"');
         expect(scheduler).toContain('from "../dream/worker.ts"');
@@ -296,7 +305,7 @@ describe("Internal infrastructure deployment boundaries", () => {
 
     test("memory matrix does not use sentiment lexicons for semantic scoring", async () => {
         const matrix = await readFile(
-            join(import.meta.dir, "..", "src", "fch", "hippocampus", "memory", "recall", "matrix.ts"),
+            join(import.meta.dir, "..", "src", "cognitive", "hippocampus", "memory", "recall", "matrix.ts"),
             "utf8",
         );
 
@@ -311,7 +320,7 @@ describe("Internal infrastructure deployment boundaries", () => {
         const runtimeFiles = await readdir(join(import.meta.dir, "..", "src", "agent", "runtime"));
 
         // Dream and feedback both mutate or classify memory state, so their
-        // implementation lives under fch/hippocampus/memory rather than runtime.
+        // implementation lives under cognitive/hippocampus/memory rather than runtime.
         expect(runtimeFiles).not.toContain("dream.worker.ts");
         expect(runtimeFiles).not.toContain("feedback.interpreter.ts");
     });

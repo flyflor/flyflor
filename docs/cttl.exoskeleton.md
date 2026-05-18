@@ -4,7 +4,7 @@
 
 Executive 是 Flyflor 的能力外骨架，内部仍沿用 `Capability / Tool / Trust / Loop` 四个概念，中文叫 **能力工具信任回路层**。Flyflor 的 Cognitive 认知层负责思考、记忆和人格连续性；Executive 外骨架负责发现能力、包装工具、计算信任、控制执行回路，让智能体安全地拥有手脚。
 
-迁移期说明：当前源码物理路径仍是 `src/cttl`，目标路径是 `src/executive`。文档中的 Executive 指最终层名；旧 CTTL 只作为历史代号和兼容路径存在。
+迁移期说明：当前源码物理路径已迁移到 `src/executive`；旧 `src/cttl` 只保留兼容 re-export。文档中的 Executive 指当前层名；旧 CTTL 只作为历史代号和兼容路径存在，新代码不得继续 import `src/cttl`。
 
 ## 设计原则
 

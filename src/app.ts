@@ -15,7 +15,7 @@ import {
 import { AdaptersComponent } from "./agent/gateway/index.ts";
 import { ConfigComponent, loadConfig, type FlyflorConfig } from "./config/index.ts";
 import { RuntimeSkillUsageEventHandler } from "./agent/runtime/events/index.ts";
-import { createMemory, MemoryModule } from "./fch/hippocampus/memory/index.ts";
+import { createMemory, MemoryModule } from "./cognitive/hippocampus/memory/index.ts";
 import {
     assertModuleMetadata,
     DependencyContainer,
@@ -25,7 +25,7 @@ import {
 } from "./agent/di/index.ts";
 import { EventsComponent } from "./events/index.ts";
 import { RuntimeModeComponent } from "./protocol/contracts/index.ts";
-import { createModelClient, ModelComponent } from "./fch/mindstream/index.ts";
+import { createModelClient, ModelComponent } from "./cognitive/mindstream/index.ts";
 import {
     ConsoleEventSink,
     NullEventSink,

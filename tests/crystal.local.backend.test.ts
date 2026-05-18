@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CrystalMemoryComponent, LocalCrystalMemoryStore } from "../src/fch/crystal/memory/index.ts";
-import { evidence } from "../src/fch/crystal/reflection/index.ts";
+import { CrystalMemoryComponent, LocalCrystalMemoryStore } from "../src/cognitive/crystal/memory/index.ts";
+import { evidence } from "../src/cognitive/crystal/reflection/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
 
 describe("local crystal backend", () => {

@@ -16,7 +16,7 @@ import {
     type CttlMcpResourceCatalogEntry,
     type CttlToolPlan,
     type CttlTrustContext,
-} from "../../../cttl/index.ts";
+} from "../../../executive/index.ts";
 import type { McpPromptDefinition, McpResourceDefinition, McpToolCatalogEntry } from "../../mcp/index.ts";
 import { GIT_SERVER } from "./git.ts";
 import { WORKSPACE_SERVER } from "./workspace.ts";

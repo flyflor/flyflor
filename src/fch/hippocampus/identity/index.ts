@@ -1,1 +1,1 @@
-export * from "./append.ts";
+export * from "../../../cognitive/hippocampus/identity/index.ts";

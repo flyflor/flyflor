@@ -18,7 +18,7 @@ import { ConsoleEventSink, EventsComponent } from "../../events/index.ts";
 import { ConfigComponent, loadConfig, resolveFlyflorPaths, type FlyflorConfig } from "../../config/index.ts";
 import { PROMPT_TEMPLATE_MANIFEST_FILE } from "../../agent/prompts/template.manifest.ts";
 import type { FlyFlor } from "../../app.ts";
-import { BlackboardModule, GatewayModule, getFlyFlor, RuntimeModule } from "../../app.ts";
+import { GatewayModule, getFlyFlor } from "../../app.ts";
 import {
     buildGatewayServicePlan,
     gatewayDaemonStatus,
@@ -27,7 +27,7 @@ import {
     startGatewayDaemon,
     stopGatewayDaemon,
     writeGatewayServicePlan} from "../../agent/gateway/index.ts";
-import { RetrospectiveLog } from "../../fch/hippocampus/memory/index.ts";
+import { RetrospectiveLog } from "../../cognitive/hippocampus/memory/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/index.ts";
 import {
     callMcpTool,
@@ -54,7 +54,6 @@ import {
     validatePlugins,
     type PluginDefinition,
     type PluginValidationResult} from "../../agent/plugin/index.ts";
-import { promptApproveMcpToolCall, startHumanChat } from "../../agent/runtime/index.ts";
 import {
     addSandboxAllow,
     createSandboxPolicy,
@@ -70,7 +69,7 @@ import {
     resetSkill,
     validateSkill,
     type Skill,
-    type SkillUsageSummary} from "../../skills/index.ts";
+    type SkillUsageSummary} from "../../agent/skills/index.ts";
 import {
     initializeFlyflorGatewayConfig,
     initializeFlyflorModelConfig,
@@ -86,6 +85,7 @@ import { formatFlyflorVersion } from "../version.ts";
 import { renderConfigView } from "../config.view.ts";
 import { runUpdate } from "./update.ts";
 import { loadAppCommandRegistry } from "../app.commands.ts";
+import { commandRuntime } from "../runtime.adapter.ts";
 import { canStartInteractiveTui, interactiveTuiUnavailableMessage } from "../tui/tty.ts";
 import { resolveCommandTuiPage } from "../tui/cli/command.route.ts";
 
@@ -836,8 +836,9 @@ async function executeCommand(path: string[], command: Command): Promise<void> {
         }
         if (Array.isArray(opts.skills) && opts.skills.length > 0) {
             try {
-                await startHumanChat(app.resolve(RuntimeModule), {
-                    approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+                const runtime = commandRuntime(app);
+                await runtime.startHumanChat({
+                    approveMcpToolCall: process.stdin.isTTY ? runtime.approveMcpToolCall() : undefined,
                     skillNames: opts.skills,
                     toolsetAllowlist,
                     maxToolTurns});
@@ -1157,7 +1158,7 @@ async function runChatQuery(
     imagePaths: string[] = [],
     runtimeOptions: { toolsetAllowlist?: string[]; maxToolTurns?: number } = {},
 ): Promise<void> {
-    const runtime = app.resolve(RuntimeModule);
+    const runtime = commandRuntime(app);
     await runtime.warmup();
     const now = new Date().toISOString();
     const context: RuntimeContext = {
@@ -1179,8 +1180,8 @@ async function runChatQuery(
 
     let wrote = false;
     let buffered = "";
-    await runtime.handleMessage(message, context, {
-        approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+    await runtime.dispatchMessage(message, context, {
+        approveMcpToolCall: process.stdin.isTTY ? runtime.approveMcpToolCall() : undefined,
         toolsetAllowlist: runtimeOptions.toolsetAllowlist,
         maxToolTurns: runtimeOptions.maxToolTurns,
         onTextDelta: (text) => {
@@ -1285,15 +1286,14 @@ function inferMimeType(path: string): string | undefined {
 }
 
 async function startChatTui(app: FlyFlor): Promise<void> {
-    const runtime = app.resolve(RuntimeModule);
-    const blackboard = app.resolve(BlackboardModule);
+    const runtime = commandRuntime(app);
     const config = app.resolve(ConfigComponent);
     const events = app.resolve(EventsComponent);
     const { startChatEntry } = await import("../tui/chat/index.ts");
     await startChatEntry({
-        runtime,
+        runtime: runtime.chatRuntime(),
         eventBus: events.asBus(),
-        approveMcpToolCall: process.stdin.isTTY ? promptApproveMcpToolCall : undefined,
+        approveMcpToolCall: process.stdin.isTTY ? runtime.approveMcpToolCall() : undefined,
         agentName: "flyflor",
         appCommands: await loadAppCommandRegistry(config.paths),
         resourceConfig: {
@@ -1305,7 +1305,7 @@ async function startChatTui(app: FlyFlor): Promise<void> {
             model: config.model.model,
             providerId: config.model.providerId,
         },
-        blackboard,
+        blackboard: runtime.blackboard(),
     });
 }
 
@@ -1541,7 +1541,7 @@ async function runMemory(sub: string | undefined, command: Command): Promise<voi
 
 async function runBlackboard(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const blackboard = app.resolve(BlackboardModule);
+    const blackboard = commandRuntime(app).blackboard();
     if (!sub || sub === "list") {
         const opts = command.opts<{ json?: boolean; limit?: string | number; projectConstraint?: string }>();
         const limit = parseOptionalPositive(opts.limit) ?? 20;
@@ -1571,7 +1571,7 @@ async function runBlackboard(sub: string | undefined, command: Command): Promise
 
 async function runDream(sub: string | undefined, command: Command): Promise<void> {
     const app = await cliApp();
-    const runtime = app.resolve(RuntimeModule);
+    const runtime = commandRuntime(app);
     if (!sub || sub === "status") {
         const snapshot = runtime.dreamSnapshot();
         const lines = [

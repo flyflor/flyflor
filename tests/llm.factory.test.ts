@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ModelConfig } from "../src/config/index.ts";
-import { createModelClient, OpenAICompatibleClient } from "../src/fch/mindstream/index.ts";
+import { createModelClient, OpenAICompatibleClient } from "../src/cognitive/mindstream/index.ts";
 import { ModelApiMode, ModelProviderKind } from "../src/protocol/contracts/index.ts";
 
 describe("LLM client factory", () => {

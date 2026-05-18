@@ -1,1 +1,1 @@
-export * from "./supervisor.ts";
+export * from "../../../cognitive/hippocampus/dormant/index.ts";

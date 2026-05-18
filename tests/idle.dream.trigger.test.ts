@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { BackgroundScheduler } from "../src/fch/hippocampus/memory/lifecycle/index.ts";
+import { BackgroundScheduler } from "../src/cognitive/hippocampus/memory/lifecycle/index.ts";
 import { NullEventSink } from "../src/events/index.ts";
-import type { DreamWorker, DreamRunResult } from "../src/fch/hippocampus/memory/dream/index.ts";
+import type { DreamWorker, DreamRunResult } from "../src/cognitive/hippocampus/memory/dream/index.ts";
 
 const ZERO: DreamRunResult = {
     scanned: 0,

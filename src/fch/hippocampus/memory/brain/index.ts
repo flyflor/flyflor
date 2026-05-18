@@ -1,2 +1,1 @@
-export * from "./archive.ts";
-export * from "./store.ts";
+export * from "../../../../cognitive/hippocampus/memory/brain/index.ts";

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { ContextComponent } from "../src/components/index.ts";
-import { useContextScope } from "../src/context/index.ts";
+import { useContextScope } from "../src/agent/context/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import { Channel, ChatType, type GatewayMessage, type RuntimeContext } from "../src/protocol/contracts/index.ts";
 

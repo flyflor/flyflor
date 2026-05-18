@@ -3,7 +3,7 @@ import type {
     MemoryAtom,
     MemoryEventRecord,
 } from "../../protocol/contracts/index.ts";
-import type { BrainVisibleAtom } from "../../fch/hippocampus/memory/brain/store.ts";
+import type { BrainVisibleAtom } from "../../cognitive/hippocampus/memory/brain/store.ts";
 
 /**
  * Parser for prompt-visible atom payloads stored inside `memory_events.content`.

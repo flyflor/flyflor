@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
-import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
-import { ProjectScaffolder } from "../src/fch/hippocampus/project/scaffolder.ts";
-import { detectCodenamePromotion, ProjectTriggerKind } from "../src/fch/hippocampus/project/index.ts";
-import { promoteCodename } from "../src/fch/hippocampus/project/codename.promote.ts";
+import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
+import { ProjectScaffolder } from "../src/cognitive/hippocampus/project/scaffolder.ts";
+import { detectCodenamePromotion, ProjectTriggerKind } from "../src/cognitive/hippocampus/project/index.ts";
+import { promoteCodename } from "../src/cognitive/hippocampus/project/codename.promote.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import type { EventSink } from "../src/events/index.ts";
 

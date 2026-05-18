@@ -1,1 +1,1 @@
-export * from "./parse.ts";
+export * from "../../../cognitive/hippocampus/ask/index.ts";

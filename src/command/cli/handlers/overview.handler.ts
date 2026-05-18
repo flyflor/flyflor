@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { GatewayModule, MemoryModule, type FlyFlor } from "../../../app.ts";
 import { lintPromptTemplates } from "../../../agent/prompts/index.ts";
-import { checkSkillSchemaCompatibility } from "../../../skills/index.ts";
+import { checkSkillSchemaCompatibility } from "../../../agent/skills/index.ts";
 import { getFlyflorConfigPath } from "../config.ts";
 import { ConfigComponent, type FlyflorConfig } from "../../../config/index.ts";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../../agent/gateway/index.ts";

@@ -10,7 +10,7 @@ import {
     selectSkills,
     type Skill,
     type SkillUsageSummary,
-} from "../../../skills/index.ts";
+} from "../../skills/index.ts";
 
 export function selectRuntimeSkills(
     skills: Skill[],

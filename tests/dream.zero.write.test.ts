@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { DreamWorkerImpl } from "../src/fch/hippocampus/memory/dream/index.ts";
-import type { GemRecord, MemoryNodeRecord, MemoryGraphStore } from "../src/fch/hippocampus/memory/graph/index.ts";
+import { DreamWorkerImpl } from "../src/cognitive/hippocampus/memory/dream/index.ts";
+import type { GemRecord, MemoryNodeRecord, MemoryGraphStore } from "../src/cognitive/hippocampus/memory/graph/index.ts";
 import { ModelRole, type ModelClient } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 

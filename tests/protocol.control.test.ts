@@ -66,6 +66,35 @@ describe("Gateway Control protocol", () => {
         expect(message.text).toBe("hello");
     });
 
+    test("requires project scope to be fully structured in control payload", () => {
+        const input = readGatewayControlMessageInput({
+            context: {
+                activeProject: {
+                    id: "project-1",
+                    projectDir: "/tmp/project",
+                    projectMemoryDir: "/tmp/project/.flyflor/memory",
+                    title: "Project",
+                },
+                // Thin clients must not rely on core guessing project paths from id-only input.
+                activeProjectId: "ignored-project-id",
+                contextForkId: "fork-1",
+                skillNames: ["review"],
+            },
+            text: "hello",
+        });
+
+        expect(input.context).toEqual({
+            activeProject: {
+                id: "project-1",
+                projectDir: "/tmp/project",
+                projectMemoryDir: "/tmp/project/.flyflor/memory",
+                title: "Project",
+            },
+            contextForkId: "fork-1",
+            skillNames: ["review"],
+        });
+    });
+
     test("roundtrips capability catalog control messages", () => {
         const getEnvelope = createGatewayControlEnvelope(GatewayControlMessageType.CapabilityCatalogGet, undefined, {
             id: "cap-get-1",

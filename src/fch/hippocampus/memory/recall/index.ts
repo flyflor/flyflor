@@ -1,2 +1,1 @@
-export * from "./activation.ts";
-export * from "./matrix.ts";
+export * from "../../../../cognitive/hippocampus/memory/recall/index.ts";

@@ -1,2 +1,1 @@
-export { CrystalGemComponent } from "./component.ts";
-export { InMemoryCrystalMemoryStore } from "./in.memory.gem.store.ts";
+export * from "../../../cognitive/crystal/gems/index.ts";

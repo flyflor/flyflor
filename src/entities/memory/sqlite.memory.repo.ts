@@ -11,7 +11,7 @@ import {
     type SQLitePendingProjectOfferRow,
     type SQLitePendingSkillOfferRow,
 } from "./index.ts";
-import type { MemoryCandidate, MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../fch/hippocampus/memory/types.ts";
+import type { MemoryCandidate, MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../cognitive/hippocampus/memory/types.ts";
 
 /**
  * SQL repo for the SQLite prompt memory index and pending offer tables.

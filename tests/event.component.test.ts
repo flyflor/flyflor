@@ -6,7 +6,7 @@ import { RuntimeSkillUsageEventHandler } from "../src/agent/runtime/events/index
 import { Event } from "../src/agent/di/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import { classifyRuntimeEvent, EventsComponent, NullEventSink, RuntimeEventType, RuntimeEventBus } from "../src/events/index.ts";
-import { loadSkillUsageSummary } from "../src/skills/index.ts";
+import { loadSkillUsageSummary } from "../src/agent/skills/index.ts";
 import { RuntimeEventClass, type RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
 class RecordingHook {

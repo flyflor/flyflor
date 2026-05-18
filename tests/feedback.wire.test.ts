@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
-import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
-import { FeedbackCategory } from "../src/fch/hippocampus/memory/feedback/index.ts";
+import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
+import { FeedbackCategory } from "../src/cognitive/hippocampus/memory/feedback/index.ts";
 import {
     ChatType,
     Channel,

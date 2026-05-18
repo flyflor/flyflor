@@ -6,5 +6,5 @@ export * from "./sandbox/index.ts";
 export * from "./worker/index.ts";
 export * from "./mcp/index.ts";
 export * from "./plugin/index.ts";
-export * from "../fch/hippocampus/memory/index.ts";
-export * from "../fch/crystal/memory/index.ts";
+export * from "../cognitive/hippocampus/memory/index.ts";
+export * from "../cognitive/crystal/memory/index.ts";

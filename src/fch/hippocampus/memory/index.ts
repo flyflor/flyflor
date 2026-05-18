@@ -1,1 +1,1 @@
-export * from "./module.ts";
+export * from "../../../cognitive/hippocampus/memory/index.ts";

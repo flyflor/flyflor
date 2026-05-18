@@ -8,7 +8,7 @@
 import type { Command } from "commander";
 import { join } from "node:path";
 import { stat } from "node:fs/promises";
-import { BrainStore } from "../../../fch/hippocampus/memory/brain/store.ts";
+import { BrainStore } from "../../../cognitive/hippocampus/memory/brain/store.ts";
 import { loadConfig } from "../../../config/index.ts";
 import {
     MemoryEventStatus,

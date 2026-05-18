@@ -1,1 +1,1 @@
-export * from "./local.hash.embedding.ts";
+export * from "../../../cognitive/hippocampus/embedding/index.ts";

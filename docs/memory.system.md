@@ -8,25 +8,25 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 
 ## 相关代码路径
 
-- `src/fch/hippocampus/memory/markdown/index.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
-- `src/fch/hippocampus/memory/brain/store.ts` — `brain.db` 单库生命周期、schema 初始化与对外门面（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
+- `src/cognitive/hippocampus/memory/markdown/index.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
+- `src/cognitive/hippocampus/memory/brain/store.ts` — `brain.db` 单库生命周期、schema 初始化与对外门面（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
 - `src/entities/memory/brain.*.entity.ts` / `brain.*.repo.ts` — `memory_events`、`memory_state`、`projects`、`task_plans`、`context_forks`、`scene_records`、`memory_summary`、`memory_links`、`codenames`、`memory_eq_state` 的 row/record 映射与 SQL function；repo 只做数据访问，不做业务决策
-- `src/fch/hippocampus/memory/brain/index.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
-- `src/fch/hippocampus/memory/working/index.ts` — local WAL/snapshot 工作记忆后端
-- `src/fch/hippocampus/memory/hot/index.ts` — 到期工作记忆隔离压缩审计
-- `src/fch/hippocampus/memory/sqlite/index.ts` — candidates / offers / search
-- `src/fch/hippocampus/memory/recall/index.ts` — spreading activation 与记忆矩阵评分
-- `src/fch/hippocampus/memory/consolidation/index.ts` — working memory → crystal graph 升格与反思日志
-- `src/fch/hippocampus/memory/lifecycle/index.ts` — 双轨衰减、容量阀门与后台调度节拍
-- `src/fch/hippocampus/memory/project/index.ts` — 项目局部记忆
-- `src/fch/hippocampus/memory/fork/index.ts` — fork 低频 replay sidecar；`brain.db` 只保留摘要索引
-- `src/fch/hippocampus/memory/dream/index.ts` — Dream 三类动作
-- `src/fch/hippocampus/memory/summary/index.ts` — daily / weekly summary worker
-- `src/fch/hippocampus/memory/feedback/index.ts` — LLM 结构化反馈分类
-- `src/fch/hippocampus/memory/history/index.ts` — chat history / planning replay 映射
-- `src/fch/hippocampus/memory/actions/index.ts` — `<flyflor_memory_actions>` 解析
-- `src/fch/crystal/gems/index.ts` — CrystalGemComponent，内部 Gem 召回与结晶边界
-- `src/fch/crystal/memory/index.ts` — CrystalMemoryComponent 兼容门面与本地晶体图 backend
+- `src/cognitive/hippocampus/memory/brain/index.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
+- `src/cognitive/hippocampus/memory/working/index.ts` — local WAL/snapshot 工作记忆后端
+- `src/cognitive/hippocampus/memory/hot/index.ts` — 到期工作记忆隔离压缩审计
+- `src/cognitive/hippocampus/memory/sqlite/index.ts` — candidates / offers / search
+- `src/cognitive/hippocampus/memory/recall/index.ts` — spreading activation 与记忆矩阵评分
+- `src/cognitive/hippocampus/memory/consolidation/index.ts` — working memory → crystal graph 升格与反思日志
+- `src/cognitive/hippocampus/memory/lifecycle/index.ts` — 双轨衰减、容量阀门与后台调度节拍
+- `src/cognitive/hippocampus/memory/project/index.ts` — 项目局部记忆
+- `src/cognitive/hippocampus/memory/fork/index.ts` — fork 低频 replay sidecar；`brain.db` 只保留摘要索引
+- `src/cognitive/hippocampus/memory/dream/index.ts` — Dream 三类动作
+- `src/cognitive/hippocampus/memory/summary/index.ts` — daily / weekly summary worker
+- `src/cognitive/hippocampus/memory/feedback/index.ts` — LLM 结构化反馈分类
+- `src/cognitive/hippocampus/memory/history/index.ts` — chat history / planning replay 映射
+- `src/cognitive/hippocampus/memory/actions/index.ts` — `<flyflor_memory_actions>` 解析
+- `src/cognitive/crystal/gems/index.ts` — CrystalGemComponent，内部 Gem 召回与结晶边界；旧 `src/fch/crystal/gems/index.ts` 仅兼容 re-export
+- `src/cognitive/crystal/memory/index.ts` — CrystalMemoryComponent 兼容门面与本地晶体图 backend；旧 `src/fch/crystal/memory/index.ts` 仅兼容 re-export
 - `src/components/index.ts` — 共享 Component 基类：MemoryComponent / CrystalComponent / BrainComponent / GraphComponent / SQLiteComponent / RedisComponent / SurrealComponent
 
 ## 分层结构
@@ -86,13 +86,13 @@ flowchart LR
 | `context_forks`   | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算                                 |
 | `scene_records`   | 黑板 / 深度思考 / 反思场景回放摘要；`/history` 右侧复用，不存 chain-of-thought                           |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `src/entities/memory/brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row/entity 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/fch/hippocampus/memory/feedback/index.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `src/entities/memory/brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row/entity 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/cognitive/hippocampus/memory/feedback/index.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
 TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
 
 ContextFork 的低频 replay 详情落 `~/.flyflor/.config/storage/forks/<forkId>/manifest.json` / `replay.jsonl`。`brain.db.context_forks` 仍是权威摘要与列表索引；sidecar 只服务 TUI 深度回放和未来清理策略，可按 `memory.tuning.contextFork.sidecarTtlDays`（默认 90 天，0 关闭）删除而不影响摘要审计。
 
-chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/fch/hippocampus/memory/history/index.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
+chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/cognitive/hippocampus/memory/history/index.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
 
 月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 `MemoryComponent`、`CrystalComponent` 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
 
@@ -139,7 +139,7 @@ erDiagram
     GEM ||--o{ GEM_SNAPSHOT : "snapshot"
 ```
 
-主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore；Gem 的对内模块边界是 `src/fch/crystal/gems/index.ts` 的 `CrystalGemComponent`，`CrystalMemoryComponent` 只保留对外兼容门面。
+主实体：`episode`、`memory_node`、`gem`（晶粒）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`（brain summary 的向量索引副本）。承载层是 `CrystalComponent` 的本地 `crystal.db` + VectorIndex + SQLiteGraphStore；Gem 的对内模块边界是 `src/cognitive/crystal/gems/index.ts` 的 `CrystalGemComponent`，`CrystalMemoryComponent` 只保留对外兼容门面。
 
 `summary_embedding` 由 `MemoryModule.runSummaryOnce` 在 summary 写入后维护：对 summary content 计算 embedding，写入晶体图节点，再回填 `memory_summary.embedding_id`。summary 主记录先落盘；若 embedding 同步失败，会先保留已写入的 summary，再显式抛出，便于上层感知索引不一致并重试。
 

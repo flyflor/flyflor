@@ -12,7 +12,7 @@ import {
     describeWorkingMemoryRecoveryFiles} from "../src/command/cli/status.ts";
 import { GatewayModule, MemoryModule } from "../src/app.ts";
 import { ConfigComponent, createDefaultMemoryTuning, type FlyflorConfig } from "../src/config/index.ts";
-import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
+import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 import {
     CrystalMemoryBackend,
     MemoryEventStatus,

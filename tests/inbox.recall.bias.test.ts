@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
+import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

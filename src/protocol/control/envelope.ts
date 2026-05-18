@@ -50,8 +50,6 @@ export interface GatewayControlMessageInput {
     chatType?: GatewayMessage["route"]["chatType"];
     context?: {
         activeProject?: GatewayControlProjectScope;
-        /** Compatibility input accepted from thin clients that only know the project id. */
-        activeProjectId?: string;
         contextForkId?: string;
         skillNames?: string[];
     };
@@ -186,7 +184,6 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
         context: isRecord(payload.context)
             ? {
                   activeProject: readGatewayControlProjectScope(payload.context.activeProject),
-                  activeProjectId: readString(payload.context.activeProjectId),
                   contextForkId: readString(payload.context.contextForkId),
                   skillNames: Array.isArray(payload.context.skillNames)
                       ? payload.context.skillNames.filter((item): item is string => typeof item === "string")

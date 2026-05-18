@@ -4,23 +4,23 @@ import {
     DEFAULT_DECAY_PROFILES,
     decayImportance,
     reinforceImportance,
-} from "../src/fch/hippocampus/memory/lifecycle/index.ts";
+} from "../src/cognitive/hippocampus/memory/lifecycle/index.ts";
 import {
     dedupeGems,
     isContradiction,
     isStale,
     shouldMergeGems,
     type GemCandidate,
-} from "../src/fch/hippocampus/memory/lifecycle/index.ts";
+} from "../src/cognitive/hippocampus/memory/lifecycle/index.ts";
 import {
     clusterEvidenceScore,
     detectClusterCandidate,
     detectExplicitIntent,
     detectSkillPromotion,
     ProjectTriggerKind,
-} from "../src/fch/hippocampus/project/index.ts";
+} from "../src/cognitive/hippocampus/project/index.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
-import type { EpisodeRecord } from "../src/fch/hippocampus/memory/working/index.ts";
+import type { EpisodeRecord } from "../src/cognitive/hippocampus/memory/working/index.ts";
 
 const HOUR = 3_600_000;
 const NOW = 1_700_000_000_000;

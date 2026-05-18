@@ -180,13 +180,13 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | `src/command`  | CLI、TUI、命令注册、终端渲染                                                |
 | `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin         |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
-| `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；迁移期物理路径 `src/fch/mindstream` |
-| `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；迁移期物理路径 `src/fch/crystal` |
-| `src/cognitive/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩；迁移期物理路径 `src/fch/hippocampus` |
+| `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；旧 `src/fch/mindstream` 仅兼容 re-export |
+| `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；旧 `src/fch/crystal` 仅兼容 re-export |
+| `src/cognitive/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩；旧 `src/fch/hippocampus` 仅兼容 re-export |
 | `src/events`   | RECL / Event Fabric，所有交互事件的订阅广播中枢                            |
 | `src/executive` | Capability / Tool / Trust / Loop 执行层目标目录；迁移期物理路径 `src/cttl` |
-| `src/agent/context` | 显式 project / fork / capability scope 装配；迁移期物理路径 `src/context` |
-| `src/agent/skills` | Skill manifest、选择、使用计数、promotion；迁移期物理路径 `src/skills` |
+| `src/agent/context` | 显式 project / fork / capability scope 装配；旧 `src/context` 仅兼容 re-export |
+| `src/agent/skills` | Skill manifest、选择、使用计数、promotion；旧 `src/skills` 仅兼容 re-export |
 | `src/protocol` | 公共协议、枚举、control envelope、进程 envelope                            |
 | `templates`    | 提示词和记忆 Markdown 模板                                                  |
 
@@ -371,6 +371,7 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 | ------------------------------------------------------------ | -------------------------------------- |
 | [TODO.md](TODO.md)                                           | 当前中文接续路线 / 迁移状态 / 验收命令 |
 | [docs/architecture.md](docs/architecture.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
+| [docs/refactor.roadmap.md](docs/refactor.roadmap.md)         | 生命体内核 + 可插拔外骨骼阶段性重构路线 |
 | [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
 | [docs/cttl.exoskeleton.md](docs/cttl.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
 | [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |

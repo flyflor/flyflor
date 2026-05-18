@@ -18,9 +18,9 @@ import {
     DreamActionKind,
     DreamWorkerImpl,
     type DreamRunResult,
-} from "../src/fch/hippocampus/memory/dream/index.ts";
-import { DreamCandidateKind } from "../src/fch/hippocampus/memory/dream/index.ts";
-import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/fch/hippocampus/memory/graph/index.ts";
+} from "../src/cognitive/hippocampus/memory/dream/index.ts";
+import { DreamCandidateKind } from "../src/cognitive/hippocampus/memory/dream/index.ts";
+import type { MemoryGraphStore, GemRecord, MemoryNodeRecord } from "../src/cognitive/hippocampus/memory/graph/index.ts";
 import type { ModelClient, ModelMessage } from "../src/protocol/contracts/index.ts";
 import type { EventSink } from "../src/events/index.ts";
 

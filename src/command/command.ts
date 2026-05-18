@@ -1,8 +1,8 @@
 import { RuntimeMode, type RuntimeMode as RuntimeModeType } from "../protocol/contracts/index.ts";
 import { EventsComponent } from "../events/index.ts";
 import { ConfigComponent } from "../config/index.ts";
-import { promptApproveMcpToolCall } from "../agent/runtime/index.ts";
 import { loadAppCommandRegistry } from "./app.commands.ts";
+import { commandRuntime } from "./runtime.adapter.ts";
 import { resolveShellHookApproval } from "./cli/commands.ts";
 import {
     isFlyflorUtilityCommand,
@@ -60,16 +60,14 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
 
     if (parsed === RuntimeMode.Chat && process.stdin.isTTY) {
         const { startChatEntry } = await import("./tui/chat/index.ts");
-        const { BlackboardModule, RuntimeModule } = await import("../app.ts");
-        const runtime = app.resolve(RuntimeModule);
-        const blackboard = app.resolve(BlackboardModule);
+        const runtime = commandRuntime(app);
         const config = app.resolve(ConfigComponent);
         const events = app.resolve(EventsComponent);
         try {
             await startChatEntry({
-                runtime,
+                runtime: runtime.chatRuntime(),
                 eventBus: events.asBus(),
-                approveMcpToolCall: promptApproveMcpToolCall,
+                approveMcpToolCall: runtime.approveMcpToolCall(),
                 agentName: "flyflor",
                 appCommands: await loadAppCommandRegistry(config.paths),
                 resourceConfig: {
@@ -81,7 +79,7 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
                     model: config.model.model,
                     providerId: config.model.providerId,
                 },
-                blackboard});
+                blackboard: runtime.blackboard()});
         } finally {
             app.dispose();
         }

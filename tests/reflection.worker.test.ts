@@ -9,7 +9,7 @@ import {
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
-import type { MemoryEpisodeProvenance, MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
+import type { MemoryEpisodeProvenance, MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import { ReflectionThreadRunner, type ReflectionThreadWorkerLike, type ReflectionNormalizeSource } from "../src/agent/runtime/index.ts";
 import { normalizeReflectionRaw } from "../src/agent/runtime/index.ts";
 import type { BlackboardDecision } from "../src/agent/blackboard/index.ts";

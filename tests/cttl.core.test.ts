@@ -16,7 +16,7 @@ import {
     CttlToolRegistry,
     isPermissionAllowed,
     type CttlToolDescriptor,
-} from "../src/cttl/index.ts";
+} from "../src/executive/index.ts";
 
 describe("CTTL core", () => {
     test("registers tools and rejects duplicate names", () => {

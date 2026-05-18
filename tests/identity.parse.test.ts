@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseIdentityAppends } from "../src/fch/hippocampus/identity/index.ts";
+import { parseIdentityAppends } from "../src/cognitive/hippocampus/identity/index.ts";
 
 describe("LF-R5 identity append parser", () => {
     test("returns empty list when block missing", () => {

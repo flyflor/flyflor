@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import ts from "typescript";
 import { readdir } from "node:fs/promises";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, normalize, relative, resolve } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 const SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
@@ -16,9 +16,9 @@ const LEGACY_MEMORY_PATH_REFERENCES = [
     "src/components/crystal/",
     "components/memory/",
     "components/crystal/",
-    "fch/hippocampus/memory/brain.store.ts",
-    "fch/hippocampus/memory/working.store.ts",
-    "fch/hippocampus/memory/markdown.store.ts",
+    "cognitive/hippocampus/memory/brain.store.ts",
+    "cognitive/hippocampus/memory/working.store.ts",
+    "cognitive/hippocampus/memory/markdown.store.ts",
     "project.memory.store.ts",
     "context.fork.store.ts",
     "sqlite.memory.store.ts",
@@ -28,7 +28,7 @@ const SINGLE_OWNER_COMPONENT_FILES = [
     "src/agent/gateway/adapters.component.ts",
     "src/components/base.component.ts",
     "src/config/config.component.ts",
-    "src/context/context.scope.component.ts",
+    "src/agent/context/context.scope.component.ts",
     "src/fch/crystal/gems/gem.component.ts",
     "src/fch/crystal/memory/crystal.memory.component.ts",
     "src/fch/mindstream/model.component.ts",
@@ -58,6 +58,8 @@ const DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES = [
 ];
 const LEGACY_FCH_TOP_LEVEL_DIRS = ["llm", "crystal", "neural"];
 const LEGACY_FCH_CHILD_DIRS = ["fluid", "llmriver"];
+const MIGRATED_FCH_IMPORTS = ["crystal", "hippocampus", "mindstream"];
+const MIGRATED_AGENT_IMPORTS = ["context", "skills"];
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {
@@ -135,7 +137,7 @@ describe("repository naming boundary", () => {
         const violations = files.filter((file) => hasRepeatedDirectoryOwnerPrefix(file)).sort();
 
         // Directory is the first convention. Once `src/agent/blackboard/` or
-        // `src/fch/hippocampus/ask/` names the owner, files use role names such as
+        // `src/cognitive/hippocampus/ask/` names the owner, files use role names such as
         // `module.ts`, `composition.ts`, `parse.ts`, or `manager.ts`.
         expect(violations).toEqual([]);
     });
@@ -145,8 +147,8 @@ describe("repository naming boundary", () => {
         const topLevelNames = new Set(dirs.map((dir) => basename(dir)));
         const violations = LEGACY_FCH_TOP_LEVEL_DIRS.filter((dir) => topLevelNames.has(dir));
 
-        // During P2 migration, mindstream, crystal and hippocampus still live
-        // under the legacy cognitive directory instead of returning as top-level domains.
+        // During R3 migration, cognitive slices move under src/cognitive.
+        // These old top-level names must not return as parallel domains.
         expect(violations).toEqual([]);
     });
 
@@ -171,8 +173,86 @@ describe("repository naming boundary", () => {
         expect(await exists(join(REPO_ROOT, "src", "events", "index.ts"))).toBe(true);
     });
 
+    test("new code imports Executive through src/executive instead of legacy cttl", async () => {
+        const files = (await Promise.all(["src", "tests", "scripts"].map((dir) => listFiles(join(REPO_ROOT, dir)))))
+            .flat()
+            .filter((file) => {
+                const rel = relative(REPO_ROOT, file);
+                return !rel.startsWith("src/cttl/") && (file.endsWith(".ts") || file.endsWith(".tsx"));
+            });
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const rel = relative(REPO_ROOT, file);
+            const text = await Bun.file(file).text();
+            if (/from\s+["'][^"']*\/cttl(?:\/index)?\.ts["']/u.test(text)) {
+                violations.push(rel);
+            }
+        }
+
+        // src/cttl is a compatibility barrel only. Production code and tests
+        // should exercise the current Executive boundary directly.
+        expect(violations).toEqual([]);
+    });
+
+    test("new code imports migrated cognitive slices through src/cognitive instead of legacy fch", async () => {
+        const files = (await Promise.all(["src", "tests", "scripts"].map((dir) => listFiles(join(REPO_ROOT, dir)))))
+            .flat()
+            .filter((file) => {
+                const rel = relative(REPO_ROOT, file);
+                return !rel.startsWith("src/fch/") && (file.endsWith(".ts") || file.endsWith(".tsx"));
+            });
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const rel = relative(REPO_ROOT, file);
+            const text = await Bun.file(file).text();
+            for (const slice of MIGRATED_FCH_IMPORTS) {
+                if (new RegExp(`from\\s+["'][^"']*/fch/${slice}(?:/index)?\\.ts["']`, "u").test(text)) {
+                    violations.push(`${rel}: ${slice}`);
+                }
+            }
+        }
+
+        // Migrated cognitive slices keep fch compatibility barrels only for
+        // external callers. Source and tests should exercise the target path.
+        expect(violations).toEqual([]);
+    });
+
+    test("new code imports migrated agent slices through src/agent instead of legacy top-level paths", async () => {
+        const files = (await Promise.all(["src", "tests", "scripts"].map((dir) => listFiles(join(REPO_ROOT, dir)))))
+            .flat()
+            .filter((file) => {
+                const rel = relative(REPO_ROOT, file);
+                return (
+                    !rel.startsWith("src/context/") &&
+                    !rel.startsWith("src/skills/") &&
+                    (file.endsWith(".ts") || file.endsWith(".tsx"))
+                );
+            });
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const rel = relative(REPO_ROOT, file);
+            const text = await Bun.file(file).text();
+            for (const specifier of importSpecifiers(text)) {
+                const resolved = normalize(resolve(dirname(file), specifier));
+                const target = relative(REPO_ROOT, resolved);
+                for (const slice of MIGRATED_AGENT_IMPORTS) {
+                    if (target === `src/${slice}/index.ts` || target.startsWith(`src/${slice}/`)) {
+                        violations.push(`${rel}: ${slice}`);
+                    }
+                }
+            }
+        }
+
+        // R4 moves runtime context and skill loading under src/agent. The old
+        // top-level directories remain compatibility barrels only.
+        expect(violations).toEqual([]);
+    });
+
     test("hippocampus memory capability subdirectories expose an index entrypoint", async () => {
-        const dirs = await listDirs(join(REPO_ROOT, "src", "fch", "hippocampus", "memory"));
+        const dirs = await listDirs(join(REPO_ROOT, "src", "cognitive", "hippocampus", "memory"));
         const violations: string[] = [];
 
         for (const dir of dirs) {
@@ -297,6 +377,18 @@ async function exists(path: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+function importSpecifiers(text: string): string[] {
+    const specifiers: string[] = [];
+    const pattern = /from\s+["']([^"']+)["']/gu;
+    for (const match of text.matchAll(pattern)) {
+        const specifier = match[1];
+        if (specifier?.startsWith(".")) {
+            specifiers.push(specifier);
+        }
+    }
+    return specifiers;
 }
 
 async function findImplicitClassMembers(file: string): Promise<string[]> {

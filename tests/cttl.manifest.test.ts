@@ -6,7 +6,7 @@ import {
     cttlToolManifestPath,
     loadCttlToolManifest,
     normalizeCttlToolManifest,
-} from "../src/cttl/index.ts";
+} from "../src/executive/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import {
     CttlCapabilitySource,

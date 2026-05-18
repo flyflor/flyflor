@@ -11,8 +11,8 @@ import {
 import type { FastRouteSnapshotStore } from "../src/agent/runtime/routing/index.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
-import { LocalHashEmbeddingProvider } from "../src/fch/hippocampus/embedding/index.ts";
-import { MemoryModule } from "../src/fch/hippocampus/memory/index.ts";
+import { LocalHashEmbeddingProvider } from "../src/cognitive/hippocampus/embedding/index.ts";
+import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import {
     BlackboardMode,
     Channel,

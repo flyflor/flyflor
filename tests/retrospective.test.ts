@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { RetrospectiveLog } from "../src/fch/hippocampus/memory/consolidation/index.ts";
+import { RetrospectiveLog } from "../src/cognitive/hippocampus/memory/consolidation/index.ts";
 
 describe("RetrospectiveLog", () => {
     test("creates header on first append and accumulates blocks", async () => {

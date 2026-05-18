@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DormantSupervisor } from "../src/fch/hippocampus/dormant/index.ts";
+import { DormantSupervisor } from "../src/cognitive/hippocampus/dormant/index.ts";
 import { RuntimeMode } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 

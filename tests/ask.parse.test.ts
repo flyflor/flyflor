@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseAgentAsk } from "../src/fch/hippocampus/ask/index.ts";
+import { parseAgentAsk } from "../src/cognitive/hippocampus/ask/index.ts";
 import { AskReason } from "../src/protocol/contracts/index.ts";
 
 const wrap = (json: string): string => `<flyflor_agent_ask>\n${json}\n</flyflor_agent_ask>`;

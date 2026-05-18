@@ -9,7 +9,7 @@ import type {
 import { BlackboardMode } from "../../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../events/index.ts";
 import type { BlackboardDecision } from "../../blackboard/index.ts";
-import type { MemoryEpisodeProvenance, MemoryModule } from "../../../fch/hippocampus/memory/index.ts";
+import type { MemoryEpisodeProvenance, MemoryModule } from "../../../cognitive/hippocampus/memory/index.ts";
 import { extractRuntimeReflectionCandidates } from "./index.ts";
 import { ReflectionThreadRunner } from "./thread.runner.ts";
 import type { RuntimeBlackboardRouteDecision } from "../blackboard/route.ts";

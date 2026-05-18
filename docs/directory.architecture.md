@@ -74,14 +74,14 @@ docs/
 
 | 目标目录 | 当前物理路径 | 迁移规则 |
 | --- | --- | --- |
-| `src/cognitive/mindstream` | `src/fch/mindstream` | P2 统一移动；旧 `src/fch` 只保留薄 barrel |
-| `src/cognitive/crystal` | `src/fch/crystal` | P2 统一移动；不新增旧认知代号专属新文件 |
-| `src/cognitive/hippocampus` | `src/fch/hippocampus` | P2 统一移动；记忆路径测试随迁移更新 |
-| `src/executive` | `src/cttl` | P1 先迁移；registry/planner/guard 是目标子层 |
-| `src/agent/skills` | `src/skills` | P3 迁移；skill 不属于 cognitive core |
-| `src/agent/context` | `src/context` | P3 迁移；context 属于运行态 scope 装配 |
+| `src/cognitive/mindstream` | `src/cognitive/mindstream`（`src/fch/mindstream` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
+| `src/cognitive/crystal` | `src/cognitive/crystal`（`src/fch/crystal` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
+| `src/cognitive/hippocampus` | `src/cognitive/hippocampus`（`src/fch/hippocampus` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
+| `src/executive` | `src/executive`（`src/cttl` 仅兼容 re-export） | registry/planner/guard/loop 是当前实现路径；新代码禁止回写 `src/cttl` |
+| `src/agent/skills` | `src/agent/skills`（`src/skills` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
+| `src/agent/context` | `src/agent/context`（`src/context` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
 
-迁移完成前，文档必须同时说明“目标目录”和“当前物理路径”，不能让读者误以为目录已经搬完。
+迁移完成前，未完成目录必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确旧路径只是兼容出口，不能让读者误以为旧路径仍承载实现。
 
 ## 文件命名约定
 

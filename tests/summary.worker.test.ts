@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BrainStore } from "../src/fch/hippocampus/memory/brain/store.ts";
-import { SummaryWorker, aggregate } from "../src/fch/hippocampus/memory/summary/index.ts";
+import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
+import { SummaryWorker, aggregate } from "../src/cognitive/hippocampus/memory/summary/index.ts";
 import {
     MemoryEventType,
     ModelRole,

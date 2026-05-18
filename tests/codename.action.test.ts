@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseMemoryActions } from "../src/fch/hippocampus/memory/actions/index.ts";
+import { parseMemoryActions } from "../src/cognitive/hippocampus/memory/actions/index.ts";
 
 const wrap = (json: string): string => `<flyflor_memory_actions>\n${json}\n</flyflor_memory_actions>`;
 

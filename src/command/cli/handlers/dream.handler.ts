@@ -1,4 +1,5 @@
-import { RuntimeModule, type FlyFlor } from "../../../app.ts";
+import type { FlyFlor } from "../../../app.ts";
+import { commandRuntime } from "../../runtime.adapter.ts";
 
 export interface DreamData {
     enabled: boolean;
@@ -7,7 +8,7 @@ export interface DreamData {
 }
 
 export function fetchDreamData(app: FlyFlor): DreamData {
-    const snapshot = app.resolve(RuntimeModule).dreamSnapshot();
+    const snapshot = commandRuntime(app).dreamSnapshot();
     return {
         enabled: snapshot.dreamEnabled,
         busy: snapshot.dreamBusy,
@@ -22,5 +23,5 @@ export async function runDreamPass(app: FlyFlor, limit?: number, userId?: string
     contradictionsFlagged: number;
     skipped: number;
 }> {
-    return app.resolve(RuntimeModule).runDreamOnce(limit, userId);
+    return commandRuntime(app).runDreamOnce(limit, userId);
 }

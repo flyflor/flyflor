@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readdir, rm, copyFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../src/config/index.ts";
-import { ProjectScaffolder } from "../src/fch/hippocampus/project/scaffolder.ts";
-import { ProjectTriggerKind, type ProjectTriggerResult } from "../src/fch/hippocampus/project/index.ts";
+import { ProjectScaffolder } from "../src/cognitive/hippocampus/project/scaffolder.ts";
+import { ProjectTriggerKind, type ProjectTriggerResult } from "../src/cognitive/hippocampus/project/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 

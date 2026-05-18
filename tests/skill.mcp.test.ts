@@ -28,7 +28,7 @@ import {
     resetSkill,
     selectSkills,
     validateSkill,
-} from "../src/skills/index.ts";
+} from "../src/agent/skills/index.ts";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { EventsComponent, NullEventSink, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import {

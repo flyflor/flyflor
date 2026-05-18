@@ -3,7 +3,7 @@ import { PluginRunner, type PluginInvocationResult } from "../../plugin/index.ts
 import type { FlyflorPaths } from "../../../config/index.ts";
 import type { EventSink } from "../../../events/index.ts";
 import type { SandboxPolicy } from "../../sandbox/index.ts";
-import type { CttlManifestToolDefinition } from "../../../cttl/index.ts";
+import type { CttlManifestToolDefinition } from "../../../executive/index.ts";
 
 export const USER_TOOL_SERVER = "user";
 

@@ -1,1 +1,1 @@
-export * from "./registry.ts";
+export * from "../agent/skills/index.ts";

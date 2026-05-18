@@ -1,1 +1,1 @@
-export * from "./crystal.reflection.ts";
+export * from "../../../cognitive/crystal/reflection/index.ts";

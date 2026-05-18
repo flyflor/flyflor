@@ -5,7 +5,7 @@ import Table from "cli-table3";
 import pc from "picocolors";
 import type { ChannelStatusSnapshot, GatewayStatusSnapshot } from "../../agent/gateway/index.ts";
 import { lintPromptTemplates } from "../../agent/prompts/index.ts";
-import { checkSkillSchemaCompatibility } from "../../skills/index.ts";
+import { checkSkillSchemaCompatibility } from "../../agent/skills/index.ts";
 import { GatewayModule, MemoryModule, type FlyFlor } from "../../app.ts";
 import { ConfigComponent, createDefaultMemoryTuning, type FlyflorConfig } from "../../config/index.ts";
 import { ChannelLinkState, CrystalMemoryBackend, MemoryEventStatus, MemoryEventType, MemoryWorkingBackend } from "../../protocol/contracts/index.ts";

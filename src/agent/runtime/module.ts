@@ -28,16 +28,16 @@ import {
     type CttlCapabilitySummary,
     type CttlManifestToolDefinition,
     type CttlLoopGuardDecision,
-} from "../../cttl/index.ts";
+} from "../../executive/index.ts";
 import { Runtime as RuntimeBoundary } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
-import { parseMemoryActions } from "../../fch/hippocampus/memory/actions/index.ts";
-import { AgentAskParser } from "../../fch/hippocampus/ask/index.ts";
-import { GhostDecisionParser } from "../../fch/hippocampus/ghost/index.ts";
-import { IdentityAppendParser } from "../../fch/hippocampus/identity/index.ts";
-import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../fch/hippocampus/memory/index.ts";
-import { LocalHashEmbeddingProvider } from "../../fch/hippocampus/embedding/index.ts";
+import { parseMemoryActions } from "../../cognitive/hippocampus/memory/actions/index.ts";
+import { AgentAskParser } from "../../cognitive/hippocampus/ask/index.ts";
+import { GhostDecisionParser } from "../../cognitive/hippocampus/ghost/index.ts";
+import { IdentityAppendParser } from "../../cognitive/hippocampus/identity/index.ts";
+import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../cognitive/hippocampus/memory/index.ts";
+import { LocalHashEmbeddingProvider } from "../../cognitive/hippocampus/embedding/index.ts";
 import {
     callMcpTool,
     describeMcpResult,
@@ -77,7 +77,7 @@ import {
 } from "../prompts/index.ts";
 import { type BlackboardModule } from "../blackboard/index.ts";
 import { loadPlugins } from "../plugin/index.ts";
-import { loadSkills, loadSkillUsageSummary, type Skill } from "../../skills/index.ts";
+import { loadSkills, loadSkillUsageSummary, type Skill } from "../skills/index.ts";
 import {
     RuntimeBlackboardOutputComponent,
     RuntimeBlackboardRouteComponent,

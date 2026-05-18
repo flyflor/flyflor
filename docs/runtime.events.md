@@ -88,7 +88,11 @@ src/
     "chatId": "local",
     "user": { "id": "yi" },
     "context": {
-      "activeProjectId": "flyflor",
+      "activeProject": {
+        "id": "flyflor",
+        "projectDir": "/workspace/flyflor",
+        "projectMemoryDir": "/workspace/flyflor/.flyflor/memory"
+      },
       "contextForkId": "fork-1",
       "skillNames": ["code-review"]
     }
@@ -96,7 +100,7 @@ src/
 }
 ```
 
-`context` 只接受结构化 project/fork/skill scope，不从自然语言、cwd 或 UI 状态隐式猜测。
+`context` 只接受结构化 project/fork/skill scope。`activeProject` 必须携带 `id`、`projectDir` 和 `projectMemoryDir`；只传 project id 不会让 core 从 cwd、历史 UI 状态或自然语言隐式猜测项目。
 
 ### 订阅事件
 

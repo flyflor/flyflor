@@ -2,13 +2,13 @@ import {
     DEFAULT_CRYSTAL_VECTOR_DIMENSIONS,
     crystalVectorCodec,
     type CrystalVectorCodec,
-} from "../../fch/crystal/memory/vector.index.ts";
+} from "../../cognitive/crystal/memory/vector.index.ts";
 import type {
     GemRecord,
     GraphRecallInput,
     MemoryNodeRecord,
     SummaryEmbeddingInput,
-} from "../../fch/hippocampus/memory/graph/types.ts";
+} from "../../cognitive/hippocampus/memory/graph/types.ts";
 
 export interface EpisodeRow {
     concepts_json: string;

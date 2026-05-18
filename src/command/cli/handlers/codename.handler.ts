@@ -1,10 +1,10 @@
 import type { Command } from "commander";
 import { join } from "node:path";
 import { mkdir, stat, writeFile } from "node:fs/promises";
-import { BrainStore } from "../../../fch/hippocampus/memory/brain/store.ts";
+import { BrainStore } from "../../../cognitive/hippocampus/memory/brain/store.ts";
 import { loadConfig } from "../../../config/index.ts";
-import { ProjectScaffolder } from "../../../fch/hippocampus/project/scaffolder.ts";
-import { promoteCodename as promoteCodenameHelper } from "../../../fch/hippocampus/project/codename.promote.ts";
+import { ProjectScaffolder } from "../../../cognitive/hippocampus/project/scaffolder.ts";
+import { promoteCodename as promoteCodenameHelper } from "../../../cognitive/hippocampus/project/codename.promote.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../events/index.ts";
 
 interface CodenameListOptions {

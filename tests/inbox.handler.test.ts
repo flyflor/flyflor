@@ -13,7 +13,7 @@ import {
     type GatewayReply,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
-import type { MemoryAction } from "../src/fch/hippocampus/memory/actions/index.ts";
+import type { MemoryAction } from "../src/cognitive/hippocampus/memory/actions/index.ts";
 import { type EventSink } from "../src/events/index.ts";
 
 const tempRoots: string[] = [];

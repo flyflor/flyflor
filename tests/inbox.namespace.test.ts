@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { MemoryModule } from "../src/agent/index.ts";
-import { inboxProjectIdFor, isInboxProjectId } from "../src/fch/hippocampus/memory/index.ts";
-import type { MemoryAction } from "../src/fch/hippocampus/memory/actions/index.ts";
+import { inboxProjectIdFor, isInboxProjectId } from "../src/cognitive/hippocampus/memory/index.ts";
+import type { MemoryAction } from "../src/cognitive/hippocampus/memory/actions/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
     Channel,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/agent/index.ts";
-import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/fch/crystal/index.ts";
+import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/cognitive/crystal/index.ts";
 import { MemoryKind } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
 import type { MemoryRecord } from "../src/agent/index.ts";
