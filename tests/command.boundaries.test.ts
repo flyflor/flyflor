@@ -20,6 +20,23 @@ import {
 } from "../src/protocol/contracts/index.ts";
 
 describe("Command boundary", () => {
+    test("CLI runtime access is concentrated behind command runtime adapter", async () => {
+        const [entry, commands, dreamHandler, adapter] = await Promise.all([
+            Bun.file("src/command/command.ts").text(),
+            Bun.file("src/command/cli/commands.ts").text(),
+            Bun.file("src/command/cli/handlers/dream.handler.ts").text(),
+            Bun.file("src/command/runtime.adapter.ts").text(),
+        ]);
+        const commandSources = `${entry}\n${commands}\n${dreamHandler}`;
+
+        expect(commandSources).toContain("commandRuntime");
+        expect(commandSources).not.toContain("../agent/runtime/index.ts");
+        expect(commandSources).not.toContain("../../agent/runtime/index.ts");
+        expect(commandSources).not.toContain("RuntimeModule");
+        expect(adapter).toContain("RuntimeModule");
+        expect(adapter).toContain("dispatchMessage");
+    });
+
     test("commander route defaults to chat and accepts runtime modes without exposing the removed CLI surface", () => {
         expect(parseFlyflorMode(["bun", "flyflor"])).toBe(RuntimeMode.Chat);
         expect(parseFlyflorMode(["bun", "flyflor", "tui"])).toBe(RuntimeMode.Tui);

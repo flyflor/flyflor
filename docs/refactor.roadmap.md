@@ -86,7 +86,7 @@ flowchart TB
 
 任务：
 
-- 迁移 `src/cttl` 到 `src/executive`，保留薄兼容 barrel。（已完成）
+- 迁移 `src/cttl` 到 `src/executive`，并移除旧 `src/cttl` 物理路径。（已完成）
 - 将 registry、planner、guard、loop guard、capability descriptor 和 catalog snapshot 收拢到 Executive 目录。（已完成）
 - 为 delegate、computer、code runner、browser、LSP、message、media 等能力族预留 descriptor，不把它们写成固定 prompt 命令清单。（已在文档中保留能力族规则；具体实现进入后续 External Kit / Capability Kit 阶段）
 - 明确 long-running task 的中断、恢复、审批和审计协议。（已在本阶段方向中固定，细化实现进入 R5 kit 协议）
@@ -107,7 +107,7 @@ flowchart TB
 任务：
 
 - 迁移 `src/fch/mindstream`、`src/fch/crystal`、`src/fch/hippocampus` 到 `src/cognitive`。（已完成）
-- 旧 `src/fch` 只保留兼容导出，不再承载新实现。
+- 移除旧 `src/fch` 物理路径，不再保留 Cognitive 兼容壳。（已完成）
 - 确认 Cognitive 不直接执行 shell、MCP、channel send、browser/computer 等副作用。
 - 保持 brain.db、crystal.db、project/fork/ghost/identity/eq 写入协议不漂移。
 
@@ -120,14 +120,14 @@ flowchart TB
 
 ### R4 Agent Shell Split
 
-状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent`，CLI/TUI/Gateway 拆分待继续）。
+状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent`；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；TUI/Gateway 拆分待继续）。
 
 目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
 
 任务：
 
 - 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。（已完成）
-- 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。
+- 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（本地 adapter 已建立）
 - 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。
 - Gateway 保留最小 control/event transport；具体 channel adapter 进入可插拔 kit 规划。
 - 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述。

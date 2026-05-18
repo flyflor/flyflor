@@ -25,8 +25,8 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 - `src/cognitive/hippocampus/memory/feedback/index.ts` — LLM 结构化反馈分类
 - `src/cognitive/hippocampus/memory/history/index.ts` — chat history / planning replay 映射
 - `src/cognitive/hippocampus/memory/actions/index.ts` — `<flyflor_memory_actions>` 解析
-- `src/cognitive/crystal/gems/index.ts` — CrystalGemComponent，内部 Gem 召回与结晶边界；旧 `src/fch/crystal/gems/index.ts` 仅兼容 re-export
-- `src/cognitive/crystal/memory/index.ts` — CrystalMemoryComponent 兼容门面与本地晶体图 backend；旧 `src/fch/crystal/memory/index.ts` 仅兼容 re-export
+- `src/cognitive/crystal/gems/index.ts` — CrystalGemComponent，内部 Gem 召回与结晶边界；历史 `src/fch/crystal/gems/index.ts` 已移除
+- `src/cognitive/crystal/memory/index.ts` — CrystalMemoryComponent 兼容门面与本地晶体图 backend；历史 `src/fch/crystal/memory/index.ts` 已移除
 - `src/components/index.ts` — 共享 Component 基类：MemoryComponent / CrystalComponent / BrainComponent / GraphComponent / SQLiteComponent / RedisComponent / SurrealComponent
 
 ## 分层结构

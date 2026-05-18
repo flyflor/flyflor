@@ -29,9 +29,6 @@ const SINGLE_OWNER_COMPONENT_FILES = [
     "src/components/base.component.ts",
     "src/config/config.component.ts",
     "src/agent/context/context.scope.component.ts",
-    "src/fch/crystal/gems/gem.component.ts",
-    "src/fch/crystal/memory/crystal.memory.component.ts",
-    "src/fch/mindstream/model.component.ts",
     "src/protocol/contracts/mode.component.ts",
     "src/events/events.component.ts",
 ];
@@ -57,7 +54,6 @@ const DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES = [
     "docs/old-docs/",
 ];
 const LEGACY_FCH_TOP_LEVEL_DIRS = ["llm", "crystal", "neural"];
-const LEGACY_FCH_CHILD_DIRS = ["fluid", "llmriver"];
 const MIGRATED_FCH_IMPORTS = ["crystal", "hippocampus", "mindstream"];
 const MIGRATED_AGENT_IMPORTS = ["context", "skills"];
 
@@ -152,14 +148,10 @@ describe("repository naming boundary", () => {
         expect(violations).toEqual([]);
     });
 
-    test("mindstream does not regress to old transient names", async () => {
-        const dirs = await listDirs(join(REPO_ROOT, "src", "fch"));
-        const childNames = new Set(dirs.map((dir) => basename(dir)));
-        const violations = LEGACY_FCH_CHILD_DIRS.filter((dir) => childNames.has(dir));
-
-        // Mindstream names the current reasoning/generation flow. The old
-        // fluid/llmriver names should not return as real source directories.
-        expect(violations).toEqual([]);
+    test("legacy fch physical directory does not return", async () => {
+        // R3 finished with Cognitive owned by src/cognitive. Keeping src/fch
+        // around as compatibility shells makes the public boundary ambiguous.
+        expect(await exists(join(REPO_ROOT, "src", "fch"))).toBe(false);
     });
 
     test("Event Fabric stays above protocol instead of under protocol/events", async () => {
@@ -190,9 +182,15 @@ describe("repository naming boundary", () => {
             }
         }
 
-        // src/cttl is a compatibility barrel only. Production code and tests
-        // should exercise the current Executive boundary directly.
+        // Executive is owned by src/executive. The old cttl import surface is
+        // gone, so source and tests must exercise the current boundary.
         expect(violations).toEqual([]);
+    });
+
+    test("legacy cttl physical directory does not return", async () => {
+        // R2 finished with Executive owned by src/executive. Keeping src/cttl
+        // around as compatibility shells makes the public boundary ambiguous.
+        expect(await exists(join(REPO_ROOT, "src", "cttl"))).toBe(false);
     });
 
     test("new code imports migrated cognitive slices through src/cognitive instead of legacy fch", async () => {

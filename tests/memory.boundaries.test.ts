@@ -359,7 +359,7 @@ describe("Internal infrastructure deployment boundaries", () => {
     test("project solidification lives under hippocampus rather than agent", async () => {
         const [agentFiles, hippocampusProjectFiles] = await Promise.all([
             readdir(join(import.meta.dir, "..", "src", "agent")),
-            readdir(join(import.meta.dir, "..", "src", "fch", "hippocampus", "project")),
+            readdir(join(import.meta.dir, "..", "src", "cognitive", "hippocampus", "project")),
         ]);
 
         // Codename promotion and project scaffolding are memory solidification

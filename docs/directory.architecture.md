@@ -70,18 +70,18 @@ docs/
 
 ## 迁移期路径映射
 
-当前源码仍处在迁移期。目标目录是未来新代码的方向，旧物理路径只作为兼容窗口存在：
+当前源码仍处在迁移期。目标目录是未来新代码的方向；已完成迁移的历史物理路径必须移除，未完成迁移的旧物理路径只作为兼容窗口存在：
 
 | 目标目录 | 当前物理路径 | 迁移规则 |
 | --- | --- | --- |
-| `src/cognitive/mindstream` | `src/cognitive/mindstream`（`src/fch/mindstream` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
-| `src/cognitive/crystal` | `src/cognitive/crystal`（`src/fch/crystal` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
-| `src/cognitive/hippocampus` | `src/cognitive/hippocampus`（`src/fch/hippocampus` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
-| `src/executive` | `src/executive`（`src/cttl` 仅兼容 re-export） | registry/planner/guard/loop 是当前实现路径；新代码禁止回写 `src/cttl` |
+| `src/cognitive/mindstream` | `src/cognitive/mindstream`（历史 `src/fch/mindstream` 已移除） | 已迁移；新代码禁止回写旧路径 |
+| `src/cognitive/crystal` | `src/cognitive/crystal`（历史 `src/fch/crystal` 已移除） | 已迁移；新代码禁止回写旧路径 |
+| `src/cognitive/hippocampus` | `src/cognitive/hippocampus`（历史 `src/fch/hippocampus` 已移除） | 已迁移；新代码禁止回写旧路径 |
+| `src/executive` | `src/executive`（历史 `src/cttl` 已移除） | registry/planner/guard/loop 是当前实现路径；新代码禁止回写旧路径 |
 | `src/agent/skills` | `src/agent/skills`（`src/skills` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
 | `src/agent/context` | `src/agent/context`（`src/context` 仅兼容 re-export） | 已迁移；新代码禁止回写旧路径 |
 
-迁移完成前，未完成目录必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确旧路径只是兼容出口，不能让读者误以为旧路径仍承载实现。
+迁移完成前，未完成目录必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确历史旧路径已移除，不能让读者误以为旧路径仍承载实现。
 
 ## 文件命名约定
 

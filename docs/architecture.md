@@ -4,7 +4,7 @@
 
 Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；整体设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**。Cognitive 负责 Mindstream、Crystal、Hippocampus 认知内核，Executive 负责 capability registry、tool planner、trust guard 和 loop 防护，Agent 负责 runtime、gateway、sandbox、skills、context 等外在交互形态。入口装配在 `FlyFlor` composition root 完成，热路径由 `RuntimeModule` 编排。
 
-`FCH` 和 `CTTL` 是迁移期历史代号：`src/cognitive/mindstream`、`src/cognitive/crystal` 与 `src/cognitive/hippocampus` 已承载对应实现，旧 `src/fch/*` 只保留兼容 re-export。`src/executive` 已承载原 CTTL 实现，`src/cttl` 只保留兼容 re-export。文档提到旧路径时只表示兼容窗口，不代表新的公开架构命名。
+`FCH` 和 `CTTL` 是迁移期历史代号：`src/cognitive/mindstream`、`src/cognitive/crystal` 与 `src/cognitive/hippocampus` 已承载对应实现，旧 `src/fch` 物理路径已移除。`src/executive` 已承载原 CTTL 实现，旧 `src/cttl` 物理路径已移除。文档提到旧代号时只表示历史背景，不代表新的公开架构命名。
 
 ## 相关代码路径
 
@@ -15,7 +15,7 @@ Flyflor 是 Bun + TypeScript 智能体运行时，目标是单文件二进制；
 - `src/agent/di/` — `@Module` / `@Provide` / `@Inject` metadata、`DependencyContainer`
 - `src/protocol/` — 公共协议、枚举、control envelope、进程信封
 - `src/events/` — RECL / Event Fabric，所有交互事件的订阅广播中枢
-- `src/cognitive/hippocampus/project/` — codename / project 固化、项目脚手架与资源指标触发器；旧 `src/fch/hippocampus/project/` 仅兼容 re-export
+- `src/cognitive/hippocampus/project/` — codename / project 固化、项目脚手架与资源指标触发器；历史 `src/fch/hippocampus/project/` 已移除
 - `src/agent/runtime/{blackboard,mcp,planning,routing,reflection,skills,streaming,turn}/` — RuntimeModule 的语义子目录；主 module 只做 turn 编排
 - `src/cognitive/mindstream/`、`src/cognitive/crystal/`、`src/cognitive/hippocampus/`、`src/executive/`、`src/agent/`、`src/command/`、`src/config/`
 
@@ -25,9 +25,9 @@ Cognitive 是 Flyflor 的认知层，内部三层是 `Mindstream / Crystal / Hip
 
 | Cognitive 层 | 目标目录 | 兼容路径 | 角色 | 后端 |
 | --- | --- | --- | --- |
-| Mindstream 心流层 | `src/cognitive/mindstream` | `src/fch/mindstream` 仅兼容 re-export | provider 协议转换、流式输出、当前任务的理解、推理、生成、工具意图和临场判断 | OpenAI 兼容 / Anthropic 兼容 |
-| Crystal Intelligence 晶体智力 | `src/cognitive/crystal` | `src/fch/crystal` 仅兼容 re-export | 反思候选 → Gem 升格、方法论沉淀、稳定知识复用 | local `crystal.db` + VectorIndex |
-| Hippocampus 海马体遗忘曲线 | `src/cognitive/hippocampus` | `src/fch/hippocampus` 仅兼容 re-export | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计、计划/fork/场景摘要落 brain.db | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
+| Mindstream 心流层 | `src/cognitive/mindstream` | 历史 `src/fch/mindstream` 已移除 | provider 协议转换、流式输出、当前任务的理解、推理、生成、工具意图和临场判断 | OpenAI 兼容 / Anthropic 兼容 |
+| Crystal Intelligence 晶体智力 | `src/cognitive/crystal` | 历史 `src/fch/crystal` 已移除 | 反思候选 → Gem 升格、方法论沉淀、稳定知识复用 | local `crystal.db` + VectorIndex |
+| Hippocampus 海马体遗忘曲线 | `src/cognitive/hippocampus` | 历史 `src/fch/hippocampus` 已移除 | 工作记忆 ring、激活、TTL 遗忘、热记忆压缩审计、计划/fork/场景摘要落 brain.db | local `MemoryComponent` + Markdown + SQLite + `crystal.db` |
 
 Cognitive 不直接表达文件、shell、MCP、鼠标键盘、消息发送等外部行动能力；这些能力统一进入 Executive 外骨架，避免认知内核被具体工具实现污染。
 
