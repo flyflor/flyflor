@@ -30,10 +30,12 @@ function policy(approval: ToolApprovalMode): SandboxPolicy {
     return {
         mode: SandboxMode.Off,
         approvals: {
+            [CapabilityExecutionKind.Computer]: approval,
             [CapabilityExecutionKind.McpTool]: approval,
             [CapabilityExecutionKind.Plugin]: approval,
             [CapabilityExecutionKind.ShellHook]: approval,
         },
+        computerApproval: approval,
         mcpToolApproval: approval,
         pluginApproval: approval,
         shellHookApproval: approval,
@@ -141,5 +143,22 @@ describe("gateCapabilityExecution", () => {
         });
         expect(result.allowed).toBe(true);
         expect(events.events).toHaveLength(0);
+    });
+
+    test("computer capability uses its own approval surface", async () => {
+        const events = new CapturingEvents();
+        const result = await gateCapabilityExecution({
+            policy: policy(ToolApprovalMode.Ask),
+            kind: CapabilityExecutionKind.Computer,
+            events,
+            descriptor: { capability: "computer.click" },
+            approve: () => true,
+        });
+        expect(result.allowed).toBe(true);
+        expect(events.types()).toEqual([RuntimeEventType.SandboxToolApprovalRequested]);
+        expect(events.events[0]?.payload).toMatchObject({
+            kind: CapabilityExecutionKind.Computer,
+            capability: "computer.click",
+        });
     });
 });

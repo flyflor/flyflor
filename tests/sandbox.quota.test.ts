@@ -39,6 +39,9 @@ describe("SandboxQuotaTracker", () => {
         expect(
             tracker.checkBeforeAllow(CapabilityExecutionKind.Plugin, "req1", { yolo: false }).ok,
         ).toBe(true);
+        expect(
+            tracker.checkBeforeAllow(CapabilityExecutionKind.Computer, "req1", { yolo: false }).ok,
+        ).toBe(true);
     });
 
     test("forgetRequest releases counters", () => {

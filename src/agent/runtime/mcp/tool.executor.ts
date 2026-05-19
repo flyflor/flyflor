@@ -22,6 +22,8 @@ import {
 } from "../../sandbox/index.ts";
 import {
     ExecutiveToolRuntime,
+    CttlComputerProfileComponent,
+    CttlMcpCatalogAdapter,
     type CttlLoopGuardDecision,
     type ExecutiveToolRuntimeAskRequired,
     type ExecutiveToolRuntimeDescriptor,
@@ -73,6 +75,13 @@ export interface RuntimeMcpToolLoopResult {
  */
 export class RuntimeMcpToolExecutor {
     private readonly executive = new ExecutiveToolRuntime<McpToolCallRequest & { key: string }, McpToolCallExecution & { call: McpToolCallRequest & { key: string } }>();
+    private readonly computerProfile = new CttlComputerProfileComponent();
+    private readonly adapter = new CttlMcpCatalogAdapter({
+        coreServers: new Set(["workspace", "git", BUILTIN_SHELL_SERVER]),
+        gitServer: "git",
+        shellServer: BUILTIN_SHELL_SERVER,
+        workspaceServer: "workspace",
+    });
 
     public constructor(
         private readonly config: FlyflorConfig,
@@ -196,7 +205,7 @@ export class RuntimeMcpToolExecutor {
                       : undefined;
             const gate = await gateCapabilityExecution({
                 policy: sandboxPolicy,
-                kind: CapabilityExecutionKind.McpTool,
+                kind: this.executionKindForCall(call, catalogEntry),
                 events: this.events,
                 requestId: input.requestId,
                 descriptor,
@@ -579,6 +588,19 @@ export class RuntimeMcpToolExecutor {
             return { concurrencySafe: false, exclusive: true, readOnly: false };
         }
         return { concurrencySafe: true, exclusive: false, readOnly: true };
+    }
+
+    private executionKindForCall(
+        call: McpToolCallRequest,
+        catalogEntry: McpToolCatalogEntry | undefined,
+    ): CapabilityExecutionKind {
+        if (!catalogEntry) {
+            return CapabilityExecutionKind.McpTool;
+        }
+        const descriptor = this.adapter.descriptorFor(catalogEntry);
+        return this.computerProfile.isComputerControlled(descriptor)
+            ? CapabilityExecutionKind.Computer
+            : CapabilityExecutionKind.McpTool;
     }
 
     private catalogKeys(catalog: readonly McpToolCatalogEntry[]): ReadonlySet<string> {

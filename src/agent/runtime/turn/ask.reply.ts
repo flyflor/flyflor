@@ -1,6 +1,7 @@
 import type { AgentAsk, AgentAskChoice } from "../../../protocol/contracts/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
 import { Runtime } from "../../../components/component.ts";
+import type { GatewayControlLongHorizonLoopSnapshot } from "../../../protocol/control/index.ts";
 
 /**
  * Render AgentAsk into the visible reply sent to the user.
@@ -34,10 +35,15 @@ export class AskReplyRenderer extends Runtime {
         return lines.join("\n");
     }
 
-    public buildAskMetadata(ask: AgentAsk, snapshotId: string): Record<string, unknown> {
+    public buildAskMetadata(
+        ask: AgentAsk,
+        snapshotId: string,
+        executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot,
+    ): Record<string, unknown> {
         return {
             choiceCount: ask.choices?.length ?? 0,
             choices: ask.choices ?? [],
+            executiveToolLoop,
             freeform: ask.freeform ?? true,
             prompt: ask.prompt,
             questionCount: ask.questions?.length ?? 0,
@@ -67,6 +73,10 @@ export function renderAskReplyText(ask: AgentAsk): string {
     return defaultAskReplyRenderer.renderAskReplyText(ask);
 }
 
-export function buildAskMetadata(ask: AgentAsk, snapshotId: string): Record<string, unknown> {
-    return defaultAskReplyRenderer.buildAskMetadata(ask, snapshotId);
+export function buildAskMetadata(
+    ask: AgentAsk,
+    snapshotId: string,
+    executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot,
+): Record<string, unknown> {
+    return defaultAskReplyRenderer.buildAskMetadata(ask, snapshotId, executiveToolLoop);
 }

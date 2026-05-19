@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { GatewayModule } from "../src/agent/gateway/module.ts";
-import { buildDedupKey, InMemoryDedupStore } from "../src/agent/gateway/dedup.ts";
+import { buildDedupKey, InMemoryDedupStore } from "../src/agent/gateway/dedup.store.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import {
     Channel,
@@ -77,7 +77,6 @@ describe("GatewayModule dedup telemetry", () => {
         const events = new CapturingSink();
         const gateway = new GatewayModule(
             gatewayConfig(),
-            new Map(),
             {
                 handleMessage: async () => reply("delivered", "msg-record-fail"),
             } as never,
@@ -102,7 +101,6 @@ describe("GatewayModule dedup telemetry", () => {
         const events = new CapturingSink();
         const gateway = new GatewayModule(
             gatewayConfig(),
-            new Map(),
             {
                 handleMessage: async () => {
                     throw new Error("runtime-down");

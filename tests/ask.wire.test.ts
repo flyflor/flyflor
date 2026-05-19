@@ -196,6 +196,16 @@ describe("LF-R3 Ask first-class wiring", () => {
                 db.close();
             }
             expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryAskAnswered)).toBe(true);
+            expect(sink.events).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        type: RuntimeEventType.CttlLongHorizonLoopResumed,
+                        payload: expect.objectContaining({
+                            askId: expect.any(String),
+                        }),
+                    }),
+                ]),
+            );
         } finally {
             memory.dispose();
         }

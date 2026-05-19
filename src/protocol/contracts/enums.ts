@@ -166,6 +166,7 @@ export const ToolApprovalMode = {
 export type ToolApprovalMode = (typeof ToolApprovalMode)[keyof typeof ToolApprovalMode];
 
 export const CapabilityExecutionKind = {
+    Computer: "computer",
     McpTool: "mcp-tool",
     Plugin: "plugin",
     ShellHook: "shell-hook",

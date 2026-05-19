@@ -40,6 +40,11 @@ interface CttlToolDescriptor {
     concurrencySafe: boolean;
     exclusive: boolean;
     resultLimit: { maxChars: number };
+    computer?: {
+        action: "browser" | "keyboard" | "mouse" | "screen" | "window";
+        observationOnly: boolean;
+        requiresFocusTarget?: boolean;
+    };
 }
 ```
 
@@ -48,6 +53,14 @@ interface CttlToolDescriptor {
 `permission` 独立于 scope，初始约定为 `none`、`read`、`write`、`execute`、`network`、`message`、`computer`、`dangerous`。本地 CLI 可以按交互模式提升默认审批，微信、Webhook 等远程 channel 默认不得拥有 `execute`、`computer`、`dangerous`。
 
 `readOnly && concurrencySafe` 的工具可以并发执行；`exclusive` 工具必须独占，例如 shell PTY、browser control、mouse/keyboard、长生命周期 code runner 或会修改共享状态的工具。
+
+`computer` profile 是 R9 冻结后的正式外骨骼契约：
+
+- 它描述“这是电脑控制能力”，而不是某个具体 transport。
+- 不论能力来自 MCP、plugin、user tool 还是未来 Rust exoskeleton bridge，都应归一成同一 profile。
+- `action` 只表达控制面类别，不承载自然语言语义推断。
+- `observationOnly=true` 代表只观察屏幕或窗口状态；`false` 代表会产生输入/控制副作用。
+- `requiresFocusTarget=true` 代表执行前通常需要明确窗口/标签页/聚焦目标。
 
 ## Capability 来源
 
@@ -83,6 +96,8 @@ Tool Plan 是协议层数据，不是自然语言推断结果；隐藏原因必�
 
 每轮 Tool Plan 生成后会发布 `cttl.capability.catalog.built`。这是外部 control/event 面的通用快照，只包含可 JSON 序列化的 descriptor 摘要、hidden reason、失败/stale source 和 totals；不包含 executor、resource 正文、prompt 正文或密钥。WS 客户端可通过 `capability.catalog.get` 读取最近一次 `capability.catalog.snapshot`，用于独立 TUI、channel console 或调试面板展示当前“手脚目录”。
 
+R9 之后，computer-control descriptor 也会出现在这个 capability catalog 中。Rust 侧可以直接读取 `category=computer`、`permission=computer` 和 `descriptor.computer`，不需要依赖 Bun runtime 内部判断。
+
 ## Trust Policy 默认行为
 
 Trust Policy 把结构化运行面转换成 trust context。调用点只声明当前 surface、是否本地、是否 project-scoped、是否 debug，Executive 决定默认 scope 和 permission cap：
@@ -95,6 +110,12 @@ Trust Policy 把结构化运行面转换成 trust context。调用点只声明�
 | background / cron | `core`、`background`、可选 `project` | `network` |
 
 远程 surface 即使声明了 channel scope，也不会默认获得 shell、computer 或 dangerous。需要执行类能力时必须由调用方显式传入更高 permission cap，并经过 sandbox / approval / audit。scope 只表达使用场景，不能替代 permission。
+
+电脑控制的额外约定：
+
+- `permission=computer` 不足以让工具自动可见；默认至少需要显式提升到 `computer` permission cap。
+- 远程 channel 永远不默认暴露 computer tools。
+- 本地 debug / exoskeleton 调试面是推荐的公开面；computer descriptor 应优先声明 `debug` scope，避免普通本地回合默认拿到高风险控制能力。
 
 ## Loop Guard
 
@@ -112,6 +133,26 @@ Runtime 工具 loop 由 `ExecutiveToolRuntime` 拥有，Runtime 只传 `generate
 调度规则固定在 Executive：`readOnly && concurrencySafe && !exclusive` 的工具可以同批并发，`write` / `execute` / `exclusive` 工具必须串行。具体 transport（MCP、workspace、git、shell、user tool、plugin）只在 runtime-facing adapter 内实现，`src/executive` 不 import Runtime、Gateway、Command、MCP、Sandbox 或 Plugin 私有实现。
 
 每次阻断还会发布 `cttl.loop.guard.blocked` RuntimeEvent。事件 payload 只包含 `server`、`tool`、`reason`、`message` 等可 JSON 序列化事实；它用于 TUI、WS、channel adapter 和审计展示，不参与业务语义判断。
+
+## R10 Long-Horizon Loop Contract
+
+R10 没有新增第二套 loop 系统，而是把“长线执行需要用户继续”冻结为 Executive 现有 ask 出口的一部分。
+
+当前 contract：
+
+- 当工具预算耗尽，Executive 返回 `toolBudgetExhausted=true` 的 `askRequired`。
+- 当 loop guard 阻断当前 step 的全部工具调用，Executive 返回带 `loopGuardReason` 的 `askRequired`。
+- Runtime 把这份 snapshot 映射到：
+  - `turn.final.reply.metadata.executiveToolLoop`
+  - `turn.final.reply.metadata.ask.executiveToolLoop`
+  - `cttl.long_horizon_loop.paused`
+- 用户显式回答上一轮 pending ask 后，Memory 发布 `cttl.long_horizon_loop.resumed`。
+
+设计结论：
+
+- 长线 loop 的暂停/恢复是协议契约，不是隐藏线程。
+- WS/event 已足够承载这一层语义，不需要在现阶段换协议。
+- 未来 Rust exoskeleton 只需实现对 snapshot 和事件的读取、展示、继续输入，不需要复刻 Bun 内部执行器。
 
 ## 高风险工具分层
 

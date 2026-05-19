@@ -1,10 +1,20 @@
-import { runFlyflorCommand } from "./src/command/index.ts";
-import { formatFlyflorVersion } from "./src/command/version.ts";
+import { getFlyFlor } from "./src/app.ts";
+import { formatFlyflorVersion } from "./src/version.ts";
+import { RuntimeMode } from "./src/protocol/index.ts";
 
 if (process.argv.includes("--version") || process.argv.includes("-V")) {
     console.log(formatFlyflorVersion());
     process.exit(0);
 }
 
-const result = await runFlyflorCommand(process.argv);
-process.exitCode = result.exitCode;
+const mode = normalizeEntryMode(process.argv.slice(2));
+const app = await getFlyFlor({ argv: ["bun", "flyflor", mode], mode });
+await app.start();
+
+function normalizeEntryMode(argv: string[]): typeof RuntimeMode.Chat | typeof RuntimeMode.Gateway {
+    const first = argv[0];
+    if (first === RuntimeMode.Gateway) {
+        return RuntimeMode.Gateway;
+    }
+    return RuntimeMode.Chat;
+}

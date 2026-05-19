@@ -1,303 +1,173 @@
 # Flyflor TODO
 
-## 当前交接
+## 当前状态
 
-状态：R6 Release Gate And Cleanup 已完成。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并移除旧物理路径，CLI runtime 与只读状态访问已收敛到 command adapters，chat TUI 已收敛到 `CommandRuntimeClient`，Gateway `/ws` control/event transport 已作为第一方迁移传输稳定，Executive Tool Runtime 已接管工具循环与 MCP read capability gating；R5 已固定 External Kit manifest、只读 capability catalog 和 control/event 发现边界；R6 已完成根层文档迁移残留清理、发布门禁和 deterministic smoke 验证。
+状态：R0-R6 已完成。R7 正在执行主线剥离，当前这一轮已完成 `src/command`、`src/agent/gateway/channels` 的主源码移除，主线 Gateway 只保留 WS/control/event 血管与外部 kit 只读发现。`abandon/` 只作为废弃代码备份，不允许主线 import / re-export / 运行时依赖。
 
-当前目标：R6 已收口，下一步进入发布前分支整理、变更审阅和可选 `bun run smoke:release` / `bun run release:check`；R4/R5 已收口的第一方内置实现只作为内置 transport 和 adapter，不再扩张 Runtime 私有直连。
+当前主线目标：
 
-当前活跃路线：
+- 保持 `src/agent/gateway` 只承载 WebSocket control/event 传输、最小 `GatewayModule`、dedup 和只读 kit catalog。
+- 把未来 Rust CLI / Gateway / TUI 对接所需的协议面冻结在 `src/protocol/control/*` 与 `docs/control.protocol.md`。
+- 所有后续电脑控制、长线 loop、ask/todo/data 协议扩展，都先围绕 event 血管和 WS envelope 做，不回流到第一方 CLI/TUI/channel adapter。
 
-- 阶段说明：`docs/refactor.roadmap.md`
-- 工程红线：`docs/boundaries.md`
-- 目录目标：`docs/directory.architecture.md`
-- 外骨架规则：`docs/cttl.exoskeleton.md`
+## 架构定位
 
-## 换 session 交接快照
+Flyflor 当前主线继续以 **Cognitive-Executive-Agent Architecture** 为核心：
 
-已完成：
+- `src/cognitive`：认知内核，心流、晶体智力、海马体。
+- `src/executive`：外骨骼，Capability / Tool / Trust / Loop。
+- `src/agent`：运行时外显面；其中 Gateway 现只保留 WS/control/event 血管。
+- `src/events`：血管系统，统一广播 RuntimeEvent。
+- `src/protocol`：跨实现共享协议，作为 Rust 对接基础。
 
-- R4：Runtime 变薄，Context owner 装配 prompt/context，Executive Tool Runtime 接管工具 loop。
-- R5：External Kit manifest、只读 capability catalog、Gateway control/event 发现面落地。
-- R6：根层文档残留清理、old-docs 归档说明、docs/test/binary/smoke release gate 已通过。
+## R7 Surface Amputation
 
-下一步：
+状态：进行中
 
-- 做发布前 diff review，确认是否需要 `bun run smoke:release` / `bun run release:check`。
-- 若继续外部化 CLI/TUI/Gateway，只能替换 `src/command/runtime.adapter.ts`、`src/command/state.adapter.ts` 或新增 External Kit/control client，不得新增 Runtime 私有直连。
-- 若新增能力执行桥，先走 Executive descriptor、Tool Plan、sandbox/approval、RuntimeEvent 审计和 `docs/boundaries.md` 更新。
+本轮已完成：
 
-本轮已验证：
+- 已删除主线 `src/command`。
+- 已删除主线 `src/agent/gateway/channels`。
+- 已删除依赖上述目录的第一方 CLI/TUI/channel 测试与脚本。
+- 已移除主线对 `abandon/` 的 import / re-export。
+- 已将 `src/agent/gateway/module.ts` 收敛为仅支持 `/ws`、`/health`、`/channels` 的最小 Gateway。
+- 已将 `src/agent/gateway/kit/*` 回收到主线，仅保留 External Kit 只读 manifest/catalog。
+- 已将版本读取能力回收到 `src/version.ts`。
+- 已将构建入口改成只编译 `app.ts`，不再编译 TUI parser worker。
 
-- `bun run docs:check`
+下一轮：
+
+1. 继续清理文档中残余的 `src/command`、TUI、channel adapter 叙述。
+2. 补齐主线针对最小 GatewayModule 的测试。
+3. 收紧 `README`、`docs/boundaries.md`、`docs/architecture.md` 到血管化主线。
+4. 为 Rust 客户端先冻结 `ask` / `todo` / `data` / `event` 语义与字段约束。
+
+## R8 Vascular Freeze
+
+状态：进行中
+
+目标：
+
+- 固化 WS 协议为 Rust / DIY 客户端长期对接面。
+- 把核心语义收敛为：`input`、`stream`、`event`、`ask`、`todo`、`data`、`error`、`ping`、`pong`。
+- 明确请求/响应 envelope、鉴权、订阅、turn 生命周期、错误码和状态快照字段。
+
+本轮已完成：
+
+- 已冻结 `docs/control.protocol.md` 为 Rust / thin client 对接主文档。
+- 已明确 `ask` / `todo` / `data` 当前发送约定：
+  - `ask` 走 `turn.final.reply.metadata.ask`
+  - `todo` 走 `turn.final.reply.metadata.planning.taskPlans`
+  - `data` 走 `server.hello` / `gateway.status.snapshot` / `capability.catalog.snapshot` / `ack` 与 `turn.final.reply.metadata.planning`
+- 已在 `src/protocol/control/envelope.ts` 收紧稳定 payload 类型：
+  - `GatewayControlReplyMetadata`
+  - `GatewayControlPlanningMetadataSnapshot`
+  - `GatewayControlAskMetadataSnapshot`
+  - `GatewayControlErrorCode`
+  - `GatewayControlProtocolError`
+- 已将 WS control 错误面收敛为结构化错误码：`internal`、`invalid-envelope`、`invalid-payload`、`unauthorized`、`unsupported-message`。
+- 已补协议与 gateway 测试，验证：
+  - `turn.final` 中的 ask/todo metadata 形态
+  - control error 的 machine-readable `code`
+  - invalid envelope / invalid payload 的错误面
+
+验收：
+
+- `docs/control.protocol.md` 与 `src/protocol/control/*` 完全一致。
+- 主线不再出现第一方 CLI/TUI/channel adapter 的运行时依赖。
 - `bun run check`
-- `bun run test`
-- `bun run build:binary`
-- `bun run smoke:agent`
+- `bun run docs:check`
 
-## 架构命名
+## R9 Computer Exoskeleton
 
-公开架构名：**Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**。
+状态：已完成
 
-- `cognitive`：认知层，原 FCH。包含 `mindstream`、`crystal`、`hippocampus`，只负责思考、反思、记忆、人格连续性和生命体内在状态。
-- `executive`：执行层，原 CTTL。当前实现路径为 `src/executive`，历史 `src/cttl` 物理路径已移除。包含 `registry`、`planner`、`guard`、`loop`，负责能力发现、工具包装、信任边界、执行规划、失败恢复和 loop 防护。
-- `agent`：运行态外显层。当前包含 `runtime`、`gateway`、`sandbox`、`skills`、`context` 等面向外部世界的编排与适配；重构后 CLI/TUI/Gateway 具体实现逐步外部化。
+目标：
 
-路径说明：历史 `src/fch`、`src/cttl`、`src/skills` 与 `src/context` 物理路径已移除，Cognitive / Executive / Agent 实现只位于当前目标目录。CLI/TUI/Gateway 仍可作为仓库内置 transport 存在，但只能通过 adapter、event/control/ws 和 External Kit catalog 暴露，不得新增 Runtime 私有直连。
+- 以 Executive 外骨骼形式接入电脑控制。
+- 参考 nanobot 的 scope 简洁性，保证工具面足够薄。
+- 保持控制权、权限、审批、审计都走统一 Capability / Tool / Trust / Loop。
 
-## 重构方向
+本轮已完成：
 
-目标不是继续堆 channel 或 CLI 功能，而是把 Flyflor 从单仓 agent app 重塑为：
+- 已把电脑控制提升为 Executive 一等能力面，而不是继续混在普通 MCP / plugin / shell 执行里。
+- 已新增独立 capability execution kind：`computer`。
+- 已为 Executive descriptor 引入稳定 `computer` profile：
+  - `action`
+  - `observationOnly`
+  - `requiresFocusTarget`
+- 已在 `src/executive/mcp.adapter.ts` 固化 `computer.*` MCP server 的 descriptor 约定：
+  - `category=computer`
+  - `permission=computer`
+  - `scope=local + debug`
+  - 自动附带 `computer` profile
+- 已在 Runtime capability plan 与执行门中对齐 computer profile：
+  - remote / channel 默认不可见
+  - 本地非 debug 默认不可见
+  - 即使经 MCP 接入，也会切换到独立 `computer` sandbox approval 面
+- 已在 SandboxConfig / SandboxPolicy 中增加独立 `computerApproval`
+- 已补充测试，验证：
+  - computer capability 的 trust 可见性
+  - MCP `computer.*` descriptor 归一
+  - sandbox gate / quota / policy 覆盖 computer kind
 
-```text
-Flyflor Core = runtime + cognitive continuity + event/control protocol
-Executive Exoskeleton = capability + tool + trust + loop
-External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / subagents
-```
+R9 收口结论：
 
-核心原则：
+- Bun 主线不负责堆电脑控制 GUI 或第一方终端壳。
+- Bun 主线负责冻结 computer exoskeleton 的 capability/tool/trust/sandbox 契约。
+- 后续 Rust CLI / Gateway / TUI 或用户自定义 exoskeleton，只要遵守这套契约接入真实控制器即可。
 
-- 内核只保留生命连续性：brain.db、crystal.db、Memory、Identity、Ghost、Ask、ContextFork、BehaviorSnapshot、RuntimeEvent。
-- 外骨骼提供执行力：Herme-agent / OpenClaw 类能力必须通过 descriptor、Tool Plan、sandbox、approval、audit、loop guard、resume protocol 接入。
-- CLI/TUI/Gateway 具体实现即使仍在仓库内置，也只能依赖 event 和 control/ws JSON envelope、command adapters 与 External Kit catalog。
-- 旧文档一旦被新契约替代，必须移动到 `docs/old-docs/` 并更新归档索引。
+约束：
+
+- 不在 Gateway 层堆叠电脑控制逻辑。
+- 不在自然语言上做关键词路由。
+- 只通过结构化 ask/todo/data/event 和工具描述驱动动作。
+
+## R10 Long-Horizon Loop
+
+状态：已完成
+
+目标：
+
+- 参考 Hermes 的长线 loop 设计。
+- 当工具调用达到封顶后，触发 ask 进入类似 openclaw 的超长线 loop。
+- 保持 loop 可恢复、可中断、可审计、可观察。
+
+本轮已完成：
+
+- 已把 Executive tool loop 的暂停面冻结为结构化 `executiveToolLoop` snapshot，而不是新增一套私有 transport。
+- 已在 `ExecutiveToolRuntimeAskRequired` 固化 R10 最小恢复字段：
+  - `askId`
+  - `resume.mode`
+  - `stepCount`
+  - `loopGuardReason`
+  - `toolBudgetExhausted`
+- 已在 `turn.final.reply.metadata` 与 `turn.final.reply.metadata.ask` 同步暴露 `executiveToolLoop`，方便 Rust UI 直接恢复当前 pending loop 状态。
+- 已新增并发布 R10 事件契约：
+  - `cttl.long_horizon_loop.paused`
+  - `cttl.long_horizon_loop.resumed`
+- 已把恢复语义收敛为“用户显式回答 pending ask 后，再由下一轮结构化输入继续”，不引入后台自动续跑 worker。
+- 已补齐协议、runtime、gateway、memory 与文档测试，确保 ask/todo/data/event 仍是唯一稳定语义面。
+
+R10 收口结论：
+
+- WS 继续作为长线 loop 的基础血管协议，性能与复杂度在当前阶段足够。
+- 长线 loop 不新增复杂 transport；只复用现有 `turn.final` + event stream。
+- Rust CLI / Gateway / TUI 后续只需读取 `executiveToolLoop` snapshot 和 R10 事件，即可接管暂停/恢复 UI。
 
 ## 红线
 
-- coding 前先更新本 TODO 和相关文档；跨 session 交接必须写清“已完成、当前状态、下一步、验证命令”。
-- 每个阶段完成前必须清理主文档、更新本 TODO、归档旧文档到 `docs/old-docs/`。
-- Bun 单文件二进制是硬需求：新增依赖前必须确认兼容 `bun build --compile`，禁止 native addon、postinstall、运行时读取 `node_modules` 资产和动态 require/import。
-- 业务配置不走环境变量；provider、模型、渠道凭据、sandbox、gateway 行为和工具策略都走 JSONC config / secrets provider。
-- 所有提示词工程放在 `templates/`；修改 `.md` 时必须同步 `.zh.cn.md` 副本。
-- 不把外骨架写成固定工具清单。工具来自 core、MCP、plugin、skill、channel、user、subagent 等 descriptor source，再经过 Tool Plan。
-- 内置工具描述不能用固定命令名训练模型行为；模型只看结构化 catalog、schema、scope、permission 和当前 Tool Plan。
-- MCP tools/resources/prompts 都是一等 capability；resources/prompts 只做发现和受控读取，不自动把正文塞进上下文。
-- shell、computer、dangerous、send_message、network、write 类副作用必须经过 executive guard、sandbox、approval、audit 和 loop guard。
-- 远程 channel 默认最小权限；不能默认获得 execute、computer 或 dangerous。
-- 零字符匹配红线继续有效：意图、路由、记忆动作、反馈分类、复杂度、矛盾检测等语义判断只能来自结构化字段或专用 JSON prompt 输出。
-- Event payload、Tool Plan、tool result 和 control envelope 必须 JSON 可序列化，不携带密钥、函数、stream、socket 或 class instance。
-
-## 阶段路线
-
-### R0 计划与文档基线
-
-状态：完成。
-
-目标：把“外骨骼重塑内在”的重构目标写成明确阶段计划，避免后续 session 只跟着局部文件漂移。
-
-任务：
-
-1. 建立 `docs/refactor.roadmap.md`。
-2. 更新 `docs/README.md` 和根 `README.md` 的核心文档索引。
-3. 更新本 `TODO.md`，固定每阶段收尾协议。
-4. 保留 `docs/old-docs/todo.active.md` 为归档指针，后续阶段如替代主文档，必须移动旧材料到 `docs/old-docs/`。
-
-验收：
-
-- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun run check`
-
-### R1 Core Boundary Freeze
-
-状态：完成。
-
-目标：冻结内核可依赖的最小边界，让 CLI/TUI/Gateway 拆分时不会反向拉扯 runtime。
-
-任务：
-
-1. 明确 core 只暴露 RuntimeEvent、control envelope、capability snapshot、turn delta/final、memory continuity API。
-2. 梳理 `src/app.ts` composition root，把 CLI/TUI/Gateway 直接耦合点标记为待外部化适配层。
-3. 给 `src/protocol/control` 和 `src/events` 补齐外部 client 需要的契约文档和测试。
-4. 收紧 control payload：project/fork/skill scope 必须完整结构化传入，core 不接受只传 project id 后再猜测项目目录。
-5. 更新 `docs/architecture.md`、`docs/runtime.events.md`、`docs/refactor.roadmap.md`。
-
-验收：
-
-- `bun test tests/protocol.control.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts --timeout 30000`
-- `bun run check`
-
-已验证：
-
-- `bun test tests/protocol.control.test.ts tests/event.component.test.ts tests/gateway.ws.test.ts --timeout 30000`
-- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun run check`
-
-### R2 Executive Exoskeleton Upgrade
-
-状态：完成。
-
-目标：把执行层从“工具 catalog + guard”推进到可承载 Herme-agent / OpenClaw 类执行力的外骨骼。
-
-任务：
-
-1. 把 `src/cttl` 迁移到 `src/executive`，并按 `registry`、`planner`、`guard`、`loop` 收拢职责。（已完成）
-2. 移除旧 `src/cttl` 物理路径，避免兼容壳继续污染 Executive 边界。（已完成）
-3. 为 delegate、computer、code runner、browser、LSP、message、media 等能力族预留 descriptor，不写固定 prompt 命令清单。
-4. 明确 long-running task 的中断、恢复、审批和审计协议。
-5. 更新 import 与命名边界测试。（已完成）
-6. 更新 `docs/cttl.exoskeleton.md`、`docs/sandbox.capabilities.md`、`docs/refactor.roadmap.md`。（已完成）
-
-验收：
-
-- `bun test tests/cttl.core.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-已验证：
-
-- `bun test tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
-- `bun test tests/naming.boundaries.test.ts tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
-- `bun test tests/naming.boundaries.test.ts tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-### R3 Cognitive Core Migration
-
-状态：完成。
-
-目标：把迁移期 FCH 目录落到 `src/cognitive`，让 Mindstream / Crystal / Hippocampus 成为公开内核边界。
-
-任务：
-
-1. 把 `src/fch/mindstream`、`src/fch/crystal`、`src/fch/hippocampus` 迁移到 `src/cognitive`。（已完成）
-2. 移除旧 `src/fch` 物理路径，避免兼容壳继续污染 Cognitive 边界。（已完成）
-3. 更新 memory、reflection、runtime、tests 的导入。（已完成）
-4. 确认 Cognitive 不直接执行 shell、MCP、channel send、browser/computer 等副作用。
-5. 保持 brain.db、crystal.db、project/fork/ghost/identity/eq 写入协议不漂移。
-6. 更新 `docs/architecture.md`、`docs/memory.system.md`、`docs/crystal.reflection.md`、`docs/directory.architecture.md`、`docs/refactor.roadmap.md`。
-
-验收：
-
-- `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-已验证：
-
-- `bun test tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts tests/crystal.local.backend.test.ts tests/memory.boundaries.test.ts tests/naming.boundaries.test.ts --timeout 30000`
-- `bun test tests/ask.parse.test.ts tests/ghost.decisions.parse.test.ts tests/identity.parse.test.ts tests/dormant.supervisor.test.ts tests/activation.test.ts tests/brain.store.test.ts tests/brain.archive.test.ts tests/summary.worker.test.ts tests/summary.wire.test.ts tests/dream.worker.test.ts tests/dream.zero.write.test.ts tests/background.scheduler.test.ts tests/memory.scheduler.wiring.test.ts tests/hot.memory.compression.worker.test.ts tests/consolidation.test.ts tests/local.working.store.test.ts tests/context.fork.store.test.ts tests/project.scaffolder.test.ts tests/codename.promote.test.ts --timeout 30000`
-- `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
-- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun test tests/memory.boundaries.test.ts tests/naming.boundaries.test.ts tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun test tests/naming.boundaries.test.ts tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-### R4 Agent Shell Split + Executive Tool Runtime
-
-状态：完成。
-
-目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
-
-任务：
-
-1. 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。skills 是做事方式，context 是运行态 scope 装配，二者都不属于认知内核；旧物理路径已移除。（已完成）
-2. 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（已建立 `src/command/runtime.adapter.ts`；chat TUI 使用 `CommandRuntimeClient`，不直接依赖 `RuntimeModule` / `BlackboardModule` 类型；后续 R5 可替换成 control/ws client）
-3. 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。（已建立 `src/command/state.adapter.ts` 收敛本地只读状态访问）
-4. Runtime 工具循环迁移到 Executive：Runtime 只编排 turn，Context owner 装配 model messages，Executive 负责 schema/sandbox/approval/result/loop guard/read-only 并发与写/执行串行调度。（已完成）
-5. MCP、workspace、git、shell、user tool、plugin capability 通过 `RuntimeMcpToolExecutor` 接入同一 `<flyflor_mcp_calls>` wire 和结果回灌格式。（已完成）
-6. MCP resources/prompts 读取通过 `RuntimeMcpCapabilityReader` 进入可见性确认、sandbox/approval gating 与受控 transport 调用；Runtime 不直接导入底层 read/get 函数。（已完成）
-7. Gateway 保留最小 control/event transport；`GatewayControlHub` `/ws` 已作为外部 client 契约边界，channel adapter 只接 `StreamingMessageDispatcher`，不 import Runtime 私有实现。（已完成）
-8. strict Executive manifest 与 JSONC config boundary 已固化；坏 manifest/config 不再静默吞默认值。（已完成）
-9. sandbox approval callback 异常通过 `sandbox.tool.approval.denied` 暴露 `reason: "approval-error"` 与 `approvalError`，不再伪装成普通拒绝。（已完成）
-10. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；External Kit manifest、发现和权限协议已在 R5 完成。（已完成）
-11. 更新 `docs/cli.commands.md`、`docs/gateway.channels.md`、`docs/runtime.events.md`、`docs/runtime.turn.md`、`docs/refactor.roadmap.md`。（已完成）
-
-验收：
-
-- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts --timeout 30000`
-- `bun test tests/executive.tool.runtime.test.ts tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts tests/runtime.mcp.tool.plan.test.ts tests/mcp.long.results.test.ts tests/mcp.schema.validate.test.ts tests/sandbox.gate.test.ts tests/runtime.toolset.test.ts tests/plugin.runner.test.ts tests/plugin.registry.test.ts --timeout 30000`
-- `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
-- `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/tui.chat.history.test.ts tests/tui.chat.metadata.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-
-已验证：
-
-- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/skill.schema.compat.test.ts tests/event.component.test.ts tests/naming.boundaries.test.ts --timeout 30000`
-- `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
-- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/naming.boundaries.test.ts --timeout 30000`
-- `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
-- `bun test tests/memory.boundaries.test.ts tests/reflection.boundaries.test.ts tests/llm.factory.test.ts --timeout 30000`
-- `bun test tests/naming.boundaries.test.ts tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun test tests/naming.boundaries.test.ts tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts --timeout 30000`
-- `bun test tests/naming.boundaries.test.ts tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
-- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/skill.schema.compat.test.ts tests/event.component.test.ts --timeout 30000`
-- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-- `bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts tests/cttl.core.test.ts tests/runtime.mcp.tool.plan.test.ts tests/cttl.manifest.test.ts tests/executive.tool.runtime.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/shell.hook.executor.test.ts --timeout 30000`
-- `bun test tests/command.boundaries.test.ts tests/gateway.ws.test.ts --timeout 30000`
-- `bun test tests/docs.index.test.ts tests/todo.status.test.ts tests/cli.commands.docs.test.ts --timeout 30000`
-- `bun run docs:check`
-- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/executive.tool.runtime.test.ts tests/runtime.executive.boundaries.test.ts tests/runtime.mcp.tool.plan.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/plugin.registry.test.ts tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/tui.chat.history.test.ts tests/tui.chat.metadata.test.ts tests/gateway.ws.test.ts --timeout 30000`
-- `bun test tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.executive.boundaries.test.ts tests/shell.hook.executor.test.ts tests/mcp.long.results.test.ts tests/mcp.schema.validate.test.ts tests/runtime.toolset.test.ts tests/channels.status.test.ts --timeout 30000`
-
-### R5 External Kit Protocol
-
-状态：已完成。
-
-目标：定义外部套件的发现、权限、事件订阅和执行边界协议。
-
-任务：
-
-1. 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、permissions、commands、events、control messages。（已完成：protocol contract、builtin discovery snapshot、global/project JSONC load path、project 覆盖 global、坏 manifest control error、command/permission 一致性校验）
-2. 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。（已完成：kit manifest JSONC；MCP/plugin/skill/user tool 只读 registry view）
-3. plugin、MCP、skill、user tool 统一进入 External Kit capability catalog 的发现面；真实执行仍由 Executive registry / Tool Runtime / sandbox 接管，不允许套件绕过 sandbox。（已完成）
-4. 制定 old-docs 归档清单，标记 CLI/TUI/channel 历史内置文档已被 R5 kit/control 契约覆盖。（已完成）
-5. 新增或更新 kit 协议文档、`docs/refactor.roadmap.md`、`docs/old-docs/README.md`。（已完成）
-
-验收：
-
-- `bun test tests/plugin.runner.test.ts tests/skill.schema.compat.test.ts tests/mcp.http.transport.test.ts --timeout 30000`
-- `bun run check`
-- `bun run build:binary`
-- `bun test tests/gateway.ws.test.ts tests/command.boundaries.test.ts --timeout 30000`
-- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
-
-### R6 Release Gate And Cleanup
-
-状态：已完成。
-
-目标：在外部化阶段完成后清理迁移残留，保证文档、测试、目录和发布资产一致。
-
-任务：
-
-1. 删除或归档过时迁移说明，根层 docs 只保留当前运行契约。（已完成）
-2. `docs/old-docs/README.md` 列出所有被替代材料。（已完成）
-3. 更新 README、AGENTS、boundaries、directory architecture、TODO 的最终状态。（已完成）
-4. 跑完整 deterministic release gate。（已完成）
-
-验收：
-
-- `bun run docs:check`
-- `bun run check`
-- `bun run test`
-- `bun run build:binary`
-- `bun run smoke:agent`
-
-本轮已验证：
-
-- `bun run docs:check`
-- `bun run check`
-- `bun run test`
-- `bun run build:binary`
-- `bun run smoke:agent`
-
-## 每阶段收尾协议
-
-每个阶段完成前必须做四件事：
-
-1. 更新 `TODO.md`：状态、完成内容、下一步、跑过的验证命令。
-2. 更新相关主文档：只描述当前契约，不把已经替代的方案留在 docs 根层。
-3. 归档旧文档：被替代或只剩历史价值的文档移入 `docs/old-docs/`，并更新 `docs/old-docs/README.md`。
-4. 验证：至少跑该阶段列出的测试、`bun run check`；涉及构建或发布路径时跑 `bun run build:binary`。
-
-## 下次接手检查
-
-1. 先读 `TODO.md`、`docs/refactor.roadmap.md`、`docs/boundaries.md`、`docs/directory.architecture.md`。
-2. 用 `git status --short` 看是否有未完成改动，不要回滚用户或其他 session 的文件。
-3. 若改提示词，必须同时改 `.zh.cn.md`。
-4. 若改目录或协议，先补文档和测试护栏。
-5. 每个阶段结束必须清理文档、归档 old docs、更新 TODO。
-6. 收尾必须记录跑过的验证命令。
+- `abandon/` 是废弃备份，不是兼容层，不允许主线引用。
+- 约定大于配置。
+- 目录与命名必须严格遵守仓库规则。
+- 业务语义判断坚持零字符匹配红线。
+- 提示词工程变更必须同步 `.zh.cn.md`。
+- CLI / Gateway / TUI 未来统一用 Rust 重写；当前 Bun 主线只保留 event 血管与 WS 协议基础。
+
+## 验证命令
+
+```bash
+bun run check
+bun run docs:check
+bun run build:binary
+```

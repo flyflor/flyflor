@@ -333,7 +333,6 @@ Consolidation 的 reinforce 分支会延长 working-memory episode TTL 并把下
 - `tests/activation.test.ts`
 - `tests/idle.dream.trigger.test.ts`
 - `tests/hot.memory.compression.worker.test.ts`
-- `tests/memory.boundaries.test.ts`
 - `tests/memory.scheduler.wiring.test.ts`
 - `tests/background.scheduler.test.ts`
 - `tests/brain.archive.test.ts`

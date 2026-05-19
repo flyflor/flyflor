@@ -532,6 +532,7 @@ export interface SandboxQuotaConfig {
 
 export interface SandboxConfig {
     mode: SandboxMode;
+    computerApproval?: ToolApprovalModeType;
     mcpToolApproval?: ToolApprovalModeType;
     pluginApproval?: ToolApprovalModeType;
     shellHookApproval?: ToolApprovalModeType;
@@ -645,6 +646,7 @@ export async function loadConfigForPaths(
 
     const sandbox: SandboxConfig = {
         mode: SandboxMode.Off,
+        computerApproval: ToolApprovalMode.Deny,
         mcpToolApproval: ToolApprovalMode.Deny,
         pluginApproval: ToolApprovalMode.Deny,
         shellHookApproval: ToolApprovalMode.Deny,

@@ -53,7 +53,7 @@ async function listMarkdownFiles(root: string): Promise<string[]> {
         entries.map(async (entry) => {
             const path = join(root, entry.name);
             if (entry.isDirectory()) {
-                if (entry.name === "scripts") {
+                if (entry.name === "scripts" || entry.name === "old-docs") {
                     return [];
                 }
                 return listMarkdownFiles(path);

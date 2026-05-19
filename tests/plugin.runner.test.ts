@@ -17,10 +17,12 @@ function policy(approval: ToolApprovalMode = ToolApprovalMode.Allow): SandboxPol
     return {
         mode: SandboxMode.Yolo,
         approvals: {
+            [CapabilityExecutionKind.Computer]: ToolApprovalMode.Deny,
             [CapabilityExecutionKind.McpTool]: ToolApprovalMode.Allow,
             [CapabilityExecutionKind.Plugin]: approval,
             [CapabilityExecutionKind.ShellHook]: ToolApprovalMode.Allow,
         },
+        computerApproval: ToolApprovalMode.Deny,
         mcpToolApproval: ToolApprovalMode.Allow,
         pluginApproval: approval,
         shellHookApproval: ToolApprovalMode.Allow,

@@ -19,6 +19,8 @@ export const RuntimeEventType = {
     ChannelError: "channel.error",
     CttlCapabilityCatalogBuilt: "cttl.capability.catalog.built",
     CttlLoopGuardBlocked: "cttl.loop.guard.blocked",
+    CttlLongHorizonLoopPaused: "cttl.long_horizon_loop.paused",
+    CttlLongHorizonLoopResumed: "cttl.long_horizon_loop.resumed",
     McpCapabilityCatalogBuilt: "mcp.capability.catalog.built",
     McpToolCallExecuted: "mcp.tool.call.executed",
     McpToolCatalogBuilt: "mcp.tool.catalog.built",

@@ -6,6 +6,7 @@
  */
 import { evidence, type CrystalCandidateInput } from "../../../cognitive/crystal/reflection/index.ts";
 import { BlackboardMode, BlackboardTurnStatus, type CrystalEvidence } from "../../../protocol/contracts/index.ts";
+import type { GatewayControlLongHorizonLoopSnapshot } from "../../../protocol/control/index.ts";
 
 export interface ReflectionNormalizeSource {
     answer: string;
@@ -22,12 +23,7 @@ export interface ReflectionNormalizeSource {
         }>;
         turnId?: string;
     };
-    executiveToolLoop?: {
-        loopGuardReason?: string;
-        message: string;
-        stop: "ask";
-        toolBudgetExhausted?: true;
-    };
+    executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot;
     now: string;
     request: string;
     requestId: string;

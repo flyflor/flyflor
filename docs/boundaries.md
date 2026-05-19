@@ -17,9 +17,8 @@
 目录是架构协议：目录必须表达边界、生命周期、能力来源和运行态位置；配置只覆盖差异，不允许用配置弥补目录混乱。目录架构详见 [directory.architecture.md](directory.architecture.md)。
 
 ```
-app.ts            程序入口，只做版本/命令分派
+app.ts            程序入口，只做版本/模式分派
 src/app.ts        FlyFlor composition root
-src/command/      CLI / TUI / 命令注册 / 终端渲染
 src/agent/        runtime / gateway / blackboard / sandbox / context / skills / worker / mcp / project / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
 src/cognitive/    认知内核目标目录
@@ -84,7 +83,7 @@ flowchart LR
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
 - 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、目标 `src/cognitive/hippocampus/project` 与 `src/cognitive/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
-- `command` / `gateway` 必须通过 runtime facade，不绕过 runtime 自驱 agent loop。
+- 主线 `gateway` 只保留 WS/control/event 血管，不承载第一方 CLI/TUI/channel adapter。
 - `gateway`、`runtime`、`blackboard`、`worker`、`sandbox`、`memory` 都是 Event Fabric 的参与者；`src/events` 拥有事件发布、订阅、分类和 fan-out，gateway 不拥有事件总线。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。
 - `protocol` / `agent/di` 不能成为垃圾桶；只服务单一领域的类型必须回到对应目录。
@@ -143,6 +142,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 
 - `Capability` 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent。
 - `Tool` 把 capability 适配成模型可调用 schema，声明 scope、permission、readOnly、concurrencySafe、exclusive 和 result limit。
+- 电脑控制 capability 必须额外声明结构化 `computer` profile，作为 future Rust exoskeleton 的稳定契约；不得靠工具名字符串或提示词文本推断控制类别。
 - `Trust` 根据 channel、sender、group、project、sandbox、approval、permission cap、secrets provider 和 config 计算本次是否可执行。
 - `Loop` 负责 tool plan、并发调度、结果压缩、失败恢复、unknown tool 防护、重复调用防护、无进展检测、审批中断和恢复。
 
@@ -153,9 +153,11 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - Executive 不能退化为固定工具清单。新增能力必须说明 capability 来源、Tool descriptor、Trust 策略和 Loop 行为。
 - MCP `tools/resources/prompts` 都是一等 capability；禁止只包装 tools 而忽略 resources/prompts 的发现和权限规划。
 - 远程 channel 默认最小权限，不能默认获得 `execute`、`computer`、`dangerous`；本地 CLI 的调试放权也必须走本次 invocation 覆盖和审计。
+- 电脑控制必须走独立 `computerApproval` sandbox 面，不能继续混在普通 `mcp-tool` / `plugin` / `shell-hook` 审批里。
 - 用户自定义工具必须声明 schema、permission、scope、cwd/env 边界、输出限制和审批策略；缺任何一项都不能进入可见 Tool Plan。
 - Tool Plan 必须保留 hidden diagnostics，说明工具不可见是缺配置、缺凭据、平台不可用、权限不足、channel cap、sandbox deny 还是 loop guard 限制。
 - Loop guard 必须能处理 unknown tool 重复调用、工具名漂移、同一失败调用反复执行、无进展循环、过量工具调用和非法 MCP/tool result。
+- Long-horizon loop 只能通过结构化 ask snapshot 和 `cttl.long_horizon_loop.paused/resumed` 事件暂停或恢复；不得新增靠文本约定的隐藏 loop 控制协议。
 - Executive 实现仍遵守 OOP + use composition：业务能力用 class / Component / Module 表达，组合入口使用 `useXxx()`；不得新增专用 decorator、反射扫描、动态 import 或无归属 helper function。
 - Executive 实现仍遵守 Bun 二进制硬约束：不得依赖运行时读取 `node_modules`、native addon、postinstall 或用户机器额外 Node.js。
 
@@ -190,7 +192,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 ```bash
 bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
   --define process.env.FLYFLOR_BUILD_COMMIT="'$(git rev-parse --short HEAD)'" \
-  --outfile dist/flyflor app.ts src/command/tui/chat/parser.worker.ts
+  --outfile dist/flyflor app.ts
 ```
 
 硬规则：
@@ -203,7 +205,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
 - 禁止要求安装 Node.js；开发与发布都以 Bun 为准。
-- 当前必须启用 `--allow-unresolved=""` 兼容 OpenTUI 的 opaque dynamic import；同时保留 `src/command/tui/chat/parser.worker.ts` 作为第二个 compile entrypoint，保证 TreeSitter worker 及其依赖进入独立二进制。新增依赖仍不得引入新的运行时动态加载要求。
+- 当前必须启用 `--allow-unresolved=""`，新增依赖仍不得引入新的运行时动态加载要求。
 - 不把 `.env`、本地日志、会话数据库、密钥、测试 fixture 编译进二进制。
 
 ## 7. 依赖准入

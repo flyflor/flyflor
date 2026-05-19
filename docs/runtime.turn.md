@@ -1,319 +1,40 @@
 # 单轮请求流程
 
-## 一句话定位
+## 当前主线
 
-`RuntimeModule.handleMessage` 是热路径唯一入口；从 Gateway 归一化消息到回复落盘、记忆写入、后台反思的全过程都在这里编排。
+`RuntimeModule.handleMessage` 仍然是热路径唯一入口。
 
-## 相关代码路径
+当前主线 turn 流程：
 
-- `src/agent/runtime/module.ts` — 热路径主入口
-- `src/agent/runtime/routing/index.ts` — 资源指标短路
-- `src/agent/runtime/blackboard/index.ts` — LLM 路由模板调用
-- `src/agent/runtime/routing/index.ts` — direct-with-watch 升级器
-- `src/agent/runtime/reflection/worker.ts` — 反思调度 worker
-- `src/agent/runtime/mcp/` — Runtime ↔ Executive 工具执行 adapter、MCP resource/prompt 受控读取、MCP toolset 过滤、工具结果 provenance 投影
-- `src/agent/runtime/mcp/capability.reader.ts` — MCP resources/prompts 可见性确认、sandbox/approval gating 与受控 transport 调用
-- `src/executive/tool.runtime.ts` — 工具调用 loop、loop guard、read-only 并发与写/执行串行调度
-- `src/agent/context/render.ts` — runtime turn 的 system/user model messages 装配 owner
-- `src/agent/runtime/skills/` — 外部 Skill 包选择适配
-- `src/agent/runtime/events/skill.usage.event.ts` — `@Event` 聚合 skill usage sidecar，避免 runtime 主流程直接写辅助统计
-- `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
-- `src/agent/runtime/streaming/` — 内部协议块流式可见性过滤
-- `src/agent/runtime/turn/` — Ask 回复、附件摘要、project constraint 和计时 Component
-- `src/agent/runtime/perf.metrics.ts` — 性能事件采集
-- `src/agent/runtime/chat.ts` — TTY 交互入口
-- `src/cognitive/hippocampus/memory/index.ts` — `MemoryModule.buildPrompt` / `rememberTurn`；历史 `src/fch/hippocampus/memory/index.ts` 已移除
-- `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
+1. Gateway `/ws` 收到 `gateway.message.send`
+2. `GatewayControlHub` 归一化为 `GatewayMessage`
+3. `RuntimeModule.handleMessage` 执行单轮推理、工具循环、记忆写入
+4. `turn.delta` / `turn.final` / `turn.error` 通过 `/ws` 返回
+5. `RuntimeEvent` 通过事件总线广播
 
-## 核心阶段
+## R10 长线 loop 冻结
 
-```mermaid
-flowchart TB
-    A["GatewayMessage 入站"] --> B["RuntimeModule.handleMessage"]
-    B --> C["嵌入向量计算<br/>LocalHashEmbeddingProvider.embed"]
-    C --> D["fastRoute 评估<br/>token / hint / cosine"]
-    D --> E{"fastRoute 命中？"}
-    E -- 是 --> F["buildBypassDecision direct"]
-    E -- 否 --> G["decideBlackboardRoute<br/>调 LLM 走 blackboard.route.md"]
-    F --> H["loadSkills / loadMcpServers / buildPrompt 并发"]
-    G --> H
-    H --> I["applyRouteEscalation<br/>watch / failure 计数升级"]
-    I --> J{"模式"}
-    J -- direct --> M["Context owner 装配 model messages"]
-    J -- direct-with-watch --> M
-    J -- blackboard --> K["BlackboardModule.startTurn"]
-    K --> L["BlackboardModule.runUntilConverged"]
-    L --> AskGate{"NeedsUser / hard cap?"}
-    AskGate -- 是 --> Ask["runtime 合成 AgentAsk<br/>reason=blackboard-stalemate"]
-    AskGate -- 否 --> M
-    M --> N["buildMcpToolCatalog<br/>TTL 30s 缓存"]
-    N --> O["model.generate 首轮"]
-    O --> P{"含 flyflor_mcp_calls？"}
-    P -- 是 --> Q["执行工具 + 结果回灌"]
-    P -- 否 --> R["流式输出最终回复"]
-    Q --> Exec["ExecutiveToolRuntime<br/>schema / sandbox / approval / scheduling / loop guard"]
-    Exec --> R
-    R --> Parse["剥离 memory_actions / ghost_decisions / identity / ask"]
-    Parse --> S["GatewayReply 返回调用方"]
-    Ask --> S
-    S --> T["rememberTurn / recordSkillUsage<br/>aware-of-await"]
-    T --> U["ReflectionWorker.dispatch 后台 fire-and-forget"]
-    T --> V["classifyAndApplyFeedback 后台"]
-    T --> W{"黑板收敛？"}
-    W -- 是 --> X["recordDebateEpisode"]
-    T --> Y["更新 fastRouteSnapshots"]
-```
+当 Executive 工具回路命中预算上限或 loop guard 把当前 step 全部阻断时，主线 turn 不会继续隐藏重试，而是收敛到显式 ask 暂停：
 
-## fastRoute（资源指标短路）
+1. `ExecutiveToolRuntime` 返回结构化 `askRequired`
+2. `RuntimeModule` 发布 `cttl.long_horizon_loop.paused`
+3. `turn.final.reply.metadata.kind` 变为 `ask`
+4. `turn.final.reply.metadata.executiveToolLoop` 暴露暂停 snapshot
+5. 用户下一轮显式回答 pending ask 后，Memory 记录 `ask-answer-pair`
+6. Runtime 发布 `cttl.long_horizon_loop.resumed`
 
-只允许三类指标，未命中才调路由 LLM：
+约束：
 
-| 指标           | 命中条件                                                          | 阈值 |
-| -------------- | ----------------------------------------------------------------- | ---- |
-| token 预算     | `estimatedTokens < routeBypassTokenBudget`                        | 配置 |
-| hint 复用      | `nextRouteHint === direct` 且 `now - recordedAt < routeHintTtlMs` | 配置 |
-| embedding 相似 | `lastMode === direct` 且 `cosine > similarityBypassThreshold`     | 配置 |
+- 没有后台自动续跑。
+- 没有额外私有 loop transport。
+- 恢复完全依赖新的结构化输入和既有 WS/event 血管。
 
-落库的 `FastRouteSnapshot`（按 `channel:chatId:userId` 维度）会在 turn 末尾更新：
+## 已移除的主线表面
 
-```ts
-interface FastRouteSnapshot {
-    recordedAt: number;
-    embedding?: number[];
-    lastMode: BlackboardMode;
-    nextRouteHint?: BlackboardMode;
-    consecutiveWatchTurns?: number;
-    consecutiveBlackboardFailures?: number;
-    consecutiveToolFailureTurns?: number;
-}
-```
+以下内容不再属于主线：
 
-## Blackboard route（LLM 决策）
+- 第一方 Bun CLI/TUI command adapter
+- 第一方 channel adapter 入站
+- 本地 TUI runtime/state adapter
 
-`templates/prompts/blackboard.route.md` 必须返回结构化 JSON：
-
-```json
-{
-    "mode": "direct | direct-with-watch | blackboard",
-    "score": 0.0,
-    "reason": "...",
-    "signals": ["..."],
-    "needsReflectionCandidate": true,
-    "blackboardContract": { "evidence": [], "contradictions": [], "mode": "normal" },
-    "workers": [{ "role": "...", "stage": "...", "handoff": "...", "capabilities": [], "dependsOn": [] }]
-}
-```
-
-代码只做 `mode` 枚举校验、`score` 数值范围、`workers` 数量 `<= 5`，不二次解析自然语言。
-
-## 路由升级
-
-```mermaid
-stateDiagram-v2
-    [*] --> direct
-    direct --> direct: 默认
-    direct --> watch: LLM 升级
-    watch --> watch: 连续命中
-    watch --> blackboard: consecutiveWatchTurns >= watchThreshold
-    direct --> blackboard: consecutiveBlackboardFailures >= failureThreshold
-    blackboard --> blackboard: status = converged → 清零
-    blackboard --> direct: status = needs-user/failed → failure++
-```
-
-阈值来自 `RoutingConfig`：`watchEscalationThreshold`（默认 3）、`blackboardFailureEscalationThreshold`（默认 2）。任一为 0 表示禁用该通道。
-
-## 上下文装配（`MemoryModule.buildPrompt`）
-
-```mermaid
-flowchart LR
-    Q[GatewayMessage] --> Markdown[MarkdownMemoryStore.snapshot<br/>SELF/SOUL/USER/MEMORY]
-    Q --> Brain[BrainStore<br/>brain event prompt recall + ask/ghost/identity/codename/eq state]
-    Q --> Hippo[Hippocampus context<br/>MemoryComponent local ring]
-    Q --> Project[ProjectMemoryStore.snapshot<br/>项目局部记忆]
-    Q --> Crystal[CrystalMemoryComponent.recall<br/>CrystalComponent Gem]
-    Q --> SqliteSearch[SQLiteMemoryStore.search]
-    Markdown --> Render[renderMemoryPrompt]
-    Brain --> Render
-    Brain --> Nudge[continuation / ghost-hint / identity / eq / dormant resume]
-    Nudge --> Render
-    Hippo --> Render
-    Project --> Render
-    Crystal --> Render
-    SqliteSearch --> Render
-    Render --> Prompt[memoryContext 字符串]
-```
-
-Memory 只返回 `memoryContext` 字符串；完整 model messages 由 `src/agent/context/render.ts`
-装配。Runtime 只传入结构化 scope/catalog/memory/skill/sandbox/blackboard 字段，不在主
-turn 里直接拼 prompt 细节，也不从自然语言推断 project、fork、工具需求或业务意图。
-
-Context owner 装配 system prompt 时注入：
-
-- `sandboxSummary`：当前 sandbox 模式描述
-- `memoryContext`：上面的合成 prompt
-- `memoryActionInstructions`：`memory.action.md`
-- `skillContext`：`renderSkillContextPrompt`
-- `selectedSkills` 的自动池已经吃到 runtime 预计算 embedding，但仍只按资源指标做排序，不碰自然语言启发式
-- `mcpContext`：`renderMcpContextPrompt`（含可用工具 catalog）
-- `blackboardContext`：`renderBlackboardAdvisoryPrompt`
-- `askSchemaInstructions`：Ask / Ghost / Identity 结构化块协议
-
-Ghost Context 不是普通 retrieved memory：active / resumed ghost 通过 `[ghost-hint]` 单独进入 prompt，模型用结构化 `resume` / `fork` / `fresh` 决策让分支继续、降权或回到主线。
-
-ContextFork 不等于 session。调用方只有在 `RuntimeContext.contextForkId` 显式传入已落库的 fork id 时，MemoryComponent 才注入 `[context-fork]` 范围摘要与 token 预算；不传 id 时不会靠自然语言猜测分叉。
-
-Project 也不等于 session。调用方只有在 `RuntimeContext.activeProject` 显式传入 `{ id, projectDir, projectMemoryDir }` 时，MemoryComponent 才把当前 turn 绑定到该项目的 `.flyflor/memory`；`/project` / `/projects` 只是在 TUI 本地维护这个结构化选择。
-
-RuntimeModule 另外暴露 `listChatHistory(userId, options)` 等只读/局部写入能力给 command
-adapter。chat TUI 只消费 `CommandRuntimeClient`：当前内置实现由 `src/command/runtime.adapter.ts`
-绑定 Runtime/Blackboard；若后续替换成 control/ws client，只能替换该 adapter。TUI 不直接 import Runtime 或
-Blackboard 私有类。历史回放只读 `brain.db` 事件与 `task_plans` / `context_forks` /
-`scene_records` 摘要表，不进入 prompt 装配。
-
-## Executive 工具循环
-
-```mermaid
-sequenceDiagram
-    participant RT as RuntimeModule
-    participant Context as Context owner
-    participant Exec as ExecutiveToolRuntime
-    participant Adapter as RuntimeMcpToolExecutor
-    participant LLM as ModelClient
-    participant Sandbox as SandboxPolicy
-    participant Cat as McpCatalogCache
-    participant MCP as MCP server
-
-    RT->>Sandbox: decideCapabilityExecution(McpTool)
-    Sandbox-->>RT: canExecute / requiresApproval
-    RT->>Cat: buildMcpToolCatalog(servers)
-    Cat->>MCP: tools/list (cache TTL 30s)
-    MCP-->>Cat: tool defs
-    Cat-->>RT: McpToolCatalogEntry[]
-    RT->>Context: renderRuntimeModelMessages(structured context)
-    Context-->>RT: ModelMessage[]
-    RT->>Exec: run(messages, callbacks)
-    Exec->>LLM: model.generate(messages)
-    LLM-->>RT: 首轮含 <flyflor_mcp_calls> JSON?
-    alt 有
-        Exec->>Adapter: parse + schedule tool calls
-        loop 每个 call
-            Adapter->>Sandbox: schema / approval / sandbox gate
-            Sandbox-->>Adapter: allow / deny
-            alt allow
-                Adapter->>MCP: MCP / workspace / git / shell / user / plugin
-                MCP-->>Adapter: normalized result
-            else deny
-                Adapter->>Adapter: normalized error result
-            end
-        end
-        Adapter-->>Exec: executions
-        Exec->>LLM: model.generate(messages + tool results)
-        LLM-->>RT: 终稿
-    else 无
-        LLM-->>RT: 直接终稿
-    end
-```
-
-`RuntimeModule` 不直接执行 `callMcpTool`、`invokeUserTool`、`ShellHookExecutor` 或
-plugin runner，也不直接执行 MCP resource/prompt read transport。它只负责 turn 编排、
-流式可见性和最终回复落盘。具体工具闭环由
-`RuntimeMcpToolExecutor` 绑定到 Executive 回调：
-
-- schema violation、unknown tool、approval denied 都归一化为 `McpToolCallExecution`。
-- MCP、workspace、git、shell、user tool、plugin capability 使用同一结果回灌格式。
-- `readOnly && concurrencySafe && !exclusive` 工具可批量并发；write/execute/exclusive 串行。
-- 工具预算耗尽或全阻断后，Executive 返回 ask，由 Runtime 继续进入补全闭环，不再继续开放工具。
-- repeated failed call、unknown tool repeat 和 max calls 由 `CttlLoopGuardReason` 进入事件与结果。
-
-MCP resources/prompts 是一等 capability，但它们的正文不会自动塞进 prompt。显式读取由
-`RuntimeMcpCapabilityReader` 负责：基于本轮 catalog 重算可见 plan，经过 sandbox/approval gate
-后才调用 MCP transport；不可见、未获批或 transport 失败都必须显式失败，不返回空默认值。
-
-## 记忆写回（`rememberTurn`）
-
-同步落库 + 异步管道，全部必要写入完成后才结束 `rememberTurn`：
-
-```mermaid
-flowchart LR
-    Action[memory_actions JSON] --> Cand[candidates 构造]
-    Action --> Codename[codename 写 brain.codenames<br/>inbox projectId 命名空间化]
-    Action --> Eq[eq 写 memory_eq_state]
-    Action --> Trig[detectExplicitIntent → ProjectTrigger]
-    Action --> Imp[importanceFromActions]
-    Ask[AgentAsk?] --> BrainAsk[ask / ask-answer-pair 事件]
-    Imp --> WorkEp[writeEpisodeToWorkingMemory<br/>metadata.brainEventId]
-    Trig --> ScaffoldP[ProjectScaffolder]
-    Cand --> SqliteCand[sqlite.addCandidate<br/>autoPromote 时直接 markdown 写入]
-    Trig --> ProjectMem[ProjectMemoryStore.recordTurn<br/>显式意图通道]
-    Action --> BrainEvent[BrainStore.appendEvent<br/>brain.db memory_events + content.atoms]
-    Planning[TaskPlan / ContextFork / SceneRecord blocks] --> BrainPlanning[BrainStore planning tables<br/>summary-only metadata]
-    Cand -.-> CrystalAsync[CrystalMemoryComponent.recordTurn]
-```
-
-随后 fire-and-forget 启动：
-
-- `ReflectionWorker.dispatch` — LLM 抽取 symbols/bucket/coordinates → `MemoryModule.applyReflection` → Crystal 候选
-- `classifyAndApplyFeedback` — A/B/C/D 分类，由模型 JSON 驱动；Preference / GlobalStrategy / 部分 correction/confirmation 已接入记忆事件
-- 收敛黑板 → `recordDebateEpisode` 高权重 episode
-- MCP 工具失败 → `ghost-context`，process restart → warmup 恢复 ghost
-
-## 性能事件
-
-| 事件                           | 含义                                                             |
-| ------------------------------ | ---------------------------------------------------------------- |
-| `perf.ttfb`                    | 首字延迟（目标 < 350ms）                                         |
-| `perf.build_prompt`            | 上下文装配耗时                                                   |
-| `perf.route_llm`               | 路由阶段总耗时（含 bypass）                                      |
-| `perf.fast_route_evaluated`    | fastRoute 决策记录                                               |
-| `perf.fast_route_cache_failed` | fastRoute 文件缓存写入失败；主回复继续，后续 turn 降级为正常路由 |
-
-## 关键数据结构
-
-```ts
-interface RuntimeContext {
-    requestId: string;
-    now: string;            // ISO timestamp
-    embedding?: number[];   // 由 handleMessage 计算并下发
-    skillNames?: string[];  // CLI --skills 透传
-    // ...
-}
-
-interface GatewayReply {
-    messageId: string;
-    route: GatewayRoute;
-    text: string;
-    metadata: {
-        blackboard?: { turnId, mode, status, elapsedMs, ... };
-        memoryActions: number;
-        mcpToolCalls: number;
-        mcpToolExecutions: Array<{ server, tool, ok, ... }>;
-        skills: string[];
-        sandboxMode: SandboxMode;
-        // ...
-    };
-}
-```
-
-## 配置与约束
-
-- `config.routing.fastRouteEnabled` 控制资源短路总开关。
-- `config.routing.routeHintTtlMs` / `similarityBypassThreshold` / `routeBypassTokenBudget` 控制短路命中阈值。
-- `fastRouteSnapshots` 默认写入 `<cacheDir>/runtime.fast.route.snapshots.json`，进程启动后懒加载到内存热读；该文件只是性能缓存，不是记忆权威，写入失败会发 `perf.fast_route_cache_failed`。
-- `config.memory.embedding.dimensions` 决定 embedding 向量长度；`LocalHashEmbeddingProvider` 不联网。
-- `config.metrics.enabled` 关闭时所有 perf 事件不发布。
-
-## 运行边界
-
-- `RuntimeModule` 已拆 phase；附件摘要渲染由 `AttachmentSummaryRenderer` 拥有，Ask 可见回复与 metadata 由 `AskReplyRenderer` 拥有，黑板租约键由 `ProjectConstraintBuilder` 拥有，MCP/skill/planning/streaming helper 均按子目录归位。`module.ts` 不再承载独立 helper function，只保留 turn 生命周期编排和必要私有方法。
-- `brain.db` 已成为 prompt recall / turn event write / inbox 可视化权威；working-memory episode 通过 `metadata.brainEventId` 回连 brain atom，后续改动必须避免新增 sidecar 事件库回到 prompt path。
-- direct-with-watch 已加入工具失败 / 上下文压力资源指标，但仍是轻量计数器，不消费 worker 内部复杂信号。
-- `fastRouteSnapshots` 默认走 file-backed cache + 内存热读；损坏或写入失败只降级为 cache miss，并通过 `perf.fast_route_cache_failed` 保持可观测。多副本共享快照后续应走独立 cache component，不再把工作记忆后端当作公共缓存。
-- 行为演化已写入 `behavior-snapshot` / `behavior-correction`，ask / answer / snapshot 通过同一个 `snapshotId` 回挂；当前诊断展示只消费已落库的 behavior-snapshot 与 behavior-correction 结构化证据。
-
-## 相关测试
-
-- `tests/runtime.perf.test.ts`
-- `tests/route.escalation.test.ts`
-- `tests/chat.boundaries.test.ts`
-- `tests/feedback.wire.test.ts`
-- `tests/memory.scheduler.wiring.test.ts`
+这些实现已经从主源码剥离，保存在 `abandon/` 仅做备份。

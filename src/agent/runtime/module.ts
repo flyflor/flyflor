@@ -230,8 +230,11 @@ interface GeneratedTurn {
 }
 
 interface RuntimeExecutiveAskRequired {
+    askId: string;
     loopGuardReason?: ExecutiveToolRuntimeAskRequired["loopGuardReason"];
     message: string;
+    resume: ExecutiveToolRuntimeAskRequired["resume"];
+    stepCount: number;
     stop: "ask";
     toolBudgetExhausted?: true;
 }
@@ -827,6 +830,18 @@ export class RuntimeModule extends RuntimeBoundary {
             ? this.buildExecutiveToolAsk(generated.askRequired, generated.mcpToolCalls)
             : undefined;
         if (executiveAsk) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.CttlLongHorizonLoopPaused,
+                    {
+                        askId: generated.askRequired?.askId,
+                        loopGuardReason: generated.askRequired?.loopGuardReason,
+                        stepCount: generated.askRequired?.stepCount,
+                        toolBudgetExhausted: generated.askRequired?.toolBudgetExhausted === true,
+                    },
+                    context.requestId,
+                ),
+            );
             return this.replyFromAsk({
                 ask: executiveAsk,
                 message,
@@ -916,7 +931,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ...(ask
                     ? {
                           kind: "ask" as const,
-                          ask: buildAskMetadata(ask, behaviorSnapshotId),
+                          ask: buildAskMetadata(ask, behaviorSnapshotId, generated.askRequired),
                       }
                     : { kind: "reply" as const }),
                 behaviorSnapshotId,
@@ -995,7 +1010,7 @@ export class RuntimeModule extends RuntimeBoundary {
             text: renderAskReplyText(ask),
             metadata: {
                 kind: "ask" as const,
-                ask: buildAskMetadata(ask, behaviorSnapshotId),
+                ask: buildAskMetadata(ask, behaviorSnapshotId, executiveAskRequired),
                 behaviorSnapshotId,
                 blackboard: blackboardRun
                     ? {

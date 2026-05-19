@@ -7,6 +7,7 @@ import type {
     RuntimeContext,
 } from "../../../protocol/contracts/index.ts";
 import { BlackboardMode } from "../../../protocol/contracts/index.ts";
+import type { GatewayControlLongHorizonLoopSnapshot } from "../../../protocol/control/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../events/index.ts";
 import type { BlackboardDecision } from "../../blackboard/index.ts";
 import type { MemoryEpisodeProvenance, MemoryModule } from "../../../cognitive/hippocampus/memory/index.ts";
@@ -32,12 +33,7 @@ export interface ReflectionBlackboardRun {
 export interface ReflectionWorkerInput {
     blackboardRun?: ReflectionBlackboardRun;
     context: RuntimeContext;
-    executiveToolLoop?: {
-        loopGuardReason?: string;
-        message: string;
-        stop: "ask";
-        toolBudgetExhausted?: true;
-    };
+    executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot;
     message: GatewayMessage;
     provenance: MemoryEpisodeProvenance;
     visibleText: string;

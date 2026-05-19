@@ -2,7 +2,6 @@ import {
     RuntimeModule,
     promptApproveMcpToolCall,
     BlackboardModule,
-    createChannelAdapters,
     GatewayModule,
     loadPromptTemplates,
     registerModelBackedBlackboardWorker,
@@ -10,9 +9,7 @@ import {
     SQLiteBlackboardStore,
     startHumanChat,
     WorkerManager,
-    type ChannelAdapter,
 } from "./agent/index.ts";
-import { AdaptersComponent } from "./agent/gateway/index.ts";
 import { ConfigComponent, loadConfig, type FlyflorConfig } from "./config/index.ts";
 import { RuntimeSkillUsageEventHandler } from "./agent/runtime/events/index.ts";
 import { createMemory, MemoryModule } from "./cognitive/hippocampus/memory/index.ts";
@@ -23,19 +20,10 @@ import {
     Module,
     type DependencyToken,
 } from "./agent/di/index.ts";
-import { EventsComponent } from "./events/index.ts";
+import { CompositeEventSink, ConsoleEventSink, EventsComponent, NullEventSink } from "./events/index.ts";
 import { RuntimeModeComponent } from "./protocol/contracts/index.ts";
 import { createModelClient, ModelComponent } from "./cognitive/mindstream/index.ts";
-import {
-    ConsoleEventSink,
-    NullEventSink,
-    RuntimeMode,
-    type ChannelName,
-    type EventSink,
-    type ModelClient,
-    type RuntimeMode as RuntimeModeType,
-} from "./protocol/index.ts";
-import { CompositeEventSink } from "./events/index.ts";
+import { RuntimeMode, type EventSink, type ModelClient, type RuntimeMode as RuntimeModeType } from "./protocol/index.ts";
 import { FileAuditSink, HttpAuditSink } from "./agent/sandbox/audit.sink.ts";
 import { join } from "node:path";
 
@@ -52,7 +40,6 @@ export { BlackboardModule, DependencyContainer, GatewayModule, MemoryModule, Run
         BlackboardModule,
         MemoryModule,
         RuntimeModule,
-        AdaptersComponent,
         GatewayModule,
     ],
     exports: [
@@ -63,14 +50,12 @@ export { BlackboardModule, DependencyContainer, GatewayModule, MemoryModule, Run
         BlackboardModule,
         MemoryModule,
         RuntimeModule,
-        AdaptersComponent,
         GatewayModule,
     ],
 })
 export class FlyFlorModule {}
 
 export interface FlyFlorCreateOptions {
-    adapters?: Map<ChannelName, ChannelAdapter>;
     argv?: string[];
     blackboard?: BlackboardModule;
     config?: FlyflorConfig;
@@ -85,7 +70,6 @@ export interface FlyFlorCreateOptions {
 }
 
 export interface FlyFlorDependencies {
-    adapters: AdaptersComponent;
     blackboard: BlackboardModule;
     config: ConfigComponent;
     container: DependencyContainer;
@@ -150,20 +134,18 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
     const mode = new RuntimeModeComponent(normalizeRuntimeMode(options.mode ?? options.argv?.[2]));
     const config = new ConfigComponent(options.config ?? (await loadConfig()));
     await loadPromptTemplates(config.paths);
-    const events = new EventsComponent(options.events ?? createDefaultEventSink(mode.value, config));
+    const events = new EventsComponent(options.events ?? createDefaultEventSink(mode.value, config.snapshot()));
     const model = new ModelComponent(options.model ?? createModelClient(config.model, events));
-    const workers = options.workers ?? createDefaultWorkerManager(model, events);
+    const workers = options.workers ?? createDefaultWorkerManager(model.unwrap(), events);
     const blackboard =
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
-    const memory = options.memory ?? createMemory(config, events, model);
-    const runtime = options.runtime ?? new RuntimeModule(config, model, events, blackboard, memory);
+    const memory = options.memory ?? createMemory(config.snapshot(), events, model.unwrap());
+    const runtime = options.runtime ?? new RuntimeModule(config.snapshot(), model.unwrap(), events, blackboard, memory);
+    const gateway = options.gateway ?? new GatewayModule(config.gateway, runtime, events, { paths: config.paths });
     const eventDisposers = registerRuntimeEventHandlers(config, events);
-    const adapters = new AdaptersComponent(options.adapters ?? createChannelAdapters(config.gateway));
-    const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters.asMap(), runtime, events, { paths: config.paths });
     const container = options.container ?? new DependencyContainer();
 
     return {
-        adapters,
         blackboard,
         config,
         container,
@@ -194,7 +176,6 @@ function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies
         [BlackboardModule, dependencies.blackboard],
         [MemoryModule, dependencies.memory],
         [RuntimeModule, dependencies.runtime],
-        [AdaptersComponent, dependencies.adapters],
         [GatewayModule, dependencies.gateway],
     ]);
 
@@ -212,7 +193,6 @@ function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies
 function providerName(provider: DependencyToken<unknown>): string {
     return isInjectionToken(provider) ? provider.name : provider.name;
 }
-
 
 function createDefaultEventSink(mode: RuntimeModeType, config: FlyflorConfig): EventSink {
     const logDir = config.paths.logDir;

@@ -61,6 +61,7 @@ describe("Skill and MCP capability config", () => {
                 mode: SandboxMode.Off,
                 approvals: {},
                 expected: {
+                    [CapabilityExecutionKind.Computer]: [false, true, ToolApprovalMode.Deny],
                     [CapabilityExecutionKind.McpTool]: [false, true, ToolApprovalMode.Deny],
                     [CapabilityExecutionKind.ShellHook]: [false, true, ToolApprovalMode.Deny],
                     [CapabilityExecutionKind.Plugin]: [false, true, ToolApprovalMode.Deny],
@@ -70,6 +71,7 @@ describe("Skill and MCP capability config", () => {
                 mode: SandboxMode.Yolo,
                 approvals: {},
                 expected: {
+                    [CapabilityExecutionKind.Computer]: [true, false, ToolApprovalMode.Allow],
                     [CapabilityExecutionKind.McpTool]: [true, false, ToolApprovalMode.Allow],
                     [CapabilityExecutionKind.ShellHook]: [true, false, ToolApprovalMode.Allow],
                     [CapabilityExecutionKind.Plugin]: [true, false, ToolApprovalMode.Allow],
@@ -78,11 +80,13 @@ describe("Skill and MCP capability config", () => {
             {
                 mode: SandboxMode.Off,
                 approvals: {
+                    computerApproval: ToolApprovalMode.Deny,
                     mcpToolApproval: ToolApprovalMode.Ask,
                     pluginApproval: ToolApprovalMode.Allow,
                     shellHookApproval: ToolApprovalMode.Deny,
                 },
                 expected: {
+                    [CapabilityExecutionKind.Computer]: [false, true, ToolApprovalMode.Deny],
                     [CapabilityExecutionKind.McpTool]: [true, true, ToolApprovalMode.Ask],
                     [CapabilityExecutionKind.ShellHook]: [false, true, ToolApprovalMode.Deny],
                     [CapabilityExecutionKind.Plugin]: [true, false, ToolApprovalMode.Allow],
@@ -1368,7 +1372,8 @@ describe("Skill and MCP capability config", () => {
             '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</flyflor_mcp_calls>',
             "[]",
         ]);
-        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+        const events = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, events);
 
         const reply = await runtime.handleMessage(
             gatewayMessage("inspect with small budget"),
@@ -1383,7 +1388,24 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toContain("工具调用预算已用完");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(reply.metadata?.executiveToolLoop).toEqual(
-            expect.objectContaining({ stop: "ask", toolBudgetExhausted: true }),
+            expect.objectContaining({
+                askId: expect.any(String),
+                resume: { mode: "continue" },
+                stepCount: 1,
+                stop: "ask",
+                toolBudgetExhausted: true,
+            }),
+        );
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.CttlLongHorizonLoopPaused,
+                    payload: expect.objectContaining({
+                        stepCount: 1,
+                        toolBudgetExhausted: true,
+                    }),
+                }),
+            ]),
         );
         expect(model.messages).toHaveLength(2);
     });
@@ -1441,7 +1463,13 @@ describe("Skill and MCP capability config", () => {
             ]),
         );
         expect(reply.metadata?.executiveToolLoop).toEqual(
-            expect.objectContaining({ loopGuardReason: "repeated-call-no-progress", stop: "ask" }),
+            expect.objectContaining({
+                askId: expect.any(String),
+                loopGuardReason: "repeated-call-no-progress",
+                resume: { mode: "continue" },
+                stepCount: 4,
+                stop: "ask",
+            }),
         );
         const toolResultText = model.messages
             .flat()
@@ -1463,6 +1491,17 @@ describe("Skill and MCP capability config", () => {
             ]),
         );
         expect(model.messages.at(-1)?.[0]?.content).toContain("executiveToolLoop");
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.CttlLongHorizonLoopPaused,
+                    payload: expect.objectContaining({
+                        loopGuardReason: "repeated-call-no-progress",
+                        stepCount: 4,
+                    }),
+                }),
+            ]),
+        );
     });
 
     test("runtime keeps looping beyond the old small default until the model finalizes", async () => {

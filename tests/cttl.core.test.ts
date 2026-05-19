@@ -134,11 +134,45 @@ describe("CTTL core", () => {
         expect(debug.visible.map((entry) => entry.descriptor.name)).toEqual(["browser.control"]);
     });
 
+    test("computer-control tools require computer permission and remain hidden from default local trust", () => {
+        const cttl = new CttlComponent();
+        cttl.registerTool(tool("computer.click", {
+            category: CttlToolCategory.Computer,
+            concurrencySafe: false,
+            exclusive: true,
+            permission: CttlPermission.Computer,
+            readOnly: false,
+            scope: [CttlToolScope.Local, CttlToolScope.Debug],
+            computer: {
+                action: "mouse",
+                observationOnly: false,
+                requiresFocusTarget: true,
+            },
+        }));
+
+        const local = cttl.buildToolPlan(cttl.buildTrustContext({ surface: CttlTrustSurface.Local }));
+        const localComputer = cttl.buildToolPlan(cttl.buildTrustContext({
+            maxPermission: CttlPermission.Computer,
+            surface: CttlTrustSurface.Local,
+        }));
+        const debug = cttl.buildToolPlan(cttl.buildTrustContext({
+            debug: true,
+            maxPermission: CttlPermission.Computer,
+            surface: CttlTrustSurface.Local,
+        }));
+
+        expect(local.visible).toHaveLength(0);
+        expect(hiddenReasons(local, "computer.click")).toContain(CttlHiddenReason.PermissionCap);
+        expect(localComputer.visible.map((entry) => entry.descriptor.name)).toEqual(["computer.click"]);
+        expect(debug.visible.map((entry) => entry.descriptor.name)).toEqual(["computer.click"]);
+    });
+
     test("MCP catalog adapter maps builtin and remote tools into CTTL descriptors", () => {
         const adapter = new CttlMcpCatalogAdapter();
         const workspace = adapter.descriptorFor(mcpEntry("workspace", "read"));
         const shell = adapter.descriptorFor(mcpEntry("shell", "run"));
         const remote = adapter.descriptorFor(mcpEntry("browser", "open"));
+        const computer = adapter.descriptorFor(mcpEntry("computer", "click"));
         const resource = adapter.resourceDescriptorFor({
             server: "docs",
             resource: {
@@ -179,6 +213,18 @@ describe("CTTL core", () => {
             permission: CttlPermission.Network,
             scope: [CttlToolScope.Core],
             source: CttlCapabilitySource.Mcp,
+        });
+        expect(computer).toMatchObject({
+            category: CttlToolCategory.Computer,
+            name: "computer.click",
+            permission: CttlPermission.Computer,
+            scope: [CttlToolScope.Local, CttlToolScope.Debug],
+            source: CttlCapabilitySource.Mcp,
+            computer: {
+                action: "browser",
+                observationOnly: false,
+                requiresFocusTarget: true,
+            },
         });
         expect(resource).toMatchObject({
             name: "docs.resource.file.readme.md",

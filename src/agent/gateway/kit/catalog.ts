@@ -6,17 +6,7 @@ import { ExternalKitCapabilitySource, type ExternalKitCapabilitySummary } from "
 import type { FlyflorPaths } from "../../../config/index.ts";
 import { loadExternalKitCatalog } from "./manifest.ts";
 
-/**
- * Builds the external kit discovery view from existing manifest registries.
- *
- * This is a read-only catalog for Gateway control clients. It deliberately
- * does not list live MCP tools, spawn plugins or execute user tools; execution
- * stays behind Executive Tool Runtime and sandbox approval.
- */
-export async function loadExternalKitCatalogSnapshot(
-    paths: FlyflorPaths,
-    now = new Date().toISOString(),
-) {
+export async function loadExternalKitCatalogSnapshot(paths: FlyflorPaths, now = new Date().toISOString()) {
     const [catalog, mcpServers, plugins, skills, userTools] = await Promise.all([
         loadExternalKitCatalog(paths, now),
         loadMcpServers(paths),

@@ -45,4 +45,38 @@ describe("runtime ask replies", () => {
             snapshotId: "snapshot-1",
         });
     });
+
+    test("builds stable ask metadata with executive loop snapshot", () => {
+        const ask: AgentAsk = {
+            reason: AskReason.Other,
+            prompt: "继续吗？",
+        };
+        expect(
+            buildAskMetadata(ask, "snapshot-2", {
+                askId: "ask-1",
+                loopGuardReason: "unknown-tool-repeat",
+                message: "Need execution guidance",
+                resume: { mode: "continue" },
+                stepCount: 2,
+                stop: "ask",
+            }),
+        ).toEqual({
+            choiceCount: 0,
+            choices: [],
+            executiveToolLoop: {
+                askId: "ask-1",
+                loopGuardReason: "unknown-tool-repeat",
+                message: "Need execution guidance",
+                resume: { mode: "continue" },
+                stepCount: 2,
+                stop: "ask",
+            },
+            freeform: true,
+            prompt: "继续吗？",
+            questionCount: 0,
+            questions: [],
+            reason: AskReason.Other,
+            snapshotId: "snapshot-2",
+        });
+    });
 });

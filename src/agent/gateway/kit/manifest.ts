@@ -49,11 +49,6 @@ const COMMAND_PERMISSION: Partial<Record<GatewayControlMessageType, ExternalKitP
     [GatewayControlMessageType.GatewayStatusGet]: ExternalKitPermission.GatewayStatus,
 };
 
-/**
- * External kit manifest is the durable discovery contract for first-party and
- * project-overridden control surfaces. It is intentionally narrow: discovery,
- * permissions and event/control capabilities only.
- */
 export function buildBuiltinExternalKitCatalog(now = new Date().toISOString()): ExternalKitCatalogSnapshot {
     return {
         builtAt: now,
@@ -263,28 +258,25 @@ function normalizeOptionalStringArray(value: unknown, path: string): string[] | 
     });
 }
 
-function normalizeStringEnum<T extends string>(
+function normalizeStringEnum<TEnum extends Record<string, string>>(
     value: unknown,
-    enumObject: Readonly<Record<string, T>>,
+    enumObject: TEnum,
     path: string,
-): T | undefined {
+): TEnum[keyof TEnum] | undefined {
     if (value === undefined) {
         return undefined;
     }
-    if (typeof value !== "string") {
-        throw new Error(`${path} must be a string.`);
-    }
-    if (!Object.values(enumObject).includes(value as T)) {
+    if (typeof value !== "string" || !Object.values(enumObject).includes(value)) {
         throw new Error(`${path} must be a valid enum value.`);
     }
-    return value as T;
+    return value as TEnum[keyof TEnum];
 }
 
-function normalizeStringEnumArray<T extends string>(
+function normalizeStringEnumArray<TEnum extends Record<string, string>>(
     value: unknown,
-    enumObject: Readonly<Record<string, T>>,
+    enumObject: TEnum,
     path: string,
-): T[] | undefined {
+): TEnum[keyof TEnum][] | undefined {
     if (value === undefined) {
         return undefined;
     }
@@ -292,70 +284,67 @@ function normalizeStringEnumArray<T extends string>(
         throw new Error(`${path} must be an array.`);
     }
     return value.map((entry, index) => {
-        const normalized = normalizeStringEnum(entry, enumObject, `${path}.${index}`);
-        if (normalized === undefined) {
-            throw new Error(`${path}.${index} must be a string.`);
+        if (typeof entry !== "string" || !Object.values(enumObject).includes(entry)) {
+            throw new Error(`${path}.${index} must be a valid enum value.`);
         }
-        return normalized;
+        return entry as TEnum[keyof TEnum];
     });
 }
 
 function normalizeManifest(id: string, shape: ExternalKitManifestShape): ExternalKitManifest {
-    assertCommandPermissions(id, shape.commands ?? [], shape.permissions ?? []);
-    return {
-        capabilities: shape.capabilities?.map((binding) => ({
-            source: binding.source ?? ExternalKitCapabilitySource.Mcp,
-            names: binding.names?.filter((name) => typeof name === "string" && name.length > 0),
-        })),
-        commands: shape.commands?.filter((command): command is GatewayControlMessageType => typeof command === "string"),
-        description: shape.description,
-        events: shape.events?.map((entry) => ({
-            classes: entry.classes?.filter((value): value is RuntimeEventClass => typeof value === "string"),
-            types: entry.types?.filter((value): value is string => typeof value === "string"),
-        })),
+    const manifest: ExternalKitManifest = {
         id: shape.id ?? id,
         kind: shape.kind ?? ExternalKitKind.Capability,
-        name: shape.name ?? id,
+        name: shape.name ?? shape.id ?? id,
         permissions: shape.permissions ?? [],
-        schemaVersion: shape.schemaVersion ?? 1,
+        schemaVersion: 1,
         source: shape.source ?? ExternalKitSource.Project,
-        version: shape.version,
     };
+
+    if (shape.description) {
+        manifest.description = shape.description;
+    }
+    if (shape.version) {
+        manifest.version = shape.version;
+    }
+    if (shape.commands) {
+        manifest.commands = shape.commands;
+    }
+    if (shape.events) {
+        manifest.events = shape.events;
+    }
+    if (shape.capabilities) {
+        manifest.capabilities = shape.capabilities.map((binding) => ({
+            names: binding.names,
+            source: binding.source ?? ExternalKitCapabilitySource.Channel,
+        }));
+    }
+
+    validateKitPermissions(manifest);
+    return manifest;
 }
 
-function assertCommandPermissions(
-    id: string,
-    commands: readonly GatewayControlMessageType[],
-    permissions: readonly ExternalKitPermission[],
-): void {
-    const granted = new Set(permissions);
-    for (const command of commands) {
-        const required = COMMAND_PERMISSION[command];
-        if (required && !granted.has(required)) {
-            throw new Error(`kits.${id}.permissions must include ${required} for command ${command}.`);
+function validateKitPermissions(manifest: ExternalKitManifest): void {
+    for (const command of manifest.commands ?? []) {
+        const permission = COMMAND_PERMISSION[command];
+        if (!permission) {
+            continue;
+        }
+        if (!(manifest.permissions ?? []).includes(permission)) {
+            throw new Error(`kits.${manifest.id}.permissions must include ${permission} for command ${command}.`);
         }
     }
 }
 
 function builtinCliKit(): ExternalKitManifest {
     return {
-        commands: [
-            GatewayControlMessageType.CapabilityCatalogGet,
-            GatewayControlMessageType.EventSubscribe,
-            GatewayControlMessageType.GatewayMessageSend,
-            GatewayControlMessageType.GatewayStatusGet,
-        ],
-        description: "First-party CLI command surface over the Gateway control/event protocol.",
-        events: [{ classes: [RuntimeEventClass.Error, RuntimeEventClass.Lifecycle, RuntimeEventClass.Read] }],
         id: "builtin.cli",
         kind: ExternalKitKind.Cli,
-        name: "Built-in CLI",
+        name: "Builtin CLI",
         permissions: [
-            ExternalKitPermission.CapabilityCatalog,
             ExternalKitPermission.Control,
             ExternalKitPermission.EventSubscribe,
             ExternalKitPermission.GatewayMessageSend,
-            ExternalKitPermission.GatewayStatus,
         ],
         schemaVersion: 1,
         source: ExternalKitSource.Builtin,
@@ -364,23 +353,13 @@ function builtinCliKit(): ExternalKitManifest {
 
 function builtinTuiKit(): ExternalKitManifest {
     return {
-        commands: [
-            GatewayControlMessageType.CapabilityCatalogGet,
-            GatewayControlMessageType.EventSubscribe,
-            GatewayControlMessageType.GatewayMessageSend,
-            GatewayControlMessageType.GatewayStatusGet,
-        ],
-        description: "First-party TUI surface consuming turn deltas, RuntimeEvent streams and status snapshots.",
-        events: [{ classes: [RuntimeEventClass.Ask, RuntimeEventClass.Error, RuntimeEventClass.Lifecycle, RuntimeEventClass.Read] }],
         id: "builtin.tui",
         kind: ExternalKitKind.Tui,
-        name: "Built-in TUI",
+        name: "Builtin TUI",
         permissions: [
-            ExternalKitPermission.CapabilityCatalog,
             ExternalKitPermission.Control,
             ExternalKitPermission.EventSubscribe,
             ExternalKitPermission.GatewayMessageSend,
-            ExternalKitPermission.GatewayStatus,
         ],
         schemaVersion: 1,
         source: ExternalKitSource.Builtin,
@@ -389,22 +368,10 @@ function builtinTuiKit(): ExternalKitManifest {
 
 function builtinGatewayKit(): ExternalKitManifest {
     return {
-        commands: [
-            GatewayControlMessageType.EventSubscribe,
-            GatewayControlMessageType.GatewayMessageSend,
-            GatewayControlMessageType.GatewayStatusGet,
-        ],
-        description: "First-party Gateway channel transport kit using StreamingMessageDispatcher.",
-        events: [{ classes: [RuntimeEventClass.Control, RuntimeEventClass.Error, RuntimeEventClass.Lifecycle] }],
         id: "builtin.gateway",
         kind: ExternalKitKind.Gateway,
-        name: "Built-in Gateway",
-        permissions: [
-            ExternalKitPermission.Control,
-            ExternalKitPermission.EventSubscribe,
-            ExternalKitPermission.GatewayMessageSend,
-            ExternalKitPermission.GatewayStatus,
-        ],
+        name: "Builtin Gateway",
+        permissions: [ExternalKitPermission.Control, ExternalKitPermission.GatewayStatus],
         schemaVersion: 1,
         source: ExternalKitSource.Builtin,
     };
@@ -412,25 +379,10 @@ function builtinGatewayKit(): ExternalKitManifest {
 
 function builtinCapabilityKit(): ExternalKitManifest {
     return {
-        capabilities: [
-            { source: ExternalKitCapabilitySource.Mcp },
-            { source: ExternalKitCapabilitySource.Plugin },
-            { source: ExternalKitCapabilitySource.Skill },
-            { source: ExternalKitCapabilitySource.UserTool },
-        ],
-        commands: [
-            GatewayControlMessageType.CapabilityCatalogGet,
-            GatewayControlMessageType.EventSubscribe,
-        ],
-        description: "Capability kit bridge for MCP, plugin, skill and user-tool descriptors.",
-        events: [{ classes: [RuntimeEventClass.Effect, RuntimeEventClass.Error, RuntimeEventClass.Question, RuntimeEventClass.Read] }],
         id: "builtin.capabilities",
         kind: ExternalKitKind.Capability,
-        name: "Built-in Capabilities",
-        permissions: [
-            ExternalKitPermission.CapabilityCatalog,
-            ExternalKitPermission.EventSubscribe,
-        ],
+        name: "Builtin Capability Catalog",
+        permissions: [ExternalKitPermission.Control, ExternalKitPermission.CapabilityCatalog],
         schemaVersion: 1,
         source: ExternalKitSource.Builtin,
     };

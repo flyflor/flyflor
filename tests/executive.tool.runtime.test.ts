@@ -140,8 +140,11 @@ describe("ExecutiveToolRuntime", () => {
         });
 
         expect(result.askRequired).toEqual({
+            askId: expect.any(String),
             loopGuardReason: CttlLoopGuardReason.UnknownToolRepeat,
             message: "Executive loop guard blocked every tool call in this step.",
+            resume: { mode: "continue" },
+            stepCount: 2,
             stop: "ask",
         });
         expect(result.rawText).toBe("missing");
@@ -209,7 +212,10 @@ describe("ExecutiveToolRuntime", () => {
         });
 
         expect(result.askRequired).toEqual({
+            askId: expect.any(String),
             message: "no more tools",
+            resume: { mode: "continue" },
+            stepCount: 1,
             stop: "ask",
             toolBudgetExhausted: true,
         });
@@ -236,8 +242,11 @@ describe("ExecutiveToolRuntime", () => {
         });
 
         expect(result.askRequired).toEqual({
+            askId: expect.any(String),
             loopGuardReason: CttlLoopGuardReason.UnknownToolRepeat,
             message: "Executive loop guard blocked every tool call in this step.",
+            resume: { mode: "continue" },
+            stepCount: 1,
             stop: "ask",
         });
         expect(result.rawText).toBe("missing");
@@ -269,7 +278,10 @@ describe("ExecutiveToolRuntime", () => {
         });
 
         expect(result.askRequired).toEqual({
+            askId: expect.any(String),
             message: "tool budget is exhausted, ask for execution guidance",
+            resume: { mode: "continue" },
+            stepCount: 1,
             stop: "ask",
             toolBudgetExhausted: true,
         });

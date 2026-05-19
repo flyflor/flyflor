@@ -49,6 +49,27 @@ describe("RuntimeMcpToolPlanComponent", () => {
         expect(plan.hiddenTools).toEqual([]);
     });
 
+    test("keeps computer-control tools hidden from remote turns and exposes them on local computer-capable surface", () => {
+        const remote = new RuntimeMcpToolPlanComponent().build({
+            catalog: [entry("computer", "click")],
+            channel: Channel.Telegram,
+            maxPermission: CttlPermission.Computer,
+        });
+        const local = new RuntimeMcpToolPlanComponent().build({
+            catalog: [entry("computer", "click")],
+            channel: Channel.Stdio,
+            maxPermission: CttlPermission.Computer,
+            projectScoped: true,
+        });
+
+        expect(remote.catalog).toEqual([]);
+        expect(hiddenReasons(remote, "computer.click")).toEqual(
+            expect.arrayContaining([CttlHiddenReason.ScopeMismatch]),
+        );
+        expect(local.catalog.map((tool) => `${tool.server}.${tool.tool.name}`)).toEqual(["computer.click"]);
+        expect(local.hiddenTools).toEqual([]);
+    });
+
     test("plans MCP resources and prompts as read-only capabilities", () => {
         const plan = new RuntimeMcpToolPlanComponent().buildCapabilities({
             channel: Channel.Stdio,

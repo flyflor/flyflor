@@ -7,7 +7,9 @@ import {
     loadExternalKitCatalogSnapshot,
 } from "../src/agent/gateway/kit/index.ts";
 import {
+    buildGatewayControlSurfaceCapabilities,
     createGatewayControlEnvelope,
+    GatewayControlErrorCode,
     type GatewayControlEnvelope,
     type GatewayControlPeer,
     type GatewayControlSocket,
@@ -22,8 +24,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
 import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
-import type { StreamingDispatchOptions } from "../src/agent/gateway/channels/types.ts";
-import type { GatewayStatusSnapshot } from "../src/agent/gateway/channels/status.ts";
+import type { GatewayControlDispatchOptions } from "../src/agent/gateway/control.ts";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -68,8 +69,15 @@ describe("GatewayControlHub", () => {
             payload: {
                 clientId: "client-1",
                 capabilities: {
-                    eventStream: true,
-                    protocol: "flyflor.ws.v1",
+                    ...buildGatewayControlSurfaceCapabilities([
+                        GatewayControlMessageType.CapabilityCatalogGet,
+                        GatewayControlMessageType.ClientHello,
+                        GatewayControlMessageType.EventSubscribe,
+                        GatewayControlMessageType.EventUnsubscribe,
+                        GatewayControlMessageType.GatewayStatusGet,
+                        GatewayControlMessageType.GatewayMessageSend,
+                        GatewayControlMessageType.Ping,
+                    ]),
                 },
                 kits: {
                     schemaVersion: 1,
@@ -307,6 +315,7 @@ describe("GatewayControlHub", () => {
             expect(sent(socket)[0]).toMatchObject({
                 type: GatewayControlMessageType.Error,
                 payload: {
+                    code: GatewayControlErrorCode.Internal,
                     message: "kits.broken.permissions.0 must be a valid enum value.",
                 },
             });
@@ -389,7 +398,10 @@ describe("GatewayControlHub", () => {
     });
 
     test("dispatches ws messages with explicit runtime context and emits turn deltas/final", async () => {
-        const calls: Array<{ message: GatewayMessage; options?: StreamingDispatchOptions }> = [];
+        const calls: Array<{
+            message: GatewayMessage;
+            options?: GatewayControlDispatchOptions;
+        }> = [];
         const hub = createHub({
             dispatch: async (message, options) => {
                 calls.push({ message, options });
@@ -474,6 +486,131 @@ describe("GatewayControlHub", () => {
         hub.dispose();
     });
 
+    test("emits structured invalid-envelope and invalid-payload control errors", async () => {
+        const hub = createHub();
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(socket, JSON.stringify({
+            protocol: "invalid",
+            id: "env-1",
+            type: GatewayControlMessageType.Ping,
+            at: "2026-05-20T00:00:00.000Z",
+        }));
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayMessageSend, {})),
+        );
+
+        expect(sent(socket).slice(-2)).toEqual([
+            expect.objectContaining({
+                type: GatewayControlMessageType.Error,
+                payload: expect.objectContaining({
+                    code: GatewayControlErrorCode.InvalidEnvelope,
+                    message: "Unsupported gateway control protocol",
+                }),
+            }),
+            expect.objectContaining({
+                type: GatewayControlMessageType.Error,
+                payload: expect.objectContaining({
+                    code: GatewayControlErrorCode.InvalidPayload,
+                    message: "gateway.message.send payload requires text",
+                }),
+            }),
+        ]);
+        hub.dispose();
+    });
+
+    test("carries ask and todo snapshots through turn.final reply metadata", async () => {
+        const hub = createHub({
+            dispatch: async (message) => ({
+                messageId: message.id,
+                route: message.route,
+                text: "Need confirmation?",
+                metadata: {
+                    kind: "ask",
+                        ask: {
+                            choiceCount: 1,
+                            choices: [{ label: "Continue", description: "Proceed with the current plan" }],
+                            executiveToolLoop: {
+                                askId: "ask-1",
+                                message: "Need one more step",
+                                resume: { mode: "continue" },
+                                stepCount: 2,
+                                stop: "ask",
+                                toolBudgetExhausted: true,
+                            },
+                            freeform: true,
+                            prompt: "Need confirmation?",
+                            questionCount: 0,
+                        questions: [],
+                        reason: "other",
+                        snapshotId: "snapshot-1",
+                    },
+                    planning: {
+                        contextForks: [],
+                        scenes: [],
+                        taskPlans: [{
+                            completedStepCount: 0,
+                            id: "plan-1",
+                            progress: 0,
+                            status: "planned",
+                            stepCount: 1,
+                            steps: [{ id: "step-1", order: 0, status: "planned", title: "Confirm direction" }],
+                            summary: "Need one confirmation step",
+                            title: "Confirmation",
+                        }],
+                    },
+                },
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(GatewayControlMessageType.GatewayMessageSend, {
+                    id: "message-ask-1",
+                    text: "hello",
+                    user: { id: "u-1" },
+                }),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.TurnFinal,
+            payload: {
+                reply: {
+                    metadata: {
+                        kind: "ask",
+                        ask: {
+                            executiveToolLoop: {
+                                askId: "ask-1",
+                                message: "Need one more step",
+                                resume: { mode: "continue" },
+                                stepCount: 2,
+                                stop: "ask",
+                                toolBudgetExhausted: true,
+                            },
+                            prompt: "Need confirmation?",
+                            reason: "other",
+                            snapshotId: "snapshot-1",
+                        },
+                        planning: {
+                            taskPlans: [{
+                                id: "plan-1",
+                                title: "Confirmation",
+                                steps: [{ id: "step-1", title: "Confirm direction" }],
+                            }],
+                        },
+                    },
+                },
+            },
+        });
+        hub.dispose();
+    });
+
     test("requires control token for non-local upgrade requests", async () => {
         const hub = createHub({ config: fakeConfig({ control: { token: "secret-token" } }) });
         const server = new FakeUpgradeServer().asBunServer();
@@ -526,7 +663,7 @@ function createHub(overrides: Partial<ConstructorParameters<typeof GatewayContro
             port: 0,
             startedAt: "2026-05-17T00:00:00.000Z",
             streamingCount: 0,
-        }) satisfies GatewayStatusSnapshot,
+        }),
         ...overrides,
     });
 }

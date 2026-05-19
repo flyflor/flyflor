@@ -4,7 +4,11 @@ import {
     CttlToolCategory,
     CttlToolScope,
 } from "../protocol/contracts/index.ts";
-import type { CttlJsonObject, CttlToolDescriptor } from "./types.ts";
+import {
+    CttlComputerControlAction,
+    type CttlJsonObject,
+    type CttlToolDescriptor,
+} from "./types.ts";
 
 export interface CttlMcpCatalogEntry {
     readonly server: string;
@@ -55,19 +59,33 @@ export class CttlMcpCatalogAdapter {
     }
 
     public descriptorFor(entry: CttlMcpCatalogEntry): CttlToolDescriptor {
-        return {
-            category: this.categoryFor(entry),
+        const category = this.categoryFor(entry);
+        const permission = this.permissionFor(entry);
+        const readOnly = this.readOnlyFor(entry);
+        const descriptor: CttlToolDescriptor = {
+            category,
             concurrencySafe: this.concurrencySafeFor(entry),
             description: entry.tool.description ?? this.toolName(entry),
             exclusive: this.exclusiveFor(entry),
             inputSchema: this.inputSchemaFor(entry),
             name: this.toolName(entry),
-            permission: this.permissionFor(entry),
-            readOnly: this.readOnlyFor(entry),
+            permission,
+            readOnly,
             resultLimit: { maxChars: 4_000 },
             scope: this.scopeFor(entry),
             source: this.coreServers.has(entry.server) ? CttlCapabilitySource.Core : CttlCapabilitySource.Mcp,
         };
+        if (category === CttlToolCategory.Computer || permission === CttlPermission.Computer) {
+            return {
+                ...descriptor,
+                computer: {
+                    action: readOnly ? CttlComputerControlAction.Screen : CttlComputerControlAction.Browser,
+                    observationOnly: readOnly,
+                    requiresFocusTarget: !readOnly,
+                },
+            };
+        }
+        return descriptor;
     }
 
     public resourceDescriptorFor(entry: CttlMcpResourceCatalogEntry): CttlToolDescriptor {
@@ -130,6 +148,7 @@ export class CttlMcpCatalogAdapter {
     }
 
     private categoryFor(entry: CttlMcpCatalogEntry): CttlToolCategory {
+        if (entry.server === "computer") return CttlToolCategory.Computer;
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return CttlToolCategory.Coding;
         if (entry.server === this.shellServer) return CttlToolCategory.System;
         return CttlToolCategory.Integration;
@@ -144,16 +163,19 @@ export class CttlMcpCatalogAdapter {
     }
 
     private permissionFor(entry: CttlMcpCatalogEntry): CttlPermission {
+        if (entry.server === "computer") return CttlPermission.Computer;
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return CttlPermission.Read;
         if (entry.server === this.shellServer) return CttlPermission.Execute;
         return CttlPermission.Network;
     }
 
     private readOnlyFor(entry: CttlMcpCatalogEntry): boolean {
+        if (entry.server === "computer") return false;
         return entry.server !== this.shellServer;
     }
 
     private scopeFor(entry: CttlMcpCatalogEntry): readonly CttlToolScope[] {
+        if (entry.server === "computer") return [CttlToolScope.Local, CttlToolScope.Debug];
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return [CttlToolScope.Project];
         if (entry.server === this.shellServer) return [CttlToolScope.Local];
         return [CttlToolScope.Core];

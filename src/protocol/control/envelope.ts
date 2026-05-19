@@ -1,14 +1,256 @@
 import {
     Channel,
     ChatType,
+    ChannelLinkState,
+    ChannelTransport,
+    type AgentAsk,
+    type AgentAskChoice,
+    type AgentAskQuestion,
+    type ContextForkRecord,
     GatewayControlMessageType,
     GatewayControlProtocol,
+    type GatewayChannelCapabilities,
+    type SceneRecord,
+    type TaskPlanRecord,
+    type TaskPlanStepRecord,
     type RuntimeEventClass,
     type GatewayControlMessageType as GatewayControlMessageTypeValue,
     type GatewayMessage,
     type RuntimeEvent,
 } from "../contracts/index.ts";
 import { classifyRuntimeEvent } from "../../events/index.ts";
+import type { ExternalKitCatalogSnapshot } from "../contracts/index.ts";
+
+export type GatewayControlAckPayload = Record<string, unknown> & {
+    clientId?: string;
+    received?: string;
+    subscriptions?: GatewayControlSubscription[];
+};
+
+export const GatewayControlErrorCode = {
+    Internal: "internal",
+    InvalidEnvelope: "invalid-envelope",
+    InvalidPayload: "invalid-payload",
+    Unauthorized: "unauthorized",
+    UnsupportedMessage: "unsupported-message",
+} as const;
+
+export type GatewayControlErrorCode = (typeof GatewayControlErrorCode)[keyof typeof GatewayControlErrorCode];
+
+export class GatewayControlProtocolError extends Error {
+    public constructor(
+        public readonly code: GatewayControlErrorCode,
+        message: string,
+        public readonly details?: Record<string, unknown>,
+    ) {
+        super(message);
+        this.name = "GatewayControlProtocolError";
+    }
+}
+
+export type GatewayControlErrorPayload = Record<string, unknown> & {
+    code: GatewayControlErrorCode;
+    details?: Record<string, unknown>;
+    message: string;
+    retryable?: boolean;
+};
+
+export type GatewayControlTurnDeltaPayload = Record<string, unknown> & {
+    delta: string;
+    messageId: string;
+};
+
+export type GatewayControlTurnErrorPayload = Record<string, unknown> & {
+    message: string;
+    messageId: string;
+};
+
+export type GatewayControlTurnFinalPayload = Record<string, unknown> & {
+    reply: GatewayReplyLike;
+};
+
+export type GatewayControlGatewayStatusPayload = Record<string, unknown> & {
+    status: GatewayControlGatewayStatusSnapshot;
+};
+
+export type GatewayControlCapabilityCatalogPayload = Record<string, unknown> & {
+    catalog: Record<string, unknown> | null;
+    kits?: ExternalKitCatalogSnapshot;
+};
+
+export type GatewayControlServerHelloPayload = Record<string, unknown> & {
+    capabilities: GatewayControlSurfaceCapabilities;
+    clientId: string;
+    connectedAt: string;
+    kits: ExternalKitCatalogSnapshot;
+    status: GatewayControlGatewayStatusSnapshot;
+};
+
+export type GatewayControlPongPayload = Record<string, unknown> & {
+    now: string;
+};
+
+export type GatewayControlEventPublishPayload = Record<string, unknown> & {
+    event: RuntimeEvent;
+};
+
+/**
+ * Stable Rust-facing WS semantic groups.
+ *
+ * The transport still carries concrete message types such as `turn.delta` or
+ * `event.publish`, but Rust/DIY clients should reason about this smaller set of
+ * semantic lanes instead of Bun-specific command names.
+ */
+export const GatewayControlSemanticType = {
+    Ask: "ask",
+    Data: "data",
+    Error: "error",
+    Event: "event",
+    Input: "input",
+    Ping: "ping",
+    Pong: "pong",
+    Stream: "stream",
+    Todo: "todo",
+} as const;
+
+export type GatewayControlSemanticType =
+    (typeof GatewayControlSemanticType)[keyof typeof GatewayControlSemanticType];
+
+export type GatewayControlAskPayload = Record<string, unknown> & {
+    ask: AgentAsk;
+};
+
+export type GatewayControlTodoPayload = Record<string, unknown> & {
+    taskPlans: TaskPlanRecord[];
+};
+
+export type GatewayControlDataPayload = Record<string, unknown> & {
+    channel?: GatewayControlGatewayStatusPayload;
+    context?: Record<string, unknown>;
+    kits?: ExternalKitCatalogSnapshot;
+    status?: GatewayControlGatewayStatusSnapshot;
+};
+
+export const GatewayControlReplyMetadataKind = {
+    Ask: "ask",
+    Reply: "reply",
+} as const;
+
+export type GatewayControlReplyMetadataKind =
+    (typeof GatewayControlReplyMetadataKind)[keyof typeof GatewayControlReplyMetadataKind];
+
+export interface GatewayControlAskMetadataSnapshot {
+    choiceCount: number;
+    choices: AgentAskChoice[];
+    executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot;
+    freeform: boolean;
+    prompt: string;
+    questionCount: number;
+    questions: AgentAskQuestion[];
+    reason: AgentAsk["reason"];
+    snapshotId: string;
+}
+
+export interface GatewayControlTodoStepSnapshot {
+    id: string;
+    order: number;
+    progress?: TaskPlanStepRecord["progress"];
+    status: TaskPlanStepRecord["status"];
+    title: string;
+}
+
+export interface GatewayControlTodoTaskSnapshot {
+    completedStepCount: number;
+    id: string;
+    progress: number;
+    status: TaskPlanRecord["status"];
+    stepCount: number;
+    steps: GatewayControlTodoStepSnapshot[];
+    summary: string;
+    title: string;
+}
+
+export interface GatewayControlContextForkSnapshot {
+    id: string;
+    maxContextTokens: ContextForkRecord["maxContextTokens"];
+    scopeSummary: ContextForkRecord["scopeSummary"];
+    title: ContextForkRecord["title"];
+}
+
+export interface GatewayControlSceneSnapshot {
+    blackboardTurnId?: SceneRecord["blackboardTurnId"];
+    contextForkId?: SceneRecord["contextForkId"];
+    id: string;
+    kind: SceneRecord["kind"];
+    summary: SceneRecord["summary"];
+    taskPlanId?: SceneRecord["taskPlanId"];
+    title: SceneRecord["title"];
+}
+
+export interface GatewayControlPlanningMetadataSnapshot {
+    contextForks: GatewayControlContextForkSnapshot[];
+    scenes: GatewayControlSceneSnapshot[];
+    taskPlans: GatewayControlTodoTaskSnapshot[];
+}
+
+export interface GatewayControlLongHorizonLoopSnapshot {
+    askId: string;
+    loopGuardReason?: string;
+    message: string;
+    resume: {
+        mode: "continue";
+        requestId?: string;
+    };
+    stepCount: number;
+    stop: "ask";
+    toolBudgetExhausted?: true;
+}
+
+export type GatewayControlReplyMetadata = Record<string, unknown> & {
+    ask?: GatewayControlAskMetadataSnapshot;
+    behaviorSnapshotId?: string;
+    executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot;
+    kind?: GatewayControlReplyMetadataKind;
+    planning?: GatewayControlPlanningMetadataSnapshot;
+};
+
+export interface GatewayReplyLike {
+    messageId: string;
+    route: GatewayMessage["route"];
+    text: string;
+    delivery?: GatewayMessage["metadata"] | Record<string, unknown>;
+    metadata?: GatewayControlReplyMetadata;
+}
+
+export interface GatewayControlChannelStatusSnapshot {
+    adapter: string | null;
+    configured: boolean;
+    connected: boolean;
+    detail?: string;
+    implemented: boolean;
+    lastError?: string;
+    lastErrorAt?: string;
+    lastInboundAt?: string;
+    lastOutboundAt?: string;
+    name: string;
+    state: ChannelLinkState;
+    streaming: boolean;
+    transport: ChannelTransport;
+    capabilities?: GatewayChannelCapabilities;
+}
+
+export interface GatewayControlGatewayStatusSnapshot {
+    channels: GatewayControlChannelStatusSnapshot[];
+    connectedCount: number;
+    degradedCount: number;
+    gatewayRunning: boolean;
+    host: string;
+    port: number;
+    startedAt?: string;
+    streamingCount: number;
+    uptimeMs?: number;
+    url?: string;
+}
 
 export interface GatewayControlEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {
     protocol: typeof GatewayControlProtocol.WsV1;
@@ -26,9 +268,7 @@ export interface GatewayControlEventEnvelope {
     type: typeof GatewayControlMessageType.EventPublish;
     at: string;
     requestId?: string;
-    payload: {
-        event: RuntimeEvent;
-    };
+    payload: GatewayControlEventPublishPayload;
 }
 
 export interface GatewayControlSubscription {
@@ -70,6 +310,13 @@ export interface GatewayControlProjectScope {
     title?: string;
 }
 
+export interface GatewayControlSurfaceCapabilities {
+    commands: string[];
+    eventStream: true;
+    protocol: typeof GatewayControlProtocol.WsV1;
+    semanticTypes: GatewayControlSemanticType[];
+}
+
 export type GatewayControlSocket = Bun.ServerWebSocket<GatewayControlPeer>;
 
 export interface GatewayControlPeer {
@@ -105,20 +352,135 @@ export function createGatewayControlEventEnvelope(event: RuntimeEvent): GatewayC
     };
 }
 
+export function buildGatewayControlAckPayload(input: GatewayControlAckPayload): GatewayControlAckPayload {
+    return input;
+}
+
+export function buildGatewayControlErrorPayload(
+    message: string,
+    options: {
+        code?: GatewayControlErrorCode;
+        details?: Record<string, unknown>;
+        retryable?: boolean;
+    } = {},
+): GatewayControlErrorPayload {
+    return {
+        code: options.code ?? GatewayControlErrorCode.Internal,
+        details: options.details,
+        message,
+        retryable: options.retryable,
+    };
+}
+
+export function buildGatewayControlTurnDeltaPayload(delta: string, messageId: string): GatewayControlTurnDeltaPayload {
+    return { delta, messageId };
+}
+
+export function buildGatewayControlTurnErrorPayload(
+    message: string,
+    messageId: string,
+): GatewayControlTurnErrorPayload {
+    return { message, messageId };
+}
+
+export function buildGatewayControlTurnFinalPayload(reply: GatewayReplyLike): GatewayControlTurnFinalPayload {
+    return { reply };
+}
+
+export function buildGatewayControlGatewayStatusPayload(
+    status: GatewayControlGatewayStatusSnapshot,
+): GatewayControlGatewayStatusPayload {
+    return { status };
+}
+
+export function buildGatewayControlCapabilityCatalogPayload(
+    catalog: Record<string, unknown> | null,
+    kits?: ExternalKitCatalogSnapshot,
+): GatewayControlCapabilityCatalogPayload {
+    return { catalog, kits };
+}
+
+export function buildGatewayControlServerHelloPayload(input: GatewayControlServerHelloPayload): GatewayControlServerHelloPayload {
+    return input;
+}
+
+export function buildGatewayControlPongPayload(now = new Date().toISOString()): GatewayControlPongPayload {
+    return { now };
+}
+
+export function buildGatewayControlAskPayload(ask: AgentAsk): GatewayControlAskPayload {
+    return { ask };
+}
+
+export function buildGatewayControlTodoPayload(taskPlans: TaskPlanRecord[]): GatewayControlTodoPayload {
+    return { taskPlans };
+}
+
+export function buildGatewayControlDataPayload(input: GatewayControlDataPayload): GatewayControlDataPayload {
+    return input;
+}
+
+/**
+ * Maps concrete transport message types to the smaller stable semantic lane set.
+ *
+ * Rust or DIY clients should branch on this lane first, then optionally inspect
+ * the concrete message type when they need finer transport-specific handling.
+ */
+export function classifyGatewayControlSemanticType(
+    type: GatewayControlMessageTypeValue,
+): GatewayControlSemanticType {
+    switch (type) {
+        case GatewayControlMessageType.GatewayMessageSend:
+            return GatewayControlSemanticType.Input;
+        case GatewayControlMessageType.TurnDelta:
+        case GatewayControlMessageType.TurnFinal:
+        case GatewayControlMessageType.TurnError:
+            return GatewayControlSemanticType.Stream;
+        case GatewayControlMessageType.EventPublish:
+        case GatewayControlMessageType.EventSubscribe:
+        case GatewayControlMessageType.EventUnsubscribe:
+            return GatewayControlSemanticType.Event;
+        case GatewayControlMessageType.Error:
+            return GatewayControlSemanticType.Error;
+        case GatewayControlMessageType.Ping:
+            return GatewayControlSemanticType.Ping;
+        case GatewayControlMessageType.Pong:
+            return GatewayControlSemanticType.Pong;
+        case GatewayControlMessageType.Ack:
+        case GatewayControlMessageType.CapabilityCatalogGet:
+        case GatewayControlMessageType.CapabilityCatalogSnapshot:
+        case GatewayControlMessageType.ClientHello:
+        case GatewayControlMessageType.GatewayStatusGet:
+        case GatewayControlMessageType.GatewayStatusSnapshot:
+        case GatewayControlMessageType.ServerHello:
+            return GatewayControlSemanticType.Data;
+    }
+}
+
 export function parseGatewayControlEnvelope(input: string | Buffer): GatewayControlEnvelope {
     const raw = typeof input === "string" ? input : input.toString("utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed)) {
-        throw new Error("Gateway control envelope must be a JSON object");
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidEnvelope,
+            "Gateway control envelope must be a JSON object",
+        );
     }
     if (parsed.protocol !== GatewayControlProtocol.WsV1) {
-        throw new Error("Unsupported gateway control protocol");
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidEnvelope,
+            "Unsupported gateway control protocol",
+            { protocol: parsed.protocol as string | undefined },
+        );
     }
     const id = readString(parsed.id);
     const type = readString(parsed.type) as GatewayControlMessageTypeValue | undefined;
     const at = readString(parsed.at);
     if (!id || !type || !at) {
-        throw new Error("Gateway control envelope requires id, type and at");
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidEnvelope,
+            "Gateway control envelope requires id, type and at",
+        );
     }
     return {
         protocol: GatewayControlProtocol.WsV1,
@@ -133,7 +495,10 @@ export function parseGatewayControlEnvelope(input: string | Buffer): GatewayCont
 
 export function normalizeGatewayControlMessage(input: GatewayControlMessageInput): GatewayMessage {
     if (!input.text || typeof input.text !== "string") {
-        throw new Error("gateway.message.send payload requires text");
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidPayload,
+            "gateway.message.send payload requires text",
+        );
     }
     const userId = input.user?.id ?? "ws-user";
     return {
@@ -167,7 +532,10 @@ export function readGatewayControlSubscription(payload: Record<string, unknown> 
 
 export function readGatewayControlMessageInput(payload: Record<string, unknown> | undefined): GatewayControlMessageInput {
     if (!payload) {
-        throw new Error("gateway.message.send requires payload");
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidPayload,
+            "gateway.message.send requires payload",
+        );
     }
     return {
         id: readString(payload.id),

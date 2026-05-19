@@ -758,6 +758,15 @@ export class MemoryModule extends Memory {
         // 再处理本轮可能新发起的 ask。两个写入顺序固定，避免 chain 被错误跨轮接续。
         const pendingAskBefore = this.findPendingAsk(message.user.id);
         if (pendingAskBefore) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.CttlLongHorizonLoopResumed,
+                    {
+                        askId: pendingAskBefore.id,
+                    },
+                    context.requestId,
+                ),
+            );
             this.recordAskAnswerPair(pendingAskBefore.id, pendingAskBefore.snapshotId, message);
         }
 

@@ -9,6 +9,7 @@ import {
 import { Channel } from "../../../protocol/contracts/index.ts";
 import {
     CttlComponent,
+    CttlComputerProfileComponent,
     CttlMcpCatalogAdapter,
     type CttlManifestToolDefinition,
     type CttlToolDescriptor,
@@ -98,6 +99,7 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
         shellServer: SHELL_SERVER,
         workspaceServer: WORKSPACE_SERVER,
     });
+    private readonly computerProfile = new CttlComputerProfileComponent();
 
     public build(input: RuntimeMcpToolPlanInput): RuntimeMcpToolPlanResult {
         const capabilityPlan = this.buildCapabilities({
@@ -114,7 +116,9 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
     }
 
     public descriptorForCatalogEntry(entry: McpToolCatalogEntry) {
-        return this.adapter.descriptorFor(entry);
+        const descriptor = this.adapter.descriptorFor(entry);
+        const computer = this.computerProfile.profileFor(descriptor);
+        return computer ? { ...descriptor, computer } : descriptor;
     }
 
     public descriptorForResourceEntry(entry: RuntimeMcpResourceCatalogEntry) {

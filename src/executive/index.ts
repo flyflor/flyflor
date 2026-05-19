@@ -1,4 +1,5 @@
 export * from "./component.ts";
+export * from "./computer.profile.ts";
 export * from "./loop.guard.ts";
 export * from "./manifest.ts";
 export * from "./mcp.adapter.ts";

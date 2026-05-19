@@ -45,9 +45,6 @@ const DIRECTORY_REPEATED_INFRA_FILES = [
 ];
 const DIRECTORY_OWNER_PREFIX_ALLOWLIST = new Set([
     "src/config/config.ts",
-    "src/command/command.ts",
-    "src/command/cli/cli.ts",
-    "src/command/tui/chat/chat.entry.ts",
 ]);
 const DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES = [
     "templates/prompts/",

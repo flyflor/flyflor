@@ -42,8 +42,14 @@ export interface ExecutiveToolRuntimeOptions<TCall extends ExecutiveToolCall, TE
 }
 
 export interface ExecutiveToolRuntimeAskRequired {
+    readonly askId: string;
     readonly loopGuardReason?: CttlLoopGuardReason;
     readonly message: string;
+    readonly resume: {
+        readonly mode: "continue";
+        readonly requestId?: string;
+    };
+    readonly stepCount: number;
     readonly stop: "ask";
     readonly toolBudgetExhausted?: true;
 }
@@ -89,8 +95,11 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
                 allExecutions.push(...blocked);
                 return {
                     askRequired: {
+                        askId: crypto.randomUUID(),
                         loopGuardReason: this.lastLoopGuardReason(blocked),
                         message: "Executive loop guard blocked every tool call in this step.",
+                        resume: { mode: "continue" },
+                        stepCount: turn + 1,
                         stop: "ask",
                     },
                     rawText: parsed.text || raw,
@@ -119,8 +128,11 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
 
         return {
             askRequired: {
+                askId: crypto.randomUUID(),
                 loopGuardReason: this.lastLoopGuardReason(allExecutions),
                 message: input.noMoreToolsMessage,
+                resume: { mode: "continue" },
+                stepCount: maxTurns,
                 stop: "ask",
                 toolBudgetExhausted: true,
             },

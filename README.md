@@ -1,6 +1,6 @@
 # Flyflor
 
-Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进制交付。
+Flyflor 是一个 Bun + TypeScript 智能体运行时内核，目标是单文件二进制交付。
 
 核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、gateway、sandbox、skills、context 等外部交互。
 
@@ -12,22 +12,19 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进
 - 不靠单轮堆叠上下文，而靠三层记忆、遗忘曲线和反思把经验压成稳定能力。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
+- 未来 CLI、Gateway、TUI 用 Rust 重写；当前 Bun 主线只保留 event 血管与 WS/control 协议。
 - 简单问题直接回，复杂问题走黑板，保证复杂度和协作成本只在必要时上升。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 
-## 支持的渠道
+## Gateway 现状
 
-Flyflor 当前支持 31 个 channel，分为三类：
+主线 Gateway 已收缩为最小血管层：
 
-| 类别                | 渠道                                                                                                                                         |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 核心入口            | API、STDIO、Webhook                                                                                                                          |
-| 官方协议 / 独立适配 | WeChat official account、WeCom Callback、Weixin iLink、Telegram、Discord、Feishu、Slack、Line、Mattermost、DingTalk、BlueBubbles / iMessage  |
-| 共享 HTTP 协议适配  | API Server、Google Chat、IRC、Email、Home Assistant、Matrix、MS Graph Webhook、QQ、QQBot、Signal、SMS、Teams、WeCom、WhatsApp、Yuanbao、Zalo |
+- `/ws` WebSocket control/event
+- `/health`
+- `/channels`
 
-Channel 协议会保留 thread、引用回复、评论、typing、mention、reaction、编辑 / 删除、卡片更新等结构化通信细节；业务判断仍只走模型结构化输出，不从消息文本做关键词推断。`/channels` 状态会暴露每个 adapter 的 capability：Telegram 已支持 typing / thread / reply / message edit，Discord 使用 official deferred interaction + original message patch，Slack 支持 thread / update / reaction，Feishu 支持 thread reply / message update，LINE 支持 loading animation / quoteToken / push fallback，Mattermost 支持 REST typing / thread / post patch，Weixin iLink 支持官方 `sendtyping` ticket 生命周期，WeChat official、WeCom Callback 坚持官方协议并按平台能力稳定降级。
-
-完整矩阵和每个 channel 的配置要求见 [docs/gateway.channels.md](docs/gateway.channels.md)。
+第一方 CLI/TUI/channel adapter 已从主源码剥离，保存在 `abandon/` 仅做备份。后续 Rust 客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
 
 ## 快速开始
 
@@ -83,7 +80,6 @@ bun run setup        # 初始化向导
 bun run status       # 运行状态
 bun run doctor       # 诊断配置与依赖
 bun run doctor --fix # 自动创建缺失目录
-bun run tui          # 仪表板 TUI
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
 ./dist/flyflor       # 执行已编译二进制；交互式执行 shell.run 会询问
@@ -178,7 +174,6 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | -------------- | --------------------------------------------------------------------------- |
 | `app.ts`       | 薄入口，启动 FlyFlor 主类                                                   |
 | `src/app.ts`   | FlyFlor composition root，显式 DI 容器                                      |
-| `src/command`  | CLI、TUI、命令注册、终端渲染                                                |
 | `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin         |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
 | `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；历史 `src/fch/mindstream` 已移除 |
@@ -372,7 +367,7 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 | ------------------------------------------------------------ | -------------------------------------- |
 | [TODO.md](TODO.md)                                           | 当前中文接续路线 / 迁移状态 / 验收命令 |
 | [docs/architecture.md](docs/architecture.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
-| [docs/refactor.roadmap.md](docs/refactor.roadmap.md)         | 生命体内核 + 可插拔外骨骼阶段性重构路线 |
+| [docs/refactor.roadmap.md](docs/refactor.roadmap.md)         | 切除旧身体、保留内核 / 外骨骼 / 事件血管的阶段性重构路线 |
 | [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
 | [docs/cttl.exoskeleton.md](docs/cttl.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
 | [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |
@@ -380,10 +375,11 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 | [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
 | [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
 | [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
-| [docs/gateway.channels.md](docs/gateway.channels.md)         | Gateway 与渠道矩阵                     |
+| [docs/gateway.channels.md](docs/gateway.channels.md)         | 退役中的第一方 Gateway 与渠道矩阵       |
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
+| [docs/control.protocol.md](docs/control.protocol.md)         | Rust / thin client 直接对接的 WS/control 血管协议 |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
 | [docs/cli.commands.md](docs/cli.commands.md)                 | CLI 命令现状                           |

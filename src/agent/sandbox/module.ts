@@ -13,6 +13,7 @@ import { SandboxQuotaTracker } from "./quota.ts";
 export interface SandboxPolicy {
     mode: SandboxMode;
     approvals: Record<CapabilityExecutionKindType, ToolApprovalMode>;
+    computerApproval: ToolApprovalMode;
     mcpToolApproval: ToolApprovalMode;
     pluginApproval: ToolApprovalMode;
     shellHookApproval: ToolApprovalMode;
@@ -41,6 +42,7 @@ export class SandboxModule extends Sandbox {
             {
                 mode: this.config.mode,
                 approvals,
+                computerApproval: approvals[CapabilityExecutionKind.Computer],
                 mcpToolApproval: approvals[CapabilityExecutionKind.McpTool],
                 pluginApproval: approvals[CapabilityExecutionKind.Plugin],
                 shellHookApproval: approvals[CapabilityExecutionKind.ShellHook],
@@ -53,6 +55,7 @@ export class SandboxModule extends Sandbox {
         return {
             mode: this.config.mode,
             approvals,
+            computerApproval: approvals[CapabilityExecutionKind.Computer],
             mcpToolApproval: approvals[CapabilityExecutionKind.McpTool],
             pluginApproval: approvals[CapabilityExecutionKind.Plugin],
             shellHookApproval: approvals[CapabilityExecutionKind.ShellHook],
@@ -101,6 +104,7 @@ export function decideCapabilityExecution(
 
 function resolveCapabilityApprovals(config: SandboxConfig): Record<CapabilityExecutionKindType, ToolApprovalMode> {
     return {
+        [CapabilityExecutionKind.Computer]: config.computerApproval ?? defaultApproval(config.mode),
         [CapabilityExecutionKind.McpTool]: config.mcpToolApproval ?? defaultApproval(config.mode),
         [CapabilityExecutionKind.Plugin]: config.pluginApproval ?? defaultApproval(config.mode),
         [CapabilityExecutionKind.ShellHook]: config.shellHookApproval ?? defaultApproval(config.mode),
@@ -117,6 +121,7 @@ function renderSandboxPolicySummary(
 ): string {
     return [
         `Sandbox mode: ${mode}.`,
+        `Computer control: ${approvals[CapabilityExecutionKind.Computer]}.`,
         `MCP tools: ${approvals[CapabilityExecutionKind.McpTool]}.`,
         `Shell hooks: ${approvals[CapabilityExecutionKind.ShellHook]}.`,
         `Plugins: ${approvals[CapabilityExecutionKind.Plugin]}.`,

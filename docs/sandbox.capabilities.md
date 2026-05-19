@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-Sandbox 是 MCP 工具、Plugin、Shell hook 三类可执行能力的统一闸门：全局模式只负责默认姿态，具体能力用 `allow / ask / deny` 显式配置；所有执行点都走 `gateCapabilityExecution`，并接入 quota、YOLO 冷却、allowlist 与审计 sink。
+Sandbox 是 MCP 工具、电脑控制、Plugin、Shell hook 四类可执行能力的统一闸门：全局模式只负责默认姿态，具体能力用 `allow / ask / deny` 显式配置；所有执行点都走 `gateCapabilityExecution`，并接入 quota、YOLO 冷却、allowlist 与审计 sink。
 
 ## 相关代码路径
 
@@ -20,6 +20,7 @@ Sandbox 是 MCP 工具、Plugin、Shell hook 三类可执行能力的统一闸�
 
 | `CapabilityExecutionKind` | 来源 | 说明 |
 | --- | --- | --- |
+| `computer` | Executive computer-control capability | 所有电脑控制能力的统一审批面 |
 | `mcp-tool` | RuntimeModule 调 MCP 工具 | catalog 中每个 tool 调用前走一次 gate |
 | `plugin` | Plugin runner | 插件命令 / 二进制启动前走 gate |
 | `shell-hook` | Shell hook executor | hook 命令执行前走 gate |
@@ -29,11 +30,12 @@ Sandbox 是 MCP 工具、Plugin、Shell hook 三类可执行能力的统一闸�
 | 配置 | 取值 | 说明 |
 | --- | --- | --- |
 | `config.sandbox.mode` | `off` / `yolo` | `off` 默认 deny；`yolo` 默认 allow |
+| `config.sandbox.computerApproval` | `allow` / `ask` / `deny` | 覆盖 computer capability 的默认决策 |
 | `config.sandbox.mcpToolApproval` | `allow` / `ask` / `deny` | 覆盖 MCP tool 的默认决策 |
 | `config.sandbox.pluginApproval` | `allow` / `ask` / `deny` | 覆盖 plugin 的默认决策 |
 | `config.sandbox.shellHookApproval` | `allow` / `ask` / `deny` | 覆盖 shell hook 的默认决策 |
 
-`SandboxModule.policy()` 会把 mode 与三个 per-capability approval 归一成 `SandboxPolicy.approvals`。默认值在 `src/config/index.ts` 中固定为 `mode=off` 且三类能力均 `deny`；用户显式改为 `yolo` 时，未单独覆盖的能力才默认 `allow`。
+`SandboxModule.policy()` 会把 mode 与四个 per-capability approval 归一成 `SandboxPolicy.approvals`。默认值在 `src/config/index.ts` 中固定为 `mode=off` 且四类能力均 `deny`；用户显式改为 `yolo` 时，未单独覆盖的能力才默认 `allow`。
 
 交互式本地调试时，`./dist/flyflor` / `flyflor chat` 只对本次进程把 `shellHookApproval` 覆盖为 `ask`，模型能看见内置 `shell.run`，但每次执行仍需终端确认；`--accept-hooks` 则覆盖为 `allow`，用于本地已信任的快速调试。Runtime 会把内置 `shell.run` 暴露进 MCP 结构化工具目录，但实际执行仍经过 `ShellHookExecutor`、sandbox gate、超时和输出截断。
 
@@ -80,7 +82,8 @@ sequenceDiagram
 ```ts
 interface SandboxPolicy {
     mode: "off" | "yolo";
-    approvals: Record<"mcp-tool" | "plugin" | "shell-hook", "allow" | "ask" | "deny">;
+    approvals: Record<"computer" | "mcp-tool" | "plugin" | "shell-hook", "allow" | "ask" | "deny">;
+    computerApproval: "allow" | "ask" | "deny";
     mcpToolApproval: "allow" | "ask" | "deny";
     pluginApproval: "allow" | "ask" | "deny";
     shellHookApproval: "allow" | "ask" | "deny";
@@ -91,7 +94,7 @@ interface SandboxPolicy {
 
 interface CapabilityGateInput {
     policy: SandboxPolicy;
-    kind: "mcp-tool" | "plugin" | "shell-hook";
+    kind: "computer" | "mcp-tool" | "plugin" | "shell-hook";
     descriptor: Record<string, unknown>;
     preDeny?: { reason: string; message: string };
     approve?: () => boolean | Promise<boolean>;
@@ -158,6 +161,7 @@ Plugin registry 只管理 JSONC manifest，不直接执行 entry；`PluginRunner
 
 - Sandbox 只判断执行权限，不判断业务语义；业务意图、路由、记忆动作仍只能来自模型结构化输出或专用提示词 JSON。
 - `ask` 是否弹出交互 UI 由调用方提供审批回调决定；后台入口不提供回调时按失败关闭。
+- 电脑控制必须走独立 `computerApproval` 面；不能再混用普通 `mcpToolApproval`。
 - allowlist 是可执行项的精确等值名单，不是安全沙箱本体；真正的文件 / 网络 / 进程隔离仍由宿主环境与具体 runner 负责。
 - quota 是进程内保护；多副本部署需要每个副本各自维护，或在未来引入共享 quota store。
 

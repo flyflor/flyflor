@@ -19,6 +19,23 @@ export interface CttlResultLimit {
     maxChars: number;
 }
 
+export const CttlComputerControlAction = {
+    Browser: "browser",
+    Keyboard: "keyboard",
+    Mouse: "mouse",
+    Screen: "screen",
+    Window: "window",
+} as const;
+
+export type CttlComputerControlAction =
+    (typeof CttlComputerControlAction)[keyof typeof CttlComputerControlAction];
+
+export interface CttlComputerControlProfile {
+    readonly action: CttlComputerControlAction;
+    readonly observationOnly: boolean;
+    readonly requiresFocusTarget?: boolean;
+}
+
 export interface CttlToolDescriptor {
     readonly name: string;
     readonly description: string;
@@ -32,6 +49,7 @@ export interface CttlToolDescriptor {
     readonly concurrencySafe: boolean;
     readonly exclusive: boolean;
     readonly resultLimit: CttlResultLimit;
+    readonly computer?: CttlComputerControlProfile;
     readonly sourceId?: string;
     readonly tags?: readonly string[];
 }
@@ -93,6 +111,7 @@ export interface CttlToolPlan {
 
 export interface CttlCapabilitySummary {
     readonly category: CttlToolCategory;
+    readonly computer?: CttlComputerControlProfile;
     readonly concurrencySafe: boolean;
     readonly exclusive: boolean;
     readonly name: string;
