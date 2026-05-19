@@ -7,3 +7,4 @@ export {
     type ExternalKitManifestFile,
     type ExternalKitManifestShape,
 } from "./manifest.ts";
+export { loadExternalKitCatalogSnapshot } from "./catalog.ts";

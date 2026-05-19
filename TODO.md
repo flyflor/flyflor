@@ -2,9 +2,9 @@
 
 ## 当前交接
 
-状态：R4 Agent Shell Split + Executive Tool Runtime 已完成。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并移除旧物理路径，CLI runtime 与只读状态访问已收敛到 command adapters，chat TUI 已收敛到 `CommandRuntimeClient`，Gateway `/ws` control/event transport 已作为第一方迁移传输稳定，Executive Tool Runtime 已接管工具循环与 MCP read capability gating。
+状态：R6 Release Gate And Cleanup 已完成。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并移除旧物理路径，CLI runtime 与只读状态访问已收敛到 command adapters，chat TUI 已收敛到 `CommandRuntimeClient`，Gateway `/ws` control/event transport 已作为第一方迁移传输稳定，Executive Tool Runtime 已接管工具循环与 MCP read capability gating；R5 已固定 External Kit manifest、只读 capability catalog 和 control/event 发现边界；R6 已完成根层文档迁移残留清理、发布门禁和 deterministic smoke 验证。
 
-当前目标：进入 R5 External Kit Protocol，把 CLI/TUI/Gateway/Capability kit 的外部安装、发现、权限、事件订阅和执行桥协议做成稳定契约；R4 已收口的第一方内置实现只作为迁移期 transport 和 adapter，不再扩张 Runtime 私有直连。
+当前目标：R6 已收口，下一步进入发布前分支整理、变更审阅和可选 `bun run smoke:release` / `bun run release:check`；R4/R5 已收口的第一方内置实现只作为内置 transport 和 adapter，不再扩张 Runtime 私有直连。
 
 当前活跃路线：
 
@@ -12,6 +12,28 @@
 - 工程红线：`docs/boundaries.md`
 - 目录目标：`docs/directory.architecture.md`
 - 外骨架规则：`docs/cttl.exoskeleton.md`
+
+## 换 session 交接快照
+
+已完成：
+
+- R4：Runtime 变薄，Context owner 装配 prompt/context，Executive Tool Runtime 接管工具 loop。
+- R5：External Kit manifest、只读 capability catalog、Gateway control/event 发现面落地。
+- R6：根层文档残留清理、old-docs 归档说明、docs/test/binary/smoke release gate 已通过。
+
+下一步：
+
+- 做发布前 diff review，确认是否需要 `bun run smoke:release` / `bun run release:check`。
+- 若继续外部化 CLI/TUI/Gateway，只能替换 `src/command/runtime.adapter.ts`、`src/command/state.adapter.ts` 或新增 External Kit/control client，不得新增 Runtime 私有直连。
+- 若新增能力执行桥，先走 Executive descriptor、Tool Plan、sandbox/approval、RuntimeEvent 审计和 `docs/boundaries.md` 更新。
+
+本轮已验证：
+
+- `bun run docs:check`
+- `bun run check`
+- `bun run test`
+- `bun run build:binary`
+- `bun run smoke:agent`
 
 ## 架构命名
 
@@ -21,7 +43,7 @@
 - `executive`：执行层，原 CTTL。当前实现路径为 `src/executive`，历史 `src/cttl` 物理路径已移除。包含 `registry`、`planner`、`guard`、`loop`，负责能力发现、工具包装、信任边界、执行规划、失败恢复和 loop 防护。
 - `agent`：运行态外显层。当前包含 `runtime`、`gateway`、`sandbox`、`skills`、`context` 等面向外部世界的编排与适配；重构后 CLI/TUI/Gateway 具体实现逐步外部化。
 
-迁移期说明：历史 `src/fch`、`src/cttl`、`src/skills` 与 `src/context` 物理路径已移除，Cognitive / Executive / Agent 实现只位于当前目标目录。文档中的目标目录不代表所有目录已经完成外部化；实际移动必须按阶段逐步完成并验证。
+路径说明：历史 `src/fch`、`src/cttl`、`src/skills` 与 `src/context` 物理路径已移除，Cognitive / Executive / Agent 实现只位于当前目标目录。CLI/TUI/Gateway 仍可作为仓库内置 transport 存在，但只能通过 adapter、event/control/ws 和 External Kit catalog 暴露，不得新增 Runtime 私有直连。
 
 ## 重构方向
 
@@ -37,7 +59,7 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 
 - 内核只保留生命连续性：brain.db、crystal.db、Memory、Identity、Ghost、Ask、ContextFork、BehaviorSnapshot、RuntimeEvent。
 - 外骨骼提供执行力：Herme-agent / OpenClaw 类能力必须通过 descriptor、Tool Plan、sandbox、approval、audit、loop guard、resume protocol 接入。
-- CLI/TUI/Gateway 具体实现逐步外部化：核心只稳定 event 和 control/ws JSON envelope。
+- CLI/TUI/Gateway 具体实现即使仍在仓库内置，也只能依赖 event 和 control/ws JSON envelope、command adapters 与 External Kit catalog。
 - 旧文档一旦被新契约替代，必须移动到 `docs/old-docs/` 并更新归档索引。
 
 ## 红线
@@ -178,7 +200,7 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 7. Gateway 保留最小 control/event transport；`GatewayControlHub` `/ws` 已作为外部 client 契约边界，channel adapter 只接 `StreamingMessageDispatcher`，不 import Runtime 私有实现。（已完成）
 8. strict Executive manifest 与 JSONC config boundary 已固化；坏 manifest/config 不再静默吞默认值。（已完成）
 9. sandbox approval callback 异常通过 `sandbox.tool.approval.denied` 暴露 `reason: "approval-error"` 与 `approvalError`，不再伪装成普通拒绝。（已完成）
-10. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；真正 external kit 安装/发现/权限协议进入 R5。（已完成）
+10. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；External Kit manifest、发现和权限协议已在 R5 完成。（已完成）
 11. 更新 `docs/cli.commands.md`、`docs/gateway.channels.md`、`docs/runtime.events.md`、`docs/runtime.turn.md`、`docs/refactor.roadmap.md`。（已完成）
 
 验收：
@@ -213,17 +235,17 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 
 ### R5 External Kit Protocol
 
-状态：进行中。
+状态：已完成。
 
-目标：定义外部套件的安装、发现、权限、事件订阅和执行桥协议。
+目标：定义外部套件的发现、权限、事件订阅和执行边界协议。
 
 任务：
 
-1. 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。（已落 protocol contract、builtin discovery snapshot、global/project JSONC load path 与坏 manifest control error）
-2. 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。
-3. plugin、MCP、skill、user tool、subagent 统一进入 Executive registry；不允许套件绕过 sandbox。
-4. 制定 old-docs 归档清单，移动被 kit 协议替代的历史文档。
-5. 新增或更新 kit 协议文档、`docs/refactor.roadmap.md`、`docs/old-docs/README.md`。
+1. 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、permissions、commands、events、control messages。（已完成：protocol contract、builtin discovery snapshot、global/project JSONC load path、project 覆盖 global、坏 manifest control error、command/permission 一致性校验）
+2. 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。（已完成：kit manifest JSONC；MCP/plugin/skill/user tool 只读 registry view）
+3. plugin、MCP、skill、user tool 统一进入 External Kit capability catalog 的发现面；真实执行仍由 Executive registry / Tool Runtime / sandbox 接管，不允许套件绕过 sandbox。（已完成）
+4. 制定 old-docs 归档清单，标记 CLI/TUI/channel 历史内置文档已被 R5 kit/control 契约覆盖。（已完成）
+5. 新增或更新 kit 协议文档、`docs/refactor.roadmap.md`、`docs/old-docs/README.md`。（已完成）
 
 验收：
 
@@ -235,18 +257,26 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 
 ### R6 Release Gate And Cleanup
 
-状态：待开始。
+状态：已完成。
 
 目标：在外部化阶段完成后清理迁移残留，保证文档、测试、目录和发布资产一致。
 
 任务：
 
-1. 删除或归档过时迁移说明，根层 docs 只保留当前运行契约。
-2. `docs/old-docs/README.md` 列出所有被替代材料。
-3. 更新 README、AGENTS、boundaries、directory architecture、TODO 的最终状态。
-4. 跑完整 deterministic release gate。
+1. 删除或归档过时迁移说明，根层 docs 只保留当前运行契约。（已完成）
+2. `docs/old-docs/README.md` 列出所有被替代材料。（已完成）
+3. 更新 README、AGENTS、boundaries、directory architecture、TODO 的最终状态。（已完成）
+4. 跑完整 deterministic release gate。（已完成）
 
 验收：
+
+- `bun run docs:check`
+- `bun run check`
+- `bun run test`
+- `bun run build:binary`
+- `bun run smoke:agent`
+
+本轮已验证：
 
 - `bun run docs:check`
 - `bun run check`

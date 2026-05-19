@@ -13,3 +13,7 @@
 - [todo.next.md](todo.next.md) — 发布前从根目录移出的下一阶段候选，只做规划参考，不作为当前运行契约。
 - [todo.active.md](todo.active.md) — 旧活跃 TODO 路径的归档指针；当前路线已移动到根目录 `TODO.md`。
 - [scripts/tui.history.seed.ts](scripts/tui.history.seed.ts) — TUI 历史滚动性能造数脚本，归档为手工参考，不属于发布脚本面。
+
+## R5 替代说明
+
+R5 已把 CLI / TUI / Gateway / Capability kit 的外部发现与权限边界收敛到 [../external.kit.md](../external.kit.md) 和 `/ws` control/event protocol。旧文档中把 CLI/TUI/channel 内置实现描述为核心边界的段落只保留历史意义；当前运行契约以 `docs/external.kit.md`、`docs/gateway.channels.md`、`docs/runtime.events.md` 和 `docs/boundaries.md` 为准。

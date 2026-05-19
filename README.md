@@ -11,6 +11,7 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时，目标是单文件二进
 - LLM 负责当下推理与生成，记忆系统只负责沉淀、召回和偏移修正。
 - 不靠单轮堆叠上下文，而靠三层记忆、遗忘曲线和反思把经验压成稳定能力。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
+- 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
 - 简单问题直接回，复杂问题走黑板，保证复杂度和协作成本只在必要时上升。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 

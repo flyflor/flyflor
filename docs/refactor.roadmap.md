@@ -89,7 +89,7 @@ flowchart TB
 - 迁移 `src/cttl` 到 `src/executive`，并移除旧 `src/cttl` 物理路径。（已完成）
 - 将 registry、planner、guard、loop guard、capability descriptor 和 catalog snapshot 收拢到 Executive 目录。（已完成）
 - 为 delegate、computer、code runner、browser、LSP、message、media 等能力族预留 descriptor，不把它们写成固定 prompt 命令清单。（已在文档中保留能力族规则；具体实现进入后续 External Kit / Capability Kit 阶段）
-- 明确 long-running task 的中断、恢复、审批和审计协议。（已在本阶段方向中固定，细化实现进入 R5 kit 协议）
+- 明确 long-running task 的中断、恢复、审批和审计协议。（已在本阶段方向中固定；R5 已完成 kit/control 发现边界，执行闭环继续由 Executive/sandbox 接管）
 
 验收：
 
@@ -134,7 +134,7 @@ flowchart TB
 - MCP resources/prompts 读取通过 `RuntimeMcpCapabilityReader` 统一可见性确认、sandbox/approval gating 与受控 transport 调用；Runtime 不直接导入底层 read/get 执行函数。（已完成）
 - Gateway 保留最小 control/event transport；`GatewayControlHub` `/ws` 是第一方迁移传输和外部 client 契约，channel adapter 只通过 `StreamingMessageDispatcher` 进入消息调度。（已完成）
 - Executive manifest 与 JSONC config boundary 已改为严格校验；sandbox approval callback 异常通过 `approval-error` 事件 payload 可观察。（已完成）
-- 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；具体 channel adapter 的独立包化、kit manifest 和执行 bridge 进入 R5。
+- 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；具体 channel adapter 的独立包化后续不得绕过 R5 已固定的 kit manifest 与 control/event 契约。
 
 验收：
 
@@ -146,16 +146,16 @@ flowchart TB
 
 ### R5 External Kit Protocol
 
-状态：进行中。
+状态：已完成。
 
-目标：定义外部套件的安装、发现、权限、事件订阅和执行桥协议。
+目标：定义外部套件的发现、权限、事件订阅和执行边界协议。
 
 任务：
 
-- 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。（已落 protocol contract、builtin discovery snapshot、global/project JSONC load path 与坏 manifest control error）
-- 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。
-- plugin、MCP、skill、user tool、subagent 统一进入 Executive registry；不允许套件绕过 sandbox。
-- 制定 old-docs 归档清单，移动被 kit 协议替代的历史文档。
+- 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、permissions、commands、events、control messages。（已完成：protocol contract、builtin discovery snapshot、global/project JSONC load path、project 覆盖 global、坏 manifest control error、command/permission 一致性校验）
+- 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。（已完成：kit manifest JSONC；MCP/plugin/skill/user tool 只读 registry view）
+- plugin、MCP、skill、user tool 统一进入 External Kit capability catalog 的发现面；真实执行仍由 Executive registry / Tool Runtime / sandbox 接管，不允许套件绕过 sandbox。（已完成）
+- 制定 old-docs 归档清单，标记 CLI/TUI/channel 历史内置文档已被 R5 kit/control 契约覆盖。（已完成）
 
 验收：
 
@@ -166,16 +166,26 @@ flowchart TB
 
 ### R6 Release Gate And Cleanup
 
+状态：已完成。
+
 目标：在外部化阶段完成后清理迁移残留，保证文档、测试、目录和发布资产一致。
 
 任务：
 
-- 删除或归档过时迁移说明，根层 docs 只保留当前运行契约。
-- `docs/old-docs/README.md` 列出所有被替代材料。
-- 更新 README、AGENTS、boundaries、directory architecture、TODO 的最终状态。
-- 跑完整 deterministic release gate。
+- 删除或归档过时迁移说明，根层 docs 只保留当前运行契约。（已完成）
+- `docs/old-docs/README.md` 列出所有被替代材料。（已完成）
+- 更新 README、AGENTS、boundaries、directory architecture、TODO 的最终状态。（已完成）
+- 跑完整 deterministic release gate。（已完成）
 
 验收：
+
+- `bun run docs:check`
+- `bun run check`
+- `bun run test`
+- `bun run build:binary`
+- `bun run smoke:agent`
+
+本轮已验证：
 
 - `bun run docs:check`
 - `bun run check`

@@ -181,6 +181,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - Gateway 出站生命周期（typing、message edit、card update、reaction、thread create）必须走 `GatewayOutboundOperation` + `GatewayChannelCapabilities`；adapter 不得用自然语言文本、私有字符串或隐式布尔推断平台能力。
 - Gateway Control/Event Transport 必须走 `src/protocol/control/envelope.ts` 的 JSON envelope。`/ws` 可以暴露 `turn.delta`、`turn.final`、status 和 RuntimeEvent subscription，但事件来源必须是 `src/events`；不得为单个 TUI 写私有补丁协议。普通 IM channel 仍 final-only。
 - `gateway.message.send.payload.context` 是 project/fork/skill scope 的唯一 WS 入口；只能映射到 `RuntimeContext.activeProject` / `contextForkId` / `skillNames`，不得引入 session id 或从自然语言推断当前 project/fork。
+- External Kit manifest 与只读发现目录是外部套件的唯一公开发现契约。`server.hello` / `capability.catalog.get` 可以暴露 CLI/TUI/Gateway/Capability kit、MCP server、plugin descriptor、skill manifest 和 user tool descriptor；kit discovery 不得 import Runtime 私有实现、command/TUI 私有实现、sandbox runner、MCP call client 或 PluginRunner，真实执行必须继续走 Executive Tool Runtime + sandbox/approval。
 - 新增代码必须带必要注释解释边界、生命周期、副作用或协议意图；修改旧代码时补齐被触碰路径的关键注释。注释应解释“为什么/边界是什么”，避免机械复述代码。
 - 源码、测试、模板、脚本和文档不得出现疑似真实 provider 密钥。测试只能使用明显的非厂商占位值（例如 `test-openai-key-*`），让 `sk-*` 这类厂商格式在发布扫描中保持高信噪比；本机或 Docker dev 的私有配置文件只由用户自己管理，不在清理任务中自动改写。
 

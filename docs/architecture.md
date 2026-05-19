@@ -44,7 +44,7 @@ Executive 是能力外骨架，内部保留 `Capability / Tool / Trust / Loop` �
 
 Executive 的外骨架专章见 [cttl.exoskeleton.md](cttl.exoskeleton.md)。它是工具系统的架构契约，不替代 OOP + use composition、显式 DI、目录命名、零字符匹配等工程边界。
 
-R4 已把模型工具循环从 `RuntimeModule` 迁出：Runtime 只做 turn 编排与结果落盘，`src/agent/context` 装配 model messages，`ExecutiveToolRuntime` 负责 loop guard、调度和结果回灌，`RuntimeMcpToolExecutor` / `RuntimeMcpCapabilityReader` 作为迁移 adapter 连接 MCP、workspace/git/shell、user tool、plugin 以及 resource/prompt 受控读取。CLI/TUI/Gateway 当前仍是仓库内 first-party transport，但外部契约已经收敛到 event/control/ws；独立 External Kit manifest 与安装/发现协议进入 R5。
+R4 已把模型工具循环从 `RuntimeModule` 迁出：Runtime 只做 turn 编排与结果落盘，`src/agent/context` 装配 model messages，`ExecutiveToolRuntime` 负责 loop guard、调度和结果回灌，`RuntimeMcpToolExecutor` / `RuntimeMcpCapabilityReader` 作为迁移 adapter 连接 MCP、workspace/git/shell、user tool、plugin 以及 resource/prompt 受控读取。R5 已把 CLI/TUI/Gateway/Capability kit 的外部发现与权限边界固定为 External Kit manifest + `/ws` control/event catalog；catalog 只读 MCP/plugin/skill/user tool 声明，真实执行仍由 Executive/sandbox 接管。
 
 ## 分层结构图
 

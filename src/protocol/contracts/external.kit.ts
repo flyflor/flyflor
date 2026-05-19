@@ -42,6 +42,15 @@ export interface ExternalKitEventSubscription {
 
 export interface ExternalKitCatalogSnapshot {
     builtAt: string;
+    capabilities: ExternalKitCapabilitySummary[];
     kits: ExternalKitManifest[];
     schemaVersion: 1;
+}
+
+export interface ExternalKitCapabilitySummary {
+    description?: string;
+    enabled: boolean;
+    name: string;
+    source: ExternalKitCapabilitySource;
+    sourceId?: string;
 }

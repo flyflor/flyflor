@@ -16,6 +16,11 @@ import type { ChannelAdapter, StreamingDispatchOptions, StreamingMessageDispatch
 import { GatewayControlHub, type GatewayControlPeer } from "./control.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.ts";
 
+export interface GatewayModuleOptions {
+    dedup?: MessageDedupStore;
+    paths?: FlyflorPaths;
+}
+
 @Module()
 export class GatewayModule extends Gateway {
     protected readonly channelRuntime = new Map<ChannelName, ChannelRuntimeState>();
@@ -30,11 +35,17 @@ export class GatewayModule extends Gateway {
         protected readonly adapters: Map<ChannelName, ChannelAdapter>,
         protected readonly runtime: RuntimeModule,
         protected readonly events: EventSink,
-        protected readonly dedup: MessageDedupStore = new InMemoryDedupStore(),
-        protected readonly paths?: FlyflorPaths,
+        options: GatewayModuleOptions | MessageDedupStore = {},
     ) {
         super();
+        this.dedup = isGatewayModuleOptions(options)
+            ? options.dedup ?? new InMemoryDedupStore()
+            : options;
+        this.paths = isGatewayModuleOptions(options) ? options.paths : undefined;
     }
+
+    protected readonly dedup: MessageDedupStore;
+    protected readonly paths?: FlyflorPaths;
 
     public start(): void {
         if (this.running) {
@@ -397,6 +408,10 @@ export class GatewayModule extends Gateway {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function isGatewayModuleOptions(value: GatewayModuleOptions | MessageDedupStore): value is GatewayModuleOptions {
+    return !("tryClaim" in value);
 }
 
 function json(payload: unknown, status = 200): Response {

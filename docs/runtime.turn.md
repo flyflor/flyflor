@@ -165,8 +165,8 @@ ContextFork 不等于 session。调用方只有在 `RuntimeContext.contextForkId
 Project 也不等于 session。调用方只有在 `RuntimeContext.activeProject` 显式传入 `{ id, projectDir, projectMemoryDir }` 时，MemoryComponent 才把当前 turn 绑定到该项目的 `.flyflor/memory`；`/project` / `/projects` 只是在 TUI 本地维护这个结构化选择。
 
 RuntimeModule 另外暴露 `listChatHistory(userId, options)` 等只读/局部写入能力给 command
-adapter。chat TUI 只消费 `CommandRuntimeClient`：本地迁移期由 `src/command/runtime.adapter.ts`
-绑定 Runtime/Blackboard，后续可以替换成 control/ws client；TUI 不直接 import Runtime 或
+adapter。chat TUI 只消费 `CommandRuntimeClient`：当前内置实现由 `src/command/runtime.adapter.ts`
+绑定 Runtime/Blackboard；若后续替换成 control/ws client，只能替换该 adapter。TUI 不直接 import Runtime 或
 Blackboard 私有类。历史回放只读 `brain.db` 事件与 `task_plans` / `context_forks` /
 `scene_records` 摘要表，不进入 prompt 装配。
 

@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等 capability。当前 runtime 已执行 tools；resources / prompts 先进入 Executive descriptor 与发现测试，后续再接读取、注入和交互协议。所有执行仍经 Executive Tool Plan、Sandbox 决策和审计事件。
+Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等 capability。当前 runtime 通过 Executive Tool Runtime 执行 tools；resources / prompts 已进入 Executive descriptor，并通过 `RuntimeMcpCapabilityReader` 做受控读取。所有执行和读取仍经 Executive Tool Plan、Sandbox 决策和审计事件。
 
 ## 相关代码路径
 
@@ -78,7 +78,7 @@ sequenceDiagram
 | `prompts/list` | `mcp` | `read` | 已接发现与 descriptor，不直接调用或改写系统提示词 |
 | `prompts/get` | `mcp` | `read` | 已有受控 client API；只返回结构化 prompt result，不自动改写系统提示词 |
 
-resources / prompts 只消费 MCP 标准结构化字段，不从描述文本推断语义。后续读取 resource 或获取 prompt 时必须带 result limit、provenance、requestId 和 sandbox / trust 审计。
+resources / prompts 只消费 MCP 标准结构化字段，不从描述文本推断语义。读取 resource 或获取 prompt 时必须带 result limit、provenance、requestId 和 sandbox / trust 审计，不自动把正文塞进上下文或改写系统提示词。
 
 ## 调用协议（模型侧）
 

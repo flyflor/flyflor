@@ -18,7 +18,7 @@
 - Docker dev 保持简单：挂载工作目录、`./docker/config` 和已编译 Linux 二进制；不要在 Compose 里安装依赖或构建项目。
 - Provider 必须支持内置默认 profile + 用户覆盖；新增厂商时先预留空配置和默认模型列表。
 - 新增运行时依赖前必须确认其兼容 `bun build --compile`，避免 native addon、postinstall、动态 require 和运行时读取 `node_modules` 资产。
-- 保持目录边界：入口只装配，目标架构为 `src/cognitive` 负责 mindstream、crystal、hippocampus 认知层，`src/executive` 负责 registry、planner、guard 执行层，`src/agent` 负责 runtime、gateway、blackboard、sandbox、context、skills、worker、MCP 和 plugin，`src/events` 负责事件广播中枢，`src/protocol` 负责公共协议，`src/agent/di` 负责 metadata 和显式 provider 容器。迁移期旧物理路径 `src/fch`、`src/cttl`、`src/skills`、`src/context` 只能作为兼容窗口。
+- 保持目录边界：入口只装配，`src/cognitive` 负责 mindstream、crystal、hippocampus 认知层，`src/executive` 负责 registry、planner、guard 执行层，`src/agent` 负责 runtime、gateway、blackboard、sandbox、context、skills、worker、MCP 和 plugin，`src/events` 负责事件广播中枢，`src/protocol` 负责公共协议，`src/agent/di` 负责 metadata 和显式 provider 容器。历史旧物理路径 `src/fch`、`src/cttl`、`src/skills`、`src/context` 已移除，禁止新增兼容壳或回写旧路径。
 - 不把密钥、`.env`、日志、会话数据库、用户工作区数据编译进二进制。
 - 不绕过 sandbox 执行文件写入、shell、网络、插件或 MCP 工具。
 - 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化。

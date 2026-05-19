@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { GatewayControlHub } from "../src/agent/gateway/control.ts";
-import { buildBuiltinExternalKitCatalog, loadExternalKitCatalog } from "../src/agent/gateway/kit/index.ts";
+import {
+    buildBuiltinExternalKitCatalog,
+    externalKitCatalogPath,
+    loadExternalKitCatalog,
+    loadExternalKitCatalogSnapshot,
+} from "../src/agent/gateway/kit/index.ts";
 import {
     createGatewayControlEnvelope,
     type GatewayControlEnvelope,
@@ -114,7 +119,6 @@ describe("GatewayControlHub", () => {
                             id: "global.cli",
                             kind: "cli",
                             name: "Global CLI",
-                            source: "builtin",
                             permissions: ["control"],
                         },
                     },
@@ -129,7 +133,6 @@ describe("GatewayControlHub", () => {
                             id: "project.cli",
                             kind: "cli",
                             name: "Project CLI",
-                            source: "project",
                             permissions: ["control", "event.subscribe"],
                         },
                     },
@@ -138,6 +141,7 @@ describe("GatewayControlHub", () => {
 
             const catalog = await loadExternalKitCatalog(paths, "2026-05-18T00:00:00.000Z");
             expect(catalog.kits.map((kit) => kit.id)).toEqual(["global.cli", "project.cli"]);
+            expect(catalog.kits.map((kit) => kit.source)).toEqual(["global", "project"]);
 
             const emptyRoot = await mkdtemp(join(tmpdir(), "flyflor-kit-empty-"));
             try {
@@ -157,6 +161,83 @@ describe("GatewayControlHub", () => {
         }
     });
 
+    test("builds a read-only external kit capability catalog from existing registries", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-capabilities-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectMcpDir, { recursive: true });
+            await mkdir(paths.projectPluginDir, { recursive: true });
+            await mkdir(join(paths.projectSkillDir, "writer"), { recursive: true });
+            await mkdir(paths.projectFlyflorDir, { recursive: true });
+            await writeFile(
+                join(paths.projectMcpDir, "mcp.json"),
+                JSON.stringify({
+                    servers: {
+                        filesystem: { command: "bunx", args: ["mcp-server-filesystem"], enabled: true },
+                    },
+                }),
+            );
+            await writeFile(
+                join(paths.projectPluginDir, "plugins.json"),
+                JSON.stringify({
+                    plugins: {
+                        demo: {
+                            entry: "./demo.ts",
+                            enabled: true,
+                            capabilities: {
+                                echo: { description: "Echo payload", permission: CttlPermission.Read },
+                            },
+                        },
+                    },
+                }),
+            );
+            await writeFile(
+                join(paths.projectSkillDir, "writer", "SKILL.md"),
+                "---\nname: writer\ndescription: Draft prose\n---\nUse when drafting prose.\n",
+            );
+            await writeFile(
+                join(paths.projectFlyflorDir, "tools.jsonc"),
+                JSON.stringify({
+                    tools: {
+                        "user.echo": {
+                            description: "User echo",
+                            permission: CttlPermission.Read,
+                        },
+                    },
+                }),
+            );
+
+            const catalog = await loadExternalKitCatalogSnapshot(paths, "2026-05-18T00:00:00.000Z");
+
+            expect(catalog).toMatchObject({
+                builtAt: "2026-05-18T00:00:00.000Z",
+                schemaVersion: 1,
+            });
+            expect(catalog.kits.map((kit) => kit.id)).toEqual([
+                "builtin.cli",
+                "builtin.tui",
+                "builtin.gateway",
+                "builtin.capabilities",
+            ]);
+            expect(catalog.capabilities).toEqual([
+                { enabled: true, name: "filesystem", source: "mcp", sourceId: "project" },
+                { description: undefined, enabled: true, name: "demo", source: "plugin", sourceId: "project" },
+                { description: "Echo payload", enabled: true, name: "plugin.demo.echo", source: "plugin", sourceId: "demo" },
+                { description: "Draft prose", enabled: true, name: "writer", source: "skill", sourceId: "project" },
+                { description: "User echo", enabled: true, name: "user.echo", source: "user-tool", sourceId: "project" },
+            ]);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("resolves external kit manifest paths by source without mutating path semantics", () => {
+        const paths = testPaths("/tmp/flyflor-kit-paths");
+
+        expect(externalKitCatalogPath(paths, { global: true })).toBe("/tmp/flyflor-kit-paths/kits/kits.jsonc");
+        expect(externalKitCatalogPath(paths)).toBe("/tmp/flyflor-kit-paths/project/.flyflor/kits/kits.jsonc");
+    });
+
     test("rejects incompatible external kit manifest schema versions", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-kit-version-"));
         const paths = testPaths(root);
@@ -171,6 +252,31 @@ describe("GatewayControlHub", () => {
             );
 
             await expect(loadExternalKitCatalog(paths)).rejects.toThrow("schemaVersion must be 1.");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("rejects kit commands that omit their required permissions", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-permission-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectKitDir!, { recursive: true });
+            await writeFile(
+                join(paths.projectKitDir!, "kits.jsonc"),
+                JSON.stringify({
+                    kits: {
+                        sender: {
+                            commands: [GatewayControlMessageType.GatewayMessageSend],
+                            permissions: ["control"],
+                        },
+                    },
+                }),
+            );
+
+            await expect(loadExternalKitCatalog(paths)).rejects.toThrow(
+                "kits.sender.permissions must include gateway.message.send for command gateway.message.send.",
+            );
         } finally {
             await rm(root, { recursive: true, force: true });
         }

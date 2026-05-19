@@ -9,6 +9,7 @@ const SANDBOX_DOC_PATH = join(import.meta.dir, "..", "docs", "sandbox.capabiliti
 const ARCHITECTURE_DOC_PATH = join(import.meta.dir, "..", "docs", "architecture.md");
 const CLI_DOC_PATH = join(import.meta.dir, "..", "docs", "cli.commands.md");
 const PLUGIN_REGISTRY_PATH = join(import.meta.dir, "..", "src", "agent", "plugin", "registry.ts");
+const README_PATH = join(import.meta.dir, "..", "README.md");
 
 describe("TODO status", () => {
     test("does not keep stale documentation automation gaps after docs:check", async () => {
@@ -31,7 +32,7 @@ describe("TODO status", () => {
         const todo = await readFile(ROOT_TODO_PATH, "utf8");
 
         expect(todo).toContain("Cognitive-Executive-Agent Architecture");
-        expect(todo).toContain("迁移期说明");
+        expect(todo).toContain("路径说明");
         expect(todo).toContain("Bun 单文件二进制");
         expect(todo).toContain("零字符匹配红线");
         expect(todo).toContain("bun run docs:check");
@@ -40,6 +41,46 @@ describe("TODO status", () => {
         expect(todo).toContain("src/executive");
         expect(todo).toContain("src/agent/skills");
         expect(todo).toContain("src/agent/context");
+    });
+
+    test("R5 and R6 are closed with a clear handoff snapshot", async () => {
+        const [todo, roadmap, agents, readme, boundaries] = await Promise.all([
+            readFile(ROOT_TODO_PATH, "utf8"),
+            readFile(join(import.meta.dir, "..", "docs", "refactor.roadmap.md"), "utf8"),
+            readFile(join(import.meta.dir, "..", "AGENTS.md"), "utf8"),
+            readFile(README_PATH, "utf8"),
+            readFile(join(import.meta.dir, "..", "docs", "boundaries.md"), "utf8"),
+        ]);
+
+        expect(todo).toContain("R5 External Kit Protocol");
+        expect(todo).toContain("状态：已完成");
+        expect(todo).toContain("R6 Release Gate And Cleanup");
+        expect(todo).toContain("状态：已完成");
+        expect(todo).toContain("换 session 交接快照");
+        expect(todo).toContain("发布前 diff review");
+        expect(roadmap).toContain("R5 已完成 kit/control 发现边界");
+        expect(roadmap).toContain("状态：已完成");
+        expect(roadmap).toContain("本轮已验证");
+        expect(agents).toContain("历史旧物理路径 `src/fch`、`src/cttl`、`src/skills`、`src/context` 已移除");
+        expect(agents).not.toContain("只能作为兼容窗口");
+        expect(readme).toContain("External Kit manifest");
+        expect(boundaries).toContain("kit discovery 不得 import Runtime 私有实现");
+    });
+
+    test("active handoff docs do not describe R5/R6 as future work", async () => {
+        const [todo, runtimeEvents, mcpTools, directoryArchitecture] = await Promise.all([
+            readFile(ROOT_TODO_PATH, "utf8"),
+            readFile(join(import.meta.dir, "..", "docs", "runtime.events.md"), "utf8"),
+            readFile(join(import.meta.dir, "..", "docs", "mcp.tools.md"), "utf8"),
+            readFile(join(import.meta.dir, "..", "docs", "directory.architecture.md"), "utf8"),
+        ]);
+
+        const active = `${todo}\n${runtimeEvents}\n${mcpTools}\n${directoryArchitecture}`;
+        expect(active).not.toContain("进入 R5");
+        expect(active).not.toContain("进入 R6");
+        expect(active).not.toContain("迁移期内置 CLI/TUI");
+        expect(active).not.toContain("resources / prompts 先进入 Executive descriptor 与发现测试，后续再接读取");
+        expect(active).not.toContain("未完成迁移的旧物理路径只作为兼容窗口存在");
     });
 
     test("archived active TODO points at the root handoff roadmap", async () => {

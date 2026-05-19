@@ -41,6 +41,14 @@ export interface ExternalKitEventSubscriptionShape {
     types?: string[];
 }
 
+const COMMAND_PERMISSION: Partial<Record<GatewayControlMessageType, ExternalKitPermission>> = {
+    [GatewayControlMessageType.CapabilityCatalogGet]: ExternalKitPermission.CapabilityCatalog,
+    [GatewayControlMessageType.EventSubscribe]: ExternalKitPermission.EventSubscribe,
+    [GatewayControlMessageType.EventUnsubscribe]: ExternalKitPermission.EventSubscribe,
+    [GatewayControlMessageType.GatewayMessageSend]: ExternalKitPermission.GatewayMessageSend,
+    [GatewayControlMessageType.GatewayStatusGet]: ExternalKitPermission.GatewayStatus,
+};
+
 /**
  * External kit manifest is the durable discovery contract for first-party and
  * project-overridden control surfaces. It is intentionally narrow: discovery,
@@ -49,22 +57,30 @@ export interface ExternalKitEventSubscriptionShape {
 export function buildBuiltinExternalKitCatalog(now = new Date().toISOString()): ExternalKitCatalogSnapshot {
     return {
         builtAt: now,
+        capabilities: [],
         kits: [builtinCliKit(), builtinTuiKit(), builtinGatewayKit(), builtinCapabilityKit()],
         schemaVersion: 1,
     };
 }
 
-export async function readExternalKitManifestFile(paths: FlyflorPaths): Promise<ExternalKitManifestFile> {
-    const file = Bun.file(externalKitCatalogPath(paths));
+export async function readExternalKitManifestFile(
+    paths: FlyflorPaths,
+    options: { global?: boolean } = {},
+): Promise<ExternalKitManifestFile> {
+    const file = Bun.file(externalKitCatalogPath(paths, options));
     if (!(await file.exists())) {
         return {};
     }
     return normalizeExternalKitManifestFile(parseJsonc(await file.text()));
 }
 
-export async function writeExternalKitManifestFile(paths: FlyflorPaths, payload: ExternalKitManifestFile): Promise<void> {
-    await mkdir(externalKitRoot(paths), { recursive: true });
-    await Bun.write(externalKitCatalogPath(paths), `${JSON.stringify(payload, null, 4)}\n`);
+export async function writeExternalKitManifestFile(
+    paths: FlyflorPaths,
+    payload: ExternalKitManifestFile,
+    options: { global?: boolean } = {},
+): Promise<void> {
+    await mkdir(externalKitRoot(paths, options), { recursive: true });
+    await Bun.write(externalKitCatalogPath(paths, options), `${JSON.stringify(payload, null, 4)}\n`);
 }
 
 export async function loadExternalKitCatalog(
@@ -72,24 +88,28 @@ export async function loadExternalKitCatalog(
     now = new Date().toISOString(),
 ): Promise<ExternalKitCatalogSnapshot> {
     const [globalFile, projectFile] = await Promise.all([
-        readExternalKitManifestFile({ ...paths, projectKitDir: paths.kitDir }),
-        readExternalKitManifestFile({ ...paths, projectKitDir: paths.projectKitDir }),
+        readExternalKitManifestFile(paths, { global: true }),
+        readExternalKitManifestFile(paths),
     ]);
     const merged = mergeKitFiles(globalFile, projectFile);
     const kits = Object.entries(merged.kits ?? {}).map(([id, shape]) => normalizeManifest(id, shape));
     return {
         builtAt: now,
+        capabilities: [],
         kits: kits.length > 0 ? kits : buildBuiltinExternalKitCatalog(now).kits,
         schemaVersion: 1,
     };
 }
 
-export function externalKitCatalogPath(paths: FlyflorPaths): string {
-    return join(externalKitRoot(paths), "kits.jsonc");
+export function externalKitCatalogPath(paths: FlyflorPaths, options: { global?: boolean } = {}): string {
+    return join(externalKitRoot(paths, options), "kits.jsonc");
 }
 
-function externalKitRoot(paths: FlyflorPaths): string {
-    return paths.projectKitDir ?? paths.kitDir ?? join(paths.projectFlyflorDir, "kits");
+function externalKitRoot(paths: FlyflorPaths, options: { global?: boolean } = {}): string {
+    if (options.global) {
+        return paths.kitDir ?? join(paths.configDir, "kits");
+    }
+    return paths.projectKitDir ?? join(paths.projectFlyflorDir, "kits");
 }
 
 function mergeKitFiles(
@@ -98,9 +118,24 @@ function mergeKitFiles(
 ): ExternalKitManifestFile {
     return {
         kits: {
-            ...(globalFile.kits ?? {}),
-            ...(projectFile.kits ?? {}),
+            ...withDefaultSource(globalFile, ExternalKitSource.Global).kits,
+            ...withDefaultSource(projectFile, ExternalKitSource.Project).kits,
         },
+    };
+}
+
+function withDefaultSource(file: ExternalKitManifestFile, source: ExternalKitSource): ExternalKitManifestFile {
+    return {
+        kits: Object.fromEntries(
+            Object.entries(file.kits ?? {}).map(([id, shape]) => [
+                id,
+                {
+                    ...shape,
+                    source: shape.source ?? source,
+                },
+            ]),
+        ),
+        schemaVersion: file.schemaVersion,
     };
 }
 
@@ -266,6 +301,7 @@ function normalizeStringEnumArray<T extends string>(
 }
 
 function normalizeManifest(id: string, shape: ExternalKitManifestShape): ExternalKitManifest {
+    assertCommandPermissions(id, shape.commands ?? [], shape.permissions ?? []);
     return {
         capabilities: shape.capabilities?.map((binding) => ({
             source: binding.source ?? ExternalKitCapabilitySource.Mcp,
@@ -285,6 +321,20 @@ function normalizeManifest(id: string, shape: ExternalKitManifestShape): Externa
         source: shape.source ?? ExternalKitSource.Project,
         version: shape.version,
     };
+}
+
+function assertCommandPermissions(
+    id: string,
+    commands: readonly GatewayControlMessageType[],
+    permissions: readonly ExternalKitPermission[],
+): void {
+    const granted = new Set(permissions);
+    for (const command of commands) {
+        const required = COMMAND_PERMISSION[command];
+        if (required && !granted.has(required)) {
+            throw new Error(`kits.${id}.permissions must include ${required} for command ${command}.`);
+        }
+    }
 }
 
 function builtinCliKit(): ExternalKitManifest {

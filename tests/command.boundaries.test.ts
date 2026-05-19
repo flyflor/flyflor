@@ -78,6 +78,23 @@ describe("Command boundary", () => {
         }
     });
 
+    test("external kit discovery stays read-only and does not import private runtime surfaces", async () => {
+        const files = Array.from(new Bun.Glob("src/agent/gateway/kit/*.ts").scanSync("."));
+        const sources = await Promise.all(files.map(async (file) => [file, await Bun.file(file).text()] as const));
+
+        expect(sources.length).toBeGreaterThan(0);
+        for (const [file, source] of sources) {
+            expect(source, `${file} must not import RuntimeModule`).not.toContain("RuntimeModule");
+            expect(source, `${file} must not import command internals`).not.toContain("../../command");
+            expect(source, `${file} must not import TUI internals`).not.toContain("../../command/tui");
+            expect(source, `${file} must not import runtime internals`).not.toContain("../runtime");
+            expect(source, `${file} must not import runtime internals`).not.toContain("../../runtime");
+            expect(source, `${file} must not import sandbox runners`).not.toContain("../sandbox");
+            expect(source, `${file} must not import MCP execution clients`).not.toContain("callMcpTool");
+            expect(source, `${file} must not spawn plugin runners`).not.toContain("PluginRunner");
+        }
+    });
+
     test("commander route defaults to chat and accepts runtime modes without exposing the removed CLI surface", () => {
         expect(parseFlyflorMode(["bun", "flyflor"])).toBe(RuntimeMode.Chat);
         expect(parseFlyflorMode(["bun", "flyflor", "tui"])).toBe(RuntimeMode.Tui);

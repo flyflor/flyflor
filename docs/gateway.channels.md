@@ -93,14 +93,15 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 
 Gateway 额外开放 `/ws` 作为本地 TUI、Web 控制台和未来 first-party app 的通用控制面。它不是某个 TUI 的兼容补丁，而是 `src/protocol/control/envelope.ts` 定义的结构化协议：
 
-R4 收口后的边界是：当前仓库内置 Gateway 仍作为第一方迁移 transport 留在 composition root，负责把 channel 入站归一到 Runtime facade，并把 RuntimeEvent fan-out 到 `/ws`；外部客户端只依赖 `/ws` control/event envelope，不 import Runtime、Gateway 私有类或 memory 实现。具体 Gateway/CLI/TUI 独立包化、kit manifest 和安装/发现协议属于 R5 External Kit Protocol。
+R4 收口后的边界是：当前仓库内置 Gateway 仍作为第一方迁移 transport 留在 composition root，负责把 channel 入站归一到 Runtime facade，并把 RuntimeEvent fan-out 到 `/ws`；外部客户端只依赖 `/ws` control/event envelope，不 import Runtime、Gateway 私有类或 memory 实现。R5 已把 Gateway/CLI/TUI/Capability kit 的 manifest 和只读发现目录固定在 External Kit Protocol；后续独立包化不得绕过该 control/event 契约。
 
 | Message type | 方向 | 用途 |
 | --- | --- | --- |
-| `client.hello` / `server.hello` | 双向 | 能力握手；server 返回支持的 command、当前 gateway status |
+| `client.hello` / `server.hello` | 双向 | 能力握手；server 返回支持的 command、kit catalog、当前 gateway status |
 | `event.subscribe` / `event.unsubscribe` | client → server | 按 `RuntimeEvent.type` 或 `requestId` 订阅全局事件流 |
 | `event.publish` | server → client | 推送 JSON 可序列化 `RuntimeEvent` |
 | `gateway.status.get` / `gateway.status.snapshot` | 双向 | 拉取 `/channels` 同源 status snapshot |
+| `capability.catalog.get` / `capability.catalog.snapshot` | 双向 | 拉取 Executive capability snapshot 以及 External Kit 只读发现目录 |
 | `gateway.message.send` | client → server | 发送一轮结构化 `GatewayMessage`，channel 固定归一为 `ws` |
 | `turn.delta` / `turn.final` / `turn.error` | server → client | 控制面 turn 生命周期；WS 可收 delta，IM channel 仍 final-only |
 | `ping` / `pong` / `ack` / `error` | 双向 | 心跳、确认和机器可读错误 |

@@ -68,9 +68,9 @@ docs/
 | `src/entities` | 数据访问 | entity/repo SQL，不能承载业务决策 |
 | `templates` | Prompt / memory templates | 所有提示词工程放这里，`.zh.cn.md` 副本同步 |
 
-## 迁移期路径映射
+## 路径映射
 
-当前源码仍处在迁移期。目标目录是未来新代码的方向；已完成迁移的历史物理路径必须移除，未完成迁移的旧物理路径只作为兼容窗口存在：
+当前 R0-R6 路径迁移已收口。历史物理路径必须保持移除状态；若后续新增迁移目标，必须先在本表登记目标目录和当前物理路径，再补测试护栏：
 
 | 目标目录 | 当前物理路径 | 迁移规则 |
 | --- | --- | --- |
@@ -81,9 +81,9 @@ docs/
 | `src/agent/skills` | `src/agent/skills`（历史 `src/skills` 已移除） | 已迁移；新代码禁止回写旧路径 |
 | `src/agent/context` | `src/agent/context`（历史 `src/context` 已移除） | 已迁移；新代码禁止回写旧路径 |
 
-R4 完成后，`src/command`、`src/agent/gateway` 仍保留 first-party CLI/TUI/Gateway 实现，但它们不再是核心私有协议边界：CLI/TUI 本地直连只允许集中在 `src/command/runtime.adapter.ts` 与 `src/command/state.adapter.ts`，Gateway 外部契约是 `/ws` control/event envelope。真正 external kit 的安装、发现和权限 manifest 进入 R5，不在 Runtime 目录继续加私有桥。
+R4 完成后，`src/command`、`src/agent/gateway` 仍保留 first-party CLI/TUI/Gateway 实现，但它们不再是核心私有协议边界：CLI/TUI 本地直连只允许集中在 `src/command/runtime.adapter.ts` 与 `src/command/state.adapter.ts`，Gateway 外部契约是 `/ws` control/event envelope。R5 已把 external kit 的发现和权限 manifest 固定到 `src/agent/gateway/kit` 与 `src/protocol/contracts/external.kit.ts`；该目录只做只读 catalog，不在 Runtime 目录继续加私有桥。
 
-迁移完成前，未完成目录必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确历史旧路径已移除，不能让读者误以为旧路径仍承载实现。
+后续阶段若出现新的未完成目录迁移，必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确历史旧路径已移除，不能让读者误以为旧路径仍承载实现。
 
 ## 文件命名约定
 

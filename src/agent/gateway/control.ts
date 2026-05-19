@@ -19,7 +19,7 @@ import {
 } from "../../protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../../events/index.ts";
 import type { FlyflorPaths } from "../../config/index.ts";
-import { buildBuiltinExternalKitCatalog, loadExternalKitCatalog } from "./kit/index.ts";
+import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
 import type { GatewayStatusSnapshot } from "./channels/status.ts";
 import type { StreamingMessageDispatcher } from "./channels/types.ts";
 
@@ -53,7 +53,7 @@ export class GatewayControlHub implements EventSink {
     private readonly unsubscribeEvents: () => void;
 
     public constructor(private readonly options: GatewayControlHubOptions) {
-        this.handlers.set(GatewayControlMessageType.CapabilityCatalogGet, (socket, envelope) =>
+        this.handlers.set(GatewayControlMessageType.CapabilityCatalogGet, async (socket, envelope) =>
             this.handleCapabilityCatalogGet(socket, envelope),
         );
         this.handlers.set(GatewayControlMessageType.ClientHello, (socket, envelope) =>
@@ -149,9 +149,16 @@ export class GatewayControlHub implements EventSink {
         }, envelope);
     }
 
-    private handleCapabilityCatalogGet(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private async handleCapabilityCatalogGet(
+        socket: GatewayControlSocket,
+        envelope: GatewayControlEnvelope,
+    ): Promise<void> {
+        const kits = this.options.paths
+            ? await loadExternalKitCatalogSnapshot(this.options.paths)
+            : buildBuiltinExternalKitCatalog();
         this.send(socket, GatewayControlMessageType.CapabilityCatalogSnapshot, {
             catalog: this.capabilityCatalog,
+            kits,
         }, envelope);
     }
 
@@ -251,7 +258,7 @@ export class GatewayControlHub implements EventSink {
 
     private async sendServerHello(socket: GatewayControlSocket): Promise<void> {
         const kits = this.options.paths
-            ? await loadExternalKitCatalog(this.options.paths)
+            ? await loadExternalKitCatalogSnapshot(this.options.paths)
             : buildBuiltinExternalKitCatalog();
         this.send(socket, GatewayControlMessageType.ServerHello, {
             clientId: socket.data.clientId,
