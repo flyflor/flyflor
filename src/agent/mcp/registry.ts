@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { FlyflorPaths } from "../../config/index.ts";
+import { parseJsonc, type FlyflorPaths } from "../../config/index.ts";
 import {
     callHttpMcpTool,
     getHttpMcpPrompt,
@@ -451,58 +451,4 @@ function assertMcpName(name: string): void {
     if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
         throw new Error(`Invalid MCP server name: ${name}`);
     }
-}
-
-/** 共享 JSONC 解析（剥注释 + 容忍尾逗号），供 mcp / plugin 等 manifest 复用。 */
-export function parseJsonc(input: string): unknown {
-    let output = "";
-    let inString = false;
-    let quote = "";
-    let escaped = false;
-
-    for (let index = 0; index < input.length; index += 1) {
-        const char = input[index]!;
-        const next = input[index + 1];
-
-        if (inString) {
-            output += char;
-            if (escaped) {
-                escaped = false;
-            } else if (char === "\\") {
-                escaped = true;
-            } else if (char === quote) {
-                inString = false;
-                quote = "";
-            }
-            continue;
-        }
-
-        if (char === '"' || char === "'") {
-            inString = true;
-            quote = char;
-            output += char;
-            continue;
-        }
-
-        if (char === "/" && next === "/") {
-            while (index < input.length && input[index] !== "\n") {
-                index += 1;
-            }
-            output += "\n";
-            continue;
-        }
-
-        if (char === "/" && next === "*") {
-            index += 2;
-            while (index < input.length && !(input[index] === "*" && input[index + 1] === "/")) {
-                index += 1;
-            }
-            index += 1;
-            continue;
-        }
-
-        output += char;
-    }
-
-    return JSON.parse(output.replace(/,\s*([}\]])/g, "$1"));
 }

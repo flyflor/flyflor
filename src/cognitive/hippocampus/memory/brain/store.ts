@@ -4,6 +4,23 @@ import { Database } from "bun:sqlite";
 import { Component } from "../../../../agent/di/decorators/index.ts";
 import { BrainComponent } from "../../../../components/component.ts";
 import {
+    brainPromptAtomModel,
+    brainSchema,
+    BrainCodenameRepo,
+    BrainContextForkRepo,
+    BrainEqStateRepo,
+    BrainEventRepo,
+    type BrainEventInput,
+    type BrainEventListInput,
+    BrainLinkRepo,
+    BrainProjectRepo,
+    BrainSceneRecordRepo,
+    BrainStateRepo,
+    type BrainStateMutation,
+    BrainSummaryRepo,
+    BrainTaskPlanRepo,
+} from "../../../../entities/memory/index.ts";
+import {
     type AtomScore,
     type MemoryAtom,
     type CodenameRecord,
@@ -21,25 +38,8 @@ import {
     type TaskPlanRecord,
     type SummaryRange,
 } from "../../../../protocol/contracts/index.ts";
-import { brainPromptAtomModel } from "../../../../entities/memory/index.ts";
-import { brainSchema } from "../../../../entities/memory/brain.schema.ts";
-import { BrainCodenameRepo } from "../../../../entities/memory/brain.codename.repo.ts";
-import {
-    BrainEventRepo,
-    type BrainEventInput,
-    type BrainEventListInput,
-} from "../../../../entities/memory/brain.event.repo.ts";
-import { BrainContextForkRepo } from "../../../../entities/memory/brain.context.fork.repo.ts";
-import { BrainEqStateRepo } from "../../../../entities/memory/brain.eq.state.repo.ts";
-import { BrainLinkRepo } from "../../../../entities/memory/brain.link.repo.ts";
-import { BrainProjectRepo } from "../../../../entities/memory/brain.project.repo.ts";
-import { BrainSceneRecordRepo } from "../../../../entities/memory/brain.scene.record.repo.ts";
-import { BrainStateRepo, type BrainStateMutation } from "../../../../entities/memory/brain.state.repo.ts";
-import { BrainSummaryRepo } from "../../../../entities/memory/brain.summary.repo.ts";
-import { BrainTaskPlanRepo } from "../../../../entities/memory/brain.task.plan.repo.ts";
 
-export type { BrainEventInput, BrainEventListInput } from "../../../../entities/memory/brain.event.repo.ts";
-export type { BrainStateMutation } from "../../../../entities/memory/brain.state.repo.ts";
+export type { BrainEventInput, BrainEventListInput, BrainStateMutation } from "../../../../entities/memory/index.ts";
 
 /**
  * LF-R1 brain.db single-file store.
@@ -469,4 +469,3 @@ export class BrainStore extends BrainComponent {
         return this.taskPlanRepo;
     }
 }
-

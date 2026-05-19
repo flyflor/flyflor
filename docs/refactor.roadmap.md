@@ -118,22 +118,27 @@ flowchart TB
 - `bun run build:binary`
 - 文档更新：`docs/architecture.md`、`docs/memory.system.md`、`docs/crystal.reflection.md`、`docs/directory.architecture.md`、`docs/refactor.roadmap.md`、`TODO.md`
 
-### R4 Agent Shell Split
+### R4 Agent Shell Split + Executive Tool Runtime
 
-状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent` 并移除旧物理路径；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；CLI/TUI 只读状态访问已收敛到 `src/command/state.adapter.ts`；TUI/Gateway 外部化待继续）。
+状态：完成。
 
 目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
 
 任务：
 
 - 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`，并移除旧物理路径。（已完成）
-- 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（本地 adapter 已建立）
+- 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（本地 adapter 已建立；chat TUI 已改为窄 `CommandRuntimeClient`，后续可替换成 control/ws client）
 - 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。（本地只读状态 adapter 已建立）
-- Gateway 保留最小 control/event transport；具体 channel adapter 进入可插拔 kit 规划。
-- 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述。
+- Runtime 工具循环迁移到 Executive：Runtime 只编排 turn，Context owner 装配 model messages，Executive 负责 schema/sandbox/approval/result/loop guard/read-only 并发与写/执行串行调度。（已完成）
+- MCP、workspace、git、shell、user tool、plugin capability 通过 `RuntimeMcpToolExecutor` 接入同一 `<flyflor_mcp_calls>` wire 和结果回灌格式。（已完成）
+- MCP resources/prompts 读取通过 `RuntimeMcpCapabilityReader` 统一可见性确认、sandbox/approval gating 与受控 transport 调用；Runtime 不直接导入底层 read/get 执行函数。（已完成）
+- Gateway 保留最小 control/event transport；`GatewayControlHub` `/ws` 是第一方迁移传输和外部 client 契约，channel adapter 只通过 `StreamingMessageDispatcher` 进入消息调度。（已完成）
+- Executive manifest 与 JSONC config boundary 已改为严格校验；sandbox approval callback 异常通过 `approval-error` 事件 payload 可观察。（已完成）
+- 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；具体 channel adapter 的独立包化、kit manifest 和执行 bridge 进入 R5。
 
 验收：
 
+- `bun test tests/executive.tool.runtime.test.ts tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts tests/runtime.mcp.tool.plan.test.ts tests/mcp.long.results.test.ts tests/mcp.schema.validate.test.ts tests/sandbox.gate.test.ts tests/runtime.toolset.test.ts tests/plugin.runner.test.ts tests/plugin.registry.test.ts --timeout 30000`
 - `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
 - `bun run check`
 - `bun run build:binary`
@@ -141,11 +146,13 @@ flowchart TB
 
 ### R5 External Kit Protocol
 
+状态：进行中。
+
 目标：定义外部套件的安装、发现、权限、事件订阅和执行桥协议。
 
 任务：
 
-- 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。
+- 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。（已落 protocol contract、builtin discovery snapshot、global/project JSONC load path 与坏 manifest control error）
 - 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。
 - plugin、MCP、skill、user tool、subagent 统一进入 Executive registry；不允许套件绕过 sandbox。
 - 制定 old-docs 归档清单，移动被 kit 协议替代的历史文档。

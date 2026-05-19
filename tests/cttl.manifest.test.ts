@@ -108,6 +108,85 @@ describe("CTTL user tool manifest", () => {
             },
         });
     });
+
+    test("keeps convention defaults when optional fields are absent", () => {
+        const tools = normalizeCttlToolManifest(
+            {
+                tools: {
+                    "local.echo": {},
+                },
+            },
+            "project",
+        );
+
+        expect(tools[0]).toMatchObject({
+            enabled: true,
+            executor: undefined,
+            manifestSource: "project",
+            descriptor: {
+                category: CttlToolCategory.Integration,
+                concurrencySafe: true,
+                description: "local.echo",
+                exclusive: false,
+                inputSchema: { type: "object" },
+                name: "local.echo",
+                permission: CttlPermission.Read,
+                readOnly: true,
+                resultLimit: { maxChars: 4000 },
+                scope: [CttlToolScope.Core],
+                source: CttlCapabilitySource.User,
+            },
+        });
+    });
+
+    test("rejects malformed explicit manifest fields", () => {
+        const invalidManifests: Array<{ file: unknown; message: string }> = [
+            {
+                file: { tools: [] },
+                message: "tools must be an object.",
+            },
+            {
+                file: { tools: { BadName: {} } },
+                message: "tools.BadName must be a valid CTTL tool name.",
+            },
+            {
+                file: { tools: { "local.echo": { inputSchema: [] } } },
+                message: "tools.local.echo.inputSchema must be an object.",
+            },
+            {
+                file: { tools: { "local.echo": { scope: [] } } },
+                message: "tools.local.echo.scope must be a non-empty array.",
+            },
+            {
+                file: { tools: { "local.echo": { resultLimit: [] } } },
+                message: "tools.local.echo.resultLimit must be an object.",
+            },
+            {
+                file: { tools: { "local.echo": { resultLimit: { maxChars: 0 } } } },
+                message: "tools.local.echo.resultLimit.maxChars must be a positive integer.",
+            },
+            {
+                file: { tools: { "local.echo": { executor: { kind: "stdio", command: "bun" } } } },
+                message: "tools.local.echo.executor.kind must be process-json.",
+            },
+            {
+                file: { tools: { "local.echo": { executor: { kind: "process-json", command: "" } } } },
+                message: "tools.local.echo.executor.command must be a non-empty string.",
+            },
+            {
+                file: { tools: { "local.echo": { executor: { kind: "process-json", command: "bun", args: [1] } } } },
+                message: "tools.local.echo.executor.args.0 must be a string.",
+            },
+            {
+                file: { tools: { "local.echo": { executor: { kind: "process-json", command: "bun", env: { TOKEN: 1 } } } } },
+                message: "tools.local.echo.executor.env.TOKEN must be a string.",
+            },
+        ];
+
+        for (const manifest of invalidManifests) {
+            expect(() => normalizeCttlToolManifest(manifest.file as never, "project")).toThrow(manifest.message);
+        }
+    });
 });
 
 function testPaths(root: string): FlyflorPaths {

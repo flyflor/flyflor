@@ -23,7 +23,8 @@
 13. [skill.system.md](skill.system.md) — Skill manifest、选择、使用计数、promotion
 14. [cli.commands.md](cli.commands.md) — CLI 命令现状清单（含 blackboard TTY 浏览器）
 15. [boundaries.md](boundaries.md) — 工程硬边界与红线
-16. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
+16. [external.kit.md](external.kit.md) — 外部套件 manifest、发现与 control/event 契约
+17. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
 
 ## 归档区
 

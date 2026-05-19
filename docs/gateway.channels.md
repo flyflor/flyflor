@@ -93,6 +93,8 @@ Flyflor 继承 Hermes gateway 的通信细节，但不搬流式逐 token 推送�
 
 Gateway 额外开放 `/ws` 作为本地 TUI、Web 控制台和未来 first-party app 的通用控制面。它不是某个 TUI 的兼容补丁，而是 `src/protocol/control/envelope.ts` 定义的结构化协议：
 
+R4 收口后的边界是：当前仓库内置 Gateway 仍作为第一方迁移 transport 留在 composition root，负责把 channel 入站归一到 Runtime facade，并把 RuntimeEvent fan-out 到 `/ws`；外部客户端只依赖 `/ws` control/event envelope，不 import Runtime、Gateway 私有类或 memory 实现。具体 Gateway/CLI/TUI 独立包化、kit manifest 和安装/发现协议属于 R5 External Kit Protocol。
+
 | Message type | 方向 | 用途 |
 | --- | --- | --- |
 | `client.hello` / `server.hello` | 双向 | 能力握手；server 返回支持的 command、当前 gateway status |
@@ -117,6 +119,7 @@ Envelope 固定包含 `protocol`、`id`、`type`、`at`，可选 `requestId` / `
 - WS 事件订阅只按结构化 `type` / `requestId` 过滤，不读取自然语言内容。
 - 外部 CLI / TUI / Web 客户端只依赖四类主干消息：`gateway.message.send`、`turn.delta/final/error`、`event.subscribe/publish`、`gateway.status.get/snapshot`。详细事件协议见 [runtime.events.md](runtime.events.md)。
 - 当前仓库内置 CLI/TUI 仍可本地读取状态，但读取点已收敛到 `src/command/state.adapter.ts`；后续替换为 `gateway.status.get/snapshot` 客户端时，只替换该 adapter。
+- Channel adapter 只拿 `StreamingMessageDispatcher` 作为消息调度边界；adapter 不 import `RuntimeModule`，也不直接调用 `handleMessage()`。
 - 外部 IM channel 不消费 `turn.delta`，也不会逐字推送；只有 `/v1` API SSE 和 `/ws` 控制面属于显式流式协议。
 - Gateway 停止时必须先 dispose `GatewayControlHub`，再关闭 Bun server；这样 WS 订阅不会在 daemon restart 或测试进程内泄漏。
 

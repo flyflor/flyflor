@@ -11,7 +11,10 @@
 - `src/agent/runtime/blackboard/index.ts` — LLM 路由模板调用
 - `src/agent/runtime/routing/index.ts` — direct-with-watch 升级器
 - `src/agent/runtime/reflection/worker.ts` — 反思调度 worker
-- `src/agent/runtime/mcp/` — MCP toolset 过滤、工具结果 provenance 投影
+- `src/agent/runtime/mcp/` — Runtime ↔ Executive 工具执行 adapter、MCP resource/prompt 受控读取、MCP toolset 过滤、工具结果 provenance 投影
+- `src/agent/runtime/mcp/capability.reader.ts` — MCP resources/prompts 可见性确认、sandbox/approval gating 与受控 transport 调用
+- `src/executive/tool.runtime.ts` — 工具调用 loop、loop guard、read-only 并发与写/执行串行调度
+- `src/agent/context/render.ts` — runtime turn 的 system/user model messages 装配 owner
 - `src/agent/runtime/skills/` — 外部 Skill 包选择适配
 - `src/agent/runtime/events/skill.usage.event.ts` — `@Event` 聚合 skill usage sidecar，避免 runtime 主流程直接写辅助统计
 - `src/agent/runtime/planning/` — TaskPlan / ContextFork / SceneRecord 结构化块解析与 metadata
@@ -36,7 +39,7 @@ flowchart TB
     G --> H
     H --> I["applyRouteEscalation<br/>watch / failure 计数升级"]
     I --> J{"模式"}
-    J -- direct --> M["拼 system prompt"]
+    J -- direct --> M["Context owner 装配 model messages"]
     J -- direct-with-watch --> M
     J -- blackboard --> K["BlackboardModule.startTurn"]
     K --> L["BlackboardModule.runUntilConverged"]
@@ -48,7 +51,8 @@ flowchart TB
     O --> P{"含 flyflor_mcp_calls？"}
     P -- 是 --> Q["执行工具 + 结果回灌"]
     P -- 否 --> R["流式输出最终回复"]
-    Q --> R
+    Q --> Exec["ExecutiveToolRuntime<br/>schema / sandbox / approval / scheduling / loop guard"]
+    Exec --> R
     R --> Parse["剥离 memory_actions / ghost_decisions / identity / ask"]
     Parse --> S["GatewayReply 返回调用方"]
     Ask --> S
@@ -139,7 +143,11 @@ flowchart LR
     Render --> Prompt[memoryContext 字符串]
 ```
 
-输出后用 `renderRuntimeSystemPrompt` 拼接，注入：
+Memory 只返回 `memoryContext` 字符串；完整 model messages 由 `src/agent/context/render.ts`
+装配。Runtime 只传入结构化 scope/catalog/memory/skill/sandbox/blackboard 字段，不在主
+turn 里直接拼 prompt 细节，也不从自然语言推断 project、fork、工具需求或业务意图。
+
+Context owner 装配 system prompt 时注入：
 
 - `sandboxSummary`：当前 sandbox 模式描述
 - `memoryContext`：上面的合成 prompt
@@ -156,13 +164,20 @@ ContextFork 不等于 session。调用方只有在 `RuntimeContext.contextForkId
 
 Project 也不等于 session。调用方只有在 `RuntimeContext.activeProject` 显式传入 `{ id, projectDir, projectMemoryDir }` 时，MemoryComponent 才把当前 turn 绑定到该项目的 `.flyflor/memory`；`/project` / `/projects` 只是在 TUI 本地维护这个结构化选择。
 
-RuntimeModule 另外暴露 `listChatHistory(userId, options)` 给 chat TUI 做 out-of-band 历史回放；这条路径只读 `brain.db` 事件与 `task_plans` / `context_forks` / `scene_records` 摘要表，不进入 prompt 装配。
+RuntimeModule 另外暴露 `listChatHistory(userId, options)` 等只读/局部写入能力给 command
+adapter。chat TUI 只消费 `CommandRuntimeClient`：本地迁移期由 `src/command/runtime.adapter.ts`
+绑定 Runtime/Blackboard，后续可以替换成 control/ws client；TUI 不直接 import Runtime 或
+Blackboard 私有类。历史回放只读 `brain.db` 事件与 `task_plans` / `context_forks` /
+`scene_records` 摘要表，不进入 prompt 装配。
 
-## MCP 工具循环
+## Executive 工具循环
 
 ```mermaid
 sequenceDiagram
     participant RT as RuntimeModule
+    participant Context as Context owner
+    participant Exec as ExecutiveToolRuntime
+    participant Adapter as RuntimeMcpToolExecutor
     participant LLM as ModelClient
     participant Sandbox as SandboxPolicy
     participant Cat as McpCatalogCache
@@ -174,26 +189,45 @@ sequenceDiagram
     Cat->>MCP: tools/list (cache TTL 30s)
     MCP-->>Cat: tool defs
     Cat-->>RT: McpToolCatalogEntry[]
-    RT->>LLM: model.generate(messages)
+    RT->>Context: renderRuntimeModelMessages(structured context)
+    Context-->>RT: ModelMessage[]
+    RT->>Exec: run(messages, callbacks)
+    Exec->>LLM: model.generate(messages)
     LLM-->>RT: 首轮含 <flyflor_mcp_calls> JSON?
     alt 有
-        RT->>RT: parseMcpToolCalls
+        Exec->>Adapter: parse + schedule tool calls
         loop 每个 call
-            RT->>Sandbox: ask 审批（如需要）
-            Sandbox-->>RT: allow / deny
+            Adapter->>Sandbox: schema / approval / sandbox gate
+            Sandbox-->>Adapter: allow / deny
             alt allow
-                RT->>MCP: tools/call
-                MCP-->>RT: McpCallResult
+                Adapter->>MCP: MCP / workspace / git / shell / user / plugin
+                MCP-->>Adapter: normalized result
             else deny
-                RT->>RT: 记录 SandboxToolApprovalDenied
+                Adapter->>Adapter: normalized error result
             end
         end
-        RT->>LLM: model.generate(messages + tool 结果)
+        Adapter-->>Exec: executions
+        Exec->>LLM: model.generate(messages + tool results)
         LLM-->>RT: 终稿
     else 无
         LLM-->>RT: 直接终稿
     end
 ```
+
+`RuntimeModule` 不直接执行 `callMcpTool`、`invokeUserTool`、`ShellHookExecutor` 或
+plugin runner，也不直接执行 MCP resource/prompt read transport。它只负责 turn 编排、
+流式可见性和最终回复落盘。具体工具闭环由
+`RuntimeMcpToolExecutor` 绑定到 Executive 回调：
+
+- schema violation、unknown tool、approval denied 都归一化为 `McpToolCallExecution`。
+- MCP、workspace、git、shell、user tool、plugin capability 使用同一结果回灌格式。
+- `readOnly && concurrencySafe && !exclusive` 工具可批量并发；write/execute/exclusive 串行。
+- 工具预算耗尽或全阻断后，Executive 返回 ask，由 Runtime 继续进入补全闭环，不再继续开放工具。
+- repeated failed call、unknown tool repeat 和 max calls 由 `CttlLoopGuardReason` 进入事件与结果。
+
+MCP resources/prompts 是一等 capability，但它们的正文不会自动塞进 prompt。显式读取由
+`RuntimeMcpCapabilityReader` 负责：基于本轮 catalog 重算可见 plan，经过 sandbox/approval gate
+后才调用 MCP transport；不可见、未获批或 transport 失败都必须显式失败，不返回空默认值。
 
 ## 记忆写回（`rememberTurn`）
 

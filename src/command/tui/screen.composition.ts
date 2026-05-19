@@ -64,21 +64,11 @@ export function clearOpenTuiEnvCache(clearCache: () => void = clearEnvCache): vo
     try {
         clearCache();
     } catch (cause) {
-        // OpenTUI 0.2.x can leave its env singleton undefined inside Bun's
-        // Linux compiled bundle. Cache clearing is best-effort; the env value
-        // is still set before renderer creation in the same turn.
-        if (isOpenTuiCompiledEnvCacheMiss(cause)) return;
+        // Cache invalidation is part of renderer setup. OpenTUI must not
+        // silently continue here: if the cache cannot be cleared, the caller
+        // needs to see the failure and decide whether to abort startup.
         throw cause;
     }
-}
-
-function isOpenTuiCompiledEnvCacheMiss(cause: unknown): boolean {
-    if (!(cause instanceof TypeError)) return false;
-    const message = cause.message;
-    return (
-        (message.includes("undefined is not an object") || message.includes("Cannot read properties of undefined")) &&
-        message.includes("clearCache")
-    );
 }
 
 function shouldPreferTrueColor(env: TuiEnv): boolean {

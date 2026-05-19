@@ -135,6 +135,15 @@ describe("TUI chat metadata parsing", () => {
         expect(readStringArray(["a", 1, "b", null])).toEqual(["a", "b"]);
     });
 
+    test("throws on malformed MCP trace instead of hiding broken event payloads", () => {
+        expect(() => readMcpTrace({ ok: true, tool: "read" })).toThrow(
+            "Invalid MCP trace at server: missing string.",
+        );
+        expect(() => readMcpTrace({ ok: true, server: "workspace", tool: 42 })).toThrow(
+            "Invalid MCP trace at tool: missing string.",
+        );
+    });
+
     test("reads planning metadata without parsing visible reply text", () => {
         expect(
             readPlanningMeta({

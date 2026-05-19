@@ -8,9 +8,9 @@
 
 - `src/command/index.ts` - CLI entrypoint
 - `src/command/cli/commands.ts` - spec tree and handlers
-- `src/command/runtime.adapter.ts` - migration bridge that concentrates direct RuntimeModule access before command surfaces move to control/ws
-- `src/command/state.adapter.ts` - migration bridge that concentrates CLI/TUI read-only runtime state before command surfaces move to control/ws snapshots
 - `src/command/cli/index.ts` / `status.ts` / `config.ts` / `update.ts`
+- `src/command/runtime.adapter.ts` - first-party local runtime adapter, replaceable by a future control/ws client
+- `src/command/state.adapter.ts` - first-party local state adapter for read-only CLI/TUI status surfaces
 
 ## Command Tree
 

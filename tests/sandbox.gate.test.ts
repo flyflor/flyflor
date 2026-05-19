@@ -105,7 +105,7 @@ describe("gateCapabilityExecution", () => {
         expect(events.types()).toEqual([RuntimeEventType.SandboxToolApprovalRequested]);
     });
 
-    test("approver 抛错被吞掉视为未批准", async () => {
+    test("approver 抛错会拒绝执行并暴露审批错误", async () => {
         const events = new CapturingEvents();
         const result = await gateCapabilityExecution({
             policy: policy(ToolApprovalMode.Ask),
@@ -118,11 +118,17 @@ describe("gateCapabilityExecution", () => {
             deniedMessage: "denied-by-test",
         });
         expect(result.allowed).toBe(false);
-        expect(result.reason).toBe("denied-by-test");
+        expect(result.reason).toBe(`${CapabilityExecutionKind.McpTool} approval failed: boom`);
         expect(events.types()).toEqual([
             RuntimeEventType.SandboxToolApprovalRequested,
             RuntimeEventType.SandboxToolApprovalDenied,
         ]);
+        expect(events.events[1]?.payload).toMatchObject({
+            approvalError: "boom",
+            reason: "approval-error",
+            server: "s",
+            tool: "t",
+        });
     });
 
     test("Allow 直接放行不发任何 sandbox 事件", async () => {

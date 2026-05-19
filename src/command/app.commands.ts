@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { parseJsonc } from "../agent/mcp/index.ts";
+import { parseJsonc } from "../config/index.ts";
 import type { FlyflorPaths } from "../config/index.ts";
 
 export const APP_COMMANDS_FILE_NAME = "commands.jsonc";

@@ -21,10 +21,12 @@ import {
 
 describe("Command boundary", () => {
     test("CLI runtime access is concentrated behind command runtime adapter", async () => {
-        const [entry, commands, dreamHandler, adapter] = await Promise.all([
+        const [entry, commands, dreamHandler, chatEntry, chatApp, adapter] = await Promise.all([
             Bun.file("src/command/command.ts").text(),
             Bun.file("src/command/cli/commands.ts").text(),
             Bun.file("src/command/cli/handlers/dream.handler.ts").text(),
+            Bun.file("src/command/tui/chat/chat.entry.ts").text(),
+            Bun.file("src/command/tui/chat/app.tsx").text(),
             Bun.file("src/command/runtime.adapter.ts").text(),
         ]);
         const commandSources = `${entry}\n${commands}\n${dreamHandler}`;
@@ -35,6 +37,10 @@ describe("Command boundary", () => {
         expect(commandSources).not.toContain("RuntimeModule");
         expect(adapter).toContain("RuntimeModule");
         expect(adapter).toContain("dispatchMessage");
+        expect(chatEntry).toContain("CommandRuntimeClient");
+        expect(chatEntry).not.toContain("RuntimeModule");
+        expect(chatApp).not.toContain("handleMessage(");
+        expect(chatApp).toContain("dispatchMessage(");
     });
 
     test("CLI and TUI state reads are concentrated behind command state adapter", async () => {
@@ -57,6 +63,19 @@ describe("Command boundary", () => {
         expect(adapter).toContain("MemoryModule");
         expect(adapter).toContain("BlackboardModule");
         expect(adapter).toContain("gatewaySnapshot");
+    });
+
+    test("gateway channel adapters stay behind dispatcher and control transport", async () => {
+        const files = Array.from(new Bun.Glob("src/agent/gateway/channels/*.ts").scanSync("."));
+        const sources = await Promise.all(files.map(async (file) => [file, await Bun.file(file).text()] as const));
+
+        expect(sources.length).toBeGreaterThan(0);
+        for (const [file, source] of sources) {
+            expect(source, `${file} must not import RuntimeModule`).not.toContain("RuntimeModule");
+            expect(source, `${file} must not call runtime directly`).not.toContain("handleMessage(");
+            expect(source, `${file} must not import runtime internals`).not.toContain("../runtime");
+            expect(source, `${file} must not import runtime internals`).not.toContain("../../runtime");
+        }
     });
 
     test("commander route defaults to chat and accepts runtime modes without exposing the removed CLI surface", () => {

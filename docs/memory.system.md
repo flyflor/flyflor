@@ -10,7 +10,7 @@ Flyflor 把记忆切成五类职责：Markdown 宪法层、brain.db 生命事件
 
 - `src/cognitive/hippocampus/memory/markdown/index.ts` — `SELF/SOUL/USER/MEMORY.md` 读写
 - `src/cognitive/hippocampus/memory/brain/store.ts` — `brain.db` 单库生命周期、schema 初始化与对外门面（events/state/summary/links/codenames/projects/eq/task_plans/context_forks/scene_records）
-- `src/entities/memory/brain.*.entity.ts` / `brain.*.repo.ts` — `memory_events`、`memory_state`、`projects`、`task_plans`、`context_forks`、`scene_records`、`memory_summary`、`memory_links`、`codenames`、`memory_eq_state` 的 row/record 映射与 SQL function；repo 只做数据访问，不做业务决策
+- `src/entities/memory/brain/<owner>/entity.ts` / `repo.ts` — `memory_events`、`memory_state`、`projects`、`task_plans`、`context_forks`、`scene_records`、`memory_summary`、`memory_links`、`codenames`、`memory_eq_state` 的 row/record 映射与 SQL function；repo 只做数据访问，不做业务决策
 - `src/cognitive/hippocampus/memory/brain/index.ts` — brain.db 月级冷归档（admin 脚本与 runtime 共用）
 - `src/cognitive/hippocampus/memory/working/index.ts` — local WAL/snapshot 工作记忆后端
 - `src/cognitive/hippocampus/memory/hot/index.ts` — 到期工作记忆隔离压缩审计
@@ -86,7 +86,7 @@ flowchart LR
 | `context_forks`   | 无 session 设计下的显式 fork 节点；只存继承事件 id、范围摘要和上下文预算                                 |
 | `scene_records`   | 黑板 / 深度思考 / 反思场景回放摘要；`/history` 右侧复用，不存 chain-of-thought                           |
 
-当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `src/entities/memory/brain.*.repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row/entity 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/cognitive/hippocampus/memory/feedback/index.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
+当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `src/entities/memory/brain/<owner>/repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row/entity 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/cognitive/hippocampus/memory/feedback/index.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
 TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
 

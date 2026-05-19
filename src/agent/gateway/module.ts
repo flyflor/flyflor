@@ -1,4 +1,5 @@
 import type { GatewayConfig } from "../../config/index.ts";
+import type { FlyflorPaths } from "../../config/index.ts";
 import type { RuntimeModule } from "../runtime/index.ts";
 import {
     ChannelLinkState,
@@ -30,6 +31,7 @@ export class GatewayModule extends Gateway {
         protected readonly runtime: RuntimeModule,
         protected readonly events: EventSink,
         protected readonly dedup: MessageDedupStore = new InMemoryDedupStore(),
+        protected readonly paths?: FlyflorPaths,
     ) {
         super();
     }
@@ -44,6 +46,7 @@ export class GatewayModule extends Gateway {
             config: this.config,
             dispatch: this.createTrackedDispatcher("ws"),
             events: globalEvents,
+            paths: this.paths,
             status: () => this.getStatusSnapshot(),
         });
         this.server = Bun.serve<GatewayControlPeer>({

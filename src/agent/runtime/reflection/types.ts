@@ -24,6 +24,7 @@ export interface RuntimeReflectionSource {
         }>;
         turnId?: string;
     };
+    executiveToolLoop?: ReflectionNormalizeSource["executiveToolLoop"];
     now: string;
     request: string;
     requestId: string;
@@ -67,6 +68,7 @@ function toNormalizeSource(source: RuntimeReflectionSource): ReflectionNormalize
     return {
         answer: source.answer,
         blackboard: source.blackboard,
+        executiveToolLoop: source.executiveToolLoop,
         now: source.now,
         request: source.request,
         requestId: source.requestId,

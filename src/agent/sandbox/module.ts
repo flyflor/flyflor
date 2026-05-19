@@ -205,16 +205,26 @@ export async function gateCapabilityExecution(
                 requestId,
             ),
         );
-        const approved = await runApprover(input.approve);
-        if (!approved) {
+        const approval = await runApprover(input.approve);
+        if (!approval.approved) {
             events.publish(
                 event(
                     RuntimeEventType.SandboxToolApprovalDenied,
-                    { kind, ...descriptor },
+                    {
+                        kind,
+                        reason: approval.error ? "approval-error" : "approval-denied",
+                        approvalError: approval.error,
+                        ...descriptor,
+                    },
                     requestId,
                 ),
             );
-            return { allowed: false, reason: input.deniedMessage ?? `${kind} was not approved` };
+            return {
+                allowed: false,
+                reason: approval.error
+                    ? `${kind} approval failed: ${approval.error}`
+                    : input.deniedMessage ?? `${kind} was not approved`,
+            };
         }
     }
     if (input.quota) {
@@ -224,12 +234,11 @@ export async function gateCapabilityExecution(
     return { allowed: true, reason: decision.reason };
 }
 
-async function runApprover(approve?: () => boolean | Promise<boolean>): Promise<boolean> {
-    if (!approve) return false;
+async function runApprover(approve?: () => boolean | Promise<boolean>): Promise<{ approved: boolean; error?: string }> {
+    if (!approve) return { approved: false };
     try {
-        return await approve();
-    } catch {
-        // 审批 UI / 回调失败时按未批准处理，保持 capability gate 默认安全。
-        return false;
+        return { approved: await approve() };
+    } catch (error) {
+        return { approved: false, error: error instanceof Error ? error.message : String(error) };
     }
 }

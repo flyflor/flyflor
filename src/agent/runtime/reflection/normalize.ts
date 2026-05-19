@@ -22,6 +22,12 @@ export interface ReflectionNormalizeSource {
         }>;
         turnId?: string;
     };
+    executiveToolLoop?: {
+        loopGuardReason?: string;
+        message: string;
+        stop: "ask";
+        toolBudgetExhausted?: true;
+    };
     now: string;
     request: string;
     requestId: string;
@@ -69,6 +75,7 @@ export function renderReflectionEvidence(source: ReflectionNormalizeSource): str
                   }
                 : undefined,
             answer: source.answer,
+            executiveToolLoop: source.executiveToolLoop,
             mcpCalls: source.mcpCalls,
             skillNames: source.skillNames,
         },
@@ -99,6 +106,7 @@ function reflectionCandidateFromItem(
         metadata: {
             blackboardReason: source.blackboard?.reason,
             blackboardStatus: source.blackboard?.status,
+            executiveToolLoop: source.executiveToolLoop,
             routeMode: source.route?.mode,
             routeReason: source.route?.reason,
             schemaVersion: 1,
@@ -111,6 +119,16 @@ function reflectionCandidateFromItem(
 }
 
 function reflectionEvidenceFor(source: ReflectionNormalizeSource): CrystalEvidence[] {
+    if (source.executiveToolLoop) {
+        return [
+            evidence(
+                "executive-tool-loop-ask",
+                0.45,
+                source.requestId,
+                "executive tool loop asked the user for execution guidance",
+            ),
+        ];
+    }
     if (!source.blackboard) {
         return [evidence("runtime-direct-reflection", 0, source.requestId, "direct turn reflection candidate")];
     }

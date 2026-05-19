@@ -161,7 +161,7 @@ src/
 | `cttl.capability.catalog.built` | read | 本轮通用 capability plan 已生成 |
 | `mcp.capability.catalog.built` | read | 本轮 MCP tools/resources/prompts capability plan 已生成 |
 | `mcp.tool.catalog.built` | read | 本轮可见工具列表与 hidden diagnostics 已生成 |
-| `mcp.tool.call.executed` | effect | 工具执行完成或失败 |
+| `mcp.tool.call.executed` | effect | MCP/workspace/git/shell/user/plugin 工具执行完成或失败 |
 | `cttl.loop.guard.blocked` | effect | Executive 阻断重复、unknown 或超预算工具调用 |
 | `sandbox.tool.approval.requested` / `sandbox.tool.approval.denied` | question / error | 高风险能力需要审批或被拒绝 |
 | `memory.ask.recorded` / `blackboard.decision.requested` | ask / question | 需要用户补充信息或黑板需要决策 |
@@ -189,6 +189,10 @@ src/
 `cttl.capability.catalog.built` 是通用外骨架发现事件。payload 是最近一次 Executive 能力目录快照：只包含已过滤后的 descriptor 摘要、hidden diagnostics、失败/stale source 与 totals；resources/prompts 的正文、user tool executor 命令、plugin 执行参数、密钥和 runtime 私有对象不会出现在该事件中。WS 客户端也可以发送 `capability.catalog.get`，由 control hub 返回最近一次 `capability.catalog.snapshot`；尚未发生 turn 时 catalog 为 `null`。事件名暂保留 `cttl.*` 前缀，直到 P1 目录迁移统一重命名。
 
 `mcp.capability.catalog.built` 是兼容事件，保留 MCP tools/resources/prompts 名称、hidden diagnostics、失败/stale server 与来源统计。外部 TUI、WS 客户端和 channel adapter 可以用它展示 MCP 细节，但具体读取 resource 或获取 prompt 必须再走显式受控 API。
+
+MCP resource/prompt 读取不是 prompt 自动注入，也不是 Runtime 私有直连。当前受控入口由 `RuntimeMcpCapabilityReader` 承担：先用本轮 capability catalog 重新计算可见 plan，再走 sandbox/approval gate，最后才调用 MCP transport。读取失败、不可见或未获批必须抛出或通过事件暴露，不能静默降级成空正文。
+
+`sandbox.tool.approval.denied` 同时覆盖普通拒绝与审批回调异常。普通拒绝 payload 使用 `reason: "approval-denied"`；审批函数抛错或 rejected promise 时使用 `reason: "approval-error"`，并附 `approvalError` 字段。调用方收到的 gate reason 会保留失败信息，例如 `mcp-tool approval failed: <message>`，方便 TUI/审计区分“用户拒绝”和“审批链路坏了”。
 
 ## 红线
 

@@ -328,9 +328,11 @@ describe("PluginRunner", () => {
         });
         const r = await runner.invoke(SPEC);
         expect(r.ok).toBe(false);
-        expect(r.error).toBe("plugin demo was not approved");
+        expect(r.error).toBe("plugin approval failed: approve-boom");
         expect(spawned).toBe(false);
         expect(sink.types()).toContain(RuntimeEventType.SandboxToolApprovalDenied);
+        expect(sink.events.find((event) => event.type === RuntimeEventType.SandboxToolApprovalDenied)?.payload)
+            .toMatchObject({ approvalError: "approve-boom", reason: "approval-error" });
     });
 
     test("[chaos] events sink throws → surfaces the error", async () => {

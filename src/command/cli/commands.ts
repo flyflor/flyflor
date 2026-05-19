@@ -1291,7 +1291,7 @@ async function startChatTui(app: FlyFlor): Promise<void> {
     const events = app.resolve(EventsComponent);
     const { startChatEntry } = await import("../tui/chat/index.ts");
     await startChatEntry({
-        runtime: runtime.chatRuntime(),
+        runtime: runtime.chatClient(),
         eventBus: events.asBus(),
         approveMcpToolCall: process.stdin.isTTY ? runtime.approveMcpToolCall() : undefined,
         agentName: "flyflor",
@@ -1305,7 +1305,6 @@ async function startChatTui(app: FlyFlor): Promise<void> {
             model: config.model.model,
             providerId: config.model.providerId,
         },
-        blackboard: runtime.blackboard(),
     });
 }
 

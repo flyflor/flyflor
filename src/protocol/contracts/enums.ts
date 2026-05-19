@@ -324,6 +324,45 @@ export const GatewayControlMessageType = {
 export type GatewayControlMessageType =
     (typeof GatewayControlMessageType)[keyof typeof GatewayControlMessageType];
 
+export const ExternalKitKind = {
+    Capability: "capability",
+    Cli: "cli",
+    Gateway: "gateway",
+    Tui: "tui",
+} as const;
+
+export type ExternalKitKind = (typeof ExternalKitKind)[keyof typeof ExternalKitKind];
+
+export const ExternalKitSource = {
+    Builtin: "builtin",
+    Global: "global",
+    Project: "project",
+} as const;
+
+export type ExternalKitSource = (typeof ExternalKitSource)[keyof typeof ExternalKitSource];
+
+export const ExternalKitPermission = {
+    CapabilityCatalog: "capability.catalog",
+    Control: "control",
+    EventSubscribe: "event.subscribe",
+    GatewayMessageSend: "gateway.message.send",
+    GatewayStatus: "gateway.status",
+} as const;
+
+export type ExternalKitPermission = (typeof ExternalKitPermission)[keyof typeof ExternalKitPermission];
+
+export const ExternalKitCapabilitySource = {
+    Channel: "channel",
+    Mcp: "mcp",
+    Plugin: "plugin",
+    Skill: "skill",
+    Subagent: "subagent",
+    UserTool: "user-tool",
+} as const;
+
+export type ExternalKitCapabilitySource =
+    (typeof ExternalKitCapabilitySource)[keyof typeof ExternalKitCapabilitySource];
+
 export const ChannelLinkState = {
     Connected: "connected",
     Degraded: "degraded",

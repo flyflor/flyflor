@@ -45,8 +45,8 @@ export function parseMcpToolCalls(rawText: string, limit = DEFAULT_MCP_TOOL_CALL
     const calls: McpToolCallRequest[] = [];
     // MCP 调用也走统一内部块 registry；本文件只负责工具调用 payload 的安全校验。
     const extracted = extractStructuredBlocks(rawText, StructuredBlockProtocol.McpCalls);
-    for (const block of extracted.blocks) {
-        calls.push(...readCalls(block.content));
+    for (let index = 0; index < extracted.blocks.length; index += 1) {
+        calls.push(...readCalls(extracted.blocks[index]!.content, index));
     }
     if (calls.length > limit) {
         throw new Error(`MCP tool call count ${calls.length} exceeds limit ${limit}.`);
@@ -181,36 +181,28 @@ export function hasMcpCallProtocolText(text: string): boolean {
     return text.includes(MCP_CALL_BLOCK.open) || text.includes(MCP_CALL_BLOCK.close);
 }
 
-function readCalls(rawJson: string): McpToolCallRequest[] {
+function readCalls(rawJson: string, blockIndex: number): McpToolCallRequest[] {
     try {
         const payload = parseStructuredJson(rawJson);
         if (Array.isArray(payload)) {
-            return payload.flatMap(readMcpToolCall);
+            return payload.map((value, index) => readMcpToolCall(value, `mcpCalls[${blockIndex}].array[${index}]`));
         }
         if (isRecord(payload) && Array.isArray(payload.calls)) {
-            return payload.calls.flatMap(readMcpToolCall);
+            return payload.calls.map((value, index) => readMcpToolCall(value, `mcpCalls[${blockIndex}].calls[${index}]`));
         }
         if (isRecord(payload) && Array.isArray(payload.tool_calls)) {
-            return payload.tool_calls.flatMap(readMcpToolCall);
+            return payload.tool_calls.map((value, index) => readMcpToolCall(value, `mcpCalls[${blockIndex}].tool_calls[${index}]`));
         }
         if (isRecord(payload) && Array.isArray(payload.tools)) {
-            return payload.tools.flatMap(readMcpToolCall);
+            return payload.tools.map((value, index) => readMcpToolCall(value, `mcpCalls[${blockIndex}].tools[${index}]`));
         }
         if (isRecord(payload)) {
-            return readMcpToolCall(payload);
+            return [readMcpToolCall(payload, `mcpCalls[${blockIndex}]`)];
         }
     } catch (error) {
         throw error instanceof Error ? error : new Error(String(error));
     }
     throw new Error("MCP tool call block must be an array or an object with calls[].");
-}
-
-function readMcpToolCall(value: unknown): McpToolCallRequest[] {
-    const call = normalizeCallShape(value);
-    if (!call) {
-        return [];
-    }
-    return [normalizeCall(call)];
 }
 
 function isMcpToolCall(value: unknown): value is McpToolCallRequest {
@@ -222,54 +214,55 @@ function isMcpToolCall(value: unknown): value is McpToolCallRequest {
     );
 }
 
-function normalizeCallShape(value: unknown): McpToolCallRequest | undefined {
-    if (!isRecord(value)) return undefined;
-    const input = readCallInput(value);
-    const functionCall = readFunctionCall(value);
-    if (functionCall) {
-        return functionCall;
+function readMcpToolCall(value: unknown, path: string): McpToolCallRequest {
+    if (!isRecord(value)) {
+        throw new Error(`Invalid MCP tool call at ${path}: expected object.`);
     }
+    const functionCall = readFunctionCall(value, `${path}.function`);
+    if (functionCall) {
+        return normalizeCall(functionCall);
+    }
+    const input = readCallInput(value, path);
     if (typeof value.server === "string" && typeof value.tool === "string") {
-        return {
+        return normalizeCall({
             server: value.server,
             tool: value.tool,
             input,
-        };
+        });
     }
     if (typeof value.server === "string" && typeof value.name === "string") {
-        return {
+        return normalizeCall({
             server: value.server,
             tool: value.name,
             input,
-        };
+        });
     }
     if (typeof value.name === "string") {
         const split = splitToolName(value.name);
         if (split) {
-            return { ...split, input };
+            return normalizeCall({ ...split, input });
         }
     }
     if (typeof value.tool === "string") {
         const split = splitToolName(value.tool);
         if (split) {
-            return { ...split, input };
+            return normalizeCall({ ...split, input });
         }
     }
     if (typeof value.server === "string") {
         const split = splitToolName(value.server);
         if (split) {
-            return { ...split, input };
+            return normalizeCall({ ...split, input });
         }
     }
-    return undefined;
+    throw new Error(`Invalid MCP tool call at ${path}: missing server/tool identity.`);
 }
 
-function readCallInput(value: Record<string, unknown>): Record<string, unknown> {
+function readCallInput(value: Record<string, unknown>, path: string): Record<string, unknown> {
     if (isRecord(value.input)) return value.input;
     if (isRecord(value.arguments)) return value.arguments;
     if (typeof value.arguments === "string") {
-        const parsed = parseJsonRecord(value.arguments);
-        if (parsed) return parsed;
+        return parseJsonRecord(value.arguments, `${path}.arguments`);
     }
     const reserved = new Set(["server", "tool", "name", "input", "arguments", "type", "function", "id"]);
     const lifted: Record<string, unknown> = {};
@@ -281,17 +274,24 @@ function readCallInput(value: Record<string, unknown>): Record<string, unknown> 
     return lifted;
 }
 
-function readFunctionCall(value: Record<string, unknown>): McpToolCallRequest | undefined {
-    if (!isRecord(value.function)) return undefined;
+function readFunctionCall(value: Record<string, unknown>, path: string): McpToolCallRequest | undefined {
+    if (value.function === undefined) return undefined;
+    if (!isRecord(value.function)) {
+        throw new Error(`Invalid MCP tool call at ${path}: expected object.`);
+    }
     const fn = value.function;
-    const rawName = typeof fn.name === "string" ? fn.name : undefined;
-    if (!rawName) return undefined;
+    if (typeof fn.name !== "string" || fn.name.trim().length === 0) {
+        throw new Error(`Invalid MCP tool call at ${path}.name: missing server.tool name.`);
+    }
+    const rawName = fn.name;
     const split = splitToolName(rawName);
-    if (!split) return undefined;
+    if (!split) {
+        throw new Error(`Invalid MCP tool call at ${path}.name: expected server.tool format.`);
+    }
     const input = isRecord(fn.arguments)
         ? fn.arguments
         : typeof fn.arguments === "string"
-          ? parseJsonRecord(fn.arguments) ?? {}
+          ? parseJsonRecord(fn.arguments, `${path}.arguments`)
           : {};
     return { ...split, input };
 }
@@ -306,12 +306,18 @@ function splitToolName(name: string): { server: string; tool: string } | undefin
     };
 }
 
-function parseJsonRecord(raw: string): Record<string, unknown> | undefined {
+function parseJsonRecord(raw: string, path: string): Record<string, unknown> {
     try {
         const parsed = JSON.parse(raw);
-        return isRecord(parsed) ? parsed : undefined;
-    } catch {
-        return undefined;
+        if (!isRecord(parsed)) {
+            throw new Error(`Invalid MCP tool call at ${path}: expected JSON object.`);
+        }
+        return parsed;
+    } catch (error) {
+        if (error instanceof SyntaxError) {
+            throw new Error(`Invalid MCP tool call at ${path}: expected valid JSON object.`);
+        }
+        throw error instanceof Error ? error : new Error(`Invalid MCP tool call at ${path}: expected valid JSON object.`);
     }
 }
 

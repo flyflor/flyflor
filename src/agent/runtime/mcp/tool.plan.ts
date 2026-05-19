@@ -80,6 +80,9 @@ export interface RuntimeUserToolCatalogEntry {
 export interface RuntimePluginCapabilityCatalogEntry {
     readonly descriptor: CttlToolDescriptor;
     readonly plugin: string;
+    readonly entry: string;
+    readonly enabled: boolean;
+    readonly source: "project" | "global";
 }
 
 /**

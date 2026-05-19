@@ -292,7 +292,7 @@ export class NativeChatApp {
         const message = this.buildGatewayMessage(text.trim(), startedAt);
         let streamed = false;
         try {
-            const reply = await this.options.runtime.handleMessage(message, context, {
+            const reply = await this.options.runtime.dispatchMessage(message, context, {
                 approveMcpToolCall: this.options.approveMcpToolCall ?? (async () => true),
                 signal: controller.signal,
                 onTextDelta: (chunk) => {
@@ -576,8 +576,7 @@ export class NativeChatApp {
     }
 
     private async refreshBlackboardTurn(turnId: string): Promise<void> {
-        if (!this.options.blackboard) return;
-        const turn = await this.options.blackboard.getTurn(turnId).catch(() => undefined);
+        const turn = await this.options.runtime.getBlackboardTurn(turnId).catch(() => undefined);
         if (!turn) return;
         this.blackboardTurns.set(turnId, turn);
         for (const msg of this.messages) {

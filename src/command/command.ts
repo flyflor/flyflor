@@ -65,7 +65,7 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
         const events = app.resolve(EventsComponent);
         try {
             await startChatEntry({
-                runtime: runtime.chatRuntime(),
+                runtime: runtime.chatClient(),
                 eventBus: events.asBus(),
                 approveMcpToolCall: runtime.approveMcpToolCall(),
                 agentName: "flyflor",
@@ -79,7 +79,7 @@ export async function runFlyflorCommand(argv: string[]): Promise<FlyflorCommandR
                     model: config.model.model,
                     providerId: config.model.providerId,
                 },
-                blackboard: runtime.blackboard()});
+            });
         } finally {
             app.dispose();
         }

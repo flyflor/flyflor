@@ -153,6 +153,8 @@ export function renderCliCommandsDoc(): string {
     lines.push("- `src/command/index.ts` - CLI entrypoint");
     lines.push("- `src/command/cli/commands.ts` - spec tree and handlers");
     lines.push("- `src/command/cli/index.ts` / `status.ts` / `config.ts` / `update.ts`");
+    lines.push("- `src/command/runtime.adapter.ts` - first-party local runtime adapter, replaceable by a future control/ws client");
+    lines.push("- `src/command/state.adapter.ts` - first-party local state adapter for read-only CLI/TUI status surfaces");
     lines.push("");
     lines.push("## Command Tree");
     lines.push("");

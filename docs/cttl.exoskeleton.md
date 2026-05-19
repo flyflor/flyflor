@@ -65,7 +65,7 @@ Executive 支持多来源 capability，但所有来源进入运行时前都必�
 
 当前 user tool manifest 约定落在 `tools.jsonc`：全局为 `~/.flyflor/.config/tools.jsonc`，项目为 `./.flyflor/tools.jsonc`，项目层覆盖全局层。manifest tool 首先归一成 Executive descriptor；带 `executor.kind="process-json"` 的 enabled tool 会作为虚拟 `user.*` 工具进入模型 catalog。执行协议复用 PluginRunner 的 JSON process bridge：stdin 一行 JSON、stdout 一行 JSON，执行必须经过 Plugin sandbox gate、approval、audit、result summary 和 loop guard。
 
-plugin manifest 也可以声明 `capabilities`：全局为 `~/.flyflor/.config/plugins/plugins.json`，项目为 `./.flyflor/plugins/plugins.json`。这些 capability 先只作为 `plugin.<plugin>.<capability>` descriptor 进入 Executive Tool Plan 和 catalog snapshot，表达插件“能提供什么手脚”；具体执行仍由显式 `PluginRunner` 调用、命令白名单和 sandbox gate 控制，不因为出现在 catalog 里自动获得执行入口。
+plugin manifest 也可以声明 `capabilities`：全局为 `~/.flyflor/.config/plugins/plugins.json`，项目为 `./.flyflor/plugins/plugins.json`。这些 capability 作为 `plugin.<plugin>.<capability>` descriptor 进入 Executive Tool Plan 和 catalog snapshot；经过本轮 Trust 过滤后，会通过现有 MCP block wire 暴露为虚拟 `user.plugin.<plugin>.<capability>` 工具。执行仍由 `PluginRunner`、命令白名单、Plugin sandbox gate、approval、audit、result summary 和 loop guard 控制；出现于 catalog 不等于绕过执行闸门。
 
 ## Tool Plan
 
@@ -79,7 +79,7 @@ plugin manifest 也可以声明 `capabilities`：全局为 `~/.flyflor/.config/p
 
 Tool Plan 是协议层数据，不是自然语言推断结果；隐藏原因必须来自结构化字段和枚举。
 
-当前 Runtime 接线从内置 MCP 兼容工具开始：`workspace.*`、`git.*`、`shell.run` 在注入 prompt 前先归一成 Executive descriptor，再按本轮 trust context 过滤可见性。MCP `tools/resources/prompts` 也会统一进入 capability plan；resources/prompts 只做发现和受控读取 API，不把正文自动注入模型。这个切片只控制模型可见 catalog，不替代 sandbox / approval / quota 执行门；实际执行仍由 workspace access、ShellHook、MCP transport 和 sandbox gate 负责。
+当前 Runtime 接线从 MCP 兼容工具统一进入 Executive：`workspace.*`、`git.*`、`shell.run`、远端 MCP tools、user manifest tools 和 plugin manifest capabilities 在注入 prompt 前先归一成 descriptor，再按本轮 trust context 过滤可见性。MCP `tools/resources/prompts` 也会统一进入 capability plan；resources/prompts 只做发现和受控读取 API，不把正文自动注入模型。这个切片只控制模型可见 catalog，不替代 sandbox / approval / quota 执行门；实际执行由 `RuntimeMcpToolExecutor` 适配到 workspace access、ShellHook、MCP transport、PluginRunner 和 sandbox gate。
 
 每轮 Tool Plan 生成后会发布 `cttl.capability.catalog.built`。这是外部 control/event 面的通用快照，只包含可 JSON 序列化的 descriptor 摘要、hidden reason、失败/stale source 和 totals；不包含 executor、resource 正文、prompt 正文或密钥。WS 客户端可通过 `capability.catalog.get` 读取最近一次 `capability.catalog.snapshot`，用于独立 TUI、channel console 或调试面板展示当前“手脚目录”。
 
@@ -107,7 +107,9 @@ Executive 的 Loop 层必须防止模型卡在工具回路：
 - MCP 返回非法 schema、缺 `tool_call_id`、非 JSON content 或 transport 失败时，Loop 层必须转成结构化错误，不把原始异常长文本直接塞回模型。
 - 后台任务、cron、delegate 和 long-running code runner 必须可中断、可恢复、可审计。
 
-Runtime MCP loop 接入 Executive guard 时分两步：执行前用 `knownToolNames`、tool name 和 JSON input 做 preflight；执行后只记录 `ok/error` 结果，用于重复失败检测。被 guard 阻断的调用仍以失败 `McpToolCallExecution` 回灌模型，原因使用 `CttlLoopGuardReason`，便于事件面和 TUI 解释。
+Runtime 工具 loop 由 `ExecutiveToolRuntime` 拥有，Runtime 只传 `generate/parse/execute/renderResults` 回调。执行前用 `knownToolNames`、tool name 和 JSON input 做 preflight；执行后只记录 `ok/error` 结果，用于重复失败检测。被 guard 阻断的调用仍以失败 `McpToolCallExecution` 回灌模型，原因使用 `CttlLoopGuardReason`，便于事件面和 TUI 解释。unknown tool 第一次允许 adapter 返回 catalog/schema/sandbox 失败，重复后立即 guard 阻断；当一轮调用全被阻断或工具预算耗尽时，Executive 返回 ask，不继续开放工具。
+
+调度规则固定在 Executive：`readOnly && concurrencySafe && !exclusive` 的工具可以同批并发，`write` / `execute` / `exclusive` 工具必须串行。具体 transport（MCP、workspace、git、shell、user tool、plugin）只在 runtime-facing adapter 内实现，`src/executive` 不 import Runtime、Gateway、Command、MCP、Sandbox 或 Plugin 私有实现。
 
 每次阻断还会发布 `cttl.loop.guard.blocked` RuntimeEvent。事件 payload 只包含 `server`、`tool`、`reason`、`message` 等可 JSON 序列化事实；它用于 TUI、WS、channel adapter 和审计展示，不参与业务语义判断。
 

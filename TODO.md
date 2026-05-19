@@ -2,9 +2,9 @@
 
 ## 当前交接
 
-状态：R4 Agent Shell Split 进行中。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并移除旧物理路径，CLI runtime 与只读状态访问已收敛到 command adapters，TUI/Gateway 外部化待继续。
+状态：R4 Agent Shell Split + Executive Tool Runtime 已完成。R0 已建立 `docs/refactor.roadmap.md` 并接入 README / docs 索引；R1 已收紧 core/event/control/ws 外部协议边界；R2 已把原 `src/cttl` 实现迁移到 `src/executive` 并移除旧 `src/cttl` 物理路径；R3 已把 `mindstream`、`crystal` 与 `hippocampus` 迁移到 `src/cognitive` 并移除旧 `src/fch` 物理路径；R4 已迁移 `skills` / `context` 并移除旧物理路径，CLI runtime 与只读状态访问已收敛到 command adapters，chat TUI 已收敛到 `CommandRuntimeClient`，Gateway `/ws` control/event transport 已作为第一方迁移传输稳定，Executive Tool Runtime 已接管工具循环与 MCP read capability gating。
 
-本轮目标：继续 R4 外显层拆分，保持 CLI/TUI/Gateway 通过 event/control/ws 收敛；阶段收尾时必须同步清理主文档、更新本 TODO，并把被替代的旧文档归档到 `docs/old-docs/`。
+当前目标：进入 R5 External Kit Protocol，把 CLI/TUI/Gateway/Capability kit 的外部安装、发现、权限、事件订阅和执行桥协议做成稳定契约；R4 已收口的第一方内置实现只作为迁移期 transport 和 adapter，不再扩张 Runtime 私有直连。
 
 当前活跃路线：
 
@@ -161,25 +161,32 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 - `bun run check`
 - `bun run build:binary`
 
-### R4 Agent Shell Split
+### R4 Agent Shell Split + Executive Tool Runtime
 
-状态：进行中（`src/skills` / `src/context` 已迁移到 `src/agent` 并移除旧物理路径；CLI runtime 直连已收敛到 `src/command/runtime.adapter.ts`；CLI/TUI 只读状态访问已收敛到 `src/command/state.adapter.ts`；TUI/Gateway 外部化待继续）。
+状态：完成。
 
 目标：把当前内置 CLI/TUI/Gateway 从“内核组成部分”降级为“第一方外部套件候选”，内核只保留 event/control/ws 协议。
 
 任务：
 
 1. 把 `src/skills` 迁移到 `src/agent/skills`，把 `src/context` 迁移到 `src/agent/context`。skills 是做事方式，context 是运行态 scope 装配，二者都不属于认知内核；旧物理路径已移除。（已完成）
-2. 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（已建立 `src/command/runtime.adapter.ts`）
+2. 把 `src/command` 对 runtime 的直接使用收敛到 control/ws client 或薄本地 adapter。（已建立 `src/command/runtime.adapter.ts`；chat TUI 使用 `CommandRuntimeClient`，不直接依赖 `RuntimeModule` / `BlackboardModule` 类型；后续 R5 可替换成 control/ws client）
 3. 梳理 TUI 只读/交互面所需事件，缺口补到 RuntimeEvent 和 control envelope，而不是 import 私有模块。（已建立 `src/command/state.adapter.ts` 收敛本地只读状态访问）
-4. Gateway 保留最小 control/event transport；具体 channel adapter 进入可插拔 kit 规划。
-5. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述。
-6. 更新 `docs/cli.commands.md`、`docs/gateway.channels.md`、`docs/runtime.events.md`、`docs/refactor.roadmap.md`。
+4. Runtime 工具循环迁移到 Executive：Runtime 只编排 turn，Context owner 装配 model messages，Executive 负责 schema/sandbox/approval/result/loop guard/read-only 并发与写/执行串行调度。（已完成）
+5. MCP、workspace、git、shell、user tool、plugin capability 通过 `RuntimeMcpToolExecutor` 接入同一 `<flyflor_mcp_calls>` wire 和结果回灌格式。（已完成）
+6. MCP resources/prompts 读取通过 `RuntimeMcpCapabilityReader` 进入可见性确认、sandbox/approval gating 与受控 transport 调用；Runtime 不直接导入底层 read/get 函数。（已完成）
+7. Gateway 保留最小 control/event transport；`GatewayControlHub` `/ws` 已作为外部 client 契约边界，channel adapter 只接 `StreamingMessageDispatcher`，不 import Runtime 私有实现。（已完成）
+8. strict Executive manifest 与 JSONC config boundary 已固化；坏 manifest/config 不再静默吞默认值。（已完成）
+9. sandbox approval callback 异常通过 `sandbox.tool.approval.denied` 暴露 `reason: "approval-error"` 与 `approvalError`，不再伪装成普通拒绝。（已完成）
+10. 文档中把 CLI/TUI/channel 当前内置状态标记为迁移期，不再当核心边界描述；真正 external kit 安装/发现/权限协议进入 R5。（已完成）
+11. 更新 `docs/cli.commands.md`、`docs/gateway.channels.md`、`docs/runtime.events.md`、`docs/runtime.turn.md`、`docs/refactor.roadmap.md`。（已完成）
 
 验收：
 
 - `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts --timeout 30000`
+- `bun test tests/executive.tool.runtime.test.ts tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts tests/runtime.mcp.tool.plan.test.ts tests/mcp.long.results.test.ts tests/mcp.schema.validate.test.ts tests/sandbox.gate.test.ts tests/runtime.toolset.test.ts tests/plugin.runner.test.ts tests/plugin.registry.test.ts --timeout 30000`
 - `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/channels.status.test.ts --timeout 30000`
+- `bun test tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/tui.chat.history.test.ts tests/tui.chat.metadata.test.ts --timeout 30000`
 - `bun run check`
 - `bun run build:binary`
 
@@ -197,16 +204,22 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 - `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
 - `bun run check`
 - `bun run build:binary`
+- `bun test tests/runtime.executive.boundaries.test.ts tests/skill.mcp.test.ts tests/cttl.core.test.ts tests/runtime.mcp.tool.plan.test.ts tests/cttl.manifest.test.ts tests/executive.tool.runtime.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/shell.hook.executor.test.ts --timeout 30000`
+- `bun test tests/command.boundaries.test.ts tests/gateway.ws.test.ts --timeout 30000`
+- `bun test tests/docs.index.test.ts tests/todo.status.test.ts tests/cli.commands.docs.test.ts --timeout 30000`
+- `bun run docs:check`
+- `bun test tests/skill.select.test.ts tests/skill.mcp.test.ts tests/context.scope.test.ts tests/executive.tool.runtime.test.ts tests/runtime.executive.boundaries.test.ts tests/runtime.mcp.tool.plan.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/plugin.registry.test.ts tests/command.boundaries.test.ts tests/tui.lifecycle.test.ts tests/tui.chat.history.test.ts tests/tui.chat.metadata.test.ts tests/gateway.ws.test.ts --timeout 30000`
+- `bun test tests/cttl.core.test.ts tests/cttl.manifest.test.ts tests/runtime.executive.boundaries.test.ts tests/shell.hook.executor.test.ts tests/mcp.long.results.test.ts tests/mcp.schema.validate.test.ts tests/runtime.toolset.test.ts tests/channels.status.test.ts --timeout 30000`
 
 ### R5 External Kit Protocol
 
-状态：待开始。
+状态：进行中。
 
 目标：定义外部套件的安装、发现、权限、事件订阅和执行桥协议。
 
 任务：
 
-1. 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。
+1. 定义 external kit manifest：CLI/TUI/Gateway/Capability kit 的 source、scope、permissions、commands、events、control messages。（已落 protocol contract、builtin discovery snapshot、global/project JSONC load path 与坏 manifest control error）
 2. 保持所有 kit 通过 JSONC config / secrets provider / capability descriptor 接入。
 3. plugin、MCP、skill、user tool、subagent 统一进入 Executive registry；不允许套件绕过 sandbox。
 4. 制定 old-docs 归档清单，移动被 kit 协议替代的历史文档。
@@ -217,6 +230,8 @@ External Kits = CLI / TUI / Gateway channels / MCP / plugins / user tools / suba
 - `bun test tests/plugin.runner.test.ts tests/skill.schema.compat.test.ts tests/mcp.http.transport.test.ts --timeout 30000`
 - `bun run check`
 - `bun run build:binary`
+- `bun test tests/gateway.ws.test.ts tests/command.boundaries.test.ts --timeout 30000`
+- `bun test tests/docs.index.test.ts tests/todo.status.test.ts --timeout 30000`
 
 ### R6 Release Gate And Cleanup
 

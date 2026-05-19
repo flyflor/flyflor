@@ -382,6 +382,7 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 | [docs/gateway.channels.md](docs/gateway.channels.md)         | Gateway 与渠道矩阵                     |
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
+| [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
 | [docs/cli.commands.md](docs/cli.commands.md)                 | CLI 命令现状                           |

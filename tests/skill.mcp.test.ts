@@ -733,6 +733,136 @@ describe("Skill and MCP capability config", () => {
         expect(executions?.[0]?.error).toContain("inputSchema");
     });
 
+    test("runtime exposes and executes plugin capability descriptors through the Executive tool loop", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-plugin-capability-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await installTestPluginCapability(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{"text":"hello plugin"}}]}</flyflor_mcp_calls>',
+            "Plugin final.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    pluginApproval: ToolApprovalMode.Allow,
+                },
+            },
+            model,
+            sink,
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("use plugin capability"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Plugin final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "user", tool: "plugin.demo.echo" }),
+        ]);
+        const toolResultText = model.messages
+            .flat()
+            .filter((message) => message.role === ModelRole.User)
+            .map((message) => message.content)
+            .join("\n");
+        expect(toolResultText).toContain("hello plugin");
+        const catalogEvent = sink.events.find((item) => item.type === RuntimeEventType.McpCapabilityCatalogBuilt);
+        expect(catalogEvent?.payload).toMatchObject({
+            tools: expect.arrayContaining(["user.plugin.demo.echo"]),
+        });
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.PluginInvokeStart);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.PluginInvokeEnd);
+    });
+
+    test("runtime rejects plugin capability calls that violate input schema", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-plugin-schema-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await installTestPluginCapability(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{}}]}</flyflor_mcp_calls>',
+            "Plugin schema final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    pluginApproval: ToolApprovalMode.Allow,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("use malformed plugin capability"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Plugin schema final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "user", tool: "plugin.demo.echo" }),
+        ]);
+        const executions = reply.metadata?.mcpToolExecutions as TestMcpToolCallProvenance[] | undefined;
+        expect(executions?.[0]?.error).toContain("inputSchema");
+    });
+
+    test("runtime keeps plugin capability execution behind plugin sandbox approval", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-plugin-deny-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await installTestPluginCapability(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{"text":"blocked"}}]}</flyflor_mcp_calls>',
+            "Plugin denied final.",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    pluginApproval: ToolApprovalMode.Ask,
+                },
+            },
+            model,
+            sink,
+        );
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage("use denied plugin capability"),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            {
+                approveMcpToolCall: async () => false,
+            },
+        );
+
+        expect(reply.text).toBe("Plugin denied final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "user", tool: "plugin.demo.echo" }),
+        ]);
+        const executions = reply.metadata?.mcpToolExecutions as TestMcpToolCallProvenance[] | undefined;
+        expect(executions?.[0]?.error).toContain("not approved");
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.SandboxToolApprovalRequested);
+        expect(sink.events.map((item) => item.type)).toContain(RuntimeEventType.SandboxToolApprovalDenied);
+        expect(sink.events.map((item) => item.type)).not.toContain(RuntimeEventType.PluginInvokeStart);
+    });
+
     test("runtime executes structured MCP tool calls and uses tool results in the final answer", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-"));
         const paths = testPaths(root);
@@ -807,6 +937,51 @@ describe("Skill and MCP capability config", () => {
             resources: ["fake:file://notes.md"],
             tools: expect.arrayContaining(["fake.echo", "workspace.list"]),
         });
+    });
+
+    test("runtime returns MCP input schema violations through the Executive tool loop", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-mcp-schema-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const script = join(root, "fake.mcp.server.js");
+        await writeFile(script, fakeMcpServerScript({ requireEchoText: true }));
+        await upsertMcpServer(paths, {
+            args: [script],
+            command: process.execPath,
+            name: "fake",
+        });
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{}}]}</flyflor_mcp_calls>',
+            "Schema final.",
+        ]);
+        const runtime = new RuntimeModule(
+            {
+                ...baseConfig,
+                sandbox: {
+                    mcpToolApproval: ToolApprovalMode.Allow,
+                    mode: SandboxMode.Off,
+                },
+            },
+            model,
+            new NullEventSink(),
+        );
+
+        const reply = await runtime.handleMessage(gatewayMessage("use malformed fake echo"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Schema final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "fake", tool: "echo" }),
+        ]);
+        const executions = reply.metadata?.mcpToolExecutions as TestMcpToolCallProvenance[] | undefined;
+        expect(executions?.[0]?.error).toContain("inputSchema");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "inputSchema",
+        );
     });
 
     test("runtime skips MCP execution when approval is denied", async () => {
@@ -1181,6 +1356,66 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
+    test("runtime returns an ask when maxToolTurns is exhausted", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-tool-budget-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "one.txt"), "one\n");
+        await writeFile(join(root, "two.txt"), "two\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</flyflor_mcp_calls>',
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage("inspect with small budget"),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 1 },
+        );
+
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.text).toContain("工具调用预算已用完");
+        expect(reply.metadata?.mcpToolCalls).toBe(1);
+        expect(reply.metadata?.executiveToolLoop).toEqual(
+            expect.objectContaining({ stop: "ask", toolBudgetExhausted: true }),
+        );
+        expect(model.messages).toHaveLength(2);
+    });
+
+    test("runtime follows through on short confirmations by executing structured tool calls", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-short-confirm-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "todo.txt"), "confirmed follow-through\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"todo.txt"}}]}</flyflor_mcp_calls>',
+            "Done after reading todo.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("ok do it"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Done after reading todo.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "confirmed follow-through",
+        );
+    });
+
     test("runtime feeds CTTL loop guard diagnostics back after repeated failed tool calls", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-loop-guard-"));
         const paths = testPaths(root);
@@ -1189,7 +1424,7 @@ describe("Skill and MCP capability config", () => {
         const baseConfig = await loadConfigForPaths(paths);
         const repeatedFailure =
             '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"missing.txt"}}]}</flyflor_mcp_calls>';
-        const model = new SequencedModel([repeatedFailure, repeatedFailure, repeatedFailure, "Guard final.", "[]"]);
+        const model = new SequencedModel([repeatedFailure, repeatedFailure, repeatedFailure, repeatedFailure, "[]"]);
         const events = new CapturingSink();
         const runtime = new RuntimeModule(baseConfig, model, events);
 
@@ -1198,11 +1433,15 @@ describe("Skill and MCP capability config", () => {
             now: new Date().toISOString(),
         });
 
-        expect(reply.text).toBe("Guard final.");
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.text).toContain("执行层连续遇到工具阻断");
         expect(reply.metadata?.mcpToolExecutions).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ ok: false, server: "workspace", tool: "read" }),
             ]),
+        );
+        expect(reply.metadata?.executiveToolLoop).toEqual(
+            expect.objectContaining({ loopGuardReason: "repeated-call-no-progress", stop: "ask" }),
         );
         const toolResultText = model.messages
             .flat()
@@ -1223,6 +1462,7 @@ describe("Skill and MCP capability config", () => {
                 }),
             ]),
         );
+        expect(model.messages.at(-1)?.[0]?.content).toContain("executiveToolLoop");
     });
 
     test("runtime keeps looping beyond the old small default until the model finalizes", async () => {
@@ -1381,7 +1621,7 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
-    test("runtime ignores unrecognized tool call shapes instead of aborting the turn", async () => {
+    test("runtime rejects unrecognized tool call shapes instead of silently dropping them", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-bad-shape-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -1393,13 +1633,31 @@ describe("Skill and MCP capability config", () => {
         ]);
         const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
 
-        const reply = await runtime.handleMessage(gatewayMessage("bad call shape"), {
-            requestId: crypto.randomUUID(),
-            now: new Date().toISOString(),
-        });
+        await expect(
+            runtime.handleMessage(gatewayMessage("bad call shape"), {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            }),
+        ).rejects.toThrow("Invalid MCP tool call at mcpCalls[0].calls[0]: missing server/tool identity.");
+    });
 
-        expect(reply.text).toBe("Visible before  visible after");
-        expect(reply.metadata?.mcpToolCalls).toBe(0);
+    test("runtime rejects malformed string arguments with a structured MCP call path", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-bad-args-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"not-json"}}]}</flyflor_mcp_calls>',
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        await expect(
+            runtime.handleMessage(gatewayMessage("bad call args"), {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            }),
+        ).rejects.toThrow("Invalid MCP tool call at mcpCalls[0].tool_calls[0].function.arguments: expected valid JSON object.");
     });
 
     test("workspace tools require approval for paths outside the project root", async () => {
@@ -1600,7 +1858,13 @@ describe("Skill and MCP capability config", () => {
         expect(deltas.join("")).toBe("visible-before  visible-after");
         expect(reply.text).toBe("visible-before  visible-after");
         expect(deltas.join("")).not.toContain("flyflor_mcp_calls");
-        expect(reply.metadata?.mcpToolCalls).toBe(0);
+        expect(reply.metadata?.kind).toBe("reply");
+        expect(reply.metadata?.mcpToolCalls).toBe(1);
+        expect(reply.metadata?.mcpToolExecutions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ ok: false, server: "fake", tool: "echo" }),
+            ]),
+        );
     });
 });
 
@@ -1627,7 +1891,10 @@ function testPaths(root: string): FlyflorPaths {
     };
 }
 
-function fakeMcpServerScript(): string {
+function fakeMcpServerScript(options: { requireEchoText?: boolean } = {}): string {
+    const echoInputSchema = options.requireEchoText
+        ? '{ type: "object", properties: { text: { type: "string" } }, required: ["text"] }'
+        : '{ type: "object", properties: { text: { type: "string" } } }';
     return `
 let buffer = Buffer.alloc(0);
 process.stdin.on("data", (chunk) => {
@@ -1664,7 +1931,7 @@ function handle(message) {
     return;
   }
   if (message.method === "tools/list") {
-    send({ jsonrpc: "2.0", id: message.id, result: { tools: [{ name: "echo", description: "Echo input text", inputSchema: { type: "object", properties: { text: { type: "string" } } } }] } });
+    send({ jsonrpc: "2.0", id: message.id, result: { tools: [{ name: "echo", description: "Echo input text", inputSchema: ${echoInputSchema} }] } });
     return;
   }
   if (message.method === "resources/list") {
@@ -1703,6 +1970,20 @@ process.stdin.on("data", (chunk) => {
 process.stdin.on("end", () => {
   const payload = JSON.parse(body);
   process.stdout.write(JSON.stringify({ echoed: payload.input?.text ?? null, tool: payload.tool }) + "\\n");
+});
+`;
+}
+
+function pluginCapabilityScript(): string {
+    return `
+let body = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  body += chunk;
+});
+process.stdin.on("end", () => {
+  const payload = JSON.parse(body);
+  process.stdout.write(JSON.stringify({ echoed: payload.input?.text ?? null, capability: payload.capability }) + "\\n");
 });
 `;
 }
@@ -1906,6 +2187,37 @@ async function installRuntimeTestSkill(paths: FlyflorPaths): Promise<void> {
             "",
             "Keep answers concise.",
         ].join("\n"),
+    );
+}
+
+async function installTestPluginCapability(paths: FlyflorPaths): Promise<void> {
+    await mkdir(paths.projectPluginDir, { recursive: true });
+    await writeFile(join(paths.projectPluginDir, "echo.plugin.js"), pluginCapabilityScript());
+    await writeFile(
+        join(paths.projectPluginDir, "plugins.json"),
+        JSON.stringify({
+            plugins: {
+                demo: {
+                    entry: "./echo.plugin.js",
+                    capabilities: {
+                        echo: {
+                            description: "Echo plugin input",
+                            inputSchema: {
+                                type: "object",
+                                properties: { text: { type: "string" } },
+                                required: ["text"],
+                            },
+                            permission: CttlPermission.Execute,
+                            scope: [CttlToolScope.Local],
+                            category: CttlToolCategory.System,
+                            readOnly: false,
+                            concurrencySafe: false,
+                            exclusive: true,
+                        },
+                    },
+                },
+            },
+        }),
     );
 }
 

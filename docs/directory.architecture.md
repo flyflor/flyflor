@@ -57,7 +57,7 @@ docs/
 | `src/cognitive/crystal` | Cognitive / Crystal | Gem、反思、drift、长期方法论沉淀 |
 | `src/cognitive/hippocampus` | Cognitive / Hippocampus | 工作记忆、遗忘曲线、brain.db、记忆生命周期 |
 | `src/executive` | Executive | Capability / Tool / Trust / Loop 的内核类型、registry、planner、guard |
-| `src/agent/runtime` | Runtime orchestration | turn 编排、上下文装配、事件发布；逐步只消费 cognitive / executive / events |
+| `src/agent/runtime` | Runtime orchestration | turn 编排、事件发布与 Executive adapter；prompt 装配归 `src/agent/context`，工具闭环归 `src/executive` |
 | `src/agent/gateway` | Surface adapter | channel 入站归一、出站投递、control WS；不调用模型 |
 | `src/events` | RECL / Event Fabric | RuntimeEvent 类型、分类、bus、sink、hook 注册和订阅广播中枢 |
 | `src/protocol/control` | RECL / Gateway control | WS/control envelope，不写 TUI 私有协议 |
@@ -81,13 +81,15 @@ docs/
 | `src/agent/skills` | `src/agent/skills`（历史 `src/skills` 已移除） | 已迁移；新代码禁止回写旧路径 |
 | `src/agent/context` | `src/agent/context`（历史 `src/context` 已移除） | 已迁移；新代码禁止回写旧路径 |
 
+R4 完成后，`src/command`、`src/agent/gateway` 仍保留 first-party CLI/TUI/Gateway 实现，但它们不再是核心私有协议边界：CLI/TUI 本地直连只允许集中在 `src/command/runtime.adapter.ts` 与 `src/command/state.adapter.ts`，Gateway 外部契约是 `/ws` control/event envelope。真正 external kit 的安装、发现和权限 manifest 进入 R5，不在 Runtime 目录继续加私有桥。
+
 迁移完成前，未完成目录必须同时说明“目标目录”和“当前物理路径”；已迁移目录必须明确历史旧路径已移除，不能让读者误以为旧路径仍承载实现。
 
 ## 文件命名约定
 
 - 目录入口统一 `index.ts`，只做 barrel export。
 - 单 owner 目录使用短名：`component.ts`、`module.ts`、`store.ts`、`types.ts`、`manager.ts`、`adapter.ts`。
-- 同目录多 owner 才使用限定前缀，例如 `brain.event.repo.ts`。
+- 同目录多 owner 先拆 owner 子目录；只有无法继续拆分时才使用限定前缀。
 - 大模块按生命周期或职责拆子目录，例如 `memory/dream/worker.ts`、`runtime/streaming/visibility.ts`。
 - 提示词、脚本和测试辅助同样使用点分后缀，例如 `blackboard.route.md`、`build.docker.binary.ts`。
 - 禁止新增连字符或下划线命名仓库文件。

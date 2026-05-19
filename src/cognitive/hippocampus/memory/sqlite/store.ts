@@ -11,8 +11,7 @@ import type {
     MemorySearchRequest,
     MemorySearchResult,
 } from "../types.ts";
-import { SQLiteMemoryRepo } from "../../../../entities/memory/sqlite.memory.repo.ts";
-import type { PendingProjectOffer, PendingSkillOffer } from "../../../../entities/memory/index.ts";
+import { SQLiteMemoryRepo, type PendingProjectOffer, type PendingSkillOffer } from "../../../../entities/memory/index.ts";
 
 export type { PendingProjectOffer, PendingSkillOffer } from "../../../../entities/memory/index.ts";
 

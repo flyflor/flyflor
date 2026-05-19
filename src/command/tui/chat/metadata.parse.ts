@@ -219,13 +219,21 @@ export function readMcpTrace(entry: unknown): McpTrace | null {
     const record = readRecord(entry);
     if (!record) return null;
     const resultSummaryMeta = readRecord(record.resultSummaryMeta) ?? readRecord(record.summary);
+    const server = readMcpTraceString(record.server, "server");
+    const tool = readMcpTraceString(record.tool, "tool");
     return {
         ok: record.ok === true,
         resultText: readString(record.resultSummary) ?? readString(record.resultText) ?? renderMcpSummaryMeta(resultSummaryMeta),
         ...(resultSummaryMeta ? { resultSummaryMeta } : {}),
-        server: readString(record.server) ?? "",
-        tool: readString(record.tool) ?? "",
+        server,
+        tool,
     };
+}
+
+function readMcpTraceString(value: unknown, path: string): string {
+    const text = readString(value)?.trim();
+    if (!text) throw new Error(`Invalid MCP trace at ${path}: missing string.`);
+    return text;
 }
 
 function renderMcpSummaryMeta(meta: Record<string, unknown> | null): string {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { GatewayControlHub } from "../src/agent/gateway/control.ts";
+import { buildBuiltinExternalKitCatalog, loadExternalKitCatalog } from "../src/agent/gateway/kit/index.ts";
 import {
     createGatewayControlEnvelope,
     type GatewayControlEnvelope,
@@ -15,9 +16,12 @@ import {
     type GatewayReply,
 } from "../src/protocol/contracts/index.ts";
 import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
-import type { GatewayConfig } from "../src/config/index.ts";
+import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
 import type { StreamingDispatchOptions } from "../src/agent/gateway/channels/types.ts";
 import type { GatewayStatusSnapshot } from "../src/agent/gateway/channels/status.ts";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 class FakeSocket {
     public readonly sent: GatewayControlEnvelope[] = [];
@@ -62,9 +66,148 @@ describe("GatewayControlHub", () => {
                     eventStream: true,
                     protocol: "flyflor.ws.v1",
                 },
+                kits: {
+                    schemaVersion: 1,
+                    kits: [
+                        { id: "builtin.cli" },
+                        { id: "builtin.tui" },
+                        { id: "builtin.gateway" },
+                        { id: "builtin.capabilities" },
+                    ],
+                },
             },
         });
         hub.dispose();
+    });
+
+    test("exposes a stable built-in external kit catalog snapshot", () => {
+        const catalog = buildBuiltinExternalKitCatalog("2026-05-18T00:00:00.000Z");
+
+        expect(catalog).toMatchObject({
+            builtAt: "2026-05-18T00:00:00.000Z",
+            schemaVersion: 1,
+        });
+        expect(catalog.kits.map((kit) => kit.id)).toEqual([
+            "builtin.cli",
+            "builtin.tui",
+            "builtin.gateway",
+            "builtin.capabilities",
+        ]);
+        expect(catalog.kits[0]).toMatchObject({
+            kind: "cli",
+            permissions: expect.arrayContaining(["control", "event.subscribe", "gateway.message.send"]),
+        });
+    });
+
+    test("loads project kits over global kits and falls back to builtin when manifest is absent", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-manifest-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.kitDir!, { recursive: true });
+            await mkdir(paths.projectKitDir!, { recursive: true });
+            await writeFile(
+                join(paths.kitDir!, "kits.jsonc"),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    kits: {
+                        "global.cli": {
+                            id: "global.cli",
+                            kind: "cli",
+                            name: "Global CLI",
+                            source: "builtin",
+                            permissions: ["control"],
+                        },
+                    },
+                }),
+            );
+            await writeFile(
+                join(paths.projectKitDir!, "kits.jsonc"),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    kits: {
+                        "project.cli": {
+                            id: "project.cli",
+                            kind: "cli",
+                            name: "Project CLI",
+                            source: "project",
+                            permissions: ["control", "event.subscribe"],
+                        },
+                    },
+                }),
+            );
+
+            const catalog = await loadExternalKitCatalog(paths, "2026-05-18T00:00:00.000Z");
+            expect(catalog.kits.map((kit) => kit.id)).toEqual(["global.cli", "project.cli"]);
+
+            const emptyRoot = await mkdtemp(join(tmpdir(), "flyflor-kit-empty-"));
+            try {
+                const emptyPaths = testPaths(emptyRoot);
+                const builtin = await loadExternalKitCatalog(emptyPaths, "2026-05-18T00:00:00.000Z");
+                expect(builtin.kits.map((kit) => kit.id)).toEqual([
+                    "builtin.cli",
+                    "builtin.tui",
+                    "builtin.gateway",
+                    "builtin.capabilities",
+                ]);
+            } finally {
+                await rm(emptyRoot, { recursive: true, force: true });
+            }
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("rejects incompatible external kit manifest schema versions", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-version-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectKitDir!, { recursive: true });
+            await writeFile(
+                join(paths.projectKitDir!, "kits.jsonc"),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    kits: {},
+                }),
+            );
+
+            await expect(loadExternalKitCatalog(paths)).rejects.toThrow("schemaVersion must be 1.");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("reports invalid kit manifest as a control error during server hello", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-invalid-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectKitDir!, { recursive: true });
+            await writeFile(
+                join(paths.projectKitDir!, "kits.jsonc"),
+                JSON.stringify({
+                    kits: {
+                        broken: {
+                            kind: "cli",
+                            permissions: ["not-a-permission"],
+                        },
+                    },
+                }),
+            );
+            const hub = createHub({ paths });
+            const socket = fakeSocket();
+
+            hub.open(socket);
+            await waitForEnvelope(socket);
+
+            expect(sent(socket)[0]).toMatchObject({
+                type: GatewayControlMessageType.Error,
+                payload: {
+                    message: "kits.broken.permissions.0 must be a valid enum value.",
+                },
+            });
+            hub.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
     });
 
     test("subscribes to runtime events and publishes matching envelopes", async () => {
@@ -294,6 +437,15 @@ function sent(socket: GatewayControlSocket): GatewayControlEnvelope[] {
     return (socket as unknown as FakeSocket).sent;
 }
 
+async function waitForEnvelope(socket: GatewayControlSocket): Promise<void> {
+    for (let index = 0; index < 10; index += 1) {
+        if (sent(socket).length > 0) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+}
+
 function fakeConfig(patch: Partial<GatewayConfig> = {}): GatewayConfig {
     return {
         host: "127.0.0.1",
@@ -305,4 +457,29 @@ function fakeConfig(patch: Partial<GatewayConfig> = {}): GatewayConfig {
         stdio: false,
         ...patch,
     } as unknown as GatewayConfig;
+}
+
+function testPaths(root: string): FlyflorPaths {
+    return {
+        cacheDir: join(root, "cache"),
+        configDir: join(root, "config"),
+        home: join(root, "home"),
+        logDir: join(root, "logs"),
+        memoryDir: join(root, "memory"),
+        mcpDir: join(root, "mcp"),
+        pluginDir: join(root, "plugins"),
+        projectDir: join(root, "project"),
+        projectFlyflorDir: join(root, "project", ".flyflor"),
+        projectKitDir: join(root, "project", ".flyflor", "kits"),
+        projectMemoryDir: join(root, "project", ".flyflor", "memory"),
+        projectMcpDir: join(root, "project", ".flyflor", "mcp"),
+        projectPluginDir: join(root, "project", ".flyflor", "plugins"),
+        projectSkillDir: join(root, "project", ".flyflor", "skills"),
+        promptDir: join(root, "prompts"),
+        skillDir: join(root, "skills"),
+        storageDir: join(root, "storage"),
+        templateDir: join(root, "templates"),
+        workspaceDir: join(root, "workspace"),
+        kitDir: join(root, "kits"),
+    } as FlyflorPaths;
 }

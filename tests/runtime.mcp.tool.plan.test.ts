@@ -88,7 +88,10 @@ describe("RuntimeMcpToolPlanComponent", () => {
             channel: Channel.Stdio,
             pluginCapabilities: [
                 {
+                    entry: "./inspector.ts",
+                    enabled: true,
                     plugin: "inspector",
+                    source: "project",
                     descriptor: {
                         category: CttlToolCategory.Coding,
                         concurrencySafe: true,

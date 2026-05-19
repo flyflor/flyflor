@@ -32,6 +32,12 @@ export interface ReflectionBlackboardRun {
 export interface ReflectionWorkerInput {
     blackboardRun?: ReflectionBlackboardRun;
     context: RuntimeContext;
+    executiveToolLoop?: {
+        loopGuardReason?: string;
+        message: string;
+        stop: "ask";
+        toolBudgetExhausted?: true;
+    };
     message: GatewayMessage;
     provenance: MemoryEpisodeProvenance;
     visibleText: string;
@@ -55,7 +61,7 @@ export class ReflectionWorker {
     }
 
     public async dispatch(input: ReflectionWorkerInput): Promise<void> {
-        if (!this.shouldExtract(input.blackboardRun, input.provenance.mcpCalls)) {
+        if (!this.shouldExtract(input.blackboardRun, input.provenance.mcpCalls, input.executiveToolLoop)) {
             return;
         }
         try {
@@ -85,6 +91,7 @@ export class ReflectionWorker {
                     request: input.message.text,
                     requestId: input.context.requestId,
                     route: readRouteMetadata(input.blackboardRun?.metadata),
+                    executiveToolLoop: input.executiveToolLoop,
                     mcpCalls: input.provenance.mcpCalls,
                     skillNames: input.provenance.skillNames,
                 },
@@ -113,7 +120,9 @@ export class ReflectionWorker {
     private shouldExtract(
         run: ReflectionBlackboardRun | undefined,
         mcpCalls: MemoryEpisodeProvenance["mcpCalls"] = [],
+        executiveToolLoop?: ReflectionWorkerInput["executiveToolLoop"],
     ): boolean {
+        if (executiveToolLoop) return true;
         if ((mcpCalls ?? []).some((call) => call.ok)) {
             return true;
         }

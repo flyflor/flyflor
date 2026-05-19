@@ -18,6 +18,8 @@ import {
     type RuntimeEvent,
 } from "../../protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../../events/index.ts";
+import type { FlyflorPaths } from "../../config/index.ts";
+import { buildBuiltinExternalKitCatalog, loadExternalKitCatalog } from "./kit/index.ts";
 import type { GatewayStatusSnapshot } from "./channels/status.ts";
 import type { StreamingMessageDispatcher } from "./channels/types.ts";
 
@@ -27,6 +29,7 @@ export interface GatewayControlHubOptions {
     config: GatewayConfig;
     dispatch: StreamingMessageDispatcher;
     events: RuntimeEventBus;
+    paths?: FlyflorPaths;
     status: () => GatewayStatusSnapshot;
 }
 
@@ -92,16 +95,7 @@ export class GatewayControlHub implements EventSink {
 
     public open(socket: GatewayControlSocket): void {
         this.clients.add(socket);
-        this.send(socket, GatewayControlMessageType.ServerHello, {
-            clientId: socket.data.clientId,
-            connectedAt: socket.data.connectedAt,
-            capabilities: {
-                commands: [...this.handlers.keys()],
-                eventStream: true,
-                protocol: "flyflor.ws.v1",
-            },
-            status: this.options.status(),
-        });
+        void this.sendServerHello(socket).catch((error) => this.sendError(socket, undefined, error));
     }
 
     public close(socket: GatewayControlSocket): void {
@@ -253,6 +247,23 @@ export class GatewayControlHub implements EventSink {
                 }),
             ),
         );
+    }
+
+    private async sendServerHello(socket: GatewayControlSocket): Promise<void> {
+        const kits = this.options.paths
+            ? await loadExternalKitCatalog(this.options.paths)
+            : buildBuiltinExternalKitCatalog();
+        this.send(socket, GatewayControlMessageType.ServerHello, {
+            clientId: socket.data.clientId,
+            connectedAt: socket.data.connectedAt,
+            capabilities: {
+                commands: [...this.handlers.keys()],
+                eventStream: true,
+                protocol: "flyflor.ws.v1",
+            },
+            kits,
+            status: this.options.status(),
+        });
     }
 
     private sendError(socket: GatewayControlSocket, source: GatewayControlEnvelope | undefined, cause: unknown): void {

@@ -44,6 +44,8 @@ Executive 是能力外骨架，内部保留 `Capability / Tool / Trust / Loop` �
 
 Executive 的外骨架专章见 [cttl.exoskeleton.md](cttl.exoskeleton.md)。它是工具系统的架构契约，不替代 OOP + use composition、显式 DI、目录命名、零字符匹配等工程边界。
 
+R4 已把模型工具循环从 `RuntimeModule` 迁出：Runtime 只做 turn 编排与结果落盘，`src/agent/context` 装配 model messages，`ExecutiveToolRuntime` 负责 loop guard、调度和结果回灌，`RuntimeMcpToolExecutor` / `RuntimeMcpCapabilityReader` 作为迁移 adapter 连接 MCP、workspace/git/shell、user tool、plugin 以及 resource/prompt 受控读取。CLI/TUI/Gateway 当前仍是仓库内 first-party transport，但外部契约已经收敛到 event/control/ws；独立 External Kit manifest 与安装/发现协议进入 R5。
+
 ## 分层结构图
 
 ```mermaid
@@ -121,7 +123,7 @@ sequenceDiagram
     Flyflor->>WM: registerModelBackedBlackboardWorker
     Flyflor->>BB: new BlackboardModule(sqlite, events, WM)
     Flyflor->>RT: new RuntimeModule(config, model, events, BB)
-    Flyflor->>GW: new GatewayModule(config, adapters, RT, events)
+    Flyflor->>GW: new GatewayModule(config, adapters, RT, events, dedup, paths)
     Flyflor->>DC: bindSingleton 全部 token
     Flyflor-->>CLI: FlyFlor 实例
     CLI->>Flyflor: start()
@@ -185,7 +187,7 @@ SQLite 数据访问按 `entity/repo -> store -> component` 分层：
 - 模块内 `store.ts`：数据库连接生命周期、schema 初始化、事务组合、backup / recovery；当一个模块有多个 store，用子目录表达语义后仍命名为 `store.ts`，例如 `src/cognitive/hippocampus/memory/brain/store.ts`。
 - `component.ts`：模块唯一组件 owner，向 runtime / cognitive 子层暴露能力边界；同目录多组件时才使用限定前缀。
 
-Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `src/entities/memory/brain.*.repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
+Repo SQL 统一使用 `query\`SELECT ... ${value}\`` tagged template，插值只会生成 SQLite `?` 参数；表名、列名、排序字段必须留在 repo 内部字面量中。当前 `brain.db` 的 event、state、project、task plan、context fork、scene record、summary、link、codename、EQ state 已迁移到 `src/entities/memory/brain/<owner>/repo.ts`，BrainStore 只保留单库生命周期、schema 初始化和对外门面。
 
 ## 模块边界硬约束
 

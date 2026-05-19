@@ -159,7 +159,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
     const runtime = options.runtime ?? new RuntimeModule(config, model, events, blackboard, memory);
     const eventDisposers = registerRuntimeEventHandlers(config, events);
     const adapters = new AdaptersComponent(options.adapters ?? createChannelAdapters(config.gateway));
-    const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters.asMap(), runtime, events);
+    const gateway = options.gateway ?? new GatewayModule(config.gateway, adapters.asMap(), runtime, events, undefined, config.paths);
     const container = options.container ?? new DependencyContainer();
 
     return {

@@ -162,9 +162,9 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 ## 4.3 数据模型与 SQL Repo
 
 - SQLite 访问分三层：`src/entities/**/*.repo.ts` 是表模型 + SQL function，模块内 `store.ts` 负责连接生命周期 / schema / 事务组合，模块 `component.ts` 对上表达能力边界。
-- `*.entity.ts` 是 data entity layer，只负责 row / record 映射、JSON 列编解码和轻量 shape 校验，不写 SQL；目录已唯一表达领域时使用短名，例如 `src/entities/blackboard/entity.ts` / `repo.ts`；同一目录包含多张表时才使用 `brain.event.entity.ts`、`brain.event.repo.ts` 这类表名前缀。
+- `*.entity.ts` 是 data entity layer，只负责 row / record 映射、JSON 列编解码和轻量 shape 校验，不写 SQL；目录已唯一表达领域时使用短名，例如 `src/entities/blackboard/entity.ts` / `repo.ts`；同一目录包含多张表时优先用子目录表达表 owner，例如 `src/entities/memory/brain/event/entity.ts` / `repo.ts`。
 - Repo 不是 service 层：不得调用 LLM、prompt、runtime、gateway、TUI 或业务决策；只能接收结构化 DTO、执行 SQL、映射 row。
-- 新增表或高频 SQL 必须优先建立 `src/entities/<domain>/tablename.repo.ts`，例如 `brain.event.repo.ts`、`brain.state.repo.ts`、`brain.summary.repo.ts`、`local.crystal.repo.ts`；确实跨领域公用的 repo 才放 `src/entities/repo/`。
+- 新增表或高频 SQL 必须优先建立 `src/entities/<domain>/<table-owner>/repo.ts`，例如 `src/entities/memory/brain/event/repo.ts`、`src/entities/memory/brain/state/repo.ts`、`src/entities/memory/brain/summary/repo.ts`；确实跨领域公用的 repo 才放 `src/entities/repo/`。
 - 新增 repo SQL 必须使用 `query\`SELECT ... ${value}\`` tagged template；插值只允许值参数并转成 SQLite `?`，禁止字符串拼接值进入 SQL。
 - 表名、列名和排序字段必须是 repo 内部字面量。确需动态 identifier 时先设计白名单 helper 和测试，不能直接插值用户输入。
 - `brain.db` 热路径仍保持单库；低频详情可以由 repo 写 sidecar，但 `brain.db` 必须保留摘要索引和可恢复审计。

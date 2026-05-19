@@ -13,6 +13,8 @@ import type { MemoryEpisodeProvenance, MemoryModule } from "../src/cognitive/hip
 import { ReflectionThreadRunner, type ReflectionThreadWorkerLike, type ReflectionNormalizeSource } from "../src/agent/runtime/index.ts";
 import { normalizeReflectionRaw } from "../src/agent/runtime/index.ts";
 import type { BlackboardDecision } from "../src/agent/blackboard/index.ts";
+import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
+import { join } from "node:path";
 
 class CapturingSink implements EventSink {
     public readonly events: Array<{ type: string; payload?: unknown }> = [];
@@ -87,6 +89,7 @@ const baseBlackboard: ReflectionBlackboardRun = {
 
 describe("ReflectionWorker", () => {
     test("dispatches candidates into memory when blackboard reflection is warranted", async () => {
+        await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);
         const sink = new CapturingSink();
         const memory = new StubMemory();
         const runner = new ReflectionThreadRunner({
@@ -120,6 +123,7 @@ describe("ReflectionWorker", () => {
     });
 
     test("skips reflection when no signal is present", async () => {
+        await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);
         const sink = new CapturingSink();
         const memory = new StubMemory();
         const worker = new ReflectionWorker({
@@ -141,6 +145,7 @@ describe("ReflectionWorker", () => {
     });
 
     test("publishes failure when model extraction throws", async () => {
+        await loadPromptTemplates({ promptDir: join(import.meta.dir, "..", "templates", "prompts") } as never);
         const sink = new CapturingSink();
         const memory = new StubMemory();
         const worker = new ReflectionWorker({

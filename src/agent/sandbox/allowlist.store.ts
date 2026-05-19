@@ -15,7 +15,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
-import { parseJsonc } from "../mcp/index.ts";
+import { parseJsonc } from "../../config/index.ts";
 
 export interface SandboxAllowlistFile {
     pluginCommands: string[];
@@ -112,16 +112,15 @@ function bucketFor(file: SandboxAllowlistFile, kind: SandboxAllowKind): string[]
 async function readAllowlistFile(path: string): Promise<SandboxAllowlistFile> {
     const file = Bun.file(path);
     if (!(await file.exists())) return emptyAllowlist();
-    try {
-        const parsed = parseJsonc(await file.text()) as Record<string, unknown>;
-        return {
-            pluginCommands: toStringArray(parsed.pluginCommands),
-            shellCommands: toStringArray(parsed.shellCommands),
-            mcpTools: toStringArray(parsed.mcpTools),
-        };
-    } catch {
-        return emptyAllowlist();
+    const parsed = parseJsonc(await file.text()) as Record<string, unknown>;
+    if (!isRecord(parsed)) {
+        throw new Error(`sandbox allowlist must be a JSON object: ${path}`);
     }
+    return {
+        pluginCommands: readStringArrayField(parsed.pluginCommands, `${path}.pluginCommands`),
+        shellCommands: readStringArrayField(parsed.shellCommands, `${path}.shellCommands`),
+        mcpTools: readStringArrayField(parsed.mcpTools, `${path}.mcpTools`),
+    };
 }
 
 async function writeAllowlistFile(path: string, payload: SandboxAllowlistFile): Promise<void> {
@@ -130,8 +129,11 @@ async function writeAllowlistFile(path: string, payload: SandboxAllowlistFile): 
     await Bun.write(path, `${json}\n`);
 }
 
-function toStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) return [];
+function readStringArrayField(value: unknown, field: string): string[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        throw new Error(`${field} must be a JSON array.`);
+    }
     return [...new Set(value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0))]
         .map((entry) => entry.trim())
         .sort();
@@ -143,4 +145,8 @@ function mergeUnique(a: string[], b: string[]): string[] {
 
 function emptyAllowlist(): SandboxAllowlistFile {
     return { pluginCommands: [], shellCommands: [], mcpTools: [] };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }

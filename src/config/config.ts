@@ -18,6 +18,7 @@ import {
     ToolApprovalMode,
     type ToolApprovalMode as ToolApprovalModeType,
 } from "../protocol/contracts/index.ts";
+import { stripJsonc } from "./jsonc.ts";
 
 export { ConfigComponent } from "./component.ts";
 
@@ -45,6 +46,7 @@ export interface FlyflorPaths {
     cacheDir: string;
     projectDir: string;
     projectFlyflorDir: string;
+    projectKitDir?: string;
     projectSkillDir: string;
     projectMcpDir: string;
     projectPluginDir: string;
@@ -52,6 +54,7 @@ export interface FlyflorPaths {
     workspaceDir: string;
     logDir: string;
     memoryDir: string;
+    kitDir?: string;
     pluginDir: string;
     promptDir: string;
     skillDir: string;
@@ -1270,6 +1273,7 @@ function resolvePaths(): FlyflorPaths {
         cacheDir: join(xdgCache, "flyflor"),
         projectDir,
         projectFlyflorDir,
+        projectKitDir: join(projectFlyflorDir, "kits"),
         projectSkillDir: join(projectFlyflorDir, "skills"),
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),
@@ -1277,6 +1281,7 @@ function resolvePaths(): FlyflorPaths {
         workspaceDir: join(configDir, "workspace"),
         logDir: join(configDir, "logs"),
         memoryDir: join(configDir, "memory"),
+        kitDir: join(configDir, "kits"),
         pluginDir: join(configDir, "plugins"),
         promptDir: join(configDir, "prompts"),
         skillDir: join(configDir, "skills"),
@@ -1321,6 +1326,8 @@ async function ensureDirectories(paths: FlyflorPaths): Promise<void> {
             paths.workspaceDir,
             paths.logDir,
             paths.memoryDir,
+            paths.kitDir,
+            paths.projectKitDir,
             paths.pluginDir,
             paths.promptDir,
             paths.skillDir,
@@ -1345,59 +1352,6 @@ async function readConfigFile(configDir: string): Promise<ConfigFileShape> {
     } catch (error) {
         throw new Error(`Invalid config file ${path}: ${String(error)}`);
     }
-}
-
-function stripJsonc(input: string): string {
-    let output = "";
-    let inString = false;
-    let quote = "";
-    let escaped = false;
-
-    for (let index = 0; index < input.length; index += 1) {
-        const char = input[index]!;
-        const next = input[index + 1];
-
-        if (inString) {
-            output += char;
-            if (escaped) {
-                escaped = false;
-            } else if (char === "\\") {
-                escaped = true;
-            } else if (char === quote) {
-                inString = false;
-                quote = "";
-            }
-            continue;
-        }
-
-        if (char === '"' || char === "'") {
-            inString = true;
-            quote = char;
-            output += char;
-            continue;
-        }
-
-        if (char === "/" && next === "/") {
-            while (index < input.length && input[index] !== "\n") {
-                index += 1;
-            }
-            output += "\n";
-            continue;
-        }
-
-        if (char === "/" && next === "*") {
-            index += 2;
-            while (index < input.length && !(input[index] === "*" && input[index + 1] === "/")) {
-                index += 1;
-            }
-            index += 1;
-            continue;
-        }
-
-        output += char;
-    }
-
-    return output.replace(/,\s*([}\]])/g, "$1");
 }
 
 function env(name: string): string | undefined {

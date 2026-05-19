@@ -296,9 +296,11 @@ describe("ShellHookExecutor", () => {
         });
         const result = await exec.execute(SPEC);
         expect(result.ok).toBe(false);
-        expect(result.error).toBe("shell-hook test-hook was not approved");
+        expect(result.error).toBe("shell-hook approval failed: approve-boom");
         expect(spawned).toBe(false);
         expect(sink.types()).toContain(RuntimeEventType.SandboxToolApprovalDenied);
+        expect(sink.events.find((event) => event.type === RuntimeEventType.SandboxToolApprovalDenied)?.payload)
+            .toMatchObject({ approvalError: "approve-boom", reason: "approval-error" });
     });
 
     test("[chaos] events sink throwing surfaces the error", async () => {
