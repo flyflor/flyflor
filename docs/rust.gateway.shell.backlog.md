@@ -112,9 +112,9 @@ Rust 外壳的目标职责：
 1. 读取 `turn.final.reply.metadata.executiveToolLoop`
 2. ask 组件局部回退读取 `ask.executiveToolLoop`
 3. 消费事件：
-   - `cttl.long_horizon_loop.paused`
-   - `cttl.long_horizon_loop.resumed`
-   - `cttl.loop.guard.blocked`
+   - `executive.loop.paused`
+   - `executive.loop.resumed`
+   - `executive.loop.guard.blocked`
 4. 为当前 pending loop 渲染恢复状态
 
 完成标准：

@@ -2,11 +2,31 @@
 
 ## 当前状态
 
-状态：R0-R6 已完成。R7/R8 对应的 Bun 内核封板已经通过当前 `kernel:seal` 门禁：`docs:check`、`check`、deterministic tests、smoke、build、`test:live` 与 `smoke:agent:live` 全绿。主线 Gateway 只保留 WS/control/event 血管与外部 kit 只读发现。`abandon/` 只作为废弃代码备份，不允许主线 import / re-export / 运行时依赖。
+状态：R0-R10 主阶段已完成，当前进入收口校准期。主线 Gateway 只保留 WS/control/event 血管与外部 kit 只读发现。`abandon/` 只作为废弃代码备份，不允许主线 import / re-export / 运行时依赖。
 
 本轮补充进展：
 
 - 活跃主文档已经开始统一收口到 “Bun 内核 + 最小 WS 血管 + Rust 外骨骼壳” 叙述。
+- 已新增 `bun run gateway` 与 `bun run gateway:dev`，固定源码态最小 Gateway 启动与 watch 调试入口，避免继续复用历史 CLI/TUI 脚本面。
+- 已为 `src/agent/gateway/module.ts` 与 `src/agent/gateway/control.ts` 增加最小结构化调试日志，当前可直接定位启动、HTTP、WS upgrade、message type、turn final/error 与协议错误层级。
+- 已改为外挂调试脚本 `scripts/gateway.dev.sh`：启动前清理 `./.config/logs/gateway.dev/current.log`，并为每轮单独保存 `session.*.log`，避免旧报错污染当前排查。
+- 当前手动验证显示：`bun run gateway` 入口已生效；本轮观察到的启动失败是 `127.0.0.1:8788` 端口占用，日志已能直接打印 `start.requested/start.failed` 与原因。
+- 已在 `tests/tui.chat.history.test.ts` 补充未来 Rust TUI 渲染用的对话历史夹具：新增 `deep-think` 场景回放数据，以及 `blackboard` 收敛回放数据，覆盖 context fork / task plan / scene detail 三类侧栏输入。
+- 已在 `src/agent/gateway/control.ts` / `src/protocol/control/envelope.ts` 正式补齐 `history.list -> history.snapshot`，Gateway 直接复用现有持久化历史读取，不新增额外思考/会话逻辑层。
+- 已把 `history.list` / `history.snapshot` 对齐成全局 brain ledger 读取：不再接收 `userId`，不引入 session / scope 语义，project / fork / scene 只作为 turn 结构化附着返回。
+- 已把 `docs/ws.doc.md` 改为正式历史接口文档，不再把历史读取表述成“临时方案”。
+- 已把 brain 存储主线改为“当前月 live + 月冷库 archive + brain.catalog.db”三层：
+  - `~/.flyflor/.config/brain.db`：当前月 live 全量 brain
+  - `~/.flyflor/.config/brain/archive/brain.YYYY-MM.db`：按月封存的全量冷库
+  - `~/.flyflor/.config/brain/catalog/brain.catalog.db`：跨月 entity locator / shard catalog
+- 已修正 `BrainStore` live shard 语义：live 月份由 `brain_meta.live_month_key` 显式维护，不再被历史事件时间戳倒带。
+- 已重写 `scripts/brain.archive.ts` 与 runtime `runBrainArchiveOnce` 对应实现：不再做旧的 `state='archived'` 按行搬运，而是对 stale live brain 做整库月封存。
+- 已新增 / 修正归档与历史守护测试：
+  - `tests/brain.archive.test.ts`
+  - `tests/brain.store.test.ts`
+  - `tests/tui.chat.history.test.ts`
+  - `tests/gateway.ws.test.ts`
+  - `tests/protocol.control.test.ts`
 - `README.md`、`docs/runtime.turn.md`、`docs/blackboard.md`、`docs/memory.system.md`、`docs/boundaries.md`、`docs/architecture.md`、`docs/reference/README.md` 已补齐当前主线与归档区边界说明。
 - 已新增最小 `GatewayModule` 血管面测试，覆盖 `/health`、`/channels`、未就绪 `/ws` 与 404 错误面。
 - `docs/control.protocol.md` 已补齐 Rust 最小接线顺序、ask/todo/data 读取优先级、loop snapshot 读取顺序与稳定错误码说明。
@@ -22,6 +42,7 @@
 当前主线目标：
 
 - 保持 `src/agent/gateway` 只承载 WebSocket control/event 传输、最小 `GatewayModule`、dedup 和只读 kit catalog。
+- 保持源码调试入口也只暴露 `chat` 与 `gateway` 两条主线，避免旧 CLI/TUI/doctor/status 脚本面继续误导 Rust 外壳接线。
 - 把未来 Rust CLI / Gateway / TUI 对接所需的协议面冻结在 `src/protocol/control/*` 与 `docs/control.protocol.md`。
 - 所有后续电脑控制、长线 loop、ask/todo/data 协议扩展，都先围绕 event 血管和 WS envelope 做，不回流到第一方 CLI/TUI/channel adapter。
 - 当前内核封板门禁以 `kernel:seal` 为准，并已在真实 provider 下跑通：`docs:check`、`check`、deterministic tests、smoke、build、live tests 全绿。
@@ -54,6 +75,8 @@ Flyflor 当前主线继续以 **Cognitive-Executive-Agent Architecture** 为核�
 - 已将版本读取能力回收到 `src/version.ts`。
 - 已将构建入口改成只编译 `app.ts`，不再编译 TUI parser worker。
 - 已把活跃主文档第一轮收紧到 “Bun 主线只保留 stdio 调试入口 + 最小 Gateway 血管，第一方壳体后续由 Rust 通过 `/ws` 对接”。
+- 已新增 `docs/ws.doc.md`，按真实 message type / 请求响应 / 错误码 / `turn.final` metadata 展开详细 WebSocket API 文档，并显式引用 `tests/gateway.ws.test.ts`、`tests/protocol.control.test.ts`、`tests/gateway.module.test.ts` 作为契约守护来源。
+- 已把 `history.list` / `history.snapshot` 并入最小 WS 血管面，后续 Rust TUI 不必猜 DB schema 即可走标准协议拿历史对话。
 - 已新增 `tests/gateway.module.test.ts`，锁定最小 GatewayModule 的 HTTP/WS 边界。
 
 下一轮（滚动）：
@@ -95,6 +118,8 @@ Flyflor 当前主线继续以 **Cognitive-Executive-Agent Architecture** 为核�
 - 已把 Rust 最小接线顺序、lane-first 读取约定、loop snapshot 双表面读取约定写入 `docs/control.protocol.md`。
 - 已新增守护测试，确保协议文档持续包含 Rust 读取主线与稳定错误码约定。
 - 已把 `client.hello`、`gateway.status.get`、`event.subscribe/unsubscribe` 的稳定 ack/snapshot/filter 行为补进协议文档与 `GatewayControlHub` 测试。
+- 已把 `history.list` 的 payload 校验、`history.snapshot` 的分页返回和 `data` semantic lane 分类补进协议与 gateway 测试。
+- 已把 `history.list` 从旧的 `payload.userId` 语义切回全局流水账语义；Rust / DIY 客户端不再需要伪造 session/user 维度。
 - 已为协议文档补 snapshot 分层矩阵与单一 error section 守护，避免连接级/turn 级/事件级信息在后续手册里重新混层。
 - 已为 runtime event 文档补“事件矩阵”与事件分类守护，明确哪些事件只做时间线提示，哪些状态仍必须回到 `turn.final.reply.metadata` 读取。
 - 已把 control/event 冻结结果收束成独立 Rust handoff 手册，后续 Rust `gateway/channel/cli/tui` 可直接按该手册接线，不必在多篇文档间拼接主流程。
@@ -175,8 +200,8 @@ R9 收口结论：
   - `toolBudgetExhausted`
 - 已在 `turn.final.reply.metadata` 与 `turn.final.reply.metadata.ask` 同步暴露 `executiveToolLoop`，方便 Rust UI 直接恢复当前 pending loop 状态。
 - 已新增并发布 R10 事件契约：
-  - `cttl.long_horizon_loop.paused`
-  - `cttl.long_horizon_loop.resumed`
+  - `executive.loop.paused`
+  - `executive.loop.resumed`
 - 已把恢复语义收敛为“用户显式回答 pending ask 后，再由下一轮结构化输入继续”，不引入后台自动续跑 worker。
 - 已补齐协议、runtime、gateway、memory 与文档测试，确保 ask/todo/data/event 仍是唯一稳定语义面。
 
@@ -185,6 +210,15 @@ R10 收口结论：
 - WS 继续作为长线 loop 的基础血管协议，性能与复杂度在当前阶段足够。
 - 长线 loop 不新增复杂 transport；只复用现有 `turn.final` + event stream。
 - Rust CLI / Gateway / TUI 后续只需读取 `executiveToolLoop` snapshot 和 R10 事件，即可接管暂停/恢复 UI。
+
+## 当前校准项
+
+状态：进行中
+
+1. 文档命名继续从历史 `CTTL` 术语收口到 `Executive` 术语。
+2. 活跃文档中的“cross session / userId history / archived rows”残留叙述继续清理。
+3. `cttl.exoskeleton.md` 文件名仍是历史名称，内容已切换为 Executive；后续需要在不打断引用的前提下统一文件名。
+4. 继续排查源码中的历史 CTTL 文案、类型名和测试名，逐步对齐到更清晰的 Executive 命名。
 
 ## 红线
 

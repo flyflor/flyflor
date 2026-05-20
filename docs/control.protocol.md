@@ -48,7 +48,7 @@ Rust 或其他 thin client 应先看 semantic lane，再决定 UI 或状态机�
 | `event` | 事件广播与订阅控制 | `event.publish` `event.subscribe` `event.unsubscribe` |
 | `ask` | 服务端要求用户补回答案 | 当前附着在 `turn.final.reply.metadata.ask` |
 | `todo` | 结构化任务计划与进度 | 当前附着在 `turn.final.reply.metadata.planning.taskPlans` |
-| `data` | 只读状态或上下文快照 | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` 以及 `turn.final.reply.metadata.planning` |
+| `data` | 只读状态或上下文快照 | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.list` `history.snapshot` 以及 `turn.final.reply.metadata.planning` |
 | `error` | 机器可读控制面错误 | `error` |
 | `ping` | 心跳请求 | `ping` |
 | `pong` | 心跳响应 | `pong` |
@@ -68,6 +68,8 @@ Rust 或其他 thin client 应先看 semantic lane，再决定 UI 或状态机�
 - `gateway.message.send`
 - `gateway.status.get`
 - `gateway.status.snapshot`
+- `history.list`
+- `history.snapshot`
 - `ping`
 - `pong`
 - `server.hello`
@@ -126,6 +128,7 @@ Rust 或其他 thin client 应先看 semantic lane，再决定 UI 或状态机�
         "event.subscribe",
         "event.unsubscribe",
         "gateway.status.get",
+        "history.list",
         "gateway.message.send",
         "ping"
       ],
@@ -172,6 +175,12 @@ Rust 或其他 thin client 应先看 semantic lane，再决定 UI 或状态机�
 - 客户端可以在任意时刻主动请求一次连接级状态快照。
 - 服务端返回 `gateway.status.snapshot`。
 - 该 snapshot 与 `server.hello.payload.status` 同 shape，适合 Rust UI 在连接后主动刷新当前血管状态。
+
+`history.list` 当前稳定约定：
+
+- 客户端可以按 `userId + beforeTs + limit` 请求历史对话。
+- 服务端返回 `history.snapshot`。
+- 这条能力属于 gateway 血管面直接暴露的只读历史查询，不新增额外思考或会话层。
 
 ## 输入
 
@@ -401,6 +410,11 @@ snapshot 字段：
 - `turn.final.payload.reply.metadata.planning.scenes`
 - `turn.final.payload.reply.metadata.planning.taskPlans`
 
+历史数据快照：
+
+- `history.snapshot.payload.history`
+- `history.snapshot.payload.nextBeforeTs`
+
 额外约束：
 
 - `server.hello` / `gateway.status.snapshot` / `capability.catalog.snapshot` 是连接级只读 snapshot。
@@ -466,6 +480,7 @@ Rust / DIY client 应把当前协议面拆成三层读取，不要混用：
 | 层级 | 主要来源 | 读取位置 | 性质 | 用途 |
 | --- | --- | --- | --- | --- |
 | 连接级 snapshot | `server.hello` `gateway.status.snapshot` `capability.catalog.snapshot` `ack` | `payload.status` `payload.capabilities` `payload.kits` `payload.catalog` `payload.subscriptions` | 只读连接态 | 握手、连接状态、kit/capability 目录、订阅状态 |
+| 历史分页 snapshot | `history.snapshot` | `payload.history` `payload.nextBeforeTs` | 只读历史分页 | TUI 历史回放、blackboard/deep-think/task plan 回放 |
 | turn 级 snapshot | `turn.final` | `reply.metadata.ask` `reply.metadata.planning` `reply.metadata.executiveToolLoop` | 只读当前轮结果 | ask UI、todo/fork/scene 展示、long-horizon loop 恢复 |
 | 事件流 | `event.publish` | `payload.event` | 只读时间线 | 审计、观察、恢复提示、进度广播 |
 
@@ -498,18 +513,79 @@ Rust CLI / Gateway / TUI 的最小主循环建议固定为：
 
 1. 连接 `/ws`，接收 `server.hello`。
 2. 把 `server.hello.payload.status`、`server.hello.payload.capabilities`、`server.hello.payload.kits` 缓存成连接级 data snapshot。
-3. 发送 `gateway.message.send` 时附带结构化 `requestId`。
-4. 消费 `turn.delta` 渲染流式文本。
-5. 消费 `turn.final.reply.metadata.ask`、`turn.final.reply.metadata.planning`、`turn.final.reply.metadata.executiveToolLoop` 做 UI 状态恢复。
-6. 订阅 `event.publish`，用 `RuntimeEvent.type` 做时间线、审计和恢复提示。
-7. 消费 `error.payload.code` 做机器分支，不读 reply 文本猜测失败类型。
-8. 不做关键词、文本片段、消息正文匹配。
+3. 需要历史回放时，发送 `history.list`，缓存 `history.snapshot.payload.history` 与 `nextBeforeTs`。
+4. 发送 `gateway.message.send` 时附带结构化 `requestId`。
+5. 消费 `turn.delta` 渲染流式文本。
+6. 消费 `turn.final.reply.metadata.ask`、`turn.final.reply.metadata.planning`、`turn.final.reply.metadata.executiveToolLoop` 做 UI 状态恢复。
+7. 订阅 `event.publish`，用 `RuntimeEvent.type` 做时间线、审计和恢复提示。
+8. 消费 `error.payload.code` 做机器分支，不读 reply 文本猜测失败类型。
+9. 不做关键词、文本片段、消息正文匹配。
+
+## History
+
+### `history.list`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "history-list-1",
+  "type": "history.list",
+  "at": "2026-05-21T00:00:00.000Z",
+  "requestId": "req-history-1",
+  "payload": {
+    "limit": 20,
+    "beforeTs": 1747785600000
+  }
+}
+```
+
+约定：
+
+- `payload.limit` 可选
+- `payload.beforeTs` 可选
+- payload 缺失时，返回 `error`，`code=invalid-payload`
+- 这条接口读取的是全局历史流水账，不做 `userId` / session / scope 过滤
+
+### `history.snapshot`
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "history-snapshot-1",
+  "type": "history.snapshot",
+  "at": "2026-05-21T00:00:00.100Z",
+  "requestId": "req-history-1",
+  "correlationId": "history-list-1",
+  "payload": {
+    "nextBeforeTs": 1747785599999,
+    "history": [
+      {
+        "eventId": "event-1",
+        "ts": 1747785600000,
+        "userText": "hello",
+        "assistantText": "hi"
+      }
+    ]
+  }
+}
+```
+
+读取约定：
+
+- `payload.history` 是当前页历史 turn，按时间正序
+- `payload.nextBeforeTs` 是下一页建议游标
+- 这条接口只做持久化历史只读暴露，不做额外语义推断
+- history 是全局 brain ledger；project / event / fork 只是附着在 turn 上的结构化摘要，不是独立 session 容器
 
 R10 事件补充：
 
-- `cttl.long_horizon_loop.paused`: Executive 工具回路被预算上限或 loop guard 暂停。
-- `cttl.long_horizon_loop.resumed`: 用户回答 pending ask，runtime 记录恢复锚点。
-- `cttl.loop.guard.blocked`: 单次工具调用被 loop guard 阻断。
+- `executive.loop.paused`: Executive 工具回路被预算上限或 loop guard 暂停。
+- `executive.loop.resumed`: 用户回答 pending ask，runtime 记录恢复锚点。
+- `executive.loop.guard.blocked`: 单次工具调用被 loop guard 阻断。
 
 ## Ping / Pong
 

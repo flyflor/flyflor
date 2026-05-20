@@ -314,6 +314,8 @@ export const GatewayControlMessageType = {
     GatewayMessageSend: "gateway.message.send",
     GatewayStatusGet: "gateway.status.get",
     GatewayStatusSnapshot: "gateway.status.snapshot",
+    HistoryList: "history.list",
+    HistorySnapshot: "history.snapshot",
     Ping: "ping",
     Pong: "pong",
     ServerHello: "server.hello",

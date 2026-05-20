@@ -25,6 +25,7 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时内核，目标是单文件
 - `/channels`
 
 第一方 CLI/TUI/channel adapter 已从主源码剥离，保存在 `abandon/` 仅做备份。后续 Rust 客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
+需要按请求/响应字段直接调试 `/ws` 时，使用 [docs/ws.doc.md](docs/ws.doc.md)。
 
 ## 快速开始
 
@@ -80,8 +81,20 @@ bun run chat
 ./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
 ./dist/flyflor gateway
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
+bun run gateway      # 源码模式启动最小 Gateway：/ws /health /channels
+bun run gateway:dev  # dev 源码模式：同步模板后用 Bun watch 直接跑 gateway
+sh scripts/gateway.dev.sh # gateway dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
 ```
+
+推荐调试方式：
+
+- 直接运行 `sh scripts/gateway.dev.sh`
+- 脚本会在启动前清理 `./.config/logs/gateway.dev/current.log`
+- 同时把本轮输出保存到 `./.config/logs/gateway.dev/session.YYYYMMDD-HHMMSS.log`
+- 终端仍会实时看到完整输出
+
+这样每轮调试都是独立日志，不会把旧报错和新报错混在一起。
 
 说明：
 

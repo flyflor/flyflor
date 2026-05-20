@@ -315,8 +315,8 @@ export class RuntimeModule extends RuntimeBoundary {
         this.memory.dispose();
     }
 
-    public listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}) {
-        return this.memory.listChatHistory(userId, options);
+    public listChatHistory(options: { beforeTs?: number; limit?: number } = {}) {
+        return this.memory.listChatHistory(options);
     }
 
     public createOrUseProject(input: {
@@ -632,7 +632,7 @@ export class RuntimeModule extends RuntimeBoundary {
         });
         this.events.publish(
             event(
-                RuntimeEventType.CttlCapabilityCatalogBuilt,
+                RuntimeEventType.ExecutiveCapabilityCatalogBuilt,
                 capabilitySnapshot as unknown as Record<string, unknown>,
                 context.requestId,
             ),
@@ -832,7 +832,7 @@ export class RuntimeModule extends RuntimeBoundary {
         if (executiveAsk) {
             this.events.publish(
                 event(
-                    RuntimeEventType.CttlLongHorizonLoopPaused,
+                    RuntimeEventType.ExecutiveLoopPaused,
                     {
                         askId: generated.askRequired?.askId,
                         loopGuardReason: generated.askRequired?.loopGuardReason,

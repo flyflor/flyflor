@@ -75,6 +75,7 @@ describe("GatewayControlHub", () => {
                         GatewayControlMessageType.EventSubscribe,
                         GatewayControlMessageType.EventUnsubscribe,
                         GatewayControlMessageType.GatewayStatusGet,
+                        GatewayControlMessageType.HistoryList,
                         GatewayControlMessageType.GatewayMessageSend,
                         GatewayControlMessageType.Ping,
                     ]),
@@ -290,6 +291,36 @@ describe("GatewayControlHub", () => {
         }
     });
 
+    test("accepts history.list as a control-scoped command in kit manifests", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-history-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectKitDir!, { recursive: true });
+            await writeFile(
+                join(paths.projectKitDir!, "kits.jsonc"),
+                JSON.stringify({
+                    kits: {
+                        history: {
+                            commands: [GatewayControlMessageType.HistoryList],
+                            permissions: ["control"],
+                        },
+                    },
+                }),
+            );
+
+            const catalog = await loadExternalKitCatalog(paths);
+            expect(catalog.kits).toEqual([
+                expect.objectContaining({
+                    commands: [GatewayControlMessageType.HistoryList],
+                    id: "history",
+                    permissions: ["control"],
+                }),
+            ]);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("reports invalid kit manifest as a control error during server hello", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-kit-invalid-"));
         const paths = testPaths(root);
@@ -458,6 +489,55 @@ describe("GatewayControlHub", () => {
         hub.dispose();
     });
 
+    test("returns persisted history snapshots through history.list without routing through turn logic", async () => {
+        const hub = createHub({
+            listChatHistory: (input) => {
+                expect(input).toEqual({ beforeTs: 200, limit: 2 });
+                return [
+                    {
+                        assistantText: "Assistant 1",
+                        eventId: "event-1",
+                        ts: 100,
+                        userText: "User 1",
+                    },
+                    {
+                        assistantText: "Assistant 2",
+                        eventId: "event-2",
+                        ts: 200,
+                        userText: "User 2",
+                    },
+                ];
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.HistoryList,
+                    { beforeTs: 200, limit: 2 },
+                    { id: "history-list-1", requestId: "req-history-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "history-list-1",
+            requestId: "req-history-1",
+            type: GatewayControlMessageType.HistorySnapshot,
+            payload: {
+                history: [
+                    { assistantText: "Assistant 1", eventId: "event-1", ts: 100, userText: "User 1" },
+                    { assistantText: "Assistant 2", eventId: "event-2", ts: 200, userText: "User 2" },
+                ],
+                nextBeforeTs: 99,
+            },
+        });
+        hub.dispose();
+    });
+
     test("responds to ping with pong without affecting the connection snapshot surface", async () => {
         const hub = createHub();
         const socket = fakeSocket();
@@ -565,7 +645,7 @@ describe("GatewayControlHub", () => {
         });
 
         bus.publish({
-            type: RuntimeEventType.CttlCapabilityCatalogBuilt,
+            type: RuntimeEventType.ExecutiveCapabilityCatalogBuilt,
             at: "2026-05-18T12:00:00.000Z",
             requestId: "req-cttl",
             payload: {
@@ -851,6 +931,7 @@ function createHub(overrides: Partial<ConstructorParameters<typeof GatewayContro
             return { messageId: message.id, route: message.route, text: "final" };
         },
         events,
+        listChatHistory: () => [],
         status: () => ({
             channels: [],
             connectedCount: 0,

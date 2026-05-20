@@ -157,7 +157,7 @@ interface McpCallResult {
 
 | 事件 | 触发点 |
 | --- | --- |
-| `cttl.capability.catalog.built` | 本轮通用 capability plan 生成，包含 MCP、内置工具、user manifest tools 与 plugin manifest capabilities 的 descriptor 摘要 |
+| `executive.capability.catalog.built` | 本轮通用 capability plan 生成，包含 MCP、内置工具、user manifest tools 与 plugin manifest capabilities 的 descriptor 摘要 |
 | `mcp.capability.catalog.built` | 本轮 tools/resources/prompts capability plan 生成 |
 | `mcp.server.connected` / `disconnected` | client 生命周期 |
 | `mcp.catalog.refreshed` / `failed` | catalog 拉取 |

@@ -6,6 +6,7 @@ import {
     GatewayControlProtocolError,
     buildGatewayControlErrorPayload,
     buildGatewayControlGatewayStatusPayload,
+    buildGatewayControlHistorySnapshotPayload,
     buildGatewayControlPongPayload,
     buildGatewayControlServerHelloSnapshot,
     buildGatewayControlSurfaceCapabilities,
@@ -16,9 +17,12 @@ import {
     createGatewayControlEventEnvelope,
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
+    readGatewayControlHistoryListInput,
     readGatewayControlMessageInput,
     readGatewayControlSubscription,
     shouldDeliverGatewayControlEvent,
+    type GatewayControlHistoryListInput,
+    type GatewayControlHistoryTurnSnapshot,
     type GatewayControlEnvelope,
     type GatewayControlGatewayStatusSnapshot,
     type GatewayControlPeer,
@@ -84,6 +88,7 @@ export interface GatewayControlHubOptions {
     config: GatewayConfig;
     dispatch: GatewayControlMessageDispatcher;
     events: RuntimeEventBus;
+    listChatHistory: (input: GatewayControlHistoryListInput) => GatewayControlHistoryTurnSnapshot[];
     paths?: FlyflorPaths;
     status: () => GatewayControlTransportStatusSnapshot;
 }
@@ -123,6 +128,9 @@ export class GatewayControlHub implements EventSink {
         this.handlers.set(GatewayControlMessageType.GatewayStatusGet, (socket, envelope) =>
             this.handleGatewayStatusGet(socket, envelope),
         );
+        this.handlers.set(GatewayControlMessageType.HistoryList, (socket, envelope) =>
+            this.handleHistoryList(socket, envelope),
+        );
         this.handlers.set(GatewayControlMessageType.GatewayMessageSend, (socket, envelope) =>
             this.handleGatewayMessageSend(socket, envelope),
         );
@@ -132,6 +140,7 @@ export class GatewayControlHub implements EventSink {
 
     public upgrade(request: Request, server: Bun.Server<GatewayControlPeer>): Response | undefined {
         if (!this.authorize(request)) {
+            this.log("upgrade.denied", { url: request.url });
             return new Response(JSON.stringify({ error: "gateway_control_unauthorized" }), {
                 status: 401,
                 headers: { "content-type": "application/json; charset=utf-8" },
@@ -145,16 +154,19 @@ export class GatewayControlHub implements EventSink {
                 subscriptions: [],
             },
         });
+        this.log(ok ? "upgrade.accepted" : "upgrade.failed", { clientId, url: request.url });
         return ok ? undefined : new Response("gateway control upgrade failed", { status: 400 });
     }
 
     public open(socket: GatewayControlSocket): void {
         this.clients.add(socket);
+        this.log("socket.open", { clientId: socket.data.clientId, connectedAt: socket.data.connectedAt });
         void this.sendServerHello(socket).catch((error) => this.sendError(socket, undefined, error));
     }
 
     public close(socket: GatewayControlSocket): void {
         this.clients.delete(socket);
+        this.log("socket.close", { clientId: socket.data.clientId });
     }
 
     public async message(socket: GatewayControlSocket, raw: string | Buffer): Promise<void> {
@@ -162,11 +174,25 @@ export class GatewayControlHub implements EventSink {
         try {
             envelope = parseGatewayControlEnvelope(raw);
         } catch (error) {
+            this.log("message.invalid_envelope", {
+                clientId: socket.data.clientId,
+                message: error instanceof Error ? error.message : String(error),
+            });
             this.sendError(socket, undefined, error, GatewayControlErrorCode.InvalidEnvelope);
             return;
         }
+        this.log("message.received", {
+            clientId: socket.data.clientId,
+            id: envelope.id,
+            requestId: envelope.requestId,
+            type: envelope.type,
+        });
         const handler = this.handlers.get(envelope.type);
         if (!handler) {
+            this.log("message.unsupported", {
+                clientId: socket.data.clientId,
+                type: envelope.type,
+            });
             this.sendError(
                 socket,
                 envelope,
@@ -178,13 +204,19 @@ export class GatewayControlHub implements EventSink {
         try {
             await handler(socket, envelope);
         } catch (error) {
+            this.log("message.failed", {
+                clientId: socket.data.clientId,
+                id: envelope.id,
+                message: error instanceof Error ? error.message : String(error),
+                type: envelope.type,
+            });
             const code = error instanceof GatewayControlProtocolError ? error.code : GatewayControlErrorCode.Internal;
             this.sendError(socket, envelope, error, code);
         }
     }
 
     public publish(event: RuntimeEvent): void {
-        if (event.type === RuntimeEventType.CttlCapabilityCatalogBuilt && event.payload) {
+        if (event.type === RuntimeEventType.ExecutiveCapabilityCatalogBuilt && event.payload) {
             this.capabilityCatalog = event.payload;
         }
         const envelope = createGatewayControlEventEnvelope(event);
@@ -196,6 +228,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     public dispose(): void {
+        this.log("dispose", { clientCount: this.clients.size });
         this.unsubscribeEvents();
         for (const client of this.clients) {
             client.close();
@@ -204,6 +237,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     private handleClientHello(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+        this.log("client.hello", { clientId: socket.data.clientId, correlationId: envelope.id });
         this.send(socket, GatewayControlMessageType.Ack, buildGatewayControlAckPayload({
             clientId: socket.data.clientId,
             received: envelope.type,
@@ -217,6 +251,7 @@ export class GatewayControlHub implements EventSink {
         const kits = this.options.paths
             ? await loadExternalKitCatalogSnapshot(this.options.paths)
             : buildBuiltinExternalKitCatalog();
+        this.log("capability.catalog.snapshot", { clientId: socket.data.clientId });
         this.send(
             socket,
             GatewayControlMessageType.CapabilityCatalogSnapshot,
@@ -228,6 +263,10 @@ export class GatewayControlHub implements EventSink {
     private handleEventSubscribe(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
         const subscription = readGatewayControlSubscription(envelope.payload);
         socket.data.subscriptions = [...socket.data.subscriptions, subscription];
+        this.log("event.subscribe", {
+            clientId: socket.data.clientId,
+            subscriptionCount: socket.data.subscriptions.length,
+        });
         this.send(socket, GatewayControlMessageType.Ack, buildGatewayControlAckPayload({
             subscriptions: socket.data.subscriptions,
         }), envelope);
@@ -243,16 +282,41 @@ export class GatewayControlHub implements EventSink {
             }
             return false;
         });
+        this.log("event.unsubscribe", {
+            clientId: socket.data.clientId,
+            subscriptionCount: socket.data.subscriptions.length,
+        });
         this.send(socket, GatewayControlMessageType.Ack, buildGatewayControlAckPayload({
             subscriptions: socket.data.subscriptions,
         }), envelope);
     }
 
     private handleGatewayStatusGet(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+        this.log("gateway.status.get", { clientId: socket.data.clientId });
         this.send(
             socket,
             GatewayControlMessageType.GatewayStatusSnapshot,
             buildGatewayControlGatewayStatusPayload(this.protocolStatusSnapshot(this.options.status())),
+            envelope,
+        );
+    }
+
+    private handleHistoryList(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+        const input = readGatewayControlHistoryListInput(envelope.payload);
+        const history = this.options.listChatHistory(input);
+        this.log("history.snapshot", {
+            beforeTs: input.beforeTs,
+            clientId: socket.data.clientId,
+            count: history.length,
+            limit: input.limit,
+        });
+        this.send(
+            socket,
+            GatewayControlMessageType.HistorySnapshot,
+            buildGatewayControlHistorySnapshotPayload({
+                history,
+                nextBeforeTs: history.length > 0 && history[0] ? history[0].ts - 1 : undefined,
+            }),
             envelope,
         );
     }
@@ -264,6 +328,12 @@ export class GatewayControlHub implements EventSink {
         const input = readGatewayControlMessageInput(envelope.payload);
         const context = this.contextFromInput(input.context);
         const gatewayMessage = this.messageFromInput(input);
+        this.log("turn.start", {
+            channel: gatewayMessage.route.channel,
+            clientId: socket.data.clientId,
+            messageId: gatewayMessage.id,
+            requestId: context.requestId,
+        });
         try {
             const reply = await this.options.dispatch(gatewayMessage, {
                 context,
@@ -277,6 +347,12 @@ export class GatewayControlHub implements EventSink {
                     );
                 },
             });
+            this.log("turn.final", {
+                channel: gatewayMessage.route.channel,
+                clientId: socket.data.clientId,
+                messageId: gatewayMessage.id,
+                requestId: context.requestId,
+            });
             this.send(
                 socket,
                 GatewayControlMessageType.TurnFinal,
@@ -285,6 +361,13 @@ export class GatewayControlHub implements EventSink {
                 context.requestId,
             );
         } catch (error) {
+            this.log("turn.error", {
+                channel: gatewayMessage.route.channel,
+                clientId: socket.data.clientId,
+                message: error instanceof Error ? error.message : String(error),
+                messageId: gatewayMessage.id,
+                requestId: context.requestId,
+            });
             this.send(
                 socket,
                 GatewayControlMessageType.TurnError,
@@ -299,6 +382,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     private handlePing(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+        this.log("ping", { clientId: socket.data.clientId });
         this.send(socket, GatewayControlMessageType.Pong, buildGatewayControlPongPayload(), envelope);
     }
 
@@ -323,6 +407,12 @@ export class GatewayControlHub implements EventSink {
         source?: GatewayControlEnvelope,
         requestId?: string,
     ): void {
+        this.log("message.send", {
+            clientId: socket.data.clientId,
+            correlationId: source?.id,
+            requestId: requestId ?? source?.requestId,
+            type,
+        });
         socket.send(
             JSON.stringify(
                 createGatewayControlEnvelope(type, payload, {
@@ -352,6 +442,13 @@ export class GatewayControlHub implements EventSink {
         cause: unknown,
         code: GatewayControlErrorCode = GatewayControlErrorCode.Internal,
     ): void {
+        this.log("message.error", {
+            clientId: socket.data.clientId,
+            code,
+            correlationId: source?.id,
+            message: cause instanceof Error ? cause.message : String(cause),
+            requestId: source?.requestId,
+        });
         this.send(
             socket,
             GatewayControlMessageType.Error,
@@ -407,5 +504,15 @@ export class GatewayControlHub implements EventSink {
     private isLocalRequest(request: Request): boolean {
         const url = new URL(request.url);
         return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+    }
+
+    private log(step: string, payload: Record<string, unknown> = {}): void {
+        console.error(
+            JSON.stringify({
+                scope: "gateway.control",
+                step,
+                ...payload,
+            }),
+        );
     }
 }

@@ -165,7 +165,7 @@ export class PlanningBlockParser {
             parentId: this.readNonEmptyString(record.parentId)?.slice(0, 120),
             title: this.requiredText(record.title, "flyflor_context_fork.title", 160),
             summary: this.requiredText(record.summary, "flyflor_context_fork.summary", 1200),
-            scopeSummary: this.requiredText(record.scopeSummary, "flyflor_context_fork.scopeSummary", 1200),
+            continuitySummary: this.requiredText(record.continuitySummary, "flyflor_context_fork.continuitySummary", 1200),
             maxContextTokens: this.clampInt(this.readNumber(record.maxContextTokens) ?? 12_000, 1_000, 200_000),
             inheritedEventIds,
             createdAt: this.readIso(record.createdAt) ?? now,

@@ -192,7 +192,7 @@ class ScriptedAgentModel implements ModelClient {
             renderStructuredBlock(StructuredBlockProtocol.ContextFork, {
                 title: "Smoke fork",
                 summary: "Bound the deterministic smoke context.",
-                scopeSummary: "Only the generated smoke turn and planning records are inherited.",
+                continuitySummary: "Only the generated smoke turn and planning records are inherited.",
                 maxContextTokens: 4096,
                 inheritedEventIds: [],
             }),

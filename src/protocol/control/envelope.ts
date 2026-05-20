@@ -78,6 +78,28 @@ export type GatewayControlCapabilityCatalogPayload = Record<string, unknown> & {
     kits?: ExternalKitCatalogSnapshot;
 };
 
+export interface GatewayControlHistoryListInput {
+    beforeTs?: number;
+    limit?: number;
+}
+
+export type GatewayControlHistoryListPayload = Record<string, unknown> & GatewayControlHistoryListInput;
+
+export interface GatewayControlHistoryTurnSnapshot {
+    assistantText: string;
+    eventId: string;
+    contextForks?: ContextForkRecord[];
+    scenes?: SceneRecord[];
+    taskPlans?: TaskPlanRecord[];
+    ts: number;
+    userText: string;
+}
+
+export type GatewayControlHistorySnapshotPayload = Record<string, unknown> & {
+    history: GatewayControlHistoryTurnSnapshot[];
+    nextBeforeTs?: number;
+};
+
 export type GatewayControlServerHelloPayload = Record<string, unknown> & {
     capabilities: GatewayControlSurfaceCapabilities;
     clientId: string;
@@ -173,7 +195,7 @@ export interface GatewayControlTodoTaskSnapshot {
 export interface GatewayControlContextForkSnapshot {
     id: string;
     maxContextTokens: ContextForkRecord["maxContextTokens"];
-    scopeSummary: ContextForkRecord["scopeSummary"];
+    continuitySummary: ContextForkRecord["continuitySummary"];
     title: ContextForkRecord["title"];
 }
 
@@ -400,6 +422,13 @@ export function buildGatewayControlCapabilityCatalogPayload(
     return { catalog, kits };
 }
 
+export function buildGatewayControlHistorySnapshotPayload(input: {
+    history: GatewayControlHistoryTurnSnapshot[];
+    nextBeforeTs?: number;
+}): GatewayControlHistorySnapshotPayload {
+    return input;
+}
+
 export function buildGatewayControlServerHelloPayload(input: GatewayControlServerHelloPayload): GatewayControlServerHelloPayload {
     return input;
 }
@@ -452,6 +481,8 @@ export function classifyGatewayControlSemanticType(
         case GatewayControlMessageType.ClientHello:
         case GatewayControlMessageType.GatewayStatusGet:
         case GatewayControlMessageType.GatewayStatusSnapshot:
+        case GatewayControlMessageType.HistoryList:
+        case GatewayControlMessageType.HistorySnapshot:
         case GatewayControlMessageType.ServerHello:
             return GatewayControlSemanticType.Data;
     }
@@ -563,6 +594,23 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
     };
 }
 
+export function readGatewayControlHistoryListInput(
+    payload: Record<string, unknown> | undefined,
+): GatewayControlHistoryListInput {
+    if (!payload) {
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidPayload,
+            "history.list requires payload",
+        );
+    }
+    const beforeTs = readNumber(payload.beforeTs);
+    const limit = readNumber(payload.limit);
+    return {
+        beforeTs,
+        limit,
+    };
+}
+
 function readGatewayControlProjectScope(value: unknown): GatewayControlProjectScope | undefined {
     if (!isRecord(value)) return undefined;
     const id = readString(value.id);
@@ -602,4 +650,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readString(value: unknown): string | undefined {
     return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }

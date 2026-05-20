@@ -17,10 +17,10 @@ export const RuntimeEventType = {
     GatewayStart: "gateway.start",
     ChannelLinkChanged: "channel.link.changed",
     ChannelError: "channel.error",
-    CttlCapabilityCatalogBuilt: "cttl.capability.catalog.built",
-    CttlLoopGuardBlocked: "cttl.loop.guard.blocked",
-    CttlLongHorizonLoopPaused: "cttl.long_horizon_loop.paused",
-    CttlLongHorizonLoopResumed: "cttl.long_horizon_loop.resumed",
+    ExecutiveCapabilityCatalogBuilt: "executive.capability.catalog.built",
+    ExecutiveLoopGuardBlocked: "executive.loop.guard.blocked",
+    ExecutiveLoopPaused: "executive.loop.paused",
+    ExecutiveLoopResumed: "executive.loop.resumed",
     McpCapabilityCatalogBuilt: "mcp.capability.catalog.built",
     McpToolCallExecuted: "mcp.tool.call.executed",
     McpToolCatalogBuilt: "mcp.tool.catalog.built",
@@ -118,9 +118,6 @@ export const RuntimeEventType = {
 } as const;
 
 export type RuntimeEventType = (typeof RuntimeEventType)[keyof typeof RuntimeEventType];
-
-export const FpcEventType = RuntimeEventType;
-export type FpcEventType = RuntimeEventType;
 
 export interface EventSink {
     publish(event: RuntimeEvent): void;

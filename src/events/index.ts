@@ -3,4 +3,4 @@ export { FpcEventBus, GlobalEventBus, RuntimeEventBus, globalEvents } from "./bu
 export { RuntimeEventClassifier, classifyRuntimeEvent, runtimeEventClassifier } from "./classifier.ts";
 export { createRuntimeEvent as event } from "./runtime.event.ts";
 export { ConsoleEventSink, NullEventSink, CompositeEventSink } from "./sinks.ts";
-export { FpcEventType, RuntimeEventType, type EventSink } from "./types.ts";
+export { RuntimeEventType, type EventSink } from "./types.ts";

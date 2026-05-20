@@ -22,11 +22,11 @@
 当 Executive 工具回路命中预算上限或 loop guard 把当前 step 全部阻断时，主线 turn 不会继续隐藏重试，而是收敛到显式 ask 暂停：
 
 1. `ExecutiveToolRuntime` 返回结构化 `askRequired`
-2. `RuntimeModule` 发布 `cttl.long_horizon_loop.paused`
+2. `RuntimeModule` 发布 `executive.loop.paused`
 3. `turn.final.reply.metadata.kind` 变为 `ask`
 4. `turn.final.reply.metadata.executiveToolLoop` 暴露暂停 snapshot
 5. 用户下一轮显式回答 pending ask 后，Memory 记录 `ask-answer-pair`
-6. Runtime 发布 `cttl.long_horizon_loop.resumed`
+6. Runtime 发布 `executive.loop.resumed`
 
 约束：
 

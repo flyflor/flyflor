@@ -9,6 +9,7 @@ import {
     buildGatewayControlDataPayload,
     buildGatewayControlErrorPayload,
     buildGatewayControlGatewayStatusPayload,
+    buildGatewayControlHistorySnapshotPayload,
     buildGatewayControlPongPayload,
     buildGatewayControlServerHelloSnapshot,
     buildGatewayControlSurfaceCapabilities,
@@ -21,6 +22,7 @@ import {
     createGatewayControlEventEnvelope,
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
+    readGatewayControlHistoryListInput,
     readGatewayControlMessageInput,
     shouldDeliverGatewayControlEvent,
 } from "../src/protocol/control/index.ts";
@@ -39,6 +41,7 @@ describe("Gateway Control protocol", () => {
             GatewayControlMessageType.GatewayMessageSend,
             GatewayControlMessageType.EventSubscribe,
             GatewayControlMessageType.GatewayStatusGet,
+            GatewayControlMessageType.HistoryList,
         ]);
 
         expect(capabilities).toEqual({
@@ -46,6 +49,7 @@ describe("Gateway Control protocol", () => {
                 GatewayControlMessageType.GatewayMessageSend,
                 GatewayControlMessageType.EventSubscribe,
                 GatewayControlMessageType.GatewayStatusGet,
+                GatewayControlMessageType.HistoryList,
             ],
             eventStream: true,
             protocol: GatewayControlProtocol.WsV1,
@@ -130,7 +134,7 @@ describe("Gateway Control protocol", () => {
                         snapshotId: "snapshot-1",
                     },
                     planning: {
-                        contextForks: [{ id: "fork-1", maxContextTokens: 12000, scopeSummary: "scope", title: "Fork" }],
+                        contextForks: [{ id: "fork-1", maxContextTokens: 12000, continuitySummary: "scope", title: "Fork" }],
                         scenes: [{
                             id: "scene-1",
                             kind: "blackboard",
@@ -176,7 +180,7 @@ describe("Gateway Control protocol", () => {
                         snapshotId: "snapshot-1",
                     },
                     planning: {
-                        contextForks: [{ id: "fork-1", maxContextTokens: 12000, scopeSummary: "scope", title: "Fork" }],
+                        contextForks: [{ id: "fork-1", maxContextTokens: 12000, continuitySummary: "scope", title: "Fork" }],
                         scenes: [{
                             id: "scene-1",
                             kind: "blackboard",
@@ -219,6 +223,29 @@ describe("Gateway Control protocol", () => {
             },
         });
         expect(buildGatewayControlCapabilityCatalogPayload(null)).toEqual({ catalog: null, kits: undefined });
+        expect(
+            buildGatewayControlHistorySnapshotPayload({
+                history: [
+                    {
+                        assistantText: "Hi",
+                        eventId: "event-1",
+                        ts: 100,
+                        userText: "Hello",
+                    },
+                ],
+                nextBeforeTs: 99,
+            }),
+        ).toEqual({
+            history: [
+                {
+                    assistantText: "Hi",
+                    eventId: "event-1",
+                    ts: 100,
+                    userText: "Hello",
+                },
+            ],
+            nextBeforeTs: 99,
+        });
         expect(buildGatewayControlPongPayload("2026-05-19T00:00:00.000Z")).toEqual({ now: "2026-05-19T00:00:00.000Z" });
         expect(
             buildGatewayControlAskPayload({
@@ -314,6 +341,12 @@ describe("Gateway Control protocol", () => {
             GatewayControlSemanticType.Event,
         );
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.GatewayStatusSnapshot)).toBe(
+            GatewayControlSemanticType.Data,
+        );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.HistoryList)).toBe(
+            GatewayControlSemanticType.Data,
+        );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.HistorySnapshot)).toBe(
             GatewayControlSemanticType.Data,
         );
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.Error)).toBe(
@@ -457,6 +490,8 @@ describe("Gateway Control protocol", () => {
 
     test("rejects invalid message payloads with structured protocol errors", () => {
         expect(() => readGatewayControlMessageInput(undefined)).toThrow("gateway.message.send requires payload");
+        expect(() => readGatewayControlHistoryListInput(undefined)).toThrow("history.list requires payload");
+        expect(readGatewayControlHistoryListInput({ limit: 10 })).toEqual({ beforeTs: undefined, limit: 10 });
         expect(() => normalizeGatewayControlMessage({ text: "" })).toThrow("gateway.message.send payload requires text");
     });
 
@@ -526,6 +561,49 @@ describe("Gateway Control protocol", () => {
             correlationId: "cap-get-1",
             payload: { catalog: null },
             type: GatewayControlMessageType.CapabilityCatalogSnapshot,
+        });
+    });
+
+    test("roundtrips history control messages", () => {
+        const getEnvelope = createGatewayControlEnvelope(
+            GatewayControlMessageType.HistoryList,
+            { limit: 2, beforeTs: 100 },
+            { id: "history-get-1", requestId: "req-history-1" },
+        );
+        const snapshotEnvelope = createGatewayControlEnvelope(
+            GatewayControlMessageType.HistorySnapshot,
+            {
+                history: [
+                    {
+                        assistantText: "Hi",
+                        eventId: "event-1",
+                        ts: 100,
+                        userText: "Hello",
+                    },
+                ],
+                nextBeforeTs: 99,
+            },
+            { correlationId: getEnvelope.id, id: "history-snapshot-1", requestId: "req-history-1" },
+        );
+
+        expect(parseGatewayControlEnvelope(JSON.stringify(getEnvelope))).toMatchObject({
+            id: "history-get-1",
+            payload: { beforeTs: 100, limit: 2 },
+            requestId: "req-history-1",
+            type: GatewayControlMessageType.HistoryList,
+        });
+        expect(parseGatewayControlEnvelope(JSON.stringify(snapshotEnvelope))).toMatchObject({
+            correlationId: "history-get-1",
+            payload: {
+                history: [{ eventId: "event-1" }],
+                nextBeforeTs: 99,
+            },
+            requestId: "req-history-1",
+            type: GatewayControlMessageType.HistorySnapshot,
+        });
+        expect(readGatewayControlHistoryListInput({ beforeTs: 100, limit: 2 })).toEqual({
+            beforeTs: 100,
+            limit: 2,
         });
     });
 

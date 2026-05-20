@@ -91,14 +91,13 @@ async function main(): Promise<void> {
     for (const month of result.months) {
         if (result.dryRun) {
             console.error(
-                `[dry-run] would archive ${month.eventsCopied} events ` +
+                `[dry-run] would archive ${month.eventCount} events ` +
                     `from ${month.bucketMonth} -> ${month.archivePath}`,
             );
             continue;
         }
         console.error(
-            `archived ${month.bucketMonth}: events=${month.eventsCopied} ` +
-                `states=${month.statesCopied} summaries=${month.summariesCopied} ` +
+            `archived ${month.bucketMonth}: events=${month.eventCount} ` +
                 `-> ${month.archivePath}`,
         );
     }

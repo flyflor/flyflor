@@ -42,7 +42,7 @@
 - `plugin.invoke.end`
 - `plugin.invoke.failed`
 - `mcp.tool.call.executed`
-- `cttl.capability.catalog.built`
+- `executive.capability.catalog.built`
 - `mcp.capability.catalog.built`
 - `mcp.tool.catalog.built`
 
@@ -52,9 +52,9 @@
 - `memory.ask.answered`
 - `memory.ask.chain.capped`
 - `memory.ask.mutex.violation`
-- `cttl.loop.guard.blocked`
-- `cttl.long_horizon_loop.paused`
-- `cttl.long_horizon_loop.resumed`
+- `executive.loop.guard.blocked`
+- `executive.loop.paused`
+- `executive.loop.resumed`
 
 ### Memory / Reflection
 
@@ -73,7 +73,7 @@ Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途
 | --- | --- | --- | --- |
 | turn 生命周期 | `agent.turn.start` `agent.turn.end` | 时间线、turn 边界、性能标记 | 否 |
 | gateway/control | `gateway.message.received` `channel.link.changed` `channel.error` | 连接状态、血管告警、链路可见性 | 否 |
-| ask / loop | `memory.ask.recorded` `memory.ask.answered` `cttl.long_horizon_loop.paused` `cttl.long_horizon_loop.resumed` | ask 时间线、恢复提示、暂停/恢复提示 | 否，当前轮权威状态仍读 `turn.final.reply.metadata` |
+| ask / loop | `memory.ask.recorded` `memory.ask.answered` `executive.loop.paused` `executive.loop.resumed` | ask 时间线、恢复提示、暂停/恢复提示 | 否，当前轮权威状态仍读 `turn.final.reply.metadata` |
 | planning / memory write | `memory.task_plan.written` `memory.context_fork.written` `memory.scene_record.written` | 审计、历史回放提示、增量刷新提示 | 否，结构化快照仍读 `turn.final.reply.metadata.planning` |
 | sandbox / capability | `sandbox.tool.approval.requested` `sandbox.tool.denied` `mcp.tool.call.executed` | 执行审计、审批提示、副作用观察 | 否 |
 
@@ -87,7 +87,7 @@ Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途
 
 R10 之后，Executive tool loop 的超长线暂停/恢复通过两类事件暴露：
 
-### `cttl.long_horizon_loop.paused`
+### `executive.loop.paused`
 
 触发时机：
 
@@ -105,7 +105,7 @@ payload 约定：
 }
 ```
 
-### `cttl.long_horizon_loop.resumed`
+### `executive.loop.resumed`
 
 触发时机：
 
@@ -142,8 +142,8 @@ payload 约定：
 1. 订阅 `event.publish`。
 2. 对 `RuntimeEvent.type` 做固定映射，不看用户文本。
 3. 对 R10 关注：
-   - `cttl.long_horizon_loop.paused`
-   - `cttl.long_horizon_loop.resumed`
-   - `cttl.loop.guard.blocked`
+   - `executive.loop.paused`
+   - `executive.loop.resumed`
+   - `executive.loop.guard.blocked`
 4. 如果当前轮 `turn.final.reply.metadata.executiveToolLoop` 存在，就把它当成当前 pending loop snapshot。
 5. 如果收到 `memory.task_plan.written` / `memory.context_fork.written` / `memory.scene_record.written`，把它们当成“planning 已更新”的提示；真正的当前轮结构化数据仍回到 `turn.final.reply.metadata.planning`。

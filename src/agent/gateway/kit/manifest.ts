@@ -47,6 +47,7 @@ const COMMAND_PERMISSION: Partial<Record<GatewayControlMessageType, ExternalKitP
     [GatewayControlMessageType.EventUnsubscribe]: ExternalKitPermission.EventSubscribe,
     [GatewayControlMessageType.GatewayMessageSend]: ExternalKitPermission.GatewayMessageSend,
     [GatewayControlMessageType.GatewayStatusGet]: ExternalKitPermission.GatewayStatus,
+    [GatewayControlMessageType.HistoryList]: ExternalKitPermission.Control,
 };
 
 export function buildBuiltinExternalKitCatalog(now = new Date().toISOString()): ExternalKitCatalogSnapshot {

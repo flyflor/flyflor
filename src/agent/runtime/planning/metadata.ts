@@ -19,7 +19,7 @@ export class PlanningMetadataBuilder {
             contextForks: contextForks.map((fork) => ({
                 id: fork.id,
                 title: fork.title,
-                scopeSummary: fork.scopeSummary,
+                continuitySummary: fork.continuitySummary,
                 maxContextTokens: fork.maxContextTokens,
             })),
             scenes: sceneRecords.map((scene) => this.compactSceneMetadata(scene)),

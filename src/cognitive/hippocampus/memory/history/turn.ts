@@ -9,6 +9,7 @@ export interface ChatHistoryTurn {
     assistantText: string;
     eventId: string;
     contextForks?: ContextForkRecord[];
+    forkId?: string;
     scenes?: SceneRecord[];
     taskPlans?: TaskPlanRecord[];
     ts: number;
@@ -27,10 +28,12 @@ export function historyTurnFromEvent(
 ): ChatHistoryTurn {
     const userText = strictHistoryString(row.content.userText, row.id, "userText");
     const assistantText = strictHistoryString(row.content.assistantText, row.id, "assistantText");
+    const forkId = typeof row.content.contextForkId === "string" ? row.content.contextForkId : undefined;
     return {
         assistantText,
         ...(planning.contextForks && planning.contextForks.length > 0 ? { contextForks: planning.contextForks } : {}),
         eventId: row.id,
+        ...(forkId ? { forkId } : {}),
         ...(planning.scenes && planning.scenes.length > 0 ? { scenes: planning.scenes } : {}),
         ...(planning.taskPlans && planning.taskPlans.length > 0 ? { taskPlans: planning.taskPlans } : {}),
         ts: row.ts,

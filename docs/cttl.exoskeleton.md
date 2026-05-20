@@ -94,7 +94,7 @@ Tool Plan 是协议层数据，不是自然语言推断结果；隐藏原因必�
 
 当前 Runtime 接线从 MCP 兼容工具统一进入 Executive：`workspace.*`、`git.*`、`shell.run`、远端 MCP tools、user manifest tools 和 plugin manifest capabilities 在注入 prompt 前先归一成 descriptor，再按本轮 trust context 过滤可见性。MCP `tools/resources/prompts` 也会统一进入 capability plan；resources/prompts 只做发现和受控读取 API，不把正文自动注入模型。这个切片只控制模型可见 catalog，不替代 sandbox / approval / quota 执行门；实际执行由 `RuntimeMcpToolExecutor` 适配到 workspace access、ShellHook、MCP transport、PluginRunner 和 sandbox gate。
 
-每轮 Tool Plan 生成后会发布 `cttl.capability.catalog.built`。这是外部 control/event 面的通用快照，只包含可 JSON 序列化的 descriptor 摘要、hidden reason、失败/stale source 和 totals；不包含 executor、resource 正文、prompt 正文或密钥。WS 客户端可通过 `capability.catalog.get` 读取最近一次 `capability.catalog.snapshot`，用于独立 TUI、channel console 或调试面板展示当前“手脚目录”。
+每轮 Tool Plan 生成后会发布 `executive.capability.catalog.built`。这是外部 control/event 面的通用快照，只包含可 JSON 序列化的 descriptor 摘要、hidden reason、失败/stale source 和 totals；不包含 executor、resource 正文、prompt 正文或密钥。WS 客户端可通过 `capability.catalog.get` 读取最近一次 `capability.catalog.snapshot`，用于独立 TUI、channel console 或调试面板展示当前“手脚目录”。
 
 R9 之后，computer-control descriptor 也会出现在这个 capability catalog 中。Rust 侧可以直接读取 `category=computer`、`permission=computer` 和 `descriptor.computer`，不需要依赖 Bun runtime 内部判断。
 
@@ -132,7 +132,7 @@ Runtime 工具 loop 由 `ExecutiveToolRuntime` 拥有，Runtime 只传 `generate
 
 调度规则固定在 Executive：`readOnly && concurrencySafe && !exclusive` 的工具可以同批并发，`write` / `execute` / `exclusive` 工具必须串行。具体 transport（MCP、workspace、git、shell、user tool、plugin）只在 runtime-facing adapter 内实现，`src/executive` 不 import Runtime、Gateway、Command、MCP、Sandbox 或 Plugin 私有实现。
 
-每次阻断还会发布 `cttl.loop.guard.blocked` RuntimeEvent。事件 payload 只包含 `server`、`tool`、`reason`、`message` 等可 JSON 序列化事实；它用于 TUI、WS、channel adapter 和审计展示，不参与业务语义判断。
+每次阻断还会发布 `executive.loop.guard.blocked` RuntimeEvent。事件 payload 只包含 `server`、`tool`、`reason`、`message` 等可 JSON 序列化事实；它用于 TUI、WS、channel adapter 和审计展示，不参与业务语义判断。
 
 ## R10 Long-Horizon Loop Contract
 
@@ -145,8 +145,8 @@ R10 没有新增第二套 loop 系统，而是把“长线执行需要用户继�
 - Runtime 把这份 snapshot 映射到：
   - `turn.final.reply.metadata.executiveToolLoop`
   - `turn.final.reply.metadata.ask.executiveToolLoop`
-  - `cttl.long_horizon_loop.paused`
-- 用户显式回答上一轮 pending ask 后，Memory 发布 `cttl.long_horizon_loop.resumed`。
+  - `executive.loop.paused`
+- 用户显式回答上一轮 pending ask 后，Memory 发布 `executive.loop.resumed`。
 
 设计结论：
 

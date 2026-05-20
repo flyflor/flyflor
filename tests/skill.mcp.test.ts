@@ -1399,7 +1399,7 @@ describe("Skill and MCP capability config", () => {
         expect(events.events).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    type: RuntimeEventType.CttlLongHorizonLoopPaused,
+                    type: RuntimeEventType.ExecutiveLoopPaused,
                     payload: expect.objectContaining({
                         stepCount: 1,
                         toolBudgetExhausted: true,
@@ -1481,7 +1481,7 @@ describe("Skill and MCP capability config", () => {
         expect(events.events).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    type: RuntimeEventType.CttlLoopGuardBlocked,
+                    type: RuntimeEventType.ExecutiveLoopGuardBlocked,
                     payload: expect.objectContaining({
                         reason: "failed-call-repeat",
                         server: "workspace",
@@ -1494,7 +1494,7 @@ describe("Skill and MCP capability config", () => {
         expect(events.events).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    type: RuntimeEventType.CttlLongHorizonLoopPaused,
+                    type: RuntimeEventType.ExecutiveLoopPaused,
                     payload: expect.objectContaining({
                         loopGuardReason: "repeated-call-no-progress",
                         stepCount: 4,

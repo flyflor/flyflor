@@ -21,7 +21,7 @@ export class BrainContextForkRepo {
                 source_ask_id, source_blackboard_turn_id
             ) VALUES (
                 ${record.id}, ${record.userId}, ${record.parentId ?? null},
-                ${record.title}, ${record.summary}, ${record.scopeSummary},
+                ${record.title}, ${record.summary}, ${record.continuitySummary},
                 ${record.maxContextTokens}, ${JSON.stringify(record.inheritedEventIds)},
                 ${record.createdAt}, ${record.updatedAt}, ${record.sourceEventId ?? null},
                 ${record.sourceAskId ?? null}, ${record.sourceBlackboardTurnId ?? null}

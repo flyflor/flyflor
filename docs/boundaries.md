@@ -157,7 +157,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - 用户自定义工具必须声明 schema、permission、scope、cwd/env 边界、输出限制和审批策略；缺任何一项都不能进入可见 Tool Plan。
 - Tool Plan 必须保留 hidden diagnostics，说明工具不可见是缺配置、缺凭据、平台不可用、权限不足、channel cap、sandbox deny 还是 loop guard 限制。
 - Loop guard 必须能处理 unknown tool 重复调用、工具名漂移、同一失败调用反复执行、无进展循环、过量工具调用和非法 MCP/tool result。
-- Long-horizon loop 只能通过结构化 ask snapshot 和 `cttl.long_horizon_loop.paused/resumed` 事件暂停或恢复；不得新增靠文本约定的隐藏 loop 控制协议。
+- Long-horizon loop 只能通过结构化 ask snapshot 和 `executive.loop.paused/resumed` 事件暂停或恢复；不得新增靠文本约定的隐藏 loop 控制协议。
 - Executive 实现仍遵守 OOP + use composition：业务能力用 class / Component / Module 表达，组合入口使用 `useXxx()`；不得新增专用 decorator、反射扫描、动态 import 或无归属 helper function。
 - Executive 实现仍遵守 Bun 二进制硬约束：不得依赖运行时读取 `node_modules`、native addon、postinstall 或用户机器额外 Node.js。
 

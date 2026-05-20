@@ -37,12 +37,12 @@ export class SQLiteBlackboardStore implements BlackboardStore {
             return;
         }
 
-        const dir = join(this.paths.storageDir, "blackboard");
+        const dir = join(this.paths.configDir, "brain", "live");
         await mkdir(dir, { recursive: true });
-        let database = this.openBlackboardDatabase(join(dir, "blackboard.sqlite"));
+        let database = this.openBlackboardDatabase(join(dir, "brain.db"));
         if (this.hasIncompatibleBlackboardSchema(database)) {
             database.close();
-            database = this.openBlackboardDatabase(join(dir, "blackboard.project.sqlite"));
+            database = this.openBlackboardDatabase(join(dir, "brain.compat.blackboard.db"));
         }
         this.installSchema(database);
         this.database = database;

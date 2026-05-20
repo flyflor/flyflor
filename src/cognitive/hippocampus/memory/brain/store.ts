@@ -1,5 +1,6 @@
+import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, unlinkSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 import { Component } from "../../../../agent/di/decorators/index.ts";
 import { BrainComponent } from "../../../../components/component.ts";
@@ -41,19 +42,6 @@ import {
 
 export type { BrainEventInput, BrainEventListInput, BrainStateMutation } from "../../../../entities/memory/index.ts";
 
-/**
- * LF-R1 brain.db single-file store.
- *
- * Boundary contract:
- * - `memory_events` is append-only. Any "update" is a new row + a `memory_state` redirect.
- * - `memory_state` is the only mutable layer Dream / sweeper may touch.
- * - Dream is forbidden from `DELETE FROM memory_events` (R7).
- * - Visibility gating (AtomScore) is the caller's responsibility; this store does no scoring.
- *
- * Read / write surface is intentionally narrow: callers consume protocol records,
- * never raw SQLite rows.
- */
-
 export interface BrainStoreOptions {
     dbPath: string;
 }
@@ -62,7 +50,6 @@ export interface BrainPromptAtomWindowInput {
     days?: number;
     limit?: number;
     minScore: number;
-    /** Runtime prompt recall supplies this; diagnostics may omit it to inspect all inbox buckets. */
     userId?: string;
 }
 
@@ -73,104 +60,282 @@ export interface BrainVisibleAtom {
     sourceEventTs: number;
 }
 
-/**
- * Shape persisted under `memory_events.content.atoms`.
- * The store owns windowing and visibility; callers own scoring before append.
- */
+export interface BrainShardDescriptor {
+    archivePath?: string;
+    endTs?: number;
+    eventCount: number;
+    id: string;
+    monthKey?: string;
+    sealedAt?: string;
+    startTs?: number;
+    status: "archived" | "live";
+}
+
+interface BrainCatalogLocatorRecord {
+    entityId: string;
+    entityType: BrainCatalogEntityType;
+    shardId: string;
+    ts?: number;
+    updatedAt: string;
+}
+
+const BrainCatalogEntityType = {
+    BlackboardTurn: "blackboard-turn",
+    ContextFork: "context-fork",
+    Event: "event",
+    Ghost: "ghost",
+    Project: "project",
+    SceneRecord: "scene-record",
+    TaskPlan: "task-plan",
+} as const;
+
+type BrainCatalogEntityType = (typeof BrainCatalogEntityType)[keyof typeof BrainCatalogEntityType];
+
+const LIVE_SHARD_ID = "live";
+
 export interface BrainPromptAtomWrite {
     atom: MemoryAtom;
     score: AtomScore;
 }
 
+interface BrainShardRepos {
+    codenameRepo: BrainCodenameRepo;
+    contextForkRepo: BrainContextForkRepo;
+    db: Database;
+    eqStateRepo: BrainEqStateRepo;
+    eventRepo: BrainEventRepo;
+    linkRepo: BrainLinkRepo;
+    projectRepo: BrainProjectRepo;
+    sceneRecordRepo: BrainSceneRecordRepo;
+    stateRepo: BrainStateRepo;
+    summaryRepo: BrainSummaryRepo;
+    taskPlanRepo: BrainTaskPlanRepo;
+}
+
+class BrainCatalogStore {
+    private readonly db: Database;
+
+    public constructor(private readonly dbPath: string) {
+        mkdirSync(dirname(dbPath), { recursive: true });
+        this.db = new Database(dbPath);
+        this.db.exec("PRAGMA journal_mode = WAL");
+        this.install();
+    }
+
+    public close(): void {
+        this.db.close();
+    }
+
+    public upsertShard(record: BrainShardDescriptor): void {
+        this.db
+            .prepare(
+                `INSERT INTO brain_shards (
+                    id, status, archive_path, start_ts, end_ts, event_count, sealed_at, month_key, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status = excluded.status,
+                    archive_path = excluded.archive_path,
+                    start_ts = excluded.start_ts,
+                    end_ts = excluded.end_ts,
+                    event_count = excluded.event_count,
+                    sealed_at = excluded.sealed_at,
+                    month_key = excluded.month_key,
+                    updated_at = excluded.updated_at`,
+            )
+            .run(
+                record.id,
+                record.status,
+                record.archivePath ?? null,
+                record.startTs ?? null,
+                record.endTs ?? null,
+                record.eventCount,
+                record.sealedAt ?? null,
+                record.monthKey ?? null,
+                new Date().toISOString(),
+            );
+    }
+
+    public listShards(): BrainShardDescriptor[] {
+        return this.db
+            .query<
+                {
+                    archive_path: string | null;
+                    end_ts: number | null;
+                    event_count: number;
+                    id: string;
+                    month_key: string | null;
+                    sealed_at: string | null;
+                    start_ts: number | null;
+                    status: "archived" | "live";
+                },
+                []
+            >(
+                `SELECT id, status, archive_path, start_ts, end_ts, event_count, sealed_at, month_key
+                   FROM brain_shards
+                  ORDER BY CASE status WHEN 'live' THEN 1 ELSE 0 END DESC, id DESC`,
+            )
+            .all()
+            .map((row) => ({
+                id: row.id,
+                status: row.status,
+                archivePath: row.archive_path ?? undefined,
+                startTs: row.start_ts ?? undefined,
+                endTs: row.end_ts ?? undefined,
+                eventCount: row.event_count,
+                monthKey: row.month_key ?? undefined,
+                sealedAt: row.sealed_at ?? undefined,
+            }));
+    }
+
+    public upsertLocator(record: BrainCatalogLocatorRecord): void {
+        this.db
+            .prepare(
+                `INSERT INTO brain_entity_locator (
+                    entity_type, entity_id, shard_id, ts, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+                    shard_id = excluded.shard_id,
+                    ts = excluded.ts,
+                    updated_at = excluded.updated_at`,
+            )
+            .run(record.entityType, record.entityId, record.shardId, record.ts ?? null, record.updatedAt);
+    }
+
+    public getShardId(entityType: BrainCatalogEntityType, entityId: string): string | null {
+        const row = this.db
+            .query<{ shard_id: string }, [BrainCatalogEntityType, string]>(
+                `SELECT shard_id
+                   FROM brain_entity_locator
+                  WHERE entity_type = ?1 AND entity_id = ?2`,
+            )
+            .get(entityType, entityId);
+        return row?.shard_id ?? null;
+    }
+
+    private install(): void {
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS brain_shards (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                archive_path TEXT,
+                start_ts INTEGER,
+                end_ts INTEGER,
+                event_count INTEGER NOT NULL DEFAULT 0,
+                sealed_at TEXT,
+                month_key TEXT,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS brain_entity_locator (
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                shard_id TEXT NOT NULL,
+                ts INTEGER,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (entity_type, entity_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_brain_locator_shard ON brain_entity_locator(shard_id, ts DESC);
+        `);
+    }
+}
+
 @Component()
 export class BrainStore extends BrainComponent {
-    private codenameRepo: BrainCodenameRepo | null = null;
-    private db: Database | null = null;
-    private eventRepo: BrainEventRepo | null = null;
-    private contextForkRepo: BrainContextForkRepo | null = null;
-    private eqStateRepo: BrainEqStateRepo | null = null;
-    private linkRepo: BrainLinkRepo | null = null;
+    private readonly archiveShards = new Map<string, BrainShardRepos>();
+    private readonly archiveDir: string;
+    private readonly brainDir: string;
+    private readonly catalogPath: string;
+    private catalog: BrainCatalogStore | null = null;
+    private currentLiveMonth = utcMonthKey(Date.now());
+    private live: BrainShardRepos | null = null;
     private opened = false;
-    private projectRepo: BrainProjectRepo | null = null;
-    private sceneRecordRepo: BrainSceneRecordRepo | null = null;
-    private stateRepo: BrainStateRepo | null = null;
-    private summaryRepo: BrainSummaryRepo | null = null;
-    private taskPlanRepo: BrainTaskPlanRepo | null = null;
 
     public constructor(private readonly options: BrainStoreOptions) {
         super();
+        this.brainDir = join(dirname(this.options.dbPath), "brain");
+        this.archiveDir = join(this.brainDir, "archive");
+        this.catalogPath = join(this.brainDir, "catalog", "brain.catalog.db");
     }
 
     public async open(): Promise<void> {
         if (this.opened) return;
         await mkdir(dirname(this.options.dbPath), { recursive: true });
-        const db = new Database(this.options.dbPath);
-        db.exec("PRAGMA journal_mode = WAL");
-        db.exec("PRAGMA synchronous = NORMAL");
-        db.exec("PRAGMA foreign_keys = ON");
-        brainSchema.install(db);
-        this.db = db;
-        this.codenameRepo = new BrainCodenameRepo(db);
-        this.eventRepo = new BrainEventRepo(db);
-        this.contextForkRepo = new BrainContextForkRepo(db);
-        this.eqStateRepo = new BrainEqStateRepo(db);
-        this.linkRepo = new BrainLinkRepo(db);
-        this.projectRepo = new BrainProjectRepo(db);
-        this.sceneRecordRepo = new BrainSceneRecordRepo(db);
-        this.stateRepo = new BrainStateRepo(db);
-        this.summaryRepo = new BrainSummaryRepo(db);
-        this.taskPlanRepo = new BrainTaskPlanRepo(db);
+        await mkdir(this.brainDir, { recursive: true });
+        await mkdir(this.archiveDir, { recursive: true });
+        this.catalog = new BrainCatalogStore(this.catalogPath);
+        this.rotateLiveShardIfNeeded();
+        this.live = this.openShard(this.options.dbPath);
+        this.currentLiveMonth = ensureLiveShardMonth(this.live.db);
         this.opened = true;
+        this.catalog.upsertShard(this.describeLiveShard());
     }
 
     public close(): void {
         if (!this.opened) return;
-        this.db?.close();
-        this.codenameRepo = null;
-        this.db = null;
-        this.eventRepo = null;
-        this.contextForkRepo = null;
-        this.eqStateRepo = null;
-        this.linkRepo = null;
+        this.live?.db.close();
+        this.live = null;
+        for (const shard of this.archiveShards.values()) {
+            shard.db.close();
+        }
+        this.archiveShards.clear();
+        this.catalog?.close();
+        this.catalog = null;
         this.opened = false;
-        this.projectRepo = null;
-        this.sceneRecordRepo = null;
-        this.stateRepo = null;
-        this.summaryRepo = null;
-        this.taskPlanRepo = null;
     }
 
     public appendEvent(input: BrainEventInput): MemoryEventRecord {
-        return this.requireEventRepo().append(input);
+        this.rotateLiveShardForTs(input.ts);
+        const written = this.requireLive().eventRepo.append(input);
+        this.catalog?.upsertLocator({
+            entityId: written.id,
+            entityType: written.type === MemoryEventType.GhostContext ? BrainCatalogEntityType.Ghost : BrainCatalogEntityType.Event,
+            shardId: LIVE_SHARD_ID,
+            ts: written.ts,
+            updatedAt: new Date(written.ts).toISOString(),
+        });
+        this.catalog?.upsertShard(this.describeLiveShard());
+        return written;
     }
 
     public getEvent(id: string): MemoryEventRecord | null {
-        return this.requireEventRepo().get(id);
+        const shard = this.openLocatedShard(BrainCatalogEntityType.Event, id) ?? this.openLocatedShard(BrainCatalogEntityType.Ghost, id);
+        if (shard) {
+            return shard.eventRepo.get(id);
+        }
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.eventRepo.get(id);
+            if (row) return row;
+        }
+        return null;
     }
 
     public listEvents(input: BrainEventListInput = {}): MemoryEventRecord[] {
-        return this.requireEventRepo().list(input);
+        const rows: MemoryEventRecord[] = [];
+        const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
+        for (const repos of this.iterReadableShards()) {
+            for (const row of repos.eventRepo.list({ ...input, limit })) {
+                rows.push(row);
+            }
+            if (rows.length >= limit * 3) {
+                break;
+            }
+        }
+        rows.sort((left, right) => right.ts - left.ts);
+        return rows.slice(0, limit);
     }
 
-    /**
-     * prompt recall 的 brain 权威窗口：从 `memory_events` 展开结构化 `content.atoms`。
-     * 不做字符匹配，只按时间窗、状态层与 JSON shape 过滤。
-     */
     public listPromptAtomsWindow(date: Date | string, input: BrainPromptAtomWindowInput): BrainVisibleAtom[] {
         const days = Math.max(1, Math.min(31, Math.floor(input.days ?? 7)));
         const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
         const sinceTs = brainPromptAtomModel.normalizeTimestamp(date) - days * 86_400_000;
-        const events = this.listEvents({
+        const visible: BrainVisibleAtom[] = [];
+        for (const event of this.listEvents({
             ...(input.userId ? { userId: input.userId } : {}),
             type: MemoryEventType.Event,
             sinceTs,
-            limit,
+            limit: limit * 4,
             statusIn: [MemoryEventStatus.Live, MemoryEventStatus.Resumed],
-        });
-        const visible: BrainVisibleAtom[] = [];
-        for (const event of events) {
-            const atoms = brainPromptAtomModel.entriesFromEvent(event);
-            for (const entry of atoms) {
+        })) {
+            for (const entry of brainPromptAtomModel.entriesFromEvent(event)) {
                 if (entry.score.total < input.minScore) continue;
                 visible.push(entry);
             }
@@ -186,31 +351,49 @@ export class BrainStore extends BrainComponent {
     }
 
     public getState(eventId: string): MemoryStateRecord | null {
-        return this.requireStateRepo().get(eventId);
+        const shard = this.shardForEvent(eventId);
+        return shard?.stateRepo.get(eventId) ?? null;
     }
 
     public upsertState(eventId: string, mutation: BrainStateMutation): MemoryStateRecord {
-        return this.requireStateRepo().upsert(eventId, mutation);
+        this.rotateLiveShardForTs(Date.now());
+        return this.requireLive().stateRepo.upsert(eventId, mutation);
     }
 
     public writeSummary(record: MemorySummaryRecord): void {
-        this.requireSummaryRepo().write(record);
+        this.rotateLiveShardForTs(record.createdAt);
+        this.requireLive().summaryRepo.write(record);
     }
 
     public getSummary(id: string): MemorySummaryRecord | null {
-        return this.requireSummaryRepo().get(id);
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.summaryRepo.get(id);
+            if (row) return row;
+        }
+        return null;
     }
 
     public listSummaries(input: { timeRange?: SummaryRange; limit?: number } = {}): MemorySummaryRecord[] {
-        return this.requireSummaryRepo().list(input);
+        const rows: MemorySummaryRecord[] = [];
+        const limit = Math.max(1, Math.min(500, Math.floor(input.limit ?? 100)));
+        for (const repos of this.iterReadableShards()) {
+            rows.push(...repos.summaryRepo.list(input));
+            if (rows.length >= limit * 2) break;
+        }
+        rows.sort((left, right) => right.createdAt - left.createdAt);
+        return rows.slice(0, limit);
     }
 
-    /**
-     * Runtime planning metadata lives in brain.db but outside `memory_events`.
-     * These tables are summary-first views for TUI/history; they never store raw chain-of-thought.
-     */
     public writeTaskPlan(record: TaskPlanRecord): TaskPlanRecord {
-        return this.requireTaskPlanRepo().write(record);
+        this.rotateLiveShardForTs(Date.parse(record.updatedAt));
+        const written = this.requireLive().taskPlanRepo.write(record);
+        this.catalog?.upsertLocator({
+            entityId: written.id,
+            entityType: BrainCatalogEntityType.TaskPlan,
+            shardId: LIVE_SHARD_ID,
+            updatedAt: written.updatedAt,
+        });
+        return written;
     }
 
     public listTaskPlans(input: {
@@ -219,15 +402,33 @@ export class BrainStore extends BrainComponent {
         sourceBlackboardTurnId?: string;
         limit?: number;
     } = {}): TaskPlanRecord[] {
-        return this.requireTaskPlanRepo().list(input);
+        return this.mergeAcrossShards((repos) => repos.taskPlanRepo.list(input), input.limit ?? 100, (left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt),
+        );
     }
 
     public writeContextFork(record: ContextForkRecord): ContextForkRecord {
-        return this.requireContextForkRepo().write(record);
+        this.rotateLiveShardForTs(Date.parse(record.updatedAt));
+        const written = this.requireLive().contextForkRepo.write(record);
+        this.catalog?.upsertLocator({
+            entityId: written.id,
+            entityType: BrainCatalogEntityType.ContextFork,
+            shardId: LIVE_SHARD_ID,
+            updatedAt: written.updatedAt,
+        });
+        return written;
     }
 
     public getContextFork(id: string): ContextForkRecord | null {
-        return this.requireContextForkRepo().get(id);
+        const shard = this.openLocatedShard(BrainCatalogEntityType.ContextFork, id);
+        if (shard) {
+            return shard.contextForkRepo.get(id);
+        }
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.contextForkRepo.get(id);
+            if (row) return row;
+        }
+        return null;
     }
 
     public listContextForks(input: {
@@ -236,11 +437,21 @@ export class BrainStore extends BrainComponent {
         sourceBlackboardTurnId?: string;
         limit?: number;
     } = {}): ContextForkRecord[] {
-        return this.requireContextForkRepo().list(input);
+        return this.mergeAcrossShards((repos) => repos.contextForkRepo.list(input), input.limit ?? 100, (left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt),
+        );
     }
 
     public writeSceneRecord(record: SceneRecord): SceneRecord {
-        return this.requireSceneRecordRepo().write(record);
+        this.rotateLiveShardForTs(Date.parse(record.updatedAt));
+        const written = this.requireLive().sceneRecordRepo.write(record);
+        this.catalog?.upsertLocator({
+            entityId: written.id,
+            entityType: BrainCatalogEntityType.SceneRecord,
+            shardId: LIVE_SHARD_ID,
+            updatedAt: written.updatedAt,
+        });
+        return written;
     }
 
     public listSceneRecords(input: {
@@ -249,223 +460,473 @@ export class BrainStore extends BrainComponent {
         blackboardTurnId?: string;
         limit?: number;
     } = {}): SceneRecord[] {
-        return this.requireSceneRecordRepo().list(input);
+        return this.mergeAcrossShards((repos) => repos.sceneRecordRepo.list(input), input.limit ?? 100, (left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt),
+        );
     }
 
     public writeLink(record: MemoryLinkRecord): void {
-        this.requireLinkRepo().write(record);
+        this.rotateLiveShardForTs(record.createdAt);
+        this.requireLive().linkRepo.write(record);
     }
 
     public listLinks(input: { fromId?: string; toId?: string; type?: MemoryLinkType; limit?: number } = {}): MemoryLinkRecord[] {
-        return this.requireLinkRepo().list(input);
+        return this.mergeAcrossShards((repos) => repos.linkRepo.list(input), input.limit ?? 100, (left, right) =>
+            right.createdAt - left.createdAt,
+        );
     }
 
     public upsertCodename(record: CodenameRecord): CodenameRecord {
-        return this.requireCodenameRepo().upsert(record);
+        this.rotateLiveShardForTs(record.lastUsedAt);
+        return this.requireLive().codenameRepo.upsert(record);
     }
 
     public touchCodename(id: string, ts: number): void {
-        this.requireCodenameRepo().touch(id, ts);
+        this.rotateLiveShardForTs(ts);
+        this.requireLive().codenameRepo.touch(id, ts);
     }
 
     public bindCodenameProject(id: string, projectId: string): void {
-        this.requireCodenameRepo().bindProject(id, projectId);
+        this.rotateLiveShardForTs(Date.now());
+        this.requireLive().codenameRepo.bindProject(id, projectId);
     }
 
     public getCodename(id: string): CodenameRecord | null {
-        return this.requireCodenameRepo().get(id);
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.codenameRepo.get(id);
+            if (row) return row;
+        }
+        return null;
     }
 
     public listCodenames(input: { userId?: string; limit?: number } = {}): CodenameRecord[] {
-        return this.requireCodenameRepo().list(input);
+        return this.mergeAcrossShards((repos) => repos.codenameRepo.list(input), input.limit ?? 100, (left, right) =>
+            right.lastUsedAt - left.lastUsedAt,
+        );
     }
 
     public getCodenameByName(userId: string, name: string): CodenameRecord | null {
-        return this.requireCodenameRepo().getByName(userId, name);
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.codenameRepo.getByName(userId, name);
+            if (row) return row;
+        }
+        return null;
     }
 
-    /**
-     * Project registry for explicit `/project` scope selection.
-     * This table stores only structured paths and counters; runtime context must
-     * still pass the active project every turn, so it does not become a session.
-     */
     public upsertProject(record: ProjectRecord): ProjectRecord {
-        return this.requireProjectRepo().upsert(record);
+        this.rotateLiveShardForTs(record.updatedAt);
+        const written = this.requireLive().projectRepo.upsert(record);
+        this.catalog?.upsertLocator({
+            entityId: written.id,
+            entityType: BrainCatalogEntityType.Project,
+            shardId: LIVE_SHARD_ID,
+            updatedAt: new Date(written.updatedAt).toISOString(),
+        });
+        return written;
     }
 
     public getProject(id: string): ProjectRecord | null {
-        return this.requireProjectRepo().get(id);
+        const shard = this.openLocatedShard(BrainCatalogEntityType.Project, id);
+        if (shard) return shard.projectRepo.get(id);
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.projectRepo.get(id);
+            if (row) return row;
+        }
+        return null;
     }
 
     public listProjects(input: { userId?: string; limit?: number } = {}): ProjectRecord[] {
-        return this.requireProjectRepo().list(input);
+        return this.mergeAcrossShards((repos) => repos.projectRepo.list(input), input.limit ?? 100, (left, right) =>
+            right.lastUsedAt - left.lastUsedAt,
+        );
     }
 
-    /**
-     * P2 inbox 收口：取用户最近被 touch 过且仍未升格（projectId IS NULL）的 codename，
-     * 用于召回侧偏变（让 inbox 召回向"用户当前正在用的那个 codename"倾斜）。
-     * 零字符匹配——只看 last_used_at >= sinceTs 资源指标 + project_id IS NULL 结构化字段。
-     */
     public getMostRecentTouchedCodename(userId: string, sinceTs: number): CodenameRecord | null {
-        return this.requireCodenameRepo().getMostRecentTouched(userId, sinceTs);
+        const rows = this.listCodenames({ userId, limit: 100 }).filter((row) => row.lastUsedAt >= sinceTs && !row.projectId);
+        rows.sort((left, right) => right.lastUsedAt - left.lastUsedAt);
+        return rows[0] ?? null;
     }
 
-    /**
-     * EQ-01 slice A：写入 / 覆盖某用户最新情绪状态（latest-only UPSERT）。
-     * append-only 历史轨迹由 `memory_events` 中模型同轮记录的对话事件携带，
-     * 此处只保留"现在的样子"以便快速取读 + 衰减。
-     */
     public upsertEqState(state: EqState): void {
-        this.requireEqStateRepo().upsert(state);
+        this.rotateLiveShardForTs(state.updatedAt);
+        this.requireLive().eqStateRepo.upsert(state);
     }
 
-    /** 取某用户最新 EQ 状态。无记录返回 null。 */
     public getEqState(userId: string): EqState | null {
-        return this.requireEqStateRepo().get(userId);
+        for (const repos of this.iterReadableShards()) {
+            const row = repos.eqStateRepo.get(userId);
+            if (row) return row;
+        }
+        return null;
     }
 
-    /**
-     * LF-R3：取该用户最近一次未答复的 ask 事件。"未答复"= 既不是 Abandoned/Archived，
-     * 也没有任何 ask-answer-pair 子事件（parent_id 指向它）。
-     */
-    public getLatestPendingAsk(userId: string): MemoryEventRecord | null {
-        return this.requireEventRepo().getLatestPendingAsk(userId);
+    public getLatestPendingAsk(_userId: string): MemoryEventRecord | null {
+        const asks = this.listEvents({
+            type: MemoryEventType.Ask,
+            limit: 64,
+            statusIn: [MemoryEventStatus.Live, MemoryEventStatus.Resumed],
+        }).filter((row) => !this.hasAskBeenAnswered(row.id));
+        asks.sort((left, right) => right.ts - left.ts);
+        return asks[0] ?? null;
     }
 
-    /**
-     * LF-R3：链深度 = 从 pending ask 沿 parent_id 反向追溯，前序 ask 事件个数 + 1。
-     * 用于 `memory.tuning.ghost.maxChainDepth` 强制 reply 阈值检查。
-     */
     public countAskChainDepth(askEventId: string): number {
-        return this.requireEventRepo().countAskChainDepth(askEventId);
+        let depth = 1;
+        let cursor = this.getEvent(askEventId);
+        for (let index = 0; index < 32 && cursor?.parentId; index += 1) {
+            const parent = this.getEvent(cursor.parentId);
+            if (!parent || parent.type !== MemoryEventType.Ask) break;
+            depth += 1;
+            cursor = parent;
+        }
+        return depth;
     }
 
-    /**
-     * LF-R4：列出当前用户的 ghost-context 事件，按 ts 倒序。
-     * "active" = status ∈ {live, resumed}（drop = abandoned；archive = archived；不展示）。
-     * codenameId 可选，传入则只看该工作目录下的 ghost。
-     */
-    public listActiveGhosts(
-        userId: string,
-        options: { codenameId?: string | null; limit?: number } = {},
-    ): MemoryEventRecord[] {
-        return this.requireEventRepo().listActiveGhosts(userId, options);
+    public listActiveGhosts(_userId: string, options: { codenameId?: string | null; limit?: number } = {}): MemoryEventRecord[] {
+        const rows = this.listEvents({
+            ...(options.codenameId !== undefined ? { codenameId: options.codenameId ?? undefined } : {}),
+            type: MemoryEventType.GhostContext,
+            statusIn: [MemoryEventStatus.Live, MemoryEventStatus.Resumed],
+            limit: options.limit ?? 50,
+        });
+        return rows.filter((row) => {
+            if (options.codenameId === null) return row.codenameId == null;
+            if (typeof options.codenameId === "string") return row.codenameId === options.codenameId;
+            return true;
+        });
     }
 
-    /**
-     * LF-R4 fork/fresh hint：合并 patch 到 ghost-context content，并保留其它字段。
-     * 仅对 `type='ghost-context'` 生效；其他类型直接抛错避免误用。
-     */
     public patchGhostContent(eventId: string, patch: Record<string, unknown>): MemoryEventRecord | null {
-        return this.requireEventRepo().patchGhostContent(eventId, patch);
+        this.rotateLiveShardForTs(Date.now());
+        return this.requireLive().eventRepo.patchGhostContent(eventId, patch);
     }
 
-    /**
-     * LF-R5 identity revert：通用的事件 content 整体替换（不限 type）。
-     * Identity revert 等审计操作只允许写入 content；schema 列（type、parent_id、user_id 等）不可改。
-     */
     public updateEventContent(eventId: string, nextContent: Record<string, unknown>): MemoryEventRecord | null {
-        return this.requireEventRepo().updateContent(eventId, nextContent);
+        this.rotateLiveShardForTs(Date.now());
+        return this.requireLive().eventRepo.updateContent(eventId, nextContent);
     }
 
-    /**
-     * LF-R4 evidence weight：判断给定 askEventId 是否已有 ask-answer-pair 子事件。
-     * 仅消费结构化关系（parent_id + type），不读对话文本。
-     */
     public hasAskBeenAnswered(askEventId: string): boolean {
-        return this.requireEventRepo().hasAskBeenAnswered(askEventId);
+        for (const repos of this.iterReadableShards()) {
+            if (repos.eventRepo.hasAskBeenAnswered(askEventId)) return true;
+        }
+        return false;
     }
 
-    /**
-     * LF-R5 identity 召回：列出指定 user 的 live `identity-append` 事件，按 ts 倒序。
-     * 状态层为 `abandoned` 的（revert 过）会被过滤；`archived` 同理（冷归档已外迁）。
-     */
-    public listActiveIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
-        return this.requireEventRepo().listActiveIdentity(userId, options);
+    public listActiveIdentity(_userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
+        return this.listEvents({
+            type: MemoryEventType.IdentityAppend,
+            statusIn: [MemoryEventStatus.Live],
+            limit: options.limit ?? 32,
+        });
     }
 
-    /**
-     * LF-R5 identity 历史：列出所有 identity append（含 revert / archived），按 ts 倒序。
-     * 仅 CLI / TUI 审计使用，prompt 召回请用 listActiveIdentity。
-     */
-    public listAllIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
-        return this.requireEventRepo().listAllIdentity(userId, options);
+    public listAllIdentity(_userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
+        return this.listEvents({
+            type: MemoryEventType.IdentityAppend,
+            limit: options.limit ?? 64,
+        });
     }
 
-    private requireDb(): Database {
-        if (!this.db || !this.opened) {
+    public listShards(): BrainShardDescriptor[] {
+        return this.catalog?.listShards() ?? [];
+    }
+
+    public sealLiveShardIfStale(nowMs = Date.now()): BrainShardDescriptor | null {
+        if (!this.opened || !this.live) {
             throw new Error("BrainStore is not opened; call open() before use.");
         }
-        return this.db;
+        const currentMonth = utcMonthKey(nowMs);
+        if (this.currentLiveMonth === currentMonth) {
+            this.catalog?.upsertShard(this.describeLiveShard());
+            return null;
+        }
+        return this.sealCurrentLiveShard();
     }
 
-    private requireCodenameRepo(): BrainCodenameRepo {
-        if (!this.codenameRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
-        }
-        return this.codenameRepo;
+    private describeLiveShard(): BrainShardDescriptor {
+        const db = this.requireLive().db;
+        const row = db
+            .query<{ minTs: number | null; maxTs: number | null; count: number }, []>(
+                "SELECT MIN(ts) AS minTs, MAX(ts) AS maxTs, COUNT(*) AS count FROM memory_events",
+            )
+            .get() ?? { minTs: null, maxTs: null, count: 0 };
+        return {
+            id: LIVE_SHARD_ID,
+            status: "live",
+            eventCount: row.count,
+            monthKey: this.currentLiveMonth,
+            startTs: row.minTs ?? undefined,
+            endTs: row.maxTs ?? undefined,
+        };
     }
 
-    private requireContextForkRepo(): BrainContextForkRepo {
-        if (!this.contextForkRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
+    private mergeAcrossShards<T>(reader: (repos: BrainShardRepos) => T[], limit: number, sorter: (left: T, right: T) => number): T[] {
+        const rows: T[] = [];
+        for (const repos of this.iterReadableShards()) {
+            rows.push(...reader(repos));
+            if (rows.length >= limit * 3) break;
         }
-        return this.contextForkRepo;
+        rows.sort(sorter);
+        return rows.slice(0, Math.max(1, Math.min(500, Math.floor(limit))));
     }
 
-    private requireEqStateRepo(): BrainEqStateRepo {
-        if (!this.eqStateRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
+    private shardForEvent(eventId: string): BrainShardRepos | null {
+        const located = this.openLocatedShard(BrainCatalogEntityType.Event, eventId) ?? this.openLocatedShard(BrainCatalogEntityType.Ghost, eventId);
+        if (located) return located;
+        for (const repos of this.iterReadableShards()) {
+            if (repos.eventRepo.get(eventId)) return repos;
         }
-        return this.eqStateRepo;
+        return null;
     }
 
-    private requireEventRepo(): BrainEventRepo {
-        if (!this.eventRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
+    private iterReadableShards(): BrainShardRepos[] {
+        const shards: BrainShardRepos[] = [];
+        if (this.live) shards.push(this.live);
+        for (const shard of this.catalog?.listShards() ?? []) {
+            if (shard.status !== "archived" || !shard.archivePath) continue;
+            shards.push(this.getArchiveShard(shard.id, shard.archivePath));
         }
-        return this.eventRepo;
+        return shards;
     }
 
-    private requireLinkRepo(): BrainLinkRepo {
-        if (!this.linkRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
-        }
-        return this.linkRepo;
+    private openLocatedShard(entityType: BrainCatalogEntityType, entityId: string): BrainShardRepos | null {
+        const shardId = this.catalog?.getShardId(entityType, entityId);
+        if (!shardId) return null;
+        if (shardId === LIVE_SHARD_ID) return this.live;
+        const descriptor = this.catalog?.listShards().find((item) => item.id === shardId);
+        if (!descriptor?.archivePath) return null;
+        return this.getArchiveShard(descriptor.id, descriptor.archivePath);
     }
 
-    private requireProjectRepo(): BrainProjectRepo {
-        if (!this.projectRepo || !this.opened) {
+    private requireLive(): BrainShardRepos {
+        if (!this.live || !this.opened) {
             throw new Error("BrainStore is not opened; call open() before use.");
         }
-        return this.projectRepo;
+        return this.live;
     }
 
-    private requireSceneRecordRepo(): BrainSceneRecordRepo {
-        if (!this.sceneRecordRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
+    private openShard(path: string, readonly = false): BrainShardRepos {
+        const db = new Database(path, readonly ? { readonly: true } : undefined);
+        if (!readonly) {
+            db.exec("PRAGMA journal_mode = WAL");
+            db.exec("PRAGMA synchronous = NORMAL");
+            db.exec("PRAGMA foreign_keys = ON");
+            brainSchema.install(db);
         }
-        return this.sceneRecordRepo;
+        return {
+            db,
+            codenameRepo: new BrainCodenameRepo(db),
+            contextForkRepo: new BrainContextForkRepo(db),
+            eqStateRepo: new BrainEqStateRepo(db),
+            eventRepo: new BrainEventRepo(db),
+            linkRepo: new BrainLinkRepo(db),
+            projectRepo: new BrainProjectRepo(db),
+            sceneRecordRepo: new BrainSceneRecordRepo(db),
+            stateRepo: new BrainStateRepo(db),
+            summaryRepo: new BrainSummaryRepo(db),
+            taskPlanRepo: new BrainTaskPlanRepo(db),
+        };
     }
 
-    private requireStateRepo(): BrainStateRepo {
-        if (!this.stateRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
-        }
-        return this.stateRepo;
+    private getArchiveShard(shardId: string, path: string): BrainShardRepos {
+        const existing = this.archiveShards.get(shardId);
+        if (existing) return existing;
+        const opened = this.openShard(path, true);
+        this.archiveShards.set(shardId, opened);
+        return opened;
     }
 
-    private requireSummaryRepo(): BrainSummaryRepo {
-        if (!this.summaryRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
-        }
-        return this.summaryRepo;
+    private rotateLiveShardIfNeeded(): void {
+        const currentMonth = utcMonthKey(Date.now());
+        const liveShardMonth = existsSync(this.options.dbPath) ? detectLiveShardMonth(this.options.dbPath) : currentMonth;
+        if (!existsSync(this.options.dbPath) || liveShardMonth === currentMonth) return;
+        this.archiveDetachedLiveShard(liveShardMonth);
     }
 
-    private requireTaskPlanRepo(): BrainTaskPlanRepo {
-        if (!this.taskPlanRepo || !this.opened) {
-            throw new Error("BrainStore is not opened; call open() before use.");
+    private rotateLiveShardForTs(ts: number): void {
+        if (!this.live) return;
+        const currentMonth = utcMonthKey(Date.now());
+        if (this.currentLiveMonth !== currentMonth) {
+            this.sealCurrentLiveShard();
         }
-        return this.taskPlanRepo;
+        if (utcMonthKey(ts) !== this.currentLiveMonth) {
+            this.catalog?.upsertShard(this.describeLiveShard());
+        }
+    }
+
+    private sealCurrentLiveShard(): BrainShardDescriptor | null {
+        if (!this.live) return null;
+        const monthKey = this.currentLiveMonth;
+        const descriptor = this.archiveAttachedLiveShard(monthKey);
+        this.live = this.openShard(this.options.dbPath);
+        this.currentLiveMonth = ensureLiveShardMonth(this.live.db);
+        this.catalog?.upsertShard(this.describeLiveShard());
+        return descriptor;
+    }
+
+    private archiveDetachedLiveShard(monthKey: string): BrainShardDescriptor {
+        const archivePath = join(this.archiveDir, `brain.${monthKey}.db`);
+        mkdirSync(dirname(archivePath), { recursive: true });
+        if (existsSync(archivePath)) {
+            copyFileSync(this.options.dbPath, archivePath);
+        } else {
+            renameSync(this.options.dbPath, archivePath);
+        }
+        const descriptor = describeArchiveShard(archivePath, monthKey);
+        this.catalog?.upsertShard(descriptor);
+        if (this.catalog) {
+            importShardLocators(this.catalog, archivePath, monthKey);
+        }
+        return descriptor;
+    }
+
+    private archiveAttachedLiveShard(monthKey: string): BrainShardDescriptor | null {
+        const liveEventCount = this.describeLiveShard().eventCount;
+        this.live?.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        this.live?.db.close();
+        this.live = null;
+        if (liveEventCount === 0) {
+            if (existsSync(this.options.dbPath)) {
+                unlinkSync(this.options.dbPath);
+            }
+            return null;
+        }
+        return this.archiveDetachedLiveShard(monthKey);
+    }
+}
+
+function utcMonthKey(nowMs: number): string {
+    const now = new Date(nowMs);
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function detectLiveShardMonth(path: string): string {
+    const db = new Database(path, { readonly: true });
+    try {
+        try {
+            const stored = db
+                .query<{ value: string | null }, [string]>("SELECT value FROM brain_meta WHERE key = ?1")
+                .get("live_month_key")?.value;
+            if (stored && stored.length > 0) {
+                return stored;
+            }
+        } catch {
+            // Pre-meta live brains are still valid; fall back to the latest event month.
+        }
+        const row = db
+            .query<{ month: string | null }, []>("SELECT substr(MAX(time_bucket), 1, 7) AS month FROM memory_events")
+            .get();
+        return row?.month ?? utcMonthKey(Date.now());
+    } finally {
+        db.close();
+    }
+}
+
+function ensureLiveShardMonth(db: Database): string {
+    brainSchema.install(db);
+    const stored = db.query<{ value: string | null }, [string]>("SELECT value FROM brain_meta WHERE key = ?1").get("live_month_key")
+        ?.value;
+    if (stored && stored.length > 0) {
+        return stored;
+    }
+    const month = utcMonthKey(Date.now());
+    db.prepare("INSERT OR REPLACE INTO brain_meta(key, value) VALUES (?1, ?2)").run("live_month_key", month);
+    return month;
+}
+
+function describeArchiveShard(path: string, monthKey: string): BrainShardDescriptor {
+    return {
+        id: monthKey,
+        status: "archived",
+        archivePath: path,
+        eventCount: countEvents(path),
+        monthKey,
+        startTs: detectShardMinTs(path) ?? undefined,
+        endTs: detectShardMaxTs(path) ?? undefined,
+        sealedAt: new Date().toISOString(),
+    };
+}
+
+function countEvents(path: string): number {
+    const db = new Database(path, { readonly: true });
+    try {
+        const row = db.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM memory_events").get();
+        return row?.count ?? 0;
+    } finally {
+        db.close();
+    }
+}
+
+function detectShardMinTs(path: string): number | null {
+    const db = new Database(path, { readonly: true });
+    try {
+        const row = db.query<{ ts: number | null }, []>("SELECT MIN(ts) AS ts FROM memory_events").get();
+        return row?.ts ?? null;
+    } finally {
+        db.close();
+    }
+}
+
+function detectShardMaxTs(path: string): number | null {
+    const db = new Database(path, { readonly: true });
+    try {
+        const row = db.query<{ ts: number | null }, []>("SELECT MAX(ts) AS ts FROM memory_events").get();
+        return row?.ts ?? null;
+    } finally {
+        db.close();
+    }
+}
+
+function importShardLocators(catalog: BrainCatalogStore, archivePath: string, shardId: string): void {
+    const db = new Database(archivePath, { readonly: true });
+    try {
+        const events = db
+            .query<{ id: string; ts: number; type: string }, []>("SELECT id, ts, type FROM memory_events")
+            .all();
+        for (const row of events) {
+            catalog.upsertLocator({
+                entityId: row.id,
+                entityType: row.type === MemoryEventType.GhostContext ? BrainCatalogEntityType.Ghost : BrainCatalogEntityType.Event,
+                shardId,
+                ts: row.ts,
+                updatedAt: new Date(row.ts).toISOString(),
+            });
+        }
+
+        for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM context_forks").all()) {
+            catalog.upsertLocator({
+                entityId: row.id,
+                entityType: BrainCatalogEntityType.ContextFork,
+                shardId,
+                updatedAt: row.updated_at,
+            });
+        }
+        for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM task_plans").all()) {
+            catalog.upsertLocator({
+                entityId: row.id,
+                entityType: BrainCatalogEntityType.TaskPlan,
+                shardId,
+                updatedAt: row.updated_at,
+            });
+        }
+        for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM scene_records").all()) {
+            catalog.upsertLocator({
+                entityId: row.id,
+                entityType: BrainCatalogEntityType.SceneRecord,
+                shardId,
+                updatedAt: row.updated_at,
+            });
+        }
+        for (const row of db.query<{ id: string; updated_at: number }, []>("SELECT id, updated_at FROM projects").all()) {
+            catalog.upsertLocator({
+                entityId: row.id,
+                entityType: BrainCatalogEntityType.Project,
+                shardId,
+                updatedAt: new Date(row.updated_at).toISOString(),
+            });
+        }
+    } finally {
+        db.close();
     }
 }

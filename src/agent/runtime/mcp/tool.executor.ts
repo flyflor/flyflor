@@ -535,7 +535,7 @@ export class RuntimeMcpToolExecutor {
         requestId: string,
     ): McpToolCallExecution & { call: McpToolCallRequest & { key: string } } {
         this.events.publish(
-            event(RuntimeEventType.CttlLoopGuardBlocked, {
+            event(RuntimeEventType.ExecutiveLoopGuardBlocked, {
                 message: decision.message,
                 reason: decision.reason ?? CttlLoopGuardReason.RepeatedCallNoProgress,
                 server: call.server,

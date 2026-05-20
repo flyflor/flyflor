@@ -15,7 +15,7 @@ describe("ContextForkStore", () => {
                     userId: "u1",
                     title: "Fork",
                     summary: "Summary",
-                    scopeSummary: "Scope",
+                    continuitySummary: "Scope",
                     maxContextTokens: 4096,
                     inheritedEventIds: ["event-1"],
                     createdAt: "2026-05-01T00:00:00.000Z",

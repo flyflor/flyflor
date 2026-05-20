@@ -6,8 +6,8 @@ const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
     [RuntimeEventType.MemoryAskChainCapped]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskMutexViolation]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskRecorded]: RuntimeEventClass.Ask,
-    [RuntimeEventType.CttlLongHorizonLoopPaused]: RuntimeEventClass.Ask,
-    [RuntimeEventType.CttlLongHorizonLoopResumed]: RuntimeEventClass.Ask,
+    [RuntimeEventType.ExecutiveLoopPaused]: RuntimeEventClass.Ask,
+    [RuntimeEventType.ExecutiveLoopResumed]: RuntimeEventClass.Ask,
     [RuntimeEventType.BlackboardDecisionRequested]: RuntimeEventClass.Question,
     [RuntimeEventType.MemoryProjectOfferProposed]: RuntimeEventClass.Question,
     [RuntimeEventType.MemorySkillOfferProposed]: RuntimeEventClass.Question,
@@ -47,7 +47,7 @@ export class RuntimeEventClassifier {
             return RuntimeEventClass.Read;
         }
         if (
-            type.startsWith("cttl.") ||
+            type.startsWith("executive.") ||
             type.startsWith("sandbox.") ||
             type.startsWith("plugin.") ||
             type.startsWith("mcp.") ||

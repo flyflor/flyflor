@@ -127,9 +127,9 @@ Rust 恢复长线 loop 时，优先读取：
 
 事件流辅助提示：
 
-- `cttl.long_horizon_loop.paused`
-- `cttl.long_horizon_loop.resumed`
-- `cttl.loop.guard.blocked`
+- `executive.loop.paused`
+- `executive.loop.resumed`
+- `executive.loop.guard.blocked`
 
 ## 事件流消费
 

@@ -315,7 +315,7 @@ describe("BrainStore", () => {
                 userId: "u1",
                 title: "Installer fork",
                 summary: "Isolate installer decisions.",
-                scopeSummary: "Installer files only.",
+                continuitySummary: "Installer files only.",
                 maxContextTokens: 12000,
                 inheritedEventIds: ["episode-1"],
                 createdAt: "2026-05-16T00:00:00.000Z",
@@ -341,7 +341,7 @@ describe("BrainStore", () => {
             expect(store.listContextForks({ userId: "u1", sourceEventId: "episode-1" })[0]?.maxContextTokens).toBe(
                 12000,
             );
-            expect(store.getContextFork("fork-1")?.scopeSummary).toBe("Installer files only.");
+            expect(store.getContextFork("fork-1")?.continuitySummary).toBe("Installer files only.");
             expect(store.listSceneRecords({ userId: "u1", sourceEventId: "episode-1" })[0]?.visibleFacts).toEqual([
                 "plan exists",
             ]);

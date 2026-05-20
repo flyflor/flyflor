@@ -76,14 +76,14 @@ describe("EventsComponent explicit hooks", () => {
     });
 
     test("CTTL loop guard events are classified as effects", () => {
-        expect(classifyRuntimeEvent(RuntimeEventType.CttlCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
-        expect(classifyRuntimeEvent(RuntimeEventType.CttlLoopGuardBlocked)).toBe(RuntimeEventClass.Effect);
+        expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
+        expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveLoopGuardBlocked)).toBe(RuntimeEventClass.Effect);
         expect(classifyRuntimeEvent(RuntimeEventType.McpCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
     });
 
     test("event classes keep ask timeline events separate from planning write events", () => {
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryAskRecorded)).toBe(RuntimeEventClass.Ask);
-        expect(classifyRuntimeEvent(RuntimeEventType.CttlLongHorizonLoopPaused)).toBe(RuntimeEventClass.Ask);
+        expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveLoopPaused)).toBe(RuntimeEventClass.Ask);
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryTaskPlanWritten)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryContextForkWritten)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.MemorySceneRecordWritten)).toBe(RuntimeEventClass.Write);

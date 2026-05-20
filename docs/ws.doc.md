@@ -1,0 +1,1210 @@
+# WebSocket API
+
+## 一句话定位
+
+本文是 Flyflor 当前主线 `/ws` 血管协议的详细 API 文档。
+
+它只描述真实已实现的 WebSocket surface：
+
+- 连接地址
+- envelope 结构
+- message type
+- 请求/响应顺序
+- 错误码
+- 当前 `turn.final` 中 ask/todo/data 的读取方式
+- 对应源码与单元测试位置
+
+如果你在调 Rust CLI / TUI / gateway shell，这份文档应该比 `control.protocol.md` 更像直接可用的接口手册。
+
+## 相关代码
+
+核心实现：
+
+- `src/agent/gateway/module.ts`
+- `src/agent/gateway/control.ts`
+- `src/protocol/control/envelope.ts`
+- `src/protocol/control/component.ts`
+- `src/protocol/contracts/enums.ts`
+
+关键测试：
+
+- `tests/gateway.module.test.ts`
+- `tests/gateway.ws.test.ts`
+- `tests/protocol.control.test.ts`
+
+## HTTP Surface
+
+Gateway 当前只暴露三个 HTTP 路径：
+
+| Path | Method | 作用 | 代码 | 测试 |
+| --- | --- | --- | --- | --- |
+| `/ws` | `GET` | WebSocket upgrade | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
+| `/health` | `GET` | 健康检查 | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
+| `/channels` | `GET` | 当前血管状态快照 | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
+
+### `GET /health`
+
+响应：
+
+```json
+{
+  "ok": true
+}
+```
+
+参考：
+
+- `tests/gateway.module.test.ts` `GET /health returns ok without runtime involvement`
+
+### `GET /channels`
+
+响应主体：
+
+```json
+{
+  "gateway": {
+    "gatewayRunning": true,
+    "host": "127.0.0.1",
+    "port": 8788,
+    "channels": [
+      {
+        "name": "ws",
+        "adapter": "GatewayControlHub",
+        "transport": "websocket",
+        "connected": true,
+        "streaming": true,
+        "configured": true,
+        "implemented": true,
+        "state": "connected",
+        "capabilities": {
+          "finalReply": true,
+          "typing": true,
+          "replyReference": true,
+          "thread": true,
+          "messageUpdate": false,
+          "cardUpdate": false,
+          "reactions": false,
+          "topicCreate": false
+        }
+      }
+    ],
+    "connectedCount": 1,
+    "degradedCount": 0,
+    "streamingCount": 1,
+    "startedAt": "2026-05-21T00:00:00.000Z",
+    "uptimeMs": 1234,
+    "url": "http://127.0.0.1:8788/"
+  },
+  "channels": [
+    {
+      "name": "ws"
+    }
+  ]
+}
+```
+
+参考：
+
+- `tests/gateway.module.test.ts` `GET /channels returns the minimal gateway status snapshot`
+
+### `GET /ws`
+
+行为：
+
+- 若 GatewayControlHub 未准备好，返回 `503`
+- 若准备好，执行 WebSocket upgrade
+
+未就绪响应：
+
+```json
+{
+  "error": "gateway_control_not_ready"
+}
+```
+
+参考：
+
+- `tests/gateway.module.test.ts` `GET /ws returns 503 before GatewayControlHub is started`
+
+## Protocol Id
+
+当前稳定 protocol id 只有两个：
+
+### 控制面 envelope
+
+```json
+"protocol": "flyflor.ws.v1"
+```
+
+### 事件广播 envelope
+
+```json
+"protocol": "flyflor.event.v1"
+```
+
+代码：
+
+- `src/protocol/contracts/enums.ts`
+- `src/protocol/control/envelope.ts`
+
+测试：
+
+- `tests/protocol.control.test.ts` `roundtrips a typed ws envelope`
+- `tests/protocol.control.test.ts` `rejects unknown control protocol versions`
+
+## Message Types
+
+当前稳定 transport message type：
+
+- `ack`
+- `capability.catalog.get`
+- `capability.catalog.snapshot`
+- `client.hello`
+- `error`
+- `event.publish`
+- `event.subscribe`
+- `event.unsubscribe`
+- `gateway.message.send`
+- `gateway.status.get`
+- `gateway.status.snapshot`
+- `history.list`
+- `history.snapshot`
+- `ping`
+- `pong`
+- `server.hello`
+- `turn.delta`
+- `turn.error`
+- `turn.final`
+
+代码：
+
+- `src/protocol/contracts/enums.ts`
+
+## 历史对话列表获取
+
+`/ws` 现在已经正式提供只读历史查询：
+
+- `history.list`
+- `history.snapshot`
+
+这条接口的职责非常薄：
+
+- gateway 接收分页参数
+- gateway 直接调用现有持久化历史读取
+- gateway 返回稳定 JSON 快照
+
+它不是新的思考逻辑，也不是新的会话层。
+它只是血管层把已存在的持久化历史暴露出来。
+
+### 内核当前读法
+
+当前历史对话读取入口：
+
+- `src/cognitive/hippocampus/memory/module.ts` `listChatHistory({ beforeTs?, limit? })`
+
+它实际做的是：
+
+1. 从 `brain.db.memory_events` 读取：
+   - `type = "event"`
+   - `ts <= beforeTs`（如果传了）
+   - `ORDER BY ts DESC`
+   - `LIMIT ?`
+2. 再按 `sourceEventId = event.id` 回查：
+   - `task_plans`
+   - `scene_records`
+   - `context_forks`
+3. 最后把结果 reverse 成按时间正序返回
+
+对应代码：
+
+- `src/cognitive/hippocampus/memory/module.ts` `listChatHistory(...)`
+- `src/cognitive/hippocampus/memory/module.ts` `historyPlanningForEvent(...)`
+- `src/entities/memory/brain/event/repo.ts` `list(...)`
+- `src/cognitive/hippocampus/memory/history/turn.ts` `historyTurnFromEvent(...)`
+- `src/agent/gateway/module.ts` `listChatHistory: (input) => this.runtime.listChatHistory(...)`
+- `src/agent/gateway/control.ts` `handleHistoryList(...)`
+- `src/protocol/control/envelope.ts` `readGatewayControlHistoryListInput(...)`
+- `src/protocol/control/envelope.ts` `buildGatewayControlHistorySnapshotPayload(...)`
+
+### 当前返回 shape
+
+内核当前组装后的历史对象 shape：
+
+```ts
+interface ChatHistoryTurn {
+  assistantText: string;
+  eventId: string;
+  contextForks?: ContextForkRecord[];
+  scenes?: SceneRecord[];
+  taskPlans?: TaskPlanRecord[];
+  ts: number;
+  userText: string;
+}
+```
+
+关键点：
+
+- `userText` 来自 `memory_events.content.userText`
+- `assistantText` 来自 `memory_events.content.assistantText`
+- 任一字段缺失会直接抛错
+- `taskPlans` / `scenes` / `contextForks` 都是按 `sourceEventId = event.id` 补挂上去
+
+### SQL 语义
+
+`memory_events` 当前实际分页语义来自 `BrainEventRepo.list(...)`：
+
+```sql
+SELECT e.*
+FROM memory_events e
+LEFT JOIN memory_state s ON s.event_id = e.id
+WHERE (? IS NULL OR e.type = ?)
+  AND (? IS NULL OR e.ts <= ?)
+ORDER BY e.ts DESC
+LIMIT ?
+```
+
+历史对话读取时额外固定：
+
+- `type = "event"`
+- `limit = 默认 20`
+
+再回查 planning 元数据：
+
+- `brain.listTaskPlans({ sourceEventId, limit: 8 })`
+- `brain.listSceneRecords({ sourceEventId, limit: 16 })`
+- `brain.listContextForks({ sourceEventId, limit: 8 })`
+
+### 当前测试覆盖
+
+这条 db 读法当前有明确测试：
+
+- `tests/tui.chat.history.test.ts` `lists chat turns chronologically and pages older turns by timestamp`
+- `tests/tui.chat.history.test.ts` `throws when a persisted chat history event is malformed`
+- `tests/tui.chat.history.test.ts` `includes persisted planning metadata for history side-panel replay`
+- `tests/tui.chat.history.test.ts` `persists deep-think history data for future TUI ask-loop rendering`
+- `tests/tui.chat.history.test.ts` `persists blackboard replay data for future TUI discussion rendering`
+
+## `history.list`
+
+用途：
+
+- 读取某个用户的历史对话
+- 按时间戳向更早历史翻页
+- 给 Rust TUI / shell / 调试器提供黑板、深度思考、task plan 回放面
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "history-list-1",
+  "type": "history.list",
+  "at": "2026-05-21T00:00:00.000Z",
+  "requestId": "req-history-1",
+  "payload": {
+    "limit": 20,
+    "beforeTs": 1747785600000
+  }
+}
+```
+
+字段：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `limit` | 否 | 返回条数；不传走内核默认值 |
+| `beforeTs` | 否 | 只取 `ts <= beforeTs` 的更早历史 |
+
+错误：
+
+- payload 缺失时返回 `error`，`code=invalid-payload`
+- 不存在 `userId` / session / scope 参数；历史就是当前 brain ledger 的全局流水账
+
+测试：
+
+- `tests/protocol.control.test.ts` `roundtrips history control messages`
+- `tests/protocol.control.test.ts` `rejects invalid message payloads with structured protocol errors`
+
+## `history.snapshot`
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "history-snapshot-1",
+  "type": "history.snapshot",
+  "at": "2026-05-21T00:00:00.100Z",
+  "requestId": "req-history-1",
+  "correlationId": "history-list-1",
+  "payload": {
+    "nextBeforeTs": 1747785599999,
+    "history": [
+      {
+        "eventId": "event-1",
+        "ts": 1747785600000,
+        "userText": "hello",
+        "assistantText": "hi",
+        "taskPlans": [],
+        "scenes": [],
+        "contextForks": []
+      }
+    ]
+  }
+}
+```
+
+字段：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `history` | 是 | 历史 turn 列表，按时间正序 |
+| `nextBeforeTs` | 否 | 下一页建议游标；当前实现为首条记录 `ts - 1` |
+
+当前返回 shape：
+
+```ts
+interface HistoryTurnSnapshot {
+  assistantText: string;
+  eventId: string;
+  contextForks?: ContextForkRecord[];
+  scenes?: SceneRecord[];
+  taskPlans?: TaskPlanRecord[];
+  ts: number;
+  userText: string;
+}
+```
+
+测试：
+
+- `tests/gateway.ws.test.ts` `returns persisted history snapshots through history.list without routing through turn logic`
+- `tests/tui.chat.history.test.ts` 全部历史相关测试继续作为数据 shape 守护
+
+## Semantic Lanes
+
+客户端应该先按 lane 分流，再按具体 message type 细分。
+
+| Lane | 主要 message |
+| --- | --- |
+| `input` | `gateway.message.send` |
+| `stream` | `turn.delta` `turn.final` `turn.error` |
+| `event` | `event.publish` `event.subscribe` `event.unsubscribe` |
+| `ask` | 当前附着在 `turn.final.reply.metadata.ask` |
+| `todo` | 当前附着在 `turn.final.reply.metadata.planning.taskPlans` |
+| `data` | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.list` `history.snapshot` |
+| `error` | `error` |
+| `ping` | `ping` |
+| `pong` | `pong` |
+
+代码：
+
+- `src/protocol/control/envelope.ts` `classifyGatewayControlSemanticType(...)`
+
+测试：
+
+- `tests/protocol.control.test.ts` `maps transport messages onto stable semantic lanes for Rust clients`
+
+## Envelope
+
+### 控制面 envelope
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-1",
+  "type": "gateway.message.send",
+  "at": "2026-05-21T00:00:00.000Z",
+  "requestId": "client-req-1",
+  "correlationId": "optional-parent-envelope-id",
+  "payload": {}
+}
+```
+
+字段：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `protocol` | 是 | 必须是 `flyflor.ws.v1` |
+| `id` | 是 | 当前 envelope 唯一 id |
+| `type` | 是 | transport message type |
+| `at` | 是 | ISO 时间 |
+| `requestId` | 否 | 客户端业务请求关联 id |
+| `correlationId` | 否 | 响应所对应的源 envelope id |
+| `payload` | 否 | message 对应负载 |
+
+### 事件 envelope
+
+```json
+{
+  "protocol": "flyflor.event.v1",
+  "id": "event-1",
+  "type": "event.publish",
+  "at": "2026-05-21T00:00:00.000Z",
+  "requestId": "runtime-req-1",
+  "payload": {
+    "event": {}
+  }
+}
+```
+
+代码：
+
+- `src/protocol/control/envelope.ts`
+
+测试：
+
+- `tests/protocol.control.test.ts` `roundtrips a typed ws envelope`
+- `tests/protocol.control.test.ts` `filters event envelopes by explicit subscription`
+
+## 握手流程
+
+当前连接握手顺序：
+
+1. 客户端连接 `ws://host:port/ws`
+2. 服务端立即发送 `server.hello`
+3. 客户端可选发送 `client.hello`
+4. 服务端返回 `ack`
+5. 客户端可继续发送 `gateway.status.get`、`capability.catalog.get`、`history.list`、`gateway.message.send`
+
+### 1. `server.hello`
+
+连接一打开，服务端立即发送：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-server-1",
+  "type": "server.hello",
+  "at": "2026-05-21T00:00:00.000Z",
+  "payload": {
+    "clientId": "client-1",
+    "connectedAt": "2026-05-21T00:00:00.000Z",
+    "capabilities": {
+      "protocol": "flyflor.ws.v1",
+      "eventStream": true,
+      "commands": [
+        "capability.catalog.get",
+        "client.hello",
+        "event.subscribe",
+        "event.unsubscribe",
+        "gateway.status.get",
+        "history.list",
+        "gateway.message.send",
+        "ping"
+      ],
+      "semanticTypes": [
+        "input",
+        "stream",
+        "event",
+        "ask",
+        "todo",
+        "data",
+        "error",
+        "ping",
+        "pong"
+      ]
+    },
+    "kits": {
+      "schemaVersion": 1,
+      "builtAt": "2026-05-21T00:00:00.000Z",
+      "kits": [],
+      "capabilities": []
+    },
+    "status": {
+      "gatewayRunning": true,
+      "host": "127.0.0.1",
+      "port": 8788,
+      "channels": [],
+      "connectedCount": 1,
+      "degradedCount": 0,
+      "streamingCount": 1
+    }
+  }
+}
+```
+
+代码：
+
+- `src/agent/gateway/control.ts` `sendServerHello(...)`
+- `src/protocol/control/component.ts`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `announces server capabilities on open`
+- `tests/protocol.control.test.ts` `keeps server hello as the connection-level bootstrap snapshot`
+
+### 2. `client.hello`
+
+客户端可选发送：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-client-hello-1",
+  "type": "client.hello",
+  "at": "2026-05-21T00:00:01.000Z",
+  "requestId": "probe-hello",
+  "payload": {
+    "client": {
+      "name": "rust-tui",
+      "version": "0.1.0"
+    }
+  }
+}
+```
+
+注意：
+
+- 当前服务端不会消费 `payload.client` 做状态机修改
+- 它只是返回 `ack`
+
+### 3. `ack`
+
+对 `client.hello` 的响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-ack-1",
+  "type": "ack",
+  "at": "2026-05-21T00:00:01.010Z",
+  "requestId": "probe-hello",
+  "correlationId": "env-client-hello-1",
+  "payload": {
+    "clientId": "client-1",
+    "received": "client.hello"
+  }
+}
+```
+
+代码：
+
+- `src/agent/gateway/control.ts` `handleClientHello(...)`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `client.hello -> ack`
+
+## 状态与 Catalog
+
+### `gateway.status.get`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-status-1",
+  "type": "gateway.status.get",
+  "at": "2026-05-21T00:00:02.000Z",
+  "requestId": "probe-status",
+  "payload": {}
+}
+```
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-status-snapshot-1",
+  "type": "gateway.status.snapshot",
+  "at": "2026-05-21T00:00:02.010Z",
+  "requestId": "probe-status",
+  "correlationId": "env-status-1",
+  "payload": {
+    "status": {
+      "gatewayRunning": true,
+      "host": "127.0.0.1",
+      "port": 8788,
+      "url": "http://127.0.0.1:8788/",
+      "startedAt": "2026-05-21T00:00:00.000Z",
+      "uptimeMs": 1234,
+      "connectedCount": 1,
+      "degradedCount": 0,
+      "streamingCount": 1,
+      "channels": [
+        {
+          "name": "ws",
+          "adapter": "GatewayControlHub",
+          "transport": "websocket",
+          "connected": true,
+          "configured": true,
+          "implemented": true,
+          "streaming": true,
+          "state": "connected",
+          "capabilities": {
+            "finalReply": true,
+            "typing": true,
+            "replyReference": true,
+            "thread": true,
+            "messageUpdate": false,
+            "cardUpdate": false,
+            "reactions": false,
+            "topicCreate": false
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+代码：
+
+- `src/agent/gateway/control.ts` `handleGatewayStatusGet(...)`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `gateway.status.get -> snapshot`
+
+### `capability.catalog.get`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-catalog-1",
+  "type": "capability.catalog.get",
+  "at": "2026-05-21T00:00:03.000Z",
+  "requestId": "probe-catalog",
+  "payload": {}
+}
+```
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-catalog-snapshot-1",
+  "type": "capability.catalog.snapshot",
+  "at": "2026-05-21T00:00:03.010Z",
+  "requestId": "probe-catalog",
+  "correlationId": "env-catalog-1",
+  "payload": {
+    "catalog": null,
+    "kits": {
+      "schemaVersion": 1,
+      "builtAt": "2026-05-21T00:00:03.010Z",
+      "kits": [
+        { "id": "builtin.cli", "kind": "cli", "source": "builtin" },
+        { "id": "builtin.tui", "kind": "tui", "source": "builtin" },
+        { "id": "builtin.gateway", "kind": "gateway", "source": "builtin" },
+        { "id": "builtin.capabilities", "kind": "capability", "source": "builtin" }
+      ],
+      "capabilities": []
+    }
+  }
+}
+```
+
+说明：
+
+- `catalog` 当前允许为 `null`
+- `kits` 是只读 external kit snapshot
+
+代码：
+
+- `src/agent/gateway/control.ts` `handleCapabilityCatalogGet(...)`
+- `src/agent/gateway/kit/*`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `roundtrips capability catalog control messages`
+- `tests/gateway.ws.test.ts` `exposes a stable built-in external kit catalog snapshot`
+
+## 输入与流式回复
+
+### `gateway.message.send`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-input-1",
+  "type": "gateway.message.send",
+  "at": "2026-05-21T00:00:10.000Z",
+  "requestId": "client-req-1",
+  "payload": {
+    "id": "message-1",
+    "text": "继续推进项目",
+    "chatId": "u-1",
+    "threadId": "thread-1",
+    "user": {
+      "id": "u-1",
+      "displayName": "User One"
+    },
+    "context": {
+      "contextForkId": "fork-1",
+      "skillNames": ["review"],
+      "activeProject": {
+        "id": "project-1",
+        "projectDir": "/workspace/project",
+        "projectMemoryDir": "/workspace/project/.flyflor/memory",
+        "title": "Project"
+      }
+    }
+  }
+}
+```
+
+最小必填：
+
+- `payload.text`
+
+当前解析规则：
+
+- `text` 为空或缺失会报 `invalid-payload`
+- `context.activeProject` 只有在 `id + projectDir + projectMemoryDir` 都齐全时才会被接收
+- `chatType` 缺失时默认 `direct`
+- `user.id` 缺失时默认 `ws-user`
+
+代码：
+
+- `src/protocol/control/envelope.ts` `readGatewayControlMessageInput(...)`
+- `src/protocol/control/envelope.ts` `normalizeGatewayControlMessage(...)`
+- `src/agent/gateway/control.ts` `handleGatewayMessageSend(...)`
+
+测试：
+
+- `tests/protocol.control.test.ts` `normalizes gateway.message.send payload into a ws GatewayMessage`
+- `tests/protocol.control.test.ts` `requires project scope to be fully structured in control payload`
+- `tests/gateway.ws.test.ts` `dispatches ws messages with explicit runtime context and emits turn deltas/final`
+
+### `turn.delta`
+
+流式增量响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-delta-1",
+  "type": "turn.delta",
+  "at": "2026-05-21T00:00:11.000Z",
+  "requestId": "runtime-req-1",
+  "correlationId": "env-input-1",
+  "payload": {
+    "messageId": "message-1",
+    "delta": "hel"
+  }
+}
+```
+
+### `turn.final`
+
+结束响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-final-1",
+  "type": "turn.final",
+  "at": "2026-05-21T00:00:12.000Z",
+  "requestId": "runtime-req-1",
+  "correlationId": "env-input-1",
+  "payload": {
+    "reply": {
+      "messageId": "message-1",
+      "route": {
+        "channel": "ws",
+        "chatId": "u-1",
+        "chatType": "direct"
+      },
+      "text": "Need confirmation?",
+      "metadata": {}
+    }
+  }
+}
+```
+
+### `turn.error`
+
+单轮执行失败：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-turn-error-1",
+  "type": "turn.error",
+  "at": "2026-05-21T00:00:12.000Z",
+  "requestId": "runtime-req-1",
+  "correlationId": "env-input-1",
+  "payload": {
+    "messageId": "message-1",
+    "message": "runtime failed"
+  }
+}
+```
+
+代码：
+
+- `src/agent/gateway/control.ts` `handleGatewayMessageSend(...)`
+- `src/protocol/control/envelope.ts` `buildGatewayControlTurnDeltaPayload(...)`
+- `src/protocol/control/envelope.ts` `buildGatewayControlTurnFinalPayload(...)`
+- `src/protocol/control/envelope.ts` `buildGatewayControlTurnErrorPayload(...)`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `dispatches ws messages with explicit runtime context and emits turn deltas/final`
+- `tests/gateway.ws.test.ts` `reports runtime failures as turn.error envelopes`
+
+## `turn.final` 中的 ask / todo / data
+
+当前协议最重要的事实：
+
+- `ask` 不单独发 transport message
+- `todo` 不单独发 transport message
+- 大部分当前轮结构化数据都附着在 `turn.final.payload.reply.metadata`
+
+### Ask 读取位置
+
+读取：
+
+- `reply.metadata.kind === "ask"`
+- `reply.metadata.ask`
+
+结构：
+
+```json
+{
+  "kind": "ask",
+  "ask": {
+    "snapshotId": "snapshot-1",
+    "reason": "other",
+    "prompt": "Need confirmation?",
+    "freeform": true,
+    "choiceCount": 1,
+    "choices": [
+      {
+        "label": "Continue",
+        "description": "Proceed with the current plan"
+      }
+    ],
+    "questionCount": 0,
+    "questions": [],
+    "executiveToolLoop": {
+      "askId": "ask-1",
+      "message": "Need one more step",
+      "resume": {
+        "mode": "continue"
+      },
+      "stepCount": 2,
+      "stop": "ask",
+      "toolBudgetExhausted": true
+    }
+  }
+}
+```
+
+### Todo / Planning 读取位置
+
+读取：
+
+- `reply.metadata.planning.taskPlans`
+- `reply.metadata.planning.contextForks`
+- `reply.metadata.planning.scenes`
+
+结构：
+
+```json
+{
+  "planning": {
+    "taskPlans": [
+      {
+        "id": "plan-1",
+        "title": "Confirmation",
+        "summary": "Need one confirmation step",
+        "status": "planned",
+        "progress": 0,
+        "stepCount": 1,
+        "completedStepCount": 0,
+        "steps": [
+          {
+            "id": "step-1",
+            "title": "Confirm direction",
+            "status": "planned",
+            "order": 0
+          }
+        ]
+      }
+    ],
+    "contextForks": [],
+    "scenes": []
+  }
+}
+```
+
+### Long-horizon loop 读取位置
+
+当前稳定双表面：
+
+- `reply.metadata.executiveToolLoop`
+- `reply.metadata.ask.executiveToolLoop`
+
+两者表达同一个 snapshot。
+
+代码：
+
+- `src/protocol/control/envelope.ts`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `carries ask and todo snapshots through turn.final reply metadata`
+- `tests/protocol.control.test.ts` `keeps long-horizon loop snapshot stable on both top-level and ask metadata surfaces`
+
+## 事件订阅
+
+### `event.subscribe`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-sub-1",
+  "type": "event.subscribe",
+  "at": "2026-05-21T00:00:20.000Z",
+  "payload": {
+    "requestId": "runtime-req-1",
+    "types": ["gateway.message.received"],
+    "classes": ["gateway"]
+  }
+}
+```
+
+### `event.unsubscribe`
+
+请求结构与 subscribe 相同。
+
+### `ack` 响应
+
+成功订阅或取消订阅后，服务端都返回：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-ack-sub-1",
+  "type": "ack",
+  "at": "2026-05-21T00:00:20.010Z",
+  "correlationId": "env-sub-1",
+  "payload": {
+    "subscriptions": [
+      {
+        "requestId": "runtime-req-1",
+        "types": ["gateway.message.received"],
+        "classes": ["gateway"]
+      }
+    ]
+  }
+}
+```
+
+### `event.publish`
+
+广播结构：
+
+```json
+{
+  "protocol": "flyflor.event.v1",
+  "id": "event-1",
+  "type": "event.publish",
+  "at": "2026-05-21T00:00:21.000Z",
+  "requestId": "runtime-req-1",
+  "payload": {
+    "event": {
+      "type": "gateway.message.received",
+      "at": "2026-05-21T00:00:21.000Z",
+      "requestId": "runtime-req-1",
+      "payload": {
+        "channel": "ws"
+      }
+    }
+  }
+}
+```
+
+过滤规则：
+
+- `requestId`
+- `types`
+- `classes`
+
+不会按文本或 label 做筛选。
+
+代码：
+
+- `src/agent/gateway/control.ts` `handleEventSubscribe(...)`
+- `src/agent/gateway/control.ts` `handleEventUnsubscribe(...)`
+- `src/protocol/control/envelope.ts` `shouldDeliverGatewayControlEvent(...)`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `client.hello -> ack`
+- `tests/gateway.ws.test.ts` `event.subscribe/unsubscribe -> ack + filter`
+- `tests/gateway.ws.test.ts` `subscribes to runtime events and publishes matching envelopes`
+- `tests/protocol.control.test.ts` `filters event envelopes by explicit subscription`
+
+## Ping / Pong
+
+### `ping`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-ping-1",
+  "type": "ping",
+  "at": "2026-05-21T00:00:30.000Z"
+}
+```
+
+### `pong`
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-pong-1",
+  "type": "pong",
+  "at": "2026-05-21T00:00:30.010Z",
+  "correlationId": "env-ping-1",
+  "payload": {
+    "now": "2026-05-21T00:00:30.010Z"
+  }
+}
+```
+
+代码：
+
+- `src/agent/gateway/control.ts` `handlePing(...)`
+
+测试：
+
+- `tests/protocol.control.test.ts` `builds typed control payload snapshots for thin clients and Rust transports`
+
+## 鉴权与 Upgrade
+
+规则：
+
+- 若 `gateway.control.token` 已配置：
+  - 允许 `Authorization: Bearer <token>`
+  - 或 `?token=<token>`
+- 若未配置 token：
+  - 只允许本地地址：
+    - `127.0.0.1`
+    - `localhost`
+    - `::1`
+
+拒绝响应：
+
+```json
+{
+  "error": "gateway_control_unauthorized"
+}
+```
+
+HTTP status：
+
+- `401`
+
+代码：
+
+- `src/agent/gateway/control.ts` `authorize(...)`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `requires control token for non-local upgrade requests`
+- `tests/gateway.ws.test.ts` `allows localhost upgrade without token and rejects non-localhost without token`
+
+## 错误码
+
+当前稳定控制面错误码：
+
+- `internal`
+- `invalid-envelope`
+- `invalid-payload`
+- `unauthorized`
+- `unsupported-message`
+
+错误 envelope：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-error-1",
+  "type": "error",
+  "at": "2026-05-21T00:00:40.000Z",
+  "correlationId": "env-input-1",
+  "payload": {
+    "code": "invalid-payload",
+    "message": "gateway.message.send payload requires text"
+  }
+}
+```
+
+典型触发：
+
+| code | 触发 |
+| --- | --- |
+| `invalid-envelope` | `protocol` 错误、envelope 缺少 `id/type/at` |
+| `invalid-payload` | `gateway.message.send` 缺少 `payload` 或 `text` |
+| `unsupported-message` | `type` 未注册 |
+| `unauthorized` | upgrade 未通过鉴权 |
+| `internal` | handler 内部异常 |
+
+代码：
+
+- `src/protocol/control/envelope.ts`
+- `src/agent/gateway/control.ts` `sendError(...)`
+
+测试：
+
+- `tests/gateway.ws.test.ts` `emits structured invalid-envelope and invalid-payload control errors`
+- `tests/protocol.control.test.ts` `rejects unknown control protocol versions`
+- `tests/protocol.control.test.ts` `rejects invalid message payloads with structured protocol errors`
+
+## 当前推荐的客户端最小流程
+
+1. 连接 `/ws`
+2. 收 `server.hello`
+3. 可选发 `client.hello`
+4. 需要时主动发 `gateway.status.get`
+5. 需要时主动发 `capability.catalog.get`
+6. 需要历史回放时主动发 `history.list`
+7. 发 `gateway.message.send`
+8. 收 `turn.delta`
+9. 收 `turn.final` 或 `turn.error`
+10. 如果要时间线，再发 `event.subscribe`
+
+最小解析优先级：
+
+1. 先看 `protocol`
+2. 再看 `type`
+3. 再做 lane 分流
+4. `turn.final` 到达后优先读 `reply.metadata`
+
+## 调试建议
+
+调 `/ws` 时，先确认这几件事：
+
+1. protocol 必须发 `flyflor.ws.v1`
+2. 路径必须是 `ws://host:port/ws`
+3. `gateway.message.send` 必须有 `payload.text`
+4. 需要 project scope 时必须传完整：
+   - `id`
+   - `projectDir`
+   - `projectMemoryDir`
+5. 如果你只看到 `server.hello` 后所有请求都报 `invalid-envelope`，先检查是不是把 protocol 发成了别的值
+
+## 相关主文档
+
+- `docs/control.protocol.md`
+- `docs/runtime.events.md`
+- `docs/gateway.channels.md`
+- `docs/rust.integration.md`
+- `docs/rust.connection.core.md`

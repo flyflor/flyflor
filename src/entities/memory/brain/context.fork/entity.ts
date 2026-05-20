@@ -27,7 +27,7 @@ export class BrainContextForkModel {
             parentId: row.parent_id ?? undefined,
             title: row.title,
             summary: row.summary,
-            scopeSummary: row.scope_summary,
+            continuitySummary: row.scope_summary,
             maxContextTokens: row.max_context_tokens,
             inheritedEventIds: this.parseJsonArray(row.inherited_event_ids_json, `context_forks.inherited_event_ids_json for ${row.id}`),
             createdAt: row.created_at,

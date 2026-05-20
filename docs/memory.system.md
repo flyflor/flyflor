@@ -69,9 +69,15 @@ flowchart LR
     SQLite --> Prompt
 ```
 
-## brain.db 单库契约
+## brain.db 月分片契约
 
-`brain.db` 是 LF-R1 之后的单文件大脑，当前已包含：
+当前 brain 存储不是“永远增长的一个 live sqlite”。主线约定已经切成三层：
+
+- `~/.flyflor/.config/brain.db`：当前月 live 全量 brain
+- `~/.flyflor/.config/brain/archive/brain.YYYY-MM.db`：按月封存的全量冷库
+- `~/.flyflor/.config/brain/catalog/brain.catalog.db`：跨月 locator / shard catalog
+
+当前月 live brain 与月冷库共享同一套表结构，当前已包含：
 
 | 表                | 职责                                                                                                     |
 | ----------------- | -------------------------------------------------------------------------------------------------------- |
@@ -92,9 +98,16 @@ TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数�
 
 ContextFork 的低频 replay 详情落 `~/.flyflor/.config/storage/forks/<forkId>/manifest.json` / `replay.jsonl`。`brain.db.context_forks` 仍是权威摘要与列表索引；sidecar 只服务深度回放和未来清理策略，可按 `memory.tuning.contextFork.sidecarTtlDays`（默认 90 天，0 关闭）删除而不影响摘要审计。
 
-历史回放面可直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/cognitive/hippocampus/memory/history/index.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
+历史回放面可直接调用 `MemoryModule.listChatHistory({ beforeTs, limit })`；它只读全局 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/cognitive/hippocampus/memory/history/index.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
 
-月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 `MemoryComponent`、`CrystalComponent` 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
+月级冷归档不再做“按状态搬行”。当前约定是：
+
+- live brain 的 `live_month_key` 落后于当前月时，整库封存为 `brain/archive/brain.YYYY-MM.db`
+- archive 保留当月全部 `memory_events`、`memory_summary`、`task_plans`、`context_forks`、`scene_records`、`projects`
+- `brain.catalog.db` 记录 shard 列表与 entity locator，供跨月按 id 快速定位
+- 新 live brain 会立刻重建为空库并写入新的 `live_month_key`
+
+有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 `MemoryComponent`、`CrystalComponent` 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
 
 Ghost Context 不被压平成普通 prompt atom。它以 `[ghost-hint]` 单独注入，让模型同轮用 `<flyflor_ghost_decisions>` 决定 `resume` / `fork` / `fresh`；`fork` 或 `fresh` 只更新 ghost 的结构化 evidence，不删除 ghost，后续仍可像分支回归主线一样重新激活。
 

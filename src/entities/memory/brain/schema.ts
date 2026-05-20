@@ -48,6 +48,11 @@ export class BrainSchema {
             );
             CREATE INDEX IF NOT EXISTS idx_state_status ON memory_state(status);
 
+            CREATE TABLE IF NOT EXISTS brain_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS memory_summary (
                 id TEXT PRIMARY KEY,
                 time_range TEXT NOT NULL,

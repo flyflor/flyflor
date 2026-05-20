@@ -18,7 +18,7 @@ describe("runtime planning structured blocks", () => {
             renderStructuredBlock(StructuredBlockProtocol.ContextFork, {
                 title: "Installer fork",
                 summary: "Separate installer decisions from the main topic.",
-                scopeSummary: "Only install scripts and release docs are inherited.",
+                continuitySummary: "Only install scripts and release docs are inherited.",
                 maxContextTokens: 9000,
                 inheritedEventIds: ["episode-a"],
             }),

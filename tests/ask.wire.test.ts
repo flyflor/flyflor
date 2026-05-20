@@ -199,7 +199,7 @@ describe("LF-R3 Ask first-class wiring", () => {
             expect(sink.events).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
-                        type: RuntimeEventType.CttlLongHorizonLoopResumed,
+                        type: RuntimeEventType.ExecutiveLoopResumed,
                         payload: expect.objectContaining({
                             askId: expect.any(String),
                         }),

@@ -43,41 +43,65 @@ export class GatewayModule extends Gateway {
 
     public start(): void {
         if (this.running) {
+            this.log("start.skip", { reason: "already_running", url: this.serverUrl });
             return;
         }
+        this.log("start.requested", { host: this.config.host, port: this.config.port });
         this.running = true;
         this.startedAt = new Date().toISOString();
         this.controlHub = new GatewayControlHub({
             config: this.config,
             dispatch: (message, options) => this.dispatch(message, options),
             events: { subscribe: (sink: EventSink) => this.subscribeEvents(sink) } as never,
+            listChatHistory: (input) => this.runtime.listChatHistory({ beforeTs: input.beforeTs, limit: input.limit }),
             paths: this.paths,
             status: () => this.getStatusSnapshot(),
         });
-        this.server = Bun.serve<GatewayControlPeer>({
-            hostname: this.config.host,
-            port: this.config.port,
-            fetch: (request, server) => this.handleRequest(request, server),
-            websocket: {
-                close: (socket) => this.controlHub?.close(socket),
-                message: (socket, raw) => void this.controlHub?.message(socket, raw),
-                open: (socket) => this.controlHub?.open(socket),
-            },
-        });
+        try {
+            this.server = Bun.serve<GatewayControlPeer>({
+                hostname: this.config.host,
+                port: this.config.port,
+                fetch: (request, server) => this.handleRequest(request, server),
+                websocket: {
+                    close: (socket) => this.controlHub?.close(socket),
+                    message: (socket, raw) => void this.controlHub?.message(socket, raw),
+                    open: (socket) => this.controlHub?.open(socket),
+                },
+            });
+        } catch (error) {
+            this.log("start.failed", {
+                host: this.config.host,
+                message: error instanceof Error ? error.message : String(error),
+                port: this.config.port,
+            });
+            this.controlHub.dispose();
+            this.controlHub = undefined;
+            this.running = false;
+            throw error;
+        }
         this.serverUrl = this.server.url.toString();
+        this.log("start.ready", {
+            health: `${this.serverUrl}health`,
+            channels: `${this.serverUrl}channels`,
+            ws: `${this.serverUrl}ws`,
+        });
         this.events.publish(event(RuntimeEventType.GatewayStart, { url: this.serverUrl }));
         void this.runtime.warmup?.();
     }
 
     public stop(): void {
         if (!this.running) {
+            this.log("stop.skip", { reason: "not_running" });
             return;
         }
+        this.log("stop.requested", { url: this.serverUrl });
         this.controlHub?.dispose();
         this.controlHub = undefined;
         this.server?.stop(true);
         this.server = undefined;
         this.running = false;
+        this.serverUrl = undefined;
+        this.log("stop.complete");
     }
 
     public getStatusSnapshot(): GatewayControlTransportStatusSnapshot {
@@ -122,21 +146,27 @@ export class GatewayModule extends Gateway {
         server?: Bun.Server<GatewayControlPeer>,
     ): Promise<Response | undefined> {
         const url = new URL(request.url);
+        this.log("http.request", { method: request.method, path: url.pathname });
         if (request.method === "GET" && url.pathname === "/ws") {
             if (!server || !this.controlHub) {
+                this.log("http.ws.not_ready");
                 return json({ error: "gateway_control_not_ready" }, 503);
             }
+            this.log("http.ws.upgrade");
             return this.controlHub.upgrade(request, server);
         }
         if (request.method === "GET" && url.pathname === "/health") {
+            this.log("http.health");
             return json({ ok: true });
         }
         if (request.method === "GET" && url.pathname === "/channels") {
+            this.log("http.channels");
             return json({
                 gateway: this.getStatusSnapshot(),
                 channels: this.getStatusSnapshot().channels,
             });
         }
+        this.log("http.not_found", { method: request.method, path: url.pathname });
         return json({ error: "not_found" }, 404);
     }
 
@@ -149,14 +179,21 @@ export class GatewayModule extends Gateway {
             now: new Date().toISOString(),
         };
         const dedupKey = buildDedupKey(message.route.channel, message.id);
+        this.log("dispatch.received", {
+            channel: message.route.channel,
+            messageId: message.id,
+            requestId: context.requestId,
+        });
         const claim = await this.dedup.tryClaim(dedupKey);
         if (claim.state === "duplicate") {
+            this.log("dispatch.duplicate", { channel: message.route.channel, messageId: message.id, requestId: context.requestId });
             this.events.publish(
                 event(RuntimeEventType.GatewayMessageReceived, { channel: message.route.channel, dedup: "duplicate" }, context.requestId),
             );
             return claim.cachedReply;
         }
         if (claim.state === "in-flight") {
+            this.log("dispatch.in_flight", { channel: message.route.channel, messageId: message.id, requestId: context.requestId });
             this.events.publish(
                 event(RuntimeEventType.GatewayMessageReceived, { channel: message.route.channel, dedup: "in-flight" }, context.requestId),
             );
@@ -172,9 +209,20 @@ export class GatewayModule extends Gateway {
         );
         try {
             const reply = await this.runtime.handleMessage(message, context, options);
+            this.log("dispatch.completed", {
+                channel: message.route.channel,
+                messageId: message.id,
+                requestId: context.requestId,
+            });
             await this.recordDedupReply(dedupKey, reply, message.route.channel, context.requestId);
             return reply;
         } catch (error) {
+            this.log("dispatch.failed", {
+                channel: message.route.channel,
+                message: error instanceof Error ? error.message : String(error),
+                messageId: message.id,
+                requestId: context.requestId,
+            });
             await this.releaseDedupClaim(dedupKey, message.route.channel, context.requestId);
             throw error;
         }
@@ -208,6 +256,13 @@ export class GatewayModule extends Gateway {
         requestId: string,
         error: unknown,
     ): void {
+        this.log("dedup.failed", {
+            channel,
+            key,
+            message: error instanceof Error ? error.message : String(error),
+            operation,
+            requestId,
+        });
         this.events.publish(
             event(
                 RuntimeEventType.GatewayDedupStoreFailed,
@@ -228,6 +283,16 @@ export class GatewayModule extends Gateway {
             return maybeSubscribe.subscribe(sink);
         }
         return () => undefined;
+    }
+
+    protected log(step: string, payload: Record<string, unknown> = {}): void {
+        console.error(
+            JSON.stringify({
+                scope: "gateway.module",
+                step,
+                ...payload,
+            }),
+        );
     }
 }
 

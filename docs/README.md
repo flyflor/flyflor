@@ -1,6 +1,6 @@
 # Flyflor 文档索引
 
-本目录是 Flyflor 工程文档的唯一入口。主文档只描述当前运行契约；当前跨 session 接续路线在根目录 [TODO.md](../TODO.md)，已经落地或迁移完成的提案、历史背景统一归入 [old-docs/](old-docs/)。
+本目录是 Flyflor 工程文档的唯一入口。主文档只描述当前运行契约；当前跨会话延续路线在根目录 [TODO.md](../TODO.md)，已经落地或迁移完成的提案、历史背景统一归入 [old-docs/](old-docs/)。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -11,7 +11,7 @@
 1. [architecture.md](architecture.md) — Cognitive / Executive / Agent 顶层分层、composition root、DI 容器、模块边界
 2. [refactor.roadmap.md](refactor.roadmap.md) — 切除旧身体、保留内核 / 外骨骼 / 事件血管的阶段性重构路线
 3. [directory.architecture.md](directory.architecture.md) — 源码、配置、运行态、工作区和 capability 目录约定
-4. [cttl.exoskeleton.md](cttl.exoskeleton.md) — Executive 外骨架中的 Capability / Tool / Trust / Loop 规则
+4. [cttl.exoskeleton.md](cttl.exoskeleton.md) — Executive 外骨架中的 Capability / Tool / Trust / Loop 规则（文档已切到 Executive 命名；文件名待后续统一）
 5. [runtime.events.md](runtime.events.md) — RECL / Event Fabric 事件订阅广播中枢
 6. [runtime.turn.md](runtime.turn.md) — 单轮请求从渠道入站到回复落盘的完整流程
 7. [memory.system.md](memory.system.md) — Markdown / MemoryComponent / brain.db / crystal.db 本地记忆系统
@@ -25,10 +25,11 @@
 15. [boundaries.md](boundaries.md) — 工程硬边界与红线
 16. [external.kit.md](external.kit.md) — 外部套件 manifest、发现与 control/event 契约
 17. [control.protocol.md](control.protocol.md) — Rust / thin client 可直接复用的 WS/control 血管协议面
-18. [rust.integration.md](rust.integration.md) — Rust gateway/channel/cli/tui 外壳最小接入手册
-19. [rust.connection.core.md](rust.connection.core.md) — Rust Slice 1 `/ws` 连接核心、握手、snapshot cache 与重连状态机
-20. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust gateway shell 工程切分 backlog
-21. [reference/README.md](reference/README.md) — 反复查阅的实现参考与归档对照
+18. [ws.doc.md](ws.doc.md) — 详细 WebSocket API 文档，按请求/响应/message type/错误码展开
+19. [rust.integration.md](rust.integration.md) — Rust gateway/channel/cli/tui 外壳最小接入手册
+20. [rust.connection.core.md](rust.connection.core.md) — Rust Slice 1 `/ws` 连接核心、握手、snapshot cache 与重连状态机
+21. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust gateway shell 工程切分 backlog
+22. [reference/README.md](reference/README.md) — 反复查阅的实现参考与归档对照
 
 ## 归档区
 

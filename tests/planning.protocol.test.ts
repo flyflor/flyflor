@@ -19,7 +19,7 @@ describe("planning protocol", () => {
             userId: "u1",
             title: "Investigate install flow",
             summary: "Forked from the main thread to isolate installer work.",
-            scopeSummary: "Only installer, docs, and release asset questions stay in scope.",
+            continuitySummary: "Only installer, docs, and release asset questions stay in scope.",
             maxContextTokens: 12_000,
             inheritedEventIds: ["e1", "e2"],
             createdAt: "2026-05-16T00:00:00.000Z",

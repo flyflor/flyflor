@@ -57,7 +57,7 @@ export interface ContextForkRecord {
     parentId?: string;
     title: string;
     summary: string;
-    scopeSummary: string;
+    continuitySummary: string;
     maxContextTokens: number;
     inheritedEventIds: string[];
     createdAt: string;

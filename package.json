@@ -8,6 +8,8 @@
         "dev": "bun run dev:source",
         "dev:source": "bun run install:templates:force && bun run --watch --conditions=browser app.ts chat",
         "chat": "bun run install:templates && bun run --conditions=browser app.ts chat",
+        "gateway": "bun run install:templates && bun run --conditions=browser app.ts gateway",
+        "gateway:dev": "bun run install:templates:force && bun run --watch --conditions=browser app.ts gateway",
         "tui": "bun run install:templates && bun run --conditions=browser app.ts tui",
         "setup": "bun run install:templates && bun run app.ts setup",
         "status": "bun run install:templates && bun run app.ts status",

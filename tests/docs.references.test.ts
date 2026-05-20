@@ -57,6 +57,25 @@ describe("documentation references", () => {
         expect(errorHeadings).toHaveLength(1);
     });
 
+    test("ws api docs cite the live gateway tests and core message types", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "ws.doc.md")).text();
+
+        expect(doc).toContain("tests/gateway.ws.test.ts");
+        expect(doc).toContain("tests/protocol.control.test.ts");
+        expect(doc).toContain("tests/gateway.module.test.ts");
+        expect(doc).toContain("tests/tui.chat.history.test.ts");
+        expect(doc).toContain("server.hello");
+        expect(doc).toContain("gateway.status.snapshot");
+        expect(doc).toContain("capability.catalog.snapshot");
+        expect(doc).toContain("turn.final");
+        expect(doc).toContain("invalid-envelope");
+        expect(doc).toContain("gateway.message.send payload requires text");
+        expect(doc).toContain("历史对话列表获取");
+        expect(doc).toContain("history.list");
+        expect(doc).toContain("history.snapshot");
+        expect(doc).toContain("listChatHistory");
+    });
+
     test("runtime events docs keep event timeline separate from turn-final authority", async () => {
         const doc = await Bun.file(join(REPO_ROOT, "docs", "runtime.events.md")).text();
 

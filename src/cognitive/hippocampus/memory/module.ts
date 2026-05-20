@@ -760,7 +760,7 @@ export class MemoryModule extends Memory {
         if (pendingAskBefore) {
             this.events.publish(
                 event(
-                    RuntimeEventType.CttlLongHorizonLoopResumed,
+                    RuntimeEventType.ExecutiveLoopResumed,
                     {
                         askId: pendingAskBefore.id,
                     },
@@ -1632,7 +1632,7 @@ export class MemoryModule extends Memory {
         return { askId: pending.id, chainDepth: pending.chainDepth, ask: pending.ask };
     }
 
-    public listChatHistory(userId: string, options: { beforeTs?: number; limit?: number } = {}): ChatHistoryTurn[] {
+    public listChatHistory(options: { beforeTs?: number; limit?: number } = {}): ChatHistoryTurn[] {
         if (!this.config.memory.enabled) {
             throw new Error("Chat history is unavailable because memory is disabled.");
         }
@@ -1640,12 +1640,11 @@ export class MemoryModule extends Memory {
             throw new Error("Chat history is unavailable because brain.db is not opened.");
         }
         const rows = this.brain.listEvents({
-            userId,
             type: MemoryEventType.Event,
             untilTs: options.beforeTs,
             limit: options.limit ?? 20,
         });
-        return rows.map((row) => historyTurnFromEvent(row, this.historyPlanningForEvent(userId, row.id))).reverse();
+        return rows.map((row) => historyTurnFromEvent(row, this.historyPlanningForEvent(row.id))).reverse();
     }
 
     /**
@@ -1726,14 +1725,11 @@ export class MemoryModule extends Memory {
         }
     }
 
-    private historyPlanningForEvent(
-        userId: string,
-        sourceEventId: string,
-    ): ChatHistoryPlanning {
+    private historyPlanningForEvent(sourceEventId: string): ChatHistoryPlanning {
         return {
-            contextForks: this.brain.listContextForks({ userId, sourceEventId, limit: 8 }),
-            scenes: this.brain.listSceneRecords({ userId, sourceEventId, limit: 16 }),
-            taskPlans: this.brain.listTaskPlans({ userId, sourceEventId, limit: 8 }),
+            contextForks: this.brain.listContextForks({ sourceEventId, limit: 8 }),
+            scenes: this.brain.listSceneRecords({ sourceEventId, limit: 16 }),
+            taskPlans: this.brain.listTaskPlans({ sourceEventId, limit: 8 }),
         };
     }
 
@@ -1932,7 +1928,7 @@ export class MemoryModule extends Memory {
             "[context-fork]",
             `id: ${fork.id}`,
             `title: ${fork.title}`,
-            `scope: ${fork.scopeSummary}`,
+            `scope: ${fork.continuitySummary}`,
             `budget: ${fork.maxContextTokens} tokens`,
             `inheritedEvents: ${fork.inheritedEventIds.slice(0, 12).join(", ")}`,
             "[/context-fork]",
@@ -2470,8 +2466,6 @@ export class MemoryModule extends Memory {
                     cutoffMonth: result.cutoffMonth,
                     eventsCopied: result.eventsCopied,
                     months: result.months.map((m) => m.bucketMonth),
-                    statesCopied: result.statesCopied,
-                    summariesCopied: result.summariesCopied,
                     vacuumed: result.vacuumed,
                 }),
             );
