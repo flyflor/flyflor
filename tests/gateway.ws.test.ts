@@ -352,6 +352,203 @@ describe("GatewayControlHub", () => {
         hub.dispose();
     });
 
+    test("acks client.hello with stable client identity echo", async () => {
+        const hub = createHub();
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const envelope = createGatewayControlEnvelope(
+            GatewayControlMessageType.ClientHello,
+            {
+                capabilities: { ui: "rust-tui" },
+                clientId: "rust-client",
+                name: "Rust TUI",
+                version: "0.1.0",
+            },
+            { id: "client-hello-1", requestId: "req-client-1" },
+        );
+        await hub.message(socket, JSON.stringify(envelope));
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "client-hello-1",
+            requestId: "req-client-1",
+            type: GatewayControlMessageType.Ack,
+            payload: {
+                clientId: "client-1",
+                received: GatewayControlMessageType.ClientHello,
+            },
+        });
+        hub.dispose();
+    });
+
+    test("keeps server.hello as the initial connection snapshot and does not let client.hello rewrite it", async () => {
+        const hub = createHub();
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const hello = sent(socket)[0];
+        expect(hello).toMatchObject({
+            type: GatewayControlMessageType.ServerHello,
+            payload: {
+                clientId: "client-1",
+                connectedAt: "2026-05-17T00:00:00.000Z",
+                status: {
+                    gatewayRunning: true,
+                    host: "127.0.0.1",
+                    port: 0,
+                },
+            },
+        });
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ClientHello,
+                    {
+                        clientId: "rust-client-overwrite-attempt",
+                        name: "Rust TUI",
+                        version: "0.1.0",
+                    },
+                    { id: "client-hello-bootstrap-1", requestId: "req-bootstrap-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket)[0]).toEqual(hello);
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.Ack,
+            payload: {
+                clientId: "client-1",
+                received: GatewayControlMessageType.ClientHello,
+            },
+        });
+        hub.dispose();
+    });
+
+    test("returns a stable gateway status snapshot for Rust clients", async () => {
+        const hub = createHub();
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const envelope = createGatewayControlEnvelope(
+            GatewayControlMessageType.GatewayStatusGet,
+            undefined,
+            { id: "status-get-1", requestId: "req-status-1" },
+        );
+        await hub.message(socket, JSON.stringify(envelope));
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "status-get-1",
+            requestId: "req-status-1",
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: {
+                status: {
+                    channels: [],
+                    connectedCount: 0,
+                    degradedCount: 0,
+                    gatewayRunning: true,
+                    host: "127.0.0.1",
+                    port: 0,
+                    startedAt: "2026-05-17T00:00:00.000Z",
+                    streamingCount: 0,
+                },
+            },
+        });
+        hub.dispose();
+    });
+
+    test("responds to ping with pong without affecting the connection snapshot surface", async () => {
+        const hub = createHub();
+        const socket = fakeSocket();
+        hub.open(socket);
+        const initialServerHello = sent(socket)[0];
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.Ping,
+                    { probe: "keepalive" },
+                    { id: "ping-1", requestId: "req-ping-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "ping-1",
+            requestId: "req-ping-1",
+            type: GatewayControlMessageType.Pong,
+            payload: {
+                now: expect.any(String),
+            },
+        });
+        expect(sent(socket)[0]).toEqual(initialServerHello);
+        hub.dispose();
+    });
+
+    test("acks subscribe and unsubscribe and stops event delivery after unsubscribe", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const subscribe = createGatewayControlEnvelope(
+            GatewayControlMessageType.EventSubscribe,
+            {
+                requestId: "runtime-req-1",
+                types: [RuntimeEventType.ChannelError],
+            },
+            { id: "event-sub-1", requestId: "req-sub-1" },
+        );
+        await hub.message(socket, JSON.stringify(subscribe));
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "event-sub-1",
+            requestId: "req-sub-1",
+            type: GatewayControlMessageType.Ack,
+            payload: {
+                subscriptions: [{ requestId: "runtime-req-1", types: [RuntimeEventType.ChannelError] }],
+            },
+        });
+
+        bus.publish({
+            type: RuntimeEventType.ChannelError,
+            at: "2026-05-17T00:00:00.000Z",
+            requestId: "runtime-req-1",
+            payload: { channel: Channel.Ws, error: "boom" },
+        });
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)).toHaveLength(1);
+
+        const unsubscribe = createGatewayControlEnvelope(
+            GatewayControlMessageType.EventUnsubscribe,
+            {
+                requestId: "runtime-req-1",
+                types: [RuntimeEventType.ChannelError],
+            },
+            { id: "event-unsub-1", requestId: "req-unsub-1" },
+        );
+        await hub.message(socket, JSON.stringify(unsubscribe));
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "event-unsub-1",
+            requestId: "req-unsub-1",
+            type: GatewayControlMessageType.Ack,
+            payload: {
+                subscriptions: [],
+            },
+        });
+
+        bus.publish({
+            type: RuntimeEventType.ChannelError,
+            at: "2026-05-17T00:01:00.000Z",
+            requestId: "runtime-req-1",
+            payload: { channel: Channel.Ws, error: "boom-again" },
+        });
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)).toHaveLength(1);
+        hub.dispose();
+    });
+
     test("keeps the latest CTTL capability catalog available through control snapshot", async () => {
         const bus = new GlobalEventBus();
         const hub = createHub({ events: bus });

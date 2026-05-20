@@ -131,6 +131,41 @@ describe("prompt template docs generator", () => {
             await rm(root, { force: true, recursive: true });
         }
     });
+
+    test("source template install can initialize source config once and preserve local secrets", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-source-templates-"));
+        try {
+            const first = Bun.spawn(
+                ["bun", "run", "scripts/install.templates.ts", "--target", root, "--source-config", "--force"],
+                {
+                    cwd: join(import.meta.dir, ".."),
+                    stderr: "pipe",
+                    stdout: "pipe",
+                },
+            );
+            expect(await first.exited).toBe(0);
+            const configPath = join(root, "config.jsonc");
+            const generated = await readFile(configPath, "utf8");
+            expect(generated).toContain('"replace-with-real-key"');
+            expect(generated).toContain('"crystal"');
+
+            await writeFile(configPath, '{ "model": { "providers": { "openai": { "apiKey": "test-live-key" } } } }\n');
+            const second = Bun.spawn(
+                ["bun", "run", "scripts/install.templates.ts", "--target", root, "--source-config", "--force"],
+                {
+                    cwd: join(import.meta.dir, ".."),
+                    stderr: "pipe",
+                    stdout: "pipe",
+                },
+            );
+            const [exit, stdout] = await Promise.all([second.exited, new Response(second.stdout).text()]);
+            expect(exit).toBe(0);
+            expect(stdout).toContain("preserve config.jsonc");
+            expect(await readFile(configPath, "utf8")).toContain("test-live-key");
+        } finally {
+            await rm(root, { force: true, recursive: true });
+        }
+    });
 });
 
 function extractPromptTemplateSection(readme: string): string {

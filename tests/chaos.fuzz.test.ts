@@ -35,8 +35,27 @@ import {
     detectSkillPromotion,
     ProjectTriggerKind,
 } from "../src/cognitive/hippocampus/project/index.ts";
+import { normalizeReflectionRaw } from "../src/agent/runtime/index.ts";
+import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/route.ts";
+import {
+    classifyGatewayControlSemanticType,
+    GatewayControlSemanticType,
+    parseGatewayControlEnvelope,
+    readGatewayControlMessageInput,
+    shouldDeliverGatewayControlEvent,
+} from "../src/protocol/control/index.ts";
 import type { EpisodeRecord } from "../src/cognitive/hippocampus/memory/working/index.ts";
-import { AtomStage, MemoryEventType, ModelRole, type AtomScore, type MemoryAtom } from "../src/protocol/contracts/index.ts";
+import {
+    AtomStage,
+    BlackboardMode,
+    GatewayControlMessageType,
+    GatewayControlProtocol,
+    MemoryEventType,
+    ModelRole,
+    type AtomScore,
+    type MemoryAtom,
+} from "../src/protocol/contracts/index.ts";
+import { RuntimeEventType } from "../src/events/index.ts";
 
 // ─── 随机源 (deterministic mulberry32) ─────────────────────────────
 function rng(seed: number): () => number {
@@ -533,6 +552,161 @@ describe("chaos: determinism check", () => {
         const a = spreadActivation(input);
         const b = spreadActivation(input);
         expect(a).toEqual(b);
+    });
+});
+
+// ─── reflection normalize 暴力 ────────────────────────────────────
+describe("chaos: reflection normalize", () => {
+    test("normalizes fenced/garbage reflection payloads without leaking invalid coordinates", () => {
+        const source = {
+            answer: "visible answer",
+            now: "2026-05-20T00:00:00.000Z",
+            request: "request text",
+            requestId: "req-chaos-reflection",
+            route: {
+                mode: BlackboardMode.DirectWithWatch,
+                reason: "watch",
+                score: 0.4,
+                signals: ["watch"],
+            },
+            mcpCalls: [{ ok: true, server: "filesystem", tool: "read", resultSummary: "ok" }],
+            skillNames: ["review"],
+        } as const;
+
+        const outputs = [
+            normalizeReflectionRaw(
+                '```json\n[{"title":"x","method":"m","symbols":["a","",2],"coordinates":{"a":2,"b":-1,"c":"x"}}]\n```',
+                source,
+            ),
+            normalizeReflectionRaw(
+                '[{"title":"x","method":"m","bucketHint":"ops","coordinates":{"safe":0.5,"bad":null}}, {"title":"","method":""}]',
+                source,
+            ),
+        ];
+
+        for (const result of outputs.flat()) {
+            expect(result.id).toContain("runtime-reflection-");
+            expect(result.sourceKind).toBe("runtime-reflection");
+            expect(result.createdAt).toBe(source.now);
+            expect(Array.isArray(result.symbols)).toBe(true);
+            for (const value of Object.values(result.coordinates ?? {})) {
+                expect(value).toBeGreaterThanOrEqual(0);
+                expect(value).toBeLessThanOrEqual(1);
+                expect(Number.isFinite(value)).toBe(true);
+            }
+        }
+    });
+
+    test("reflection normalize stays deterministic for the same raw payload", () => {
+        const raw = '[{"title":"shadow debt","method":"freeze and audit","symbols":["debt","ops"]}]';
+        const source = {
+            answer: "visible answer",
+            now: "2026-05-20T00:00:00.000Z",
+            request: "request text",
+            requestId: "req-chaos-reflection-deterministic",
+        };
+        expect(normalizeReflectionRaw(raw, source)).toEqual(normalizeReflectionRaw(raw, source));
+    });
+});
+
+// ─── blackboard route 暴力 ────────────────────────────────────────
+describe("chaos: blackboard route parser", () => {
+    test("dedupes, sanitizes and caps oversized worker plans", () => {
+        const raw = JSON.stringify({
+            mode: "blackboard",
+            score: 0.92,
+            reason: "complex",
+            signals: ["multi-step", "analysis", 1, null],
+            needsReflectionCandidate: true,
+            blackboardContract: {
+                mode: "non-convergent",
+                policyReason: "keep debating",
+                contradictions: [
+                    { left: "A", right: "B", reason: "conflict" },
+                    { left: "A2", right: "B2", reason: "conflict2" },
+                ],
+            },
+            workers: [
+                { role: "Lead Analyst", name: "Lead Analyst", dependsOn: ["Verifier"], capabilities: ["trace"] },
+                { role: "Verifier", dependsOn: ["Lead Analyst"], handoff: "verification" },
+                { role: "Lead Analyst", name: "Duplicate Analyst" },
+                { role: "Implementer", dependsOn: ["Lead Analyst"], stage: "build" },
+                { role: "Reviewer", dependsOn: ["Implementer"], stage: "review" },
+                { role: "Observer", dependsOn: ["Reviewer"], stage: "observe" },
+            ],
+        });
+
+        const parsed = parseBlackboardRouteDecision(raw);
+        expect(parsed.mode).toBe(BlackboardMode.Blackboard);
+        expect(parsed.score).toBe(0.92);
+        expect(parsed.needsReflectionCandidate).toBe(true);
+        expect(parsed.workers.length).toBeLessThanOrEqual(5);
+        expect(new Set(parsed.workers.map((worker) => worker.role)).size).toBe(parsed.workers.length);
+        expect(parsed.workers.some((worker) => worker.role === "lead-analyst")).toBe(true);
+        expect(parsed.workers.some((worker) => worker.role === "verifier")).toBe(true);
+        expect(parsed.blackboardContract.mode).toBe("non-convergent");
+        expect(parsed.blackboardContract.policyReason).toBe("keep debating");
+    });
+});
+
+// ─── control envelope 暴力 ───────────────────────────────────────
+describe("chaos: control envelope and payload parsing", () => {
+    test("control envelope rejects poisoned shapes with structured invalid-envelope errors", () => {
+        const poisoned = [
+            "not json",
+            "{}",
+            JSON.stringify({ protocol: GatewayControlProtocol.WsV1, id: "env-1", at: "2026-05-20T00:00:00.000Z" }),
+            JSON.stringify({ protocol: "flyflor.ws.v999", id: "env-1", type: GatewayControlMessageType.Ping, at: "2026-05-20T00:00:00.000Z" }),
+        ];
+
+        for (const input of poisoned) {
+            expect(() => parseGatewayControlEnvelope(input)).toThrow();
+        }
+    });
+
+    test("gateway message input keeps only structured fields from chaos payloads", () => {
+        const payload = readGatewayControlMessageInput({
+            text: "hello",
+            chatId: "chat-1",
+            user: { id: "u-1", displayName: "User" },
+            context: {
+                activeProject: {
+                    id: "project-1",
+                    projectDir: "/tmp/project",
+                    projectMemoryDir: "/tmp/project/.flyflor/memory",
+                    title: "Project",
+                },
+                skillNames: ["review", 1, null, "plan"],
+            },
+            metadata: { ok: true },
+            attachments: [{ kind: "image", url: "https://example.com/a.png" }],
+        });
+
+        expect(payload.text).toBe("hello");
+        expect(payload.context?.activeProject?.projectDir).toBe("/tmp/project");
+        expect(payload.context?.skillNames).toEqual(["review", "plan"]);
+        expect(payload.metadata).toEqual({ ok: true });
+        expect(Array.isArray(payload.attachments)).toBe(true);
+    });
+
+    test("control semantic lanes and event filtering stay deterministic under mixed subscriptions", () => {
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ServerHello)).toBe(
+            GatewayControlSemanticType.Data,
+        );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.TurnFinal)).toBe(
+            GatewayControlSemanticType.Stream,
+        );
+
+        const evt = {
+            type: RuntimeEventType.MemoryTurnRecorded,
+            at: "2026-05-20T00:00:00.000Z",
+            requestId: "req-1",
+            payload: { userId: "u-1" },
+        };
+        expect(shouldDeliverGatewayControlEvent(evt, [{ requestId: "req-1" }])).toBe(true);
+        expect(shouldDeliverGatewayControlEvent(evt, [{ requestId: "other" }])).toBe(false);
+        expect(shouldDeliverGatewayControlEvent(evt, [{ types: [RuntimeEventType.MemoryTurnRecorded] }])).toBe(true);
+        expect(shouldDeliverGatewayControlEvent(evt, [{ types: [RuntimeEventType.ChannelError] }])).toBe(false);
     });
 });
 

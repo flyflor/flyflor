@@ -2,13 +2,32 @@
 
 ## 当前状态
 
-状态：R0-R6 已完成。R7 正在执行主线剥离，当前这一轮已完成 `src/command`、`src/agent/gateway/channels` 的主源码移除，主线 Gateway 只保留 WS/control/event 血管与外部 kit 只读发现。`abandon/` 只作为废弃代码备份，不允许主线 import / re-export / 运行时依赖。
+状态：R0-R6 已完成。R7/R8 对应的 Bun 内核封板已经通过当前 `kernel:seal` 门禁：`docs:check`、`check`、deterministic tests、smoke、build、`test:live` 与 `smoke:agent:live` 全绿。主线 Gateway 只保留 WS/control/event 血管与外部 kit 只读发现。`abandon/` 只作为废弃代码备份，不允许主线 import / re-export / 运行时依赖。
+
+本轮补充进展：
+
+- 活跃主文档已经开始统一收口到 “Bun 内核 + 最小 WS 血管 + Rust 外骨骼壳” 叙述。
+- `README.md`、`docs/runtime.turn.md`、`docs/blackboard.md`、`docs/memory.system.md`、`docs/boundaries.md`、`docs/architecture.md`、`docs/reference/README.md` 已补齐当前主线与归档区边界说明。
+- 已新增最小 `GatewayModule` 血管面测试，覆盖 `/health`、`/channels`、未就绪 `/ws` 与 404 错误面。
+- `docs/control.protocol.md` 已补齐 Rust 最小接线顺序、ask/todo/data 读取优先级、loop snapshot 读取顺序与稳定错误码说明。
+- 协议测试已新增对 `metadata.executiveToolLoop` 与 `metadata.ask.executiveToolLoop` 双表面一致性的守护。
+- `GatewayControlHub` 测试已新增 `client.hello -> ack`、`gateway.status.get -> snapshot`、`event.subscribe/unsubscribe -> ack + filter` 的连接级契约守护。
+- `docs/control.protocol.md` 已新增 snapshot 分层矩阵，明确连接级 snapshot、turn 级 metadata、事件流三层职责，不再混写重复错误段。
+- `docs/runtime.events.md` 已新增 event matrix，明确时间线事件、恢复提示与 `turn.final.reply.metadata` 权威状态之间的边界。
+- 已新增 `docs/rust.integration.md`，把 `/ws` 连接、lane 路由、ask 闭环、planning 展示、loop 恢复、event 消费整理成 Rust 外壳最小接入手册。
+- 已新增 `docs/rust.connection.core.md`，把 Rust Slice 1 `/ws` connection core 进一步细化为连接生命周期、`server.hello` / `client.hello`、snapshot cache ownership、`ping` / `pong`、reconnect/backoff 与连接级状态机契约。
+- 已新增 `docs/rust.gateway.shell.backlog.md`，把 Rust gateway shell 重写拆成 connection core、stream renderer、ask loop、planning panel、loop recovery、event timeline、shell UX 七个 slice。
+- `docs/directory.architecture.md` 已重写为真实源码目录分层索引，明确 `src/agent`、`src/cognitive`、`src/executive`、`src/entities`、`src/components`、`src/types` 等当前 owner，开始朝“代码/文档 0 漂移”收口。
 
 当前主线目标：
 
 - 保持 `src/agent/gateway` 只承载 WebSocket control/event 传输、最小 `GatewayModule`、dedup 和只读 kit catalog。
 - 把未来 Rust CLI / Gateway / TUI 对接所需的协议面冻结在 `src/protocol/control/*` 与 `docs/control.protocol.md`。
 - 所有后续电脑控制、长线 loop、ask/todo/data 协议扩展，都先围绕 event 血管和 WS envelope 做，不回流到第一方 CLI/TUI/channel adapter。
+- 当前内核封板门禁以 `kernel:seal` 为准，并已在真实 provider 下跑通：`docs:check`、`check`、deterministic tests、smoke、build、live tests 全绿。
+- live 冒烟现在分成“手动探测”和“封板硬门槛”两种语义：手动 `test:live` / `smoke:agent:live` 缺 provider 时允许打印 skipped 诊断，但 `kernel:seal` 会强制要求真实 provider 可见，缺失即失败，避免 skip 伪绿。
+- 已新增 `bun run provider:ready`，用于在跑 live / kernel:seal 前先确认当前 source/docker 配置看到的是 `missing`、`placeholder` 还是 `configured`。
+- Docker / docker compose 继续作为部署与 deterministic/runtime smoke 载体；`smoke:runtime:live` 保持可选扩展验证，不提升为当前内核封板硬门槛。
 
 ## 架构定位
 
@@ -34,13 +53,15 @@ Flyflor 当前主线继续以 **Cognitive-Executive-Agent Architecture** 为核�
 - 已将 `src/agent/gateway/kit/*` 回收到主线，仅保留 External Kit 只读 manifest/catalog。
 - 已将版本读取能力回收到 `src/version.ts`。
 - 已将构建入口改成只编译 `app.ts`，不再编译 TUI parser worker。
+- 已把活跃主文档第一轮收紧到 “Bun 主线只保留 stdio 调试入口 + 最小 Gateway 血管，第一方壳体后续由 Rust 通过 `/ws` 对接”。
+- 已新增 `tests/gateway.module.test.ts`，锁定最小 GatewayModule 的 HTTP/WS 边界。
 
-下一轮：
+下一轮（滚动）：
 
-1. 继续清理文档中残余的 `src/command`、TUI、channel adapter 叙述。
-2. 补齐主线针对最小 GatewayModule 的测试。
-3. 收紧 `README`、`docs/boundaries.md`、`docs/architecture.md` 到血管化主线。
-4. 为 Rust 客户端先冻结 `ask` / `todo` / `data` / `event` 语义与字段约束。
+1. 继续清理活跃文档中残余的 `src/command`、TUI、channel adapter 叙述；本轮已完成主文档第一波收口，下一步重点扫剩余活跃说明与测试注释。
+2. 继续补主线针对最小 GatewayModule 与 control surface 的测试；本轮已完成最小 HTTP/WS 边界覆盖，下一步补更高层快照守护。
+3. 继续收紧 `README`、`docs/boundaries.md`、`docs/architecture.md` 与 docs index 的长期表述，避免 future client / archive / debug surface 混写。
+4. 为 Rust 客户端先冻结 `ask` / `todo` / `data` / `event` 语义与字段约束，并把这层约束转成更明确的守护测试。
 
 ## R8 Vascular Freeze
 
@@ -70,6 +91,16 @@ Flyflor 当前主线继续以 **Cognitive-Executive-Agent Architecture** 为核�
   - `turn.final` 中的 ask/todo metadata 形态
   - control error 的 machine-readable `code`
   - invalid envelope / invalid payload 的错误面
+- 已把活跃文档中的主线叙述统一到最小 `/ws` 血管与 Rust/thin client handoff，减少旧 Bun 壳体描述对协议冻结的干扰。
+- 已把 Rust 最小接线顺序、lane-first 读取约定、loop snapshot 双表面读取约定写入 `docs/control.protocol.md`。
+- 已新增守护测试，确保协议文档持续包含 Rust 读取主线与稳定错误码约定。
+- 已把 `client.hello`、`gateway.status.get`、`event.subscribe/unsubscribe` 的稳定 ack/snapshot/filter 行为补进协议文档与 `GatewayControlHub` 测试。
+- 已为协议文档补 snapshot 分层矩阵与单一 error section 守护，避免连接级/turn 级/事件级信息在后续手册里重新混层。
+- 已为 runtime event 文档补“事件矩阵”与事件分类守护，明确哪些事件只做时间线提示，哪些状态仍必须回到 `turn.final.reply.metadata` 读取。
+- 已把 control/event 冻结结果收束成独立 Rust handoff 手册，后续 Rust `gateway/channel/cli/tui` 可直接按该手册接线，不必在多篇文档间拼接主流程。
+- 已把 Rust 外壳的下一阶段工作从“接入说明”进一步拆到“工程 backlog”，后续可以直接按 slice 逐个实现而不重新做范围划分。
+- 已重新对齐目录层级文档和守护测试，开始把“源码真实边界”和“文档目录分层”拉到同一条线上。
+- 已把 Rust backlog 的 Slice 1 从“可连接”推进到“可实现”：连接状态阶段、握手顺序、连接级 cache、保活与重连职责已经单独冻结，后续 Rust 外壳可以直接按文档实现而不再二次拆题。
 
 验收：
 

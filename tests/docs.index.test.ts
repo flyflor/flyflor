@@ -36,6 +36,30 @@ describe("documentation index", () => {
         expect(missing).toEqual([]);
     });
 
+    test("rust integration guide is indexed as a core handoff document", async () => {
+        const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
+        const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
+
+        expect(docsReadme).toContain("](rust.integration.md)");
+        expect(rootReadme).toContain("](docs/rust.integration.md)");
+    });
+
+    test("rust gateway shell backlog is indexed as a core planning document", async () => {
+        const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
+        const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
+
+        expect(docsReadme).toContain("](rust.gateway.shell.backlog.md)");
+        expect(rootReadme).toContain("](docs/rust.gateway.shell.backlog.md)");
+    });
+
+    test("rust connection core guide is indexed as a core handoff document", async () => {
+        const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
+        const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
+
+        expect(docsReadme).toContain("](rust.connection.core.md)");
+        expect(rootReadme).toContain("](docs/rust.connection.core.md)");
+    });
+
     test("public docs and package metadata point at the official homepage", async () => {
         const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
         const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");

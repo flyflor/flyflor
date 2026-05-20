@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -37,6 +37,24 @@ export interface FlyflorConfigLoadOptions {
         providerId?: string;
         model?: string;
     };
+}
+
+export const ModelProviderReadinessState = {
+    Configured: "configured",
+    Missing: "missing",
+    Placeholder: "placeholder",
+} as const;
+
+export type ModelProviderReadinessState =
+    (typeof ModelProviderReadinessState)[keyof typeof ModelProviderReadinessState];
+
+export interface ModelProviderReadiness {
+    configDir: string;
+    detail: string;
+    model: string;
+    providerId: string;
+    ready: boolean;
+    state: ModelProviderReadinessState;
 }
 
 export interface FlyflorPaths {
@@ -614,6 +632,29 @@ export async function loadConfig(options: FlyflorConfigLoadOptions = {}): Promis
 
 export function resolveFlyflorPaths(): FlyflorPaths {
     return resolvePaths();
+}
+
+export function readModelProviderReadiness(config: FlyflorConfig): ModelProviderReadiness {
+    const apiKey = typeof config.model.apiKey === "string" ? config.model.apiKey.trim() : "";
+    const state =
+        apiKey.length === 0
+            ? ModelProviderReadinessState.Missing
+            : isPlaceholderApiKey(apiKey)
+              ? ModelProviderReadinessState.Placeholder
+              : ModelProviderReadinessState.Configured;
+    return {
+        configDir: config.paths.configDir,
+        detail:
+            state === ModelProviderReadinessState.Configured
+                ? "configured"
+                : state === ModelProviderReadinessState.Placeholder
+                  ? "placeholder"
+                  : "missing",
+        model: config.model.model,
+        providerId: config.model.providerId,
+        ready: state === ModelProviderReadinessState.Configured,
+        state,
+    };
 }
 
 export async function loadConfigForPaths(
@@ -1293,6 +1334,10 @@ function resolvePaths(): FlyflorPaths {
 }
 
 function resolveFlyflorHome(): string {
+    const cwdHome = resolveCwdFlyflorHome();
+    if (cwdHome) {
+        return cwdHome;
+    }
     const candidates = Bun.main.endsWith("/app.ts")
         ? [Bun.main, process.argv[1], process.execPath]
         : [process.execPath, process.argv[1], Bun.main];
@@ -1308,6 +1353,19 @@ function resolveFlyflorHome(): string {
         }
     }
     return resolve(homedir(), ".flyflor");
+}
+
+function resolveCwdFlyflorHome(): string | undefined {
+    const cwd = resolve(process.cwd());
+    if (!existsSync(join(cwd, "app.ts")) || !existsSync(join(cwd, "package.json"))) {
+        return undefined;
+    }
+    try {
+        const packageJson = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as { name?: unknown };
+        return packageJson.name === "flyflor" ? cwd : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function resolveEntrypointPath(path: string): string {
@@ -1359,4 +1417,25 @@ async function readConfigFile(configDir: string): Promise<ConfigFileShape> {
 function env(name: string): string | undefined {
     const value = process.env[name];
     return value && value.length > 0 ? value : undefined;
+}
+
+function isPlaceholderApiKey(value: string): boolean {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0) {
+        return false;
+    }
+    return (
+        normalized.includes("placeholder") ||
+        normalized === "changeme" ||
+        normalized === "change-me" ||
+        normalized === "replace-me" ||
+        normalized === "replace_with_real_key" ||
+        normalized === "replace-with-real-key" ||
+        normalized === "your-api-key" ||
+        normalized === "your_api_key" ||
+        normalized === "set-me" ||
+        normalized === "set_this" ||
+        normalized === "set-this" ||
+        normalized === "todo"
+    );
 }

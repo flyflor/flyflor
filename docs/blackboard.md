@@ -194,7 +194,7 @@ erDiagram
     BLACKBOARD_TURNS ||--o{ BLACKBOARD_WORKER_STATES : tracks
 ```
 
-CLI `flyflor blackboard` 在 TTY 下进入黑板浏览 TUI，可搜索、上下选择并进入 turn 详情；`flyflor blackboard list` / `show <turnId>` 继续直接消费这些表，保留脚本化排查入口（见 `cli.commands.md`）。
+这些表的设计目标是给 future WS/thin client、诊断脚本与历史回放共享同一份结构化黑板快照；主线不再把第一方 Bun 黑板浏览器当成稳定边界。
 
 ## 事件清单
 
@@ -229,7 +229,7 @@ worker **不能**直接写长期记忆：
 ## 运行边界
 
 - direct-with-watch 升级已接入工具失败 / 上下文压力资源指标，但未读取 worker 内部复杂语义信号。
-- chat TUI 已订阅 `BlackboardWorkerStart` / `BlackboardWorkerEnd` / `BlackboardMessageAppended`，并在 assistant 消息下回填 `BlackboardModule.getTurn(turnId)` 的快照展示 workers / steps / public messages / decision；TUI 展示只消费结构化 runtime event 与黑板快照，不读取 worker 原始推理。
+- future WS/thin client 可订阅 `BlackboardWorkerStart` / `BlackboardWorkerEnd` / `BlackboardMessageAppended`，并通过 `BlackboardModule.getTurn(turnId)` 回填 workers / steps / public messages / decision；消费面只应读取结构化 runtime event 与黑板快照，不读取 worker 原始推理。
 - 线程 / 进程隔离已分层落地：blackboard 与 reflection 的 raw → structured 规范化走 Bun Worker
   线程；`WorkerManager.registerRawStdioProcess` 可把外部 agent-cli 包成子进程 worker。模型调用本身仍由
   runtime 主进程发起，默认 blackboard worker 仍以 in-process 注册为主，后续若把模型 worker 完整迁到

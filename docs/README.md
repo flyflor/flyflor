@@ -25,7 +25,10 @@
 15. [boundaries.md](boundaries.md) — 工程硬边界与红线
 16. [external.kit.md](external.kit.md) — 外部套件 manifest、发现与 control/event 契约
 17. [control.protocol.md](control.protocol.md) — Rust / thin client 可直接复用的 WS/control 血管协议面
-18. [reference/README.md](reference/README.md) — 反复查阅的实现参考与本地复现手册
+18. [rust.integration.md](rust.integration.md) — Rust gateway/channel/cli/tui 外壳最小接入手册
+19. [rust.connection.core.md](rust.connection.core.md) — Rust Slice 1 `/ws` 连接核心、握手、snapshot cache 与重连状态机
+20. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust gateway shell 工程切分 backlog
+21. [reference/README.md](reference/README.md) — 反复查阅的实现参考与归档对照
 
 ## 归档区
 

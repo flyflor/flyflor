@@ -81,6 +81,15 @@ describe("EventsComponent explicit hooks", () => {
         expect(classifyRuntimeEvent(RuntimeEventType.McpCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
     });
 
+    test("event classes keep ask timeline events separate from planning write events", () => {
+        expect(classifyRuntimeEvent(RuntimeEventType.MemoryAskRecorded)).toBe(RuntimeEventClass.Ask);
+        expect(classifyRuntimeEvent(RuntimeEventType.CttlLongHorizonLoopPaused)).toBe(RuntimeEventClass.Ask);
+        expect(classifyRuntimeEvent(RuntimeEventType.MemoryTaskPlanWritten)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.MemoryContextForkWritten)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.MemorySceneRecordWritten)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.ChannelError)).toBe(RuntimeEventClass.Error);
+    });
+
     test("runtime skill usage handler records sidecar usage from structured events", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-events-"));
         try {

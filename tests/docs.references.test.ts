@@ -45,6 +45,77 @@ describe("documentation references", () => {
         expect(doc).toContain("id: string;");
         expect(doc).not.toContain("interface GatewayMessage {\n    messageId: string;");
     });
+
+    test("control protocol docs keep snapshot layers distinct and a single error section", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "control.protocol.md")).text();
+        const errorHeadings = doc.match(/^## Error$/gmu) ?? [];
+
+        expect(doc).toContain("## Snapshot Matrix");
+        expect(doc).toContain("连接级 snapshot");
+        expect(doc).toContain("turn 级 snapshot");
+        expect(doc).toContain("事件流");
+        expect(errorHeadings).toHaveLength(1);
+    });
+
+    test("runtime events docs keep event timeline separate from turn-final authority", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "runtime.events.md")).text();
+
+        expect(doc).toContain("## Event Matrix");
+        expect(doc).toContain("当前轮权威状态仍读 `turn.final.reply.metadata`");
+        expect(doc).toContain("结构化快照仍读 `turn.final.reply.metadata.planning`");
+        expect(doc).toContain("`RuntimeEvent` 默认是时间线事实流");
+    });
+
+    test("rust integration guide keeps the ws handoff checklist stable", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "rust.integration.md")).text();
+
+        expect(doc).toContain("## 最小连接流程");
+        expect(doc).toContain("## Snapshot 分层");
+        expect(doc).toContain("gateway.message.send");
+        expect(doc).toContain("turn.final.reply.metadata.ask");
+        expect(doc).toContain("turn.final.reply.metadata.planning");
+        expect(doc).toContain("turn.final.reply.metadata.executiveToolLoop");
+        expect(doc).toContain("event.publish");
+    });
+
+    test("rust connection core guide keeps handshake and reconnect contracts stable", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "rust.connection.core.md")).text();
+
+        expect(doc).toContain("/ws");
+        expect(doc).toContain("server.hello");
+        expect(doc).toContain("client.hello");
+        expect(doc).toContain("gateway.status.get");
+        expect(doc).toContain("capability.catalog.get");
+        expect(doc).toContain("ping");
+        expect(doc).toContain("pong");
+        expect(doc).toContain("reconnecting");
+        expect(doc).toContain("Snapshot Cache Ownership");
+        expect(doc).toContain("连接级状态与 Turn 级状态分层");
+    });
+
+    test("rust gateway shell backlog keeps the implementation slices stable", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "rust.gateway.shell.backlog.md")).text();
+
+        expect(doc).toContain("## Slice 1: Connection Core");
+        expect(doc).toContain("rust.connection.core.md");
+        expect(doc).toContain("## Slice 2: Stream Renderer");
+        expect(doc).toContain("## Slice 3: Ask Loop");
+        expect(doc).toContain("## Slice 4: Planning Panel");
+        expect(doc).toContain("## Slice 5: Long-Horizon Loop Recovery");
+        expect(doc).toContain("## Slice 6: Event Timeline");
+        expect(doc).toContain("## Slice 7: Shell UX");
+    });
+
+    test("directory architecture docs cover the live source ownership layers", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "directory.architecture.md")).text();
+
+        expect(doc).toContain("`src/agent/prompts`");
+        expect(doc).toContain("`src/entities`");
+        expect(doc).toContain("`src/components`");
+        expect(doc).toContain("`src/types`");
+        expect(doc).toContain("`src/protocol/control`");
+        expect(doc).toContain("`src/agent/gateway`");
+    });
 });
 
 async function listMarkdownFiles(root: string): Promise<string[]> {

@@ -295,6 +295,12 @@ describe("Gateway Control protocol", () => {
     });
 
     test("maps transport messages onto stable semantic lanes for Rust clients", () => {
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ServerHello)).toBe(
+            GatewayControlSemanticType.Data,
+        );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ClientHello)).toBe(
+            GatewayControlSemanticType.Data,
+        );
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.GatewayMessageSend)).toBe(
             GatewayControlSemanticType.Input,
         );
@@ -319,6 +325,121 @@ describe("Gateway Control protocol", () => {
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.Pong)).toBe(
             GatewayControlSemanticType.Pong,
         );
+    });
+
+    test("keeps server hello as the connection-level bootstrap snapshot", () => {
+        const connectedAt = "2026-05-19T00:00:00.000Z";
+        const hello = buildGatewayControlServerHelloSnapshot({
+            capabilities: buildGatewayControlSurfaceCapabilities([
+                GatewayControlMessageType.ClientHello,
+                GatewayControlMessageType.GatewayStatusGet,
+                GatewayControlMessageType.CapabilityCatalogGet,
+                GatewayControlMessageType.Ping,
+            ]),
+            clientId: "client-1",
+            connectedAt,
+            kits: {
+                builtAt: "2026-05-19T00:00:00.000Z",
+                capabilities: [],
+                kits: [{
+                    id: "builtin.gateway",
+                    kind: "gateway",
+                    name: "Gateway",
+                    permissions: ["control"],
+                    schemaVersion: 1,
+                    source: "builtin",
+                }],
+                schemaVersion: 1,
+            },
+            status: {
+                channels: [],
+                connectedCount: 1,
+                degradedCount: 0,
+                gatewayRunning: true,
+                host: "127.0.0.1",
+                port: 7777,
+                startedAt: "2026-05-19T00:00:00.000Z",
+                streamingCount: 0,
+                url: "ws://127.0.0.1:7777/ws",
+            },
+        });
+
+        expect(hello).toMatchObject({
+            clientId: "client-1",
+            connectedAt,
+            status: {
+                gatewayRunning: true,
+                host: "127.0.0.1",
+                port: 7777,
+                connectedCount: 1,
+            },
+            kits: {
+                schemaVersion: 1,
+                kits: [{ id: "builtin.gateway" }],
+            },
+            capabilities: {
+                commands: [
+                    GatewayControlMessageType.ClientHello,
+                    GatewayControlMessageType.GatewayStatusGet,
+                    GatewayControlMessageType.CapabilityCatalogGet,
+                    GatewayControlMessageType.Ping,
+                ],
+            },
+        });
+    });
+
+    test("keeps long-horizon loop snapshot stable on both top-level and ask metadata surfaces", () => {
+        const executiveToolLoop = {
+            askId: "ask-1",
+            loopGuardReason: "unknown-tool-repeat",
+            message: "Need execution guidance",
+            resume: { mode: "continue" as const, requestId: "req-1" },
+            stepCount: 2,
+            stop: "ask" as const,
+            toolBudgetExhausted: true as const,
+        };
+        const payload = buildGatewayControlTurnFinalPayload({
+            messageId: "msg-1",
+            route: { channel: Channel.Ws, chatId: "c-1", chatType: ChatType.Direct },
+            text: "Need confirmation?",
+            metadata: {
+                kind: GatewayControlReplyMetadataKind.Ask,
+                ask: {
+                    choiceCount: 1,
+                    choices: [{ label: "Yes" }],
+                    executiveToolLoop,
+                    freeform: true,
+                    prompt: "Need confirmation?",
+                    questionCount: 0,
+                    questions: [],
+                    reason: "other",
+                    snapshotId: "snapshot-1",
+                },
+                behaviorSnapshotId: "snapshot-1",
+                executiveToolLoop,
+                planning: {
+                    contextForks: [],
+                    scenes: [],
+                    taskPlans: [],
+                },
+            },
+        });
+
+        expect(payload.reply.metadata?.executiveToolLoop).toEqual(executiveToolLoop);
+        expect(payload.reply.metadata?.ask?.executiveToolLoop).toEqual(executiveToolLoop);
+    });
+
+    test("documents the stable Rust-facing control lanes and error codes", async () => {
+        const doc = await Bun.file(new URL("../docs/control.protocol.md", import.meta.url)).text();
+
+        expect(doc).toContain("最小读取优先级建议");
+        expect(doc).toContain("## Snapshot Matrix");
+        expect(doc).toContain("Rust 最小接线清单");
+        expect(doc).toContain("reply.metadata.executiveToolLoop");
+        expect(doc).toContain("reply.metadata.ask");
+        expect(doc).toContain("invalid-envelope");
+        expect(doc).toContain("invalid-payload");
+        expect(doc).toContain("unsupported-message");
     });
 
     test("rejects unknown control protocol versions", () => {

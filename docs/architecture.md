@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-Flyflor 主线当前是一个 Bun + TypeScript 智能体运行时内核。未来 CLI、Gateway、TUI 将用 Rust 重写；因此主线已经剥离第一方 `command` 与 channel adapter，只保留 Cognitive-Executive-Agent 内核、RuntimeEvent 血管，以及 WebSocket control 协议面。
+Flyflor 主线当前是一个 Bun + TypeScript 智能体运行时内核。未来第一方 CLI、Gateway、TUI 将用 Rust 重写；因此主线已经剥离第一方 `command` 与 channel adapter，只保留 Cognitive-Executive-Agent 内核、RuntimeEvent 血管，以及 WebSocket control 协议面。
 
 ## 当前主线
 
@@ -10,10 +10,17 @@ Flyflor 主线当前是一个 Bun + TypeScript 智能体运行时内核。未来
 - `src/app.ts`：composition root。
 - `src/cognitive/*`：大脑皮层、晶体智力、海马体。
 - `src/executive/*`：外骨骼，负责 Capability / Tool / Trust / Loop。
-- `src/agent/runtime/*`：turn 编排。
-- `src/agent/gateway/*`：最小 WS/control/event 血管。
+- `src/agent/*`：运行时外显层；其中 runtime/blackboard/sandbox/worker/prompts/mcp/plugin/skills 都在这里归属。
 - `src/events/*`：事件总线。
 - `src/protocol/*`：Rust 与外部客户端共享协议。
+- `src/entities/*`：数据实体与 repo SQL。
+- `src/components/*`：共享 Component 基类与跨模块基础设施。
+- `src/types/*`：轻量共享类型收口。
+
+当前 Bun 主线只保留两个可见入口：
+
+- 本地 `stdio` chat 调试入口，用来直接驱动 `RuntimeModule`。
+- 最小 `gateway` 入口，只暴露 `/ws`、`/health`、`/channels`。
 
 ## 主线不再包含
 
@@ -53,7 +60,9 @@ Executive 是未来电脑控制、工具调用、长线 loop 的统一外骨骼�
 Gateway 现在只保留血管角色：
 
 - `/ws`：control/event。
+- `/health`：最小健康检查。
+- `/channels`：当前血管状态快照。
 - `RuntimeEvent`：统一事件广播。
 - `GatewayControlEnvelope`：统一流式 envelope。
 
-未来 Rust CLI / TUI / Gateway 只应依赖这层。
+未来 Rust CLI / TUI / Gateway 只应依赖这层，而不是反向依赖 Bun 内部 runtime、旧 command、旧 TUI 或 `abandon/` 备份实现。

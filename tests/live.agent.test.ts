@@ -19,6 +19,7 @@ import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import {
     loadConfig,
     loadConfigForPaths,
+    readModelProviderReadiness,
     type FlyflorConfig,
     type FlyflorPaths,
 } from "../src/config/index.ts";
@@ -59,6 +60,7 @@ describe("live agent runtime", () => {
 });
 
 class LiveAgentHarness {
+    private providerConfig: FlyflorConfig | undefined;
     private root = "";
     private runtime: RuntimeModule | undefined;
 
@@ -66,7 +68,8 @@ class LiveAgentHarness {
         this.root = await mkdtemp(join(tmpdir(), "flyflor-live-agent-smoke-"));
         try {
             const config = await this.createIsolatedConfig();
-            if (!this.hasLiveApiKey(config)) {
+            if (!readModelProviderReadiness(this.providerConfig ?? config).ready) {
+                this.requireLiveApiKey(config);
                 return {
                     brainEvents: 0,
                     eventTypes: [],
@@ -92,6 +95,7 @@ class LiveAgentHarness {
 
     private async createIsolatedConfig(): Promise<FlyflorConfig> {
         const liveConfig = await this.loadProviderConfig();
+        this.providerConfig = liveConfig;
         const paths = this.paths();
         const repoRoot = resolve(import.meta.dir, "..");
         await mkdir(dirname(paths.promptDir), { recursive: true });
@@ -140,8 +144,21 @@ class LiveAgentHarness {
         };
     }
 
-    private hasLiveApiKey(config: FlyflorConfig): boolean {
-        return typeof config.model.apiKey === "string" && config.model.apiKey.trim().length > 0;
+    private requireLiveApiKey(config: FlyflorConfig): void {
+        const providerReadiness = readModelProviderReadiness(this.providerConfig ?? config);
+        const details = {
+            configDir: providerReadiness.configDir,
+            detail: providerReadiness.detail,
+            isolatedHome: config.paths.home,
+            model: providerReadiness.model,
+            mode: Bun.env.FLYFLOR_LIVE_TEST_CONFIG === "docker" ? "docker" : "home",
+            providerId: providerReadiness.providerId,
+            state: providerReadiness.state,
+        };
+        if (Bun.env.FLYFLOR_LIVE_REQUIRED === "1") {
+            throw new Error(`Live provider apiKey is unavailable: ${JSON.stringify(details)}`);
+        }
+        console.log(JSON.stringify({ skipped: true, reason: "live provider apiKey is unavailable", ...details }, null, 2));
     }
 
     private paths(): FlyflorPaths {

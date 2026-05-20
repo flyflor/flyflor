@@ -161,6 +161,18 @@ Rust 或其他 thin client 应先看 semantic lane，再决定 UI 或状态机�
 
 客户端可选发送 `client.hello`。当前服务端只返回 `ack`，不依赖 `client.hello` 驱动会话状态。
 
+`client.hello` 当前稳定约定：
+
+- 作用是让客户端显式表明自己已经收到 `server.hello`，并可附带 name/version/capabilities 这类只读自报字段。
+- 服务端返回 `ack`，其中 `payload.received === "client.hello"`。
+- 当前服务端不会因为 `client.hello` 改写连接状态机；Rust / DIY client 不应把它当成必须的第二次握手。
+
+`gateway.status.get` 当前稳定约定：
+
+- 客户端可以在任意时刻主动请求一次连接级状态快照。
+- 服务端返回 `gateway.status.snapshot`。
+- 该 snapshot 与 `server.hello.payload.status` 同 shape，适合 Rust UI 在连接后主动刷新当前血管状态。
+
 ## 输入
 
 客户端输入：
@@ -307,6 +319,13 @@ Rust 或其他 thin client 应先看 semantic lane，再决定 UI 或状态机�
 
 这是 Rust 对接最关键的部分。
 
+最小读取优先级建议：
+
+1. 先按 semantic lane 处理：`input` / `stream` / `event` / `ask` / `todo` / `data` / `error`。
+2. `turn.final` 到达后，先读 `reply.metadata`，不要先解析 `reply.text`。
+3. ask UI 优先消费 `reply.metadata.ask`；loop 恢复优先消费 `reply.metadata.executiveToolLoop`。
+4. todo / scene / fork 面统一消费 `reply.metadata.planning`，不要另建私有投影协议。
+
 ### `ask`
 
 当前不单独发 transport message。
@@ -332,6 +351,13 @@ R10 之后额外约定：
 
 这两个字段表达同一个 snapshot。推荐 Rust / DIY client 优先读取顶层 `metadata.executiveToolLoop`，如果只在 ask 表单组件内消费，也可以直接读 `ask.executiveToolLoop`。
 
+稳定读取顺序：
+
+1. 如果 `reply.metadata.kind === "ask"`，把当前轮视为 ask turn。
+2. 读取 `reply.metadata.ask` 作为表单快照。
+3. 如果存在 `reply.metadata.executiveToolLoop`，把它视为当前 pending loop 的权威 snapshot。
+4. 只有在组件局部只拿到了 ask metadata 时，才回退读 `reply.metadata.ask.executiveToolLoop`。
+
 snapshot 字段：
 
 - `askId`: 当前暂停点 id，也是后续 resume 审计锚点。
@@ -355,6 +381,7 @@ snapshot 字段：
 - 这是当前 turn 输出的结构化任务计划摘要。
 - `taskPlans[].steps` 是可直接渲染的轻量步骤列表。
 - 这是只读快照，不是客户端回写协议。
+- `planning.contextForks` 与 `planning.scenes` 也属于同一份只读 planning snapshot，应和 `taskPlans` 一起消费，而不是拆成多个自定义 lane。
 
 ### `data`
 
@@ -373,6 +400,12 @@ snapshot 字段：
 - `turn.final.payload.reply.metadata.planning.contextForks`
 - `turn.final.payload.reply.metadata.planning.scenes`
 - `turn.final.payload.reply.metadata.planning.taskPlans`
+
+额外约束：
+
+- `server.hello` / `gateway.status.snapshot` / `capability.catalog.snapshot` 是连接级只读 snapshot。
+- `turn.final.reply.metadata.planning` 是当前 turn 级只读 snapshot。
+- Rust / DIY client 不应假设当前阶段会额外出现 `data.publish` 一类新 transport type。
 
 ## Event
 
@@ -418,32 +451,33 @@ snapshot 字段：
 
 - `event.publish` 的 `payload.event` 直接就是 `RuntimeEvent`。
 - 订阅过滤只看结构化 `requestId`、`types`、`classes`。
-- 不做关键词、文本片段、消息正文匹配。
+- 事件流用于时间线、审计和观察；当前轮 ask/todo/loop 恢复仍以 `turn.final.reply.metadata` 为准。
 
-R10 事件补充：
+`event.subscribe` / `event.unsubscribe` 当前稳定约定：
 
-- `cttl.long_horizon_loop.paused`: Executive 工具回路被预算上限或 loop guard 暂停。
-- `cttl.long_horizon_loop.resumed`: 用户回答 pending ask，runtime 记录恢复锚点。
-- `cttl.loop.guard.blocked`: 单次工具调用被 loop guard 阻断。
+- 成功订阅后服务端返回 `ack`，`payload.subscriptions` 是当前连接生效中的订阅列表快照。
+- 成功取消订阅后服务端同样返回 `ack`，并回传更新后的 `payload.subscriptions`。
+- 过滤只使用 `requestId`、`types`、`classes` 这三个结构化字段；客户端不应使用文本或 message label 做事件筛选。
+
+## Snapshot Matrix
+
+Rust / DIY client 应把当前协议面拆成三层读取，不要混用：
+
+| 层级 | 主要来源 | 读取位置 | 性质 | 用途 |
+| --- | --- | --- | --- | --- |
+| 连接级 snapshot | `server.hello` `gateway.status.snapshot` `capability.catalog.snapshot` `ack` | `payload.status` `payload.capabilities` `payload.kits` `payload.catalog` `payload.subscriptions` | 只读连接态 | 握手、连接状态、kit/capability 目录、订阅状态 |
+| turn 级 snapshot | `turn.final` | `reply.metadata.ask` `reply.metadata.planning` `reply.metadata.executiveToolLoop` | 只读当前轮结果 | ask UI、todo/fork/scene 展示、long-horizon loop 恢复 |
+| 事件流 | `event.publish` | `payload.event` | 只读时间线 | 审计、观察、恢复提示、进度广播 |
+
+硬约束：
+
+- 连接级 snapshot 不能替代 `turn.final.reply.metadata`。
+- 事件流不能替代 ask/todo/loop 的权威恢复入口。
+- 客户端不回写任何 snapshot；新的用户动作一律通过 `gateway.message.send` 进入下一轮。
 
 ## Error
 
-控制面错误使用 `type: "error"`。
-
-payload shape：
-
-```json
-{
-  "code": "invalid-payload",
-  "message": "gateway.message.send payload requires text",
-  "retryable": false,
-  "details": {
-    "field": "text"
-  }
-}
-```
-
-当前稳定错误码：
+控制面错误统一走 `error` transport message，当前稳定错误码：
 
 - `internal`
 - `invalid-envelope`
@@ -451,18 +485,31 @@ payload shape：
 - `unauthorized`
 - `unsupported-message`
 
-使用约定：
+读取约定：
 
-- envelope 解析失败: `invalid-envelope`
-- 不支持的 transport message: `unsupported-message`
-- payload 缺字段或结构不合法: `invalid-payload`
-- 鉴权失败: HTTP 401；若后续扩展到 WS 内部错误，也使用 `unauthorized`
-- 其他未分类运行时错误: `internal`
+- 客户端应先读 `payload.code` 做机器分支。
+- `payload.message` 只作为展示或日志信息，不应用于业务判断。
+- `payload.details` 是调试辅助字段，可选。
+- `turn.error` 属于 `stream` lane，表示一轮生成失败；`error` 属于 `control` 面错误，表示协议、鉴权或控制命令失败。
 
-说明：
+## Rust 最小接线清单
 
-- `turn.error` 属于 `stream` lane，表示一轮生成失败。
-- `error` 属于 `control` 面错误，表示协议、鉴权或控制命令失败。
+Rust CLI / Gateway / TUI 的最小主循环建议固定为：
+
+1. 连接 `/ws`，接收 `server.hello`。
+2. 把 `server.hello.payload.status`、`server.hello.payload.capabilities`、`server.hello.payload.kits` 缓存成连接级 data snapshot。
+3. 发送 `gateway.message.send` 时附带结构化 `requestId`。
+4. 消费 `turn.delta` 渲染流式文本。
+5. 消费 `turn.final.reply.metadata.ask`、`turn.final.reply.metadata.planning`、`turn.final.reply.metadata.executiveToolLoop` 做 UI 状态恢复。
+6. 订阅 `event.publish`，用 `RuntimeEvent.type` 做时间线、审计和恢复提示。
+7. 消费 `error.payload.code` 做机器分支，不读 reply 文本猜测失败类型。
+8. 不做关键词、文本片段、消息正文匹配。
+
+R10 事件补充：
+
+- `cttl.long_horizon_loop.paused`: Executive 工具回路被预算上限或 loop guard 暂停。
+- `cttl.long_horizon_loop.resumed`: 用户回答 pending ask，runtime 记录恢复锚点。
+- `cttl.loop.guard.blocked`: 单次工具调用被 loop guard 阻断。
 
 ## Ping / Pong
 

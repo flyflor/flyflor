@@ -229,12 +229,12 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 ## 8. 配置与密钥
 
 - Flyflor home 相对路径：`<flyflor-home>/.config/config.jsonc`（source install 默认 `<flyflor-home>=~/.flyflor`，本地 dev checkout 为当前源码根）；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
-- 本地交互命令：`~/.flyflor/.config/commands.jsonc`。它只定义 TUI / app slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
+- 本地命令协议：`~/.flyflor/.config/commands.jsonc`。它只定义 future client 的本地 slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
 - `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 project / fork 选择写回 `RuntimeContext.activeProject` / `contextForkId`，不能反向变成隐式 session 容器。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
 - OpenAI-compatible provider 的最小配置是 `baseUrl` + `apiKey` + 当前模型；`type`、默认 `chat-completions` 和模型列表由加载器推断 / 探测。自动化代理不得把用户本地 `config.jsonc` 中正在使用的 `apiKey` 改成占位符。
-- CLI 诊断 / 管理命令默认保持文本输出；命令式 navigator 只能由显式 `--tui` 打开，不能因为 stdin 是 TTY 或 Docker `-it` 自动创建 OpenTUI renderer。
+- 后续 CLI 诊断 / 管理面默认保持文本输出；命令式 navigator 若恢复，也必须由显式 client 决策打开，不能因为 stdin 是 TTY 或 Docker `-it` 自动创建 renderer。
 - provider key / MCP token / 插件 token 不得写入日志、事件 payload、错误详情或记忆。
 - 配置对象进入核心后视为只读。
 - 默认配置必须能离线启动；需要联网的能力必须显式启用。
@@ -381,10 +381,10 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 bun run check         # tsc --noEmit
 bun run test          # 已注册确定性测试套件
 bun run smoke:agent   # runtime + memory + planning + brain.db 确定性主路径冒烟
-bun run smoke:agent:live # 真实 provider + 临时 HOME，验证完整 agent turn；无 apiKey 时跳过
+bun run smoke:agent:live # 真实 provider + 临时 HOME，验证完整 agent turn；手动运行缺 apiKey 时打印 skipped 诊断，kernel:seal 下则直接失败
 bun run build:release  # 本机 + GitHub Release 资产名对齐的二进制与模板包可构建
 ```
 
-默认测试套件必须离线、确定性、无真实 provider 消耗；模型调用用 stub / mock 覆盖协议与错误边界。需要验证当前真实配置时，显式运行 `bun run test:live`（`~/.flyflor/.config/config.jsonc`）或 `bun run test:live:docker`（`./docker/config/config.jsonc`），这类 live 冒烟不进入 `ci` / `release:check` 的默认门禁。
+默认测试套件必须离线、确定性、无真实 provider 消耗；模型调用用 stub / mock 覆盖协议与错误边界。需要验证当前真实配置时，显式运行 `bun run test:live`（source checkout 默认读当前仓库 `.config/config.jsonc`，安装态读 `~/.flyflor/.config/config.jsonc`）或 `bun run test:live:docker`（`./docker/config/config.jsonc`）。这类 live 冒烟不进入 `ci` / `release:check` 的默认门禁，但已进入 `kernel:seal`，且 `kernel:seal` 下缺真实 provider 必须直接失败，不允许 skip 伪绿。
 
 涉及工具 / MCP / 插件 / 文件系统 / shell / 网络 / 记忆 / provider 时必须补对应测试或最小验证脚本。

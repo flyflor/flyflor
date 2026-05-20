@@ -33,7 +33,7 @@ export interface ReflectionNormalizeSource {
         score?: number;
         signals?: unknown;
     };
-    mcpCalls?: Array<{
+    mcpCalls?: ReadonlyArray<{
         error?: string;
         ok: boolean;
         resultSummary?: string;
@@ -41,7 +41,7 @@ export interface ReflectionNormalizeSource {
         server: string;
         tool: string;
     }>;
-    skillNames?: string[];
+    skillNames?: ReadonlyArray<string>;
 }
 
 interface ExtractedReflectionItem {

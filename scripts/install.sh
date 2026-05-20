@@ -135,7 +135,7 @@ install_source_mode() {
     info "installing Bun dependencies"
     bun install
     info "installing templates into $FLYFLOR_CONFIG_DIR"
-    bun run install:templates -- --target "$FLYFLOR_CONFIG_DIR"
+    bun run install:templates -- --target "$FLYFLOR_CONFIG_DIR" --source-config
     info "building local binary"
     bun run build:binary
     link_global_command "$FLYFLOR_HOME/dist/$BINARY_NAME"

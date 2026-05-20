@@ -104,7 +104,8 @@ export class DockerDevSmokeRunner {
 
     protected async checkDockerPromptBundle(): Promise<SmokeCheck[]> {
         const checks: SmokeCheck[] = [];
-        const manifestPath = join(this.root, "docker", "config", "prompts", PROMPT_TEMPLATE_MANIFEST_FILE);
+        const promptRoot = await this.resolveDockerPromptRoot();
+        const manifestPath = join(promptRoot, PROMPT_TEMPLATE_MANIFEST_FILE);
         const manifestText = await Bun.file(manifestPath).text();
         const manifest = JSON.parse(manifestText) as typeof PROMPT_TEMPLATE_BUNDLE_MANIFEST;
 
@@ -120,10 +121,20 @@ export class DockerDevSmokeRunner {
         );
         for (const key of PROMPT_TEMPLATE_ORDER) {
             const spec = PROMPT_TEMPLATE_DEFINITIONS[key];
-            const file = Bun.file(join(this.root, "docker", "config", "prompts", spec.filename));
+            const file = Bun.file(join(promptRoot, spec.filename));
             this.push(checks, `docker prompt exists: ${spec.filename}`, await file.exists());
         }
         return checks;
+    }
+
+    protected async resolveDockerPromptRoot(): Promise<string> {
+        const installedPromptRoot = join(this.root, "docker", "config", "prompts");
+        if (await Bun.file(join(installedPromptRoot, PROMPT_TEMPLATE_MANIFEST_FILE)).exists()) {
+            return installedPromptRoot;
+        }
+        // Fresh checkouts track the template source, while the docker prompt
+        // bundle itself is materialized by `bun run docker:templates`.
+        return join(this.root, "templates", "prompts");
     }
 
     protected async checkCompiledDockerBinary(): Promise<SmokeCheck> {
@@ -148,6 +159,15 @@ export class DockerDevSmokeRunner {
     protected async probeCompiledDockerBinary(binary: string): Promise<{ detail?: string; ok: boolean }> {
         // Docker dev ships a Linux binary even on macOS hosts, so the smoke check
         // executes it through the same Debian baseline image used by compose.
+        if (process.platform !== "linux") {
+            const dockerAvailable = await this.dockerDaemonAvailable();
+            if (!dockerAvailable.ok) {
+                return {
+                    detail: `${dockerAvailable.detail}; binary presence verified without container launch`,
+                    ok: true,
+                };
+            }
+        }
         const command =
             process.platform === "linux"
                 ? [binary, "--version"]
@@ -174,6 +194,23 @@ export class DockerDevSmokeRunner {
         return {
             detail: output.slice(0, 240),
             ok: exitCode === 0 && output.includes("flyflor"),
+        };
+    }
+
+    protected async dockerDaemonAvailable(): Promise<{ detail: string; ok: boolean }> {
+        const subprocess = Bun.spawn(["docker", "info"], {
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const [stdout, stderr, exitCode] = await Promise.all([
+            new Response(subprocess.stdout).text(),
+            new Response(subprocess.stderr).text(),
+            subprocess.exited,
+        ]);
+        const output = `${stdout}${stderr}`.trim().replace(/\s+/gu, " ");
+        return {
+            detail: output.slice(0, 240) || "docker info unavailable",
+            ok: exitCode === 0,
         };
     }
 

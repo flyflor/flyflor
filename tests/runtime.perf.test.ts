@@ -15,6 +15,7 @@ import { LocalHashEmbeddingProvider } from "../src/cognitive/hippocampus/embeddi
 import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import {
     BlackboardMode,
+    BlackboardTurnStatus,
     Channel,
     ChatType,
     type GatewayMessage,
@@ -236,6 +237,87 @@ describe("Runtime fastRoute cache observability", () => {
             channel: Channel.Stdio,
             error: "fast-route-cache-down",
         });
+    });
+
+    test("post-reply async failures publish events without downgrading the final reply", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
+        const runtime = new RuntimeModule(config, new StaticTextModel("reply survives async failure"), events, undefined, memory);
+        const instrumentedRuntime = runtime as unknown as {
+            memory: MemoryModule & {
+                classifyAndApplyFeedback: (_message: GatewayMessage, _context: RuntimeContext) => Promise<void>;
+                recordDebateEpisode: (_input: {
+                    embedding?: number[];
+                    requestId?: string;
+                    text: string;
+                    userId: string;
+                }) => Promise<void>;
+            };
+            dispatchAsyncTurnTasks: (
+                message: GatewayMessage,
+                prepared: {
+                    context: RuntimeContext;
+                    embedding: number[];
+                    enrichedContext: RuntimeContext;
+                },
+                assembled: { blackboardRun?: { status?: BlackboardTurnStatus; steps: Array<{ blockers: string[]; newFacts: string[]; outputSummary: string; workerRole: string }>; mode: BlackboardMode; reason: string; metadata: Record<string, unknown>; decisions: unknown[] } },
+                generated: {
+                    mcpCallProvenance: [];
+                    selectedSkillNames: string[];
+                    visibleText: string;
+                },
+            ) => Promise<void>;
+        };
+        instrumentedRuntime.memory.classifyAndApplyFeedback = async () => {
+            throw new Error("feedback-dispatch-failed");
+        };
+        instrumentedRuntime.memory.recordDebateEpisode = async () => {
+            throw new Error("debate-episode-failed");
+        };
+
+        const reply = await runtime.handleMessage(
+            msg("async failure turn"),
+            withEmbedding(await embedFor(config, "async failure turn")),
+        );
+        expect(reply.text).toBe("reply survives async failure");
+
+        await instrumentedRuntime.dispatchAsyncTurnTasks(
+            msg("debate failure turn"),
+            {
+                context: withEmbedding(await embedFor(config, "debate failure turn")),
+                embedding: await embedFor(config, "debate failure turn"),
+                enrichedContext: withEmbedding(await embedFor(config, "debate failure turn")),
+            },
+            {
+                blackboardRun: {
+                    decisions: [],
+                    metadata: {},
+                    mode: BlackboardMode.Blackboard,
+                    reason: "converged",
+                    status: BlackboardTurnStatus.Converged,
+                    steps: [{ blockers: [], newFacts: ["fact"], outputSummary: "summary", workerRole: "analyst" }],
+                },
+            },
+            {
+                mcpCallProvenance: [],
+                selectedSkillNames: [],
+                visibleText: "visible",
+            },
+        );
+
+        expect(events.findOf(RuntimeEventType.MemoryFeedbackFailed)?.payload).toMatchObject({
+            error: "feedback-dispatch-failed",
+            stage: "runtime-dispatch",
+        });
+        expect(events.events.some((entry) =>
+            entry.type === RuntimeEventType.MemoryReflectionFailed &&
+            typeof entry.payload === "object" &&
+            entry.payload !== null &&
+            (entry.payload as Record<string, unknown>).stage === "runtime-debate-episode" &&
+            (entry.payload as Record<string, unknown>).error === "debate-episode-failed"
+        )).toBe(true);
+        runtime.dispose();
     });
 });
 

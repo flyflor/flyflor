@@ -5,6 +5,7 @@ import { basename, dirname, join } from "node:path";
 interface InstallOptions {
     docker: boolean;
     force: boolean;
+    sourceConfig: boolean;
     targetHome: string;
 }
 
@@ -15,6 +16,7 @@ const explicitTarget = readArgValue("--target");
 const options: InstallOptions = {
     docker: args.has("--docker"),
     force: args.has("--force"),
+    sourceConfig: args.has("--source-config"),
     targetHome:
         explicitTarget ??
         // Default local script usage mirrors runtime config resolution:
@@ -50,6 +52,11 @@ if (options.docker) {
     await installDockerDefaultConfig({
         destination: join(options.targetHome, "config.jsonc"),
         source: join(repoRoot, "docker", "config.default.jsonc"),
+    });
+} else if (options.sourceConfig) {
+    await installSourceDefaultConfig({
+        destination: join(options.targetHome, "config.jsonc"),
+        source: join(repoRoot, "config.default.jsonc"),
     });
 }
 
@@ -91,6 +98,17 @@ async function installDockerDefaultConfig(input: { destination: string; source: 
     if (await destination.exists()) {
         // Docker config carries local provider secrets. Even --force template
         // refreshes must preserve this file and only update prompts/commands.
+        console.log(`preserve ${basename(input.destination)}`);
+        return;
+    }
+    await copyFile(input.source, input.destination);
+    console.log(`copy ${basename(input.destination)}`);
+}
+
+async function installSourceDefaultConfig(input: { destination: string; source: string }): Promise<void> {
+    await mkdir(dirname(input.destination), { recursive: true });
+    const destination = Bun.file(input.destination);
+    if (await destination.exists()) {
         console.log(`preserve ${basename(input.destination)}`);
         return;
     }

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
     createDefaultMemoryTuning,
     loadConfigForPaths,
+    readModelProviderReadiness,
     type FlyflorPaths,
 } from "../src/config/index.ts";
 import { RuntimeMode, AtomStage, IdentityFile, SummaryTrigger } from "../src/protocol/contracts/index.ts";
@@ -145,5 +146,55 @@ describe("LF-P0 memory tuning defaults", () => {
         expect(AtomStage.Fuzzy).toBe("fuzzy");
         expect(IdentityFile.Soul).toBe("soul.md");
         expect(IdentityFile.User).toBe("user.md");
+    });
+
+    test("model provider readiness distinguishes missing, placeholder and configured credentials", async () => {
+        const { paths, root } = await makePaths();
+        try {
+            const missing = readModelProviderReadiness(await loadConfigForPaths(paths));
+            expect(missing.ready).toBe(false);
+            expect(missing.state).toBe("missing");
+            expect(missing.detail).toBe("missing");
+
+            await writeFile(
+                configFileOf(paths),
+                JSON.stringify({
+                    model: {
+                        activeProvider: "openai",
+                        activeModel: "gpt-5.5",
+                        providers: {
+                            openai: {
+                                apiKey: "replace-with-real-key",
+                            },
+                        },
+                    },
+                }),
+            );
+            const placeholder = readModelProviderReadiness(await loadConfigForPaths(paths));
+            expect(placeholder.ready).toBe(false);
+            expect(placeholder.state).toBe("placeholder");
+            expect(placeholder.detail).toBe("placeholder");
+
+            await writeFile(
+                configFileOf(paths),
+                JSON.stringify({
+                    model: {
+                        activeProvider: "openai",
+                        activeModel: "gpt-5.5",
+                        providers: {
+                            openai: {
+                                apiKey: "test-live-key",
+                            },
+                        },
+                    },
+                }),
+            );
+            const configured = readModelProviderReadiness(await loadConfigForPaths(paths));
+            expect(configured.ready).toBe(true);
+            expect(configured.state).toBe("configured");
+            expect(configured.detail).toBe("configured");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
     });
 });

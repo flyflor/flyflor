@@ -88,11 +88,11 @@ flowchart LR
 
 当前写路径：`rememberTurn` 先构造结构化 prompt atoms，并把 turn 作为 `memory_events.type='event'` 写入 brain；atoms 封在 `event.content.atoms` 中，工作记忆 episode 通过 `metadata.brainEventId` 回连该 brain event。当前读路径：prompt atom recall、hippocampus context 与 inbox 可视化都走 `BrainStore.listPromptAtomsWindow` 展开 `brain_events`；Ask continuation、Ghost hint、Identity block、EQ block、Dormant resume hint 也直接从 brain/state 渲染。表级 SQL 优先落在 `src/entities/memory/brain/<owner>/repo.ts`，repo 使用 `query\`...\`` 绑定参数并只做 row/entity 映射；`BrainStore`不承载 service 层语义。Feedback 分类器归属`src/cognitive/hippocampus/memory/feedback/index.ts`，只产出结构化分类供 MemoryModule 写入修正证据。`MemoryActionAffect` 只参与 memory candidate 权重；EQ 只用于语气、暖度和节奏，不参与路由、工具、问答链深度或记忆候选打分。
 
-TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 TUI 详情可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
+TaskPlan / ContextFork / SceneRecord 也会作为 summary-first brain.db 元数据进入同一条回放链。它们只存进度、作用域和可复用场景摘要，不存 raw thinking trace；`/history` 与 future thin client 详情面可以直接复用这些摘要对象，不需要为每个视图再建一套存储。ContextFork 只在调用方显式传入 `RuntimeContext.contextForkId` 时注入 prompt，Project 只在调用方显式传入 `RuntimeContext.activeProject` 时使用项目局部记忆，保持无 session 设计。
 
-ContextFork 的低频 replay 详情落 `~/.flyflor/.config/storage/forks/<forkId>/manifest.json` / `replay.jsonl`。`brain.db.context_forks` 仍是权威摘要与列表索引；sidecar 只服务 TUI 深度回放和未来清理策略，可按 `memory.tuning.contextFork.sidecarTtlDays`（默认 90 天，0 关闭）删除而不影响摘要审计。
+ContextFork 的低频 replay 详情落 `~/.flyflor/.config/storage/forks/<forkId>/manifest.json` / `replay.jsonl`。`brain.db.context_forks` 仍是权威摘要与列表索引；sidecar 只服务深度回放和未来清理策略，可按 `memory.tuning.contextFork.sidecarTtlDays`（默认 90 天，0 关闭）删除而不影响摘要审计。
 
-chat TUI 的历史回放直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/cognitive/hippocampus/memory/history/index.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
+历史回放面可直接调用 `MemoryModule.listChatHistory(userId, { beforeTs, limit })`；它只读 `memory_events.type='event'` 的结构化 `userText` / `assistantText`，缺字段视为数据损坏并显式报错。turn event 到 `/history` 视图的映射集中在 `src/cognitive/hippocampus/memory/history/index.ts`，该文件只做 JSON shape 校验，不从文本推断 TODO、fork 或场景语义。
 
 月级冷归档只移动 `memory_state.status='archived'` 且早于 cutoff month 的事件，并同步搬运同月 `memory_summary`；live / resumed / pending ask / active ghost 不移动。有完整 `BackgroundScheduler` 时归档 tick 复用调度器并避开 summary / dream busy；缺 `MemoryComponent`、`CrystalComponent` 或模型时，`MemoryModule` 仍会用根 timer 维护归档，不依赖长期图后端。
 

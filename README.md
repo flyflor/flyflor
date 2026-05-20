@@ -43,7 +43,7 @@ flyflor update -y
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在源码根相对的 `.config`，也就是 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
+默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在源码根相对的 `.config`，也就是 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，并在 source config 缺失时从 `config.default.jsonc` 初始化最小 `config.jsonc`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
 
 ### 安装方式
 
@@ -73,35 +73,39 @@ bun run install:templates  # copies prompts/templates/commands into this checkou
 bun run chat
 ```
 
-常用命令：
+当前主线常用入口：
 
 ```bash
-bun run setup        # 初始化向导
-bun run status       # 运行状态
-bun run doctor       # 诊断配置与依赖
-bun run doctor --fix # 自动创建缺失目录
+./dist/flyflor       # 本地 stdio chat 调试入口
+./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
+./dist/flyflor gateway
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
-./dist/flyflor       # 执行已编译二进制；交互式执行 shell.run 会询问
-./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
-./dist/flyflor gateway run
-flyflor gateway service plan --target systemd --write # 写入用户级 systemd 服务文件；launchd 同理
 ```
+
+说明：
+
+- Bun 主线仍保留一个本地 stdio chat 调试面，方便直接驱动 `RuntimeModule`。
+- 未来第一方 CLI / TUI / gateway shell 将由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核。
+- `setup` / `status` / `doctor` / 第一方 navigator 类命令不再视为主线稳定边界。
 
 质量验证：
 
 ```bash
 bun run check        # TypeScript 类型检查
 bun run test         # 确定性单元测试：离线、stub model、无真实 API 消耗
-bun run test:live    # 真实模型冒烟：读取 ~/.flyflor/.config/config.jsonc 的当前 provider；无 apiKey 时跳过
+bun run test:kernel  # 内核封板关键 deterministic 子集：runtime/memory/blackboard/executive/ws/docs/chaos
+bun run test:live    # 真实模型冒烟：source checkout 默认读取当前仓库 .config/config.jsonc，安装态读取 ~/.flyflor/.config/config.jsonc；手动运行时缺 apiKey 会打印 skipped 诊断
 bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc，并覆盖 runtime + memory 临时状态链路
+bun run provider:ready # 读取当前约定 config，输出结构化 provider readiness（missing / placeholder / configured）
 bun run smoke:agent  # 确定性智能体主路径冒烟：runtime + memory + planning + brain.db
-bun run smoke:agent:live # 真实模型 + runtime + memory + brain.db 冒烟；状态写入临时 HOME，无 apiKey 时跳过
+bun run smoke:agent:live # 真实模型 + runtime + memory + brain.db 冒烟；状态写入临时 HOME，手动运行时缺 apiKey 会打印 skipped 诊断
 bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
 bun run build:binary # 编译本机二进制
 bun run build:binary:release # 编译本机 + GitHub Release 资产名对齐的 Linux x64 / arm64 二进制
 bun run build:templates:release # 打包 GitHub Release 使用的 flyflor-templates.tar.gz
 bun run build:release # 构建并检查发布所需的二进制 + 模板包
+bun run kernel:seal  # 当前 Bun 内核封板门禁：docs/check/test/smoke/build/live 全绿；kernel:seal 下缺真实 provider 会直接失败
 ```
 
 ## Docker Dev
@@ -110,7 +114,7 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 
 ```bash
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
-bun run docker:chat                       # 直接进入 chat TUI
+bun run docker:chat                       # 进入容器内的本地 stdio chat 调试入口
 bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
 bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Scene 与 brain.db 写入
 bun run smoke:agent:live                  # 读取真实 provider，临时 HOME 内检查完整 agent turn
@@ -125,7 +129,7 @@ bun run release:check                     # 本地发布门禁：完整 determin
 docker exec -it flyflor-dev flyflor       # 进入容器交互
 ```
 
-`bun run test` 默认不调用真实模型，避免普通单测受网络、余额和 provider 抖动影响；需要验证你当前配置的真实模型时，单独跑 `bun run test:live`、`bun run test:live:docker` 或 Docker 场景的 `bun run smoke:runtime:live`。
+`bun run test` 默认不调用真实模型，避免普通单测受网络、余额和 provider 抖动影响；需要验证你当前配置的真实模型时，先跑 `bun run provider:ready`，再按场景单独跑 `bun run test:live`、`bun run test:live:docker` 或 Docker 场景的 `bun run smoke:runtime:live`。手动 live 探测允许输出 skipped 诊断，但 `bun run kernel:seal` 会把 live provider 缺失视为封板失败。Docker live runtime 继续保留为可选扩展验证，不属于当前 Bun 内核封板硬门槛。
 
 挂载路径：
 
@@ -203,7 +207,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot cache
 6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
 
-外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成和驱动 TUI/API SSE，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
+外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成并驱动 `/ws` thin client，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
 
 ## 记忆系统
 
@@ -211,7 +215,7 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | ----------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 宪法层      | Markdown                                       | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）                                                                                                           |
 | 生命事件层  | SQLite `brain.db`                              | `memory_events` append-only + `memory_state` 当前可见性；projects / TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
-| 工作记忆    | `MemoryComponent`：Local WAL/snapshot          | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；`status` / `doctor` / TUI 只读恢复文件元数据                                           |
+| 工作记忆    | `MemoryComponent`：Local WAL/snapshot          | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；恢复面只暴露结构化文件元数据给诊断脚本或 future WS client                                           |
 | 长期记忆图  | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系                                                                                                         |
 | 索引 / 审计 | SQLite                                         | blackboard、candidate、offer、skill/plugin/mcp 辅助状态                                                                                                            |
 
@@ -285,41 +289,14 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 - 流式输出 worker 讨论步骤
 - 无法收敛时由 runtime 合成 Ask（`reason=blackboard-stalemate`），交还用户选择；旧 `flyflor-decision-form` 已退役
 
-## CLI 参考
+## Runtime Surfaces
 
 ```bash
-flyflor                      # 启动 chat TUI（TTY 环境）
-flyflor chat                 # 对话模式
-# Chat TUI 内置 slash commands：
-# /project [path]  创建 / 使用项目作用域
-# /projects        从 brain.db 项目列表选择并激活
-# /fork            从历史 turn 摘要 fork 上下文
-# /forks           选择已保存的 ContextFork
-flyflor tui                  # 仪表板 TUI
-flyflor setup                # 初始化向导
-flyflor status               # 运行状态
-flyflor doctor [--fix]       # 诊断（--fix 自动创建缺失目录）
-flyflor update [--check] [-y]# 检查 / 应用更新
-flyflor version              # 版本信息
-flyflor config show          # 查看配置
-flyflor config path          # 配置文件路径
-flyflor memory status        # 记忆状态
-flyflor blackboard           # 黑板浏览 TUI：搜索、选择、进入详情
-flyflor blackboard list      # 黑板 turn 列表
-flyflor codename list        # 代号锚点列表
-flyflor inbox list           # inbox/codename 桶中的 atom
-flyflor ghost list --user me # 未完事项 / 可恢复上下文
-flyflor identity list --user me # identity 自写条目
-flyflor gem list             # 晶体列表（`skills` 子命令已更名为 `gem`）
-flyflor mcp list             # MCP 服务列表
-flyflor plugins list         # 插件列表
-flyflor plugins run <name>   # 沙箱审批后运行插件
-flyflor dream status         # Dream 队列状态
-flyflor dream run            # 手动触发 dream pass
-flyflor model                # 模型配置向导
-flyflor gateway status       # 网关状态
-flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
+flyflor            # 本地 stdio chat 调试入口
+flyflor gateway    # 最小 Gateway：/ws /health /channels
 ```
+
+当前主线只把这两个 Bun 入口当成调试/血管面保留。后续第一方 CLI、TUI、channel shell 和 gateway surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；更多说明见 [docs/cli.commands.md](docs/cli.commands.md) 与 [docs/control.protocol.md](docs/control.protocol.md)。
 
 ## 工程规则
 
@@ -351,7 +328,7 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 
 - 只使用 Bun 命令管理依赖，不要求安装 Node.js
 - 配置走 `~/.flyflor/.config/config.jsonc`（Docker dev：`./docker/config/config.jsonc`），兼容 JSONC
-- 本地 TUI / app slash commands 走 `~/.flyflor/.config/commands.jsonc`，由 `match.slash` + `run.type` / `run.action` 规则驱动；不要混入模型、凭据和网关配置
+- `~/.flyflor/.config/commands.jsonc` 只保留给 future client 的本地命令协议层，不承载模型、凭据和网关配置
 - 业务配置不走环境变量；凭据、沙箱策略走 config/secrets provider
 - 新增运行时依赖前确认兼容 `bun build --compile`（无 native addon、无 postinstall、无动态 require）
 - 不把密钥、日志、会话数据库、用户数据编译进二进制
@@ -375,14 +352,17 @@ flyflor gateway service plan # 生成 systemd / launchd 用户服务安装计划
 | [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
 | [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
 | [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
-| [docs/gateway.channels.md](docs/gateway.channels.md)         | 退役中的第一方 Gateway 与渠道矩阵       |
+| [docs/gateway.channels.md](docs/gateway.channels.md)         | 主线最小 Gateway 血管层                 |
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
 | [docs/control.protocol.md](docs/control.protocol.md)         | Rust / thin client 直接对接的 WS/control 血管协议 |
+| [docs/rust.integration.md](docs/rust.integration.md)         | Rust gateway/channel/cli/tui 外壳最小接入手册 |
+| [docs/rust.connection.core.md](docs/rust.connection.core.md) | Rust Slice 1 `/ws` 连接核心与重连状态机 |
+| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust gateway shell 工程切分 backlog |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
-| [docs/cli.commands.md](docs/cli.commands.md)                 | CLI 命令现状                           |
+| [docs/cli.commands.md](docs/cli.commands.md)                 | Bun CLI/TUI 退役说明                    |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 

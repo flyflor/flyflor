@@ -65,6 +65,24 @@
 - `memory.scene_record.written`
 - `memory.reflection.failed`
 
+## Event Matrix
+
+Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途，再决定是否要联动 UI：
+
+| 事件族 | 代表事件 | UI 主要职责 | 是否可单独作为恢复权威 |
+| --- | --- | --- | --- |
+| turn 生命周期 | `agent.turn.start` `agent.turn.end` | 时间线、turn 边界、性能标记 | 否 |
+| gateway/control | `gateway.message.received` `channel.link.changed` `channel.error` | 连接状态、血管告警、链路可见性 | 否 |
+| ask / loop | `memory.ask.recorded` `memory.ask.answered` `cttl.long_horizon_loop.paused` `cttl.long_horizon_loop.resumed` | ask 时间线、恢复提示、暂停/恢复提示 | 否，当前轮权威状态仍读 `turn.final.reply.metadata` |
+| planning / memory write | `memory.task_plan.written` `memory.context_fork.written` `memory.scene_record.written` | 审计、历史回放提示、增量刷新提示 | 否，结构化快照仍读 `turn.final.reply.metadata.planning` |
+| sandbox / capability | `sandbox.tool.approval.requested` `sandbox.tool.denied` `mcp.tool.call.executed` | 执行审计、审批提示、副作用观察 | 否 |
+
+硬约束：
+
+- `RuntimeEvent` 默认是时间线事实流，不是当前轮结果快照。
+- ask/todo/loop 的当前轮权威状态继续以 `turn.final.reply.metadata` 为准。
+- 事件流可用于“提示要刷新 UI”，但不应替代 snapshot 读取。
+
 ## R10 Long-Horizon Loop 事件契约
 
 R10 之后，Executive tool loop 的超长线暂停/恢复通过两类事件暴露：
@@ -117,6 +135,7 @@ payload 约定：
 
 - 想做时间线或审计面板，看事件流。
 - 想做当前轮 UI 状态恢复，看 `turn.final.reply.metadata.executiveToolLoop`。
+- 想做 task plan / fork / scene 的结构化当前轮展示，看 `turn.final.reply.metadata.planning`。
 
 ## Rust 侧最小读取建议
 
@@ -127,3 +146,4 @@ payload 约定：
    - `cttl.long_horizon_loop.resumed`
    - `cttl.loop.guard.blocked`
 4. 如果当前轮 `turn.final.reply.metadata.executiveToolLoop` 存在，就把它当成当前 pending loop snapshot。
+5. 如果收到 `memory.task_plan.written` / `memory.context_fork.written` / `memory.scene_record.written`，把它们当成“planning 已更新”的提示；真正的当前轮结构化数据仍回到 `turn.final.reply.metadata.planning`。

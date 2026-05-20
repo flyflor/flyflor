@@ -1,0 +1,25 @@
+{
+    // Source checkout default config. install.templates.ts copies this file into
+    // ./.config/config.jsonc only when the local source config is missing, so
+    // existing provider credentials are never replaced by automation.
+    "model": {
+        "activeProvider": "openai",
+        "activeModel": "gpt-5.5",
+        "providers": {
+            "openai": {
+                "baseUrl": "https://api.openai.com/v1",
+                "apiKey": "replace-with-real-key",
+            },
+        },
+    },
+    "memory": {
+        "enabled": true,
+        "working": {
+            "backend": "local",
+        },
+        "crystal": {
+            "enabled": true,
+            "backend": "local",
+        },
+    },
+}

@@ -1279,14 +1279,50 @@ export class RuntimeModule extends RuntimeBoundary {
                 skillNames: selectedSkillNames,
             },
         });
-        await this.memory.classifyAndApplyFeedback(message, enrichedContext);
+        await this.runAsyncTurnTask(
+            () => this.memory.classifyAndApplyFeedback(message, enrichedContext),
+            RuntimeEventType.MemoryFeedbackFailed,
+            { stage: "runtime-dispatch", userId: message.user.id },
+            context.requestId,
+        );
         if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
-            await this.memory.recordDebateEpisode({
-                userId: message.user.id,
-                text: this.blackboardOutput.renderDebateEpisodeText(message.text, blackboardRun),
-                embedding,
-                requestId: context.requestId,
-            });
+            await this.runAsyncTurnTask(
+                () =>
+                    this.memory.recordDebateEpisode({
+                        userId: message.user.id,
+                        text: this.blackboardOutput.renderDebateEpisodeText(message.text, blackboardRun),
+                        embedding,
+                        requestId: context.requestId,
+                    }),
+                RuntimeEventType.MemoryReflectionFailed,
+                { stage: "runtime-debate-episode", userId: message.user.id },
+                context.requestId,
+            );
+        }
+    }
+
+    /**
+     * 主回复已经生成后，后台任务失败只能发布结构化事件，不能把 turn.final 反向打成失败。
+     */
+    private async runAsyncTurnTask(
+        task: () => Promise<void>,
+        failureType: RuntimeEventType,
+        payload: Record<string, unknown>,
+        requestId: string,
+    ): Promise<void> {
+        try {
+            await task();
+        } catch (error) {
+            this.events.publish(
+                event(
+                    failureType,
+                    {
+                        ...payload,
+                        error: error instanceof Error ? error.message : String(error),
+                    },
+                    requestId,
+                ),
+            );
         }
     }
 

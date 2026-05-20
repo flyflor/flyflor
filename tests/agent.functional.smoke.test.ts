@@ -34,8 +34,17 @@ describe("agent functional smoke", () => {
     test("package and quality gates keep the agent smoke wired", async () => {
         const packageJson = JSON.parse(await Bun.file("package.json").text()) as { scripts?: Record<string, string> };
         const quality = await Bun.file("scripts/quality.ts").text();
+        const testRunner = await Bun.file("scripts/test.ts").text();
 
         expect(packageJson.scripts?.["smoke:agent"]).toContain("agent.functional.smoke.ts");
+        expect(packageJson.scripts?.["test:kernel"]).toContain("scripts/test.ts kernel");
+        expect(packageJson.scripts?.["kernel:seal"]).toContain("scripts/quality.ts kernel-seal");
+        expect(testRunner).toContain('if (suite === "kernel")');
+        expect(testRunner).toContain("tests/agent.functional.smoke.test.ts");
+        expect(testRunner).toContain("tests/chaos.fuzz.test.ts");
         expect(quality).toContain('["bun", "run", "smoke:agent"]');
+        expect(quality).toContain('["bun", "run", "test:live"]');
+        expect(quality).toContain('["bun", "run", "smoke:agent:live"]');
+        expect(quality).toContain("FLYFLOR_LIVE_REQUIRED");
     });
 });

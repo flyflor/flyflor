@@ -10,15 +10,20 @@
 
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { loadConfig, loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
+import {
+    loadConfig,
+    loadConfigForPaths,
+    readModelProviderReadiness,
+    type FlyflorConfig,
+    type FlyflorPaths,
+} from "../src/config/index.ts";
 import { createModelClient } from "../src/cognitive/mindstream/index.ts";
 import { ModelRole } from "../src/protocol/contracts/index.ts";
 
 describe("live model provider", () => {
     test("generates a short structured response using configured provider", async () => {
         const config = await loadLiveConfig();
-        if (!hasLiveApiKey(config)) {
-            console.log(JSON.stringify({ skipped: true, reason: "live provider apiKey is unavailable" }));
+        if (!requireLiveApiKey(config, "live.model.generate")) {
             return;
         }
         const model = createModelClient(config.model);
@@ -39,8 +44,7 @@ describe("live model provider", () => {
 
     test("streams text when configured provider exposes streaming", async () => {
         const config = await loadLiveConfig();
-        if (!hasLiveApiKey(config)) {
-            console.log(JSON.stringify({ skipped: true, reason: "live provider apiKey is unavailable" }));
+        if (!requireLiveApiKey(config, "live.model.stream")) {
             return;
         }
         const model = createModelClient(config.model);
@@ -72,8 +76,25 @@ async function loadLiveConfig(): Promise<FlyflorConfig> {
     return config;
 }
 
-function hasLiveApiKey(config: FlyflorConfig): boolean {
-    return typeof config.model.apiKey === "string" && config.model.apiKey.trim().length > 0;
+function requireLiveApiKey(config: FlyflorConfig, probe: string): boolean {
+    const readiness = readModelProviderReadiness(config);
+    if (readiness.ready) {
+        return true;
+    }
+    const details = {
+        configDir: readiness.configDir,
+        detail: readiness.detail,
+        model: readiness.model,
+        mode: readConfigMode(),
+        providerId: readiness.providerId,
+        probe,
+        state: readiness.state,
+    };
+    if (Bun.env.FLYFLOR_LIVE_REQUIRED === "1") {
+        throw new Error(`Live provider apiKey is unavailable: ${JSON.stringify(details)}`);
+    }
+    console.log(JSON.stringify({ skipped: true, reason: "live provider apiKey is unavailable", ...details }));
+    return false;
 }
 
 function readConfigMode(): "home" | "docker" {

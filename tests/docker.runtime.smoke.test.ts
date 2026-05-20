@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { buildDockerRuntimeSmokePlan, readDoctorApiKeyState } from "../scripts/docker.runtime.smoke.ts";
+import {
+    buildDockerRuntimeSmokePlan,
+    isProviderCredentialReady,
+    readDoctorApiKeyState,
+} from "../scripts/docker.runtime.smoke.ts";
 
 describe("Docker runtime smoke plan", () => {
     test("covers doctor and status main path without mandatory external backends", () => {
@@ -41,6 +45,12 @@ describe("Docker runtime smoke plan", () => {
             status: "warn",
             detail: "placeholder",
         });
+    });
+
+    test("provider readiness helper only accepts configured credentials", () => {
+        expect(isProviderCredentialReady(readDoctorApiKeyState(doctorLine("warn", "placeholder")))).toBe(false);
+        expect(isProviderCredentialReady(readDoctorApiKeyState(doctorLine("ok", "configured")))).toBe(true);
+        expect(isProviderCredentialReady(undefined)).toBe(false);
     });
 });
 

@@ -88,7 +88,7 @@ info "installing Bun dependencies"
 bun install
 CONFIG_DIR="${FLYFLOR_CONFIG_DIR:-$TARGET_DIR/.config}"
 info "installing templates into $CONFIG_DIR"
-bun run install:templates -- --target "$CONFIG_DIR"
+bun run install:templates -- --target "$CONFIG_DIR" --source-config
 info "building Bun-compiled binary"
 bun run build:binary
 mkdir -p "$GLOBAL_BIN_DIR"

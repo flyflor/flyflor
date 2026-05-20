@@ -29,7 +29,7 @@ export interface RuntimeReflectionSource {
     request: string;
     requestId: string;
     route?: RuntimeBlackboardRouteDecision;
-    mcpCalls?: Array<{
+    mcpCalls?: ReadonlyArray<{
         error?: string;
         ok: boolean;
         resultSummary?: string;
@@ -37,7 +37,7 @@ export interface RuntimeReflectionSource {
         server: string;
         tool: string;
     }>;
-    skillNames?: string[];
+    skillNames?: ReadonlyArray<string>;
 }
 
 export async function extractRuntimeReflectionCandidates(

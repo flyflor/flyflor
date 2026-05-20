@@ -8,6 +8,11 @@ interface SmokeStep {
     retryDelayMs?: number;
 }
 
+export interface ProviderCredentialState {
+    detail: string;
+    status: string;
+}
+
 export interface DockerRuntimeSmokeOptions {
     chatProbe?: boolean;
     devContainerName?: string;
@@ -129,7 +134,7 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function readDoctorApiKeyState(output: string): { status: string; detail: string } | undefined {
+export function readDoctorApiKeyState(output: string): ProviderCredentialState | undefined {
     // Smoke scripts parse the doctor table as a CLI contract, keeping provider readiness outside runtime semantics.
     const line = output
         .split(/\r?\n/u)
@@ -146,10 +151,13 @@ export function readDoctorApiKeyState(output: string): { status: string; detail:
     return { status: status.toLowerCase(), detail: detail.toLowerCase() };
 }
 
+export function isProviderCredentialReady(state: ProviderCredentialState | undefined): boolean {
+    return state?.status === "ok" && state.detail === "configured";
+}
+
 function validateProviderKeyReadiness(output: string, requireProviderKey: boolean): boolean {
     if (!requireProviderKey) return true;
-    const state = readDoctorApiKeyState(output);
-    return state?.status === "ok" && state.detail === "configured";
+    return isProviderCredentialReady(readDoctorApiKeyState(output));
 }
 
 function providerReadinessNote(output: string, requireProviderKey: boolean): string | undefined {
@@ -157,7 +165,7 @@ function providerReadinessNote(output: string, requireProviderKey: boolean): str
     if (!state) {
         return requireProviderKey ? "provider credential state was not visible in doctor output" : undefined;
     }
-    if (state.status === "ok" && state.detail === "configured") {
+    if (isProviderCredentialReady(state)) {
         return undefined;
     }
     if (requireProviderKey) {

@@ -157,7 +157,7 @@ esac
             expect(log).toContain("git clone --branch main https://example.invalid/flyflor.git");
             expect(log).toContain("bun install");
             expect(log).toContain(
-                `bun run install:templates -- --target ${join(sandbox.home, ".flyflor", ".config")}`,
+                `bun run install:templates -- --target ${join(sandbox.home, ".flyflor", ".config")} --source-config`,
             );
             expect(log).toContain("bun run build:binary");
         },
@@ -174,7 +174,7 @@ describe("source/docker/windows installers", () => {
         expect(text).toContain("git clone");
         expect(text).toContain("git -C \"$TARGET_DIR\" pull --ff-only");
         expect(text).toContain("bun install");
-        expect(text).toContain('bun run install:templates -- --target "$CONFIG_DIR"');
+        expect(text).toContain('bun run install:templates -- --target "$CONFIG_DIR" --source-config');
         expect(text).toContain("bun run build:binary");
         expect(text).toContain("ln -sf \"$TARGET_DIR/dist/flyflor\"");
         expect(text).toContain(`curl -fsSL ${GITHUB_SCRIPT_BASE}/install.source.sh | bash`);
@@ -267,7 +267,7 @@ describe("source/docker/windows installers", () => {
             const log = await readFile(sandbox.log, "utf8");
             expect(log).toContain("git clone --branch main https://example.invalid/flyflor.git");
             expect(log).toContain("bun install");
-            expect(log).toContain(`bun run install:templates -- --target ${join(target, ".config")}`);
+            expect(log).toContain(`bun run install:templates -- --target ${join(target, ".config")} --source-config`);
             expect(log).toContain("bun run build:binary");
             const linked = await readLinkText(join(sandbox.home, ".local", "bin", "flyflor"));
             expect(linked).toContain(join(target, "dist", "flyflor"));
