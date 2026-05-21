@@ -102,6 +102,13 @@ Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：�
 
 tmux 的作用是让并发工作可观察，不是让子会话静默改写仓库级规则。
 
+恢复命令：
+
+```bash
+bun run kernel:tmux
+bun run kernel:tmux -- --launch-codex
+```
+
 ## Review 与合并规则
 
 主线合并纪律必须保持严格：
@@ -174,6 +181,36 @@ git worktree list
     - `docs/runtime.events.zh.cn.md`
   - reviewed commit: `6a6d0c2`
 
+当前激活的代码 worktree：
+
+- `wt/kernel-context-memory`
+  - owned files:
+    - `src/cognitive/hippocampus/memory/**`
+    - `src/entities/memory/**`
+    - `src/agent/context/**`
+    - 相关测试与本地控制文件
+  - validation:
+    - `bun run check`
+    - 定向 memory/context 测试
+- `wt/kernel-scope-crystal-ask`
+  - owned files:
+    - `src/cognitive/hippocampus/scope/**`
+    - `src/cognitive/hippocampus/ask/**`
+    - `src/cognitive/crystal/**`
+    - 相关测试与本地控制文件
+  - validation:
+    - `bun run check`
+    - 定向 ask/scope/crystal 测试
+- `wt/kernel-runtime-executive-ws`
+  - owned files:
+    - `src/agent/runtime/**`
+    - `src/agent/gateway/**`
+    - `src/executive/**`
+    - 相关脚本/测试/文档与本地控制文件
+  - validation:
+    - `bun run check`
+    - 定向 runtime/gateway/executive 测试
+
 主线协调合并提交：
 
 - `4c21957` — reviewed worktree architecture refinements merged to `main-codex-docs`
@@ -197,6 +234,20 @@ git worktree list
 - `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-memory-philosophy`
 - `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-scope-ask`
 - `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-protocol-events`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-context-memory`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-scope-crystal-ask`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-runtime-executive-ws`
+
+当前 tmux 恢复面：
+
+- script: `scripts/tmux.worktree.dev.sh`
+- package 入口：`bun run kernel:tmux`
+- 默认 session：`flyflor-kernel`
+- windows:
+  - `main`
+  - `context`
+  - `scope`
+  - `runtime`
 
 当前主线已携带的封板关键实现状态：
 

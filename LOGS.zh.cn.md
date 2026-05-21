@@ -36,3 +36,10 @@
   摘要：把仓库交接契约从短周期 seal sprint 升级为长线协调式重构模式，明确下一阶段目标是完整的智能生命体内核，并要求每次停下前都更新 workflow/handoff 文档并全量 push。
   原因：下一阶段需要比单线程串行推进更高的吞吐，而新的 session 也必须能不依赖聊天历史，直接恢复协调职责和 worktree/tmux 并发执行方式。
   验证：主线 handoff 文档已在下一轮 worktree 拆分前更新
+
+- 状态：completed
+  操作者：main-codex
+  范围：kernel-worktree-bootstrap
+  摘要：新增可复现的 `bun run kernel:tmux` 恢复入口，切出 context-memory、scope-crystal-ask、runtime-executive-ws 三个代码 worktree 分支，并把交接文档更新为新的并发内核开发布局。
+  原因：下一阶段是大范围内核重构，所以新机器和新 session 需要稳定地重建 worktree、tmux 窗口和 child Codex 所有权，不能依赖瞬时 shell 状态。
+  验证：`bun run kernel:tmux`

@@ -63,6 +63,8 @@ Main visible surfaces:
 9. Align all active docs with the "intelligent lifeform kernel" framing before starting multi-worktree implementation.
 10. Introduce append-only `LOGS.md` control files for the main worktree and future child worktrees.
 11. Split the first document pass into three child worktrees after the mainline architecture anchor is updated.
+12. Keep the active code-worktree split (`wt/kernel-context-memory`, `wt/kernel-scope-crystal-ask`, `wt/kernel-runtime-executive-ws`) alive until the WS-visible intelligent-lifeform kernel loop is complete.
+13. Preserve `bun run kernel:tmux` as the new-environment restore entrypoint for worktree + tmux orchestration.
 
 ## Red Lines
 
@@ -154,3 +156,10 @@ Latest full seal validation in this workspace passed:
   4. update `docs/development.workflow.zh.cn.md`
   5. push every changed branch/worktree branch before yielding the repository
 - When implementation pressure rises, split code work into new `git worktree + tmux + Codex` slices instead of stretching one thread too far.
+- Active code worktrees initialized from `main-codex-docs`:
+  - `wt/kernel-context-memory`
+  - `wt/kernel-scope-crystal-ask`
+  - `wt/kernel-runtime-executive-ws`
+- New environment restore command:
+  - `bun run kernel:tmux`
+  - `bun run kernel:tmux -- --launch-codex`

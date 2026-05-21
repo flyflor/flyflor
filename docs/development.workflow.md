@@ -102,6 +102,13 @@ The expected pattern is:
 
 tmux is here to make parallel work observable. It is not a license to let child sessions silently redefine repository-wide rules.
 
+Restore command:
+
+```bash
+bun run kernel:tmux
+bun run kernel:tmux -- --launch-codex
+```
+
 ## Review and merge rules
 
 Mainline merge discipline is strict:
@@ -174,6 +181,36 @@ Reviewed document worktrees:
     - `docs/runtime.events.zh.cn.md`
   - reviewed commit: `6a6d0c2`
 
+Active code worktrees:
+
+- `wt/kernel-context-memory`
+  - owned files:
+    - `src/cognitive/hippocampus/memory/**`
+    - `src/entities/memory/**`
+    - `src/agent/context/**`
+    - related tests and local control files
+  - validation:
+    - `bun run check`
+    - targeted memory/context tests
+- `wt/kernel-scope-crystal-ask`
+  - owned files:
+    - `src/cognitive/hippocampus/scope/**`
+    - `src/cognitive/hippocampus/ask/**`
+    - `src/cognitive/crystal/**`
+    - related tests and local control files
+  - validation:
+    - `bun run check`
+    - targeted ask/scope/crystal tests
+- `wt/kernel-runtime-executive-ws`
+  - owned files:
+    - `src/agent/runtime/**`
+    - `src/agent/gateway/**`
+    - `src/executive/**`
+    - related scripts/tests/docs and local control files
+  - validation:
+    - `bun run check`
+    - targeted runtime/gateway/executive tests
+
 Coordinator merge commit on mainline:
 
 - `4c21957` — reviewed worktree architecture refinements merged to `main-codex-docs`
@@ -197,6 +234,20 @@ Current local worktree paths:
 - `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-memory-philosophy`
 - `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-scope-ask`
 - `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-protocol-events`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-context-memory`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-scope-crystal-ask`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-runtime-executive-ws`
+
+Current tmux restore surface:
+
+- script: `scripts/tmux.worktree.dev.sh`
+- package entry: `bun run kernel:tmux`
+- default session: `flyflor-kernel`
+- windows:
+  - `main`
+  - `context`
+  - `scope`
+  - `runtime`
 
 Seal-critical implementation state now carried by mainline:
 

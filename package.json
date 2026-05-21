@@ -36,6 +36,7 @@
         "test:kernel": "bun run scripts/test.ts kernel",
         "test:live": "bun run scripts/test.ts live",
         "test:live:docker": "bun run scripts/test.ts live:docker",
+        "kernel:tmux": "sh scripts/tmux.worktree.dev.sh",
         "ci": "bun run scripts/quality.ts ci",
         "kernel:seal": "bun run scripts/quality.ts kernel-seal",
         "inspect:blackboard": "bun run scripts/blackboard.inspect.ts",

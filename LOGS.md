@@ -50,3 +50,10 @@
   Summary: Upgraded the repository handoff contract from short seal sprints to a long-running coordinated refactor mode whose explicit target is the full intelligent-lifeform kernel, with mandatory workflow/handoff updates and full-branch pushes at every stop.
   Reason: The next stage needs higher throughput than a single-thread linear loop, and new sessions must be able to resume coordination and worktree/tmux execution without reconstructing intent from chat history.
   Verification: repository handoff docs updated on mainline before the next worktree split
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-worktree-bootstrap
+  Summary: Added the reproducible `bun run kernel:tmux` restore entrypoint, created the three code worktree branches for context-memory, scope-crystal-ask, and runtime-executive-ws, and updated the handoff docs to reflect the new concurrent kernel-development layout.
+  Reason: The next phase is a broad kernel refactor, so new machines and new sessions need a stable way to recreate worktrees, tmux windows, and child-Codex ownership without relying on ephemeral shell state.
+  Verification: `bun run kernel:tmux`

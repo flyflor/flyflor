@@ -63,6 +63,8 @@
 9. 在启动多 worktree 开发前，先把全部活动文档统一到“智能生命体内核”口径。
 10. 为主 worktree 和未来子 worktree 引入只追加的 `LOGS.md` 控制文件。
 11. 在主线架构锚点更新完成后，把第一批文档工作拆成三个子 worktree。
+12. 在 WS 可见的智能生命体内核闭环完成前，保持当前代码 worktree 切片（`wt/kernel-context-memory`、`wt/kernel-scope-crystal-ask`、`wt/kernel-runtime-executive-ws`）持续运作。
+13. 把 `bun run kernel:tmux` 固化为新环境恢复 worktree + tmux 编排的入口。
 
 ## 红线
 
@@ -115,3 +117,10 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   4. 更新 `docs/development.workflow.zh.cn.md`
   5. push 所有变更过的 branch / worktree branch
 - 当实现压力上升时，应优先新增 code worktree 并配合 tmux + Codex 并发推进，而不是把所有工作继续堆在一个线程里。
+- 已从 `main-codex-docs` 初始化的代码 worktree：
+  - `wt/kernel-context-memory`
+  - `wt/kernel-scope-crystal-ask`
+  - `wt/kernel-runtime-executive-ws`
+- 新环境恢复命令：
+  - `bun run kernel:tmux`
+  - `bun run kernel:tmux -- --launch-codex`
