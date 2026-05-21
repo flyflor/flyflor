@@ -58,6 +58,12 @@ Gem 代表的是“已经从一次经历中提炼出的稳定方法或知识”�
 
 因此，Crystal 是 Flyflor 从“经历过”变成“学会了”的那一层。
 
+Crystal 与 Scope 也不是替代关系：
+
+- Scope 提供局部生命域与局部宪法
+- Crystal 提供可跨 turn、跨问题复用的稳定方法
+- 一个 Gem 可以被某个 Scope 激活、引用、验证，但不等于这个 Scope 本身
+
 ## 结构（runtime Crystal Gem 实体）
 
 ```ts
@@ -109,6 +115,8 @@ sequenceDiagram
 - `gem-drift` 与 `skill-drift` 是两个协议概念：前者属于 Crystal graph，后者属于外部 Skill 包校验/迁移，不能共用候选类型或写入路径。
 
 这里的“遗忘”更接近再编码和偏移，不是简单抹除：旧版本不删除，而是通过 snapshot、scope 收窄和支持度变化维持晶体智力的长期稳定性。
+
+这也是 Flyflor 智能生命体设计的重要区别：长期成长依赖的是结晶与再编码，而不是把所有旧经历原样堆着不动。
 
 ## 配置
 
