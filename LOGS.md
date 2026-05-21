@@ -24,3 +24,10 @@
   Summary: Finalized the branch-owned protocol and runtime event wording so `activeScope`, explicit ask/pause/resume surfaces, and `turn.final.reply.metadata` stay authoritative while transport metadata and runtime events remain non-continuity surfaces.
   Reason: The worktree handoff required the owned docs, TODO state, and append-only log to match the architecture anchor before commit.
   Verification: `bun test tests/docs.references.test.ts`
+
+- Status: completed
+  Actor: main-codex
+  Scope: wt/docs-protocol-events
+  Summary: Mainline review accepted the owned protocol and runtime-event refinements and merged the target docs back to `main-codex-docs`.
+  Reason: This worktree is now a completed local branch record; the canonical merged history lives on the coordinator branch.
+  Verification: reviewed commit `6a6d0c2`; merged on mainline commit `4c21957`

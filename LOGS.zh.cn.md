@@ -24,3 +24,10 @@
   摘要：已最终收口当前分支负责的 protocol 与 runtime event 文档，明确 `activeScope`、显式 ask/pause/resume 表面，以及 `turn.final.reply.metadata` 的当前轮权威地位，同时再次强调 transport 元数据和 runtime events 都不是认知连续性。
   原因：在提交前，需要让本 worktree 的负责文档、TODO 状态与追加日志共同对齐架构锚点。
   验证：`bun test tests/docs.references.test.ts`
+
+- 状态：completed
+  操作者：main-codex
+  范围：wt/docs-protocol-events
+  摘要：主线 review 已接受当前分支负责的 protocol 与 runtime event 文档补强，并把目标文档合并回 `main-codex-docs`。
+  原因：当前 worktree 现在只保留本地完成记录；canonical 的合并后历史以协调主线为准。
+  验证：reviewed commit `6a6d0c2`；merged on mainline commit `4c21957`
