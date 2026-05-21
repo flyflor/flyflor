@@ -23,12 +23,13 @@
 13. [executive.exoskeleton.md](executive.exoskeleton.md) — Executive 外骨架文档，现行语义已统一到 Executive。
 14. [skill.system.md](skill.system.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
 15. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
-16. [external.kit.md](external.kit.md) — External kit 只读发现协议。
-17. [rust.integration.md](rust.integration.md) — Rust 外壳最小接入。
-18. [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心。
-19. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust shell 分 slice backlog。
-20. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
-21. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
+16. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
+17. [external.kit.md](external.kit.md) — External kit 只读发现协议。
+18. [rust.integration.md](rust.integration.md) — Rust 外壳最小接入。
+19. [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心。
+20. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust shell 分 slice backlog。
+21. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
+22. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
 

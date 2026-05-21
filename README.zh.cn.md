@@ -53,6 +53,8 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 第一方 CLI/TUI/channel adapter 已从主源码剥离，已移除旧实现且不保留兼容目录。后续 Rust 客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
 需要按请求/响应字段直接调试 `/ws` 时，使用 [docs/ws.doc.md](docs/ws.doc.md)。
 
+并发开发与新 session 交接约定见 [docs/development.workflow.md](docs/development.workflow.md)。
+
 ## 快速开始
 
 ### 安装（远程一行命令）

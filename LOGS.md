@@ -22,3 +22,10 @@
   Summary: Landed the mainline anchor docs, reviewed the three document worktrees, and merged only their owned lifeform-architecture doc updates back to the coordinator branch.
   Reason: The main worktree owns the canonical project history and must close the worktree split with a reviewed, conflict-free document set.
   Verification: pending
+
+- Status: completed
+  Actor: main-codex
+  Scope: development-workflow-handoff
+  Summary: Added a canonical development workflow doc for `git worktree + tmux + Codex`, linked it from the active indexes, and recorded the reviewed worktree snapshot for future sessions.
+  Reason: New sessions need an explicit repository-side handoff for parallel execution, worktree ownership, merge discipline, and current branch status instead of reconstructing it from chat history.
+  Verification: pending
