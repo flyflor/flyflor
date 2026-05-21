@@ -43,3 +43,10 @@
   摘要：为 runtime-executive-ws 代码 worktree 初始化了显式所有权，负责 gateway、runtime、executive 及 ws/executive 闭环测试面。
   原因：这个切片需要把可见 `/ws` 协议与执行 loop 推向完整的智能生命体契约，同时避免与 memory 或 crystal 内部实现冲突。
   验证：`wt/kernel-runtime-executive-ws` 的本地控制文件已更新
+
+- 状态：completed
+  操作者：wt/kernel-runtime-executive-ws
+  范围：runtime-executive-ws-thin-client-closure
+  摘要：补齐本地 ws thin-client control flow 缺口，把 envelope `requestId` 保留进 runtime 关联键，扩展确定性 gateway smoke 覆盖 event subscribe、loop pause-resume 闭环与 history replay，并把稳定的 lifecycle/history 面补进 Rust 后续对接文档。
+  原因：在 Rust shell 继续依赖 Gateway/Runtime 边界之前，这个切片必须先给出可执行的 ws control flow 契约，以及可观察的 event/history 面和 executive loop pause-resume 闭环，避免再靠私有 transport patch。
+  验证：`bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts`；`bun run test:kernel`；`bun run docs:check`

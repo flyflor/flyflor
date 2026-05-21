@@ -27,6 +27,10 @@ interface GatewayControlSmokeReport {
     capabilityCommands: string[];
     deltaText: string;
     eventTypes: string[];
+    historyCount: number;
+    historyKinds: string[];
+    loopSnapshotKind?: string;
+    resumedReplyKind?: string;
     finalText: string;
     helloSemanticTypes: string[];
     ok: boolean;
@@ -36,15 +40,31 @@ interface GatewayControlSmokeReport {
 }
 
 class ScriptedStreamingModel implements ModelClient {
+    private callCount = 0;
+
     public async generate(messages: ModelMessage[]): Promise<string> {
-        const text = messages.at(-1)?.content ?? "";
-        return `Gateway control smoke final reply for: ${text}`;
+        const reply = this.next(messages);
+        return reply;
     }
 
     public async *stream(messages: ModelMessage[]): AsyncIterable<string> {
+        const reply = this.next(messages);
+        yield reply;
+    }
+
+    private next(messages: ModelMessage[]): string {
         const text = messages.at(-1)?.content ?? "";
-        yield "Gateway control smoke ";
-        yield `final reply for: ${text}`;
+        this.callCount += 1;
+        if (this.callCount === 1) {
+            return '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</flyflor_mcp_calls>';
+        }
+        if (this.callCount === 2) {
+            return '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</flyflor_mcp_calls>';
+        }
+        if (this.callCount === 3) {
+            return "Gateway control smoke resumed final reply.";
+        }
+        return `Gateway control smoke fallback reply for: ${text}`;
     }
 }
 
@@ -72,12 +92,17 @@ class GatewayControlSmoke {
     private runtime: RuntimeModule | undefined;
 
     public async run(): Promise<GatewayControlSmokeReport> {
-        this.root = await mkdtemp(join(tmpdir(), "flyflor-gateway-control-smoke-"));
+            this.root = await mkdtemp(join(tmpdir(), "flyflor-gateway-control-smoke-"));
         try {
             const config = await this.createConfig();
             const memory = new MemoryModule(config, this.events);
             this.runtime = new RuntimeModule(config, new ScriptedStreamingModel(), this.events, undefined, memory);
-            this.gateway = new GatewayModule(config.gateway, this.runtime, this.events, { paths: config.paths });
+            const runtime = this.runtime;
+            const gateway = new GatewayModule(config.gateway, runtime, this.events, { paths: config.paths });
+            const originalHandleMessage = runtime.handleMessage.bind(runtime);
+            runtime.handleMessage = ((message, context, options = {}) =>
+                originalHandleMessage(message, context, { ...options, maxToolTurns: 1 })) as typeof runtime.handleMessage;
+            this.gateway = gateway;
             this.gateway.start();
 
             const serverUrl = this.gateway.getStatusSnapshot().url;
@@ -86,17 +111,28 @@ class GatewayControlSmoke {
             }
             const ws = new WebSocket(`${serverUrl}ws`);
             const received: GatewayControlEnvelope[] = [];
+            const stopCollecting = startCollecting(ws, received);
             await waitForOpen(ws);
-            const first = await waitForEnvelope(ws, received);
+            const first = await waitForEnvelope(received);
             if (first.type !== GatewayControlMessageType.ServerHello) {
                 throw new Error(`Expected server.hello first, got ${first.type}`);
             }
 
+            send(
+                ws,
+                GatewayControlMessageType.EventSubscribe,
+                {
+                    classes: ["lifecycle"],
+                },
+                { id: "event-sub-1", requestId: "req-event-sub-1" },
+            );
+            await waitForType(received, GatewayControlMessageType.Ack);
+
             send(ws, GatewayControlMessageType.GatewayStatusGet, undefined, { id: "status-1", requestId: "req-status-1" });
-            const statusEnvelope = await waitForType(ws, received, GatewayControlMessageType.GatewayStatusSnapshot);
+            const statusEnvelope = await waitForType(received, GatewayControlMessageType.GatewayStatusSnapshot);
 
             send(ws, GatewayControlMessageType.CapabilityCatalogGet, undefined, { id: "catalog-1", requestId: "req-catalog-1" });
-            const catalogEnvelope = await waitForType(ws, received, GatewayControlMessageType.CapabilityCatalogSnapshot);
+            const catalogEnvelope = await waitForType(received, GatewayControlMessageType.CapabilityCatalogSnapshot);
 
             send(
                 ws,
@@ -117,22 +153,81 @@ class GatewayControlSmoke {
                 },
                 { id: "turn-1", requestId: "req-turn-1" },
             );
-            const deltaEnvelope = await waitForType(ws, received, GatewayControlMessageType.TurnDelta);
-            const finalEnvelope = await waitForType(ws, received, GatewayControlMessageType.TurnFinal);
+            const finalEnvelope = await waitForType(received, GatewayControlMessageType.TurnFinal);
+            const final = finalEnvelope.payload as GatewayControlTurnFinalPayload;
+            if (final.reply.metadata?.kind !== "ask") {
+                throw new Error(`Expected first turn to pause as ask, got: ${JSON.stringify(final.reply.metadata ?? null)}`);
+            }
+
+            send(
+                ws,
+                GatewayControlMessageType.GatewayMessageSend,
+                {
+                    id: "message-2",
+                    text: "continue with the same scope",
+                    conversationKey: "thin-client",
+                    user: { id: "smoke-user", displayName: "Smoke User" },
+                    context: {
+                        activeScope: {
+                            id: "scope-thin-client",
+                            projectDir: join(config.paths.projectDir, "scope-thin-client"),
+                            projectMemoryDir: join(config.paths.projectDir, "scope-thin-client", ".flyflor", "memory"),
+                            title: "Thin Client Scope",
+                        },
+                    },
+                },
+                { id: "turn-2", requestId: "req-turn-2" },
+            );
+            const resumedFinalEnvelope = await waitForType(
+                received,
+                GatewayControlMessageType.TurnFinal,
+                (envelope) => envelope.requestId === "req-turn-2",
+            );
+
+            send(
+                ws,
+                GatewayControlMessageType.HistoryList,
+                { limit: 5 },
+                { id: "history-1", requestId: "req-history-1" },
+            );
+            const historyEnvelope = await waitForType(received, GatewayControlMessageType.HistorySnapshot);
             ws.close();
+            stopCollecting();
 
             const hello = first.payload as GatewayControlServerHelloPayload;
             const status = statusEnvelope.payload as GatewayControlGatewayStatusPayload;
-            const final = finalEnvelope.payload as GatewayControlTurnFinalPayload;
+            const resumedFinal = resumedFinalEnvelope.payload as GatewayControlTurnFinalPayload;
             const capabilityCommands = readCapabilityCommands(catalogEnvelope.payload);
-            const deltaText = String(deltaEnvelope.payload?.delta ?? "");
+            const firstTurnDelta = received.find(
+                (envelope) =>
+                    envelope.type === GatewayControlMessageType.TurnDelta &&
+                    envelope.requestId === "req-turn-1",
+            );
+            const deltaText = String(firstTurnDelta?.payload?.delta ?? "");
             const finalText = final.reply.text;
+            const history = Array.isArray(historyEnvelope.payload?.history)
+                ? historyEnvelope.payload.history as Array<{ assistantText?: string; taskPlans?: unknown[] }>
+                : [];
             const eventTypes = this.events.events.map((item) => item.type);
+            const eventPublishTypes = received
+                .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+                .map((envelope) => String((envelope.payload as { event?: { type?: string } } | undefined)?.event?.type ?? ""));
+            const historyKinds = history
+                .map((entry) => {
+                    const text = String(entry.assistantText ?? "");
+                    if (text.includes("工具调用预算已用完")) return "ask";
+                    if (text.includes("resumed final")) return "reply";
+                    return "unknown";
+                });
 
             return {
                 capabilityCommands,
                 deltaText,
                 eventTypes,
+                historyCount: history.length,
+                historyKinds,
+                loopSnapshotKind: String(final.reply.metadata?.kind ?? ""),
+                resumedReplyKind: String(resumedFinal.reply.metadata?.kind ?? ""),
                 finalText,
                 helloSemanticTypes: hello.capabilities.semanticTypes,
                 ok:
@@ -142,11 +237,16 @@ class GatewayControlSmoke {
                     hello.capabilities.semanticTypes.includes("stream") &&
                     status.status.gatewayRunning === true &&
                     capabilityCommands.includes("builtin.gateway") &&
-                    deltaText.length > 0 &&
-                    finalText.includes("thin client smoke") &&
+                    finalText.includes("工具调用预算已用完") &&
+                    final.reply.metadata?.kind === "ask" &&
+                    resumedFinal.reply.text === "Gateway control smoke resumed final reply." &&
+                    resumedFinal.reply.metadata?.kind === "reply" &&
+                    history.length >= 2 &&
                     eventTypes.includes(RuntimeEventType.GatewayStart) &&
                     eventTypes.includes(RuntimeEventType.AgentTurnStart) &&
-                    eventTypes.includes(RuntimeEventType.AgentTurnEnd),
+                    eventTypes.includes(RuntimeEventType.AgentTurnEnd) &&
+                    eventTypes.includes(RuntimeEventType.ExecutiveLoopPaused) &&
+                    eventTypes.includes(RuntimeEventType.ExecutiveLoopResumed),
                 statusHost: status.status.host,
                 statusPort: status.status.port,
                 tempHome: config.paths.home,
@@ -165,6 +265,8 @@ class GatewayControlSmoke {
         await symlink(join(repoRoot, "templates", "prompts"), paths.promptDir, "dir");
         await mkdir(dirname(paths.templateDir), { recursive: true });
         await symlink(join(repoRoot, "templates"), paths.templateDir, "dir");
+        await mkdir(paths.projectDir, { recursive: true });
+        await Bun.write(join(paths.projectDir, "notes.txt"), "thin client smoke note\n");
         const config = await loadConfigForPaths(paths);
         config.gateway.host = "127.0.0.1";
         config.gateway.port = 0;
@@ -222,38 +324,49 @@ function waitForOpen(ws: WebSocket): Promise<void> {
     });
 }
 
-function waitForEnvelope(ws: WebSocket, received: GatewayControlEnvelope[]): Promise<GatewayControlEnvelope> {
-    return new Promise((resolve, reject) => {
-        const onMessage = (event: MessageEvent<string>) => {
-            const envelope = parseGatewayControlEnvelope(event.data);
-            received.push(envelope);
-            ws.removeEventListener("message", onMessage);
-            resolve(envelope);
-        };
-        const onError = () => {
-            ws.removeEventListener("message", onMessage);
-            reject(new Error("WebSocket receive failed"));
-        };
-        ws.addEventListener("message", onMessage);
-        ws.addEventListener("error", onError, { once: true });
-    });
+function startCollecting(ws: WebSocket, received: GatewayControlEnvelope[]): () => void {
+    const onMessage = (event: MessageEvent<string>) => {
+        received.push(JSON.parse(event.data) as GatewayControlEnvelope);
+    };
+    ws.addEventListener("message", onMessage);
+    return () => ws.removeEventListener("message", onMessage);
+}
+
+async function waitForEnvelope(
+    received: GatewayControlEnvelope[],
+    seen = 0,
+    label = "next envelope",
+): Promise<GatewayControlEnvelope> {
+    const deadline = Date.now() + 3_000;
+    while (true) {
+        if (received.length > seen) {
+            return received[seen]!;
+        }
+        if (Date.now() > deadline) {
+            throw new Error(`Timed out waiting for ${label}. Received: ${received.map((item) => item.type).join(", ")}`);
+        }
+        await Bun.sleep(10);
+    }
 }
 
 async function waitForType(
-    ws: WebSocket,
     received: GatewayControlEnvelope[],
     type: GatewayControlMessageType,
+    predicate?: (envelope: GatewayControlEnvelope) => boolean,
 ): Promise<GatewayControlEnvelope> {
-    const existing = received.find((item) => item.type === type);
+    const existing = received.find((item) => item.type === type && (!predicate || predicate(item)));
     if (existing) {
         return existing;
     }
+    let seen = received.length;
     while (true) {
-        const next = await waitForEnvelope(ws, received);
-        if (next.type === type) {
+        const next = await waitForEnvelope(received, seen, type);
+        seen += 1;
+        if (next.type === type && (!predicate || predicate(next))) {
             return next;
         }
     }
 }
+
 
 await main();

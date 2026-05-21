@@ -168,3 +168,14 @@ Latest full seal validation in this workspace passed:
   4. update `docs/development.workflow.zh.cn.md`
   5. push every changed branch/worktree branch before yielding the repository
 - When implementation pressure rises, split code work into new `git worktree + tmux + Codex` slices instead of stretching one thread too far.
+
+## 2026-05-22 Runtime-Executive-WS Closure Addendum
+
+- Local slice status: completed for the current ws/runtime/executive closure pass.
+- Closed local target details:
+  - `/ws` now keeps the client envelope `requestId` as the runtime request correlation key for turn and event surfaces.
+  - Thin-client smoke now covers `server.hello`, `event.subscribe`, `gateway.status.get`, `capability.catalog.get`, `gateway.message.send`, loop pause/resume, `history.list`, and `history.snapshot`.
+  - Lifecycle-class event subscription is covered so Rust/thin clients can subscribe by runtime event class without per-request coupling.
+  - Executive loop pause/resume closure is verified through explicit `turn.final.reply.metadata.ask` and `executiveToolLoop` snapshots rather than hidden transport state.
+- Remaining local follow-on:
+  - Keep future Rust shell work aligned to the documented `/ws` control, event, history, and loop metadata contract without introducing private transport patches.

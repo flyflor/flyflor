@@ -57,3 +57,10 @@
   Summary: Initialized the runtime-executive-ws worktree with explicit ownership over gateway, runtime, executive, and the ws/executive closure test surface.
   Reason: This slice must drive the visible `/ws` protocol and execution loop toward the full intelligent-lifeform contract without colliding with memory or crystal internals.
   Verification: local control files updated for `wt/kernel-runtime-executive-ws`
+
+- Status: completed
+  Actor: wt/kernel-runtime-executive-ws
+  Scope: runtime-executive-ws-thin-client-closure
+  Summary: Closed the local ws thin-client control-flow gaps by preserving envelope `requestId` into runtime correlation, extending the deterministic gateway smoke through event subscribe, pause-resume loop closure, and history replay, and documenting the stable lifecycle/history surfaces for Rust follow-on work.
+  Reason: The owned slice needed an executable contract for ws control flow, observable event/history surfaces, and executive loop pause-resume closure before the Rust shell can rely on the Gateway/Runtime boundary without private patches.
+  Verification: `bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts`; `bun run test:kernel`; `bun run docs:check`

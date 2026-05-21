@@ -57,6 +57,7 @@ async function buildCommand(suite: SuiteName): Promise<string[]> {
             "tests/docs.references.test.ts",
             "tests/event.component.test.ts",
             "tests/executive.tool.runtime.test.ts",
+            "tests/gateway.control.smoke.test.ts",
             "tests/gateway.module.test.ts",
             "tests/gateway.ws.test.ts",
             "tests/memory.scheduler.wiring.test.ts",

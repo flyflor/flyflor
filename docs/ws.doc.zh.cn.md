@@ -28,6 +28,7 @@
 
 关键测试：
 
+- `tests/gateway.control.smoke.test.ts`
 - `tests/gateway.module.test.ts`
 - `tests/gateway.ws.test.ts`
 - `tests/protocol.control.test.ts`
@@ -324,6 +325,7 @@ LIMIT ?
 
 - `tests/protocol.control.test.ts` `roundtrips history control messages`
 - `tests/protocol.control.test.ts` `rejects invalid message payloads with structured protocol errors`
+- `tests/gateway.control.smoke.test.ts` `runs the ws thin-client lifecycle including loop pause-resume and history replay`
 
 ## `history.snapshot`
 
@@ -379,6 +381,7 @@ interface HistoryTurnSnapshot {
 
 - `tests/gateway.ws.test.ts` `returns persisted history snapshots through history.list without routing through turn logic`
 - `tests/tui.chat.history.test.ts` 全部历史相关测试继续作为数据 shape 守护
+- `tests/gateway.control.smoke.test.ts` `runs the ws thin-client lifecycle including loop pause-resume and history replay`
 
 ## Semantic Lanes
 
@@ -764,6 +767,7 @@ interface HistoryTurnSnapshot {
 当前解析规则：
 
 - `text` 为空或缺失会报 `invalid-payload`
+- envelope 顶层 `requestId` 会直接透传给 runtime，成为同一轮 `turn.*` 与 `event.publish` 的关联键
 - `context.activeScope` 是 canonical 字段，只有在 `id + projectDir + projectMemoryDir` 都齐全时才会被接收
 - `context.activeProject` 是兼容别名；若同时传入，以 `activeScope` 为准
 - `chatType` 缺失时默认 `direct`
@@ -781,6 +785,7 @@ interface HistoryTurnSnapshot {
 - `tests/protocol.control.test.ts` `normalizes gateway.message.send payload into a ws GatewayMessage`
 - `tests/protocol.control.test.ts` `prefers explicit activeScope and keeps activeProject as compatibility input`
 - `tests/gateway.ws.test.ts` `dispatches ws messages with explicit runtime context and emits turn deltas/final`
+- `tests/gateway.ws.test.ts` `reuses envelope requestId as the runtime request correlation key`
 
 ### `turn.delta`
 
@@ -962,6 +967,30 @@ interface HistoryTurnSnapshot {
 
 - `tests/gateway.ws.test.ts` `carries ask and todo snapshots through turn.final reply metadata`
 - `tests/protocol.control.test.ts` `keeps long-horizon loop snapshot stable on both top-level and ask metadata surfaces`
+- `tests/gateway.control.smoke.test.ts` `runs the ws thin-client lifecycle including loop pause-resume and history replay`
+
+### Long-horizon loop 事件闭环
+
+当 `turn.final.reply.metadata.executiveToolLoop` 存在时，说明当前轮已经显式进入暂停态。thin client 如果想把这条闭环完整跑通，当前真实 `/ws` 行为是：
+
+1. 先通过 `event.subscribe` 订阅
+   - `executive.loop.paused`
+   - `executive.loop.resumed`
+2. 发起会触发 ask 的 `gateway.message.send`
+3. 从 `turn.final.reply.metadata.executiveToolLoop` 读取当前 pending loop snapshot
+4. 等到 `event.publish.payload.event.type = executive.loop.paused`
+5. 用新的 `gateway.message.send` 显式提交用户回答
+6. 等到 `event.publish.payload.event.type = executive.loop.resumed`
+
+这条事件链只负责生命周期提示；当前轮权威状态仍回到：
+
+- `turn.final.reply.metadata.kind`
+- `turn.final.reply.metadata.ask`
+- `turn.final.reply.metadata.executiveToolLoop`
+
+测试：
+
+- `tests/gateway.control.smoke.test.ts` `runs the ws thin-client lifecycle including loop pause-resume and history replay`
 
 ## 事件订阅
 

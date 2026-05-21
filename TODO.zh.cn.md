@@ -129,3 +129,14 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   4. 更新 `docs/development.workflow.zh.cn.md`
   5. push 所有变更过的 branch / worktree branch
 - 当实现压力上升时，应优先新增 code worktree 并配合 tmux + Codex 并发推进，而不是把所有工作继续堆在一个线程里。
+
+## 2026-05-22 Runtime-Executive-WS 闭环补充
+
+- 本地切片状态：当前 ws/runtime/executive 闭环收口已完成。
+- 已收口的本地目标细节：
+  - `/ws` 现在会把客户端 envelope 的 `requestId` 直接保留为 runtime request correlation key，用于 turn 与 event 面。
+  - thin-client smoke 现在覆盖 `server.hello`、`event.subscribe`、`gateway.status.get`、`capability.catalog.get`、`gateway.message.send`、loop pause/resume、`history.list`、`history.snapshot`。
+  - 已补上 lifecycle class 级别的事件订阅覆盖，Rust/thin client 可以按 runtime event class 订阅，不需要依赖逐请求耦合。
+  - executive loop pause/resume 闭环现在通过显式 `turn.final.reply.metadata.ask` 与 `executiveToolLoop` 快照验证，而不是依赖隐藏 transport 状态。
+- 剩余本地后续：
+  - 后续 Rust shell 工作继续对齐文档里的 `/ws` control、event、history、loop metadata 契约，不再引入私有 transport patch。
