@@ -9,6 +9,8 @@ import type { Database } from "bun:sqlite";
 export class BrainSchema {
     public install(db: Database): void {
         this.installCompatibilityMigrations(db);
+        this.addMemoryEventCoreColumns(db);
+        this.addOwnerSourceColumns(db);
         db.exec(`
             CREATE TABLE IF NOT EXISTS memory_events (
                 id TEXT PRIMARY KEY,
@@ -177,8 +179,6 @@ export class BrainSchema {
             CREATE INDEX IF NOT EXISTS idx_replay_records_source_event ON replay_records(source_event_id);
             CREATE INDEX IF NOT EXISTS idx_replay_records_blackboard ON replay_records(blackboard_turn_id);
         `);
-        this.addOwnerSourceColumns(db);
-        this.addMemoryEventCoreColumns(db);
     }
 
     private installCompatibilityMigrations(db: Database): void {
@@ -205,6 +205,9 @@ export class BrainSchema {
     private addMemoryEventCoreColumns(db: Database): void {
         if (!this.tableExists(db, "memory_events")) return;
         const columns = db.query<{ name: string }, []>("PRAGMA table_info(memory_events)").all().map((row) => row.name);
+        if (!columns.includes("codename_id")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN codename_id TEXT;");
+        }
         if (!columns.includes("owner_key")) {
             db.exec("ALTER TABLE memory_events ADD COLUMN owner_key TEXT;");
             db.exec("UPDATE memory_events SET owner_key = id WHERE owner_key IS NULL;");
@@ -214,6 +217,18 @@ export class BrainSchema {
         }
         if (!columns.includes("source_surface")) {
             db.exec("ALTER TABLE memory_events ADD COLUMN source_surface TEXT;");
+        }
+        if (!columns.includes("role")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN role TEXT;");
+        }
+        if (!columns.includes("parent_id")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN parent_id TEXT;");
+        }
+        if (!columns.includes("embedding_id")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN embedding_id TEXT;");
+        }
+        if (!columns.includes("importance")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN importance REAL NOT NULL DEFAULT 0.5;");
         }
     }
 

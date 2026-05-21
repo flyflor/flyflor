@@ -120,6 +120,69 @@ describe("BrainStore", () => {
         }
     });
 
+    test("upgrades a legacy brain.db before owner-key indexes are created", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "flyflor-brain-legacy-"));
+        const brainPath = join(dir, "brain.db");
+        const db = new Database(brainPath);
+        try {
+            const now = Date.now();
+            const currentBucket = new Date(now).toISOString().slice(0, 10);
+            db.exec(`
+                CREATE TABLE memory_events (
+                    id TEXT PRIMARY KEY,
+                    ts INTEGER NOT NULL,
+                    time_bucket TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    content TEXT NOT NULL
+                );
+            `);
+            db.prepare(
+                `INSERT INTO memory_events (id, ts, time_bucket, type, content) VALUES (?1, ?2, ?3, ?4, ?5)`,
+            ).run("legacy-1", now, currentBucket, "event", "{}");
+        } finally {
+            db.close();
+        }
+
+        const store = new BrainStore({ dbPath: brainPath });
+        try {
+            await store.open();
+            const reopened = new Database(brainPath);
+            try {
+                const columns = tableColumns(reopened, "memory_events");
+                expect(columns).toContain("codename_id");
+                expect(tableColumns(reopened, "memory_events")).toContain("owner_key");
+                expect(columns).toContain("source_key");
+                expect(columns).toContain("source_surface");
+                expect(columns).toContain("role");
+                expect(columns).toContain("parent_id");
+                expect(columns).toContain("embedding_id");
+                expect(columns).toContain("importance");
+                const row = reopened
+                    .query<{ importance: number; owner_key: string | null; role: string | null }, [string]>(
+                        "SELECT owner_key, role, importance FROM memory_events WHERE id = ?1",
+                    )
+                    .get("legacy-1");
+                expect(row?.owner_key).toBe("legacy-1");
+                expect(row?.role).toBeNull();
+                expect(row?.importance).toBe(0.5);
+                const plan = queryPlan(
+                    reopened,
+                    `EXPLAIN QUERY PLAN
+                     SELECT e.* FROM memory_events e
+                     WHERE e.owner_key = ? AND e.type = ?
+                     ORDER BY e.ts DESC
+                     LIMIT ?`,
+                    ["legacy-1", MemoryEventType.Event, 10],
+                );
+                expect(plan).toContain("idx_events_owner_type_ts");
+            } finally {
+                reopened.close();
+            }
+        } finally {
+            store.close();
+        }
+    });
+
 
     test("ask and continuation turn paths stay on indexed lookups", async () => {
         const { store, dir } = await freshStore();

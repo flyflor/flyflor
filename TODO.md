@@ -103,3 +103,31 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 ```
 
 The expected result is a clean pass.
+
+## 2026-05-22 Seal Addendum
+
+- Main coordinator branch: `main-codex-docs`
+- Reviewed child branches kept pushed for resume:
+  - `wt/docs-memory-philosophy`
+  - `wt/docs-scope-ask`
+  - `wt/docs-protocol-events`
+- Recovery path is sealed for new sessions:
+  - legacy monthly `brain.db` shards now self-upgrade missing `memory_events` columns before owner indexes are created
+  - `working.memory.recovery.smoke.ts` now runs in an isolated temp home and forces explicit `FLYFLOR_HOME`, so repo worktrees no longer leak `.config/prompts` or WAL state into smoke recovery
+- New-session resume rule:
+  1. read `docs/boundaries.md`
+  2. read `docs/development.workflow.md`
+  3. inspect `git status --short --branch`
+  4. inspect `git worktree list`
+  5. recreate tmux/worktree execution from the documented branch ownership map
+
+Latest full seal validation in this workspace passed:
+
+- `bun run kernel:seal`
+- deterministic suite: `821 pass`, `0 fail`
+- `bun run smoke:agent`
+- `bun run smoke:recovery`
+- `bun run build:binary`
+- `bun run build:binary:docker`
+- `bun run test:live`
+- `bun run smoke:agent:live`

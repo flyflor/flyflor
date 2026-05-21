@@ -33,6 +33,7 @@ export interface FlyflorConfig {
 }
 
 export interface FlyflorConfigLoadOptions {
+    home?: string;
     model?: {
         providerId?: string;
         model?: string;
@@ -626,7 +627,7 @@ interface ProviderProfileConfig extends ModelProviderConfig {
 }
 
 export async function loadConfig(options: FlyflorConfigLoadOptions = {}): Promise<FlyflorConfig> {
-    const paths = resolvePaths();
+    const paths = resolvePaths(options);
     return loadConfigForPaths(paths, options);
 }
 
@@ -1301,8 +1302,8 @@ function firstKey(record: Record<string, unknown>): string | undefined {
     return Object.keys(record)[0];
 }
 
-function resolvePaths(): FlyflorPaths {
-    const home = resolveFlyflorHome();
+function resolvePaths(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): FlyflorPaths {
+    const home = resolveFlyflorHome(options);
     const configDir = join(home, ".config");
     const xdgData = env("XDG_DATA_HOME") ?? join(homedir(), ".local", "share");
     const xdgCache = env("XDG_CACHE_HOME") ?? join(homedir(), ".cache");
@@ -1333,7 +1334,11 @@ function resolvePaths(): FlyflorPaths {
     };
 }
 
-function resolveFlyflorHome(): string {
+function resolveFlyflorHome(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): string {
+    const explicitHome = readExplicitFlyflorHome(options.home);
+    if (explicitHome) {
+        return explicitHome;
+    }
     const cwdHome = resolveCwdFlyflorHome();
     if (cwdHome) {
         return cwdHome;
@@ -1353,6 +1358,14 @@ function resolveFlyflorHome(): string {
         }
     }
     return resolve(homedir(), ".flyflor");
+}
+
+function readExplicitFlyflorHome(homeOverride: string | undefined): string | undefined {
+    const candidate = homeOverride ?? env("FLYFLOR_HOME");
+    if (!candidate || candidate.trim().length === 0) {
+        return undefined;
+    }
+    return resolve(candidate);
 }
 
 function resolveCwdFlyflorHome(): string | undefined {

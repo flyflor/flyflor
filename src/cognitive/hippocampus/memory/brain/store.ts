@@ -901,21 +901,25 @@ function importShardLocators(catalog: BrainCatalogStore, archivePath: string, sh
             });
         }
 
-        for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM context_forks").all()) {
-            catalog.upsertLocator({
-                entityId: row.id,
-                entityType: BrainCatalogEntityType.ContextFork,
-                shardId,
-                updatedAt: row.updated_at,
-            });
+        if (hasTable(db, "context_forks")) {
+            for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM context_forks").all()) {
+                catalog.upsertLocator({
+                    entityId: row.id,
+                    entityType: BrainCatalogEntityType.ContextFork,
+                    shardId,
+                    updatedAt: row.updated_at,
+                });
+            }
         }
-        for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM task_plans").all()) {
-            catalog.upsertLocator({
-                entityId: row.id,
-                entityType: BrainCatalogEntityType.TaskPlan,
-                shardId,
-                updatedAt: row.updated_at,
-            });
+        if (hasTable(db, "task_plans")) {
+            for (const row of db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM task_plans").all()) {
+                catalog.upsertLocator({
+                    entityId: row.id,
+                    entityType: BrainCatalogEntityType.TaskPlan,
+                    shardId,
+                    updatedAt: row.updated_at,
+                });
+            }
         }
         for (const row of listReplayLocatorRows(db)) {
             catalog.upsertLocator({
@@ -925,13 +929,15 @@ function importShardLocators(catalog: BrainCatalogStore, archivePath: string, sh
                 updatedAt: row.updated_at,
             });
         }
-        for (const row of db.query<{ id: string; updated_at: number }, []>("SELECT id, updated_at FROM scopes").all()) {
-            catalog.upsertLocator({
-                entityId: row.id,
-                entityType: BrainCatalogEntityType.Scope,
-                shardId,
-                updatedAt: new Date(row.updated_at).toISOString(),
-            });
+        if (hasTable(db, "scopes")) {
+            for (const row of db.query<{ id: string; updated_at: number }, []>("SELECT id, updated_at FROM scopes").all()) {
+                catalog.upsertLocator({
+                    entityId: row.id,
+                    entityType: BrainCatalogEntityType.Scope,
+                    shardId,
+                    updatedAt: new Date(row.updated_at).toISOString(),
+                });
+            }
         }
     } finally {
         db.close();
@@ -939,9 +945,22 @@ function importShardLocators(catalog: BrainCatalogStore, archivePath: string, sh
 }
 
 function listReplayLocatorRows(db: Database): Array<{ id: string; updated_at: string }> {
+    if (!hasTable(db, "replay_records") && !hasTable(db, "scene_records")) {
+        return [];
+    }
     try {
         return db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM replay_records").all();
     } catch {
+        if (!hasTable(db, "scene_records")) {
+            return [];
+        }
         return db.query<{ id: string; updated_at: string }, []>("SELECT id, updated_at FROM scene_records").all();
     }
+}
+
+function hasTable(db: Database, table: string): boolean {
+    const row = db
+        .query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+        .get(table);
+    return Boolean(row);
 }

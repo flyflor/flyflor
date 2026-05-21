@@ -166,6 +166,40 @@ Coordinator merge commit on mainline:
 
 - `4c21957` — reviewed worktree architecture refinements merged to `main-codex-docs`
 
+## Seal handoff snapshot
+
+Seal date: `2026-05-22`
+
+Current pushed branch set to resume from a new environment:
+
+- coordinator: `main-codex-docs`
+- baseline mirror: `master`
+- child branches:
+  - `wt/docs-memory-philosophy`
+  - `wt/docs-scope-ask`
+  - `wt/docs-protocol-events`
+
+Current local worktree paths:
+
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-memory-philosophy`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-scope-ask`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-protocol-events`
+
+Seal-critical implementation state now carried by mainline:
+
+- legacy `brain.db` compatibility upgrades add missing `memory_events` columns before owner/index DDL runs
+- archive locator import tolerates older shards that do not yet carry `context_forks`, `task_plans`, `scopes`, or renamed replay tables
+- recovery smoke isolates its temp home and sets explicit `FLYFLOR_HOME`, so worktree-local repo config no longer contaminates warmup recovery
+
+Most recent coordinator validation:
+
+- `bun run kernel:seal`
+- deterministic suite: `821 pass`, `0 fail`
+- live checks passed in the same workspace:
+  - `bun run test:live`
+  - `bun run smoke:agent:live`
+
 ## Practical rule
 
 When in doubt:

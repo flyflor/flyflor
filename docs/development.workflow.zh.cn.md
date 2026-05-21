@@ -166,6 +166,40 @@ git worktree list
 
 - `4c21957` — reviewed worktree architecture refinements merged to `main-codex-docs`
 
+## 封板交接快照
+
+封板日期：`2026-05-22`
+
+新环境恢复时应以这组已 push 分支为准：
+
+- 协调者：`main-codex-docs`
+- 基线镜像：`master`
+- 子分支：
+  - `wt/docs-memory-philosophy`
+  - `wt/docs-scope-ask`
+  - `wt/docs-protocol-events`
+
+当前本地 worktree 路径：
+
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-memory-philosophy`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-scope-ask`
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-protocol-events`
+
+当前主线已携带的封板关键实现状态：
+
+- legacy `brain.db` 兼容升级会先补齐缺失的 `memory_events` 列，再创建 owner/index 相关 DDL
+- archive locator 导入已经能容忍旧 shard 还没有 `context_forks`、`task_plans`、`scopes` 或 replay 表改名未完成的情况
+- recovery smoke 现在使用隔离的临时 home，并显式设置 `FLYFLOR_HOME`，worktree 下 repo `.config` 不会再污染 warmup recovery
+
+最近一次协调者验证：
+
+- `bun run kernel:seal`
+- deterministic suite：`821 pass`，`0 fail`
+- 同一工作区 live 检查通过：
+  - `bun run test:live`
+  - `bun run smoke:agent:live`
+
 ## 实用规则
 
 当你不确定时：

@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync } from "node:fs";
 
 interface RecoverySmokeReport {
     backupWarmup: WorkingMemoryWarmupEvent;
@@ -27,21 +27,19 @@ interface WorkingMemoryWarmupEvent {
 async function main(): Promise<void> {
     const repoRoot = join(import.meta.dir, "..");
     const tempHome = await mkdtemp(join(tmpdir(), "flyflor-working-memory-recovery-"));
-    const repoConfigHome = join(repoRoot, ".config");
-    const repoConfigBackup = join(tempHome, "repo-config-backup");
+    const tempConfigHome = join(tempHome, ".config");
     const tempDataHome = join(tempHome, ".local", "share");
     const tempCacheHome = join(tempHome, ".cache");
-    const tempMemoryDir = join(repoConfigHome, "memory");
+    const tempMemoryDir = join(tempConfigHome, "memory");
     const tempLogDir = join(tempHome, "logs");
     const gatewayCommand = resolveGatewayCommand(repoRoot);
 
     try {
-        await backupDirectoryIfExists(repoConfigHome, repoConfigBackup);
-        await mkdir(repoConfigHome, { recursive: true });
+        await mkdir(tempConfigHome, { recursive: true });
         await mkdir(tempMemoryDir, { recursive: true });
         await mkdir(tempLogDir, { recursive: true });
-        await writeFile(join(repoConfigHome, "config.jsonc"), renderConfigJsonc(), "utf8");
-        await runInstallTemplates(repoConfigHome, repoRoot);
+        await writeFile(join(tempConfigHome, "config.jsonc"), renderConfigJsonc(), "utf8");
+        await runInstallTemplates(tempConfigHome, repoRoot);
 
         const firstStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
         const firstOutput = await settleAndCollect(firstStart, 1200);
@@ -82,7 +80,6 @@ async function main(): Promise<void> {
             process.exitCode = 1;
         }
     } finally {
-        await restoreDirectory(repoConfigHome, repoConfigBackup);
         await rm(tempHome, { recursive: true, force: true });
     }
 }
@@ -136,6 +133,7 @@ async function startGateway(
     const proc = Bun.spawn(command, {
         cwd,
         env: withEnv({
+            FLYFLOR_HOME: home,
             HOME: home,
             XDG_CACHE_HOME: cacheHome,
             XDG_DATA_HOME: dataHome,
@@ -301,21 +299,6 @@ function withEnv(extra: Record<string, string>): Record<string, string> {
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function backupDirectoryIfExists(source: string, backup: string): Promise<void> {
-    if (!existsSync(source)) {
-        return;
-    }
-    await cp(source, backup, { recursive: true });
-}
-
-async function restoreDirectory(target: string, backup: string): Promise<void> {
-    await rm(target, { recursive: true, force: true });
-    if (!existsSync(backup)) {
-        return;
-    }
-    await cp(backup, target, { recursive: true });
 }
 
 await main();
