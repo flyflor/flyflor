@@ -16,6 +16,7 @@
 - 事件只表达结构化事实，不做自然语言语义判断。
 - Gateway 不拥有事件语义，只负责订阅和广播。
 - 事件可以附带 scope / fork 引用做审计，但不能自己生成工作域连续性。
+- 事件流可以乱序消费、重放或延后读取，因此不能升格成当前轮隐藏状态 authority。
 - 已移除的旧 CLI/TUI 事件面不允许回流。
 
 ## 当前核心事件面
@@ -84,11 +85,19 @@ Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途
 
 - `RuntimeEvent` 默认是时间线事实流，不是当前轮结果快照。
 - ask/todo/loop 的当前轮权威状态继续以 `turn.final.reply.metadata` 为准。
+- `turn.final.reply.metadata.ask`、`turn.final.reply.metadata.planning`、`turn.final.reply.metadata.executiveToolLoop` 仍分别是 ask / planning / pause / resume 的当前轮 authority surface。
 - 事件流可用于“提示要刷新 UI”，但不应替代 snapshot 读取。
 
 这与 Flyflor 的生命体主语是一致的：事件流负责描述生命活动过程，权威快照负责暴露当前生命态。
 
 即使某条事件带有 `scopeId`、`contextForkId` 或 ask 相关字段，它也只是说明“哪一个生命域刚刚发生了什么”，不是在替 runtime 宣布新的当前工作域。
+
+## 显式 ask / pause / resume 与事件时间线的分工
+
+- `memory.ask.recorded` 只表示 ask 进入了活动时间线，不表示客户端已经拿到了当前轮 ask authority。
+- `executive.loop.paused` 只表示生命体在这一时刻暂停，不表示客户端可以只靠事件重建 pending loop snapshot。
+- `executive.loop.resumed` 只表示生命体在显式新输入到达后恢复推进，不表示 transport reconnect、thread 对齐或 route 命中就会自动续跑。
+- 当前轮真正要不要继续、还在等什么、计划是否变更，仍回到 `turn.final.reply.metadata` 读取。
 
 ## R10 Long-Horizon Loop 事件契约
 
@@ -131,6 +140,7 @@ payload 约定：
 - 这两个事件只表达 loop 生命周期，不重复携带 reply 文本。
 - 具体恢复策略仍以本轮新的 `gateway.message.send` 输入为准。
 - 恢复是“显式继续”，不是后台自动续跑。
+- 事件里的 `askId` 只是时间线锚点，不是 transport resume token，也不是认知连续性容器。
 
 因此 UI 如果看到 `executive.loop.paused`，应把它当成“需要读取 ask / loop snapshot”的提示，而不是只凭这条事件就自行拼装 pending state。
 
@@ -145,9 +155,9 @@ payload 约定：
 也就是说：
 
 - 想做时间线或审计面板，看事件流。
-- 想做当前轮 UI 状态恢复，看 `turn.final.reply.metadata.executiveToolLoop`。
+- 想做当前轮 ask / pause / resume UI 状态恢复，看 `turn.final.reply.metadata.ask` 与 `turn.final.reply.metadata.executiveToolLoop`。
 - 想做 task plan / fork / replay 的结构化当前轮展示，看 `turn.final.reply.metadata.planning`。
-- 想判断当前是否在等待用户回答 ask，看 `turn.final.reply.metadata.ask`。
+- 想判断 transport 路由事实或 gateway 链路事实，把它们当成审计和连接信息，不把它们当成认知连续性。
 
 ## Rust 侧最小读取建议
 
@@ -158,4 +168,5 @@ payload 约定：
    - `executive.loop.resumed`
    - `executive.loop.guard.blocked`
 4. 如果当前轮 `turn.final.reply.metadata.executiveToolLoop` 存在，就把它当成当前 pending loop snapshot。
-5. 如果收到 `memory.task_plan.written` / `memory.context_fork.written` / `memory.replay_record.written`，把它们当成“planning 已更新”的提示；真正的当前轮结构化数据仍回到 `turn.final.reply.metadata.planning`。
+5. 如果当前轮 `turn.final.reply.metadata.ask` 存在，就把它当成当前显式 ask surface，而不是从 `memory.ask.recorded` 反推。
+6. 如果收到 `memory.task_plan.written` / `memory.context_fork.written` / `memory.replay_record.written`，把它们当成“planning 已更新”的提示；真正的当前轮结构化数据仍回到 `turn.final.reply.metadata.planning`。

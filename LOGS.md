@@ -15,3 +15,12 @@
   Summary: Refined the control protocol and runtime event docs so explicit scope, ask, and loop surfaces stay separate from transport continuity and event timelines.
   Reason: The protocol-facing branch needed to clarify that `turn.final.reply.metadata` remains the current-turn authority while events remain audit/time-series surfaces.
   Verification: pending mainline review
+
+## 2026-05-22
+
+- Status: completed
+  Actor: child-codex
+  Scope: wt/docs-protocol-events
+  Summary: Finalized the branch-owned protocol and runtime event wording so `activeScope`, explicit ask/pause/resume surfaces, and `turn.final.reply.metadata` stay authoritative while transport metadata and runtime events remain non-continuity surfaces.
+  Reason: The worktree handoff required the owned docs, TODO state, and append-only log to match the architecture anchor before commit.
+  Verification: `bun test tests/docs.references.test.ts`

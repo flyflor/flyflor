@@ -9,4 +9,4 @@
 - [x] 审阅并更新 `docs/runtime.events.md`。
 - [x] 审阅并更新 `docs/runtime.events.zh.cn.md`。
 - [x] 确认更新后的表述仍与 `docs/architecture.md` 一致。
-- [ ] 把当前分支交还主 Codex review。
+- [x] 把当前分支交还主 Codex review。

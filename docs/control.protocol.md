@@ -19,6 +19,7 @@
 - 不引入 隐式连续性容器
 - ask / pause / resume 只通过显式结构化字段暴露
 - transport 元数据只停留在 gateway/raw audit 边界
+- transport 元数据不是认知连续性
 - 当前轮上下文只认 `activeScope` / `contextForkId` / `skillNames`
 
 这意味着协议面对外暴露的是一个会 ask、会暂停、会恢复、会显式装配生命工作域的智能生命体，而不是一个偷偷用 transport 元数据续命的聊天壳。
@@ -44,8 +45,9 @@
 | `input` | 客户端发起输入 | `gateway.message.send` |
 | `stream` | 服务端流式回复 | `turn.delta` `turn.final` `turn.error` |
 | `event` | 事件广播与订阅 | `event.publish` `event.subscribe` `event.unsubscribe` |
-| `ask` | 服务端请求用户补充 | 当前附着在 `turn.final.reply.metadata.ask` |
-| `todo` | 结构化任务计划 | 当前附着在 `turn.final.reply.metadata.planning.taskPlans` |
+| `ask` | 服务端请求用户补充、确认或交还决定 | 当前附着在 `turn.final.reply.metadata.ask` |
+| `todo` | 当前轮结构化任务计划 | 当前附着在 `turn.final.reply.metadata.planning.taskPlans` |
+| `loop` | 当前轮 pause / resume / executive loop snapshot | 当前附着在 `turn.final.reply.metadata.executiveToolLoop` |
 | `data` | 只读快照 | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.snapshot` |
 | `error` | 控制面错误 | `error` |
 | `ping` | 心跳请求 | `ping` |
@@ -92,13 +94,14 @@
 | 层 | 载体 | 用途 |
 | --- | --- | --- |
 | 连接级 snapshot | `server.hello` / `gateway.status.snapshot` / `capability.catalog.snapshot` | 当前连接、能力面、血管状态 |
-| turn 级 snapshot | `turn.final.reply.metadata` | ask / planning / executive loop 的当前轮权威状态 |
-| 事件流 | `event.publish.payload.event` | 时间线、审计、提示刷新 |
+| turn 级 snapshot | `turn.final.reply.metadata` | ask / planning / pause / resume / executive loop 的当前轮权威状态 |
+| 事件流 | `event.publish.payload.event` | 活动时间线、审计、提示刷新 |
 
 硬规则：
 
 - 连接级 snapshot 不是上下文恢复
-- 事件流不是当前轮权威状态
+- transport 元数据不是认知连续性
+- 事件流不是当前轮权威状态，也不是隐藏状态 authority
 - turn 级 metadata 才是当前轮 ask / planning / loop 的权威面
 
 这意味着 thin client 即使已经订阅了完整 event stream，也仍然必须回到 `turn.final.reply.metadata` 读取当前轮的 ask、待续任务和 long-horizon loop 状态，而不是把时间线事件拼成一个假想状态机。
@@ -145,6 +148,7 @@
 - 没有 `activeScope` 时，服务端也不能偷偷补一个 fallback scope
 - `contextForkId` 只接受显式 id，不从文本推断
 - `skillNames` 只接受显式数组
+- ask 的回答、pause 后的继续、resume 后的新推进，都通过新的 `gateway.message.send` 显式进入当前轮
 
 ### 认知边界
 
@@ -169,6 +173,8 @@
 - memory continuity key
 
 也就是说，协议不会替生命体偷偷决定“你现在正在做什么”。真正的工作域只能通过显式 `activeScope` 与 `contextForkId` 进入当前生命态。
+
+同样地，协议也不会把 `conversationKey`、`threadId`、`channel` 或其他 transport tuple 升级成 pause/resume 钥匙。上一轮 ask 是什么、loop 为什么暂停、这一轮是否继续推进，都必须回到 `turn.final.reply.metadata` 读取，而不是从路由字段猜。
 
 ## `history.list`
 
@@ -224,6 +230,12 @@ scope、fork、replay、plan 只作为 turn 附着的结构化字段随结果返
 
 Rust 或其他 thin client 恢复当前轮状态时，优先读这里，而不是扫事件流猜。
 
+读取时把它看成三块显式 surface：
+
+- `ask`：当前轮 ask surface，表达要补什么、确认什么、是否交还用户决定。
+- `planning`：当前轮 planning surface，表达 task plan / branch / replay / fork 的结构化状态。
+- `executiveToolLoop`：当前轮 pause / resume / loop surface，表达是否 pending、为什么暂停、等什么继续。
+
 ### Ask 与续跑表面
 
 当前协议对“问用户再继续”只保留一条显式表面：
@@ -231,6 +243,7 @@ Rust 或其他 thin client 恢复当前轮状态时，优先读这里，而不�
 - 需要用户补充时，读 `turn.final.reply.metadata.ask`
 - 需要恢复 long-horizon loop 时，读 `turn.final.reply.metadata.executiveToolLoop`
 - 用户回答后，通过新的 `gateway.message.send` 明确继续，而不是依赖后台自治续跑
+- 事件流只能提示“发生过 ask / pause / resume 活动”，不能单独充当当前轮状态 authority
 
 也就是说，Flyflor 的控制面暴露的是“生命体此刻在等什么、下一步需要什么”，不是“服务端已经在后台偷偷替你继续”。
 
@@ -262,7 +275,7 @@ Rust / thin client 最小读取顺序：
 
 - 只把 control 协议当成薄控制面，不在客户端重建隐式连续性 / chat / thread 绑定。
 - 发消息时显式传 `context.activeScope` 与 `context.contextForkId`；没有就留空，不做 fallback scope。
-- 结果恢复优先读 `reply.metadata.executiveToolLoop`、`reply.metadata.ask`、`reply.metadata.planning`。
+- 结果恢复优先读 `reply.metadata.ask`、`reply.metadata.planning`、`reply.metadata.executiveToolLoop`，把它们当成 ask / planning / pause / resume 的当前轮 authority surface。
 - 需要账本查询时走 `history.list`，不要把 ledger 原始事件流直接回填成 prompt。
 - transport protocol handshake 只属于 MCP / HTTP / SSE / stdio 握手层，不属于 Flyflor 认知连续性模型。
 
@@ -270,7 +283,8 @@ Rust / thin client 最小读取顺序：
 
 - `activeScope` 是唯一 canonical 显式工作域字段
 - `activeProject` 只是兼容读口
+- ask / planning / pause / resume 的当前轮 authority 只认 `turn.final.reply.metadata`
 - `history.list` 是 ledger 查询，不是会话恢复
-- `chat/thread/user/channel` 不再承担认知连续性
+- `chat/thread/user/channel` 与其他 transport 元数据都不再承担认知连续性
 - `turn.final.reply.metadata` 是当前轮 ask / planning / loop 的唯一权威读取面
 - control 协议只传显式上下文，不允许偷偷重建隐式连续性
