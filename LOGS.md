@@ -43,3 +43,10 @@
   Summary: Added a deterministic `/ws` gateway control smoke that exercises the thin-client bootstrap and stream path through the real GatewayModule and RuntimeModule using `server.hello`, `gateway.status.get`, `capability.catalog.get`, `gateway.message.send`, `turn.delta`, and `turn.final`.
   Reason: The next implementation lane is the Rust shell backlog, and the Bun mainline needed an executable guard for the exact control surface that Rust will consume before any external shell rewrite begins.
   Verification: `bun run smoke:gateway:control`
+
+- Status: completed
+  Actor: main-codex
+  Scope: coordinator-mode-upgrade
+  Summary: Upgraded the repository handoff contract from short seal sprints to a long-running coordinated refactor mode whose explicit target is the full intelligent-lifeform kernel, with mandatory workflow/handoff updates and full-branch pushes at every stop.
+  Reason: The next stage needs higher throughput than a single-thread linear loop, and new sessions must be able to resume coordination and worktree/tmux execution without reconstructing intent from chat history.
+  Verification: repository handoff docs updated on mainline before the next worktree split

@@ -4,6 +4,8 @@
 
 Flyflor now develops through a `git worktree + tmux + Codex` coordinator workflow: the main Codex owns global review and canonical history, while child worktrees own narrow slices and return reviewed commits.
 
+Current operating mode: this is no longer just a seal-maintenance loop. The active target is the full intelligent-lifeform kernel refactor, so coordinator continuity and branch hygiene are now first-class repo concerns.
+
 ## Why this exists
 
 The project boundary is already clear enough that parallel work is useful, but Flyflor still needs one explicit cognitive owner for:
@@ -32,6 +34,8 @@ The main Codex owns:
 - selective merge
 - mainline `LOGS.md`
 - final validation and commit
+- every stop/pause handoff document update
+- full push of changed branches before yielding the repository
 
 The main worktree is the only branch that should declare the canonical merged project history.
 
@@ -134,6 +138,14 @@ If continuing a child worktree, also read that worktree's local:
 - `AGENTS.md`
 - `LOGS.md`
 
+Before the coordinator stops for any reason, it must update:
+
+1. root `TODO.md`
+2. root `LOGS.md`
+3. `docs/development.workflow.md`
+4. `docs/development.workflow.zh.cn.md`
+5. push every changed branch/worktree branch that should survive a machine/session switch
+
 ## Current snapshot
 
 Snapshot date: `2026-05-22`
@@ -201,6 +213,10 @@ Most recent coordinator validation:
   - `bun run smoke:agent:live`
 - Rust-shell bootstrap guard now also lives in deterministic smoke:
   - `bun run smoke:gateway:control`
+
+Next scaling rule:
+
+- when the mainline task stops being a narrow fix and becomes a multi-slice refactor again, create or refresh code worktrees and run child Codex sessions under tmux instead of stretching one session indefinitely
 
 ## Practical rule
 

@@ -51,6 +51,7 @@
 
 ## 下一步工作
 
+0. 下一阶段按“完成智能生命体内核的大重构”来组织，而不再只是零散封板修补；每次暂停或交接前都必须先把仓库内 handoff 文档更新完整。
 1. 按 `docs/rust.gateway.shell.backlog.md` 实现 Rust shell slices。
 2. Bun 主线继续只承载认知、Executive、WebSocket/event 协议、memory、blackboard、sandbox、MCP、plugin。
 3. 继续把 `activeProject` 收缩为兼容读口；新契约不能使用它。
@@ -103,3 +104,14 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 ```
 
 预期结果是全部通过。
+
+## 2026-05-22 协调者模式补充
+
+- 当前元目标已经升级：通过协调式切片完成“智能生命体内核”的大重构，而不只是维持 seal 状态。
+- 主线协调者每次暂停/结束前必须完成：
+  1. 更新 `TODO.md`
+  2. 更新 `LOGS.md`
+  3. 更新 `docs/development.workflow.md`
+  4. 更新 `docs/development.workflow.zh.cn.md`
+  5. push 所有变更过的 branch / worktree branch
+- 当实现压力上升时，应优先新增 code worktree 并配合 tmux + Codex 并发推进，而不是把所有工作继续堆在一个线程里。

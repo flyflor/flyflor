@@ -51,6 +51,7 @@ Main visible surfaces:
 
 ## Next Work
 
+0. Treat the next phase as a coordinated large refactor whose target is the full intelligent-lifeform kernel, not just isolated seal fixes; every pause or handoff must update the repo handoff docs before ending.
 1. Implement Rust shell slices from `docs/rust.gateway.shell.backlog.md`.
 2. Keep Bun mainline focused on cognition, Executive, WebSocket/event protocol, memory, blackboard, sandbox, MCP, and plugin surfaces.
 3. Continue shrinking `activeProject` to compatibility-only code paths; do not use it in new contracts.
@@ -142,3 +143,14 @@ Latest full seal validation in this workspace passed:
   - `turn.delta`
   - `turn.final`
 - This smoke is deterministic and uses a scripted streaming model, so it verifies the stable control surface without live provider cost.
+
+## 2026-05-22 Coordinator Mode Addendum
+
+- Active meta-goal is now larger than seal maintenance: complete the intelligent-lifeform kernel refactor in coordinated slices.
+- Mainline coordinator rules for every pause/stop:
+  1. update `TODO.md`
+  2. update `LOGS.md`
+  3. update `docs/development.workflow.md`
+  4. update `docs/development.workflow.zh.cn.md`
+  5. push every changed branch/worktree branch before yielding the repository
+- When implementation pressure rises, split code work into new `git worktree + tmux + Codex` slices instead of stretching one thread too far.

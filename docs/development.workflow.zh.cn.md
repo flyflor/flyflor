@@ -4,6 +4,8 @@
 
 Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：主 Codex 负责全局 review 与 canonical 历史，子 worktree 只负责窄切片并交回可审查提交。
 
+当前运行模式已经不是单纯的 seal 维护循环。活动目标是完成整个智能生命体内核重构，所以协调者连续性和分支卫生现在都是仓库一级约束。
+
 ## 为什么需要它
 
 项目边界已经清晰到足以并发推进，但 Flyflor 仍然需要一个显式认知 owner 负责：
@@ -32,6 +34,8 @@ Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：�
 - 选择性合并
 - 主线 `LOGS.md`
 - 最终验证与提交
+- 每次暂停/结束前更新交接文档
+- 在让出仓库前 push 所有应保留的变更分支
 
 只有主 worktree 应该声明 canonical 的合并后项目历史。
 
@@ -134,6 +138,14 @@ git worktree list
 - `AGENTS.md`
 - `LOGS.md`
 
+协调者无论因为什么原因停下，都必须先更新：
+
+1. 根目录 `TODO.md`
+2. 根目录 `LOGS.md`
+3. `docs/development.workflow.md`
+4. `docs/development.workflow.zh.cn.md`
+5. push 所有需要跨机器/跨 session 保留的 branch / worktree branch
+
 ## 当前快照
 
 快照日期：`2026-05-22`
@@ -201,6 +213,10 @@ git worktree list
   - `bun run smoke:agent:live`
 - Rust 外壳 bootstrap guard 也已进入 deterministic smoke：
   - `bun run smoke:gateway:control`
+
+下一条扩容规则：
+
+- 当主线任务再次从窄修复扩成多切片重构时，应主动新建或刷新 code worktree，并在 tmux 下运行子 Codex，而不是无限拉长单个 session
 
 ## 实用规则
 
