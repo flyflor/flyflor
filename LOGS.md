@@ -15,3 +15,10 @@
   Summary: Landed the mainline architecture-anchor document pass, added append-only LOGS scaffolding, and created three sibling document worktrees from the new baseline.
   Reason: The main worktree must own the canonical lifeform framing and initialize parallel document worktrees from a stable reviewed base.
   Verification: `bun run docs:check`; `bun test tests/todo.status.test.ts tests/docs.index.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`; git commit `ae038bd`
+
+- Status: completed
+  Actor: main-codex
+  Scope: documentation-architecture-alignment
+  Summary: Landed the mainline anchor docs, reviewed the three document worktrees, and merged only their owned lifeform-architecture doc updates back to the coordinator branch.
+  Reason: The main worktree owns the canonical project history and must close the worktree split with a reviewed, conflict-free document set.
+  Verification: pending

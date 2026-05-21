@@ -15,6 +15,7 @@
 - 事件必须可 JSON 序列化。
 - 事件只表达结构化事实，不做自然语言语义判断。
 - Gateway 不拥有事件语义，只负责订阅和广播。
+- 事件可以附带 scope / fork 引用做审计，但不能自己生成工作域连续性。
 - 已移除的旧 CLI/TUI 事件面不允许回流。
 
 ## 当前核心事件面
@@ -87,6 +88,8 @@ Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途
 
 这与 Flyflor 的生命体主语是一致的：事件流负责描述生命活动过程，权威快照负责暴露当前生命态。
 
+即使某条事件带有 `scopeId`、`contextForkId` 或 ask 相关字段，它也只是说明“哪一个生命域刚刚发生了什么”，不是在替 runtime 宣布新的当前工作域。
+
 ## R10 Long-Horizon Loop 事件契约
 
 R10 之后，Executive tool loop 的超长线暂停/恢复通过两类事件暴露：
@@ -129,6 +132,8 @@ payload 约定：
 - 具体恢复策略仍以本轮新的 `gateway.message.send` 输入为准。
 - 恢复是“显式继续”，不是后台自动续跑。
 
+因此 UI 如果看到 `executive.loop.paused`，应把它当成“需要读取 ask / loop snapshot”的提示，而不是只凭这条事件就自行拼装 pending state。
+
 也就是说，长线能力来自“会 ask、会暂停、会等待用户、再继续”，不是偷偷续跑或在 transport 背后藏一个自治循环。
 
 ## 与 WS 协议的关系
@@ -142,6 +147,7 @@ payload 约定：
 - 想做时间线或审计面板，看事件流。
 - 想做当前轮 UI 状态恢复，看 `turn.final.reply.metadata.executiveToolLoop`。
 - 想做 task plan / fork / replay 的结构化当前轮展示，看 `turn.final.reply.metadata.planning`。
+- 想判断当前是否在等待用户回答 ask，看 `turn.final.reply.metadata.ask`。
 
 ## Rust 侧最小读取建议
 

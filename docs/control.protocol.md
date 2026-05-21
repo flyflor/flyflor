@@ -17,6 +17,7 @@
 - 只使用 JSON envelope
 - 只暴露显式上下文入口
 - 不引入 隐式连续性容器
+- ask / pause / resume 只通过显式结构化字段暴露
 - transport 元数据只停留在 gateway/raw audit 边界
 - 当前轮上下文只认 `activeScope` / `contextForkId` / `skillNames`
 
@@ -100,6 +101,8 @@
 - 事件流不是当前轮权威状态
 - turn 级 metadata 才是当前轮 ask / planning / loop 的权威面
 
+这意味着 thin client 即使已经订阅了完整 event stream，也仍然必须回到 `turn.final.reply.metadata` 读取当前轮的 ask、待续任务和 long-horizon loop 状态，而不是把时间线事件拼成一个假想状态机。
+
 ## `gateway.message.send`
 
 输入示例：
@@ -139,6 +142,7 @@
 - `context.activeScope` 是 canonical 字段
 - `context.activeProject` 只作兼容输入，runtime 内部应立即标准化到 `activeScope`
 - `activeScope` / `activeProject` 都必须传完整结构化对象，不能只传 id
+- 没有 `activeScope` 时，服务端也不能偷偷补一个 fallback scope
 - `contextForkId` 只接受显式 id，不从文本推断
 - `skillNames` 只接受显式数组
 
@@ -220,6 +224,16 @@ scope、fork、replay、plan 只作为 turn 附着的结构化字段随结果返
 
 Rust 或其他 thin client 恢复当前轮状态时，优先读这里，而不是扫事件流猜。
 
+### Ask 与续跑表面
+
+当前协议对“问用户再继续”只保留一条显式表面：
+
+- 需要用户补充时，读 `turn.final.reply.metadata.ask`
+- 需要恢复 long-horizon loop 时，读 `turn.final.reply.metadata.executiveToolLoop`
+- 用户回答后，通过新的 `gateway.message.send` 明确继续，而不是依赖后台自治续跑
+
+也就是说，Flyflor 的控制面暴露的是“生命体此刻在等什么、下一步需要什么”，不是“服务端已经在后台偷偷替你继续”。
+
 ## Error
 
 稳定错误码：
@@ -258,4 +272,5 @@ Rust / thin client 最小读取顺序：
 - `activeProject` 只是兼容读口
 - `history.list` 是 ledger 查询，不是会话恢复
 - `chat/thread/user/channel` 不再承担认知连续性
+- `turn.final.reply.metadata` 是当前轮 ask / planning / loop 的唯一权威读取面
 - control 协议只传显式上下文，不允许偷偷重建隐式连续性
