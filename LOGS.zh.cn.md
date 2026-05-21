@@ -43,3 +43,17 @@
   摘要：为 context-memory 代码 worktree 初始化了显式所有权，负责 hippocampus memory、memory entities、context assembly 及其直接测试。
   原因：这个切片需要在月分片生命周期、遗忘曲线和召回正确性上独立推进，避免与 scope/crystal 或 runtime/executive 工作互相冲突。
   验证：`wt/kernel-context-memory` 的本地控制文件已更新
+
+- 状态：completed
+  操作者：codex
+  范围：kernel-context-memory-shards-recall-context
+  摘要：补齐了 context-memory 切片的具体缺口，强化了 monthly brain shard rollover，让 vector recall 回写持久 recall 指标，并收紧 continuity owner 规则，使显式 fork 在 context assembly 中覆盖父 scope。
+  原因：月分片生命周期、遗忘/衰减输入、向量召回和显式 Scope/Fork 装配都属于本切片契约，这些 correctness gap 会外溢到 dream、decay、pending ask 和 prompt assembly。
+  验证：`bun test tests/brain.store.test.ts tests/brain.archive.test.ts`；`bun test tests/context.scope.test.ts tests/graph.recall.test.ts`；`bun test tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/background.scheduler.test.ts`
+
+- 状态：open
+  操作者：codex
+  范围：kernel-context-memory-validation-blocker
+  摘要：memory/context 的窄面验证已经通过，但 `tests/memory.brain.wire.test.ts` 在当前 worktree 仍被仓库环境模块解析故障阻塞，加载 `src/config/config.ts` 时就失败。
+  原因：这个测试在真正进入 memory 逻辑前，就因为当前环境里无法解析 `lodash-es/mergeWith.js` 而中断，该问题超出本切片已修改的代码面。
+  验证：`bun test tests/memory.brain.wire.test.ts`

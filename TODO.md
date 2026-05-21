@@ -169,3 +169,13 @@ Latest full seal validation in this workspace passed:
   4. update `docs/development.workflow.zh.cn.md`
   5. push every changed branch/worktree branch before yielding the repository
 - When implementation pressure rises, split code work into new `git worktree + tmux + Codex` slices instead of stretching one thread too far.
+
+## 2026-05-22 Context-Memory Slice Update
+
+- [x] Monthly `brain.db` shard sealing now rebuilds a fresh live shard with the target next-month `live_month_key`.
+- [x] Monthly shard sealing now uses a stable archive snapshot export path even when the target archive file already exists.
+- [x] Added regression coverage for stale live-shard rollover and pre-existing archive-month rollover.
+- [x] Context continuity owner now prefers explicit `contextForkId` over parent `activeScope` when both are mounted.
+- [x] Vector recall now writes back `recallCount` and `lastAccessedAt` / `lastVerifiedAt`, so dream and decay consume real recall metrics.
+- [x] Added direct tests for graph recall accounting and fork-over-scope continuity ownership.
+- [ ] `tests/memory.brain.wire.test.ts` is still blocked in this worktree by a repo-environment module-resolution failure: `src/config/config.ts` cannot load `lodash-es/mergeWith.js`.

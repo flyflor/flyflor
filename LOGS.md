@@ -57,3 +57,17 @@
   Summary: Initialized the context-memory code worktree with explicit ownership over hippocampus memory, memory entities, context assembly, and their direct tests.
   Reason: This slice needs to move independently on shard lifecycle, forgetting, and recall correctness without colliding with scope/crystal or runtime/executive work.
   Verification: local control files updated for `wt/kernel-context-memory`
+
+- Status: completed
+  Actor: codex
+  Scope: kernel-context-memory-shards-recall-context
+  Summary: Closed concrete context-memory gaps by hardening monthly brain shard rollover, making vector recall update durable recall metrics, and tightening continuity ownership so explicit forks override parent scopes during context assembly.
+  Reason: Monthly shard lifecycle, forgetting/decay inputs, vector recall, and explicit Scope/Fork assembly are all slice-owned contracts and were still carrying correctness gaps that would leak into dream, decay, pending-ask, and prompt assembly flows.
+  Verification: `bun test tests/brain.store.test.ts tests/brain.archive.test.ts`; `bun test tests/context.scope.test.ts tests/graph.recall.test.ts`; `bun test tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/background.scheduler.test.ts`
+
+- Status: open
+  Actor: codex
+  Scope: kernel-context-memory-validation-blocker
+  Summary: Narrow memory/context validation passed, but `tests/memory.brain.wire.test.ts` is still blocked in this worktree by a repo-environment module-resolution failure while loading `src/config/config.ts`.
+  Reason: The test reaches config loading outside the owned fix surface and fails before memory logic runs because `lodash-es/mergeWith.js` is not resolvable in this environment.
+  Verification: `bun test tests/memory.brain.wire.test.ts`

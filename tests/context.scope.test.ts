@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { ContextComponent } from "../src/components/index.ts";
-import { useContextScope } from "../src/agent/context/index.ts";
+import { continuityOwnerKey } from "../src/agent/context/component.ts";
+import { useContextScope } from "../src/agent/context/composition.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
+import { Channel, ChatType } from "../src/protocol/contracts/index.ts";
 import type { RuntimeContext } from "../src/protocol/contracts/index.ts";
 
 describe("ContextScopeComponent", () => {
@@ -53,6 +55,33 @@ describe("ContextScopeComponent", () => {
         };
 
         expect(scope.scopeConstraintId({ context })).toBeNull();
+    });
+
+    test("continuity owner prefers explicit fork over parent scope when both are mounted", () => {
+        const context: RuntimeContext = {
+            requestId: "req-1",
+            now: "2026-05-17T00:00:00.000Z",
+            activeScope: {
+                id: "scope-active",
+                projectDir: "/tmp/active",
+                projectMemoryDir: "/tmp/active/.flyflor/memory",
+            },
+            contextForkId: "fork-active",
+        };
+
+        expect(
+            continuityOwnerKey(
+                {
+                    id: "msg-1",
+                    receivedAt: "2026-05-17T00:00:00.000Z",
+                    text: "hello",
+                    attachments: [],
+                    user: { id: "user-1", displayName: "User" },
+                    route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
+                },
+                context,
+            ),
+        ).toBe("fork:fork-active");
     });
 });
 

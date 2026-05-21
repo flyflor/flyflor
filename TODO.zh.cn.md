@@ -130,3 +130,13 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   4. 更新 `docs/development.workflow.zh.cn.md`
   5. push 所有变更过的 branch / worktree branch
 - 当实现压力上升时，应优先新增 code worktree 并配合 tmux + Codex 并发推进，而不是把所有工作继续堆在一个线程里。
+
+## 2026-05-22 Context-Memory 切片更新
+
+- [x] 月度 `brain.db` 分片 seal 现在会用目标下个月份重建 fresh live shard，并正确写入 `live_month_key`。
+- [x] 月度分片 seal 现在即使目标归档文件已存在，也会走稳定的 archive snapshot 导出路径。
+- [x] 已补 stale live-shard rollover 和 archive 月份预存在场景的回归测试。
+- [x] 当 `contextForkId` 与父 `activeScope` 同时存在时，context continuity owner 现在优先选择显式 fork。
+- [x] 向量 recall 现在会回写 `recallCount` 与 `lastAccessedAt` / `lastVerifiedAt`，确保 dream / decay 消费到真实 recall 指标。
+- [x] 已新增 graph recall accounting 和 fork-over-scope continuity ownership 的直接测试。
+- [ ] `tests/memory.brain.wire.test.ts` 在当前 worktree 仍受仓库环境模块解析故障阻塞：`src/config/config.ts` 无法加载 `lodash-es/mergeWith.js`。
