@@ -169,6 +169,17 @@ Latest full seal validation in this workspace passed:
   5. push every changed branch/worktree branch before yielding the repository
 - When implementation pressure rises, split code work into new `git worktree + tmux + Codex` slices instead of stretching one thread too far.
 
+## 2026-05-22 Runtime Closure Addendum
+
+- Completed in this worktree:
+  - `/ws` now preserves client `requestId` as runtime correlation for the matching `turn.*` envelopes.
+  - gateway control smoke now covers the thin-client ask pause/resume loop, event subscription, and history replay in one deterministic run.
+  - ws docs now spell out the current loop-closure contract for thin clients instead of leaving it implicit.
+  - gateway ws tests now guard class-based event subscriptions and request-correlation stability.
+- Next coordinator action after merge:
+  - keep this branch as the runtime/ws implementation slice reference
+  - re-run mainline validation after integrating memory and crystal slices with these ws protocol guarantees
+
 ## 2026-05-22 Runtime-Executive-WS Closure Addendum
 
 - Local slice status: completed for the current ws/runtime/executive closure pass.

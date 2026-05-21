@@ -45,6 +45,13 @@
   验证：`wt/kernel-runtime-executive-ws` 的本地控制文件已更新
 
 - 状态：completed
+  操作者：main-codex
+  范围：kernel-runtime-executive-ws-closure
+  摘要：完成 runtime/ws 切片，打通 requestId 稳定关联的 control turn，补齐 thin-client ask 暂停/恢复契约文档，并新增可重复执行的 smoke 与 ws 定向测试来覆盖 loop 闭环和 history 回放。
+  原因：协调者需要一个已经审过的 `/ws` 表面，使新 session 或后续 Rust shell 不必重新摸索 ask-loop 闭环、事件订阅和 history 回放之间的关系。
+  验证：`bun test tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts`
+
+- 状态：completed
   操作者：wt/kernel-runtime-executive-ws
   范围：runtime-executive-ws-thin-client-closure
   摘要：补齐本地 ws thin-client control flow 缺口，把 envelope `requestId` 保留进 runtime 关联键，扩展确定性 gateway smoke 覆盖 event subscribe、loop pause-resume 闭环与 history replay，并把稳定的 lifecycle/history 面补进 Rust 后续对接文档。

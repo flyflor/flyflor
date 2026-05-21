@@ -59,6 +59,13 @@
   Verification: local control files updated for `wt/kernel-runtime-executive-ws`
 
 - Status: completed
+  Actor: main-codex
+  Scope: kernel-runtime-executive-ws-closure
+  Summary: Completed the runtime/ws slice by wiring requestId-stable control turns, documenting the thin-client ask pause/resume contract, and adding a deterministic smoke plus targeted ws tests for loop closure and history replay.
+  Reason: The coordinator needs a reviewed `/ws` surface that a new session or Rust shell can resume from without rediscovering how ask-loop closure, event subscriptions, and history replay fit together.
+  Verification: `bun test tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts`
+
+- Status: completed
   Actor: wt/kernel-runtime-executive-ws
   Scope: runtime-executive-ws-thin-client-closure
   Summary: Closed the local ws thin-client control-flow gaps by preserving envelope `requestId` into runtime correlation, extending the deterministic gateway smoke through event subscribe, pause-resume loop closure, and history replay, and documenting the stable lifecycle/history surfaces for Rust follow-on work.

@@ -130,6 +130,17 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   5. push 所有变更过的 branch / worktree branch
 - 当实现压力上升时，应优先新增 code worktree 并配合 tmux + Codex 并发推进，而不是把所有工作继续堆在一个线程里。
 
+## 2026-05-22 Runtime 收口补充
+
+- 本 worktree 已完成：
+  - `/ws` 现在会把客户端 `requestId` 透传为对应 `turn.*` envelope 的 runtime 关联键。
+  - gateway control smoke 现在一次性覆盖 thin-client 的 ask 暂停/恢复闭环、事件订阅以及 history 回放。
+  - ws 文档已经明确写出 thin client 当前需要遵守的 loop 闭环契约，不再靠隐式约定。
+  - gateway ws 测试补上了按事件 class 订阅与 request correlation 稳定性的守卫。
+- 合并后的协调者下一步：
+  - 保留此分支作为 runtime/ws 实现切片参考
+  - 在 memory 与 crystal 切片并入主线后，基于这些 ws 协议保证重新跑一轮主线验证
+
 ## 2026-05-22 Runtime-Executive-WS 闭环补充
 
 - 本地切片状态：当前 ws/runtime/executive 闭环收口已完成。
