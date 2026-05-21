@@ -199,6 +199,8 @@ git worktree list
 - 同一工作区 live 检查通过：
   - `bun run test:live`
   - `bun run smoke:agent:live`
+- Rust 外壳 bootstrap guard 也已进入 deterministic smoke：
+  - `bun run smoke:gateway:control`
 
 ## 实用规则
 

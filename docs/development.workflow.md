@@ -199,6 +199,8 @@ Most recent coordinator validation:
 - live checks passed in the same workspace:
   - `bun run test:live`
   - `bun run smoke:agent:live`
+- Rust-shell bootstrap guard now also lives in deterministic smoke:
+  - `bun run smoke:gateway:control`
 
 ## Practical rule
 

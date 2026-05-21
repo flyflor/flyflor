@@ -131,3 +131,14 @@ Latest full seal validation in this workspace passed:
 - `bun run build:binary:docker`
 - `bun run test:live`
 - `bun run smoke:agent:live`
+
+## 2026-05-22 Gateway Control Slice Addendum
+
+- Added a real `/ws` thin-client smoke for the Rust shell handoff path:
+  - `server.hello`
+  - `gateway.status.get`
+  - `capability.catalog.get`
+  - `gateway.message.send`
+  - `turn.delta`
+  - `turn.final`
+- This smoke is deterministic and uses a scripted streaming model, so it verifies the stable control surface without live provider cost.
