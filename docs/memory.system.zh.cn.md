@@ -2,9 +2,9 @@
 
 ## 一句话定位
 
-Flyflor 的上下文装配只来自 `Memory + Crystal + explicit Scope/Fork`。`brain.db` 负责保存和查询经历，但不直接参与 prompt 装配。
+Flyflor 的上下文装配只来自 `Memory + Crystal + explicit Scope/Fork`。`brain.db` 负责保存和查询生命经历，但不直接参与 prompt 装配。
 
-这篇文档的核心目的，就是把“记忆系统”和“账本系统”明确拆开。
+这篇文档的核心目的，就是把“记忆系统”和“账本系统”明确拆开，并把 Flyflor 的热记忆、晶体智力、Scope 生命域和月分片生命账本区分清楚。
 
 ## 系统分工
 
@@ -29,8 +29,8 @@ flowchart LR
 
 - 当前输入
 - Markdown 宪法层
-- Memory recall
-- Crystal recall
+- Memory recall（热记忆）
+- Crystal recall（晶体智力）
 - 显式 scope
 - 显式 fork
 - Executive 可见能力面
@@ -69,6 +69,8 @@ flowchart LR
 - 当前月：可写 `brain.db`
 - 历史月：只读 archive shards
 
+也就是说，Flyflor 的生命账本不是单一总库，而是每个月诞生一份新的 `brain.db` 分片；历史月保留为只读审计与检索面。
+
 不维护“当前总副本”。
 
 ## 相关代码路径
@@ -91,6 +93,8 @@ flowchart LR
 - scope 摘要
 - scope 下可复用压缩结果
 - scope 相关 recall 索引
+
+它的设计主语不是“项目目录附属配置”，而是智能生命体对长期事情形成的独立生命工作域。
 
 它不是：
 
@@ -162,6 +166,14 @@ Crystal 不负责：
 
 - 临时 turn 容器
 - 直接接管显式 scope
+
+## Ask、结晶与遗忘
+
+Flyflor 的长期成长不是靠“把所有聊天留着”，而是靠 ask 闭环、结晶闭环和遗忘曲线：
+
+- Ask 负责把边界不清、黑板封顶、scope 升格、工具 loop 配额耗尽等场景显式交还给用户
+- 高质量 ask-answer、黑板收敛、反思证据和长期任务收束，会变成 Crystal 的结晶候选来源
+- 遗忘不是简单删除，而是通过热记忆压缩、晶体向量偏移、漂移修复和 LLM 再组织完成的生命再编码
 
 ## Blackboard detail
 

@@ -8,6 +8,8 @@
 - Gateway `/ws` 的 event stream 只转发这些事件。
 - Rust CLI / TUI / Gateway 未来只读这层，不依赖 Bun 私有状态。
 
+事件血管暴露的是生命活动时间线，不是隐藏状态机。它告诉外部“这个智能生命体刚才做了什么”，但不替代当前轮结构化权威面。
+
 ## 设计边界
 
 - 事件必须可 JSON 序列化。
@@ -83,6 +85,8 @@ Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途
 - ask/todo/loop 的当前轮权威状态继续以 `turn.final.reply.metadata` 为准。
 - 事件流可用于“提示要刷新 UI”，但不应替代 snapshot 读取。
 
+这与 Flyflor 的生命体主语是一致的：事件流负责描述生命活动过程，权威快照负责暴露当前生命态。
+
 ## R10 Long-Horizon Loop 事件契约
 
 R10 之后，Executive tool loop 的超长线暂停/恢复通过两类事件暴露：
@@ -124,6 +128,8 @@ payload 约定：
 - 这两个事件只表达 loop 生命周期，不重复携带 reply 文本。
 - 具体恢复策略仍以本轮新的 `gateway.message.send` 输入为准。
 - 恢复是“显式继续”，不是后台自动续跑。
+
+也就是说，长线能力来自“会 ask、会暂停、会等待用户、再继续”，不是偷偷续跑或在 transport 背后藏一个自治循环。
 
 ## 与 WS 协议的关系
 

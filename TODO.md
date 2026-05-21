@@ -59,6 +59,9 @@ Main visible surfaces:
 6. Keep all new prompt prose in `templates/prompts` with `.zh.cn.md` copies.
 7. Keep all new Markdown paired with `.zh.cn.md`.
 8. Add tests before changing protocol, storage schema, or runtime context assembly.
+9. Align all active docs with the "intelligent lifeform kernel" framing before starting multi-worktree implementation.
+10. Introduce append-only `LOGS.md` control files for the main worktree and future child worktrees.
+11. Split the first document pass into three child worktrees after the mainline architecture anchor is updated.
 
 ## Red Lines
 

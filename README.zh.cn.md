@@ -1,6 +1,6 @@
 # Flyflor
 
-Flyflor 是一个 Bun + TypeScript 智能体运行时内核，目标是单文件二进制交付。
+Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单文件二进制交付。
 
 核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、gateway、sandbox、skills、context 等外部交互。
 
@@ -8,14 +8,14 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时内核，目标是单文件
 
 ## 设计哲学
 
-- LLM 负责当下推理与生成，记忆系统只负责沉淀、召回和偏移修正。
-- 不靠单轮堆叠上下文，而靠三层记忆、遗忘曲线和反思把经验压成稳定能力。
+- LLM 负责当下推理与生成，充当流体智力；记忆系统负责沉淀、召回、结晶与偏移修正。
+- 不靠单轮堆叠上下文，而靠热记忆、晶体智力、Scope 生命域、遗忘曲线和反思把经验压成稳定能力。
 - 上下文装配只来自 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
-- `brain.db` 是 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
+- `brain.db` 是按月分片的 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
 - 未来 CLI、Gateway、TUI 用 Rust 重写；当前 Bun 主线只保留 event 血管与 WS/control 协议。
-- 简单问题直接回，复杂问题走黑板，保证复杂度和协作成本只在必要时上升。
+- 简单问题直接回，复杂问题走黑板；当思考或执行抵达边界时，通过 Ask 显式向用户求证，再把高价值结果送入结晶链路。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 
 ## 架构总模型
@@ -32,6 +32,15 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时内核，目标是单文件
 - 不按 `channel/chat/thread/user` 自动恢复工作域
 
 `activeProject` 现在只保留兼容读取；所有新代码、新文档、新测试都以 `activeScope` 为准。
+
+从认知器官看，Flyflor 当前由这几部分共同构成：
+
+- `Mindstream / LLM`：流体智力
+- `MemoryComponent`：热记忆与工作缓冲区
+- `CrystalComponent`：晶体智力与方法结晶区
+- `Scope`：独立生命工作域
+- `Ask`：认知闭环器官
+- `Executive`：执行外骨骼
 
 ## Gateway 现状
 

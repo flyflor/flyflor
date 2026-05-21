@@ -59,6 +59,9 @@
 6. 新增提示词正文必须放在 `templates/prompts`，并同步 `.zh.cn.md`。
 7. 新增 Markdown 必须同步 `.zh.cn.md`。
 8. 修改 protocol、storage schema 或 runtime context assembly 前先补测试。
+9. 在启动多 worktree 开发前，先把全部活动文档统一到“智能生命体内核”口径。
+10. 为主 worktree 和未来子 worktree 引入只追加的 `LOGS.md` 控制文件。
+11. 在主线架构锚点更新完成后，把第一批文档工作拆成三个子 worktree。
 
 ## 红线
 

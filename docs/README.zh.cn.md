@@ -33,10 +33,11 @@
 ## 这套文档的核心口径
 
 - 上下文装配只来自 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
-- `brain.db` 是 ledger/query plane，不是上下文容器。
+- `brain.db` 是按月分片的 ledger/query plane，不是上下文容器，也不直接参与 prompt 召回。
 - `Scope` 是唯一显式工作域；没有显式 scope 时，不创建隐式工作域。
 - `ContextFork` 是 scope 的显式分支，不是隐式连续性容器。
 - `codename` 只是锚点、提议入口和 recall boost，不是隐式上下文桶。
+- `Mindstream + Memory + Crystal + Scope + Ask` 共同构成 Flyflor 当前的智能生命体主语；Executive 是执行外骨骼，不接管认知本体。
 - `sourceKey` 与 `sourceSurface` 只记录中性 ingress provenance；`conversationKey`、`threadId`、平台 actor 信息只停留在 gateway/raw routing 边界，不承担核心认知连续性。
 - 编程红线不动：约定大于配置，分层明确，允许重复，不为复用强行抽象，始终保持 `oop + use composition`，目录和文件名优先于局部“聪明”抽象。
 

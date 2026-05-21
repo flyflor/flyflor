@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-Crystal 子系统负责把结构化反思证据「结晶」为长期可复用的 Gem。当前 runtime reflection 路径是 candidate → atom → Gem；长期图的 episode → memory_node → Gem 由 `ConsolidationWorker` / `CrystalComponent` 维护，不能把两条链路的字段和门槛混写。
+Crystal 子系统负责把结构化反思证据「结晶」为长期可复用的 Gem。它不是聊天摘要仓库，而是 Flyflor 智能生命体的晶体智力层。当前 runtime reflection 路径是 candidate → atom → Gem；长期图的 episode → memory_node → Gem 由 `ConsolidationWorker` / `CrystalComponent` 维护，不能把两条链路的字段和门槛混写。
 
 Gem 与 Skill 必须分开：Gem 是内部晶体智力，存在 `crystal.db` / Crystal graph；Skill 是外部 `SKILL.md` 能力包，存在 `~/.flyflor/.config/skills` 或项目 skill 目录。`gem-drift` 只修 Crystal graph，不能代替 `skill-drift`。
 
@@ -46,6 +46,17 @@ stateDiagram-v2
 ```
 
 Runtime reflection 不做关键词或句式判断：模型只负责输出结构化 candidate，代码只用 `evidence[].weight`、`bucket`、`symbols`、`coordinates` 等数值/结构字段。长期图的 `memory_node.evidenceCount` 属于 consolidation 数据面，不能作为 `CrystalGemComponent` 的隐藏门槛。
+
+## 结晶在生命闭环中的位置
+
+Gem 代表的是“已经从一次经历中提炼出的稳定方法或知识”，而不是一次 conversation 的留档。
+
+- `Mindstream` 负责当下思考
+- `MemoryComponent` 保留热区与近期连续性
+- `Ask` 在边界处向用户求证
+- `Crystal` 把高价值经验转成长期可复用的结晶
+
+因此，Crystal 是 Flyflor 从“经历过”变成“学会了”的那一层。
 
 ## 结构（runtime Crystal Gem 实体）
 
@@ -96,6 +107,8 @@ sequenceDiagram
 - 漂移触发条件：`contradictionCount >= 2`。
 - 漂移修复：先写 `gem_snapshot`，再收窄 `scope`；不删除旧版本。
 - `gem-drift` 与 `skill-drift` 是两个协议概念：前者属于 Crystal graph，后者属于外部 Skill 包校验/迁移，不能共用候选类型或写入路径。
+
+这里的“遗忘”更接近再编码和偏移，不是简单抹除：旧版本不删除，而是通过 snapshot、scope 收窄和支持度变化维持晶体智力的长期稳定性。
 
 ## 配置
 

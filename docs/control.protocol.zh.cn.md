@@ -20,6 +20,8 @@
 - transport 元数据只停留在 gateway/raw audit 边界
 - 当前轮上下文只认 `activeScope` / `contextForkId` / `skillNames`
 
+这意味着协议面对外暴露的是一个会 ask、会暂停、会恢复、会显式装配生命工作域的智能生命体，而不是一个偷偷用 transport 元数据续命的聊天壳。
+
 ## Protocol Id
 
 控制面：
@@ -162,6 +164,8 @@
 - handshake
 - memory continuity key
 
+也就是说，协议不会替生命体偷偷决定“你现在正在做什么”。真正的工作域只能通过显式 `activeScope` 与 `contextForkId` 进入当前生命态。
+
 ## `history.list`
 
 `history.list` 是全局 ledger 查询。
@@ -211,6 +215,8 @@ scope、fork、replay、plan 只作为 turn 附着的结构化字段随结果返
 - `ask`
 - `planning`
 - `executiveToolLoop`
+
+这三个字段共同暴露的是当前轮生命态的显式结构化结果：要不要问用户、当前有没有待续任务、当前计划与分支是什么。thin client 恢复时要读这个面，而不是扫 event 流猜测状态。
 
 Rust 或其他 thin client 恢复当前轮状态时，优先读这里，而不是扫事件流猜。
 

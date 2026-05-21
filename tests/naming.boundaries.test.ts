@@ -8,8 +8,8 @@ const SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const SECRET_SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const DOT_SEGMENTED_FILE = /^[a-z0-9]+(?:\.[a-z0-9]+)*\.[a-z0-9]+$/u;
 const OPENAI_SECRET_PATTERN = /\bsk-[a-zA-Z0-9]{16,}\b/u;
-// 首页类知识文档约定大写：README/TODO/AGENTS/BOUNDARIES/DESIGN（顶层 + docs/ + templates/projects/ 共用）。
-const CANONICAL_FRONTPAGE_DOC = /^(README|TODO|AGENTS|BOUNDARIES|DESIGN)(?:\.zh\.cn)?\.md$/u;
+// 首页类知识文档约定大写：README/TODO/AGENTS/LOGS/BOUNDARIES/DESIGN（顶层 + docs/ + templates/projects/ 共用）。
+const CANONICAL_FRONTPAGE_DOC = /^(README|TODO|AGENTS|LOGS|BOUNDARIES|DESIGN)(?:\.zh\.cn)?\.md$/u;
 const LEGACY_MEMORY_PATH_REFERENCES = [
     "src/components/memory/",
     "src/components/crystal/",
@@ -71,7 +71,7 @@ describe("repository naming boundary", () => {
     });
 
     test("every canonical markdown source has a zh.cn companion", async () => {
-        const rootDocs = ["AGENTS.md", "README.md", "TODO.md"].map((file) => join(REPO_ROOT, file));
+        const rootDocs = ["AGENTS.md", "README.md", "TODO.md", "LOGS.md"].map((file) => join(REPO_ROOT, file));
         const files = [
             ...rootDocs,
             ...(await Promise.all(["docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
@@ -92,7 +92,7 @@ describe("repository naming boundary", () => {
     });
 
     test("zh.cn markdown companions are real Chinese review copies", async () => {
-        const rootDocs = ["AGENTS.zh.cn.md", "README.zh.cn.md", "TODO.zh.cn.md"].map((file) => join(REPO_ROOT, file));
+        const rootDocs = ["AGENTS.zh.cn.md", "README.zh.cn.md", "TODO.zh.cn.md", "LOGS.zh.cn.md"].map((file) => join(REPO_ROOT, file));
         const files = [
             ...rootDocs,
             ...(await Promise.all(["docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),

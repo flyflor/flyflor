@@ -4,6 +4,8 @@
 
 黑板是复杂任务的「可观察、可收敛、可交还」工作台：simple 走 direct、灰区走 direct-with-watch、复杂走 blackboard；模型按 `blackboard.route.md` 生成 worker plan，WorkerManager 跑 turn，BlackboardModule 控制收敛与 lease。
 
+黑板不是第二个隐藏人格，也不是长期上下文容器；它只是当前生命态下处理复杂问题的显式工作台。
+
 ## 相关代码路径
 
 - `src/agent/blackboard/module.ts` — turn / step / decision / lease 控制
@@ -183,6 +185,8 @@ CREATE TABLE blackboard_leases (
 - 释放 scope constraint lease。
 - 由 `RuntimeModule` 读取结构化 decision，合成 `AgentAsk`（`reason=blackboard-stalemate`）并向用户提问。
 
+这一步体现的是 Flyflor 的认知边界哲学：复杂思考可以由黑板展开，但在无法自动收敛时，系统必须显式 ask，而不是把不确定性偷偷埋进后台状态。
+
 旧 `flyflor-decision-form` 用户可见系统消息已退役；测试只保留 negative assertion，确保不再写入 transcript。
 
 ## 状态持久化表
@@ -220,6 +224,8 @@ worker **不能**直接写长期记忆：
 - 禁止：worker prompt 改 Markdown、关键词把讨论自动晋升长期记忆、unresolved blocker 当长期事实。
 
 收敛黑板 → `recordDebateEpisode` 高权重 episode（`sourceKind = blackboard-converged`，evidence weight 0.8）。
+
+如果黑板最终通过 ask 与用户完成收束，这类 ask-answer 与黑板讨论结果同样属于后续结晶候选的重要来源。
 
 ## 配置
 
