@@ -17,8 +17,8 @@ import {
     detectClusterCandidate,
     detectExplicitIntent,
     detectSkillPromotion,
-    ProjectTriggerKind,
-} from "../src/cognitive/hippocampus/project/index.ts";
+    ScopeTriggerKind,
+} from "../src/cognitive/hippocampus/scope/index.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { EpisodeRecord } from "../src/cognitive/hippocampus/memory/working/index.ts";
 
@@ -170,7 +170,7 @@ describe("project triggers (three paths, no string match)", () => {
     function ep(over: Partial<EpisodeRecord> = {}): EpisodeRecord {
         return {
             episodeId: crypto.randomUUID(),
-            userId: "u1",
+            ownerKey: "scope:u1",
             text: "x",
             concepts: ["redis"],
             embedding: [1, 0, 0, 0],
@@ -185,23 +185,23 @@ describe("project triggers (three paths, no string match)", () => {
 
     test("path A: explicit project intent above threshold", () => {
         const result = detectExplicitIntent([
-            { action: "add", target: "memory", content: "x", signals: { projectIntent: 0.85 } },
+            { action: "add", target: "memory", content: "x", signals: { scopeIntent: 0.85 } },
         ]);
-        expect(result.kind).toBe(ProjectTriggerKind.ExplicitProject);
+        expect(result.kind).toBe(ScopeTriggerKind.ExplicitScope);
     });
 
     test("path A: explicit event intent above threshold", () => {
         const result = detectExplicitIntent([
-            { action: "add", target: "memory", content: "x", signals: { eventIntent: 0.9 } },
+            { action: "add", target: "memory", content: "x", signals: { scopeEventIntent: 0.9 } },
         ]);
-        expect(result.kind).toBe(ProjectTriggerKind.ExplicitEvent);
+        expect(result.kind).toBe(ScopeTriggerKind.ExplicitScopeEvent);
     });
 
     test("path A: none when below threshold", () => {
         const result = detectExplicitIntent([
-            { action: "add", target: "memory", content: "x", signals: { projectIntent: 0.5 } },
+            { action: "add", target: "memory", content: "x", signals: { scopeIntent: 0.5 } },
         ]);
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
     });
 
     test("path A: project preferred when both intents above threshold", () => {
@@ -210,10 +210,10 @@ describe("project triggers (three paths, no string match)", () => {
                 action: "add",
                 target: "memory",
                 content: "x",
-                signals: { projectIntent: 0.95, eventIntent: 0.8 },
+                signals: { scopeIntent: 0.95, scopeEventIntent: 0.8 },
             },
         ]);
-        expect(result.kind).toBe(ProjectTriggerKind.ExplicitProject);
+        expect(result.kind).toBe(ScopeTriggerKind.ExplicitScope);
     });
 
     test("path B: cluster too small → none", () => {
@@ -221,7 +221,7 @@ describe("project triggers (three paths, no string match)", () => {
             concepts: ["x"],
             episodes: Array.from({ length: 3 }, () => ep()),
         });
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
         expect(result.rationale).toBe("cluster-too-small");
     });
 
@@ -232,7 +232,7 @@ describe("project triggers (three paths, no string match)", () => {
                 ep({ sourceKind: MemorySourceKind.BlackboardConverged, importance: 0.9 }),
             ),
         });
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
         expect(result.rationale).toBe("single-turn-cluster");
     });
 
@@ -243,7 +243,7 @@ describe("project triggers (three paths, no string match)", () => {
                 ep({ createdAt: NOW + i * 24 * HOUR, sourceKind: MemorySourceKind.UserTurn }),
             ),
         });
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
         expect(result.rationale).toBe("no-converged-evidence");
     });
 
@@ -256,7 +256,7 @@ describe("project triggers (three paths, no string match)", () => {
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes });
-        expect(result.kind).toBe(ProjectTriggerKind.ClusterCandidate);
+        expect(result.kind).toBe(ScopeTriggerKind.ClusterCandidate);
         expect(result.relatedIds.length).toBe(6);
     });
 
@@ -269,7 +269,7 @@ describe("project triggers (three paths, no string match)", () => {
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes });
-        expect(result.kind).toBe(ProjectTriggerKind.ClusterCandidate);
+        expect(result.kind).toBe(ScopeTriggerKind.ClusterCandidate);
     });
 
     test("path B: evidence below threshold returns none", () => {
@@ -281,7 +281,7 @@ describe("project triggers (three paths, no string match)", () => {
             }),
         );
         const result = detectClusterCandidate({ concepts: ["x"], episodes }, { clusterEvidenceMin: 0.9 });
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
         expect(result.rationale).toBe("evidence-below-threshold");
     });
 
@@ -291,17 +291,17 @@ describe("project triggers (three paths, no string match)", () => {
 
     test("path C: skill above thresholds promotes", () => {
         const result = detectSkillPromotion({ id: "s1", support: 7, confidence: 0.85 });
-        expect(result.kind).toBe(ProjectTriggerKind.SkillPromotion);
+        expect(result.kind).toBe(ScopeTriggerKind.SkillPromotion);
         expect(result.relatedIds).toEqual(["s1"]);
     });
 
     test("path C: skill below support → none", () => {
         const result = detectSkillPromotion({ id: "s1", support: 2, confidence: 0.95 });
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
     });
 
     test("path C: skill below confidence → none", () => {
         const result = detectSkillPromotion({ id: "s1", support: 99, confidence: 0.6 });
-        expect(result.kind).toBe(ProjectTriggerKind.None);
+        expect(result.kind).toBe(ScopeTriggerKind.None);
     });
 });

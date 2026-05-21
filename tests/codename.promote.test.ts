@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
 import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
-import { ProjectScaffolder } from "../src/cognitive/hippocampus/project/scaffolder.ts";
-import { detectCodenamePromotion, ProjectTriggerKind } from "../src/cognitive/hippocampus/project/index.ts";
-import { promoteCodename } from "../src/cognitive/hippocampus/project/codename.promote.ts";
+import { ScopeScaffolder } from "../src/cognitive/hippocampus/scope/scaffolder.ts";
+import { detectCodenamePromotion, ScopeTriggerKind } from "../src/cognitive/hippocampus/scope/index.ts";
+import { promoteCodename } from "../src/cognitive/hippocampus/scope/codename.promote.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import type { EventSink } from "../src/events/index.ts";
 
@@ -20,7 +20,7 @@ class NullSink implements EventSink {
     public publish(): void {}
 }
 
-async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; scaffolder: ProjectScaffolder; root: string }> {
+async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; scaffolder: ScopeScaffolder; root: string }> {
     const root = await mkdtemp(join(tmpdir(), "flyflor-codename-promote-"));
     tempRoots.push(root);
     const paths = {
@@ -49,14 +49,14 @@ async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; 
     }
     const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
     await brain.open();
-    const scaffolder = new ProjectScaffolder(paths, new NullSink());
+    const scaffolder = new ScopeScaffolder(paths, new NullSink());
     return { paths, brain, scaffolder, root };
 }
 
 describe("LF-R2 detectCodenamePromotion", () => {
     test("None when use count below threshold", () => {
         const r = detectCodenamePromotion({ id: "cn-1", name: "fly", useCount: 2, createdAt: 0, lastUsedAt: 0 });
-        expect(r.kind).toBe(ProjectTriggerKind.None);
+        expect(r.kind).toBe(ScopeTriggerKind.None);
         expect(r.rationale).toBe("use-count-too-low");
     });
 
@@ -67,7 +67,7 @@ describe("LF-R2 detectCodenamePromotion", () => {
             {},
             now,
         );
-        expect(r.kind).toBe(ProjectTriggerKind.None);
+        expect(r.kind).toBe(ScopeTriggerKind.None);
         expect(r.rationale).toBe("too-young");
     });
 
@@ -78,24 +78,24 @@ describe("LF-R2 detectCodenamePromotion", () => {
             {},
             now,
         );
-        expect(r.kind).toBe(ProjectTriggerKind.CodenamePromotion);
+        expect(r.kind).toBe(ScopeTriggerKind.CodenamePromotion);
         expect(r.score).toBeGreaterThan(0);
     });
 
-    test("None when already promoted (projectId set)", () => {
+    test("None when already promoted (scopeId set)", () => {
         const now = Date.now();
         const r = detectCodenamePromotion(
-            { id: "cn-1", name: "fly", useCount: 100, createdAt: 0, lastUsedAt: now, projectId: "p1" },
+            { id: "cn-1", name: "fly", useCount: 100, createdAt: 0, lastUsedAt: now, scopeId: "p1" },
             {},
             now,
         );
-        expect(r.kind).toBe(ProjectTriggerKind.None);
+        expect(r.kind).toBe(ScopeTriggerKind.None);
         expect(r.rationale).toBe("already-promoted");
     });
 });
 
 describe("LF-R2 promoteCodename helper", () => {
-    test("force=true scaffolds project and binds projectId back", async () => {
+    test("force=true scaffolds project and binds scopeId back", async () => {
         const { paths, brain, scaffolder } = await makeFixture();
         try {
             const id = "cn-test-1";
@@ -110,10 +110,10 @@ describe("LF-R2 promoteCodename helper", () => {
             });
             const result = await promoteCodename(brain, scaffolder, id, { force: true });
             expect(result.promoted).toBe(true);
-            expect(result.projectId).toBe("cn-fly");
+            expect(result.scopeId).toBe("cn-fly");
             const fresh = brain.getCodename(id);
-            expect(fresh?.projectId).toBe("cn-fly");
-            const dirExists = await Bun.file(join(paths.workspaceDir, "projects", "cn-fly", "AGENTS.md")).exists();
+            expect(fresh?.scopeId).toBe("cn-fly");
+            const dirExists = await Bun.file(join(paths.workspaceDir, "scopes", "cn-fly", "AGENTS.md")).exists();
             expect(dirExists).toBe(true);
         } finally {
             brain.close();
@@ -140,7 +140,7 @@ describe("LF-R2 promoteCodename helper", () => {
         }
     });
 
-    test("re-promote is no-op once projectId bound", async () => {
+    test("re-promote is no-op once scopeId bound", async () => {
         const { brain, scaffolder } = await makeFixture();
         try {
             const id = "cn-test-3";
@@ -162,7 +162,7 @@ describe("LF-R2 promoteCodename helper", () => {
         }
     });
 
-    test("brain.db codenames row reflects bindCodenameProject", async () => {
+    test("brain.db codenames row reflects bindCodenameScope", async () => {
         const { paths, brain, scaffolder } = await makeFixture();
         try {
             const id = "cn-test-4";
@@ -177,8 +177,8 @@ describe("LF-R2 promoteCodename helper", () => {
             await promoteCodename(brain, scaffolder, id);
             const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
             try {
-                const row = db.query("SELECT project_id FROM codenames WHERE id = ?").get(id) as { project_id: string };
-                expect(row.project_id).toBe("cn-verify");
+                const row = db.query("SELECT scope_id FROM codenames WHERE id = ?").get(id) as { scope_id: string };
+                expect(row.scope_id).toBe("cn-verify");
             } finally {
                 db.close();
             }

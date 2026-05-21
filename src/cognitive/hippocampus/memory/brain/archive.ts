@@ -58,9 +58,9 @@ interface BrainCatalogLocatorRecord {
 const BrainCatalogEntityType = {
     ContextFork: "context-fork",
     Event: "event",
-    Ghost: "ghost",
-    Project: "project",
-    SceneRecord: "scene-record",
+    Continuation: "continuation",
+    Scope: "scope",
+    ReplayRecord: "replay-record",
     TaskPlan: "task-plan",
 } as const;
 
@@ -347,7 +347,7 @@ function importShardLocators(catalog: BrainCatalogStore, archivePath: string, sh
         for (const row of db.query<{ id: string; ts: number; type: string }, []>("SELECT id, ts, type FROM memory_events").all()) {
             catalog.upsertLocator({
                 entityId: row.id,
-                entityType: row.type === "ghost-context" ? BrainCatalogEntityType.Ghost : BrainCatalogEntityType.Event,
+                entityType: row.type === "continuation-context" ? BrainCatalogEntityType.Continuation : BrainCatalogEntityType.Event,
                 shardId,
                 ts: row.ts,
                 updatedAt: new Date(row.ts).toISOString(),
@@ -369,18 +369,18 @@ function importShardLocators(catalog: BrainCatalogStore, archivePath: string, sh
                 updatedAt: row.updated_at,
             });
         }
-        for (const row of safeQuery<{ id: string; updated_at: string }>(db, "SELECT id, updated_at FROM scene_records")) {
+        for (const row of safeReplayLocatorQuery(db)) {
             catalog.upsertLocator({
                 entityId: row.id,
-                entityType: BrainCatalogEntityType.SceneRecord,
+                entityType: BrainCatalogEntityType.ReplayRecord,
                 shardId,
                 updatedAt: row.updated_at,
             });
         }
-        for (const row of safeQuery<{ id: string; updated_at: number }>(db, "SELECT id, updated_at FROM projects")) {
+        for (const row of safeQuery<{ id: string; updated_at: number }>(db, "SELECT id, updated_at FROM scopes")) {
             catalog.upsertLocator({
                 entityId: row.id,
-                entityType: BrainCatalogEntityType.Project,
+                entityType: BrainCatalogEntityType.Scope,
                 shardId,
                 updatedAt: new Date(row.updated_at).toISOString(),
             });
@@ -396,6 +396,12 @@ function safeQuery<T extends object>(db: Database, sql: string): T[] {
     } catch {
         return [];
     }
+}
+
+function safeReplayLocatorQuery(db: Database): Array<{ id: string; updated_at: string }> {
+    const replayRows = safeQuery<{ id: string; updated_at: string }>(db, "SELECT id, updated_at FROM replay_records");
+    if (replayRows.length > 0) return replayRows;
+    return safeQuery<{ id: string; updated_at: string }>(db, "SELECT id, updated_at FROM scene_records");
 }
 
 function formatMonthKey(date: Date): string {

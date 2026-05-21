@@ -52,9 +52,15 @@ export class BrainPromptAtomModel {
         }
         const id = this.readString(raw.id);
         const episodeIds = this.readStringArray(raw.episodeIds);
-        const userId = this.readString(raw.userId) ?? event.userId;
-        const channelId = this.readString(raw.channelId) ?? event.channelId ?? null;
-        const projectId = this.readString(raw.projectId);
+        const sourceKey = this.readString(raw.sourceKey) ?? this.readString(raw.auditUserId) ?? this.readString(raw.userId) ?? event.sourceKey;
+        const sourceSurface =
+            this.readString(raw.sourceSurface) ??
+            this.readString(raw.auditChannelId) ??
+            this.readString(raw.channelId) ??
+            event.sourceSurface ??
+            null;
+        const scopeId = this.readString(raw.scopeId) ?? this.readString(raw.projectId);
+        const ownerKey = this.readString(raw.ownerKey) ?? (scopeId ? `scope:${scopeId}` : undefined);
         const role = this.readString(raw.role);
         const task = this.readString(raw.task);
         const context = this.readString(raw.context);
@@ -69,9 +75,7 @@ export class BrainPromptAtomModel {
         if (
             !id ||
             episodeIds.length === 0 ||
-            !userId ||
-            !channelId ||
-            !projectId ||
+            !scopeId ||
             !role ||
             !task ||
             !context ||
@@ -87,9 +91,11 @@ export class BrainPromptAtomModel {
         return {
             id,
             episodeIds,
-            userId,
-            channelId,
-            projectId,
+            ownerKey,
+            scopeId,
+            sourceKey,
+            sourceSurface: sourceSurface ?? undefined,
+            projectId: scopeId,
             role: role as MemoryAtom["role"],
             task,
             context,

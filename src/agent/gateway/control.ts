@@ -391,10 +391,11 @@ export class GatewayControlHub implements EventSink {
     }
 
     private contextFromInput(input: ReturnType<typeof readGatewayControlMessageInput>["context"]): RuntimeContext {
+        const activeScope = input?.activeScope ?? input?.activeProject;
         return {
             requestId: crypto.randomUUID(),
             now: new Date().toISOString(),
-            activeProject: input?.activeProject,
+            activeScope,
             contextForkId: input?.contextForkId,
             skillNames: input?.skillNames,
         };

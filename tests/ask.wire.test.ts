@@ -214,7 +214,7 @@ describe("LF-R3 Ask first-class wiring", () => {
     test("chained asks accumulate chainDepth and emit MemoryAskChainCapped past maxChainDepth", async () => {
         const config = await makeConfig();
         // Force tiny cap for deterministic test.
-        config.memory.tuning.ghost.maxChainDepth = 2;
+        config.memory.tuning.continuation.maxChainDepth = 2;
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
         await memory.warmup();

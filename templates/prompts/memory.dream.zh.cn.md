@@ -19,7 +19,7 @@
     - `"recall-reinforce"`，`importanceMultiplier` ∈ [0.5, 1.5]：> 1.0 抬高重要性（仍然热门相关），< 1.0 压低重要性（降温淡出）。
     - `"skip"`。
 
-3. `contradiction-pair` —— 两个语义相近的项目（附带 cosine），可能冲突。三选一：
+3. `contradiction-pair` —— 两条语义相近的记忆项（附带 cosine），可能冲突。三选一：
     - `"contradiction-audit"`，用 `weaker: "left" | "right" | "both"` 标注更不可靠的一侧。可选：`confidenceMultiplier`（0.3..1.0；默认 0.7）、`contradictionDelta`（0..5；默认 1）、`relate`（boolean；默认 true，会创建 `contradicts` 边）。
     - `"reconsolidation"`，用 `winner: "left" | "right" | "merge"`。仅当一侧明显取代另一侧或两者应当合并为一个规范节点时使用。可选：`mergedSummary`（≤600 字符；严格调和已有内容，不能新增事实）、`mergedSymbols`（string[]≤16，小写）、`scopeNote`（≤200 字符）。败方会被标记为 `supersededBy=<winner>` 并新增 `supersedes` 边。Reconsolidation 比 `contradiction-audit` 更重，除非确信合并/取代必要，请优先 audit。
     - `"skip"`，如果这对其实并不冲突。
@@ -44,7 +44,7 @@
 
 只输出 JSON 对象，不要任何额外说明，不要代码围栏。
 
-用户：{{userId}}
+Owner：{{ownerKey}}
 
 候选：
 {{candidates}}

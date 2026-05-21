@@ -104,7 +104,7 @@ describe("EQ-03 — runtime keeps EQ as a tone-only hint", () => {
         try {
             const config = await makeConfig();
             // baseline cap = 5（足以让常规 chain 走过去）；EQ 只应影响语气，不该压缩链深度
-            config.memory.tuning.ghost.maxChainDepth = 5;
+            config.memory.tuning.continuation.maxChainDepth = 5;
             const events = new CapturingSink();
             const memory = new MemoryModule(config, events);
             await memory.warmup();
@@ -154,7 +154,7 @@ describe("EQ-03 — runtime keeps EQ as a tone-only hint", () => {
     test("非 CalmDown（neutral / steady）时同样只影响语气，不影响 ask 路由", async () => {
         try {
             const config = await makeConfig();
-            config.memory.tuning.ghost.maxChainDepth = 5;
+            config.memory.tuning.continuation.maxChainDepth = 5;
             const events = new CapturingSink();
             const memory = new MemoryModule(config, events);
             await memory.warmup();

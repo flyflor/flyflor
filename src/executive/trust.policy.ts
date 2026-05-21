@@ -1,21 +1,21 @@
 import {
-    CttlCapabilitySource,
-    CttlPermission,
-    CttlToolScope,
-    CttlTrustSurface,
-    type CttlCapabilitySource as CttlCapabilitySourceType,
+    CapabilitySource,
+    ToolPermission,
+    ToolScope,
+    TrustSurface,
+    type CapabilitySource as CapabilitySourceType,
 } from "../protocol/contracts/index.ts";
-import type { CttlTrustContext, CttlTrustPolicyInput } from "./types.ts";
+import type { TrustContext, TrustPolicyInput } from "./types.ts";
 
-export class CttlTrustPolicy {
-    public build(input: CttlTrustPolicyInput): CttlTrustContext {
-        const allowedScopes = new Set<CttlToolScope>();
+export class TrustPolicy {
+    public build(input: TrustPolicyInput): TrustContext {
+        const allowedScopes = new Set<ToolScope>();
         this.addBaseScopes(allowedScopes, input);
         if (input.projectScoped) {
-            allowedScopes.add(CttlToolScope.Project);
+            allowedScopes.add(ToolScope.Workspace);
         }
         if (input.debug) {
-            allowedScopes.add(CttlToolScope.Debug);
+            allowedScopes.add(ToolScope.Debug);
         }
 
         return {
@@ -27,49 +27,49 @@ export class CttlTrustPolicy {
         };
     }
 
-    private addBaseScopes(scopes: Set<CttlToolScope>, input: CttlTrustPolicyInput): void {
-        scopes.add(CttlToolScope.Core);
-        if (input.surface !== CttlTrustSurface.Background) {
-            scopes.add(CttlToolScope.Chat);
+    private addBaseScopes(scopes: Set<ToolScope>, input: TrustPolicyInput): void {
+        scopes.add(ToolScope.Core);
+        if (input.surface !== TrustSurface.Background) {
+            scopes.add(ToolScope.Chat);
         }
-        if (input.surface === CttlTrustSurface.Channel) {
-            scopes.add(CttlToolScope.Channel);
+        if (input.surface === TrustSurface.Channel) {
+            scopes.add(ToolScope.Channel);
             return;
         }
-        if (input.surface === CttlTrustSurface.Background) {
-            scopes.add(CttlToolScope.Background);
+        if (input.surface === TrustSurface.Background) {
+            scopes.add(ToolScope.Background);
             return;
         }
-        scopes.add(CttlToolScope.Local);
+        scopes.add(ToolScope.Local);
     }
 
-    private defaultPermission(input: CttlTrustPolicyInput): CttlPermission {
-        if (input.debug && input.surface === CttlTrustSurface.Local) {
-            return CttlPermission.Dangerous;
+    private defaultPermission(input: TrustPolicyInput): ToolPermission {
+        if (input.debug && input.surface === TrustSurface.Local) {
+            return ToolPermission.Dangerous;
         }
-        if (input.surface === CttlTrustSurface.Channel) {
-            return CttlPermission.Message;
+        if (input.surface === TrustSurface.Channel) {
+            return ToolPermission.Message;
         }
-        if (input.surface === CttlTrustSurface.Background) {
-            return CttlPermission.Network;
+        if (input.surface === TrustSurface.Background) {
+            return ToolPermission.Network;
         }
-        return CttlPermission.Write;
+        return ToolPermission.Write;
     }
 
-    private defaultSources(surface: CttlTrustPolicyInput["surface"]): readonly CttlCapabilitySourceType[] {
-        if (surface === CttlTrustSurface.Channel) {
-            return [CttlCapabilitySource.Core, CttlCapabilitySource.Channel, CttlCapabilitySource.Mcp];
+    private defaultSources(surface: TrustPolicyInput["surface"]): readonly CapabilitySourceType[] {
+        if (surface === TrustSurface.Channel) {
+            return [CapabilitySource.Core, CapabilitySource.Channel, CapabilitySource.Mcp];
         }
-        if (surface === CttlTrustSurface.Background) {
-            return [CttlCapabilitySource.Core, CttlCapabilitySource.Mcp, CttlCapabilitySource.Plugin];
+        if (surface === TrustSurface.Background) {
+            return [CapabilitySource.Core, CapabilitySource.Mcp, CapabilitySource.Plugin];
         }
         return [
-            CttlCapabilitySource.Core,
-            CttlCapabilitySource.Mcp,
-            CttlCapabilitySource.Plugin,
-            CttlCapabilitySource.Skill,
-            CttlCapabilitySource.User,
-            CttlCapabilitySource.Subagent,
+            CapabilitySource.Core,
+            CapabilitySource.Mcp,
+            CapabilitySource.Plugin,
+            CapabilitySource.Skill,
+            CapabilitySource.User,
+            CapabilitySource.Subagent,
         ];
     }
 }

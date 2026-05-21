@@ -3,7 +3,7 @@ The block below describes MCP servers and tools the agent MAY call — these are
 How to use this section:
 
 - Only request a tool when the user's question genuinely needs it AND you cannot answer reliably from the conversation, memory, or your own knowledge. Prefer answering directly when you can.
-- For local computer/project requests, inspect first instead of asking the user to explain what tools exist. Use available read/search tools for project files. Use `shell.run` only when an explicit local process action is needed and it is present in the catalog.
+- For local computer/workspace requests, inspect first instead of asking the user to explain what tools exist. Use available read/search tools for workspace files. Use `shell.run` only when an explicit local process action is needed and it is present in the catalog.
 - Prefer file tools for reading and searching source. Reserve shell for actions the workspace tools cannot express.
 - When `git` tools are present, use `git.status` and `git.diff` for local change review, and `git.show` for commit/object inspection. Prefer these structured read-only git tools over `shell.run` for git observation.
 - To call tools, output ONLY this structured block and stop generating; the runtime will execute the calls and send the results back as a follow-up message before you finalise your reply:

@@ -1,25 +1,25 @@
 import type {
-    CttlCapabilitySource,
-    CttlHiddenReason,
-    CttlLoopGuardReason,
-    CttlPermission,
-    CttlToolCategory,
-    CttlToolScope,
-    CttlTrustSurface,
+    CapabilitySource,
+    ToolHiddenReason,
+    ExecutiveLoopGuardReason,
+    ToolPermission,
+    ToolCategory,
+    ToolScope,
+    TrustSurface,
 } from "../protocol/contracts/index.ts";
 
-export type CttlJsonPrimitive = string | number | boolean | null;
-export type CttlJsonValue =
-    | CttlJsonPrimitive
-    | readonly CttlJsonValue[]
-    | { readonly [key: string]: CttlJsonValue };
-export type CttlJsonObject = { readonly [key: string]: CttlJsonValue };
+export type ExecutiveJsonPrimitive = string | number | boolean | null;
+export type ExecutiveJsonValue =
+    | ExecutiveJsonPrimitive
+    | readonly ExecutiveJsonValue[]
+    | { readonly [key: string]: ExecutiveJsonValue };
+export type ExecutiveJsonObject = { readonly [key: string]: ExecutiveJsonValue };
 
-export interface CttlResultLimit {
+export interface ToolResultLimit {
     maxChars: number;
 }
 
-export const CttlComputerControlAction = {
+export const ComputerControlAction = {
     Browser: "browser",
     Keyboard: "keyboard",
     Mouse: "mouse",
@@ -27,109 +27,109 @@ export const CttlComputerControlAction = {
     Window: "window",
 } as const;
 
-export type CttlComputerControlAction =
-    (typeof CttlComputerControlAction)[keyof typeof CttlComputerControlAction];
+export type ComputerControlAction =
+    (typeof ComputerControlAction)[keyof typeof ComputerControlAction];
 
-export interface CttlComputerControlProfile {
-    readonly action: CttlComputerControlAction;
+export interface ComputerControlProfile {
+    readonly action: ComputerControlAction;
     readonly observationOnly: boolean;
     readonly requiresFocusTarget?: boolean;
 }
 
-export interface CttlToolDescriptor {
+export interface ToolDescriptor {
     readonly name: string;
     readonly description: string;
-    readonly inputSchema: CttlJsonObject;
-    readonly outputSchema?: CttlJsonObject;
-    readonly source: CttlCapabilitySource;
-    readonly scope: readonly CttlToolScope[];
-    readonly permission: CttlPermission;
-    readonly category: CttlToolCategory;
+    readonly inputSchema: ExecutiveJsonObject;
+    readonly outputSchema?: ExecutiveJsonObject;
+    readonly source: CapabilitySource;
+    readonly scope: readonly ToolScope[];
+    readonly permission: ToolPermission;
+    readonly category: ToolCategory;
     readonly readOnly: boolean;
     readonly concurrencySafe: boolean;
     readonly exclusive: boolean;
-    readonly resultLimit: CttlResultLimit;
-    readonly computer?: CttlComputerControlProfile;
+    readonly resultLimit: ToolResultLimit;
+    readonly computer?: ComputerControlProfile;
     readonly sourceId?: string;
     readonly tags?: readonly string[];
 }
 
-export interface CttlRegisteredTool {
-    readonly descriptor: CttlToolDescriptor;
-    readonly execute?: CttlToolExecutor;
+export interface RegisteredTool {
+    readonly descriptor: ToolDescriptor;
+    readonly execute?: ToolExecutor;
 }
 
-export interface CttlToolExecutorInput {
-    readonly input: CttlJsonObject;
+export interface ToolExecutorInput {
+    readonly input: ExecutiveJsonObject;
     readonly requestId?: string;
 }
 
-export interface CttlToolExecutorResult {
+export interface ToolExecutorResult {
     readonly ok: boolean;
-    readonly output?: CttlJsonValue;
+    readonly output?: ExecutiveJsonValue;
     readonly error?: string;
 }
 
-export type CttlToolExecutor = (input: CttlToolExecutorInput) => Promise<CttlToolExecutorResult> | CttlToolExecutorResult;
+export type ToolExecutor = (input: ToolExecutorInput) => Promise<ToolExecutorResult> | ToolExecutorResult;
 
-export interface CttlTrustContext {
-    readonly allowedSources?: ReadonlySet<CttlCapabilitySource>;
-    readonly allowedScopes?: ReadonlySet<CttlToolScope>;
-    readonly maxPermission?: CttlPermission;
+export interface TrustContext {
+    readonly allowedSources?: ReadonlySet<CapabilitySource>;
+    readonly allowedScopes?: ReadonlySet<ToolScope>;
+    readonly maxPermission?: ToolPermission;
     readonly deniedTools?: ReadonlySet<string>;
     readonly unavailableTools?: ReadonlySet<string>;
 }
 
-export interface CttlTrustPolicyInput {
-    readonly surface: CttlTrustSurface;
+export interface TrustPolicyInput {
+    readonly surface: TrustSurface;
     readonly projectScoped?: boolean;
     readonly debug?: boolean;
-    readonly allowedSources?: readonly CttlCapabilitySource[];
-    readonly maxPermission?: CttlPermission;
+    readonly allowedSources?: readonly CapabilitySource[];
+    readonly maxPermission?: ToolPermission;
     readonly deniedTools?: readonly string[];
     readonly unavailableTools?: readonly string[];
 }
 
-export interface CttlToolPlanEntry {
-    readonly descriptor: CttlToolDescriptor;
+export interface ToolPlanEntry {
+    readonly descriptor: ToolDescriptor;
 }
 
-export interface CttlHiddenToolPlanEntry {
-    readonly descriptor: CttlToolDescriptor;
-    readonly diagnostics: readonly CttlToolPlanDiagnostic[];
+export interface HiddenToolPlanEntry {
+    readonly descriptor: ToolDescriptor;
+    readonly diagnostics: readonly ToolPlanDiagnostic[];
 }
 
-export interface CttlToolPlanDiagnostic {
-    readonly reason: CttlHiddenReason;
+export interface ToolPlanDiagnostic {
+    readonly reason: ToolHiddenReason;
     readonly message: string;
 }
 
-export interface CttlToolPlan {
-    readonly visible: readonly CttlToolPlanEntry[];
-    readonly hidden: readonly CttlHiddenToolPlanEntry[];
+export interface ToolPlan {
+    readonly visible: readonly ToolPlanEntry[];
+    readonly hidden: readonly HiddenToolPlanEntry[];
 }
 
-export interface CttlCapabilitySummary {
-    readonly category: CttlToolCategory;
-    readonly computer?: CttlComputerControlProfile;
+export interface CapabilitySummary {
+    readonly category: ToolCategory;
+    readonly computer?: ComputerControlProfile;
     readonly concurrencySafe: boolean;
     readonly exclusive: boolean;
     readonly name: string;
-    readonly permission: CttlPermission;
+    readonly permission: ToolPermission;
     readonly readOnly: boolean;
-    readonly scope: readonly CttlToolScope[];
-    readonly source: CttlCapabilitySource;
+    readonly scope: readonly ToolScope[];
+    readonly source: CapabilitySource;
     readonly sourceId?: string;
     readonly tags?: readonly string[];
 }
 
-export interface CttlCapabilityCatalogSnapshot {
+export interface CapabilityCatalogSnapshot {
     readonly builtAt: string;
-    readonly capabilities: readonly CttlCapabilitySummary[];
+    readonly capabilities: readonly CapabilitySummary[];
     readonly failedSources: readonly string[];
     readonly hiddenCapabilities: readonly {
         readonly name: string;
-        readonly reasons: readonly CttlHiddenReason[];
+        readonly reasons: readonly ToolHiddenReason[];
     }[];
     readonly staleSources: readonly string[];
     readonly totals: {
@@ -143,7 +143,7 @@ export interface CttlCapabilityCatalogSnapshot {
     };
 }
 
-export interface CttlLoopGuardEvent {
+export interface ExecutiveLoopGuardEvent {
     readonly toolName: string;
     readonly input?: Readonly<Record<string, unknown>>;
     readonly ok?: boolean;
@@ -151,20 +151,20 @@ export interface CttlLoopGuardEvent {
     readonly knownToolNames?: ReadonlySet<string>;
 }
 
-export interface CttlLoopGuardDecision {
+export interface ExecutiveLoopGuardDecision {
     readonly allow: boolean;
-    readonly reason?: CttlLoopGuardReason;
+    readonly reason?: ExecutiveLoopGuardReason;
     readonly message?: string;
 }
 
-export interface CttlLoopGuardSnapshot {
+export interface ExecutiveLoopGuardSnapshot {
     readonly totalCalls: number;
     readonly unknownToolCounts: Readonly<Record<string, number>>;
     readonly callRepeatCounts: Readonly<Record<string, number>>;
     readonly failedCallRepeatCounts: Readonly<Record<string, number>>;
 }
 
-export interface CttlLoopGuardOptions {
+export interface ExecutiveLoopGuardOptions {
     readonly maxCalls?: number;
     readonly maxUnknownToolRepeats?: number;
     readonly maxRepeatedCalls?: number;

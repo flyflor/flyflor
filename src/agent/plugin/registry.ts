@@ -28,15 +28,15 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FlyflorPaths } from "../../config/index.ts";
 import {
-    CttlCapabilitySource,
-    CttlPermission,
-    CttlToolCategory,
-    CttlToolScope,
-    type CttlPermission as CttlPermissionType,
-    type CttlToolCategory as CttlToolCategoryType,
-    type CttlToolScope as CttlToolScopeType,
+    CapabilitySource,
+    ToolPermission,
+    ToolCategory,
+    ToolScope,
+    type ToolPermission as ToolPermissionType,
+    type ToolCategory as ToolCategoryType,
+    type ToolScope as ToolScopeType,
 } from "../../protocol/contracts/index.ts";
-import type { CttlJsonObject, CttlToolDescriptor } from "../../executive/index.ts";
+import type { ExecutiveJsonObject, ToolDescriptor } from "../../executive/index.ts";
 import { parseJsonc } from "../../config/index.ts";
 
 export type PluginSource = "project" | "global";
@@ -51,7 +51,7 @@ export interface PluginDefinition {
 }
 
 export interface PluginCapabilityDefinition {
-    descriptor: CttlToolDescriptor;
+    descriptor: ToolDescriptor;
     enabled: boolean;
 }
 
@@ -64,17 +64,17 @@ export interface PluginShape {
 }
 
 export interface PluginCapabilityShape {
-    category?: CttlToolCategoryType;
+    category?: ToolCategoryType;
     concurrencySafe?: boolean;
     description?: string;
     enabled?: boolean;
     exclusive?: boolean;
     inputSchema?: unknown;
     outputSchema?: unknown;
-    permission?: CttlPermissionType;
+    permission?: ToolPermissionType;
     readOnly?: boolean;
     resultLimit?: { maxChars?: number };
-    scope?: CttlToolScopeType[];
+    scope?: ToolScopeType[];
     sourceId?: string;
     tags?: string[];
 }
@@ -229,18 +229,18 @@ function normalizePluginCapabilities(
     return Object.entries(capabilities ?? {}).map(([name, shape]) => ({
         enabled: shape.enabled ?? true,
         descriptor: {
-            category: shape.category ?? CttlToolCategory.Integration,
+            category: shape.category ?? ToolCategory.Integration,
             concurrencySafe: shape.concurrencySafe ?? true,
             description: shape.description ?? `${pluginName}.${name}`,
             exclusive: shape.exclusive ?? false,
             inputSchema: jsonObjectOrDefault(shape.inputSchema, { type: "object" }),
             name: `plugin.${pluginName}.${name}`,
             outputSchema: jsonObjectOrUndefined(shape.outputSchema),
-            permission: shape.permission ?? CttlPermission.Read,
+            permission: shape.permission ?? ToolPermission.Read,
             readOnly: shape.readOnly ?? true,
             resultLimit: { maxChars: positiveInt(shape.resultLimit?.maxChars, 4_000) },
             scope: nonEmptyScopes(shape.scope),
-            source: CttlCapabilitySource.Plugin,
+            source: CapabilitySource.Plugin,
             sourceId: shape.sourceId ?? pluginName,
             tags: Array.isArray(shape.tags)
                 ? shape.tags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
@@ -249,18 +249,18 @@ function normalizePluginCapabilities(
     }));
 }
 
-function jsonObjectOrDefault(value: unknown, fallback: CttlJsonObject): CttlJsonObject {
+function jsonObjectOrDefault(value: unknown, fallback: ExecutiveJsonObject): ExecutiveJsonObject {
     return jsonObjectOrUndefined(value) ?? fallback;
 }
 
-function jsonObjectOrUndefined(value: unknown): CttlJsonObject | undefined {
+function jsonObjectOrUndefined(value: unknown): ExecutiveJsonObject | undefined {
     return typeof value === "object" && value !== null && !Array.isArray(value)
-        ? (value as CttlJsonObject)
+        ? (value as ExecutiveJsonObject)
         : undefined;
 }
 
-function nonEmptyScopes(value: CttlToolScopeType[] | undefined): readonly CttlToolScopeType[] {
-    return Array.isArray(value) && value.length > 0 ? value : [CttlToolScope.Core];
+function nonEmptyScopes(value: ToolScopeType[] | undefined): readonly ToolScopeType[] {
+    return Array.isArray(value) && value.length > 0 ? value : [ToolScope.Core];
 }
 
 function positiveInt(value: unknown, fallback: number): number {

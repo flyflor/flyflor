@@ -1,7 +1,7 @@
 import type {
     ContextForkRecord,
     MemoryEventRecord,
-    SceneRecord,
+    ReplayRecord,
     TaskPlanRecord,
 } from "../../../../protocol/contracts/index.ts";
 
@@ -10,13 +10,13 @@ export interface ChatHistoryTurn {
     eventId: string;
     contextForks?: ContextForkRecord[];
     forkId?: string;
-    scenes?: SceneRecord[];
+    replays?: ReplayRecord[];
     taskPlans?: TaskPlanRecord[];
     ts: number;
     userText: string;
 }
 
-export type ChatHistoryPlanning = Pick<ChatHistoryTurn, "contextForks" | "scenes" | "taskPlans">;
+export type ChatHistoryPlanning = Pick<ChatHistoryTurn, "contextForks" | "replays" | "taskPlans">;
 
 /**
  * 把 brain.db 的 turn event 还原成 TUI `/history` 消费的稳定视图。
@@ -34,7 +34,7 @@ export function historyTurnFromEvent(
         ...(planning.contextForks && planning.contextForks.length > 0 ? { contextForks: planning.contextForks } : {}),
         eventId: row.id,
         ...(forkId ? { forkId } : {}),
-        ...(planning.scenes && planning.scenes.length > 0 ? { scenes: planning.scenes } : {}),
+        ...(planning.replays && planning.replays.length > 0 ? { replays: planning.replays } : {}),
         ...(planning.taskPlans && planning.taskPlans.length > 0 ? { taskPlans: planning.taskPlans } : {}),
         ts: row.ts,
         userText,

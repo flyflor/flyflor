@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import type { FlyflorConfig } from "../../../config/index.ts";
 import {
     CapabilityExecutionKind,
-    CttlLoopGuardReason,
+    ExecutiveLoopGuardReason,
 } from "../../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../events/index.ts";
 import {
@@ -22,13 +22,13 @@ import {
 } from "../../sandbox/index.ts";
 import {
     ExecutiveToolRuntime,
-    CttlComputerProfileComponent,
-    CttlMcpCatalogAdapter,
-    type CttlLoopGuardDecision,
+    ComputerProfileComponent,
+    McpCatalogAdapter,
+    type ExecutiveLoopGuardDecision,
     type ExecutiveToolRuntimeAskRequired,
     type ExecutiveToolRuntimeDescriptor,
 } from "../../../executive/index.ts";
-import type { CttlManifestToolDefinition } from "../../../executive/index.ts";
+import type { ManifestToolDefinition } from "../../../executive/index.ts";
 import { PluginRunner } from "../../plugin/index.ts";
 import { formatMcpResultSummary } from "./provenance.ts";
 import { type RuntimePluginCapabilityCatalogEntry, type RuntimeUserToolCatalogEntry } from "./tool.plan.ts";
@@ -41,7 +41,7 @@ const BUILTIN_SHELL_TOOL = "run";
 
 export interface RuntimeMcpToolExecutorInput {
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
-    approveUserToolCall?: (tool: CttlManifestToolDefinition) => boolean | Promise<boolean>;
+    approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
     catalog: McpToolCatalogEntry[];
     gitToolset: GitToolset;
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
@@ -75,8 +75,8 @@ export interface RuntimeMcpToolLoopResult {
  */
 export class RuntimeMcpToolExecutor {
     private readonly executive = new ExecutiveToolRuntime<McpToolCallRequest & { key: string }, McpToolCallExecution & { call: McpToolCallRequest & { key: string } }>();
-    private readonly computerProfile = new CttlComputerProfileComponent();
-    private readonly adapter = new CttlMcpCatalogAdapter({
+    private readonly computerProfile = new ComputerProfileComponent();
+    private readonly adapter = new McpCatalogAdapter({
         coreServers: new Set(["workspace", "git", BUILTIN_SHELL_SERVER]),
         gitServer: "git",
         shellServer: BUILTIN_SHELL_SERVER,
@@ -302,9 +302,9 @@ export class RuntimeMcpToolExecutor {
 
     private async executeUserToolCall(
         call: McpToolCallRequest & { key: string },
-        tool: CttlManifestToolDefinition,
+        tool: ManifestToolDefinition,
         schemaCheck: { ok: boolean; errors: string[] },
-        approveUserToolCall?: (tool: CttlManifestToolDefinition) => boolean | Promise<boolean>,
+        approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>,
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `user tool input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
@@ -531,13 +531,13 @@ export class RuntimeMcpToolExecutor {
 
     private loopGuardExecution(
         call: McpToolCallRequest,
-        decision: CttlLoopGuardDecision,
+        decision: ExecutiveLoopGuardDecision,
         requestId: string,
     ): McpToolCallExecution & { call: McpToolCallRequest & { key: string } } {
         this.events.publish(
             event(RuntimeEventType.ExecutiveLoopGuardBlocked, {
                 message: decision.message,
-                reason: decision.reason ?? CttlLoopGuardReason.RepeatedCallNoProgress,
+                reason: decision.reason ?? ExecutiveLoopGuardReason.RepeatedCallNoProgress,
                 server: call.server,
                 tool: call.tool,
             }, requestId),
@@ -549,9 +549,9 @@ export class RuntimeMcpToolExecutor {
             result: {
                 isError: true,
                 raw: {
-                    kind: "cttl-loop-guard",
+                    kind: "executive-loop-guard",
                     message: decision.message,
-                    reason: decision.reason ?? CttlLoopGuardReason.RepeatedCallNoProgress,
+                    reason: decision.reason ?? ExecutiveLoopGuardReason.RepeatedCallNoProgress,
                     server: call.server,
                     tool: call.tool,
                 },

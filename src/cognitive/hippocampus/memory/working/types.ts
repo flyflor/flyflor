@@ -10,25 +10,25 @@ export interface WorkingMemoryStore {
     disconnect(): Promise<void>;
     dispose(): void;
     getHealthSnapshot?(): WorkingMemoryHealthSnapshot;
-    hotConcepts(userId: string, limit: number): Promise<string[]>;
+    hotConcepts(ownerKey: string, limit: number): Promise<string[]>;
     isReady(): boolean;
-    listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]>;
+    listConsolidationCandidates(ownerKey: string, until: number, limit: number): Promise<string[]>;
     ping(): Promise<number>;
-    readContextRing(userId: string, limit: number): Promise<string[]>;
-    readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined>;
-    dropEpisode(userId: string, episodeId: string): Promise<void>;
-    reinforceEpisode(userId: string, episodeId: string, ttlSeconds: number): Promise<boolean>;
+    readContextRing(ownerKey: string, limit: number): Promise<string[]>;
+    readEpisode(ownerKey: string, episodeId: string): Promise<EpisodeRecord | undefined>;
+    dropEpisode(ownerKey: string, episodeId: string): Promise<void>;
+    reinforceEpisode(ownerKey: string, episodeId: string, ttlSeconds: number): Promise<boolean>;
     rewriteEpisode(
-        userId: string,
+        ownerKey: string,
         episodeId: string,
         patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
     ): Promise<boolean>;
-    touchConcepts(userId: string, concepts: string[]): Promise<void>;
+    touchConcepts(ownerKey: string, concepts: string[]): Promise<void>;
     writeEpisode(input: EpisodeWriteInput): Promise<EpisodeWriteResult>;
 }
 
 export interface EpisodeWriteInput {
-    userId: string;
+    ownerKey: string;
     episodeId: string;
     text: string;
     concepts: string[];
@@ -50,7 +50,7 @@ export interface EpisodeWriteResult {
 
 export interface EpisodeRecord {
     episodeId: string;
-    userId: string;
+    ownerKey: string;
     text: string;
     concepts: string[];
     embedding: number[];

@@ -35,10 +35,10 @@ describe("FileBackedFastRouteSnapshotStore", () => {
         try {
             const now = 1700000000000;
             const first = new FileBackedFastRouteSnapshotStore(dir, { now: () => now });
-            await first.set("channel:chat:user", { ...baseSnapshot, recordedAt: now });
+            await first.set("scope:alpha", { ...baseSnapshot, recordedAt: now });
 
             const second = new FileBackedFastRouteSnapshotStore(dir, { now: () => now });
-            const got = await second.get("channel:chat:user");
+            const got = await second.get("scope:alpha");
 
             expect(got?.lastMode).toBe(BlackboardMode.Direct);
             expect(got?.recordedAt).toBe(now);

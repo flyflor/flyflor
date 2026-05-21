@@ -10,11 +10,28 @@ Flyflor 是一个 Bun + TypeScript 智能体运行时内核，目标是单文件
 
 - LLM 负责当下推理与生成，记忆系统只负责沉淀、召回和偏移修正。
 - 不靠单轮堆叠上下文，而靠三层记忆、遗忘曲线和反思把经验压成稳定能力。
+- 上下文装配只来自 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
+- `brain.db` 是 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
 - 未来 CLI、Gateway、TUI 用 Rust 重写；当前 Bun 主线只保留 event 血管与 WS/control 协议。
 - 简单问题直接回，复杂问题走黑板，保证复杂度和协作成本只在必要时上升。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
+
+## 架构总模型
+
+当前运行模型明确拆成两张平面：
+
+- Context plane：当前输入、Memory recall、Crystal recall、显式 `activeScope`、显式 `contextForkId`、可见 capability surface
+- Ledger/query plane：当前月 `brain.db`、历史月归档、history / replay / audit / blackboard detail
+
+没有显式 scope 时：
+
+- 不创建 fallback scope
+- 不创建 inbox scope
+- 不按 `channel/chat/thread/user` 自动恢复工作域
+
+`activeProject` 现在只保留兼容读取；所有新代码、新文档、新测试都以 `activeScope` 为准。
 
 ## Gateway 现状
 
@@ -129,7 +146,7 @@ Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不
 bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
 bun run docker:chat                       # 进入容器内的本地 stdio chat 调试入口
 bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
-bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Scene 与 brain.db 写入
+bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Replay 与 brain.db 写入
 bun run smoke:agent:live                  # 读取真实 provider，临时 HOME 内检查完整 agent turn
 bun run smoke:gateway:service             # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
@@ -191,14 +208,14 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | -------------- | --------------------------------------------------------------------------- |
 | `app.ts`       | 薄入口，启动 FlyFlor 主类                                                   |
 | `src/app.ts`   | FlyFlor composition root，显式 DI 容器                                      |
-| `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、project、plugin         |
+| `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、scope、plugin         |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
 | `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；历史 `src/fch/mindstream` 已移除 |
 | `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；历史 `src/fch/crystal` 已移除 |
 | `src/cognitive/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩；历史 `src/fch/hippocampus` 已移除 |
 | `src/events`   | RECL / Event Fabric，所有交互事件的订阅广播中枢                            |
-| `src/executive` | Capability / Tool / Trust / Loop 执行层；历史 `src/cttl` 已移除 |
-| `src/agent/context` | 显式 project / fork / capability scope 装配；历史 `src/context` 已移除 |
+| `src/executive` | Capability / Tool / Trust / Loop 执行层；旧执行层路径已移除 |
+| `src/agent/context` | 显式 Scope / fork / capability surface 装配；历史 `src/context` 已移除 |
 | `src/agent/skills` | Skill manifest、选择、使用计数、promotion；历史 `src/skills` 已移除 |
 | `src/protocol` | 公共协议、枚举、control envelope、进程 envelope                            |
 | `templates`    | 提示词和记忆 Markdown 模板                                                  |
@@ -215,10 +232,10 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 1. 渠道、消息、用户身份归一为 `GatewayMessage`
 2. 路由判断：fastRoute 资源指标短路（本地 cache 恢复热提示，目标 ~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
-3. 上下文装配（热路径）：宪法层 Markdown + brain prompt atoms + working-memory 热激活 + project/codename 局部记忆 + local crystal Gem 召回
-4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Ghost decision / identity append / TaskPlan / ContextFork / SceneRecord；TTFB 目标 < 350ms
-5. 同步收尾：写 episode、brain 双写、Ask/Ghost/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot cache
-6. 后台 worker：consolidation、hot-memory compression、summary、decay、dormant、dream、feedback classify、reflection
+3. 上下文装配（热路径）：宪法层 Markdown + Memory recall + Crystal recall + explicit Scope/Fork + visible capability surface
+4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Continuation decision / identity append / TaskPlan / ContextFork / ReplayRecord；TTFB 目标 < 350ms
+5. 同步收尾：写 episode、brain 双写、Ask/Continuation/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot cache
+6. 后台 worker：consolidation、hot-memory compression、summary、decay、idle、dream、feedback classify、reflection
 
 外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成并驱动 `/ws` thin client，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
 
@@ -226,8 +243,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 
 | 层          | 后端                                           | 职责                                                                                                                                                               |
 | ----------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 宪法层      | Markdown                                       | 身份、用户偏好、项目事实（手编辑 + 结构化 append，慢变）                                                                                                           |
-| 生命事件层  | SQLite `brain.db`                              | `memory_events` append-only + `memory_state` 当前可见性；projects / TaskPlan / ContextFork / SceneRecord 摘要表；prompt recall/write authority 已切到 brain events |
+| 宪法层      | Markdown                                       | 身份、用户偏好、scope 事实（手编辑 + 结构化 append，慢变）                                                                                                         |
+| 生命事件层  | SQLite `brain.db`                              | 当前月 ledger：`memory_events` append-only + `memory_state` 当前可见性；TaskPlan / ContextFork / ReplayRecord / detail 索引；不直接参与 prompt 装配 |
 | 工作记忆    | `MemoryComponent`：Local WAL/snapshot          | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；恢复面只暴露结构化文件元数据给诊断脚本或 future WS client                                           |
 | 长期记忆图  | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系                                                                                                         |
 | 索引 / 审计 | SQLite                                         | blackboard、candidate、offer、skill/plugin/mcp 辅助状态                                                                                                            |
@@ -296,7 +313,7 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 
 黑板特性：
 
-- 同 project constraint 同时只能一个 turn（lease 机制）
+- 同 scope constraint 同时只能一个 turn（lease 机制）
 - 目标 3 轮收敛，5 轮硬上限
 - livelock 检测（两轮无新事实、重复争议、重复失败工具）
 - 流式输出 worker 讨论步骤
@@ -309,7 +326,7 @@ flyflor            # 本地 stdio chat 调试入口
 flyflor gateway    # 最小 Gateway：/ws /health /channels
 ```
 
-当前主线只把这两个 Bun 入口当成调试/血管面保留。后续第一方 CLI、TUI、channel shell 和 gateway surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；更多说明见 [docs/cli.commands.md](docs/cli.commands.md) 与 [docs/control.protocol.md](docs/control.protocol.md)。
+当前主线只把这两个 Bun 入口当成调试/血管面保留。后续第一方 CLI、TUI、channel shell 和 gateway surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
 
 ## 工程规则
 
@@ -356,15 +373,17 @@ flyflor gateway    # 最小 Gateway：/ws /health /channels
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
 | [TODO.md](TODO.md)                                           | 当前中文接续路线 / 迁移状态 / 验收命令 |
+| [docs/README.md](docs/README.md)                             | 活跃文档索引与阅读顺序 |
 | [docs/architecture.md](docs/architecture.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
 | [docs/refactor.roadmap.md](docs/refactor.roadmap.md)         | 切除旧身体、保留内核 / 外骨骼 / 事件血管的阶段性重构路线 |
 | [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
-| [docs/cttl.exoskeleton.md](docs/cttl.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
+| [docs/executive.exoskeleton.md](docs/executive.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
 | [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |
 | [docs/boundaries.md](docs/boundaries.md)                     | 工程边界与红线                         |
 | [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
 | [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
 | [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
+| [docs/ws.doc.md](docs/ws.doc.md)                             | `/ws` 字段级 API 手册 |
 | [docs/gateway.channels.md](docs/gateway.channels.md)         | 主线最小 Gateway 血管层                 |
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
@@ -375,7 +394,6 @@ flyflor gateway    # 最小 Gateway：/ws /health /channels
 | [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust gateway shell 工程切分 backlog |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
-| [docs/cli.commands.md](docs/cli.commands.md)                 | Bun CLI/TUI 退役说明                    |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 
@@ -384,53 +402,51 @@ flyflor gateway    # 最小 Gateway：/ws /health /channels
 
 ## One-line Summary
 
-All model-facing instructions live in `templates/prompts/`, grouped by topic; `*.md` files are the runtime canonical templates.
+All model-facing instructions live in `templates/prompts/`, grouped by topic; canonical `*.md` files are the runtime templates.
 
 ## Related Paths
 
 - `src/agent/prompts/index.ts` - all render entry points
 - `src/agent/prompts/template.manifest.ts` - template bundle version and file contract
-- `src/agent/prompts/template.docs.ts` - docs generator
-- `templates/prompts/` - built-in templates
+- `src/agent/prompts/template.docs.ts` - docs renderer
+- `templates/prompts/` - built-in runtime templates
+- `templates/prompts/docs/` - docs renderer templates, not runtime prompts
 - `scripts/install.templates.ts` - install into the config directory
 - `~/.flyflor/.config/prompts/` - user override directory
 
 ## Bundle Version
 
-- Version: `v2`
-- Manifest file: `template.manifest.json`
-- Runtime checks the manifest version first, then reads each template by filename; missing files, empty files, and stale versions all fail with a reinstall hint.
-- The manifest also records each template key, runtime filename, protocol metadata, protocol-specific envelope data, and required placeholders; lint compares it with runtime definitions to prevent partial bundle upgrades.
-- `blackboard.worker.envelope.md` keeps its output schema and constraints in manifest metadata, then renders them into the JSON envelope at runtime.
+2
 
 ## Template Catalog
 
-| Template | Runtime File | Caller | Protocol | Purpose | Required Placeholders |
-| --- | --- | --- | --- | --- | --- |
-| `ask.schema.md` | `ask.schema.md` | `renderAskSchemaInstructions` | — | Structured clarifying questions, ghost decisions, and identity append blocks. | — |
-| `behavior.priority.md` | `behavior.priority.md` | `renderBehaviorPriorityInstructions` | — | Prompt source ordering and conflict resolution rules. | — |
-| `blackboard.advisory.md` | `blackboard.advisory.md` | `renderBlackboardAdvisoryPrompt` | — | Advisory transcript for direct-path turns that need blackboard context. | `compactRounds` / `elapsedMs` / `reason` / `status` / `turnId` |
-| `blackboard.decision.md` | `blackboard.decision.md` | `BlackboardModule.returnDecisionToUser` | — | Decision prompt when the board needs user confirmation to close a loop. | `questionCount` / `reason` / `unresolvedIssues` |
-| `blackboard.route.md` | `blackboard.route.md` | `decideBlackboardRoute` | — | Route planner prompt for the blackboard front door. | `request` |
-| `blackboard.worker.envelope.md` | `blackboard.worker.envelope.md` | `renderBlackboardWorkerEnvelope` | `flyflor.blackboard.worker.v1` | User task envelope for a single blackboard worker participant. | `constraintsJson` / `contractJson` / `convergencePolicyJson` / `currentRoundStepsJson` / `discussionPlanJson` / `goalJson` / `expectedOutputJson` / `minRoundsJson` / `participantJson` / `phaseJson` / `previousStepsJson` / `roundJson` |
-| `blackboard.worker.system.md` | `blackboard.worker.system.md` | `renderBlackboardWorkerSystemPrompt` | — | System prompt for a single blackboard worker participant. | `participant` |
-| `crystal.reflection.md` | `crystal.reflection.md` | `ReflectionWorker.dispatch` | — | Reflection prompt that extracts reusable methods from evidence. | `evidence` |
-| `feedback.classify.md` | `feedback.classify.md` | `classifyAndApplyFeedback` | — | Feedback classifier that buckets the latest user message. | `currentUserText` / `previousAssistantText` |
-| `memory.action.md` | `memory.action.md` | `renderMemoryActionInstructions` | — | Durable Markdown memory tool block schema. | — |
-| `memory.consolidation.md` | `memory.consolidation.md` | `ConsolidationWorker` | — | Episode classification prompt for consolidation. | `episode` |
-| `memory.hot.compress.md` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | — | Audit-only compression prompt for expiring working-memory episodes. | `episodes` |
-| `memory.context.md` | `memory.context.md` | `renderMemoryPrompt` | — | Memory context wrapper for recent, project, long-term, and global layers. | `hippocampus` / `markdownContent` / `projectMemory` / `retrievedResults` |
-| `memory.dream.md` | `memory.dream.md` | `DreamWorker` | — | Quiet maintenance prompt for long-term drift, recall, and contradiction work. | `candidates` / `userId` |
-| `memory.project.offer.md` | `memory.project.offer.md` | `renderProjectOfferPrompt` | — | Runtime nudge for a project candidate awaiting user confirmation. | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
-| `memory.skill.offer.md` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | — | Runtime nudge for a reusable skill candidate awaiting user confirmation. | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
-| `mcp.context.md` | `mcp.context.md` | `renderMcpContextPrompt` | — | MCP capability wrapper and tool-context listing. | `mcpEntries` |
-| `runtime.ask.continuation.md` | `runtime.ask.continuation.md` | `renderRuntimeAskContinuationPrompt` | — | Runtime continuation hint for an active pending ask. | `chainDepth` / `choices` / `prompt` / `reason` |
-| `runtime.dormant.resume.md` | `runtime.dormant.resume.md` | `renderRuntimeDormantResumePrompt` | — | Runtime resume hint after a dormant interval. | `idleBucket` |
-| `runtime.eq.context.md` | `runtime.eq.context.md` | `renderRuntimeEqContextPrompt` | — | Tone-only emotional context hint. | `ageBucket` / `arousal` / `confidence` / `directive` / `dominance` / `label` / `valence` |
-| `runtime.ghost.hint.md` | `runtime.ghost.hint.md` | `renderRuntimeGhostHintPrompt` | — | Runtime hint for active unfinished contexts. | `ghostEntries` |
-| `runtime.identity.context.md` | `runtime.identity.context.md` | `renderRuntimeIdentityContextPrompt` | — | Runtime identity context assembled from live identity entries. | `identityEntries` |
-| `runtime.system.md` | `runtime.system.md` | `renderRuntimeSystemPrompt` | — | Top-level runtime system prompt assembled for every turn. | `askSchemaInstructions` / `behaviorPriorityInstructions` / `blackboardContext` / `mcpContext` / `memoryActionInstructions` / `memoryContext` / `sandboxSummary` / `skillContext` |
-| `skill.context.md` | `skill.context.md` | `renderSkillContextPrompt` | — | Skill wrapper prompt that formats loaded SKILL.md entries. | `skillEntries` |
+| Key | File | Call Site | Required Placeholders |
+|---|---|---|---|
+| `askSchema` | `ask.schema.md` | `renderAskSchemaInstructions` | — |
+| `behaviorPriority` | `behavior.priority.md` | `renderBehaviorPriorityInstructions` | — |
+| `blackboardAdvisory` | `blackboard.advisory.md` | `renderBlackboardAdvisoryPrompt` | `compactRounds` / `elapsedMs` / `reason` / `status` / `turnId` |
+| `blackboardDecision` | `blackboard.decision.md` | `BlackboardModule.returnDecisionToUser` | `questionCount` / `reason` / `unresolvedIssues` |
+| `blackboardRoute` | `blackboard.route.md` | `decideBlackboardRoute` | `request` |
+| `blackboardWorkerEnvelope` | `blackboard.worker.envelope.md` | `renderBlackboardWorkerEnvelope` | `contractJson` / `convergencePolicyJson` / `currentRoundStepsJson` / `discussionPlanJson` / `goalJson` / `minRoundsJson` / `participantJson` / `phaseJson` / `previousStepsJson` / `roundJson` |
+| `blackboardWorkerSystem` | `blackboard.worker.system.md` | `renderBlackboardWorkerSystemPrompt` | `participant` |
+| `crystalReflection` | `crystal.reflection.md` | `ReflectionWorker.dispatch` | `evidence` |
+| `feedbackClassify` | `feedback.classify.md` | `classifyAndApplyFeedback` | `currentUserText` / `previousAssistantText` |
+| `memoryAction` | `memory.action.md` | `renderMemoryActionInstructions` | — |
+| `memoryConsolidation` | `memory.consolidation.md` | `ConsolidationWorker` | `episode` |
+| `memoryHotCompress` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | `episodes` |
+| `memoryContext` | `memory.context.md` | `renderMemoryPrompt` | `hippocampus` / `markdownContent` / `retrievedResults` / `scopeMemory` |
+| `memoryDream` | `memory.dream.md` | `DreamWorker` | `candidates` / `ownerKey` |
+| `memoryScopeOffer` | `memory.scope.offer.md` | `renderScopeOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memorySkillOffer` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
+| `mcpContext` | `mcp.context.md` | `renderMcpContextPrompt` | `mcpEntries` |
+| `mcpToolBudgetExhausted` | `mcp.tool.budget.exhausted.md` | `renderMcpToolBudgetExhaustedPrompt` | — |
+| `runtimeAskContinuation` | `runtime.ask.continuation.md` | `renderRuntimeAskContinuationPrompt` | `chainDepth` / `choices` / `prompt` / `reason` |
+| `runtimeIdleResume` | `runtime.idle.resume.md` | `renderRuntimeIdleResumePrompt` | `idleBucket` |
+| `runtimeEqContext` | `runtime.eq.context.md` | `renderRuntimeEqContextPrompt` | `ageBucket` / `arousal` / `confidence` / `directive` / `dominance` / `label` / `valence` |
+| `runtimeContinuationHint` | `runtime.continuation.hint.md` | `renderRuntimeContinuationHintPrompt` | `continuationEntries` |
+| `runtimeIdentityContext` | `runtime.identity.context.md` | `renderRuntimeIdentityContextPrompt` | `identityEntries` |
+| `runtimeSystem` | `runtime.system.md` | `renderRuntimeSystemPrompt` | `askSchemaInstructions` / `behaviorPriorityInstructions` / `blackboardContext` / `mcpContext` / `memoryActionInstructions` / `memoryContext` / `sandboxSummary` / `skillContext` |
+| `skillContext` | `skill.context.md` | `renderSkillContextPrompt` | `skillEntries` |
 
 ## Assembly Flow
 
@@ -460,37 +476,38 @@ flowchart LR
 - A same-named file in the user directory overrides the built-in template; the install script syncs the bundle and manifest together.
 - Runtime only loads canonical `.md` template files.
 - `*.zh.cn.md` files are audit-only mirrors synced by the install script; they do not enter the runtime bundle, manifest, or lint contract.
+- `templates/prompts/docs/*.md` files are docs-renderer templates; they are not installed as runtime prompts.
 
 ## Data Contract
 
 Every template must guarantee:
 
-1. The model emits structured JSON sections by schema (routing, reflection, feedback, memory actions, dream evaluation, cluster summaries, and so on), while code only validates shape, enums, and ranges.
+1. The model emits structured JSON sections by schema while code only validates shape, enums, and ranges.
 2. Template-facing enum values come from `src/protocol/contracts/enums.ts`; add new enums there before updating templates.
 3. Templates must not allow the model to invent undeclared fields; extra fields are always discarded.
 
 ## Prompt-facing Enums
 
-- `MemoryActionTarget`: `memory` / `self` / `soul` / `user`
+- `MemoryActionTarget`: `memory` / `self` / `identity` / `user`
 - `MemoryKind`: `candidate` / `conversation-turn` / `fact` / `gem` / `history` / `profile` / `rule` / `skill` / `summary`
-- `MarkdownMemoryFile`: `MEMORY.md` / `SELF.md` / `SOUL.md` / `USER.md`
+- `MarkdownMemoryFile`: `MEMORY.md` / `SELF.md` / `IDENTITY.md` / `USER.md`
 - `AskReason`: `codename-ambiguity` / `codename-create` / `user-intent-unclear` / `blackboard-stalemate` / `policy-decision` / `other`
-- `GhostContextReason`: `ask` / `tool-failure` / `blackboard-cap` / `process-restart`
-- `GhostDecisionKind`: `resume` / `fork` / `fresh`
+- `ContinuationContextReason`: `ask` / `tool-failure` / `blackboard-cap` / `process-restart`
+- `ContinuationDecisionKind`: `resume` / `fork` / `fresh`
 - `EqLabel`: `neutral` / `joy` / `anger` / `sadness` / `fear` / `surprise`
 
 ## Model Readability
 
-Runtime-injected templates should only contain instructions the model can act on directly: when to use them, what structure to emit, what each field means, and how to resolve conflicts. Internal route ids, TODO ids, phase names, and implementation metaphors must not appear in runtime prompts, including `LF-R*` or engineering-only labels such as “hippocampus / crystal / Dream / Gem.”
+Runtime-injected templates should only contain instructions the model can act on directly: when to use them, what structure to emit, what each field means, and how to resolve conflicts. Internal route ids, TODO ids, phase names, and implementation metaphors must not appear in runtime prompts.
 
-Internal identifiers may stay in archived planning docs, design docs, code comments, and test names; model-facing templates must translate them into plain source labels and behavior descriptions such as “recently activated memory,” “current project notes,” “open items,” and “quiet maintenance phase.”
+Internal identifiers may stay in archived planning docs, design docs, code comments, and test names; model-facing templates must translate them into plain source labels and behavior descriptions.
 
 ## Release Checks
 
-- Template lint already checks required files, non-empty content, required placeholders, and unknown prompt files, and it blocks runtime prompt bodies that expose internal route ids or unexplained engineering metaphors; the bundle manifest version and template catalog are validated too.
-- The manifest integrity test compares the canonical templates under `templates/prompts/`; unregistered runtime prompt files must not appear in the directory, and `lintPromptTemplates` performs the same checks in the user directory.
+- Template lint checks required files, non-empty content, required placeholders, unknown prompt files, the bundle manifest version, and the template catalog.
+- Runtime prompt bodies must not expose internal route ids or unexplained engineering metaphors.
 - `*.zh.cn.md` mirrors do not participate in runtime assembly or manifest comparison; they are for human review and audit only.
-- `template.docs.ts` renders the template matrix and prompt-facing enum snapshot into reviewable documentation, while `scripts/prompt.templates.docs.ts` can generate or check the same output and sync the prompt bundle manifest.
+- `template.docs.ts` reads this Markdown template and only replaces machine values such as bundle version and enum snapshots.
 - Runtime only assembles canonical `.md` files.
 
 ## Related Tests

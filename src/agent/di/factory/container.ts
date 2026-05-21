@@ -137,6 +137,3 @@ export function isInjectionToken(value: unknown): value is InjectionToken<unknow
         typeof (value as { name?: unknown }).name === "string"
     );
 }
-
-export { DependencyContainer as FpcDependencyContainer };
-export type { Constructable as FpcConstructable };

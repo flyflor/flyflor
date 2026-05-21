@@ -91,7 +91,7 @@ export interface DreamContradictionPairCandidate {
 export type DreamCandidate = DreamGemDriftCandidate | DreamRecallCandidate | DreamContradictionPairCandidate;
 
 export interface CollectDreamCandidatesInput {
-    userId: string;
+    ownerKey: string;
     nowMs: number;
 }
 
@@ -103,11 +103,11 @@ export async function collectDreamCandidates(
     graph: MemoryGraphStore,
     input: CollectDreamCandidatesInput,
 ): Promise<DreamCandidate[]> {
-    const { userId, nowMs } = input;
+    const { ownerKey, nowMs } = input;
     const out: DreamCandidate[] = [];
 
     const driftGems = await graph.listGemDriftCandidates({
-        userId,
+        ownerKey,
         nowMs,
         minContradictionCount: DREAM_THRESHOLDS.minContradictionCount,
         maxStaleMs: DREAM_THRESHOLDS.maxStaleMs,
@@ -126,7 +126,7 @@ export async function collectDreamCandidates(
     }
 
     const recall = await graph.listRecallExtremes({
-        userId,
+        ownerKey,
         topN: DREAM_THRESHOLDS.topRecallN,
         bottomN: DREAM_THRESHOLDS.bottomRecallN,
     });
@@ -154,7 +154,7 @@ export async function collectDreamCandidates(
     }
 
     const pairs = await graph.listContradictionPairs({
-        userId,
+        ownerKey,
         seedN: DREAM_THRESHOLDS.contradictionSeedN,
         neighborK: DREAM_THRESHOLDS.contradictionNeighborK,
         minCosine: DREAM_THRESHOLDS.contradictionMinCosine,

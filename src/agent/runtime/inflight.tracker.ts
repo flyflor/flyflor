@@ -2,11 +2,11 @@ import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * LF-R4 process-restart ghost：用 sentinel 文件追踪正在处理中的请求。
+ * LF-R4 process-restart continuation：用 sentinel 文件追踪正在处理中的请求。
  *
- * 写入：handleMessage 入口落 `${storageDir}/inflight/<requestId>.json`，记录最少够还原 ghost 的结构化字段。
+ * 写入：handleMessage 入口落 `${storageDir}/inflight/<requestId>.json`，记录最少够还原 continuation 的结构化字段。
  * 移除：handleMessage 退出（成功或抛错）的 finally 里删除。
- * 恢复：runtime.warmup 调 `recoverOrphans()`，扫遗留文件 → 由调用方写 process-restart ghost → 清理。
+ * 恢复：runtime.warmup 调 `recoverOrphans()`，扫遗留文件 → 由调用方写 process-restart continuation → 清理。
  *
  * 触发条件全部来自结构化字段（文件存在与否、JSON payload），不消费对话文本语义 → 不违反零字符匹配红线。
  */

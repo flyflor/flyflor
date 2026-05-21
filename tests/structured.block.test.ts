@@ -14,11 +14,11 @@ describe("structured internal protocol blocks", () => {
             [
                 StructuredBlockProtocol.AgentAsk,
                 StructuredBlockProtocol.ContextFork,
-                StructuredBlockProtocol.GhostDecisions,
+                StructuredBlockProtocol.ContinuationDecisions,
                 StructuredBlockProtocol.IdentityAppend,
                 StructuredBlockProtocol.MemoryActions,
                 StructuredBlockProtocol.McpCalls,
-                StructuredBlockProtocol.SceneRecord,
+                StructuredBlockProtocol.ReplayRecord,
                 StructuredBlockProtocol.TaskPlan,
             ].sort(),
         );

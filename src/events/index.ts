@@ -1,5 +1,5 @@
 export { EventsComponent } from "./component.ts";
-export { FpcEventBus, GlobalEventBus, RuntimeEventBus, globalEvents } from "./bus.ts";
+export { GlobalEventBus, RuntimeEventBus, globalEvents } from "./bus.ts";
 export { RuntimeEventClassifier, classifyRuntimeEvent, runtimeEventClassifier } from "./classifier.ts";
 export { createRuntimeEvent as event } from "./runtime.event.ts";
 export { ConsoleEventSink, NullEventSink, CompositeEventSink } from "./sinks.ts";

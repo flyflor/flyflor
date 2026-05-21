@@ -25,7 +25,7 @@ describe("release assets", () => {
         expect(entries).toContain("commands.jsonc");
         expect(entries).toContain("prompts/runtime.system.md");
         expect(entries).toContain("prompts/template.manifest.json");
-        expect(entries).toContain("templates/memory/MEMORY.md");
+        expect(entries).toContain("templates/memory/memory.md");
         expect(entries).toContain("templates/projects/AGENTS.md");
     });
 

@@ -1,16 +1,16 @@
 import {
-    CttlCapabilitySource,
-    CttlPermission,
-    CttlToolCategory,
-    CttlToolScope,
+    CapabilitySource,
+    ToolPermission,
+    ToolCategory,
+    ToolScope,
 } from "../protocol/contracts/index.ts";
 import {
-    CttlComputerControlAction,
-    type CttlJsonObject,
-    type CttlToolDescriptor,
+    ComputerControlAction,
+    type ExecutiveJsonObject,
+    type ToolDescriptor,
 } from "./types.ts";
 
-export interface CttlMcpCatalogEntry {
+export interface McpCatalogEntry {
     readonly server: string;
     readonly tool: {
         readonly name: string;
@@ -19,7 +19,7 @@ export interface CttlMcpCatalogEntry {
     };
 }
 
-export interface CttlMcpResourceCatalogEntry {
+export interface McpResourceCatalogEntry {
     readonly server: string;
     readonly resource: {
         readonly uri: string;
@@ -29,7 +29,7 @@ export interface CttlMcpResourceCatalogEntry {
     };
 }
 
-export interface CttlMcpPromptCatalogEntry {
+export interface McpPromptCatalogEntry {
     readonly server: string;
     readonly prompt: {
         readonly name: string;
@@ -38,31 +38,31 @@ export interface CttlMcpPromptCatalogEntry {
     };
 }
 
-export interface CttlMcpCatalogAdapterOptions {
+export interface McpCatalogAdapterOptions {
     readonly coreServers?: ReadonlySet<string>;
     readonly gitServer?: string;
     readonly shellServer?: string;
     readonly workspaceServer?: string;
 }
 
-export class CttlMcpCatalogAdapter {
+export class McpCatalogAdapter {
     private readonly coreServers: ReadonlySet<string>;
     private readonly gitServer: string;
     private readonly shellServer: string;
     private readonly workspaceServer: string;
 
-    public constructor(options: CttlMcpCatalogAdapterOptions = {}) {
+    public constructor(options: McpCatalogAdapterOptions = {}) {
         this.workspaceServer = options.workspaceServer ?? "workspace";
         this.gitServer = options.gitServer ?? "git";
         this.shellServer = options.shellServer ?? "shell";
         this.coreServers = options.coreServers ?? new Set([this.workspaceServer, this.gitServer, this.shellServer]);
     }
 
-    public descriptorFor(entry: CttlMcpCatalogEntry): CttlToolDescriptor {
+    public descriptorFor(entry: McpCatalogEntry): ToolDescriptor {
         const category = this.categoryFor(entry);
         const permission = this.permissionFor(entry);
         const readOnly = this.readOnlyFor(entry);
-        const descriptor: CttlToolDescriptor = {
+        const descriptor: ToolDescriptor = {
             category,
             concurrencySafe: this.concurrencySafeFor(entry),
             description: entry.tool.description ?? this.toolName(entry),
@@ -73,13 +73,13 @@ export class CttlMcpCatalogAdapter {
             readOnly,
             resultLimit: { maxChars: 4_000 },
             scope: this.scopeFor(entry),
-            source: this.coreServers.has(entry.server) ? CttlCapabilitySource.Core : CttlCapabilitySource.Mcp,
+            source: this.coreServers.has(entry.server) ? CapabilitySource.Core : CapabilitySource.Mcp,
         };
-        if (category === CttlToolCategory.Computer || permission === CttlPermission.Computer) {
+        if (category === ToolCategory.Computer || permission === ToolPermission.Computer) {
             return {
                 ...descriptor,
                 computer: {
-                    action: readOnly ? CttlComputerControlAction.Screen : CttlComputerControlAction.Browser,
+                    action: readOnly ? ComputerControlAction.Screen : ComputerControlAction.Browser,
                     observationOnly: readOnly,
                     requiresFocusTarget: !readOnly,
                 },
@@ -88,9 +88,9 @@ export class CttlMcpCatalogAdapter {
         return descriptor;
     }
 
-    public resourceDescriptorFor(entry: CttlMcpResourceCatalogEntry): CttlToolDescriptor {
+    public resourceDescriptorFor(entry: McpResourceCatalogEntry): ToolDescriptor {
         return {
-            category: CttlToolCategory.Integration,
+            category: ToolCategory.Integration,
             concurrencySafe: true,
             description: entry.resource.description ?? entry.resource.name ?? entry.resource.uri,
             inputSchema: {
@@ -102,19 +102,19 @@ export class CttlMcpCatalogAdapter {
             },
             exclusive: false,
             name: `${entry.server}.resource.${this.safeName(entry.resource.uri)}`,
-            permission: CttlPermission.Read,
+            permission: ToolPermission.Read,
             readOnly: true,
             resultLimit: { maxChars: 4_000 },
-            scope: [CttlToolScope.Core],
-            source: CttlCapabilitySource.Mcp,
+            scope: [ToolScope.Core],
+            source: CapabilitySource.Mcp,
             sourceId: entry.resource.uri,
             tags: ["mcp-resource", ...(entry.resource.mimeType ? [entry.resource.mimeType] : [])],
         };
     }
 
-    public promptDescriptorFor(entry: CttlMcpPromptCatalogEntry): CttlToolDescriptor {
+    public promptDescriptorFor(entry: McpPromptCatalogEntry): ToolDescriptor {
         return {
-            category: CttlToolCategory.Integration,
+            category: ToolCategory.Integration,
             concurrencySafe: true,
             description: entry.prompt.description ?? `${entry.server}.${entry.prompt.name}`,
             inputSchema: {
@@ -126,59 +126,59 @@ export class CttlMcpCatalogAdapter {
             },
             exclusive: false,
             name: `${entry.server}.prompt.${this.safeName(entry.prompt.name)}`,
-            permission: CttlPermission.Read,
+            permission: ToolPermission.Read,
             readOnly: true,
             resultLimit: { maxChars: 4_000 },
-            scope: [CttlToolScope.Core],
-            source: CttlCapabilitySource.Mcp,
+            scope: [ToolScope.Core],
+            source: CapabilitySource.Mcp,
             sourceId: entry.prompt.name,
             tags: ["mcp-prompt"],
         };
     }
 
-    public toolName(entry: CttlMcpCatalogEntry): string {
+    public toolName(entry: McpCatalogEntry): string {
         return `${entry.server}.${entry.tool.name}`;
     }
 
-    private inputSchemaFor(entry: CttlMcpCatalogEntry): CttlJsonObject {
+    private inputSchemaFor(entry: McpCatalogEntry): ExecutiveJsonObject {
         const schema = entry.tool.inputSchema;
         return schema && typeof schema === "object" && !Array.isArray(schema)
-            ? (schema as CttlJsonObject)
+            ? (schema as ExecutiveJsonObject)
             : { type: "object" };
     }
 
-    private categoryFor(entry: CttlMcpCatalogEntry): CttlToolCategory {
-        if (entry.server === "computer") return CttlToolCategory.Computer;
-        if (entry.server === this.workspaceServer || entry.server === this.gitServer) return CttlToolCategory.Coding;
-        if (entry.server === this.shellServer) return CttlToolCategory.System;
-        return CttlToolCategory.Integration;
+    private categoryFor(entry: McpCatalogEntry): ToolCategory {
+        if (entry.server === "computer") return ToolCategory.Computer;
+        if (entry.server === this.workspaceServer || entry.server === this.gitServer) return ToolCategory.Coding;
+        if (entry.server === this.shellServer) return ToolCategory.System;
+        return ToolCategory.Integration;
     }
 
-    private concurrencySafeFor(entry: CttlMcpCatalogEntry): boolean {
+    private concurrencySafeFor(entry: McpCatalogEntry): boolean {
         return entry.server !== this.shellServer;
     }
 
-    private exclusiveFor(entry: CttlMcpCatalogEntry): boolean {
+    private exclusiveFor(entry: McpCatalogEntry): boolean {
         return entry.server === this.shellServer;
     }
 
-    private permissionFor(entry: CttlMcpCatalogEntry): CttlPermission {
-        if (entry.server === "computer") return CttlPermission.Computer;
-        if (entry.server === this.workspaceServer || entry.server === this.gitServer) return CttlPermission.Read;
-        if (entry.server === this.shellServer) return CttlPermission.Execute;
-        return CttlPermission.Network;
+    private permissionFor(entry: McpCatalogEntry): ToolPermission {
+        if (entry.server === "computer") return ToolPermission.Computer;
+        if (entry.server === this.workspaceServer || entry.server === this.gitServer) return ToolPermission.Read;
+        if (entry.server === this.shellServer) return ToolPermission.Execute;
+        return ToolPermission.Network;
     }
 
-    private readOnlyFor(entry: CttlMcpCatalogEntry): boolean {
+    private readOnlyFor(entry: McpCatalogEntry): boolean {
         if (entry.server === "computer") return false;
         return entry.server !== this.shellServer;
     }
 
-    private scopeFor(entry: CttlMcpCatalogEntry): readonly CttlToolScope[] {
-        if (entry.server === "computer") return [CttlToolScope.Local, CttlToolScope.Debug];
-        if (entry.server === this.workspaceServer || entry.server === this.gitServer) return [CttlToolScope.Project];
-        if (entry.server === this.shellServer) return [CttlToolScope.Local];
-        return [CttlToolScope.Core];
+    private scopeFor(entry: McpCatalogEntry): readonly ToolScope[] {
+        if (entry.server === "computer") return [ToolScope.Local, ToolScope.Debug];
+        if (entry.server === this.workspaceServer || entry.server === this.gitServer) return [ToolScope.Workspace];
+        if (entry.server === this.shellServer) return [ToolScope.Local];
+        return [ToolScope.Core];
     }
 
     private safeName(value: string): string {

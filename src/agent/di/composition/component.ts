@@ -42,10 +42,6 @@ export interface ComponentMetadata {
 export type ComponentConstructor<TComponent = object, TArgs extends unknown[] = unknown[]> = new (
     ...args: TArgs
 ) => TComponent;
-export type FpcComponentConstructor<TComponent = object, TArgs extends unknown[] = unknown[]> = ComponentConstructor<
-    TComponent,
-    TArgs
->;
 
 export interface ComponentDecoratorOptions {
     compatibility?: ComponentCompatibility;

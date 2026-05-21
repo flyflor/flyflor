@@ -1,18 +1,18 @@
 /**
  * Compact planning metadata for TUI/history surfaces.
  *
- * Brain.db stores full TaskPlan / ContextFork / SceneRecord structures. Runtime
+ * Brain.db stores full TaskPlan / ContextFork / ReplayRecord structures. Runtime
  * reply metadata only needs stable summaries that chat/history surfaces can
  * render inline without re-parsing event payloads or leaking long internal records.
  */
 
-import type { ContextForkRecord, SceneRecord, TaskPlanRecord } from "../../../protocol/contracts/index.ts";
+import type { ContextForkRecord, ReplayRecord, TaskPlanRecord } from "../../../protocol/contracts/index.ts";
 
 export class PlanningMetadataBuilder {
     public build(
         taskPlans: TaskPlanRecord[],
         contextForks: ContextForkRecord[],
-        sceneRecords: SceneRecord[],
+        replayRecords: ReplayRecord[],
     ): Record<string, unknown> {
         return {
             taskPlans: taskPlans.map((plan) => this.compactTaskPlanMetadata(plan)),
@@ -22,7 +22,7 @@ export class PlanningMetadataBuilder {
                 continuitySummary: fork.continuitySummary,
                 maxContextTokens: fork.maxContextTokens,
             })),
-            scenes: sceneRecords.map((scene) => this.compactSceneMetadata(scene)),
+            replays: replayRecords.map((replay) => this.compactReplayMetadata(replay)),
         };
     }
 
@@ -45,15 +45,15 @@ export class PlanningMetadataBuilder {
         };
     }
 
-    private compactSceneMetadata(scene: SceneRecord): Record<string, unknown> {
+    private compactReplayMetadata(replay: ReplayRecord): Record<string, unknown> {
         return {
-            id: scene.id,
-            kind: scene.kind,
-            title: scene.title,
-            summary: scene.summary,
-            blackboardTurnId: scene.blackboardTurnId,
-            taskPlanId: scene.taskPlanId,
-            contextForkId: scene.contextForkId,
+            id: replay.id,
+            kind: replay.kind,
+            title: replay.title,
+            summary: replay.summary,
+            blackboardTurnId: replay.blackboardTurnId,
+            taskPlanId: replay.taskPlanId,
+            contextForkId: replay.contextForkId,
         };
     }
 }
@@ -63,7 +63,7 @@ const defaultBuilder = new PlanningMetadataBuilder();
 export function buildPlanningMetadata(
     taskPlans: TaskPlanRecord[],
     contextForks: ContextForkRecord[],
-    sceneRecords: SceneRecord[],
+    replayRecords: ReplayRecord[],
 ): Record<string, unknown> {
-    return defaultBuilder.build(taskPlans, contextForks, sceneRecords);
+    return defaultBuilder.build(taskPlans, contextForks, replayRecords);
 }

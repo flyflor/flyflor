@@ -14,11 +14,11 @@
 export const StructuredBlockProtocol = {
     AgentAsk: "agentAsk",
     ContextFork: "contextFork",
-    GhostDecisions: "ghostDecisions",
+    ContinuationDecisions: "continuationDecisions",
     IdentityAppend: "identityAppend",
     MemoryActions: "memoryActions",
     McpCalls: "mcpCalls",
-    SceneRecord: "sceneRecord",
+    ReplayRecord: "replayRecord",
     TaskPlan: "taskPlan",
 } as const;
 
@@ -36,11 +36,11 @@ const STRUCTURED_BLOCK_TAGS: Record<StructuredBlockProtocol, string> = {
     // 这样 tag 拼写、边界符和剥离行为只有一个来源，避免不同模块写出互不兼容的坏数据。
     [StructuredBlockProtocol.AgentAsk]: "flyflor_agent_ask",
     [StructuredBlockProtocol.ContextFork]: "flyflor_context_fork",
-    [StructuredBlockProtocol.GhostDecisions]: "flyflor_ghost_decisions",
+    [StructuredBlockProtocol.ContinuationDecisions]: "flyflor_continuation_decisions",
     [StructuredBlockProtocol.IdentityAppend]: "flyflor_identity_append",
     [StructuredBlockProtocol.MemoryActions]: "flyflor_memory_actions",
     [StructuredBlockProtocol.McpCalls]: "flyflor_mcp_calls",
-    [StructuredBlockProtocol.SceneRecord]: "flyflor_scene_record",
+    [StructuredBlockProtocol.ReplayRecord]: "flyflor_replay_record",
     [StructuredBlockProtocol.TaskPlan]: "flyflor_task_plan",
 };
 

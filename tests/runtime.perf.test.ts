@@ -411,7 +411,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             embedding: await embedFor(config, "brain-backed hippocampus"),
         });
 
-        expect(prompt).toContain("Hippocampus context");
+        expect(prompt).toContain("Recent Activated Memory");
         expect(prompt).toContain("Hippocampus recall must survive sidecar cleanup.");
         memory.dispose();
     });
@@ -511,6 +511,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const events = new CapturingSink();
         const memory = new MemoryModule(config, events);
         await memory.recordDebateEpisode({
+            ownerKey: "scope:u1",
             userId: "u1",
             text: "[debate-goal] x\n[analyst] something",
             embedding: await embedFor(config, "x"),

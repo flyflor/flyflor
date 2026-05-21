@@ -19,7 +19,7 @@
 ```
 app.ts            程序入口，只做版本/模式分派
 src/app.ts        FlyFlor composition root
-src/agent/        runtime / gateway / blackboard / sandbox / context / skills / worker / mcp / project / plugin
+src/agent/        runtime / gateway / blackboard / sandbox / context / skills / worker / mcp / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
 src/cognitive/    认知内核目标目录
 src/cognitive/mindstream/   Mindstream 心流层
@@ -36,7 +36,7 @@ templates/        提示词与记忆 Markdown 模板
 目录归属硬规则：
 
 - 新增顶层或一级源码目录前，必须说明它属于 cognitive、executive、agent、events、protocol、config、command、runtime data 或 user workspace 的哪一层。
-- 历史 `src/fch`、`src/cttl`、`src/skills` 与 `src/context` 物理路径已移除；新公开文档和新代码只能使用 `src/cognitive`、`src/executive`、`src/agent/skills`、`src/agent/context` 的目标语义。
+- 历史 `src/fch`、`src/executive`、`src/skills` 与 `src/context` 物理路径已移除；新公开文档和新代码只能使用 `src/cognitive`、`src/executive`、`src/agent/skills`、`src/agent/context` 的目标语义。
 - 新增 capability 目录必须说明来源是 core、MCP、plugin、skill、channel、user tool 还是 subagent，并经 executive descriptor registry 进入 Tool Plan。
 - 用户数据、密钥、日志、数据库、缓存和工作区文件只能放运行态目录，不能进入源码约定和二进制产物。
 - 配置文件只表达覆盖项；不能靠配置字段给无 owner 目录补语义。
@@ -49,10 +49,11 @@ templates/        提示词与记忆 Markdown 模板
 - 目录已表达职责时不重复写长前缀：`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
 - 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`，以及 `consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
+- 每一份仓库 Markdown 源文件都必须有同目录同名 `.zh.cn.md` 中文副本。提示词工程模板的 canonical `.md` 用英文书写，`.zh.cn.md` 用中文同步维护；其他文档允许 `.md` 直接中文书写，但仍要同步 `.zh.cn.md` 便于中英对照审查。新增、移动或重命名 `.md` 时必须同步处理对应中文副本；运行态缓存目录不作为源文件例外。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
 - 单职责短文件保留语义名：`types.ts` / `scope.ts`。
-- 用户工作区文件保留领域约定：`MEMORY.md` / `SELF.md` / `SOUL.md` / `USER.md`。
+- 用户工作区文件保留领域约定：`MEMORY.md` / `SELF.md` / `IDENTITY.md` / `USER.md`。
 
 ## 3. 导入方向
 
@@ -81,7 +82,7 @@ flowchart LR
 
 - `src/cognitive/mindstream` / `src/cognitive/crystal` / `src/cognitive/hippocampus` / `src/executive` / 能力实现禁止 import `command` 或入口层。
 - `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
-- 当前注意力连续性由 `FocusPointer` 协议字段、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、目标 `src/cognitive/hippocampus/project` 与 `src/cognitive/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
+- 当前注意力连续性由 `FocusPointer` 协议字段、显式 `activeScope` / `contextForkId`、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/agent/context` 与 `src/cognitive/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
 - 主线 `gateway` 只保留 WS/control/event 血管，不承载第一方 CLI/TUI/channel adapter。
 - `gateway`、`runtime`、`blackboard`、`worker`、`sandbox`、`memory` 都是 Event Fabric 的参与者；`src/events` 拥有事件发布、订阅、分类和 fan-out，gateway 不拥有事件总线。
@@ -94,7 +95,7 @@ flowchart LR
 
 - `@Provide` 是注入底座；`@Module` / `@Component` 必须复用 `Provide` 的 metadata 注册路径，禁止各自维护第二套注入协议。
 - Gateway / Blackboard / Memory / Runtime / Sandbox / Context / Crystal 等边界必须优先用 `FlyflorComponent` 继承链表达：`class MemoryModule extends Memory`、`class ContextScopeComponent extends ContextComponent`、`class CrystalMemoryComponent extends CrystalComponent`。
-- 本地状态与 IO 存储属于 Component：`BrainStore`、`SQLiteGraphStore`、`SQLiteMemoryStore`、Markdown/project memory store 等必须继承 `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `MemoryComponent`，避免回退成额外中间层或散落工具类。
+- 本地状态与 IO 存储属于 Component：`BrainStore`、`SQLiteGraphStore`、`SQLiteMemoryStore`、Markdown/scope memory store 等必须继承 `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `MemoryComponent`，避免回退成额外中间层或散落工具类。
 - Redis / SurrealDB 作为原型定位继续保留 `RedisComponent` / `SurrealComponent` 基类；默认运行时不启用外部 Redis / SurrealDB backend，未来恢复外部存储时必须通过这两个 Component 边界接入。
 - `kind` / `layer` / `provider` 默认由 `FlyflorComponent` 继承链与类名推断；`name` 只作展示字段，不参与注入匹配；`tags` 不用于 `@Module` / `@Component`。
 - `@Component()` / `@Module()` 默认无参数、默认单例；只有偏离默认值（例如 factory scope、channel / worker / plugin 特例）时才显式写参数。
@@ -115,17 +116,17 @@ flowchart LR
 - 已存在的大型函数式模块要按触碰即迁移原则处理：改到该文件时必须把同一职责的 helper 收进 class / Component，或者抽到同目录 `*.composition.ts` 并用 `useXxx()` 命名；禁止继续追加新的无归属 helper。
 - Crystal / Gem 这类晶体智力流程必须有明确 Component owner；保留的顶层函数只能作为兼容旧 public API 的薄壳，新增调用优先依赖 `CrystalReflectionComponent` / `CrystalGemComponent` 等组件实例。
 - Crystal 向量检索的 tokenizer / hash / cosine / freshness 数值逻辑必须由 `CrystalVectorCodec` 拥有；`vector.index.ts` 的函数导出只能作为兼容薄入口。
-- Runtime planning 的 `TaskPlan` / `ContextFork` / `SceneRecord` 解析必须由 `PlanningBlockParser` 拥有；runtime 主链和新增代码直接持有 class 实例，`parsePlanningBlocks()` 只作为外部兼容薄入口，禁止继续在 `parser.ts` 外增加解析 helper。
+- Runtime planning 的 `TaskPlan` / `ContextFork` / `ReplayRecord` 解析必须由 `PlanningBlockParser` 拥有；runtime 主链和新增代码直接持有 class 实例，`parsePlanningBlocks()` 只作为外部兼容薄入口，禁止继续在 `parser.ts` 外增加解析 helper。
 - Runtime planning 的回复 metadata 压缩必须由 `PlanningMetadataBuilder` 拥有；runtime 主链直接持有 builder 实例，metadata 文件只允许暴露 builder 和兼容薄入口，不能继续追加游离 compact helper。
 - Runtime 黑板路由 prompt 调用、JSON 校验、worker plan 归一化和 contract 读取必须由 `RuntimeBlackboardRouteComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`route.ts` 兼容函数只能委托该组件。
-- Runtime 黑板文本投影、history scene、ask handoff 必须由 `RuntimeBlackboardOutputComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`output.ts` 可以保留兼容导出，但不能继续追加新的格式化 helper。
+- Runtime 黑板文本投影、history replay、ask handoff 必须由 `RuntimeBlackboardOutputComponent` 拥有；`RuntimeModule` 主链直接持有组件实例，`output.ts` 可以保留兼容导出，但不能继续追加新的格式化 helper。
 - Runtime fastRoute 与 route escalation 只能使用资源指标和结构化 snapshot；生产主链必须通过 `FastRouteEvaluator` / `RouteEscalationPolicy`，`evaluateFastRoute()`、`buildBypassDecision()`、`decideRouteEscalation()`、`nextEscalationCounters()` 只作为兼容薄入口。
-- Runtime Ask 渲染、附件摘要、project constraint、turn timing 和 working-memory 健康判定分别由 `AskReplyRenderer`、`AttachmentSummaryRenderer`、`ProjectConstraintBuilder`、`TurnTiming`、`WorkingMemoryHealthInspector` 负责；兼容函数只作转发。
-- Runtime 对模型输出的 AgentAsk / GhostDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`GhostDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
-- Memory prompt nudge 渲染由 `MemoryModule` 持有；pending project / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
+- Runtime Ask 渲染、附件摘要、scope constraint、turn timing 和 working-memory 健康判定分别由 `AskReplyRenderer`、`AttachmentSummaryRenderer`、`ScopeConstraintBuilder`、`TurnTiming`、`WorkingMemoryHealthInspector` 负责；兼容函数只作转发。
+- Runtime 对模型输出的 AgentAsk / ContinuationDecision / IdentityAppend 结构化块解析必须分别由 `AgentAskParser`、`ContinuationDecisionParser`、`IdentityAppendParser` 拥有；`RuntimeModule` 主链直接持有 parser 实例，旧 `parseXxx()` 导出只作为兼容入口。
+- Memory prompt nudge 渲染由 `MemoryModule` 持有；pending scope / skill offer 与 EQ directive 只能消费结构化 store/state 字段，不得把 nudge helper 散落成新的业务入口。
 - Memory hippocampus 召回必须由 `SpreadingActivationEngine` 拥有，生产路径只消费向量、概念、importance 和 recency 资源指标；`spreadActivation()` 只作为兼容薄入口。Memory matrix 聚合与权重回写必须由 `MemoryMatrixAggregator` 拥有，`applyMatrixImpact()` / `recallBoostFromMetadata()` 只作为兼容薄入口。
-- `src/cognitive/hippocampus/project/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ProjectTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
-- `src/cognitive/hippocampus/project/codename.promote.ts` 的 codename → project 升格流程必须由 `CodenamePromotionComponent` 拥有；旧 `promoteCodename()` / `deriveCodenameProjectId()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
+- `src/cognitive/hippocampus/scope/triggers.ts` 的显式意图、cluster 候选、skill 升格和 codename 升格判定必须由 `ScopeTriggerDetector` 负责；`MemoryModule` 等生产路径直接持有 detector 实例，兼容函数只能转发，不得继续扩散 helper。
+- `src/cognitive/hippocampus/scope/codename.promote.ts` 的 codename → scope 升格流程必须由 `CodenamePromotionComponent` 拥有；`promoteCodename()` 只保留为兼容薄入口，不能再承载 brain 写回、脚手架或阈值检测逻辑。
 - 约定优先于抽象：迁移不是为了消灭重复代码，而是为了让生命周期、状态、IO 副作用和协议边界有明确 owner。重复的 5-10 行值转换可以保留在对应 class 内，不为了“复用”抽成跨域工具函数。
 - 目录约定优先于长文件名：模块拥有的 store 必须留在模块目录内；单一职责子目录优先命名为 `store.ts` / `types.ts`，例如目标 `src/cognitive/hippocampus/memory/brain/store.ts`、`src/cognitive/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`。禁止把模块 store 或兼容导出塞回 `src/components/memory` / `src/components/crystal` 这类假边界目录。
 - `src/components` 只承载共享 Component 基类与真正跨模块基础设施（例如 SQL tagged template）；不得按领域开 `components/<domain>` 目录。
@@ -143,7 +144,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - `Capability` 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent。
 - `Tool` 把 capability 适配成模型可调用 schema，声明 scope、permission、readOnly、concurrencySafe、exclusive 和 result limit。
 - 电脑控制 capability 必须额外声明结构化 `computer` profile，作为 future Rust exoskeleton 的稳定契约；不得靠工具名字符串或提示词文本推断控制类别。
-- `Trust` 根据 channel、sender、group、project、sandbox、approval、permission cap、secrets provider 和 config 计算本次是否可执行。
+- `Trust` 根据 channel、sender、group、workspace/scope、sandbox、approval、permission cap、secrets provider 和 config 计算本次是否可执行。
 - `Loop` 负责 tool plan、并发调度、结果压缩、失败恢复、unknown tool 防护、重复调用防护、无进展检测、审批中断和恢复。
 
 硬规则：
@@ -179,10 +180,10 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - 外部输入进入核心前必须 schema 校验；`unknown` / `any` 只能在第三方边界短暂存在，必须在同一函数收敛。
 - 错误必须保留机器可读 `code`，用户文案与调试信息分离。
 - 协议值使用枚举或常量对象，不裸写字符串。新增协议值先放 `src/protocol/contracts/enums.ts`。
-- 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。当前允许的内部块包括 `AgentAsk`、`GhostDecisions`、`IdentityAppend`、`MemoryActions`、`McpCalls`、`TaskPlan`、`ContextFork`、`SceneRecord`。
+- 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。当前允许的内部块包括 `AgentAsk`、`ContinuationDecisions`、`IdentityAppend`、`MemoryActions`、`McpCalls`、`TaskPlan`、`ContextFork`、`ReplayRecord`。
 - Gateway 出站生命周期（typing、message edit、card update、reaction、thread create）必须走 `GatewayOutboundOperation` + `GatewayChannelCapabilities`；adapter 不得用自然语言文本、私有字符串或隐式布尔推断平台能力。
 - Gateway Control/Event Transport 必须走 `src/protocol/control/envelope.ts` 的 JSON envelope。`/ws` 可以暴露 `turn.delta`、`turn.final`、status 和 RuntimeEvent subscription，但事件来源必须是 `src/events`；不得为单个 TUI 写私有补丁协议。普通 IM channel 仍 final-only。
-- `gateway.message.send.payload.context` 是 project/fork/skill scope 的唯一 WS 入口；只能映射到 `RuntimeContext.activeProject` / `contextForkId` / `skillNames`，不得引入 session id 或从自然语言推断当前 project/fork。
+- `gateway.message.send.payload.context` 是 scope/fork/skill 的唯一 WS 入口；canonical 只写 `RuntimeContext.activeScope` / `contextForkId` / `skillNames`。`activeProject` 只允许作为一轮兼容读取，进入 runtime 后必须立即标准化；不得引入 session id，也不得从自然语言推断当前 scope/fork。
 - External Kit manifest 与只读发现目录是外部套件的唯一公开发现契约。`server.hello` / `capability.catalog.get` 可以暴露 CLI/TUI/Gateway/Capability kit、MCP server、plugin descriptor、skill manifest 和 user tool descriptor；kit discovery 不得 import Runtime 私有实现、command/TUI 私有实现、sandbox runner、MCP call client 或 PluginRunner，真实执行必须继续走 Executive Tool Runtime + sandbox/approval。
 - 新增代码必须带必要注释解释边界、生命周期、副作用或协议意图；修改旧代码时补齐被触碰路径的关键注释。注释应解释“为什么/边界是什么”，避免机械复述代码。
 - 源码、测试、模板、脚本和文档不得出现疑似真实 provider 密钥。测试只能使用明显的非厂商占位值（例如 `test-openai-key-*`），让 `sk-*` 这类厂商格式在发布扫描中保持高信噪比；本机或 Docker dev 的私有配置文件只由用户自己管理，不在清理任务中自动改写。
@@ -230,7 +231,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 - Flyflor home 相对路径：`<flyflor-home>/.config/config.jsonc`（source install 默认 `<flyflor-home>=~/.flyflor`，本地 dev checkout 为当前源码根）；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
 - 本地命令协议：`~/.flyflor/.config/commands.jsonc`。它只定义 future client 的本地 slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
-- `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 project / fork 选择写回 `RuntimeContext.activeProject` / `contextForkId`，不能反向变成隐式 session 容器。
+- `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 scope / fork 选择写回 `RuntimeContext.activeScope` / `contextForkId`；兼容读口可以接受旧 project 名字，但不能反向变成隐式 session 容器。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
 - OpenAI-compatible provider 的最小配置是 `baseUrl` + `apiKey` + 当前模型；`type`、默认 `chat-completions` 和模型列表由加载器推断 / 探测。自动化代理不得把用户本地 `config.jsonc` 中正在使用的 `apiKey` 改成占位符。
@@ -251,11 +252,11 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
     config.jsonc
     commands.jsonc            # TUI / app slash command rules
     prompts/                  # 内部提示词模板（不属于用户工作区）
-    templates/memory/         # MEMORY/SELF/SOUL/USER 初始模板
+    templates/memory/         # memory/self/identity/user 初始模板源文件
     templates/projects/       # 项目骨架模板
     workspace/                # 用户工作区（可编辑）
-      SELF.md / SOUL.md / USER.md / MEMORY.md
-      projects/<projectId>/
+      SELF.md / IDENTITY.md / USER.md / MEMORY.md
+      scopes/<scopeId>/
       .flyflor/{skills,mcp,plugins,memory}/  # 项目局部 capability
     skills/ / mcp/ / plugins/ # 全局 capability
     logs/                     # 审计日志
@@ -304,30 +305,31 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ## 11.1 生命体重构红线（与第 11 章并列硬约束）
 
-> 这些红线是当前运行契约的一部分。历史设计背景已归档到 `docs/old-docs/life.form.md`，不能覆盖本文件。
+> 这些红线是当前运行契约的一部分。历史设计背景已归档到 `docs/old-docs/legacy.architecture.history.md`，不能覆盖本文件。
 
 ### R1 — 无 session
 
 - 协议、提示词、存储、事件、日志、CLI 中禁止出现 `sessionId` / `sessionKey` / `sessionScope` / `legacySessionKey` 等任何形式的会话标识。
 - 禁止把 session 改名为 legacy、scope、conversation、thread 等新容器继续表达会话；纯渠道协议字段（如外部 IM thread id）只能保留在 gateway 原始元数据边界，不能进入记忆连续性模型。
-- 时间是唯一事实连续轴：所有"哪一段经历"问题改由 `(userId, channelId, codenameId, ts)` + `FocusPointer` + hippocampus activation 共同表达。
-- Project 是从海马体 / 晶体智力中沉淀出来的内部约束 + 由 codename 升格而来的可感知容器；默认 CLI / TUI 不展示 project id，调试入口必须显式标注 internal / audit。
-- Project-local memory 归 `ProjectMemoryStore` 单一组件持有；Markdown 与 JSONL 审计都保持 append-only，不能把项目固化路径拆成无 owner 的 helper 或 service。
-- 黑板互斥、Confirmation lookup、Reflection `sourceId`、TUI 当前焦点全部由内部 project constraint / turn / episode 审计 id 承担。
+- 连续性只允许由时间线、`FocusPointer`、memory activation、显式 `activeScope`、显式 `contextForkId` 和 codename boost 共同表达；`userId`、`channelId`、`chatId`、`threadId`、transport session 都不得充当核心认知 owner。
+- `Scope` 是唯一显式工作域；默认 CLI / TUI 不应偷偷造 fallback scope，调试入口需要显式标注 internal / audit 边界。
+- scope-local memory 归单一 owner 组件持有；Markdown 与 JSONL 审计都保持 append-only，不能把 scope 固化路径拆成无 owner 的 helper 或 service。
+- 黑板互斥、confirmation lookup、reflection `sourceId`、TUI 当前焦点都必须由显式 scope / fork / turn / episode 审计 id 承担，而不是 transport tuple。
 
 ### R2 — Brain.db 是单文件大脑契约
 
-- `~/.flyflor/.config/brain.db` 是用户可见、可手动 inspect 的"生平"，唯一权威记忆库。结构契约：**event / state 分离 + append-only + 时间字段索引**。
+- `~/.flyflor/.config/brain.db` 是当前月唯一可写 ledger，用户可见、可手动 inspect。结构契约：**event / state 分离 + append-only + 时间字段索引**。
 - 禁止把 event 表改成可变行（任何"更新内容"操作必须新写一行 + 状态层指向）；可变性只允许出现在 `memory_state` / `memory_summary` / `codenames` 这类显式状态表。
-- 性能优化必须保持单主库契约：`brain.db` 是唯一 live DB，热路径通过复合索引和 query-plan 测试守住；历史数据只通过月级只读归档外迁。禁止把 live 主库拆成按日 / 按项目 shard。
-- 月级冷归档落 `~/.flyflor/.config/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
+- `brain.db` 属于 ledger/query plane，不属于 context plane。运行时不得把原始 event 流直接塞进 prompt；进入上下文的只能是 recall、summary、vector、scope index 等二次产物。
+- 性能优化必须保持“当前月 live + 历史月只读归档”契约：当前月 `brain.db` 是唯一 live DB，热路径通过复合索引和 query-plan 测试守住；历史数据只通过月级只读归档外迁。禁止把 live 主库拆成按日 / 按 scope shard。
+- 月级冷归档落 `~/.flyflor/.config/brain/archive/brain.YYYY-MM.db`，必须 read-only ATTACH；禁止"为性能"把多月数据合并成单一压缩文件去替换原 brain.db 行。
 - `MemoryComponent` 热记忆压缩只能写 `memory_events.type='hot-memory-compression'` 审计事件；不得写入 `memory_summary`、不得生成 prompt atom、不得默认进入 `CrystalComponent` / Gem 候选。若未来要把压缩结果转为长期证据，必须新增显式 gate。
 - 删除操作只能通过显式 CLI（如 `flyflor memory forget`）触发并审计；Dream / sweeper 一律只能改 `memory_state` 字段，不得 DELETE event 行。
 - 旧 `~/.flyflor/journal/<yyyy>/W<ww>/day_*.db` 目录在重构过渡期内只读保留 60 天，期满下线；过渡期内禁止反向写入旧目录。
 
 ### R3 — Identity 自写：append-only + revertable
 
-- `~/.flyflor/identity/{soul.md,user.md}` 由 agent 直接 append，但必须满足三件事：
+- `~/.flyflor/identity/{identity.md,user.md}` 由 agent 直接 append，但必须满足三件事：
     1. 写入前后落 `revert.log.jsonl`，记录 `beforeHash` / `afterHash` / `appendedText` / `atomIds` 完整证据链。
     2. 频率门：每文件每天最多 `memory.tuning.identity.appendDailyLimitPerFile` 次（默认 3）；超额走 dream 慢通道，不丢弃。
     3. 用户可 1-click revert（`flyflor identity revert <entryId>`），revert 后回写反向标记 atom，未来同主题 append 概率下调。
@@ -338,29 +340,29 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 - 所有记忆召回入口必须先过 `AtomScore` 阈值；默认 prompt 可见性阈值为 `memory.tuning.atomScore.visibilityThreshold = 0.65`。禁止绕过分数直接 `SELECT *` 用作 prompt 上下文。
 - 唯一例外：`flyflor memory dump` / `doctor` / 调试 CLI 等显式调试入口，必须在日志中标注 `bypass-score: true`。
-- inbox project 内 atom 的 `recency` 分量必须乘以 `memory.tuning.inbox.decayMultiplier`（默认 2.0），实现"7 天加速淡出"。
-- `RuntimeMode.Dormant` 期间召回阈值不变；Dormant 不等于关闭召回，gateway 监听不停（行为契约，不可配）。
+- 没有显式 `activeScope` 时，不创建 fallback scope、不创建 inbox scope；全局 recall 和 turn-local recall 仍然要走同一分数门，不能因为“缺 scope”就退回原始流水账拼 prompt。
+- `RuntimeMode.Idle` 期间召回阈值不变；Idle 不等于关闭召回，gateway 监听不停（行为契约，不可配）。
 
 ### R5 — Ask 是一等公民（中断模型）
 
 - 模型同轮输出 `{ kind: 'reply' | 'ask' }` **互斥**：要么回答，要么反问。禁止用 reply 文本中嵌入问句"模拟"反问；只有 `kind === 'ask'` 携带的 `AgentAsk` 才是 ask。
 - Ask 不引入新的暂停 / 等待状态机：pending ask 仅是 `memory_events` 中一条 `type='ask-answer-pair'` 的事件 + `memory_state.status` 字段。用户**任意新输入**自动 cancel pending ask（标记 `abandoned`），不超时。
-- ask 链深度硬上限 `memory.tuning.ghost.maxChainDepth`（默认 5）。超过 → runtime 强制 reply 并落 `excessive_clarification_loop` 信号。
+- ask 链深度硬上限 `memory.tuning.continuation.maxChainDepth`（默认 5）。超过 → runtime 强制 reply 并落 `excessive_clarification_loop` 信号。
 - Ask 的触发面（reason / choices / freeform）必须完全由模型同轮结构化字段决定。禁止 runtime 用 `text.includes` / 正则 / 关键词列表 / 句末标点判断是否要 ask（**业务语义判断零字符匹配红线 — 见全局红线章节**）。
 - 黑板内部 worker 之间的讨论与 Ask 无关：worker 不能 ask 用户、不调工具、不写记忆。**只有黑板 cap（5 轮硬顶）后** runtime 接管，复用 Ask 协议向用户求助（`AskReason.BlackboardStalemate`）。`flyflor-decision-form` 等独立黑板决策表单退役。
 - Sandbox approval 与 Ask 正交，不走 Ask 协议；同一 turn 可同时出现一个 ask 和一个 sandbox approval。
 
-### R6 — Ghost Context 是 events 的子型
+### R6 — Continuation Context 是 events 的子型
 
-- Ghost 不是新存储 / 新状态机：仅是 `memory_events.type = 'ghost-context'` 的一行。所有"未完事项 / 可恢复副本"必须复用 events + state + AtomScore + decay 通路。
-- 默认对用户可见：通过 `memory.tuning.atomScore.visibilityThreshold` 过滤后渲染。任何 ghost 渲染面（TUI 侧栏、CLI `flyflor ghost list`、渠道 `/ghosts`）禁止绕过分数门。
+- Continuation 不是新存储 / 新状态机：仅是 `memory_events.type = 'continuation-context'` 的一行。所有"未完事项 / 可恢复副本"必须复用 events + state + AtomScore + decay 通路。
+- 默认对用户可见：通过 `memory.tuning.atomScore.visibilityThreshold` 过滤后渲染。任何 continuation 渲染面（TUI 侧栏、CLI `flyflor continuation list`、渠道 `/continuations`）禁止绕过分数门。
 - `userFacing.{ title, askPrompt, contextHint }` 必须由模型同轮生成；runtime 不得用规则拼接（零字符匹配）。
-- `ghost pin` 只允许把半衰期乘以 `memory.tuning.ghost.pinHalflifeMultiplier`（默认 3.0），**不允许永久冻结分数**；pin 不绕过 AtomScore 衰减，仅放慢。
-- `ghost resume <id>` 是用户显式意图，跳过模型 fork/fresh 自决；成功 resume 的 ghost `importance` 拉回峰值并保留作为 gem 升格证据。被 cancel 的 ghost 标 `abandoned`，`evidence weight = 0`，不参与晶体升格。
+- `continuation pin` 只允许把半衰期乘以 `memory.tuning.continuation.pinHalflifeMultiplier`（默认 3.0），**不允许永久冻结分数**；pin 不绕过 AtomScore 衰减，仅放慢。
+- `continuation resume <id>` 是用户显式意图，跳过模型 fork/fresh 自决；成功 resume 的 continuation `importance` 拉回峰值并保留作为 gem 升格证据。被 cancel 的 continuation 标 `abandoned`，`evidence weight = 0`，不参与晶体升格。
 
 ### R7 — Dream 只放大、不创造
 
-- Dream worker 的写操作（merge / contradiction-audit / reconsolidation / drift-repair）必须有**已记录的 negative 信号源**：用户显式纠正、连续工具失败计数、`memory_links.type ∈ { contradicts, causal, derived }`、ghost abandoned 计数。
+- Dream worker 的写操作（merge / contradiction-audit / reconsolidation / drift-repair）必须有**已记录的 negative 信号源**：用户显式纠正、连续工具失败计数、`memory_links.type ∈ { contradicts, causal, derived }`、continuation abandoned 计数。
 - 无信号源时 Dream 一轮**写 0 条**。禁止 Dream 基于"两条 atom 语义相似"作出无证据的合并 / 改写。
 - Dream 不得新增 `memory_events`（事件层）以外的状态轨道；改写只能落 `memory_state` / `memory_links`，并附 `atomIds` + `linkIds` 证据链。
 

@@ -8,14 +8,17 @@ export interface BrainTaskPlanRow {
     source_ask_id: string | null;
     source_blackboard_turn_id: string | null;
     source_event_id: string | null;
-    source_scene_id: string | null;
+    source_replay_id?: string | null;
+    source_scene_id?: string | null;
     status: string;
     step_count: number;
     steps_json: string;
     summary: string;
     title: string;
     updated_at: string;
-    user_id: string;
+    owner_key?: string | null;
+    source_key?: string | null;
+    legacy_source_key?: string | null;
 }
 
 /**
@@ -26,7 +29,8 @@ export class BrainTaskPlanModel {
         const steps = this.parseJsonArray(row.steps_json, `task_plans.steps_json for ${row.id}`);
         return {
             id: row.id,
-            userId: row.user_id,
+            ownerKey: row.owner_key ?? row.legacy_source_key ?? row.id,
+            sourceKey: row.source_key ?? row.legacy_source_key ?? undefined,
             title: row.title,
             summary: row.summary,
             status: row.status as TaskPlanRecord["status"],
@@ -39,7 +43,7 @@ export class BrainTaskPlanModel {
             sourceEventId: row.source_event_id ?? undefined,
             sourceAskId: row.source_ask_id ?? undefined,
             sourceBlackboardTurnId: row.source_blackboard_turn_id ?? undefined,
-            sourceSceneId: row.source_scene_id ?? undefined,
+            sourceReplayId: row.source_replay_id ?? row.source_scene_id ?? undefined,
         };
     }
 

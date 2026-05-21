@@ -8,13 +8,15 @@ import type { Database } from "bun:sqlite";
  */
 export class BrainSchema {
     public install(db: Database): void {
+        this.installCompatibilityMigrations(db);
         db.exec(`
             CREATE TABLE IF NOT EXISTS memory_events (
                 id TEXT PRIMARY KEY,
                 ts INTEGER NOT NULL,
                 time_bucket TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                channel_id TEXT,
+                owner_key TEXT NOT NULL,
+                source_key TEXT,
+                source_surface TEXT,
                 codename_id TEXT,
                 type TEXT NOT NULL,
                 role TEXT,
@@ -28,11 +30,9 @@ export class BrainSchema {
             CREATE INDEX IF NOT EXISTS idx_events_bucket   ON memory_events(time_bucket);
             CREATE INDEX IF NOT EXISTS idx_events_codename ON memory_events(codename_id, ts);
             CREATE INDEX IF NOT EXISTS idx_events_type     ON memory_events(type, ts);
-            CREATE INDEX IF NOT EXISTS idx_events_user     ON memory_events(user_id, ts);
-            -- Hot prompt / identity / ghost recall always starts from one user's typed time window.
-            -- Keep this as a composite index so a large single brain.db does not degrade into broad scans.
-            CREATE INDEX IF NOT EXISTS idx_events_user_type_ts ON memory_events(user_id, type, ts DESC);
-            -- Ask pending checks and ghost evidence checks are relationship lookups, not semantic text reads.
+            CREATE INDEX IF NOT EXISTS idx_events_owner    ON memory_events(owner_key, ts);
+            CREATE INDEX IF NOT EXISTS idx_events_owner_type_ts ON memory_events(owner_key, type, ts DESC);
+            -- Ask pending checks and continuation evidence checks are relationship lookups, not semantic text reads.
             -- Index parent_id + type together because these checks sit on the interactive turn path.
             CREATE INDEX IF NOT EXISTS idx_events_parent_type ON memory_events(parent_id, type);
 
@@ -82,18 +82,16 @@ export class BrainSchema {
                 name TEXT NOT NULL,
                 working_dir TEXT,
                 description TEXT,
-                user_id TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 last_used_at INTEGER NOT NULL,
                 use_count INTEGER NOT NULL DEFAULT 0,
-                project_id TEXT,
-                UNIQUE (user_id, name)
+                scope_id TEXT,
+                UNIQUE (name)
             );
-            CREATE INDEX IF NOT EXISTS idx_codename_user_used ON codenames(user_id, last_used_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_codename_used ON codenames(last_used_at DESC);
 
-            CREATE TABLE IF NOT EXISTS projects (
+            CREATE TABLE IF NOT EXISTS scopes (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 goal TEXT,
                 project_dir TEXT NOT NULL,
@@ -103,21 +101,23 @@ export class BrainSchema {
                 last_used_at INTEGER NOT NULL,
                 use_count INTEGER NOT NULL DEFAULT 0
             );
-            CREATE INDEX IF NOT EXISTS idx_projects_user_used ON projects(user_id, last_used_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_scopes_used ON scopes(last_used_at DESC);
 
             CREATE TABLE IF NOT EXISTS memory_eq_state (
-                user_id     TEXT PRIMARY KEY,
-                valence     REAL NOT NULL,
-                arousal     REAL NOT NULL,
-                dominance   REAL NOT NULL,
-                label       TEXT NOT NULL,
-                confidence  REAL NOT NULL,
-                updated_at  INTEGER NOT NULL
+                owner_key     TEXT PRIMARY KEY,
+                source_key    TEXT,
+                valence       REAL NOT NULL,
+                arousal       REAL NOT NULL,
+                dominance     REAL NOT NULL,
+                label         TEXT NOT NULL,
+                confidence    REAL NOT NULL,
+                updated_at    INTEGER NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS task_plans (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
+                source_key TEXT,
                 title TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -130,15 +130,16 @@ export class BrainSchema {
                 source_event_id TEXT,
                 source_ask_id TEXT,
                 source_blackboard_turn_id TEXT,
-                source_scene_id TEXT
+                source_replay_id TEXT
             );
-            CREATE INDEX IF NOT EXISTS idx_task_plans_user_updated ON task_plans(user_id, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_task_plans_owner_updated ON task_plans(owner_key, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_task_plans_source_event ON task_plans(source_event_id);
             CREATE INDEX IF NOT EXISTS idx_task_plans_blackboard ON task_plans(source_blackboard_turn_id);
 
             CREATE TABLE IF NOT EXISTS context_forks (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
+                source_key TEXT,
                 parent_id TEXT,
                 title TEXT NOT NULL,
                 summary TEXT NOT NULL,
@@ -151,13 +152,14 @@ export class BrainSchema {
                 source_ask_id TEXT,
                 source_blackboard_turn_id TEXT
             );
-            CREATE INDEX IF NOT EXISTS idx_context_forks_user_updated ON context_forks(user_id, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_context_forks_owner_updated ON context_forks(owner_key, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_context_forks_source_event ON context_forks(source_event_id);
             CREATE INDEX IF NOT EXISTS idx_context_forks_blackboard ON context_forks(source_blackboard_turn_id);
 
-            CREATE TABLE IF NOT EXISTS scene_records (
+            CREATE TABLE IF NOT EXISTS replay_records (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
+                source_key TEXT,
                 kind TEXT NOT NULL,
                 title TEXT NOT NULL,
                 summary TEXT NOT NULL,
@@ -171,10 +173,152 @@ export class BrainSchema {
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_scene_records_user_updated ON scene_records(user_id, updated_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_scene_records_source_event ON scene_records(source_event_id);
-            CREATE INDEX IF NOT EXISTS idx_scene_records_blackboard ON scene_records(blackboard_turn_id);
+            CREATE INDEX IF NOT EXISTS idx_replay_records_owner_updated ON replay_records(owner_key, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_replay_records_source_event ON replay_records(source_event_id);
+            CREATE INDEX IF NOT EXISTS idx_replay_records_blackboard ON replay_records(blackboard_turn_id);
         `);
+        this.addOwnerSourceColumns(db);
+        this.addMemoryEventCoreColumns(db);
+    }
+
+    private installCompatibilityMigrations(db: Database): void {
+        this.renameProjectsTable(db);
+        this.renameCodenameScopeColumn(db);
+        this.renameTaskPlanReplayColumn(db);
+        this.renameReplayRecordsTable(db);
+    }
+
+    private addOwnerSourceColumns(db: Database): void {
+        for (const table of ["memory_eq_state", "task_plans", "context_forks", "replay_records"]) {
+            if (!this.tableExists(db, table)) continue;
+            const columns = db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((row) => row.name);
+            if (!columns.includes("owner_key")) {
+                db.exec(`ALTER TABLE ${table} ADD COLUMN owner_key TEXT;`);
+                if (columns.includes("user_id")) {
+                    db.exec(`UPDATE ${table} SET owner_key = user_id WHERE owner_key IS NULL;`);
+                }
+            }
+            if (!columns.includes("source_key")) {
+                db.exec(`ALTER TABLE ${table} ADD COLUMN source_key TEXT;`);
+                if (columns.includes("audit_user_id")) {
+                    db.exec(`UPDATE ${table} SET source_key = audit_user_id WHERE source_key IS NULL;`);
+                }
+                if (columns.includes("user_id")) {
+                    db.exec(`UPDATE ${table} SET source_key = user_id WHERE source_key IS NULL;`);
+                }
+            }
+        }
+        this.dropLegacyOwnerIndexes(db);
+    }
+
+    private addMemoryEventCoreColumns(db: Database): void {
+        if (!this.tableExists(db, "memory_events")) return;
+        const columns = db.query<{ name: string }, []>("PRAGMA table_info(memory_events)").all().map((row) => row.name);
+        if (!columns.includes("owner_key")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN owner_key TEXT;");
+            db.exec("UPDATE memory_events SET owner_key = user_id WHERE owner_key IS NULL;");
+        }
+        if (!columns.includes("source_key")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN source_key TEXT;");
+            if (columns.includes("user_id")) {
+                db.exec("UPDATE memory_events SET source_key = user_id WHERE source_key IS NULL;");
+            }
+        }
+        if (!columns.includes("source_surface")) {
+            db.exec("ALTER TABLE memory_events ADD COLUMN source_surface TEXT;");
+            if (columns.includes("channel_id")) {
+                db.exec("UPDATE memory_events SET source_surface = channel_id WHERE source_surface IS NULL;");
+            }
+        }
+    }
+
+    private tableExists(db: Database, table: string): boolean {
+        const row = db
+            .query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+            .get(table);
+        return Boolean(row);
+    }
+
+    private renameTaskPlanReplayColumn(db: Database): void {
+        const columns = db.query<{ name: string }, []>("PRAGMA table_info(task_plans)").all().map((row) => row.name);
+        if (columns.includes("source_replay_id")) return;
+        if (columns.includes("source_scene_id")) {
+            db.exec("ALTER TABLE task_plans RENAME COLUMN source_scene_id TO source_replay_id;");
+        }
+    }
+
+    private renameProjectsTable(db: Database): void {
+        const tables = db
+            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all()
+            .map((row) => row.name);
+        if (tables.includes("projects") && !tables.includes("scopes")) {
+            db.exec("ALTER TABLE projects RENAME TO scopes;");
+        }
+        if (!this.tableExists(db, "scopes")) return;
+        const columns = db.query<{ name: string }, []>("PRAGMA table_info(scopes)").all().map((row) => row.name);
+        const indexes = db
+            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
+            .all()
+            .map((row) => row.name);
+        if (indexes.includes("idx_projects_user_used")) {
+            db.exec("DROP INDEX idx_projects_user_used;");
+        }
+        if (indexes.includes("idx_scopes_audit_user_used")) {
+            db.exec("DROP INDEX idx_scopes_audit_user_used;");
+        }
+    }
+
+    private renameCodenameScopeColumn(db: Database): void {
+        if (!this.tableExists(db, "codenames")) return;
+        const columns = db.query<{ name: string }, []>("PRAGMA table_info(codenames)").all().map((row) => row.name);
+        if (columns.includes("project_id") && !columns.includes("scope_id")) {
+            db.exec("ALTER TABLE codenames RENAME COLUMN project_id TO scope_id;");
+        }
+    }
+
+    private renameReplayRecordsTable(db: Database): void {
+        const tables = db
+            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all()
+            .map((row) => row.name);
+        if (tables.includes("scene_records")) {
+            if (!tables.includes("replay_records")) {
+                db.exec("ALTER TABLE scene_records RENAME TO replay_records;");
+            }
+        }
+        const indexes = db
+            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
+            .all()
+            .map((row) => row.name);
+        if (indexes.includes("idx_scene_records_user_updated")) {
+            db.exec("DROP INDEX idx_scene_records_user_updated;");
+        }
+        if (indexes.includes("idx_scene_records_source_event")) {
+            db.exec("DROP INDEX idx_scene_records_source_event;");
+        }
+        if (indexes.includes("idx_scene_records_blackboard")) {
+            db.exec("DROP INDEX idx_scene_records_blackboard;");
+        }
+    }
+
+    private dropLegacyOwnerIndexes(db: Database): void {
+        const indexes = db
+            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
+            .all()
+            .map((row) => row.name);
+        for (const name of [
+            "idx_task_plans_user_updated",
+            "idx_context_forks_user_updated",
+            "idx_replay_records_user_updated",
+            "idx_events_user",
+            "idx_events_user_type_ts",
+            "idx_codename_user_used",
+        ]) {
+            if (indexes.includes(name)) {
+                db.exec(`DROP INDEX ${name};`);
+            }
+        }
     }
 }
 

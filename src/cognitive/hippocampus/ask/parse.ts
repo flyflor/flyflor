@@ -68,7 +68,7 @@ export class AgentAskParser {
         const freeform = typeof obj.freeform === "boolean" ? obj.freeform : true;
         const relatedIds = this.normalizeStringArray(obj.relatedIds);
         const rationale = typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 500) : undefined;
-        const ghostHint = this.normalizeGhostHint(obj.ghostHint);
+        const continuationHint = this.normalizeContinuationHint(obj.continuationHint);
         const ask: AgentAsk = {
             reason,
             prompt: prompt.slice(0, 2000),
@@ -78,11 +78,11 @@ export class AgentAskParser {
         if (questions && questions.length > 0) ask.questions = questions;
         if (relatedIds && relatedIds.length > 0) ask.relatedIds = relatedIds;
         if (rationale) ask.rationale = rationale;
-        if (ghostHint) ask.ghostHint = ghostHint;
+        if (continuationHint) ask.continuationHint = continuationHint;
         return ask;
     }
 
-    private normalizeGhostHint(value: unknown): { title: string; contextHint?: string } | undefined {
+    private normalizeContinuationHint(value: unknown): { title: string; contextHint?: string } | undefined {
         if (!value || typeof value !== "object") {
             return undefined;
         }

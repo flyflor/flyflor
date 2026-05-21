@@ -17,4 +17,4 @@ export class GlobalEventBus implements EventSink {
 }
 
 export const globalEvents = new GlobalEventBus();
-export { GlobalEventBus as FpcEventBus, GlobalEventBus as RuntimeEventBus };
+export { GlobalEventBus as RuntimeEventBus };

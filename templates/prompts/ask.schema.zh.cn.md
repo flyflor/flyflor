@@ -18,9 +18,9 @@ reply 与 ask 互斥：一旦发出 ask 块，对外可见的回复会基于 `as
 - `choices`（`[{label, value?, description?}]`）：最多 12 个候选项，用于整条 ask 的标题问题。`label` 给用户看，`value` 是你打算在该项被选中时沿用的结构化值。
 - `questions`（`[{id?, prompt, choices?, freeform?, relatedIds?, rationale?}]`）：按顺序排列的子问题。一次需要问多个点时用这个数组；每个 prompt 保持短、具体。
 - `freeform`（布尔，默认 `true`）：置为 `false` 表示你强烈偏好用户从 `choices` 中选一个。客户端界面仍可能显示 `Other` 选项，让用户输入自定义回答；如果用户这样回答，下一轮照常处理。
-- `relatedIds`（`[string]`）：codenameId / blackboardTurnId / projectId 等关联标识，仅供审计回查。
+- `relatedIds`（`[string]`）：codenameId / blackboardTurnId / scopeId 等关联标识，仅供审计回查。
 - `rationale`（字符串）：你内部的简短理由（调试 / 审计用），不会原样展示给用户。
-- `ghostHint`（对象）：给运行时的可选元数据，用来保存一条“未完成事项 / 可恢复上下文”。它不是给你推理用的额外上下文。形态：`{ "title": "≤60 字的简短标题", "contextHint": "≤200 字、用户重新打开这个未完成事项时看到的提示" }`。如果 `prompt` 已经把未解决点说明清楚，可以省略。
+- `continuationHint`（对象）：给运行时的可选元数据，用来保存一条“未完成事项 / 可恢复上下文”。它不是给你推理用的额外上下文。形态：`{ "title": "≤60 字的简短标题", "contextHint": "≤200 字、用户重新打开这个未完成事项时看到的提示" }`。如果 `prompt` 已经把未解决点说明清楚，可以省略。
 
 硬规则：
 
@@ -31,17 +31,17 @@ reply 与 ask 互斥：一旦发出 ask 块，对外可见的回复会基于 `as
 
 未完成事项决策。
 
-当 `[ghost-hint]` 列出了活跃的历史上下文，而用户的新消息与其中某条明显相关时，你可以输出结构化决策块告诉运行时如何处置每个候选 ghost：
+当 `[continuation-hint]` 列出了活跃的历史上下文，而用户的新消息与其中某条明显相关时，你可以输出结构化决策块告诉运行时如何处置每个候选 continuation：
 
-<flyflor_ghost_decisions>
-[{"ghostId":"ghost-…","kind":"resume"}, {"ghostId":"ghost-…","kind":"fresh"}]
-</flyflor_ghost_decisions>
+<flyflor_continuation_decisions>
+[{"continuationId":"continuation-…","kind":"resume"}, {"continuationId":"continuation-…","kind":"fresh"}]
+</flyflor_continuation_decisions>
 
 - `kind: "resume"` —— 用户正在继续这个未完成事项，运行时将其标记为 resumed。
 - `kind: "fork"` —— 用户从旧上下文分出一个相关但新的话题，旧上下文被降权但仍可见。
 - `kind: "fresh"` —— 用户在开启独立的新话题，旧上下文被降权但仍可见。
 
-只能引用本轮 `[ghost-hint]` 中原文出现过的 ghostId；未知 id 会被静默丢弃。无需决策时省略该块；不要凭空捏造 ghost。运行时从不对自然语言推断 fork/fresh/resume。
+只能引用本轮 `[continuation-hint]` 中原文出现过的 continuationId；未知 id 会被静默丢弃。无需决策时省略该块；不要凭空捏造 continuation。运行时从不对自然语言推断 fork/fresh/resume。
 
 身份自写。
 
@@ -81,9 +81,9 @@ reply 与 ask 互斥：一旦发出 ask 块，对外可见的回复会基于 `as
 
 场景回放：
 
-<flyflor_scene_record>
+<flyflor_replay_record>
 {"kind":"deep-think","title":"场景标题","summary":"可回放摘要，不是思维链。","visibleFacts":[],"openQuestions":[]}
-</flyflor_scene_record>
+</flyflor_replay_record>
 
 - `status` 只能是 `planned` / `in-progress` / `waiting` / `blocked` / `done`。
 - `kind` 只能是 `blackboard` / `deep-think` / `reflection`。

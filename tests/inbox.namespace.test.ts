@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { MemoryModule } from "../src/agent/index.ts";
-import { inboxProjectIdFor, isInboxProjectId } from "../src/cognitive/hippocampus/memory/index.ts";
 import type { MemoryAction } from "../src/cognitive/hippocampus/memory/actions/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
@@ -105,20 +104,8 @@ function actionAdd(content: string, codename?: { name: string; workingDir?: stri
     return a;
 }
 
-describe("P2 inbox slice A — projectId namespacing by codename", () => {
-    test("inboxProjectIdFor / isInboxProjectId predicate boundaries", () => {
-        expect(inboxProjectIdFor()).toBe("inbox");
-        expect(inboxProjectIdFor(undefined)).toBe("inbox");
-        expect(inboxProjectIdFor(null)).toBe("inbox");
-        expect(inboxProjectIdFor("")).toBe("inbox");
-        expect(inboxProjectIdFor("cn-abc")).toBe("inbox:cn-cn-abc");
-        expect(isInboxProjectId("inbox")).toBe(true);
-        expect(isInboxProjectId("inbox:cn-anything")).toBe(true);
-        expect(isInboxProjectId("project-abc123")).toBe(false);
-        expect(isInboxProjectId("inboxx")).toBe(false);
-    });
-
-    test("turn with no codename action → atom.projectId === 'inbox' + inboxDecayApplied", async () => {
+describe("No-scope atom ownership", () => {
+    test("turn with no codename action writes turn-local owner without opening inbox scope", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
@@ -136,8 +123,9 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
                     .query("SELECT content FROM memory_events WHERE type = ? ORDER BY ts DESC LIMIT 1")
                     .get(MemoryEventType.Event) as { content: string } | null;
                 const atoms = readBrainAtoms(event?.content);
-                expect(atoms[0]?.projectId).toBe("inbox");
-                expect(isInboxProjectId(String(atoms[0]?.projectId))).toBe(true);
+                expect(atoms[0]?.ownerKey).toBe("turn:m-1");
+                expect(atoms[0]?.scopeId).toBeUndefined();
+                expect(atoms[0]?.projectId).toBe("turn:m-1");
             } finally {
                 db.close();
             }
@@ -146,7 +134,7 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
         }
     });
 
-    test("turn with codename action → atom.projectId namespaced as 'inbox:cn-<id>' and isInboxProjectId true", async () => {
+    test("turn with codename action writes codename owner without opening inbox scope", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
@@ -170,10 +158,9 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
                     .query("SELECT content FROM memory_events WHERE type = ? ORDER BY ts DESC LIMIT 1")
                     .get(MemoryEventType.Event) as { content: string } | null;
                 const atoms = readBrainAtoms(event?.content);
-                const projId = String(atoms[0]?.projectId);
-                expect(projId).toBe(inboxProjectIdFor(codenameId));
-                expect(projId.startsWith("inbox:cn-")).toBe(true);
-                expect(isInboxProjectId(projId)).toBe(true);
+                expect(atoms[0]?.ownerKey).toBe(`codename:${codenameId}`);
+                expect(atoms[0]?.scopeId).toBeUndefined();
+                expect(atoms[0]?.projectId).toBe(`codename:${codenameId}`);
 
                 const cn = db
                     .query("SELECT id, name FROM codenames WHERE user_id = ? AND name = ?")
@@ -189,7 +176,9 @@ describe("P2 inbox slice A — projectId namespacing by codename", () => {
     });
 });
 
-function readBrainAtoms(rawContent: string | undefined): Array<{ projectId?: string }> {
-    const content = rawContent ? (JSON.parse(rawContent) as { atoms?: Array<{ atom?: { projectId?: string } }> }) : {};
+function readBrainAtoms(rawContent: string | undefined): Array<{ ownerKey?: string; projectId?: string; scopeId?: string }> {
+    const content = rawContent
+        ? (JSON.parse(rawContent) as { atoms?: Array<{ atom?: { ownerKey?: string; projectId?: string; scopeId?: string } }> })
+        : {};
     return (content.atoms ?? []).map((entry) => entry.atom ?? {});
 }

@@ -69,6 +69,9 @@ async function installTemplateGroup(input: { destination: string; force: boolean
         if (!entry.isFile()) {
             continue;
         }
+        if (entry.name === "docs") {
+            continue;
+        }
         const sourcePath = join(input.source, entry.name);
         const destinationPath = join(input.destination, entry.name);
         const destination = Bun.file(destinationPath);

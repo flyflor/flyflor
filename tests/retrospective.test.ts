@@ -9,8 +9,8 @@ describe("RetrospectiveLog", () => {
         const dir = await mkdtemp(join(tmpdir(), "flyflor-retro-"));
         const log = new RetrospectiveLog({ projectMemoryDir: dir });
 
-        await log.append({ kind: "consolidate", userId: "u1", episodeId: "ep1", summary: "remembers tea", symbols: ["a", "b"] });
-        await log.append({ kind: "discard", userId: "u1", episodeId: "ep2", rationale: "transient" });
+        await log.append({ kind: "consolidate", ownerKey: "scope:u1", episodeId: "ep1", summary: "remembers tea", symbols: ["a", "b"] });
+        await log.append({ kind: "discard", ownerKey: "scope:u1", episodeId: "ep2", rationale: "transient" });
 
         const text = await log.read();
         expect(text).toContain("# RETROSPECTIVE");

@@ -1,5 +1,5 @@
 /**
- * RetrospectiveLog: project-scoped append-only Markdown log of long-term
+ * RetrospectiveLog: scope-local append-only Markdown log of long-term
  * memory consolidation outcomes (consolidate / discard) plus skill / cluster
  * promotion events. Written to `<projectMemoryDir>/RETROSPECTIVE.md` so users
  * can audit what their agent has been promoting or forgetting.
@@ -7,7 +7,7 @@
  * Format (one entry = one block separated by a blank line):
  *
  * ## 2024-06-10T14:22:01.337Z — consolidate
- * - userId: u_42
+ * - ownerKey: scope:example
  * - episodeId: ep_…
  * - summary: <short summary>
  * - symbols: [a, b, c]
@@ -27,7 +27,7 @@ const HEADER = "# RETROSPECTIVE\n\n> Append-only audit log of long-term memory c
 export interface RetrospectiveEntry {
     at?: string;
     kind: "consolidate" | "discard" | "reinforce" | "skill-promoted" | "cluster-promoted" | "custom";
-    userId?: string;
+    ownerKey?: string;
     episodeId?: string;
     summary?: string;
     symbols?: readonly string[];
@@ -40,18 +40,18 @@ export interface RetrospectiveLogOptions {
 }
 
 export class RetrospectiveLog {
-    private readonly projectMemoryDir: string;
+    private readonly scopeMemoryDir: string;
 
     public constructor(options: RetrospectiveLogOptions) {
-        this.projectMemoryDir = options.projectMemoryDir;
+        this.scopeMemoryDir = options.projectMemoryDir;
     }
 
     public path(): string {
-        return join(this.projectMemoryDir, FILE_NAME);
+        return join(this.scopeMemoryDir, FILE_NAME);
     }
 
     public async append(entry: RetrospectiveEntry): Promise<void> {
-        await mkdir(this.projectMemoryDir, { recursive: true });
+        await mkdir(this.scopeMemoryDir, { recursive: true });
         const file = Bun.file(this.path());
         if (!(await file.exists())) {
             await Bun.write(this.path(), HEADER);
@@ -79,7 +79,7 @@ export class RetrospectiveLog {
 function renderEntry(entry: RetrospectiveEntry): string {
     const at = entry.at ?? new Date().toISOString();
     const lines = [`## ${at} — ${entry.kind}`];
-    if (entry.userId) lines.push(`- userId: ${entry.userId}`);
+    if (entry.ownerKey) lines.push(`- ownerKey: ${entry.ownerKey}`);
     if (entry.episodeId) lines.push(`- episodeId: ${entry.episodeId}`);
     if (entry.summary) lines.push(`- summary: ${stripNewlines(entry.summary)}`);
     if (entry.symbols && entry.symbols.length > 0) lines.push(`- symbols: [${entry.symbols.join(", ")}]`);

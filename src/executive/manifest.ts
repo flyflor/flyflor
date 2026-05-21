@@ -1,42 +1,42 @@
 import { parseJsonc, type FlyflorPaths } from "../config/index.ts";
 import { CapabilityComponent } from "../components/index.ts";
 import {
-    CttlCapabilitySource,
-    CttlPermission,
-    CttlToolCategory,
-    CttlToolScope,
-    type CttlCapabilitySource as CttlCapabilitySourceType,
-    type CttlPermission as CttlPermissionType,
-    type CttlToolCategory as CttlToolCategoryType,
-    type CttlToolScope as CttlToolScopeType,
+    CapabilitySource,
+    ToolPermission,
+    ToolCategory,
+    ToolScope,
+    type CapabilitySource as CapabilitySourceType,
+    type ToolPermission as ToolPermissionType,
+    type ToolCategory as ToolCategoryType,
+    type ToolScope as ToolScopeType,
 } from "../protocol/contracts/index.ts";
-import type { CttlJsonObject, CttlToolDescriptor } from "./types.ts";
+import type { ExecutiveJsonObject, ToolDescriptor } from "./types.ts";
 
-export type CttlManifestSource = "project" | "global";
+export type ToolManifestSource = "project" | "global";
 
-export interface CttlToolManifestFile {
-    tools?: Record<string, CttlToolManifestShape>;
+export interface ToolManifestFile {
+    tools?: Record<string, ToolManifestShape>;
 }
 
-export interface CttlToolManifestShape {
-    category?: CttlToolCategoryType;
+export interface ToolManifestShape {
+    category?: ToolCategoryType;
     concurrencySafe?: boolean;
     description?: string;
     enabled?: boolean;
-    executor?: CttlToolManifestExecutorShape;
+    executor?: ToolManifestExecutorShape;
     exclusive?: boolean;
     inputSchema?: unknown;
     outputSchema?: unknown;
-    permission?: CttlPermissionType;
+    permission?: ToolPermissionType;
     readOnly?: boolean;
     resultLimit?: { maxChars?: number };
-    scope?: CttlToolScopeType[];
-    source?: CttlCapabilitySourceType;
+    scope?: ToolScopeType[];
+    source?: CapabilitySourceType;
     sourceId?: string;
     tags?: string[];
 }
 
-export interface CttlToolManifestExecutorShape {
+export interface ToolManifestExecutorShape {
     args?: string[];
     command?: string;
     cwd?: "project" | "config";
@@ -46,14 +46,14 @@ export interface CttlToolManifestExecutorShape {
     timeoutMs?: number;
 }
 
-export interface CttlManifestToolDefinition {
-    descriptor: CttlToolDescriptor;
+export interface ManifestToolDefinition {
+    descriptor: ToolDescriptor;
     enabled: boolean;
-    executor?: CttlToolManifestExecutor;
-    manifestSource: CttlManifestSource;
+    executor?: ToolManifestExecutor;
+    manifestSource: ToolManifestSource;
 }
 
-export interface CttlToolManifestExecutor {
+export interface ToolManifestExecutor {
     args: readonly string[];
     command: string;
     cwd: "project" | "config";
@@ -70,13 +70,13 @@ type StringEnumShape = Readonly<Record<string, string>>;
  * Absence uses conventions; explicit malformed values fail fast at the
  * Executive boundary so invalid tools cannot be hidden by defaults.
  */
-export class CttlManifestComponent extends CapabilityComponent {
-    public async load(paths: FlyflorPaths): Promise<CttlManifestToolDefinition[]> {
+export class ToolManifestComponent extends CapabilityComponent {
+    public async load(paths: FlyflorPaths): Promise<ManifestToolDefinition[]> {
         const [globalFile, projectFile] = await Promise.all([
             this.read(paths, { global: true }),
             this.read(paths, { global: false }),
         ]);
-        const byName = new Map<string, CttlManifestToolDefinition>();
+        const byName = new Map<string, ManifestToolDefinition>();
         for (const entry of this.normalize(globalFile, "global")) {
             byName.set(entry.descriptor.name, entry);
         }
@@ -89,7 +89,7 @@ export class CttlManifestComponent extends CapabilityComponent {
     public async read(
         paths: FlyflorPaths,
         options: { global?: boolean } = {},
-    ): Promise<CttlToolManifestFile> {
+    ): Promise<ToolManifestFile> {
         const file = Bun.file(this.path(paths, options));
         if (!(await file.exists())) {
             return {};
@@ -102,14 +102,14 @@ export class CttlManifestComponent extends CapabilityComponent {
     }
 
     public normalize(
-        file: CttlToolManifestFile,
-        source: CttlManifestSource,
-    ): CttlManifestToolDefinition[] {
+        file: ToolManifestFile,
+        source: ToolManifestSource,
+    ): ManifestToolDefinition[] {
         const manifest = this.normalizeManifestFile(file);
         return Object.entries(manifest.tools ?? {}).map(([name, shape]) => this.normalizeTool(name, shape, source));
     }
 
-    private normalizeManifestFile(value: unknown): CttlToolManifestFile {
+    private normalizeManifestFile(value: unknown): ToolManifestFile {
         const file = this.optionalObject(value, "tools.jsonc", true) as Record<string, unknown> | undefined;
         if (!file) {
             return {};
@@ -122,7 +122,7 @@ export class CttlManifestComponent extends CapabilityComponent {
             tools: Object.fromEntries(
                 Object.entries(tools).map(([name, shape]) => [
                     name,
-                    this.requiredObject(shape, `tools.${name}`) as unknown as CttlToolManifestShape,
+                    this.requiredObject(shape, `tools.${name}`) as unknown as ToolManifestShape,
                 ]),
             ),
         };
@@ -130,9 +130,9 @@ export class CttlManifestComponent extends CapabilityComponent {
 
     private normalizeTool(
         name: string,
-        shape: CttlToolManifestShape,
-        manifestSource: CttlManifestSource,
-    ): CttlManifestToolDefinition {
+        shape: ToolManifestShape,
+        manifestSource: ToolManifestSource,
+    ): ManifestToolDefinition {
         const path = `tools.${name}`;
         this.assertToolName(name, path);
         return {
@@ -140,18 +140,18 @@ export class CttlManifestComponent extends CapabilityComponent {
             executor: this.normalizeExecutor(shape.executor, `${path}.executor`),
             manifestSource,
             descriptor: {
-                category: this.optionalEnum(shape.category, CttlToolCategory, `${path}.category`) ?? CttlToolCategory.Integration,
+                category: this.optionalEnum(shape.category, ToolCategory, `${path}.category`) ?? ToolCategory.Integration,
                 concurrencySafe: this.optionalBoolean(shape.concurrencySafe, `${path}.concurrencySafe`) ?? true,
                 description: this.optionalNonEmptyString(shape.description, `${path}.description`) ?? name,
                 exclusive: this.optionalBoolean(shape.exclusive, `${path}.exclusive`) ?? false,
                 inputSchema: this.optionalJsonObject(shape.inputSchema, `${path}.inputSchema`) ?? { type: "object" },
                 name,
                 outputSchema: this.optionalJsonObject(shape.outputSchema, `${path}.outputSchema`),
-                permission: this.optionalEnum(shape.permission, CttlPermission, `${path}.permission`) ?? CttlPermission.Read,
+                permission: this.optionalEnum(shape.permission, ToolPermission, `${path}.permission`) ?? ToolPermission.Read,
                 readOnly: this.optionalBoolean(shape.readOnly, `${path}.readOnly`) ?? true,
                 resultLimit: { maxChars: this.optionalResultLimitMaxChars(shape.resultLimit, `${path}.resultLimit`) ?? 4_000 },
-                scope: this.optionalScopes(shape.scope, `${path}.scope`) ?? [CttlToolScope.Core],
-                source: this.optionalEnum(shape.source, CttlCapabilitySource, `${path}.source`) ?? this.sourceForManifestSource(manifestSource),
+                scope: this.optionalScopes(shape.scope, `${path}.scope`) ?? [ToolScope.Core],
+                source: this.optionalEnum(shape.source, CapabilitySource, `${path}.source`) ?? this.sourceForManifestSource(manifestSource),
                 sourceId: this.optionalString(shape.sourceId, `${path}.sourceId`),
                 tags: this.optionalTags(shape.tags, `${path}.tags`),
             },
@@ -160,18 +160,18 @@ export class CttlManifestComponent extends CapabilityComponent {
 
     private assertToolName(value: string, path: string): void {
         if (!/^[a-z][a-z0-9_.-]*$/u.test(value)) {
-            throw new Error(`${path} must be a valid CTTL tool name.`);
+            throw new Error(`${path} must be a valid Executive tool name.`);
         }
     }
 
     private normalizeExecutor(
-        value: CttlToolManifestExecutorShape | undefined,
+        value: ToolManifestExecutorShape | undefined,
         path: string,
-    ): CttlToolManifestExecutor | undefined {
+    ): ToolManifestExecutor | undefined {
         if (value === undefined) {
             return undefined;
         }
-        const executor = this.requiredObject(value, path) as unknown as CttlToolManifestExecutorShape;
+        const executor = this.requiredObject(value, path) as unknown as ToolManifestExecutorShape;
         const kind = this.optionalString(executor.kind, `${path}.kind`);
         if (kind !== "process-json") {
             throw new Error(`${path}.kind must be process-json.`);
@@ -187,14 +187,14 @@ export class CttlManifestComponent extends CapabilityComponent {
         };
     }
 
-    private optionalScopes(value: unknown, path: string): readonly CttlToolScopeType[] | undefined {
+    private optionalScopes(value: unknown, path: string): readonly ToolScopeType[] | undefined {
         if (value === undefined) {
             return undefined;
         }
         if (!Array.isArray(value) || value.length === 0) {
             throw new Error(`${path} must be a non-empty array.`);
         }
-        return value.map((scope, index) => this.optionalEnum(scope, CttlToolScope, `${path}.${index}`)!);
+        return value.map((scope, index) => this.optionalEnum(scope, ToolScope, `${path}.${index}`)!);
     }
 
     private optionalResultLimitMaxChars(value: unknown, path: string): number | undefined {
@@ -235,13 +235,13 @@ export class CttlManifestComponent extends CapabilityComponent {
         );
     }
 
-    private optionalJsonObject(value: unknown, path: string): CttlJsonObject | undefined {
+    private optionalJsonObject(value: unknown, path: string): ExecutiveJsonObject | undefined {
         const object = this.optionalObject(value, path, true);
         if (!object) {
             return undefined;
         }
         this.assertJsonValue(object, path);
-        return object as CttlJsonObject;
+        return object as ExecutiveJsonObject;
     }
 
     private optionalObject(
@@ -348,29 +348,29 @@ export class CttlManifestComponent extends CapabilityComponent {
         throw new Error(`${path} must be JSON-safe.`);
     }
 
-    private sourceForManifestSource(source: CttlManifestSource): CttlCapabilitySourceType {
-        return source === "project" ? CttlCapabilitySource.User : CttlCapabilitySource.Plugin;
+    private sourceForManifestSource(source: ToolManifestSource): CapabilitySourceType {
+        return source === "project" ? CapabilitySource.User : CapabilitySource.Plugin;
     }
 }
 
-export async function loadCttlToolManifest(paths: FlyflorPaths): Promise<CttlManifestToolDefinition[]> {
-    return new CttlManifestComponent().load(paths);
+export async function loadToolManifest(paths: FlyflorPaths): Promise<ManifestToolDefinition[]> {
+    return new ToolManifestComponent().load(paths);
 }
 
-export async function readCttlToolManifest(
+export async function readToolManifest(
     paths: FlyflorPaths,
     options: { global?: boolean } = {},
-): Promise<CttlToolManifestFile> {
-    return new CttlManifestComponent().read(paths, options);
+): Promise<ToolManifestFile> {
+    return new ToolManifestComponent().read(paths, options);
 }
 
-export function cttlToolManifestPath(paths: FlyflorPaths, options: { global?: boolean } = {}): string {
-    return new CttlManifestComponent().path(paths, options);
+export function toolManifestPath(paths: FlyflorPaths, options: { global?: boolean } = {}): string {
+    return new ToolManifestComponent().path(paths, options);
 }
 
-export function normalizeCttlToolManifest(
-    file: CttlToolManifestFile,
-    source: CttlManifestSource,
-): CttlManifestToolDefinition[] {
-    return new CttlManifestComponent().normalize(file, source);
+export function normalizeToolManifest(
+    file: ToolManifestFile,
+    source: ToolManifestSource,
+): ManifestToolDefinition[] {
+    return new ToolManifestComponent().normalize(file, source);
 }

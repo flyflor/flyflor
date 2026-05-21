@@ -1,14 +1,14 @@
 /**
  * Brain.db 协议（单文件大脑 event/state/summary/link/codename 公共契约）
  *
- * 设计要点（当前契约见 `docs/boundaries.md` R2，历史背景见 `docs/old-docs/life.form.md`）：
+ * 设计要点（当前契约见 `docs/boundaries.md` R2，历史背景见 `docs/old-docs/legacy.architecture.history.md`）：
  * - `~/.flyflor/.config/brain.db` 是单文件大脑：event/state 分离 + append-only。
  * - `memory_events`：append-only 事件层。任何"更新内容"操作必须新写一行 + 状态层指向。
  * - `memory_state`：状态层。Dream / sweeper 只允许改这里，不得 DELETE event 行。
  * - `memory_summary`：日 / 周级摘要，取代旧 `week.summary.md`。
  * - `memory_links`：dream / reflection 形成的隐含链接（contradicts / causal / derived / similarity）。
- * - `codenames`：用户显式工作目录锚点；频次衰减自然上浮，可升格为 Project。
- * - `projects`：显式 `/project` 选择的项目作用域；只记录结构化路径和本地记忆目录，不解析对话文本。
+ * - `codenames`：轻量工作锚点；频次衰减自然上浮，可经确认升格为 Scope。
+ * - `scopes`：显式 Scope 工作域；只记录结构化路径和本地记忆目录，不解析对话文本。
  *
  * 本文件是 memory runtime、BrainStore、doctor/status 与归档工具共享的协议边界；
  * 新增事件类型必须仍可 JSON 序列化，且不得通过字符串语义解析派生。
@@ -29,11 +29,11 @@ export const MemoryEventType = {
     Action: "action",
     /** Reflection 候选 → atom 派生事件。 */
     Reflection: "reflection",
-    /** Ghost Context 快照（LF-R4）。`parent_id` 指向被 fork 的原事件。 */
-    GhostContext: "ghost-context",
+    /** Continuation Context 快照（LF-R4）。`parent_id` 指向被 fork 的原事件。 */
+    ContinuationContext: "continuation-context",
     /** Pending ask（LF-R3）：模型同轮 kind='ask' 输出的反问事件。`parent_id` 指向上一轮触发它的 event。 */
     Ask: "ask",
-    /** Ask-Answer 配对（LF-R3）。`parent_id` 指向触发它的 ghost / 原 ask 事件。 */
+    /** Ask-Answer 配对（LF-R3）。`parent_id` 指向触发它的 continuation / 原 ask 事件。 */
     AskAnswerPair: "ask-answer-pair",
     /** Identity self-write append。 */
     IdentityAppend: "identity-append",
@@ -65,7 +65,7 @@ export type HotMemoryCompressionReason =
 export const MemoryEventStatus = {
     /** 默认。参与召回、衰减、AtomScore 计算。 */
     Live: "live",
-    /** Ghost 被显式 resume 后的标记，importance 拉回峰值。 */
+    /** Continuation 被显式 resume 后的标记，importance 拉回峰值。 */
     Resumed: "resumed",
     /** Pending ask 被用户新输入 cancel；evidence weight = 0，不参与晶体升格。 */
     Abandoned: "abandoned",
@@ -107,14 +107,18 @@ export interface MemoryEventRecord {
     ts: number;
     /** YYYY-MM-DD（UTC）。R1 索引列。 */
     timeBucket: string;
-    userId: string;
-    channelId?: string;
+    /** Cognitive continuity owner (`scope:*`, `fork:*`, `codename:*`, `turn:*`). */
+    ownerKey?: string;
+    /** Optional gateway/source provenance label; never used as continuity owner. */
+    sourceKey?: string;
+    /** Optional gateway/source surface label; never used as continuity owner. */
+    sourceSurface?: string;
     codenameId?: string;
     type: MemoryEventType;
     role?: ModelRole;
     /** 序列化为 SQLite TEXT 列时使用 `JSON.stringify`；协议层保持结构化。 */
     content: Record<string, unknown>;
-    /** Ghost 链 / ask-answer 配对的反向引用。 */
+    /** Continuation 链 / ask-answer 配对的反向引用。 */
     parentId?: string;
     embeddingId?: string;
     importance: number;
@@ -129,7 +133,7 @@ export interface MemoryStateRecord {
     decayScore: number;
     accessCount: number;
     lastAccessed?: number;
-    /** Ghost 专用：成功 resume 的时间戳。 */
+    /** Continuation 专用：成功 resume 的时间戳。 */
     resumedAt?: number;
     status: MemoryEventStatus;
 }
@@ -158,8 +162,7 @@ export interface BehaviorSnapshotContent {
     input: {
         messageId: string;
         textPreview: string;
-        channel: string;
-        chatId: string;
+        sourceSurface?: string;
         chatType?: string;
         receivedAt?: string;
     };
@@ -207,7 +210,9 @@ export interface BehaviorCorrectionContent {
  */
 export interface HotMemoryCompressionContent {
     batchId: string;
-    userId: string;
+    ownerKey: string;
+    /** Optional source provenance label; not a cognitive owner. */
+    sourceKey?: string;
     reason: HotMemoryCompressionReason;
     sourceEpisodeIds: string[];
     deletedEpisodeIds: string[];
@@ -244,7 +249,7 @@ export interface MemoryLinkRecord {
 
 /**
  * Codename：用户显式工作目录锚点。`@xxx` 强绑定；多候选触发 Ask；
- * `useCount + lastUsedAt` 进 AtomScore 自然上浮；满足条件升格为 Project。
+ * `useCount + lastUsedAt` 进 AtomScore 自然上浮；满足条件升格为 Scope。
  */
 export interface CodenameRecord {
     id: string;
@@ -252,23 +257,21 @@ export interface CodenameRecord {
     workingDir?: string;
     /** 模型同轮生成的一句话摘要（R6：零字符匹配，runtime 不规则拼接）。 */
     description?: string;
-    userId: string;
     createdAt: number;
     lastUsedAt: number;
     useCount: number;
-    /** 升格后绑定 `projects/<projectId>/`。未升格则 undefined。 */
-    projectId?: string;
+    /** 升格后绑定显式工作域。未升格则 undefined。 */
+    scopeId?: string;
 }
 
 /**
- * Project：用户显式创建 / 使用的工作作用域。
+ * Scope：用户显式创建 / 使用的工作作用域。
  *
- * 它不是 session。调用方必须在每轮 RuntimeContext.activeProject 里显式传入，
- * MemoryModule 才会加载该项目的 `.flyflor/memory` 与项目红线。
+ * 它不是 session。调用方必须在每轮 RuntimeContext.activeScope 里显式传入，
+ * MemoryModule 才会加载该范围的 `.flyflor/memory` 与工作红线。
  */
-export interface ProjectRecord {
+export interface ScopeRecord {
     id: string;
-    userId: string;
     title: string;
     goal?: string;
     projectDir: string;

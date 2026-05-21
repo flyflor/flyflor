@@ -137,7 +137,7 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
     test("model-emitted ask is dropped when chainDepth would exceed maxChainDepth", async () => {
         try {
             const config = await makeConfig();
-            config.memory.tuning.ghost.maxChainDepth = 2;
+            config.memory.tuning.continuation.maxChainDepth = 2;
             const events = new CapturingSink();
             const memory = new MemoryModule(config, events);
             await memory.warmup();

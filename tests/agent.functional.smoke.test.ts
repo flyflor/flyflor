@@ -18,14 +18,14 @@ describe("agent functional smoke", () => {
             contextForks: number;
             ok: boolean;
             replyText: string;
-            sceneRecords: number;
+            replayRecords: number;
             taskPlans: number;
         };
         expect(report).toMatchObject({
             contextForks: 1,
             ok: true,
             replyText: "Agent functional smoke completed.",
-            sceneRecords: 1,
+            replayRecords: 1,
             taskPlans: 1,
         });
         expect(report.brainEvents).toBeGreaterThanOrEqual(1);

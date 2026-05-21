@@ -1,7 +1,7 @@
 import { loadMcpServers } from "../../mcp/registry.ts";
 import { loadPlugins } from "../../plugin/registry.ts";
 import { loadSkills } from "../../skills/registry.ts";
-import { loadCttlToolManifest } from "../../../executive/manifest.ts";
+import { loadToolManifest } from "../../../executive/manifest.ts";
 import { ExternalKitCapabilitySource, type ExternalKitCapabilitySummary } from "../../../protocol/contracts/index.ts";
 import type { FlyflorPaths } from "../../../config/index.ts";
 import { loadExternalKitCatalog } from "./manifest.ts";
@@ -12,7 +12,7 @@ export async function loadExternalKitCatalogSnapshot(paths: FlyflorPaths, now = 
         loadMcpServers(paths),
         loadPlugins(paths),
         loadSkills(paths),
-        loadCttlToolManifest(paths),
+        loadToolManifest(paths),
     ]);
     return {
         ...catalog,

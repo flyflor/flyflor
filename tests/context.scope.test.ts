@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { ContextComponent } from "../src/components/index.ts";
 import { useContextScope } from "../src/agent/context/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
-import { Channel, ChatType, type GatewayMessage, type RuntimeContext } from "../src/protocol/contracts/index.ts";
+import type { RuntimeContext } from "../src/protocol/contracts/index.ts";
 
 describe("ContextScopeComponent", () => {
     test("is part of the explicit component inheritance tree", () => {
@@ -14,10 +14,10 @@ describe("ContextScopeComponent", () => {
         expect(scope).toBeInstanceOf(ContextComponent);
     });
 
-    test("maps explicit activeProject to project-local component paths", () => {
+    test("maps explicit activeScope to scope-local component paths", () => {
         const scope = useContextScope(paths("/tmp/flyflor"));
         const projectDir = "/tmp/flyflor/workspace/demo";
-        const mapped = scope.projectStorePaths({
+        const mapped = scope.scopeStorePaths({
             id: "project-demo",
             projectDir,
             projectMemoryDir: join(projectDir, ".flyflor", "memory"),
@@ -30,41 +30,31 @@ describe("ContextScopeComponent", () => {
         expect(mapped.projectPluginDir).toBe(join(projectDir, ".flyflor", "plugins"));
     });
 
-    test("derives project constraint from explicit structure, not text", () => {
+    test("derives scope constraint only from explicit structure", () => {
         const scope = useContextScope(paths("/tmp/flyflor"));
-        const message = gatewayMessage("whatever text");
         const context: RuntimeContext = {
             requestId: "req-1",
             now: "2026-05-17T00:00:00.000Z",
-            activeProject: {
-                id: "project-active",
+            activeScope: {
+                id: "scope-active",
                 projectDir: "/tmp/active",
                 projectMemoryDir: "/tmp/active/.flyflor/memory",
             },
         };
 
-        expect(
-            scope.projectConstraintId({
-                codenameId: "code-1",
-                context,
-                fallbackProjectId: "project-fallback",
-                inboxProjectId: "inbox",
-                message,
-                projectIntent: true,
-            }),
-        ).toBe("project-active");
+        expect(scope.scopeConstraintId({ codenameId: "code-1", context })).toBe("scope-active");
+    });
+
+    test("returns null when no explicit scope is mounted", () => {
+        const scope = useContextScope(paths("/tmp/flyflor"));
+        const context: RuntimeContext = {
+            requestId: "req-1",
+            now: "2026-05-17T00:00:00.000Z",
+        };
+
+        expect(scope.scopeConstraintId({ context })).toBeNull();
     });
 });
-
-function gatewayMessage(text: string): GatewayMessage {
-    return {
-        id: "msg-1",
-        receivedAt: "2026-05-17T00:00:00.000Z",
-        route: { channel: Channel.Stdio, chatId: "chat", chatType: ChatType.Direct },
-        text,
-        user: { id: "u1" },
-    };
-}
 
 function paths(root: string): FlyflorPaths {
     return {

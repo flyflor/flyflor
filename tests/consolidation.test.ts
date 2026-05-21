@@ -157,11 +157,11 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
     });
 
     test("drain processes all three branches and emits completion event", async () => {
-        const userId = "u1";
+        const ownerKey = "scope:u1";
         const episodes: Record<string, EpisodeRecord> = {
-            e1: makeEpisode("e1", userId),
-            e2: makeEpisode("e2", userId, { concepts: ["redis"] }),
-            e3: makeEpisode("e3", userId),
+            e1: makeEpisode("e1", ownerKey),
+            e2: makeEpisode("e2", ownerKey, { concepts: ["redis"] }),
+            e3: makeEpisode("e3", ownerKey),
         };
         const drops: string[] = [];
         const touches: string[][] = [];
@@ -201,7 +201,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
         ]);
         const events = new CapturingSink();
         const worker = new ConsolidationWorker(fakeWorking, fakeGraph, model, events);
-        const result = await worker.drain(userId);
+        const result = await worker.drain(ownerKey);
         expect(result.scanned).toBe(3);
         expect(result.consolidated).toBe(1);
         expect(result.reinforced).toBe(1);
@@ -244,7 +244,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
 
     test("skipped when episode is missing from working memory", async () => {
         const fakeWorking = {
-            listConsolidationCandidates: async () => ["ghost"],
+            listConsolidationCandidates: async () => ["continuation"],
             readEpisode: async () => undefined,
             dropEpisode: async () => {},
             touchConcepts: async () => {},
@@ -292,11 +292,11 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
     });
 
     test("retrospective write failure blocks discard drop and publishes failure", async () => {
-        const userId = "u1";
+        const ownerKey = "scope:u1";
         const drops: string[] = [];
         const fakeWorking = {
             listConsolidationCandidates: async () => ["e1"],
-            readEpisode: async () => makeEpisode("e1", userId),
+            readEpisode: async () => makeEpisode("e1", ownerKey),
             dropEpisode: async (_uid: string, id: string) => {
                 drops.push(id);
             },
@@ -315,7 +315,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             { retrospective },
         );
 
-        const result = await worker.drain(userId);
+        const result = await worker.drain(ownerKey);
 
         expect(result.discarded).toBe(0);
         expect(result.skipped).toBe(1);
@@ -324,14 +324,14 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
     });
 
     test("retrospective write failure keeps consolidated episode for retry", async () => {
-        const userId = "u1";
+        const ownerKey = "scope:u1";
         const drops: string[] = [];
         const epUpserts: unknown[] = [];
         const memNodeUpserts: unknown[] = [];
         const relateCalls: Array<[string, string]> = [];
         const fakeWorking = {
             listConsolidationCandidates: async () => ["e1"],
-            readEpisode: async () => makeEpisode("e1", userId),
+            readEpisode: async () => makeEpisode("e1", ownerKey),
             dropEpisode: async (_uid: string, id: string) => {
                 drops.push(id);
             },
@@ -361,7 +361,7 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
             { retrospective },
         );
 
-        const result = await worker.drain(userId);
+        const result = await worker.drain(ownerKey);
 
         expect(result.consolidated).toBe(0);
         expect(result.skipped).toBe(1);
@@ -373,10 +373,10 @@ describe("ConsolidationWorker (LLM-driven, no string match)", () => {
     });
 });
 
-function makeEpisode(id: string, userId: string, over: Partial<EpisodeRecord> = {}): EpisodeRecord {
+function makeEpisode(id: string, ownerKey: string, over: Partial<EpisodeRecord> = {}): EpisodeRecord {
     return {
         episodeId: id,
-        userId,
+        ownerKey,
         text: `text for ${id}`,
         concepts: [],
         embedding: [0.1, 0.2, 0.3, 0.4],

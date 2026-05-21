@@ -110,7 +110,7 @@ function fakeAs(graph: FakeGraph): MemoryGraphStore {
 function mkGem(over: Partial<GemRecord> = {}): GemRecord {
     return {
         id: "s1",
-        userId: "u1",
+        ownerKey: "u1",
         symbols: ["x"],
         summary: "old summary",
         embedding: [],
@@ -127,7 +127,7 @@ function mkGem(over: Partial<GemRecord> = {}): GemRecord {
 function mkMem(over: Partial<MemoryNodeRecord> = {}): MemoryNodeRecord {
     return {
         id: "m1",
-        userId: "u1",
+        ownerKey: "u1",
         symbols: ["y"],
         summary: "mem one",
         embedding: [],

@@ -1,8 +1,6 @@
-export { ComponentRegistry, FpcComponentFactory, componentRegistry, fpcComponents } from "./component.ts";
+export { ComponentRegistry, componentRegistry } from "./component.ts";
 export {
     DependencyContainer,
-    DependencyContainer as FcpDependencyContainer,
-    DependencyContainer as FpcDependencyContainer,
     createInjectionToken,
     isInjectionToken,
     type InjectionFactory,

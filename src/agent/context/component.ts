@@ -1,9 +1,10 @@
 import { basename, join, resolve } from "node:path";
 import { ContextComponent } from "../../components/index.ts";
 import type { FlyflorPaths } from "../../config/index.ts";
-import type { GatewayMessage, RuntimeContext, RuntimeProjectScope } from "../../protocol/contracts/index.ts";
+import type { GatewayMessage } from "../../protocol/contracts/index.ts";
+import type { RuntimeContext, RuntimeScope } from "../../protocol/contracts/index.ts";
 
-export interface ContextProjectStorePaths extends FlyflorPaths {
+export interface ContextScopeStorePaths extends FlyflorPaths {
     projectDir: string;
     projectFlyflorDir: string;
     projectMemoryDir: string;
@@ -12,7 +13,7 @@ export interface ContextProjectStorePaths extends FlyflorPaths {
     projectPluginDir: string;
 }
 
-export interface ExplicitProjectSeed {
+export interface ExplicitScopeSeed {
     id: string;
     projectDir: string;
     projectMemoryDir: string;
@@ -20,7 +21,7 @@ export interface ExplicitProjectSeed {
 }
 
 /**
- * Structured context scope assembly for project/fork/capability boundaries.
+ * Structured context scope assembly for scope/fork/capability boundaries.
  * This layer is intentionally parallel to neural: it normalizes explicit
  * RuntimeContext fields for runtime, memory, skill, mcp, plugin, and gem
  * assembly, but never reads natural language intent and never stores session.
@@ -30,7 +31,7 @@ export class ContextScopeComponent extends ContextComponent {
         super();
     }
 
-    public projectStorePaths(scope: RuntimeProjectScope | undefined): FlyflorPaths {
+    public scopeStorePaths(scope: RuntimeScope | undefined): FlyflorPaths {
         if (!scope) return this.paths;
         return {
             ...this.paths,
@@ -40,36 +41,37 @@ export class ContextScopeComponent extends ContextComponent {
             projectSkillDir: join(scope.projectDir, ".flyflor", "skills"),
             projectMcpDir: join(scope.projectDir, ".flyflor", "mcp"),
             projectPluginDir: join(scope.projectDir, ".flyflor", "plugins"),
-        } satisfies ContextProjectStorePaths;
+        } satisfies ContextScopeStorePaths;
     }
 
-    public projectConstraintId(input: {
+    public scopeConstraintId(input: {
         codenameId?: string;
-        fallbackProjectId: string;
-        inboxProjectId: string;
-        message: GatewayMessage;
-        projectIntent: boolean;
         context: RuntimeContext;
-    }): string {
-        if (input.context.activeProject) return input.context.activeProject.id;
-        if (input.projectIntent) return input.fallbackProjectId;
-        if (input.codenameId) return `${input.inboxProjectId}:cn-${input.codenameId}`;
-        return input.inboxProjectId;
+    }): string | null {
+        return input.context.activeScope?.id ?? null;
     }
 
-    public explicitProjectSeed(userId: string, rawPath: string): ExplicitProjectSeed {
+    public explicitScopeSeed(userId: string, rawPath: string): ExplicitScopeSeed {
         const projectDir = resolve(rawPath);
         return {
-            id: ContextScopeComponent.deriveExplicitProjectId(userId, projectDir),
+            id: ContextScopeComponent.deriveExplicitScopeId(userId, projectDir),
             projectDir,
             projectMemoryDir: join(projectDir, ".flyflor", "memory"),
-            title: basename(projectDir) || "project",
+            title: basename(projectDir) || "scope",
         };
     }
 
-    private static deriveExplicitProjectId(userId: string, projectDir: string): string {
+    private static deriveExplicitScopeId(userId: string, projectDir: string): string {
         const hasher = new Bun.CryptoHasher("sha256");
         hasher.update(`${userId}:${projectDir}`);
-        return `project-${hasher.digest("hex").slice(0, 16)}`;
+        return `scope-${hasher.digest("hex").slice(0, 16)}`;
     }
+}
+
+export function continuityOwnerKey(message: GatewayMessage, context?: RuntimeContext, codenameId?: string): string {
+    const scopeId = context?.activeScope?.id;
+    if (scopeId) return `scope:${scopeId}`;
+    if (context?.contextForkId) return `fork:${context.contextForkId}`;
+    if (codenameId) return `codename:${codenameId}`;
+    return `turn:${message.id}`;
 }

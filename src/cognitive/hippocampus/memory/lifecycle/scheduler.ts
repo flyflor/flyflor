@@ -1,16 +1,16 @@
 /**
  * 海马体后台调度器（BackgroundScheduler）。
  *
- * 单一职责：按固定节拍对每个"活跃用户"驱动两条后台流水：
- *   1. ConsolidationWorker.drain(userId) — 把到期的 episode candidate 跑过 LLM 决策
+ * 单一职责：按固定节拍对每个活跃 continuity owner 驱动两条后台流水：
+ *   1. ConsolidationWorker.drain(ownerKey) — 把到期的 episode candidate 跑过 LLM 决策
  *      （reinforce / consolidate / discard）；
  *   2. decay sweep — 对 CrystalComponent memory_node / skill 跑衰减纯函数并把
  *      新 importance 写回（避免假高分长期占据召回）。
  *
  * 设计约束（与 docs/boundaries.md 对齐）：
  *  - 不依赖系统 cron / node-cron，只用 setInterval；编译进 bun 二进制零风险；
- *  - 用户集合由 trackUser() 显式注册；不扫描工作记忆适配器枚举全量用户；
- *  - 单个 tick 内串行执行同一用户的两条任务，跨用户也串行（避免并发 LLM 风暴）；
+ *  - owner 集合由 trackOwner() 显式注册；不扫描工作记忆适配器枚举全量 owner；
+ *  - 单个 tick 内串行执行同一 owner 的两条任务，跨 owner 也串行（避免并发 LLM 风暴）；
  *  - 失败只发事件不抛错，下一 tick 自动重试；
  *  - 关停时立即清 timer，正在跑的 tick 让其自然结束。
  */
@@ -33,14 +33,14 @@ export interface BackgroundSchedulerOptions {
     decayIntervalMs?: number;
     /** dream worker 节拍（毫秒）。默认 30 分钟，0 关闭。 */
     dreamIntervalMs?: number;
-    /** dream 单 tick 每用户处理上限。默认 8。 */
+    /** dream 单 tick 每 continuity owner 处理上限。默认 8。 */
     dreamBatchSize?: number;
-    /** 单 tick 内每用户 decay sweep 的 batch 大小，默认 200。 */
+    /** 单 tick 内每 continuity owner decay sweep 的 batch 大小，默认 200。 */
     decayBatchSize?: number;
-    /** 用户空闲多久触发一次 dream（毫秒）；0 关闭。默认 5 分钟。 */
+    /** owner 空闲多久触发一次 dream（毫秒）；0 关闭。默认 5 分钟。 */
     idleDreamTriggerMs?: number;
-    /** 项目候选 cluster sweep 节拍（毫秒）。默认 15 分钟，0 关闭。 */
-    projectClusterIntervalMs?: number;
+    /** Scope 候选 cluster sweep 节拍（毫秒）。默认 15 分钟，0 关闭。 */
+    scopeClusterIntervalMs?: number;
     /** 技能候选 cluster sweep 节拍（毫秒）。默认 20 分钟，0 关闭。 */
     skillClusterIntervalMs?: number;
     /** 自定义衰减 profile（测试可注入更短半衰期）。 */
@@ -50,20 +50,20 @@ export interface BackgroundSchedulerOptions {
     /** 可选 dream worker。未注入则跳过 dream tick。 */
     dream?: DreamWorker;
     /**
-     * 可选 project cluster sweeper（避免 Scheduler 反向依赖 MemoryModule）。
-     * 由 MemoryModule 注入 `(userId) => this.sweepProjectClusters(userId)`。
+     * 可选 scope cluster sweeper（避免 Scheduler 反向依赖 MemoryModule）。
+     * 由 MemoryModule 注入 `(ownerKey) => this.sweepProjectClusters(ownerKey)`。
      */
-    projectSweeper?: (userId: string) => Promise<boolean>;
+    scopeSweeper?: (ownerKey: string) => Promise<boolean>;
     /**
      * 可选 skill cluster sweeper（避免 Scheduler 反向依赖 MemoryModule）。
-     * 由 MemoryModule 注入 `(userId) => this.sweepSkillCandidates(userId)`。
+     * 由 MemoryModule 注入 `(ownerKey) => this.sweepSkillCandidates(ownerKey)`。
      */
-    skillSweeper?: (userId: string) => Promise<boolean>;
+    skillSweeper?: (ownerKey: string) => Promise<boolean>;
     /**
      * LF-R5 slice B：summary worker tick。注入后调度器按 `summaryIntervalMs` 节拍调用。
      * 与 dream 同样：未注入则关掉本条 timer。
      */
-    summarySweeper?: (userId: string) => Promise<{ written: number }>;
+    summarySweeper?: (ownerKey: string) => Promise<{ written: number }>;
     /** Summary worker 节拍。默认 6 小时，0 关闭。 */
     summaryIntervalMs?: number;
     /** 工作记忆压缩 worker。未注入则跳过。 */
@@ -71,13 +71,13 @@ export interface BackgroundSchedulerOptions {
     /** 热记忆压缩检查节拍。默认 30 分钟，0 关闭。 */
     hotMemoryCompressionIntervalMs?: number;
     /**
-     * LF-R5 slice D：dormant sweep。注入后调度器按 `dormantIntervalMs` 节拍调用。
-     * 未注入则关掉本条 timer；MemoryModule 仍可手动触发 sweepDormantOnce。
+     * LF-R5 slice D：idle sweep。注入后调度器按 `idleIntervalMs` 节拍调用。
+     * 未注入则关掉本条 timer；MemoryModule 仍可手动触发 sweepIdleOnce。
      */
-    dormantSweeper?: () => { entered: number };
-    /** Dormant sweep 节拍。默认 60s，0 关闭。 */
-    dormantIntervalMs?: number;
-    /** brain.db 冷归档 sweep。全局任务，不按 userId 分片。 */
+    idleSweeper?: () => { entered: number };
+    /** Idle sweep 节拍。默认 60s，0 关闭。 */
+    idleIntervalMs?: number;
+    /** brain.db 冷归档 sweep。全局任务，不按 owner 分片。 */
     brainArchiveSweeper?: () => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>;
     /** brain.db 冷归档检查节拍。默认 24h，0 关闭。 */
     brainArchiveIntervalMs?: number;
@@ -86,34 +86,34 @@ export interface BackgroundSchedulerOptions {
 }
 
 export class BackgroundScheduler {
-    private readonly users = new Set<string>();
+    private readonly owners = new Set<string>();
     private consolidationTimer: ReturnType<typeof setInterval> | undefined;
     private decayTimer: ReturnType<typeof setInterval> | undefined;
     private dreamTimer: ReturnType<typeof setInterval> | undefined;
-    private projectTimer: ReturnType<typeof setInterval> | undefined;
+    private scopeTimer: ReturnType<typeof setInterval> | undefined;
     private skillTimer: ReturnType<typeof setInterval> | undefined;
     private summaryTimer: ReturnType<typeof setInterval> | undefined;
     private hotMemoryCompressionTimer: ReturnType<typeof setInterval> | undefined;
-    /** 每用户 idle one-shot timer：每次 noteUserTurn 重置；命中后触发 dream。 */
+    /** 每 owner idle one-shot timer：每次 noteOwnerTurn 重置；命中后触发 dream。 */
     private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private consolidationBusy = false;
     private decayBusy = false;
     private dreamBusy = false;
-    private projectBusy = false;
+    private scopeBusy = false;
     private skillBusy = false;
     private summaryBusy = false;
     private hotMemoryCompressionBusy = false;
     private brainArchiveBusy = false;
     private brainMaintenanceBusy = false;
     private readonly dream: DreamWorker | undefined;
-    private readonly projectSweeper: ((userId: string) => Promise<boolean>) | undefined;
-    private readonly skillSweeper: ((userId: string) => Promise<boolean>) | undefined;
-    private readonly summarySweeper: ((userId: string) => Promise<{ written: number }>) | undefined;
+    private readonly scopeSweeper: ((ownerKey: string) => Promise<boolean>) | undefined;
+    private readonly skillSweeper: ((ownerKey: string) => Promise<boolean>) | undefined;
+    private readonly summarySweeper: ((ownerKey: string) => Promise<{ written: number }>) | undefined;
     private readonly hotMemoryCompression: HotMemoryCompressionWorker | undefined;
-    private readonly dormantSweeper: (() => { entered: number }) | undefined;
+    private readonly idleSweeper: (() => { entered: number }) | undefined;
     private readonly brainArchiveSweeper: (() => Promise<{ eventsCopied: number; months: number; vacuumed: boolean }>) | undefined;
     private readonly workingMemoryHealthSnapshot: (() => WorkingMemoryHealthSnapshot | undefined) | undefined;
-    private dormantTimer: ReturnType<typeof setInterval> | undefined;
+    private idleSweepTimer: ReturnType<typeof setInterval> | undefined;
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
     private readonly opts: Required<
         Omit<
@@ -121,11 +121,11 @@ export class BackgroundScheduler {
             | "profiles"
             | "now"
             | "dream"
-            | "projectSweeper"
+            | "scopeSweeper"
             | "skillSweeper"
             | "summarySweeper"
             | "hotMemoryCompression"
-            | "dormantSweeper"
+            | "idleSweeper"
             | "brainArchiveSweeper"
             | "workingMemoryHealthSnapshot"
         >
@@ -141,11 +141,11 @@ export class BackgroundScheduler {
         options: BackgroundSchedulerOptions = {},
     ) {
         this.dream = options.dream;
-        this.projectSweeper = options.projectSweeper;
+        this.scopeSweeper = options.scopeSweeper;
         this.skillSweeper = options.skillSweeper;
         this.summarySweeper = options.summarySweeper;
         this.hotMemoryCompression = options.hotMemoryCompression;
-        this.dormantSweeper = options.dormantSweeper;
+        this.idleSweeper = options.idleSweeper;
         this.brainArchiveSweeper = options.brainArchiveSweeper;
         this.workingMemoryHealthSnapshot = options.workingMemoryHealthSnapshot;
         this.opts = {
@@ -155,55 +155,55 @@ export class BackgroundScheduler {
             dreamBatchSize: options.dreamBatchSize ?? 8,
             decayBatchSize: options.decayBatchSize ?? 200,
             idleDreamTriggerMs: options.idleDreamTriggerMs ?? 5 * 60_000,
-            projectClusterIntervalMs: options.projectClusterIntervalMs ?? 15 * 60_000,
+            scopeClusterIntervalMs: options.scopeClusterIntervalMs ?? 15 * 60_000,
             skillClusterIntervalMs: options.skillClusterIntervalMs ?? 20 * 60_000,
             summaryIntervalMs: options.summaryIntervalMs ?? 6 * 60 * 60_000,
             hotMemoryCompressionIntervalMs: options.hotMemoryCompressionIntervalMs ?? 30 * 60_000,
-            dormantIntervalMs: options.dormantIntervalMs ?? 60_000,
+            idleIntervalMs: options.idleIntervalMs ?? 60_000,
             brainArchiveIntervalMs: options.brainArchiveIntervalMs ?? 24 * 60 * 60_000,
             profiles: { ...DEFAULT_DECAY_PROFILES, ...(options.profiles ?? {}) },
             now: options.now ?? (() => Date.now()),
         };
     }
 
-    /** 把一个 userId 加入活跃集合。MemoryModule 在 rememberTurn 时调用。 */
-    public trackUser(userId: string): void {
-        if (typeof userId !== "string" || userId.length === 0) return;
-        this.users.add(userId);
+    /** 把一个 continuity owner 加入活跃集合。MemoryModule 在 rememberTurn 时调用。 */
+    public trackOwner(ownerKey: string): void {
+        if (typeof ownerKey !== "string" || ownerKey.length === 0) return;
+        this.owners.add(ownerKey);
     }
 
     /**
-     * 标记一次用户 turn 完成 → 重置该用户的 idle one-shot timer。
-     * idle 阈值到点未被再次重置时，触发一轮该用户的 dream pass。
+     * 标记一次 owner turn 完成 → 重置该 owner 的 idle one-shot timer。
+     * idle 阈值到点未被再次重置时，触发一轮该 owner 的 dream pass。
      * - dream 未注入或 idleDreamTriggerMs <= 0 时无副作用；
-     * - 同一 userId 重复调用会 clear 旧 timer，避免 timer 堆积；
+     * - 同一 ownerKey 重复调用会 clear 旧 timer，避免 timer 堆积；
      * - 失败不吞掉；异常通过 returned promise / unhandled rejection 暴露。
      */
-    public noteUserTurn(userId: string): void {
-        if (typeof userId !== "string" || userId.length === 0) return;
-        this.trackUser(userId);
+    public noteOwnerTurn(ownerKey: string): void {
+        if (typeof ownerKey !== "string" || ownerKey.length === 0) return;
+        this.trackOwner(ownerKey);
         if (!this.dream || this.opts.idleDreamTriggerMs <= 0) return;
-        const existing = this.idleTimers.get(userId);
+        const existing = this.idleTimers.get(ownerKey);
         if (existing !== undefined) {
             clearTimeout(existing);
-            this.idleTimers.delete(userId);
+            this.idleTimers.delete(ownerKey);
         }
         // Dream 是全局串行维护任务；已有 pass 在跑时只记录 active user，
         // 不再安排新的 idle one-shot，避免慢 pass 结束边界上补打一轮重复 dream。
         if (this.dreamBusy) return;
         const timer = setTimeout(() => {
-            this.idleTimers.delete(userId);
-            void this.runDreamOnce(this.opts.dreamBatchSize, userId);
+            this.idleTimers.delete(ownerKey);
+            void this.runDreamOnce(this.opts.dreamBatchSize, ownerKey);
         }, this.opts.idleDreamTriggerMs);
         if (typeof (timer as { unref?: () => void })?.unref === "function") {
             (timer as { unref: () => void }).unref();
         }
-        this.idleTimers.set(userId, timer);
+        this.idleTimers.set(ownerKey, timer);
     }
 
-    /** 当前活跃用户数（用于可观察性）。 */
-    public activeUsers(): number {
-        return this.users.size;
+    /** 当前活跃 continuity owner 数（用于可观察性）。 */
+    public activeOwners(): number {
+        return this.owners.size;
     }
 
     /** 启动两条 timer。重复调用安全（先 stop 再 start）。 */
@@ -220,10 +220,10 @@ export class BackgroundScheduler {
                 void this.runDreamOnce();
             }, this.opts.dreamIntervalMs);
         }
-        if (this.projectSweeper && this.opts.projectClusterIntervalMs > 0) {
-            this.projectTimer = setInterval(() => {
-                void this.runProjectClusterOnce();
-            }, this.opts.projectClusterIntervalMs);
+        if (this.scopeSweeper && this.opts.scopeClusterIntervalMs > 0) {
+            this.scopeTimer = setInterval(() => {
+                void this.runScopeClusterOnce();
+            }, this.opts.scopeClusterIntervalMs);
         }
         if (this.skillSweeper && this.opts.skillClusterIntervalMs > 0) {
             this.skillTimer = setInterval(() => {
@@ -240,14 +240,14 @@ export class BackgroundScheduler {
                 void this.runHotMemoryCompressionOnce();
             }, this.opts.hotMemoryCompressionIntervalMs);
         }
-        if (this.dormantSweeper && this.opts.dormantIntervalMs > 0) {
-            this.dormantTimer = setInterval(() => {
+        if (this.idleSweeper && this.opts.idleIntervalMs > 0) {
+            this.idleSweepTimer = setInterval(() => {
                 try {
-                    this.dormantSweeper?.();
+                    this.idleSweeper?.();
                 } catch (err) {
-                    this.publishFailure("dormant-tick", "", err);
+                    this.publishFailure("idle-tick", "", err);
                 }
-            }, this.opts.dormantIntervalMs);
+            }, this.opts.idleIntervalMs);
         }
         if (this.brainArchiveSweeper && this.opts.brainArchiveIntervalMs > 0) {
             this.brainArchiveTimer = setInterval(() => {
@@ -264,8 +264,8 @@ export class BackgroundScheduler {
         if (this.dreamTimer && typeof (this.dreamTimer as { unref?: () => void })?.unref === "function") {
             (this.dreamTimer as { unref: () => void }).unref();
         }
-        if (this.projectTimer && typeof (this.projectTimer as { unref?: () => void })?.unref === "function") {
-            (this.projectTimer as { unref: () => void }).unref();
+        if (this.scopeTimer && typeof (this.scopeTimer as { unref?: () => void })?.unref === "function") {
+            (this.scopeTimer as { unref: () => void }).unref();
         }
         if (this.skillTimer && typeof (this.skillTimer as { unref?: () => void })?.unref === "function") {
             (this.skillTimer as { unref: () => void }).unref();
@@ -279,8 +279,8 @@ export class BackgroundScheduler {
         ) {
             (this.hotMemoryCompressionTimer as { unref: () => void }).unref();
         }
-        if (this.dormantTimer && typeof (this.dormantTimer as { unref?: () => void })?.unref === "function") {
-            (this.dormantTimer as { unref: () => void }).unref();
+        if (this.idleSweepTimer && typeof (this.idleSweepTimer as { unref?: () => void })?.unref === "function") {
+            (this.idleSweepTimer as { unref: () => void }).unref();
         }
         if (this.brainArchiveTimer && typeof (this.brainArchiveTimer as { unref?: () => void })?.unref === "function") {
             (this.brainArchiveTimer as { unref: () => void }).unref();
@@ -300,9 +300,9 @@ export class BackgroundScheduler {
             clearInterval(this.dreamTimer);
             this.dreamTimer = undefined;
         }
-        if (this.projectTimer !== undefined) {
-            clearInterval(this.projectTimer);
-            this.projectTimer = undefined;
+        if (this.scopeTimer !== undefined) {
+            clearInterval(this.scopeTimer);
+            this.scopeTimer = undefined;
         }
         if (this.skillTimer !== undefined) {
             clearInterval(this.skillTimer);
@@ -316,9 +316,9 @@ export class BackgroundScheduler {
             clearInterval(this.hotMemoryCompressionTimer);
             this.hotMemoryCompressionTimer = undefined;
         }
-        if (this.dormantTimer !== undefined) {
-            clearInterval(this.dormantTimer);
-            this.dormantTimer = undefined;
+        if (this.idleSweepTimer !== undefined) {
+            clearInterval(this.idleSweepTimer);
+            this.idleSweepTimer = undefined;
         }
         if (this.brainArchiveTimer !== undefined) {
             clearInterval(this.brainArchiveTimer);
@@ -343,15 +343,15 @@ export class BackgroundScheduler {
         this.consolidationBusy = true;
         const totals = { users: 0, consolidated: 0, reinforced: 0, discarded: 0 };
         try {
-            for (const userId of [...this.users]) {
+            for (const ownerKey of [...this.owners]) {
                 try {
-                    const r = await this.consolidation.drain(userId);
+                    const r = await this.consolidation.drain(ownerKey);
                     totals.users += 1;
                     totals.consolidated += r.consolidated;
                     totals.reinforced += r.reinforced;
                     totals.discarded += r.discarded;
                 } catch (err) {
-                    this.publishFailure("consolidation-tick", userId, err);
+                    this.publishFailure("consolidation-tick", ownerKey, err);
                 }
             }
         } finally {
@@ -371,10 +371,10 @@ export class BackgroundScheduler {
         const totals = { users: 0, memoryNodes: 0, gems: 0 };
         try {
             const now = this.opts.now();
-            for (const userId of [...this.users]) {
+            for (const ownerKey of [...this.owners]) {
                 try {
                     const r = await this.graph.applyDecaySweep({
-                        userId,
+                        ownerKey,
                         batchSize: this.opts.decayBatchSize,
                         decayMemoryNode: ({ importance, updatedAt }) =>
                             decayImportance({
@@ -398,7 +398,7 @@ export class BackgroundScheduler {
                     totals.memoryNodes += r.memoryNodes;
                     totals.gems += r.gems;
                 } catch (err) {
-                    this.publishFailure("decay-tick", userId, err);
+                    this.publishFailure("decay-tick", ownerKey, err);
                 }
             }
             this.events.publish(
@@ -414,10 +414,10 @@ export class BackgroundScheduler {
         return totals;
     }
 
-    private publishFailure(stage: string, userId: string, err: unknown): void {
+    private publishFailure(stage: string, ownerKey: string, err: unknown): void {
         this.events.publish(
             event(RuntimeEventType.MemoryConsolidationFailed, {
-                userId,
+                ownerKey,
                 stage,
                 error: String(err),
             }),
@@ -427,7 +427,7 @@ export class BackgroundScheduler {
     /** 立即跑一轮 dream（测试与手动触发复用）。串行所有用户。 */
     public async runDreamOnce(
         limit?: number,
-        userId?: string,
+        ownerKey?: string,
     ): Promise<{
         users: number;
         driftRepaired: number;
@@ -440,7 +440,7 @@ export class BackgroundScheduler {
         if (!this.dream || this.dreamBusy) return totals;
         this.dreamBusy = true;
         const batchSize = limit && limit > 0 ? limit : this.opts.dreamBatchSize;
-        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        const targets = ownerKey ? (this.owners.has(ownerKey) ? [ownerKey] : []) : [...this.owners];
         try {
             for (const u of targets) {
                 try {
@@ -461,34 +461,34 @@ export class BackgroundScheduler {
         return totals;
     }
 
-    /** 立即跑一轮项目 cluster 扫描（测试与手动触发复用）。串行所有用户。 */
-    public async runProjectClusterOnce(userId?: string): Promise<{ users: number; offers: number }> {
+    /** 立即跑一轮scope cluster 扫描（测试与手动触发复用）。串行所有用户。 */
+    public async runScopeClusterOnce(ownerKey?: string): Promise<{ users: number; offers: number }> {
         const totals = { users: 0, offers: 0 };
-        if (!this.projectSweeper || this.projectBusy) return totals;
-        this.projectBusy = true;
-        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        if (!this.scopeSweeper || this.scopeBusy) return totals;
+        this.scopeBusy = true;
+        const targets = ownerKey ? (this.owners.has(ownerKey) ? [ownerKey] : []) : [...this.owners];
         try {
             for (const u of targets) {
                 try {
-                    const proposed = await this.projectSweeper(u);
+                    const proposed = await this.scopeSweeper(u);
                     totals.users += 1;
                     if (proposed) totals.offers += 1;
                 } catch (err) {
-                    this.publishFailure("project-cluster-tick", u, err);
+                    this.publishFailure("scope-cluster-tick", u, err);
                 }
             }
         } finally {
-            this.projectBusy = false;
+            this.scopeBusy = false;
         }
         return totals;
     }
 
     /** 立即跑一轮技能 cluster 扫描（测试与手动触发复用）。串行所有用户。 */
-    public async runSkillSweepOnce(userId?: string): Promise<{ users: number; offers: number }> {
+    public async runSkillSweepOnce(ownerKey?: string): Promise<{ users: number; offers: number }> {
         const totals = { users: 0, offers: 0 };
         if (!this.skillSweeper || this.skillBusy) return totals;
         this.skillBusy = true;
-        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        const targets = ownerKey ? (this.owners.has(ownerKey) ? [ownerKey] : []) : [...this.owners];
         try {
             for (const u of targets) {
                 try {
@@ -506,12 +506,12 @@ export class BackgroundScheduler {
     }
 
     /** LF-R5 slice B：跑一次 summary sweep。串行所有用户。 */
-    public async runSummarySweepOnce(userId?: string): Promise<{ users: number; written: number }> {
+    public async runSummarySweepOnce(ownerKey?: string): Promise<{ users: number; written: number }> {
         const totals = { users: 0, written: 0 };
         if (!this.summarySweeper || this.summaryBusy || this.brainMaintenanceBusy) return totals;
         this.summaryBusy = true;
         this.brainMaintenanceBusy = true;
-        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        const targets = ownerKey ? (this.owners.has(ownerKey) ? [ownerKey] : []) : [...this.owners];
         try {
             for (const u of targets) {
                 try {
@@ -530,7 +530,7 @@ export class BackgroundScheduler {
     }
 
     /** 工作记忆压缩清理：只写隔离审计事件，不进入 summary / prompt recall / CrystalComponent。 */
-    public async runHotMemoryCompressionOnce(userId?: string): Promise<{
+    public async runHotMemoryCompressionOnce(ownerKey?: string): Promise<{
         users: number;
         compressed: number;
         deleted: number;
@@ -549,7 +549,7 @@ export class BackgroundScheduler {
         }
         this.hotMemoryCompressionBusy = true;
         this.brainMaintenanceBusy = true;
-        const targets = userId ? (this.users.has(userId) ? [userId] : []) : [...this.users];
+        const targets = ownerKey ? (this.owners.has(ownerKey) ? [ownerKey] : []) : [...this.owners];
         try {
             for (const u of targets) {
                 try {
@@ -562,7 +562,7 @@ export class BackgroundScheduler {
                 } catch (err) {
                     this.events.publish(
                         event(RuntimeEventType.MemoryHotCompressionFailed, {
-                            userId: u,
+                            ownerKey: u,
                             stage: "hot-memory-compression-tick",
                             error: String(err),
                         }),
@@ -602,9 +602,29 @@ export class BackgroundScheduler {
         }
     }
 
-    /** 返回当前注册的活跃用户快照（CLI 诊断使用）。 */
+    /** 返回当前注册的活跃 owner 快照（CLI 诊断使用）。 */
+    public trackedOwners(): string[] {
+        return [...this.owners];
+    }
+
+    /** 兼容旧调用方；新代码应使用 trackOwner。 */
+    public trackUser(userId: string): void {
+        this.trackOwner(userId);
+    }
+
+    /** 兼容旧调用方；新代码应使用 noteOwnerTurn。 */
+    public noteUserTurn(userId: string): void {
+        this.noteOwnerTurn(userId);
+    }
+
+    /** 兼容旧调用方；新代码应使用 activeOwners。 */
+    public activeUsers(): number {
+        return this.activeOwners();
+    }
+
+    /** 兼容旧调用方；新代码应使用 trackedOwners。 */
     public trackedUsers(): string[] {
-        return [...this.users];
+        return this.trackedOwners();
     }
 
     /** 后台调度状态快照（CLI / 诊断使用，不抛错）。 */
@@ -613,23 +633,23 @@ export class BackgroundScheduler {
         dreamBusy: boolean;
         consolidationBusy: boolean;
         decayBusy: boolean;
-        projectClusterEnabled: boolean;
-        projectClusterBusy: boolean;
+        scopeClusterEnabled: boolean;
+        scopeClusterBusy: boolean;
         skillClusterEnabled: boolean;
         skillClusterBusy: boolean;
         hotMemoryCompressionEnabled: boolean;
         hotMemoryCompressionBusy: boolean;
         brainArchiveEnabled: boolean;
         brainArchiveBusy: boolean;
-        users: number;
+        owners: number;
     } {
         return {
             dreamEnabled: Boolean(this.dream) && this.opts.dreamIntervalMs > 0,
             dreamBusy: this.dreamBusy,
             consolidationBusy: this.consolidationBusy,
             decayBusy: this.decayBusy,
-            projectClusterEnabled: Boolean(this.projectSweeper) && this.opts.projectClusterIntervalMs > 0,
-            projectClusterBusy: this.projectBusy,
+            scopeClusterEnabled: Boolean(this.scopeSweeper) && this.opts.scopeClusterIntervalMs > 0,
+            scopeClusterBusy: this.scopeBusy,
             skillClusterEnabled: Boolean(this.skillSweeper) && this.opts.skillClusterIntervalMs > 0,
             skillClusterBusy: this.skillBusy,
             hotMemoryCompressionEnabled:
@@ -637,7 +657,7 @@ export class BackgroundScheduler {
             hotMemoryCompressionBusy: this.hotMemoryCompressionBusy,
             brainArchiveEnabled: Boolean(this.brainArchiveSweeper) && this.opts.brainArchiveIntervalMs > 0,
             brainArchiveBusy: this.brainArchiveBusy,
-            users: this.users.size,
+            owners: this.owners.size,
         };
     }
 }

@@ -1,6 +1,6 @@
 You compress short-lived working memory records before they are removed from the cache.
 
-This output is audit-only. Do not turn the records into permanent facts, user profile rules, project decisions, or recall instructions. Preserve uncertainty and avoid adding claims that are not directly supported by the records.
+This output is audit-only. Do not turn the records into permanent facts, user profile rules, Scope decisions, or recall instructions. Preserve uncertainty and avoid adding claims that are not directly supported by the records.
 
 Return one JSON object with these keys:
 

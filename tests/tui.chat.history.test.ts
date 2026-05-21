@@ -11,7 +11,7 @@ import {
     ChatType,
     MemoryEventType,
     ModelRole,
-    SceneRecordKind,
+    ReplayRecordKind,
     TaskPlanStatus,
     type GatewayMessage,
     type GatewayReply,
@@ -170,6 +170,8 @@ describe("TUI chat history source", () => {
                     taskPlans: [
                         {
                             id: "plan-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
                             title: "Plan",
                             summary: "Summary",
@@ -182,12 +184,14 @@ describe("TUI chat history source", () => {
                             updatedAt: now,
                         },
                     ],
-                    sceneRecords: [
+                    replayRecords: [
                         {
-                            id: "scene-1",
+                            id: "replay-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
-                            kind: SceneRecordKind.DeepThink,
-                            title: "Scene",
+                            kind: ReplayRecordKind.DeepThink,
+                            title: "Replay",
                             summary: "Replay summary",
                             visibleFacts: [],
                             openQuestions: [],
@@ -200,7 +204,7 @@ describe("TUI chat history source", () => {
 
             const latest = memory.listChatHistory({ limit: 1 });
             expect(latest[0]?.taskPlans?.[0]?.title).toBe("Plan");
-            expect(latest[0]?.scenes?.[0]?.summary).toBe("Replay summary");
+            expect(latest[0]?.replays?.[0]?.summary).toBe("Replay summary");
         } finally {
             memory.dispose();
         }
@@ -233,6 +237,8 @@ describe("TUI chat history source", () => {
                     contextForks: [
                         {
                             id: "fork-deep-think-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
                             title: "电脑控制规划",
                             summary: "为外骨骼控制任务拆出单独上下文分支",
@@ -246,6 +252,8 @@ describe("TUI chat history source", () => {
                     taskPlans: [
                         {
                             id: "plan-deep-think-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
                             title: "电脑控制长线方案",
                             summary: "先探测环境，再执行动作，最后回收状态",
@@ -262,11 +270,13 @@ describe("TUI chat history source", () => {
                             updatedAt: now,
                         },
                     ],
-                    sceneRecords: [
+                    replayRecords: [
                         {
-                            id: "scene-deep-think-1",
+                            id: "replay-deep-think-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
-                            kind: SceneRecordKind.DeepThink,
+                            kind: ReplayRecordKind.DeepThink,
                             title: "深度思考：电脑控制计划",
                             summary: "需要长线规划、ask 收口和上下文分支",
                             detail: "该回合需要先做环境探测，再选择执行路径，最后把控制动作挂到 ask-loop 上。",
@@ -291,9 +301,9 @@ describe("TUI chat history source", () => {
                 title: "电脑控制长线方案",
                 status: TaskPlanStatus.InProgress,
             });
-            expect(latest[0]?.scenes?.[0]).toMatchObject({
-                id: "scene-deep-think-1",
-                kind: SceneRecordKind.DeepThink,
+            expect(latest[0]?.replays?.[0]).toMatchObject({
+                id: "replay-deep-think-1",
+                kind: ReplayRecordKind.DeepThink,
                 openQuestions: ["是否先做只读探测？", "是否允许直接执行控制动作？"],
             });
         } finally {
@@ -320,6 +330,8 @@ describe("TUI chat history source", () => {
                     taskPlans: [
                         {
                             id: "plan-blackboard-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
                             title: "协议收口",
                             summary: "收敛 WS 控制面、事件面和恢复面",
@@ -337,11 +349,13 @@ describe("TUI chat history source", () => {
                             sourceBlackboardTurnId: "bb-turn-1",
                         },
                     ],
-                    sceneRecords: [
+                    replayRecords: [
                         {
-                            id: "scene-blackboard-1",
+                            id: "replay-blackboard-1",
+                            ownerKey: "scope:history",
+                            auditUserId: "history-user",
                             userId: "history-user",
-                            kind: SceneRecordKind.Blackboard,
+                            kind: ReplayRecordKind.Blackboard,
                             title: "Blackboard Converged",
                             summary: "黑板已收敛到单一 WS 协议建议",
                             detail: [
@@ -368,12 +382,12 @@ describe("TUI chat history source", () => {
                 sourceBlackboardTurnId: "bb-turn-1",
                 status: TaskPlanStatus.Done,
             });
-            expect(latest[0]?.scenes?.[0]).toMatchObject({
-                id: "scene-blackboard-1",
-                kind: SceneRecordKind.Blackboard,
+            expect(latest[0]?.replays?.[0]).toMatchObject({
+                id: "replay-blackboard-1",
+                kind: ReplayRecordKind.Blackboard,
                 blackboardTurnId: "bb-turn-1",
             });
-            expect(latest[0]?.scenes?.[0]?.detail).toContain("decision: 保留 ws，冻结 ask/todo/data/event 协议面");
+            expect(latest[0]?.replays?.[0]?.detail).toContain("decision: 保留 ws，冻结 ask/todo/data/event 协议面");
         } finally {
             memory.dispose();
         }

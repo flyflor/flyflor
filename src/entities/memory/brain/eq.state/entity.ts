@@ -6,7 +6,9 @@ export interface BrainEqStateRow {
     dominance: number;
     label: string;
     updated_at: number;
-    user_id: string;
+    owner_key?: string | null;
+    source_key?: string | null;
+    legacy_source_key?: string | null;
     valence: number;
 }
 
@@ -16,7 +18,8 @@ export interface BrainEqStateRow {
 export class BrainEqStateModel {
     public toRecord(row: BrainEqStateRow): EqState {
         return {
-            userId: row.user_id,
+            ownerKey: row.owner_key ?? row.legacy_source_key ?? "eq:unknown",
+            sourceKey: row.source_key ?? row.legacy_source_key ?? undefined,
             valence: row.valence,
             arousal: row.arousal,
             dominance: row.dominance,

@@ -1,13 +1,13 @@
 /**
  * LF-R5 slice B：daily / weekly summary worker。
  *
- * 取代旧 `journal/.../week.summary.md` 平铺文本：把每日 / 每周的事件流
+ * 取代旧 `journal/.../week.summary.md` 平铺文本：把每日 / 每周的 owner 事件流
  * 折叠成一行 `memory_summary` 结构化 JSON 行，供 Dream / 召回 / TUI 翻阅。
  *
  * 红线：
  * - 不调 LLM、不解析事件 content 文本语义。
  * - 仅聚合结构化字段：type 计数、role 计数、ts 区间、codenameId touched、
- *   ask reason / ghost reason 桶。
+ *   ask reason / continuation reason 桶。
  * - 调度面用资源指标（now() 与 lastCreatedAt 的小时差 ≥ minIntervalHours）短路；
  *   不引入"今天有没有进展"之类的关键词判断。
  */
@@ -39,8 +39,8 @@ interface SummaryStats {
     codenamesTouched: string[];
     asksAsked: number;
     asksAnswered: number;
-    ghostsRecorded: number;
-    ghostReasons: Record<string, number>;
+    continuationsRecorded: number;
+    continuationReasons: Record<string, number>;
     identityAppends: number;
     behaviorSnapshots: number;
     behaviorCorrections: number;
@@ -64,32 +64,37 @@ export class SummaryWorker {
     }
 
     /**
-     * 跑一次该用户的 daily + weekly 摘要写入。
+     * 跑一次该 continuity owner 的 daily + weekly 摘要写入。
      * - daily：覆盖 `now` 所在 UTC 日 [00:00, 24:00)；bucketKey = YYYY-MM-DD
      * - weekly：rolling 取 `now - rollingWindowDays`；calendar 取 ISO week
      */
-    public runOnceForUser(userId: string, nowMs = this.opts.now()): SummaryRunResult {
+    public runOnceForOwner(ownerKey: string, nowMs = this.opts.now()): SummaryRunResult {
         const result: SummaryRunResult = { written: 0, writtenIds: [], skippedByInterval: 0, skippedEmpty: 0 };
         const today = new Date(nowMs);
         const dayKey = toIsoDay(today);
         const dayRange = isoDayRange(today);
-        this.writeBucket(userId, SummaryRange.Day, dayKey, dayRange.start, dayRange.end, nowMs, result);
+        this.writeBucket(ownerKey, SummaryRange.Day, dayKey, dayRange.start, dayRange.end, nowMs, result);
 
         if (this.opts.trigger === "calendar") {
             const weekKey = toIsoWeek(today);
             const weekRange = isoWeekRange(today);
-            this.writeBucket(userId, SummaryRange.Week, weekKey, weekRange.start, weekRange.end, nowMs, result);
+            this.writeBucket(ownerKey, SummaryRange.Week, weekKey, weekRange.start, weekRange.end, nowMs, result);
         } else {
             const windowMs = this.opts.rollingWindowDays * 24 * 60 * 60_000;
             const start = nowMs - windowMs;
             const weekKey = `rolling-${dayKey}-${this.opts.rollingWindowDays}d`;
-            this.writeBucket(userId, SummaryRange.Week, weekKey, start, nowMs, nowMs, result);
+            this.writeBucket(ownerKey, SummaryRange.Week, weekKey, start, nowMs, nowMs, result);
         }
         return result;
     }
 
+    /** @deprecated Use runOnceForOwner. */
+    public runOnceForUser(userId: string, nowMs = this.opts.now()): SummaryRunResult {
+        return this.runOnceForOwner(userId, nowMs);
+    }
+
     private writeBucket(
-        userId: string,
+        ownerKey: string,
         range: typeof SummaryRange[keyof typeof SummaryRange],
         bucketKey: string,
         startMs: number,
@@ -97,7 +102,7 @@ export class SummaryWorker {
         nowMs: number,
         result: SummaryRunResult,
     ): void {
-        const id = `summary-${userId}-${range}-${bucketKey}`;
+        const id = `summary-${ownerKey}-${range}-${bucketKey}`;
         const previous = this.brain.getSummary(id);
         if (previous) {
             const ageHours = (nowMs - previous.createdAt) / 36e5;
@@ -106,13 +111,13 @@ export class SummaryWorker {
                 return;
             }
         }
-        const stats = this.collect(userId, startMs, endMs);
+        const stats = this.collect(ownerKey, startMs, endMs);
         if (stats.totalEvents === 0) {
             result.skippedEmpty += 1;
             return;
         }
         const payload = {
-            userId,
+            ownerKey,
             range,
             bucketKey,
             startMs,
@@ -131,9 +136,9 @@ export class SummaryWorker {
         result.writtenIds.push(id);
     }
 
-    private collect(userId: string, startMs: number, endMs: number): SummaryStats {
+    private collect(ownerKey: string, startMs: number, endMs: number): SummaryStats {
         const rows = this.brain.listEvents({
-            userId,
+            ownerKey,
             sinceTs: startMs,
             untilTs: endMs,
             limit: 500,
@@ -151,8 +156,8 @@ export function aggregate(rows: MemoryEventRecord[]): SummaryStats {
         codenamesTouched: [],
         asksAsked: 0,
         asksAnswered: 0,
-        ghostsRecorded: 0,
-        ghostReasons: {},
+        continuationsRecorded: 0,
+        continuationReasons: {},
         identityAppends: 0,
         behaviorSnapshots: 0,
         behaviorCorrections: 0,
@@ -168,11 +173,11 @@ export function aggregate(rows: MemoryEventRecord[]): SummaryStats {
         if (stats.lastTs === null || row.ts > stats.lastTs) stats.lastTs = row.ts;
         if (row.type === MemoryEventType.Ask) stats.asksAsked += 1;
         else if (row.type === MemoryEventType.AskAnswerPair) stats.asksAnswered += 1;
-        else if (row.type === MemoryEventType.GhostContext) {
-            stats.ghostsRecorded += 1;
+        else if (row.type === MemoryEventType.ContinuationContext) {
+            stats.continuationsRecorded += 1;
             const reason = (row.content as { reason?: string }).reason;
             if (typeof reason === "string") {
-                stats.ghostReasons[reason] = (stats.ghostReasons[reason] ?? 0) + 1;
+                stats.continuationReasons[reason] = (stats.continuationReasons[reason] ?? 0) + 1;
             }
         } else if (row.type === MemoryEventType.IdentityAppend) {
             stats.identityAppends += 1;

@@ -1,6 +1,6 @@
 # {{title}}
 
-Project scaffolded by Flyflor on {{createdAt}}.
+Scope scaffolded by Flyflor on {{createdAt}}.
 
 ## Goal
 
@@ -9,5 +9,5 @@ Project scaffolded by Flyflor on {{createdAt}}.
 ## Files
 
 - `AGENTS.md` - shared instructions for AI coding agents.
-- `TODO.md` - active project backlog.
-- `.flyflor/` - Flyflor-local skills, MCP, plugins, and project metadata.
+- `TODO.md` - active scope backlog.
+- `.flyflor/` - Flyflor-local skills, MCP, plugins, and scope metadata.

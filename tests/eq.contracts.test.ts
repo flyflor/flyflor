@@ -70,6 +70,8 @@ describe("EQ-01 contracts: normalizeEqClassification", () => {
 
 describe("EQ-01 contracts: decayEq", () => {
     const base: EqState = {
+        ownerKey: "scope:eq",
+        auditUserId: "u-1",
         userId: "u-1",
         valence: 0.8,
         arousal: 0.6,
@@ -106,6 +108,8 @@ describe("EQ-01 contracts: decayEq", () => {
 
 describe("EQ-02 contracts: deriveEqDirective", () => {
     const base: EqState = {
+        ownerKey: "scope:eq",
+        auditUserId: "u-1",
         userId: "u-1",
         valence: 0,
         arousal: 0,

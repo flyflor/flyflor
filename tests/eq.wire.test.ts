@@ -29,7 +29,7 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
         await memory.warmup();
         try {
             await memory.rememberTurn(
-                gatewayMessage("一段消息"),
+                gatewayMessage("一段消息", "msg-eq-1"),
                 gatewayReply("好", "msg-eq-1"),
                 runtimeContext(),
                 [
@@ -53,11 +53,12 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
             try {
                 const row = db
                     .query(
-                        "SELECT user_id, label, valence, arousal, dominance, confidence FROM memory_eq_state WHERE user_id = 'user-1'",
+                        "SELECT owner_key, audit_user_id, label, valence, arousal, dominance, confidence FROM memory_eq_state WHERE owner_key = 'turn:msg-eq-1'",
                     )
                     .get() as
                     | {
-                          user_id: string;
+                          owner_key: string;
+                          audit_user_id: string;
                           label: string;
                           valence: number;
                           arousal: number;
@@ -76,10 +77,11 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
             }
 
             const updated = sink.events.find((e) => e.type === RuntimeEventType.MemoryEqStateUpdated) as
-                | { type: string; payload?: { userId?: string; label?: string } }
+                | { type: string; payload?: { auditUserId?: string; ownerKey?: string; label?: string } }
                 | undefined;
             expect(updated).toBeTruthy();
-            expect(updated!.payload?.userId).toBe("user-1");
+            expect(updated!.payload?.ownerKey).toBe("turn:msg-eq-1");
+            expect(updated!.payload?.auditUserId).toBe("user-1");
             expect(updated!.payload?.label).toBe("joy");
         } finally {
             memory.dispose();
@@ -204,9 +206,9 @@ async function makeConfig(): Promise<FlyflorConfig> {
     return await loadConfigForPaths(paths);
 }
 
-function gatewayMessage(text: string): GatewayMessage {
+function gatewayMessage(text: string, id = `msg-${Math.random().toString(36).slice(2, 8)}`): GatewayMessage {
     return {
-        id: `msg-${Math.random().toString(36).slice(2, 8)}`,
+        id,
         receivedAt: new Date().toISOString(),
         text,
         attachments: [],

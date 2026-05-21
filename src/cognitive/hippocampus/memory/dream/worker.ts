@@ -46,9 +46,9 @@ export interface DreamRunResult {
 export interface DreamWorker {
     /**
      * 跑一轮 dream pass。limit 是单批次送 LLM 的候选数上限。
-     * userId 强制必填：dream 是 per-user 操作（用户记忆边界）。
+     * ownerKey 强制必填：dream 是 per-owner 操作（连续性 owner 记忆边界）。
      */
-    runOnce(userId: string, limit?: number): Promise<DreamRunResult>;
+    runOnce(ownerKey: string, limit?: number): Promise<DreamRunResult>;
 }
 
 /** No-op 实现：缺少晶体图 Component 或 ModelClient 时使用，保持依赖图稳定。 */
@@ -79,35 +79,35 @@ export class DreamWorkerImpl implements DreamWorker {
         this.maxCandidates = Math.max(1, options.maxCandidates ?? 24);
     }
 
-    public async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
-        if (typeof userId !== "string" || userId.length === 0) return zeroResult();
+    public async runOnce(ownerKey: string, limit?: number): Promise<DreamRunResult> {
+        if (typeof ownerKey !== "string" || ownerKey.length === 0) return zeroResult();
         const cap = Math.min(this.maxCandidates, limit && limit > 0 ? limit : this.maxCandidates);
         const nowMs = this.now();
 
         let candidates: DreamCandidate[];
         try {
-            candidates = await collectDreamCandidates(this.graph, { userId, nowMs });
+            candidates = await collectDreamCandidates(this.graph, { ownerKey, nowMs });
         } catch (err) {
-            this.publishFailure(userId, "collect", err);
+            this.publishFailure(ownerKey, "collect", err);
             return zeroResult();
         }
         candidates = candidates.slice(0, cap);
         const result = zeroResult();
         result.scanned = candidates.length;
         if (candidates.length === 0) {
-            this.publishCompleted(userId, result);
+            this.publishCompleted(ownerKey, result);
             return result;
         }
 
         let raw: string;
         try {
             const prompt = renderMemoryDreamPrompt({
-                userId,
+                ownerKey,
                 candidates: renderCandidatesBlock(candidates),
             });
             raw = await this.model.generate([{ role: ModelRole.User, content: prompt }]);
         } catch (err) {
-            this.publishFailure(userId, "llm", err);
+            this.publishFailure(ownerKey, "llm", err);
             result.skipped = candidates.length;
             return result;
         }
@@ -121,23 +121,23 @@ export class DreamWorkerImpl implements DreamWorker {
                 continue;
             }
             try {
-                const applied = await this.applyDecision(userId, cand, dec, nowMs);
+                const applied = await this.applyDecision(ownerKey, cand, dec, nowMs);
                 if (applied === "drift") result.driftRepaired += 1;
                 else if (applied === "recall") result.recallReinforced += 1;
                 else if (applied === "contradiction") result.contradictionsFlagged += 1;
                 else if (applied === "reconsolidation") result.reconsolidated += 1;
                 else result.skipped += 1;
             } catch (err) {
-                this.publishFailure(userId, "apply", err);
+                this.publishFailure(ownerKey, "apply", err);
                 result.skipped += 1;
             }
         }
-        this.publishCompleted(userId, result);
+        this.publishCompleted(ownerKey, result);
         return result;
     }
 
     private async applyDecision(
-        userId: string,
+        ownerKey: string,
         candidate: DreamCandidate,
         decision: DreamDecision,
         nowMs: number,
@@ -150,7 +150,7 @@ export class DreamWorkerImpl implements DreamWorker {
             const snapId = await this.graph.writeGemSnapshot(
                 {
                     id: candidate.gemId,
-                    userId,
+                    ownerKey,
                     summary: candidate.summary,
                     symbols: candidate.symbols,
                     embedding: [],
@@ -174,7 +174,7 @@ export class DreamWorkerImpl implements DreamWorker {
             if (ok) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryDriftRepaired, {
-                        userId,
+                        ownerKey,
                         gemId: candidate.gemId,
                         snapshotId: snapId,
                         newStatus: decision.newStatus,
@@ -196,7 +196,7 @@ export class DreamWorkerImpl implements DreamWorker {
             if (ok) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryRecallReinforced, {
-                        userId,
+                        ownerKey,
                         table: candidate.target.table,
                         id: candidate.target.id,
                         importanceMultiplier: decision.importanceMultiplier,
@@ -235,7 +235,7 @@ export class DreamWorkerImpl implements DreamWorker {
             if (appliedAny) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryContradictionFlagged, {
-                        userId,
+                        ownerKey,
                         left: candidate.left,
                         right: candidate.right,
                         weaker: decision.weaker,
@@ -265,7 +265,7 @@ export class DreamWorkerImpl implements DreamWorker {
             if (ok) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryReconsolidated, {
-                        userId,
+                        ownerKey,
                         left: candidate.left,
                         right: candidate.right,
                         winner: decision.winner,
@@ -280,14 +280,14 @@ export class DreamWorkerImpl implements DreamWorker {
         return "skip";
     }
 
-    private publishCompleted(userId: string, result: DreamRunResult): void {
-        this.events.publish(event(RuntimeEventType.MemoryDreamCompleted, { userId, ...result }));
+    private publishCompleted(ownerKey: string, result: DreamRunResult): void {
+        this.events.publish(event(RuntimeEventType.MemoryDreamCompleted, { ownerKey, ...result }));
     }
 
-    private publishFailure(userId: string, stage: string, err: unknown): void {
+    private publishFailure(ownerKey: string, stage: string, err: unknown): void {
         this.events.publish(
             event(RuntimeEventType.MemoryDreamFailed, {
-                userId,
+                ownerKey,
                 stage,
                 error: String(err),
             }),

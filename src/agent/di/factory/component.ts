@@ -42,5 +42,3 @@ export class ComponentRegistry {
 }
 
 export const componentRegistry = new ComponentRegistry();
-export { ComponentRegistry as FpcComponentFactory };
-export const fpcComponents = componentRegistry;

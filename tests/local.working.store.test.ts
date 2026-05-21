@@ -11,7 +11,7 @@ describe("LocalWorkingMemoryStore", () => {
         try {
             const first = store(root);
             await first.writeEpisode({
-                userId: "u1",
+                ownerKey: "scope:u1",
                 episodeId: "ep1",
                 text: "remember me",
                 concepts: ["local"],
@@ -24,9 +24,9 @@ describe("LocalWorkingMemoryStore", () => {
             });
 
             const second = store(root);
-            const episode = await second.readEpisode("u1", "ep1");
+            const episode = await second.readEpisode("scope:u1", "ep1");
             expect(episode?.text).toBe("remember me");
-            expect(await second.readContextRing("u1", 4)).toEqual(["ep1"]);
+            expect(await second.readContextRing("scope:u1", 4)).toEqual(["ep1"]);
         } finally {
             await rm(root, { recursive: true, force: true });
         }
@@ -37,7 +37,7 @@ describe("LocalWorkingMemoryStore", () => {
         try {
             const first = store(root);
             await first.writeEpisode({
-                userId: "u1",
+                ownerKey: "scope:u1",
                 episodeId: "ep1",
                 text: "safe line",
                 concepts: [],
@@ -49,7 +49,7 @@ describe("LocalWorkingMemoryStore", () => {
             await appendFile(join(root, "working.wal.jsonl"), "{\"op\":\"write-episode\"", "utf8");
 
             const second = store(root);
-            expect((await second.readEpisode("u1", "ep1"))?.text).toBe("safe line");
+            expect((await second.readEpisode("scope:u1", "ep1"))?.text).toBe("safe line");
         } finally {
             await rm(root, { recursive: true, force: true });
         }
@@ -60,7 +60,7 @@ describe("LocalWorkingMemoryStore", () => {
         try {
             const first = store(root, { snapshotEveryWrites: 1 });
             await first.writeEpisode({
-                userId: "u1",
+                ownerKey: "scope:u1",
                 episodeId: "ep1",
                 text: "backup me",
                 concepts: ["local"],
@@ -84,7 +84,7 @@ describe("LocalWorkingMemoryStore", () => {
         try {
             const first = store(root, { snapshotEveryWrites: 1 });
             await first.writeEpisode({
-                userId: "u1",
+                ownerKey: "scope:u1",
                 episodeId: "ep1",
                 text: "backup survivor",
                 concepts: ["local"],
@@ -99,7 +99,7 @@ describe("LocalWorkingMemoryStore", () => {
 
             const second = store(root);
 
-            expect((await second.readEpisode("u1", "ep1"))?.text).toBe("backup survivor");
+            expect((await second.readEpisode("scope:u1", "ep1"))?.text).toBe("backup survivor");
             expect(second.getHealthSnapshot()).toMatchObject({
                 circuitState: "closed",
                 loaded: true,
@@ -116,7 +116,7 @@ describe("LocalWorkingMemoryStore", () => {
         try {
             const store = new FailingStore(root);
             await store.writeEpisode({
-                userId: "u1",
+                ownerKey: "scope:u1",
                 episodeId: "ep1",
                 text: "keep me",
                 concepts: [],
@@ -128,7 +128,7 @@ describe("LocalWorkingMemoryStore", () => {
 
             await expect(
                 store.writeEpisode({
-                    userId: "u1",
+                    ownerKey: "scope:u1",
                     episodeId: "ep2",
                     text: "break me",
                     concepts: [],
@@ -141,10 +141,10 @@ describe("LocalWorkingMemoryStore", () => {
 
             const health = store.getHealthSnapshot();
             expect(health.circuitState).toBe("open");
-            expect(await store.readEpisode("u1", "ep1")).toBeDefined();
+            expect(await store.readEpisode("scope:u1", "ep1")).toBeDefined();
             await expect(
                 store.writeEpisode({
-                    userId: "u1",
+                    ownerKey: "scope:u1",
                     episodeId: "ep3",
                     text: "still broken",
                     concepts: [],

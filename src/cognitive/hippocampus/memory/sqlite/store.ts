@@ -11,9 +11,9 @@ import type {
     MemorySearchRequest,
     MemorySearchResult,
 } from "../types.ts";
-import { SQLiteMemoryRepo, type PendingProjectOffer, type PendingSkillOffer } from "../../../../entities/memory/index.ts";
+import { SQLiteMemoryRepo, type PendingScopeOffer, type PendingSkillOffer } from "../../../../entities/memory/index.ts";
 
-export type { PendingProjectOffer, PendingSkillOffer } from "../../../../entities/memory/index.ts";
+export type { PendingScopeOffer, PendingSkillOffer } from "../../../../entities/memory/index.ts";
 
 /**
  * SQLite memory store.
@@ -69,46 +69,46 @@ export class SQLiteMemoryStore extends SQLiteComponent {
         return this.repo?.search(request) ?? [];
     }
 
-    /** Persists one pending explicit project offer per user. */
-    public async upsertProjectOffer(offer: PendingProjectOffer): Promise<void> {
+    /** Persists one pending explicit scope offer per continuity owner. */
+    public async upsertScopeOffer(offer: PendingScopeOffer): Promise<void> {
         await this.initialize();
-        this.repo?.upsertProjectOffer(offer);
+        this.repo?.upsertScopeOffer(offer);
     }
 
-    public async getProjectOffer(userId: string): Promise<PendingProjectOffer | undefined> {
+    public async getScopeOffer(ownerKey: string): Promise<PendingScopeOffer | undefined> {
         await this.initialize();
-        return this.repo?.getProjectOffer(userId);
+        return this.repo?.getScopeOffer(ownerKey);
     }
 
-    public async decrementProjectOfferTtl(userId: string): Promise<number | undefined> {
+    public async decrementScopeOfferTtl(ownerKey: string): Promise<number | undefined> {
         await this.initialize();
-        return this.repo?.decrementProjectOfferTtl(userId);
+        return this.repo?.decrementScopeOfferTtl(ownerKey);
     }
 
-    public async deleteProjectOffer(userId: string): Promise<void> {
+    public async deleteScopeOffer(ownerKey: string): Promise<void> {
         await this.initialize();
-        this.repo?.deleteProjectOffer(userId);
+        this.repo?.deleteScopeOffer(ownerKey);
     }
 
-    /** Persists one pending explicit skill/gem offer per user. */
+    /** Persists one pending explicit skill/gem offer per continuity owner. */
     public async upsertSkillOffer(offer: PendingSkillOffer): Promise<void> {
         await this.initialize();
         this.repo?.upsertSkillOffer(offer);
     }
 
-    public async getSkillOffer(userId: string): Promise<PendingSkillOffer | undefined> {
+    public async getSkillOffer(ownerKey: string): Promise<PendingSkillOffer | undefined> {
         await this.initialize();
-        return this.repo?.getSkillOffer(userId);
+        return this.repo?.getSkillOffer(ownerKey);
     }
 
-    public async decrementSkillOfferTtl(userId: string): Promise<number | undefined> {
+    public async decrementSkillOfferTtl(ownerKey: string): Promise<number | undefined> {
         await this.initialize();
-        return this.repo?.decrementSkillOfferTtl(userId);
+        return this.repo?.decrementSkillOfferTtl(ownerKey);
     }
 
-    public async deleteSkillOffer(userId: string): Promise<void> {
+    public async deleteSkillOffer(ownerKey: string): Promise<void> {
         await this.initialize();
-        this.repo?.deleteSkillOffer(userId);
+        this.repo?.deleteSkillOffer(ownerKey);
     }
 
     private openMemoryDatabase(path: string): Database {
@@ -162,9 +162,9 @@ export class SQLiteMemoryStore extends SQLiteComponent {
             );
         `);
         database.exec(`
-            CREATE TABLE IF NOT EXISTS pending_project_offer (
-                user_id TEXT PRIMARY KEY,
-                project_id TEXT NOT NULL,
+            CREATE TABLE IF NOT EXISTS pending_scope_offer (
+                owner_key TEXT PRIMARY KEY,
+                scope_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 goal TEXT NOT NULL,
                 trigger_kind TEXT NOT NULL,
@@ -176,7 +176,7 @@ export class SQLiteMemoryStore extends SQLiteComponent {
         `);
         database.exec(`
             CREATE TABLE IF NOT EXISTS pending_skill_offer (
-                user_id TEXT PRIMARY KEY,
+                owner_key TEXT PRIMARY KEY,
                 skill_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT NOT NULL,
@@ -189,6 +189,7 @@ export class SQLiteMemoryStore extends SQLiteComponent {
                 ttl_turns INTEGER NOT NULL
             );
         `);
+        this.migrateOfferTables(database);
         database.exec("CREATE INDEX IF NOT EXISTS idx_candidates_status ON memory_candidates(status, created_at)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_memories_scope_updated ON memories(scope, updated_at DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_memories_subject ON memories(subject_id, updated_at DESC)");
@@ -212,9 +213,65 @@ export class SQLiteMemoryStore extends SQLiteComponent {
         return rows.some((row) => row.name === column);
     }
 
+    private migrateOfferTables(database: Database): void {
+        this.migrateLegacyPendingScopeOfferTable(database);
+        if (this.tableExists(database, "pending_scope_offer")) {
+            const hasOwnerKey = this.tableHasColumn(database, "pending_scope_offer", "owner_key");
+            const hasUserId = this.tableHasColumn(database, "pending_scope_offer", "user_id");
+            if (!hasOwnerKey && hasUserId) {
+                database.exec("ALTER TABLE pending_scope_offer RENAME COLUMN user_id TO owner_key;");
+            }
+            const hasScopeId = this.tableHasColumn(database, "pending_scope_offer", "scope_id");
+            const hasProjectId = this.tableHasColumn(database, "pending_scope_offer", "project_id");
+            if (!hasScopeId && hasProjectId) {
+                database.exec("ALTER TABLE pending_scope_offer RENAME COLUMN project_id TO scope_id;");
+            }
+        }
+        if (this.tableExists(database, "pending_skill_offer")) {
+            const hasOwnerKey = this.tableHasColumn(database, "pending_skill_offer", "owner_key");
+            const hasUserId = this.tableHasColumn(database, "pending_skill_offer", "user_id");
+            if (!hasOwnerKey && hasUserId) {
+                database.exec("ALTER TABLE pending_skill_offer RENAME COLUMN user_id TO owner_key;");
+            }
+        }
+    }
+
+    private migrateLegacyPendingScopeOfferTable(database: Database): void {
+        if (!this.tableExists(database, "pending_project_offer")) {
+            return;
+        }
+
+        const ownerColumn = this.tableHasColumn(database, "pending_project_offer", "owner_key") ? "owner_key" : "user_id";
+        const scopeColumn = this.tableHasColumn(database, "pending_project_offer", "scope_id") ? "scope_id" : "project_id";
+        this.assertKnownMemoryColumn(ownerColumn);
+        this.assertKnownMemoryColumn(scopeColumn);
+        database.exec(`
+            INSERT OR REPLACE INTO pending_scope_offer (
+                owner_key, scope_id, title, goal, trigger_kind, evidence_score,
+                related_ids_json, proposed_at, ttl_turns
+            )
+            SELECT
+                ${ownerColumn}, ${scopeColumn}, title, goal, trigger_kind, evidence_score,
+                related_ids_json, proposed_at, ttl_turns
+            FROM pending_project_offer;
+        `);
+        database.exec("DROP TABLE pending_project_offer;");
+    }
+
     private assertKnownMemoryTable(table: string): void {
-        if (table !== "memory_candidates") {
+        if (
+            table !== "memory_candidates" &&
+            table !== "pending_scope_offer" &&
+            table !== "pending_project_offer" &&
+            table !== "pending_skill_offer"
+        ) {
             throw new Error(`Unknown memory table: ${table}`);
+        }
+    }
+
+    private assertKnownMemoryColumn(column: string): void {
+        if (column !== "owner_key" && column !== "user_id" && column !== "scope_id" && column !== "project_id") {
+            throw new Error(`Unknown memory column: ${column}`);
         }
     }
 }

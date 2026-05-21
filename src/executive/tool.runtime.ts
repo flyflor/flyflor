@@ -1,6 +1,6 @@
-import { CttlLoopGuardReason } from "../protocol/contracts/index.ts";
-import { CttlLoopGuard } from "./loop.guard.ts";
-import type { CttlLoopGuardDecision } from "./types.ts";
+import { ExecutiveLoopGuardReason } from "../protocol/contracts/index.ts";
+import { ExecutiveLoopGuard } from "./loop.guard.ts";
+import type { ExecutiveLoopGuardDecision } from "./types.ts";
 
 export interface ExecutiveToolCall {
     readonly input: Readonly<Record<string, unknown>>;
@@ -25,7 +25,7 @@ export interface ExecutiveToolRuntimeCallbacks<TCall extends ExecutiveToolCall, 
     generate(messages: unknown[], turn: number): Promise<string>;
     knownToolNames(): ReadonlySet<string>;
     onExecution?(execution: TExecution, options: { loopGuardBlocked: boolean }): void;
-    onLoopGuardBlocked?(call: TCall, decision: CttlLoopGuardDecision): TExecution;
+    onLoopGuardBlocked?(call: TCall, decision: ExecutiveLoopGuardDecision): TExecution;
     parse(raw: string): { calls: TCall[]; text: string };
     renderResults(executions: TExecution[]): string;
     toolDescriptor(call: TCall): ExecutiveToolRuntimeDescriptor | undefined;
@@ -43,7 +43,7 @@ export interface ExecutiveToolRuntimeOptions<TCall extends ExecutiveToolCall, TE
 
 export interface ExecutiveToolRuntimeAskRequired {
     readonly askId: string;
-    readonly loopGuardReason?: CttlLoopGuardReason;
+    readonly loopGuardReason?: ExecutiveLoopGuardReason;
     readonly message: string;
     readonly resume: {
         readonly mode: "continue";
@@ -75,7 +75,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         }
         const allExecutions: TExecution[] = [];
         const transcript = [...input.initialMessages];
-        const loopGuard = new CttlLoopGuard(input.loopGuard);
+        const loopGuard = new ExecutiveLoopGuard(input.loopGuard);
 
         for (let turn = 0; turn < maxTurns; turn += 1) {
             const raw = await input.callbacks.generate(transcript, turn);
@@ -143,7 +143,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
 
     private applyLoopGuard(
         calls: TCall[],
-        loopGuard: CttlLoopGuard,
+        loopGuard: ExecutiveLoopGuard,
         callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
     ): { allowed: TCall[]; blocked: TExecution[] } {
         const knownToolNames = callbacks.knownToolNames();
@@ -166,7 +166,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
 
     private applyResultGuard(
         executions: TExecution[],
-        loopGuard: CttlLoopGuard,
+        loopGuard: ExecutiveLoopGuard,
         callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
     ): TExecution[] {
         return executions
@@ -256,7 +256,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
 
     private blockedExecution(
         call: TCall,
-        decision: CttlLoopGuardDecision,
+        decision: ExecutiveLoopGuardDecision,
         callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
     ): TExecution {
         const execution = callbacks.onLoopGuardBlocked?.(call, decision);
@@ -266,9 +266,9 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             ok: false,
             error: decision.message ?? "Executive loop guard blocked this tool call.",
             result: {
-                kind: "cttl-loop-guard",
+                kind: "executive-loop-guard",
                 message: decision.message,
-                reason: decision.reason ?? CttlLoopGuardReason.RepeatedCallNoProgress,
+                reason: decision.reason ?? ExecutiveLoopGuardReason.RepeatedCallNoProgress,
                 tool: call.key,
             },
         } as TExecution;
@@ -282,7 +282,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         return { role: "user", content };
     }
 
-    private lastLoopGuardReason(executions: readonly TExecution[]): CttlLoopGuardReason | undefined {
+    private lastLoopGuardReason(executions: readonly TExecution[]): ExecutiveLoopGuardReason | undefined {
         for (const execution of [...executions].reverse()) {
             if (!execution.result || typeof execution.result !== "object") continue;
             const reason = this.loopGuardReasonFromResult(execution.result);
@@ -291,7 +291,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         return undefined;
     }
 
-    private loopGuardReasonFromResult(value: object): CttlLoopGuardReason | undefined {
+    private loopGuardReasonFromResult(value: object): ExecutiveLoopGuardReason | undefined {
         const reason = (value as { reason?: unknown; raw?: unknown }).reason;
         if (this.isLoopGuardReason(reason)) return reason;
         const raw = (value as { raw?: unknown }).raw;
@@ -302,8 +302,8 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         return undefined;
     }
 
-    private isLoopGuardReason(value: unknown): value is CttlLoopGuardReason {
-        return Object.values(CttlLoopGuardReason).includes(value as CttlLoopGuardReason);
+    private isLoopGuardReason(value: unknown): value is ExecutiveLoopGuardReason {
+        return Object.values(ExecutiveLoopGuardReason).includes(value as ExecutiveLoopGuardReason);
     }
 
     private stableJson(value: unknown): string {

@@ -41,38 +41,12 @@
     {
       "key": "blackboardWorkerEnvelope",
       "filename": "blackboard.worker.envelope.md",
-      "protocol": "flyflor.blackboard.worker.v1",
-      "protocolSpec": {
-        "expectedOutput": [
-          "inputSummary",
-          "outputSummary",
-          "newFacts",
-          "blockers",
-          "risk",
-          "questions",
-          "answers",
-          "agreement",
-          "outcome",
-          "openIssues",
-          "proposal",
-          "discussion"
-        ],
-        "constraints": [
-          "no-tool-execution",
-          "no-long-term-memory-write",
-          "surface-blockers",
-          "write-public-discussion-as-dialogue",
-          "answer-current-round-peer-questions"
-        ]
-      },
       "requiredPlaceholders": [
-        "constraintsJson",
         "contractJson",
         "convergencePolicyJson",
         "currentRoundStepsJson",
         "discussionPlanJson",
         "goalJson",
-        "expectedOutputJson",
         "minRoundsJson",
         "participantJson",
         "phaseJson",
@@ -127,8 +101,8 @@
       "requiredPlaceholders": [
         "hippocampus",
         "markdownContent",
-        "projectMemory",
-        "retrievedResults"
+        "retrievedResults",
+        "scopeMemory"
       ]
     },
     {
@@ -136,12 +110,12 @@
       "filename": "memory.dream.md",
       "requiredPlaceholders": [
         "candidates",
-        "userId"
+        "ownerKey"
       ]
     },
     {
-      "key": "memoryProjectOffer",
-      "filename": "memory.project.offer.md",
+      "key": "memoryScopeOffer",
+      "filename": "memory.scope.offer.md",
       "requiredPlaceholders": [
         "evidenceScore",
         "relatedCount",
@@ -168,6 +142,11 @@
       ]
     },
     {
+      "key": "mcpToolBudgetExhausted",
+      "filename": "mcp.tool.budget.exhausted.md",
+      "requiredPlaceholders": []
+    },
+    {
       "key": "runtimeAskContinuation",
       "filename": "runtime.ask.continuation.md",
       "requiredPlaceholders": [
@@ -178,8 +157,8 @@
       ]
     },
     {
-      "key": "runtimeDormantResume",
-      "filename": "runtime.dormant.resume.md",
+      "key": "runtimeIdleResume",
+      "filename": "runtime.idle.resume.md",
       "requiredPlaceholders": [
         "idleBucket"
       ]
@@ -198,10 +177,10 @@
       ]
     },
     {
-      "key": "runtimeGhostHint",
-      "filename": "runtime.ghost.hint.md",
+      "key": "runtimeContinuationHint",
+      "filename": "runtime.continuation.hint.md",
       "requiredPlaceholders": [
-        "ghostEntries"
+        "continuationEntries"
       ]
     },
     {

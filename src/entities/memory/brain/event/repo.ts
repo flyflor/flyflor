@@ -8,17 +8,18 @@ import { allQuery, getQuery, query, runQuery } from "../../../../components/sql/
 import { brainEventModel, type BrainEventRow } from "./entity.ts";
 
 export interface BrainEventInput {
-    channelId?: string;
     codenameId?: string;
     content: Record<string, unknown>;
     embeddingId?: string;
     id: string;
     importance?: number;
+    ownerKey: string;
     parentId?: string;
     role?: MemoryEventRecord["role"];
+    sourceKey?: string;
+    sourceSurface?: string;
     ts: number;
     type: MemoryEventType;
-    userId: string;
 }
 
 export interface BrainEventListInput {
@@ -28,7 +29,7 @@ export interface BrainEventListInput {
     statusIn?: MemoryEventRecord extends never ? never : MemoryEventStatus[];
     type?: MemoryEventType;
     untilTs?: number;
-    userId?: string;
+    ownerKey?: string;
 }
 
 /**
@@ -47,11 +48,11 @@ export class BrainEventRepo {
         runQuery(
             this.db,
             query`INSERT INTO memory_events (
-                id, ts, time_bucket, user_id, channel_id, codename_id,
+                id, ts, time_bucket, owner_key, source_key, source_surface, codename_id,
                 type, role, content, parent_id, embedding_id, importance
             ) VALUES (
-                ${input.id}, ${input.ts}, ${bucket}, ${input.userId},
-                ${input.channelId ?? null}, ${input.codenameId ?? null},
+                ${input.id}, ${input.ts}, ${bucket}, ${input.ownerKey}, ${input.sourceKey ?? null},
+                ${input.sourceSurface ?? null}, ${input.codenameId ?? null},
                 ${input.type}, ${input.role ?? null}, ${JSON.stringify(input.content)},
                 ${input.parentId ?? null}, ${input.embeddingId ?? null}, ${importance}
             )`,
@@ -60,8 +61,9 @@ export class BrainEventRepo {
             id: input.id,
             ts: input.ts,
             timeBucket: bucket,
-            userId: input.userId,
-            channelId: input.channelId,
+            ownerKey: input.ownerKey,
+            sourceKey: input.sourceKey,
+            sourceSurface: input.sourceSurface,
             codenameId: input.codenameId,
             type: input.type,
             role: input.role,
@@ -84,7 +86,7 @@ export class BrainEventRepo {
             this.db,
             query`SELECT e.* FROM memory_events e
                 LEFT JOIN memory_state s ON s.event_id = e.id
-                WHERE (${input.userId ?? null} IS NULL OR e.user_id = ${input.userId ?? null})
+                WHERE (${input.ownerKey ?? null} IS NULL OR e.owner_key = ${input.ownerKey ?? null})
                   AND (${input.codenameId ?? null} IS NULL OR e.codename_id = ${input.codenameId ?? null})
                   AND (${input.type ?? null} IS NULL OR e.type = ${input.type ?? null})
                   AND (${input.sinceTs ?? null} IS NULL OR e.ts >= ${input.sinceTs ?? null})
@@ -102,12 +104,13 @@ export class BrainEventRepo {
         return rows.map((row) => brainEventModel.toRecord(row));
     }
 
-    public getLatestPendingAsk(userId: string): MemoryEventRecord | null {
+    public getLatestPendingAsk(ownerKey: string): MemoryEventRecord | null {
         const row = getQuery<BrainEventRow>(
             this.db,
             query`SELECT e.* FROM memory_events e
                 LEFT JOIN memory_state s ON s.event_id = e.id
-                WHERE e.user_id = ${userId} AND e.type = ${MemoryEventType.Ask}
+                WHERE e.owner_key = ${ownerKey}
+                  AND e.type = ${MemoryEventType.Ask}
                   AND COALESCE(s.status, ${MemoryEventStatus.Live}) IN (${MemoryEventStatus.Live}, ${MemoryEventStatus.Resumed})
                   AND NOT EXISTS (
                     SELECT 1 FROM memory_events c
@@ -142,8 +145,8 @@ export class BrainEventRepo {
         return depth;
     }
 
-    public listActiveGhosts(
-        userId: string,
+    public listActiveContinuations(
+        ownerKey: string,
         options: { codenameId?: string | null; limit?: number } = {},
     ): MemoryEventRecord[] {
         const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 50)));
@@ -152,8 +155,8 @@ export class BrainEventRepo {
             this.db,
             query`SELECT e.* FROM memory_events e
                 LEFT JOIN memory_state s ON s.event_id = e.id
-                WHERE e.user_id = ${userId}
-                  AND e.type = ${MemoryEventType.GhostContext}
+                WHERE e.owner_key = ${ownerKey}
+                  AND e.type = ${MemoryEventType.ContinuationContext}
                   AND (
                     ${codenameFilter.any} = 1
                     OR (${codenameFilter.nullOnly} = 1 AND e.codename_id IS NULL)
@@ -166,15 +169,15 @@ export class BrainEventRepo {
         return rows.map((row) => brainEventModel.toRecord(row));
     }
 
-    public patchGhostContent(eventId: string, patch: Record<string, unknown>): MemoryEventRecord | null {
+    public patchContinuationContent(eventId: string, patch: Record<string, unknown>): MemoryEventRecord | null {
         const row = getQuery<BrainEventRow>(this.db, query`SELECT * FROM memory_events WHERE id = ${eventId}`);
         if (!row) return null;
-        if (row.type !== MemoryEventType.GhostContext) {
-            throw new Error(`patchGhostContent: ${eventId} is not a ghost-context event`);
+        if (row.type !== MemoryEventType.ContinuationContext) {
+            throw new Error(`patchContinuationContent: ${eventId} is not a continuation-context event`);
         }
         const current = brainEventModel.parseObjectContent(
             row.content,
-            `Invalid ghost-context content JSON for event ${eventId}`,
+            `Invalid continuation-context content JSON for event ${eventId}`,
         );
         const next = { ...current, ...patch };
         runQuery(this.db, query`UPDATE memory_events SET content = ${JSON.stringify(next)} WHERE id = ${eventId}`);
@@ -198,13 +201,14 @@ export class BrainEventRepo {
         return row !== null;
     }
 
-    public listActiveIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
+    public listActiveIdentity(ownerKey: string, options: { limit?: number } = {}): MemoryEventRecord[] {
         const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 32)));
         const rows = allQuery<BrainEventRow>(
             this.db,
             query`SELECT e.* FROM memory_events e
                 LEFT JOIN memory_state s ON s.event_id = e.id
-                WHERE e.user_id = ${userId} AND e.type = ${MemoryEventType.IdentityAppend}
+                WHERE e.owner_key = ${ownerKey}
+                  AND e.type = ${MemoryEventType.IdentityAppend}
                   AND COALESCE(s.status, ${MemoryEventStatus.Live}) = ${MemoryEventStatus.Live}
                 ORDER BY e.ts DESC
                 LIMIT ${limit}`,
@@ -212,12 +216,13 @@ export class BrainEventRepo {
         return rows.map((row) => brainEventModel.toRecord(row));
     }
 
-    public listAllIdentity(userId: string, options: { limit?: number } = {}): MemoryEventRecord[] {
+    public listAllIdentity(ownerKey: string, options: { limit?: number } = {}): MemoryEventRecord[] {
         const limit = Math.max(1, Math.min(500, Math.floor(options.limit ?? 64)));
         const rows = allQuery<BrainEventRow>(
             this.db,
             query`SELECT e.* FROM memory_events e
-                WHERE e.user_id = ${userId} AND e.type = ${MemoryEventType.IdentityAppend}
+                WHERE e.owner_key = ${ownerKey}
+                  AND e.type = ${MemoryEventType.IdentityAppend}
                 ORDER BY e.ts DESC
                 LIMIT ${limit}`,
         );

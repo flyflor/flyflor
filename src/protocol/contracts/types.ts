@@ -222,13 +222,18 @@ export interface RuntimeContext {
      */
     contextForkId?: string;
     /**
-     * 显式 project 作用域。Flyflor 保持无 session：TUI / API 若要使用某个项目，
-     * 必须每轮传入这个结构化对象；runtime 不从自然语言或 cwd 猜测当前项目。
+     * 显式 scope 作用域。Flyflor 保持无 session：TUI / API 若要进入某个工作域，
+     * 必须每轮传入这个结构化对象；runtime 不从自然语言、transport 或 cwd 猜测。
      */
-    activeProject?: RuntimeProjectScope;
+    activeScope?: RuntimeScope;
+    /**
+     * Deprecated compatibility alias. Runtime internals should normalize to
+     * `activeScope` and stop introducing new `activeProject` writes.
+     */
+    activeProject?: RuntimeScope;
 }
 
-export interface RuntimeProjectScope {
+export interface RuntimeScope {
     id: string;
     title?: string;
     projectDir: string;

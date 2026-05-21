@@ -12,7 +12,7 @@ import {
     upsertPlugin,
     validatePlugins,
 } from "../src/agent/plugin/index.ts";
-import { CttlPermission, CttlToolCategory, CttlToolScope } from "../src/protocol/contracts/index.ts";
+import { ToolPermission, ToolCategory, ToolScope } from "../src/protocol/contracts/index.ts";
 
 function testPaths(root: string): FlyflorPaths {
     return {
@@ -72,11 +72,11 @@ describe("Plugin registry", () => {
         const paths = testPaths(root);
         try {
             await upsertPlugin(paths, { name: "shared", entry: "./global.ts", global: true });
-            await upsertPlugin(paths, { name: "shared", entry: "./project.ts" });
+            await upsertPlugin(paths, { name: "shared", entry: "index.ts" });
             const plugins = await loadPlugins(paths);
             expect(plugins).toHaveLength(1);
             expect(plugins[0]?.source).toBe("project");
-            expect(plugins[0]?.entry).toBe("./project.ts");
+            expect(plugins[0]?.entry).toBe("index.ts");
         } finally {
             await rm(root, { recursive: true, force: true });
         }
@@ -96,9 +96,9 @@ describe("Plugin registry", () => {
                             capabilities: {
                                 "symbols.scan": {
                                     description: "Scan project symbols",
-                                    category: CttlToolCategory.Coding,
-                                    permission: CttlPermission.Read,
-                                    scope: [CttlToolScope.Project],
+                                    category: ToolCategory.Coding,
+                                    permission: ToolPermission.Read,
+                                    scope: [ToolScope.Workspace],
                                     inputSchema: {
                                         type: "object",
                                         properties: { path: { type: "string" } },
@@ -116,10 +116,10 @@ describe("Plugin registry", () => {
             expect(plugin?.capabilities[0]).toMatchObject({
                 enabled: true,
                 descriptor: {
-                    category: CttlToolCategory.Coding,
+                    category: ToolCategory.Coding,
                     name: "plugin.inspector.symbols.scan",
-                    permission: CttlPermission.Read,
-                    scope: [CttlToolScope.Project],
+                    permission: ToolPermission.Read,
+                    scope: [ToolScope.Workspace],
                     source: "plugin",
                     sourceId: "inspector",
                     tags: ["lsp"],

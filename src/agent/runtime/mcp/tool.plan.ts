@@ -1,22 +1,22 @@
 import { Component } from "../../../agent/di/decorators/index.ts";
 import { Runtime } from "../../../components/index.ts";
 import {
-    type CttlHiddenReason,
-    CttlPermission,
-    CttlTrustSurface,
+    type ToolHiddenReason,
+    ToolPermission,
+    TrustSurface,
     type ChannelName,
 } from "../../../protocol/contracts/index.ts";
 import { Channel } from "../../../protocol/contracts/index.ts";
 import {
-    CttlComponent,
-    CttlComputerProfileComponent,
-    CttlMcpCatalogAdapter,
-    type CttlManifestToolDefinition,
-    type CttlToolDescriptor,
-    type CttlMcpPromptCatalogEntry,
-    type CttlMcpResourceCatalogEntry,
-    type CttlToolPlan,
-    type CttlTrustContext,
+    ExecutiveComponent,
+    ComputerProfileComponent,
+    McpCatalogAdapter,
+    type ManifestToolDefinition,
+    type ToolDescriptor,
+    type McpPromptCatalogEntry,
+    type McpResourceCatalogEntry,
+    type ToolPlan,
+    type TrustContext,
 } from "../../../executive/index.ts";
 import type { McpPromptDefinition, McpResourceDefinition, McpToolCatalogEntry } from "../../mcp/index.ts";
 import { GIT_SERVER } from "./git.ts";
@@ -27,7 +27,7 @@ const SHELL_SERVER = "shell";
 export interface RuntimeMcpToolPlanInput {
     readonly catalog: readonly McpToolCatalogEntry[];
     readonly channel: ChannelName;
-    readonly maxPermission?: CttlPermission;
+    readonly maxPermission?: ToolPermission;
     readonly projectScoped?: boolean;
 }
 
@@ -38,19 +38,19 @@ export interface RuntimeMcpCapabilityPlanInput {
     readonly tools: readonly McpToolCatalogEntry[];
     readonly userTools?: readonly RuntimeUserToolCatalogEntry[];
     readonly channel: ChannelName;
-    readonly maxPermission?: CttlPermission;
+    readonly maxPermission?: ToolPermission;
     readonly projectScoped?: boolean;
 }
 
 export interface RuntimeMcpToolPlanResult {
     readonly catalog: McpToolCatalogEntry[];
     readonly hiddenTools: readonly RuntimeMcpHiddenTool[];
-    readonly plan: CttlToolPlan;
+    readonly plan: ToolPlan;
 }
 
 export interface RuntimeMcpCapabilityPlanResult {
     readonly hiddenCapabilities: readonly RuntimeMcpHiddenTool[];
-    readonly plan: CttlToolPlan;
+    readonly plan: ToolPlan;
     readonly pluginCapabilities: RuntimePluginCapabilityCatalogEntry[];
     readonly prompts: RuntimeMcpPromptCatalogEntry[];
     readonly resources: RuntimeMcpResourceCatalogEntry[];
@@ -60,7 +60,7 @@ export interface RuntimeMcpCapabilityPlanResult {
 
 export interface RuntimeMcpHiddenTool {
     readonly name: string;
-    readonly reasons: readonly CttlHiddenReason[];
+    readonly reasons: readonly ToolHiddenReason[];
 }
 
 export interface RuntimeMcpResourceCatalogEntry {
@@ -75,11 +75,11 @@ export interface RuntimeMcpPromptCatalogEntry {
 
 export interface RuntimeUserToolCatalogEntry {
     readonly catalog: McpToolCatalogEntry;
-    readonly tool: CttlManifestToolDefinition;
+    readonly tool: ManifestToolDefinition;
 }
 
 export interface RuntimePluginCapabilityCatalogEntry {
-    readonly descriptor: CttlToolDescriptor;
+    readonly descriptor: ToolDescriptor;
     readonly plugin: string;
     readonly entry: string;
     readonly enabled: boolean;
@@ -93,13 +93,13 @@ export interface RuntimePluginCapabilityCatalogEntry {
  */
 @Component()
 export class RuntimeMcpToolPlanComponent extends Runtime {
-    private readonly adapter = new CttlMcpCatalogAdapter({
+    private readonly adapter = new McpCatalogAdapter({
         coreServers: new Set([WORKSPACE_SERVER, GIT_SERVER, SHELL_SERVER]),
         gitServer: GIT_SERVER,
         shellServer: SHELL_SERVER,
         workspaceServer: WORKSPACE_SERVER,
     });
-    private readonly computerProfile = new CttlComputerProfileComponent();
+    private readonly computerProfile = new ComputerProfileComponent();
 
     public build(input: RuntimeMcpToolPlanInput): RuntimeMcpToolPlanResult {
         const capabilityPlan = this.buildCapabilities({
@@ -122,33 +122,33 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
     }
 
     public descriptorForResourceEntry(entry: RuntimeMcpResourceCatalogEntry) {
-        return this.adapter.resourceDescriptorFor(entry satisfies CttlMcpResourceCatalogEntry);
+        return this.adapter.resourceDescriptorFor(entry satisfies McpResourceCatalogEntry);
     }
 
     public descriptorForPromptEntry(entry: RuntimeMcpPromptCatalogEntry) {
-        return this.adapter.promptDescriptorFor(entry satisfies CttlMcpPromptCatalogEntry);
+        return this.adapter.promptDescriptorFor(entry satisfies McpPromptCatalogEntry);
     }
 
     public buildCapabilities(input: RuntimeMcpCapabilityPlanInput): RuntimeMcpCapabilityPlanResult {
-        const cttl = new CttlComponent();
+        const executive = new ExecutiveComponent();
         for (const entry of input.tools) {
-            cttl.registerTool(this.descriptorForCatalogEntry(entry));
+            executive.registerTool(this.descriptorForCatalogEntry(entry));
         }
         for (const entry of input.resources ?? []) {
-            cttl.registerTool(this.descriptorForResourceEntry(entry));
+            executive.registerTool(this.descriptorForResourceEntry(entry));
         }
         for (const entry of input.prompts ?? []) {
-            cttl.registerTool(this.descriptorForPromptEntry(entry));
+            executive.registerTool(this.descriptorForPromptEntry(entry));
         }
         for (const entry of input.userTools ?? []) {
-            cttl.registerTool(entry.tool.descriptor);
+            executive.registerTool(entry.tool.descriptor);
         }
         for (const entry of input.pluginCapabilities ?? []) {
-            cttl.registerTool(entry.descriptor);
+            executive.registerTool(entry.descriptor);
         }
 
-        const trust = this.trustContext(cttl, input);
-        const plan = cttl.buildToolPlan(trust);
+        const trust = this.trustContext(executive, input);
+        const plan = executive.buildToolPlan(trust);
         const visibleNames = new Set(plan.visible.map((entry) => entry.descriptor.name));
         return {
             tools: input.tools.filter((entry) => visibleNames.has(this.adapter.toolName(entry))),
@@ -171,17 +171,17 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
     }
 
     private trustContext(
-        cttl: CttlComponent,
+        executive: ExecutiveComponent,
         input: Pick<RuntimeMcpCapabilityPlanInput, "channel" | "maxPermission" | "projectScoped">,
-    ): CttlTrustContext {
-        return cttl.buildTrustContext({
+    ): TrustContext {
+        return executive.buildTrustContext({
             maxPermission: input.maxPermission,
             projectScoped: input.projectScoped,
             surface: this.surfaceForChannel(input.channel),
         });
     }
 
-    private surfaceForChannel(channel: ChannelName): CttlTrustSurface {
-        return channel === Channel.Stdio ? CttlTrustSurface.Local : CttlTrustSurface.Channel;
+    private surfaceForChannel(channel: ChannelName): TrustSurface {
+        return channel === Channel.Stdio ? TrustSurface.Local : TrustSurface.Channel;
     }
 }

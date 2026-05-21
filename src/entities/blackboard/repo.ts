@@ -37,7 +37,7 @@ export class BlackboardRepo {
         runQuery(this.db, query`DELETE FROM blackboard_leases WHERE expires_at <= ${request.now}`);
         const existing = getQuery<BlackboardLeaseRow>(
             this.db,
-            query`SELECT * FROM blackboard_leases WHERE project_constraint_id = ${request.projectConstraintId}`,
+            query`SELECT * FROM blackboard_leases WHERE project_constraint_id = ${request.scopeConstraintId}`,
         );
         if (existing) {
             return {
@@ -47,7 +47,7 @@ export class BlackboardRepo {
         }
 
         const lease: BlackboardLease = {
-            projectConstraintId: request.projectConstraintId,
+            scopeConstraintId: request.scopeConstraintId,
             turnId: request.turnId,
             requestId: request.requestId,
             acquiredAt: request.now,
@@ -58,17 +58,17 @@ export class BlackboardRepo {
             query`INSERT INTO blackboard_leases (
                 project_constraint_id, turn_id, request_id, acquired_at, expires_at
             ) VALUES (
-                ${lease.projectConstraintId}, ${lease.turnId}, ${lease.requestId}, ${lease.acquiredAt}, ${lease.expiresAt}
+                ${lease.scopeConstraintId}, ${lease.turnId}, ${lease.requestId}, ${lease.acquiredAt}, ${lease.expiresAt}
             )`,
         );
         return { acquired: true, lease };
     }
 
-    public releaseLease(projectConstraintId: string, turnId: string): BlackboardLease | undefined {
+    public releaseLease(scopeConstraintId: string, turnId: string): BlackboardLease | undefined {
         const existing = getQuery<BlackboardLeaseRow>(
             this.db,
             query`SELECT * FROM blackboard_leases
-                WHERE project_constraint_id = ${projectConstraintId} AND turn_id = ${turnId}`,
+                WHERE project_constraint_id = ${scopeConstraintId} AND turn_id = ${turnId}`,
         );
         if (!existing) {
             return undefined;
@@ -76,7 +76,7 @@ export class BlackboardRepo {
         runQuery(
             this.db,
             query`DELETE FROM blackboard_leases
-                WHERE project_constraint_id = ${projectConstraintId} AND turn_id = ${turnId}`,
+                WHERE project_constraint_id = ${scopeConstraintId} AND turn_id = ${turnId}`,
         );
         return blackboardModel.toLease(existing);
     }
@@ -88,7 +88,7 @@ export class BlackboardRepo {
                 id, project_constraint_id, request_id, mode, status, goal, budget_json,
                 workers_json, created_at, updated_at, completed_at, metadata_json
             ) VALUES (
-                ${turn.id}, ${turn.projectConstraintId}, ${turn.requestId}, ${turn.mode},
+                ${turn.id}, ${turn.scopeConstraintId}, ${turn.requestId}, ${turn.mode},
                 ${turn.status}, ${turn.goal}, ${JSON.stringify(turn.budget)},
                 ${JSON.stringify(turn.workers)}, ${turn.createdAt}, ${turn.updatedAt},
                 ${turn.completedAt ?? null}, ${JSON.stringify(turn.metadata)}
@@ -192,7 +192,7 @@ export class BlackboardRepo {
         return row ? this.hydrateTurn(row) : undefined;
     }
 
-    public listTurns(projectConstraintId: string, limit: number): BlackboardTurn[] {
+    public listTurns(scopeConstraintId: string, limit: number): BlackboardTurn[] {
         if (limit <= 0) {
             return [];
         }
@@ -200,7 +200,7 @@ export class BlackboardRepo {
             this.db,
             query`SELECT *
                 FROM blackboard_turns
-                WHERE project_constraint_id = ${projectConstraintId}
+                WHERE project_constraint_id = ${scopeConstraintId}
                 ORDER BY updated_at DESC
                 LIMIT ${Math.max(1, limit)}`,
         );

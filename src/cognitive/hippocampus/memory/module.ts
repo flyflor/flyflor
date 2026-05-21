@@ -31,41 +31,41 @@ import { event, RuntimeEventType, type EventSink } from "../../../events/index.t
 import {
     loadPromptTemplates,
     renderMemoryContextPrompt,
-    renderProjectOfferPrompt,
+    renderScopeOfferPrompt,
     renderRuntimeAskContinuationPrompt,
-    renderRuntimeDormantResumePrompt,
+    renderRuntimeIdleResumePrompt,
     renderRuntimeEqContextPrompt,
-    renderRuntimeGhostHintPrompt,
+    renderRuntimeContinuationHintPrompt,
     renderRuntimeIdentityContextPrompt,
     renderSkillOfferPrompt,
 } from "../../../agent/prompts/index.ts";
 import { FeedbackCategory, classifyFeedback } from "./feedback/index.ts";
 import {
-    ProjectTriggerDetector,
-    ProjectTriggerKind,
-} from "../project/index.ts";
-import { CodenamePromotionComponent } from "../project/codename.promote.ts";
-import { ProjectScaffolder } from "../project/scaffolder.ts";
+    ScopeTriggerDetector,
+    ScopeTriggerKind,
+} from "../scope/index.ts";
+import { CodenamePromotionComponent } from "../scope/codename.promote.ts";
+import { ScopeScaffolder } from "../scope/scaffolder.ts";
 import { SpreadingActivationEngine, type ActivationCandidate } from "./recall/index.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions/index.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding/index.ts";
 import { MarkdownMemoryStore } from "./markdown/index.ts";
-import { ProjectMemoryStore } from "./project/index.ts";
+import { ScopeMemoryStore } from "./scope/index.ts";
 import { ContextForkStore, type ContextForkStoreSource } from "./fork/index.ts";
 import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain/index.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary/index.ts";
-import { AskReason, MemoryEventStatus, MemoryEventType, SceneRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type GhostContextEventContent, GhostContextReason, GhostDecisionKind, type GhostDecision, type GhostSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ProjectRecord, type SceneRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, ReplayRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type ContinuationContextEventContent, ContinuationContextReason, ContinuationDecisionKind, type ContinuationDecision, type ContinuationSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ScopeRecord, type ReplayRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
 import { MemoryMatrixAggregator } from "./recall/index.ts";
 import { CrystalMemoryComponent } from "../../crystal/memory/index.ts";
-import { SQLiteMemoryStore, type PendingProjectOffer, type PendingSkillOffer } from "./sqlite/index.ts";
+import { SQLiteMemoryStore, type PendingScopeOffer, type PendingSkillOffer } from "./sqlite/index.ts";
 import { LocalWorkingMemoryStore, type EpisodeRecord, type WorkingMemoryStore } from "./working/index.ts";
 import { SQLiteGraphStore, type MemoryGraphStore } from "./graph/index.ts";
 import { ConsolidationWorker, RetrospectiveLog } from "./consolidation/index.ts";
 import { HotMemoryCompressionWorker } from "./hot/index.ts";
 import { runBrainArchive, type BrainArchiveRunResult } from "./brain/index.ts";
 import { BackgroundScheduler } from "./lifecycle/index.ts";
-import { DormantSupervisor } from "../dormant/index.ts";
-import { type ContextScopeComponent, useContextScope } from "../../../agent/context/index.ts";
+import { IdleSupervisor } from "../idle/index.ts";
+import { continuityOwnerKey, type ContextScopeComponent, useContextScope } from "../../../agent/context/index.ts";
 import { DreamWorkerImpl } from "./dream/index.ts";
 import { historyTurnFromEvent, type ChatHistoryPlanning, type ChatHistoryTurn } from "./history/index.ts";
 import type { MemoryAction } from "./actions/index.ts";
@@ -82,7 +82,7 @@ import type { WorkingMemoryHealthSnapshot } from "./working/index.ts";
 
 export { parseMemoryActions, targetFileForMemoryAction } from "./actions/index.ts";
 export { MarkdownMemoryStore } from "./markdown/index.ts";
-export { ProjectMemoryStore } from "./project/index.ts";
+export { ScopeMemoryStore } from "./scope/index.ts";
 export { RetrospectiveLog, type RetrospectiveEntry } from "./consolidation/index.ts";
 export { HotMemoryCompressionWorker, parseHotMemoryCompressionDecision } from "./hot/index.ts";
 export { SQLiteMemoryStore } from "./sqlite/index.ts";
@@ -108,7 +108,7 @@ export type { ChatHistoryTurn } from "./history/index.ts";
 
 export interface TurnPlanningInput {
     contextForks?: ContextForkRecord[];
-    sceneRecords?: SceneRecord[];
+    replayRecords?: ReplayRecord[];
     taskPlans?: TaskPlanRecord[];
 }
 
@@ -143,7 +143,7 @@ export class MemoryModule extends Memory {
     private readonly brain: BrainStore;
     private brainOpened = false;
     private readonly markdown: MarkdownMemoryStore;
-    private readonly projectMemory: ProjectMemoryStore;
+    private readonly scopeMemory: ScopeMemoryStore;
     private readonly contextForkStore: ContextForkStore;
     private readonly contextScope: ContextScopeComponent;
     private readonly matrix: MemoryMatrixAggregator;
@@ -162,17 +162,18 @@ export class MemoryModule extends Memory {
     private brainArchiveTimer: ReturnType<typeof setInterval> | undefined;
     private hotMemoryCompressionTimer: ReturnType<typeof setInterval> | undefined;
     private brainMaintenanceBusy = false;
-    private readonly activeMemoryUsers = new Set<string>();
-    private readonly dormant: DormantSupervisor;
+    private readonly activeMemoryOwners = new Set<string>();
+    private readonly idle: IdleSupervisor;
     private readonly model: ModelClient | undefined;
-    private readonly projectScaffolder: ProjectScaffolder;
-    /** Project/fork/skill 固化触发只读结构化信号和资源指标，不解析自然语言。 */
-    private readonly projectTriggerDetector: ProjectTriggerDetector;
-    /** Codename → project 升格副作用 owner，避免 runtime 直接调用兼容 helper。 */
+    private readonly scopeScaffolder: ScopeScaffolder;
+    /** Scope/fork/skill 固化触发只读结构化信号和资源指标，不解析自然语言。 */
+    private readonly scopeTriggerDetector: ScopeTriggerDetector;
+    /** Codename → scope 升格副作用 owner，避免 runtime 直接调用兼容 helper。 */
     private readonly codenamePromotion: CodenamePromotionComponent;
     /** 单例 embedding provider；用于 context.embedding 缺省时降级计算。 */
     private readonly embeddings: EmbeddingProvider;
     private readonly assistantMemoryByFocus = new Map<string, { current?: string; previous?: string }>();
+    private readonly auditUserIdByOwnerKey = new Map<string, string>();
 
     public constructor(
         private readonly config: FlyflorConfig,
@@ -188,7 +189,7 @@ export class MemoryModule extends Memory {
         this.workingMemoryDefaultTtlSeconds = working.local.defaultTtlSeconds;
         this.brain = new BrainStore({ dbPath: join(config.paths.configDir, "brain.db") });
         this.markdown = new MarkdownMemoryStore(config.paths, config.memory.markdown);
-        this.projectMemory = new ProjectMemoryStore(config.paths, this.events);
+        this.scopeMemory = new ScopeMemoryStore(config.paths, this.events);
         this.contextForkStore = new ContextForkStore(join(config.paths.storageDir, "forks"));
         this.contextScope = useContextScope(config.paths);
         this.matrix = new MemoryMatrixAggregator(config.memory.matrix);
@@ -216,8 +217,8 @@ export class MemoryModule extends Memory {
                       workingMemoryHealthSnapshot: () => this.getWorkingMemoryHealthSnapshot(),
                   })
                 : null;
-        this.projectScaffolder = new ProjectScaffolder(config.paths, this.events);
-        this.projectTriggerDetector = new ProjectTriggerDetector();
+        this.scopeScaffolder = new ScopeScaffolder(config.paths, this.events);
+        this.scopeTriggerDetector = new ScopeTriggerDetector();
         this.codenamePromotion = new CodenamePromotionComponent();
         // 后台调度器仅在三件依赖（工作记忆 Component + 长期图 Component + 模型）齐备时启用；
         // 任一缺失时不启动 scheduler，并通过 warmup 事件显式暴露缺口。
@@ -232,16 +233,16 @@ export class MemoryModule extends Memory {
                       this.events,
                       {
                           dream: new DreamWorkerImpl(this.graph, model, this.events),
-                          projectSweeper: (userId: string) => this.sweepProjectClusters(userId),
-                          skillSweeper: (userId: string) => this.sweepSkillCandidates(userId),
-                          summarySweeper: async (userId: string) => {
-                              const r = await this.runSummaryOnce(userId);
+                          scopeSweeper: (ownerKey: string) => this.sweepScopeClusters(ownerKey),
+                          skillSweeper: (ownerKey: string) => this.sweepSkillCandidates(ownerKey),
+                          summarySweeper: async (ownerKey: string) => {
+                              const r = await this.runSummaryOnce(ownerKey);
                               return { written: r?.written ?? 0 };
                           },
                           hotMemoryCompression: this.hotMemoryCompression ?? undefined,
                           hotMemoryCompressionIntervalMs:
                               Math.max(0, config.memory.tuning.hotMemoryCompression.intervalMinutes) * 60_000,
-                          dormantSweeper: () => this.dormant.sweepOnce(),
+                          idleSweeper: () => this.idle.sweepOnce(),
                           brainArchiveSweeper: async () => {
                               const r = await this.runBrainArchiveOnce();
                               return {
@@ -256,8 +257,8 @@ export class MemoryModule extends Memory {
                       },
                   )
                 : null;
-        this.dormant = new DormantSupervisor(this.events, {
-            idleMinutes: config.memory.tuning.dormant.idleMinutes,
+        this.idle = new IdleSupervisor(this.events, {
+            idleMinutes: config.memory.tuning.idle.idleMinutes,
         });
     }
 
@@ -266,13 +267,13 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * Project memory store is normally bound to config.paths.projectDir. Active
-     * project commands create a per-turn scoped store so project memory can move
+     * Scope memory store is normally bound to config.paths.projectDir. Active
+     * scope commands create a per-turn scoped store so scope memory can move
      * without mutating global config or creating a hidden session.
      */
-    private projectMemoryForScope(scope: RuntimeContext["activeProject"] | undefined): ProjectMemoryStore {
-        if (!scope) return this.projectMemory;
-        return new ProjectMemoryStore(this.contextScope.projectStorePaths(scope), this.events);
+    private scopeMemoryForScope(scope: RuntimeContext["activeScope"] | undefined): ScopeMemoryStore {
+        if (!scope) return this.scopeMemory;
+        return new ScopeMemoryStore(this.contextScope.scopeStorePaths(scope), this.events);
     }
 
     public async warmup(): Promise<void> {
@@ -411,8 +412,8 @@ export class MemoryModule extends Memory {
         if (!this.brainOpened || !this.hotMemoryCompression || this.brainMaintenanceBusy) return;
         this.brainMaintenanceBusy = true;
         try {
-            for (const userId of [...this.activeMemoryUsers]) {
-                await this.hotMemoryCompression.drain(userId);
+            for (const ownerKey of [...this.activeMemoryOwners]) {
+                await this.hotMemoryCompression.drain(ownerKey);
             }
         } finally {
             this.brainMaintenanceBusy = false;
@@ -425,7 +426,7 @@ export class MemoryModule extends Memory {
             return { dreamEnabled: false, dreamBusy: false, users: 0 };
         }
         const s = this.scheduler.snapshot();
-        return { dreamEnabled: s.dreamEnabled, dreamBusy: s.dreamBusy, users: s.users };
+        return { dreamEnabled: s.dreamEnabled, dreamBusy: s.dreamBusy, users: s.owners };
     }
 
     /** CLI 手动触发一轮 dream pass；scheduler 未启用时返回零值。 */
@@ -504,6 +505,7 @@ export class MemoryModule extends Memory {
             this.brain.appendEvent({
                 id: snapshotId,
                 ts: nowMs,
+                ownerKey: continuityOwnerKey(input.message, input.context),
                 userId: input.message.user.id,
                 channelId: input.message.route.channel,
                 codenameId: input.codenameId,
@@ -570,83 +572,87 @@ export class MemoryModule extends Memory {
             return "Memory is disabled.";
         }
         await loadPromptTemplates(this.config.paths);
-        const projectScope = context?.activeProject;
-        const projectConstraintId = projectScope?.id ?? INBOX_PROJECT_CONSTRAINT_ID;
+        const activeScope = context?.activeScope;
+        const scopeConstraintId = activeScope?.id;
 
         const request: MemorySearchRequest = {
             query: message.text,
-            scope: projectConstraintId,
+            scope: scopeConstraintId ?? "global",
             subjectId: message.user.id,
             channel: message.route.channel,
             chatId: message.route.chatId,
             limit: this.config.memory.retrieval.maxResults,
         };
 
-        const [hippocampus, projectMemory, brainResults, markdown] = await Promise.all([
+        const [hippocampus, scopeMemory, brainResults, markdown] = await Promise.all([
             this.assembleHippocampusContext(message, context),
-            this.projectMemoryForScope(projectScope).snapshot({
-                maxChars: this.config.memory.retrieval.maxPromptChars,
-                query: message.text,
-                requestId: context?.requestId,
-                scope: request.scope,
-            }),
+            activeScope
+                ? this.scopeMemoryForScope(activeScope).snapshot({
+                      maxChars: this.config.memory.retrieval.maxPromptChars,
+                      query: message.text,
+                      requestId: context?.requestId,
+                      scope: scopeConstraintId,
+                  })
+                : Promise.resolve(this.scopeMemory.emptySnapshot()),
             this.recallVisibleBrainMemory(message, context),
             this.markdown.snapshot(),
         ]);
         const results = dedupeResults(brainResults);
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
-            projectMemory.prompt,
+            scopeMemory.prompt,
             hippocampus,
             results,
             this.config.memory.retrieval.maxPromptChars,
         );
 
-        // 项目候选 nudge 注入：若该 userId 有待确认 offer，把 nudge 拼到 memoryBody 顶部。
+        // Scope 候选 nudge 注入：若该 ownerKey 有待确认 offer，把 nudge 拼到 memoryBody 顶部。
         // 复用 Path A：用户下一轮回复若给出明确意图，model 自然在 memory action 的 signals 中
-        // 抬高 projectIntent，commitTurn 的 detectExplicitIntent 即触发 scaffolder。
+        // 抬高 scopeIntent，commitTurn 的 detectExplicitIntent 即触发 scaffolder。
+        const continuityOwner = continuityOwnerKey(message, context);
         const [offer, skillOffer] = await Promise.all([
-            this.sqlite.getProjectOffer(message.user.id),
-            this.sqlite.getSkillOffer(message.user.id),
+            this.sqlite.getScopeOffer(continuityOwner),
+            this.sqlite.getSkillOffer(continuityOwner),
         ]);
         const nudges: string[] = [];
-        if (offer) nudges.push(this.renderProjectOfferNudge(offer));
+        if (offer) nudges.push(this.renderScopeOfferNudge(offer));
         if (skillOffer) nudges.push(this.renderSkillOfferNudge(skillOffer));
 
         // LF-R3 Ask 一等公民：若 brain 中存在 pending ask，把 [continuation] 块拼到顶部，
         // 让模型把用户下一条消息当作对该 ask 的答复处理。零字符匹配——是否注入只看
         // brain 是否有未答复的 ask 事件，runtime 不解析任何对话文本。
-        const continuation = this.renderPendingAskContinuation(message.user.id);
+        const ownerKey = continuityOwnerKey(message, context);
+        const continuation = this.renderPendingAskContinuation(ownerKey);
         if (continuation) nudges.unshift(continuation);
 
-        // LF-R4 Ghost Context：把活跃的高分 ghost-context 拼成 [ghost-hint] 块注入
+        // LF-R4 Continuation Context：把活跃的高分 continuation-context 拼成 [continuation-hint] 块注入
         // prompt。零字符匹配——是否注入只看 brain 的 status + decayScore 资源指标，
         // 不解析任何对话文本。用户可在回复里显式 resume / fork / fresh。
-        const ghostHint = this.renderGhostHint(message.user.id);
-        if (ghostHint) nudges.push(ghostHint);
+        const continuationHint = this.renderContinuationHint(ownerKey);
+        if (continuationHint) nudges.push(continuationHint);
 
         // ContextFork：无 session 设计下的显式分叉上下文。只有调用方传入
         // context.contextForkId 时才注入范围边界；runtime 不从文本推断 fork。
-        const forkBlock = this.renderContextForkBlock(message.user.id, context?.contextForkId);
+        const forkBlock = this.renderContextForkBlock(context?.contextForkId);
         if (forkBlock) nudges.push(forkBlock);
 
         // LF-R5 Identity：把当前 live identity append 拼成 [identity] 块注入 prompt 顶部。
         // 零字符匹配——是否注入只看 brain 行的 status，runtime 不解析 content 语义。
-        const identityBlock = this.renderIdentityBlock(message.user.id);
+        const identityBlock = this.renderIdentityBlock(ownerKey);
         if (identityBlock) nudges.unshift(identityBlock);
 
-        // LF-R8 Dormant 行为联动：若上一轮该用户被 sweep 进 Dormant，
+        // LF-R8 Idle 行为联动：若上一轮该 owner 被 sweep 进 Idle，
         // 本轮 user 输入会触发 awaken，但此时 touch() 还未发生（在 persistTurn
         // 阶段才执行），所以 peekResumeHint 仍能返回旧 mode 的 idleMs。
-        // 仅注入资源指标 idleMinutes，让模型对长时间未互动的用户更 graceful。
+        // 仅注入资源指标 idleMinutes，让模型对长时间未互动的 scope/fork/turn 更 graceful。
         // 零字符匹配——不读消息文本，只用 (now - lastInputAt) 资源指标。
-        const resumeBlock = this.renderDormantResumeBlock(message.user.id);
+        const resumeBlock = this.renderIdleResumeBlock(ownerKey);
         if (resumeBlock) nudges.unshift(resumeBlock);
 
         // EQ-01 slice B：把当前 EQ state 渲染为 `[eq-context]` 块注入 prompt 顶部。
         // 零字符匹配——只读 brain.memory_eq_state 结构化字段 + 资源指标 decay；
         // 不解析消息文本，不基于文本派生 label。
-        const eqBlock = this.renderEqContextBlock(message.user.id);
+        const eqBlock = this.renderEqContextBlock(ownerKey);
         if (eqBlock) nudges.unshift(eqBlock);
 
         const body = nudges.length > 0 ? `${nudges.join("\n\n")}\n\n${memoryBody}` : memoryBody;
@@ -657,11 +663,11 @@ export class MemoryModule extends Memory {
                 atomScoreThreshold: this.config.memory.tuning.atomScore.visibilityThreshold,
                 hippocampusActivated: hippocampus ? true : false,
                 brainPromptRecallResults: brainResults.length,
-                projectConstraintId,
-                projectMemoryActivated: projectMemory.prompt ? true : false,
-                projectMemoryManifestPath: projectMemory.manifest.paths.manifest,
-                projectMemoryRecallReceiptId: projectMemory.receipt?.id,
-                projectMemoryRecallResults: projectMemory.results.length,
+                scopeConstraintId: scopeConstraintId ?? "global",
+                scopeMemoryActivated: Boolean(scopeConstraintId) && scopeMemory.prompt ? true : false,
+                scopeMemoryManifestPath: scopeMemory.manifest.paths.manifest,
+                scopeMemoryRecallReceiptId: scopeMemory.receipt?.id,
+                scopeMemoryRecallResults: scopeMemory.results.length,
             }),
         );
 
@@ -678,15 +684,15 @@ export class MemoryModule extends Memory {
         context?: RuntimeContext,
     ): Promise<string | undefined> {
         if (!this.workingMemory) return undefined;
-        const userId = message.user.id;
+        const ownerKey = continuityOwnerKey(message, context);
         const ringSize = this.config.memory.retrieval.maxResults;
         const [episodeIds, hotConcepts] = await Promise.all([
-            this.workingMemory.readContextRing(userId, ringSize),
-            this.workingMemory.hotConcepts(userId, 16),
+            this.workingMemory.readContextRing(ownerKey, ringSize),
+            this.workingMemory.hotConcepts(ownerKey, 16),
         ]);
         if (episodeIds.length === 0) return undefined;
-        const records = await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)));
-        const visibleByEpisode = this.visibleAtomsForEpisodes(userId, records);
+        const records = await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(ownerKey, id)));
+        const visibleByEpisode = this.visibleAtomsForEpisodes(ownerKey, records);
         const candidates: ActivationCandidate[] = [];
         const visibleAtoms = new Map<string, BrainVisibleAtom>();
         for (const rec of records) {
@@ -754,9 +760,23 @@ export class MemoryModule extends Memory {
         // rememberTurn keeps the same lifecycle guarantee as runtime-managed turns.
         await this.ensureBrainOpen("remember-turn");
 
+        const scopeTrigger = this.scopeTriggerDetector.detectExplicitIntent(actions);
+        const createdAt = new Date(context.now).toISOString();
+        // Codename must be persisted before atom scoring so the no-scope inbox
+        // bucket can receive a namespaced codename boost without opening a scope.
+        const codenameId = this.persistCodenamesFromActions(message.user.id, actions, createdAt);
+        const activeScope = context.activeScope;
+        const scopeConstraintId = this.contextScope.scopeConstraintId({
+            codenameId,
+            context,
+        });
+        const ownerKey = continuityOwnerKey(message, context, codenameId);
+        this.auditUserIdByOwnerKey.set(ownerKey, message.user.id);
+        const memoryScopeId = scopeConstraintId ?? ownerKey;
+
         // LF-R3 Ask 一等公民：先把"用户对上一轮 ask 的答复"落到 brain（ask-answer-pair 事件），
         // 再处理本轮可能新发起的 ask。两个写入顺序固定，避免 chain 被错误跨轮接续。
-        const pendingAskBefore = this.findPendingAsk(message.user.id);
+        const pendingAskBefore = this.findPendingAsk(ownerKey);
         if (pendingAskBefore) {
             this.events.publish(
                 event(
@@ -767,23 +787,8 @@ export class MemoryModule extends Memory {
                     context.requestId,
                 ),
             );
-            this.recordAskAnswerPair(pendingAskBefore.id, pendingAskBefore.snapshotId, message);
+            this.recordAskAnswerPair(pendingAskBefore.id, pendingAskBefore.snapshotId, message, ownerKey);
         }
-
-        const projectTrigger = this.projectTriggerDetector.detectExplicitIntent(actions);
-        const createdAt = new Date(context.now).toISOString();
-        // P2 inbox 收口：把 codename 持久化提前到 atom 写之前，使 inbox projectId
-        // 能命名空间化为 "inbox:cn-<codenameId>"。零字符匹配——只读结构化 action.codename。
-        const codenameId = this.persistCodenamesFromActions(message.user.id, actions, createdAt);
-        const projectScope = context.activeProject;
-        const projectConstraintId = this.contextScope.projectConstraintId({
-            codenameId,
-            context,
-            fallbackProjectId: deriveProjectId(message),
-            inboxProjectId: INBOX_PROJECT_CONSTRAINT_ID,
-            message,
-            projectIntent: projectTrigger.kind !== ProjectTriggerKind.None,
-        });
 
         // brain.db 是生命事件事实层：每轮先写权威事件，再从同轮结构化 memory action
         // 派生 atom。失败直接抛出，避免半状态继续运行。
@@ -793,7 +798,7 @@ export class MemoryModule extends Memory {
             context,
             actions,
             provenance,
-            projectConstraintId,
+            memoryScopeId,
             codenameId,
         );
 
@@ -808,49 +813,52 @@ export class MemoryModule extends Memory {
         this.recordTurnPlanning({
             ...planning,
             blackboardTurnId: provenance.blackboardTurnId,
+            ownerKey,
+            auditUserId: message.user.id,
             requestId: context.requestId,
             sourceAskId: askEventId,
             sourceEventId,
             userId: message.user.id,
         });
 
-        await this.writeEpisodeToWorkingMemory(message, reply, context, importanceFromActions(actions), provenance);
-        // 把当前用户登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
+        await this.writeEpisodeToWorkingMemory(message, reply, context, ownerKey, importanceFromActions(actions), provenance);
+        // 把当前 owner 登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不扫描外部后端，只信任活跃 turn 触发，避免把后端存储变成全局枚举入口。
-        this.activeMemoryUsers.add(message.user.id);
-        this.scheduler?.noteUserTurn(message.user.id);
-        this.dormant.touch(message.user.id);
+        this.activeMemoryOwners.add(ownerKey);
+        this.scheduler?.noteOwnerTurn(ownerKey);
+        this.idle.touch(ownerKey);
 
         // EQ-01 slice A：若本轮模型同轮在 memoryAction.eq 给出情绪分类，
         // 落 brain.memory_eq_state（latest-only UPSERT）。零字符匹配——
         // runtime 不读消息文本派生 label，只读已规范化的结构化字段。
-        this.persistEqFromActions(message.user.id, actions);
+        this.persistEqFromActions(ownerKey, message.user.id, actions);
 
-        // 项目脚手架触发（仅显式意图通道，幂等；cluster 通道由后台 sweep 触发，本路径不参与）。
-        if (projectTrigger.kind !== ProjectTriggerKind.None) {
-            await this.projectScaffolder.scaffold({
-                projectId: projectConstraintId,
-                projectDir: projectScope?.projectDir,
+        // Scope scaffolding trigger: only model-structured explicit intent can
+        // create/update this path; cluster offers stay in the background sweep.
+        if (scopeTrigger.kind !== ScopeTriggerKind.None && activeScope) {
+            await this.scopeScaffolder.scaffold({
+                scopeId: activeScope.id,
+                projectDir: activeScope?.projectDir,
                 title: deriveProjectTitle(message),
                 goal: message.text.slice(0, 500),
                 userId: message.user.id,
-                trigger: projectTrigger,
+                trigger: scopeTrigger,
                 createdAt: new Date(context.now).toISOString(),
             });
         }
-        // 项目候选 offer 生命周期：显式触发即消费，否则 ttl-1。
-        await this.noteProjectOfferTurn(message.user.id, projectTrigger.kind !== ProjectTriggerKind.None);
+        // Scope 候选 offer 生命周期：显式触发即消费，否则 ttl-1。
+        await this.noteScopeOfferTurn(ownerKey, scopeTrigger.kind !== ScopeTriggerKind.None);
 
         // 技能候选 offer 生命周期：用户在本轮回复中明确同意（skillPromotionIntent ≥ 0.7）即
-        // 立即从 pending_skill_offer 生成 SKILL.md；否则 ttl-1。完全与 project offer 解耦。
-        const skillTrigger = this.projectTriggerDetector.detectExplicitSkillIntent(actions);
-        if (skillTrigger.kind !== ProjectTriggerKind.None) {
-            await this.consumeSkillOffer(message.user.id);
+        // 立即从 pending_skill_offer 生成 SKILL.md；否则 ttl-1。完全与 scope offer 解耦。
+        const skillTrigger = this.scopeTriggerDetector.detectExplicitSkillIntent(actions);
+        if (skillTrigger.kind !== ScopeTriggerKind.None) {
+            await this.consumeSkillOffer(ownerKey);
         } else {
-            await this.noteSkillOfferTurn(message.user.id, false);
+            await this.noteSkillOfferTurn(ownerKey, false);
         }
 
-        this.rememberAssistantForFocus(message, reply.text);
+        this.rememberAssistantForFocus(message, reply.text, context);
         const candidates = actions
             .map((action) =>
                 candidateFromAction(
@@ -858,7 +866,7 @@ export class MemoryModule extends Memory {
                     message,
                     reply,
                     context,
-                    projectConstraintId,
+                    memoryScopeId,
                     turnEpisodeId(message, context),
                     this.config.memory.weights,
                     this.matrix,
@@ -866,24 +874,24 @@ export class MemoryModule extends Memory {
             )
             .slice(0, this.config.memory.candidates.maxCandidatesPerTurn);
 
-        // 三路并行：candidate 写入 / project memory / crystal 记录，任一失败都向上抛出。
-        const projectMemoryPipeline =
-            projectTrigger.kind !== ProjectTriggerKind.None || projectScope
-                ? this.projectMemoryForScope(projectScope).recordTurn({
+        // 三路并行：candidate 写入 / scope-local memory / crystal 记录，任一失败都向上抛出。
+        const scopeMemoryPipeline =
+            activeScope
+                ? this.scopeMemoryForScope(activeScope).recordTurn({
                       message,
                       reply,
                       context,
                       trigger:
-                          projectTrigger.kind !== ProjectTriggerKind.None
-                              ? projectTrigger
+                          scopeTrigger.kind !== ScopeTriggerKind.None
+                              ? scopeTrigger
                               : {
-                                    kind: ProjectTriggerKind.ExplicitProject,
+                                    kind: ScopeTriggerKind.ExplicitScope,
                                     score: 1,
-                                    relatedIds: [projectConstraintId],
-                                    rationale: "active-project-scope",
+                                    relatedIds: scopeConstraintId ? [scopeConstraintId] : [],
+                                    rationale: "active-scope",
                                 },
                       candidates,
-                      projectId: projectConstraintId,
+                      scopeId: memoryScopeId,
                   })
                 : Promise.resolve([]);
         const candidatePipeline = Promise.all(
@@ -902,9 +910,9 @@ export class MemoryModule extends Memory {
             }),
         );
 
-        const [candidateResults, projectRecords] = await Promise.all([candidatePipeline, projectMemoryPipeline]);
+        const [candidateResults, scopeRecords] = await Promise.all([candidatePipeline, scopeMemoryPipeline]);
         const promoted: MemoryRecord[] = candidateResults.filter((r): r is MemoryRecord => r !== undefined);
-        const promotedRecords = [...promoted, ...projectRecords];
+        const promotedRecords = [...promoted, ...scopeRecords];
 
         await this.crystal.recordTurn({
             requestId: context.requestId,
@@ -921,8 +929,8 @@ export class MemoryModule extends Memory {
                 {
                     candidates: candidates.length,
                     brain: true,
-                    projectConstraintId,
-                    projectPromoted: projectRecords.length,
+                    scopeConstraintId: memoryScopeId,
+                    scopePromoted: scopeRecords.length,
                     promoted: promotedRecords.length,
                 },
                 context.requestId,
@@ -964,6 +972,7 @@ export class MemoryModule extends Memory {
      * 失败发布事件后继续抛出。
      */
     public async recordDebateEpisode(input: {
+        ownerKey?: string;
         userId: string;
         text: string;
         embedding?: number[];
@@ -982,8 +991,9 @@ export class MemoryModule extends Memory {
                     ? input.embedding
                     : await this.embeddings.embed(input.text);
             const episodeId = crypto.randomUUID();
+            const ownerKey = input.ownerKey ?? `audit-user:${input.userId}`;
             await this.workingMemory.writeEpisode({
-                userId: input.userId,
+                ownerKey,
                 episodeId,
                 text: input.text.slice(0, 2048),
                 concepts: [],
@@ -1024,6 +1034,7 @@ export class MemoryModule extends Memory {
      * 失败发事件后继续抛出。
      */
     public async applyFeedback(input: {
+        ownerKey?: string;
         userId: string;
         category: FeedbackCategory;
         extractedFact?: string;
@@ -1036,10 +1047,11 @@ export class MemoryModule extends Memory {
         if (input.category === FeedbackCategory.None) return;
         const fact = (input.extractedFact ?? input.currentUserText).slice(0, 500);
         try {
+            const ownerKey = input.ownerKey ?? `audit-user:${input.userId}`;
             if (input.category === FeedbackCategory.LocalCorrection && this.workingMemory) {
                 const embedding = await this.embeddings.embed(input.currentUserText);
                 await this.workingMemory.writeEpisode({
-                    userId: input.userId,
+                    ownerKey,
                     episodeId: crypto.randomUUID(),
                     text: `correction: ${fact} (was: ${input.previousAssistantText.slice(0, 256)})`,
                     concepts: ["correction"],
@@ -1062,7 +1074,7 @@ export class MemoryModule extends Memory {
                 if (this.workingMemory) {
                     const embedding = await this.embeddings.embed(input.previousAssistantText);
                     await this.workingMemory.writeEpisode({
-                        userId: input.userId,
+                        ownerKey,
                         episodeId: crypto.randomUUID(),
                         text: `confirmation: ${fact} (about: ${input.previousAssistantText.slice(0, 256)})`,
                         concepts: ["confirmation"],
@@ -1074,7 +1086,7 @@ export class MemoryModule extends Memory {
                         ttlSeconds: this.workingMemoryDefaultTtlSeconds,
                     });
                     if (this.graph) {
-                        const top = await this.graph.recallMemoryNodes({ userId: input.userId, embedding, limit: 1 });
+                        const top = await this.graph.recallMemoryNodes({ ownerKey, embedding, limit: 1 });
                         const candidate = top[0];
                         const score = (candidate as { score?: number } | undefined)?.score ?? 0;
                         if (candidate && score >= 0.75) {
@@ -1089,6 +1101,7 @@ export class MemoryModule extends Memory {
                 }
             }
             this.recordBehaviorCorrection({
+                ownerKey,
                 userId: input.userId,
                 category: input.category,
                 extractedFact: input.extractedFact,
@@ -1099,7 +1112,7 @@ export class MemoryModule extends Memory {
             this.events.publish(
                 event(
                     RuntimeEventType.MemoryFeedbackClassified,
-                    { userId: input.userId, category: input.category, hasFact: Boolean(input.extractedFact) },
+                    { userId: input.userId, ownerKey, category: input.category, hasFact: Boolean(input.extractedFact) },
                     input.requestId,
                 ),
             );
@@ -1125,7 +1138,7 @@ export class MemoryModule extends Memory {
     public async classifyAndApplyFeedback(message: GatewayMessage, context: RuntimeContext): Promise<void> {
         if (!this.model || !this.config.memory.enabled) return;
         try {
-            const previousAssistantText = this.assistantMemoryByFocus.get(focusKeyForMessage(message))?.previous;
+            const previousAssistantText = this.assistantMemoryByFocus.get(focusKeyForMessage(message, context))?.previous;
             if (!previousAssistantText) return;
             const classification = await classifyFeedback(this.model, {
                 previousAssistantText,
@@ -1142,6 +1155,7 @@ export class MemoryModule extends Memory {
                 return;
             }
             await this.applyFeedback({
+                ownerKey: continuityOwnerKey(message, context),
                 userId: message.user.id,
                 category: classification.category,
                 extractedFact: classification.extractedFact,
@@ -1168,6 +1182,7 @@ export class MemoryModule extends Memory {
      * 已经写入，所以这里显式排除当前 requestId，避免把"纠正上一轮"挂错。
      */
     private recordBehaviorCorrection(input: {
+        ownerKey: string;
         userId: string;
         category: FeedbackCategory;
         extractedFact?: string;
@@ -1176,7 +1191,7 @@ export class MemoryModule extends Memory {
         requestId?: string;
     }): string | null {
         if (!this.brainOpened) return null;
-        const snapshot = this.findLatestBehaviorSnapshot(input.userId, input.requestId);
+        const snapshot = this.findLatestBehaviorSnapshot(input.ownerKey, input.requestId);
         if (!snapshot) return null;
         const eventId = `behavior-correction-${crypto.randomUUID()}`;
         const content: BehaviorCorrectionContent = {
@@ -1192,6 +1207,7 @@ export class MemoryModule extends Memory {
             this.brain.appendEvent({
                 id: eventId,
                 ts: Date.now(),
+                ownerKey: input.ownerKey,
                 userId: input.userId,
                 channelId: snapshot.channelId,
                 codenameId: snapshot.codenameId,
@@ -1222,11 +1238,11 @@ export class MemoryModule extends Memory {
         }
     }
 
-    private findLatestBehaviorSnapshot(userId: string, excludeRequestId?: string): MemoryEventRecord | null {
+    private findLatestBehaviorSnapshot(ownerKey: string, excludeRequestId?: string): MemoryEventRecord | null {
         if (!this.brainOpened) return null;
         try {
             const rows = this.brain.listEvents({
-                userId,
+                ownerKey,
                 type: MemoryEventType.BehaviorSnapshot,
                 limit: 20,
             });
@@ -1247,8 +1263,8 @@ export class MemoryModule extends Memory {
 
     // ───── 内部 ──────────────────────────────────────────────────────
 
-    private rememberAssistantForFocus(message: GatewayMessage, assistantText: string): void {
-        const key = focusKeyForMessage(message);
+    private rememberAssistantForFocus(message: GatewayMessage, assistantText: string, context: RuntimeContext): void {
+        const key = focusKeyForMessage(message, context);
         const existing = this.assistantMemoryByFocus.get(key);
         this.assistantMemoryByFocus.set(key, {
             current: assistantText,
@@ -1267,7 +1283,7 @@ export class MemoryModule extends Memory {
         context: RuntimeContext,
         actions: MemoryAction[],
         provenance: MemoryEpisodeProvenance,
-        projectConstraintId: string,
+        scopeConstraintId: string,
         codenameId?: string,
     ): Promise<string> {
         try {
@@ -1288,12 +1304,14 @@ export class MemoryModule extends Memory {
                 }
                 return brainAtomFromAction({
                     action,
+                    codenameId,
                     embedding,
                     episodeId,
                     index,
                     matrix: this.matrix,
                     message,
-                    projectConstraintId,
+                    context,
+                    scopeConstraintId,
                     reply,
                     defaultWeights: this.config.memory.weights,
                     scoreWeights: this.config.memory.tuning.atomScore.weights,
@@ -1309,7 +1327,7 @@ export class MemoryModule extends Memory {
                 reply,
                 provenance: normalizedProvenance,
                 createdAt,
-                projectConstraintId,
+                scopeConstraintId,
                 requestId: context.requestId,
                 atomIds: atoms.map((entry) => entry.atom.id),
                 atoms,
@@ -1339,7 +1357,7 @@ export class MemoryModule extends Memory {
         reply: GatewayReply;
         provenance: MemoryEpisodeProvenance;
         createdAt: string;
-        projectConstraintId: string;
+        scopeConstraintId: string;
         requestId: string;
         atomIds: string[];
         atoms: BrainPromptAtomWrite[];
@@ -1354,9 +1372,10 @@ export class MemoryModule extends Memory {
             this.brain.appendEvent({
                 id: input.episodeId,
                 ts: tsValue,
+                ownerKey: input.scopeConstraintId,
                 userId: input.message.user.id,
                 channelId: input.message.route.channel,
-                codenameId: input.codenameId ?? input.projectConstraintId,
+                codenameId: input.codenameId ?? input.scopeConstraintId,
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
                 content: {
@@ -1376,7 +1395,7 @@ export class MemoryModule extends Memory {
                     RuntimeEventType.MemoryBrainEventWritten,
                     {
                         episodeId: input.episodeId,
-                        codenameId: input.codenameId ?? input.projectConstraintId,
+                        codenameId: input.codenameId ?? input.scopeConstraintId,
                         atoms: input.atoms.length,
                     },
                     input.requestId,
@@ -1464,7 +1483,7 @@ export class MemoryModule extends Memory {
      * EQ-01 slice A：把同轮 memoryAction.eq 落到 brain.memory_eq_state（latest-only UPSERT）。
      * 零字符匹配——只读结构化字段，runtime 严禁基于消息文本派生 label。
      */
-    private persistEqFromActions(userId: string, actions: MemoryAction[]): void {
+    private persistEqFromActions(ownerKey: string, auditUserId: string, actions: MemoryAction[]): void {
         if (!this.brainOpened) return;
         let last: EqClassification | undefined;
         for (const action of actions) {
@@ -1475,7 +1494,9 @@ export class MemoryModule extends Memory {
         try {
             const updatedAt = Date.now();
             this.brain.upsertEqState({
-                userId,
+                ownerKey,
+                auditUserId,
+                userId: auditUserId,
                 valence: last.valence,
                 arousal: last.arousal,
                 dominance: last.dominance,
@@ -1485,7 +1506,8 @@ export class MemoryModule extends Memory {
             });
             this.events.publish(
                 event(RuntimeEventType.MemoryEqStateUpdated, {
-                    userId,
+                    ownerKey,
+                    auditUserId,
                     label: last.label,
                     valence: last.valence,
                     arousal: last.arousal,
@@ -1504,28 +1526,28 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R2: codename 升格通路。useCount + age 满足阈值且尚未绑定 projectId 时，
-     * 调用 ProjectScaffolder 在 workspace/projects/<projectId>/ 生成骨架，并把
-     * projectId 写回 codenames 表。完全幂等；失败发事件后抛出。
+     * LF-R2: codename 升格通路。useCount + age 满足阈值且尚未绑定 scopeId 时，
+     * 调用 ScopeScaffolder 在 workspace/scopes/<scopeId>/ 生成骨架，并把
+     * scopeId 写回 codenames 表。完全幂等；失败发事件后抛出。
      */
     public async promoteCodename(
         codenameId: string,
         opts: { force?: boolean; createdAt?: string } = {},
-    ): Promise<{ promoted: boolean; projectId?: string; rationale: string }> {
+    ): Promise<{ promoted: boolean; scopeId?: string; rationale: string }> {
         if (!this.brainOpened) return { promoted: false, rationale: "brain-closed" };
         try {
-            const result = await this.codenamePromotion.promote(this.brain, this.projectScaffolder, codenameId, opts);
-            if (result.promoted && result.record && result.projectId) {
+            const result = await this.codenamePromotion.promote(this.brain, this.scopeScaffolder, codenameId, opts);
+            if (result.promoted && result.record && result.scopeId) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryCodenamePromoted, {
                         id: result.record.id,
                         name: result.record.name,
-                        projectId: result.projectId,
+                        scopeId: result.scopeId,
                         useCount: result.record.useCount,
                     }),
                 );
             }
-            return { promoted: result.promoted, projectId: result.projectId, rationale: result.rationale };
+            return { promoted: result.promoted, scopeId: result.scopeId, rationale: result.rationale };
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryCodenamePromotionFailed, {
@@ -1538,28 +1560,28 @@ export class MemoryModule extends Memory {
     }
 
     private async maybePromoteCodename(record: CodenameRecord, createdAt: string): Promise<void> {
-        if (record.projectId) return;
+        if (record.scopeId) return;
         await this.promoteCodename(record.id, { createdAt });
     }
 
     /**
-     * Explicit project entry point for local apps (`/project`).
+     * Explicit scope entry point for local apps (`/project`).
      * The path comes from the command protocol, not language understanding, and
-     * the returned record must be passed back as RuntimeContext.activeProject on
-     * every turn that wants project-local memory.
+     * the returned record must be passed back as RuntimeContext.activeScope on
+     * every turn that wants scope-local memory.
      */
-    public async createOrUseProject(input: {
+    public async createOrUseScope(input: {
         goal?: string;
         path: string;
         title?: string;
         userId: string;
         now?: number;
-    }): Promise<ProjectRecord> {
-        await this.ensureBrainOpen("project.create-or-use");
-        const seed = this.contextScope.explicitProjectSeed(input.userId, input.path);
-        const existing = this.brain.getProject(seed.id);
+    }): Promise<ScopeRecord> {
+        await this.ensureBrainOpen("scope.create-or-use");
+        const seed = this.contextScope.explicitScopeSeed(input.userId, input.path);
+        const existing = this.brain.getScope(seed.id);
         const nowMs = input.now ?? Date.now();
-        const record: ProjectRecord = {
+        const record: ScopeRecord = {
             id: seed.id,
             userId: input.userId,
             title: input.title ?? seed.title,
@@ -1571,31 +1593,42 @@ export class MemoryModule extends Memory {
             lastUsedAt: nowMs,
             useCount: (existing?.useCount ?? 0) + 1,
         };
-        await this.projectScaffolder.scaffold({
-            projectId: seed.id,
+        await this.scopeScaffolder.scaffold({
+            scopeId: seed.id,
             projectDir: seed.projectDir,
             title: record.title,
             goal: record.goal ?? `Project scope: ${record.title}`,
             userId: input.userId,
             trigger: {
-                kind: ProjectTriggerKind.ExplicitProject,
+                kind: ScopeTriggerKind.ExplicitScope,
                 score: 1,
                 relatedIds: [seed.id],
                 rationale: "slash-project",
             },
             createdAt: new Date(nowMs).toISOString(),
         });
-        return this.brain.upsertProject(record);
+        return this.brain.upsertScope(record);
     }
 
-    public listProjects(userId: string, options: { limit?: number } = {}): ProjectRecord[] {
-        if (!this.brainOpened) return [];
-        return this.brain.listProjects({ userId, limit: options.limit ?? 50 });
+    /** @deprecated Use createOrUseScope. */
+    public async createOrUseProject(input: {
+        goal?: string;
+        path: string;
+        title?: string;
+        userId: string;
+        now?: number;
+    }): Promise<ScopeRecord> {
+        return this.createOrUseScope(input);
     }
 
-    public listContextForks(userId: string, options: { limit?: number } = {}): ContextForkRecord[] {
+    public listScopes(userId: string, options: { limit?: number } = {}): ScopeRecord[] {
         if (!this.brainOpened) return [];
-        return this.brain.listContextForks({ userId, limit: options.limit ?? 50 });
+        return this.brain.listScopes({ userId, limit: options.limit ?? 50 });
+    }
+
+    public listContextForks(ownerKey: string, options: { limit?: number } = {}): ContextForkRecord[] {
+        if (!this.brainOpened) return [];
+        return this.brain.listContextForks({ ownerKey, limit: options.limit ?? 50 });
     }
 
     /**
@@ -1653,33 +1686,42 @@ export class MemoryModule extends Memory {
      * attaches source ids and stores summary records in brain.db.
      */
     public recordTurnPlanning(input: TurnPlanningInput & {
+        ownerKey: string;
         blackboardTurnId?: string;
+        auditUserId: string;
         requestId?: string;
         sourceAskId?: string;
         sourceEventId: string;
+        /** @deprecated Use auditUserId / ownerKey. */
         userId: string;
     }): void {
         if (!this.brainOpened) return;
         const withSourcePlan = (plan: TaskPlanRecord): TaskPlanRecord => ({
             ...plan,
-            userId: input.userId,
+            ownerKey: input.ownerKey,
+            auditUserId: input.auditUserId,
+            userId: input.auditUserId,
             sourceAskId: plan.sourceAskId ?? input.sourceAskId,
             sourceBlackboardTurnId: plan.sourceBlackboardTurnId ?? input.blackboardTurnId,
             sourceEventId: plan.sourceEventId ?? input.sourceEventId,
         });
         const withSourceFork = (fork: ContextForkRecord): ContextForkRecord => ({
             ...fork,
-            userId: input.userId,
+            ownerKey: input.ownerKey,
+            auditUserId: input.auditUserId,
+            userId: input.auditUserId,
             sourceAskId: fork.sourceAskId ?? input.sourceAskId,
             sourceBlackboardTurnId: fork.sourceBlackboardTurnId ?? input.blackboardTurnId,
             sourceEventId: fork.sourceEventId ?? input.sourceEventId,
             inheritedEventIds: uniqueStrings([input.sourceEventId, ...fork.inheritedEventIds]),
         });
-        const withSourceScene = (scene: SceneRecord): SceneRecord => ({
-            ...scene,
-            userId: input.userId,
-            blackboardTurnId: scene.blackboardTurnId ?? input.blackboardTurnId,
-            sourceEventId: scene.sourceEventId ?? input.sourceEventId,
+        const withSourceReplay = (replay: ReplayRecord): ReplayRecord => ({
+            ...replay,
+            ownerKey: input.ownerKey,
+            auditUserId: input.auditUserId,
+            userId: input.auditUserId,
+            blackboardTurnId: replay.blackboardTurnId ?? input.blackboardTurnId,
+            sourceEventId: replay.sourceEventId ?? input.sourceEventId,
         });
         try {
             for (const plan of (input.taskPlans ?? []).slice(0, 4).map(withSourcePlan)) {
@@ -1687,7 +1729,8 @@ export class MemoryModule extends Memory {
                 this.events.publish(
                     event(RuntimeEventType.MemoryTaskPlanWritten, {
                         planId: plan.id,
-                        userId: input.userId,
+                        ownerKey: input.ownerKey,
+                        auditUserId: input.auditUserId,
                         status: plan.status,
                         progress: plan.progress,
                     }, input.requestId),
@@ -1698,19 +1741,21 @@ export class MemoryModule extends Memory {
                 this.events.publish(
                     event(RuntimeEventType.MemoryContextForkWritten, {
                         forkId: fork.id,
-                        userId: input.userId,
+                        ownerKey: input.ownerKey,
+                        auditUserId: input.auditUserId,
                         maxContextTokens: fork.maxContextTokens,
                     }, input.requestId),
                 );
             }
-            for (const scene of (input.sceneRecords ?? []).slice(0, 8).map(withSourceScene)) {
-                this.brain.writeSceneRecord(scene);
+            for (const replay of (input.replayRecords ?? []).slice(0, 8).map(withSourceReplay)) {
+                this.brain.writeReplayRecord(replay);
                 this.events.publish(
-                    event(RuntimeEventType.MemorySceneRecordWritten, {
-                        sceneId: scene.id,
-                        userId: input.userId,
-                        kind: scene.kind,
-                        blackboardTurnId: scene.blackboardTurnId,
+                    event(RuntimeEventType.MemoryReplayRecordWritten, {
+                        replayId: replay.id,
+                        ownerKey: input.ownerKey,
+                        auditUserId: input.auditUserId,
+                        kind: replay.kind,
+                        blackboardTurnId: replay.blackboardTurnId,
                     }, input.requestId),
                 );
             }
@@ -1728,7 +1773,7 @@ export class MemoryModule extends Memory {
     private historyPlanningForEvent(sourceEventId: string): ChatHistoryPlanning {
         return {
             contextForks: this.brain.listContextForks({ sourceEventId, limit: 8 }),
-            scenes: this.brain.listSceneRecords({ sourceEventId, limit: 16 }),
+            replays: this.brain.listReplayRecords({ sourceEventId, limit: 16 }),
             taskPlans: this.brain.listTaskPlans({ sourceEventId, limit: 8 }),
         };
     }
@@ -1738,10 +1783,10 @@ export class MemoryModule extends Memory {
      * 零字符匹配——只读 brain 行 + 数字衰减，不基于消息文本派生 label。
      * 没有 state 或 brain 未开则返回 null（只作为语气提示；不参与路由、工具或 ask 决策）。
      */
-    public peekEqState(userId: string, nowMs: number = Date.now()): EqState | null {
+    public peekEqState(ownerKey: string, nowMs: number = Date.now()): EqState | null {
         if (!this.brainOpened) return null;
         try {
-            const state = this.brain.getEqState(userId);
+            const state = this.brain.getEqState(ownerKey);
             if (!state) return null;
             return decayEq(state, nowMs);
         } catch (err) {
@@ -1757,11 +1802,11 @@ export class MemoryModule extends Memory {
 
     /** brain 缺失时返回 null；读库失败时抛错。 */
     private findPendingAsk(
-        userId: string,
+        ownerKey: string,
     ): { id: string; chainDepth: number; ask: AgentAsk; snapshotId?: string } | null {
         if (!this.brainOpened) return null;
         try {
-            const row = this.brain.getLatestPendingAsk(userId);
+            const row = this.brain.getLatestPendingAsk(ownerKey);
             if (!row) return null;
             const content = row.content as Partial<AskEventContent> | undefined;
             const ask = content?.ask as AgentAsk | undefined;
@@ -1781,11 +1826,11 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R8：若该用户上一轮被 sweep 进 Dormant，把 idle 时长以 `[runtime-resume]`
-     * 块注入 prompt 顶部。零字符匹配——只读 dormant supervisor 的资源指标。
+     * LF-R8：若该 owner 上一轮被 sweep 进 Idle，把 idle 时长以 `[runtime-resume]`
+     * 块注入 prompt 顶部。零字符匹配——只读 idle supervisor 的资源指标。
      */
-    private renderDormantResumeBlock(userId: string): string | undefined {
-        const hint = this.dormant.peekResumeHint(userId);
+    private renderIdleResumeBlock(ownerKey: string): string | undefined {
+        const hint = this.idle.peekResumeHint(ownerKey);
         if (!hint) return undefined;
         const idleMinutes = Math.max(1, Math.round(hint.idleMs / 60000));
         const idleHours = idleMinutes / 60;
@@ -1794,7 +1839,7 @@ export class MemoryModule extends Memory {
             : idleHours < 48
                 ? `${idleHours.toFixed(1)}h`
                 : `${(idleHours / 24).toFixed(1)}d`;
-        return renderRuntimeDormantResumePrompt({ idleBucket: bucket });
+        return renderRuntimeIdleResumePrompt({ idleBucket: bucket });
     }
 
     /**
@@ -1804,11 +1849,11 @@ export class MemoryModule extends Memory {
      * - 注入内容只包含结构化字段（label、衰减后 valence/arousal/dominance、confidence、age 分桶）；
      * - 只用于语气、暖度和节奏提示，不参与路由、工具选择、问答链深度或其他决策。
      */
-    private renderEqContextBlock(userId: string): string | undefined {
+    private renderEqContextBlock(ownerKey: string): string | undefined {
         if (!this.brainOpened) return undefined;
         let state: EqState | null;
         try {
-            state = this.brain.getEqState(userId);
+            state = this.brain.getEqState(ownerKey);
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
@@ -1844,8 +1889,8 @@ export class MemoryModule extends Memory {
      * 把 pending ask 拼成可注入 prompt 的 [continuation] 块。零字符匹配——
      * 是否注入只看 brain 是否存在 pending ask，runtime 不做任何文本判断。
      */
-    private renderPendingAskContinuation(userId: string): string | undefined {
-        const pending = this.findPendingAsk(userId);
+    private renderPendingAskContinuation(ownerKey: string): string | undefined {
+        const pending = this.findPendingAsk(ownerKey);
         if (!pending) return undefined;
         const ask = pending.ask;
         const choices: string[] = [];
@@ -1864,40 +1909,40 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R4：把活跃的高分 ghost-context 渲染为 `[ghost-hint]` 块。仅按
+     * LF-R4：把活跃的高分 continuation-context 渲染为 `[continuation-hint]` 块。仅按
      * decayScore 资源指标排序（不解析任何文本语义），最多展示 3 条。pending ask
-     * 的 sibling ghost 已通过 `[continuation]` 单独注入，这里跳过避免重复。
+     * 的 sibling continuation 已通过 `[continuation]` 单独注入，这里跳过避免重复。
      *
-     * 模型可显式输出 `<flyflor_ghost_decisions>`，由 `applyGhostDecisions`
+     * 模型可显式输出 `<flyflor_continuation_decisions>`，由 `applyContinuationDecisions`
      * 落库处理 `fork` / `fresh` / `resume`；这里不从自然语言推断分支关系。
      */
-    private renderGhostHint(userId: string): string | undefined {
+    private renderContinuationHint(ownerKey: string): string | undefined {
         if (!this.brainOpened) return undefined;
-        let ghosts: MemoryEventRecord[];
+        let continuations: MemoryEventRecord[];
         try {
-            ghosts = this.brain.listActiveGhosts(userId, { limit: 12 });
+            continuations = this.brain.listActiveContinuations(ownerKey, { limit: 12 });
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.render",
+                    op: "continuation.render",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
             throw err;
         }
-        if (ghosts.length === 0) return undefined;
+        if (continuations.length === 0) return undefined;
 
-        const pending = this.findPendingAsk(userId);
+        const pending = this.findPendingAsk(ownerKey);
         const pendingAskId = pending?.id;
-        const weightTable = this.config.memory.tuning.ghost.evidenceWeight;
+        const weightTable = this.config.memory.tuning.continuation.evidenceWeight;
 
         type Scored = { row: MemoryEventRecord; score: number; tag: string };
         const scored: Scored[] = [];
-        for (const row of ghosts) {
+        for (const row of continuations) {
             if (pendingAskId && row.parentId === pendingAskId) continue;
             const state = this.brain.getState(row.id);
             const base = state?.decayScore ?? 1;
-            const { weight, tag } = this.resolveGhostEvidenceWeight(row, weightTable);
+            const { weight, tag } = this.resolveContinuationEvidenceWeight(row, weightTable);
             const score = base * weight;
             const threshold = this.config.memory.tuning.atomScore.visibilityThreshold ?? 0;
             if (score < threshold) continue;
@@ -1909,21 +1954,21 @@ export class MemoryModule extends Memory {
 
         const entries: string[] = [];
         for (const { row, score, tag } of top) {
-            const c = row.content as Partial<GhostContextEventContent>;
-            const title = c.userFacing?.title?.slice(0, 120) ?? `ghost:${c.reason ?? "unknown"}`;
+            const c = row.content as Partial<ContinuationContextEventContent>;
+            const title = c.userFacing?.title?.slice(0, 120) ?? `continuation:${c.reason ?? "unknown"}`;
             const hint = c.userFacing?.contextHint?.slice(0, 200);
             const ageHours = Math.max(0, Math.round((Date.now() - row.ts) / 36e5));
             entries.push(
                 `- id=${row.id} reason=${c.reason ?? "-"} evidence=${tag} score=${score.toFixed(2)} age=${ageHours}h :: ${title}${hint ? ` (${hint})` : ""}`,
             );
         }
-        return renderRuntimeGhostHintPrompt({ ghostEntries: entries.join("\n") });
+        return renderRuntimeContinuationHintPrompt({ continuationEntries: entries.join("\n") });
     }
 
-    private renderContextForkBlock(userId: string, contextForkId: string | undefined): string | undefined {
+    private renderContextForkBlock(contextForkId: string | undefined): string | undefined {
         if (!this.brainOpened || !contextForkId) return undefined;
         const fork = this.brain.getContextFork(contextForkId);
-        if (!fork || fork.userId !== userId) return undefined;
+        if (!fork) return undefined;
         return [
             "[context-fork]",
             `id: ${fork.id}`,
@@ -1940,11 +1985,11 @@ export class MemoryModule extends Memory {
      * （`status='live'`）过滤；runtime 不读 content 文本派生 kind / 排序。
      * 单条 content 来自模型已结构化截断的 `<=240` 字段；整块再做长度上限保护（约 1200 字）。
      */
-    private renderIdentityBlock(userId: string): string | undefined {
+    private renderIdentityBlock(ownerKey: string): string | undefined {
         if (!this.brainOpened) return undefined;
         let rows: MemoryEventRecord[];
         try {
-            rows = this.brain.listActiveIdentity(userId, { limit: 16 });
+            rows = this.brain.listActiveIdentity(ownerKey, { limit: 16 });
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
@@ -1972,23 +2017,23 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R4 evidence weight：根据 ghost 当前结构化状态选权重。
-     * - state.status === 'abandoned' → 0（不应出现在 listActiveGhosts，但兜底）
+     * LF-R4 evidence weight：根据 continuation 当前结构化状态选权重。
+     * - state.status === 'abandoned' → 0（不应出现在 listActiveContinuations，但兜底）
      * - content.continuationCompleted === true（模型已在某轮标记 fork/fresh）→ continuationCompleted（0.75）
      * - sibling ask 已收到答复（存在 ask-answer-pair 事件）→ askAnswered（0.85）
      * - 其它 → default
      * 仅消费结构化字段（state.status + content flag + parent_id + 子事件类型），
      * 不解析任何对话文本。
      */
-    private resolveGhostEvidenceWeight(
+    private resolveContinuationEvidenceWeight(
         row: MemoryEventRecord,
-        table: typeof this.config.memory.tuning.ghost.evidenceWeight,
+        table: typeof this.config.memory.tuning.continuation.evidenceWeight,
     ): { weight: number; tag: string } {
         const state = this.brain.getState(row.id);
         if (state?.status === MemoryEventStatus.Abandoned) {
             return { weight: table.abandoned, tag: "abandoned" };
         }
-        const c = row.content as Partial<GhostContextEventContent>;
+        const c = row.content as Partial<ContinuationContextEventContent>;
         if (c.continuationCompleted === true) {
             return { weight: table.continuationCompleted, tag: "continuation-completed" };
         }
@@ -2001,7 +2046,7 @@ export class MemoryModule extends Memory {
         return { weight: table.default, tag: "default" };
     }
 
-    private recordAskAnswerPair(askEventId: string, snapshotId: string | undefined, message: GatewayMessage): void {
+    private recordAskAnswerPair(askEventId: string, snapshotId: string | undefined, message: GatewayMessage, ownerKey: string): void {
         if (!this.brainOpened) return;
         const ts = Date.parse(message.receivedAt);
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
@@ -2015,6 +2060,7 @@ export class MemoryModule extends Memory {
             this.brain.appendEvent({
                 id: `ask-ans-${crypto.randomUUID()}`,
                 ts: nowMs,
+                ownerKey,
                 userId: message.user.id,
                 channelId: message.route.channel,
                 type: MemoryEventType.AskAnswerPair,
@@ -2053,7 +2099,7 @@ export class MemoryModule extends Memory {
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
         const askId = `ask-${crypto.randomUUID()}`;
         const chainDepth = parentAskId ? this.brain.countAskChainDepth(parentAskId) + 1 : 1;
-        const maxChainDepth = Math.max(1, this.config.memory.tuning.ghost.maxChainDepth);
+        const maxChainDepth = Math.max(1, this.config.memory.tuning.continuation.maxChainDepth);
         const snapshotId = behaviorSnapshotId ?? `behavior-${context.requestId ?? message.id}`;
         const content: AskEventContent = {
             askId,
@@ -2066,6 +2112,7 @@ export class MemoryModule extends Memory {
             this.brain.appendEvent({
                 id: askId,
                 ts: nowMs,
+                ownerKey: continuityOwnerKey(message, context),
                 userId: message.user.id,
                 channelId: message.route.channel,
                 type: MemoryEventType.Ask,
@@ -2092,10 +2139,10 @@ export class MemoryModule extends Memory {
                     }),
                 );
             }
-            // LF-R4：每条 ask 同步写一条 ghost-context 事件（parent_id 指向 ask），
+            // LF-R4：每条 ask 同步写一条 continuation-context 事件（parent_id 指向 ask），
             // 用户可见 + 可 resume / drop / pin。userFacing.title 缺省 fallback 到
             // ask.prompt 首行（短路降级，不算字符匹配——纯结构化字段）。
-            this.recordGhostFromAsk({
+            this.recordContinuationFromAsk({
                 askId,
                 snapshotId,
                 ask,
@@ -2115,23 +2162,23 @@ export class MemoryModule extends Memory {
         }
     }
 
-    // ─── LF-R4 Ghost Context（与 LF-R3 Ask 同根）──────────────────
+    // ─── LF-R4 Continuation Context（与 LF-R3 Ask 同根）──────────────────
 
     /**
-     * 列出当前用户的活跃 ghost-context 事件（live/resumed），ts 倒序。
-     * `codenameId === null` 显式查询无 codename 的 ghost；`undefined` 不限定。
+     * 列出当前用户的活跃 continuation-context 事件（live/resumed），ts 倒序。
+     * `codenameId === null` 显式查询无 codename 的 continuation；`undefined` 不限定。
      */
-    public listActiveGhosts(
-        userId: string,
+    public listActiveContinuations(
+        ownerKey: string,
         options: { codenameId?: string | null; limit?: number } = {},
     ): MemoryEventRecord[] {
         if (!this.brainOpened) return [];
         try {
-            return this.brain.listActiveGhosts(userId, options);
+            return this.brain.listActiveContinuations(ownerKey, options);
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.list",
+                    op: "continuation.list",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2139,16 +2186,16 @@ export class MemoryModule extends Memory {
         }
     }
 
-    /** 取单个 ghost 详情；找不到或非 ghost-context 类型则返回 null。 */
-    public getGhost(ghostEventId: string): MemoryEventRecord | null {
+    /** 取单个 continuation 详情；找不到或非 continuation-context 类型则返回 null。 */
+    public getContinuation(continuationEventId: string): MemoryEventRecord | null {
         if (!this.brainOpened) return null;
         try {
-            const row = this.brain.getEvent(ghostEventId);
-            return row?.type === MemoryEventType.GhostContext ? row : null;
+            const row = this.brain.getEvent(continuationEventId);
+            return row?.type === MemoryEventType.ContinuationContext ? row : null;
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.get",
+                    op: "continuation.get",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2156,27 +2203,27 @@ export class MemoryModule extends Memory {
         }
     }
 
-    /** 用户主动 resume：拉回峰值，state=resumed + resumedAt。runtime 后续按 ghost 重建上下文。 */
-    public resumeGhost(ghostEventId: string, nowMs = Date.now()): boolean {
-        const ghost = this.getGhost(ghostEventId);
-        if (!ghost) return false;
+    /** 用户主动 resume：拉回峰值，state=resumed + resumedAt。runtime 后续按 continuation 重建上下文。 */
+    public resumeContinuation(continuationEventId: string, nowMs = Date.now()): boolean {
+        const continuation = this.getContinuation(continuationEventId);
+        if (!continuation) return false;
         try {
-            this.brain.upsertState(ghost.id, {
+            this.brain.upsertState(continuation.id, {
                 status: MemoryEventStatus.Resumed,
                 resumedAt: nowMs,
                 lastAccessed: nowMs,
             });
             this.events.publish(
-                event(RuntimeEventType.MemoryGhostResumed, {
-                    ghostEventId: ghost.id,
-                    userId: ghost.userId,
+                event(RuntimeEventType.MemoryContinuationResumed, {
+                    continuationEventId: continuation.id,
+                    userId: continuation.userId,
                 }),
             );
             return true;
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.resume",
+                    op: "continuation.resume",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2185,22 +2232,22 @@ export class MemoryModule extends Memory {
     }
 
     /** 用户主动 drop：state=abandoned，不再展示，evidence weight=0。 */
-    public dropGhost(ghostEventId: string): boolean {
-        const ghost = this.getGhost(ghostEventId);
-        if (!ghost) return false;
+    public dropContinuation(continuationEventId: string): boolean {
+        const continuation = this.getContinuation(continuationEventId);
+        if (!continuation) return false;
         try {
-            this.brain.upsertState(ghost.id, { status: MemoryEventStatus.Abandoned });
+            this.brain.upsertState(continuation.id, { status: MemoryEventStatus.Abandoned });
             this.events.publish(
-                event(RuntimeEventType.MemoryGhostDropped, {
-                    ghostEventId: ghost.id,
-                    userId: ghost.userId,
+                event(RuntimeEventType.MemoryContinuationDropped, {
+                    continuationEventId: continuation.id,
+                    userId: continuation.userId,
                 }),
             );
             return true;
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.drop",
+                    op: "continuation.drop",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2209,21 +2256,21 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 用户 pin：把 decay_score 半衰期乘以 `tuning.ghost.pinHalflifeMultiplier`（默认 3.0）。
+     * 用户 pin：把 decay_score 半衰期乘以 `tuning.continuation.pinHalflifeMultiplier`（默认 3.0）。
      * 实装层面：直接把 decayScore 上调到 current * multiplier，仍走衰减管道（不冻结）。
      */
-    public pinGhost(ghostEventId: string): boolean {
-        const ghost = this.getGhost(ghostEventId);
-        if (!ghost) return false;
+    public pinContinuation(continuationEventId: string): boolean {
+        const continuation = this.getContinuation(continuationEventId);
+        if (!continuation) return false;
         try {
-            const state = this.brain.getState(ghost.id);
-            const multiplier = Math.max(1, this.config.memory.tuning.ghost.pinHalflifeMultiplier);
+            const state = this.brain.getState(continuation.id);
+            const multiplier = Math.max(1, this.config.memory.tuning.continuation.pinHalflifeMultiplier);
             const baseScore = state?.decayScore ?? 1;
-            this.brain.upsertState(ghost.id, { decayScore: baseScore * multiplier });
+            this.brain.upsertState(continuation.id, { decayScore: baseScore * multiplier });
             this.events.publish(
-                event(RuntimeEventType.MemoryGhostPinned, {
-                    ghostEventId: ghost.id,
-                    userId: ghost.userId,
+                event(RuntimeEventType.MemoryContinuationPinned, {
+                    continuationEventId: continuation.id,
+                    userId: continuation.userId,
                     multiplier,
                 }),
             );
@@ -2231,7 +2278,7 @@ export class MemoryModule extends Memory {
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.pin",
+                    op: "continuation.pin",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2240,43 +2287,43 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R4 fork/fresh hint：把模型同轮输出的 ghost 决策落库。
-     * 仅消费 `{ghostId, kind}` 结构化字段，不读文本语义。
-     * - `resume`：调 resumeGhost（state → resumed）。
-     * - `fork` / `fresh`：在 ghost-context content 上挂 `continuationCompleted=true` + `lastKind=kind`，
-     *   评分阶段 `resolveGhostEvidenceWeight` 走 `continuationCompleted` 权重（默认 0.75）。
-     * 未命中的 ghostId 视为模型结构化输出引用漂移，跳过该项并继续应用其它决策。
+     * LF-R4 fork/fresh hint：把模型同轮输出的 continuation 决策落库。
+     * 仅消费 `{continuationId, kind}` 结构化字段，不读文本语义。
+     * - `resume`：调 resumeContinuation（state → resumed）。
+     * - `fork` / `fresh`：在 continuation-context content 上挂 `continuationCompleted=true` + `lastKind=kind`，
+     *   评分阶段 `resolveContinuationEvidenceWeight` 走 `continuationCompleted` 权重（默认 0.75）。
+     * 未命中的 continuationId 视为模型结构化输出引用漂移，跳过该项并继续应用其它决策。
      * 返回成功应用的条数。
      */
-    public applyGhostDecisions(decisions: GhostDecision[]): number {
+    public applyContinuationDecisions(decisions: ContinuationDecision[]): number {
         if (!this.brainOpened || decisions.length === 0) return 0;
         let applied = 0;
         for (const decision of decisions) {
-            const ghost = this.getGhost(decision.ghostId);
-            if (!ghost) continue;
+            const continuation = this.getContinuation(decision.continuationId);
+            if (!continuation) continue;
             try {
-                if (decision.kind === GhostDecisionKind.Resume) {
-                    if (!this.resumeGhost(decision.ghostId)) {
-                        throw new Error(`Ghost decision resume failed for ghostId: ${decision.ghostId}`);
+                if (decision.kind === ContinuationDecisionKind.Resume) {
+                    if (!this.resumeContinuation(decision.continuationId)) {
+                        throw new Error(`Continuation decision resume failed for continuationId: ${decision.continuationId}`);
                     }
                 } else {
-                    this.brain.patchGhostContent(decision.ghostId, {
+                    this.brain.patchContinuationContent(decision.continuationId, {
                         continuationCompleted: true,
                         lastKind: decision.kind,
                     });
                 }
                 applied += 1;
                 this.events.publish(
-                    event(RuntimeEventType.MemoryGhostDecisionApplied, {
-                        ghostEventId: decision.ghostId,
-                        userId: ghost.userId,
+                    event(RuntimeEventType.MemoryContinuationDecisionApplied, {
+                        continuationEventId: decision.continuationId,
+                        userId: continuation.userId,
                         kind: decision.kind,
                     }),
                 );
             } catch (err) {
                 this.events.publish(
                     event(RuntimeEventType.MemoryBrainWriteFailed, {
-                        op: "ghost.decision",
+                        op: "continuation.decision",
                         message: err instanceof Error ? err.message : String(err),
                     }),
                 );
@@ -2292,6 +2339,7 @@ export class MemoryModule extends Memory {
      * 返回新写入的 eventId 列表（按输入顺序）；写入失败立即抛错。
      */
     public applyIdentityAppends(input: {
+        ownerKey?: string;
         userId: string;
         candidates: IdentityAppendCandidate[];
         codenameId?: string;
@@ -2301,6 +2349,7 @@ export class MemoryModule extends Memory {
     }): string[] {
         if (!this.brainOpened || input.candidates.length === 0) return [];
         const ts = input.nowMs ?? Date.now();
+        const ownerKey = input.ownerKey ?? (input.codenameId ? `codename:${input.codenameId}` : `audit-user:${input.userId}`);
         const writtenIds: string[] = [];
         for (const candidate of input.candidates) {
             const eventId = `identity-${crypto.randomUUID()}`;
@@ -2314,6 +2363,7 @@ export class MemoryModule extends Memory {
                 this.brain.appendEvent({
                     id: eventId,
                     ts,
+                    ownerKey,
                     userId: input.userId,
                     channelId: input.channelId,
                     codenameId: input.codenameId,
@@ -2347,14 +2397,14 @@ export class MemoryModule extends Memory {
      * 传 `includeReverted=true` 时拉全部历史用于 CLI / TUI 审计。
      */
     public listIdentity(
-        userId: string,
+        ownerKey: string,
         options: { limit?: number; includeReverted?: boolean } = {},
     ): MemoryEventRecord[] {
         if (!this.brainOpened) return [];
         try {
             return options.includeReverted
-                ? this.brain.listAllIdentity(userId, { limit: options.limit })
-                : this.brain.listActiveIdentity(userId, { limit: options.limit });
+                ? this.brain.listAllIdentity(ownerKey, { limit: options.limit })
+                : this.brain.listActiveIdentity(ownerKey, { limit: options.limit });
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
@@ -2385,8 +2435,8 @@ export class MemoryModule extends Memory {
                 ...(row.content as unknown as IdentityEventContent),
                 revertedAt: nowMs,
             };
-            // Lightweight in-place patch shares the ghost path's UPDATE semantics.
-            // Reuse low-level update by reusing patchGhostContent? It's ghost-typed only;
+            // Lightweight in-place patch shares the continuation path's UPDATE semantics.
+            // Reuse low-level update by reusing patchContinuationContent? It's continuation-typed only;
             // use a dedicated brain helper to keep the type check clean.
             this.brain.updateEventContent(eventId, nextContent as unknown as Record<string, unknown>);
             this.events.publish(
@@ -2408,11 +2458,11 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R5 slice B：跑一次该用户的 daily + weekly summary 聚合。
-     * 纯结构化字段聚合（type / role / codenameId / ask reason / ghost reason 计数），
+     * LF-R5 slice B：跑一次该 continuity owner 对应 ledger 用户的 daily + weekly summary 聚合。
+     * 纯结构化字段聚合（type / role / codenameId / ask reason / continuation reason 计数），
      * 不调 LLM、不读 content 文本。返回 `null` 表示 brain 未开或当前维护锁忙。
      */
-    public async runSummaryOnce(userId: string, nowMs?: number): Promise<SummaryRunResult | null> {
+    public async runSummaryOnce(ownerKey: string, nowMs?: number): Promise<SummaryRunResult | null> {
         if (!this.brainOpened || this.brainMaintenanceBusy) return null;
         this.brainMaintenanceBusy = true;
         try {
@@ -2421,16 +2471,17 @@ export class MemoryModule extends Memory {
                 trigger: this.config.memory.tuning.summary.trigger,
                 minIntervalHours: this.config.memory.tuning.summary.minIntervalHours,
             });
-            const result = worker.runOnceForUser(userId, nowMs);
+            const result = worker.runOnceForOwner(ownerKey, nowMs);
             this.events.publish(
                 event(RuntimeEventType.MemorySummaryWritten, {
-                    userId,
+                    ownerKey,
+                    auditUserId: this.resolveAuditUserId(ownerKey),
                     written: result.written,
                     skippedByInterval: result.skippedByInterval,
                     skippedEmpty: result.skippedEmpty,
                 }),
             );
-            await this.embedWrittenSummaries(userId, result.writtenIds);
+            await this.embedWrittenSummaries(ownerKey, result.writtenIds);
             return result;
         } catch (err) {
             this.events.publish(
@@ -2443,6 +2494,10 @@ export class MemoryModule extends Memory {
         } finally {
             this.brainMaintenanceBusy = false;
         }
+    }
+
+    private resolveAuditUserId(ownerKey: string): string {
+        return this.auditUserIdByOwnerKey.get(ownerKey) ?? ownerKey;
     }
 
     /**
@@ -2482,7 +2537,7 @@ export class MemoryModule extends Memory {
         }
     }
 
-    private async embedWrittenSummaries(userId: string, summaryIds: string[]): Promise<void> {
+    private async embedWrittenSummaries(ownerKey: string, summaryIds: string[]): Promise<void> {
         if (!this.brainOpened || !this.graph || summaryIds.length === 0) return;
         let written = 0;
         const failures: Array<{ summaryId: string; error: unknown }> = [];
@@ -2494,7 +2549,7 @@ export class MemoryModule extends Memory {
                 const embedding = await this.embeddings.embed(summary.content);
                 await this.graph.upsertSummaryEmbedding({
                     id: embeddingId,
-                    userId,
+                    ownerKey,
                     summaryId: summary.id,
                     timeRange: summary.timeRange,
                     bucketKey: summary.bucketKey,
@@ -2520,7 +2575,7 @@ export class MemoryModule extends Memory {
         if (written > 0) {
             this.events.publish(
                 event(RuntimeEventType.MemorySummaryEmbeddingWritten, {
-                    userId,
+                    ownerKey,
                     written,
                 }),
             );
@@ -2531,30 +2586,30 @@ export class MemoryModule extends Memory {
         }
     }
 
-    /** LF-R5 slice D：Dormant 当前态查询。 */
-    public runtimeModeOf(userId: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Dormant {
-        return this.dormant.modeOf(userId);
+    /** LF-R5 slice D：Idle 当前态查询。 */
+    public runtimeModeOf(ownerKey: string): typeof RuntimeMode.Chat | typeof RuntimeMode.Idle {
+        return this.idle.modeOf(ownerKey);
     }
 
-    /** LF-R5 slice D：手动触发一次 dormant sweep（测试 / CLI）。 */
-    public sweepDormantOnce(): { entered: number } {
-        return this.dormant.sweepOnce();
+    /** LF-R5 slice D：手动触发一次 idle sweep（测试 / CLI）。 */
+    public sweepIdleOnce(): { entered: number } {
+        return this.idle.sweepOnce();
     }
 
-    /** LF-R5 slice D：dormant 状态快照（CLI / 诊断）。 */
-    public dormantSnapshot(): Array<{ userId: string; mode: string; lastInputAt: number; idleMs: number }> {
-        return this.dormant.snapshot();
+    /** LF-R5 slice D：idle 状态快照（CLI / 诊断）。 */
+    public idleSnapshot(): Array<{ ownerKey: string; userId: string; mode: string; lastInputAt: number; idleMs: number }> {
+        return this.idle.snapshot();
     }
 
     /**
-     * LF-R4：runtime 在非 ask 路径触发的 ghost-context 写入。
+     * LF-R4：runtime 在非 ask 路径触发的 continuation-context 写入。
      * 适用于 `tool-failure` / `blackboard-cap` / `process-restart` 三种 reason；
      * 调用方必须显式给出 `userFacing` 字段（不做 prompt fallback，runtime 不解析文本语义）。
-     * `ask` reason 的 ghost 仍由 `recordGhostFromAsk` 自动写入，不要走本入口。
+     * `ask` reason 的 continuation 仍由 `recordContinuationFromAsk` 自动写入，不要走本入口。
      */
-    public recordGhostFromReason(input: {
+    public recordContinuationFromReason(input: {
         userId: string;
-        reason: Exclude<GhostContextReason, typeof GhostContextReason.Ask>;
+        reason: Exclude<ContinuationContextReason, typeof ContinuationContextReason.Ask>;
         userFacing: { title: string; contextHint?: string };
         snapshot?: {
             originalUserMessage?: string;
@@ -2569,19 +2624,19 @@ export class MemoryModule extends Memory {
         nowMs?: number;
     }): string | null {
         if (!this.brainOpened) return null;
-        const ghostId = `ghost-${crypto.randomUUID()}`;
+        const continuationId = `continuation-${crypto.randomUUID()}`;
         const ts = input.nowMs ?? Date.now();
         const title = input.userFacing.title.trim().slice(0, 120);
         if (!title) return null;
         const contextHint = input.userFacing.contextHint?.trim().slice(0, 500);
-        const snapshot: GhostSnapshot = {};
+        const snapshot: ContinuationSnapshot = {};
         if (input.snapshot?.originalUserMessage) snapshot.originalUserMessage = input.snapshot.originalUserMessage;
         if (input.snapshot?.blackboardTurnId) snapshot.blackboardTurnId = input.snapshot.blackboardTurnId;
         if (input.snapshot?.mcpCallProgress && input.snapshot.mcpCallProgress.length > 0) {
             snapshot.mcpCallProgress = input.snapshot.mcpCallProgress;
         }
-        const content: GhostContextEventContent = {
-            ghostId,
+        const content: ContinuationContextEventContent = {
+            continuationId,
             reason: input.reason,
             userFacing: contextHint ? { title, contextHint } : { title },
             ...(Object.keys(snapshot).length > 0 ? { snapshot } : {}),
@@ -2590,28 +2645,29 @@ export class MemoryModule extends Memory {
         };
         try {
             this.brain.appendEvent({
-                id: ghostId,
+                id: continuationId,
                 ts,
+                ownerKey: input.codenameId ? `codename:${input.codenameId}` : `audit-user:${input.userId}`,
                 userId: input.userId,
                 channelId: input.channelId,
                 codenameId: input.codenameId,
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: content as unknown as Record<string, unknown>,
                 parentId: input.parentEventId,
                 importance: input.importance ?? 0.6,
             });
             this.events.publish(
-                event(RuntimeEventType.MemoryGhostRecorded, {
-                    ghostEventId: ghostId,
+                event(RuntimeEventType.MemoryContinuationRecorded, {
+                    continuationEventId: continuationId,
                     userId: input.userId,
                     reason: input.reason,
                 }),
             );
-            return ghostId;
+            return continuationId;
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.record",
+                    op: "continuation.record",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2620,10 +2676,10 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * LF-R4：每次 recordAskEvent 完毕后写一条 ghost-context 事件。
-     * userFacing.title 必须由模型同轮结构化 `ask.ghostHint.title` 给出。
+     * LF-R4：每次 recordAskEvent 完毕后写一条 continuation-context 事件。
+     * userFacing.title 必须由模型同轮结构化 `ask.continuationHint.title` 给出。
      */
-    private recordGhostFromAsk(input: {
+    private recordContinuationFromAsk(input: {
         askId: string;
         snapshotId: string;
         ask: AgentAsk;
@@ -2632,22 +2688,22 @@ export class MemoryModule extends Memory {
         nowMs: number;
     }): void {
         const { askId, snapshotId, ask, message, context, nowMs } = input;
-        const hintTitle = ask.ghostHint?.title?.trim();
-        const hintContext = ask.ghostHint?.contextHint?.trim();
+        const hintTitle = ask.continuationHint?.title?.trim();
+        const hintContext = ask.continuationHint?.contextHint?.trim();
         const title = (hintTitle || firstLine(ask.prompt)).slice(0, 120);
         const contextHint = hintContext ?? ask.rationale;
         // LF-R4：ask.reason 是结构化枚举字段，结构化 → 结构化的映射不算字符匹配。
         // 黑板封顶的 ask 是 runtime 合成而非模型表达，单独标记为 reason='blackboard-cap'，
-        // 列表 / 召回 / fork 决策时可与普通 ask ghost 区分。
-        const ghostReason: GhostContextReason =
+        // 列表 / 召回 / fork 决策时可与普通 ask continuation 区分。
+        const continuationReason: ContinuationContextReason =
             ask.reason === AskReason.BlackboardStalemate
-                ? GhostContextReason.BlackboardCap
-                : GhostContextReason.Ask;
-        const ghostId = `ghost-${crypto.randomUUID()}`;
-        const content: GhostContextEventContent = {
-            ghostId,
+                ? ContinuationContextReason.BlackboardCap
+                : ContinuationContextReason.Ask;
+        const continuationId = `continuation-${crypto.randomUUID()}`;
+        const content: ContinuationContextEventContent = {
+            continuationId,
             snapshotId,
-            reason: ghostReason,
+            reason: continuationReason,
             userFacing: {
                 title,
                 askPrompt: ask.prompt,
@@ -2661,28 +2717,29 @@ export class MemoryModule extends Memory {
         };
         try {
             this.brain.appendEvent({
-                id: ghostId,
+                id: continuationId,
                 ts: nowMs,
+                ownerKey: continuityOwnerKey(message, context),
                 userId: message.user.id,
                 channelId: message.route.channel,
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: content as unknown as Record<string, unknown>,
                 parentId: askId,
                 importance: 0.7,
             });
             this.events.publish(
-                event(RuntimeEventType.MemoryGhostRecorded, {
-                    ghostEventId: ghostId,
+                event(RuntimeEventType.MemoryContinuationRecorded, {
+                    continuationEventId: continuationId,
                     askEventId: askId,
                     userId: message.user.id,
-                    reason: ghostReason,
+                    reason: continuationReason,
                     askReason: ask.reason,
                 }),
             );
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
-                    op: "ghost.record",
+                    op: "continuation.record",
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -2701,11 +2758,11 @@ export class MemoryModule extends Memory {
             days: 7,
             limit: this.config.memory.retrieval.maxResults,
             minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
-            userId: message.user.id,
+            ownerKey: continuityOwnerKey(message, context),
         });
         this.events.publish(
             event(RuntimeEventType.MemoryBrainPromptRecall, {
-                userId: message.user.id,
+                ownerKey: continuityOwnerKey(message, context),
                 sinceTs,
                 hits: visible.length,
             }),
@@ -2715,12 +2772,12 @@ export class MemoryModule extends Memory {
             context?.embedding && context.embedding.length > 0 ? context.embedding : await this.embeddings.embed(message.text);
         // P0 prompt recall：brain_events 是权威源；召回时仍按资源指标做轻量排序。
         // 零字符匹配——只看结构化 score + embedding。
-        const activeInboxProjectId = this.peekActiveInboxProjectId(message.user.id, context);
+        const activeCodenameOwnerKey = this.peekActiveCodenameOwnerKey(message.user.id, context);
         const boost = this.config.memory.tuning.inbox.codenameRecallBoost;
         const results = visible
             .map((entry) => ({
                 entry,
-                rank: rankVisibleAtom(entry, queryEmbedding, activeInboxProjectId, boost),
+                rank: rankVisibleAtom(entry, queryEmbedding, activeCodenameOwnerKey, boost),
             }))
             .sort((a, b) => b.rank - a.rank)
             .slice(0, this.config.memory.retrieval.maxResults)
@@ -2729,20 +2786,20 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * P2：算"用户当前活跃的 codename" → 对应的 inbox 命名空间 projectId。
+     * P2：算"用户当前活跃的 codename" → 对应的 no-scope ownerKey。
      * 不可用（brain 未开/无 touch 命中）返回 null，rank 函数会跳过 boost。
      */
-    private peekActiveInboxProjectId(userId: string, context?: RuntimeContext): string | null {
+    private peekActiveCodenameOwnerKey(userId: string, context?: RuntimeContext): string | null {
         if (!this.brainOpened) return null;
         const nowMs = context?.now ? Date.parse(context.now) : Date.now();
         const windowMs = Math.max(0, this.config.memory.tuning.inbox.activeCodenameWindowMinutes) * 60_000;
         const sinceTs = (Number.isFinite(nowMs) ? nowMs : Date.now()) - windowMs;
         const cn = this.brain.getMostRecentTouchedCodename(userId, sinceTs);
-        return cn ? inboxProjectIdFor(cn.id) : null;
+        return cn ? `codename:${cn.id}` : null;
     }
 
     private visibleAtomsForEpisodes(
-        userId: string,
+        ownerKey: string,
         records: Array<EpisodeRecord | undefined>,
     ): Map<string, BrainVisibleAtom[]> {
         if (!this.brainOpened) return new Map();
@@ -2765,7 +2822,7 @@ export class MemoryModule extends Memory {
                 days: 31,
                 limit: Math.max(this.config.memory.retrieval.maxResults * 4, records.length),
                 minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
-                userId,
+                ownerKey,
             },
         );
         const byEpisode = new Map<string, BrainVisibleAtom[]>();
@@ -2789,6 +2846,7 @@ export class MemoryModule extends Memory {
         message: GatewayMessage,
         reply: GatewayReply,
         context: RuntimeContext,
+        ownerKey: string,
         importance: number,
         provenance: MemoryEpisodeProvenance,
     ): Promise<void> {
@@ -2809,7 +2867,7 @@ export class MemoryModule extends Memory {
             const text = renderEpisodeText(message.text, reply.text, normalizedProvenance);
 
             await this.workingMemory.writeEpisode({
-                userId: message.user.id,
+                ownerKey,
                 episodeId,
                 text,
                 concepts: [],
@@ -2854,21 +2912,21 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * 项目候选 cluster 扫描：从工作记忆 context ring 拿近期 episode，按 concept 聚合，
-     * 用 `detectClusterCandidate` 判定；命中即写入 pending_project_offer（每 userId 最多一条；
+     * Scope 候选 cluster 扫描：从工作记忆 context ring 拿近期 episode，按 concept 聚合，
+     * 用 `detectClusterCandidate` 判定；命中即写入 pending_scope_offer（每 ownerKey 最多一条；
      * 已有 offer 时不重复触发，避免噪声）。
      *
      * 返回是否新增了一条 offer（用于测试与诊断）。
      */
-    public async sweepProjectClusters(userId: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
+    public async sweepScopeClusters(ownerKey: string, options: { ttlTurns?: number } = {}): Promise<boolean> {
         if (!this.workingMemory) return false;
-        const existing = await this.sqlite.getProjectOffer(userId);
+        const existing = await this.sqlite.getScopeOffer(ownerKey);
         if (existing) return false;
 
         const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
-        const episodeIds = await this.workingMemory.readContextRing(userId, ringLimit);
+        const episodeIds = await this.workingMemory.readContextRing(ownerKey, ringLimit);
         if (episodeIds.length === 0) return false;
-        const episodes = (await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)))).filter(
+        const episodes = (await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(ownerKey, id)))).filter(
             (e): e is NonNullable<typeof e> => Boolean(e),
         );
         if (episodes.length === 0) return false;
@@ -2888,16 +2946,16 @@ export class MemoryModule extends Memory {
         const clusterEpisodes = episodes.filter((e) => (e.concepts ?? []).includes(topConcept));
         if (clusterEpisodes.length === 0) return false;
 
-        const trigger = this.projectTriggerDetector.detectClusterCandidate({ concepts: [topConcept], episodes: clusterEpisodes });
-        if (trigger.kind === ProjectTriggerKind.None) return false;
+        const trigger = this.scopeTriggerDetector.detectClusterCandidate({ concepts: [topConcept], episodes: clusterEpisodes });
+        if (trigger.kind === ScopeTriggerKind.None) return false;
 
         const proposedAt = new Date().toISOString();
-        const projectId = `project-${userId}-${Date.now().toString(36)}`;
+        const scopeId = `scope-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
         const title = `Recurring topic: ${topConcept}`;
         const goal = `Cluster around concept "${topConcept}" with ${clusterEpisodes.length} related episodes.`;
-        const offer: PendingProjectOffer = {
-            userId,
-            projectId,
+        const offer: PendingScopeOffer = {
+            ownerKey,
+            scopeId,
             title,
             goal,
             triggerKind: trigger.kind,
@@ -2906,11 +2964,11 @@ export class MemoryModule extends Memory {
             proposedAt,
             ttlTurns: Math.max(1, options.ttlTurns ?? 3),
         };
-        await this.sqlite.upsertProjectOffer(offer);
+        await this.sqlite.upsertScopeOffer(offer);
         this.events.publish(
-            event(RuntimeEventType.MemoryProjectOfferProposed, {
-                userId,
-                projectId,
+            event(RuntimeEventType.MemoryScopeOfferProposed, {
+                ownerKey,
+                scopeId,
                 title,
                 triggerKind: trigger.kind,
                 evidenceScore: trigger.score,
@@ -2925,26 +2983,26 @@ export class MemoryModule extends Memory {
      * commitTurn 末端调用：若 Path A 触发了显式 project intent，消费 offer 并发事件；
      * 否则 ttl-1，0 时自动过期。
      */
-    public async noteProjectOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
-        const offer = await this.sqlite.getProjectOffer(userId);
+    public async noteScopeOfferTurn(ownerKey: string, explicitTriggered: boolean): Promise<void> {
+        const offer = await this.sqlite.getScopeOffer(ownerKey);
         if (!offer) return;
         if (explicitTriggered) {
-            await this.sqlite.deleteProjectOffer(userId);
+            await this.sqlite.deleteScopeOffer(ownerKey);
             this.events.publish(
-                event(RuntimeEventType.MemoryProjectOfferConsumed, {
-                    userId,
-                    projectId: offer.projectId,
+                event(RuntimeEventType.MemoryScopeOfferConsumed, {
+                    ownerKey,
+                    scopeId: offer.scopeId,
                     triggerKind: offer.triggerKind,
                 }),
             );
             return;
         }
-        const remaining = await this.sqlite.decrementProjectOfferTtl(userId);
+        const remaining = await this.sqlite.decrementScopeOfferTtl(ownerKey);
         if (remaining === 0) {
             this.events.publish(
-                event(RuntimeEventType.MemoryProjectOfferExpired, {
-                    userId,
-                    projectId: offer.projectId,
+                event(RuntimeEventType.MemoryScopeOfferExpired, {
+                    ownerKey,
+                    scopeId: offer.scopeId,
                     evidenceScore: offer.evidenceScore,
                 }),
             );
@@ -2956,17 +3014,17 @@ export class MemoryModule extends Memory {
      * 的工具组合（成功的 tools，按字典序去重）聚合 cluster；满足 support/confidence 阈值即
      * 写入 pending_skill_offer。
      *
-     * 同 sweepProjectClusters 一样：每 userId 最多一条 offer；已存在 offer 时直接跳过。
+     * 同 sweepScopeClusters 一样：每 ownerKey 最多一条 offer；已存在 offer 时直接跳过。
      */
-    public async sweepSkillCandidates(userId: string): Promise<boolean> {
+    public async sweepSkillCandidates(ownerKey: string): Promise<boolean> {
         if (!this.workingMemory) return false;
-        const existing = await this.sqlite.getSkillOffer(userId);
+        const existing = await this.sqlite.getSkillOffer(ownerKey);
         if (existing) return false;
 
         const ringLimit = Math.max(8, this.config.memory.retrieval.maxResults * 4);
-        const episodeIds = await this.workingMemory.readContextRing(userId, ringLimit);
+        const episodeIds = await this.workingMemory.readContextRing(ownerKey, ringLimit);
         if (episodeIds.length === 0) return false;
-        const episodes = (await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(userId, id)))).filter(
+        const episodes = (await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(ownerKey, id)))).filter(
             (e): e is NonNullable<typeof e> => Boolean(e),
         );
         if (episodes.length === 0) return false;
@@ -2991,16 +3049,16 @@ export class MemoryModule extends Memory {
         const top = sorted[0];
         if (!top) return false;
 
-        const trigger = this.projectTriggerDetector.detectSkillCandidate(top, { skillSupportMin: supportMin });
-        if (trigger.kind === ProjectTriggerKind.None) return false;
+        const trigger = this.scopeTriggerDetector.detectSkillCandidate(top, { skillSupportMin: supportMin });
+        if (trigger.kind === ScopeTriggerKind.None) return false;
 
         const proposedAt = new Date().toISOString();
-        const skillId = `skill-${userId}-${Date.now().toString(36)}`;
+        const skillId = `skill-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
         const name = synthesizeSkillName(top.tools);
         const description = `Recurring workflow combining ${top.tools.length} MCP tool(s): ${top.tools.join(", ")}.`;
         const summary = buildSkillSummary(top.episodes, top.tools);
         const offer: PendingSkillOffer = {
-            userId,
+            ownerKey,
             skillId,
             name,
             description,
@@ -3015,7 +3073,7 @@ export class MemoryModule extends Memory {
         await this.sqlite.upsertSkillOffer(offer);
         this.events.publish(
             event(RuntimeEventType.MemorySkillOfferProposed, {
-                userId,
+                ownerKey,
                 skillId,
                 name,
                 support: offer.support,
@@ -3027,15 +3085,15 @@ export class MemoryModule extends Memory {
     }
 
     /** 显式同意：把 pending offer 物化为 SKILL.md，并写 RETROSPECTIVE。 */
-    public async consumeSkillOffer(userId: string): Promise<boolean> {
-        const offer = await this.sqlite.getSkillOffer(userId);
+    public async consumeSkillOffer(ownerKey: string): Promise<boolean> {
+        const offer = await this.sqlite.getSkillOffer(ownerKey);
         if (!offer) return false;
         try {
             const skillDir = await materializeSkillFromOffer(this.config.paths.skillDir, offer);
-            await this.sqlite.deleteSkillOffer(userId);
+            await this.sqlite.deleteSkillOffer(ownerKey);
             this.events.publish(
                 event(RuntimeEventType.MemorySkillInstalled, {
-                    userId,
+                    ownerKey,
                     skillId: offer.skillId,
                     name: offer.name,
                     path: skillDir,
@@ -3044,7 +3102,7 @@ export class MemoryModule extends Memory {
             );
             this.events.publish(
                 event(RuntimeEventType.MemorySkillOfferConsumed, {
-                    userId,
+                    ownerKey,
                     skillId: offer.skillId,
                     name: offer.name,
                 }),
@@ -3052,7 +3110,7 @@ export class MemoryModule extends Memory {
             const retrospective = new RetrospectiveLog({ projectMemoryDir: this.config.paths.projectMemoryDir });
             await retrospective.append({
                 kind: "skill-promoted",
-                userId,
+                ownerKey,
                 summary: offer.description,
                 symbols: offer.mcpTools,
                 rationale: `User confirmed promotion of recurring MCP workflow (support=${offer.support}, confidence=${offer.confidence.toFixed(2)}).`,
@@ -3062,7 +3120,7 @@ export class MemoryModule extends Memory {
         } catch (err) {
             this.events.publish(
                 event(RuntimeEventType.MemorySkillInstallFailed, {
-                    userId,
+                    ownerKey,
                     skillId: offer.skillId,
                     name: offer.name,
                     error: String(err),
@@ -3073,18 +3131,18 @@ export class MemoryModule extends Memory {
     }
 
     /** 用户未显式同意 → ttl-1；归零即过期。 */
-    public async noteSkillOfferTurn(userId: string, explicitTriggered: boolean): Promise<void> {
-        const offer = await this.sqlite.getSkillOffer(userId);
+    public async noteSkillOfferTurn(ownerKey: string, explicitTriggered: boolean): Promise<void> {
+        const offer = await this.sqlite.getSkillOffer(ownerKey);
         if (!offer) return;
         if (explicitTriggered) {
             // consumeSkillOffer 已处理；这里幂等保护
             return;
         }
-        const remaining = await this.sqlite.decrementSkillOfferTtl(userId);
+        const remaining = await this.sqlite.decrementSkillOfferTtl(ownerKey);
         if (remaining === 0) {
             this.events.publish(
                 event(RuntimeEventType.MemorySkillOfferExpired, {
-                    userId,
+                    ownerKey,
                     skillId: offer.skillId,
                     confidence: offer.confidence,
                 }),
@@ -3093,11 +3151,11 @@ export class MemoryModule extends Memory {
     }
 
     /**
-     * Pending project offer 是 prompt nudge，不是文本意图检测。
+     * Pending scope offer 是 prompt nudge，不是文本意图检测。
      * 渲染由 MemoryModule 持有，避免散落 helper 重新引入隐式业务入口。
      */
-    private renderProjectOfferNudge(offer: PendingProjectOffer): string {
-        return renderProjectOfferPrompt({
+    private renderScopeOfferNudge(offer: PendingScopeOffer): string {
+        return renderScopeOfferPrompt({
             evidenceScore: offer.evidenceScore.toFixed(2),
             relatedCount: String(offer.relatedIds.length),
             remainingTurns: String(offer.ttlTurns),
@@ -3253,14 +3311,14 @@ export function createMemory(config: FlyflorConfig, events: EventSink, model?: M
 }
 
 function buildScoreExplain(
-    projectConstraintId: string,
+    scopeConstraintId: string,
     inboxDecayMultiplier: number,
     codenameBoost: number,
     codenameUseCount: number,
 ): string | undefined {
     const parts: string[] = [];
-    if (isInboxProjectId(projectConstraintId)) {
-        const cn = extractCodenameIdFromInboxProjectId(projectConstraintId);
+    if (isInboxScopeId(scopeConstraintId)) {
+        const cn = extractCodenameIdFromInboxScopeId(scopeConstraintId);
         const namespace = cn ? `inbox:${cn}` : "inbox";
         parts.push(`${namespace} recency dampened by ${inboxDecayMultiplier}`);
     }
@@ -3275,7 +3333,7 @@ function candidateFromAction(
     message: GatewayMessage,
     reply: GatewayReply,
     context: RuntimeContext,
-    projectId: string,
+    scopeOrOwnerId: string,
     sourceId: string,
     defaults: MemoryWeights,
     matrixAggregator: MemoryMatrixAggregator,
@@ -3290,7 +3348,7 @@ function candidateFromAction(
         status: MemoryCandidateStatus.Candidate,
         sourceKind: MemorySourceKind.ExplicitUserIntent,
         content: action.content.replace(/\s+/g, " ").trim(),
-        projectId,
+        projectId: scopeOrOwnerId,
         sourceId,
         sourceMessageId: message.id,
         sourceReplyId: reply.messageId,
@@ -3375,7 +3433,7 @@ function dedupeResults(results: MemorySearchResult[]): MemorySearchResult[] {
 
 function renderMemoryPrompt(
     markdown: string,
-    projectMemory: string,
+    scopeMemory: string,
     hippocampus: string | undefined,
     results: MemorySearchResult[],
     maxChars: number,
@@ -3383,7 +3441,7 @@ function renderMemoryPrompt(
     const content = renderMemoryContextPrompt({
         markdown,
         hippocampus: hippocampus ?? "",
-        projectMemory,
+        scopeMemory,
         renderedResults: results.length > 0 ? renderResults(results) : "",
     });
     return content.length <= maxChars ? content : content.slice(0, maxChars).trimEnd();
@@ -3417,41 +3475,51 @@ function importanceFromActions(actions: MemoryAction[]): number {
     return clamp01(total / actions.length);
 }
 
-const INBOX_PROJECT_CONSTRAINT_ID = "inbox";
-const INBOX_CODENAME_PROJECT_PREFIX = "inbox:cn-";
+const INBOX_SCOPE_CONSTRAINT_ID = "inbox";
+const INBOX_CODENAME_SCOPE_PREFIX = "inbox:cn-";
 
 /**
  * P2 inbox 收口：把 inbox 单一虚拟桶扩成"按 codename 命名空间化"的子桶集合。
  * - 无 codename → "inbox"（保持后向兼容）
  * - 有 codename → "inbox:cn-<codenameId>"
  *
- * 命名空间内仍走 inbox 7-day 加速衰减；项目升格后改用真实 project-<hex> 路径。
+ * 命名空间内仍走 inbox 7-day 加速衰减；scope 升格后改用真实 scope id。
  */
-export function inboxProjectIdFor(codenameId?: string | null): string {
-    if (!codenameId) return INBOX_PROJECT_CONSTRAINT_ID;
-    return `${INBOX_CODENAME_PROJECT_PREFIX}${codenameId}`;
+export function inboxScopeIdFor(codenameId?: string | null): string {
+    if (!codenameId) return INBOX_SCOPE_CONSTRAINT_ID;
+    return `${INBOX_CODENAME_SCOPE_PREFIX}${codenameId}`;
 }
 
-/**
- * 谓词：projectId 是否属于 inbox 容器（含 codename 子桶）。
- * 决定 atom 是否走 inbox decay multiplier；零字符匹配——只看 projectId 字面量前缀。
- */
-export function isInboxProjectId(id: string): boolean {
-    return id === INBOX_PROJECT_CONSTRAINT_ID || id.startsWith(INBOX_CODENAME_PROJECT_PREFIX);
-}
+/** @deprecated Compatibility alias for older tests and callers. Use inboxScopeIdFor. */
+export const inboxProjectIdFor = inboxScopeIdFor;
 
 /**
- * 从命名空间化的 inbox projectId 中抽取 codenameId；非 codename 桶返回 null。
+ * 谓词：scope id 是否属于 inbox 容器（含 codename 子桶）。
+ * 决定 atom 是否走 inbox decay multiplier；零字符匹配——只看 scope id 字面量前缀。
+ */
+export function isInboxScopeId(id: string): boolean {
+    return id === INBOX_SCOPE_CONSTRAINT_ID || id.startsWith(INBOX_CODENAME_SCOPE_PREFIX);
+}
+
+/** @deprecated Compatibility alias for older tests and callers. Use isInboxScopeId. */
+export const isInboxProjectId = isInboxScopeId;
+
+/**
+ * 从命名空间化的 inbox scope id 中抽取 codenameId；非 codename 桶返回 null。
  * 单一来源 — 任何需要反解的 caller 都用这个，不要本地再 slice 前缀。
  */
-export function extractCodenameIdFromInboxProjectId(id: string): string | null {
-    if (!id.startsWith(INBOX_CODENAME_PROJECT_PREFIX)) return null;
-    const tail = id.slice(INBOX_CODENAME_PROJECT_PREFIX.length);
+export function extractCodenameIdFromInboxScopeId(id: string): string | null {
+    if (!id.startsWith(INBOX_CODENAME_SCOPE_PREFIX)) return null;
+    const tail = id.slice(INBOX_CODENAME_SCOPE_PREFIX.length);
     return tail.length > 0 ? tail : null;
 }
 
+/** @deprecated Compatibility alias for older tests and callers. Use extractCodenameIdFromInboxScopeId. */
+export const extractCodenameIdFromInboxProjectId = extractCodenameIdFromInboxScopeId;
+
 interface BrainAtomFromActionInput {
     action: MemoryAction;
+    codenameId?: string;
     createdAt: string;
     defaultWeights: MemoryWeights;
     embedding: number[];
@@ -3459,7 +3527,8 @@ interface BrainAtomFromActionInput {
     index: number;
     matrix: MemoryMatrixAggregator;
     message: GatewayMessage;
-    projectConstraintId: string;
+    context: RuntimeContext;
+    scopeConstraintId: string;
     reply: GatewayReply;
     scoreWeights: {
         access: number;
@@ -3487,7 +3556,7 @@ function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWr
     const weights = input.matrix.applyImpact(baseWeights, matrix);
     const inboxDecayMultiplier = Math.max(1, input.inboxDecayMultiplier);
     const recency =
-        isInboxProjectId(input.projectConstraintId) ? clamp01(1 / inboxDecayMultiplier) : 1;
+        isInboxScopeId(input.scopeConstraintId) ? clamp01(1 / inboxDecayMultiplier) : 1;
     const codenameUseCount = Math.max(0, Math.floor(input.codenameUseCount ?? 0));
     const codenameBoost =
         codenameUseCount > 0 ? clamp01(Math.log2(1 + codenameUseCount) / 4) : 0;
@@ -3495,11 +3564,11 @@ function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWr
         atomId: `${input.episodeId}:atom:${input.index}`,
         access: clamp01(weights.recurrence),
         fanout: clamp01(weights.sourceDiversity),
-        inboxDecayApplied: isInboxProjectId(input.projectConstraintId),
+        inboxDecayApplied: isInboxScopeId(input.scopeConstraintId),
         recency,
         successPrior: clamp01(weights.confidence * 0.5 + weights.durability * 0.3 + weights.validationCount * 0.2),
         total: 0,
-        explain: buildScoreExplain(input.projectConstraintId, inboxDecayMultiplier, codenameBoost, codenameUseCount),
+        explain: buildScoreExplain(input.scopeConstraintId, inboxDecayMultiplier, codenameBoost, codenameUseCount),
     };
     score.total = clamp01(
         score.recency * input.scoreWeights.recency +
@@ -3508,12 +3577,19 @@ function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWr
             score.fanout * input.scoreWeights.fanout +
             codenameBoost,
     );
+    const ownerKey = continuityOwnerKey(input.message, input.context, input.codenameId);
+    const scopeId = input.context.activeScope?.id;
+    const legacyProjectId = scopeId ?? ownerKey;
     const atom: MemoryAtom = {
         id: score.atomId,
         episodeIds: [input.episodeId],
+        ownerKey,
+        scopeId,
+        auditUserId: input.message.user.id,
+        auditChannelId: input.message.route.channel,
         userId: input.message.user.id,
         channelId: input.message.route.channel,
-        projectId: input.projectConstraintId,
+        projectId: legacyProjectId,
         role: ModelRole.Assistant,
         task: input.action.target,
         context: input.action.reason ?? input.action.target,
@@ -3543,9 +3619,9 @@ function visibleAtomToMemoryResult(entry: VisibleAtomEntry, layer: MemoryLayer):
             id: entry.atom.id,
             kind: MemoryKind.Summary,
             content: compactText([entry.atom.task, entry.atom.action, entry.atom.outcome].filter(Boolean).join(" | "), 640),
-            scope: entry.atom.projectId,
-            subjectId: entry.atom.userId,
-            channel: entry.atom.channelId,
+            scope: entry.atom.scopeId ?? entry.atom.projectId ?? entry.atom.ownerKey ?? entry.atom.id,
+            subjectId: entry.atom.auditUserId ?? entry.atom.userId,
+            channel: entry.atom.auditChannelId ?? entry.atom.channelId,
             importance: entry.score.total,
             confidence: entry.atom.confidence,
             createdAt: entry.atom.createdAt,
@@ -3562,18 +3638,18 @@ function visibleAtomToMemoryResult(entry: VisibleAtomEntry, layer: MemoryLayer):
 function rankVisibleAtom(
     entry: VisibleAtomEntry,
     queryEmbedding: number[],
-    activeInboxProjectId?: string | null,
+    activeCodenameOwnerKey?: string | null,
     codenameBoost?: number,
 ): number {
     const similarity =
         queryEmbedding.length > 0 && entry.atom.embedding.length === queryEmbedding.length
             ? Math.max(0, cosine(queryEmbedding, entry.atom.embedding))
             : 0;
-    const inboxBoost =
-        activeInboxProjectId && entry.atom.projectId === activeInboxProjectId
+    const codenameBoostScore =
+        activeCodenameOwnerKey && (entry.atom.ownerKey ?? entry.atom.scopeId ?? entry.atom.projectId) === activeCodenameOwnerKey
             ? Math.max(0, codenameBoost ?? 0)
             : 0;
-    return entry.score.total * 0.75 + similarity * 0.25 + inboxBoost;
+    return entry.score.total * 0.75 + similarity * 0.25 + codenameBoostScore;
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -3598,8 +3674,8 @@ function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string
     return `episode:${hasher.digest("hex").slice(0, 24)}`;
 }
 
-function focusKeyForMessage(message: GatewayMessage): string {
-    return `${message.user.id}:${message.route.channel}`;
+function focusKeyForMessage(message: GatewayMessage, context?: RuntimeContext): string {
+    return continuityOwnerKey(message, context);
 }
 
 function resolveWorkingMemoryConfig(config: FlyflorConfig): WorkingMemoryConfig {
@@ -3618,17 +3694,6 @@ function resolveWorkingMemoryConfig(config: FlyflorConfig): WorkingMemoryConfig 
             walFile: "working.wal.jsonl",
         },
     };
-}
-
-/**
- * Project id 派生：来自 (channel, chatId, user) 的稳定 hash，便于多次显式触发命中同一目录（幂等）。
- * 不依赖 GUID，避免每轮重新 scaffold 一个新目录。
- */
-function deriveProjectId(message: GatewayMessage): string {
-    const seed = `${message.route.channel}:${message.route.chatId}:${message.user.id}`;
-    const hasher = new Bun.CryptoHasher("sha256");
-    hasher.update(seed);
-    return hasher.digest("hex").slice(0, 12);
 }
 
 function deriveProjectTitle(message: GatewayMessage): string {

@@ -9,8 +9,8 @@ import { SQLiteMemoryStore, type PendingSkillOffer } from "../src/cognitive/hipp
 import {
     detectExplicitSkillIntent,
     detectSkillCandidate,
-    ProjectTriggerKind,
-} from "../src/cognitive/hippocampus/project/index.ts";
+    ScopeTriggerKind,
+} from "../src/cognitive/hippocampus/scope/index.ts";
 import type { EpisodeRecord } from "../src/cognitive/hippocampus/memory/working/index.ts";
 import { MemorySourceKind } from "../src/protocol/contracts/index.ts";
 import type { ModelClient, ModelMessage, RuntimeEvent } from "../src/protocol/contracts/index.ts";
@@ -43,7 +43,7 @@ class StubModel implements ModelClient {
 function fakeEpisode(id: string, importance: number, sourceKind: string): EpisodeRecord {
     return {
         episodeId: id,
-        userId: "u",
+        ownerKey: "scope:u",
         text: "[user] do thing\n[assistant] done",
         concepts: [],
         embedding: [],
@@ -61,21 +61,21 @@ describe("detectSkillCandidate (cluster heuristic)", () => {
             tools: ["fs.read"],
             episodes: [fakeEpisode("e1", 0.9, MemorySourceKind.McpAugmented)],
         });
-        expect(r.kind).toBe(ProjectTriggerKind.None);
+        expect(r.kind).toBe(ScopeTriggerKind.None);
         expect(r.rationale).toBe("support-too-low");
     });
 
     test("returns None when mean importance below confidence threshold", () => {
         const eps = Array.from({ length: 5 }, (_, i) => fakeEpisode(`e${i}`, 0.4, MemorySourceKind.McpAugmented));
         const r = detectSkillCandidate({ tools: ["fs.read"], episodes: eps });
-        expect(r.kind).toBe(ProjectTriggerKind.None);
+        expect(r.kind).toBe(ScopeTriggerKind.None);
         expect(r.rationale).toBe("confidence-too-low");
     });
 
     test("returns SkillCandidate when both thresholds met", () => {
         const eps = Array.from({ length: 5 }, (_, i) => fakeEpisode(`e${i}`, 0.85, MemorySourceKind.McpAugmented));
         const r = detectSkillCandidate({ tools: ["fs.read", "fs.write"], episodes: eps });
-        expect(r.kind).toBe(ProjectTriggerKind.SkillCandidate);
+        expect(r.kind).toBe(ScopeTriggerKind.SkillCandidate);
         expect(r.relatedIds).toHaveLength(5);
         expect(r.score).toBeGreaterThan(0);
     });
@@ -83,14 +83,14 @@ describe("detectSkillCandidate (cluster heuristic)", () => {
     test("requires MCP-augmented evidence", () => {
         const eps = Array.from({ length: 6 }, (_, i) => fakeEpisode(`e${i}`, 0.9, MemorySourceKind.UserTurn));
         const r = detectSkillCandidate({ tools: ["fs.read"], episodes: eps });
-        expect(r.kind).toBe(ProjectTriggerKind.None);
+        expect(r.kind).toBe(ScopeTriggerKind.None);
         expect(r.rationale).toBe("mcp-evidence-too-thin");
     });
 });
 
 describe("detectExplicitSkillIntent", () => {
     test("fires only when skillPromotionIntent >= threshold", () => {
-        expect(detectExplicitSkillIntent([]).kind).toBe(ProjectTriggerKind.None);
+        expect(detectExplicitSkillIntent([]).kind).toBe(ScopeTriggerKind.None);
         expect(
             detectExplicitSkillIntent([
                 {
@@ -100,7 +100,7 @@ describe("detectExplicitSkillIntent", () => {
                     signals: { skillPromotionIntent: 0.5 },
                 },
             ]).kind,
-        ).toBe(ProjectTriggerKind.None);
+        ).toBe(ScopeTriggerKind.None);
         const r = detectExplicitSkillIntent([
             {
                 action: "add",
@@ -109,7 +109,7 @@ describe("detectExplicitSkillIntent", () => {
                 signals: { skillPromotionIntent: 0.9 },
             },
         ]);
-        expect(r.kind).toBe(ProjectTriggerKind.ExplicitSkill);
+        expect(r.kind).toBe(ScopeTriggerKind.ExplicitSkill);
         expect(r.score).toBeCloseTo(0.9, 5);
     });
 });
@@ -119,7 +119,7 @@ describe("pending_skill_offer DAO + consume lifecycle", () => {
         const config = await testConfig();
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         const offer: PendingSkillOffer = {
-            userId: "u1",
+            ownerKey: "scope:u1",
             skillId: "skill-u1-x",
             name: "fs-pipeline",
             description: "Recurring read+write workflow.",
@@ -132,13 +132,13 @@ describe("pending_skill_offer DAO + consume lifecycle", () => {
             ttlTurns: 2,
         };
         await store.upsertSkillOffer(offer);
-        const got = await store.getSkillOffer("u1");
+        const got = await store.getSkillOffer("scope:u1");
         expect(got?.name).toBe("fs-pipeline");
         expect(got?.mcpTools).toEqual(["fs.read", "fs.write"]);
 
-        expect(await store.decrementSkillOfferTtl("u1")).toBe(1);
-        expect(await store.decrementSkillOfferTtl("u1")).toBe(0);
-        expect(await store.getSkillOffer("u1")).toBeUndefined();
+        expect(await store.decrementSkillOfferTtl("scope:u1")).toBe(1);
+        expect(await store.decrementSkillOfferTtl("scope:u1")).toBe(0);
+        expect(await store.getSkillOffer("scope:u1")).toBeUndefined();
     });
 
     test("consumeSkillOffer materialises SKILL.md + emits installed event", async () => {
@@ -147,7 +147,7 @@ describe("pending_skill_offer DAO + consume lifecycle", () => {
         const memory = new MemoryModule(config, sink, new StubModel());
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         await store.upsertSkillOffer({
-            userId: "u2",
+            ownerKey: "scope:u2",
             skillId: "skill-u2-y",
             name: "search-summarise",
             description: "Web search + summarise pipeline.",
@@ -160,9 +160,9 @@ describe("pending_skill_offer DAO + consume lifecycle", () => {
             ttlTurns: 3,
         });
 
-        const ok = await memory.consumeSkillOffer("u2");
+        const ok = await memory.consumeSkillOffer("scope:u2");
         expect(ok).toBe(true);
-        expect(await store.getSkillOffer("u2")).toBeUndefined();
+        expect(await store.getSkillOffer("scope:u2")).toBeUndefined();
 
         const dest = join(config.paths.skillDir, "search-summarise");
         const skillStat = await stat(join(dest, "SKILL.md"));
@@ -187,7 +187,7 @@ describe("pending_skill_offer DAO + consume lifecycle", () => {
         const memory = new MemoryModule(config, sink, new StubModel());
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
         await store.upsertSkillOffer({
-            userId: "u3",
+            ownerKey: "scope:u3",
             skillId: "skill-u3-z",
             name: "noop",
             description: "noop",
@@ -199,9 +199,9 @@ describe("pending_skill_offer DAO + consume lifecycle", () => {
             proposedAt: new Date().toISOString(),
             ttlTurns: 1,
         });
-        await memory.noteSkillOfferTurn("u3", false);
+        await memory.noteSkillOfferTurn("scope:u3", false);
         expect(sink.events.find((e) => e.type === RuntimeEventType.MemorySkillOfferExpired)).toBeDefined();
-        expect(await store.getSkillOffer("u3")).toBeUndefined();
+        expect(await store.getSkillOffer("scope:u3")).toBeUndefined();
     });
 });
 

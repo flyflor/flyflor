@@ -33,8 +33,8 @@ import {
     detectClusterCandidate,
     detectExplicitIntent,
     detectSkillPromotion,
-    ProjectTriggerKind,
-} from "../src/cognitive/hippocampus/project/index.ts";
+    ScopeTriggerKind,
+} from "../src/cognitive/hippocampus/scope/index.ts";
 import { normalizeReflectionRaw } from "../src/agent/runtime/index.ts";
 import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/route.ts";
 import {
@@ -484,12 +484,12 @@ describe("chaos: project triggers", () => {
                     target: "memory",
                     content: chaosString(r),
                     signals: {
-                        projectIntent: chaosNumber(r),
-                        eventIntent: chaosNumber(r),
+                        scopeIntent: chaosNumber(r),
+                        scopeEventIntent: chaosNumber(r),
                     },
                 },
             ]);
-            expect(Object.values(ProjectTriggerKind)).toContain(out.kind);
+            expect(Object.values(ScopeTriggerKind)).toContain(out.kind);
             expect(out.score).toBeGreaterThanOrEqual(0);
             expect(out.score).toBeLessThanOrEqual(1);
         }
@@ -501,7 +501,7 @@ describe("chaos: project triggers", () => {
             const n = Math.floor(r() * 12);
             const eps: EpisodeRecord[] = Array.from({ length: n }, (_, i) => ({
                 episodeId: `ep${i}`,
-                userId: "u",
+                ownerKey: "scope:u",
                 text: chaosString(r),
                 concepts: [chaosString(r)],
                 embedding: chaosVector(r, 4),
@@ -512,7 +512,7 @@ describe("chaos: project triggers", () => {
                 metadata: {},
             }));
             const out = detectClusterCandidate({ concepts: ["x"], episodes: eps });
-            expect(Object.values(ProjectTriggerKind)).toContain(out.kind);
+            expect(Object.values(ScopeTriggerKind)).toContain(out.kind);
             expect(out.score).toBeGreaterThanOrEqual(0);
             expect(out.score).toBeLessThanOrEqual(1);
         }
@@ -526,7 +526,7 @@ describe("chaos: project triggers", () => {
                 support: chaosNumber(r),
                 confidence: chaosNumber(r),
             });
-            expect(Object.values(ProjectTriggerKind)).toContain(out.kind);
+            expect(Object.values(ScopeTriggerKind)).toContain(out.kind);
             expect(out.score).toBeGreaterThanOrEqual(0);
             expect(out.score).toBeLessThanOrEqual(1);
         }
@@ -670,6 +670,12 @@ describe("chaos: control envelope and payload parsing", () => {
             chatId: "chat-1",
             user: { id: "u-1", displayName: "User" },
             context: {
+                activeScope: {
+                    id: "scope-1",
+                    projectDir: "/tmp/scope",
+                    projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                    title: "Scope",
+                },
                 activeProject: {
                     id: "project-1",
                     projectDir: "/tmp/project",
@@ -683,6 +689,7 @@ describe("chaos: control envelope and payload parsing", () => {
         });
 
         expect(payload.text).toBe("hello");
+        expect(payload.context?.activeScope?.projectDir).toBe("/tmp/scope");
         expect(payload.context?.activeProject?.projectDir).toBe("/tmp/project");
         expect(payload.context?.skillNames).toEqual(["review", "plan"]);
         expect(payload.metadata).toEqual({ ok: true });

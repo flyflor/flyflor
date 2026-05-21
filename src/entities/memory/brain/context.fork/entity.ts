@@ -13,7 +13,9 @@ export interface BrainContextForkRow {
     summary: string;
     title: string;
     updated_at: string;
-    user_id: string;
+    owner_key?: string | null;
+    source_key?: string | null;
+    legacy_source_key?: string | null;
 }
 
 /**
@@ -23,7 +25,8 @@ export class BrainContextForkModel {
     public toRecord(row: BrainContextForkRow): ContextForkRecord {
         return {
             id: row.id,
-            userId: row.user_id,
+            ownerKey: row.owner_key ?? row.legacy_source_key ?? row.id,
+            sourceKey: row.source_key ?? row.legacy_source_key ?? undefined,
             parentId: row.parent_id ?? undefined,
             title: row.title,
             summary: row.summary,

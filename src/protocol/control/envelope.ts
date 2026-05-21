@@ -10,7 +10,7 @@ import {
     GatewayControlMessageType,
     GatewayControlProtocol,
     type GatewayChannelCapabilities,
-    type SceneRecord,
+    type ReplayRecord,
     type TaskPlanRecord,
     type TaskPlanStepRecord,
     type RuntimeEventClass,
@@ -89,7 +89,7 @@ export interface GatewayControlHistoryTurnSnapshot {
     assistantText: string;
     eventId: string;
     contextForks?: ContextForkRecord[];
-    scenes?: SceneRecord[];
+    replays?: ReplayRecord[];
     taskPlans?: TaskPlanRecord[];
     ts: number;
     userText: string;
@@ -199,19 +199,19 @@ export interface GatewayControlContextForkSnapshot {
     title: ContextForkRecord["title"];
 }
 
-export interface GatewayControlSceneSnapshot {
-    blackboardTurnId?: SceneRecord["blackboardTurnId"];
-    contextForkId?: SceneRecord["contextForkId"];
+export interface GatewayControlReplaySnapshot {
+    blackboardTurnId?: ReplayRecord["blackboardTurnId"];
+    contextForkId?: ReplayRecord["contextForkId"];
     id: string;
-    kind: SceneRecord["kind"];
-    summary: SceneRecord["summary"];
-    taskPlanId?: SceneRecord["taskPlanId"];
-    title: SceneRecord["title"];
+    kind: ReplayRecord["kind"];
+    summary: ReplayRecord["summary"];
+    taskPlanId?: ReplayRecord["taskPlanId"];
+    title: ReplayRecord["title"];
 }
 
 export interface GatewayControlPlanningMetadataSnapshot {
     contextForks: GatewayControlContextForkSnapshot[];
-    scenes: GatewayControlSceneSnapshot[];
+    replays: GatewayControlReplaySnapshot[];
     taskPlans: GatewayControlTodoTaskSnapshot[];
 }
 
@@ -311,6 +311,7 @@ export interface GatewayControlMessageInput {
     chatId?: string;
     chatType?: GatewayMessage["route"]["chatType"];
     context?: {
+        activeScope?: GatewayControlProjectScope;
         activeProject?: GatewayControlProjectScope;
         contextForkId?: string;
         skillNames?: string[];
@@ -582,6 +583,7 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
             : undefined,
         context: isRecord(payload.context)
             ? {
+                  activeScope: readGatewayControlProjectScope(payload.context.activeScope),
                   activeProject: readGatewayControlProjectScope(payload.context.activeProject),
                   contextForkId: readString(payload.context.contextForkId),
                   skillNames: Array.isArray(payload.context.skillNames)

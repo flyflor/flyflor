@@ -64,7 +64,7 @@ function buildState(opts: CliOpts): {
 
     const drift: GemRecord[] = Array.from({ length: driftN }, (_, i) => ({
         id: `s${i}`,
-        userId: "u1",
+        ownerKey: "u1",
         symbols: [`sym${i % 7}`],
         summary: `skill ${i}`,
         embedding: [],
@@ -78,7 +78,7 @@ function buildState(opts: CliOpts): {
 
     const tops: MemoryNodeRecord[] = Array.from({ length: recallN }, (_, i) => ({
         id: `m${i}`,
-        userId: "u1",
+        ownerKey: "u1",
         symbols: [`tag${i % 5}`],
         summary: `memory ${i}`,
         embedding: [],

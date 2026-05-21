@@ -44,15 +44,15 @@ export interface LocalWorkingMemoryHealthSnapshot {
 
 type WalRecord =
     | { op: typeof WorkingMemoryWalOperation.WriteEpisode; episode: StoredEpisode }
-    | { op: typeof WorkingMemoryWalOperation.DropEpisode; userId: string; episodeId: string }
-    | { op: typeof WorkingMemoryWalOperation.ReinforceEpisode; userId: string; episodeId: string; expiresAt: number; reviewAt: number }
+    | { op: typeof WorkingMemoryWalOperation.DropEpisode; ownerKey: string; episodeId: string }
+    | { op: typeof WorkingMemoryWalOperation.ReinforceEpisode; ownerKey: string; episodeId: string; expiresAt: number; reviewAt: number }
     | {
           op: typeof WorkingMemoryWalOperation.RewriteEpisode;
-          userId: string;
+          ownerKey: string;
           episodeId: string;
           patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> };
       }
-    | { op: typeof WorkingMemoryWalOperation.TouchConcepts; userId: string; concepts: string[]; touchedAt: number };
+    | { op: typeof WorkingMemoryWalOperation.TouchConcepts; ownerKey: string; concepts: string[]; touchedAt: number };
 
 interface WorkingMemoryState {
     activation: Map<string, Map<string, number>>;
@@ -158,13 +158,13 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         const now = Date.now();
         const ttl = Math.max(1, Math.floor(input.ttlSeconds ?? this.config.defaultTtlSeconds));
         const reviewAt = Math.floor(now / 1000) + Math.floor(ttl * 0.8);
-        const forcedForgotten = await this.enforceUserCapacity(input.userId);
+        const forcedForgotten = await this.enforceUserCapacity(input.ownerKey);
         const episode: StoredEpisode = {
             expiresAt: now + ttl * 1000,
             reviewAt,
             record: {
                 episodeId: input.episodeId,
-                userId: input.userId,
+                ownerKey: input.ownerKey,
                 text: input.text,
                 concepts: input.concepts,
                 embedding: input.embedding ?? [],
@@ -179,36 +179,36 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         return { episodeId: input.episodeId, ttlSeconds: ttl, reviewAt, forcedForgotten };
     }
 
-    public async readEpisode(userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
+    public async readEpisode(ownerKey: string, episodeId: string): Promise<EpisodeRecord | undefined> {
         await this.connect();
         this.pruneExpired(Date.now());
-        return this.episodes.get(this.key(userId, episodeId))?.record;
+        return this.episodes.get(this.key(ownerKey, episodeId))?.record;
     }
 
-    public async readContextRing(userId: string, limit: number): Promise<string[]> {
+    public async readContextRing(ownerKey: string, limit: number): Promise<string[]> {
         await this.connect();
         this.pruneExpired(Date.now());
-        return (this.context.get(userId) ?? []).slice(0, Math.max(0, limit));
+        return (this.context.get(ownerKey) ?? []).slice(0, Math.max(0, limit));
     }
 
-    public async listConsolidationCandidates(userId: string, until: number, limit: number): Promise<string[]> {
+    public async listConsolidationCandidates(ownerKey: string, until: number, limit: number): Promise<string[]> {
         await this.connect();
         this.pruneExpired(Date.now());
         return [...this.episodes.values()]
-            .filter((episode) => episode.record.userId === userId && episode.reviewAt <= until)
+            .filter((episode) => episode.record.ownerKey === ownerKey && episode.reviewAt <= until)
             .sort((a, b) => a.reviewAt - b.reviewAt)
             .slice(0, Math.max(0, limit))
             .map((episode) => episode.record.episodeId);
     }
 
-    public async dropEpisode(userId: string, episodeId: string): Promise<void> {
+    public async dropEpisode(ownerKey: string, episodeId: string): Promise<void> {
         await this.ensureWritable();
-        await this.applyDurably({ op: WorkingMemoryWalOperation.DropEpisode, userId, episodeId });
+        await this.applyDurably({ op: WorkingMemoryWalOperation.DropEpisode, ownerKey, episodeId });
     }
 
-    public async reinforceEpisode(userId: string, episodeId: string, ttlSeconds: number): Promise<boolean> {
+    public async reinforceEpisode(ownerKey: string, episodeId: string, ttlSeconds: number): Promise<boolean> {
         await this.connect();
-        const key = this.key(userId, episodeId);
+        const key = this.key(ownerKey, episodeId);
         if (!this.episodes.has(key)) {
             return false;
         }
@@ -216,7 +216,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         const now = Date.now();
         await this.applyDurably({
             op: WorkingMemoryWalOperation.ReinforceEpisode,
-            userId,
+            ownerKey,
             episodeId,
             expiresAt: now + ttl * 1000,
             reviewAt: Math.floor(now / 1000) + Math.floor(ttl * 0.8),
@@ -225,53 +225,53 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     }
 
     public async rewriteEpisode(
-        userId: string,
+        ownerKey: string,
         episodeId: string,
         patch: { text?: string; concepts?: string[]; importance?: number; metadata?: Record<string, unknown> },
     ): Promise<boolean> {
         await this.connect();
-        if (!this.episodes.has(this.key(userId, episodeId))) {
+        if (!this.episodes.has(this.key(ownerKey, episodeId))) {
             return false;
         }
-        await this.applyDurably({ op: WorkingMemoryWalOperation.RewriteEpisode, userId, episodeId, patch });
+        await this.applyDurably({ op: WorkingMemoryWalOperation.RewriteEpisode, ownerKey, episodeId, patch });
         return true;
     }
 
-    public async touchConcepts(userId: string, concepts: string[]): Promise<void> {
+    public async touchConcepts(ownerKey: string, concepts: string[]): Promise<void> {
         if (concepts.length === 0) {
             return;
         }
         await this.ensureWritable();
         await this.applyDurably({
             op: WorkingMemoryWalOperation.TouchConcepts,
-            userId,
+            ownerKey,
             concepts,
             touchedAt: Date.now(),
         });
     }
 
-    public async hotConcepts(userId: string, limit: number): Promise<string[]> {
+    public async hotConcepts(ownerKey: string, limit: number): Promise<string[]> {
         await this.connect();
-        return [...(this.activation.get(userId)?.entries() ?? [])]
+        return [...(this.activation.get(ownerKey)?.entries() ?? [])]
             .sort((a, b) => b[1] - a[1])
             .slice(0, Math.max(0, limit))
             .map(([concept]) => concept);
     }
 
-    private async enforceUserCapacity(userId: string): Promise<string[]> {
-        const userEpisodes = [...this.episodes.values()]
-            .filter((episode) => episode.record.userId === userId)
+    private async enforceUserCapacity(ownerKey: string): Promise<string[]> {
+        const ownerEpisodes = [...this.episodes.values()]
+            .filter((episode) => episode.record.ownerKey === ownerKey)
             .sort((a, b) => a.reviewAt - b.reviewAt);
-        const overflow = userEpisodes.length - this.config.maxEpisodesPerUser + 1;
+        const overflow = ownerEpisodes.length - this.config.maxEpisodesPerUser + 1;
         if (overflow <= 0) {
             return [];
         }
         const dropped: string[] = [];
-        for (const episode of userEpisodes.slice(0, overflow)) {
+        for (const episode of ownerEpisodes.slice(0, overflow)) {
             dropped.push(episode.record.episodeId);
             await this.applyDurably({
                 op: WorkingMemoryWalOperation.DropEpisode,
-                userId,
+                ownerKey,
                 episodeId: episode.record.episodeId,
             });
         }
@@ -310,18 +310,18 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     private applyWalRecordToState(state: WorkingMemoryState, record: WalRecord): void {
         if (record.op === WorkingMemoryWalOperation.WriteEpisode) {
             const episode = record.episode;
-            const userId = episode.record.userId;
-            state.episodes.set(this.key(userId, episode.record.episodeId), episode);
-            const ring = [episode.record.episodeId, ...(state.context.get(userId) ?? []).filter((id) => id !== episode.record.episodeId)];
-            state.context.set(userId, ring.slice(0, this.config.contextRingSize));
+            const ownerKey = episode.record.ownerKey;
+            state.episodes.set(this.key(ownerKey, episode.record.episodeId), episode);
+            const ring = [episode.record.episodeId, ...(state.context.get(ownerKey) ?? []).filter((id) => id !== episode.record.episodeId)];
+            state.context.set(ownerKey, ring.slice(0, this.config.contextRingSize));
             return;
         }
         if (record.op === WorkingMemoryWalOperation.DropEpisode) {
-            this.dropFromMemory(state, record.userId, record.episodeId);
+            this.dropFromMemory(state, record.ownerKey, record.episodeId);
             return;
         }
         if (record.op === WorkingMemoryWalOperation.ReinforceEpisode) {
-            const episode = state.episodes.get(this.key(record.userId, record.episodeId));
+            const episode = state.episodes.get(this.key(record.ownerKey, record.episodeId));
             if (episode) {
                 episode.expiresAt = record.expiresAt;
                 episode.reviewAt = record.reviewAt;
@@ -329,7 +329,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             return;
         }
         if (record.op === WorkingMemoryWalOperation.RewriteEpisode) {
-            const episode = state.episodes.get(this.key(record.userId, record.episodeId));
+            const episode = state.episodes.get(this.key(record.ownerKey, record.episodeId));
             if (episode) {
                 episode.record = {
                     ...episode.record,
@@ -340,11 +340,11 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             return;
         }
         if (record.op === WorkingMemoryWalOperation.TouchConcepts) {
-            const bucket = state.activation.get(record.userId) ?? new Map<string, number>();
+            const bucket = state.activation.get(record.ownerKey) ?? new Map<string, number>();
             for (const concept of record.concepts) {
                 bucket.set(concept, record.touchedAt);
             }
-            state.activation.set(record.userId, bucket);
+            state.activation.set(record.ownerKey, bucket);
         }
     }
 
@@ -371,16 +371,16 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
     private pruneExpiredState(state: WorkingMemoryState, now: number): void {
         for (const episode of [...state.episodes.values()]) {
             if (episode.expiresAt <= now) {
-                this.dropFromMemory(state, episode.record.userId, episode.record.episodeId);
+                this.dropFromMemory(state, episode.record.ownerKey, episode.record.episodeId);
             }
         }
     }
 
-    private dropFromMemory(state: WorkingMemoryState, userId: string, episodeId: string): void {
-        state.episodes.delete(this.key(userId, episodeId));
-        const ring = state.context.get(userId);
+    private dropFromMemory(state: WorkingMemoryState, ownerKey: string, episodeId: string): void {
+        state.episodes.delete(this.key(ownerKey, episodeId));
+        const ring = state.context.get(ownerKey);
         if (ring) {
-            state.context.set(userId, ring.filter((id) => id !== episodeId));
+            state.context.set(ownerKey, ring.filter((id) => id !== episodeId));
         }
     }
 
@@ -499,13 +499,13 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
 
     private applySnapshotPayload(state: WorkingMemoryState, payload: SnapshotPayload): void {
         for (const episode of payload.episodes) {
-            state.episodes.set(this.key(episode.record.userId, episode.record.episodeId), episode);
+            state.episodes.set(this.key(episode.record.ownerKey, episode.record.episodeId), episode);
         }
-        for (const [userId, ids] of payload.context) {
-            state.context.set(userId, ids);
+        for (const [ownerKey, ids] of payload.context) {
+            state.context.set(ownerKey, ids);
         }
-        for (const [userId, concepts] of payload.activation) {
-            state.activation.set(userId, new Map(concepts));
+        for (const [ownerKey, concepts] of payload.activation) {
+            state.activation.set(ownerKey, new Map(concepts));
         }
     }
 
@@ -521,7 +521,7 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
             schemaVersion: 1,
             episodes: [...this.episodes.values()],
             context: [...this.context.entries()],
-            activation: [...this.activation.entries()].map(([userId, concepts]) => [userId, [...concepts.entries()]]),
+            activation: [...this.activation.entries()].map(([ownerKey, concepts]) => [ownerKey, [...concepts.entries()]]),
         };
     }
 
@@ -532,11 +532,11 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         for (const [key, episode] of state.episodes.entries()) {
             this.episodes.set(key, episode);
         }
-        for (const [userId, ring] of state.context.entries()) {
-            this.context.set(userId, ring);
+        for (const [ownerKey, ring] of state.context.entries()) {
+            this.context.set(ownerKey, ring);
         }
-        for (const [userId, concepts] of state.activation.entries()) {
-            this.activation.set(userId, new Map(concepts));
+        for (const [ownerKey, concepts] of state.activation.entries()) {
+            this.activation.set(ownerKey, new Map(concepts));
         }
     }
 
@@ -578,8 +578,8 @@ export class LocalWorkingMemoryStore extends MemoryComponent implements WorkingM
         await appendFile(this.walPath, `${JSON.stringify(record)}\n`, "utf8");
     }
 
-    private key(userId: string, episodeId: string): string {
-        return `${userId}\u0000${episodeId}`;
+    private key(ownerKey: string, episodeId: string): string {
+        return `${ownerKey}\u0000${episodeId}`;
     }
 
     private createStorageError(code: string, message: string, cause?: unknown): Error & { code: string } {

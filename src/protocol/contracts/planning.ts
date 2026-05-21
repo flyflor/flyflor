@@ -1,8 +1,8 @@
 /**
- * Task plan / context fork / scene record protocol.
+ * Task plan / context fork / replay record protocol.
  *
  * These records are intentionally summary-first: they capture progress,
- * boundaries, and replayable scene metadata without storing raw chain-of-thought.
+ * boundaries, and replay metadata without storing raw chain-of-thought.
  * Runtime, brain.db, and TUI history can share these shapes directly.
  */
 
@@ -16,13 +16,13 @@ export const TaskPlanStatus = {
 
 export type TaskPlanStatus = (typeof TaskPlanStatus)[keyof typeof TaskPlanStatus];
 
-export const SceneRecordKind = {
+export const ReplayRecordKind = {
     Blackboard: "blackboard",
     DeepThink: "deep-think",
     Reflection: "reflection",
 } as const;
 
-export type SceneRecordKind = (typeof SceneRecordKind)[keyof typeof SceneRecordKind];
+export type ReplayRecordKind = (typeof ReplayRecordKind)[keyof typeof ReplayRecordKind];
 
 export interface TaskPlanStepRecord {
     id: string;
@@ -35,7 +35,10 @@ export interface TaskPlanStepRecord {
 
 export interface TaskPlanRecord {
     id: string;
-    userId: string;
+    /** Core owner key: scope:<id>, fork:<id>, codename:<id>, turn:<id>, or ledger:<id>. */
+    ownerKey: string;
+    /** Optional source provenance label; never used as continuity owner. */
+    sourceKey?: string;
     title: string;
     summary: string;
     status: TaskPlanStatus;
@@ -48,12 +51,17 @@ export interface TaskPlanRecord {
     sourceEventId?: string;
     sourceAskId?: string;
     sourceBlackboardTurnId?: string;
-    sourceSceneId?: string;
+    sourceReplayId?: string;
 }
 
 export interface ContextForkRecord {
     id: string;
-    userId: string;
+    /** Core owner key for explicit fork records. */
+    ownerKey: string;
+    /** Explicit scope this fork branches from, when available. */
+    scopeId?: string;
+    /** Optional source provenance label; never used as continuity owner. */
+    sourceKey?: string;
     parentId?: string;
     title: string;
     summary: string;
@@ -67,10 +75,13 @@ export interface ContextForkRecord {
     sourceBlackboardTurnId?: string;
 }
 
-export interface SceneRecord {
+export interface ReplayRecord {
     id: string;
-    userId: string;
-    kind: SceneRecordKind;
+    /** Core owner key for replay/query records. */
+    ownerKey: string;
+    /** Optional source provenance label; never used as continuity owner. */
+    sourceKey?: string;
+    kind: ReplayRecordKind;
     title: string;
     summary: string;
     detail?: string;

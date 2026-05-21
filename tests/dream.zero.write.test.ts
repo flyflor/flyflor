@@ -105,7 +105,7 @@ describe("LF-R6: dream zero-write hard rule", () => {
         expect(sink.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryDreamFailed);
     });
 
-    test("empty userId → no graph methods invoked", async () => {
+    test("empty ownerKey → no graph methods invoked", async () => {
         const graph = new ZeroSignalGraph();
         const model = new CountingModel();
         const w = new DreamWorkerImpl(graph as unknown as MemoryGraphStore, model, new CapturingSink());

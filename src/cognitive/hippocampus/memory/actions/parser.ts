@@ -44,10 +44,10 @@ export interface MemoryActionSignals {
     relevance?: number;
     sourceDiversity?: number;
     validationCount?: number;
-    /** 显式项目固化意图（0..1）。≥ 0.7 直接触发 project-init（见 src/cognitive/hippocampus/project）。 */
-    projectIntent?: number;
+    /** 显式 scope 固化意图（0..1）。≥ 0.7 直接触发 scope scaffold。 */
+    scopeIntent?: number;
     /** 显式事件记录意图（0..1）。≥ 0.7 触发 event-record。 */
-    eventIntent?: number;
+    scopeEventIntent?: number;
     /** 显式技能固化意图（0..1）。≥ 0.7 直接把当前 pending skill offer 升格成 SKILL.md。 */
     skillPromotionIntent?: number;
 }
@@ -80,8 +80,8 @@ export function targetFileForMemoryAction(action: MemoryAction): MarkdownMemoryF
     if (action.target === MemoryActionTarget.User) {
         return MarkdownMemoryFile.User;
     }
-    if (action.target === MemoryActionTarget.Soul) {
-        return MarkdownMemoryFile.Soul;
+    if (action.target === MemoryActionTarget.Identity) {
+        return MarkdownMemoryFile.Identity;
     }
     if (action.target === MemoryActionTarget.Self) {
         return MarkdownMemoryFile.Self;
@@ -96,7 +96,7 @@ export function kindForMemoryAction(action: MemoryAction): MemoryKind {
     if (action.target === MemoryActionTarget.User) {
         return MemoryKind.Profile;
     }
-    if (action.target === MemoryActionTarget.Soul) {
+    if (action.target === MemoryActionTarget.Identity) {
         return MemoryKind.Rule;
     }
     return MemoryKind.Fact;
@@ -124,7 +124,7 @@ function isMemoryAction(value: unknown): value is MemoryAction {
         value.action === "add" &&
         (value.target === MemoryActionTarget.Memory ||
             value.target === MemoryActionTarget.Self ||
-            value.target === MemoryActionTarget.Soul ||
+            value.target === MemoryActionTarget.Identity ||
             value.target === MemoryActionTarget.User) &&
         typeof value.content === "string"
     );
@@ -190,8 +190,8 @@ function normalizeSignals(value: unknown): MemoryActionSignals {
         durability: clamp01(numberValue(value.durability)),
         recurrence: clamp01(numberValue(value.recurrence)),
         relevance: clamp01(numberValue(value.relevance)),
-        projectIntent: clamp01(numberValue(value.projectIntent)),
-        eventIntent: clamp01(numberValue(value.eventIntent)),
+        scopeIntent: clamp01(numberValue(value.scopeIntent)),
+        scopeEventIntent: clamp01(numberValue(value.scopeEventIntent)),
         skillPromotionIntent: clamp01(numberValue(value.skillPromotionIntent)),
         sourceDiversity: clamp01(numberValue(value.sourceDiversity)),
         validationCount: clamp01(numberValue(value.validationCount)),

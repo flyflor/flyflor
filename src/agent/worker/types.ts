@@ -53,7 +53,7 @@ export interface WorkerRunContext {
     workerName: string;
     runtime: WorkerRuntimeKind;
     requestId?: string;
-    projectConstraintId?: string;
+    scopeConstraintId?: string;
     turnId?: string;
     createdAt: string;
 }
@@ -85,7 +85,7 @@ export interface DynamicWorkerRegisterOptions extends WorkerRegisterOptions {
 
 export interface WorkerRunOptions {
     requestId?: string;
-    projectConstraintId?: string;
+    scopeConstraintId?: string;
     timeoutMs?: number;
     turnId?: string;
 }

@@ -97,6 +97,9 @@ class ReleaseTemplatePackager {
             if (!entry.isFile()) {
                 continue;
             }
+            if (entry.name === "docs") {
+                continue;
+            }
             await copyFile(join(plan.source, entry.name), join(plan.destination, entry.name));
         }
     }

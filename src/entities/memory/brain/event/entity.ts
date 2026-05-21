@@ -4,18 +4,21 @@ import {
 } from "../../../../protocol/contracts/index.ts";
 
 export interface BrainEventRow {
-    channel_id: string | null;
     codename_id: string | null;
     content: string;
     embedding_id: string | null;
     id: string;
     importance: number;
+    owner_key: string;
     parent_id: string | null;
     role: string | null;
+    source_key?: string | null;
+    source_surface?: string | null;
     time_bucket: string;
     ts: number;
     type: string;
-    user_id: string;
+    user_id?: string | null;
+    channel_id?: string | null;
 }
 
 /**
@@ -30,8 +33,9 @@ export class BrainEventModel {
             id: row.id,
             ts: row.ts,
             timeBucket: row.time_bucket,
-            userId: row.user_id,
-            channelId: row.channel_id ?? undefined,
+            ownerKey: row.owner_key ?? row.user_id ?? row.id,
+            sourceKey: row.source_key ?? row.user_id ?? undefined,
+            sourceSurface: row.source_surface ?? row.channel_id ?? undefined,
             codenameId: row.codename_id ?? undefined,
             type: row.type as MemoryEventType,
             role: row.role ? (row.role as MemoryEventRecord["role"]) : undefined,

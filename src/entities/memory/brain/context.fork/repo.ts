@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ContextForkRecord } from "../../../../protocol/contracts/index.ts";
-import { allQuery, getQuery, query, runQuery } from "../../../../components/sql/index.ts";
+import { allQuery, query, runQuery } from "../../../../components/sql/index.ts";
 import { brainContextForkModel, type BrainContextForkRow } from "./entity.ts";
 
 /**
@@ -13,14 +13,15 @@ export class BrainContextForkRepo {
     public constructor(private readonly db: Database) {}
 
     public write(record: ContextForkRecord): ContextForkRecord {
+        const sourceKey = record.sourceKey ?? record.ownerKey;
         runQuery(
             this.db,
             query`INSERT INTO context_forks (
-                id, user_id, parent_id, title, summary, scope_summary, max_context_tokens,
+                id, owner_key, source_key, parent_id, title, summary, scope_summary, max_context_tokens,
                 inherited_event_ids_json, created_at, updated_at, source_event_id,
                 source_ask_id, source_blackboard_turn_id
             ) VALUES (
-                ${record.id}, ${record.userId}, ${record.parentId ?? null},
+                ${record.id}, ${record.ownerKey}, ${sourceKey}, ${record.parentId ?? null},
                 ${record.title}, ${record.summary}, ${record.continuitySummary},
                 ${record.maxContextTokens}, ${JSON.stringify(record.inheritedEventIds)},
                 ${record.createdAt}, ${record.updatedAt}, ${record.sourceEventId ?? null},
@@ -28,6 +29,8 @@ export class BrainContextForkRepo {
             )
             ON CONFLICT(id) DO UPDATE SET
                 parent_id = excluded.parent_id,
+                owner_key = excluded.owner_key,
+                source_key = excluded.source_key,
                 title = excluded.title,
                 summary = excluded.summary,
                 scope_summary = excluded.scope_summary,
@@ -42,7 +45,9 @@ export class BrainContextForkRepo {
     }
 
     public get(id: string): ContextForkRecord | null {
-        const row = getQuery<BrainContextForkRow>(this.db, query`SELECT * FROM context_forks WHERE id = ${id}`);
+        const row = this.db
+            .query<BrainContextForkRow, [string]>(`SELECT ${this.selectProjection()} FROM context_forks WHERE id = ?1`)
+            .get(id);
         return row ? brainContextForkModel.toRecord(row) : null;
     }
 
@@ -50,21 +55,49 @@ export class BrainContextForkRepo {
         limit?: number;
         sourceBlackboardTurnId?: string;
         sourceEventId?: string;
-        userId?: string;
+        ownerKey?: string;
+        /** @deprecated Use ownerKey for cognition. */
+        sourceKey?: string;
     } = {}): ContextForkRecord[] {
         const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
         const sourceBlackboardTurnId = input.sourceBlackboardTurnId ?? null;
         const sourceEventId = input.sourceEventId ?? null;
-        const userId = input.userId ?? null;
-        const rows = allQuery<BrainContextForkRow>(
-            this.db,
-            query`SELECT * FROM context_forks
-                WHERE (${userId} IS NULL OR user_id = ${userId})
-                  AND (${sourceEventId} IS NULL OR source_event_id = ${sourceEventId})
-                  AND (${sourceBlackboardTurnId} IS NULL OR source_blackboard_turn_id = ${sourceBlackboardTurnId})
-                ORDER BY updated_at DESC
-                LIMIT ${limit}`,
-        );
+        const ownerKey = input.ownerKey ?? input.sourceKey ?? null;
+        const rows = this.db
+            .query<BrainContextForkRow, [string | null, string | null, string | null, number]>(
+                `SELECT ${this.selectProjection()} FROM context_forks
+                    WHERE (?1 IS NULL OR owner_key = ?1)
+                      AND (?2 IS NULL OR source_event_id = ?2)
+                      AND (?3 IS NULL OR source_blackboard_turn_id = ?3)
+                    ORDER BY updated_at DESC
+                    LIMIT ?4`,
+            )
+            .all(ownerKey, sourceEventId, sourceBlackboardTurnId, limit);
         return rows.map((row) => brainContextForkModel.toRecord(row));
+    }
+
+    private selectProjection(): string {
+        const legacySourceColumn = this.hasColumn("context_forks", "legacy_source_key") ? "legacy_source_key" : "source_key AS legacy_source_key";
+        return [
+            "created_at",
+            "id",
+            "inherited_event_ids_json",
+            "max_context_tokens",
+            "parent_id",
+            "scope_summary",
+            "source_ask_id",
+            "source_blackboard_turn_id",
+            "source_event_id",
+            "summary",
+            "title",
+            "updated_at",
+            "owner_key",
+            "source_key",
+            legacySourceColumn,
+        ].join(", ");
+    }
+
+    private hasColumn(table: string, column: string): boolean {
+        return this.db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().some((row) => row.name === column);
     }
 }

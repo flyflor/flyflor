@@ -35,9 +35,9 @@ import {
     CapabilityExecutionKind,
     Channel,
     ChatType,
-    CttlPermission,
-    CttlToolCategory,
-    CttlToolScope,
+    ToolPermission,
+    ToolCategory,
+    ToolScope,
     ModelRole,
     SandboxMode,
     ToolApprovalMode,
@@ -560,9 +560,9 @@ describe("Skill and MCP capability config", () => {
                             properties: { text: { type: "string" } },
                             required: ["text"],
                         },
-                        permission: CttlPermission.Execute,
-                        scope: [CttlToolScope.Local],
-                        category: CttlToolCategory.System,
+                        permission: ToolPermission.Execute,
+                        scope: [ToolScope.Local],
+                        category: ToolCategory.System,
                         readOnly: true,
                         concurrencySafe: true,
                         exclusive: false,
@@ -632,9 +632,9 @@ describe("Skill and MCP capability config", () => {
                     "local.echo": {
                         description: "Echo through user tool",
                         inputSchema: { type: "object" },
-                        permission: CttlPermission.Execute,
-                        scope: [CttlToolScope.Local],
-                        category: CttlToolCategory.System,
+                        permission: ToolPermission.Execute,
+                        scope: [ToolScope.Local],
+                        category: ToolCategory.System,
                         executor: {
                             kind: "process-json",
                             command: process.execPath,
@@ -694,9 +694,9 @@ describe("Skill and MCP capability config", () => {
                             properties: { text: { type: "string" } },
                             required: ["text"],
                         },
-                        permission: CttlPermission.Execute,
-                        scope: [CttlToolScope.Local],
-                        category: CttlToolCategory.System,
+                        permission: ToolPermission.Execute,
+                        scope: [ToolScope.Local],
+                        category: ToolCategory.System,
                         executor: {
                             kind: "process-json",
                             command: process.execPath,
@@ -1438,7 +1438,7 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
-    test("runtime feeds CTTL loop guard diagnostics back after repeated failed tool calls", async () => {
+    test("runtime feeds Executive loop guard diagnostics back after repeated failed tool calls", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-loop-guard-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -1476,7 +1476,7 @@ describe("Skill and MCP capability config", () => {
             .filter((message) => message.role === ModelRole.User)
             .map((message) => message.content)
             .join("\n");
-        expect(toolResultText).toContain("cttl-loop-guard");
+        expect(toolResultText).toContain("executive-loop-guard");
         expect(toolResultText).toContain("failed-call-repeat");
         expect(events.events).toEqual(
             expect.arrayContaining([
@@ -2246,9 +2246,9 @@ async function installTestPluginCapability(paths: FlyflorPaths): Promise<void> {
                                 properties: { text: { type: "string" } },
                                 required: ["text"],
                             },
-                            permission: CttlPermission.Execute,
-                            scope: [CttlToolScope.Local],
-                            category: CttlToolCategory.System,
+                            permission: ToolPermission.Execute,
+                            scope: [ToolScope.Local],
+                            category: ToolCategory.System,
                             readOnly: false,
                             concurrencySafe: false,
                             exclusive: true,

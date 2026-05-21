@@ -12,6 +12,8 @@ describe("ContextForkStore", () => {
             await store.writeFork(
                 {
                     id: "fork-1",
+                    ownerKey: "scope:alpha",
+                    auditUserId: "u1",
                     userId: "u1",
                     title: "Fork",
                     summary: "Summary",

@@ -17,7 +17,7 @@ import {
 import {
     Channel,
     ChatType,
-    CttlPermission,
+    ToolPermission,
     GatewayControlMessageType,
     type GatewayMessage,
     type GatewayReply,
@@ -194,7 +194,7 @@ describe("GatewayControlHub", () => {
                             entry: "./demo.ts",
                             enabled: true,
                             capabilities: {
-                                echo: { description: "Echo payload", permission: CttlPermission.Read },
+                                echo: { description: "Echo payload", permission: ToolPermission.Read },
                             },
                         },
                     },
@@ -210,7 +210,7 @@ describe("GatewayControlHub", () => {
                     tools: {
                         "user.echo": {
                             description: "User echo",
-                            permission: CttlPermission.Read,
+                            permission: ToolPermission.Read,
                         },
                     },
                 }),
@@ -629,7 +629,7 @@ describe("GatewayControlHub", () => {
         hub.dispose();
     });
 
-    test("keeps the latest CTTL capability catalog available through control snapshot", async () => {
+    test("keeps the latest Executive capability catalog available through control snapshot", async () => {
         const bus = new GlobalEventBus();
         const hub = createHub({ events: bus });
         const socket = fakeSocket();
@@ -647,10 +647,10 @@ describe("GatewayControlHub", () => {
         bus.publish({
             type: RuntimeEventType.ExecutiveCapabilityCatalogBuilt,
             at: "2026-05-18T12:00:00.000Z",
-            requestId: "req-cttl",
+            requestId: "req-executive",
             payload: {
                 builtAt: "2026-05-18T12:00:00.000Z",
-                capabilities: [{ name: "workspace.read", permission: CttlPermission.Read }],
+                capabilities: [{ name: "workspace.read", permission: ToolPermission.Read }],
                 failedSources: [],
                 hiddenCapabilities: [],
                 staleSources: [],
@@ -666,7 +666,7 @@ describe("GatewayControlHub", () => {
             type: GatewayControlMessageType.CapabilityCatalogSnapshot,
             payload: {
                 catalog: {
-                    capabilities: [{ name: "workspace.read", permission: CttlPermission.Read }],
+                    capabilities: [{ name: "workspace.read", permission: ToolPermission.Read }],
                     totals: { capabilities: 1 },
                 },
             },
@@ -697,6 +697,12 @@ describe("GatewayControlHub", () => {
                     GatewayControlMessageType.GatewayMessageSend,
                     {
                         context: {
+                            activeScope: {
+                                id: "scope-1",
+                                projectDir: "/tmp/scope",
+                                projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                                title: "Scope",
+                            },
                             activeProject: {
                                 id: "project-1",
                                 projectDir: "/tmp/project",
@@ -720,7 +726,7 @@ describe("GatewayControlHub", () => {
             chatType: ChatType.Direct,
         });
         expect(calls[0]?.options?.context).toMatchObject({
-            activeProject: { id: "project-1" },
+            activeScope: { id: "scope-1" },
             contextForkId: "fork-1",
             skillNames: ["skill-a"],
         });
@@ -826,7 +832,7 @@ describe("GatewayControlHub", () => {
                     },
                     planning: {
                         contextForks: [],
-                        scenes: [],
+                        replays: [],
                         taskPlans: [{
                             completedStepCount: 0,
                             id: "plan-1",

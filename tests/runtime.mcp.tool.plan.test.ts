@@ -1,29 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import {
     Channel,
-    CttlHiddenReason,
-    CttlPermission,
-    CttlToolCategory,
-    CttlToolScope,
+    ToolHiddenReason,
+    ToolPermission,
+    ToolCategory,
+    ToolScope,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeMcpToolPlanComponent } from "../src/agent/runtime/mcp/index.ts";
 import type { McpToolCatalogEntry, McpToolDefinition } from "../src/agent/mcp/index.ts";
 
 describe("RuntimeMcpToolPlanComponent", () => {
-    test("keeps project and local tools hidden from remote channels without project scope", () => {
+    test("keeps workspace and local tools hidden from remote channels without workspace scope", () => {
         const plan = new RuntimeMcpToolPlanComponent().build({
             catalog: [entry("workspace", "read"), entry("shell", "run")],
             channel: Channel.Telegram,
         });
 
         expect(plan.catalog).toEqual([]);
-        expect(hiddenReasons(plan, "workspace.read")).toContain(CttlHiddenReason.ScopeMismatch);
+        expect(hiddenReasons(plan, "workspace.read")).toContain(ToolHiddenReason.ScopeMismatch);
         expect(hiddenReasons(plan, "shell.run")).toEqual(
-            expect.arrayContaining([CttlHiddenReason.ScopeMismatch, CttlHiddenReason.PermissionCap]),
+            expect.arrayContaining([ToolHiddenReason.ScopeMismatch, ToolHiddenReason.PermissionCap]),
         );
     });
 
-    test("exposes project read tools for local project turns", () => {
+    test("exposes workspace read tools for local workspace turns", () => {
         const plan = new RuntimeMcpToolPlanComponent().build({
             catalog: [entry("workspace", "read"), entry("git", "status"), entry("shell", "run")],
             channel: Channel.Stdio,
@@ -34,14 +34,14 @@ describe("RuntimeMcpToolPlanComponent", () => {
             "workspace.read",
             "git.status",
         ]);
-        expect(hiddenReasons(plan, "shell.run")).toContain(CttlHiddenReason.PermissionCap);
+        expect(hiddenReasons(plan, "shell.run")).toContain(ToolHiddenReason.PermissionCap);
     });
 
     test("exposes local shell when sandbox has granted execute capability", () => {
         const plan = new RuntimeMcpToolPlanComponent().build({
             catalog: [entry("shell", "run")],
             channel: Channel.Stdio,
-            maxPermission: CttlPermission.Execute,
+            maxPermission: ToolPermission.Execute,
             projectScoped: true,
         });
 
@@ -53,18 +53,18 @@ describe("RuntimeMcpToolPlanComponent", () => {
         const remote = new RuntimeMcpToolPlanComponent().build({
             catalog: [entry("computer", "click")],
             channel: Channel.Telegram,
-            maxPermission: CttlPermission.Computer,
+            maxPermission: ToolPermission.Computer,
         });
         const local = new RuntimeMcpToolPlanComponent().build({
             catalog: [entry("computer", "click")],
             channel: Channel.Stdio,
-            maxPermission: CttlPermission.Computer,
+            maxPermission: ToolPermission.Computer,
             projectScoped: true,
         });
 
         expect(remote.catalog).toEqual([]);
         expect(hiddenReasons(remote, "computer.click")).toEqual(
-            expect.arrayContaining([CttlHiddenReason.ScopeMismatch]),
+            expect.arrayContaining([ToolHiddenReason.ScopeMismatch]),
         );
         expect(local.catalog.map((tool) => `${tool.server}.${tool.tool.name}`)).toEqual(["computer.click"]);
         expect(local.hiddenTools).toEqual([]);
@@ -104,7 +104,7 @@ describe("RuntimeMcpToolPlanComponent", () => {
         expect(plan.hiddenCapabilities).toEqual([]);
     });
 
-    test("plans plugin manifest capabilities through the same CTTL visibility gate", () => {
+    test("plans plugin manifest capabilities through the same Executive visibility gate", () => {
         const plan = new RuntimeMcpToolPlanComponent().buildCapabilities({
             channel: Channel.Stdio,
             pluginCapabilities: [
@@ -114,16 +114,16 @@ describe("RuntimeMcpToolPlanComponent", () => {
                     plugin: "inspector",
                     source: "project",
                     descriptor: {
-                        category: CttlToolCategory.Coding,
+                        category: ToolCategory.Coding,
                         concurrencySafe: true,
                         description: "Scan symbols",
                         exclusive: false,
                         inputSchema: { type: "object" },
                         name: "plugin.inspector.symbols.scan",
-                        permission: CttlPermission.Read,
+                        permission: ToolPermission.Read,
                         readOnly: true,
                         resultLimit: { maxChars: 4000 },
-                        scope: [CttlToolScope.Project],
+                        scope: [ToolScope.Workspace],
                         source: "plugin",
                     },
                 },

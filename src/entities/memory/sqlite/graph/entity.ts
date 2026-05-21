@@ -19,7 +19,7 @@ export interface EpisodeRow {
     metadata_json?: string;
     source_kind: string;
     text: string;
-    user_id: string;
+    owner_key: string;
 }
 
 export interface MemoryNodeRow {
@@ -36,7 +36,7 @@ export interface MemoryNodeRow {
     superseded_by?: string | null;
     symbols_json: string;
     updated_at: number;
-    user_id: string;
+    owner_key: string;
 }
 
 export interface GemRow {
@@ -55,7 +55,7 @@ export interface GemRow {
     support: number;
     symbols_json: string;
     updated_at: number;
-    user_id: string;
+    owner_key: string;
 }
 
 export interface SummaryEmbeddingRow {
@@ -65,7 +65,7 @@ export interface SummaryEmbeddingRow {
     id: string;
     summary_id: string;
     time_range: string;
-    user_id: string;
+    owner_key: string;
 }
 
 export interface GemSnapshotRow {
@@ -79,7 +79,7 @@ export interface GemSnapshotRow {
     symbols_json: string;
     taken_at: number;
     updated_at: number;
-    user_id: string;
+    owner_key: string;
 }
 
 export interface GraphEdgeRow {
@@ -93,7 +93,7 @@ export interface GraphEdgeRow {
     score?: number | null;
     to_id: string;
     to_table: string;
-    user_id?: string | null;
+    owner_key?: string | null;
 }
 
 export interface MemoryEpisodeRecord {
@@ -105,7 +105,7 @@ export interface MemoryEpisodeRecord {
     metadata?: Record<string, unknown>;
     sourceKind: string;
     text: string;
-    userId: string;
+    ownerKey: string;
 }
 
 export interface GraphEdgeRecord {
@@ -119,7 +119,7 @@ export interface GraphEdgeRecord {
     score?: number;
     toId: string;
     toTable: string;
-    userId?: string | null;
+    ownerKey?: string | null;
 }
 
 export interface GemSnapshotRecord {
@@ -133,7 +133,7 @@ export interface GemSnapshotRecord {
     symbols: string[];
     takenAt: number;
     updatedAt: number;
-    userId: string;
+    ownerKey: string;
 }
 
 /**
@@ -148,7 +148,7 @@ export class SQLiteGraphModel {
     public rowToEpisode(row: EpisodeRow): MemoryEpisodeRecord {
         return {
             id: row.id,
-            userId: row.user_id,
+            ownerKey: row.owner_key,
             text: row.text,
             concepts: this.parseJsonArray(row.concepts_json),
             embedding: this.parseJsonNumberArray(row.embedding_json),
@@ -162,7 +162,7 @@ export class SQLiteGraphModel {
     public rowToMemoryNode(row: MemoryNodeRow): MemoryNodeRecord {
         return {
             id: row.id,
-            userId: row.user_id,
+            ownerKey: row.owner_key,
             symbols: this.parseJsonArray(row.symbols_json),
             summary: row.summary,
             embedding: this.parseJsonNumberArray(row.embedding_json),
@@ -181,7 +181,7 @@ export class SQLiteGraphModel {
     public rowToGem(row: GemRow): GemRecord {
         return {
             id: row.id,
-            userId: row.user_id,
+            ownerKey: row.owner_key,
             symbols: this.parseJsonArray(row.symbols_json),
             summary: row.summary,
             embedding: this.parseJsonNumberArray(row.embedding_json),
@@ -202,7 +202,7 @@ export class SQLiteGraphModel {
     public rowToSummaryEmbedding(row: SummaryEmbeddingRow): SummaryEmbeddingInput {
         return {
             id: row.id,
-            userId: row.user_id,
+            ownerKey: row.owner_key,
             summaryId: row.summary_id,
             timeRange: row.time_range,
             bucketKey: row.bucket_key,
@@ -215,7 +215,7 @@ export class SQLiteGraphModel {
         return {
             id: row.id,
             gemId: row.gem_id,
-            userId: row.user_id,
+            ownerKey: row.owner_key,
             reason: row.reason,
             takenAt: row.taken_at,
             summary: row.summary,
@@ -230,7 +230,7 @@ export class SQLiteGraphModel {
     public rowToEdge(row: GraphEdgeRow): GraphEdgeRecord {
         return {
             id: row.id,
-            userId: row.user_id ?? undefined,
+            ownerKey: row.owner_key ?? undefined,
             fromTable: row.from_table,
             fromId: row.from_id,
             edge: row.edge,
@@ -334,7 +334,7 @@ export class SQLiteGraphModel {
                       .map((n) => n.toFixed(4))
                       .join(",")}`
                 : "none";
-        return [input.userId ?? "anon", symbols, embFingerprint, input.minConfidence ?? "any", input.limit ?? 16].join("|");
+        return [input.ownerKey ?? "anon", symbols, embFingerprint, input.minConfidence ?? "any", input.limit ?? 16].join("|");
     }
 
     private parseJsonArray(value: string): string[] {

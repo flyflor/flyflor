@@ -135,11 +135,11 @@ describe("Gateway Control protocol", () => {
                     },
                     planning: {
                         contextForks: [{ id: "fork-1", maxContextTokens: 12000, continuitySummary: "scope", title: "Fork" }],
-                        scenes: [{
-                            id: "scene-1",
+                        replays: [{
+                            id: "replay-1",
                             kind: "blackboard",
                             summary: "summary",
-                            title: "Scene",
+                            title: "Replay",
                         }],
                         taskPlans: [{
                             completedStepCount: 0,
@@ -181,11 +181,11 @@ describe("Gateway Control protocol", () => {
                     },
                     planning: {
                         contextForks: [{ id: "fork-1", maxContextTokens: 12000, continuitySummary: "scope", title: "Fork" }],
-                        scenes: [{
-                            id: "scene-1",
+                        replays: [{
+                            id: "replay-1",
                             kind: "blackboard",
                             summary: "summary",
-                            title: "Scene",
+                            title: "Replay",
                         }],
                         taskPlans: [{
                             completedStepCount: 0,
@@ -266,6 +266,8 @@ describe("Gateway Control protocol", () => {
                     completedStepCount: 0,
                     createdAt: "2026-05-19T00:00:00.000Z",
                     id: "plan-1",
+                    ownerKey: "scope:todo",
+                    auditUserId: "u-1",
                     progress: 0,
                     status: "planned",
                     stepCount: 1,
@@ -452,7 +454,7 @@ describe("Gateway Control protocol", () => {
                 executiveToolLoop,
                 planning: {
                     contextForks: [],
-                    scenes: [],
+                    replays: [],
                     taskPlans: [],
                 },
             },
@@ -514,9 +516,15 @@ describe("Gateway Control protocol", () => {
         expect(message.text).toBe("hello");
     });
 
-    test("requires project scope to be fully structured in control payload", () => {
+    test("prefers explicit activeScope and keeps activeProject as compatibility input", () => {
         const input = readGatewayControlMessageInput({
             context: {
+                activeScope: {
+                    id: "scope-1",
+                    projectDir: "/tmp/scope",
+                    projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                    title: "Scope",
+                },
                 activeProject: {
                     id: "project-1",
                     projectDir: "/tmp/project",
@@ -532,6 +540,12 @@ describe("Gateway Control protocol", () => {
         });
 
         expect(input.context).toEqual({
+            activeScope: {
+                id: "scope-1",
+                projectDir: "/tmp/scope",
+                projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                title: "Scope",
+            },
             activeProject: {
                 id: "project-1",
                 projectDir: "/tmp/project",

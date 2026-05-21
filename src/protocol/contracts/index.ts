@@ -2,7 +2,7 @@ export { RuntimeModeComponent } from "./component.ts";
 export * from "./ask.ts";
 export * from "./brain.ts";
 export * from "./eq.ts";
-export * from "./ghost.ts";
+export * from "./continuation.ts";
 export * from "./identity.ts";
 export * from "./enums.ts";
 export * from "./external.kit.ts";

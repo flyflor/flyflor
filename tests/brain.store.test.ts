@@ -9,10 +9,10 @@ import {
     MemoryEventType,
     MemoryLinkType,
     ModelRole,
-    SceneRecordKind,
+    ReplayRecordKind,
+    type ScopeRecord,
     SummaryRange,
     TaskPlanStatus,
-    type ProjectRecord,
 } from "../src/protocol/contracts/index.ts";
 
 async function freshStore() {
@@ -94,7 +94,33 @@ describe("BrainStore", () => {
         }
     });
 
-    test("ask and ghost turn paths stay on indexed lookups", async () => {
+    test("schema keeps scope-centric owner columns for core state tables", async () => {
+        const { store, dir } = await freshStore();
+        const brainPath = join(dir, "brain.db");
+        try {
+            store.close();
+            const db = new Database(brainPath);
+            try {
+                expect(tableColumns(db, "scopes")).toContain("audit_user_id");
+                expect(tableColumns(db, "scopes")).not.toContain("user_id");
+                expect(tableColumns(db, "codenames")).toContain("scope_id");
+                expect(tableColumns(db, "codenames")).not.toContain("project_id");
+                for (const table of ["memory_eq_state", "task_plans", "context_forks", "replay_records"]) {
+                    const columns = tableColumns(db, table);
+                    expect(columns).toContain("owner_key");
+                    expect(columns).toContain("audit_user_id");
+                    expect(columns).not.toContain("user_id");
+                }
+            } finally {
+                db.close();
+            }
+        } finally {
+            store.close();
+        }
+    });
+
+
+    test("ask and continuation turn paths stay on indexed lookups", async () => {
         const { store, dir } = await freshStore();
         const brainPath = join(dir, "brain.db");
         try {
@@ -116,23 +142,23 @@ describe("BrainStore", () => {
                      LIMIT 1`,
                     ["u1"],
                 );
-                const ghostPlan = queryPlan(
+                const continuationPlan = queryPlan(
                     db,
                     `EXPLAIN QUERY PLAN
                      SELECT e.* FROM memory_events e
                      LEFT JOIN memory_state s ON s.event_id = e.id
-                     WHERE e.user_id = ? AND e.type = 'ghost-context'
+                     WHERE e.user_id = ? AND e.type = 'continuation-context'
                        AND COALESCE(s.status, 'live') IN ('live', 'resumed')
                      ORDER BY e.ts DESC
                      LIMIT ?`,
                     ["u1", 12],
                 );
 
-                // Pending ask resolution and active ghost listing both drive the user's next turn.
+                // Pending ask resolution and active continuation listing both drive the user's next turn.
                 // Keep them on indexed reads so a larger single brain.db still behaves predictably.
                 expect(askPlan).toContain("idx_events_user_type_ts");
                 expect(askPlan).toContain("idx_events_parent_type");
-                expect(ghostPlan).toContain("idx_events_user_type_ts");
+                expect(continuationPlan).toContain("idx_events_user_type_ts");
             } finally {
                 db.close();
             }
@@ -149,7 +175,7 @@ describe("BrainStore", () => {
                 id: "e1",
                 ts,
                 userId: "u1",
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: { reason: "ask", askedQuestion: "?" },
             });
             const state = store.upsertState("e1", {
@@ -181,7 +207,7 @@ describe("BrainStore", () => {
                 ts: base + 1000,
                 userId: "u1",
                 codenameId: "c1",
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: {},
             });
             store.appendEvent({
@@ -189,7 +215,7 @@ describe("BrainStore", () => {
                 ts: base + 2000,
                 userId: "u1",
                 codenameId: "c1",
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: {},
             });
             store.upsertState("abandoned", { status: MemoryEventStatus.Abandoned });
@@ -198,46 +224,46 @@ describe("BrainStore", () => {
                 ts: base + 3000,
                 userId: "u1",
                 codenameId: "c2",
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: {},
             });
 
             const live = store.listEvents({
                 codenameId: "c1",
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 statusIn: [MemoryEventStatus.Live],
             });
             expect(live.map((e) => e.id)).toEqual(["live"]);
 
-            const all = store.listEvents({ codenameId: "c1", type: MemoryEventType.GhostContext });
+            const all = store.listEvents({ codenameId: "c1", type: MemoryEventType.ContinuationContext });
             expect(all.map((e) => e.id).sort()).toEqual(["abandoned", "live"].sort());
         } finally {
             store.close();
         }
     });
 
-    test("patchGhostContent fails loudly on corrupt ghost content", async () => {
+    test("patchContinuationContent fails loudly on corrupt continuation content", async () => {
         const { store, dir } = await freshStore();
         try {
             const ts = Date.UTC(2026, 4, 13, 0, 0, 0);
             store.appendEvent({
-                id: "ghost-corrupt",
+                id: "continuation-corrupt",
                 ts,
                 userId: "u1",
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 content: { reason: "ask" },
             });
             store.close();
             const db = new Database(join(dir, "brain.db"));
             try {
-                db.run("UPDATE memory_events SET content = ? WHERE id = ?", ["{", "ghost-corrupt"]);
+                db.run("UPDATE memory_events SET content = ? WHERE id = ?", ["{", "continuation-corrupt"]);
             } finally {
                 db.close();
             }
             await store.open();
 
-            expect(() => store.patchGhostContent("ghost-corrupt", { resumed: true })).toThrow(
-                "Invalid ghost-context content JSON",
+            expect(() => store.patchContinuationContent("continuation-corrupt", { resumed: true })).toThrow(
+                "Invalid continuation-context content JSON",
             );
         } finally {
             store.close();
@@ -293,11 +319,13 @@ describe("BrainStore", () => {
         }
     });
 
-    test("stores summary-first task plans, forks and scene records in brain.db", async () => {
+    test("stores summary-first task plans, forks and replay records in brain.db", async () => {
         const { store } = await freshStore();
         try {
             store.writeTaskPlan({
                 id: "plan-1",
+                ownerKey: "scope:alpha",
+                auditUserId: "u1",
                 userId: "u1",
                 title: "Release plan",
                 summary: "Track release readiness.",
@@ -312,6 +340,8 @@ describe("BrainStore", () => {
             });
             store.writeContextFork({
                 id: "fork-1",
+                ownerKey: "scope:alpha",
+                auditUserId: "u1",
                 userId: "u1",
                 title: "Installer fork",
                 summary: "Isolate installer decisions.",
@@ -322,11 +352,13 @@ describe("BrainStore", () => {
                 updatedAt: "2026-05-16T00:00:00.000Z",
                 sourceEventId: "episode-1",
             });
-            store.writeSceneRecord({
-                id: "scene-1",
+            store.writeReplayRecord({
+                id: "replay-1",
+                ownerKey: "scope:alpha",
+                auditUserId: "u1",
                 userId: "u1",
-                kind: SceneRecordKind.DeepThink,
-                title: "Planning scene",
+                kind: ReplayRecordKind.DeepThink,
+                title: "Planning replay",
                 summary: "The plan was created after analysis.",
                 visibleFacts: ["plan exists"],
                 openQuestions: [],
@@ -335,14 +367,14 @@ describe("BrainStore", () => {
                 updatedAt: "2026-05-16T00:00:00.000Z",
             });
 
-            expect(store.listTaskPlans({ userId: "u1", sourceEventId: "episode-1" })[0]?.step?.[0]?.title).toBe(
+            expect(store.listTaskPlans({ ownerKey: "scope:alpha", sourceEventId: "episode-1" })[0]?.step?.[0]?.title).toBe(
                 "Run checks",
             );
-            expect(store.listContextForks({ userId: "u1", sourceEventId: "episode-1" })[0]?.maxContextTokens).toBe(
+            expect(store.listContextForks({ ownerKey: "scope:alpha", sourceEventId: "episode-1" })[0]?.maxContextTokens).toBe(
                 12000,
             );
             expect(store.getContextFork("fork-1")?.continuitySummary).toBe("Installer files only.");
-            expect(store.listSceneRecords({ userId: "u1", sourceEventId: "episode-1" })[0]?.visibleFacts).toEqual([
+            expect(store.listReplayRecords({ ownerKey: "scope:alpha", sourceEventId: "episode-1" })[0]?.visibleFacts).toEqual([
                 "plan exists",
             ]);
         } finally {
@@ -350,12 +382,13 @@ describe("BrainStore", () => {
         }
     });
 
-    test("stores explicit project registry records", async () => {
+    test("stores explicit scope registry records", async () => {
         const { store } = await freshStore();
         try {
             const now = Date.now();
-            const project: ProjectRecord = {
+            const project: ScopeRecord = {
                 id: "project-1",
+                auditUserId: "u1",
                 userId: "u1",
                 title: "Alpha",
                 goal: "Ship alpha",
@@ -366,9 +399,9 @@ describe("BrainStore", () => {
                 lastUsedAt: now,
                 useCount: 1,
             };
-            store.upsertProject(project);
-            expect(store.getProject("project-1")?.projectDir).toBe("/tmp/alpha");
-            expect(store.listProjects({ userId: "u1" })[0]?.title).toBe("Alpha");
+            store.upsertScope(project);
+            expect(store.getScope("project-1")?.projectDir).toBe("/tmp/alpha");
+            expect(store.listScopes({ auditUserId: "u1" })[0]?.title).toBe("Alpha");
         } finally {
             store.close();
         }
@@ -391,4 +424,8 @@ describe("BrainStore", () => {
 function queryPlan(db: Database, sql: string, values: Array<string | number | null>): string {
     const rows = db.query(sql).all(...values) as Array<{ detail: string }>;
     return rows.map((row) => row.detail).join("\n");
+}
+
+function tableColumns(db: Database, table: string): string[] {
+    return db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((row) => row.name);
 }

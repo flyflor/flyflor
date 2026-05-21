@@ -8,7 +8,6 @@ export {
     type ComponentProviderMetadata,
     type ComponentProviderOptions,
     type ComponentConstructor,
-    type FpcComponentConstructor,
 } from "./component.ts";
 export { readInjectionMetadata, registerInjectionMetadata, type InjectionMetadata } from "./injection.ts";
 export {

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { CttlLoopGuardReason } from "../src/protocol/contracts/index.ts";
+import { ExecutiveLoopGuardReason } from "../src/protocol/contracts/index.ts";
 import {
     ExecutiveToolRuntime,
-    type CttlLoopGuardDecision,
+    type ExecutiveLoopGuardDecision,
     type ExecutiveToolExecution,
 } from "../src/executive/index.ts";
 
@@ -105,7 +105,7 @@ describe("ExecutiveToolRuntime", () => {
 
     test("unknown tools are executed once so adapters can return catalog failures, then loop guard blocks repeats", async () => {
         const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
-        const blocked: CttlLoopGuardDecision[] = [];
+        const blocked: ExecutiveLoopGuardDecision[] = [];
 
         const result = await runtime.run({
             initialMessages: [],
@@ -141,7 +141,7 @@ describe("ExecutiveToolRuntime", () => {
 
         expect(result.askRequired).toEqual({
             askId: expect.any(String),
-            loopGuardReason: CttlLoopGuardReason.UnknownToolRepeat,
+            loopGuardReason: ExecutiveLoopGuardReason.UnknownToolRepeat,
             message: "Executive loop guard blocked every tool call in this step.",
             resume: { mode: "continue" },
             stepCount: 2,
@@ -150,9 +150,9 @@ describe("ExecutiveToolRuntime", () => {
         expect(result.rawText).toBe("missing");
         expect(result.executions.map((execution) => execution.error)).toEqual([
             "not available: missing.tool",
-            "CTTL loop stopped repeated unknown tool missing.tool.",
+            "Executive loop stopped repeated unknown tool missing.tool.",
         ]);
-        expect(blocked[0]?.reason).toBe(CttlLoopGuardReason.UnknownToolRepeat);
+        expect(blocked[0]?.reason).toBe(ExecutiveLoopGuardReason.UnknownToolRepeat);
     });
 
     test("records failed result repeats and emits guard executions back into the transcript", async () => {
@@ -189,7 +189,7 @@ describe("ExecutiveToolRuntime", () => {
             "same failure",
             "same failure",
             "same failure",
-            "CTTL loop stopped repeated failed call workspace.read.",
+            "Executive loop stopped repeated failed call workspace.read.",
         ]);
         expect(transcriptSizes).toEqual([1, 3, 5, 7]);
     });
@@ -243,7 +243,7 @@ describe("ExecutiveToolRuntime", () => {
 
         expect(result.askRequired).toEqual({
             askId: expect.any(String),
-            loopGuardReason: CttlLoopGuardReason.UnknownToolRepeat,
+            loopGuardReason: ExecutiveLoopGuardReason.UnknownToolRepeat,
             message: "Executive loop guard blocked every tool call in this step.",
             resume: { mode: "continue" },
             stepCount: 1,
@@ -251,7 +251,7 @@ describe("ExecutiveToolRuntime", () => {
         });
         expect(result.rawText).toBe("missing");
         expect(result.executions).toHaveLength(1);
-        expect(result.executions[0]?.error).toBe("CTTL loop stopped repeated unknown tool missing.tool.");
+        expect(result.executions[0]?.error).toBe("Executive loop stopped repeated unknown tool missing.tool.");
     });
 
     test("returns ask-required with tool budget exhausted when max turns are spent", async () => {

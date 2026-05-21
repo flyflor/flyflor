@@ -89,11 +89,11 @@ export class ConsolidationWorker {
     }
 
     /**
-     * 处理一个用户当前到期的整合候选。
+     * 处理一个 continuity owner 当前到期的整合候选。
      * - 拉取工作记忆 Component 中 reviewAt <= now 的 episode；
      * - 逐条让 LLM 决策；按结果走三条通道。
      */
-    public async drain(userId: string): Promise<ConsolidationRunResult> {
+    public async drain(ownerKey: string): Promise<ConsolidationRunResult> {
         const result: ConsolidationRunResult = {
             scanned: 0,
             reinforced: 0,
@@ -107,18 +107,18 @@ export class ConsolidationWorker {
         let candidateIds: string[];
         try {
             candidateIds = await this.workingMemory.listConsolidationCandidates(
-                userId,
+                ownerKey,
                 Math.floor(Date.now() / 1000),
                 this.batchSize,
             );
         } catch (err) {
-            this.publishFailure(userId, "list-candidates", err);
+            this.publishFailure(ownerKey, "list-candidates", err);
             return result;
         }
         result.scanned = candidateIds.length;
         for (const id of candidateIds) {
             try {
-                const episode = await this.workingMemory.readEpisode(userId, id);
+                const episode = await this.workingMemory.readEpisode(ownerKey, id);
                 if (!episode) {
                     result.skipped += 1;
                     continue;
@@ -128,38 +128,38 @@ export class ConsolidationWorker {
                     // 回顾日志是 discard 证据；先写审计再删除热记忆，避免审计盘故障时静默丢失可复核样本。
                     await this.retrospective?.append({
                         kind: "discard",
-                        userId,
+                        ownerKey,
                         episodeId: episode.episodeId,
                         rationale: decision.rationale,
                     });
-                    await this.workingMemory.dropEpisode(userId, id);
+                    await this.workingMemory.dropEpisode(ownerKey, id);
                     result.discarded += 1;
                 } else if (decision.decision === ConsolidationDecisionKind.Reinforce) {
-                    await this.workingMemory.touchConcepts(userId, episode.concepts ?? []);
-                    await this.workingMemory.reinforceEpisode(userId, id, this.reinforceTtl);
+                    await this.workingMemory.touchConcepts(ownerKey, episode.concepts ?? []);
+                    await this.workingMemory.reinforceEpisode(ownerKey, id, this.reinforceTtl);
                     result.reinforced += 1;
                 } else if (decision.decision === ConsolidationDecisionKind.Consolidate) {
                     await this.consolidateEpisode(episode, decision);
                     // 长期图写入成功后再落回顾证据；审计失败时保留热记忆候选，下一轮可重试或人工排查。
                     await this.retrospective?.append({
                         kind: "consolidate",
-                        userId,
+                        ownerKey,
                         episodeId: episode.episodeId,
                         summary: decision.summary ?? episode.text.slice(0, 240),
                         symbols: decision.symbols ?? episode.concepts,
                         rationale: decision.rationale,
                     });
-                    await this.workingMemory.dropEpisode(userId, id);
+                    await this.workingMemory.dropEpisode(ownerKey, id);
                     result.consolidated += 1;
                 } else {
                     result.skipped += 1;
                 }
             } catch (err) {
-                this.publishFailure(userId, "process-candidate", err);
+                this.publishFailure(ownerKey, "process-candidate", err);
                 result.skipped += 1;
             }
         }
-        this.events.publish(event(RuntimeEventType.MemoryConsolidationCompleted, { userId, ...result }));
+        this.events.publish(event(RuntimeEventType.MemoryConsolidationCompleted, { ownerKey, ...result }));
         return result;
     }
 
@@ -175,7 +175,7 @@ export class ConsolidationWorker {
         const memoryNodeId = crypto.randomUUID();
         await this.graph.upsertEpisode({
             id: episode.episodeId,
-            userId: episode.userId,
+            ownerKey: episode.ownerKey,
             text: episode.text,
             concepts: episode.concepts,
             embedding: episode.embedding,
@@ -186,7 +186,7 @@ export class ConsolidationWorker {
         });
         await this.graph.upsertMemoryNode({
             id: memoryNodeId,
-            userId: episode.userId,
+            ownerKey: episode.ownerKey,
             symbols: decision.symbols ?? episode.concepts,
             summary: decision.summary ?? episode.text.slice(0, 240),
             embedding: episode.embedding,
@@ -198,10 +198,10 @@ export class ConsolidationWorker {
         await this.graph.relateConsolidatedInto(episode.episodeId, memoryNodeId);
     }
 
-    private publishFailure(userId: string, stage: string, err: unknown): void {
+    private publishFailure(ownerKey: string, stage: string, err: unknown): void {
         this.events.publish(
             event(RuntimeEventType.MemoryConsolidationFailed, {
-                userId,
+                ownerKey,
                 stage,
                 error: String(err),
             }),

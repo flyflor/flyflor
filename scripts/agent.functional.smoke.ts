@@ -9,7 +9,7 @@ import {
     Channel,
     ChatType,
     MemoryActionTarget,
-    SceneRecordKind,
+    ReplayRecordKind,
     TaskPlanStatus,
     type GatewayMessage,
     type ModelClient,
@@ -25,7 +25,7 @@ interface FunctionalSmokeReport {
     eventTypes: string[];
     ok: boolean;
     replyText: string;
-    sceneRecords: number;
+    replayRecords: number;
     taskPlans: number;
     tempHome: string;
 }
@@ -122,14 +122,14 @@ class AgentFunctionalSmoke {
             const brainEvents = this.count(db, "memory_events");
             const taskPlans = this.count(db, "task_plans");
             const contextForks = this.count(db, "context_forks");
-            const sceneRecords = this.count(db, "scene_records");
+            const replayRecords = this.count(db, "replay_records");
             const requiredEvents = [
                 RuntimeEventType.AgentTurnStart,
                 RuntimeEventType.AgentTurnEnd,
                 RuntimeEventType.MemoryBrainEventWritten,
                 RuntimeEventType.MemoryTaskPlanWritten,
                 RuntimeEventType.MemoryContextForkWritten,
-                RuntimeEventType.MemorySceneRecordWritten,
+                RuntimeEventType.MemoryReplayRecordWritten,
             ];
             const eventTypes = events.types;
             return {
@@ -140,11 +140,11 @@ class AgentFunctionalSmoke {
                     brainEvents >= 1 &&
                     taskPlans === 1 &&
                     contextForks === 1 &&
-                    sceneRecords === 1 &&
+                    replayRecords === 1 &&
                     requiredEvents.every((type) => eventTypes.includes(type)) &&
                     !replyText.includes("flyflor_"),
                 replyText,
-                sceneRecords,
+                replayRecords,
                 taskPlans,
                 tempHome: config.paths.home,
             };
@@ -196,9 +196,9 @@ class ScriptedAgentModel implements ModelClient {
                 maxContextTokens: 4096,
                 inheritedEventIds: [],
             }),
-            renderStructuredBlock(StructuredBlockProtocol.SceneRecord, {
-                kind: SceneRecordKind.DeepThink,
-                title: "Smoke scene",
+            renderStructuredBlock(StructuredBlockProtocol.ReplayRecord, {
+                kind: ReplayRecordKind.DeepThink,
+                title: "Smoke replay",
                 summary: "Runtime parsed structured planning without leaking protocol text.",
                 visibleFacts: ["reply generated", "memory persisted"],
                 openQuestions: [],

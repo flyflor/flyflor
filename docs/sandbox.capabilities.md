@@ -12,7 +12,7 @@ Sandbox 是 MCP 工具、电脑控制、Plugin、Shell hook 四类可执行能�
 - `src/agent/sandbox/audit.sink.ts` — file / http 审计 sink
 - `src/protocol/contracts/enums.ts` — `SandboxMode` / `CapabilityExecutionKind` / `ToolApprovalMode`
 - `src/agent/mcp/tool.calls.ts` — MCP 调用接入点
-- `src/agent/plugin/registry.ts` — Plugin manifest 声明、启停和 project/global 覆盖
+- `src/agent/plugin/registry.ts` — Plugin manifest 声明、启停和 workspace/global 覆盖
 - `src/agent/plugin/runner.ts` — Plugin 子进程执行入口，启动前必须走 sandbox gate
 - `src/agent/runtime/module.ts` — MCP tool gate 与 request quota 清理
 
@@ -115,11 +115,11 @@ interface CapabilityGateInput {
 ```
 
 - 全局文件：`~/.flyflor/sandbox.allow.jsonc`
-- 项目文件：`<project>/.flyflor/sandbox.allow.jsonc`
-- 合并规则：项目层与全局层取并集，严格精确等值匹配，不做关键词或语义判断
+- 工作区文件：`<workspace>/.flyflor/sandbox.allow.jsonc`
+- 合并规则：工作区层与全局层取并集，严格精确等值匹配，不做关键词或语义判断
 - CLI：`flyflor sandbox list/allow/deny`
 
-Plugin registry 只管理 JSONC manifest，不直接执行 entry；`PluginRunner` 负责 spawn，并在执行前用 `CapabilityExecutionKind.Plugin`、命令白名单和 allowlist 做统一 gate。这样 registry、CLI 和项目配置无法绕过 sandbox 直接启动外部进程。
+Plugin registry 只管理 JSONC manifest，不直接执行 entry；`PluginRunner` 负责 spawn，并在执行前用 `CapabilityExecutionKind.Plugin`、命令白名单和 allowlist 做统一 gate。这样 registry、CLI 和工作区配置无法绕过 sandbox 直接启动外部进程。
 
 ## Quota 与 YOLO 冷却
 

@@ -69,7 +69,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         database.exec(`
             CREATE TABLE IF NOT EXISTS graph_episodes (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
                 text TEXT NOT NULL,
                 concepts_json TEXT NOT NULL,
                 embedding_json TEXT NOT NULL,
@@ -82,7 +82,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         database.exec(`
             CREATE TABLE IF NOT EXISTS graph_memory_nodes (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
                 symbols_json TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 embedding_json TEXT NOT NULL,
@@ -100,7 +100,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         database.exec(`
             CREATE TABLE IF NOT EXISTS graph_gems (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
                 symbols_json TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 embedding_json TEXT NOT NULL,
@@ -120,7 +120,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         database.exec(`
             CREATE TABLE IF NOT EXISTS graph_summary_embeddings (
                 id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
                 summary_id TEXT NOT NULL,
                 time_range TEXT NOT NULL,
                 bucket_key TEXT NOT NULL,
@@ -132,7 +132,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             CREATE TABLE IF NOT EXISTS graph_gem_snapshots (
                 id TEXT PRIMARY KEY,
                 gem_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 taken_at INTEGER NOT NULL,
                 summary TEXT NOT NULL,
@@ -146,7 +146,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         database.exec(`
             CREATE TABLE IF NOT EXISTS graph_edges (
                 id TEXT PRIMARY KEY,
-                user_id TEXT,
+                owner_key TEXT,
                 from_table TEXT NOT NULL,
                 from_id TEXT NOT NULL,
                 edge TEXT NOT NULL,
@@ -158,11 +158,12 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
                 created_at INTEGER NOT NULL
             );
         `);
-        database.exec("CREATE INDEX IF NOT EXISTS idx_graph_episodes_user ON graph_episodes(user_id)");
-        database.exec("CREATE INDEX IF NOT EXISTS idx_graph_nodes_user ON graph_memory_nodes(user_id)");
+        this.migrateOwnerColumns(database);
+        database.exec("CREATE INDEX IF NOT EXISTS idx_graph_episodes_owner ON graph_episodes(owner_key)");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_graph_nodes_owner ON graph_memory_nodes(owner_key)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_nodes_importance ON graph_memory_nodes(importance DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_nodes_recall ON graph_memory_nodes(recall_count DESC)");
-        database.exec("CREATE INDEX IF NOT EXISTS idx_graph_gems_user ON graph_gems(user_id)");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_graph_gems_owner ON graph_gems(owner_key)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_gems_recall ON graph_gems(recall_count DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_gems_updated ON graph_gems(updated_at DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_edges_from ON graph_edges(from_table, from_id, edge)");
@@ -206,7 +207,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const record: MemoryEpisodeRecord = {
             id: input.id,
-            userId: input.userId,
+            ownerKey: input.ownerKey,
             text: input.text,
             concepts: [...input.concepts],
             embedding: sqliteGraphModel.resolveEmbedding(input.embedding, `${input.text} ${input.concepts.join(" ")}`, this.vectorDimensions),
@@ -220,13 +221,13 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_episodes (
-                    id, user_id, text, concepts_json, embedding_json, importance, source_kind, created_at, metadata_json
+                    id, owner_key, text, concepts_json, embedding_json, importance, source_kind, created_at, metadata_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 record.id,
-                record.userId,
+                record.ownerKey,
                 record.text,
                 JSON.stringify(record.concepts),
                 JSON.stringify(record.embedding),
@@ -243,7 +244,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const record: MemoryNodeRecord = {
             id: input.id,
-            userId: input.userId,
+            ownerKey: input.ownerKey,
             symbols: [...input.symbols],
             summary: input.summary,
             embedding: sqliteGraphModel.resolveEmbedding(input.embedding, `${input.summary} ${input.symbols.join(" ")}`, this.vectorDimensions),
@@ -260,14 +261,14 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_memory_nodes (
-                    id, user_id, symbols_json, summary, embedding_json, confidence, evidence_count,
+                    id, owner_key, symbols_json, summary, embedding_json, confidence, evidence_count,
                     importance, updated_at, recall_count, contradiction_count, last_accessed_at, superseded_by, scope_note
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 record.id,
-                record.userId,
+                record.ownerKey,
                 JSON.stringify(record.symbols),
                 record.summary,
                 JSON.stringify(record.embedding),
@@ -289,7 +290,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const record: GemRecord = {
             id: input.id,
-            userId: input.userId,
+            ownerKey: input.ownerKey,
             symbols: [...input.symbols],
             summary: input.summary,
             embedding: sqliteGraphModel.resolveEmbedding(input.embedding, `${input.summary} ${input.symbols.join(" ")}`, this.vectorDimensions),
@@ -309,14 +310,14 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_gems (
-                    id, user_id, symbols_json, summary, embedding_json, importance, confidence, support, protected,
+                    id, owner_key, symbols_json, summary, embedding_json, importance, confidence, support, protected,
                     updated_at, recall_count, contradiction_count, last_verified_at, status, scope_note, superseded_by
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 record.id,
-                record.userId,
+                record.ownerKey,
                 JSON.stringify(record.symbols),
                 record.summary,
                 JSON.stringify(record.embedding),
@@ -350,13 +351,13 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_summary_embeddings (
-                    id, user_id, summary_id, time_range, bucket_key, embedding_json, created_at
+                    id, owner_key, summary_id, time_range, bucket_key, embedding_json, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 input.id,
-                input.userId,
+                input.ownerKey,
                 input.summaryId,
                 input.timeRange,
                 input.bucketKey,
@@ -376,11 +377,11 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const limit = Math.max(1, Math.floor(input.batchSize ?? 200));
         const nodes = [...this.memoryNodes.values()]
-            .filter((row) => row.userId === input.userId)
+            .filter((row) => row.ownerKey === input.ownerKey)
             .sort((left, right) => left.updatedAt - right.updatedAt)
             .slice(0, limit);
         const gems = [...this.gems.values()]
-            .filter((row) => row.userId === input.userId)
+            .filter((row) => row.ownerKey === input.ownerKey)
             .sort((left, right) => left.updatedAt - right.updatedAt)
             .slice(0, limit);
         let memoryNodes = 0;
@@ -471,18 +472,18 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         return out.slice(0, Math.max(1, limit));
     }
 
-    public async countByUser(userId: string): Promise<GraphCounts> {
+    public async countByOwner(ownerKey: string): Promise<GraphCounts> {
         if (!this.config.dbFile) return { episodes: 0, memoryNodes: 0, gems: 0 };
         await this.initialize();
         return {
-            episodes: [...this.episodes.values()].filter((row) => row.userId === userId).length,
-            memoryNodes: [...this.memoryNodes.values()].filter((row) => row.userId === userId).length,
-            gems: [...this.gems.values()].filter((row) => row.userId === userId).length,
+            episodes: [...this.episodes.values()].filter((row) => row.ownerKey === ownerKey).length,
+            memoryNodes: [...this.memoryNodes.values()].filter((row) => row.ownerKey === ownerKey).length,
+            gems: [...this.gems.values()].filter((row) => row.ownerKey === ownerKey).length,
         };
     }
 
     public async listGemDriftCandidates(input: {
-        userId: string;
+        ownerKey: string;
         nowMs: number;
         minContradictionCount: number;
         maxStaleMs: number;
@@ -493,7 +494,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const staleCutoff = input.nowMs - input.maxStaleMs;
         return [...this.gems.values()]
-            .filter((row) => row.userId === input.userId)
+            .filter((row) => row.ownerKey === input.ownerKey)
             .filter((row) => {
                 const stale = row.lastVerifiedAt === undefined || row.lastVerifiedAt === null || row.lastVerifiedAt < staleCutoff;
                 return (
@@ -508,13 +509,13 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
     }
 
     public async listRecallExtremes(input: {
-        userId: string;
+        ownerKey: string;
         topN: number;
         bottomN: number;
     }): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }> {
         if (!this.config.dbFile) return { tops: [], bottoms: [] };
         await this.initialize();
-        const rows = [...this.memoryNodes.values()].filter((row) => row.userId === input.userId);
+        const rows = [...this.memoryNodes.values()].filter((row) => row.ownerKey === input.ownerKey);
         const topN = Math.max(0, Math.min(input.topN, 32));
         const bottomN = Math.max(0, Math.min(input.bottomN, 32));
         return {
@@ -532,7 +533,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
     }
 
     public async listContradictionPairs(input: {
-        userId: string;
+        ownerKey: string;
         seedN: number;
         neighborK: number;
         minCosine: number;
@@ -540,7 +541,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         if (!this.config.dbFile) return [];
         await this.initialize();
         const seeds = [...this.memoryNodes.values()]
-            .filter((row) => row.userId === input.userId)
+            .filter((row) => row.ownerKey === input.ownerKey)
             .sort((left, right) => (right.importance ?? 0) - (left.importance ?? 0))
             .slice(0, Math.max(1, Math.min(input.seedN, 16)));
         const out: Array<{ left: MemoryNodeRecord; right: MemoryNodeRecord; cosine: number }> = [];
@@ -548,7 +549,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         for (const seed of seeds) {
             if (!Array.isArray(seed.embedding) || seed.embedding.length === 0) continue;
             const neighbors = [...this.memoryNodes.values()]
-                .filter((row) => row.userId === input.userId)
+                .filter((row) => row.ownerKey === input.ownerKey)
                 .filter((row) => row.id !== seed.id)
                 .map((row) => ({
                     row,
@@ -579,7 +580,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         const record: GemSnapshotRecord = {
             id: snapId,
             gemId: gem.id,
-            userId: gem.userId,
+            ownerKey: gem.ownerKey,
             reason,
             takenAt: takenAtMs,
             summary: gem.summary,
@@ -594,14 +595,14 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_gem_snapshots (
-                    id, gem_id, user_id, reason, taken_at, summary, symbols_json, confidence, support, protected, updated_at
+                    id, gem_id, owner_key, reason, taken_at, summary, symbols_json, confidence, support, protected, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 record.id,
                 record.gemId,
-                record.userId,
+                record.ownerKey,
                 record.reason,
                 record.takenAt,
                 record.summary,
@@ -764,7 +765,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         const symbols = sqliteGraphModel.normalizeSymbols(input.symbols ?? []);
         const queryEmbedding = sqliteGraphModel.buildQueryEmbedding(input, this.vectorDimensions);
         const scored = rows
-            .filter((row) => (input.userId ? row.userId === input.userId : true))
+            .filter((row) => (input.ownerKey ? row.ownerKey === input.ownerKey : true))
             .filter((row) => (input.minConfidence !== undefined ? row.confidence >= input.minConfidence : true))
             .map((row) => ({
                 row,
@@ -781,7 +782,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         const symbols = sqliteGraphModel.normalizeSymbols(input.symbols ?? []);
         const queryEmbedding = sqliteGraphModel.buildQueryEmbedding(input, this.vectorDimensions);
         const scored = rows
-            .filter((row) => (input.userId ? row.userId === input.userId : true))
+            .filter((row) => (input.ownerKey ? row.ownerKey === input.ownerKey : true))
             .filter((row) => (input.minConfidence !== undefined ? row.confidence >= input.minConfidence : true))
             .map((row) => ({
                 row,
@@ -804,10 +805,10 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         if (!this.config.dbFile) return;
         await this.initialize();
         const id = `${fromTable}:${fromId}:${edge}:${toTable}:${toId}`;
-        const userId = this.lookupUserId(fromTable, fromId) ?? this.lookupUserId(toTable, toId);
+        const ownerKey = this.lookupOwnerKey(fromTable, fromId) ?? this.lookupOwnerKey(toTable, toId);
         const record: GraphEdgeRecord = {
             id,
-            userId,
+            ownerKey,
             fromTable,
             fromId,
             edge,
@@ -823,13 +824,13 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_edges (
-                    id, user_id, from_table, from_id, edge, to_table, to_id, score, at, metadata_json, created_at
+                    id, owner_key, from_table, from_id, edge, to_table, to_id, score, at, metadata_json, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 record.id,
-                record.userId ?? null,
+                record.ownerKey ?? null,
                 record.fromTable,
                 record.fromId,
                 record.edge,
@@ -848,14 +849,14 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_memory_nodes (
-                    id, user_id, symbols_json, summary, embedding_json, confidence, evidence_count,
+                    id, owner_key, symbols_json, summary, embedding_json, confidence, evidence_count,
                     importance, updated_at, recall_count, contradiction_count, last_accessed_at, superseded_by, scope_note
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 row.id,
-                row.userId,
+                row.ownerKey,
                 JSON.stringify(row.symbols),
                 row.summary,
                 JSON.stringify(row.embedding),
@@ -877,14 +878,14 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .query(
                 `
                 INSERT OR REPLACE INTO graph_gems (
-                    id, user_id, symbols_json, summary, embedding_json, importance, confidence, support, protected,
+                    id, owner_key, symbols_json, summary, embedding_json, importance, confidence, support, protected,
                     updated_at, recall_count, contradiction_count, last_verified_at, status, scope_note, superseded_by
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
             )
             .run(
                 row.id,
-                row.userId,
+                row.ownerKey,
                 JSON.stringify(row.symbols),
                 row.summary,
                 JSON.stringify(row.embedding),
@@ -902,11 +903,33 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             );
     }
 
-    private lookupUserId(table: string, id: string): string | undefined {
-        if (table === "episode") return this.episodes.get(id)?.userId;
-        if (table === "memory_node") return this.memoryNodes.get(id)?.userId;
-        if (table === "gem") return this.gems.get(id)?.userId;
+    private lookupOwnerKey(table: string, id: string): string | undefined {
+        if (table === "episode") return this.episodes.get(id)?.ownerKey;
+        if (table === "memory_node") return this.memoryNodes.get(id)?.ownerKey;
+        if (table === "gem") return this.gems.get(id)?.ownerKey;
         return undefined;
+    }
+
+    private migrateOwnerColumns(database: Database): void {
+        for (const table of [
+            "graph_episodes",
+            "graph_memory_nodes",
+            "graph_gems",
+            "graph_summary_embeddings",
+            "graph_gem_snapshots",
+            "graph_edges",
+        ]) {
+            this.renameUserColumnToOwnerKey(database, table);
+        }
+    }
+
+    private renameUserColumnToOwnerKey(database: Database, table: string): void {
+        const columns = database.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+        const hasOwnerKey = columns.some((column) => column.name === "owner_key");
+        const hasUserId = columns.some((column) => column.name === "user_id");
+        if (!hasOwnerKey && hasUserId) {
+            database.exec(`ALTER TABLE ${table} RENAME COLUMN user_id TO owner_key`);
+        }
     }
 
     private requiredDatabase(): Database {
@@ -927,4 +950,3 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         this.recallCache.clear();
     }
 }
-

@@ -39,7 +39,7 @@ describe("EQ-01 slice C: peekEqState public API", () => {
         await memory.warmup();
         try {
             await memory.rememberTurn(
-                gatewayMessage("一段消息"),
+                gatewayMessage("一段消息", "msg-eqc-1"),
                 gatewayReply("好", "msg-eqc-1"),
                 runtimeContext(),
                 [
@@ -57,14 +57,14 @@ describe("EQ-01 slice C: peekEqState public API", () => {
                     },
                 ],
             );
-            const immediate = memory.peekEqState("user-1");
+            const immediate = memory.peekEqState("turn:msg-eqc-1");
             expect(immediate).not.toBeNull();
             expect(immediate!.label).toBe(EqLabel.Anger);
             expect(immediate!.dominance).toBeCloseTo(0.4, 3);
 
             // 一个半衰期之后：valence/arousal/confidence 折半，dominance 不变
             const stateRow = immediate!;
-            const after = memory.peekEqState("user-1", stateRow.updatedAt + EQ_DEFAULT_HALFLIFE_MS);
+            const after = memory.peekEqState("turn:msg-eqc-1", stateRow.updatedAt + EQ_DEFAULT_HALFLIFE_MS);
             expect(after).not.toBeNull();
             expect(after!.valence).toBeCloseTo(-0.4, 3);
             expect(after!.arousal).toBeCloseTo(0.3, 3);
@@ -201,9 +201,9 @@ async function makeConfig(): Promise<FlyflorConfig> {
     return await loadConfigForPaths(paths);
 }
 
-function gatewayMessage(text: string): GatewayMessage {
+function gatewayMessage(text: string, id = `msg-${Math.random().toString(36).slice(2, 8)}`): GatewayMessage {
     return {
-        id: `msg-${Math.random().toString(36).slice(2, 8)}`,
+        id,
         receivedAt: new Date().toISOString(),
         text,
         attachments: [],

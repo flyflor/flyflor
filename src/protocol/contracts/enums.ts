@@ -174,7 +174,7 @@ export const CapabilityExecutionKind = {
 
 export type CapabilityExecutionKind = (typeof CapabilityExecutionKind)[keyof typeof CapabilityExecutionKind];
 
-export const CttlCapabilitySource = {
+export const CapabilitySource = {
     Channel: "channel",
     Core: "core",
     Mcp: "mcp",
@@ -184,17 +184,17 @@ export const CttlCapabilitySource = {
     User: "user",
 } as const;
 
-export type CttlCapabilitySource = (typeof CttlCapabilitySource)[keyof typeof CttlCapabilitySource];
+export type CapabilitySource = (typeof CapabilitySource)[keyof typeof CapabilitySource];
 
-export const CttlTrustSurface = {
+export const TrustSurface = {
     Background: "background",
     Channel: "channel",
     Local: "local",
 } as const;
 
-export type CttlTrustSurface = (typeof CttlTrustSurface)[keyof typeof CttlTrustSurface];
+export type TrustSurface = (typeof TrustSurface)[keyof typeof TrustSurface];
 
-export const CttlToolScope = {
+export const ToolScope = {
     Background: "background",
     Channel: "channel",
     Chat: "chat",
@@ -202,13 +202,13 @@ export const CttlToolScope = {
     Debug: "debug",
     Local: "local",
     Memory: "memory",
-    Project: "project",
     Subagent: "subagent",
+    Workspace: "workspace",
 } as const;
 
-export type CttlToolScope = (typeof CttlToolScope)[keyof typeof CttlToolScope];
+export type ToolScope = (typeof ToolScope)[keyof typeof ToolScope];
 
-export const CttlPermission = {
+export const ToolPermission = {
     Computer: "computer",
     Dangerous: "dangerous",
     Execute: "execute",
@@ -219,9 +219,9 @@ export const CttlPermission = {
     Write: "write",
 } as const;
 
-export type CttlPermission = (typeof CttlPermission)[keyof typeof CttlPermission];
+export type ToolPermission = (typeof ToolPermission)[keyof typeof ToolPermission];
 
-export const CttlToolCategory = {
+export const ToolCategory = {
     Coding: "coding",
     Computer: "computer",
     Integration: "integration",
@@ -232,9 +232,9 @@ export const CttlToolCategory = {
     System: "system",
 } as const;
 
-export type CttlToolCategory = (typeof CttlToolCategory)[keyof typeof CttlToolCategory];
+export type ToolCategory = (typeof ToolCategory)[keyof typeof ToolCategory];
 
-export const CttlHiddenReason = {
+export const ToolHiddenReason = {
     Availability: "availability",
     ChannelCap: "channel-cap",
     Duplicate: "duplicate",
@@ -245,26 +245,26 @@ export const CttlHiddenReason = {
     TrustDenied: "trust-denied",
 } as const;
 
-export type CttlHiddenReason = (typeof CttlHiddenReason)[keyof typeof CttlHiddenReason];
+export type ToolHiddenReason = (typeof ToolHiddenReason)[keyof typeof ToolHiddenReason];
 
-export const CttlLoopGuardReason = {
+export const ExecutiveLoopGuardReason = {
     FailedCallRepeat: "failed-call-repeat",
     MaxCallsExceeded: "max-calls-exceeded",
     RepeatedCallNoProgress: "repeated-call-no-progress",
     UnknownToolRepeat: "unknown-tool-repeat",
 } as const;
 
-export type CttlLoopGuardReason = (typeof CttlLoopGuardReason)[keyof typeof CttlLoopGuardReason];
+export type ExecutiveLoopGuardReason = (typeof ExecutiveLoopGuardReason)[keyof typeof ExecutiveLoopGuardReason];
 
 export const RuntimeMode = {
     Chat: "chat",
     Cli: "cli",
     /**
-     * 生命体常驻态：无 user 输入超过 memory.dormant.idleMinutes 后进入。
+     * 生命体常驻态：无 user 输入超过 memory.idle.idleMinutes 后进入。
      * 行为契约：gateway 监听不停（任意入站立即切回 Chat），后台 worker 主导节拍。
-     * 详见 docs/boundaries.md R1-R4；历史设计归档在 docs/old-docs/life.form.md。
+     * 详见 docs/boundaries.md R1-R4；历史设计归档在 docs/old-docs/legacy.architecture.history.md。
      */
-    Dormant: "dormant",
+    Idle: "idle",
     Gateway: "gateway",
     Tui: "tui",
 } as const;
@@ -510,9 +510,6 @@ export const ArchitectureLayer = {
 
 export type ArchitectureLayer = (typeof ArchitectureLayer)[keyof typeof ArchitectureLayer];
 
-export const FpcLayer = ArchitectureLayer;
-export type FpcLayer = ArchitectureLayer;
-
 export const MemoryLayer = {
     Brain: "brain",
     Crystal: "crystal",
@@ -563,7 +560,7 @@ export type MemoryKind = (typeof MemoryKind)[keyof typeof MemoryKind];
 export const MemoryActionTarget = {
     Memory: "memory",
     Self: "self",
-    Soul: "soul",
+    Identity: "identity",
     User: "user",
 } as const;
 
@@ -592,7 +589,7 @@ export type MemorySourceKind = (typeof MemorySourceKind)[keyof typeof MemorySour
 export const MarkdownMemoryFile = {
     Memory: "MEMORY.md",
     Self: "SELF.md",
-    Soul: "SOUL.md",
+    Identity: "IDENTITY.md",
     User: "USER.md",
 } as const;
 

@@ -2,7 +2,7 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { renderPromptTemplatesDoc } from "../src/agent/prompts/template.docs.ts";
+import { renderPromptTemplatesDoc, renderPromptTemplatesZhCnDoc } from "../src/agent/prompts/template.docs.ts";
 import {
     PROMPT_TEMPLATE_BUNDLE_MANIFEST,
     PROMPT_TEMPLATE_MANIFEST_FILE,
@@ -10,6 +10,7 @@ import {
 
 const repoRoot = join(import.meta.dir, "..");
 const readmePath = join(repoRoot, "README.md");
+const readmeZhCnPath = join(repoRoot, "README.zh.cn.md");
 const manifestPath = join(repoRoot, "templates", "prompts", PROMPT_TEMPLATE_MANIFEST_FILE);
 const startMarker = "<!-- flyflor:prompt-templates:start -->";
 const endMarker = "<!-- flyflor:prompt-templates:end -->";
@@ -19,18 +20,27 @@ const writeMode = args.has("--write");
 const checkMode = args.has("--check");
 
 const generated = renderPromptTemplatesDoc().trimEnd() + "\n";
+const generatedZhCn = renderPromptTemplatesZhCnDoc().trimEnd() + "\n";
 const generatedManifest = `${JSON.stringify(PROMPT_TEMPLATE_BUNDLE_MANIFEST, null, 2)}\n`;
 
 if (writeMode) {
     const readme = await readFile(readmePath, "utf8");
+    const readmeZhCn = await readFile(readmeZhCnPath, "utf8");
     await writeFile(readmePath, replacePromptTemplateSection(readme, generated), "utf8");
+    await writeFile(readmeZhCnPath, replacePromptTemplateSection(readmeZhCn, generatedZhCn), "utf8");
     await writeFile(manifestPath, generatedManifest, "utf8");
     console.log(`wrote ${readmePath}`);
+    console.log(`wrote ${readmeZhCnPath}`);
     console.log(`wrote ${manifestPath}`);
 } else if (checkMode) {
     const current = extractPromptTemplateSection(await readFile(readmePath, "utf8"));
     if (current.trimEnd() !== generated.trimEnd()) {
         console.error(`prompt template docs drift: ${readmePath}`);
+        process.exit(1);
+    }
+    const currentZhCn = extractPromptTemplateSection(await readFile(readmeZhCnPath, "utf8"));
+    if (currentZhCn.trimEnd() !== generatedZhCn.trimEnd()) {
+        console.error(`prompt template docs drift: ${readmeZhCnPath}`);
         process.exit(1);
     }
     const currentManifest = await readFile(manifestPath, "utf8");
@@ -39,6 +49,7 @@ if (writeMode) {
         process.exit(1);
     }
     console.log(`ok ${readmePath}`);
+    console.log(`ok ${readmeZhCnPath}`);
     console.log(`ok ${manifestPath}`);
 } else {
     process.stdout.write(generated);

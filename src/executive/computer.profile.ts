@@ -1,8 +1,8 @@
-import { CttlPermission, CttlToolCategory } from "../protocol/contracts/index.ts";
+import { ToolPermission, ToolCategory } from "../protocol/contracts/index.ts";
 import {
-    CttlComputerControlAction,
-    type CttlComputerControlProfile,
-    type CttlToolDescriptor,
+    ComputerControlAction,
+    type ComputerControlProfile,
+    type ToolDescriptor,
 } from "./types.ts";
 
 /**
@@ -13,12 +13,12 @@ import {
  * but they all normalize through the same profile so Trust / Sandbox can apply
  * one approval surface.
  */
-export class CttlComputerProfileComponent {
-    public profileFor(descriptor: CttlToolDescriptor): CttlComputerControlProfile | undefined {
+export class ComputerProfileComponent {
+    public profileFor(descriptor: ToolDescriptor): ComputerControlProfile | undefined {
         if (descriptor.computer) {
             return descriptor.computer;
         }
-        if (descriptor.category !== CttlToolCategory.Computer && descriptor.permission !== CttlPermission.Computer) {
+        if (descriptor.category !== ToolCategory.Computer && descriptor.permission !== ToolPermission.Computer) {
             return undefined;
         }
         return {
@@ -28,26 +28,26 @@ export class CttlComputerProfileComponent {
         };
     }
 
-    public isComputerControlled(descriptor: CttlToolDescriptor): boolean {
+    public isComputerControlled(descriptor: ToolDescriptor): boolean {
         return this.profileFor(descriptor) !== undefined;
     }
 
-    private actionFor(descriptor: CttlToolDescriptor): CttlComputerControlAction {
-        return descriptor.readOnly ? CttlComputerControlAction.Screen : CttlComputerControlAction.Browser;
+    private actionFor(descriptor: ToolDescriptor): ComputerControlAction {
+        return descriptor.readOnly ? ComputerControlAction.Screen : ComputerControlAction.Browser;
     }
 
-    private requiresFocusTarget(descriptor: CttlToolDescriptor): boolean {
+    private requiresFocusTarget(descriptor: ToolDescriptor): boolean {
         if (descriptor.readOnly) {
             return false;
         }
-        return descriptor.exclusive || descriptor.permission === CttlPermission.Computer;
+        return descriptor.exclusive || descriptor.permission === ToolPermission.Computer;
     }
 }
 
-const defaultComputerProfile = new CttlComputerProfileComponent();
+const defaultComputerProfile = new ComputerProfileComponent();
 
 export function profileComputerControlledTool(
-    descriptor: CttlToolDescriptor,
-): CttlComputerControlProfile | undefined {
+    descriptor: ToolDescriptor,
+): ComputerControlProfile | undefined {
     return defaultComputerProfile.profileFor(descriptor);
 }

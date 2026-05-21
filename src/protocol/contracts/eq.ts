@@ -23,7 +23,10 @@ export const EqLabel = {
 export type EqLabel = (typeof EqLabel)[keyof typeof EqLabel];
 
 export interface EqState {
-    userId: string;
+    /** Core owner key: scope/fork/codename/turn/audit. */
+    ownerKey: string;
+    /** Optional source provenance label; never used as continuity owner. */
+    sourceKey?: string;
     valence: number;
     arousal: number;
     dominance: number;

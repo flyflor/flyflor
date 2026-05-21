@@ -228,7 +228,7 @@ export class WorkerManager {
             workerName: registration.name,
             runtime: registration.runtime,
             requestId: task.options.requestId,
-            projectConstraintId: task.options.projectConstraintId,
+            scopeConstraintId: task.options.scopeConstraintId,
             turnId: task.options.turnId,
             createdAt: startedAt,
         };

@@ -121,7 +121,7 @@ esac
             expect(await readFile(join(prefix, "bin", "flyflor"), "utf8")).toContain("echo flyflor");
             expect(await readFile(join(sandbox.root, "global-bin", "flyflor"), "utf8")).toContain("echo flyflor");
             expect(await readFile(join(prefix, "prompts", "runtime.system.md"), "utf8")).toContain("runtime");
-            expect(await readFile(join(prefix, "templates", "memory", "MEMORY.md"), "utf8")).toContain("memory");
+            expect(await readFile(join(prefix, "templates", "memory", "memory.md"), "utf8")).toContain("memory");
         },
         { timeout: 30_000 },
     );
@@ -345,7 +345,7 @@ async function createTemplateTarball(root: string): Promise<string> {
     await mkdir(join(source, "prompts"), { recursive: true });
     await mkdir(join(source, "templates", "memory"), { recursive: true });
     await writeFile(join(source, "prompts", "runtime.system.md"), "runtime template\n");
-    await writeFile(join(source, "templates", "memory", "MEMORY.md"), "memory template\n");
+    await writeFile(join(source, "templates", "memory", "memory.md"), "memory template\n");
     const proc = Bun.spawn(["tar", "-czf", tarball, "-C", source, "."], { stdout: "pipe", stderr: "pipe" });
     const exit = await proc.exited;
     if (exit !== 0) {

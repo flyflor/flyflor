@@ -87,7 +87,7 @@ export interface BlackboardTurnRelations {
 export class BlackboardModel {
     public toLease(row: BlackboardLeaseRow): BlackboardLease {
         return {
-            projectConstraintId: row.project_constraint_id,
+            scopeConstraintId: row.project_constraint_id,
             turnId: row.turn_id,
             requestId: row.request_id,
             acquiredAt: row.acquired_at,
@@ -98,7 +98,7 @@ export class BlackboardModel {
     public toTurn(row: BlackboardTurnRow, relations: BlackboardTurnRelations): BlackboardTurn {
         return {
             id: row.id,
-            projectConstraintId: row.project_constraint_id,
+            scopeConstraintId: row.project_constraint_id,
             requestId: row.request_id,
             mode: BlackboardMode.Blackboard,
             status: row.status as BlackboardTurnStatusType,

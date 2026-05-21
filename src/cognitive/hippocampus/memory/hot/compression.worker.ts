@@ -58,7 +58,7 @@ export class HotMemoryCompressionWorker {
         this.workingMemoryHealthSnapshot = options.workingMemoryHealthSnapshot;
     }
 
-    public async drain(userId: string): Promise<HotMemoryCompressionRunResult> {
+    public async drain(ownerKey: string): Promise<HotMemoryCompressionRunResult> {
         const result: HotMemoryCompressionRunResult = {
             scanned: 0,
             compressed: 0,
@@ -72,12 +72,12 @@ export class HotMemoryCompressionWorker {
         let candidateIds: string[] = [];
         try {
             candidateIds = await this.workingMemory.listConsolidationCandidates(
-                userId,
+                ownerKey,
                 Math.floor(this.now() / 1000),
                 this.batchSize,
             );
         } catch (err) {
-            this.publishFailure(userId, "list-candidates", err);
+            this.publishFailure(ownerKey, "list-candidates", err);
             throw err;
         }
         result.scanned = candidateIds.length;
@@ -87,15 +87,15 @@ export class HotMemoryCompressionWorker {
         const missingEpisodeIds: string[] = [];
         for (const id of candidateIds) {
             try {
-                const episode = await this.workingMemory.readEpisode(userId, id);
+                const episode = await this.workingMemory.readEpisode(ownerKey, id);
                 if (episode) {
                     episodes.push(episode);
                 } else {
                     missingEpisodeIds.push(id);
-                    await this.workingMemory.dropEpisode(userId, id);
+                    await this.workingMemory.dropEpisode(ownerKey, id);
                 }
             } catch (err) {
-                this.publishFailure(userId, "read-episode", err);
+                this.publishFailure(ownerKey, "read-episode", err);
                 throw err;
             }
         }
@@ -104,19 +104,19 @@ export class HotMemoryCompressionWorker {
 
         let decision: HotMemoryCompressionDecision;
         try {
-            decision = await this.compress(userId, episodes);
+            decision = await this.compress(ownerKey, episodes);
         } catch (err) {
-            this.publishFailure(userId, "compress", err);
+            this.publishFailure(ownerKey, "compress", err);
             throw err;
         }
 
         const deletedEpisodeIds: string[] = [];
         for (const episode of episodes) {
             try {
-                await this.workingMemory.dropEpisode(userId, episode.episodeId);
+                await this.workingMemory.dropEpisode(ownerKey, episode.episodeId);
                 deletedEpisodeIds.push(episode.episodeId);
             } catch (err) {
-                this.publishFailure(userId, "drop-episode", err);
+                this.publishFailure(ownerKey, "drop-episode", err);
                 throw err;
             }
         }
@@ -126,7 +126,8 @@ export class HotMemoryCompressionWorker {
         const createdAt = this.now();
         const content: HotMemoryCompressionContent = {
             batchId,
-            userId,
+            ownerKey,
+            userId: ownerKey,
             reason: this.reason,
             sourceEpisodeIds: episodes.map((episode) => episode.episodeId),
             deletedEpisodeIds,
@@ -146,7 +147,7 @@ export class HotMemoryCompressionWorker {
             this.brain.appendEvent({
                 id: batchId,
                 ts: createdAt,
-                userId,
+                userId: ownerKey,
                 type: MemoryEventType.HotMemoryCompression,
                 role: ModelRole.System,
                 content: content as unknown as Record<string, unknown>,
@@ -157,7 +158,7 @@ export class HotMemoryCompressionWorker {
             this.events.publish(
                 event(RuntimeEventType.MemoryHotCompressionWritten, {
                     batchId,
-                    userId,
+                    ownerKey,
                     deleted: result.deleted,
                     missing: result.missing,
                     reason: this.reason,
@@ -165,24 +166,24 @@ export class HotMemoryCompressionWorker {
                 }),
             );
         } catch (err) {
-            this.publishFailure(userId, "brain-append", err);
+            this.publishFailure(ownerKey, "brain-append", err);
             throw err;
         }
         return result;
     }
 
-    public async compress(userId: string, episodes: EpisodeRecord[]): Promise<HotMemoryCompressionDecision> {
+    public async compress(ownerKey: string, episodes: EpisodeRecord[]): Promise<HotMemoryCompressionDecision> {
         const prompt = renderHotMemoryCompressionPrompt({
-            episodes: renderEpisodesBlock(userId, episodes),
+            episodes: renderEpisodesBlock(ownerKey, episodes),
         });
         const raw = await this.model.generate([{ role: ModelRole.User, content: prompt }]);
         return parseHotMemoryCompressionDecision(raw);
     }
 
-    private publishFailure(userId: string, stage: string, err: unknown): void {
+    private publishFailure(ownerKey: string, stage: string, err: unknown): void {
         this.events.publish(
             event(RuntimeEventType.MemoryHotCompressionFailed, {
-                userId,
+                ownerKey,
                 stage,
                 error: String(err),
             }),
@@ -221,12 +222,12 @@ export function parseHotMemoryCompressionDecision(raw: string): HotMemoryCompres
     return { compressedText, retainedSignals, confidence, rationale };
 }
 
-function renderEpisodesBlock(userId: string, episodes: EpisodeRecord[]): string {
+function renderEpisodesBlock(ownerKey: string, episodes: EpisodeRecord[]): string {
     return episodes
         .map((episode, index) =>
             [
                 `record: ${index + 1}`,
-                `userId: ${userId}`,
+                `ownerKey: ${ownerKey}`,
                 `episodeId: ${episode.episodeId}`,
                 `sourceKind: ${episode.sourceKind}`,
                 `createdAt: ${episode.createdAt}`,

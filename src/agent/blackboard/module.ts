@@ -65,7 +65,7 @@ export class BlackboardModule extends Blackboard {
     public async startTurn(request: BlackboardStartRequest): Promise<BlackboardStartResult> {
         const turnId = request.turnId ?? crypto.randomUUID();
         const lease = await this.store.acquireLease({
-            projectConstraintId: request.projectConstraintId,
+            scopeConstraintId: request.scopeConstraintId,
             turnId,
             requestId: request.requestId,
             now: request.now,
@@ -78,7 +78,7 @@ export class BlackboardModule extends Blackboard {
         const plannedWorkers = blackboardComposition.workersFromPlan(request.workers, request.now);
         const turn: BlackboardTurn = {
             id: turnId,
-            projectConstraintId: request.projectConstraintId,
+            scopeConstraintId: request.scopeConstraintId,
             requestId: request.requestId,
             mode: BlackboardMode.Blackboard,
             status: BlackboardTurnStatus.Running,
@@ -106,7 +106,7 @@ export class BlackboardModule extends Blackboard {
         try {
             await this.store.createTurn(turn);
         } catch (error) {
-            await this.store.releaseLease(request.projectConstraintId, turnId, request.now);
+            await this.store.releaseLease(request.scopeConstraintId, turnId, request.now);
             throw error;
         }
 
@@ -115,7 +115,7 @@ export class BlackboardModule extends Blackboard {
                 RuntimeEventType.BlackboardLeaseAcquired,
                 {
                     expiresAt: lease.lease.expiresAt,
-                    projectConstraintId: request.projectConstraintId,
+                    scopeConstraintId: request.scopeConstraintId,
                     turnId,
                 },
                 request.requestId,
@@ -126,7 +126,7 @@ export class BlackboardModule extends Blackboard {
                 RuntimeEventType.BlackboardTurnStart,
                 {
                     goal: request.goal,
-                    projectConstraintId: request.projectConstraintId,
+                    scopeConstraintId: request.scopeConstraintId,
                     turnId,
                 },
                 request.requestId,
@@ -342,7 +342,7 @@ export class BlackboardModule extends Blackboard {
 
         const task: BlackboardWorkerTask = {
             turnId,
-            projectConstraintId: turn.projectConstraintId,
+            scopeConstraintId: turn.scopeConstraintId,
             requestId: turn.requestId,
             goal: turn.goal,
             contract: blackboardComposition.blackboardContractFor(turn),
@@ -385,7 +385,7 @@ export class BlackboardModule extends Blackboard {
             task,
             {
                 requestId: turn.requestId,
-                projectConstraintId: turn.projectConstraintId,
+                scopeConstraintId: turn.scopeConstraintId,
                 timeoutMs: input.timeoutMs,
                 turnId,
             },
@@ -462,13 +462,13 @@ export class BlackboardModule extends Blackboard {
             return undefined;
         }
         const updated = await this.store.updateTurnStatus(turnId, status, now);
-        const released = await this.store.releaseLease(existing.projectConstraintId, turnId, now);
+        const released = await this.store.releaseLease(existing.scopeConstraintId, turnId, now);
         if (released) {
             this.events.publish(
                 event(
                     RuntimeEventType.BlackboardLeaseReleased,
                     {
-                        projectConstraintId: released.projectConstraintId,
+                        scopeConstraintId: released.scopeConstraintId,
                         turnId,
                     },
                     existing.requestId,
@@ -479,7 +479,7 @@ export class BlackboardModule extends Blackboard {
             event(
                 RuntimeEventType.BlackboardTurnEnd,
                 {
-                    projectConstraintId: existing.projectConstraintId,
+                    scopeConstraintId: existing.scopeConstraintId,
                     status,
                     turnId,
                 },
@@ -493,8 +493,8 @@ export class BlackboardModule extends Blackboard {
         return this.store.getTurn(turnId);
     }
 
-    public async listTurns(projectConstraintId: string, limit = 20): Promise<BlackboardTurn[]> {
-        return this.store.listTurns(projectConstraintId, limit);
+    public async listTurns(scopeConstraintId: string, limit = 20): Promise<BlackboardTurn[]> {
+        return this.store.listTurns(scopeConstraintId, limit);
     }
 
     public async listRecentTurns(limit = 20): Promise<BlackboardTurn[]> {

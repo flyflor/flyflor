@@ -3,17 +3,17 @@ import { PluginRunner, type PluginInvocationResult } from "../../plugin/index.ts
 import type { FlyflorPaths } from "../../../config/index.ts";
 import type { EventSink } from "../../../events/index.ts";
 import type { SandboxPolicy } from "../../sandbox/index.ts";
-import type { CttlManifestToolDefinition } from "../../../executive/index.ts";
+import type { ManifestToolDefinition } from "../../../executive/index.ts";
 
 export const USER_TOOL_SERVER = "user";
 
 export interface UserToolInvocationInput {
-    approve?: (tool: CttlManifestToolDefinition) => boolean | Promise<boolean>;
+    approve?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
     events: EventSink;
     input: Record<string, unknown>;
     paths: FlyflorPaths;
     policy: SandboxPolicy;
-    tool: CttlManifestToolDefinition;
+    tool: ManifestToolDefinition;
 }
 
 export async function invokeUserTool(input: UserToolInvocationInput): Promise<PluginInvocationResult> {

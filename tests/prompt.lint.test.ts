@@ -178,6 +178,29 @@ describe("lintPromptTemplates", () => {
         expect(offenders).toEqual([]);
     });
 
+    test("runtime prompt templates use Scope wording instead of project containers", async () => {
+        const promptDir = join(process.cwd(), "templates", "prompts");
+        const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
+        const forbidden = [
+            /\bproject notes\b/i,
+            /\bproject event\b/i,
+            /\bproject convention\b/i,
+            /\bproject decisions\b/i,
+            /项目笔记/u,
+            /项目事件/u,
+            /项目约定/u,
+            /项目决策/u,
+        ];
+        const offenders: string[] = [];
+        for (const file of files) {
+            const body = await readFile(join(promptDir, file), "utf8");
+            const prose = body.replace(/\{\{[^}]+\}\}/g, "");
+            const hit = forbidden.find((pattern) => pattern.test(prose));
+            if (hit) offenders.push(`${file}: ${String(hit)}`);
+        }
+        expect(offenders).toEqual([]);
+    });
+
     test("runtime prompt prose is not embedded in TypeScript source", async () => {
         const offenders: string[] = [];
         const sourceFiles = await listTypeScriptFiles(join(process.cwd(), "src"));
@@ -193,6 +216,7 @@ describe("lintPromptTemplates", () => {
             "answer-current-round-peer-questions",
             "To request MCP execution",
             "Use these tool results to answer the original user request",
+            "Tool-call budget is exhausted for this turn",
         ];
         for (const file of sourceFiles) {
             if (file.endsWith(join("src", "agent", "prompts", "template.manifest.ts"))) {

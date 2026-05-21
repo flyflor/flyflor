@@ -29,7 +29,7 @@ export type AtomStage = (typeof AtomStage)[keyof typeof AtomStage];
  * identity 自写目标文件。R3 红线：append-only + revertable，禁止覆盖式重写。
  */
 export const IdentityFile = {
-    Soul: "soul.md",
+    Identity: "identity.md",
     User: "user.md",
 } as const;
 
@@ -43,10 +43,16 @@ export interface MemoryAtom {
     id: string;
     /** 1..N episode id；Atom 是 episode 上的语义视图，原文不入 Atom 表。 */
     episodeIds: string[];
-    userId: string;
-    channelId: string;
-    /** 可能是 inbox project（D5：7 天加速衰减），不允许为空。 */
-    projectId: string;
+    /** Core continuity owner: scope:<id>, fork:<id>, codename:<id>, or turn:<id>. */
+    ownerKey?: string;
+    /** Explicit scope id when the atom belongs to a mounted scope. */
+    scopeId?: string;
+    /** Optional source provenance label; never used as continuity owner. */
+    sourceKey?: string;
+    /** Optional source surface label; never used as continuity owner. */
+    sourceSurface?: string;
+    /** @deprecated Legacy scope alias retained for old brain events. Prefer scopeId. */
+    projectId?: string;
     /** 主对话角色，决定 spreading activation 与 Confirmation lookup 行为。 */
     role: ModelRole;
     /** 以下五字段由模型同轮结构化输出填充；冷相回填 outcome / success。 */
@@ -90,15 +96,26 @@ export interface AtomScore {
 
 /**
  * 焦点指针：表达"现在用户和 agent 在干什么"。
- * 存于 brain/state 层或本地运行时状态。无活动超过 dormant.idleMinutes 后回落 inbox。
+ * 存于 brain/state 层或本地运行时状态。无活动超过 idle.idleMinutes 后回落 inbox。
  */
 export interface FocusPointer {
-    userId: string;
-    channelId: string;
-    projectId: string;
+    /** Core continuity owner: scope:<id>, fork:<id>, codename:<id>, or turn:<id>. */
+    ownerKey: string;
+    /** Explicit mounted scope when focus is scope-local. */
+    scopeId?: string;
+    /** Explicit fork when focus follows a context branch. */
+    contextForkId?: string;
+    /** Codename anchor boost, never an implicit context container. */
+    codenameId?: string;
+    /** Optional source provenance label; never used as continuity owner. */
+    sourceKey?: string;
+    /** Optional source surface label; never used as continuity owner. */
+    sourceSurface?: string;
+    /** @deprecated Legacy scope alias retained for old snapshots. */
+    projectId?: string;
     sinceTs: string;
     lastTouchTs: string;
-    /** RuntimeMode 切换由此判断；Dormant 期间 lastTouchTs 不更新。 */
+    /** RuntimeMode 切换由此判断；Idle 期间 lastTouchTs 不更新。 */
     awake: boolean;
 }
 

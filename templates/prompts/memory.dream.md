@@ -44,7 +44,7 @@ Output one JSON object. The `decisions` array shown below is **illustrative only
 
 Output only the JSON object. No prose, no code fences.
 
-User: {{userId}}
+Owner: {{ownerKey}}
 
 Candidates:
 {{candidates}}

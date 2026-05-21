@@ -2,7 +2,7 @@ import type { BlackboardWorkerOutcome, BlackboardWorkerRole } from "./enums.ts";
 
 export interface BlackboardWorkerTask {
     turnId: string;
-    projectConstraintId: string;
+    scopeConstraintId: string;
     requestId: string;
     goal: string;
     contract: BlackboardWorkerContract;

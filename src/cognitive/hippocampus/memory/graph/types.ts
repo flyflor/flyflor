@@ -21,9 +21,9 @@ export interface MemoryGraphStore {
     recallMemoryNodes(input: GraphRecallInput): Promise<MemoryNodeRecord[]>;
     recallSkills(input: GraphRecallInput): Promise<GemRecord[]>;
     expandSimilarConcept(seedIds: string[], limit: number): Promise<MemoryNodeRecord[]>;
-    countByUser(userId: string): Promise<GraphCounts>;
+    countByOwner(ownerKey: string): Promise<GraphCounts>;
     listGemDriftCandidates(input: {
-        userId: string;
+        ownerKey: string;
         nowMs: number;
         minContradictionCount: number;
         maxStaleMs: number;
@@ -31,12 +31,12 @@ export interface MemoryGraphStore {
         limit: number;
     }): Promise<GemRecord[]>;
     listRecallExtremes(input: {
-        userId: string;
+        ownerKey: string;
         topN: number;
         bottomN: number;
     }): Promise<{ tops: MemoryNodeRecord[]; bottoms: MemoryNodeRecord[] }>;
     listContradictionPairs(input: {
-        userId: string;
+        ownerKey: string;
         seedN: number;
         neighborK: number;
         minCosine: number;
@@ -78,7 +78,7 @@ export interface MemoryGraphStore {
 
 export interface EpisodeNodeInput {
     id: string;
-    userId: string;
+    ownerKey: string;
     text: string;
     concepts: string[];
     embedding: number[];
@@ -90,7 +90,7 @@ export interface EpisodeNodeInput {
 
 export interface MemoryNodeInput {
     id: string;
-    userId: string;
+    ownerKey: string;
     symbols: string[];
     summary: string;
     embedding: number[];
@@ -107,7 +107,7 @@ export interface MemoryNodeInput {
 
 export interface GemNodeInput {
     id: string;
-    userId: string;
+    ownerKey: string;
     symbols: string[];
     summary: string;
     embedding: number[];
@@ -126,7 +126,7 @@ export interface GemNodeInput {
 
 export interface SummaryEmbeddingInput {
     id: string;
-    userId: string;
+    ownerKey: string;
     summaryId: string;
     timeRange: string;
     bucketKey: string;
@@ -135,7 +135,7 @@ export interface SummaryEmbeddingInput {
 }
 
 export interface GraphRecallInput {
-    userId?: string;
+    ownerKey?: string;
     symbols?: string[];
     embedding?: number[];
     minConfidence?: number;
@@ -157,7 +157,7 @@ export interface GraphCounts {
 }
 
 export interface DecaySweepInput {
-    userId: string;
+    ownerKey: string;
     /** 单次扫描每张表最多拉的行数，默认 200。 */
     batchSize?: number;
     decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;

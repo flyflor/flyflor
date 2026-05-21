@@ -398,7 +398,7 @@ export interface MemoryWeightConfig {
 
 /**
  * 生命体重构（LF-P0）配置块。所有字段都有默认值；缺省走 `createDefaultMemoryTuning()`。
- * 详见当前契约 `docs/boundaries.md` R1-R4；历史设计归档在 `docs/old-docs/life.form.md`。
+ * 详见当前契约 `docs/boundaries.md` R1-R4；历史设计归档在 `docs/old-docs/legacy.architecture.history.md`。
  *
  * R 红线提醒：本块属于内部行为调参，**禁止走环境变量**；必须落 `~/.flyflor/.config/config.jsonc`。
  */
@@ -408,12 +408,12 @@ export interface MemoryTuningConfig {
     hotMemoryCompression: HotMemoryCompressionTuningConfig;
     reconsolidation: ReconsolidationTuningConfig;
     inbox: InboxTuningConfig;
-    dormant: DormantTuningConfig;
+    idle: IdleTuningConfig;
     brainDb: BrainDbTuningConfig;
     contextFork: ContextForkTuningConfig;
     atomScore: AtomScoreTuningConfig;
-    /** LF-R3/R4 ghost & ask 调参；详见 GhostTuningConfig 注释。 */
-    ghost: GhostTuningConfig;
+    /** LF-R3/R4 continuation & ask 调参；详见 ContinuationTuningConfig 注释。 */
+    continuation: ContinuationTuningConfig;
 }
 
 export interface BrainDbTuningConfig {
@@ -430,32 +430,32 @@ export interface ContextForkTuningConfig {
     sidecarTtlDays: number;
 }
 
-export interface GhostTuningConfig {
+export interface ContinuationTuningConfig {
     /**
      * Ask 链深度硬上限（LF-R3）。pending ask 接续 ask 时累加，超过阈值 runtime
-     * 强制 reply 并发 `MemoryAskChainCapped` 事件。同时作为 ghost 链固化深度上限。
+     * 强制 reply 并发 `MemoryAskChainCapped` 事件。同时作为 continuation 链固化深度上限。
      */
     maxChainDepth: number;
     /**
-     * Ghost pin 时把 decay_score 半衰期乘以本系数（LF-R4）。
+     * Continuation pin 时把 decay_score 半衰期乘以本系数（LF-R4）。
      * 不冻结、仍参与衰减管道，只是延缓被自然衰减抛弃。
      */
     pinHalflifeMultiplier: number;
     /**
-     * LF-R4 evidence weight 表：在 buildPrompt 渲染 `[ghost-hint]` 时按 ghost 当前结构化
+     * LF-R4 evidence weight 表：在 buildPrompt 渲染 `[continuation-hint]` 时按 continuation 当前结构化
      * 状态（已回答的 ask sibling / continuation 已完成 / 已被 drop）乘到 decayScore 上，
      * 用于排序与可见性判定。**全部由结构化字段（ask-answer 配对存在与否、memory_state.status）
      * 驱动，禁止任何对话文本语义匹配**。
      */
-    evidenceWeight: GhostEvidenceWeightTable;
+    evidenceWeight: ContinuationEvidenceWeightTable;
 }
 
-export interface GhostEvidenceWeightTable {
+export interface ContinuationEvidenceWeightTable {
     /** Ask 已收到答复（存在 ask-answer-pair 记录）：仍保留参考价值但权重略降。 */
     askAnswered: number;
-    /** Ghost sibling 对应的 ask 仍 pending，但 continuation 已经回过一轮：再次回顾权重下降。 */
+    /** Continuation sibling 对应的 ask 仍 pending，但 continuation 已经回过一轮：再次回顾权重下降。 */
     continuationCompleted: number;
-    /** 用户/Dream 显式 drop：state=abandoned，直接 0（不应出现在 listActiveGhosts，但作 belt-and-suspenders）。 */
+    /** 用户/Dream 显式 drop：state=abandoned，直接 0（不应出现在 listActiveContinuations，但作 belt-and-suspenders）。 */
     abandoned: number;
     /** 默认（live / resumed 且 ask 未回答）：满权重。 */
     default: number;
@@ -494,7 +494,7 @@ export interface ReconsolidationTuningConfig {
 }
 
 export interface InboxTuningConfig {
-    /** D5：inbox project 内 atom 的 recency 衰减倍率。 */
+    /** D5：no-scope codename bucket 内 atom 的 recency 衰减倍率。 */
     decayMultiplier: number;
     /** atom 在 inbox 内的 TTL 天数；过期 → 自然淡出（仍可被 cluster sweeper 抢救升格）。 */
     ttlDays: number;
@@ -505,19 +505,19 @@ export interface InboxTuningConfig {
      */
     activeCodenameWindowMinutes: number;
     /**
-     * P2：rank 函数对同 codename inbox atom 的加分（0..1）。
+     * P2：rank 函数对同 codename owner bucket atom 的加分（0..1）。
      * 默认 0.15，与现有 atom score (0.75) + similarity (0.25) 同量级；
-     * 不引入字符匹配，仅靠 projectId 字面量比较。
+     * 不引入字符匹配，仅靠 owner/scope 字面量比较。
      */
     codenameRecallBoost: number;
 }
 
-export interface DormantTuningConfig {
-    /** D7：进入 Dormant 的静默阈值（分钟）。 */
+export interface IdleTuningConfig {
+    /** D7：进入 Idle 的静默阈值（分钟）。 */
     idleMinutes: number;
     /**
      * 审计字段：W2 决策的行为契约，**编辑无效**。
-     * Dormant 期间 gateway 必须保持订阅；此字段仅供 doctor 输出。
+     * Idle 期间 gateway 必须保持订阅；此字段仅供 doctor 输出。
      */
     _keepGatewayListening: true;
 }
@@ -794,15 +794,15 @@ function mergeMemoryConfig(defaults: MemoryConfig, override: Partial<MemoryConfi
         return defaults;
     }
     if (
-        override.tuning?.dormant?._keepGatewayListening !== undefined &&
-        override.tuning.dormant._keepGatewayListening !== true
+        override.tuning?.idle?._keepGatewayListening !== undefined &&
+        override.tuning.idle._keepGatewayListening !== true
     ) {
-        throw new Error("memory.tuning.dormant._keepGatewayListening is audit-only and must stay true.");
+        throw new Error("memory.tuning.idle._keepGatewayListening is audit-only and must stay true.");
     }
 
     const merged = mergeConfig(defaults, override);
     // R red-line enforcement: `_keepGatewayListening` is an audit-only field.
-    merged.tuning.dormant._keepGatewayListening = true;
+    merged.tuning.idle._keepGatewayListening = true;
     return merged;
 }
 
@@ -898,7 +898,7 @@ export function createDefaultMemoryConfig(): MemoryConfig {
 }
 
 /**
- * 生命体重构默认调参。当前运行边界见 `docs/boundaries.md`，历史设计归档在 `docs/old-docs/life.form.md`。
+ * 生命体重构默认调参。当前运行边界见 `docs/boundaries.md`，历史设计归档在 `docs/old-docs/legacy.architecture.history.md`。
  *
  * 配置覆盖规则：用户在 `~/.flyflor/.config/config.jsonc` 的 `memory.tuning.*` 下显式覆盖即生效；
  * 类型不正确时由 doctor 表 `Memory tuning` 一行高亮（不报错）。
@@ -929,7 +929,7 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
             activeCodenameWindowMinutes: 60,
             codenameRecallBoost: 0.15,
         },
-        dormant: {
+        idle: {
             idleMinutes: 10,
             _keepGatewayListening: true,
         },
@@ -950,7 +950,7 @@ export function createDefaultMemoryTuning(): MemoryTuningConfig {
                 fanout: 0.15,
             },
         },
-        ghost: {
+        continuation: {
             maxChainDepth: 5,
             pinHalflifeMultiplier: 3,
             evidenceWeight: {

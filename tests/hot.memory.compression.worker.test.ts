@@ -174,7 +174,7 @@ describe("HotMemoryCompressionWorker", () => {
 function makeEpisode(episodeId: string): EpisodeRecord {
     return {
         episodeId,
-        userId: "u1",
+        ownerKey: "scope:u1",
         text: "A short-lived implementation note.",
         concepts: ["implementation"],
         embedding: [0.1, 0.2],

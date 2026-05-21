@@ -25,24 +25,24 @@ class FakeConsolidation {
         discarded: 0,
         skipped: 0,
     };
-    public async drain(userId: string): Promise<ConsolidationRunResult> {
-        this.drained.push(userId);
+    public async drain(ownerKey: string): Promise<ConsolidationRunResult> {
+        this.drained.push(ownerKey);
         if (this.fail) throw new Error("boom-consolidation");
         return this.result;
     }
 }
 
 class FakeGraph {
-    public readonly swept: Array<{ userId: string; batchSize?: number }> = [];
+    public readonly swept: Array<{ ownerKey: string; batchSize?: number }> = [];
     public failNext = false;
     public decayBudget = { mn: 3, sk: 1 };
     public async applyDecaySweep(input: {
-        userId: string;
+        ownerKey: string;
         batchSize?: number;
         decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
         decayGem: (row: { importance: number; updatedAt: number; lastVerifiedAt?: number }) => number;
     }): Promise<{ memoryNodes: number; gems: number }> {
-        this.swept.push({ userId: input.userId, batchSize: input.batchSize });
+        this.swept.push({ ownerKey: input.ownerKey, batchSize: input.batchSize });
         if (this.failNext) {
             this.failNext = false;
             throw new Error("boom-decay");
@@ -55,9 +55,9 @@ class FakeGraph {
 }
 
 class FakeDream {
-    public readonly drained: Array<{ userId: string; limit?: number }> = [];
-    public async drain(userId: string, limit?: number) {
-        this.drained.push({ userId, limit });
+    public readonly drained: Array<{ ownerKey: string; limit?: number }> = [];
+    public async drain(ownerKey: string, limit?: number) {
+        this.drained.push({ ownerKey, limit });
         return { rewritten: 1, discarded: 0, skipped: 0 };
     }
     public async enqueue() {}
@@ -65,8 +65,8 @@ class FakeDream {
 
 class FakeHotCompression {
     public readonly drained: string[] = [];
-    public async drain(userId: string) {
-        this.drained.push(userId);
+    public async drain(ownerKey: string) {
+        this.drained.push(ownerKey);
         return { scanned: 2, compressed: 1, deleted: 2, missing: 0, skipped: 0 };
     }
 }
@@ -145,7 +145,7 @@ describe("BackgroundScheduler", () => {
         expect(consolidation.drained).toEqual([]);
     });
 
-    test("runConsolidationOnce swallows per-user failure and continues", async () => {
+    test("runConsolidationOnce swallows per-owner failure and continues", async () => {
         const { scheduler, consolidation, events } = build();
         SCHEDULERS.push(scheduler);
         scheduler.trackUser("ok");
@@ -184,7 +184,7 @@ describe("BackgroundScheduler", () => {
         expect(totals.users).toBe(2);
         expect(totals.memoryNodes).toBe(6);
         expect(totals.gems).toBe(2);
-        expect(graph.swept.map((s) => s.userId).sort()).toEqual(["u1", "u2"]);
+        expect(graph.swept.map((s) => s.ownerKey).sort()).toEqual(["u1", "u2"]);
         for (const s of graph.swept) expect(s.batchSize).toBe(50);
         const swept = events.published.filter((e) => e.type === RuntimeEventType.MemoryDecaySwept);
         expect(swept.length).toBe(1);
@@ -243,7 +243,7 @@ describe("BackgroundScheduler", () => {
         expect(Object.values(ConsolidationDecisionKind).sort()).toEqual(["consolidate", "discard", "reinforce"]);
     });
 
-    test("runProjectClusterOnce invokes injected sweeper for tracked users only", async () => {
+    test("runScopeClusterOnce invokes injected sweeper for tracked users only", async () => {
         const consolidation = new FakeConsolidation();
         const graph = new FakeGraph();
         const events = new FakeEvents();
@@ -251,31 +251,31 @@ describe("BackgroundScheduler", () => {
         const scheduler = new BackgroundScheduler(consolidation as never, graph as never, events, {
             consolidationIntervalMs: 1_000,
             decayIntervalMs: 1_000,
-            projectClusterIntervalMs: 1_000,
-            projectSweeper: async (userId: string) => {
-                called.push(userId);
-                return userId === "u2";
+            scopeClusterIntervalMs: 1_000,
+            scopeSweeper: async (ownerKey: string) => {
+                called.push(ownerKey);
+                return ownerKey === "u2";
             },
         });
         SCHEDULERS.push(scheduler);
         scheduler.trackUser("u1");
         scheduler.trackUser("u2");
-        const r = await scheduler.runProjectClusterOnce();
+        const r = await scheduler.runScopeClusterOnce();
         expect(called.sort()).toEqual(["u1", "u2"]);
         expect(r.users).toBe(2);
         expect(r.offers).toBe(1);
         const snap = scheduler.snapshot();
-        expect(snap.projectClusterEnabled).toBe(true);
-        expect(snap.projectClusterBusy).toBe(false);
+        expect(snap.scopeClusterEnabled).toBe(true);
+        expect(snap.scopeClusterBusy).toBe(false);
     });
 
-    test("runProjectClusterOnce without sweeper is no-op", async () => {
+    test("runScopeClusterOnce without sweeper is no-op", async () => {
         const { scheduler } = build();
         SCHEDULERS.push(scheduler);
         scheduler.trackUser("u1");
-        const r = await scheduler.runProjectClusterOnce();
+        const r = await scheduler.runScopeClusterOnce();
         expect(r).toEqual({ users: 0, offers: 0 });
-        expect(scheduler.snapshot().projectClusterEnabled).toBe(false);
+        expect(scheduler.snapshot().scopeClusterEnabled).toBe(false);
     });
 
     test("runBrainArchiveOnce invokes global sweeper without requiring users", async () => {

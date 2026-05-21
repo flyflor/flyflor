@@ -1,33 +1,33 @@
 import {
-    CttlHiddenReason,
-    CttlPermission,
-    type CttlPermission as CttlPermissionType,
+    ToolHiddenReason,
+    ToolPermission,
+    type ToolPermission as ToolPermissionType,
 } from "../protocol/contracts/index.ts";
 import type {
-    CttlHiddenToolPlanEntry,
-    CttlRegisteredTool,
-    CttlToolDescriptor,
-    CttlToolPlanEntry,
-    CttlToolPlan,
-    CttlToolPlanDiagnostic,
-    CttlTrustContext,
+    HiddenToolPlanEntry,
+    RegisteredTool,
+    ToolDescriptor,
+    ToolPlanEntry,
+    ToolPlan,
+    ToolPlanDiagnostic,
+    TrustContext,
 } from "./types.ts";
 
-const PERMISSION_RANK: Readonly<Record<CttlPermissionType, number>> = {
-    [CttlPermission.None]: 0,
-    [CttlPermission.Read]: 1,
-    [CttlPermission.Write]: 2,
-    [CttlPermission.Network]: 3,
-    [CttlPermission.Message]: 4,
-    [CttlPermission.Execute]: 5,
-    [CttlPermission.Computer]: 6,
-    [CttlPermission.Dangerous]: 7,
+const PERMISSION_RANK: Readonly<Record<ToolPermissionType, number>> = {
+    [ToolPermission.None]: 0,
+    [ToolPermission.Read]: 1,
+    [ToolPermission.Write]: 2,
+    [ToolPermission.Network]: 3,
+    [ToolPermission.Message]: 4,
+    [ToolPermission.Execute]: 5,
+    [ToolPermission.Computer]: 6,
+    [ToolPermission.Dangerous]: 7,
 };
 
-export class CttlToolPlanner {
-    public build(tools: readonly CttlRegisteredTool[], trust: CttlTrustContext = {}): CttlToolPlan {
-        const visible: CttlToolPlanEntry[] = [];
-        const hidden: CttlHiddenToolPlanEntry[] = [];
+export class ToolPlanner {
+    public build(tools: readonly RegisteredTool[], trust: TrustContext = {}): ToolPlan {
+        const visible: ToolPlanEntry[] = [];
+        const hidden: HiddenToolPlanEntry[] = [];
         const seen = new Set<string>();
         for (const tool of [...tools].sort((left, right) => left.descriptor.name.localeCompare(right.descriptor.name))) {
             const descriptor = tool.descriptor;
@@ -43,44 +43,44 @@ export class CttlToolPlanner {
     }
 
     private evaluateDescriptor(
-        descriptor: CttlToolDescriptor,
-        trust: CttlTrustContext,
+        descriptor: ToolDescriptor,
+        trust: TrustContext,
         seen: ReadonlySet<string>,
-    ): CttlToolPlanDiagnostic[] {
-        const diagnostics: CttlToolPlanDiagnostic[] = [];
+    ): ToolPlanDiagnostic[] {
+        const diagnostics: ToolPlanDiagnostic[] = [];
         if (seen.has(descriptor.name)) {
             diagnostics.push({
-                reason: CttlHiddenReason.Duplicate,
+                reason: ToolHiddenReason.Duplicate,
                 message: `Tool ${descriptor.name} is registered more than once.`,
             });
         }
         if (trust.allowedSources && !trust.allowedSources.has(descriptor.source)) {
             diagnostics.push({
-                reason: CttlHiddenReason.SourceDisabled,
+                reason: ToolHiddenReason.SourceDisabled,
                 message: `Tool source ${descriptor.source} is not enabled in this context.`,
             });
         }
         if (trust.allowedScopes && !descriptor.scope.some((scope) => trust.allowedScopes?.has(scope))) {
             diagnostics.push({
-                reason: CttlHiddenReason.ScopeMismatch,
+                reason: ToolHiddenReason.ScopeMismatch,
                 message: `Tool ${descriptor.name} has no scope enabled in this context.`,
             });
         }
         if (trust.maxPermission && !isPermissionAllowed(descriptor.permission, trust.maxPermission)) {
             diagnostics.push({
-                reason: CttlHiddenReason.PermissionCap,
+                reason: ToolHiddenReason.PermissionCap,
                 message: `Tool ${descriptor.name} requires ${descriptor.permission}, above ${trust.maxPermission}.`,
             });
         }
         if (trust.deniedTools?.has(descriptor.name)) {
             diagnostics.push({
-                reason: CttlHiddenReason.TrustDenied,
+                reason: ToolHiddenReason.TrustDenied,
                 message: `Tool ${descriptor.name} is denied by trust policy.`,
             });
         }
         if (trust.unavailableTools?.has(descriptor.name)) {
             diagnostics.push({
-                reason: CttlHiddenReason.Availability,
+                reason: ToolHiddenReason.Availability,
                 message: `Tool ${descriptor.name} is unavailable in this runtime context.`,
             });
         }
@@ -88,6 +88,6 @@ export class CttlToolPlanner {
     }
 }
 
-export function isPermissionAllowed(required: CttlPermissionType, cap: CttlPermissionType): boolean {
+export function isPermissionAllowed(required: ToolPermissionType, cap: ToolPermissionType): boolean {
     return PERMISSION_RANK[required] <= PERMISSION_RANK[cap];
 }

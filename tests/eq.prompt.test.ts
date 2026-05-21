@@ -22,6 +22,8 @@ afterEach(async () => {
 });
 
 describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_state", () => {
+    const scopedContext = () => runtimeContext("scope-eq");
+
     test("没有 EQ state → 不注入 [eq-context]", async () => {
         const config = await makeConfig();
         const memory = new MemoryModule(config, new RecordingSink());
@@ -43,7 +45,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
             await memory.rememberTurn(
                 gatewayMessage("一段开心的消息"),
                 gatewayReply("好", "msg-eq-p1"),
-                runtimeContext(),
+                scopedContext(),
                 [
                     {
                         action: "add",
@@ -59,7 +61,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
                     },
                 ],
             );
-            const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), runtimeContext());
+            const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), scopedContext());
             expect(prompt).toContain("[eq-context]");
             expect(prompt).toContain("label=joy");
             // 立即 buildPrompt（dt≈0），valence 应接近原值
@@ -81,7 +83,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
             await memory.rememberTurn(
                 gatewayMessage("hi"),
                 gatewayReply("ok", "msg-eq-p2"),
-                runtimeContext(),
+                scopedContext(),
                 [
                     {
                         action: "add",
@@ -104,11 +106,11 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
             const db = new Database(dbPath);
             try {
                 const past = Date.now() - 10 * EQ_DEFAULT_HALFLIFE_MS;
-                db.run("UPDATE memory_eq_state SET updated_at = ? WHERE user_id = 'user-1'", [past]);
+                db.run("UPDATE memory_eq_state SET updated_at = ? WHERE owner_key = 'scope:scope-eq'", [past]);
             } finally {
                 db.close();
             }
-            const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), runtimeContext());
+            const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), scopedContext());
             expect(prompt).not.toContain("[eq-context]");
         } finally {
             memory.dispose();
@@ -123,7 +125,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
             await memory.rememberTurn(
                 gatewayMessage("一段消息"),
                 gatewayReply("好", "msg-eq-p3"),
-                runtimeContext(),
+                scopedContext(),
                 [
                     {
                         action: "add",
@@ -140,7 +142,7 @@ describe("EQ-01 slice B: buildPrompt injects [eq-context] from brain.memory_eq_s
                     },
                 ],
             );
-            const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), runtimeContext());
+            const prompt = await memory.buildPrompt(gatewayMessage("第二轮"), scopedContext());
             expect(prompt).toContain("[eq-context]");
             expect(prompt).toContain("label=anger");
             expect(prompt).not.toContain("directive=");
@@ -218,10 +220,20 @@ function gatewayReply(text: string, messageId: string): GatewayReply {
     };
 }
 
-function runtimeContext(): RuntimeContext {
+function runtimeContext(scopeId?: string): RuntimeContext {
     return {
         requestId: `req-${Math.random().toString(36).slice(2, 8)}`,
         now: new Date().toISOString(),
         embedding: [],
+        ...(scopeId
+            ? {
+                  activeScope: {
+                      id: scopeId,
+                      title: "EQ Scope",
+                      projectDir: "/tmp/eq-scope",
+                      projectMemoryDir: "/tmp/eq-scope/.flyflor/memory",
+                  },
+              }
+            : {}),
     };
 }

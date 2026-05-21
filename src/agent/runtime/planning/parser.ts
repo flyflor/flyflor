@@ -1,13 +1,13 @@
 import type {
     ContextForkRecord,
-    SceneRecord,
-    SceneRecordKind,
+    ReplayRecord,
+    ReplayRecordKind,
     TaskPlanRecord,
     TaskPlanStatus,
     TaskPlanStepRecord,
 } from "../../../protocol/contracts/index.ts";
 import {
-    SceneRecordKind as SceneRecordKindEnum,
+    ReplayRecordKind as ReplayRecordKindEnum,
     TaskPlanStatus as TaskPlanStatusEnum,
 } from "../../../protocol/contracts/index.ts";
 import { extractStructuredBlocks, parseStructuredJson, StructuredBlockProtocol } from "../../../protocol/index.ts";
@@ -21,7 +21,7 @@ import { extractStructuredBlocks, parseStructuredJson, StructuredBlockProtocol }
 export interface ParsedPlanningBlocks {
     contextForks: ContextForkRecord[];
     dropped: number;
-    sceneRecords: SceneRecord[];
+    replayRecords: ReplayRecord[];
     taskPlans: TaskPlanRecord[];
     text: string;
 }
@@ -29,14 +29,17 @@ export interface ParsedPlanningBlocks {
 export interface PlanningBlockParseContext {
     blackboardTurnId?: string;
     now: string;
+    ownerKey: string;
     requestId: string;
     sourceAskId?: string;
     sourceEventId?: string;
-    userId: string;
+    auditUserId?: string;
+    /** @deprecated Use ownerKey / auditUserId. */
+    userId?: string;
 }
 
 const VALID_TASK_STATUSES = new Set<string>(Object.values(TaskPlanStatusEnum));
-const VALID_SCENE_KINDS = new Set<string>(Object.values(SceneRecordKindEnum));
+const VALID_REPLAY_KINDS = new Set<string>(Object.values(ReplayRecordKindEnum));
 
 export class PlanningBlockParser {
     public parse(rawText: string, context: PlanningBlockParseContext): ParsedPlanningBlocks {
@@ -44,7 +47,7 @@ export class PlanningBlockParser {
         let dropped = 0;
         const taskPlans: TaskPlanRecord[] = [];
         const contextForks: ContextForkRecord[] = [];
-        const sceneRecords: SceneRecord[] = [];
+        const replayRecords: ReplayRecord[] = [];
 
         const taskPlanResult = extractStructuredBlocks(text, StructuredBlockProtocol.TaskPlan);
         text = taskPlanResult.text;
@@ -66,11 +69,11 @@ export class PlanningBlockParser {
             }
         }
 
-        const sceneResult = extractStructuredBlocks(text, StructuredBlockProtocol.SceneRecord);
-        text = sceneResult.text;
-        for (const block of sceneResult.blocks) {
+        const replayResult = extractStructuredBlocks(text, StructuredBlockProtocol.ReplayRecord);
+        text = replayResult.text;
+        for (const block of replayResult.blocks) {
             try {
-                sceneRecords.push(...this.readSceneRecords(block.content, context));
+                replayRecords.push(...this.readReplayRecords(block.content, context));
             } catch {
                 dropped += 1;
             }
@@ -79,7 +82,7 @@ export class PlanningBlockParser {
         return {
             contextForks: contextForks.slice(0, 4),
             dropped,
-            sceneRecords: sceneRecords.slice(0, 8),
+            replayRecords: replayRecords.slice(0, 8),
             taskPlans: taskPlans.slice(0, 4),
             text,
         };
@@ -102,7 +105,9 @@ export class PlanningBlockParser {
         );
         return {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `plan-${crypto.randomUUID()}`,
-            userId: context.userId,
+            ownerKey: context.ownerKey,
+            auditUserId: context.auditUserId ?? context.userId,
+            userId: context.auditUserId ?? context.userId,
             title: this.requiredText(record.title, "flyflor_task_plan.title", 160),
             summary: this.requiredText(record.summary, "flyflor_task_plan.summary", 1200),
             status,
@@ -115,7 +120,7 @@ export class PlanningBlockParser {
             sourceEventId: this.readNonEmptyString(record.sourceEventId) ?? context.sourceEventId,
             sourceAskId: this.readNonEmptyString(record.sourceAskId) ?? context.sourceAskId,
             sourceBlackboardTurnId: this.readNonEmptyString(record.sourceBlackboardTurnId) ?? context.blackboardTurnId,
-            sourceSceneId: this.readNonEmptyString(record.sourceSceneId),
+            sourceReplayId: this.readNonEmptyString(record.sourceReplayId),
         };
     }
 
@@ -161,7 +166,9 @@ export class PlanningBlockParser {
         }
         return {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `fork-${crypto.randomUUID()}`,
-            userId: context.userId,
+            ownerKey: context.ownerKey,
+            auditUserId: context.auditUserId ?? context.userId,
+            userId: context.auditUserId ?? context.userId,
             parentId: this.readNonEmptyString(record.parentId)?.slice(0, 120),
             title: this.requiredText(record.title, "flyflor_context_fork.title", 160),
             summary: this.requiredText(record.summary, "flyflor_context_fork.summary", 1200),
@@ -176,21 +183,23 @@ export class PlanningBlockParser {
         };
     }
 
-    private readSceneRecords(rawJson: string, context: PlanningBlockParseContext): SceneRecord[] {
+    private readReplayRecords(rawJson: string, context: PlanningBlockParseContext): ReplayRecord[] {
         const payload = parseStructuredJson(rawJson);
-        const items = this.arrayPayload(payload, "scenes");
-        return items.map((item) => this.normalizeSceneRecord(item, context));
+        const items = this.arrayPayload(payload, "replays");
+        return items.map((item) => this.normalizeReplayRecord(item, context));
     }
 
-    private normalizeSceneRecord(value: unknown, context: PlanningBlockParseContext): SceneRecord {
-        const record = this.requireRecord(value, "flyflor_scene_record item");
+    private normalizeReplayRecord(value: unknown, context: PlanningBlockParseContext): ReplayRecord {
+        const record = this.requireRecord(value, "flyflor_replay_record item");
         const now = this.normalizeIso(context.now);
         return {
-            id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `scene-${crypto.randomUUID()}`,
-            userId: context.userId,
-            kind: this.readSceneKind(record.kind) ?? SceneRecordKindEnum.DeepThink,
-            title: this.requiredText(record.title, "flyflor_scene_record.title", 160),
-            summary: this.requiredText(record.summary, "flyflor_scene_record.summary", 1600),
+            id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `replay-${crypto.randomUUID()}`,
+            ownerKey: context.ownerKey,
+            auditUserId: context.auditUserId ?? context.userId,
+            userId: context.auditUserId ?? context.userId,
+            kind: this.readReplayKind(record.kind) ?? ReplayRecordKindEnum.DeepThink,
+            title: this.requiredText(record.title, "flyflor_replay_record.title", 160),
+            summary: this.requiredText(record.summary, "flyflor_replay_record.summary", 1600),
             detail: this.readNonEmptyString(record.detail)?.slice(0, 4000),
             visibleFacts: this.readStringArray(record.visibleFacts).slice(0, 24),
             openQuestions: this.readStringArray(record.openQuestions).slice(0, 16),
@@ -227,10 +236,10 @@ export class PlanningBlockParser {
         return VALID_TASK_STATUSES.has(trimmed) ? (trimmed as TaskPlanStatus) : undefined;
     }
 
-    private readSceneKind(value: unknown): SceneRecordKind | undefined {
+    private readReplayKind(value: unknown): ReplayRecordKind | undefined {
         if (typeof value !== "string") return undefined;
         const trimmed = value.trim();
-        return VALID_SCENE_KINDS.has(trimmed) ? (trimmed as SceneRecordKind) : undefined;
+        return VALID_REPLAY_KINDS.has(trimmed) ? (trimmed as ReplayRecordKind) : undefined;
     }
 
     private readStringArray(value: unknown): string[] {

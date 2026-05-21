@@ -6,7 +6,8 @@ export interface BrainCodenameRow {
     id: string;
     last_used_at: number;
     name: string;
-    project_id: string | null;
+    scope_id?: string | null;
+    project_id?: string | null;
     use_count: number;
     user_id: string;
     working_dir: string | null;
@@ -26,7 +27,7 @@ export class BrainCodenameModel {
             createdAt: row.created_at,
             lastUsedAt: row.last_used_at,
             useCount: row.use_count,
-            projectId: row.project_id ?? undefined,
+            scopeId: row.scope_id ?? row.project_id ?? undefined,
         };
     }
 }

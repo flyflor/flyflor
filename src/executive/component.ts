@@ -1,26 +1,26 @@
 import { CapabilityComponent } from "../components/index.ts";
 import type {
-    CttlRegisteredTool,
-    CttlToolDescriptor,
-    CttlToolExecutor,
-    CttlToolPlan,
-    CttlTrustContext,
-    CttlTrustPolicyInput,
+    RegisteredTool,
+    ToolDescriptor,
+    ToolExecutor,
+    ToolPlan,
+    TrustContext,
+    TrustPolicyInput,
 } from "./types.ts";
-import { CttlLoopGuard } from "./loop.guard.ts";
-import { CttlToolPlanner } from "./planner.ts";
-import { CttlToolRegistry } from "./registry.ts";
-import { CttlTrustPolicy } from "./trust.policy.ts";
+import { ExecutiveLoopGuard } from "./loop.guard.ts";
+import { ToolPlanner } from "./planner.ts";
+import { ToolRegistry } from "./registry.ts";
+import { TrustPolicy } from "./trust.policy.ts";
 
-export class CttlComponent extends CapabilityComponent {
-    private readonly registry: CttlToolRegistry;
-    private readonly planner: CttlToolPlanner;
-    private readonly trustPolicy: CttlTrustPolicy;
+export class ExecutiveComponent extends CapabilityComponent {
+    private readonly registry: ToolRegistry;
+    private readonly planner: ToolPlanner;
+    private readonly trustPolicy: TrustPolicy;
 
     public constructor(
-        registry = new CttlToolRegistry(),
-        planner = new CttlToolPlanner(),
-        trustPolicy = new CttlTrustPolicy(),
+        registry = new ToolRegistry(),
+        planner = new ToolPlanner(),
+        trustPolicy = new TrustPolicy(),
     ) {
         super();
         this.registry = registry;
@@ -28,23 +28,23 @@ export class CttlComponent extends CapabilityComponent {
         this.trustPolicy = trustPolicy;
     }
 
-    public registerTool(descriptor: CttlToolDescriptor, execute?: CttlToolExecutor): void {
+    public registerTool(descriptor: ToolDescriptor, execute?: ToolExecutor): void {
         this.registry.register(descriptor, execute);
     }
 
-    public listTools(): CttlRegisteredTool[] {
+    public listTools(): RegisteredTool[] {
         return this.registry.list();
     }
 
-    public buildToolPlan(trust: CttlTrustContext = {}): CttlToolPlan {
+    public buildToolPlan(trust: TrustContext = {}): ToolPlan {
         return this.planner.build(this.registry.list(), trust);
     }
 
-    public buildTrustContext(input: CttlTrustPolicyInput): CttlTrustContext {
+    public buildTrustContext(input: TrustPolicyInput): TrustContext {
         return this.trustPolicy.build(input);
     }
 
-    public createLoopGuard(options?: ConstructorParameters<typeof CttlLoopGuard>[0]): CttlLoopGuard {
-        return new CttlLoopGuard(options);
+    public createLoopGuard(options?: ConstructorParameters<typeof ExecutiveLoopGuard>[0]): ExecutiveLoopGuard {
+        return new ExecutiveLoopGuard(options);
     }
 }

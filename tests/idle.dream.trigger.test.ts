@@ -13,11 +13,11 @@ const ZERO: DreamRunResult = {
 };
 
 class FakeDream implements DreamWorker {
-    public calls: Array<{ userId: string; limit?: number }> = [];
+    public calls: Array<{ ownerKey: string; limit?: number }> = [];
     public shouldThrow = false;
     public result: DreamRunResult = { ...ZERO, driftRepaired: 1 };
-    public async runOnce(userId: string, limit?: number): Promise<DreamRunResult> {
-        this.calls.push({ userId, limit });
+    public async runOnce(ownerKey: string, limit?: number): Promise<DreamRunResult> {
+        this.calls.push({ ownerKey, limit });
         if (this.shouldThrow) throw new Error("dream-boom");
         return this.result;
     }
@@ -77,7 +77,7 @@ describe("BackgroundScheduler idle-trigger", () => {
         expect(sched.activeUsers()).toBe(1);
         await tick(50);
         expect(dream.calls).toHaveLength(1);
-        expect(dream.calls[0]?.userId).toBe("alice");
+        expect(dream.calls[0]?.ownerKey).toBe("alice");
     });
 
     test("rapid successive turns reset the idle timer (no premature fire)", async () => {
@@ -155,11 +155,11 @@ describe("BackgroundScheduler idle-trigger", () => {
         sched.noteUserTurn("u2");
         sched.noteUserTurn("u3");
         await tick(60);
-        const users = dream.calls.map((c) => c.userId).sort();
+        const users = dream.calls.map((c) => c.ownerKey).sort();
         expect(users).toEqual(["u1", "u2", "u3"]);
     });
 
-    test("[chaos] garbage userId values do nothing", () => {
+    test("[chaos] garbage ownerKey values do nothing", () => {
         const dream = new FakeDream();
         const sched = build(dream, 10);
         ALL.push(sched);
@@ -175,8 +175,8 @@ describe("BackgroundScheduler idle-trigger", () => {
         const dream = new FakeDream();
         // 让 runOnce 慢一点，模拟"还没跑完又来一次"
         let slow = true;
-        dream.runOnce = async (userId: string) => {
-            dream.calls.push({ userId });
+        dream.runOnce = async (ownerKey: string) => {
+            dream.calls.push({ ownerKey });
             if (slow) {
                 slow = false;
                 await new Promise((resolve) => setTimeout(resolve, 40));

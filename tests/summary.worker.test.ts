@@ -35,7 +35,7 @@ function mkEvent(over: Partial<MemoryEventRecord> & { id: string; ts: number }):
 }
 
 describe("SummaryWorker.aggregate", () => {
-    test("aggregates type/role counts, codenames, ask/ghost/identity buckets", () => {
+    test("aggregates type/role counts, codenames, ask/continuation/identity buckets", () => {
         const rows: MemoryEventRecord[] = [
             mkEvent({ id: "a", ts: 100, type: MemoryEventType.Event, role: ModelRole.User, codenameId: "c1" }),
             mkEvent({ id: "b", ts: 200, type: MemoryEventType.Ask, role: ModelRole.Assistant }),
@@ -43,14 +43,14 @@ describe("SummaryWorker.aggregate", () => {
             mkEvent({
                 id: "d",
                 ts: 400,
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 role: ModelRole.Assistant,
                 content: { reason: "fork" },
             }),
             mkEvent({
                 id: "e",
                 ts: 500,
-                type: MemoryEventType.GhostContext,
+                type: MemoryEventType.ContinuationContext,
                 role: ModelRole.Assistant,
                 content: { reason: "fork" },
             }),
@@ -59,11 +59,11 @@ describe("SummaryWorker.aggregate", () => {
         const stats = aggregate(rows);
         expect(stats.totalEvents).toBe(6);
         expect(stats.byType[MemoryEventType.Ask]).toBe(1);
-        expect(stats.byType[MemoryEventType.GhostContext]).toBe(2);
+        expect(stats.byType[MemoryEventType.ContinuationContext]).toBe(2);
         expect(stats.asksAsked).toBe(1);
         expect(stats.asksAnswered).toBe(1);
-        expect(stats.ghostsRecorded).toBe(2);
-        expect(stats.ghostReasons.fork).toBe(2);
+        expect(stats.continuationsRecorded).toBe(2);
+        expect(stats.continuationReasons.fork).toBe(2);
         expect(stats.identityAppends).toBe(1);
         expect(stats.codenamesTouched).toEqual(["c1", "c2"]);
         expect(stats.firstTs).toBe(100);
@@ -169,7 +169,7 @@ describe("SummaryWorker.runOnceForUser", () => {
         try {
             const now = Date.UTC(2026, 4, 13, 12, 0, 0);
             const w = new SummaryWorker(store, { now: () => now });
-            const r = w.runOnceForUser("ghost-user");
+            const r = w.runOnceForUser("continuation-user");
             expect(r.written).toBe(0);
             expect(r.skippedEmpty).toBe(2);
         } finally {

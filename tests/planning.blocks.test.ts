@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { parsePlanningBlocks, PlanningBlockParser } from "../src/agent/runtime/planning/index.ts";
 import { renderStructuredBlock, StructuredBlockProtocol } from "../src/protocol/index.ts";
-import { SceneRecordKind, TaskPlanStatus } from "../src/protocol/contracts/index.ts";
+import { ReplayRecordKind, TaskPlanStatus } from "../src/protocol/contracts/index.ts";
 
 describe("runtime planning structured blocks", () => {
-    test("parses task plans, forks and scenes without visible prose leakage", () => {
+    test("parses task plans, forks and replays without visible prose leakage", () => {
         const parser = new PlanningBlockParser();
         const raw = [
             "visible",
@@ -22,7 +22,7 @@ describe("runtime planning structured blocks", () => {
                 maxContextTokens: 9000,
                 inheritedEventIds: ["episode-a"],
             }),
-            renderStructuredBlock(StructuredBlockProtocol.SceneRecord, {
+            renderStructuredBlock(StructuredBlockProtocol.ReplayRecord, {
                 kind: "deep-think",
                 title: "Route review",
                 summary: "The model chose direct reply with a bounded plan.",
@@ -34,14 +34,18 @@ describe("runtime planning structured blocks", () => {
         const parsed = parser.parse(raw, {
             blackboardTurnId: "bb-1",
             now: "2026-05-16T00:00:00.000Z",
+            ownerKey: "scope:plan",
             requestId: "req-1",
             sourceEventId: "episode-1",
+            auditUserId: "u1",
             userId: "u1",
         });
 
         expect(parsed.text).toBe("visible");
         expect(parsed.dropped).toBe(0);
         expect(parsed.taskPlans[0]).toMatchObject({
+            ownerKey: "scope:plan",
+            auditUserId: "u1",
             userId: "u1",
             title: "Ship release",
             status: TaskPlanStatus.InProgress,
@@ -50,12 +54,13 @@ describe("runtime planning structured blocks", () => {
             sourceBlackboardTurnId: "bb-1",
         });
         expect(parsed.contextForks[0]).toMatchObject({
+            ownerKey: "scope:plan",
             userId: "u1",
             title: "Installer fork",
             inheritedEventIds: ["episode-1", "episode-a"],
         });
-        expect(parsed.sceneRecords[0]).toMatchObject({
-            kind: SceneRecordKind.DeepThink,
+        expect(parsed.replayRecords[0]).toMatchObject({
+            kind: ReplayRecordKind.DeepThink,
             blackboardTurnId: "bb-1",
             sourceEventId: "episode-1",
         });
@@ -66,6 +71,7 @@ describe("runtime planning structured blocks", () => {
         const raw = `hello\n<flyflor_task_plan>{"summary":"missing title"}</flyflor_task_plan>`;
         const parsed = parser.parse(raw, {
             now: "bad-date",
+            ownerKey: "turn:req-1",
             requestId: "req-1",
             userId: "u1",
         });
@@ -81,6 +87,7 @@ describe("runtime planning structured blocks", () => {
         });
         const parsed = parsePlanningBlocks(raw, {
             now: "2026-05-16T00:00:00.000Z",
+            ownerKey: "turn:req-compat",
             requestId: "req-compat",
             userId: "u1",
         });

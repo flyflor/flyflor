@@ -1,18 +1,18 @@
 /**
- * Blackboard output adapters for runtime prompt, final reply, history scenes,
+ * Blackboard output adapters for runtime prompt, final reply, history replays,
  * and Ask handoff.
  *
  * RuntimeModule should orchestrate turns; this file owns the text/metadata
- * projections consumed by TUI, channel replies, memory scene replay and prompt
+ * projections consumed by TUI, channel replies, memory replay and prompt
  * context. It only reads structured blackboard records.
  */
 
-import type { AgentAsk, SceneRecord } from "../../../protocol/contracts/index.ts";
+import type { AgentAsk, ReplayRecord } from "../../../protocol/contracts/index.ts";
 import {
     AskReason,
     BlackboardMode,
     BlackboardTurnStatus,
-    SceneRecordKind,
+    ReplayRecordKind,
     type BlackboardTurnStatus as BlackboardTurnStatusType,
 } from "../../../protocol/contracts/index.ts";
 import { Component } from "../../../agent/di/decorators/index.ts";
@@ -109,12 +109,13 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
         };
     }
 
-    public buildBlackboardSceneRecords(
-        userId: string,
+    public buildBlackboardReplayRecords(
+        ownerKey: string,
+        auditUserId: string | undefined,
         now: string,
         run: RuntimeBlackboardRun | undefined,
         requestId: string,
-    ): SceneRecord[] {
+    ): ReplayRecord[] {
         if (!run || run.mode !== BlackboardMode.Blackboard || !run.turnId) return [];
         const facts = this.uniqueStrings(run.steps.flatMap((step) => step.newFacts)).slice(0, 16);
         const openQuestions = this.uniqueStrings([
@@ -123,12 +124,14 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
         ]).slice(0, 12);
         return [
             {
-                id: `scene-blackboard-${run.turnId}`,
-                userId,
-                kind: SceneRecordKind.Blackboard,
+                id: `replay-blackboard-${run.turnId}`,
+                ownerKey,
+                auditUserId,
+                userId: auditUserId,
+                kind: ReplayRecordKind.Blackboard,
                 title: `Blackboard ${run.status ?? BlackboardTurnStatus.Running}`,
                 summary: `status=${run.status ?? BlackboardTurnStatus.Running}; reason=${run.reason}; steps=${run.steps.length}; decisions=${run.decisions.length}`,
-                detail: this.renderBlackboardSceneDetail(run),
+                detail: this.renderBlackboardReplayDetail(run),
                 visibleFacts: facts,
                 openQuestions,
                 blackboardTurnId: run.turnId,
@@ -178,7 +181,7 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
         return summaries ? `${head}\n${summaries}` : head;
     }
 
-    private renderBlackboardSceneDetail(run: RuntimeBlackboardRun): string {
+    private renderBlackboardReplayDetail(run: RuntimeBlackboardRun): string {
         const lines = [
             `Route: ${run.reason}`,
             `Status: ${run.status ?? BlackboardTurnStatus.Running}`,
@@ -398,13 +401,14 @@ export function routeMetadata(route: RuntimeBlackboardRouteDecision): Record<str
     return defaultOutput.routeMetadata(route);
 }
 
-export function buildBlackboardSceneRecords(
-    userId: string,
+export function buildBlackboardReplayRecords(
+    ownerKey: string,
+    auditUserId: string | undefined,
     now: string,
     run: RuntimeBlackboardRun | undefined,
     requestId: string,
-): SceneRecord[] {
-    return defaultOutput.buildBlackboardSceneRecords(userId, now, run, requestId);
+): ReplayRecord[] {
+    return defaultOutput.buildBlackboardReplayRecords(ownerKey, auditUserId, now, run, requestId);
 }
 
 export function buildBlackboardStalemateAsk(run: RuntimeBlackboardRun | undefined): AgentAsk | undefined {

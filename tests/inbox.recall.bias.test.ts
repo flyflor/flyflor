@@ -20,7 +20,7 @@ async function tempStore(): Promise<{ store: BrainStore; cleanup: () => Promise<
 }
 
 describe("P2 inbox slice B — recall bias helpers", () => {
-    test("getMostRecentTouchedCodename: 仅返回 last_used_at >= sinceTs 且 project_id 为空的最新行", async () => {
+    test("getMostRecentTouchedCodename: 仅返回 last_used_at >= sinceTs 且 scope_id 为空的最新行", async () => {
         const { store, cleanup } = await tempStore();
         try {
             const userId = "u-recall";
@@ -52,7 +52,7 @@ describe("P2 inbox slice B — recall bias helpers", () => {
                 lastUsedAt: now - 5 * 60_000,
                 useCount: 1,
             });
-            // 已升格（project_id 非空）—— 必须被过滤
+            // 已升格（scope_id 非空）—— 必须被过滤
             store.upsertCodename({
                 id: "cn-promoted",
                 name: "promoted",
@@ -61,7 +61,7 @@ describe("P2 inbox slice B — recall bias helpers", () => {
                 lastUsedAt: now - 1 * 60_000,
                 useCount: 5,
             });
-            store.bindCodenameProject("cn-promoted", "project-real");
+            store.bindCodenameScope("cn-promoted", "scope-real");
 
             const sinceTs = now - 60 * 60_000; // 60 分钟窗口
             const r = store.getMostRecentTouchedCodename(userId, sinceTs);
@@ -80,7 +80,7 @@ describe("P2 inbox slice B — recall bias helpers", () => {
         }
     });
 
-    test("getMostRecentTouchedCodename: 已升格 codename 不参与召回偏变（project_id IS NULL 过滤）", async () => {
+    test("getMostRecentTouchedCodename: 已升格 codename 不参与召回偏变（scope_id IS NULL 过滤）", async () => {
         const { store, cleanup } = await tempStore();
         try {
             const userId = "u-only-promoted";
@@ -93,7 +93,7 @@ describe("P2 inbox slice B — recall bias helpers", () => {
                 lastUsedAt: now - 60_000,
                 useCount: 9,
             });
-            store.bindCodenameProject("cn-onlypromoted", "project-x");
+            store.bindCodenameScope("cn-onlypromoted", "scope-x");
             const r = store.getMostRecentTouchedCodename(userId, now - 60 * 60_000);
             expect(r).toBeNull();
         } finally {

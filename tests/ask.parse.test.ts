@@ -90,28 +90,28 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(r.dropped).toBe(1);
     });
 
-    test("ghostHint (LF-R4): title + contextHint trimmed and length-capped, empty object dropped", () => {
+    test("continuationHint (LF-R4): title + contextHint trimmed and length-capped, empty object dropped", () => {
         const ok = parseAgentAsk(
             wrap(
                 JSON.stringify({
                     reason: AskReason.UserIntentUnclear,
                     prompt: "what target?",
-                    ghostHint: { title: "  Picking target  ", contextHint: "blocked on env" },
+                    continuationHint: { title: "  Picking target  ", contextHint: "blocked on env" },
                 }),
             ),
         );
-        expect(ok.ask?.ghostHint?.title).toBe("Picking target");
-        expect(ok.ask?.ghostHint?.contextHint).toBe("blocked on env");
+        expect(ok.ask?.continuationHint?.title).toBe("Picking target");
+        expect(ok.ask?.continuationHint?.contextHint).toBe("blocked on env");
 
         const empty = parseAgentAsk(
             wrap(
                 JSON.stringify({
                     reason: AskReason.UserIntentUnclear,
                     prompt: "what?",
-                    ghostHint: { title: "  ", contextHint: "" },
+                    continuationHint: { title: "  ", contextHint: "" },
                 }),
             ),
         );
-        expect(empty.ask?.ghostHint).toBeUndefined();
+        expect(empty.ask?.continuationHint).toBeUndefined();
     });
 });

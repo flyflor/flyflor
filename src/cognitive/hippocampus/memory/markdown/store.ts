@@ -8,16 +8,16 @@ import type { MemoryCandidate, MemoryRecord, MemorySearchResult } from "../types
 
 const MARKDOWN_FILES = [
     MarkdownMemoryFile.Self,
-    MarkdownMemoryFile.Soul,
+    MarkdownMemoryFile.Identity,
     MarkdownMemoryFile.User,
     MarkdownMemoryFile.Memory,
 ];
 
 const MARKDOWN_TEMPLATE_FILES: Record<MarkdownMemoryFile, string> = {
-    [MarkdownMemoryFile.Memory]: "MEMORY.md",
-    [MarkdownMemoryFile.Self]: "SELF.md",
-    [MarkdownMemoryFile.Soul]: "SOUL.md",
-    [MarkdownMemoryFile.User]: "USER.md",
+    [MarkdownMemoryFile.Memory]: "memory.md",
+    [MarkdownMemoryFile.Self]: "self.md",
+    [MarkdownMemoryFile.Identity]: "identity.md",
+    [MarkdownMemoryFile.User]: "user.md",
 };
 
 export interface MarkdownMemorySnapshot {

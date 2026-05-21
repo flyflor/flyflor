@@ -32,7 +32,7 @@ afterEach(async () => {
 });
 
 describe("Blackboard control boundary", () => {
-    test("keeps one running blackboard turn per project constraint lease", async () => {
+    test("keeps one running blackboard turn per scope constraint lease", async () => {
         const config = await testConfig();
         const events = new CapturingSink();
         const workers = new WorkerManager(events);
@@ -40,9 +40,9 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const first = await controller.startTurn({
-            projectConstraintId: "stdio:account-a:chat-1:thread-1",
+            scopeConstraintId: "stdio:account-a:chat-1:thread-1",
             requestId: "req-1",
-            goal: "跨文件实现并验证 project constraint 分离",
+            goal: "跨文件实现并验证 scope constraint 分离",
             now: "2026-05-09T08:00:00.000Z",
             workers: [{ role: TEST_ANALYSIS_ROLE, name: "Analysis worker" }],
         });
@@ -53,9 +53,9 @@ describe("Blackboard control boundary", () => {
         }
 
         const conflict = await controller.startTurn({
-            projectConstraintId: "stdio:account-a:chat-1:thread-1",
+            scopeConstraintId: "stdio:account-a:chat-1:thread-1",
             requestId: "req-2",
-            goal: "同 project constraint 的第二个复杂任务",
+            goal: "同 scope constraint 的第二个复杂任务",
             now: "2026-05-09T08:00:01.000Z",
         });
 
@@ -95,7 +95,7 @@ describe("Blackboard control boundary", () => {
         expect(finished?.decisions).toHaveLength(1);
 
         const next = await controller.startTurn({
-            projectConstraintId: "stdio:account-a:chat-1:thread-1",
+            scopeConstraintId: "stdio:account-a:chat-1:thread-1",
             requestId: "req-3",
             goal: "lease 释放后继续",
             now: "2026-05-09T08:00:04.000Z",
@@ -115,7 +115,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths));
 
         const first = await controller.startTurn({
-            projectConstraintId: "stdio:chat-expire",
+            scopeConstraintId: "stdio:chat-expire",
             requestId: "req-expire-1",
             goal: "会崩溃的复杂任务",
             now: "2026-05-09T08:00:00.000Z",
@@ -125,7 +125,7 @@ describe("Blackboard control boundary", () => {
         expect(first.acquired).toBe(true);
 
         const next = await controller.startTurn({
-            projectConstraintId: "stdio:chat-expire",
+            scopeConstraintId: "stdio:chat-expire",
             requestId: "req-expire-2",
             goal: "TTL 后恢复",
             now: "2026-05-09T08:00:01.000Z",
@@ -356,7 +356,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths));
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:worker-plan-normalization",
+            scopeConstraintId: "stdio:worker-plan-normalization",
             requestId: "req-worker-plan-normalization",
             goal: "先实现再验证",
             now: "2026-05-09T08:00:00.000Z",
@@ -394,7 +394,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:agent-mesh",
+            scopeConstraintId: "stdio:agent-mesh",
             requestId: "req-agent-mesh",
             goal: "kimi 出方案，codex 复审后由黑板裁决",
             now: "2026-05-09T08:00:00.000Z",
@@ -428,7 +428,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:worker-envelope-context",
+            scopeConstraintId: "stdio:worker-envelope-context",
             requestId: "req-worker-envelope-context",
             goal: "先让 Kimi 出方案，再让 Codex 复审",
             now: "2026-05-09T08:00:00.000Z",
@@ -473,7 +473,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:qa-consensus",
+            scopeConstraintId: "stdio:qa-consensus",
             requestId: "req-qa-consensus",
             goal: "请把一个跨文件实现任务拆分给 worker，并让 worker 互相 QA 后输出一致方案。",
             now: "2026-05-09T08:00:00.000Z",
@@ -516,7 +516,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:blocked-agent-mesh",
+            scopeConstraintId: "stdio:blocked-agent-mesh",
             requestId: "req-blocked-agent-mesh",
             goal: "外部黑板无法判断缺失路径时必须交还用户",
             now: "2026-05-09T08:00:00.000Z",
@@ -554,7 +554,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:legacy-agreement",
+            scopeConstraintId: "stdio:legacy-agreement",
             requestId: "req-legacy-agreement",
             goal: "worker 口头同意但没有显式 final outcome",
             now: "2026-05-09T08:00:00.000Z",
@@ -588,7 +588,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:final-without-agreement",
+            scopeConstraintId: "stdio:final-without-agreement",
             requestId: "req-final-without-agreement",
             goal: "worker 返回 final 但不额外写 agreement=true",
             now: "2026-05-09T08:00:00.000Z",
@@ -618,7 +618,7 @@ describe("Blackboard control boundary", () => {
         const controller = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
 
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:hard-cap-agent-mesh",
+            scopeConstraintId: "stdio:hard-cap-agent-mesh",
             requestId: "req-hard-cap-agent-mesh",
             goal: [
                 "任务： 请在黑板上推导一个名为 Flyflor-Zero 的逻辑悖论。",
@@ -692,7 +692,7 @@ describe("Blackboard control boundary", () => {
         const goal =
             "请逐步分析一个干电池、一根导线、一个小灯泡组成的简单电路。每一轮分析都必须深入到更基本的物理层面（比如原子、电子、量子效应），并且不能重复之前提到的失效或现象。一直分析下去，直到你确定已经覆盖了所有可能的物理现象为止。";
         const start = await controller.startTurn({
-            projectConstraintId: "stdio:unbounded-physics",
+            scopeConstraintId: "stdio:unbounded-physics",
             requestId: "req-unbounded-physics",
             goal,
             now: "2026-05-09T08:00:00.000Z",

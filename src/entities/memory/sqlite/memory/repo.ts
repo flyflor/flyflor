@@ -4,11 +4,11 @@ import { MemoryCandidateStatus } from "../../../../protocol/contracts/index.ts";
 import { allQuery, getQuery, query, runQuery } from "../../../../components/sql/index.ts";
 import {
     sqliteMemoryModel,
-    type PendingProjectOffer,
+    type PendingScopeOffer,
     type PendingSkillOffer,
     type SQLiteExistingMemoryRow,
     type SQLiteMemoryRow,
-    type SQLitePendingProjectOfferRow,
+    type SQLitePendingScopeOfferRow,
     type SQLitePendingSkillOfferRow,
 } from "./entity.ts";
 import type { MemoryCandidate, MemoryRecord, MemorySearchRequest, MemorySearchResult } from "../../../../cognitive/hippocampus/memory/types.ts";
@@ -60,19 +60,19 @@ export class SQLiteMemoryRepo {
         return rows.map((row) => sqliteMemoryModel.toSearchResult(row));
     }
 
-    public upsertProjectOffer(offer: PendingProjectOffer): void {
+    public upsertScopeOffer(offer: PendingScopeOffer): void {
         runQuery(
             this.db,
-            query`INSERT INTO pending_project_offer (
-                user_id, project_id, title, goal, trigger_kind, evidence_score,
+            query`INSERT INTO pending_scope_offer (
+                owner_key, scope_id, title, goal, trigger_kind, evidence_score,
                 related_ids_json, proposed_at, ttl_turns
             ) VALUES (
-                ${offer.userId}, ${offer.projectId}, ${offer.title}, ${offer.goal},
+                ${offer.ownerKey}, ${offer.scopeId}, ${offer.title}, ${offer.goal},
                 ${offer.triggerKind}, ${offer.evidenceScore}, ${JSON.stringify(offer.relatedIds)},
                 ${offer.proposedAt}, ${offer.ttlTurns}
             )
-            ON CONFLICT(user_id) DO UPDATE SET
-                project_id = excluded.project_id,
+            ON CONFLICT(owner_key) DO UPDATE SET
+                scope_id = excluded.scope_id,
                 title = excluded.title,
                 goal = excluded.goal,
                 trigger_kind = excluded.trigger_kind,
@@ -83,46 +83,46 @@ export class SQLiteMemoryRepo {
         );
     }
 
-    public getProjectOffer(userId: string): PendingProjectOffer | undefined {
-        const row = getQuery<SQLitePendingProjectOfferRow>(
+    public getScopeOffer(ownerKey: string): PendingScopeOffer | undefined {
+        const row = getQuery<SQLitePendingScopeOfferRow>(
             this.db,
-            query`SELECT user_id, project_id, title, goal, trigger_kind, evidence_score,
+            query`SELECT owner_key, scope_id, title, goal, trigger_kind, evidence_score,
                 related_ids_json, proposed_at, ttl_turns
-                FROM pending_project_offer WHERE user_id = ${userId}`,
+                FROM pending_scope_offer WHERE owner_key = ${ownerKey}`,
         );
-        return row ? sqliteMemoryModel.toProjectOffer(row) : undefined;
+        return row ? sqliteMemoryModel.toScopeOffer(row) : undefined;
     }
 
-    public decrementProjectOfferTtl(userId: string): number | undefined {
-        const current = this.getProjectOffer(userId);
+    public decrementScopeOfferTtl(ownerKey: string): number | undefined {
+        const current = this.getScopeOffer(ownerKey);
         if (!current) {
             return undefined;
         }
         const next = current.ttlTurns - 1;
         if (next <= 0) {
-            this.deleteProjectOffer(userId);
+            this.deleteScopeOffer(ownerKey);
             return 0;
         }
-        runQuery(this.db, query`UPDATE pending_project_offer SET ttl_turns = ${next} WHERE user_id = ${userId}`);
+        runQuery(this.db, query`UPDATE pending_scope_offer SET ttl_turns = ${next} WHERE owner_key = ${ownerKey}`);
         return next;
     }
 
-    public deleteProjectOffer(userId: string): void {
-        runQuery(this.db, query`DELETE FROM pending_project_offer WHERE user_id = ${userId}`);
+    public deleteScopeOffer(ownerKey: string): void {
+        runQuery(this.db, query`DELETE FROM pending_scope_offer WHERE owner_key = ${ownerKey}`);
     }
 
     public upsertSkillOffer(offer: PendingSkillOffer): void {
         runQuery(
             this.db,
             query`INSERT INTO pending_skill_offer (
-                user_id, skill_id, name, description, summary, support, confidence,
+                owner_key, skill_id, name, description, summary, support, confidence,
                 mcp_tools_json, related_ids_json, proposed_at, ttl_turns
             ) VALUES (
-                ${offer.userId}, ${offer.skillId}, ${offer.name}, ${offer.description},
+                ${offer.ownerKey}, ${offer.skillId}, ${offer.name}, ${offer.description},
                 ${offer.summary}, ${offer.support}, ${offer.confidence}, ${JSON.stringify(offer.mcpTools)},
                 ${JSON.stringify(offer.relatedIds)}, ${offer.proposedAt}, ${offer.ttlTurns}
             )
-            ON CONFLICT(user_id) DO UPDATE SET
+            ON CONFLICT(owner_key) DO UPDATE SET
                 skill_id = excluded.skill_id,
                 name = excluded.name,
                 description = excluded.description,
@@ -136,32 +136,32 @@ export class SQLiteMemoryRepo {
         );
     }
 
-    public getSkillOffer(userId: string): PendingSkillOffer | undefined {
+    public getSkillOffer(ownerKey: string): PendingSkillOffer | undefined {
         const row = getQuery<SQLitePendingSkillOfferRow>(
             this.db,
-            query`SELECT user_id, skill_id, name, description, summary, support, confidence,
+            query`SELECT owner_key, skill_id, name, description, summary, support, confidence,
                 mcp_tools_json, related_ids_json, proposed_at, ttl_turns
-                FROM pending_skill_offer WHERE user_id = ${userId}`,
+                FROM pending_skill_offer WHERE owner_key = ${ownerKey}`,
         );
         return row ? sqliteMemoryModel.toSkillOffer(row) : undefined;
     }
 
-    public decrementSkillOfferTtl(userId: string): number | undefined {
-        const current = this.getSkillOffer(userId);
+    public decrementSkillOfferTtl(ownerKey: string): number | undefined {
+        const current = this.getSkillOffer(ownerKey);
         if (!current) {
             return undefined;
         }
         const next = current.ttlTurns - 1;
         if (next <= 0) {
-            this.deleteSkillOffer(userId);
+            this.deleteSkillOffer(ownerKey);
             return 0;
         }
-        runQuery(this.db, query`UPDATE pending_skill_offer SET ttl_turns = ${next} WHERE user_id = ${userId}`);
+        runQuery(this.db, query`UPDATE pending_skill_offer SET ttl_turns = ${next} WHERE owner_key = ${ownerKey}`);
         return next;
     }
 
-    public deleteSkillOffer(userId: string): void {
-        runQuery(this.db, query`DELETE FROM pending_skill_offer WHERE user_id = ${userId}`);
+    public deleteSkillOffer(ownerKey: string): void {
+        runQuery(this.db, query`DELETE FROM pending_skill_offer WHERE owner_key = ${ownerKey}`);
     }
 
     private insertMemoryRecord(record: MemoryRecord): void {

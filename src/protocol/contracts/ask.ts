@@ -1,7 +1,7 @@
 /**
  * AgentAsk 协议（生命体重构 LF-R3）。
  *
- * 设计要点（当前契约见 `docs/boundaries.md` R5，历史背景见 `docs/old-docs/life.form.md`）：
+ * 设计要点（当前契约见 `docs/boundaries.md` R5，历史背景见 `docs/old-docs/legacy.architecture.history.md`）：
  * - 模型同轮输出 `ModelTurnOutput.kind: 'reply' | 'ask'`，**互斥**。
  *   `ask` 不再"模拟"暂停态——它就是一次正常 turn 输出，落 `memory_events.type='ask'`，
  *   下一轮 prompt 通过 `[continuation]` 段把它注入回 system 顶部，
@@ -70,11 +70,11 @@ export interface AgentAsk {
     /** 模型给出的简短理由（debug / 审计用，不影响展示）。 */
     rationale?: string;
     /**
-     * Ghost Context hint（LF-R4）。模型同轮显式提供 ghost 的用户可见字段，
+     * Continuation Context hint（LF-R4）。模型同轮显式提供 continuation 的用户可见字段，
      * 避免 runtime 用 ask.prompt 首行做 fallback 截断。runtime 不解析、不推断；
      * 缺省则走 fallback 路径（结构化降级，非字符匹配）。
      */
-    ghostHint?: {
+    continuationHint?: {
         title?: string;
         contextHint?: string;
     };

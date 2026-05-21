@@ -23,16 +23,16 @@ export interface SQLiteExistingMemoryRow {
     id: string;
 }
 
-export interface SQLitePendingProjectOfferRow {
+export interface SQLitePendingScopeOfferRow {
     evidence_score: number;
     goal: string;
-    project_id: string;
+    owner_key: string;
+    scope_id: string;
     proposed_at: string;
     related_ids_json: string;
     title: string;
     trigger_kind: string;
     ttl_turns: number;
-    user_id: string;
 }
 
 export interface SQLitePendingSkillOfferRow {
@@ -40,13 +40,13 @@ export interface SQLitePendingSkillOfferRow {
     description: string;
     mcp_tools_json: string;
     name: string;
+    owner_key: string;
     proposed_at: string;
     related_ids_json: string;
     skill_id: string;
     summary: string;
     support: number;
     ttl_turns: number;
-    user_id: string;
 }
 
 export interface PendingSkillOffer {
@@ -60,19 +60,19 @@ export interface PendingSkillOffer {
     summary: string;
     support: number;
     ttlTurns: number;
-    userId: string;
+    ownerKey: string;
 }
 
-export interface PendingProjectOffer {
+export interface PendingScopeOffer {
     evidenceScore: number;
     goal: string;
-    projectId: string;
+    ownerKey: string;
+    scopeId: string;
     proposedAt: string;
     relatedIds: string[];
     title: string;
     triggerKind: string;
     ttlTurns: number;
-    userId: string;
 }
 
 /**
@@ -109,10 +109,10 @@ export class SQLiteMemoryModel {
         };
     }
 
-    public toProjectOffer(row: SQLitePendingProjectOfferRow): PendingProjectOffer {
+    public toScopeOffer(row: SQLitePendingScopeOfferRow): PendingScopeOffer {
         return {
-            userId: row.user_id,
-            projectId: row.project_id,
+            ownerKey: row.owner_key,
+            scopeId: row.scope_id,
             title: row.title,
             goal: row.goal,
             triggerKind: row.trigger_kind,
@@ -125,7 +125,7 @@ export class SQLiteMemoryModel {
 
     public toSkillOffer(row: SQLitePendingSkillOfferRow): PendingSkillOffer {
         return {
-            userId: row.user_id,
+            ownerKey: row.owner_key,
             skillId: row.skill_id,
             name: row.name,
             description: row.description,

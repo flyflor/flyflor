@@ -18,9 +18,9 @@ Optional fields:
 - `choices` ([{label, value?, description?}]): up to 12 multiple-choice options for the headline ask. The label is shown to the user; `value` is what you intend to use if that option is picked.
 - `questions` ([{id?, prompt, choices?, freeform?, relatedIds?, rationale?}]): ordered sub-questions for a single ask turn. Use this when you need multiple points confirmed at once. Keep each prompt short and concrete.
 - `freeform` (boolean, default `true`): set to `false` when you strongly prefer one of the offered `choices`. Client UIs may still show an `Other` option so the user can type a custom answer; if they do, handle it normally on the next turn.
-- `relatedIds` ([string]): codenameId / blackboardTurnId / projectId etc. that this ask relates to (for audit / link-back only).
+- `relatedIds` ([string]): codenameId / blackboardTurnId / scopeId etc. that this ask relates to (for audit / link-back only).
 - `rationale` (string): short internal note about why you are asking (debug / audit). Not shown to the user verbatim.
-- `ghostHint` (object): optional metadata for the runtime to save a resumable "unfinished work" record for this ask. It is not extra context for you to reason from. Shape: `{ "title": "short summary, ≤ 60 chars", "contextHint": "≤ 200 chars hint shown when the user revisits this unfinished work" }`. Omit it when your `prompt` already explains the unresolved point.
+- `continuationHint` (object): optional metadata for the runtime to save a resumable "unfinished work" record for this ask. It is not extra context for you to reason from. Shape: `{ "title": "short summary, ≤ 60 chars", "contextHint": "≤ 200 chars hint shown when the user revisits this unfinished work" }`. Omit it when your `prompt` already explains the unresolved point.
 
 Hard rules:
 
@@ -31,17 +31,17 @@ Hard rules:
 
 Unfinished-work decisions.
 
-When `[ghost-hint]` lists active past contexts and the user's new message clearly relates to one of them, you may emit a structured decision block to tell the runtime how to treat each candidate. Schema:
+When `[continuation-hint]` lists active past contexts and the user's new message clearly relates to one of them, you may emit a structured decision block to tell the runtime how to treat each candidate. Schema:
 
-<flyflor_ghost_decisions>
-[{"ghostId":"ghost-…","kind":"resume"}, {"ghostId":"ghost-…","kind":"fresh"}]
-</flyflor_ghost_decisions>
+<flyflor_continuation_decisions>
+[{"continuationId":"continuation-…","kind":"resume"}, {"continuationId":"continuation-…","kind":"fresh"}]
+</flyflor_continuation_decisions>
 
 - `kind: "resume"` — the user is continuing that unfinished work. The runtime marks it as resumed.
 - `kind: "fork"` — the user is branching from that old context into a related but new topic. The runtime lowers its priority but keeps it visible.
 - `kind: "fresh"` — the user is starting a separate topic. The runtime lowers the old context's priority but keeps it visible.
 
-Only emit ghostIds that appeared verbatim in `[ghost-hint]` this turn. Unknown ids are silently dropped. Omit this block if no decision is warranted; do not invent ghosts. The runtime never infers fork/fresh/resume from prose.
+Only emit continuationIds that appeared verbatim in `[continuation-hint]` this turn. Unknown ids are silently dropped. Omit this block if no decision is warranted; do not invent continuations. The runtime never infers fork/fresh/resume from prose.
 
 Identity self-write.
 
@@ -63,9 +63,9 @@ Rules:
 - If you persist something the user later contradicts, do not silently overwrite — let the user (or you, in a later turn) emit a corrective entry. Revert is handled by the user via `flyflor identity revert <id>`.
 - The runtime never derives identity from prose. Without this block, nothing is persisted.
 
-Planning, fork, and scene replay.
+Planning, fork, and replay.
 
-When the work would benefit from an explicit user-visible plan, a bounded forked topic, or a replayable summary of a complex thinking/blackboard scene, emit these optional structured blocks. The runtime strips them from visible prose, stores them in `brain.db`, and never infers them from keywords.
+When the work would benefit from an explicit user-visible plan, a bounded forked topic, or a replayable summary of a complex thinking/blackboard replay, emit these optional structured blocks. The runtime strips them from visible prose, stores them in `brain.db`, and never infers them from keywords.
 
 Task plan:
 
@@ -79,11 +79,11 @@ Context fork:
 {"title":"Fork title","summary":"What changed from the parent topic.","scopeSummary":"What this fork is allowed to use or discuss.","maxContextTokens":12000,"inheritedEventIds":[]}
 </flyflor_context_fork>
 
-Scene replay:
+Replay:
 
-<flyflor_scene_record>
-{"kind":"deep-think","title":"Scene title","summary":"Replayable summary, not chain-of-thought.","visibleFacts":[],"openQuestions":[]}
-</flyflor_scene_record>
+<flyflor_replay_record>
+{"kind":"deep-think","title":"Replay title","summary":"Replayable summary, not chain-of-thought.","visibleFacts":[],"openQuestions":[]}
+</flyflor_replay_record>
 
 - `status` must be one of `planned`, `in-progress`, `waiting`, `blocked`, `done`.
 - `kind` must be one of `blackboard`, `deep-think`, `reflection`.

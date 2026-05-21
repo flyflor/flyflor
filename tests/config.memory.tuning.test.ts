@@ -59,8 +59,8 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(tuning.reconsolidation.driftHitCount).toBe(2);
             expect(tuning.inbox.decayMultiplier).toBeCloseTo(2.0);
             expect(tuning.inbox.ttlDays).toBe(7);
-            expect(tuning.dormant.idleMinutes).toBe(10);
-            expect(tuning.dormant._keepGatewayListening).toBe(true);
+            expect(tuning.idle.idleMinutes).toBe(10);
+            expect(tuning.idle._keepGatewayListening).toBe(true);
             expect(tuning.brainDb.archiveAfterMonths).toBe(3);
             expect(tuning.brainDb.archiveIntervalHours).toBe(24);
             expect(tuning.brainDb.vacuumIntervalDays).toBe(14);
@@ -105,7 +105,7 @@ describe("LF-P0 memory tuning defaults", () => {
             expect(config.memory.tuning.contextFork.sidecarTtlDays).toBe(30);
             // unrelated blocks keep defaults
             expect(config.memory.tuning.summary.trigger).toBe(SummaryTrigger.Rolling);
-            expect(config.memory.tuning.dormant.idleMinutes).toBe(10);
+            expect(config.memory.tuning.idle.idleMinutes).toBe(10);
         } finally {
             await rm(root, { recursive: true, force: true });
         }
@@ -119,7 +119,7 @@ describe("LF-P0 memory tuning defaults", () => {
                 JSON.stringify({
                     memory: {
                         tuning: {
-                            dormant: { _keepGatewayListening: false },
+                            idle: { _keepGatewayListening: false },
                         },
                     },
                 }),
@@ -140,11 +140,11 @@ describe("LF-P0 memory tuning defaults", () => {
     });
 
     test("LF-P0 protocol enums are present and stable", () => {
-        expect(RuntimeMode.Dormant).toBe("dormant");
+        expect(RuntimeMode.Idle).toBe("idle");
         expect(AtomStage.Raw).toBe("raw");
         expect(AtomStage.Compressed).toBe("compressed");
         expect(AtomStage.Fuzzy).toBe("fuzzy");
-        expect(IdentityFile.Soul).toBe("soul.md");
+        expect(IdentityFile.Identity).toBe("identity.md");
         expect(IdentityFile.User).toBe("user.md");
     });
 

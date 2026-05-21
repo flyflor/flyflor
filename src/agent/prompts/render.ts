@@ -43,6 +43,8 @@ export interface McpContextPromptInput {
     toolContext?: string;
 }
 
+export interface McpToolBudgetExhaustedPromptInput {}
+
 export interface BlackboardAdvisoryPromptInput {
     compactRounds?: string[];
     configured: boolean;
@@ -77,7 +79,7 @@ export interface BlackboardWorkerSystemPromptInput {
 export interface MemoryContextPromptInput {
     hippocampus: string;
     markdown: string;
-    projectMemory: string;
+    scopeMemory: string;
     renderedResults: string;
 }
 
@@ -94,7 +96,7 @@ export interface HotMemoryCompressionPromptInput {
 }
 
 export interface MemoryDreamPromptInput {
-    userId: string;
+    ownerKey: string;
     candidates: string;
 }
 
@@ -108,7 +110,7 @@ export interface BlackboardDecisionPromptInput {
     unresolvedIssues: string[];
 }
 
-export interface RuntimeDormantResumePromptInput {
+export interface RuntimeIdleResumePromptInput {
     idleBucket: string;
 }
 
@@ -129,15 +131,15 @@ export interface RuntimeAskContinuationPromptInput {
     reason: string;
 }
 
-export interface RuntimeGhostHintPromptInput {
-    ghostEntries: string;
+export interface RuntimeContinuationHintPromptInput {
+    continuationEntries: string;
 }
 
 export interface RuntimeIdentityContextPromptInput {
     identityEntries: string;
 }
 
-export interface ProjectOfferPromptInput {
+export interface ScopeOfferPromptInput {
     evidenceScore: string;
     relatedCount: string;
     remainingTurns: string;
@@ -265,7 +267,7 @@ export function renderBehaviorPriorityInstructions(): string {
 }
 
 export function renderSkillContextPrompt(input: SkillContextPromptInput): string {
-    // 必要提示词：Skill Markdown 是用户/项目提供的能力说明；这里只做上下文格式化，不控制运行时收敛。
+    // 必要提示词：Skill Markdown 是用户或工作区提供的能力说明；这里只做上下文格式化，不控制运行时收敛。
     return renderTemplate(requiredTemplates().skillContext.content, {
         skillEntries: input.skills
             .map((skill) => `## ${skill.name}\n${skill.description}\n\n${skill.body.trim()}`)
@@ -286,6 +288,10 @@ export function renderMcpContextPrompt(input: McpContextPromptInput): string {
                 })
                 .join("\n"),
     });
+}
+
+export function renderMcpToolBudgetExhaustedPrompt(_input: McpToolBudgetExhaustedPromptInput = {}): string {
+    return requiredTemplates().mcpToolBudgetExhausted.content;
 }
 
 export function renderBlackboardAdvisoryPrompt(input: BlackboardAdvisoryPromptInput): string {
@@ -325,15 +331,12 @@ export function renderBlackboardRoutePrompt(input: BlackboardRoutePromptInput): 
 }
 
 export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeInput): string {
-    // 必要提示词：worker 会把该 JSON 作为 ModelRole.User 输入；字段说明由模板承载，输出 schema 与约束由 manifest metadata 供给。
-    const protocolSpec = requiredBlackboardWorkerEnvelopeProtocolSpec();
+    // 必要提示词：worker 会把该 JSON 作为 ModelRole.User 输入；字段说明、输出字段和约束都由模板承载。
     return renderTemplate(requiredTemplates().blackboardWorkerEnvelope.content, {
-        constraintsJson: promptJson(protocolSpec.constraints),
         contractJson: promptJson(input.contract),
         convergencePolicyJson: promptJson(input.convergencePolicy),
         currentRoundStepsJson: promptJson(input.currentRoundSteps),
         discussionPlanJson: promptJson(input.discussionPlan),
-        expectedOutputJson: promptJson(protocolSpec.expectedOutput),
         goalJson: promptJson(input.goal),
         minRoundsJson: promptJson(input.minRounds),
         participantJson: promptJson(input.participant),
@@ -341,14 +344,6 @@ export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeIn
         previousStepsJson: promptJson(input.previousSteps),
         roundJson: promptJson(input.round),
     });
-}
-
-function requiredBlackboardWorkerEnvelopeProtocolSpec() {
-    const spec = PROMPT_TEMPLATE_DEFINITIONS.blackboardWorkerEnvelope.protocolSpec;
-    if (!spec) {
-        throw new Error("Missing blackboard worker protocol spec.");
-    }
-    return spec;
 }
 
 export function renderBlackboardWorkerSystemPrompt(input: BlackboardWorkerSystemPromptInput): string {
@@ -363,7 +358,7 @@ export function renderMemoryContextPrompt(input: MemoryContextPromptInput): stri
     return renderTemplate(requiredTemplates().memoryContext.content, {
         hippocampus: input.hippocampus,
         markdownContent: input.markdown,
-        projectMemory: input.projectMemory,
+        scopeMemory: input.scopeMemory,
         retrievedResults: input.renderedResults,
     });
 }
@@ -393,7 +388,7 @@ export function renderMemoryDreamPrompt(input: MemoryDreamPromptInput): string {
     // 必要提示词：长期概念图维护 worker；drift-repair / recall-reinforce / contradiction-audit / skip
     // 由结构化 JSON 输出承载，代码不做语义匹配，只校验 enum + JSON shape（README.md §12）。
     return renderTemplate(requiredTemplates().memoryDream.content, {
-        userId: input.userId,
+        ownerKey: input.ownerKey,
         candidates: input.candidates,
     });
 }
@@ -415,8 +410,8 @@ export function renderBlackboardDecisionPrompt(input: BlackboardDecisionPromptIn
     });
 }
 
-export function renderRuntimeDormantResumePrompt(input: RuntimeDormantResumePromptInput): string {
-    return renderTemplate(requiredTemplates().runtimeDormantResume.content, {
+export function renderRuntimeIdleResumePrompt(input: RuntimeIdleResumePromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeIdleResume.content, {
         idleBucket: input.idleBucket,
     });
 }
@@ -442,9 +437,9 @@ export function renderRuntimeAskContinuationPrompt(input: RuntimeAskContinuation
     });
 }
 
-export function renderRuntimeGhostHintPrompt(input: RuntimeGhostHintPromptInput): string {
-    return renderTemplate(requiredTemplates().runtimeGhostHint.content, {
-        ghostEntries: input.ghostEntries,
+export function renderRuntimeContinuationHintPrompt(input: RuntimeContinuationHintPromptInput): string {
+    return renderTemplate(requiredTemplates().runtimeContinuationHint.content, {
+        continuationEntries: input.continuationEntries,
     });
 }
 
@@ -454,8 +449,8 @@ export function renderRuntimeIdentityContextPrompt(input: RuntimeIdentityContext
     });
 }
 
-export function renderProjectOfferPrompt(input: ProjectOfferPromptInput): string {
-    return renderTemplate(requiredTemplates().memoryProjectOffer.content, {
+export function renderScopeOfferPrompt(input: ScopeOfferPromptInput): string {
+    return renderTemplate(requiredTemplates().memoryScopeOffer.content, {
         evidenceScore: input.evidenceScore,
         relatedCount: input.relatedCount,
         remainingTurns: input.remainingTurns,
@@ -531,14 +526,15 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     memoryAction: [],
     memoryConsolidation: ["episode"],
     memoryHotCompress: ["episodes"],
-    memoryContext: ["hippocampus", "markdownContent", "projectMemory", "retrievedResults"],
-    memoryDream: ["candidates", "userId"],
-    memoryProjectOffer: ["evidenceScore", "relatedCount", "remainingTurns", "title"],
+    memoryContext: ["hippocampus", "markdownContent", "retrievedResults", "scopeMemory"],
+    memoryDream: ["candidates", "ownerKey"],
+    memoryScopeOffer: ["evidenceScore", "relatedCount", "remainingTurns", "title"],
     memorySkillOffer: ["confidence", "name", "remainingTurns", "support", "tools"],
     runtimeAskContinuation: ["chainDepth", "choices", "prompt", "reason"],
-    runtimeDormantResume: ["idleBucket"],
+    mcpToolBudgetExhausted: [],
+    runtimeIdleResume: ["idleBucket"],
     runtimeEqContext: ["ageBucket", "arousal", "confidence", "directive", "dominance", "label", "valence"],
-    runtimeGhostHint: ["ghostEntries"],
+    runtimeContinuationHint: ["continuationEntries"],
     runtimeIdentityContext: ["identityEntries"],
     runtimeSystem: [
         "askSchemaInstructions",
@@ -743,8 +739,6 @@ function diffPromptTemplateManifest(actual: PromptTemplateBundleManifest): strin
         if (
             actualEntry.key !== expectedEntry.key ||
             actualEntry.filename !== expectedEntry.filename ||
-            actualEntry.protocol !== expectedEntry.protocol ||
-            !sameProtocolSpec(actualEntry.protocolSpec, expectedEntry.protocolSpec) ||
             !sameStringArray(actualEntry.requiredPlaceholders, expectedEntry.requiredPlaceholders)
         ) {
             return `manifest template entry ${index} does not match runtime definition for ${expectedEntry.key}`;
@@ -760,15 +754,6 @@ function sameStringArray(left: readonly string[] | undefined, right: readonly st
     return left.every((item, index) => item === right[index]);
 }
 
-function sameProtocolSpec(
-    left: { constraints: readonly string[]; expectedOutput: readonly string[] } | undefined,
-    right: { constraints: readonly string[]; expectedOutput: readonly string[] } | undefined,
-): boolean {
-    if (!left || !right) {
-        return left === right;
-    }
-    return sameStringArray(left.expectedOutput, right.expectedOutput) && sameStringArray(left.constraints, right.constraints);
-}
 
 function promptJson(value: unknown): string {
     return JSON.stringify(value, null, 2);

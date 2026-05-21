@@ -24,7 +24,7 @@ export interface FastRouteSnapshot {
     embedding?: number[];
     /** 上一轮实际命中的 mode，用于相似消息复用。 */
     lastMode: BlackboardMode;
-    /** 当前 (channel, chatId, user) 维度，连续命中 direct-with-watch 的轮数。 */
+    /** 当前显式 scope/fork 维度，连续命中 direct-with-watch 的轮数；无显式范围时仅 turn-local。 */
     consecutiveWatchTurns?: number;
     /** 黑板未收敛（NeedsUser / Failed / MaxRoundsReached）连续轮数。 */
     consecutiveBlackboardFailures?: number;

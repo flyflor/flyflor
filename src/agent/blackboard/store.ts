@@ -54,9 +54,9 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return this.requiredRepo().acquireLease(request);
     }
 
-    public async releaseLease(projectConstraintId: string, turnId: string, _now: string): Promise<BlackboardLease | undefined> {
+    public async releaseLease(scopeConstraintId: string, turnId: string, _now: string): Promise<BlackboardLease | undefined> {
         await this.initialize();
-        return this.requiredRepo().releaseLease(projectConstraintId, turnId);
+        return this.requiredRepo().releaseLease(scopeConstraintId, turnId);
     }
 
     public async createTurn(turn: BlackboardTurn): Promise<void> {
@@ -93,9 +93,9 @@ export class SQLiteBlackboardStore implements BlackboardStore {
         return this.requiredRepo().getTurn(turnId);
     }
 
-    public async listTurns(projectConstraintId: string, limit: number): Promise<BlackboardTurn[]> {
+    public async listTurns(scopeConstraintId: string, limit: number): Promise<BlackboardTurn[]> {
         await this.initialize();
-        return this.requiredRepo().listTurns(projectConstraintId, limit);
+        return this.requiredRepo().listTurns(scopeConstraintId, limit);
     }
 
     public async listRecentTurns(limit: number): Promise<BlackboardTurn[]> {

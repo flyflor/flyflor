@@ -65,6 +65,6 @@ describe("setMcpServerToolsEnabled", () => {
     test("missing server raises", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-tools-miss-"));
         const paths = testPaths(root);
-        await expect(setMcpServerToolsEnabled(paths, "ghost", ["x"], "disable")).rejects.toThrow();
+        await expect(setMcpServerToolsEnabled(paths, "continuation", ["x"], "disable")).rejects.toThrow();
     });
 });

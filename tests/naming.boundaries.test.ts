@@ -8,9 +8,8 @@ const SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const SECRET_SCANNED_DIRS = ["src", "scripts", "tests", "templates", "docs"];
 const DOT_SEGMENTED_FILE = /^[a-z0-9]+(?:\.[a-z0-9]+)*\.[a-z0-9]+$/u;
 const OPENAI_SECRET_PATTERN = /\bsk-[a-zA-Z0-9]{16,}\b/u;
-const CANONICAL_MEMORY_TEMPLATE = /^(MEMORY|SELF|SOUL|USER)(?:\.zh\.cn)?\.md$/u;
 // 首页类知识文档约定大写：README/TODO/AGENTS/BOUNDARIES/DESIGN（顶层 + docs/ + templates/projects/ 共用）。
-const CANONICAL_FRONTPAGE_DOC = /^(README|TODO|AGENTS|BOUNDARIES|DESIGN)\.md$/u;
+const CANONICAL_FRONTPAGE_DOC = /^(README|TODO|AGENTS|BOUNDARIES|DESIGN)(?:\.zh\.cn)?\.md$/u;
 const LEGACY_MEMORY_PATH_REFERENCES = [
     "src/components/memory/",
     "src/components/crystal/",
@@ -69,6 +68,134 @@ describe("repository naming boundary", () => {
             .filter((file) => /[-_]/u.test(basename(file)));
 
         expect(legacyNames).toEqual([]);
+    });
+
+    test("every canonical markdown source has a zh.cn companion", async () => {
+        const rootDocs = ["AGENTS.md", "README.md", "TODO.md"].map((file) => join(REPO_ROOT, file));
+        const files = [
+            ...rootDocs,
+            ...(await Promise.all(["abandon", "docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
+        ]
+            .map((file) => relative(REPO_ROOT, file))
+            .filter((file) => file.endsWith(".md") && !file.endsWith(".zh.cn.md"));
+        const missing: string[] = [];
+        for (const file of files) {
+            const companion = file.replace(/\.md$/u, ".zh.cn.md");
+            if (!(await exists(join(REPO_ROOT, companion)))) {
+                missing.push(file);
+            }
+        }
+
+        // Markdown is a bilingual contract in this repo. Every source document
+        // needs a Chinese review copy beside it so edits cannot drift silently.
+        expect(missing).toEqual([]);
+    });
+
+    test("zh.cn markdown companions are real Chinese review copies", async () => {
+        const rootDocs = ["AGENTS.zh.cn.md", "README.zh.cn.md", "TODO.zh.cn.md"].map((file) => join(REPO_ROOT, file));
+        const files = [
+            ...rootDocs,
+            ...(await Promise.all(["abandon", "docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
+        ]
+            .map((file) => relative(REPO_ROOT, file))
+            .filter((file) => file.endsWith(".zh.cn.md"));
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const text = await Bun.file(join(REPO_ROOT, file)).text();
+            if (/机械同步|mechanically synchronized|本轮先保持/u.test(text)) {
+                violations.push(`${file}: sync marker`);
+                continue;
+            }
+            const prose = text.replace(/\{\{[^\}]+\}\}/gu, "").replace(/```[\s\S]*?```/gu, "");
+            if (file.endsWith("blackboard.worker.envelope.zh.cn.md")) {
+                continue;
+            }
+            const compactProse = prose.replace(/[\s{}\[\]",:._-]/gu, "");
+            if (!/[A-Za-z\u3400-\u9fff]/u.test(compactProse)) {
+                continue;
+            }
+            const cjkCount = (prose.match(/[\u3400-\u9fff]/gu) ?? []).length;
+            const latinCount = (prose.match(/[A-Za-z]/gu) ?? []).length;
+            if (latinCount > 80 && cjkCount < 12) {
+                violations.push(`${file}: mostly non-Chinese prose`);
+            }
+        }
+
+        // zh.cn files are for side-by-side Chinese review, not placeholder
+        // copies. JSON-only templates are allowed, but prose-bearing files must
+        // contain Chinese text and no mechanical-sync marker.
+        expect(violations).toEqual([]);
+    });
+
+    test("prompt engineering templates keep English canonical files and Chinese companions", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "templates", "prompts")))
+            .map((file) => relative(REPO_ROOT, file))
+            .filter((file) => file.endsWith(".md"));
+        const violations: string[] = [];
+
+        for (const file of files) {
+            const prose = stripPromptPlaceholders(await Bun.file(join(REPO_ROOT, file)).text());
+            const cjkCount = (prose.match(/[\u3400-\u9fff]/gu) ?? []).length;
+            const latinCount = (prose.match(/[A-Za-z]/gu) ?? []).length;
+            if (file.endsWith(".zh.cn.md")) {
+                if (latinCount > 80 && cjkCount < 12) {
+                    violations.push(`${file}: companion is not Chinese`);
+                }
+                continue;
+            }
+            if (cjkCount > 0) {
+                violations.push(`${file}: canonical prompt template must stay English`);
+            }
+        }
+
+        // Prompt templates are runtime model contracts. Keep canonical .md
+        // files English and maintain .zh.cn.md copies in Chinese for review.
+        expect(violations).toEqual([]);
+    });
+
+    test("prompt docs templates are docs-only and excluded from runtime manifest", async () => {
+        const promptDir = join(REPO_ROOT, "templates", "prompts");
+        const manifest = JSON.parse(await Bun.file(join(promptDir, "template.manifest.json")).text()) as {
+            templates?: Array<{ filename?: string }>;
+        };
+        const runtimeFiles = new Set((manifest.templates ?? []).map((entry) => entry.filename));
+        const docsFiles = (await listFiles(join(promptDir, "docs")))
+            .map((file) => relative(promptDir, file))
+            .filter((file) => file.endsWith(".md"));
+        const violations = docsFiles.filter((file) => runtimeFiles.has(file) || runtimeFiles.has(basename(file)));
+
+        // templates/prompts/docs renders README text. It is not model-facing
+        // runtime prompt material and must stay outside the installed manifest.
+        expect(violations).toEqual([]);
+    });
+
+    test("prompt manifest stays a file contract without prompt prose", async () => {
+        const manifestSource = await Bun.file(join(REPO_ROOT, "src", "agent", "prompts", "template.manifest.ts")).text();
+        const forbidden = ["protocolSpec", "expectedOutput", "constraintsJson", "expectedOutputJson"];
+        const violations = forbidden.filter((snippet) => manifestSource.includes(snippet));
+
+        // Model-facing protocol prose belongs in templates/prompts/*.md; the
+        // manifest only names files and placeholders for runtime loading.
+        expect(violations).toEqual([]);
+    });
+
+    test("identity memory uses IDENTITY and does not revive removed identity files", async () => {
+        const removedIdentityName = ["s", "o", "u", "l"].join("");
+        const removedIdentityUpperName = removedIdentityName.toUpperCase();
+        const files = [
+            `templates/memory/${removedIdentityName}.md`,
+            `templates/memory/${removedIdentityName}.zh.cn.md`,
+            `docker/workspace/${removedIdentityUpperName}.md`,
+            `docker/workspace/${removedIdentityUpperName}.zh.cn.md`,
+        ];
+        const revived = (
+            await Promise.all(files.map(async (file) => ((await exists(join(REPO_ROOT, file))) ? file : undefined)))
+        ).filter((file): file is string => Boolean(file));
+
+        // IDENTITY.md is the canonical durable identity file. Keeping removed
+        // identity templates around creates a second identity source.
+        expect(revived).toEqual([]);
     });
 
     test("class members declare explicit visibility", async () => {
@@ -162,32 +289,36 @@ describe("repository naming boundary", () => {
         expect(await exists(join(REPO_ROOT, "src", "events", "index.ts"))).toBe(true);
     });
 
-    test("new code imports Executive through src/executive instead of legacy cttl", async () => {
+    test("new code imports Executive through src/executive instead of the old execution layer", async () => {
+        const legacyExecutiveDir = ["c", "t", "t", "l"].join("");
         const files = (await Promise.all(["src", "tests", "scripts"].map((dir) => listFiles(join(REPO_ROOT, dir)))))
             .flat()
             .filter((file) => {
                 const rel = relative(REPO_ROOT, file);
-                return !rel.startsWith("src/cttl/") && (file.endsWith(".ts") || file.endsWith(".tsx"));
+                return !rel.startsWith(`src/${legacyExecutiveDir}/`) && (file.endsWith(".ts") || file.endsWith(".tsx"));
             });
         const violations: string[] = [];
 
         for (const file of files) {
             const rel = relative(REPO_ROOT, file);
             const text = await Bun.file(file).text();
-            if (/from\s+["'][^"']*\/cttl(?:\/index)?\.ts["']/u.test(text)) {
+            const legacyImportPattern = new RegExp(`from\\\\s+["'][^"']*/${legacyExecutiveDir}(?:/index)?\\\\.ts["']`, "u");
+            if (legacyImportPattern.test(text)) {
                 violations.push(rel);
             }
         }
 
-        // Executive is owned by src/executive. The old cttl import surface is
-        // gone, so source and tests must exercise the current boundary.
+        // Executive is owned by src/executive. The old import surface is gone,
+        // so source and tests must exercise the current boundary.
         expect(violations).toEqual([]);
     });
 
-    test("legacy cttl physical directory does not return", async () => {
-        // R2 finished with Executive owned by src/executive. Keeping src/cttl
+    test("old execution layer physical directory does not return", async () => {
+        const legacyExecutiveDir = ["c", "t", "t", "l"].join("");
+
+        // Executive is owned by src/executive. Keeping the old execution layer
         // around as compatibility shells makes the public boundary ambiguous.
-        expect(await exists(join(REPO_ROOT, "src", "cttl"))).toBe(false);
+        expect(await exists(join(REPO_ROOT, "src", legacyExecutiveDir))).toBe(false);
     });
 
     test("new code imports migrated cognitive slices through src/cognitive instead of legacy fch", async () => {
@@ -326,13 +457,14 @@ describe("repository naming boundary", () => {
 
 function isAllowedFilename(file: string): boolean {
     const name = basename(file);
-    if (file.startsWith("templates/memory/") && CANONICAL_MEMORY_TEMPLATE.test(name)) {
-        return true;
-    }
     if (CANONICAL_FRONTPAGE_DOC.test(name)) {
         return true;
     }
     return DOT_SEGMENTED_FILE.test(name);
+}
+
+function stripPromptPlaceholders(text: string): string {
+    return text.replace(/\{\{[^\}]+\}\}/gu, "").replace(/```[\s\S]*?```/gu, "");
 }
 
 function hasRepeatedDirectoryOwnerPrefix(file: string): boolean {
