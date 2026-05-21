@@ -24,3 +24,10 @@
   Summary: Finalized the branch-owned scope/ask wording, confirmed alignment with `docs/architecture.md`, and marked the worktree ready for handoff.
   Reason: This worktree needed a clean finish that makes Scope the explicit life-domain, Ask the normal boundary-closing path, and blackboard continuity subordinate to the active Scope.
   Verification: `bun test tests/docs.references.test.ts`
+
+- Status: completed
+  Actor: main-codex
+  Scope: wt/docs-scope-ask
+  Summary: Mainline review accepted the owned scope/ask document refinements and merged the target docs back to `main-codex-docs`.
+  Reason: This worktree is now a completed local branch record; the canonical merged history lives on the coordinator branch.
+  Verification: reviewed commit `f557924`; merged on mainline commit `4c21957`

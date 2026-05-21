@@ -24,3 +24,10 @@
   摘要：完成当前分支的 scope/ask 文案收口，确认其与 `docs/architecture.md` 对齐，并将 worktree 标记为可交还。
   原因：这个 worktree 需要完整收尾，把 Scope 讲成显式生命域，把 Ask 讲成正常边界闭环路径，并明确黑板连续性必须服从当前 active Scope。
   验证：`bun test tests/docs.references.test.ts`
+
+- 状态：completed
+  操作者：main-codex
+  范围：wt/docs-scope-ask
+  摘要：主线 review 已接受当前分支负责的 scope/ask 文档补强，并把目标文档合并回 `main-codex-docs`。
+  原因：当前 worktree 现在只保留本地完成记录；canonical 的合并后历史以协调主线为准。
+  验证：reviewed commit `f557924`；merged on mainline commit `4c21957`
