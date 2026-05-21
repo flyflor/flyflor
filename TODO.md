@@ -9,4 +9,4 @@
 - [x] Review and update `docs/crystal.reflection.md`.
 - [x] Review and update `docs/crystal.reflection.zh.cn.md`.
 - [x] Confirm the updated wording still matches `docs/architecture.md`.
-- [ ] Hand the branch back to main Codex for review.
+- [x] Hand the branch back to main Codex for review.
