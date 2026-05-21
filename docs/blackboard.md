@@ -6,6 +6,8 @@
 
 黑板不是第二个隐藏人格，也不是长期上下文容器；它只是当前生命态下处理复杂问题的显式工作台。
 
+如果当前轮已经装配了 Scope，黑板讨论也只能在这个显式生命工作域内运行；它不能自己发明新的长期容器，更不能绕开 ask 机制偷偷建立工作域连续性。
+
 ## 相关代码路径
 
 - `src/agent/blackboard/module.ts` — turn / step / decision / lease 控制
@@ -187,6 +189,13 @@ CREATE TABLE blackboard_leases (
 
 这一步体现的是 Flyflor 的认知边界哲学：复杂思考可以由黑板展开，但在无法自动收敛时，系统必须显式 ask，而不是把不确定性偷偷埋进后台状态。
 
+这也意味着黑板的最佳出口不只是“给出答案”，而是：
+
+- 收敛为 final 结果
+- 或显式收敛成需要用户裁决的 ask
+
+后者不是失败，而是智能生命体在认知边界处把决策权正确交还给用户。
+
 旧 `flyflor-decision-form` 用户可见系统消息已退役；测试只保留 negative assertion，确保不再写入 transcript。
 
 ## 状态持久化表
@@ -226,6 +235,8 @@ worker **不能**直接写长期记忆：
 收敛黑板 → `recordDebateEpisode` 高权重 episode（`sourceKind = blackboard-converged`，evidence weight 0.8）。
 
 如果黑板最终通过 ask 与用户完成收束，这类 ask-answer 与黑板讨论结果同样属于后续结晶候选的重要来源。
+
+在 Scope 已存在的情况下，这些 ask-answer 还会同时强化对应生命域的局部连续性，而不是飘成无 owner 的全局对话碎片。
 
 ## 配置
 
