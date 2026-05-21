@@ -53,7 +53,7 @@ export interface DreamWorker {
 
 /** No-op 实现：缺少晶体图 Component 或 ModelClient 时使用，保持依赖图稳定。 */
 export class NullDreamWorker implements DreamWorker {
-    public async runOnce(_userId: string, _limit?: number): Promise<DreamRunResult> {
+    public async runOnce(_ownerKey: string, _limit?: number): Promise<DreamRunResult> {
         return zeroResult();
     }
 }

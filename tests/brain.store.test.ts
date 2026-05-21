@@ -28,10 +28,11 @@ describe("BrainStore", () => {
         try {
             const ts = Date.UTC(2026, 4, 13, 8, 0, 0);
             const event = store.appendEvent({
+                ownerKey: "scope:test",
                 id: "e1",
                 ts,
-                userId: "u1",
-                channelId: "stdio",
+                sourceKey: "u1",
+                sourceSurface: "stdio",
                 codenameId: "c1",
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
@@ -41,7 +42,7 @@ describe("BrainStore", () => {
             expect(event.timeBucket).toBe("2026-05-13");
             const fetched = store.getEvent("e1");
             expect(fetched?.content).toEqual({ text: "hello" });
-            const listed = store.listEvents({ userId: "u1", limit: 10 });
+            const listed = store.listEvents({ ownerKey: "scope:test", limit: 10 });
             expect(listed).toHaveLength(1);
             expect(listed[0]?.codenameId).toBe("c1");
         } finally {
@@ -61,30 +62,30 @@ describe("BrainStore", () => {
                     `EXPLAIN QUERY PLAN
                      SELECT e.* FROM memory_events e
                      LEFT JOIN memory_state s ON s.event_id = e.id
-                     WHERE e.user_id = ? AND e.type = ? AND e.ts >= ?
+                     WHERE e.owner_key = ? AND e.type = ? AND e.ts >= ?
                      ORDER BY e.ts DESC
                      LIMIT ?`,
-                    ["u1", MemoryEventType.Event, 0, 100],
+                    ["scope:test", MemoryEventType.Event, 0, 100],
                 );
                 const pendingAskPlan = queryPlan(
                     db,
                     `EXPLAIN QUERY PLAN
                      SELECT e.* FROM memory_events e
                      LEFT JOIN memory_state s ON s.event_id = e.id
-                     WHERE e.user_id = ? AND e.type = 'ask'
+                     WHERE e.owner_key = ? AND e.type = 'ask'
                        AND NOT EXISTS (
                          SELECT 1 FROM memory_events c
                          WHERE c.parent_id = e.id AND c.type = 'ask-answer-pair'
                        )
                      ORDER BY e.ts DESC
                      LIMIT 1`,
-                    ["u1"],
+                    ["scope:test"],
                 );
 
                 // These are lifecycle-critical reads for prompt recall / pending ask checks.
                 // The test pins index intent, not micro-benchmark timing, so it stays stable on CI.
-                expect(promptPlan).toContain("idx_events_user_type_ts");
-                expect(pendingAskPlan).toContain("idx_events_user_type_ts");
+                expect(promptPlan).toContain("idx_events_owner_type_ts");
+                expect(pendingAskPlan).toContain("idx_events_owner_type_ts");
                 expect(pendingAskPlan).toContain("idx_events_parent_type");
             } finally {
                 db.close();
@@ -101,15 +102,15 @@ describe("BrainStore", () => {
             store.close();
             const db = new Database(brainPath);
             try {
-                expect(tableColumns(db, "scopes")).toContain("audit_user_id");
-                expect(tableColumns(db, "scopes")).not.toContain("user_id");
+                expect(tableColumns(db, "scopes")).toContain("id");
+                expect(tableColumns(db, "scopes")).not.toContain("source_key");
                 expect(tableColumns(db, "codenames")).toContain("scope_id");
                 expect(tableColumns(db, "codenames")).not.toContain("project_id");
                 for (const table of ["memory_eq_state", "task_plans", "context_forks", "replay_records"]) {
                     const columns = tableColumns(db, table);
                     expect(columns).toContain("owner_key");
-                    expect(columns).toContain("audit_user_id");
-                    expect(columns).not.toContain("user_id");
+                    expect(columns).toContain("source_key");
+                    expect(columns).not.toContain("audit_source_key");
                 }
             } finally {
                 db.close();
@@ -132,7 +133,7 @@ describe("BrainStore", () => {
                     `EXPLAIN QUERY PLAN
                      SELECT e.* FROM memory_events e
                      LEFT JOIN memory_state s ON s.event_id = e.id
-                     WHERE e.user_id = ? AND e.type = 'ask'
+                     WHERE e.owner_key = ? AND e.type = 'ask'
                        AND COALESCE(s.status, 'live') IN ('live', 'resumed')
                        AND NOT EXISTS (
                          SELECT 1 FROM memory_events c
@@ -140,25 +141,25 @@ describe("BrainStore", () => {
                        )
                      ORDER BY e.ts DESC
                      LIMIT 1`,
-                    ["u1"],
+                    ["scope:test"],
                 );
                 const continuationPlan = queryPlan(
                     db,
                     `EXPLAIN QUERY PLAN
                      SELECT e.* FROM memory_events e
                      LEFT JOIN memory_state s ON s.event_id = e.id
-                     WHERE e.user_id = ? AND e.type = 'continuation-context'
+                     WHERE e.owner_key = ? AND e.type = 'continuation-context'
                        AND COALESCE(s.status, 'live') IN ('live', 'resumed')
                      ORDER BY e.ts DESC
                      LIMIT ?`,
-                    ["u1", 12],
+                    ["scope:test", 12],
                 );
 
                 // Pending ask resolution and active continuation listing both drive the user's next turn.
                 // Keep them on indexed reads so a larger single brain.db still behaves predictably.
-                expect(askPlan).toContain("idx_events_user_type_ts");
+                expect(askPlan).toContain("idx_events_owner_type_ts");
                 expect(askPlan).toContain("idx_events_parent_type");
-                expect(continuationPlan).toContain("idx_events_user_type_ts");
+                expect(continuationPlan).toContain("idx_events_owner_type_ts");
             } finally {
                 db.close();
             }
@@ -172,9 +173,10 @@ describe("BrainStore", () => {
         try {
             const ts = Date.UTC(2026, 4, 13, 8, 0, 0);
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "e1",
                 ts,
-                userId: "u1",
+                sourceKey: "u1",
                 type: MemoryEventType.ContinuationContext,
                 content: { reason: "ask", askedQuestion: "?" },
             });
@@ -203,26 +205,29 @@ describe("BrainStore", () => {
         try {
             const base = Date.UTC(2026, 4, 13, 0, 0, 0);
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "live",
                 ts: base + 1000,
-                userId: "u1",
+                sourceKey: "u1",
                 codenameId: "c1",
                 type: MemoryEventType.ContinuationContext,
                 content: {},
             });
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "abandoned",
                 ts: base + 2000,
-                userId: "u1",
+                sourceKey: "u1",
                 codenameId: "c1",
                 type: MemoryEventType.ContinuationContext,
                 content: {},
             });
             store.upsertState("abandoned", { status: MemoryEventStatus.Abandoned });
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "other-codename",
                 ts: base + 3000,
-                userId: "u1",
+                sourceKey: "u1",
                 codenameId: "c2",
                 type: MemoryEventType.ContinuationContext,
                 content: {},
@@ -247,9 +252,10 @@ describe("BrainStore", () => {
         try {
             const ts = Date.UTC(2026, 4, 13, 0, 0, 0);
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "continuation-corrupt",
                 ts,
-                userId: "u1",
+                sourceKey: "u1",
                 type: MemoryEventType.ContinuationContext,
                 content: { reason: "ask" },
             });
@@ -285,8 +291,8 @@ describe("BrainStore", () => {
 
             // Links must reference existing events (FK ON)
             const ts = Date.UTC(2026, 4, 13, 0, 0, 0);
-            store.appendEvent({ id: "from", ts, userId: "u1", type: MemoryEventType.Event, content: {} });
-            store.appendEvent({ id: "to", ts: ts + 1, userId: "u1", type: MemoryEventType.Event, content: {} });
+            store.appendEvent({ ownerKey: "scope:test", id: "from", ts, sourceKey: "u1", type: MemoryEventType.Event, content: {} });
+            store.appendEvent({ ownerKey: "scope:test", id: "to", ts: ts + 1, sourceKey: "u1", type: MemoryEventType.Event, content: {} });
             store.writeLink({
                 id: "l1",
                 fromId: "from",
@@ -303,7 +309,6 @@ describe("BrainStore", () => {
             store.upsertCodename({
                 id: "code-1",
                 name: "projA",
-                userId: "u1",
                 createdAt: now,
                 lastUsedAt: now,
                 useCount: 0,
@@ -311,7 +316,7 @@ describe("BrainStore", () => {
                 workingDir: "/tmp/projA",
             });
             store.touchCodename("code-1", now + 1000);
-            const reread = store.getCodenameByName("u1", "projA");
+            const reread = store.getCodenameByName("projA");
             expect(reread?.useCount).toBe(1);
             expect(reread?.lastUsedAt).toBe(now + 1000);
         } finally {
@@ -325,8 +330,7 @@ describe("BrainStore", () => {
             store.writeTaskPlan({
                 id: "plan-1",
                 ownerKey: "scope:alpha",
-                auditUserId: "u1",
-                userId: "u1",
+                sourceKey: "u1",
                 title: "Release plan",
                 summary: "Track release readiness.",
                 status: TaskPlanStatus.InProgress,
@@ -341,8 +345,7 @@ describe("BrainStore", () => {
             store.writeContextFork({
                 id: "fork-1",
                 ownerKey: "scope:alpha",
-                auditUserId: "u1",
-                userId: "u1",
+                sourceKey: "u1",
                 title: "Installer fork",
                 summary: "Isolate installer decisions.",
                 continuitySummary: "Installer files only.",
@@ -355,8 +358,7 @@ describe("BrainStore", () => {
             store.writeReplayRecord({
                 id: "replay-1",
                 ownerKey: "scope:alpha",
-                auditUserId: "u1",
-                userId: "u1",
+                sourceKey: "u1",
                 kind: ReplayRecordKind.DeepThink,
                 title: "Planning replay",
                 summary: "The plan was created after analysis.",
@@ -388,8 +390,6 @@ describe("BrainStore", () => {
             const now = Date.now();
             const project: ScopeRecord = {
                 id: "project-1",
-                auditUserId: "u1",
-                userId: "u1",
                 title: "Alpha",
                 goal: "Ship alpha",
                 projectDir: "/tmp/alpha",
@@ -401,7 +401,7 @@ describe("BrainStore", () => {
             };
             store.upsertScope(project);
             expect(store.getScope("project-1")?.projectDir).toBe("/tmp/alpha");
-            expect(store.listScopes({ auditUserId: "u1" })[0]?.title).toBe("Alpha");
+            expect(store.listScopes()[0]?.title).toBe("Alpha");
         } finally {
             store.close();
         }
@@ -411,9 +411,10 @@ describe("BrainStore", () => {
         const store = new BrainStore({ dbPath: "/tmp/not-open.db" });
         expect(() =>
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "x",
                 ts: 0,
-                userId: "u",
+                sourceKey: "u",
                 type: MemoryEventType.Event,
                 content: {},
             }),

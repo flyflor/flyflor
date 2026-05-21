@@ -81,11 +81,11 @@ function gwMsg(text: string, msgId = `m-${Math.random().toString(36).slice(2, 8)
         text,
         attachments: [],
         user: { id: "user-cap", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-cap" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-cap" },
     };
 }
 function ctx(): RuntimeContext {
-    return { requestId: `req-${Math.random().toString(36).slice(2, 8)}`, now: new Date().toISOString(), embedding: [] };
+    return { requestId: `req-${Math.random().toString(36).slice(2, 8)}`, now: new Date().toISOString(), embedding: [], contextForkId: "test-fork" };
 }
 
 /** 模型一直坚持发 ask，让 runtime 验证 cap 强制 reply 行为。 */
@@ -148,7 +148,7 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                 await memory.rememberTurn(gwMsg("hi", "m-1"), { messageId: "m-1", route: gwMsg("x").route, text: "first?" }, ctx(), [], {}, askA);
                 await memory.rememberTurn(gwMsg("yes", "m-2"), { messageId: "m-2", route: gwMsg("x").route, text: "second?" }, ctx(), [], {}, askB);
 
-                const peek = memory.peekActiveAsk("user-cap");
+                const peek = memory.peekActiveAsk("fork:test-fork");
                 expect(peek?.chainDepth).toBe(2);
 
                 const workers = new WorkerManager(events);

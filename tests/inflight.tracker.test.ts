@@ -22,8 +22,8 @@ describe("LF-R4 InFlightTracker", () => {
         const t = new InFlightTracker(root);
         await t.markStart({
             requestId: "req-1",
-            userId: "user-1",
-            channelId: "stdio",
+            sourceKey: "user-1",
+            sourceSurface: "stdio",
             originalUserMessage: "hello",
             startedAtMs: Date.now(),
         });
@@ -37,8 +37,8 @@ describe("LF-R4 InFlightTracker", () => {
         const t = new InFlightTracker(root);
         await t.markStart({
             requestId: "req-orphan",
-            userId: "user-x",
-            channelId: "tui",
+            sourceKey: "user-x",
+            sourceSurface: "tui",
             originalUserMessage: "do the thing",
             startedAtMs: 12345,
             codenameId: "code-1",
@@ -47,8 +47,8 @@ describe("LF-R4 InFlightTracker", () => {
         expect(orphans.length).toBe(1);
         expect(orphans[0]).toMatchObject({
             requestId: "req-orphan",
-            userId: "user-x",
-            channelId: "tui",
+            sourceKey: "user-x",
+            sourceSurface: "tui",
             originalUserMessage: "do the thing",
             codenameId: "code-1",
         });

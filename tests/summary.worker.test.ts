@@ -22,8 +22,8 @@ function mkEvent(over: Partial<MemoryEventRecord> & { id: string; ts: number }):
     return {
         id: over.id,
         ts: over.ts,
-        userId: over.userId ?? "u1",
-        channelId: over.channelId ?? "stdio",
+        sourceKey: over.sourceKey ?? "u1",
+        sourceSurface: over.sourceSurface ?? "stdio",
         codenameId: over.codenameId,
         type: over.type ?? MemoryEventType.Event,
         role: over.role ?? ModelRole.User,
@@ -105,16 +105,17 @@ describe("SummaryWorker.aggregate", () => {
     });
 });
 
-describe("SummaryWorker.runOnceForUser", () => {
+describe("SummaryWorker.runOnceForOwner", () => {
     test("writes day + rolling-week summary when events exist", async () => {
         const { store } = await freshStore();
         try {
             const now = Date.UTC(2026, 4, 13, 12, 0, 0);
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "e1",
                 ts: now - 60_000,
-                userId: "u1",
-                channelId: "stdio",
+                sourceKey: "u1",
+                sourceSurface: "stdio",
                 codenameId: "c1",
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
@@ -122,15 +123,15 @@ describe("SummaryWorker.runOnceForUser", () => {
                 importance: 0.5,
             });
             const w = new SummaryWorker(store, { trigger: "rolling", rollingWindowDays: 7, minIntervalHours: 24, now: () => now });
-            const r = w.runOnceForUser("u1");
+            const r = w.runOnceForOwner("scope:test");
             expect(r.written).toBe(2);
-            expect(r.writtenIds).toEqual(["summary-u1-day-2026-05-13", "summary-u1-week-rolling-2026-05-13-7d"]);
+            expect(r.writtenIds).toEqual(["summary-scope:test-day-2026-05-13", "summary-scope:test-week-rolling-2026-05-13-7d"]);
             expect(r.skippedEmpty).toBe(0);
-            const day = store.getSummary("summary-u1-day-2026-05-13");
+            const day = store.getSummary("summary-scope:test-day-2026-05-13");
             expect(day).not.toBeNull();
             const parsed = JSON.parse(day!.content);
             expect(parsed.stats.totalEvents).toBe(1);
-            const week = store.getSummary("summary-u1-week-rolling-2026-05-13-7d");
+            const week = store.getSummary("summary-scope:test-week-rolling-2026-05-13-7d");
             expect(week).not.toBeNull();
         } finally {
             store.close();
@@ -142,10 +143,11 @@ describe("SummaryWorker.runOnceForUser", () => {
         try {
             const now = Date.UTC(2026, 4, 13, 12, 0, 0);
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "e1",
                 ts: now - 60_000,
-                userId: "u1",
-                channelId: "stdio",
+                sourceKey: "u1",
+                sourceSurface: "stdio",
                 codenameId: undefined,
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
@@ -153,9 +155,9 @@ describe("SummaryWorker.runOnceForUser", () => {
                 importance: 0.5,
             });
             const w = new SummaryWorker(store, { minIntervalHours: 24, now: () => now });
-            const first = w.runOnceForUser("u1");
+            const first = w.runOnceForOwner("scope:test");
             expect(first.written).toBe(2);
-            const second = w.runOnceForUser("u1", now + 60_000);
+            const second = w.runOnceForOwner("scope:test", now + 60_000);
             expect(second.written).toBe(0);
             expect(second.writtenIds).toEqual([]);
             expect(second.skippedByInterval).toBe(2);
@@ -169,7 +171,7 @@ describe("SummaryWorker.runOnceForUser", () => {
         try {
             const now = Date.UTC(2026, 4, 13, 12, 0, 0);
             const w = new SummaryWorker(store, { now: () => now });
-            const r = w.runOnceForUser("continuation-user");
+            const r = w.runOnceForOwner("continuation-user");
             expect(r.written).toBe(0);
             expect(r.skippedEmpty).toBe(2);
         } finally {
@@ -182,10 +184,11 @@ describe("SummaryWorker.runOnceForUser", () => {
         try {
             const now = Date.UTC(2026, 4, 13, 12, 0, 0); // 2026-05-13 Wed -> W20
             store.appendEvent({
+                ownerKey: "scope:test",
                 id: "e1",
                 ts: now - 60_000,
-                userId: "u1",
-                channelId: "stdio",
+                sourceKey: "u1",
+                sourceSurface: "stdio",
                 codenameId: undefined,
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
@@ -193,9 +196,9 @@ describe("SummaryWorker.runOnceForUser", () => {
                 importance: 0.5,
             });
             const w = new SummaryWorker(store, { trigger: "calendar", now: () => now });
-            const r = w.runOnceForUser("u1");
+            const r = w.runOnceForOwner("scope:test");
             expect(r.written).toBe(2);
-            const week = store.getSummary("summary-u1-week-2026-W20");
+            const week = store.getSummary("summary-scope:test-week-2026-W20");
             expect(week).not.toBeNull();
         } finally {
             store.close();

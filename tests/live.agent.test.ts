@@ -193,7 +193,7 @@ class LiveAgentHarness {
             text: "Run a concise Flyflor live agent smoke. Reply in one short sentence and do not use tools.",
             attachments: [],
             user: { id: "live-smoke-user", displayName: "Live Smoke User" },
-            route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "live-agent-smoke" },
+            route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "live-agent-smoke" },
         };
     }
 

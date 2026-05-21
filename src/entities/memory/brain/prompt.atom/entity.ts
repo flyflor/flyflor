@@ -52,13 +52,8 @@ export class BrainPromptAtomModel {
         }
         const id = this.readString(raw.id);
         const episodeIds = this.readStringArray(raw.episodeIds);
-        const sourceKey = this.readString(raw.sourceKey) ?? this.readString(raw.auditUserId) ?? this.readString(raw.userId) ?? event.sourceKey;
-        const sourceSurface =
-            this.readString(raw.sourceSurface) ??
-            this.readString(raw.auditChannelId) ??
-            this.readString(raw.channelId) ??
-            event.sourceSurface ??
-            null;
+        const sourceKey = this.readString(raw.sourceKey) ?? event.sourceKey;
+        const sourceSurface = this.readString(raw.sourceSurface) ?? event.sourceSurface ?? null;
         const scopeId = this.readString(raw.scopeId) ?? this.readString(raw.projectId);
         const ownerKey = this.readString(raw.ownerKey) ?? (scopeId ? `scope:${scopeId}` : undefined);
         const role = this.readString(raw.role);

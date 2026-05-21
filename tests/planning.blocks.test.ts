@@ -37,16 +37,14 @@ describe("runtime planning structured blocks", () => {
             ownerKey: "scope:plan",
             requestId: "req-1",
             sourceEventId: "episode-1",
-            auditUserId: "u1",
-            userId: "u1",
+                sourceKey: "u1",
         });
 
         expect(parsed.text).toBe("visible");
         expect(parsed.dropped).toBe(0);
         expect(parsed.taskPlans[0]).toMatchObject({
             ownerKey: "scope:plan",
-            auditUserId: "u1",
-            userId: "u1",
+                sourceKey: "u1",
             title: "Ship release",
             status: TaskPlanStatus.InProgress,
             completedStepCount: 1,
@@ -55,7 +53,7 @@ describe("runtime planning structured blocks", () => {
         });
         expect(parsed.contextForks[0]).toMatchObject({
             ownerKey: "scope:plan",
-            userId: "u1",
+            sourceKey: "u1",
             title: "Installer fork",
             inheritedEventIds: ["episode-1", "episode-a"],
         });
@@ -73,7 +71,7 @@ describe("runtime planning structured blocks", () => {
             now: "bad-date",
             ownerKey: "turn:req-1",
             requestId: "req-1",
-            userId: "u1",
+            sourceKey: "u1",
         });
         expect(parsed.text).toBe("hello");
         expect(parsed.taskPlans).toEqual([]);
@@ -89,7 +87,7 @@ describe("runtime planning structured blocks", () => {
             now: "2026-05-16T00:00:00.000Z",
             ownerKey: "turn:req-compat",
             requestId: "req-compat",
-            userId: "u1",
+            sourceKey: "u1",
         });
         expect(parsed.taskPlans[0]?.title).toBe("Thin entry");
     });

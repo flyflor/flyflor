@@ -9,7 +9,7 @@ export interface HumanChatOptions {
     pasteSettleMs?: number;
     approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
     skillNames?: string[];
-    userId?: string;
+    localActorId?: string;
     toolsetAllowlist?: string[];
     maxToolTurns?: number;
 }
@@ -22,7 +22,7 @@ export interface ChatInput {
 export async function startHumanChat(runtime: RuntimeModule, options: HumanChatOptions = {}): Promise<void> {
     const agentName = options.agentName ?? "flyflor";
     const pasteSettleMs = options.pasteSettleMs ?? 35;
-    const userId = options.userId ?? "human";
+    const localActorId = options.localActorId ?? "human";
 
     await runtime.warmup();
 
@@ -47,11 +47,11 @@ export async function startHumanChat(runtime: RuntimeModule, options: HumanChatO
             id: crypto.randomUUID(),
             route: {
                 channel: Channel.Stdio,
-                chatId: "human-local",
+                conversationKey: "local-console",
                 chatType: ChatType.Direct,
             },
             user: {
-                id: userId,
+                id: localActorId,
             },
             text,
             receivedAt: context.now,

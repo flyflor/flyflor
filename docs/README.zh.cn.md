@@ -28,15 +28,16 @@
 18. [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心。
 19. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust shell 分 slice backlog。
 20. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
+21. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
 
 - 上下文装配只来自 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
 - `brain.db` 是 ledger/query plane，不是上下文容器。
 - `Scope` 是唯一显式工作域；没有显式 scope 时，不创建隐式工作域。
-- `ContextFork` 是 scope 的显式分支，不是 session。
+- `ContextFork` 是 scope 的显式分支，不是隐式连续性容器。
 - `codename` 只是锚点、提议入口和 recall boost，不是隐式上下文桶。
-- `userId`、`channel/chat/thread` 保留在 gateway/raw audit 边界，不承担核心认知连续性。
+- `sourceKey` 与 `sourceSurface` 只记录中性 ingress provenance；`conversationKey`、`threadId`、平台 actor 信息只停留在 gateway/raw routing 边界，不承担核心认知连续性。
 - 编程红线不动：约定大于配置，分层明确，允许重复，不为复用强行抽象，始终保持 `oop + use composition`，目录和文件名优先于局部“聪明”抽象。
 
 ## 归档区

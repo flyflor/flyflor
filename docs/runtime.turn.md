@@ -42,4 +42,4 @@
 - 第一方 IM channel adapter 入站
 - 第一方 TUI runtime/state adapter
 
-这些实现已经从主源码剥离，保存在 `abandon/` 仅做备份。
+这些实现已经从主源码剥离；已移除旧实现且不保留兼容目录。

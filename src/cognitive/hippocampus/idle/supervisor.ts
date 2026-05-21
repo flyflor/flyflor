@@ -50,7 +50,6 @@ export class IdleSupervisor {
             this.events.publish(
                 event(RuntimeEventType.RuntimeModeAwakened, {
                     ownerKey,
-                    userId: ownerKey,
                     previousMode: prev.mode,
                     mode: RuntimeMode.Chat,
                     idleMs: nowMs - prev.lastInputAt,
@@ -77,11 +76,10 @@ export class IdleSupervisor {
     }
 
     /** 已知 owner 快照（CLI / 诊断）。 */
-    public snapshot(): Array<{ ownerKey: string; userId: string; mode: string; lastInputAt: number; idleMs: number }> {
+    public snapshot(): Array<{ ownerKey: string; mode: string; lastInputAt: number; idleMs: number }> {
         const nowMs = this.now();
         return [...this.states.entries()].map(([ownerKey, s]) => ({
             ownerKey,
-            userId: ownerKey,
             mode: s.mode,
             lastInputAt: s.lastInputAt,
             idleMs: nowMs - s.lastInputAt,
@@ -89,8 +87,8 @@ export class IdleSupervisor {
     }
 
     /**
-     * sweepOnce：扫描所有已知用户，把 idle 超 idleMs 的从 Chat 切到 Idle。
-     * 返回本轮切换的用户数。BackgroundScheduler 会按固定 interval 触发。
+     * sweepOnce：扫描所有已知 owner，把 idle 超 idleMs 的从 Chat 切到 Idle。
+     * 返回本轮切换的 owner 数。BackgroundScheduler 会按固定 interval 触发。
      */
     public sweepOnce(): { entered: number } {
         const nowMs = this.now();
@@ -104,7 +102,6 @@ export class IdleSupervisor {
             this.events.publish(
                 event(RuntimeEventType.RuntimeModeEntered, {
                     ownerKey,
-                    userId: ownerKey,
                     previousMode: s.mode,
                     mode: RuntimeMode.Idle,
                     idleMs: nowMs - s.lastInputAt,

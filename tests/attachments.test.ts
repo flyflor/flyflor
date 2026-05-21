@@ -10,7 +10,7 @@ import { renderAttachmentSummary, renderUserContentWithAttachments } from "../sr
 function makeMessage(attachments?: GatewayMessage["attachments"]): GatewayMessage {
     return {
         id: "m1",
-        route: { channel: Channel.Stdio, chatId: "c", chatType: ChatType.Direct },
+        route: { channel: Channel.Stdio, conversationKey: "c", chatType: ChatType.Direct },
         user: { id: "u" },
         text: "look at this",
         attachments,

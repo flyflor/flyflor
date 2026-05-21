@@ -3,8 +3,6 @@ import { MemoryLayer } from "../../../../protocol/contracts/index.ts";
 import type { MemoryRecord, MemorySearchResult } from "../../../../cognitive/hippocampus/memory/types.ts";
 
 export interface SQLiteMemoryRow {
-    channel?: string;
-    chat_id?: string;
     confidence: number;
     content: string;
     created_at: string;
@@ -99,8 +97,6 @@ export class SQLiteMemoryModel {
             content: row.content,
             scope: row.scope,
             subjectId: row.subject_id,
-            channel: row.channel,
-            chatId: row.chat_id,
             importance: row.importance,
             confidence: row.confidence,
             createdAt: row.created_at,

@@ -17,7 +17,6 @@ This file is shared context for AI coding agents working in this explicit scope.
 ## Scope Metadata
 
 - Scope id: `{{scopeId}}`
-- Audit user: `{{userId}}`
 - Created at: `{{createdAt}}`
 - Trigger: `{{trigger}}`
 - Related episode ids: {{relatedIds}}

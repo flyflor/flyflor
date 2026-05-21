@@ -104,7 +104,7 @@ class AgentFunctionalSmoke {
             text: "Run the deterministic agent functional smoke.",
             attachments: [],
             user: { id: "smoke-user", displayName: "Smoke User" },
-            route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "agent-functional-smoke" },
+            route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "agent-functional-smoke" },
         };
     }
 

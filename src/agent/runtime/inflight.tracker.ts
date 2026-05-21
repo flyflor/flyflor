@@ -12,8 +12,8 @@ import { join } from "node:path";
  */
 export interface InFlightRecord {
     requestId: string;
-    userId: string;
-    channelId: string;
+    sourceKey: string;
+    sourceSurface: string;
     originalUserMessage: string;
     startedAtMs: number;
     codenameId?: string;
@@ -52,8 +52,8 @@ export class InFlightTracker {
             if (
                 parsed &&
                 typeof parsed.requestId === "string" &&
-                typeof parsed.userId === "string" &&
-                typeof parsed.channelId === "string" &&
+                typeof parsed.sourceKey === "string" &&
+                typeof parsed.sourceSurface === "string" &&
                 typeof parsed.originalUserMessage === "string" &&
                 typeof parsed.startedAtMs === "number"
             ) {

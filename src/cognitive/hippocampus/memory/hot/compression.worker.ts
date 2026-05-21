@@ -127,7 +127,7 @@ export class HotMemoryCompressionWorker {
         const content: HotMemoryCompressionContent = {
             batchId,
             ownerKey,
-            userId: ownerKey,
+            sourceKey: ownerKey,
             reason: this.reason,
             sourceEpisodeIds: episodes.map((episode) => episode.episodeId),
             deletedEpisodeIds,
@@ -147,7 +147,8 @@ export class HotMemoryCompressionWorker {
             this.brain.appendEvent({
                 id: batchId,
                 ts: createdAt,
-                userId: ownerKey,
+                ownerKey,
+                sourceKey: ownerKey,
                 type: MemoryEventType.HotMemoryCompression,
                 role: ModelRole.System,
                 content: content as unknown as Record<string, unknown>,

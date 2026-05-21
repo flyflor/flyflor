@@ -182,12 +182,11 @@ export class SQLiteMemoryRepo {
         runQuery(
             this.db,
             query`INSERT OR REPLACE INTO memories (
-                id, kind, content, scope, subject_id, channel, chat_id,
+                id, kind, content, scope, subject_id,
                 importance, confidence, created_at, updated_at, metadata_json
             ) VALUES (
                 ${storedRecord.id}, ${storedRecord.kind}, ${storedRecord.content}, ${storedRecord.scope},
-                ${storedRecord.subjectId ?? null}, ${storedRecord.channel ?? null}, ${storedRecord.chatId ?? null},
-                ${storedRecord.importance}, ${storedRecord.confidence}, ${storedRecord.createdAt},
+                ${storedRecord.subjectId ?? null}, ${storedRecord.importance}, ${storedRecord.confidence}, ${storedRecord.createdAt},
                 ${storedRecord.updatedAt}, ${JSON.stringify(storedRecord.metadata ?? {})}
             )`,
         );

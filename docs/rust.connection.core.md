@@ -20,7 +20,7 @@
 
 - Bun runtime/gateway 私有类
 - 历史第一方 Bun CLI/TUI/channel adapter
-- `abandon/` 中的旧壳体
+- 已移除的旧实现
 
 ## 目标
 
@@ -97,7 +97,7 @@ Rust connection core 的最小职责只有五件事：
 
 - `server.hello` 是连接级事实起点。
 - `client.hello` 只是客户端自报，不是二次协商门。
-- `ack.payload.received === "client.hello"` 只表示服务端收到了自报，不表示 session 被重建。
+- `ack.payload.received === "client.hello"` 只表示服务端收到了自报，不表示 handshake 被重建。
 
 ## Snapshot Cache Ownership
 

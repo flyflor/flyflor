@@ -53,12 +53,12 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
             try {
                 const row = db
                     .query(
-                        "SELECT owner_key, audit_user_id, label, valence, arousal, dominance, confidence FROM memory_eq_state WHERE owner_key = 'turn:msg-eq-1'",
+                        "SELECT owner_key, source_key, label, valence, arousal, dominance, confidence FROM memory_eq_state WHERE owner_key = 'turn:msg-eq-1'",
                     )
                     .get() as
                     | {
                           owner_key: string;
-                          audit_user_id: string;
+                          source_key: string;
                           label: string;
                           valence: number;
                           arousal: number;
@@ -77,11 +77,11 @@ describe("EQ-01 slice A: rememberTurn persists action.eq into brain.memory_eq_st
             }
 
             const updated = sink.events.find((e) => e.type === RuntimeEventType.MemoryEqStateUpdated) as
-                | { type: string; payload?: { auditUserId?: string; ownerKey?: string; label?: string } }
+                | { type: string; payload?: { sourceKey?: string; ownerKey?: string; label?: string } }
                 | undefined;
             expect(updated).toBeTruthy();
             expect(updated!.payload?.ownerKey).toBe("turn:msg-eq-1");
-            expect(updated!.payload?.auditUserId).toBe("user-1");
+            expect(updated!.payload?.sourceKey?.startsWith("req-")).toBe(true);
             expect(updated!.payload?.label).toBe("joy");
         } finally {
             memory.dispose();
@@ -213,14 +213,14 @@ function gatewayMessage(text: string, id = `msg-${Math.random().toString(36).sli
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gatewayReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }

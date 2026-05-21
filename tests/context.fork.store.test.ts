@@ -13,8 +13,7 @@ describe("ContextForkStore", () => {
                 {
                     id: "fork-1",
                     ownerKey: "scope:alpha",
-                    auditUserId: "u1",
-                    userId: "u1",
+                sourceKey: "u1",
                     title: "Fork",
                     summary: "Summary",
                     continuitySummary: "Scope",

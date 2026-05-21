@@ -15,7 +15,7 @@ import {
 function reply(text: string, messageId = "m1"): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatId: "cli", chatType: ChatType.Direct },
+        route: { channel: Channel.Stdio, conversationKey: "cli", chatType: ChatType.Direct },
         text,
     };
 }
@@ -163,7 +163,7 @@ function gatewayConfig(): GatewayConfig {
 function message(id: string): GatewayMessage {
     return {
         id,
-        route: { channel: Channel.Stdio, chatId: "cli", chatType: ChatType.Direct },
+        route: { channel: Channel.Stdio, conversationKey: "cli", chatType: ChatType.Direct },
         user: { id: "user" },
         text: "hello",
         receivedAt: "2026-05-17T00:00:00.000Z",

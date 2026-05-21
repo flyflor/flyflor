@@ -78,14 +78,14 @@ function gatewayMessage(text: string, msgId = `msg-${Math.random().toString(36).
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gatewayReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }
@@ -95,6 +95,7 @@ function runtimeContext(): RuntimeContext {
         requestId: `req-${Math.random().toString(36).slice(2, 8)}`,
         now: new Date().toISOString(),
         embedding: [],
+        contextForkId: "test-fork",
     };
 }
 

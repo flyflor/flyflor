@@ -97,23 +97,23 @@ afterEach(() => {
 });
 
 describe("BackgroundScheduler", () => {
-    test("trackUser dedupes and counts", () => {
+    test("trackOwner dedupes and counts", () => {
         const { scheduler } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u1");
-        scheduler.trackUser("u1");
-        scheduler.trackUser("u2");
-        scheduler.trackUser("");
+        scheduler.trackOwner("u1");
+        scheduler.trackOwner("u1");
+        scheduler.trackOwner("u2");
+        scheduler.trackOwner("");
         // @ts-expect-error garbage
-        scheduler.trackUser(null);
-        expect(scheduler.activeUsers()).toBe(2);
+        scheduler.trackOwner(null);
+        expect(scheduler.activeOwners()).toBe(2);
     });
 
-    test("runConsolidationOnce drains every active user", async () => {
+    test("runConsolidationOnce drains every active owner", async () => {
         const { scheduler, consolidation } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("a");
-        scheduler.trackUser("b");
+        scheduler.trackOwner("a");
+        scheduler.trackOwner("b");
         consolidation.result = {
             scanned: 2,
             reinforced: 1,
@@ -136,8 +136,8 @@ describe("BackgroundScheduler", () => {
             }),
         });
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("a");
-        scheduler.trackUser("b");
+        scheduler.trackOwner("a");
+        scheduler.trackOwner("b");
 
         const totals = await scheduler.runConsolidationOnce();
 
@@ -148,8 +148,8 @@ describe("BackgroundScheduler", () => {
     test("runConsolidationOnce swallows per-owner failure and continues", async () => {
         const { scheduler, consolidation, events } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("ok");
-        scheduler.trackUser("ko");
+        scheduler.trackOwner("ok");
+        scheduler.trackOwner("ko");
         // fail every drain — both users emit a failure event, totals.users=0
         consolidation.fail = true;
         const totals = await scheduler.runConsolidationOnce();
@@ -161,7 +161,7 @@ describe("BackgroundScheduler", () => {
     test("runConsolidationOnce is reentrant-safe", async () => {
         const { scheduler, consolidation } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("a");
+        scheduler.trackOwner("a");
         // Force a hang via promise; the second call must early-exit with zeros
         let release!: () => void;
         const block = new Promise<ConsolidationRunResult>((resolve) => {
@@ -178,8 +178,8 @@ describe("BackgroundScheduler", () => {
     test("runDecayOnce sweeps each user with batch size and emits event", async () => {
         const { scheduler, graph, events } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u1");
-        scheduler.trackUser("u2");
+        scheduler.trackOwner("u1");
+        scheduler.trackOwner("u2");
         const totals = await scheduler.runDecayOnce();
         expect(totals.users).toBe(2);
         expect(totals.memoryNodes).toBe(6);
@@ -193,8 +193,8 @@ describe("BackgroundScheduler", () => {
     test("runDecayOnce continues past a failing user", async () => {
         const { scheduler, graph, events } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("bad");
-        scheduler.trackUser("good");
+        scheduler.trackOwner("bad");
+        scheduler.trackOwner("good");
         graph.failNext = true;
         const totals = await scheduler.runDecayOnce();
         expect(totals.users).toBe(1);
@@ -205,7 +205,7 @@ describe("BackgroundScheduler", () => {
     test("start / stop are idempotent and timers fire periodically", async () => {
         const { scheduler, consolidation } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u");
+        scheduler.trackOwner("u");
         scheduler.start();
         scheduler.start(); // restart should be safe
         await new Promise((r) => setTimeout(r, 1_200));
@@ -226,7 +226,7 @@ describe("BackgroundScheduler", () => {
     test("decay function actually applies decay layer profile", async () => {
         const { scheduler, graph } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u");
+        scheduler.trackOwner("u");
         let captured = 0;
         graph.applyDecaySweep = async (input) => {
             captured = input.decayMemoryNode({ importance: 1, updatedAt: 0 });
@@ -258,8 +258,8 @@ describe("BackgroundScheduler", () => {
             },
         });
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u1");
-        scheduler.trackUser("u2");
+        scheduler.trackOwner("u1");
+        scheduler.trackOwner("u2");
         const r = await scheduler.runScopeClusterOnce();
         expect(called.sort()).toEqual(["u1", "u2"]);
         expect(r.users).toBe(2);
@@ -272,7 +272,7 @@ describe("BackgroundScheduler", () => {
     test("runScopeClusterOnce without sweeper is no-op", async () => {
         const { scheduler } = build();
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u1");
+        scheduler.trackOwner("u1");
         const r = await scheduler.runScopeClusterOnce();
         expect(r).toEqual({ users: 0, offers: 0 });
         expect(scheduler.snapshot().scopeClusterEnabled).toBe(false);
@@ -311,8 +311,8 @@ describe("BackgroundScheduler", () => {
             hotMemoryCompression: hot as never,
         });
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u1");
-        scheduler.trackUser("u2");
+        scheduler.trackOwner("u1");
+        scheduler.trackOwner("u2");
         const r = await scheduler.runHotMemoryCompressionOnce();
         expect(hot.drained.sort()).toEqual(["u1", "u2"]);
         expect(r).toEqual({ users: 2, compressed: 2, deleted: 4, missing: 0, skipped: 0 });
@@ -338,7 +338,7 @@ describe("BackgroundScheduler", () => {
             hotMemoryCompression: hot as never,
         });
         SCHEDULERS.push(scheduler);
-        scheduler.trackUser("u1");
+        scheduler.trackOwner("u1");
         const summaryRun = scheduler.runSummarySweepOnce();
         const hotRun = await scheduler.runHotMemoryCompressionOnce();
         expect(hotRun).toEqual({ users: 0, compressed: 0, deleted: 0, missing: 0, skipped: 0 });

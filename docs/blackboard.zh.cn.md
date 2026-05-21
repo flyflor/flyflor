@@ -159,7 +159,7 @@ stderr 只做诊断，不进入模型上下文。
 
 ## Scope constraint lease
 
-公共协议和运行时类型使用 `scopeConstraintId`。现存 SQLite 表列名仍保留 `project_constraint_id`，只作为历史库兼容细节，由 `BlackboardRepo` / `BlackboardModel` 映射，不代表黑板仍绑定 project 或 transport session。
+公共协议和运行时类型使用 `scopeConstraintId`。现存 SQLite 表列名仍保留 `project_constraint_id`，只作为历史库兼容细节，由 `BlackboardRepo` / `BlackboardModel` 映射，不代表黑板仍绑定 project 或 transport protocol handshake。
 
 ```sql
 CREATE TABLE blackboard_leases (

@@ -111,7 +111,7 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
 
     public buildBlackboardReplayRecords(
         ownerKey: string,
-        auditUserId: string | undefined,
+        sourceKey: string | undefined,
         now: string,
         run: RuntimeBlackboardRun | undefined,
         requestId: string,
@@ -126,8 +126,7 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
             {
                 id: `replay-blackboard-${run.turnId}`,
                 ownerKey,
-                auditUserId,
-                userId: auditUserId,
+                sourceKey,
                 kind: ReplayRecordKind.Blackboard,
                 title: `Blackboard ${run.status ?? BlackboardTurnStatus.Running}`,
                 summary: `status=${run.status ?? BlackboardTurnStatus.Running}; reason=${run.reason}; steps=${run.steps.length}; decisions=${run.decisions.length}`,
@@ -403,12 +402,12 @@ export function routeMetadata(route: RuntimeBlackboardRouteDecision): Record<str
 
 export function buildBlackboardReplayRecords(
     ownerKey: string,
-    auditUserId: string | undefined,
+    sourceKey: string | undefined,
     now: string,
     run: RuntimeBlackboardRun | undefined,
     requestId: string,
 ): ReplayRecord[] {
-    return defaultOutput.buildBlackboardReplayRecords(ownerKey, auditUserId, now, run, requestId);
+    return defaultOutput.buildBlackboardReplayRecords(ownerKey, sourceKey, now, run, requestId);
 }
 
 export function buildBlackboardStalemateAsk(run: RuntimeBlackboardRun | undefined): AgentAsk | undefined {

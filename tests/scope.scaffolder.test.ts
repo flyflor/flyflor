@@ -70,7 +70,7 @@ describe("ScopeScaffolder", () => {
             scopeId: "abc123",
             title: "Test project",
             goal: "Build a memory consolidation pipeline",
-            userId: "u1",
+            sourceKey: "u1",
             trigger: explicitTrigger,
             createdAt: new Date().toISOString(),
         });
@@ -95,7 +95,7 @@ describe("ScopeScaffolder", () => {
             scopeId: "abc123",
             title: "T",
             goal: "g",
-            userId: "u",
+            sourceKey: "u",
             trigger: explicitTrigger,
             createdAt: new Date().toISOString(),
         });
@@ -103,7 +103,7 @@ describe("ScopeScaffolder", () => {
             scopeId: "abc123",
             title: "T",
             goal: "g",
-            userId: "u",
+            sourceKey: "u",
             trigger: explicitTrigger,
             createdAt: new Date().toISOString(),
         });
@@ -119,7 +119,7 @@ describe("ScopeScaffolder", () => {
             scopeId: "abc",
             title: "T",
             goal: "g",
-            userId: "u",
+            sourceKey: "u",
             trigger: { kind: ScopeTriggerKind.None, score: 0, relatedIds: [], rationale: "x" },
             createdAt: new Date().toISOString(),
         });
@@ -138,7 +138,7 @@ describe("ScopeScaffolder", () => {
                 scopeId: "no-template",
                 title: "T",
                 goal: "g",
-                userId: "u",
+                sourceKey: "u",
                 trigger: explicitTrigger,
                 createdAt: new Date().toISOString(),
             }),

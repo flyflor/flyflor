@@ -50,7 +50,7 @@ function buildMessage(text: string): GatewayMessage {
         id: "m1",
         text,
         user: { id: "u1", name: "Tester" },
-        route: { channel: Channel.Stdio, chatId: "cli", chatType: ChatType.Direct },
+        route: { channel: Channel.Stdio, conversationKey: "cli", chatType: ChatType.Direct },
         receivedAt: new Date().toISOString(),
     } as GatewayMessage;
 }
@@ -67,7 +67,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         const config = await testConfig();
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel("{}"));
         await memory.applyFeedback({
-            userId: "u1",
+            sourceKey: "u1",
             category: FeedbackCategory.Preference,
             extractedFact: "user prefers YAML for configs",
             previousAssistantText: "",
@@ -83,7 +83,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         const config = await testConfig();
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel("{}"));
         await memory.applyFeedback({
-            userId: "u1",
+            sourceKey: "u1",
             category: FeedbackCategory.GlobalStrategy,
             extractedFact: "always answer in 100 words or less",
             previousAssistantText: "",
@@ -100,7 +100,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         const sink = new CapturingSink();
         const memory = new MemoryModule(config, sink, new StubModel("{}"));
         await memory.applyFeedback({
-            userId: "u1",
+            sourceKey: "u1",
             category: FeedbackCategory.None,
             previousAssistantText: "",
             currentUserText: "",
@@ -127,7 +127,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         const sink = new CapturingSink();
         const memory = new MemoryModule(config, sink, new StubModel("{}"));
         await memory.applyFeedback({
-            userId: "u1",
+            sourceKey: "u1",
             category: FeedbackCategory.LocalCorrection,
             extractedFact: "name is Lisa not Lisa Wong",
             previousAssistantText: "Your sister is Lisa Wong",
@@ -143,7 +143,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
         const sink = new CapturingSink();
         const memory = new MemoryModule(config, sink, new StubModel("{}"));
         await memory.applyFeedback({
-            userId: "u1",
+            sourceKey: "u1",
             category: FeedbackCategory.Confirmation,
             extractedFact: "answer was correct",
             previousAssistantText: "Use Tailwind for utility-first styling.",
@@ -163,7 +163,7 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
             const snapshotId = "behavior-r1";
             await memory.recordBehaviorSnapshot({
                 snapshotId,
-                context: { requestId: "r1", now: new Date().toISOString() } as RuntimeContext,
+                context: { requestId: "r1", now: new Date().toISOString(), contextForkId: "test-fork" } as RuntimeContext,
                 memoryActions: 0,
                 message: buildMessage("assistant turn"),
                 reply: {
@@ -174,7 +174,8 @@ describe("MemoryModule.applyFeedback (LLM-driven, no string match)", () => {
                 visibleText: "assistant turn",
             });
             await memory.applyFeedback({
-                userId: "u1",
+                ownerKey: "fork:test-fork",
+                sourceKey: "u1",
                 category: FeedbackCategory.Preference,
                 extractedFact: "prefers short answers",
                 previousAssistantText: "assistant turn",

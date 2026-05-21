@@ -17,7 +17,6 @@
 ## Scope 元数据
 
 - Scope id：`{{scopeId}}`
-- 审计用户：`{{userId}}`
 - 创建时间：`{{createdAt}}`
 - 触发来源：`{{trigger}}`
 - 关联 episode id：{{relatedIds}}

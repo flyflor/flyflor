@@ -79,8 +79,8 @@ describe("LF-R4 process-restart continuation recovery", () => {
                 join(inflightDir, "req-orphan.json"),
                 JSON.stringify({
                     requestId: "req-orphan",
-                    userId: "user-1",
-                    channelId: "stdio",
+                    sourceKey: "req-orphan",
+                    sourceSurface: "stdio",
                     originalUserMessage: "deploy the staging cluster please",
                     startedAtMs: Date.now() - 1000,
                 }),
@@ -92,7 +92,7 @@ describe("LF-R4 process-restart continuation recovery", () => {
             const runtime = new RuntimeModule(config, new NoopModel(), events, undefined, memory);
             try {
                 await runtime.warmup();
-                const continuations = memory.listActiveContinuations("user-1");
+                const continuations = memory.listActiveContinuations("turn:req-orphan");
                 expect(continuations.length).toBe(1);
                 const c = continuations[0]!.content as {
                     reason: string;

@@ -208,14 +208,14 @@ function gatewayMessage(text: string, id = `msg-${Math.random().toString(36).sli
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gatewayReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }

@@ -17,8 +17,6 @@ export interface BrainEventRow {
     time_bucket: string;
     ts: number;
     type: string;
-    user_id?: string | null;
-    channel_id?: string | null;
 }
 
 /**
@@ -33,9 +31,9 @@ export class BrainEventModel {
             id: row.id,
             ts: row.ts,
             timeBucket: row.time_bucket,
-            ownerKey: row.owner_key ?? row.user_id ?? row.id,
-            sourceKey: row.source_key ?? row.user_id ?? undefined,
-            sourceSurface: row.source_surface ?? row.channel_id ?? undefined,
+            ownerKey: row.owner_key,
+            sourceKey: row.source_key ?? undefined,
+            sourceSurface: row.source_surface ?? undefined,
             codenameId: row.codename_id ?? undefined,
             type: row.type as MemoryEventType,
             role: row.role ? (row.role as MemoryEventRecord["role"]) : undefined,

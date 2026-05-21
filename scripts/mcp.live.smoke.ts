@@ -2,7 +2,7 @@
  * Opt-in live MCP smoke.
  *
  * Default mode is read-only: it repeatedly calls tools/list against configured
- * MCP servers to exercise real transport/session recovery without invoking
+ * MCP servers to exercise real transport/handshake recovery without invoking
  * arbitrary third-party tools. Tool calls require explicit --call server.tool.
  */
 

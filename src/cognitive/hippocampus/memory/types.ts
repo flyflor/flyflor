@@ -13,8 +13,6 @@ export interface MemoryRecord {
     content: string;
     scope: string;
     subjectId?: string;
-    channel?: string;
-    chatId?: string;
     importance: number;
     confidence: number;
     createdAt: string;
@@ -106,8 +104,6 @@ export interface MemorySearchRequest {
     query: string;
     scope: string;
     subjectId?: string;
-    channel?: string;
-    chatId?: string;
     limit: number;
 }
 

@@ -59,10 +59,10 @@ describe("MemoryModule background scheduler wiring", () => {
         config.memory.crystal.backend = CrystalMemoryBackend.Local;
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
         const scheduler = (memory as unknown as {
-            scheduler: { activeUsers(): number; snapshot(): { brainArchiveEnabled: boolean; hotMemoryCompressionEnabled: boolean } } | null;
+            scheduler: { activeOwners(): number; snapshot(): { brainArchiveEnabled: boolean; hotMemoryCompressionEnabled: boolean } } | null;
         }).scheduler;
         expect(scheduler).not.toBeNull();
-        expect(scheduler?.activeUsers()).toBe(0);
+        expect(scheduler?.activeOwners()).toBe(0);
         expect(scheduler?.snapshot().brainArchiveEnabled).toBe(true);
         expect(scheduler?.snapshot().hotMemoryCompressionEnabled).toBe(true);
         // dispose 必须可以多次调用
@@ -76,10 +76,10 @@ describe("MemoryModule background scheduler wiring", () => {
         config.memory.crystal.backend = CrystalMemoryBackend.Local;
         const memory = new MemoryModule(config, new CapturingSink(), new StubModel());
         const scheduler = (memory as unknown as {
-            scheduler: { activeUsers(): number } | null;
+            scheduler: { activeOwners(): number } | null;
         }).scheduler;
         expect(scheduler).not.toBeNull();
-        expect(scheduler?.activeUsers()).toBe(0);
+        expect(scheduler?.activeOwners()).toBe(0);
         memory.dispose();
     });
 });

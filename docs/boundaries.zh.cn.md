@@ -182,7 +182,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - 面向模型输出的内部结构化块统一登记在 `src/protocol/structured.block.ts`；各业务模块只负责对应 JSON payload 的 schema 校验，不能重复手写 tag、close tag、正则剥离或私有协议名。当前允许的内部块包括 `AgentAsk`、`ContinuationDecisions`、`IdentityAppend`、`MemoryActions`、`McpCalls`、`TaskPlan`、`ContextFork`、`ReplayRecord`。
 - Gateway 出站生命周期（typing、message edit、card update、reaction、thread create）必须走 `GatewayOutboundOperation` + `GatewayChannelCapabilities`；adapter 不得用自然语言文本、私有字符串或隐式布尔推断平台能力。
 - Gateway Control/Event Transport 必须走 `src/protocol/control/envelope.ts` 的 JSON envelope。`/ws` 可以暴露 `turn.delta`、`turn.final`、status 和 RuntimeEvent subscription，但事件来源必须是 `src/events`；不得为单个 TUI 写私有补丁协议。普通 IM channel 仍 final-only。
-- `gateway.message.send.payload.context` 是 scope/fork/skill 的唯一 WS 入口；canonical 只写 `RuntimeContext.activeScope` / `contextForkId` / `skillNames`。`activeProject` 只允许作为一轮兼容读取，进入 runtime 后必须立即标准化；不得引入 session id，也不得从自然语言推断当前 scope/fork。
+- `gateway.message.send.payload.context` 是 scope/fork/skill 的唯一 WS 入口；canonical 只写 `RuntimeContext.activeScope` / `contextForkId` / `skillNames`。`activeProject` 只允许作为一轮兼容读取，进入 runtime 后必须立即标准化；不得引入 handshake id，也不得从自然语言推断当前 scope/fork。
 - External Kit manifest 与只读发现目录是外部套件的唯一公开发现契约。`server.hello` / `capability.catalog.get` 可以暴露 CLI/TUI/Gateway/Capability kit、MCP server、plugin descriptor、skill manifest 和 user tool descriptor；kit discovery 不得 import Runtime 私有实现、command/TUI 私有实现、sandbox runner、MCP call client 或 PluginRunner，真实执行必须继续走 Executive Tool Runtime + sandbox/approval。
 - 新增代码必须带必要注释解释边界、生命周期、副作用或协议意图；修改旧代码时补齐被触碰路径的关键注释。注释应解释“为什么/边界是什么”，避免机械复述代码。
 - 源码、测试、模板、脚本和文档不得出现疑似真实 provider 密钥。测试只能使用明显的非厂商占位值（例如 `test-openai-key-*`），让 `sk-*` 这类厂商格式在发布扫描中保持高信噪比；本机或 Docker dev 的私有配置文件只由用户自己管理，不在清理任务中自动改写。
@@ -230,7 +230,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 - Flyflor home 相对路径：`<flyflor-home>/.config/config.jsonc`（source install 默认 `<flyflor-home>=~/.flyflor`，本地 dev checkout 为当前源码根）；Docker dev：`./docker/config/config.jsonc`。所有 JSON 配置必须兼容 JSONC（注释 + 尾逗号）。
 - 本地命令协议：`~/.flyflor/.config/commands.jsonc`。它只定义 future client 的本地 slash command rules，不能放 provider、渠道凭据、sandbox 模式或网关行为；内置规则按 `run.action` 合并，用户扩展用 `match.slash` + `run.type` 追加，禁止再引入独立 `id` 字符串命名层。
-- `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 scope / fork 选择写回 `RuntimeContext.activeScope` / `contextForkId`；兼容读口可以接受旧 project 名字，但不能反向变成隐式 session 容器。
+- `/project` / `/projects` / `/fork` / `/forks` 都是本地命令协议层行为：它们只负责把结构化 scope / fork 选择写回 `RuntimeContext.activeScope` / `contextForkId`；兼容读口可以接受旧 project 名字，但不能反向变成隐式 隐式连续性容器。
 - 业务配置不走环境变量；provider / 模型 / 渠道凭据 / 沙箱策略 / 网关行为必须走 config 或 secrets provider。
 - 默认目录、默认 provider、默认 channel registry 在代码中给出约定；配置只覆盖差异。
 - OpenAI-compatible provider 的最小配置是 `baseUrl` + `apiKey` + 当前模型；`type`、默认 `chat-completions` 和模型列表由加载器推断 / 探测。自动化代理不得把用户本地 `config.jsonc` 中正在使用的 `apiKey` 改成占位符。
@@ -306,11 +306,11 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 > 这些红线是当前运行契约的一部分。历史设计背景已归档到 `docs/old-docs/legacy.architecture.history.md`，不能覆盖本文件。
 
-### R1 — 无 session
+### R1 — 无隐式连续性
 
-- 协议、提示词、存储、事件、日志、CLI 中禁止出现 `sessionId` / `sessionKey` / `sessionScope` / `legacySessionKey` 等任何形式的会话标识。
-- 禁止把 session 改名为 legacy、scope、conversation、thread 等新容器继续表达会话；纯渠道协议字段（如外部 IM thread id）只能保留在 gateway 原始元数据边界，不能进入记忆连续性模型。
-- 连续性只允许由时间线、`FocusPointer`、memory activation、显式 `activeScope`、显式 `contextForkId` 和 codename boost 共同表达；`userId`、`channelId`、`chatId`、`threadId`、transport session 都不得充当核心认知 owner。
+- 协议、提示词、存储、事件、日志、CLI 中禁止出现任何形式的会话标识字段。
+- 禁止把会话概念改名为 legacy、scope、conversation、thread 等新容器继续表达；纯渠道协议字段只能保留在 gateway 原始元数据边界，不能进入记忆连续性模型。
+- 连续性只允许由时间线、`FocusPointer`、memory activation、显式 `activeScope`、显式 `contextForkId` 和 codename boost 共同表达；`sourceKey`、`sourceSurface`、`conversationKey` 和 transport protocol handshake 都不得充当核心认知 owner。
 - `Scope` 是唯一显式工作域；默认 CLI / TUI 不应偷偷造 fallback scope，调试入口需要显式标注 internal / audit 边界。
 - scope-local memory 归单一 owner 组件持有；Markdown 与 JSONL 审计都保持 append-only，不能把 scope 固化路径拆成无 owner 的 helper 或 service。
 - 黑板互斥、confirmation lookup、reflection `sourceId`、TUI 当前焦点都必须由显式 scope / fork / turn / episode 审计 id 承担，而不是 transport tuple。

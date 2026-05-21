@@ -37,7 +37,7 @@ flowchart LR
 
 ```ts
 interface EqState {
-    userId: string;
+    actorKey: string;
     valence: number;        // -1..1
     arousal: number;        // 0..1
     dominance: number;      // 0..1
@@ -53,7 +53,7 @@ type EqDirective = "calm-down" | "match-energy" | "steady";
 
 - valence 衰减允许走纯资源指标（时间窗 / 计数器）。
 - 标签 / 强度变化必须由模型结构化字段产生，禁止文本匹配。
-- 数据落点：`brain.db` 的 `memory_eq_state` 表，按 `userId` latest-only UPSERT；事件用 `MemoryEqStateUpdated` 审计，runtime 不再发 ask cap 级联事件。
+- 数据落点：`brain.db` 的 `memory_eq_state` 表，按 `actorKey` latest-only UPSERT；事件用 `MemoryEqStateUpdated` 审计，runtime 不再发 ask cap 级联事件。
 
 ## 落地清单
 

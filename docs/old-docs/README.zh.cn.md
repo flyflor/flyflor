@@ -6,7 +6,7 @@
 
 ## 归档清单
 
-- [legacy.architecture.history.md](legacy.architecture.history.md) — 无 session / brain.db / Codename / Ask / Continuation / Dream 主线的落地历史。
+- [legacy.architecture.history.md](legacy.architecture.history.md) — 无隐式连续性 / brain.db / Codename / Ask / Continuation / Dream 主线的落地历史。
 - [eq.module.md](eq.module.md) — EQ 从提案到语气层能力的落地记录。
 - [storage.degradation.md](storage.degradation.md) — Redis / SurrealDB 降级到本地 Component 的迁移背景。
 - [todo.history.md](todo.history.md) — 旧 TODO 中已经完成的路线、阶段表与收口记录。

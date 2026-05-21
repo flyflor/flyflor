@@ -45,7 +45,7 @@ async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; 
     } satisfies FlyflorPaths;
     await mkdir(join(paths.templateDir, "projects"), { recursive: true });
     for (const f of ["AGENTS.md", "TODO.md", "README.md"]) {
-        await Bun.write(join(paths.templateDir, "projects", f), `# {{title}}\n\nproject={{projectId}} user={{userId}}\ncreated={{createdAt}}\ntrigger={{trigger}}\nrelated={{relatedIds}}\n\n{{goal}}\n`);
+        await Bun.write(join(paths.templateDir, "projects", f), `# {{title}}\n\nproject={{projectId}} user={{sourceKey}}\ncreated={{createdAt}}\ntrigger={{trigger}}\nrelated={{relatedIds}}\n\n{{goal}}\n`);
     }
     const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
     await brain.open();
@@ -102,7 +102,6 @@ describe("LF-R2 promoteCodename helper", () => {
             brain.upsertCodename({
                 id,
                 name: "fly",
-                userId: "user-1",
                 createdAt: Date.now() - 1000,
                 lastUsedAt: Date.now(),
                 useCount: 1,
@@ -127,7 +126,6 @@ describe("LF-R2 promoteCodename helper", () => {
             brain.upsertCodename({
                 id,
                 name: "tiny",
-                userId: "user-1",
                 createdAt: Date.now(),
                 lastUsedAt: Date.now(),
                 useCount: 1,
@@ -147,7 +145,6 @@ describe("LF-R2 promoteCodename helper", () => {
             brain.upsertCodename({
                 id,
                 name: "again",
-                userId: "user-1",
                 createdAt: Date.now() - 10 * 60 * 60 * 1000,
                 lastUsedAt: Date.now(),
                 useCount: 8,
@@ -169,7 +166,6 @@ describe("LF-R2 promoteCodename helper", () => {
             brain.upsertCodename({
                 id,
                 name: "verify",
-                userId: "user-1",
                 createdAt: Date.now() - 60 * 60 * 1000 * 6,
                 lastUsedAt: Date.now(),
                 useCount: 6,

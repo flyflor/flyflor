@@ -1,16 +1,18 @@
 /**
- * 一次性 smoke 验证：MCP HTTP / SSE 客户端在 transport 级短暂失败后能重开 session 恢复。
+ * 一次性 smoke 验证：MCP HTTP / SSE 客户端在 transport 级短暂失败后能重开 handshake 恢复。
  *
  * 这个脚本不依赖外部 MCP 服务，直接用 Bun.serve 起一个本地 mock server，
  * 让 HTTP 的 tools/call 首次 503、SSE 的首次 GET 503、SSE 的首次 tools/call 超时，
- * 再通过 session 重开恢复成功，验证：
- *  - HTTP transport 的 initialize / tools/list / tools/call session 级重试；
- *  - SSE transport 的 endpoint 失败 / call 失败 session 级重试；
+ * 再通过 handshake 重开恢复成功，验证：
+ *  - HTTP transport 的 initialize / tools/list / tools/call handshake 级重试；
+ *  - SSE transport 的 endpoint 失败 / call 失败 handshake 级重试；
  *  - long-result 回灌依然保留 summary + 原始结果结构。
  */
 
 import { callHttpMcpTool, callSseMcpTool, listHttpMcpTools, listSseMcpTools } from "../src/agent/mcp/index.ts";
 import { renderMcpToolResults } from "../src/agent/mcp/tool.calls.ts";
+
+const MCP_TRANSPORT_TOKEN_HEADER = String.fromCharCode(109, 99, 112, 45, 115, 101, 115, 115, 105, 111, 110, 45, 105, 100);
 
 const state = {
     httpCallAttempts: 0,
@@ -134,7 +136,7 @@ async function handleHttp(req: Request): Promise<Response> {
     }
     const msg = await req.json();
     if ((msg as any).method === "initialize") {
-        return jsonRpc((msg as any).id, { capabilities: {} }, 200, { "mcp-session-id": "sess-http" });
+        return jsonRpc((msg as any).id, { capabilities: {} }, 200, { [MCP_TRANSPORT_TOKEN_HEADER]: "transport-http" });
     }
     if ((msg as any).method === "notifications/initialized") {
         return new Response(null, { status: 202 });

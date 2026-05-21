@@ -25,13 +25,13 @@ export interface GatewayUser {
 
 export interface GatewayRoute {
     channel: ChannelName;
-    chatId: string;
+    conversationKey: string;
     chatType: ChatType;
     /** Thread/topic/lane id. It stays at gateway boundary and is not a memory continuity id. */
     threadId?: string;
     accountId?: string;
-    /** Parent channel id for platforms where chatId points at a thread. */
-    parentChatId?: string;
+    /** Parent route key for platforms where conversationKey points at a thread. */
+    parentConversationKey?: string;
 }
 
 export interface GatewayAttachment {
@@ -52,16 +52,16 @@ export interface GatewayAttachment {
 }
 
 export interface GatewaySource {
-    /** Human label from the platform; display/audit only. */
-    chatName?: string;
-    /** Platform-specific topic/description, never inferred from user text. */
-    chatTopic?: string;
-    /** Platform alternate stable id, such as Feishu union_id or Signal UUID. */
-    userIdAlt?: string;
-    /** Platform alternate room/group id. */
-    chatIdAlt?: string;
-    /** Discord guild / Slack workspace / Matrix server style scope. */
-    guildId?: string;
+    /** Human label from the ingress platform; display/audit only. */
+    conversationLabel?: string;
+    /** Platform-specific topic/description, never inferred from message text. */
+    conversationTopic?: string;
+    /** Platform alternate actor key, such as Feishu union_id or Signal UUID. */
+    actorKeyAlt?: string;
+    /** Platform alternate room/group key. */
+    conversationKeyAlt?: string;
+    /** Discord guild / Slack workspace / Matrix server style ingress surface. */
+    surfaceKey?: string;
     /** Triggering platform message id used for reply anchors, pin/reaction and dedup audits. */
     messageId?: string;
     /** True when the author is a bot/webhook and the adapter deliberately lets it through. */
@@ -169,7 +169,7 @@ export interface GatewayMessage {
     reactions?: GatewayReaction[];
     /** Native update id, kept distinct from message id so redelivery offsets can be audited. */
     platformUpdateId?: number;
-    /** Platform source context for routing/audit only; it must not become a session continuity id. */
+    /** Platform source context for routing/audit only; it must not become a continuity owner. */
     source?: GatewaySource;
     /** Native reply / quote context from the incoming event. */
     replyTo?: GatewayReplyContext;
@@ -217,12 +217,12 @@ export interface RuntimeContext {
      */
     embedding?: number[];
     /**
-     * 显式 fork 节点。Flyflor 不用 session 续命；调用方若要进入分叉话题，
+     * 显式 fork 节点。Flyflor 不用隐式会话续命；调用方若要进入分叉话题，
      * 必须传入已持久化的 ContextFork id，runtime 只按该结构化 id 注入范围边界。
      */
     contextForkId?: string;
     /**
-     * 显式 scope 作用域。Flyflor 保持无 session：TUI / API 若要进入某个工作域，
+     * 显式 scope 作用域。Flyflor 保持无隐式会话：TUI / API 若要进入某个工作域，
      * 必须每轮传入这个结构化对象；runtime 不从自然语言、transport 或 cwd 猜测。
      */
     activeScope?: RuntimeScope;

@@ -4,11 +4,11 @@ import { allQuery, getQuery, query, runQuery } from "../src/components/sql/index
 
 describe("SQL query tag", () => {
     test("binds interpolated values as sqlite parameters", () => {
-        const statement = query`SELECT * FROM memory_events WHERE user_id = ${"u1"} AND ts >= ${123}`;
+        const statement = query`SELECT * FROM memory_events WHERE owner_key = ${"scope:test"} AND ts >= ${123}`;
 
         expect(statement).toEqual({
-            params: ["u1", 123],
-            sql: "SELECT * FROM memory_events WHERE user_id = ? AND ts >= ?",
+            params: ["scope:test", 123],
+            sql: "SELECT * FROM memory_events WHERE owner_key = ? AND ts >= ?",
         });
     });
 

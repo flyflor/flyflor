@@ -194,21 +194,12 @@ export class BrainSchema {
             const columns = db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((row) => row.name);
             if (!columns.includes("owner_key")) {
                 db.exec(`ALTER TABLE ${table} ADD COLUMN owner_key TEXT;`);
-                if (columns.includes("user_id")) {
-                    db.exec(`UPDATE ${table} SET owner_key = user_id WHERE owner_key IS NULL;`);
-                }
+                db.exec(`UPDATE ${table} SET owner_key = 'record:' || rowid WHERE owner_key IS NULL;`);
             }
             if (!columns.includes("source_key")) {
                 db.exec(`ALTER TABLE ${table} ADD COLUMN source_key TEXT;`);
-                if (columns.includes("audit_user_id")) {
-                    db.exec(`UPDATE ${table} SET source_key = audit_user_id WHERE source_key IS NULL;`);
-                }
-                if (columns.includes("user_id")) {
-                    db.exec(`UPDATE ${table} SET source_key = user_id WHERE source_key IS NULL;`);
-                }
             }
         }
-        this.dropLegacyOwnerIndexes(db);
     }
 
     private addMemoryEventCoreColumns(db: Database): void {
@@ -216,19 +207,13 @@ export class BrainSchema {
         const columns = db.query<{ name: string }, []>("PRAGMA table_info(memory_events)").all().map((row) => row.name);
         if (!columns.includes("owner_key")) {
             db.exec("ALTER TABLE memory_events ADD COLUMN owner_key TEXT;");
-            db.exec("UPDATE memory_events SET owner_key = user_id WHERE owner_key IS NULL;");
+            db.exec("UPDATE memory_events SET owner_key = id WHERE owner_key IS NULL;");
         }
         if (!columns.includes("source_key")) {
             db.exec("ALTER TABLE memory_events ADD COLUMN source_key TEXT;");
-            if (columns.includes("user_id")) {
-                db.exec("UPDATE memory_events SET source_key = user_id WHERE source_key IS NULL;");
-            }
         }
         if (!columns.includes("source_surface")) {
             db.exec("ALTER TABLE memory_events ADD COLUMN source_surface TEXT;");
-            if (columns.includes("channel_id")) {
-                db.exec("UPDATE memory_events SET source_surface = channel_id WHERE source_surface IS NULL;");
-            }
         }
     }
 
@@ -255,18 +240,6 @@ export class BrainSchema {
         if (tables.includes("projects") && !tables.includes("scopes")) {
             db.exec("ALTER TABLE projects RENAME TO scopes;");
         }
-        if (!this.tableExists(db, "scopes")) return;
-        const columns = db.query<{ name: string }, []>("PRAGMA table_info(scopes)").all().map((row) => row.name);
-        const indexes = db
-            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
-            .all()
-            .map((row) => row.name);
-        if (indexes.includes("idx_projects_user_used")) {
-            db.exec("DROP INDEX idx_projects_user_used;");
-        }
-        if (indexes.includes("idx_scopes_audit_user_used")) {
-            db.exec("DROP INDEX idx_scopes_audit_user_used;");
-        }
     }
 
     private renameCodenameScopeColumn(db: Database): void {
@@ -291,33 +264,11 @@ export class BrainSchema {
             .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
             .all()
             .map((row) => row.name);
-        if (indexes.includes("idx_scene_records_user_updated")) {
-            db.exec("DROP INDEX idx_scene_records_user_updated;");
-        }
         if (indexes.includes("idx_scene_records_source_event")) {
             db.exec("DROP INDEX idx_scene_records_source_event;");
         }
         if (indexes.includes("idx_scene_records_blackboard")) {
             db.exec("DROP INDEX idx_scene_records_blackboard;");
-        }
-    }
-
-    private dropLegacyOwnerIndexes(db: Database): void {
-        const indexes = db
-            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
-            .all()
-            .map((row) => row.name);
-        for (const name of [
-            "idx_task_plans_user_updated",
-            "idx_context_forks_user_updated",
-            "idx_replay_records_user_updated",
-            "idx_events_user",
-            "idx_events_user_type_ts",
-            "idx_codename_user_used",
-        ]) {
-            if (indexes.includes(name)) {
-                db.exec(`DROP INDEX ${name};`);
-            }
         }
     }
 }

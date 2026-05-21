@@ -15,16 +15,18 @@ beforeAll(async () => {
     const store = new BrainStore({ dbPath: brainPath });
     await store.open();
     store.appendEvent({
-        id: "e-old-1",
+                ownerKey: "scope:test",
+                id: "e-old-1",
         ts: Date.UTC(2026, 3, 15),
-        userId: "u1",
+        sourceKey: "u1",
         type: MemoryEventType.Event,
         content: { text: "old-1" },
     });
     store.appendEvent({
-        id: "e-old-2",
+                ownerKey: "scope:test",
+                id: "e-old-2",
         ts: Date.UTC(2026, 3, 16),
-        userId: "u1",
+        sourceKey: "u1",
         type: MemoryEventType.Event,
         content: { text: "old-2" },
     });

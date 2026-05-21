@@ -7,7 +7,7 @@
  *  3. 真正的 JSON-RPC 响应通过同一条 SSE 流以 `event: message` 推回，按 id 匹配。
  *
  * 实现要点：
- *  - 单次会话级别：每次 listSseMcpTools / callSseMcpTool 都新开一条 SSE，结束即关；
+ *  - 单次连接级别：每次 listSseMcpTools / callSseMcpTool 都新开一条 SSE，结束即关；
  *  - 不读 text、不做关键词匹配；id 严格按 number 比对；
  *  - 任何超时 / 流终止 / endpoint 缺失都抛错，由调用方处理；
  *  - 纯 fetch / ReadableStream，无 native 依赖，bun --compile 安全。
@@ -50,8 +50,8 @@ export async function listSseMcpTools(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpToolDefinition[]> {
-    return withSseSession(paths, server, options, async (session) => {
-        const result = await session.request("tools/list", {});
+    return withSseConnection(paths, server, options, async (connection) => {
+        const result = await connection.request("tools/list", {});
         return normalizeTools(result);
     });
 }
@@ -61,8 +61,8 @@ export async function listSseMcpResources(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpResourceDefinition[]> {
-    return withSseSession(paths, server, options, async (session) => {
-        const result = await session.request("resources/list", {});
+    return withSseConnection(paths, server, options, async (connection) => {
+        const result = await connection.request("resources/list", {});
         return normalizeResources(result, "MCP SSE resources/list");
     });
 }
@@ -72,8 +72,8 @@ export async function listSseMcpPrompts(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpPromptDefinition[]> {
-    return withSseSession(paths, server, options, async (session) => {
-        const result = await session.request("prompts/list", {});
+    return withSseConnection(paths, server, options, async (connection) => {
+        const result = await connection.request("prompts/list", {});
         return normalizePrompts(result, "MCP SSE prompts/list");
     });
 }
@@ -84,8 +84,8 @@ export async function readSseMcpResource(
     uri: string,
     options: McpClientOptions = {},
 ): Promise<McpResourceReadResult> {
-    return withSseSession(paths, server, options, async (session) => {
-        const raw = await session.request("resources/read", { uri });
+    return withSseConnection(paths, server, options, async (connection) => {
+        const raw = await connection.request("resources/read", { uri });
         const result = isRecord(raw) ? raw : {};
         return {
             contents: Array.isArray(result.contents) ? result.contents : undefined,
@@ -101,8 +101,8 @@ export async function getSseMcpPrompt(
     args: Record<string, unknown> = {},
     options: McpClientOptions = {},
 ): Promise<McpPromptGetResult> {
-    return withSseSession(paths, server, options, async (session) => {
-        const raw = await session.request("prompts/get", {
+    return withSseConnection(paths, server, options, async (connection) => {
+        const raw = await connection.request("prompts/get", {
             name,
             arguments: args,
         });
@@ -122,8 +122,8 @@ export async function callSseMcpTool(
     input: Record<string, unknown>,
     options: McpClientOptions = {},
 ): Promise<McpCallResult> {
-    return withSseSession(paths, server, options, async (session) => {
-        const raw = await session.request("tools/call", {
+    return withSseConnection(paths, server, options, async (connection) => {
+        const raw = await connection.request("tools/call", {
             name: toolName,
             arguments: input,
         });
@@ -136,23 +136,23 @@ export async function callSseMcpTool(
     });
 }
 
-async function withSseSession<T>(
+async function withSseConnection<T>(
     _paths: FlyflorPaths,
     server: McpServerDefinition,
     options: McpClientOptions,
-    fn: (session: McpSseSession) => Promise<T>,
+    fn: (connection: McpSseConnection) => Promise<T>,
 ): Promise<T> {
     if (!server.enabled) throw new Error(`MCP server is disabled: ${server.name}`);
     if (!server.url) throw new Error(`MCP server is not a remote SSE endpoint: ${server.name}`);
     let lastError: Error | undefined;
     for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
-        // 只在流建立后的 transport/protocol 失败时重开一次 session；
+        // 只在流建立后的 transport/protocol 失败时重开一次 connection；
         // 不把 MCP error 当作可恢复事件，以免重复执行已有语义结果的工具调用。
-        const session = new McpSseSession(server, options);
+        const connection = new McpSseConnection(server, options);
         try {
-            await session.open();
-            await session.initialize();
-            return await fn(session);
+            await connection.open();
+            await connection.initialize();
+            return await fn(connection);
         } catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
             if (!isRetryableMcpTransportError(lastError) || attempt >= DEFAULT_RETRY_ATTEMPTS) {
@@ -160,13 +160,13 @@ async function withSseSession<T>(
             }
             await sleep(backoffMs(attempt));
         } finally {
-            session.close();
+            connection.close();
         }
     }
-    throw lastError ?? new Error(`MCP SSE session failed: ${server.name}`);
+    throw lastError ?? new Error(`MCP SSE connection failed: ${server.name}`);
 }
 
-class McpSseSession {
+class McpSseConnection {
     private nextId = 1;
     private endpointUrl: string | undefined;
     private controller = new AbortController();
@@ -239,7 +239,7 @@ class McpSseSession {
     public close(): void {
         this.controller.abort();
         for (const p of this.pending.values()) {
-            p.reject(new Error("MCP SSE session closed"));
+            p.reject(new Error("MCP SSE connection closed"));
         }
         this.pending.clear();
     }

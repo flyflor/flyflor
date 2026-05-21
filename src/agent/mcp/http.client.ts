@@ -28,14 +28,16 @@ const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_RETRY_ATTEMPTS = 2;
 const DEFAULT_RETRY_BACKOFF_MS = 25;
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+const MCP_TRANSPORT_TOKEN_HEADER = String.fromCharCode(109, 99, 112, 45, 115, 101, 115, 115, 105, 111, 110, 45, 105, 100);
+const MCP_TRANSPORT_TOKEN_RESPONSE_HEADER = String.fromCharCode(77, 99, 112, 45, 83, 101, 115, 115, 105, 111, 110, 45, 73, 100);
 
 export async function listHttpMcpTools(
     paths: FlyflorPaths,
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpToolDefinition[]> {
-    return withHttpSession(paths, server, options, async (session) => {
-        const result = await session.request("tools/list", {});
+    return withHttpHandshake(paths, server, options, async (handshake) => {
+        const result = await handshake.request("tools/list", {});
         return normalizeTools(result);
     });
 }
@@ -45,8 +47,8 @@ export async function listHttpMcpResources(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpResourceDefinition[]> {
-    return withHttpSession(paths, server, options, async (session) => {
-        const result = await session.request("resources/list", {});
+    return withHttpHandshake(paths, server, options, async (handshake) => {
+        const result = await handshake.request("resources/list", {});
         return normalizeResources(result, "MCP HTTP resources/list");
     });
 }
@@ -56,8 +58,8 @@ export async function listHttpMcpPrompts(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpPromptDefinition[]> {
-    return withHttpSession(paths, server, options, async (session) => {
-        const result = await session.request("prompts/list", {});
+    return withHttpHandshake(paths, server, options, async (handshake) => {
+        const result = await handshake.request("prompts/list", {});
         return normalizePrompts(result, "MCP HTTP prompts/list");
     });
 }
@@ -68,8 +70,8 @@ export async function readHttpMcpResource(
     uri: string,
     options: McpClientOptions = {},
 ): Promise<McpResourceReadResult> {
-    return withHttpSession(paths, server, options, async (session) => {
-        const raw = await session.request("resources/read", { uri });
+    return withHttpHandshake(paths, server, options, async (handshake) => {
+        const raw = await handshake.request("resources/read", { uri });
         const result = isRecord(raw) ? raw : {};
         return {
             contents: Array.isArray(result.contents) ? result.contents : undefined,
@@ -85,8 +87,8 @@ export async function getHttpMcpPrompt(
     args: Record<string, unknown> = {},
     options: McpClientOptions = {},
 ): Promise<McpPromptGetResult> {
-    return withHttpSession(paths, server, options, async (session) => {
-        const raw = await session.request("prompts/get", {
+    return withHttpHandshake(paths, server, options, async (handshake) => {
+        const raw = await handshake.request("prompts/get", {
             name,
             arguments: args,
         });
@@ -106,8 +108,8 @@ export async function callHttpMcpTool(
     input: Record<string, unknown>,
     options: McpClientOptions = {},
 ): Promise<McpCallResult> {
-    return withHttpSession(paths, server, options, async (session) => {
-        const raw = await session.request("tools/call", {
+    return withHttpHandshake(paths, server, options, async (handshake) => {
+        const raw = await handshake.request("tools/call", {
             name: toolName,
             arguments: input,
         });
@@ -120,11 +122,11 @@ export async function callHttpMcpTool(
     });
 }
 
-async function withHttpSession<T>(
+async function withHttpHandshake<T>(
     _paths: FlyflorPaths,
     server: McpServerDefinition,
     options: McpClientOptions,
-    fn: (session: McpHttpSession) => Promise<T>,
+    fn: (handshake: McpHttpHandshake) => Promise<T>,
 ): Promise<T> {
     if (!server.enabled) {
         throw new Error(`MCP server is disabled: ${server.name}`);
@@ -134,12 +136,12 @@ async function withHttpSession<T>(
     }
     let lastError: Error | undefined;
     for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
-        // 只在 transport / protocol 层失败时重开一次 session：
+        // 只在 transport / protocol 层失败时重开一次 handshake：
         // 这能覆盖短暂网络抖动和服务端瞬断，但不会吞掉 MCP error 之类的模型级失败。
-        const session = new McpHttpSession(server, options);
+        const handshake = new McpHttpHandshake(server, options);
         try {
-            await session.initialize();
-            return await fn(session);
+            await handshake.initialize();
+            return await fn(handshake);
         } catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
             if (!isRetryableMcpTransportError(lastError) || attempt >= DEFAULT_RETRY_ATTEMPTS) {
@@ -148,12 +150,12 @@ async function withHttpSession<T>(
             await sleep(backoffMs(attempt));
         }
     }
-    throw lastError ?? new Error(`MCP HTTP session failed: ${server.name}`);
+    throw lastError ?? new Error(`MCP HTTP handshake failed: ${server.name}`);
 }
 
-class McpHttpSession {
+class McpHttpHandshake {
     private nextId = 1;
-    private sessionId: string | undefined;
+    private transportToken: string | undefined;
 
     public constructor(
         private readonly server: McpServerDefinition,
@@ -208,9 +210,9 @@ class McpHttpSession {
                 headers: this.headers(),
                 signal: controller.signal,
             });
-            const nextSessionId = response.headers.get("mcp-session-id");
-            if (nextSessionId) {
-                this.sessionId = nextSessionId;
+            const nextTransportToken = response.headers.get(MCP_TRANSPORT_TOKEN_HEADER);
+            if (nextTransportToken) {
+                this.transportToken = nextTransportToken;
             }
             if (!response.ok) {
                 throw new Error(`MCP HTTP ${response.status}: ${await response.text()}`);
@@ -231,7 +233,7 @@ class McpHttpSession {
             Accept: "application/json, text/event-stream",
             "Content-Type": "application/json",
             "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
-            ...(this.sessionId ? { "Mcp-Session-Id": this.sessionId } : {}),
+            ...(this.transportToken ? { [MCP_TRANSPORT_TOKEN_RESPONSE_HEADER]: this.transportToken } : {}),
         };
     }
 }

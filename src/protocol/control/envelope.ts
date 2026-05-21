@@ -308,7 +308,7 @@ export interface GatewayControlClientHello {
 
 export interface GatewayControlMessageInput {
     attachments?: GatewayMessage["attachments"];
-    chatId?: string;
+    conversationKey?: string;
     chatType?: GatewayMessage["route"]["chatType"];
     context?: {
         activeScope?: GatewayControlProjectScope;
@@ -532,17 +532,17 @@ export function normalizeGatewayControlMessage(input: GatewayControlMessageInput
             "gateway.message.send payload requires text",
         );
     }
-    const userId = input.user?.id ?? "ws-user";
+    const actorId = input.user?.id ?? "ws-actor";
     return {
         id: input.id ?? crypto.randomUUID(),
         route: {
             channel: Channel.Ws,
-            chatId: input.chatId ?? userId,
+            conversationKey: input.conversationKey ?? input.id ?? "ws-conversation",
             chatType: input.chatType ?? ChatType.Direct,
             threadId: input.threadId,
         },
         user: {
-            id: userId,
+            id: actorId,
             displayName: input.user?.displayName,
         },
         text: input.text,
@@ -572,7 +572,7 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
     return {
         id: readString(payload.id),
         text: readString(payload.text) ?? "",
-        chatId: readString(payload.chatId),
+        conversationKey: readString(payload.conversationKey),
         chatType: readString(payload.chatType) as GatewayControlMessageInput["chatType"],
         threadId: readString(payload.threadId),
         user: isRecord(payload.user)

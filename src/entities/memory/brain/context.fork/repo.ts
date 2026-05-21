@@ -7,7 +7,7 @@ import { brainContextForkModel, type BrainContextForkRow } from "./entity.ts";
  * Repo for `context_forks`.
  *
  * Forks are explicit context branches selected by TUI/commands. They are stored
- * as structured summaries and inherited ids, not as an implicit session store.
+ * as structured summaries and inherited ids, not as an implicit continuity store.
  */
 export class BrainContextForkRepo {
     public constructor(private readonly db: Database) {}

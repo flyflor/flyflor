@@ -72,8 +72,8 @@ export async function listStdioMcpTools(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpToolDefinition[]> {
-    return withStdioSession(paths, server, options, async (session) => {
-        const result = await session.request("tools/list", {});
+    return withStdioProcess(paths, server, options, async (connection) => {
+        const result = await connection.request("tools/list", {});
         return normalizeTools(result);
     });
 }
@@ -83,8 +83,8 @@ export async function listStdioMcpResources(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpResourceDefinition[]> {
-    return withStdioSession(paths, server, options, async (session) => {
-        const result = await session.request("resources/list", {});
+    return withStdioProcess(paths, server, options, async (connection) => {
+        const result = await connection.request("resources/list", {});
         return normalizeResources(result, "MCP stdio resources/list");
     });
 }
@@ -94,8 +94,8 @@ export async function listStdioMcpPrompts(
     server: McpServerDefinition,
     options: McpClientOptions = {},
 ): Promise<McpPromptDefinition[]> {
-    return withStdioSession(paths, server, options, async (session) => {
-        const result = await session.request("prompts/list", {});
+    return withStdioProcess(paths, server, options, async (connection) => {
+        const result = await connection.request("prompts/list", {});
         return normalizePrompts(result, "MCP stdio prompts/list");
     });
 }
@@ -106,8 +106,8 @@ export async function readStdioMcpResource(
     uri: string,
     options: McpClientOptions = {},
 ): Promise<McpResourceReadResult> {
-    return withStdioSession(paths, server, options, async (session) => {
-        const raw = await session.request("resources/read", { uri });
+    return withStdioProcess(paths, server, options, async (connection) => {
+        const raw = await connection.request("resources/read", { uri });
         const result = isRecord(raw) ? raw : {};
         return {
             contents: Array.isArray(result.contents) ? result.contents : undefined,
@@ -123,8 +123,8 @@ export async function getStdioMcpPrompt(
     args: Record<string, unknown> = {},
     options: McpClientOptions = {},
 ): Promise<McpPromptGetResult> {
-    return withStdioSession(paths, server, options, async (session) => {
-        const raw = await session.request("prompts/get", {
+    return withStdioProcess(paths, server, options, async (connection) => {
+        const raw = await connection.request("prompts/get", {
             name,
             arguments: args,
         });
@@ -144,8 +144,8 @@ export async function callStdioMcpTool(
     input: Record<string, unknown>,
     options: McpClientOptions = {},
 ): Promise<McpCallResult> {
-    return withStdioSession(paths, server, options, async (session) => {
-        const raw = await session.request("tools/call", {
+    return withStdioProcess(paths, server, options, async (connection) => {
+        const raw = await connection.request("tools/call", {
             name: toolName,
             arguments: input,
         });
@@ -158,11 +158,11 @@ export async function callStdioMcpTool(
     });
 }
 
-async function withStdioSession<T>(
+async function withStdioProcess<T>(
     paths: FlyflorPaths,
     server: McpServerDefinition,
     options: McpClientOptions,
-    fn: (session: McpStdioSession) => Promise<T>,
+    fn: (connection: McpStdioProcess) => Promise<T>,
 ): Promise<T> {
     if (!server.enabled) {
         throw new Error(`MCP server is disabled: ${server.name}`);
@@ -171,17 +171,17 @@ async function withStdioSession<T>(
         throw new Error(`MCP server is not a stdio command: ${server.name}`);
     }
 
-    const session = new McpStdioSession(paths, server, options);
-    await session.start();
+    const connection = new McpStdioProcess(paths, server, options);
+    await connection.start();
     try {
-        await session.initialize();
-        return await fn(session);
+        await connection.initialize();
+        return await fn(connection);
     } finally {
-        await session.stop();
+        await connection.stop();
     }
 }
 
-class McpStdioSession {
+class McpStdioProcess {
     private child?: ReturnType<typeof Bun.spawn>;
     private nextId = 1;
     private pending = new Map<number, PendingRequest>();
@@ -283,7 +283,7 @@ class McpStdioSession {
 
     public async stop(): Promise<void> {
         this.stopped = true;
-        this.rejectAll(new Error("MCP session stopped."));
+        this.rejectAll(new Error("MCP connection stopped."));
         this.child?.kill();
         await this.child?.exited;
     }

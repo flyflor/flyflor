@@ -43,10 +43,10 @@ class FakeWorkingMemory {
     public async listConsolidationCandidates(): Promise<string[]> {
         return this.ids;
     }
-    public async readEpisode(_userId: string, episodeId: string): Promise<EpisodeRecord | undefined> {
+    public async readEpisode(_sourceKey: string, episodeId: string): Promise<EpisodeRecord | undefined> {
         return this.episodes.get(episodeId);
     }
-    public async dropEpisode(_userId: string, episodeId: string): Promise<void> {
+    public async dropEpisode(_sourceKey: string, episodeId: string): Promise<void> {
         this.dropped.push(episodeId);
         this.episodes.delete(episodeId);
     }
@@ -87,12 +87,12 @@ describe("HotMemoryCompressionWorker", () => {
                 now: () => 1_800_000_000_000,
             });
 
-            const result = await worker.drain("u1");
+            const result = await worker.drain("owner-1");
 
             expect(result).toEqual({ scanned: 2, compressed: 1, deleted: 1, missing: 1, skipped: 0 });
             expect(workingMemory.dropped.sort()).toEqual(["ep-1", "missing"]);
             expect(model.calls).toBe(1);
-            const rows = brain.listEvents({ userId: "u1", type: MemoryEventType.HotMemoryCompression });
+            const rows = brain.listEvents({ ownerKey: "owner-1", type: MemoryEventType.HotMemoryCompression });
             expect(rows).toHaveLength(1);
             expect(rows[0]?.content.deletedEpisodeIds).toEqual(["ep-1"]);
             expect(rows[0]?.content.isolation).toEqual({
@@ -102,7 +102,7 @@ describe("HotMemoryCompressionWorker", () => {
                 gemCandidate: false,
             });
             const recalled = brain.listPromptAtomsWindow(new Date(1_800_000_000_000), {
-                userId: "u1",
+                ownerKey: "owner-1",
                 minScore: 0,
                 limit: 10,
             });
@@ -127,9 +127,9 @@ describe("HotMemoryCompressionWorker", () => {
                 events,
             );
 
-            await expect(worker.drain("u1")).rejects.toThrow("JSON object");
+            await expect(worker.drain("owner-1")).rejects.toThrow("JSON object");
             expect(workingMemory.dropped).toEqual([]);
-            expect(brain.listEvents({ userId: "u1", type: MemoryEventType.HotMemoryCompression })).toEqual([]);
+            expect(brain.listEvents({ ownerKey: "owner-1", type: MemoryEventType.HotMemoryCompression })).toEqual([]);
             expect(events.events.map((e) => e.type)).toContain(RuntimeEventType.MemoryHotCompressionFailed);
         } finally {
             brain.close();

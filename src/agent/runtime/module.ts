@@ -57,7 +57,7 @@ import {
     SandboxQuotaTracker,
 } from "../sandbox/index.ts";
 import { loadPromptTemplates, renderMcpToolBudgetExhaustedPrompt } from "../prompts/index.ts";
-import { continuityOwnerKey, renderRuntimeModelMessages } from "../context/index.ts";
+import { continuityOwnerKey, renderRuntimeModelMessages, sourceKeyForMessage, sourceSurfaceForMessage } from "../context/index.ts";
 import { type BlackboardModule } from "../blackboard/index.ts";
 import { loadPlugins } from "../plugin/index.ts";
 import { loadSkills, loadSkillUsageSummary, type Skill } from "../skills/index.ts";
@@ -323,7 +323,7 @@ export class RuntimeModule extends RuntimeBoundary {
         goal?: string;
         path: string;
         title?: string;
-        userId: string;
+        sourceKey?: string;
         now?: number;
     }): Promise<ScopeRecord> {
         return this.memory.createOrUseScope(input);
@@ -334,14 +334,14 @@ export class RuntimeModule extends RuntimeBoundary {
         goal?: string;
         path: string;
         title?: string;
-        userId: string;
+        sourceKey?: string;
         now?: number;
     }): Promise<ScopeRecord> {
         return this.createOrUseScope(input);
     }
 
-    public listScopes(userId: string, options: { limit?: number } = {}): ScopeRecord[] {
-        return this.memory.listScopes(userId, options);
+    public listScopes(sourceKey: string, options: { limit?: number } = {}): ScopeRecord[] {
+        return this.memory.listScopes(sourceKey, options);
     }
 
     public createContextFork(
@@ -351,8 +351,8 @@ export class RuntimeModule extends RuntimeBoundary {
         return this.memory.createContextFork(record, source);
     }
 
-    public listContextForks(userId: string, options: { limit?: number } = {}): ContextForkRecord[] {
-        return this.memory.listContextForks(userId, options);
+    public listContextForks(ownerKey: string, options: { limit?: number } = {}): ContextForkRecord[] {
+        return this.memory.listContextForks(ownerKey, options);
     }
 
     public async readMcpResource(input: RuntimeMcpResourceReadInput): Promise<McpResourceReadResult> {
@@ -408,14 +408,15 @@ export class RuntimeModule extends RuntimeBoundary {
         if (orphans.length === 0) return;
         for (const record of orphans) {
             this.memory.recordContinuationFromReason({
-                userId: record.userId,
+                ownerKey: `turn:${record.requestId}`,
+                sourceKey: record.sourceKey,
                 reason: ContinuationContextReason.ProcessRestart,
                 userFacing: {
                     title: "Interrupted by process restart",
                     contextHint: record.originalUserMessage.slice(0, 200),
                 },
                 snapshot: { originalUserMessage: record.originalUserMessage.slice(0, 500) },
-                channelId: record.channelId,
+                sourceSurface: record.sourceSurface,
                 requestId: record.requestId,
                 ...(record.codenameId ? { codenameId: record.codenameId } : {}),
                 importance: 0.6,
@@ -431,7 +432,7 @@ export class RuntimeModule extends RuntimeBoundary {
     /** CLI 接口：手动跑一轮 dream pass，可指定单用户。 */
     public runDreamOnce(
         limit?: number,
-        userId?: string,
+        ownerKey?: string,
     ): Promise<{
         users: number;
         driftRepaired: number;
@@ -439,7 +440,7 @@ export class RuntimeModule extends RuntimeBoundary {
         contradictionsFlagged: number;
         skipped: number;
     }> {
-        return this.memory.runDreamOnce(limit, userId);
+        return this.memory.runDreamOnce(limit, ownerKey);
     }
 
     /**
@@ -459,8 +460,8 @@ export class RuntimeModule extends RuntimeBoundary {
         await this.warmup();
         await this.inflight.markStart({
             requestId: context.requestId,
-            userId: message.user.id,
-            channelId: message.route.channel,
+            sourceKey: sourceKeyForMessage(message, context),
+            sourceSurface: sourceSurfaceForMessage(message),
             originalUserMessage: message.text.slice(0, 500),
             startedAtMs: Date.now(),
         });
@@ -478,7 +479,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
             prepared.ttfbDone();
             this.events.publish(
-                event(RuntimeEventType.AgentTurnEnd, { channel: message.route.channel }, context.requestId),
+                event(RuntimeEventType.AgentTurnEnd, { channel: sourceSurfaceForMessage(message) }, context.requestId),
             );
             await this.flushEventHooks();
             this.sandboxQuota.forgetRequest(context.requestId);
@@ -494,11 +495,11 @@ export class RuntimeModule extends RuntimeBoundary {
      */
     protected async prepareTurn(message: GatewayMessage, context: RuntimeContext): Promise<PreparedTurn> {
         this.events.publish(
-            event(RuntimeEventType.AgentTurnStart, { channel: message.route.channel }, context.requestId),
+            event(RuntimeEventType.AgentTurnStart, { channel: sourceSurfaceForMessage(message) }, context.requestId),
         );
         const ttfbDone = this.perf.mark(
             RuntimeEventType.PerfTtfb,
-            { channel: message.route.channel },
+            { channel: sourceSurfaceForMessage(message) },
             context.requestId,
         );
         await loadPromptTemplates(this.config.paths);
@@ -586,7 +587,7 @@ export class RuntimeModule extends RuntimeBoundary {
             preRoute,
             snapshotForEscalation,
             context.requestId,
-            message.route.channel,
+            sourceSurfaceForMessage(message),
             message.text.length,
         );
         const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
@@ -613,7 +614,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 : mcpExecution.canExecute
                   ? ToolPermission.Network
                   : undefined,
-            projectScoped: Boolean(context.activeScope) || message.route.channel === Channel.Stdio,
+            projectScoped: Boolean(context.activeScope) || sourceSurfaceForMessage(message) === Channel.Stdio,
             prompts: mcpCatalogBuild.prompts,
             pluginCapabilities: pluginCapabilityCatalog,
             resources: mcpCatalogBuild.resources,
@@ -877,9 +878,10 @@ export class RuntimeModule extends RuntimeBoundary {
         const identityParsed = this.identityAppendParser.parse(continuationDecisions.text);
         if (identityParsed.candidates.length > 0) {
             this.memory.applyIdentityAppends({
-                userId: message.user.id,
+                ownerKey: continuityOwnerKey(message, context),
+                sourceKey: sourceKeyForMessage(message, context),
                 candidates: identityParsed.candidates,
-                channelId: message.route.chatId,
+                sourceSurface: sourceSurfaceForMessage(message),
                 requestId: context.requestId,
             });
         }
@@ -890,9 +892,8 @@ export class RuntimeModule extends RuntimeBoundary {
             blackboardTurnId: blackboardRun?.turnId,
             now: context.now,
             ownerKey: continuityOwnerKey(message, context),
-            auditUserId: message.user.id,
+            sourceKey: sourceKeyForMessage(message, context),
             requestId: context.requestId,
-            userId: message.user.id,
         });
         // LF-R3 Ask 一等公民：从剥离 memory_actions + continuation_decisions + identity 后的剩余文本里解析
         // <flyflor_agent_ask> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
@@ -913,7 +914,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // 仅由 ask 链深度决定，不再让 EQ 参与路由或 ask cap。
         let modelAsk: AgentAsk | undefined = askParsed.ask;
         if (modelAsk) {
-            const pending = this.memory.peekActiveAsk(message.user.id);
+            const pending = this.memory.peekActiveAsk(continuityOwnerKey(message, context));
             const baseCap = Math.max(1, this.config.memory.tuning.continuation.maxChainDepth);
             const maxChainDepth = baseCap;
             const projectedDepth = pending ? pending.chainDepth + 1 : 1;
@@ -921,7 +922,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 this.events.publish(
                     event(RuntimeEventType.MemoryAskChainCapped, {
                         requestId: context.requestId,
-                        userId: message.user.id,
+                        sourceKey: sourceKeyForMessage(message, context),
                         chainDepth: projectedDepth,
                         maxChainDepth,
                         action: "dropped-by-runtime",
@@ -1104,7 +1105,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     ...replayRecords,
                     ...this.blackboardOutput.buildBlackboardReplayRecords(
                         continuityOwnerKey(message, context),
-                        message.user.id,
+                        sourceKeyForMessage(message, context),
                         context.now,
                         blackboardRun,
                         context.requestId,
@@ -1136,7 +1137,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // LF-R4 continuation：MCP 工具失败 → 把"in-flight 上下文"写一条 reason='tool-failure' 的 continuation。
         // 触发条件是布尔字段 `call.ok === false`（资源指标，非字符匹配）；
         // userFacing.title 由 server/tool/error 三段结构化字段拼接，不解析对话文本。
-        this.recordToolFailureContinuations(message, context.requestId, mcpCallProvenance);
+        this.recordToolFailureContinuations(message, context, mcpCallProvenance);
         const lastMode = blackboardRun?.mode ?? BlackboardMode.Direct;
         const previousSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const totalToolCalls = mcpCallProvenance.length;
@@ -1169,7 +1170,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 event(
                     RuntimeEventType.PerfFastRouteCacheFailed,
                     {
-                        channel: message.route.channel,
+                        channel: sourceSurfaceForMessage(message),
                         error: error instanceof Error ? error.message : String(error),
                         key: snapshotKey,
                     },
@@ -1181,13 +1182,13 @@ export class RuntimeModule extends RuntimeBoundary {
 
     /**
      * LF-R4：把本轮 MCP 工具失败写入 continuation-context（reason='tool-failure'）。
-     * 触发条件仅消费布尔字段 `call.ok` 与 `requestId`、`channelId` 等结构化资源指标；
+     * 触发条件仅消费布尔字段 `call.ok` 与 `requestId`、`sourceSurface` 等结构化资源指标；
      * userFacing.title 由 `server/tool` 字段拼接，contextHint 直传原始错误串（来自工具自身的结构化输出，
      * 不是对话文本语义判断 → 不违反零字符匹配红线）。
      */
     private recordToolFailureContinuations(
         message: GatewayMessage,
-        requestId: string,
+        context: RuntimeContext,
         mcpCalls: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>,
     ): void {
         if (!this.memory) return;
@@ -1207,15 +1208,16 @@ export class RuntimeModule extends RuntimeBoundary {
             lastError: c.error ? c.error.slice(0, 200) : undefined,
         }));
         this.memory.recordContinuationFromReason({
-            userId: message.user.id,
+            ownerKey: continuityOwnerKey(message, context),
+            sourceKey: sourceKeyForMessage(message, context),
             reason: ContinuationContextReason.ToolFailure,
             userFacing: contextHint ? { title, contextHint } : { title },
             snapshot: {
                 originalUserMessage: message.text.slice(0, 500),
                 mcpCallProgress,
             },
-            channelId: message.route.channel,
-            requestId,
+            sourceSurface: sourceSurfaceForMessage(message),
+            requestId: context.requestId,
             importance: 0.6,
         });
     }
@@ -1296,7 +1298,7 @@ export class RuntimeModule extends RuntimeBoundary {
         await this.runAsyncTurnTask(
             () => this.memory.classifyAndApplyFeedback(message, enrichedContext),
             RuntimeEventType.MemoryFeedbackFailed,
-            { stage: "runtime-dispatch", userId: message.user.id },
+            { stage: "runtime-dispatch", sourceKey: sourceKeyForMessage(message, context) },
             context.requestId,
         );
         if (blackboardRun?.status === BlackboardTurnStatus.Converged) {
@@ -1309,13 +1311,13 @@ export class RuntimeModule extends RuntimeBoundary {
                                 : enrichedContext.contextForkId
                                   ? `fork:${enrichedContext.contextForkId}`
                                   : `turn:${message.id}`,
-                        userId: message.user.id,
+                        sourceKey: sourceKeyForMessage(message, context),
                         text: this.blackboardOutput.renderDebateEpisodeText(message.text, blackboardRun),
                         embedding,
                         requestId: context.requestId,
                     }),
                 RuntimeEventType.MemoryReflectionFailed,
-                { stage: "runtime-debate-episode", userId: message.user.id },
+                { stage: "runtime-debate-episode", sourceKey: sourceKeyForMessage(message, context) },
                 context.requestId,
             );
         }

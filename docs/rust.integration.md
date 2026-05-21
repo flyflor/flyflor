@@ -6,7 +6,7 @@
 
 - Bun 主线负责认知内核、Executive 外骨骼、WS/control 协议和 RuntimeEvent 血管。
 - Rust 外壳负责连接 `/ws`、渲染 UI、闭环 ask、展示 planning、消费事件流。
-- Rust 侧不应 import Bun runtime 私有实现，也不应依赖 `abandon/`。
+- Rust 侧不应 import Bun runtime 私有实现，也不应依赖已移除的旧实现。
 
 ## 对接边界
 
@@ -176,6 +176,6 @@ Rust 外壳接入完成的最低标准：
 ## 红线
 
 - 不 import Bun runtime/gateway 私有实现。
-- 不依赖 `abandon/` 中的历史壳体。
+- 不依赖已移除的历史壳体。
 - 不从 reply 文本、事件文本、用户文本做关键词判断。
 - 不把连接级 snapshot、turn 级 snapshot、事件流混成一层状态机。

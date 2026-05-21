@@ -33,9 +33,7 @@ export interface PlanningBlockParseContext {
     requestId: string;
     sourceAskId?: string;
     sourceEventId?: string;
-    auditUserId?: string;
-    /** @deprecated Use ownerKey / auditUserId. */
-    userId?: string;
+    sourceKey?: string;
 }
 
 const VALID_TASK_STATUSES = new Set<string>(Object.values(TaskPlanStatusEnum));
@@ -106,8 +104,7 @@ export class PlanningBlockParser {
         return {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `plan-${crypto.randomUUID()}`,
             ownerKey: context.ownerKey,
-            auditUserId: context.auditUserId ?? context.userId,
-            userId: context.auditUserId ?? context.userId,
+            sourceKey: context.sourceKey,
             title: this.requiredText(record.title, "flyflor_task_plan.title", 160),
             summary: this.requiredText(record.summary, "flyflor_task_plan.summary", 1200),
             status,
@@ -167,8 +164,7 @@ export class PlanningBlockParser {
         return {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `fork-${crypto.randomUUID()}`,
             ownerKey: context.ownerKey,
-            auditUserId: context.auditUserId ?? context.userId,
-            userId: context.auditUserId ?? context.userId,
+            sourceKey: context.sourceKey,
             parentId: this.readNonEmptyString(record.parentId)?.slice(0, 120),
             title: this.requiredText(record.title, "flyflor_context_fork.title", 160),
             summary: this.requiredText(record.summary, "flyflor_context_fork.summary", 1200),
@@ -195,8 +191,7 @@ export class PlanningBlockParser {
         return {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `replay-${crypto.randomUUID()}`,
             ownerKey: context.ownerKey,
-            auditUserId: context.auditUserId ?? context.userId,
-            userId: context.auditUserId ?? context.userId,
+            sourceKey: context.sourceKey,
             kind: this.readReplayKind(record.kind) ?? ReplayRecordKindEnum.DeepThink,
             title: this.requiredText(record.title, "flyflor_replay_record.title", 160),
             summary: this.requiredText(record.summary, "flyflor_replay_record.summary", 1600),

@@ -16,7 +16,7 @@
 
 - 只使用 JSON envelope
 - 只暴露显式上下文入口
-- 不引入 session 容器
+- 不引入 隐式连续性容器
 - transport 元数据只停留在 gateway/raw audit 边界
 - 当前轮上下文只认 `activeScope` / `contextForkId` / `skillNames`
 
@@ -111,7 +111,7 @@
   "payload": {
     "id": "message-1",
     "text": "继续推进这个范围",
-    "chatId": "u-1",
+    "conversationKey": "u-1",
     "threadId": "thread-1",
     "user": {
       "id": "u-1",
@@ -144,10 +144,10 @@
 
 这些字段仍可存在于 message route：
 
-- `chatId`
+- `conversationKey`
 - `threadId`
 - `channel`
-- `user.id`
+- `platform actor id`
 
 但它们的职责仅限于：
 
@@ -159,7 +159,7 @@
 
 - scope
 - fork
-- session
+- handshake
 - memory continuity key
 
 ## `history.list`
@@ -183,8 +183,8 @@
 
 ### 规则
 
-- 不存在 `userId` 参数
-- 不存在 session 参数
+- 不存在 `sourceKey` 参数
+- 不存在 handshake 参数
 - 不存在 scope 参数
 - 返回的是当前 ledger 的全局流水账分页
 
@@ -240,11 +240,11 @@ Rust / thin client 最小读取顺序：
 
 ## Rust 最小接线清单
 
-- 只把 control 协议当成薄控制面，不在客户端重建 session / chat / thread 连续性。
+- 只把 control 协议当成薄控制面，不在客户端重建隐式连续性 / chat / thread 绑定。
 - 发消息时显式传 `context.activeScope` 与 `context.contextForkId`；没有就留空，不做 fallback scope。
 - 结果恢复优先读 `reply.metadata.executiveToolLoop`、`reply.metadata.ask`、`reply.metadata.planning`。
 - 需要账本查询时走 `history.list`，不要把 ledger 原始事件流直接回填成 prompt。
-- transport session 只属于 MCP / HTTP / SSE / stdio 握手层，不属于 Flyflor 认知连续性模型。
+- transport protocol handshake 只属于 MCP / HTTP / SSE / stdio 握手层，不属于 Flyflor 认知连续性模型。
 
 ## 当前最重要的协议口径
 
@@ -252,4 +252,4 @@ Rust / thin client 最小读取顺序：
 - `activeProject` 只是兼容读口
 - `history.list` 是 ledger 查询，不是会话恢复
 - `chat/thread/user/channel` 不再承担认知连续性
-- control 协议只传显式上下文，不允许偷偷重建 session
+- control 协议只传显式上下文，不允许偷偷重建隐式连续性

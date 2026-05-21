@@ -78,14 +78,14 @@ function gwMsg(text: string, id = `msg-${Math.random().toString(36).slice(2, 8)}
         text,
         attachments: [],
         user: { id: "user-inbox-ns", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gwReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }
@@ -163,8 +163,8 @@ describe("No-scope atom ownership", () => {
                 expect(atoms[0]?.projectId).toBe(`codename:${codenameId}`);
 
                 const cn = db
-                    .query("SELECT id, name FROM codenames WHERE user_id = ? AND name = ?")
-                    .get("user-inbox-ns", "fly") as { id: string; name: string } | null;
+                    .query("SELECT id, name FROM codenames WHERE name = ?")
+                    .get("fly") as { id: string; name: string } | null;
                 expect(cn).toBeTruthy();
                 expect(cn!.id).toBe(codenameId);
             } finally {

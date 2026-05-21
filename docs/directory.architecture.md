@@ -48,7 +48,7 @@
 关键约束：
 
 - `src/agent/context` 只认显式 scope/fork，不创建 fallback scope，不按 `channel/chat/thread/user` 恢复工作域。
-- `src/agent/gateway` 不拥有 session 连续性；transport session 只属于外部协议握手。
+- `src/agent/gateway` 不拥有 隐式连续性；transport protocol handshake 只属于外部协议握手。
 - `src/agent/prompts` 只做模板渲染，不内嵌大段模型指令正文。
 
 ## `src/cognitive`
@@ -199,4 +199,4 @@ Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cog
 - `src/context`
 - 第一方 CLI/TUI/channel adapter 主源码面
 
-它们的历史解释价值只留在 `abandon/` 和 `docs/old-docs/`。主源码移除之后，活跃文档必须只描述今天仍然真实存在的 owner。
+它们的历史解释价值只留在 `docs/old-docs/`。主源码移除之后，活跃文档必须只描述今天仍然真实存在的 owner。

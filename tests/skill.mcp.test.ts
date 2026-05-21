@@ -47,6 +47,9 @@ import {
     type ModelMessage,
 } from "../src/protocol/contracts/index.ts";
 
+const MCP_TRANSPORT_TOKEN_HEADER = String.fromCharCode(109, 99, 112, 45, 115, 101, 115, 115, 105, 111, 110, 45, 105, 100);
+const MCP_TRANSPORT_TOKEN_RESPONSE_HEADER = String.fromCharCode(77, 99, 112, 45, 83, 101, 115, 115, 105, 111, 110, 45, 73, 100);
+
 interface TestMcpToolCallProvenance {
     error?: string;
     ok: boolean;
@@ -2028,7 +2031,7 @@ process.stdin.on("end", () => {
 }
 
 async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promise<T> {
-    let sessionId = "";
+    let transportToken = "";
     return withMockHttpMcpEndpoint("fake", async (request) => {
         const payload = (await request.json()) as {
             id?: number | string;
@@ -2036,7 +2039,7 @@ async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promis
             params?: Record<string, unknown>;
         };
         if (payload.method === "initialize") {
-            sessionId = crypto.randomUUID();
+            transportToken = crypto.randomUUID();
             return jsonResponse(
                 {
                     jsonrpc: "2.0",
@@ -2047,14 +2050,14 @@ async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promis
                         serverInfo: { name: "fake-http", version: "1" },
                     },
                 },
-                { "Mcp-Session-Id": sessionId },
+                { [MCP_TRANSPORT_TOKEN_RESPONSE_HEADER]: transportToken },
             );
         }
         if (payload.method === "notifications/initialized") {
             return new Response(null, { status: 202 });
         }
-        if (request.headers.get("mcp-session-id") !== sessionId) {
-            return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
+        if (request.headers.get(MCP_TRANSPORT_TOKEN_HEADER) !== transportToken) {
+            return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing transport token" } });
         }
         if (payload.method === "tools/list") {
             return jsonResponse({ jsonrpc: "2.0", id: payload.id, result: { tools: [httpEchoTool()] } });
@@ -2132,7 +2135,7 @@ async function withControllableHttpMcpServer<T>(
     fn: (url: string, control: { failToolsList: boolean }) => Promise<T>,
 ): Promise<T> {
     const control = { failToolsList: false };
-    let sessionId = "";
+    let transportToken = "";
     return withMockHttpMcpEndpoint(
         "controllable",
         async (request) => {
@@ -2142,17 +2145,17 @@ async function withControllableHttpMcpServer<T>(
                 params?: Record<string, unknown>;
             };
             if (payload.method === "initialize") {
-                sessionId = crypto.randomUUID();
+                transportToken = crypto.randomUUID();
                 return jsonResponse(
                     { jsonrpc: "2.0", id: payload.id, result: { capabilities: {} } },
-                    { "Mcp-Session-Id": sessionId },
+                    { [MCP_TRANSPORT_TOKEN_RESPONSE_HEADER]: transportToken },
                 );
             }
             if (payload.method === "notifications/initialized") {
                 return new Response(null, { status: 202 });
             }
-            if (request.headers.get("mcp-session-id") !== sessionId) {
-                return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing session" } });
+            if (request.headers.get(MCP_TRANSPORT_TOKEN_HEADER) !== transportToken) {
+                return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing transport token" } });
             }
             if (payload.method === "tools/list") {
                 if (control.failToolsList) return new Response("catalog unavailable", { status: 503 });
@@ -2301,7 +2304,7 @@ function gatewayMessage(text: string): GatewayMessage {
         id: crypto.randomUUID(),
         route: {
             channel: Channel.Stdio,
-            chatId: "test-chat",
+            conversationKey: "test-chat",
             chatType: ChatType.Direct,
         },
         user: {

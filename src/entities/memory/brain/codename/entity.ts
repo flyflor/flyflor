@@ -9,7 +9,6 @@ export interface BrainCodenameRow {
     scope_id?: string | null;
     project_id?: string | null;
     use_count: number;
-    user_id: string;
     working_dir: string | null;
 }
 
@@ -23,7 +22,6 @@ export class BrainCodenameModel {
             name: row.name,
             workingDir: row.working_dir ?? undefined,
             description: row.description ?? undefined,
-            userId: row.user_id,
             createdAt: row.created_at,
             lastUsedAt: row.last_used_at,
             useCount: row.use_count,

@@ -251,7 +251,7 @@ describe("Runtime fastRoute cache observability", () => {
                     embedding?: number[];
                     requestId?: string;
                     text: string;
-                    userId: string;
+                    sourceKey: string;
                 }) => Promise<void>;
             };
             dispatchAsyncTurnTasks: (
@@ -371,14 +371,14 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             brain: {
                 listPromptAtomsWindow(
                     date: Date | string,
-                    input: { minScore: number; userId: string },
+                    input: { minScore: number; sourceKey: string },
                 ): Array<{
                     atom: { text: string };
                     score: { total: number };
                 }>;
             };
         };
-        const visible = brain.brain.listPromptAtomsWindow(ctx.now, { minScore: 0.1, userId: "u1" });
+        const visible = brain.brain.listPromptAtomsWindow(ctx.now, { minScore: 0.1, sourceKey: "u1" });
         expect(visible.map((entry) => entry.atom.text)).toContain(
             "Brain atoms are driven by structured memory actions.",
         );
@@ -512,7 +512,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         const memory = new MemoryModule(config, events);
         await memory.recordDebateEpisode({
             ownerKey: "scope:u1",
-            userId: "u1",
+            sourceKey: "u1",
             text: "[debate-goal] x\n[analyst] something",
             embedding: await embedFor(config, "x"),
             requestId: "r1",
@@ -573,13 +573,13 @@ async function embedFor(config: FlyflorConfig, text: string): Promise<number[]> 
 }
 
 function withEmbedding(embedding: number[]): RuntimeContext {
-    return { requestId: crypto.randomUUID(), now: "2026-05-09T02:00:00.000Z", embedding };
+    return { requestId: crypto.randomUUID(), now: "2026-05-09T02:00:00.000Z", embedding, contextForkId: "test-fork" };
 }
 
 function msg(text: string): GatewayMessage {
     return {
         id: crypto.randomUUID(),
-        route: { channel: Channel.Stdio, chatId: "c1", chatType: ChatType.Direct, threadId: "t1" },
+        route: { channel: Channel.Stdio, conversationKey: "c1", chatType: ChatType.Direct, threadId: "t1" },
         user: { id: "u1" },
         text,
         receivedAt: "2026-05-09T02:00:00.000Z",

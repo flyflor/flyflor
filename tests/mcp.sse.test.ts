@@ -33,7 +33,7 @@ function streamServer(server: { onPost: (msg: Record<string, unknown>) => void; 
         start(controller) {
             const push = (chunk: string) => controller.enqueue(encoder.encode(chunk));
             // 先发 endpoint
-            push("event: endpoint\ndata: /messages?sessionId=abc\n\n");
+            push("event: endpoint\ndata: /messages?transportToken=abc\n\n");
             server.onPost = (msg) => {
                 const method = String(msg.method ?? "");
                 const id = typeof msg.id === "number" ? msg.id : undefined;
@@ -163,7 +163,7 @@ describe("MCP SSE legacy transport", () => {
                 start(c) {
                     controller = c;
                     push = (chunk: string) => controller.enqueue(encoder.encode(chunk));
-                    push("event: endpoint\ndata: /messages?sessionId=abc\n\n");
+                    push("event: endpoint\ndata: /messages?transportToken=abc\n\n");
                     server.onPost = (msg: Record<string, unknown>) => {
                         const method = String(msg.method ?? "");
                         const id = typeof msg.id === "number" ? msg.id : undefined;

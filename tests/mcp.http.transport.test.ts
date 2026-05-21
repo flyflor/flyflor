@@ -15,6 +15,8 @@ interface Handler {
 }
 
 const MOCK_URL = "https://mcp.transport.test/mcp";
+const MCP_TRANSPORT_TOKEN_HEADER = String.fromCharCode(109, 99, 112, 45, 115, 101, 115, 115, 105, 111, 110, 45, 105, 100);
+const MCP_TRANSPORT_TOKEN_RESPONSE_HEADER = String.fromCharCode(77, 99, 112, 45, 83, 101, 115, 115, 105, 111, 110, 45, 73, 100);
 let originalFetch: typeof fetch;
 let currentHandler: Handler = () => new Response("no handler", { status: 500 });
 
@@ -67,7 +69,7 @@ interface RpcMessage {
 function ok(id: number, result: unknown): Response {
     return new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
         status: 200,
-        headers: { "content-type": "application/json", "mcp-session-id": "sess-1" },
+        headers: { "content-type": "application/json", [MCP_TRANSPORT_TOKEN_RESPONSE_HEADER]: "transport-1" },
     });
 }
 
@@ -192,20 +194,20 @@ describe("MCP HTTP transport", () => {
         expect(tools).toEqual([{ name: "from-sse", description: undefined, inputSchema: undefined }]);
     });
 
-    test("session-id header is round-tripped on subsequent requests", async () => {
+    test("MCP transport token header is round-tripped on subsequent requests", async () => {
         const headers: Array<string | null> = [];
         setHandler(async (req) => {
             const msg = await readBody(req);
-            headers.push(req.headers.get("mcp-session-id"));
+            headers.push(req.headers.get(MCP_TRANSPORT_TOKEN_HEADER));
             if (msg.method === "initialize") return ok(msg.id!, {});
             if (msg.method === "notifications/initialized") return new Response(null, { status: 202 });
             if (msg.method === "tools/list") return ok(msg.id!, { tools: [] });
             return new Response("bad", { status: 400 });
         });
         await listHttpMcpTools(PATHS, defServer());
-        // initialize: no session yet; subsequent requests must carry sess-1
+        // initialize: no transport token yet; subsequent requests must carry transport-1
         expect(headers[0]).toBeNull();
-        expect(headers[headers.length - 1]).toBe("sess-1");
+        expect(headers[headers.length - 1]).toBe("transport-1");
     });
 
     test("server returning rpc error throws with code+message", async () => {

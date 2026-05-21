@@ -22,7 +22,7 @@
 
 | ID | 决策 | 备注 |
 | --- | --- | --- |
-| D1 | 完全删除 session 概念 | 协议 / 存储 / 提示词禁用 `sessionId / sessionKey / sessionScope / legacySessionKey` |
+| D1 | 完全删除隐式会话概念 | 协议 / 存储 / 提示词禁用 `archived continuity token / key / scope` |
 | D2 | **brain.db 单库**（取代按天 journal） | 单文件 + 时间字段 + 索引 + summary 表 + event/state 分离；月级冷归档为可选优化 |
 | D3 | Atom 作为 episode 的视图字段 | 热相由模型同轮结构化输出派生；**取消冷相离线 refine** |
 | D4 | Codename 接管"工作上下文边界" | 显式 `@xxx` 强绑定；无 `@` 但多候选 → Ask；频次上浮为常驻；可升格 Project |
@@ -93,8 +93,8 @@ CREATE TABLE memory_events (
   id            TEXT PRIMARY KEY,
   ts            INTEGER NOT NULL,
   codename_id   TEXT,
-  user_id       TEXT NOT NULL,
-  channel_id    TEXT,
+  actor_key       TEXT NOT NULL,
+  ingress_surface    TEXT,
   type          TEXT NOT NULL,        -- 'event' | 'thought' | 'action' | 'reflection' | 'continuation-context' | 'ask-answer-pair'
   role          TEXT,                 -- 'user' | 'assistant' | 'system' | 'tool'
   content       TEXT,                 -- JSON：含 atom view 字段 / continuation snapshot / ask 内容
@@ -146,13 +146,13 @@ CREATE TABLE codenames (
   name          TEXT UNIQUE NOT NULL,
   working_dir   TEXT,
   description   TEXT,                  -- 模型同轮生成的一句话摘要
-  user_id       TEXT NOT NULL,
+  actor_key       TEXT NOT NULL,
   created_at    INTEGER,
   last_used_at  INTEGER,
   use_count     INTEGER DEFAULT 0,
   project_id    TEXT                   -- 升格后绑定 projects/<projectId>/
 );
-CREATE INDEX idx_codename_user_used ON codenames(user_id, last_used_at DESC);
+CREATE INDEX idx_codename_user_used ON codenames(actor_key, last_used_at DESC);
 ```
 
 > 关键点：
@@ -308,13 +308,13 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 | 阶段 | 交付 |
 | --- | --- |
 | **R0 文档 + 红线** | ✅ done — 重写 `legacy.architecture.history.md`；`boundaries.md` §11.1 替换 R2、新增 R5/R6/R7；`TODO.md` 主线重排 |
-| R1 brain.db 单库 | ✅ done<br>① ✅ 协议类型 `src/protocol/contracts/brain.ts`（`MemoryEventType` / `MemoryEventStatus` / `MemoryLinkType` / `SummaryRange` 枚举 + 5 个 Record 接口）<br>② ✅ `src/fch/hippocampus/memory/brain.store.ts` `BrainStore` 骨架 + 5 张表 schema + 单测（5/5）<br>③ ✅ LF-R10 后写路径为 brain-first：`memory_events` 是 turn event 权威，prompt atoms 封在 `event.content.atoms`；legacy journal 仅 best-effort 审计副本<br>④ ✅ `flyflor doctor` 表新增 `Brain.db` 行：显示主文件大小 + archive 文件数<br>⑤ ✅ 月级冷归档脚本 `scripts/brain.archive.ts`：把 `status='archived'` 且月份 < cutoff 的 events / states / 当月 summaries 搬到 `archive/brain.YYYY-MM.db`，admin 工具不受 R7 Dream 删除禁令约束（1/1 集成测试）<br>⑥ ✅ prompt recall 由 `BrainStore.listPromptAtomsWindow` 展开 brain events，发 `MemoryBrainPromptRecall` 事件携 `userId`/`hits`/`sinceTs`<br>⑦ ✅ 旧 `journal/` read-only 60 天 grace：`JournalStore.legacyGraceDays`（默认 60）+ `JournalWriteRejectedError`，legacy 写失败不影响 brain event |
+| R1 brain.db 单库 | ✅ done<br>① ✅ 协议类型 `src/protocol/contracts/brain.ts`（`MemoryEventType` / `MemoryEventStatus` / `MemoryLinkType` / `SummaryRange` 枚举 + 5 个 Record 接口）<br>② ✅ `src/fch/hippocampus/memory/brain.store.ts` `BrainStore` 骨架 + 5 张表 schema + 单测（5/5）<br>③ ✅ LF-R10 后写路径为 brain-first：`memory_events` 是 turn event 权威，prompt atoms 封在 `event.content.atoms`；legacy journal 仅 best-effort 审计副本<br>④ ✅ `flyflor doctor` 表新增 `Brain.db` 行：显示主文件大小 + archive 文件数<br>⑤ ✅ 月级冷归档脚本 `scripts/brain.archive.ts`：把 `status='archived'` 且月份 < cutoff 的 events / states / 当月 summaries 搬到 `archive/brain.YYYY-MM.db`，admin 工具不受 R7 Dream 删除禁令约束（1/1 集成测试）<br>⑥ ✅ prompt recall 由 `BrainStore.listPromptAtomsWindow` 展开 brain events，发 `MemoryBrainPromptRecall` 事件携 `actorKey`/`hits`/`sinceTs`<br>⑦ ✅ 旧 `journal/` read-only 60 天 grace：`JournalStore.legacyGraceDays`（默认 60）+ `JournalWriteRejectedError`，legacy 写失败不影响 brain event |
 | R2 Codename 接管 | ✅ done<br>① ✅ `MemoryAction.codename` 字段 + 同轮模型结构化输出（零字符匹配，2/2 单测）<br>② ✅ `MemoryModule.persistCodenamesFromActions` 双写 brain.codenames + `useCount` 自增 + `memory_events.codename_id` tagging + `MemoryCodenameCreated`/`MemoryCodenameTouched` 事件（1/1 集成测试）<br>③ ✅ CLI `flyflor codename list [--user --limit --json]`（`handlers/codename.handler.ts`）<br>④ ✅ 提示词模板（zh + en）追加 codename 字段说明与"绝不要从对话里猜代号"红线<br>⑤ ✅ 升格 ScopeScaffolder：`detectCodenamePromotion`（useCount + age 阈值，零字符匹配）+ `promoteCodename` helper（`agent/project/codename.promote.ts`）+ `MemoryModule.promoteCodename` + 自动 touch 路径触发 + 事件 `MemoryCodenamePromoted` / `MemoryCodenamePromotionFailed`（8/8 单测）<br>⑥ ✅ AtomScore 上浮：`journalAtomFromAction` 增 `codenameUseCount` 入参，`min(1, log2(1+useCount)/4)` 加到 `score_total`，explain 含说明（仅资源指标，零字符匹配）<br>⑦ ✅ CLI 子命令补齐：`flyflor codename promote <name> [--force --json]` + `flyflor codename use <name>`（写 `~/.flyflor/state/active-codename.json` 提示文件）<br>⑧ ✅ 多候选 → Ask 由 R3/R9 的 `reason=codename-ambiguity` 结构化 ask 承接；inbox project 容器收口已由 P2 inbox 三 slice 完成 |
 | R3 Ask 一等公民 | ✅ done<br>① ✅ 协议 `src/protocol/contracts/ask.ts`（`AgentAsk` / `AskReason` × 6 / `AskEventContent` / `AskAnswerPairContent`）<br>② ✅ 解析器 `src/fch/hippocampus/memory/ask.ts`：`<flyflor_agent_ask>` 块只取首个、reason 在枚举内、prompt 非空，dropped 计数（零字符匹配，5/5 单测）<br>③ ✅ `BrainStore.getLatestPendingAsk`（`NOT EXISTS ask-answer-pair` 子事件判定 pending）+ `countAskChainDepth`（沿 `parent_id` 反追，硬上限 32 跳）<br>④ ✅ `MemoryModule.rememberTurn` 第 6 参 `ask?: AgentAsk`，顺序 pendingAskBefore → ask-answer-pair（state=resumed）→ journal → 新 ask 事件（chainDepth = parent+1）；新增 `MemoryModule.peekActiveAsk` 公开方法供 runtime 做 cap 强制<br>⑤ ✅ `buildPrompt` 注入 `[continuation]` 块到 nudges 顶部<br>⑥ ✅ 配置 `tuning.continuation.maxChainDepth=5`；超 cap 发 `MemoryAskChainCapped` 事件<br>⑦ ✅ 4 个新事件 `MemoryAskRecorded` / `MemoryAskAnswered` / `MemoryAskChainCapped` / `MemoryAskMutexViolation`<br>⑧ ✅ `RuntimeModule.generateTurnReply`：解析 ask、`renderAskReplyText`、`reply.metadata.kind: 'ask'\|'reply'`、ask 透传 memory<br>⑨ ✅ **slice D**：`buildBlackboardStalemateAsk`（黑板 NeedsUser → `AgentAsk(reason=blackboard-stalemate)`，仅消费 status + decisions 两个结构化资源指标）+ `replyFromAsk` 短路 LLM、跳过 mcp/memory_actions；`returnDecisionToUser` 不再写 `flyflor-decision-form` 系统消息（只保留结构化 decisions[]），`renderDecisionForm` / `isDecisionFormMessage` 删除；runtime 用户面 cap 强制：模型 ask 而 chainDepth+1 > maxChainDepth 时抛弃 ask 改走 reply、发 `MemoryAskChainCapped` action=`dropped-by-runtime`<br>⑩ ✅ 集成测试 `tests/ask.parse.test.ts`（5/5）+ `tests/ask.wire.test.ts`（3/3）+ `tests/ask.cap.runtime.test.ts`（1/1，runtime cap 强制）；blackboard / memory boundaries 改写为短路 ask 行为（5 测全过）|
 | R4 Continuation Context | ✅ done<br>① 协议 `src/protocol/contracts/continuation.ts`：`ContinuationContextReason` 枚举 4 值 + `ContinuationUserFacing` / `ContinuationSnapshot` / `ContinuationContextEventContent`（含 `continuationCompleted` / `lastKind`）+ `ContinuationDecisionKind` 枚举 + `ContinuationDecision`；`AgentAsk.continuationHint?: { title?, contextHint? }`<br>② `BrainStore.listActiveContinuations` + `hasAskBeenAnswered` + `patchContinuationContent`<br>③ `MemoryModule.recordAskEvent` 自动 sibling continuation；公开 `listActiveContinuations/getContinuation/resumeContinuation/dropContinuation/pinContinuation/recordContinuationFromReason/applyContinuationDecisions`<br>④ 5 个事件 `MemoryContinuationRecorded/Resumed/Dropped/Pinned/DecisionApplied`<br>⑤ `ContinuationTuningConfig.pinHalflifeMultiplier=3.0` + `evidenceWeight={askAnswered:0.85, continuationCompleted:0.75, abandoned:0, default:1}`<br>⑥ CLI `flyflor continuation list/show/resume/drop/pin`<br>⑦ **Prompt 注入**：`templates/prompts/ask.schema.md`(en+zh)，`buildPrompt` 注入 `[continuation-hint]` 块（高分 continuation top-3 + `evidence=` 标签）<br>⑧ **Runtime triggers**：(a) tool-failure：`runtime.persistTurn` 扫 `mcpCallProvenance` 失败聚合；(b) blackboard-cap：enum→enum 映射；(c) process-restart：`InFlightTracker` sentinel + `warmup.recoverProcessRestartContinuations`<br>⑨ **TUI 侧栏**：`Continuations` 页（按 codename 分组 + reason 着色）<br>⑩ **Evidence weight**：4 档（abandoned > continuation-completed > ask-answered > default）参与 `decayScore` 重排序<br>⑪ **Fork/Fresh hint**：`<flyflor_continuation_decisions>` 结构化块 + `parseContinuationDecisions`（dedupe / maxDecisions=8 / 非法 kind 丢弃）+ `applyContinuationDecisions`（resume → resumeContinuation；fork/fresh → patchContinuationContent 写 continuationCompleted=true 切换 evidence 权重 0.75）；runtime `prepareTurn` 解析顺序 memoryActions → continuationDecisions → ask 逐层剥离<br>**测试**：`tests/continuation.wire.test.ts` 13/13 + `tests/continuation.decisions.parse.test.ts` 6/6 + `tests/inflight.tracker.test.ts` 4/4 + `tests/process.restart.continuation.test.ts` 1/1 + `tests/continuation.list.handler.test.ts` 2/2 + `tests/ask.parse.test.ts` 6/6 |
 | R5 生命体能力 | ✅ done<br>**slice A identity 自写 + revert** ✅：协议/parser/MemoryModule API/BrainStore/事件/buildPrompt 注入/CLI/Prompt 模板/runtime parse 链/测试 7+5。<br>**slice B summary worker** ✅：`summary.worker.ts` 纯结构化聚合（type/role/codenameId/ask reason/continuation reason/identityAppends + firstTs/lastTs）；daily=`YYYY-MM-DD` + weekly rolling=`rolling-…-Nd` / calendar=`YYYY-Www`；`minIntervalHours` 资源指标短路；`MemoryModule.runSummaryOnce`；`BackgroundScheduler.summarySweeper` 6h；事件 `MemorySummaryWritten`；测试 6+2。<br>**slice C Dream reconsolidation** ✅：`DreamActionKind.Reconsolidation` 第 4 类动作（winner=left/right/merge + mergedSummary/Symbols/scopeNote）；`SurrealGraphStore.applyReconsolidation`（winner UPDATE → loser `supersededBy` → RELATE `supersedes`）；资源指标短路（contradictionCount≥1 或 cosine≥0.85）；事件 `MemoryReconsolidated`；Prompt 模板 (en+zh) 同步；测试 16。<br>**slice D Idle 实装** ✅：① `src/fch/hippocampus/memory/idle.supervisor.ts`：per-user `lastInputAt` + `mode` 状态机；`touch()` 注册/唤醒、`sweepOnce()` 把超过 `idleMinutes` 的 Chat 用户切到 Idle；零字符匹配，只用 `now - lastInputAt` 资源指标；② `MemoryModule.idle` 实例 + `rememberTurn` 调 `touch`；公开 `runtimeModeOf` / `sweepDormantOnce` / `dormantSnapshot`；③ `BackgroundScheduler.dormantSweeper` + `dormantIntervalMs`（默认 60s）+ unref + stop 清理；④ 事件 `RuntimeModeEntered` / `RuntimeModeAwakened`；⑤ 测试 `tests/idle.supervisor.test.ts` 5/5 + `tests/idle.wire.test.ts` 2/2；阶段测试通过。 |
 | R6 Dream 收紧 | ✅ done — `DreamWorkerImpl.runOnce` candidates.length===0 短路（0 LLM、0 graph 写）；候选源已资源指标分桶（drift-repair / recall extremes / contradiction-pair cosine≥0.78 / reconsolidation contradictionCount≥1 或 cosine≥0.85）；新增 `tests/dream.zero.write.test.ts` 3 项覆盖 |
-| R7 清理 | ✅ done — `legacySessionKey` 字段 / `flyflor-decision-form` 用户可见系统消息均已无正向代码引用，仅在测试中作为 negative assertion 出现；`MemoryTuningConfig.session` 字段已删；`status.ts` / `tests/config.memory.tuning.test.ts` 引用清掉；删废弃 `src/command/tui/native/cli.entry.ts` + 导出；注释 (`memory.atom.ts`) 提及"旧 journal 分文件路径"统一改为"brain.db 单库"；legacy journal prompt path 已由 LF-R10 下线 |
+| R7 清理 | ✅ done — `archivedContinuityKey` 字段 / `flyflor-decision-form` 用户可见系统消息均已无正向代码引用，仅在测试中作为 negative assertion 出现；`MemoryTuningConfig archived continuity field` 字段已删；`status.ts` / `tests/config.memory.tuning.test.ts` 引用清掉；删废弃 `src/command/tui/native/cli.entry.ts` + 导出；注释 (`memory.atom.ts`) 提及"旧 journal 分文件路径"统一改为"brain.db 单库"；legacy journal prompt path 已由 LF-R10 下线 |
 | R10 brain.db 权威源切换 | ✅ done — prompt atom recall 从 `brain_events.content.atoms` 展开；turn event 写入改为 brain-first；legacy journal 仅 best-effort audit；Continuation Context 保持独立 `[continuation-hint]` 分支，不被普通 atom recall 吞掉，`resume` / `fork` / `fresh` 仍可让分支回归主线 |
 | R11 Behavior Snapshot | ✅ done — 每轮写 `behavior-snapshot`，后续用户纠正写 `behavior-correction`；ask / ask-answer / reply metadata 共用 `snapshotId`，用于回放行为原因 |
 | R12 提示词优先级冲突表 | ✅ done — `behavior.priority.md` 注入 runtime system；模型看到的是可执行来源优先级和 ask 多问题结构，不暴露路线编号或内部隐喻 |
@@ -334,7 +334,7 @@ Dream 仍负责四类动作（drift-repair / recall-reinforce / contradiction-au
 
 ## 风险记录
 
-1. **brain.db 单文件膨胀**：live 记忆坚持单 `brain.db`，不拆按日 / 按项目 shard；R14 已接入月级只读冷归档与最小间隔 vacuum；热路径通过 `user_id + type + ts` / `parent_id + type` 复合索引和 query-plan 测试守住。仍需观测首批 30 天增长曲线，doctor 表已展示 `brain.db size`、核心表行数与 archive 文件数。
+1. **brain.db 单文件膨胀**：live 记忆坚持单 `brain.db`，不拆按日 / 按项目 shard；R14 已接入月级只读冷归档与最小间隔 vacuum；热路径通过 `actor_key + type + ts` / `parent_id + type` 复合索引和 query-plan 测试守住。仍需观测首批 30 天增长曲线，doctor 表已展示 `brain.db size`、核心表行数与 archive 文件数。
 2. **Continuation 链深度爆炸**：硬上限 `continuation.maxChainDepth=5` 兜底；超过时落 `excessive_clarification_loop` 反馈给 Dream。
 3. **Ask 触发过频 → 用户疲劳**：不设硬预算，仅在连续 N 轮无任务推进时事件告警 `AskLoopSuspected`；用户主动反馈是最终校正。
 4. **identity 自写漂移**：每条 append 必须带 `atomIds` 证据链，Dream reconsolidation 必须能复盘合并 / 收回 identity 行。

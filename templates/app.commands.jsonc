@@ -82,14 +82,14 @@
             "match": { "slash": ["/clear", "/reset"] },
             "run": { "type": "builtin", "action": "clear" },
             "detail": "clear screen",
-            "group": "session",
+            "group": "runtime",
             "enabled": true
         },
         {
             "match": { "slash": ["/exit", "/quit"] },
             "run": { "type": "builtin", "action": "exit" },
             "detail": "quit",
-            "group": "session",
+            "group": "runtime",
             "enabled": true
         },
 

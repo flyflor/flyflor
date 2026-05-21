@@ -69,12 +69,12 @@ afterEach(() => {
 });
 
 describe("BackgroundScheduler idle-trigger", () => {
-    test("noteUserTurn fires dream after idle threshold elapses", async () => {
+    test("noteOwnerTurn fires dream after idle threshold elapses", async () => {
         const dream = new FakeDream();
         const sched = build(dream, 20);
         ALL.push(sched);
-        sched.noteUserTurn("alice");
-        expect(sched.activeUsers()).toBe(1);
+        sched.noteOwnerTurn("alice");
+        expect(sched.activeOwners()).toBe(1);
         await tick(50);
         expect(dream.calls).toHaveLength(1);
         expect(dream.calls[0]?.ownerKey).toBe("alice");
@@ -84,11 +84,11 @@ describe("BackgroundScheduler idle-trigger", () => {
         const dream = new FakeDream();
         const sched = build(dream, 30);
         ALL.push(sched);
-        sched.noteUserTurn("bob");
+        sched.noteOwnerTurn("bob");
         await tick(15);
-        sched.noteUserTurn("bob");
+        sched.noteOwnerTurn("bob");
         await tick(15);
-        sched.noteUserTurn("bob");
+        sched.noteOwnerTurn("bob");
         await tick(15);
         expect(dream.calls).toHaveLength(0);
         await tick(40);
@@ -99,18 +99,18 @@ describe("BackgroundScheduler idle-trigger", () => {
         const dream = new FakeDream();
         const sched = build(dream, 0);
         ALL.push(sched);
-        sched.noteUserTurn("c");
+        sched.noteOwnerTurn("c");
         await tick(50);
         expect(dream.calls).toHaveLength(0);
     });
 
-    test("dream not provided → noteUserTurn is silent (no throw, no calls)", async () => {
+    test("dream not provided → noteOwnerTurn is silent (no throw, no calls)", async () => {
         const sched = build(undefined, 10);
         ALL.push(sched);
-        expect(() => sched.noteUserTurn("nobody")).not.toThrow();
+        expect(() => sched.noteOwnerTurn("nobody")).not.toThrow();
         await tick(30);
         // no dream → nothing to verify but no crash
-        expect(sched.activeUsers()).toBe(1);
+        expect(sched.activeOwners()).toBe(1);
     });
 
     test("dream.runOnce throwing does not propagate or break future triggers", async () => {
@@ -118,12 +118,12 @@ describe("BackgroundScheduler idle-trigger", () => {
         dream.shouldThrow = true;
         const sched = build(dream, 15);
         ALL.push(sched);
-        sched.noteUserTurn("x");
+        sched.noteOwnerTurn("x");
         await tick(40);
         expect(dream.calls).toHaveLength(1);
         // second cycle still works after error
         dream.shouldThrow = false;
-        sched.noteUserTurn("x");
+        sched.noteOwnerTurn("x");
         await tick(40);
         expect(dream.calls).toHaveLength(2);
     });
@@ -131,17 +131,17 @@ describe("BackgroundScheduler idle-trigger", () => {
     test("stop() clears pending idle timers (no fire after stop)", async () => {
         const dream = new FakeDream();
         const sched = build(dream, 25);
-        sched.noteUserTurn("y");
+        sched.noteOwnerTurn("y");
         sched.stop();
         await tick(50);
         expect(dream.calls).toHaveLength(0);
     });
 
-    test("[chaos] 200 rapid noteUserTurn calls on same user keep exactly one pending timer", async () => {
+    test("[chaos] 200 rapid noteOwnerTurn calls on same owner keep exactly one pending timer", async () => {
         const dream = new FakeDream();
         const sched = build(dream, 30);
         ALL.push(sched);
-        for (let i = 0; i < 200; i++) sched.noteUserTurn("flood");
+        for (let i = 0; i < 200; i++) sched.noteOwnerTurn("flood");
         await tick(60);
         // 即使 200 次重置，最终只触发一次 dream（最后一次的 timer 生效）。
         expect(dream.calls).toHaveLength(1);
@@ -151,9 +151,9 @@ describe("BackgroundScheduler idle-trigger", () => {
         const dream = new FakeDream();
         const sched = build(dream, 20);
         ALL.push(sched);
-        sched.noteUserTurn("u1");
-        sched.noteUserTurn("u2");
-        sched.noteUserTurn("u3");
+        sched.noteOwnerTurn("u1");
+        sched.noteOwnerTurn("u2");
+        sched.noteOwnerTurn("u3");
         await tick(60);
         const users = dream.calls.map((c) => c.ownerKey).sort();
         expect(users).toEqual(["u1", "u2", "u3"]);
@@ -163,15 +163,15 @@ describe("BackgroundScheduler idle-trigger", () => {
         const dream = new FakeDream();
         const sched = build(dream, 10);
         ALL.push(sched);
-        sched.noteUserTurn("");
+        sched.noteOwnerTurn("");
         // @ts-expect-error null
-        sched.noteUserTurn(null);
+        sched.noteOwnerTurn(null);
         // @ts-expect-error number
-        sched.noteUserTurn(123);
-        expect(sched.activeUsers()).toBe(0);
+        sched.noteOwnerTurn(123);
+        expect(sched.activeOwners()).toBe(0);
     });
 
-    test("[chaos] noteUserTurn during in-flight dream skips duplicate fire", async () => {
+    test("[chaos] noteOwnerTurn during in-flight dream skips duplicate fire", async () => {
         const dream = new FakeDream();
         // 让 runOnce 慢一点，模拟"还没跑完又来一次"
         let slow = true;
@@ -185,17 +185,17 @@ describe("BackgroundScheduler idle-trigger", () => {
         };
         const sched = build(dream, 15);
         ALL.push(sched);
-        sched.noteUserTurn("z");
+        sched.noteOwnerTurn("z");
         await tick(20);
         // 第一次正在 in-flight
         expect(dream.calls).toHaveLength(1);
-        sched.noteUserTurn("z");
+        sched.noteOwnerTurn("z");
         await tick(20);
         // 第二次 timer 命中时第一次还没跑完 → dreamBusy 短路；calls 仍 1
         expect(dream.calls).toHaveLength(1);
         // 等第一次跑完
         await tick(40);
-        sched.noteUserTurn("z");
+        sched.noteOwnerTurn("z");
         await tick(40);
         expect(dream.calls.length).toBeGreaterThanOrEqual(2);
     });

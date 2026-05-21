@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 const ROOT_TODO_PATH = join(import.meta.dir, "..", "TODO.md");
@@ -10,11 +10,11 @@ describe("TODO status", () => {
         expect(await exists(ROOT_TODO_PATH)).toBe(true);
         const todo = await readFile(ROOT_TODO_PATH, "utf8");
 
+        expect(todo).toContain("Current Handoff");
+        expect(todo).toContain("Sealed Contract");
+        expect(todo).toContain("Next Work");
         expect(todo).toContain("Cognitive-Executive-Agent Architecture");
-        expect(todo).toContain("R7 Surface Amputation");
-        expect(todo).toContain("R8 Vascular Freeze");
-        expect(todo).toContain("R9 Computer Exoskeleton");
-        expect(todo).toContain("R10 Long-Horizon Loop");
+        expect(todo).toContain("Context assembly is `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`");
         expect(todo).toContain("gateway");
         expect(todo).toContain("WebSocket");
         expect(todo).toContain("Rust");
@@ -58,10 +58,10 @@ describe("TODO status", () => {
         expect(directory).toContain("`src/types`");
     });
 
-    test("abandon remains backup-only and not a mainline runtime dependency", async () => {
-        const abandonReadme = await readFile(join(import.meta.dir, "..", "abandon", "README.md"), "utf8");
-        expect(abandonReadme).toContain("废弃代码备份");
-        expect(abandonReadme).toContain("不是兼容层");
+    test("retired shell backup directory is removed from the repository", async () => {
+        const rootEntries = await readdir(join(import.meta.dir, ".."));
+        const retiredDirectory = ["aba", "ndon"].join("");
+        expect(rootEntries).not.toContain(retiredDirectory);
     });
 
     test("roadmap and todo stay aligned on the sealed Bun kernel state", async () => {
@@ -71,8 +71,8 @@ describe("TODO status", () => {
             readFile(README_PATH, "utf8"),
         ]);
 
-        expect(todo).toContain("kernel:seal");
-        expect(todo).toContain("已在真实 provider 下跑通");
+        expect(todo).toContain("Last sealed validation");
+        expect(todo).toContain("820 passing tests");
         expect(roadmap).toContain("Bun 内核封板已完成");
         expect(roadmap).toContain("0 漂移维护");
         expect(roadmap).toContain("TODO.md");

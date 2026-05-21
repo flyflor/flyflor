@@ -88,11 +88,6 @@ export class SummaryWorker {
         return result;
     }
 
-    /** @deprecated Use runOnceForOwner. */
-    public runOnceForUser(userId: string, nowMs = this.opts.now()): SummaryRunResult {
-        return this.runOnceForOwner(userId, nowMs);
-    }
-
     private writeBucket(
         ownerKey: string,
         range: typeof SummaryRange[keyof typeof SummaryRange],

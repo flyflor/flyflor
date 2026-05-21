@@ -145,8 +145,6 @@ export class SQLiteMemoryStore extends SQLiteComponent {
                 content TEXT NOT NULL,
                 scope TEXT NOT NULL,
                 subject_id TEXT,
-                channel TEXT,
-                chat_id TEXT,
                 importance REAL NOT NULL DEFAULT 0.5,
                 confidence REAL NOT NULL DEFAULT 1.0,
                 created_at TEXT NOT NULL,
@@ -190,6 +188,7 @@ export class SQLiteMemoryStore extends SQLiteComponent {
             );
         `);
         this.migrateOfferTables(database);
+        this.migrateMemoryRecords(database);
         database.exec("CREATE INDEX IF NOT EXISTS idx_candidates_status ON memory_candidates(status, created_at)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_memories_scope_updated ON memories(scope, updated_at DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_memories_subject ON memories(subject_id, updated_at DESC)");
@@ -216,22 +215,10 @@ export class SQLiteMemoryStore extends SQLiteComponent {
     private migrateOfferTables(database: Database): void {
         this.migrateLegacyPendingScopeOfferTable(database);
         if (this.tableExists(database, "pending_scope_offer")) {
-            const hasOwnerKey = this.tableHasColumn(database, "pending_scope_offer", "owner_key");
-            const hasUserId = this.tableHasColumn(database, "pending_scope_offer", "user_id");
-            if (!hasOwnerKey && hasUserId) {
-                database.exec("ALTER TABLE pending_scope_offer RENAME COLUMN user_id TO owner_key;");
-            }
             const hasScopeId = this.tableHasColumn(database, "pending_scope_offer", "scope_id");
             const hasProjectId = this.tableHasColumn(database, "pending_scope_offer", "project_id");
             if (!hasScopeId && hasProjectId) {
                 database.exec("ALTER TABLE pending_scope_offer RENAME COLUMN project_id TO scope_id;");
-            }
-        }
-        if (this.tableExists(database, "pending_skill_offer")) {
-            const hasOwnerKey = this.tableHasColumn(database, "pending_skill_offer", "owner_key");
-            const hasUserId = this.tableHasColumn(database, "pending_skill_offer", "user_id");
-            if (!hasOwnerKey && hasUserId) {
-                database.exec("ALTER TABLE pending_skill_offer RENAME COLUMN user_id TO owner_key;");
             }
         }
     }
@@ -241,10 +228,14 @@ export class SQLiteMemoryStore extends SQLiteComponent {
             return;
         }
 
-        const ownerColumn = this.tableHasColumn(database, "pending_project_offer", "owner_key") ? "owner_key" : "user_id";
+        const ownerColumn = "owner_key";
         const scopeColumn = this.tableHasColumn(database, "pending_project_offer", "scope_id") ? "scope_id" : "project_id";
         this.assertKnownMemoryColumn(ownerColumn);
         this.assertKnownMemoryColumn(scopeColumn);
+        if (!this.tableHasColumn(database, "pending_project_offer", ownerColumn)) {
+            database.exec("DROP TABLE pending_project_offer;");
+            return;
+        }
         database.exec(`
             INSERT OR REPLACE INTO pending_scope_offer (
                 owner_key, scope_id, title, goal, trigger_kind, evidence_score,
@@ -258,9 +249,56 @@ export class SQLiteMemoryStore extends SQLiteComponent {
         database.exec("DROP TABLE pending_project_offer;");
     }
 
+    private migrateMemoryRecords(database: Database): void {
+        if (!this.tableExists(database, "memories")) return;
+        const columns = database.query("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+        const canonical = [
+            "id",
+            "kind",
+            "content",
+            "scope",
+            "subject_id",
+            "importance",
+            "confidence",
+            "created_at",
+            "updated_at",
+            "metadata_json",
+        ];
+        const names = columns.map((column) => column.name);
+        const hasOnlyCanonicalColumns = names.length === canonical.length && canonical.every((name) => names.includes(name));
+        if (hasOnlyCanonicalColumns) return;
+        database.exec(`
+            CREATE TABLE IF NOT EXISTS memories_next (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                content TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                subject_id TEXT,
+                importance REAL NOT NULL DEFAULT 0.5,
+                confidence REAL NOT NULL DEFAULT 1.0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                metadata_json TEXT
+            );
+        `);
+        database.exec(`
+            INSERT OR REPLACE INTO memories_next (
+                id, kind, content, scope, subject_id, importance, confidence,
+                created_at, updated_at, metadata_json
+            )
+            SELECT
+                id, kind, content, scope, subject_id, importance, confidence,
+                created_at, updated_at, metadata_json
+            FROM memories;
+        `);
+        database.exec("DROP TABLE memories;");
+        database.exec("ALTER TABLE memories_next RENAME TO memories;");
+    }
+
     private assertKnownMemoryTable(table: string): void {
         if (
             table !== "memory_candidates" &&
+            table !== "memories" &&
             table !== "pending_scope_offer" &&
             table !== "pending_project_offer" &&
             table !== "pending_skill_offer"
@@ -270,7 +308,7 @@ export class SQLiteMemoryStore extends SQLiteComponent {
     }
 
     private assertKnownMemoryColumn(column: string): void {
-        if (column !== "owner_key" && column !== "user_id" && column !== "scope_id" && column !== "project_id") {
+        if (column !== "owner_key" && column !== "scope_id" && column !== "project_id") {
             throw new Error(`Unknown memory column: ${column}`);
         }
     }

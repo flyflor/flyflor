@@ -401,10 +401,11 @@ describe("chaos: BrainStore AtomScore gate", () => {
                 }
                 // BrainStore persists atoms inside the authoritative turn event; no sidecar files are involved.
                 store.appendEvent({
+                    ownerKey: "scope:test",
                     id: episodeId,
                     ts,
-                    userId: "u-chaos",
-                    channelId: "stdio",
+                    sourceKey: "u-chaos",
+                    sourceSurface: "stdio",
                     codenameId: "p-chaos",
                     type: MemoryEventType.Event,
                     role: ModelRole.User,
@@ -416,7 +417,7 @@ describe("chaos: BrainStore AtomScore gate", () => {
                 days: 7,
                 limit: 100,
                 minScore: 0.7,
-                userId: "u-chaos",
+                ownerKey: "scope:test",
             });
 
             expect(visible.length).toBeLessThanOrEqual(100);
@@ -667,7 +668,7 @@ describe("chaos: control envelope and payload parsing", () => {
     test("gateway message input keeps only structured fields from chaos payloads", () => {
         const payload = readGatewayControlMessageInput({
             text: "hello",
-            chatId: "chat-1",
+            conversationKey: "chat-1",
             user: { id: "u-1", displayName: "User" },
             context: {
                 activeScope: {
@@ -708,7 +709,7 @@ describe("chaos: control envelope and payload parsing", () => {
             type: RuntimeEventType.MemoryTurnRecorded,
             at: "2026-05-20T00:00:00.000Z",
             requestId: "req-1",
-            payload: { userId: "u-1" },
+            payload: { sourceKey: "u-1" },
         };
         expect(shouldDeliverGatewayControlEvent(evt, [{ requestId: "req-1" }])).toBe(true);
         expect(shouldDeliverGatewayControlEvent(evt, [{ requestId: "other" }])).toBe(false);
@@ -721,8 +722,8 @@ function brainAtomWrite(id: string, episodeId: string, total: number, createdAt:
     const atom: MemoryAtom = {
         id,
         episodeIds: [episodeId],
-        userId: "u-chaos",
-        channelId: "stdio",
+        sourceKey: "u-chaos",
+        sourceSurface: "stdio",
         projectId: "p-chaos",
         role: ModelRole.User,
         task: "chaos",

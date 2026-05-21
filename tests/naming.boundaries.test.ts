@@ -74,7 +74,7 @@ describe("repository naming boundary", () => {
         const rootDocs = ["AGENTS.md", "README.md", "TODO.md"].map((file) => join(REPO_ROOT, file));
         const files = [
             ...rootDocs,
-            ...(await Promise.all(["abandon", "docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
+            ...(await Promise.all(["docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
         ]
             .map((file) => relative(REPO_ROOT, file))
             .filter((file) => file.endsWith(".md") && !file.endsWith(".zh.cn.md"));
@@ -95,7 +95,7 @@ describe("repository naming boundary", () => {
         const rootDocs = ["AGENTS.zh.cn.md", "README.zh.cn.md", "TODO.zh.cn.md"].map((file) => join(REPO_ROOT, file));
         const files = [
             ...rootDocs,
-            ...(await Promise.all(["abandon", "docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
+            ...(await Promise.all(["docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
         ]
             .map((file) => relative(REPO_ROOT, file))
             .filter((file) => file.endsWith(".zh.cn.md"));

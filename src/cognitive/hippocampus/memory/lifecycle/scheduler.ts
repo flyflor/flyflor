@@ -607,26 +607,6 @@ export class BackgroundScheduler {
         return [...this.owners];
     }
 
-    /** 兼容旧调用方；新代码应使用 trackOwner。 */
-    public trackUser(userId: string): void {
-        this.trackOwner(userId);
-    }
-
-    /** 兼容旧调用方；新代码应使用 noteOwnerTurn。 */
-    public noteUserTurn(userId: string): void {
-        this.noteOwnerTurn(userId);
-    }
-
-    /** 兼容旧调用方；新代码应使用 activeOwners。 */
-    public activeUsers(): number {
-        return this.activeOwners();
-    }
-
-    /** 兼容旧调用方；新代码应使用 trackedOwners。 */
-    public trackedUsers(): string[] {
-        return this.trackedOwners();
-    }
-
     /** 后台调度状态快照（CLI / 诊断使用，不抛错）。 */
     public snapshot(): {
         dreamEnabled: boolean;

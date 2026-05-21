@@ -167,7 +167,7 @@ export interface ChannelConfigs {
     matrix: {
         accessToken?: string;
         homeserverUrl?: string;
-        userId?: string;
+        accountHandle?: string;
     };
     msgraphWebhook?: {
         clientState?: SecretRef | string;
@@ -244,12 +244,12 @@ export interface ChannelConfigs {
                 pollIntervalMs?: number;
                 syncBuf?: string;
                 token?: SecretRef | string;
-                userId?: string;
+                accountHandle?: string;
             }
         >;
         syncBuf?: string;
         token?: SecretRef | string;
-        userId?: string;
+        accountHandle?: string;
     };
     yuanbao?: {
         accessToken?: SecretRef | string;

@@ -82,14 +82,14 @@ function gatewayMessage(text: string, id: string, receivedAt: string): GatewayMe
         text,
         attachments: [],
         user: { id: "history-user", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-history" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-history" },
     };
 }
 
 function gatewayReply(text: string, id: string): GatewayReply {
     return {
         messageId: id,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-history" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-history" },
         text,
     };
 }
@@ -137,10 +137,11 @@ describe("TUI chat history source", () => {
         try {
             const brain = (memory as unknown as { brain: BrainStore }).brain;
             brain.appendEvent({
+                ownerKey: "scope:test",
                 id: "bad-history-event",
                 ts: Date.parse("2026-05-14T00:00:04.000Z"),
-                userId: "history-user",
-                channelId: Channel.Stdio,
+                sourceKey: "history-user",
+                sourceSurface: Channel.Stdio,
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
                 content: { userText: "missing assistant text" },
@@ -171,8 +172,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "plan-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             title: "Plan",
                             summary: "Summary",
                             status: TaskPlanStatus.Planned,
@@ -188,8 +188,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "replay-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             kind: ReplayRecordKind.DeepThink,
                             title: "Replay",
                             summary: "Replay summary",
@@ -238,8 +237,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "fork-deep-think-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             title: "电脑控制规划",
                             summary: "为外骨骼控制任务拆出单独上下文分支",
                             continuitySummary: "只保留电脑控制协议、权限和执行计划",
@@ -253,8 +251,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "plan-deep-think-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             title: "电脑控制长线方案",
                             summary: "先探测环境，再执行动作，最后回收状态",
                             status: TaskPlanStatus.InProgress,
@@ -274,8 +271,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "replay-deep-think-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             kind: ReplayRecordKind.DeepThink,
                             title: "深度思考：电脑控制计划",
                             summary: "需要长线规划、ask 收口和上下文分支",
@@ -331,8 +327,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "plan-blackboard-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             title: "协议收口",
                             summary: "收敛 WS 控制面、事件面和恢复面",
                             status: TaskPlanStatus.Done,
@@ -353,8 +348,7 @@ describe("TUI chat history source", () => {
                         {
                             id: "replay-blackboard-1",
                             ownerKey: "scope:history",
-                            auditUserId: "history-user",
-                            userId: "history-user",
+                sourceKey: "u1",
                             kind: ReplayRecordKind.Blackboard,
                             title: "Blackboard Converged",
                             summary: "黑板已收敛到单一 WS 协议建议",

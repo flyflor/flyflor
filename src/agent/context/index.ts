@@ -1,6 +1,8 @@
 export {
     ContextScopeComponent,
     continuityOwnerKey,
+    sourceKeyForMessage,
+    sourceSurfaceForMessage,
     type ContextScopeStorePaths,
     type ExplicitScopeSeed,
 } from "./component.ts";

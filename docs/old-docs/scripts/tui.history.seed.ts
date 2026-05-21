@@ -7,7 +7,7 @@ import { Channel, ChatType, MemoryEventType } from "../src/protocol/contracts/in
 interface SeedOptions {
     count: number;
     spacingMs: number;
-    userId: string;
+    actorKey: string;
 }
 
 async function main(): Promise<void> {
@@ -23,8 +23,8 @@ async function main(): Promise<void> {
             brain.appendEvent({
                 id: eventId,
                 ts,
-                userId: options.userId,
-                channelId: Channel.Stdio,
+                actorKey: options.actorKey,
+                ingressSurface: Channel.Stdio,
                 type: MemoryEventType.Event,
                 content: {
                     assistantText: buildAssistantText(i),
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
             });
         }
         process.stdout.write(
-            `Seeded ${options.count} fake history turns for ${options.userId} at ${config.paths.home}/brain.db\n`,
+            `Seeded ${options.count} fake history turns for ${options.actorKey} at ${config.paths.home}/brain.db\n`,
         );
     } finally {
         brain.close();
@@ -45,8 +45,8 @@ async function main(): Promise<void> {
 function parseArgs(argv: string[]): SeedOptions {
     const count = parseInteger(flagValue(argv, "--count"), 1000, 1);
     const spacingMs = parseInteger(flagValue(argv, "--spacing-ms"), 15_000, 1_000);
-    const userId = flagValue(argv, "--user") ?? "human";
-    return { count, spacingMs, userId };
+    const actorKey = flagValue(argv, "--user") ?? "human";
+    return { count, spacingMs, actorKey };
 }
 
 function flagValue(argv: string[], flag: string): string | undefined {

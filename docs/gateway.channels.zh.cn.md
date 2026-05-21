@@ -35,7 +35,7 @@
 - Gateway 只做 transport，不做业务语义判断。
 - 事件统一来自 `src/events`。
 - turn 输入统一经 `gateway.message.send` 进入 Runtime。
-- transport session 只属于外部协议握手，不属于 Flyflor 的认知连续性模型。
+- transport protocol handshake 只属于外部协议握手，不属于 Flyflor 的认知连续性模型。
 
 ## 它负责什么
 
@@ -48,8 +48,8 @@
 
 ## 它不负责什么
 
-- 不恢复 session
-- 不按 `channel/chat/thread/user` 建立隐式上下文
+- 不恢复 handshake
+- 不按 `sourceSurface/conversationKey/thread/user` 建立隐式上下文
 - 不拥有记忆召回
 - 不拥有黑板 lease 语义
 - 不拥有模型业务判断
@@ -68,7 +68,7 @@
 
 - `activeProject`
 
-但兼容字段进入 runtime 后必须立即标准化为 `activeScope`。Gateway 不能偷偷从 `chatId`、`threadId`、`channel`、`user.id` 推断当前 scope。
+但兼容字段进入 runtime 后必须立即标准化为 `activeScope`。Gateway 不能偷偷从 `conversationKey`、`threadId`、`channel`、`platform actor id` 推断当前 scope。
 
 ## WS 语义
 
@@ -108,9 +108,9 @@ interface GatewayMessage {
 
 - Rust CLI / Gateway / TUI 只需要实现 `/ws` 客户端或服务端对接。
 - 不应依赖 Bun 私有 runtime 类。
-- 不应依赖 `abandon/` 里的任何实现。
+- 不应依赖已移除的旧实现。
 - 只应依赖 `docs/control.protocol.md`、`docs/ws.doc.md` 与 `src/protocol/control/*`。
 
 ## 退役说明
 
-旧的第一方 channel adapter、CLI、TUI、gateway body 已移到 `abandon/` 作为备份。它们不是主线兼容层，也不是运行时依赖。
+旧的第一方 channel adapter、CLI、TUI、gateway body 已移除。它们不是主线兼容层，也不是运行时依赖。

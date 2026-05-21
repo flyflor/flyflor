@@ -78,12 +78,12 @@ function gwMsg(text: string, msgId = `m-${Math.random().toString(36).slice(2, 8)
         text,
         attachments: [],
         user: { id: "user-eq03", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-eq03" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-eq03" },
     };
 }
 
 function ctx(): RuntimeContext {
-    return { requestId: `req-${Math.random().toString(36).slice(2, 8)}`, now: new Date().toISOString(), embedding: [] };
+    return { requestId: `req-${Math.random().toString(36).slice(2, 8)}`, now: new Date().toISOString(), embedding: [], contextForkId: "test-fork" };
 }
 
 class AskingModel implements ModelClient {
@@ -131,7 +131,7 @@ describe("EQ-03 — runtime keeps EQ as a tone-only hint", () => {
                     {},
                     askA,
                 );
-                expect(memory.peekActiveAsk("user-eq03")?.chainDepth).toBe(1);
+                expect(memory.peekActiveAsk("fork:test-fork")?.chainDepth).toBe(1);
 
                 const workers = new WorkerManager(events);
                 const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);

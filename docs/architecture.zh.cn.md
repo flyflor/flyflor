@@ -26,7 +26,7 @@ Flyflor 当前主线是一个 Bun + TypeScript 智能体内核。它的运行模
 - 本地 `stdio` chat 调试入口
 - 最小 Gateway：`/ws`、`/health`、`/channels`
 
-第一方 Bun CLI/TUI/channel adapter 已退出主线，只保留在 `abandon/` 或 `docs/old-docs/` 作为历史材料。
+第一方 Bun CLI/TUI/channel adapter 已退出主线，只保留在 `docs/old-docs/` 作为历史材料。
 
 ## 两张平面
 
@@ -69,7 +69,7 @@ flowchart LR
 
 - 不创建 fallback scope
 - 不创建 inbox scope
-- 不按 `channel/chat/thread/user` 自动恢复工作域
+- 不按 `sourceSurface/conversationKey/thread/user` 自动恢复工作域
 - 只装配 `Memory + Crystal + explicit fork`
 
 ## Ledger/query plane
@@ -120,11 +120,11 @@ Flyflor 现在只承认一个显式工作域概念：`Scope`。
 
 不再承担连续性容器职责的字段：
 
-- `userId`
-- `channelId`
-- `chatId`
+- `sourceKey`
+- `sourceSurface`
+- `conversationKey`
 - `threadId`
-- transport session
+- transport protocol handshake
 
 这些字段仍可存在于 gateway/raw audit 边界，但不再定义“当前上下文是谁”。
 
@@ -157,10 +157,10 @@ Flyflor 现在只承认一个显式工作域概念：`Scope`。
 
 真正要清理的是残留的隐式绑定：
 
-- `(channel, chatId, user)` 式快照键
+- `(sourceSurface, conversationKey, actor)` 式快照键
 - transport tuple 充当 blackboard lease key
 - fallback scope / inbox scope 默认兜底
-- `userId` 进入核心认知分区
+- `sourceKey` 进入核心认知分区
 - 把 `brain.db` 当成 prompt 本体
 
 换句话说，这次重构不是“少一点约束”，而是“让实现终于和设计一致”。

@@ -264,7 +264,7 @@ describe("NullDreamWorker", () => {
 describe("DreamWorkerImpl.runOnce", () => {
     const now = () => 1_700_000_000_000;
 
-    test("empty userId returns zero without calling LLM", async () => {
+    test("empty ownerKey returns zero without calling LLM", async () => {
         const sink = new CapturingSink();
         const w = new DreamWorkerImpl(fakeAs(new FakeGraph()), new StubModel([]), sink, { now });
         const r = await w.runOnce("");

@@ -80,14 +80,14 @@ function gatewayMessage(text: string, msgId = `msg-${Math.random().toString(36).
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gatewayReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }
@@ -97,6 +97,7 @@ function runtimeContext(): RuntimeContext {
         requestId: `req-${Math.random().toString(36).slice(2, 8)}`,
         now: new Date().toISOString(),
         embedding: [],
+        contextForkId: "test-fork",
     };
 }
 
@@ -158,16 +159,16 @@ describe("LF-R4 Continuation Context wiring", () => {
                 {},
                 askA,
             );
-            const initial = memory.listActiveContinuations("user-1");
+            const initial = memory.listActiveContinuations("fork:test-fork");
             expect(initial.length).toBe(1);
             const continuationId = initial[0]!.id;
 
             expect(memory.dropContinuation(continuationId)).toBe(true);
-            expect(memory.listActiveContinuations("user-1").length).toBe(0);
+            expect(memory.listActiveContinuations("fork:test-fork").length).toBe(0);
             expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryContinuationDropped)).toBe(true);
 
             expect(memory.resumeContinuation(continuationId)).toBe(true);
-            const after = memory.listActiveContinuations("user-1");
+            const after = memory.listActiveContinuations("fork:test-fork");
             expect(after.length).toBe(1);
             expect(after[0]!.id).toBe(continuationId);
             expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryContinuationResumed)).toBe(true);
@@ -191,7 +192,7 @@ describe("LF-R4 Continuation Context wiring", () => {
                 {},
                 askA,
             );
-            const continuation = memory.listActiveContinuations("user-1")[0]!;
+            const continuation = memory.listActiveContinuations("fork:test-fork")[0]!;
             const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             const before = (db.query("SELECT decay_score FROM memory_state WHERE event_id = ?").get(continuation.id) as
                 | { decay_score: number }
@@ -260,7 +261,7 @@ describe("LF-R4 Continuation Context wiring", () => {
                 {},
                 askWithHint,
             );
-            const continuation = memory.listActiveContinuations("user-1")[0]!;
+            const continuation = memory.listActiveContinuations("fork:test-fork")[0]!;
             const c = continuation.content as { userFacing?: { title?: string; contextHint?: string } };
             expect(c.userFacing?.title).toBe("Picking deployment target");
             expect(c.userFacing?.contextHint).toBe("blocked on env choice");
@@ -349,7 +350,7 @@ describe("LF-R4 Continuation Context wiring", () => {
                 gatewayReply("ok", "rep-2"),
                 runtimeContext(),
             );
-            const continuation = memory.listActiveContinuations("user-1")[0]!;
+            const continuation = memory.listActiveContinuations("fork:test-fork")[0]!;
             memory.dropContinuation(continuation.id);
             const prompt = await memory.buildPrompt(gatewayMessage("next", "msg-3"), runtimeContext());
             expect(prompt).not.toContain("[continuation-hint]");
@@ -376,7 +377,7 @@ describe("LF-R4 Continuation Context wiring", () => {
                     freeform: true,
                 },
             );
-            const continuation = memory.listActiveContinuations("user-1")[0]!;
+            const continuation = memory.listActiveContinuations("fork:test-fork")[0]!;
             const c = continuation.content as { reason: string };
             expect(c.reason).toBe(ContinuationContextReason.BlackboardCap);
         } finally {
@@ -391,18 +392,19 @@ describe("LF-R4 Continuation Context wiring", () => {
         await memory.warmup();
         try {
             const id = memory.recordContinuationFromReason({
-                userId: "user-1",
+                ownerKey: "fork:test-fork",
+                sourceKey: "test-source",
                 reason: ContinuationContextReason.ToolFailure,
                 userFacing: { title: "MCP tool failed: fs/read_file", contextHint: "ENOENT: missing" },
                 snapshot: {
                     originalUserMessage: "please read foo.txt",
                     mcpCallProgress: [{ tool: "fs/read_file", status: "error", lastError: "ENOENT" }],
                 },
-                channelId: "stdio",
+                sourceSurface: "stdio",
                 requestId: "req-1",
             });
             expect(id).not.toBeNull();
-            const continuations = memory.listActiveContinuations("user-1");
+            const continuations = memory.listActiveContinuations("fork:test-fork");
             expect(continuations.length).toBe(1);
             const c = continuations[0]!.content as {
                 reason: string;
@@ -486,7 +488,7 @@ describe("LF-R4 Continuation Context wiring", () => {
                 gatewayReply("ok", "rep-2"),
                 runtimeContext(),
             );
-            const continuation = memory.listActiveContinuations("user-1")[0]!;
+            const continuation = memory.listActiveContinuations("fork:test-fork")[0]!;
             const applied = memory.applyContinuationDecisions([{ continuationId: continuation.id, kind: "fresh" }]);
             expect(applied).toBe(1);
             const updated = memory.getContinuation(continuation.id)!;
@@ -522,12 +524,12 @@ describe("LF-R4 Continuation Context wiring", () => {
                 {},
                 askA,
             );
-            const continuation = memory.listActiveContinuations("user-1")[0]!;
+            const continuation = memory.listActiveContinuations("fork:test-fork")[0]!;
             memory.dropContinuation(continuation.id);
-            expect(memory.listActiveContinuations("user-1").length).toBe(0);
+            expect(memory.listActiveContinuations("fork:test-fork").length).toBe(0);
             const applied = memory.applyContinuationDecisions([{ continuationId: continuation.id, kind: "resume" }]);
             expect(applied).toBe(1);
-            expect(memory.listActiveContinuations("user-1").length).toBe(1);
+            expect(memory.listActiveContinuations("fork:test-fork").length).toBe(1);
         } finally {
             memory.dispose();
         }

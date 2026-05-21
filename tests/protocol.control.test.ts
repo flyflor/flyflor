@@ -111,7 +111,7 @@ describe("Gateway Control protocol", () => {
         expect(
             buildGatewayControlTurnFinalPayload({
                 messageId: "msg-1",
-                route: { channel: Channel.Ws, chatId: "c-1", chatType: ChatType.Direct },
+                route: { channel: Channel.Ws, conversationKey: "c-1", chatType: ChatType.Direct },
                 text: "done",
                 metadata: {
                     kind: GatewayControlReplyMetadataKind.Ask,
@@ -157,7 +157,7 @@ describe("Gateway Control protocol", () => {
         ).toEqual({
             reply: {
                 messageId: "msg-1",
-                route: { channel: Channel.Ws, chatId: "c-1", chatType: ChatType.Direct },
+                route: { channel: Channel.Ws, conversationKey: "c-1", chatType: ChatType.Direct },
                 text: "done",
                 metadata: {
                     kind: GatewayControlReplyMetadataKind.Ask,
@@ -267,14 +267,13 @@ describe("Gateway Control protocol", () => {
                     createdAt: "2026-05-19T00:00:00.000Z",
                     id: "plan-1",
                     ownerKey: "scope:todo",
-                    auditUserId: "u-1",
+                    sourceKey: "u-1",
                     progress: 0,
                     status: "planned",
                     stepCount: 1,
                     summary: "Summary",
                     title: "Plan",
                     updatedAt: "2026-05-19T00:00:00.000Z",
-                    userId: "u-1",
                 },
             ]),
         ).toMatchObject({
@@ -435,7 +434,7 @@ describe("Gateway Control protocol", () => {
         };
         const payload = buildGatewayControlTurnFinalPayload({
             messageId: "msg-1",
-            route: { channel: Channel.Ws, chatId: "c-1", chatType: ChatType.Direct },
+            route: { channel: Channel.Ws, conversationKey: "c-1", chatType: ChatType.Direct },
             text: "Need confirmation?",
             metadata: {
                 kind: GatewayControlReplyMetadataKind.Ask,
@@ -499,7 +498,7 @@ describe("Gateway Control protocol", () => {
 
     test("normalizes gateway.message.send payload into a ws GatewayMessage", () => {
         const input = readGatewayControlMessageInput({
-            chatId: "chat-1",
+            conversationKey: "chat-1",
             text: "hello",
             threadId: "thread-1",
             user: { id: "user-1", displayName: "User One" },
@@ -508,7 +507,7 @@ describe("Gateway Control protocol", () => {
 
         expect(message.route).toMatchObject({
             channel: Channel.Ws,
-            chatId: "chat-1",
+            conversationKey: "chat-1",
             chatType: ChatType.Direct,
             threadId: "thread-1",
         });

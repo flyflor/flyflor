@@ -267,7 +267,7 @@ export interface CodenameRecord {
 /**
  * Scope：用户显式创建 / 使用的工作作用域。
  *
- * 它不是 session。调用方必须在每轮 RuntimeContext.activeScope 里显式传入，
+ * 它不是隐式会话。调用方必须在每轮 RuntimeContext.activeScope 里显式传入，
  * MemoryModule 才会加载该范围的 `.flyflor/memory` 与工作红线。
  */
 export interface ScopeRecord {

@@ -24,7 +24,7 @@ export interface ExplicitScopeSeed {
  * Structured context scope assembly for scope/fork/capability boundaries.
  * This layer is intentionally parallel to neural: it normalizes explicit
  * RuntimeContext fields for runtime, memory, skill, mcp, plugin, and gem
- * assembly, but never reads natural language intent and never stores session.
+ * assembly, but never reads natural language intent and never stores continuity owners.
  */
 export class ContextScopeComponent extends ContextComponent {
     public constructor(private readonly paths: FlyflorPaths) {
@@ -51,19 +51,19 @@ export class ContextScopeComponent extends ContextComponent {
         return input.context.activeScope?.id ?? null;
     }
 
-    public explicitScopeSeed(userId: string, rawPath: string): ExplicitScopeSeed {
+    public explicitScopeSeed(rawPath: string): ExplicitScopeSeed {
         const projectDir = resolve(rawPath);
         return {
-            id: ContextScopeComponent.deriveExplicitScopeId(userId, projectDir),
+            id: ContextScopeComponent.deriveExplicitScopeId(projectDir),
             projectDir,
             projectMemoryDir: join(projectDir, ".flyflor", "memory"),
             title: basename(projectDir) || "scope",
         };
     }
 
-    private static deriveExplicitScopeId(userId: string, projectDir: string): string {
+    private static deriveExplicitScopeId(projectDir: string): string {
         const hasher = new Bun.CryptoHasher("sha256");
-        hasher.update(`${userId}:${projectDir}`);
+        hasher.update(projectDir);
         return `scope-${hasher.digest("hex").slice(0, 16)}`;
     }
 }
@@ -74,4 +74,12 @@ export function continuityOwnerKey(message: GatewayMessage, context?: RuntimeCon
     if (context?.contextForkId) return `fork:${context.contextForkId}`;
     if (codenameId) return `codename:${codenameId}`;
     return `turn:${message.id}`;
+}
+
+export function sourceKeyForMessage(message: GatewayMessage, context?: RuntimeContext): string {
+    return message.source?.messageId ?? context?.requestId ?? message.id;
+}
+
+export function sourceSurfaceForMessage(message: GatewayMessage): string {
+    return message.route.channel;
 }

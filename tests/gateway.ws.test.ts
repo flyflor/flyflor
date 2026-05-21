@@ -722,7 +722,7 @@ describe("GatewayControlHub", () => {
 
         expect(calls[0]?.message.route).toMatchObject({
             channel: Channel.Ws,
-            chatId: "u-1",
+            conversationKey: "ws-conversation",
             chatType: ChatType.Direct,
         });
         expect(calls[0]?.options?.context).toMatchObject({

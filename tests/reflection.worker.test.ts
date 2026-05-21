@@ -60,7 +60,7 @@ function makeFakeWorker(impl: (msg: unknown) => unknown): ReflectionThreadWorker
 const baseContext: RuntimeContext = { requestId: "req-1", now: "2025-01-01T00:00:00Z" };
 const baseMessage: GatewayMessage = {
     id: "msg-1",
-    route: { channel: "api", chatId: "chat-1", chatType: ChatType.Direct },
+    route: { channel: "api", conversationKey: "chat-1", chatType: ChatType.Direct },
     user: { id: "user-1" },
     text: "turn text",
     receivedAt: "2025-01-01T00:00:00Z",

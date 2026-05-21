@@ -911,25 +911,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
     }
 
     private migrateOwnerColumns(database: Database): void {
-        for (const table of [
-            "graph_episodes",
-            "graph_memory_nodes",
-            "graph_gems",
-            "graph_summary_embeddings",
-            "graph_gem_snapshots",
-            "graph_edges",
-        ]) {
-            this.renameUserColumnToOwnerKey(database, table);
-        }
-    }
-
-    private renameUserColumnToOwnerKey(database: Database, table: string): void {
-        const columns = database.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-        const hasOwnerKey = columns.some((column) => column.name === "owner_key");
-        const hasUserId = columns.some((column) => column.name === "user_id");
-        if (!hasOwnerKey && hasUserId) {
-            database.exec(`ALTER TABLE ${table} RENAME COLUMN user_id TO owner_key`);
-        }
+        void database;
     }
 
     private requiredDatabase(): Database {

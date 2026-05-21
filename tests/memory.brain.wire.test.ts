@@ -37,17 +37,19 @@ describe("MemoryModule + BrainStore", () => {
             const db = new Database(dbPath, { readonly: true });
             try {
                 const rows = db
-                    .query("SELECT id, user_id, codename_id, type, content FROM memory_events ORDER BY ts DESC")
+                    .query("SELECT id, owner_key, source_key, codename_id, type, content FROM memory_events ORDER BY ts DESC")
                     .all() as Array<{
                         id: string;
-                        user_id: string;
+                        owner_key: string;
+                        source_key: string | null;
                         codename_id: string | null;
                         type: string;
                         content: string;
                     }>;
                 expect(rows.length).toBeGreaterThan(0);
                 const last = rows[0]!;
-                expect(last.user_id).toBe("user-1");
+                expect(last.owner_key).toBe("fork:test-fork");
+                expect(last.source_key?.startsWith("req-")).toBe(true);
                 expect(last.type).toBe("event");
                 const parsed = JSON.parse(last.content) as Record<string, unknown>;
                 expect(parsed.userText).toContain("会议结论");
@@ -98,7 +100,7 @@ describe("MemoryModule + BrainStore", () => {
             const db = new Database(dbPath, { readonly: true });
             try {
                 const rows = db
-                    .query("SELECT id, name, working_dir, use_count FROM codenames WHERE user_id = 'user-1'")
+                    .query("SELECT id, name, working_dir, use_count FROM codenames WHERE name = 'fly'")
                     .all() as Array<{ id: string; name: string; working_dir: string | null; use_count: number }>;
                 expect(rows).toHaveLength(1);
                 expect(rows[0]!.name).toBe("fly");
@@ -130,7 +132,7 @@ describe("MemoryModule + BrainStore", () => {
             const db2 = new Database(dbPath, { readonly: true });
             try {
                 const cn = db2
-                    .query("SELECT use_count FROM codenames WHERE user_id = 'user-1' AND name = 'fly'")
+                    .query("SELECT use_count FROM codenames WHERE name = 'fly'")
                     .get() as { use_count: number };
                 expect(cn.use_count).toBe(2);
             } finally {
@@ -171,7 +173,7 @@ describe("MemoryModule + BrainStore", () => {
             sink.events.length = 0;
             const prompt = await memory.buildPrompt(gatewayMessage("what did we say earlier?"), runtimeContext());
             const recall = sink.events.find((e) => e.type === RuntimeEventType.MemoryBrainPromptRecall) as
-                | { type: string; payload?: { hits?: number; userId?: string } }
+                | { type: string; payload?: { hits?: number; ownerKey?: string } }
                 | undefined;
             const failed = sink.events.filter((e) => e.type === RuntimeEventType.MemoryBrainWriteFailed);
             if (!recall) {
@@ -179,7 +181,7 @@ describe("MemoryModule + BrainStore", () => {
                     `brain prompt recall event missing. events: ${sink.events.map((e) => e.type).join(",")}; failed: ${JSON.stringify(failed)}`,
                 );
             }
-            expect(recall.payload?.userId).toBe("user-1");
+            expect(recall.payload?.ownerKey).toBe("fork:test-fork");
             expect(recall.payload?.hits ?? 0).toBeGreaterThanOrEqual(1);
             expect(prompt).toContain("brain prompt recall fixture atom");
         } finally {
@@ -247,14 +249,14 @@ function gatewayMessage(text: string): GatewayMessage {
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gatewayReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }
@@ -264,5 +266,6 @@ function runtimeContext(): RuntimeContext {
         requestId: `req-${Math.random().toString(36).slice(2, 8)}`,
         now: new Date().toISOString(),
         embedding: [],
+        contextForkId: "test-fork",
     };
 }

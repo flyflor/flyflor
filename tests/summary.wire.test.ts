@@ -36,7 +36,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 gatewayReply("收到", "msg-1"),
                 runtimeContext(),
             );
-            const res = await memory.runSummaryOnce("user-1");
+            const res = await memory.runSummaryOnce("fork:test-fork");
             expect(res).not.toBeNull();
             expect(res!.written).toBeGreaterThan(0);
             expect(sink.types).toContain(RuntimeEventType.MemorySummaryWritten);
@@ -49,7 +49,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         const config = await makeConfig();
         const sink = new RecordingSink();
         const memory = new MemoryModule(config, sink);
-        const res = await memory.runSummaryOnce("user-1");
+        const res = await memory.runSummaryOnce("fork:test-fork");
         expect(res).toBeNull();
         memory.dispose();
     });
@@ -61,7 +61,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
         await memory.warmup();
         try {
             (memory as unknown as { brainMaintenanceBusy: boolean }).brainMaintenanceBusy = true;
-            expect(await memory.runSummaryOnce("user-1")).toBeNull();
+            expect(await memory.runSummaryOnce("fork:test-fork")).toBeNull();
             expect(await memory.runBrainArchiveOnce()).toBeNull();
             expect(sink.types).not.toContain(RuntimeEventType.MemorySummaryWritten);
             expect(sink.types).not.toContain(RuntimeEventType.MemoryBrainArchiveCompleted);
@@ -80,25 +80,27 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
             const now = Date.UTC(2026, 4, 13, 12, 0, 0);
             const brain = (memory as unknown as { brain: BrainStore }).brain;
             brain.appendEvent({
+                ownerKey: "scope:test",
                 id: "turn-1",
                 ts: now - 120_000,
-                userId: "user-1",
-                channelId: "stdio",
+                sourceKey: "user-1",
+                sourceSurface: "stdio",
                 type: MemoryEventType.Event,
                 role: ModelRole.User,
                 content: { text: "hello" },
                 importance: 0.5,
             });
             brain.appendEvent({
+                ownerKey: "scope:test",
                 id: "hot-1",
                 ts: now - 60_000,
-                userId: "user-1",
-                channelId: "stdio",
+                sourceKey: "user-1",
+                sourceSurface: "stdio",
                 type: MemoryEventType.HotMemoryCompression,
                 role: ModelRole.System,
                 content: {
                     batchId: "hot-batch-1",
-                    userId: "user-1",
+                    sourceKey: "user-1",
                     reason: "review-due",
                     sourceEpisodeIds: ["ep-1"],
                     deletedEpisodeIds: ["ep-1"],
@@ -117,12 +119,12 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 importance: 0.2,
             });
 
-            const res = await memory.runSummaryOnce("user-1", now);
+            const res = await memory.runSummaryOnce("scope:test", now);
             expect(res?.written).toBe(2);
 
             const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
-                const dayId = "summary-user-1-day-2026-05-13";
+                const dayId = "summary-scope:test-day-2026-05-13";
                 const row = db.query("SELECT content FROM memory_summary WHERE id = ?").get(dayId) as
                     | { content: string }
                     | null;
@@ -152,10 +154,10 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 gatewayReply("收到", "msg-embed"),
                 runtimeContext(),
             );
-            const res = await memory.runSummaryOnce("user-1");
+            const res = await memory.runSummaryOnce("fork:test-fork");
             expect(res?.written).toBeGreaterThan(0);
             await waitFor(() => graph.inputs.length > 0);
-            expect(graph.inputs[0]?.summaryId).toMatch(/^summary-user-1-/);
+            expect(graph.inputs[0]?.summaryId).toMatch(/^summary-fork:test-fork-/);
             expect(sink.types).toContain(RuntimeEventType.MemorySummaryEmbeddingWritten);
             const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
             try {
@@ -163,7 +165,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                     .query("SELECT embedding_id FROM memory_summary WHERE embedding_id IS NOT NULL")
                     .all() as Array<{ embedding_id: string }>;
                 expect(rows.length).toBeGreaterThan(0);
-                expect(rows[0]?.embedding_id).toMatch(/^summary-embedding-summary-user-1-/);
+                expect(rows[0]?.embedding_id).toMatch(/^summary-embedding-summary-fork:test-fork-/);
             } finally {
                 db.close();
             }
@@ -184,7 +186,7 @@ describe("MemoryModule.runSummaryOnce (LF-R5 slice B)", () => {
                 gatewayReply("收到", "msg-fail"),
                 runtimeContext(),
             );
-            await expect(memory.runSummaryOnce("user-1")).rejects.toThrow("Summary embedding write failed");
+            await expect(memory.runSummaryOnce("fork:test-fork")).rejects.toThrow("Summary embedding write failed");
             expect(sink.types).toContain(RuntimeEventType.MemorySummaryWritten);
             expect(sink.types).toContain(RuntimeEventType.MemoryBrainWriteFailed);
         } finally {
@@ -277,14 +279,14 @@ function gatewayMessage(text: string): GatewayMessage {
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
 function gatewayReply(text: string, messageId: string): GatewayReply {
     return {
         messageId,
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
         text,
     };
 }
@@ -294,5 +296,6 @@ function runtimeContext(): RuntimeContext {
         requestId: `req-${Math.random().toString(36).slice(2, 8)}`,
         now: new Date().toISOString(),
         embedding: [],
+        contextForkId: "test-fork",
     };
 }

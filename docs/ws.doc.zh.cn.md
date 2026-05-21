@@ -318,7 +318,7 @@ LIMIT ?
 错误：
 
 - payload 缺失时返回 `error`，`code=invalid-payload`
-- 不存在 `userId` / session / scope 参数；历史就是当前 brain ledger 的全局流水账
+- 不存在 `sourceKey` / handshake / scope 参数；历史就是当前 brain ledger 的全局流水账
 
 测试：
 
@@ -731,7 +731,7 @@ interface HistoryTurnSnapshot {
   "payload": {
     "id": "message-1",
     "text": "继续推进这个 Scope",
-    "chatId": "u-1",
+    "conversationKey": "u-1",
     "threadId": "thread-1",
     "user": {
       "id": "u-1",
@@ -767,8 +767,8 @@ interface HistoryTurnSnapshot {
 - `context.activeScope` 是 canonical 字段，只有在 `id + projectDir + projectMemoryDir` 都齐全时才会被接收
 - `context.activeProject` 是兼容别名；若同时传入，以 `activeScope` 为准
 - `chatType` 缺失时默认 `direct`
-- `user.id` 缺失时默认 `ws-user`
-- `chatId` / `threadId` 仍可保留在 transport route，但不会参与认知连续性
+- `platform actor id` 缺失时默认 `ws-user`
+- `conversationKey` / `threadId` 只属于 gateway route，不会参与认知连续性
 
 代码：
 
@@ -818,7 +818,7 @@ interface HistoryTurnSnapshot {
       "messageId": "message-1",
       "route": {
         "channel": "ws",
-        "chatId": "u-1",
+        "conversationKey": "u-1",
         "chatType": "direct"
       },
       "text": "Need confirmation?",

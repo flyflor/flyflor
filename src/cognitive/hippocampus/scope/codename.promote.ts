@@ -65,7 +65,7 @@ export class CodenamePromotionComponent {
             scopeId,
             title: record.description ?? record.name,
             goal: record.description ?? `Working context anchor: ${record.name}`,
-            userId: record.auditUserId ?? record.userId ?? record.id,
+            sourceKey: record.id,
             trigger,
             createdAt: opts.createdAt ?? new Date(nowMs).toISOString(),
         });

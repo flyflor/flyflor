@@ -1,1 +1,0 @@
-../../../../src/agent/gateway/index.ts

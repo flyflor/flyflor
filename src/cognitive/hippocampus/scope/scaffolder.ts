@@ -32,7 +32,7 @@ export interface ScopeScaffoldInput {
     projectDir?: string;
     title: string;
     goal: string;
-    userId: string;
+    sourceKey?: string;
     trigger: ScopeTriggerResult;
     createdAt: string;
 }
@@ -84,7 +84,7 @@ export class ScopeScaffolder {
                     goal: input.goal,
                     projectId: input.scopeId,
                     scopeId: input.scopeId,
-                    userId: input.userId,
+                    sourceKey: input.sourceKey ?? "",
                     trigger: input.trigger.kind,
                     createdAt: input.createdAt,
                     relatedIds: input.trigger.relatedIds.length
@@ -104,7 +104,7 @@ export class ScopeScaffolder {
                             scopeId: input.scopeId,
                             title: input.title,
                             goal: input.goal,
-                            userId: input.userId,
+                            sourceKey: input.sourceKey,
                             createdAt: input.createdAt,
                         },
                         null,

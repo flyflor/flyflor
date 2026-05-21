@@ -17,8 +17,7 @@ describe("planning protocol", () => {
         const fork: ContextForkRecord = {
             id: "fork-1",
             ownerKey: "scope:install",
-            auditUserId: "u1",
-            userId: "u1",
+                sourceKey: "u1",
             title: "Investigate install flow",
             summary: "Forked from the main thread to isolate installer work.",
             continuitySummary: "Only installer, docs, and release asset questions stay in scope.",

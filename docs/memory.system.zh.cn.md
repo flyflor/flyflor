@@ -60,7 +60,7 @@ flowchart LR
 - 直接作为 prompt 原文来源
 - 自动恢复“当前上下文”
 - 成为 scope 容器
-- 成为 user/session/chat/thread 的隐式连续性桶
+- 成为 user/handshake/chat/thread 的隐式连续性桶
 
 ## 月度模型
 
@@ -99,7 +99,7 @@ flowchart LR
 
 ## Fork
 
-`ContextFork` 是显式分支，不是 session。
+`ContextFork` 是显式分支，不是隐式连续性容器。
 
 规则：
 
@@ -176,7 +176,7 @@ blackboard 详细信息固定保存在 ledger/query plane。
 禁止做法：
 
 - 把完整 blackboard 详情只塞进 event JSON
-- 把 blackboard 结果直接当成 session 容器
+- 把 blackboard 结果直接当成 隐式连续性容器
 
 ## 历史查询
 

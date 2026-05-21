@@ -19,6 +19,6 @@ External Kit 是主线保留的只读发现协议，不是第一方 CLI/TUI/Gate
 - 不执行工具
 - 不 import Runtime 私有实现
 - 不 import CLI/TUI
-- 不 import `abandon/`
+- 不 import 已移除的旧实现
 
 真实执行仍然必须进入 Executive Tool Runtime 与 sandbox。

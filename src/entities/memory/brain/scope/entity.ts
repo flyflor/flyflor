@@ -10,8 +10,6 @@ export interface BrainScopeRow {
     title: string;
     updated_at: number;
     use_count: number;
-    audit_user_id?: string | null;
-    user_id?: string | null;
 }
 
 /**
@@ -24,8 +22,6 @@ export class BrainScopeModel {
     public toRecord(row: BrainScopeRow): ScopeRecord {
         return {
             id: row.id,
-            auditUserId: row.audit_user_id ?? row.user_id ?? undefined,
-            userId: row.audit_user_id ?? row.user_id ?? undefined,
             title: row.title,
             goal: row.goal ?? undefined,
             projectDir: row.project_dir,

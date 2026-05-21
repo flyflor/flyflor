@@ -51,8 +51,6 @@ export interface BrainPromptAtomWindowInput {
     limit?: number;
     minScore: number;
     ownerKey?: string;
-    /** Gateway/raw audit filter. Prefer ownerKey for context assembly. */
-    userId?: string;
 }
 
 export interface BrainVisibleAtom {
@@ -332,7 +330,6 @@ export class BrainStore extends BrainComponent {
         const visible: BrainVisibleAtom[] = [];
         for (const event of this.listEvents({
             ...(input.ownerKey ? { ownerKey: input.ownerKey } : {}),
-            ...(input.userId ? { userId: input.userId } : {}),
             type: MemoryEventType.Event,
             sinceTs,
             limit: limit * 4,
@@ -401,7 +398,7 @@ export class BrainStore extends BrainComponent {
 
     public listTaskPlans(input: {
         ownerKey?: string;
-        userId?: string;
+        sourceKey?: string;
         sourceEventId?: string;
         sourceBlackboardTurnId?: string;
         limit?: number;
@@ -437,7 +434,7 @@ export class BrainStore extends BrainComponent {
 
     public listContextForks(input: {
         ownerKey?: string;
-        userId?: string;
+        sourceKey?: string;
         sourceEventId?: string;
         sourceBlackboardTurnId?: string;
         limit?: number;
@@ -461,7 +458,7 @@ export class BrainStore extends BrainComponent {
 
     public listReplayRecords(input: {
         ownerKey?: string;
-        userId?: string;
+        sourceKey?: string;
         sourceEventId?: string;
         blackboardTurnId?: string;
         limit?: number;
@@ -505,15 +502,15 @@ export class BrainStore extends BrainComponent {
         return null;
     }
 
-    public listCodenames(input: { userId?: string; limit?: number } = {}): CodenameRecord[] {
+    public listCodenames(input: { limit?: number } = {}): CodenameRecord[] {
         return this.mergeAcrossShards((repos) => repos.codenameRepo.list(input), input.limit ?? 100, (left, right) =>
             right.lastUsedAt - left.lastUsedAt,
         );
     }
 
-    public getCodenameByName(userId: string, name: string): CodenameRecord | null {
+    public getCodenameByName(name: string): CodenameRecord | null {
         for (const repos of this.iterReadableShards()) {
-            const row = repos.codenameRepo.getByName(userId, name);
+            const row = repos.codenameRepo.getByName(name);
             if (row) return row;
         }
         return null;
@@ -541,14 +538,14 @@ export class BrainStore extends BrainComponent {
         return null;
     }
 
-    public listScopes(input: { auditUserId?: string; userId?: string; limit?: number } = {}): ScopeRecord[] {
+    public listScopes(input: { limit?: number } = {}): ScopeRecord[] {
         return this.mergeAcrossShards((repos) => repos.scopeRepo.list(input), input.limit ?? 100, (left, right) =>
             right.lastUsedAt - left.lastUsedAt,
         );
     }
 
-    public getMostRecentTouchedCodename(userId: string, sinceTs: number): CodenameRecord | null {
-        const rows = this.listCodenames({ userId, limit: 100 }).filter((row) => row.lastUsedAt >= sinceTs && !row.scopeId);
+    public getMostRecentTouchedCodename(sinceTs: number): CodenameRecord | null {
+        const rows = this.listCodenames({ limit: 100 }).filter((row) => row.lastUsedAt >= sinceTs && !row.scopeId);
         rows.sort((left, right) => right.lastUsedAt - left.lastUsedAt);
         return rows[0] ?? null;
     }
@@ -558,9 +555,9 @@ export class BrainStore extends BrainComponent {
         this.requireLive().eqStateRepo.upsert(state);
     }
 
-    public getEqState(userId: string): EqState | null {
+    public getEqState(ownerKey: string): EqState | null {
         for (const repos of this.iterReadableShards()) {
-            const row = repos.eqStateRepo.get(userId);
+            const row = repos.eqStateRepo.get(ownerKey);
             if (row) return row;
         }
         return null;

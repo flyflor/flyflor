@@ -74,7 +74,7 @@ function gatewayMessage(text: string): GatewayMessage {
         text,
         attachments: [],
         user: { id: "user-1", displayName: "User" },
-        route: { channel: Channel.Stdio, chatType: ChatType.Direct, chatId: "chat-1" },
+        route: { channel: Channel.Stdio, chatType: ChatType.Direct, conversationKey: "chat-1" },
     };
 }
 
@@ -83,6 +83,7 @@ function runtimeContext(): RuntimeContext {
         requestId: `req-${Math.random().toString(36).slice(2, 8)}`,
         now: new Date().toISOString(),
         embedding: [],
+        contextForkId: "test-fork",
     };
 }
 
@@ -94,14 +95,15 @@ describe("LF-R5 identity self-write wiring", () => {
         await memory.warmup();
         try {
             const ids = memory.applyIdentityAppends({
-                userId: "user-1",
+                ownerKey: "fork:test-fork",
+                sourceKey: "test-source",
                 candidates: [
                     { kind: "preference", content: "concise replies", confidence: 0.9 },
                     { kind: "constraint", content: "never auto-commit", confidence: 1 },
                 ],
             });
             expect(ids.length).toBe(2);
-            const live = memory.listIdentity("user-1");
+            const live = memory.listIdentity("fork:test-fork");
             expect(live.length).toBe(2);
             const kinds = live.map((r) => (r.content as { kind?: string }).kind).sort();
             expect(kinds).toEqual(["constraint", "preference"]);
@@ -120,15 +122,16 @@ describe("LF-R5 identity self-write wiring", () => {
         await memory.warmup();
         try {
             const [id] = memory.applyIdentityAppends({
-                userId: "user-1",
+                ownerKey: "fork:test-fork",
+                sourceKey: "test-source",
                 candidates: [{ kind: "preference", content: "first entry" }],
             });
-            expect(memory.listIdentity("user-1").length).toBe(1);
+            expect(memory.listIdentity("fork:test-fork").length).toBe(1);
             const ok = memory.revertIdentity(id!);
             expect(ok).toBe(true);
-            expect(memory.listIdentity("user-1").length).toBe(0);
-            expect(memory.listIdentity("user-1", { includeReverted: true }).length).toBe(1);
-            const reverted = memory.listIdentity("user-1", { includeReverted: true })[0]!;
+            expect(memory.listIdentity("fork:test-fork").length).toBe(0);
+            expect(memory.listIdentity("fork:test-fork", { includeReverted: true }).length).toBe(1);
+            const reverted = memory.listIdentity("fork:test-fork", { includeReverted: true })[0]!;
             expect(typeof (reverted.content as { revertedAt?: number }).revertedAt).toBe("number");
             expect(
                 sink.events.some((e) => e.type === RuntimeEventType.MemoryIdentityReverted),
@@ -157,7 +160,8 @@ describe("LF-R5 identity self-write wiring", () => {
         await memory.warmup();
         try {
             memory.applyIdentityAppends({
-                userId: "user-1",
+                ownerKey: "fork:test-fork",
+                sourceKey: "test-source",
                 candidates: [
                     { kind: "preference", content: "uses Markdown tables in replies" },
                     { kind: "goal", content: "ship the flyflor launch by month-end" },
@@ -182,7 +186,8 @@ describe("LF-R5 identity self-write wiring", () => {
         await memory.warmup();
         try {
             const [id] = memory.applyIdentityAppends({
-                userId: "user-1",
+                ownerKey: "fork:test-fork",
+                sourceKey: "test-source",
                 candidates: [{ kind: "preference", content: "verbose mode" }],
             });
             memory.revertIdentity(id!);
