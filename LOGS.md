@@ -50,3 +50,10 @@
   Summary: Upgraded the repository handoff contract from short seal sprints to a long-running coordinated refactor mode whose explicit target is the full intelligent-lifeform kernel, with mandatory workflow/handoff updates and full-branch pushes at every stop.
   Reason: The next stage needs higher throughput than a single-thread linear loop, and new sessions must be able to resume coordination and worktree/tmux execution without reconstructing intent from chat history.
   Verification: repository handoff docs updated on mainline before the next worktree split
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-runtime-executive-ws-bootstrap
+  Summary: Initialized the runtime-executive-ws worktree with explicit ownership over gateway, runtime, executive, and the ws/executive closure test surface.
+  Reason: This slice must drive the visible `/ws` protocol and execution loop toward the full intelligent-lifeform contract without colliding with memory or crystal internals.
+  Verification: local control files updated for `wt/kernel-runtime-executive-ws`

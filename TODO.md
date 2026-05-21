@@ -63,6 +63,20 @@ Main visible surfaces:
 9. Align all active docs with the "intelligent lifeform kernel" framing before starting multi-worktree implementation.
 10. Introduce append-only `LOGS.md` control files for the main worktree and future child worktrees.
 11. Split the first document pass into three child worktrees after the mainline architecture anchor is updated.
+12. Local slice owner: `wt/kernel-runtime-executive-ws`.
+13. Owned files for this worktree:
+    - `src/agent/runtime/**`
+    - `src/agent/gateway/**`
+    - `src/executive/**`
+    - related tests, docs, and smoke scripts for ws control, events, history, and executive loop closure
+14. Local target:
+    - `/ws` completes the thin-client lifecycle across hello, catalog, send, delta, final, history, and loop metadata
+    - executive loop pause/resume stays explicit and observable
+    - gateway/runtime protocol surfaces are stable enough for Rust shell follow-on work
+15. Local handoff rule:
+    - update this worktree `TODO.md` and `LOGS.md`
+    - commit only owned files
+    - do not rewrite mainline handoff docs from this branch
 
 ## Red Lines
 

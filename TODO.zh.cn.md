@@ -63,6 +63,20 @@
 9. 在启动多 worktree 开发前，先把全部活动文档统一到“智能生命体内核”口径。
 10. 为主 worktree 和未来子 worktree 引入只追加的 `LOGS.md` 控制文件。
 11. 在主线架构锚点更新完成后，把第一批文档工作拆成三个子 worktree。
+12. 本地切片 owner：`wt/kernel-runtime-executive-ws`。
+13. 本 worktree 归属文件：
+    - `src/agent/runtime/**`
+    - `src/agent/gateway/**`
+    - `src/executive/**`
+    - 覆盖 ws control、events、history、executive loop 闭环的相关测试、文档和 smoke 脚本
+14. 本地目标：
+    - `/ws` 完整跑通 thin-client 生命周期，包括 hello、catalog、send、delta、final、history、loop metadata
+    - executive loop pause/resume 保持显式且可观察
+    - gateway/runtime 协议面稳定到足以承接 Rust shell 后续开发
+15. 本地交还规则：
+    - 更新本 worktree 的 `TODO.md` 与 `LOGS.md`
+    - 只提交归属文件
+    - 不在本分支改写主线 handoff 文档
 
 ## 红线
 
