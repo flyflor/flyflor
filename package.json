@@ -44,6 +44,7 @@
         "smoke:docker:binary": "bun run scripts/docker.dev.smoke.ts --require-binary",
         "smoke:agent": "bun run scripts/agent.functional.smoke.ts",
         "smoke:agent:live": "bun test tests/live.agent.test.ts",
+        "smoke:gateway:ask-loop": "bun run scripts/gateway.ask.loop.smoke.ts",
         "smoke:gateway:control": "bun run scripts/gateway.control.smoke.ts",
         "smoke:gateway:service": "bun run scripts/gateway.service.smoke.ts",
         "smoke:runtime": "bun run scripts/docker.runtime.smoke.ts",
