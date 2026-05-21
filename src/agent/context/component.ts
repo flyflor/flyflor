@@ -69,9 +69,9 @@ export class ContextScopeComponent extends ContextComponent {
 }
 
 export function continuityOwnerKey(message: GatewayMessage, context?: RuntimeContext, codenameId?: string): string {
+    if (context?.contextForkId) return `fork:${context.contextForkId}`;
     const scopeId = context?.activeScope?.id;
     if (scopeId) return `scope:${scopeId}`;
-    if (context?.contextForkId) return `fork:${context.contextForkId}`;
     if (codenameId) return `codename:${codenameId}`;
     return `turn:${message.id}`;
 }

@@ -60,6 +60,7 @@ describe("documentation references", () => {
     test("ws api docs cite the live gateway tests and core message types", async () => {
         const doc = await Bun.file(join(REPO_ROOT, "docs", "ws.doc.md")).text();
 
+        expect(doc).toContain("tests/gateway.control.smoke.test.ts");
         expect(doc).toContain("tests/gateway.ws.test.ts");
         expect(doc).toContain("tests/protocol.control.test.ts");
         expect(doc).toContain("tests/gateway.module.test.ts");
@@ -74,6 +75,8 @@ describe("documentation references", () => {
         expect(doc).toContain("history.list");
         expect(doc).toContain("history.snapshot");
         expect(doc).toContain("listChatHistory");
+        expect(doc).toContain("executive.loop.paused");
+        expect(doc).toContain("executive.loop.resumed");
     });
 
     test("runtime events docs keep event timeline separate from turn-final authority", async () => {

@@ -75,6 +75,26 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(r2.dropped).toBe(1);
     });
 
+    test("rejects non-freeform ask when no structured choices exist", () => {
+        const root = parseAgentAsk(
+            wrap(JSON.stringify({ reason: AskReason.UserIntentUnclear, prompt: "Pick one", freeform: false })),
+        );
+        const nested = parseAgentAsk(
+            wrap(
+                JSON.stringify({
+                    reason: AskReason.UserIntentUnclear,
+                    prompt: "Need two confirmations.",
+                    freeform: false,
+                    questions: [{ prompt: "Should I continue?", freeform: false }],
+                }),
+            ),
+        );
+        expect(root.ask).toBeUndefined();
+        expect(root.dropped).toBe(1);
+        expect(nested.ask).toBeUndefined();
+        expect(nested.dropped).toBe(1);
+    });
+
     test("multiple ask blocks → first wins, rest counted as dropped", () => {
         const a = wrap(JSON.stringify({ reason: AskReason.Other, prompt: "first?" }));
         const b = wrap(JSON.stringify({ reason: AskReason.Other, prompt: "second?" }));

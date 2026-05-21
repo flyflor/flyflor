@@ -443,16 +443,18 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const cacheKey = sqliteGraphModel.recallCacheKey(input);
         const cached = this.recallCache.get(cacheKey);
-        if (cached) return cached;
+        if (cached) {
+            return this.markMemoryNodeRecall(cached, Date.now());
+        }
         const result = this.searchMemoryNodes(input, 64);
-        this.recallCache.set(cacheKey, result);
-        return result;
+        this.recallCache.set(cacheKey, result.map((row) => ({ ...row })));
+        return this.markMemoryNodeRecall(result, Date.now());
     }
 
     public async recallSkills(input: GraphRecallInput): Promise<GemRecord[]> {
         if (!this.config.dbFile) return [];
         await this.initialize();
-        return this.searchGems(input, 32);
+        return this.markGemRecall(this.searchGems(input, 32), Date.now());
     }
 
     public async expandSimilarConcept(seedIds: string[], limit: number): Promise<MemoryNodeRecord[]> {
@@ -930,5 +932,46 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
 
     private invalidateRecallCache(): void {
         this.recallCache.clear();
+    }
+
+    /**
+     * Recall accounting is part of the graph store contract: downstream dream,
+     * decay, and reinforcement flows read recallCount/lastAccessedAt directly
+     * from graph rows, so successful recall must update those resource metrics.
+     */
+    private markMemoryNodeRecall(rows: MemoryNodeRecord[], nowMs: number): MemoryNodeRecord[] {
+        if (rows.length === 0) return [];
+        const out: MemoryNodeRecord[] = [];
+        for (const row of rows) {
+            const live = this.memoryNodes.get(row.id);
+            if (!live) {
+                out.push({ ...row });
+                continue;
+            }
+            live.recallCount = (live.recallCount ?? 0) + 1;
+            live.lastAccessedAt = nowMs;
+            this.persistMemoryNode(live);
+            out.push({ ...live, score: row.score });
+        }
+        this.invalidateRecallCache();
+        return out;
+    }
+
+    private markGemRecall(rows: GemRecord[], nowMs: number): GemRecord[] {
+        if (rows.length === 0) return [];
+        const out: GemRecord[] = [];
+        for (const row of rows) {
+            const live = this.gems.get(row.id);
+            if (!live) {
+                out.push({ ...row });
+                continue;
+            }
+            live.recallCount = (live.recallCount ?? 0) + 1;
+            live.lastVerifiedAt = nowMs;
+            this.persistGem(live);
+            out.push({ ...live, score: row.score });
+        }
+        this.invalidateRecallCache();
+        return out;
     }
 }

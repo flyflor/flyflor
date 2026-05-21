@@ -56,8 +56,16 @@ export class CrystalGemComponent extends CrystalComponent {
         ).map((result) => ({
             layer: MemoryLayer.Crystal,
             score: result.score,
-            record: this.crystalGemToMemoryRecord(result.gem),
+            record: this.crystalGemToMemoryRecord(result.gem, result.reasons, result.evidence),
         }));
+    }
+
+    public async forgetGem(id: string): Promise<boolean> {
+        if (!this.config.enabled) {
+            return false;
+        }
+        await this.store.initialize();
+        return this.store.forgetGem(id);
     }
 
     public async recordTurn(input: CrystalTurnInput): Promise<CrystalTurnResult> {
@@ -121,7 +129,16 @@ export class CrystalGemComponent extends CrystalComponent {
         });
     }
 
-    private crystalGemToMemoryRecord(gem: CrystalGem): MemoryRecord {
+    private crystalGemToMemoryRecord(
+        gem: CrystalGem,
+        recallReasons: string[] = [],
+        recallEvidence?: {
+            bucketMatch: number;
+            symbolOverlap: number;
+            coordinateSimilarity: number;
+            confidence: number;
+        },
+    ): MemoryRecord {
         return {
             id: gem.id,
             kind: MemoryKind.Gem,
@@ -135,6 +152,8 @@ export class CrystalGemComponent extends CrystalComponent {
                 bucket: gem.bucket,
                 sourceAtomIds: gem.sourceAtomIds,
                 symbols: gem.symbols,
+                recallReasons,
+                recallEvidence,
             },
         };
     }

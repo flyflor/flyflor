@@ -27,6 +27,13 @@ export interface CrystalMemoryStore {
     initialize(): Promise<void>;
     findGem(id: string): Promise<CrystalGem | undefined>;
     listGems(request: CrystalRecallRequest): Promise<CrystalGem[]>;
+    /**
+     * Explicit forgetting path for crystal recall.
+     *
+     * This only removes the gem surface itself; candidate/atom provenance stays
+     * in storage so consolidation remains auditable.
+     */
+    forgetGem(id: string): Promise<boolean>;
     upsertCandidate(candidate: ReflectionCandidate): Promise<void>;
     upsertAtom(atom: ReflectionAtom): Promise<void>;
     upsertGem(gem: CrystalGem): Promise<void>;

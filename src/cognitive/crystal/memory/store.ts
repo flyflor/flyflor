@@ -119,6 +119,15 @@ export class LocalCrystalMemoryStore extends CrystalComponent implements Crystal
         return this.index.search(request, Math.max(1, Math.min(request.limit * 8, 128)));
     }
 
+    public async forgetGem(id: string): Promise<boolean> {
+        await this.initialize();
+        const deleted = this.requiredRepo().deleteGem(id);
+        if (deleted) {
+            this.index.remove(id);
+        }
+        return deleted;
+    }
+
     public async upsertCandidate(candidate: ReflectionCandidate): Promise<void> {
         await this.initialize();
         this.requiredRepo().upsertCandidate(candidate);

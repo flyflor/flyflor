@@ -269,6 +269,34 @@ git worktree list
 
 - 当主线任务再次从窄修复扩成多切片重构时，应主动新建或刷新 code worktree，并在 tmux 下运行子 Codex，而不是无限拉长单个 session
 
+## 2026-05-22 第一波整合
+
+协调者已 review 并合入主线的代码切片：
+
+- `wt/kernel-context-memory`
+  - 已落地主线：
+    - live brain shard 轮换时会把当前月份导出归档，并为下一月重建新的 live shard
+    - graph recall 会更新 memory node 和 gem 的 recall 计数
+- `wt/kernel-scope-crystal-ask`
+  - 已落地主线：
+    - crystal recall 返回结构化 evidence 元数据
+    - crystal memory 暴露显式 gem 遗忘接口，但不删除 candidate/atom 溯源
+    - ask 解析会拒绝 `freeform=false` 且没有结构化选项面的 ask
+    - scope scaffold 会把触发信息写入 `.flyflor/scope.json`
+- `wt/kernel-runtime-executive-ws`
+  - 已落地主线：
+    - `/ws` control turn 会复用客户端 `requestId` 作为 runtime 关联键
+    - ws 文档已经写明显式的 ask 暂停/恢复闭环契约
+    - 新的确定性 smoke 覆盖 ask-loop 闭环和 thin-client history 回放
+
+完成这一波整合后，新环境恢复建议：
+
+1. 先同步/拉取所有分支
+2. 恢复 `main-codex-docs`
+3. 执行 `bun run kernel:tmux`
+4. 查看 `git status --short --branch`
+5. 判断下一轮是继续沿用现有代码 worktree，还是基于新的主线快照再切一轮
+
 ## 实用规则
 
 当你不确定时：

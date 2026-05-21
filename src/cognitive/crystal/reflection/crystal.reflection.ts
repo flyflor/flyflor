@@ -141,6 +141,12 @@ export class CrystalReflectionComponent extends CrystalComponent {
                 return {
                     gem,
                     score,
+                    evidence: {
+                        bucketMatch: bucketScore,
+                        symbolOverlap: symbolScore,
+                        coordinateSimilarity: coordinateScore,
+                        confidence: confidenceScore,
+                    },
                     reasons: [
                         bucketScore > 0 ? `bucket:${gem.bucket}` : "",
                         symbolScore > 0 ? `symbols:${symbolScore.toFixed(2)}` : "",

@@ -78,11 +78,22 @@ describe("ScopeScaffolder", () => {
         expect(r.skipped).toEqual([]);
         const agents = await Bun.file(join(r.projectDir, "AGENTS.md")).text();
         const readme = await Bun.file(join(r.projectDir, "README.md")).text();
+        const manifest = await Bun.file(join(r.projectDir, ".flyflor", "scope.json")).json();
         expect(agents).toContain("Test project Agent Guide");
         expect(agents).toContain("Build a memory consolidation pipeline");
         expect(agents).toContain("ep-1, ep-2");
         expect(readme).toContain("Test project");
         expect(readme).toContain("AGENTS.md");
+        expect(manifest).toMatchObject({
+            scopeId: "abc123",
+            sourceKey: "u1",
+            trigger: {
+                kind: ScopeTriggerKind.ExplicitScope,
+                score: 0.9,
+                rationale: "explicit-scope-intent",
+                relatedIds: ["ep-1", "ep-2"],
+            },
+        });
         expect((await stat(join(r.projectDir, ".flyflor", "memory"))).isDirectory()).toBe(true);
         expect((await stat(join(r.projectDir, ".flyflor", "skills"))).isDirectory()).toBe(true);
         expect(sink.events.find((e) => e.type === RuntimeEventType.ScopeScaffolded)).toBeDefined();

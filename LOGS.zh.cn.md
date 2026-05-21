@@ -43,3 +43,10 @@
   摘要：新增可复现的 `bun run kernel:tmux` 恢复入口，切出 context-memory、scope-crystal-ask、runtime-executive-ws 三个代码 worktree 分支，并把交接文档更新为新的并发内核开发布局。
   原因：下一阶段是大范围内核重构，所以新机器和新 session 需要稳定地重建 worktree、tmux 窗口和 child Codex 所有权，不能依赖瞬时 shell 状态。
   验证：`bun run kernel:tmux`
+
+- 状态：completed
+  操作者：main-codex
+  范围：kernel-slice-integration-wave-1
+  摘要：完成第一波代码 worktree 切片 review 与整合，把 live brain shard 轮换加固、crystal/scope/ask 收口，以及 ws thin-client loop smoke 和 request correlation 守卫合回 `main-codex-docs`。
+  原因：项目需要一个已经审过的主线快照，使记忆轮换、crystal 召回/遗忘、ask/scope 固化以及 ws loop 可见性可以同时存在，作为下一轮长线内核推进的起点。
+  验证：`bun test tests/brain.store.test.ts tests/context.scope.test.ts tests/graph.recall.test.ts tests/ask.parse.test.ts tests/scope.scaffolder.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts`；`bun run smoke:gateway:ask-loop`；`bun run smoke:gateway:control`；`bun run check`

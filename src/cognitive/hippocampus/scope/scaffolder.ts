@@ -106,6 +106,12 @@ export class ScopeScaffolder {
                             goal: input.goal,
                             sourceKey: input.sourceKey,
                             createdAt: input.createdAt,
+                            trigger: {
+                                kind: input.trigger.kind,
+                                score: input.trigger.score,
+                                rationale: input.trigger.rationale,
+                                relatedIds: input.trigger.relatedIds,
+                            },
                         },
                         null,
                         2,

@@ -64,4 +64,16 @@ export interface CrystalRecallResult {
     gem: CrystalGem;
     score: number;
     reasons: string[];
+    /**
+     * Structured recall evidence for prompt assembly and audit.
+     *
+     * This keeps recall explanation numeric/contracted instead of forcing
+     * callers to reverse-engineer a score from formatted strings.
+     */
+    evidence: {
+        bucketMatch: number;
+        symbolOverlap: number;
+        coordinateSimilarity: number;
+        confidence: number;
+    };
 }

@@ -124,3 +124,19 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - 新环境恢复命令：
   - `bun run kernel:tmux`
   - `bun run kernel:tmux -- --launch-codex`
+
+## 2026-05-22 内核整合补充
+
+- 已把第一批三个代码切片合回 `main-codex-docs`：
+  - context-memory
+  - scope-crystal-ask
+  - runtime-executive-ws
+- 当前主线已经带上：
+  - 月度 live brain shard 轮换，并在轮换后重建全新的 live `brain.db`
+  - graph/crystal 召回计数与显式 gem 遗忘钩子
+  - 对非 freeform ask 的结构化约束校验
+  - 将 scope 触发信息固化到 `.flyflor/scope.json`
+  - 覆盖 ask 暂停/恢复、事件订阅、history 回放、request correlation 的 ws thin-client 闭环测试面
+- 接下来的内核缺口：
+  - 从“协议闭环”的 `/ws` 覆盖继续推进到“在预期 trust surface 下的更完整 executive capability 执行”
+  - 把遗忘/衰减与向量召回行为继续并入更宽的 kernel seal 验证

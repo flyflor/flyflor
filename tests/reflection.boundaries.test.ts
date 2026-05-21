@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/agent/index.ts";
+import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/cognitive/crystal/memory/index.ts";
 import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/cognitive/crystal/index.ts";
 import { MemoryKind } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
-import type { MemoryRecord } from "../src/agent/index.ts";
+import type { MemoryRecord } from "../src/cognitive/hippocampus/memory/types.ts";
 
 describe("Crystal memory boundaries", () => {
     test("builds dynamic buckets from evidence instead of a fixed taxonomy", () => {
@@ -56,6 +56,15 @@ describe("Crystal memory boundaries", () => {
         expect(results.length).toBeGreaterThan(0);
         expect(results[0]?.record.kind).toBe(MemoryKind.Gem);
         expect(results[0]?.record.content).toContain("blocker");
+        expect(results[0]?.record.metadata).toMatchObject({
+            recallReasons: expect.any(Array),
+            recallEvidence: {
+                bucketMatch: expect.any(Number),
+                symbolOverlap: expect.any(Number),
+                coordinateSimilarity: expect.any(Number),
+                confidence: expect.any(Number),
+            },
+        });
     });
 
     test("core recall does not require configured buckets", () => {
@@ -142,6 +151,37 @@ describe("Crystal memory boundaries", () => {
         expect(store.candidates.size).toBe(1);
         expect(store.atoms.size).toBe(0);
         expect(store.gems.size).toBe(0);
+    });
+
+    test("explicit forget removes a gem from recall without deleting candidate provenance", async () => {
+        const store = new InMemoryCrystalMemoryStore();
+        const controller = new CrystalMemoryComponent(crystalConfig(), store);
+
+        await controller.recordTurn({
+            now: "2026-05-10T00:00:00.000Z",
+            candidates: [],
+            promoted: [
+                memoryRecord(
+                    "memory-forget-a",
+                    "When facts are missing, return blockers before continuing execution.",
+                ),
+            ],
+            historyEntries: [],
+        });
+
+        const [gemId] = [...store.gems.keys()];
+        expect(gemId).toBeDefined();
+        expect(await controller.forgetGem(gemId!)).toBe(true);
+        expect(store.gems.has(gemId!)).toBe(false);
+        expect(store.candidates.size).toBe(1);
+
+        const recalled = await controller.recall({
+            query: "missing facts blockers",
+            scope: "stdio:test",
+            limit: 4,
+        });
+        expect(recalled).toEqual([]);
+        expect(await controller.forgetGem(gemId!)).toBe(false);
     });
 
 });

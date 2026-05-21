@@ -27,6 +27,12 @@ export class LocalCrystalRepo {
         ).map((row) => localCrystalModel.rowToGem(row));
     }
 
+    public deleteGem(id: string): boolean {
+        const statement = query`DELETE FROM crystal_gems WHERE id = ${id}`;
+        const result = this.db.query(statement.sql).run(...statement.params);
+        return (result.changes ?? 0) > 0;
+    }
+
     public upsertCandidate(candidate: ReflectionCandidate): void {
         runQuery(
             this.db,

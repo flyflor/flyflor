@@ -57,3 +57,10 @@
   Summary: Added the reproducible `bun run kernel:tmux` restore entrypoint, created the three code worktree branches for context-memory, scope-crystal-ask, and runtime-executive-ws, and updated the handoff docs to reflect the new concurrent kernel-development layout.
   Reason: The next phase is a broad kernel refactor, so new machines and new sessions need a stable way to recreate worktrees, tmux windows, and child-Codex ownership without relying on ephemeral shell state.
   Verification: `bun run kernel:tmux`
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-slice-integration-wave-1
+  Summary: Reviewed and integrated the first three code worktree slices into `main-codex-docs`, adding live brain shard rollover hardening, crystal/scope/ask closure work, and a ws thin-client loop smoke plus request-correlation guards.
+  Reason: The project needed one reviewed mainline snapshot where memory rollover, crystal recall/forget, ask/scope solidification, and ws loop visibility all coexist for the next long-running kernel pass.
+  Verification: `bun test tests/brain.store.test.ts tests/context.scope.test.ts tests/graph.recall.test.ts tests/ask.parse.test.ts tests/scope.scaffolder.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts`; `bun run smoke:gateway:ask-loop`; `bun run smoke:gateway:control`; `bun run check`

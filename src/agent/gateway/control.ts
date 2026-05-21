@@ -326,7 +326,7 @@ export class GatewayControlHub implements EventSink {
         envelope: GatewayControlEnvelope,
     ): Promise<void> {
         const input = readGatewayControlMessageInput(envelope.payload);
-        const context = this.contextFromInput(input.context);
+        const context = this.contextFromInput(input.context, envelope.requestId);
         const gatewayMessage = this.messageFromInput(input);
         this.log("turn.start", {
             channel: gatewayMessage.route.channel,
@@ -390,10 +390,13 @@ export class GatewayControlHub implements EventSink {
         return normalizeGatewayControlMessage(input);
     }
 
-    private contextFromInput(input: ReturnType<typeof readGatewayControlMessageInput>["context"]): RuntimeContext {
+    private contextFromInput(
+        input: ReturnType<typeof readGatewayControlMessageInput>["context"],
+        requestId?: string,
+    ): RuntimeContext {
         const activeScope = input?.activeScope ?? input?.activeProject;
         return {
-            requestId: crypto.randomUUID(),
+            requestId: requestId ?? crypto.randomUUID(),
             now: new Date().toISOString(),
             activeScope,
             contextForkId: input?.contextForkId,

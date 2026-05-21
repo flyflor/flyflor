@@ -163,3 +163,19 @@ Latest full seal validation in this workspace passed:
 - New environment restore command:
   - `bun run kernel:tmux`
   - `bun run kernel:tmux -- --launch-codex`
+
+## 2026-05-22 Kernel Integration Addendum
+
+- Integrated the first three code slices back into `main-codex-docs`:
+  - context-memory
+  - scope-crystal-ask
+  - runtime-executive-ws
+- Mainline now carries:
+  - monthly live brain shard rollover that recreates a fresh live `brain.db`
+  - graph/crystal recall accounting and explicit gem forgetting hooks
+  - ask parser enforcement for non-freeform structured asks
+  - scope scaffold trigger persistence in `.flyflor/scope.json`
+  - ws thin-client loop closure coverage across ask pause/resume, event subscription, history replay, and request correlation
+- Immediate next kernel gaps:
+  - move from protocol-closed `/ws` loop coverage to fuller end-to-end executive capability execution under the intended trust surface
+  - continue integrating forgetting/decay and vector recall behavior into broader kernel seal validation

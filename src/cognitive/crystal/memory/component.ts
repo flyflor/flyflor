@@ -28,6 +28,10 @@ export class CrystalMemoryComponent extends CrystalComponent {
         return this.gems.recall(request);
     }
 
+    public async forgetGem(id: string): Promise<boolean> {
+        return this.gems.forgetGem(id);
+    }
+
     public async recordTurn(input: CrystalTurnInput): Promise<CrystalTurnResult> {
         return this.gems.recordTurn(input);
     }

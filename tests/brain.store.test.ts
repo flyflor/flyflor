@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { copyFileSync, mkdirSync } from "node:fs";
 import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 import {
     MemoryEventStatus,
@@ -175,6 +176,89 @@ describe("BrainStore", () => {
                     ["legacy-1", MemoryEventType.Event, 10],
                 );
                 expect(plan).toContain("idx_events_owner_type_ts");
+            } finally {
+                reopened.close();
+            }
+        } finally {
+            store.close();
+        }
+    });
+
+    test("sealLiveShardIfStale advances live_month_key to the target month", async () => {
+        const { store, dir } = await freshStore();
+        const brainPath = join(dir, "brain.db");
+        try {
+            const liveMonth = store.listShards().find((item) => item.id === "live")?.monthKey;
+            if (!liveMonth) {
+                throw new Error("live shard month missing");
+            }
+            const nextMonth = nextMonthKey(liveMonth);
+            const currentMonthTs = Date.parse(`${liveMonth}-15T08:00:00.000Z`);
+            store.appendEvent({
+                ownerKey: "scope:test",
+                id: "current-month-event",
+                ts: currentMonthTs,
+                sourceKey: "u1",
+                type: MemoryEventType.Event,
+                content: { text: "current month memory" },
+            });
+
+            const sealed = store.sealLiveShardIfStale(Date.parse(`${nextMonth}-01T00:00:00.000Z`));
+            expect(sealed?.id).toBe(liveMonth);
+            expect(store.listShards().find((item) => item.id === "live")?.monthKey).toBe(nextMonth);
+
+            store.close();
+            const reopened = new Database(brainPath, { readonly: true });
+            try {
+                const storedMonth = reopened
+                    .query<{ value: string | null }, [string]>("SELECT value FROM brain_meta WHERE key = ?1")
+                    .get("live_month_key")?.value;
+                const eventCount = (reopened.query("SELECT COUNT(*) AS count FROM memory_events").get() as { count: number }).count;
+                expect(storedMonth).toBe(nextMonth);
+                expect(eventCount).toBe(0);
+            } finally {
+                reopened.close();
+            }
+        } finally {
+            store.close();
+        }
+    });
+
+    test("sealLiveShardIfStale rebuilds a fresh live db even when the archive month already exists", async () => {
+        const { store, dir } = await freshStore();
+        const brainPath = join(dir, "brain.db");
+        try {
+            const liveMonth = store.listShards().find((item) => item.id === "live")?.monthKey;
+            if (!liveMonth) {
+                throw new Error("live shard month missing");
+            }
+            const nextMonth = nextMonthKey(liveMonth);
+            const currentMonthTs = Date.parse(`${liveMonth}-20T12:00:00.000Z`);
+            store.appendEvent({
+                ownerKey: "scope:test",
+                id: "current-month-event",
+                ts: currentMonthTs,
+                sourceKey: "u1",
+                type: MemoryEventType.Event,
+                content: { text: "current month memory" },
+            });
+
+            const archiveDir = join(dir, "brain", "archive");
+            mkdirSync(archiveDir, { recursive: true });
+            copyFileSync(brainPath, join(archiveDir, `brain.${liveMonth}.db`));
+
+            const sealed = store.sealLiveShardIfStale(Date.parse(`${nextMonth}-01T00:00:00.000Z`));
+            expect(sealed?.archivePath).toBe(join(archiveDir, `brain.${liveMonth}.db`));
+
+            store.close();
+            const reopened = new Database(brainPath, { readonly: true });
+            try {
+                const storedMonth = reopened
+                    .query<{ value: string | null }, [string]>("SELECT value FROM brain_meta WHERE key = ?1")
+                    .get("live_month_key")?.value;
+                const eventCount = (reopened.query("SELECT COUNT(*) AS count FROM memory_events").get() as { count: number }).count;
+                expect(storedMonth).toBe(nextMonth);
+                expect(eventCount).toBe(0);
             } finally {
                 reopened.close();
             }
@@ -492,4 +576,12 @@ function queryPlan(db: Database, sql: string, values: Array<string | number | nu
 
 function tableColumns(db: Database, table: string): string[] {
     return db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((row) => row.name);
+}
+
+function nextMonthKey(monthKey: string): string {
+    const [yearRaw, monthRaw] = monthKey.split("-");
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const date = new Date(Date.UTC(year, month, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }

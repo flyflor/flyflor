@@ -52,6 +52,26 @@ describe("local crystal backend", () => {
 
             expect(recalled.length).toBeGreaterThan(0);
             expect(recalled[0]?.record.content).toContain("blocker");
+            expect(recalled[0]?.record.metadata).toMatchObject({
+                recallReasons: expect.any(Array),
+                recallEvidence: {
+                    bucketMatch: expect.any(Number),
+                    symbolOverlap: expect.any(Number),
+                    coordinateSimilarity: expect.any(Number),
+                    confidence: expect.any(Number),
+                },
+            });
+
+            const gemId = recalled[0]?.record.id;
+            expect(gemId).toBeDefined();
+            expect(await svc.forgetGem(gemId!)).toBe(true);
+            const afterForget = await svc.recall({
+                query: "missing facts blocker list",
+                scope: "stdio:test",
+                limit: 3,
+            });
+            expect(afterForget.map((item) => item.record.id)).not.toContain(gemId);
+            expect(await svc.forgetGem(gemId!)).toBe(false);
         } finally {
             await rm(root, { force: true, recursive: true });
         }

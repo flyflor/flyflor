@@ -629,6 +629,44 @@ describe("GatewayControlHub", () => {
         hub.dispose();
     });
 
+    test("delivers event.publish when subscribing by runtime event class without a requestId", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    {
+                        classes: ["lifecycle"],
+                    },
+                    { id: "event-sub-class-1", requestId: "req-sub-class-1" },
+                ),
+            ),
+        );
+
+        bus.publish({
+            type: RuntimeEventType.AgentTurnStart,
+            at: "2026-05-17T00:00:00.000Z",
+            requestId: "runtime-req-class-1",
+            payload: { channel: Channel.Ws },
+        });
+
+        expect(sent(socket).find((envelope) => envelope.type === GatewayControlMessageType.EventPublish)).toMatchObject({
+            type: GatewayControlMessageType.EventPublish,
+            payload: {
+                event: expect.objectContaining({
+                    type: RuntimeEventType.AgentTurnStart,
+                    requestId: "runtime-req-class-1",
+                }),
+            },
+        });
+        hub.dispose();
+    });
+
     test("keeps the latest Executive capability catalog available through control snapshot", async () => {
         const bus = new GlobalEventBus();
         const hub = createHub({ events: bus });
@@ -728,6 +766,7 @@ describe("GatewayControlHub", () => {
         expect(calls[0]?.options?.context).toMatchObject({
             activeScope: { id: "scope-1" },
             contextForkId: "fork-1",
+            requestId: "client-req-1",
             skillNames: ["skill-a"],
         });
         expect(sent(socket).map((envelope) => envelope.type)).toEqual([
@@ -736,6 +775,45 @@ describe("GatewayControlHub", () => {
             GatewayControlMessageType.TurnDelta,
             GatewayControlMessageType.TurnFinal,
         ]);
+        hub.dispose();
+    });
+
+    test("reuses envelope requestId as the runtime request correlation key", async () => {
+        const calls: Array<GatewayControlDispatchOptions | undefined> = [];
+        const hub = createHub({
+            dispatch: async (_message, options) => {
+                calls.push(options);
+                return {
+                    messageId: "reply-1",
+                    route: { channel: Channel.Ws, conversationKey: "ws-conversation", chatType: ChatType.Direct },
+                    text: "done",
+                };
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.GatewayMessageSend,
+                    {
+                        id: "message-request-id-1",
+                        text: "reuse request id",
+                        user: { id: "u-1" },
+                    },
+                    { id: "send-1", requestId: "req-from-client-1" },
+                ),
+            ),
+        );
+
+        expect(calls[0]?.context?.requestId).toBe("req-from-client-1");
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "send-1",
+            requestId: "req-from-client-1",
+            type: GatewayControlMessageType.TurnFinal,
+        });
         hub.dispose();
     });
 

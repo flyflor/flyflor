@@ -69,6 +69,11 @@ export class AgentAskParser {
         const relatedIds = this.normalizeStringArray(obj.relatedIds);
         const rationale = typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 500) : undefined;
         const continuationHint = this.normalizeContinuationHint(obj.continuationHint);
+        const hasStructuredChoices =
+            (choices?.length ?? 0) > 0 || (questions?.some((question) => (question.choices?.length ?? 0) > 0) ?? false);
+        if (!freeform && !hasStructuredChoices) {
+            throw new Error("flyflor_agent_ask with freeform=false requires at least one structured choice.");
+        }
         const ask: AgentAsk = {
             reason,
             prompt: prompt.slice(0, 2000),

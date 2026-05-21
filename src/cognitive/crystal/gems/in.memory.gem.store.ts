@@ -25,6 +25,10 @@ export class InMemoryCrystalMemoryStore extends CrystalComponent implements Crys
         return [...this.gems.values()];
     }
 
+    public async forgetGem(id: string): Promise<boolean> {
+        return this.gems.delete(id);
+    }
+
     public async upsertAtom(atom: Awaited<CrystalTurnResult["atoms"][number]>): Promise<void> {
         this.atoms.set(atom.id, atom);
     }

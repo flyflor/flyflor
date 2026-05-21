@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
@@ -648,7 +648,7 @@ export class BrainStore extends BrainComponent {
             this.catalog?.upsertShard(this.describeLiveShard());
             return null;
         }
-        return this.sealCurrentLiveShard();
+        return this.sealCurrentLiveShard(currentMonth);
     }
 
     private describeLiveShard(): BrainShardDescriptor {
@@ -755,19 +755,20 @@ export class BrainStore extends BrainComponent {
         if (!this.live) return;
         const currentMonth = utcMonthKey(Date.now());
         if (this.currentLiveMonth !== currentMonth) {
-            this.sealCurrentLiveShard();
+            this.sealCurrentLiveShard(currentMonth);
         }
         if (utcMonthKey(ts) !== this.currentLiveMonth) {
             this.catalog?.upsertShard(this.describeLiveShard());
         }
     }
 
-    private sealCurrentLiveShard(): BrainShardDescriptor | null {
+    private sealCurrentLiveShard(nextLiveMonth = utcMonthKey(Date.now())): BrainShardDescriptor | null {
         if (!this.live) return null;
         const monthKey = this.currentLiveMonth;
         const descriptor = this.archiveAttachedLiveShard(monthKey);
+        createFreshLiveShard(this.options.dbPath, nextLiveMonth);
         this.live = this.openShard(this.options.dbPath);
-        this.currentLiveMonth = ensureLiveShardMonth(this.live.db);
+        this.currentLiveMonth = ensureLiveShardMonth(this.live.db, nextLiveMonth);
         this.catalog?.upsertShard(this.describeLiveShard());
         return descriptor;
     }
@@ -775,16 +776,13 @@ export class BrainStore extends BrainComponent {
     private archiveDetachedLiveShard(monthKey: string): BrainShardDescriptor {
         const archivePath = join(this.archiveDir, `brain.${monthKey}.db`);
         mkdirSync(dirname(archivePath), { recursive: true });
-        if (existsSync(archivePath)) {
-            copyFileSync(this.options.dbPath, archivePath);
-        } else {
-            renameSync(this.options.dbPath, archivePath);
-        }
+        exportShardSnapshot(this.options.dbPath, archivePath);
         const descriptor = describeArchiveShard(archivePath, monthKey);
         this.catalog?.upsertShard(descriptor);
         if (this.catalog) {
             importShardLocators(this.catalog, archivePath, monthKey);
         }
+        removeLiveShardFiles(this.options.dbPath);
         return descriptor;
     }
 
@@ -830,16 +828,51 @@ function detectLiveShardMonth(path: string): string {
     }
 }
 
-function ensureLiveShardMonth(db: Database): string {
+function ensureLiveShardMonth(db: Database, fallbackMonth = utcMonthKey(Date.now())): string {
     brainSchema.install(db);
     const stored = db.query<{ value: string | null }, [string]>("SELECT value FROM brain_meta WHERE key = ?1").get("live_month_key")
         ?.value;
     if (stored && stored.length > 0) {
         return stored;
     }
-    const month = utcMonthKey(Date.now());
+    const month = fallbackMonth;
     db.prepare("INSERT OR REPLACE INTO brain_meta(key, value) VALUES (?1, ?2)").run("live_month_key", month);
     return month;
+}
+
+function createFreshLiveShard(path: string, monthKey: string): void {
+    removeLiveShardFiles(path);
+    const db = new Database(path);
+    try {
+        db.exec("PRAGMA journal_mode = WAL");
+        db.exec("PRAGMA synchronous = NORMAL");
+        db.exec("PRAGMA foreign_keys = ON");
+        brainSchema.install(db);
+        db.prepare("INSERT OR REPLACE INTO brain_meta(key, value) VALUES (?1, ?2)").run("live_month_key", monthKey);
+    } finally {
+        db.close();
+    }
+}
+
+function removeLiveShardFiles(path: string): void {
+    for (const livePath of [path, `${path}-wal`, `${path}-shm`]) {
+        if (existsSync(livePath)) {
+            unlinkSync(livePath);
+        }
+    }
+}
+
+function exportShardSnapshot(sourcePath: string, archivePath: string): void {
+    if (existsSync(archivePath)) {
+        unlinkSync(archivePath);
+    }
+    const db = new Database(sourcePath);
+    try {
+        db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        db.prepare("VACUUM INTO ?1").run(archivePath);
+    } finally {
+        db.close();
+    }
 }
 
 function describeArchiveShard(path: string, monthKey: string): BrainShardDescriptor {

@@ -269,6 +269,34 @@ Next scaling rule:
 
 - when the mainline task stops being a narrow fix and becomes a multi-slice refactor again, create or refresh code worktrees and run child Codex sessions under tmux instead of stretching one session indefinitely
 
+## 2026-05-22 Integration Wave 1
+
+Coordinator-reviewed code slices now landed on mainline:
+
+- `wt/kernel-context-memory`
+  - landed:
+    - live brain shard rollover now exports the current month into archive and recreates a fresh live shard for the next month
+    - graph recall accounting updates recall counters on memory nodes and gems
+- `wt/kernel-scope-crystal-ask`
+  - landed:
+    - crystal recall returns structured evidence metadata
+    - crystal memory exposes explicit gem forgetting without deleting candidate/atom provenance
+    - ask parsing now rejects `freeform=false` asks with no structured choice surface
+    - scope scaffold persists trigger metadata into `.flyflor/scope.json`
+- `wt/kernel-runtime-executive-ws`
+  - landed:
+    - `/ws` control turns reuse client `requestId` as runtime correlation
+    - ws docs now describe the explicit ask pause/resume loop contract
+    - deterministic smokes cover ask-loop closure and thin-client history replay
+
+Resume guidance for a new environment after this integration wave:
+
+1. sync/fetch all branches
+2. restore `main-codex-docs`
+3. run `bun run kernel:tmux`
+4. inspect `git status --short --branch`
+5. confirm whether the next pass should continue on the existing code worktrees or create a fresh split from the new mainline snapshot
+
 ## Practical rule
 
 When in doubt:

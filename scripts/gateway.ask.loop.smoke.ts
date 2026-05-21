@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { GatewayModule } from "../src/agent/gateway/module.ts";
+import type { RuntimeModule } from "../src/agent/runtime/index.ts";
 import { createGatewayControlEnvelope, parseGatewayControlEnvelope } from "../src/protocol/control/index.ts";
 import type { GatewayControlEnvelope, GatewayControlTurnFinalPayload } from "../src/protocol/control/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
@@ -81,12 +82,12 @@ class GatewayAskLoopSmoke {
             const dispatch = new GatewayAskLoopDispatch(memory, this.events);
             this.gateway = new GatewayModule(
                 this.config.gateway,
-                {
+                ({
                     warmup: async () => undefined,
                     dispose: () => undefined,
                     listChatHistory: (options?: { beforeTs?: number; limit?: number }) => memory.listChatHistory(options),
                     handleMessage: (message: GatewayMessage, context: RuntimeContext) => dispatch.handleMessage(message, context),
-                } as unknown as { handleMessage: (message: GatewayMessage, context: RuntimeContext) => Promise<GatewayReply> },
+                } as unknown as RuntimeModule),
                 this.events,
                 { paths: this.config.paths },
             );
