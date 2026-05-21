@@ -37,3 +37,9 @@ bun run build:binary
 - 当前主线目标是完成“智能生命体内核”的大重构，而不是只维持局部 seal。
 - 当工作再次扩成多切片时，优先通过 `git worktree + tmux + Codex` 拆并行切片，提高吞吐。
 - 每次暂停、结束或准备切换环境前，必须先更新根目录 `TODO.md`、`LOGS.md`、`docs/development.workflow.md`、`docs/development.workflow.zh.cn.md`，并 push 所有需要保留的分支。
+
+本地 worktree 规则：
+
+- 当前分支只拥有 context-memory 切片：`src/cognitive/hippocampus/memory/**`、`src/entities/memory/**`、`src/agent/context/**` 与直接相关测试。
+- 未经主线协调者批准，不修改 `src/cognitive/crystal/**`、`src/agent/runtime/**`、`src/agent/gateway/**`、`src/executive/**`。
+- 交还前只更新本 worktree 的 `TODO.md` / `LOGS.md`；主线 handoff 文档由协调者分支维护。

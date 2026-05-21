@@ -36,3 +36,10 @@
   摘要：把仓库交接契约从短周期 seal sprint 升级为长线协调式重构模式，明确下一阶段目标是完整的智能生命体内核，并要求每次停下前都更新 workflow/handoff 文档并全量 push。
   原因：下一阶段需要比单线程串行推进更高的吞吐，而新的 session 也必须能不依赖聊天历史，直接恢复协调职责和 worktree/tmux 并发执行方式。
   验证：主线 handoff 文档已在下一轮 worktree 拆分前更新
+
+- 状态：completed
+  操作者：main-codex
+  范围：kernel-context-memory-bootstrap
+  摘要：为 context-memory 代码 worktree 初始化了显式所有权，负责 hippocampus memory、memory entities、context assembly 及其直接测试。
+  原因：这个切片需要在月分片生命周期、遗忘曲线和召回正确性上独立推进，避免与 scope/crystal 或 runtime/executive 工作互相冲突。
+  验证：`wt/kernel-context-memory` 的本地控制文件已更新

@@ -63,6 +63,21 @@
 9. 在启动多 worktree 开发前，先把全部活动文档统一到“智能生命体内核”口径。
 10. 为主 worktree 和未来子 worktree 引入只追加的 `LOGS.md` 控制文件。
 11. 在主线架构锚点更新完成后，把第一批文档工作拆成三个子 worktree。
+12. 本地切片 owner：`wt/kernel-context-memory`。
+13. 本 worktree 归属文件：
+    - `src/cognitive/hippocampus/memory/**`
+    - `src/entities/memory/**`
+    - `src/agent/context/**`
+    - 覆盖 context assembly、recall、月分片迁移、遗忘曲线、向量记忆的相关测试
+14. 本地目标：
+    - 每月 `brain.db` 分片生命周期稳定
+    - 遗忘/衰减/热记忆压缩保持确定性
+    - 上下文装配严格遵守 `Memory + Crystal + explicit Scope/Fork`
+    - 向量召回和 scope-local recall 在测试下保持一致
+15. 本地交还规则：
+    - 更新本 worktree 的 `TODO.md` 与 `LOGS.md`
+    - 只提交归属文件
+    - 不在本分支改写主线 handoff 文档
 
 ## 红线
 

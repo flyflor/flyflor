@@ -50,3 +50,10 @@
   Summary: Upgraded the repository handoff contract from short seal sprints to a long-running coordinated refactor mode whose explicit target is the full intelligent-lifeform kernel, with mandatory workflow/handoff updates and full-branch pushes at every stop.
   Reason: The next stage needs higher throughput than a single-thread linear loop, and new sessions must be able to resume coordination and worktree/tmux execution without reconstructing intent from chat history.
   Verification: repository handoff docs updated on mainline before the next worktree split
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-context-memory-bootstrap
+  Summary: Initialized the context-memory code worktree with explicit ownership over hippocampus memory, memory entities, context assembly, and their direct tests.
+  Reason: This slice needs to move independently on shard lifecycle, forgetting, and recall correctness without colliding with scope/crystal or runtime/executive work.
+  Verification: local control files updated for `wt/kernel-context-memory`

@@ -63,6 +63,21 @@ Main visible surfaces:
 9. Align all active docs with the "intelligent lifeform kernel" framing before starting multi-worktree implementation.
 10. Introduce append-only `LOGS.md` control files for the main worktree and future child worktrees.
 11. Split the first document pass into three child worktrees after the mainline architecture anchor is updated.
+12. Local slice owner: `wt/kernel-context-memory`.
+13. Owned files for this worktree:
+    - `src/cognitive/hippocampus/memory/**`
+    - `src/entities/memory/**`
+    - `src/agent/context/**`
+    - related tests that exercise context assembly, recall, shard migration, forgetting, and vector memory
+14. Local target:
+    - monthly `brain.db` shard lifecycle is stable
+    - forgetting/decay/hot-memory compression stay deterministic
+    - context assembly respects `Memory + Crystal + explicit Scope/Fork`
+    - vector recall and scope-local recall stay consistent under tests
+15. Local handoff rule:
+    - update this worktree `TODO.md` and `LOGS.md`
+    - commit only owned files
+    - do not rewrite mainline handoff docs from this branch
 
 ## Red Lines
 
