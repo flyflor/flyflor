@@ -679,11 +679,12 @@ Active tmux/worktree lanes:
 
 Scope Vector owner contract:
 
-- `ScopeVectorComponent` owns a separate SQLite DB under `storageDir/scope-vector/scope-vector.db`.
-- Scope Vector owns deterministic vector encoding and bounded hot-subtree recall, similar in spirit to the Crystal vector index.
+- `ScopeVectorComponent` owns scope-local SQLite indexes: default runtime storage is `<scope.projectDir>/.flyflor/scope.db`; injected `dbFile` is reserved for tests or explicit migration tooling.
+- `scope.db` stores Scope Vector nodes, tree nodes, scope hot memory, association terms, and graph edges. It is a context/index plane, not the life ledger.
+- Scope Vector owns deterministic vector encoding and bounded hot-subtree recall, similar in spirit to the Crystal vector index and OpenHuman-style memory-tree folding.
 - Scope is permanent; this component does not implement forgetting or decay over Scope identity.
 - The hot cache is only a performance layer and may be rebuilt from SQLite.
-- `brain.db` remains ledger/query/replay/audit and is never treated as prompt transcript assembly.
+- `brain.db` remains ledger/query/replay/audit and is never treated as prompt transcript assembly or Scope hot-memory storage.
 - Context assembly remains current input + MemoryComponent + CrystalComponent + explicit Scope/Fork + Executive visible capability surface.
 - No semantic `includes`, regex, keyword lists, or punctuation heuristics may drive Scope recall or promotion.
 

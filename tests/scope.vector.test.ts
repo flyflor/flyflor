@@ -16,6 +16,29 @@ afterEach(async () => {
 });
 
 describe("ScopeVectorComponent", () => {
+    test("defaults to scope-local scope.db instead of brain.db", async () => {
+        const { brain, paths } = await fixture({ explicitVectorDb: false });
+        const now = Date.now();
+        const projectDir = join(paths.workspaceDir, "alpha-project");
+        const scope = writeScope(brain, "scope-local-alpha", "Local Alpha", "scope-local vector plane", now, projectDir);
+        const component = new ScopeVectorComponent(paths, brain, { vectorDimensions: 32 });
+        await component.initialize();
+        await component.upsertScope({ scope, summary: "Scope-local memory tree root", nowMs: now });
+
+        const scopeDb = join(projectDir, ".flyflor", "scope.db");
+        expect(tables(scopeDb)).toContain("scope_vectors");
+        expect(tables(scopeDb)).toContain("scope_hot_memory");
+        expect(tables(scopeDb)).toContain("scope_tree_nodes");
+        expect(tables(join(paths.configDir, "brain.db"))).not.toContain("scope_vectors");
+
+        const restarted = new ScopeVectorComponent(paths, brain, { vectorDimensions: 32 });
+        const hot = await restarted.listHotScopes(4);
+        expect(hot[0]?.scopeId).toBe(scope.id);
+        restarted.dispose();
+        component.dispose();
+        brain.close();
+    });
+
     test("owns a separate SQLite vector DB and recalls an explicit scope", async () => {
         const { brain, component, vectorDb } = await fixture();
         const now = Date.now();
@@ -30,6 +53,59 @@ describe("ScopeVectorComponent", () => {
         const vectorTables = tables(vectorDb);
         expect(brainTables).not.toContain("scope_vectors");
         expect(vectorTables).toContain("scope_vectors");
+        brain.close();
+    });
+
+    test("records turn hot memory inside scope.db and renders it during recall", async () => {
+        const { brain, component } = await fixture();
+        const now = Date.now();
+        const scope = writeScope(brain, "scope-hot", "Hot Scope", "ASK closure and long loop", now);
+        await component.noteTurn({
+            context: {
+                requestId: "req-hot",
+                now: new Date(now).toISOString(),
+                activeScope: {
+                    id: scope.id,
+                    title: scope.title,
+                    projectDir: scope.projectDir,
+                    projectMemoryDir: scope.projectMemoryDir,
+                },
+            },
+            messageText: "Implement scope db hot memory",
+            replyText: "Scope hot memory writes project memory into scope.db",
+            activeScope: {
+                id: scope.id,
+                title: scope.title,
+                projectDir: scope.projectDir,
+                projectMemoryDir: scope.projectMemoryDir,
+            },
+            nowMs: now,
+        });
+
+        const hits = await component.recall({ scopeId: scope.id, query: "hot memory", limit: 2, nowMs: now });
+        expect(hits[0]?.summary).toContain("Scope hot memory:");
+        expect(hits[0]?.summary).toContain("scope.db");
+        brain.close();
+    });
+
+    test("uses scope association rows as recall evidence without writing ledger history", async () => {
+        const { brain, component, vectorDb } = await fixture();
+        const now = Date.now();
+        const scope = writeScope(brain, "scope-association", "Association Scope", "project memory relation index", now);
+        await component.upsertScope({ scope, summary: "Association scope root", nowMs: now });
+        await component.recordHotMemory({
+            scopeId: scope.id,
+            summary: "Memory tree links stable anchors",
+            text: "Vector associations connect ASK closure, scope constitution, and hot memory.",
+            symbols: ["ask-closure", "scope-constitution", "hot-memory"],
+            importance: 0.9,
+            nowMs: now,
+        });
+
+        const hits = await component.recall({ scopeId: scope.id, query: "ask closure scope constitution", limit: 2, nowMs: now });
+        expect(hits[0]?.scopeId).toBe(scope.id);
+        expect(hits[0]?.evidence.symbol).toBeGreaterThan(0);
+        expect(tables(join(pathsFromDb(vectorDb).configDir, "brain.db"))).not.toContain("scope_associations");
         brain.close();
     });
 
@@ -89,7 +165,7 @@ describe("ScopeVectorComponent", () => {
     });
 });
 
-async function fixture(): Promise<{
+async function fixture(options: { explicitVectorDb?: boolean } = {}): Promise<{
     brain: BrainStore;
     component: ScopeVectorComponent;
     paths: FlyflorPaths;
@@ -101,18 +177,21 @@ async function fixture(): Promise<{
     const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
     await brain.open();
     const vectorDb = join(paths.storageDir, "scope-vector", "scope-vector.db");
-    const component = new ScopeVectorComponent(paths, brain, { dbFile: vectorDb, vectorDimensions: 32 });
+    const component =
+        options.explicitVectorDb === false
+            ? new ScopeVectorComponent(paths, brain, { vectorDimensions: 32 })
+            : new ScopeVectorComponent(paths, brain, { dbFile: vectorDb, vectorDimensions: 32 });
     await component.initialize();
     return { brain, component, paths, vectorDb };
 }
 
-function writeScope(brain: BrainStore, id: string, title: string, goal: string, now: number): ScopeRecord {
+function writeScope(brain: BrainStore, id: string, title: string, goal: string, now: number, projectDir = join(tmpdir(), id)): ScopeRecord {
     return brain.upsertScope({
         id,
         title,
         goal,
-        projectDir: join(tmpdir(), id),
-        projectMemoryDir: join(tmpdir(), id, ".flyflor", "memory"),
+        projectDir,
+        projectMemoryDir: join(projectDir, ".flyflor", "memory"),
         createdAt: now,
         updatedAt: now,
         lastUsedAt: now,

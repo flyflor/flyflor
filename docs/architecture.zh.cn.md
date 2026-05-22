@@ -117,7 +117,7 @@ Flyflor 当前活跃设计可以理解成四个彼此协作的认知器官：
 
 也就是说，Flyflor 的生命日志会随着月份诞生新的账本分片，但上下文装配仍然不直接从这些账本原文取材。
 
-Scope Vector permanent graph index 是独立的长期 graph index：它保留 scope / fork / recall 之间的稳定连边和检索锚点，但仍然不承担 prompt 容器职责。
+Scope Vector permanent graph index 是独立的长期 graph/tree index：默认落在每个 Scope 的 `<scope.projectDir>/.flyflor/scope.db`，保留 scope / fork / recall 之间的稳定连边、记忆树节点、热区项目记忆和多维关联词索引，但仍然不承担 prompt 容器职责。
 
 它不是：
 

@@ -423,7 +423,7 @@ Latest full seal validation in this workspace passed:
   - `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`
   - `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests`
 - [x] Main coordinator implemented a verified Scope Vector baseline in the coordinator worktree:
-  - independent `scope-vector/scope-vector.db`
+  - independent Scope Vector DB, now defaulting to each Scope project's `.flyflor/scope.db`
   - `ScopeVectorComponent`
   - deterministic Scope vector codec
   - bounded hot subtree recall
@@ -478,3 +478,13 @@ Latest full seal validation in this workspace passed:
 - [x] Switch the current worktree back to `master`.
 - [x] Merge the coordinator snapshot into `master`.
 - [ ] Push `master` for the next session.
+
+## 2026-05-22 Scope DB Vector Closure
+
+- [x] Move default Scope Vector persistence from the shared vector DB to each Scope project's `.flyflor/scope.db`.
+- [x] Keep injected `dbFile` support for tests and explicit migration tooling.
+- [x] Add `scope_tree_nodes`, `scope_hot_memory`, and `scope_associations` tables beside `scope_vectors` and `scope_vector_edges`.
+- [x] Write active-scope turn summaries into scope hot memory while leaving full turn ledger authority in `brain.db`.
+- [x] Open scope-local DB files on demand during recall, neighbor lookup, and hot-scope listing.
+- [x] Cover scope-local DB isolation, hot memory recall rendering, and association evidence in `tests/scope.vector.test.ts`.
+- [x] Update workflow, memory, and architecture docs so `brain.db` remains ledger/query/replay/audit/detail only.

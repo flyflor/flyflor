@@ -15,6 +15,7 @@ flowchart LR
         Memory["Memory recall"]
         Crystal["Crystal recall"]
         Scope["activeScope"]
+        ScopeDb["scope.db vector/tree/hot memory"]
         Fork["contextForkId"]
     end
 
@@ -32,6 +33,7 @@ flowchart LR
 - Memory recall（热记忆）
 - Crystal recall（晶体智力）
 - 显式 scope
+- scope-local `scope.db` 二次索引：Scope Vector、记忆树节点、热区项目记忆和关联词召回
 - 显式 fork
 - Executive 可见能力面
 
@@ -93,6 +95,7 @@ flowchart LR
 - scope 摘要
 - scope 下可复用压缩结果
 - scope 相关 recall 索引
+- `<scope.projectDir>/.flyflor/scope.db` 中的 Scope Vector、tree node、hot memory 和 association index
 
 它的设计主语不是“项目目录附属配置”，而是智能生命体对长期事情形成的独立生命工作域。
 
@@ -107,6 +110,8 @@ flowchart LR
 
 - 从 `brain.db` 原始事件里直接拼 prompt
 - 通过 `channel/chat/thread/user` 自动猜出来的工作域
+
+`scope.db` 与 `brain.db` 必须分离：`brain.db` 是按月生命账本，负责 ledger/query/replay/audit/detail；`scope.db` 是某个 Scope 的上下文装备索引，保存类似 MemoryComponent 热区记忆的项目记忆、记忆树节点、多维关联词和向量召回材料。用户显式进入一个 Scope，或 codename 锚点升格成 Scope 后，运行时才能用 Scope Vector 把这些二次产物装配进热区。
 
 ## Fork
 

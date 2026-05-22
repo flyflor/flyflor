@@ -288,3 +288,10 @@
   Summary: Updated the handoff target from `codex/seal-coordinator` to `master`, committed the coordinator snapshot, switched the current worktree to `master`, and fast-forwarded `master` to the seal snapshot.
   Reason: The next environment/session should start from the canonical mainline, not a staging branch.
   Verification: `git switch master`; `git merge --ff-only codex/seal-coordinator`; pending `git push origin master`
+
+- Status: completed
+  Actor: main-codex
+  Scope: scope-db-vector-closure
+  Summary: Promoted Scope Vector persistence to scope-local `.flyflor/scope.db`, added tree/hot-memory/association tables, wrote active-scope turns into Scope hot memory, and documented the split from `brain.db`.
+  Reason: Scope needs its own context-equipment index and project hot memory plane; the monthly `brain.db` must remain the life ledger/query/replay/audit/detail store rather than a prompt or Scope-memory container.
+  Verification: `bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/memory.brain.wire.test.ts`; `bun run check`; `bun run docs:check`; `git diff --check`

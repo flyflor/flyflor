@@ -678,11 +678,12 @@ Worktree：
 
 Scope Vector owner contract：
 
-- `ScopeVectorComponent` 拥有独立 SQLite DB：`storageDir/scope-vector/scope-vector.db`。
-- Scope Vector 自己封装确定性 vector 编码和有界 hot-subtree 召回，设计精神接近 Crystal vector index。
+- `ScopeVectorComponent` 拥有 scope-local SQLite index：默认运行时落在 `<scope.projectDir>/.flyflor/scope.db`；显式注入 `dbFile` 只用于测试或明确的迁移工具。
+- `scope.db` 保存 Scope Vector 节点、记忆树节点、scope 热区记忆、关联词条和图边。它是上下文 / 索引面，不是生命账本。
+- Scope Vector 自己封装确定性 vector 编码和有界 hot-subtree 召回，设计精神接近 Crystal vector index 和 OpenHuman 式 memory-tree folding。
 - Scope 是常驻实体；该 component 不对 Scope identity 实现遗忘或 decay。
 - hot cache 只是性能层，可从 SQLite 重建。
-- `brain.db` 仍然只做 ledger/query/replay/audit，不能被当作 prompt transcript assembly。
+- `brain.db` 仍然只做 ledger/query/replay/audit，不能被当作 prompt transcript assembly 或 Scope 热区记忆存储。
 - context assembly 仍然来自 current input + MemoryComponent + CrystalComponent + explicit Scope/Fork + Executive visible capability surface。
 - Scope 召回或升格不得由语义 `includes`、regex、关键词表或标点启发式驱动。
 

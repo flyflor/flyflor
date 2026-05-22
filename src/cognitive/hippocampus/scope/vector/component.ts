@@ -8,7 +8,7 @@
  */
 
 import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 import { Component } from "../../../../agent/di/decorators/index.ts";
 import { BrainComponent } from "../../../../components/component.ts";
@@ -94,6 +94,46 @@ interface ScopeVectorPersistedNode {
     active: number;
 }
 
+interface ScopeHotMemoryInput {
+    id?: string;
+    requestId?: string;
+    scopeId: string;
+    sourceId?: string;
+    summary: string;
+    text: string;
+    symbols?: string[];
+    importance?: number;
+    nowMs?: number;
+}
+
+interface ScopeTreeNodeInput {
+    id?: string;
+    scopeId: string;
+    parentId?: string;
+    kind: "root" | "summary" | "hot-memory" | "association";
+    title: string;
+    summary: string;
+    symbols?: string[];
+    sourceId?: string;
+    score?: number;
+    depth?: number;
+    nowMs?: number;
+}
+
+interface ScopeHotMemoryRow {
+    id: string;
+    scopeId: string;
+    summary: string;
+    text: string;
+    embeddingJson: string;
+    symbolJson: string;
+    importance: number;
+    createdAt: number;
+    updatedAt: number;
+    sourceId?: string;
+    requestId?: string;
+}
+
 @Component()
 export class ScopeVectorComponent extends BrainComponent {
     private readonly cache: LruCache<ScopeVectorHit[]>;
@@ -101,8 +141,7 @@ export class ScopeVectorComponent extends BrainComponent {
     private readonly dbFile: string;
     private readonly dimensions: number;
     private readonly codec: ScopeVectorCodec;
-    private database?: Database;
-    private initialized = false;
+    private readonly databases = new Map<string, Database>();
 
     public constructor(
         private readonly paths: FlyflorPaths,
@@ -110,7 +149,10 @@ export class ScopeVectorComponent extends BrainComponent {
         options: ScopeVectorComponentOptions = {},
     ) {
         super();
-        this.dbFile = options.dbFile ?? `${paths.storageDir}/scope-vector/scope-vector.db`;
+        // Default runtime storage is scope-local: each solidified Scope owns its
+        // own project `.flyflor/scope.db`. Tests and migrations may inject a
+        // single dbFile to preserve old shared-index behavior explicitly.
+        this.dbFile = options.dbFile ?? join(paths.projectFlyflorDir, "scope.db");
         this.dimensions = options.vectorDimensions ?? DEFAULT_SCOPE_VECTOR_DIMENSIONS;
         this.codec = options.codec ?? scopeVectorCodec;
         this.cache = new LruCache<ScopeVectorHit[]>({
@@ -120,9 +162,14 @@ export class ScopeVectorComponent extends BrainComponent {
     }
 
     public async initialize(): Promise<void> {
-        if (this.initialized) return;
-        await mkdir(dirname(this.dbFile), { recursive: true });
-        const database = new Database(this.dbFile, { create: true });
+        await this.openDatabase(this.dbFile);
+    }
+
+    private async openDatabase(dbFile: string): Promise<Database> {
+        const existing = this.databases.get(dbFile);
+        if (existing) return existing;
+        await mkdir(dirname(dbFile), { recursive: true });
+        const database = new Database(dbFile, { create: true });
         database.exec("PRAGMA journal_mode = WAL");
         database.exec("PRAGMA synchronous = NORMAL");
         database.exec("PRAGMA foreign_keys = ON");
@@ -143,6 +190,48 @@ export class ScopeVectorComponent extends BrainComponent {
             );
         `);
         database.exec(`
+            CREATE TABLE IF NOT EXISTS scope_tree_nodes (
+                id TEXT PRIMARY KEY,
+                scope_id TEXT NOT NULL,
+                parent_id TEXT,
+                kind TEXT NOT NULL,
+                title TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                embedding_json TEXT NOT NULL,
+                symbol_json TEXT NOT NULL,
+                score REAL NOT NULL,
+                depth INTEGER NOT NULL,
+                source_id TEXT,
+                updated_at INTEGER NOT NULL
+            );
+        `);
+        database.exec(`
+            CREATE TABLE IF NOT EXISTS scope_hot_memory (
+                id TEXT PRIMARY KEY,
+                scope_id TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                text TEXT NOT NULL,
+                embedding_json TEXT NOT NULL,
+                symbol_json TEXT NOT NULL,
+                importance REAL NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                source_id TEXT,
+                request_id TEXT
+            );
+        `);
+        database.exec(`
+            CREATE TABLE IF NOT EXISTS scope_associations (
+                id TEXT PRIMARY KEY,
+                scope_id TEXT NOT NULL,
+                term TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                weight REAL NOT NULL,
+                source_id TEXT,
+                updated_at INTEGER NOT NULL
+            );
+        `);
+        database.exec(`
             CREATE TABLE IF NOT EXISTS scope_vector_edges (
                 id TEXT PRIMARY KEY,
                 from_scope_id TEXT NOT NULL,
@@ -154,16 +243,21 @@ export class ScopeVectorComponent extends BrainComponent {
         `);
         database.exec("CREATE INDEX IF NOT EXISTS idx_scope_vectors_last_used ON scope_vectors(last_used_at DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_scope_vectors_owner ON scope_vectors(owner_key)");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_scope_tree_nodes_scope ON scope_tree_nodes(scope_id, kind, score DESC)");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_scope_hot_memory_scope ON scope_hot_memory(scope_id, importance DESC, updated_at DESC)");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_scope_associations_scope ON scope_associations(scope_id, kind, weight DESC)");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_scope_associations_term ON scope_associations(term)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_scope_vector_edges_from ON scope_vector_edges(from_scope_id, kind, score DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_scope_vector_edges_to ON scope_vector_edges(to_scope_id, kind, score DESC)");
-        this.database = database;
-        this.initialized = true;
+        this.databases.set(dbFile, database);
+        return database;
     }
 
     public dispose(): void {
-        this.database?.close();
-        this.database = undefined;
-        this.initialized = false;
+        for (const database of this.databases.values()) {
+            database.close();
+        }
+        this.databases.clear();
         this.cache.clear();
         this.hotScopeIds.clear();
     }
@@ -177,34 +271,36 @@ export class ScopeVectorComponent extends BrainComponent {
         relatedScopeIds?: string[];
         nowMs?: number;
     }): Promise<void> {
-        await this.initialize();
+        const database = await this.databaseForScope(input.scope);
         const nowMs = input.nowMs ?? Date.now();
         const codename = input.codename ?? null;
+        const summary = (input.summary ?? this.buildScopeSummary(input.scope, codename)).trim();
+        const symbols = this.codec.normalizeSymbols(input.symbols ?? this.buildScopeSymbols(input.scope, codename));
         const node: ScopeVectorPersistedNode = {
             scopeId: input.scope.id,
             ownerKey: `scope:${input.scope.id}`,
             title: input.scope.title,
             goal: input.scope.goal,
-            summary: (input.summary ?? this.buildScopeSummary(input.scope, codename)).trim(),
+            summary,
             embeddingJson: JSON.stringify(
                 this.codec.embedScopeText(
                     {
                         scope: input.scope,
                         codename,
-                        summary: input.summary,
-                        symbols: input.symbols,
+                        summary,
+                        symbols,
                     },
                     this.dimensions,
                 ),
             ),
-            symbolJson: JSON.stringify(this.codec.normalizeSymbols(input.symbols ?? this.buildScopeSymbols(input.scope, codename))),
+            symbolJson: JSON.stringify(symbols),
             updatedAt: nowMs,
             lastUsedAt: input.scope.lastUsedAt,
             useCount: input.scope.useCount,
             codenameId: codename?.id,
             active: input.active === false ? 0 : 1,
         };
-        this.database!
+        database
             .prepare(
                 `INSERT OR REPLACE INTO scope_vectors (
                     scope_id, owner_key, title, goal, summary, embedding_json, symbol_json,
@@ -225,10 +321,26 @@ export class ScopeVectorComponent extends BrainComponent {
                 node.codenameId ?? null,
                 node.active,
             );
+        await this.upsertTreeNode({
+            scopeId: node.scopeId,
+            id: `${node.scopeId}:root`,
+            kind: "root",
+            title: node.title,
+            summary,
+            symbols,
+            score: 1,
+            depth: 0,
+            nowMs,
+        }, database);
+        this.upsertAssociations(database, node.scopeId, symbols, "scope", node.scopeId, nowMs, 1);
         this.invalidateScopeCache(node.scopeId);
         this.hotScopeIds.add(node.scopeId);
         if (input.relatedScopeIds && input.relatedScopeIds.length > 0) {
             for (const related of input.relatedScopeIds) {
+                const relatedScope = this.brain.getScope(related);
+                if (relatedScope) {
+                    await this.upsertScopeRow(database, relatedScope, nowMs);
+                }
                 await this.upsertEdge({
                     fromScopeId: node.scopeId,
                     toScopeId: related,
@@ -241,9 +353,9 @@ export class ScopeVectorComponent extends BrainComponent {
     }
 
     public async upsertEdge(input: Omit<ScopeVectorEdge, "id"> & { id?: string }): Promise<void> {
-        await this.initialize();
+        const database = await this.databaseForScopeId(input.fromScopeId);
         const id = input.id ?? `${input.kind}:${input.fromScopeId}:${input.toScopeId}`;
-        this.database!
+        database
             .prepare(
                 `INSERT OR REPLACE INTO scope_vector_edges (
                     id, from_scope_id, to_scope_id, kind, score, updated_at
@@ -253,6 +365,50 @@ export class ScopeVectorComponent extends BrainComponent {
         this.invalidateScopeCache(input.fromScopeId);
         this.invalidateScopeCache(input.toScopeId);
         this.hotScopeIds.add(input.fromScopeId);
+    }
+
+    public async recordHotMemory(input: ScopeHotMemoryInput): Promise<void> {
+        const database = await this.databaseForScopeId(input.scopeId);
+        const nowMs = input.nowMs ?? Date.now();
+        const id = input.id ?? `hot-${crypto.randomUUID()}`;
+        const symbols = this.codec.normalizeSymbols(input.symbols ?? [input.summary, input.text]);
+        const embedding = this.codec.embedText([input.summary, input.text, ...symbols].join(" "), this.dimensions);
+        database
+            .prepare(
+                `INSERT OR REPLACE INTO scope_hot_memory (
+                    id, scope_id, summary, text, embedding_json, symbol_json, importance,
+                    created_at, updated_at, source_id, request_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+                id,
+                input.scopeId,
+                input.summary,
+                input.text,
+                JSON.stringify(embedding),
+                JSON.stringify(symbols),
+                input.importance ?? 0.6,
+                nowMs,
+                nowMs,
+                input.sourceId ?? null,
+                input.requestId ?? null,
+            );
+        await this.upsertTreeNode({
+            scopeId: input.scopeId,
+            id: `${input.scopeId}:hot:${id}`,
+            parentId: `${input.scopeId}:root`,
+            kind: "hot-memory",
+            title: input.summary.slice(0, 120) || "scope hot memory",
+            summary: input.summary,
+            symbols,
+            sourceId: id,
+            score: input.importance ?? 0.6,
+            depth: 1,
+            nowMs,
+        }, database);
+        this.upsertAssociations(database, input.scopeId, symbols, "hot-memory", id, nowMs, input.importance ?? 0.6);
+        this.invalidateScopeCache(input.scopeId);
+        this.hotScopeIds.add(input.scopeId);
     }
 
     public async syncScopeFromBrain(scopeId: string): Promise<boolean> {
@@ -277,16 +433,17 @@ export class ScopeVectorComponent extends BrainComponent {
         const limit = Math.max(1, Math.min(16, Math.floor(input.limit ?? 4)));
         const scopeId = this.resolveScopeId(input);
         if (!scopeId) return [];
+        await this.databaseForScopeId(scopeId);
         const cacheKey = this.cacheKey(scopeId, input);
         const cached = this.cache.get(cacheKey, input.nowMs ?? Date.now());
         if (cached) return cached.slice(0, limit);
-        const rows = this.loadSubtreeRows(scopeId, limit);
+        const rows = await this.loadSubtreeRows(scopeId, limit);
         if (rows.length === 0) return [];
         const queryEmbedding = input.queryEmbedding ?? this.embedQuery(input.query ?? scopeId);
         const querySymbols = this.codec.normalizeSymbols([input.query ?? "", input.codenameId ?? "", scopeId]);
         const nowMs = input.nowMs ?? Date.now();
-        const hits = rows
-            .map((row) => this.scoreRow(row, queryEmbedding, querySymbols, nowMs, input.contextForkId))
+        const scored = await Promise.all(rows.map((row) => this.scoreRow(row, queryEmbedding, querySymbols, nowMs, input.contextForkId)));
+        const hits = scored
             .filter((hit) => hit.score > 0)
             .sort((left, right) => {
                 if (right.score !== left.score) return right.score - left.score;
@@ -308,27 +465,32 @@ export class ScopeVectorComponent extends BrainComponent {
 
     public async listHotScopes(limit = 8): Promise<ScopeVectorHit[]> {
         await this.initialize();
-        const rows = this.loadAllRows().sort((left, right) => {
+        const rows = (await this.loadAllRows()).sort((left, right) => {
             if (right.useCount !== left.useCount) return right.useCount - left.useCount;
             if (right.lastUsedAt !== left.lastUsedAt) return right.lastUsedAt - left.lastUsedAt;
             return left.scopeId.localeCompare(right.scopeId);
         });
-        return rows.slice(0, Math.max(1, Math.min(16, limit))).map((row) => this.scoreRow(row, this.embedQuery(row.scopeId), [row.scopeId], Date.now()));
+        return Promise.all(
+            rows
+                .slice(0, Math.max(1, Math.min(16, limit)))
+                .map((row) => this.scoreRow(row, this.embedQuery(row.scopeId), [row.scopeId], Date.now())),
+        );
     }
 
     public async recallScopeNeighbors(scopeId: string, limit = 8): Promise<ScopeVectorHit[]> {
         await this.initialize();
+        await this.databaseForScopeId(scopeId);
         const nowMs = Date.now();
-        const edges = this.loadEdges(scopeId)
+        const edges = (await this.loadEdges(scopeId))
             .sort((left, right) => right.score - left.score)
             .slice(0, Math.max(1, Math.min(16, limit)));
-        const rows = this.loadAllRows().filter((row) => row.scopeId !== scopeId);
+        const rows = (await this.loadAllRows()).filter((row) => row.scopeId !== scopeId);
         const hits: ScopeVectorHit[] = [];
         for (const edge of edges) {
             const neighborId = edge.fromScopeId === scopeId ? edge.toScopeId : edge.fromScopeId;
             const row = rows.find((item) => item.scopeId === neighborId);
             if (!row) continue;
-            hits.push(this.scoreRow(row, this.embedQuery(scopeId), [scopeId, row.scopeId], nowMs));
+            hits.push(await this.scoreRow(row, this.embedQuery(scopeId), [scopeId, row.scopeId], nowMs));
         }
         return hits.slice(0, limit);
     }
@@ -358,10 +520,22 @@ export class ScopeVectorComponent extends BrainComponent {
             relatedScopeIds: input.relatedScopeIds,
             nowMs: input.nowMs,
         });
+        // Scope hot memory is an index/materialization plane, not the life
+        // ledger. The authoritative turn event remains in brain.db.
+        await this.recordHotMemory({
+            scopeId,
+            requestId: input.context.requestId,
+            sourceId: input.context.contextForkId,
+            summary: summary.slice(0, 500),
+            text: [input.messageText, input.replyText].filter(Boolean).join("\n"),
+            symbols,
+            importance: input.crystallizedGems && input.crystallizedGems.length > 0 ? 0.8 : 0.6,
+            nowMs: input.nowMs,
+        });
     }
 
-    private loadRows(scopeId: string): ScopeVectorPersistedNode[] {
-        const db = this.requireDatabase();
+    private async loadRows(scopeId: string): Promise<ScopeVectorPersistedNode[]> {
+        const db = await this.databaseForScopeId(scopeId);
         return db
             .query<ScopeVectorPersistedNode, [string]>(
                 `SELECT scope_id AS scopeId, owner_key AS ownerKey, title, goal, summary, embedding_json AS embeddingJson, symbol_json AS symbolJson, updated_at AS updatedAt, last_used_at AS lastUsedAt, use_count AS useCount, codename_id AS codenameId, active FROM scope_vectors WHERE scope_id = ?1`,
@@ -369,33 +543,33 @@ export class ScopeVectorComponent extends BrainComponent {
             .all(scopeId);
     }
 
-    private loadSubtreeRows(scopeId: string, limit: number): ScopeVectorPersistedNode[] {
-        const root = this.loadRows(scopeId);
+    private async loadSubtreeRows(scopeId: string, limit: number): Promise<ScopeVectorPersistedNode[]> {
+        const root = await this.loadRows(scopeId);
         if (root.length === 0) return [];
-        const neighborIds = this.loadEdges(scopeId)
+        const neighborIds = (await this.loadEdges(scopeId))
             .sort((left, right) => right.score - left.score)
             .slice(0, Math.max(0, limit * 2))
             .map((edge) => (edge.fromScopeId === scopeId ? edge.toScopeId : edge.fromScopeId));
         const rows = new Map<string, ScopeVectorPersistedNode>();
         for (const row of root) rows.set(row.scopeId, row);
         for (const neighborId of neighborIds) {
-            const row = this.loadRows(neighborId)[0];
+            const row = (await this.loadRows(neighborId))[0];
             if (row) rows.set(row.scopeId, row);
         }
         return [...rows.values()];
     }
 
-    private loadAllRows(): ScopeVectorPersistedNode[] {
-        const db = this.requireDatabase();
-        return db
-            .query<ScopeVectorPersistedNode, []>(
-                `SELECT scope_id AS scopeId, owner_key AS ownerKey, title, goal, summary, embedding_json AS embeddingJson, symbol_json AS symbolJson, updated_at AS updatedAt, last_used_at AS lastUsedAt, use_count AS useCount, codename_id AS codenameId, active FROM scope_vectors`,
-            )
-            .all();
+    private async loadAllRows(): Promise<ScopeVectorPersistedNode[]> {
+        const rows: ScopeVectorPersistedNode[] = [];
+        for (const scope of this.brain.listScopes({ limit: 500 })) {
+            rows.push(...(await this.loadRows(scope.id)));
+        }
+        if (rows.length > 0) return rows;
+        return this.queryRows(this.requireDefaultDatabase());
     }
 
-    private loadEdges(scopeId: string): ScopeVectorEdge[] {
-        const db = this.requireDatabase();
+    private async loadEdges(scopeId: string): Promise<ScopeVectorEdge[]> {
+        const db = await this.databaseForScopeId(scopeId);
         return db
             .query<ScopeVectorEdge, [string]>(
                 `SELECT id, from_scope_id AS fromScopeId, to_scope_id AS toScopeId, kind, score, updated_at AS updatedAt FROM scope_vector_edges WHERE from_scope_id = ?1 OR to_scope_id = ?1`,
@@ -403,19 +577,22 @@ export class ScopeVectorComponent extends BrainComponent {
             .all(scopeId);
     }
 
-    private scoreRow(
+    private async scoreRow(
         row: ScopeVectorPersistedNode,
         queryEmbedding: number[],
         querySymbols: string[],
         nowMs: number,
         contextForkId?: string,
-    ): ScopeVectorHit {
+    ): Promise<ScopeVectorHit> {
+        const hotMemory = this.loadHotMemory(row.scopeId, queryEmbedding, querySymbols, nowMs, 4);
+        const hotBoost = Math.min(0.2, hotMemory.reduce((sum, item) => sum + item.importance, 0) / 20);
         const embedding = this.codec.cosine(queryEmbedding, this.parseEmbedding(row.embeddingJson));
         const symbol = this.codec.symbolOverlap(querySymbols, this.parseSymbols(row.symbolJson));
         const activity = this.activityScore(row.lastUsedAt, row.useCount, nowMs);
         const adjacency = this.adjacencyScore(row.scopeId, contextForkId);
         const activeBoost = row.active ? 0.15 : 0;
-        const score = embedding * 0.6 + symbol * 0.18 + activity * 0.14 + adjacency * 0.08 + activeBoost;
+        const association = this.associationScore(row.scopeId, querySymbols);
+        const score = embedding * 0.46 + symbol * 0.16 + association * 0.14 + activity * 0.12 + adjacency * 0.06 + activeBoost + hotBoost;
         return {
             scopeId: row.scopeId,
             score,
@@ -423,10 +600,10 @@ export class ScopeVectorComponent extends BrainComponent {
             title: row.title,
             goal: row.goal,
             codenameId: row.codenameId,
-            relatedIds: this.loadEdges(row.scopeId).map((edge) => (edge.fromScopeId === row.scopeId ? edge.toScopeId : edge.fromScopeId)).slice(0, 8),
-            summary: row.summary,
+            relatedIds: (await this.loadEdges(row.scopeId)).map((edge) => (edge.fromScopeId === row.scopeId ? edge.toScopeId : edge.fromScopeId)).slice(0, 8),
+            summary: this.renderScopeSummary(row.summary, hotMemory),
             hot: row.active ? true : false,
-            evidence: { embedding, symbol, activity, adjacency },
+            evidence: { embedding, symbol: Math.max(symbol, association), activity, adjacency },
         };
     }
 
@@ -509,11 +686,190 @@ export class ScopeVectorComponent extends BrainComponent {
         return [...this.hotScopeIds];
     }
 
-    private requireDatabase(): Database {
-        if (!this.database) {
+    private async databaseForScope(scope: ScopeRecord): Promise<Database> {
+        return this.openDatabase(this.dbFileForScope(scope));
+    }
+
+    private async databaseForScopeId(scopeId: string): Promise<Database> {
+        const scope = this.brain.getScope(scopeId);
+        if (!scope) return this.openDatabase(this.dbFile);
+        return this.databaseForScope(scope);
+    }
+
+    private requireDatabaseForScopeId(scopeId: string): Database {
+        const scope = this.brain.getScope(scopeId);
+        const dbFile = scope ? this.dbFileForScope(scope) : this.dbFile;
+        const db = this.databases.get(dbFile);
+        if (!db) {
             throw new Error("ScopeVectorComponent is not initialized.");
         }
-        return this.database;
+        return db;
+    }
+
+    private requireDefaultDatabase(): Database {
+        const db = this.databases.get(this.dbFile);
+        if (!db) {
+            throw new Error("ScopeVectorComponent is not initialized.");
+        }
+        return db;
+    }
+
+    private dbFileForScope(scope: ScopeRecord): string {
+        if (this.dbFile !== join(this.paths.projectFlyflorDir, "scope.db")) return this.dbFile;
+        return join(scope.projectDir, ".flyflor", "scope.db");
+    }
+
+    private async upsertScopeRow(database: Database, scope: ScopeRecord, nowMs: number): Promise<void> {
+        const codename = this.brain.listCodenames({ limit: 100 }).find((row) => row.scopeId === scope.id) ?? null;
+        const summary = this.buildScopeSummary(scope, codename);
+        const symbols = this.buildScopeSymbols(scope, codename);
+        const node: ScopeVectorPersistedNode = {
+            scopeId: scope.id,
+            ownerKey: `scope:${scope.id}`,
+            title: scope.title,
+            goal: scope.goal,
+            summary,
+            embeddingJson: JSON.stringify(this.codec.embedScopeText({ scope, codename, summary, symbols }, this.dimensions)),
+            symbolJson: JSON.stringify(symbols),
+            updatedAt: nowMs,
+            lastUsedAt: scope.lastUsedAt,
+            useCount: scope.useCount,
+            codenameId: codename?.id,
+            active: 1,
+        };
+        database
+            .prepare(
+                `INSERT OR REPLACE INTO scope_vectors (
+                    scope_id, owner_key, title, goal, summary, embedding_json, symbol_json,
+                    updated_at, last_used_at, use_count, codename_id, active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+                node.scopeId,
+                node.ownerKey,
+                node.title,
+                node.goal ?? null,
+                node.summary,
+                node.embeddingJson,
+                node.symbolJson,
+                node.updatedAt,
+                node.lastUsedAt,
+                node.useCount,
+                node.codenameId ?? null,
+                node.active,
+            );
+        await this.upsertTreeNode({
+            scopeId: scope.id,
+            id: `${scope.id}:root`,
+            kind: "root",
+            title: scope.title,
+            summary,
+            symbols,
+            score: 1,
+            depth: 0,
+            nowMs,
+        }, database);
+    }
+
+    private async upsertTreeNode(input: ScopeTreeNodeInput, database: Database): Promise<void> {
+        const nowMs = input.nowMs ?? Date.now();
+        const symbols = this.codec.normalizeSymbols(input.symbols ?? [input.title, input.summary]);
+        const embedding = this.codec.embedText([input.title, input.summary, ...symbols].join(" "), this.dimensions);
+        database
+            .prepare(
+                `INSERT OR REPLACE INTO scope_tree_nodes (
+                    id, scope_id, parent_id, kind, title, summary, embedding_json, symbol_json,
+                    score, depth, source_id, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+                input.id ?? `${input.scopeId}:${input.kind}:${crypto.randomUUID()}`,
+                input.scopeId,
+                input.parentId ?? null,
+                input.kind,
+                input.title,
+                input.summary,
+                JSON.stringify(embedding),
+                JSON.stringify(symbols),
+                input.score ?? 0.5,
+                input.depth ?? 1,
+                input.sourceId ?? null,
+                nowMs,
+            );
+    }
+
+    private upsertAssociations(
+        database: Database,
+        scopeId: string,
+        symbols: string[],
+        kind: string,
+        sourceId: string,
+        nowMs: number,
+        weight: number,
+    ): void {
+        for (const term of this.codec.normalizeSymbols(symbols).slice(0, 64)) {
+            database
+                .prepare(
+                    `INSERT OR REPLACE INTO scope_associations (
+                        id, scope_id, term, kind, weight, source_id, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                )
+                .run(`${scopeId}:${kind}:${term}:${sourceId}`, scopeId, term, kind, weight, sourceId, nowMs);
+        }
+    }
+
+    private queryRows(db: Database): ScopeVectorPersistedNode[] {
+        return db
+            .query<ScopeVectorPersistedNode, []>(
+                `SELECT scope_id AS scopeId, owner_key AS ownerKey, title, goal, summary, embedding_json AS embeddingJson, symbol_json AS symbolJson, updated_at AS updatedAt, last_used_at AS lastUsedAt, use_count AS useCount, codename_id AS codenameId, active FROM scope_vectors`,
+            )
+            .all();
+    }
+
+    private loadHotMemory(
+        scopeId: string,
+        queryEmbedding: number[],
+        querySymbols: string[],
+        nowMs: number,
+        limit: number,
+    ): ScopeHotMemoryRow[] {
+        const db = this.requireDatabaseForScopeId(scopeId);
+        const rows = db
+            .query<ScopeHotMemoryRow, [string]>(
+                `SELECT id, scope_id AS scopeId, summary, text, embedding_json AS embeddingJson, symbol_json AS symbolJson, importance, created_at AS createdAt, updated_at AS updatedAt, source_id AS sourceId, request_id AS requestId FROM scope_hot_memory WHERE scope_id = ?1 ORDER BY importance DESC, updated_at DESC LIMIT 24`,
+            )
+            .all(scopeId);
+        return rows
+            .map((row) => ({
+                row,
+                rank:
+                    this.codec.cosine(queryEmbedding, this.parseEmbedding(row.embeddingJson)) * 0.55 +
+                    this.codec.symbolOverlap(querySymbols, this.parseSymbols(row.symbolJson)) * 0.25 +
+                    this.activityScore(row.updatedAt, Math.round(row.importance * 10), nowMs) * 0.2,
+            }))
+            .sort((left, right) => right.rank - left.rank)
+            .slice(0, limit)
+            .map((entry) => entry.row);
+    }
+
+    private associationScore(scopeId: string, querySymbols: string[]): number {
+        if (querySymbols.length === 0) return 0;
+        const db = this.requireDatabaseForScopeId(scopeId);
+        const terms = new Set(querySymbols);
+        const rows = db
+            .query<{ term: string; weight: number }, [string]>(
+                `SELECT term, weight FROM scope_associations WHERE scope_id = ?1 ORDER BY weight DESC LIMIT 128`,
+            )
+            .all(scopeId);
+        if (rows.length === 0) return 0;
+        const weight = rows.filter((row) => terms.has(row.term)).reduce((sum, row) => sum + row.weight, 0);
+        return Math.max(0, Math.min(1, weight / Math.max(1, rows.length)));
+    }
+
+    private renderScopeSummary(summary: string, hotMemory: ScopeHotMemoryRow[]): string {
+        if (hotMemory.length === 0) return summary;
+        const hot = hotMemory.map((row) => `- ${row.summary}`).join("\n");
+        return `${summary}\n\nScope hot memory:\n${hot}`;
     }
 }
 
