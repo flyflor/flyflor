@@ -505,9 +505,13 @@ Latest full seal validation in this workspace passed:
   - `wt/kernel-release-seal`
   - `wt/docs-contracts-report`
 - [x] Launch child Codex lanes once, then stop them at user request before accepting any child changes.
-- [ ] Initialize each new worktree with independent local `TODO.md`, `AGENTS.md`, and `LOGS.md` control sections before relaunching parallel Codex work.
-- [ ] Relaunch child Codex lanes only after their local control files state task list, work status, local red lines, change-log requirements, and handoff conditions.
-- [ ] Require every child worktree to commit local control-file updates together with its implementation/docs work before main Codex review.
+- [x] Initialize each new worktree with independent local `TODO.md`, `AGENTS.md`, and `LOGS.md` control sections before relaunching parallel Codex work.
+- [x] Relaunch child Codex lanes only after their local control files state task list, work status, local red lines, change-log requirements, and handoff conditions.
+- [x] Require every child worktree to commit local control-file updates together with its implementation/docs work before main Codex review.
+- [ ] Monitor `flyflor-kernel-v2` tmux lanes and interrupt any child lane that drifts outside its owned surface.
+- [ ] Review child commits in this order: docs-contracts-report, scope-memory, fork-ask-crystal, runtime-executive, socket-protocol, release-seal.
+- [ ] Merge only reviewed implementation/docs surfaces; summarize useful child control-file history into root handoff docs rather than blindly merging local noise.
+- [ ] Run focused validation after every accepted child merge.
 
 Kernel V2 acceptance focus:
 

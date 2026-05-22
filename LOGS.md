@@ -323,3 +323,17 @@
   Summary: Strengthening the `git worktree + tmux + Codex` workflow so every child worktree has independent `TODO.md`, `AGENTS.md`, and `LOGS.md` control records before relaunch.
   Reason: Parallel Codex work must be observable and reviewable: `TODO.md` carries task list/status, `AGENTS.md` carries local constitution/red lines, and `LOGS.md` carries change history with reasons. Child control files are append/status-only and every merge must pass main Codex review.
   Verification: pending local control-file initialization in all six worktrees, docs check, branch commits, and push
+
+- Status: completed
+  Actor: main-codex
+  Scope: worktree-control-file-protocol
+  Summary: Initialized independent `TODO.md`, `AGENTS.md`, and `LOGS.md` sections in all six Kernel V2 worktrees and committed/pushed those local control-file baselines.
+  Reason: Child Codex lanes must be reviewable before implementation starts; their task list, local red lines, and append-only history now live with each worktree branch.
+  Verification: `git status --short --branch` in all six worktrees; `bun run docs:check`; `bun run check`; `git diff --check`
+
+- Status: open
+  Actor: main-codex
+  Scope: kernel-v2-parallel-development
+  Summary: Relaunched `flyflor-kernel-v2` tmux with six concurrent Codex lanes after control-file initialization.
+  Reason: The project needs parallel throughput while main Codex stays responsible for design drift control, owned-surface review, and selective merge.
+  Verification: `tmux list-windows -t flyflor-kernel-v2 -F '#I:#W #{pane_current_path} #{pane_current_command}'`; pending child commits and review
