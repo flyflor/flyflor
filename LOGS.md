@@ -295,3 +295,17 @@
   Summary: Promoted Scope Vector persistence to scope-local `.flyflor/scope.db`, added tree/hot-memory/association tables, wrote active-scope turns into Scope hot memory, and documented the split from `brain.db`.
   Reason: Scope needs its own context-equipment index and project hot memory plane; the monthly `brain.db` must remain the life ledger/query/replay/audit/detail store rather than a prompt or Scope-memory container.
   Verification: `bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/memory.brain.wire.test.ts`; `bun run check`; `bun run docs:check`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-v2-clean-slate
+  Summary: Committed and pushed the Scope DB Vector closure, removed all old local worktrees, deleted old local development branches, pruned stale remote refs, and deleted the remaining remote `codex/*` branches so only `master` remains as the shared baseline.
+  Reason: The next development wave needs fewer, cleaner lanes with main Codex acting as architecture guard and merge owner instead of carrying stale worktree history forward.
+  Verification: `git worktree list --porcelain`; `git branch --format='%(refname:short)'`; `git branch -r --format='%(refname:short)'`
+
+- Status: open
+  Actor: main-codex
+  Scope: kernel-v2-worktree-orchestration
+  Summary: Replacing the old wave layout with six full-kernel lanes: scope-memory, fork-ask-crystal, runtime-executive, socket-protocol, release-seal, and docs-contracts-report.
+  Reason: The intelligent-lifeform kernel still needs Scope/Memory, fork/ASK ghost/crystal, Runtime/Executive loop, Socket protocol, release validation, and canonical project-report work to proceed in parallel without violating owner boundaries.
+  Verification: pending new worktree creation, branch push, child handoff prompts, focused validations, and coordinator merge review

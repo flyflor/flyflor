@@ -477,7 +477,7 @@ Latest full seal validation in this workspace passed:
 - [x] Commit the staged coordinator snapshot.
 - [x] Switch the current worktree back to `master`.
 - [x] Merge the coordinator snapshot into `master`.
-- [ ] Push `master` for the next session.
+- [x] Push `master` for the next session.
 
 ## 2026-05-22 Scope DB Vector Closure
 
@@ -488,3 +488,28 @@ Latest full seal validation in this workspace passed:
 - [x] Open scope-local DB files on demand during recall, neighbor lookup, and hot-scope listing.
 - [x] Cover scope-local DB isolation, hot memory recall rendering, and association evidence in `tests/scope.vector.test.ts`.
 - [x] Update workflow, memory, and architecture docs so `brain.db` remains ledger/query/replay/audit/detail only.
+
+## 2026-05-22 Kernel V2 Clean Slate Orchestration
+
+- [x] Commit and push the current Scope DB Vector closure to `master`.
+- [x] Remove all old local worktrees so the repository has one clean coordinator worktree.
+- [x] Delete old local development branches, including previous `wt/*`, `main-codex-docs`, `y-branch-1`, and GitButler workspace branches.
+- [x] Prune stale remote refs and delete old remote `codex/*` development branches.
+- [x] Leave `origin/master` as the only remote branch.
+- [x] Record the new full-kernel worktree split before launching child work.
+- [ ] Create and push the new Kernel V2 worktrees:
+  - `wt/kernel-scope-memory`
+  - `wt/kernel-fork-ask-crystal`
+  - `wt/kernel-runtime-executive`
+  - `wt/kernel-socket-protocol`
+  - `wt/kernel-release-seal`
+  - `wt/docs-contracts-report`
+- [ ] Launch or hand off the new child Codex lanes with explicit owned surfaces and validation commands.
+
+Kernel V2 acceptance focus:
+
+- Scope / Memory must close `scope.db` as the scope-local vector/tree/hot-memory/association index while `brain.db` remains ledger/query/replay/audit/detail only.
+- Fork mode must behave like a branch: a conversation can enter a `ContextFork`, users can ask the LLM to merge it, conflicts trigger ASK, and successful closure can crystallize.
+- ASK ghost mode must preserve unanswered ASK state; users can `continue` instead of losing the pending branch/scope/loop snapshot.
+- Runtime / Executive must run the nanobot-style context path: current input + Memory + Crystal + explicit Scope/Fork + Executive visible capability surface.
+- Socket protocol must expose the stable `/ws` vascular surface without restoring `/channels` or turning transport metadata into cognitive continuity.

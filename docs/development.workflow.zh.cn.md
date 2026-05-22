@@ -726,3 +726,58 @@ Scope Vector owner contract：
 - 当前 worktree 已切回 `master`，并 fast-forward 到 seal 快照
 - 结束本 session 前，push `master`，并让当前 worktree 停在 `master`
 - `git diff --check`
+
+## 2026-05-22 Kernel V2 Clean Slate
+
+旧 seal / wave worktree 已退场。当前活跃基线是 `master`；旧 `wt/*`、`codex/*`、`main-codex-docs` 和 GitButler workspace 分支已在本地删除。远程开发分支已 prune / delete，下一轮共享基线只认 `origin/master`。
+
+Kernel V2 中主 Codex 的职责：
+
+- 负责架构红线、合并审查、canonical TODO/LOGS/workflow 和最终验证
+- 除少量关键 patch 外，不长期持有大功能实现
+- 子 worktree 如果越权修改 v1 wire string、DB/context assembly、scope/fork 连续性、sandbox/trust policy 或 prompt template，必须打回或拆分
+- 每次暂停前必须更新根 `TODO.md`、根 `LOGS.md`、本文件、对应 `.zh.cn.md`，并 push 需要保留的分支
+
+新 worktree 分配：
+
+- `wt/kernel-scope-memory` 位于 `../flyflor-wt-kernel-scope-memory`
+  - owned surface：`src/cognitive/hippocampus/memory/**`、`src/cognitive/hippocampus/scope/**`、`src/agent/context/**`、`src/entities/memory/**`、相关测试
+  - mission：闭合 Scope / Memory / Context plane，包括 scope-local `scope.db`、codename 升格、显式 Scope 激活和项目热区记忆
+  - validation：`bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/scope.scaffolder.test.ts tests/memory.brain.wire.test.ts tests/brain.store.test.ts tests/brain.archive.test.ts tests/local.working.store.test.ts`；`bun run check`；`git diff --check`
+- `wt/kernel-fork-ask-crystal` 位于 `../flyflor-wt-kernel-fork-ask-crystal`
+  - owned surface：`src/cognitive/hippocampus/ask/**`、`src/cognitive/hippocampus/continuation/**`、`src/cognitive/crystal/**`、`src/agent/runtime/reflection/**`、相关测试
+  - mission：让交流 fork 像分支一样工作，支持 LLM 辅助 merge，冲突触发 ASK，未回复 ASK 进入 ghost/continue 状态，并把闭合 loop 输入 Crystal candidate
+  - validation：`bun test tests/context.fork.store.test.ts tests/continuation.wire.test.ts tests/continuation.decisions.parse.test.ts tests/ask.parse.test.ts tests/ask.wire.test.ts tests/ask.reply.test.ts tests/ask.cap.runtime.test.ts tests/reflection.worker.test.ts tests/reflection.gem.consolidation.test.ts tests/crystal.local.backend.test.ts`；`bun run check`；`git diff --check`
+- `wt/kernel-runtime-executive` 位于 `../flyflor-wt-kernel-runtime-executive`
+  - owned surface：`src/agent/runtime/**`、`src/executive/**`、`src/agent/sandbox/**`、`src/agent/mcp/**`、相关测试
+  - mission：闭合 nanobot 式 runtime 路径和 Executive tool/trust/loop，包括预算耗尽、unknown tool、重复失败、无进展时的结构化 pause/resume
+  - validation：`bun test tests/runtime.executive.boundaries.test.ts tests/runtime.mcp.tool.plan.test.ts tests/runtime.perf.test.ts tests/executive.core.test.ts tests/executive.tool.runtime.test.ts tests/executive.manifest.test.ts tests/sandbox.gate.test.ts tests/sandbox.quota.test.ts tests/sandbox.audit.test.ts tests/mcp.schema.validate.test.ts`；`bun run check`；`git diff --check`
+- `wt/kernel-socket-protocol` 位于 `../flyflor-wt-kernel-socket-protocol`
+  - owned surface：`src/socket/**`、`src/protocol/control/**`、`src/protocol/contracts/**`、`docs/openapi/**`、相关测试
+  - mission：保持 `/ws` + `/health` 血管面，稳定 wire-v1 名称，用结构化 control/event protocol 暴露 context/fork/ASK/history/event/capability，并保持 OpenAPI/Apifox 示例可解析
+  - validation：`bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts tests/protocol.contracts.test.ts tests/docs.references.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`
+- `wt/kernel-release-seal` 位于 `../flyflor-wt-kernel-release-seal`
+  - owned surface：`scripts/**`、安装脚本、`docker/**`、release/install/docker 测试
+  - mission：封住 Bun binary、source install、binary install、Docker dev、template release 和 release smoke，不引入 native addon、postinstall、Node.js 要求或运行时读取 `node_modules`
+  - validation：`bun run build:binary`；`bun test tests/install.script.test.ts tests/docker.dev.smoke.test.ts tests/docker.binary.build.test.ts tests/release.assets.test.ts`；`bun run smoke:socket:service`；`bun run check`；`git diff --check`
+- `wt/docs-contracts-report` 位于 `../flyflor-wt-docs-contracts-report`
+  - owned surface：architecture / boundaries / workflow / memory docs、README pairs，以及经 coordinator 批准的 TODO/LOGS 段落
+  - mission：写完整项目报告、目录分层、作者思想、设计红线、Scope/Fork/ASK ghost/Crystal 闭环模型和 canonical worktree task table
+  - validation：`bun run docs:check`；`bun test tests/docs.index.test.ts tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts`；`bun run check`；`git diff --check`
+
+Kernel V2 合并顺序：
+
+1. `wt/docs-contracts-report` 先统一 canonical contract
+2. `wt/kernel-scope-memory` 建立 context / memory 基础
+3. `wt/kernel-fork-ask-crystal` 闭合 fork、ASK ghost、merge conflict 和 crystallization
+4. `wt/kernel-runtime-executive` 闭合 tool loop 执行与 pause/resume
+5. `wt/kernel-socket-protocol` 对外暴露协议面
+6. `wt/kernel-release-seal` 做最终打包与 release 验证
+
+Kernel V2 硬设计点：
+
+- 交流可以进入 `ContextFork` 分支。用户可以让 LLM 合并 fork；冲突必须产生 ASK，不能静默覆盖；成功闭合可以成为 Crystal 证据。
+- 未回复 ASK 进入 ghost / pending 状态。用户可以 `continue` 恢复其 scope/fork/loop snapshot，而不是丢失。
+- `scope.db` 是 Scope-local vector/tree/hot-memory/association 上下文装备；`brain.db` 只做 ledger/query/replay/audit/detail。
+- Runtime context 仍然是 current input + Memory + Crystal + explicit Scope/Fork + Executive visible capability surface。
+- Socket transport metadata、client id、conversation key、user 和 thread 都不能成为认知连续性 owner。

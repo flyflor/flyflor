@@ -726,3 +726,58 @@ Fresh-session handoff target:
 - coordinator snapshot commit: `811fba1`
 - current worktree has been switched back to `master` and fast-forwarded to the seal snapshot
 - before ending this session, push `master` and leave the worktree on `master`
+
+## 2026-05-22 Kernel V2 Clean Slate
+
+The previous seal and wave worktrees have been retired. The active baseline is now `master`, with old `wt/*`, `codex/*`, `main-codex-docs`, and GitButler workspace branches removed locally. Remote development branches were pruned/deleted so `origin/master` is the shared baseline for the next wave.
+
+Main Codex role for Kernel V2:
+
+- own architecture guardrails, merge review, canonical TODO/LOGS/workflow, and final validation
+- avoid large feature ownership unless a small critical patch is needed
+- reject child work that changes v1 wire strings, DB/context assembly, scope/fork continuity, sandbox/trust policy, or prompt templates outside its owned surface
+- before any pause, update root `TODO.md`, root `LOGS.md`, this file, the `.zh.cn.md` companion, and push branches that should survive
+
+New worktree allocation:
+
+- `wt/kernel-scope-memory` at `../flyflor-wt-kernel-scope-memory`
+  - owned surface: `src/cognitive/hippocampus/memory/**`, `src/cognitive/hippocampus/scope/**`, `src/agent/context/**`, `src/entities/memory/**`, related tests
+  - mission: close Scope/Memory/Context plane, including scope-local `scope.db`, codename promotion, explicit Scope activation, and hot project memory
+  - validation: `bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/scope.scaffolder.test.ts tests/memory.brain.wire.test.ts tests/brain.store.test.ts tests/brain.archive.test.ts tests/local.working.store.test.ts`; `bun run check`; `git diff --check`
+- `wt/kernel-fork-ask-crystal` at `../flyflor-wt-kernel-fork-ask-crystal`
+  - owned surface: `src/cognitive/hippocampus/ask/**`, `src/cognitive/hippocampus/continuation/**`, `src/cognitive/crystal/**`, `src/agent/runtime/reflection/**`, related tests
+  - mission: make conversation forks branch-like, support LLM-assisted fork merge, trigger ASK on conflicts, preserve unanswered ASK as ghost/continue state, and feed closed loops into Crystal candidates
+  - validation: `bun test tests/context.fork.store.test.ts tests/continuation.wire.test.ts tests/continuation.decisions.parse.test.ts tests/ask.parse.test.ts tests/ask.wire.test.ts tests/ask.reply.test.ts tests/ask.cap.runtime.test.ts tests/reflection.worker.test.ts tests/reflection.gem.consolidation.test.ts tests/crystal.local.backend.test.ts`; `bun run check`; `git diff --check`
+- `wt/kernel-runtime-executive` at `../flyflor-wt-kernel-runtime-executive`
+  - owned surface: `src/agent/runtime/**`, `src/executive/**`, `src/agent/sandbox/**`, `src/agent/mcp/**`, related tests
+  - mission: close the nanobot-style runtime path and Executive tool/trust/loop, including structured pause/resume on loop budget, unknown tools, repeated failure, and no-progress conditions
+  - validation: `bun test tests/runtime.executive.boundaries.test.ts tests/runtime.mcp.tool.plan.test.ts tests/runtime.perf.test.ts tests/executive.core.test.ts tests/executive.tool.runtime.test.ts tests/executive.manifest.test.ts tests/sandbox.gate.test.ts tests/sandbox.quota.test.ts tests/sandbox.audit.test.ts tests/mcp.schema.validate.test.ts`; `bun run check`; `git diff --check`
+- `wt/kernel-socket-protocol` at `../flyflor-wt-kernel-socket-protocol`
+  - owned surface: `src/socket/**`, `src/protocol/control/**`, `src/protocol/contracts/**`, `docs/openapi/**`, related tests
+  - mission: keep `/ws` + `/health` as the vascular surface, preserve wire-v1 names, expose context/fork/ASK/history/event/capability through structured control/event protocol, and keep OpenAPI/Apifox examples parseable
+  - validation: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts tests/protocol.contracts.test.ts tests/docs.references.test.ts`; `bun run docs:check`; `bun run check`; `git diff --check`
+- `wt/kernel-release-seal` at `../flyflor-wt-kernel-release-seal`
+  - owned surface: `scripts/**`, install scripts, `docker/**`, release/install/docker tests
+  - mission: keep Bun binary, source install, binary install, Docker dev, template release, and release smoke stable without introducing native addons, postinstall, Node.js requirements, or runtime `node_modules` reads
+  - validation: `bun run build:binary`; `bun test tests/install.script.test.ts tests/docker.dev.smoke.test.ts tests/docker.binary.build.test.ts tests/release.assets.test.ts`; `bun run smoke:socket:service`; `bun run check`; `git diff --check`
+- `wt/docs-contracts-report` at `../flyflor-wt-docs-contracts-report`
+  - owned surface: architecture/boundaries/workflow/memory docs, README pairs, and coordinator-approved TODO/LOGS sections
+  - mission: write the full project report, directory layering, authorial design philosophy, red lines, Scope/Fork/ASK ghost/Crystal closure model, and the canonical worktree task table
+  - validation: `bun run docs:check`; `bun test tests/docs.index.test.ts tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts`; `bun run check`; `git diff --check`
+
+Kernel V2 merge order:
+
+1. `wt/docs-contracts-report` for the canonical contract
+2. `wt/kernel-scope-memory` for context/memory foundation
+3. `wt/kernel-fork-ask-crystal` for fork, ASK ghost, merge conflict, and crystallization
+4. `wt/kernel-runtime-executive` for tool loop execution and pause/resume
+5. `wt/kernel-socket-protocol` for external protocol exposure
+6. `wt/kernel-release-seal` for final packaging and release verification
+
+Kernel V2 hard design points:
+
+- A conversation may enter a `ContextFork` branch. Users can ask the LLM to merge a fork; conflicts must produce ASK instead of silent overwrite; successful closure may become Crystal evidence.
+- An unanswered ASK becomes ghost/pending state. Users can `continue` to resume its scope/fork/loop snapshot instead of losing it.
+- `scope.db` is Scope-local vector/tree/hot-memory/association context equipment. `brain.db` remains ledger/query/replay/audit/detail only.
+- Runtime context remains current input + Memory + Crystal + explicit Scope/Fork + Executive visible capability surface.
+- Socket transport metadata, client ids, conversation keys, users, and threads never become cognitive continuity owners.
