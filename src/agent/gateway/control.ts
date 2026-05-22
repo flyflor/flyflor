@@ -63,6 +63,7 @@ export interface GatewayControlTransportChannelStatusSnapshot {
 
 export interface GatewayControlTransportStatusSnapshot {
     channels: GatewayControlTransportChannelStatusSnapshot[];
+    clientCount: number;
     connectedCount: number;
     degradedCount: number;
     gatewayRunning: boolean;
@@ -167,6 +168,10 @@ export class GatewayControlHub implements EventSink {
     public close(socket: GatewayControlSocket): void {
         this.clients.delete(socket);
         this.log("socket.close", { clientId: socket.data.clientId });
+    }
+
+    public getClientCount(): number {
+        return this.clients.size;
     }
 
     public async message(socket: GatewayControlSocket, raw: string | Buffer): Promise<void> {
@@ -493,6 +498,8 @@ export class GatewayControlHub implements EventSink {
                 streaming: Boolean(channel.streaming),
                 transport: channel.transport,
             })),
+            // Peer count belongs to the live hub, not the channel registry.
+            clientCount: this.clients.size,
             connectedCount: status.connectedCount,
             degradedCount: status.degradedCount,
             gatewayRunning: status.gatewayRunning,

@@ -57,3 +57,12 @@
   摘要：补齐本地 ws thin-client control flow 缺口，把 envelope `requestId` 保留进 runtime 关联键，扩展确定性 gateway smoke 覆盖 event subscribe、loop pause-resume 闭环与 history replay，并把稳定的 lifecycle/history 面补进 Rust 后续对接文档。
   原因：在 Rust shell 继续依赖 Gateway/Runtime 边界之前，这个切片必须先给出可执行的 ws control flow 契约，以及可观察的 event/history 面和 executive loop pause-resume 闭环，避免再靠私有 transport patch。
   验证：`bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts`；`bun run test:kernel`；`bun run docs:check`
+
+## 2026-05-22 Runtime-Executive-WS Peer Count 补充
+
+- 状态：completed
+  操作者：wt/kernel-runtime-executive-ws
+  范围：runtime-executive-ws-peer-count
+  摘要：在 gateway status snapshot 中加入 live `clientCount`，让 thin Gateway 可以暴露实时 peer 压力，而不必恢复已退役的 HTTP `/channels` surface。
+  原因：live hub 需要一个 peer-count 信号服务 `/ws` status snapshot，但这个信号属于 hub 级 runtime 状态，不应该回到已经移除的 REST channel registry。
+  验证：本地已更新 gateway 与 protocol 的定向测试；完整 worktree 验证仍待执行

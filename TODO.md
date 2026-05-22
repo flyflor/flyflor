@@ -190,3 +190,9 @@ Latest full seal validation in this workspace passed:
   - Executive loop pause/resume closure is verified through explicit `turn.final.reply.metadata.ask` and `executiveToolLoop` snapshots rather than hidden transport state.
 - Remaining local follow-on:
   - Keep future Rust shell work aligned to the documented `/ws` control, event, history, and loop metadata contract without introducing private transport patches.
+
+## 2026-05-22 Runtime-Executive-WS Peer Count Addendum
+
+- [x] Added live `clientCount` to gateway status snapshots so the thin Gateway can expose live peer pressure without reviving `/channels`.
+- [x] Extended gateway and protocol tests to distinguish live hub peer count from channel registry state.
+- [x] Kept the HTTP surface pruned to `/ws` and `/health` only.

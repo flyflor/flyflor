@@ -71,3 +71,12 @@
   Summary: Closed the local ws thin-client control-flow gaps by preserving envelope `requestId` into runtime correlation, extending the deterministic gateway smoke through event subscribe, pause-resume loop closure, and history replay, and documenting the stable lifecycle/history surfaces for Rust follow-on work.
   Reason: The owned slice needed an executable contract for ws control flow, observable event/history surfaces, and executive loop pause-resume closure before the Rust shell can rely on the Gateway/Runtime boundary without private patches.
   Verification: `bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts`; `bun run test:kernel`; `bun run docs:check`
+
+## 2026-05-22 Runtime-Executive-WS Peer Count Addendum
+
+- Status: completed
+  Actor: wt/kernel-runtime-executive-ws
+  Scope: runtime-executive-ws-peer-count
+  Summary: Added live `clientCount` to gateway status snapshots so the thin Gateway can expose live peer pressure without reopening the retired HTTP `/channels` surface.
+  Reason: The live hub needs a peer-count signal for `/ws` status snapshots, but that signal belongs to hub-level runtime state instead of the removed REST channel registry.
+  Verification: targeted gateway and protocol tests updated locally; full worktree validation still pending

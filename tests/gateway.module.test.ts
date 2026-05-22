@@ -36,11 +36,12 @@ describe("GatewayModule minimal vascular surface", () => {
 
         const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/channels"));
         const body = (await response?.json()) as {
-            gateway: { gatewayRunning: boolean; channels: Array<{ name: string }> };
+            gateway: { clientCount: number; gatewayRunning: boolean; channels: Array<{ name: string }> };
             channels: Array<{ name: string }>;
         };
 
         expect(response?.status).toBe(200);
+        expect(body.gateway.clientCount).toBe(0);
         expect(body.gateway.gatewayRunning).toBe(false);
         expect(body.gateway.channels).toHaveLength(1);
         expect(body.gateway.channels[0]?.name).toBe(Channel.Ws);

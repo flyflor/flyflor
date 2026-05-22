@@ -424,6 +424,7 @@ describe("GatewayControlHub", () => {
                 clientId: "client-1",
                 connectedAt: "2026-05-17T00:00:00.000Z",
                 status: {
+                    clientCount: 1,
                     gatewayRunning: true,
                     host: "127.0.0.1",
                     port: 0,
@@ -476,6 +477,7 @@ describe("GatewayControlHub", () => {
             payload: {
                 status: {
                     channels: [],
+                    clientCount: 1,
                     connectedCount: 0,
                     degradedCount: 0,
                     gatewayRunning: true,
@@ -483,6 +485,56 @@ describe("GatewayControlHub", () => {
                     port: 0,
                     startedAt: "2026-05-17T00:00:00.000Z",
                     streamingCount: 0,
+                },
+            },
+        });
+        hub.dispose();
+    });
+
+    test("tracks live ws peer count separately from channel availability", async () => {
+        const hub = createHub({
+            status: () => ({
+                channels: [],
+                clientCount: 0,
+                connectedCount: 1,
+                degradedCount: 0,
+                gatewayRunning: true,
+                host: "127.0.0.1",
+                port: 0,
+                startedAt: "2026-05-17T00:00:00.000Z",
+                streamingCount: 1,
+            }),
+        });
+        const first = fakeSocket("client-1");
+        const second = fakeSocket("client-2");
+        hub.open(first);
+        hub.open(second);
+
+        await hub.message(
+            first,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)),
+        );
+        expect(sent(first).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: {
+                status: {
+                    clientCount: 2,
+                    connectedCount: 1,
+                    streamingCount: 1,
+                },
+            },
+        });
+
+        hub.close(second);
+        await hub.message(
+            first,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)),
+        );
+        expect(sent(first).at(-1)).toMatchObject({
+            payload: {
+                status: {
+                    clientCount: 1,
+                    connectedCount: 1,
                 },
             },
         });
@@ -1018,6 +1070,7 @@ function createHub(overrides: Partial<ConstructorParameters<typeof GatewayContro
         listChatHistory: () => [],
         status: () => ({
             channels: [],
+            clientCount: 0,
             connectedCount: 0,
             degradedCount: 0,
             gatewayRunning: true,
@@ -1030,9 +1083,9 @@ function createHub(overrides: Partial<ConstructorParameters<typeof GatewayContro
     });
 }
 
-function fakeSocket(): GatewayControlSocket {
+function fakeSocket(clientId = "client-1"): GatewayControlSocket {
     return new FakeSocket({
-        clientId: "client-1",
+        clientId,
         connectedAt: "2026-05-17T00:00:00.000Z",
         subscriptions: [],
     }) as unknown as GatewayControlSocket;

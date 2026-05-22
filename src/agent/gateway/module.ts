@@ -106,6 +106,7 @@ export class GatewayModule extends Gateway {
 
     public getStatusSnapshot(): GatewayControlTransportStatusSnapshot {
         const url = this.serverUrl;
+        const clientCount = this.running ? this.controlHub?.getClientCount() ?? 0 : 0;
         return {
             channels: [
                 {
@@ -129,6 +130,7 @@ export class GatewayModule extends Gateway {
                     transport: ChannelTransport.Websocket,
                 },
             ],
+            clientCount,
             connectedCount: this.running ? 1 : 0,
             degradedCount: 0,
             gatewayRunning: this.running,
