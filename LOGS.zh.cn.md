@@ -64,3 +64,10 @@
   摘要：把 graph 遗忘与向量 recall 改成显式 clock 驱动：scheduler decay sweep、graph 行时间戳持久化、vector freshness scoring、recall accounting 和确定性 recall cache key 都传递 `nowMs`。
   原因：遗忘/衰减和向量召回必须是可 replay 的资源指标流程；graph 持久化和 scoring 内部隐藏使用 `Date.now()` 会让同样的定时 sweep 与 recall 受墙钟时间影响。
   验证：`bun run check`；`bun run docs:check`；`bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts`；`bun test tests/graph.recall.test.ts tests/background.scheduler.test.ts`；`bun test tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts`；`bun test tests/memory.brain.wire.test.ts`；`bun test tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/hot.memory.compression.worker.test.ts`；`bun run build:binary`；完整 `bun run test` 到达 826 pass / 1 fail，失败点是本切片外路径敏感的 `tests/provider.readiness.test.ts`
+
+- 状态：completed
+  操作者：codex
+  范围：kernel-context-memory-finalization
+  摘要：把 memory/context 切片标记为可供协调者 review 合并，并记录当前唯一残留的 full-suite failure 是切片外的路径敏感案例。
+  原因：归属的分片生命周期、召回账本、遗忘和 fork-over-scope 装配工作已经完成到可以回主线合并；残余失败属于 worktree 路径布局，而不是已实现的 memory 逻辑。
+  验证：本地切片验证已完成；等待协调者合并与主线复验

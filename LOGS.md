@@ -78,3 +78,10 @@
   Summary: Made graph forgetting and vector recall clock-driven by threading explicit `nowMs` through scheduler decay sweeps, persisted graph timestamps, vector freshness scoring, recall accounting, and deterministic recall cache keys.
   Reason: Forgetting/decay and vector recall must be replayable resource-metric flows; hidden `Date.now()` use inside graph persistence/scoring made identical scheduled sweeps and recalls depend on wall-clock timing.
   Verification: `bun run check`; `bun run docs:check`; `bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts`; `bun test tests/graph.recall.test.ts tests/background.scheduler.test.ts`; `bun test tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts`; `bun test tests/memory.brain.wire.test.ts`; `bun test tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/hot.memory.compression.worker.test.ts`; `bun run build:binary`; full `bun run test` reached 826 pass / 1 fail on path-sensitive `tests/provider.readiness.test.ts` outside this slice
+
+- Status: completed
+  Actor: codex
+  Scope: kernel-context-memory-finalization
+  Summary: Declared the memory/context slice ready for coordinator merge review and recorded that the only remaining full-suite failure is a path-sensitive case outside the slice-owned memory fix surface.
+  Reason: The owned shard lifecycle, recall accounting, forgetting, and fork-over-scope context assembly work is complete enough to merge back; the remaining failure belongs to the worktree path layout rather than the implemented memory logic.
+  Verification: local slice validations already completed; coordinator merge and mainline validation remain

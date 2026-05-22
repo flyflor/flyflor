@@ -182,3 +182,9 @@ Latest full seal validation in this workspace passed:
 - [x] Vector recall freshness scoring and recall accounting now accept explicit `nowMs`; deterministic clocks participate in recall cache keys.
 - [x] Restored locked Bun dependencies in this worktree, resolving the local `lodash-es/mergeWith.js` module-resolution blocker for `tests/memory.brain.wire.test.ts`.
 - [ ] Full `bun run test` still has one child-worktree path-sensitive failure outside this slice: `tests/provider.readiness.test.ts` expects `/flyflor/.config`, but this worktree resolves `.config` under `flyflor-wt-kernel-context-memory`.
+
+## 2026-05-22 Context-Memory Finalization Addendum
+
+- [x] The owned memory/context slice is functionally complete and ready for coordinator merge review.
+- [x] The only remaining full-suite failure is path-sensitive and outside the slice-owned memory fix surface.
+- [ ] Merge back to mainline and rerun the coordinator validation set from the main worktree.
