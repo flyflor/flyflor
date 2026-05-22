@@ -98,4 +98,11 @@
   范围：kernel-wave4-runtime-capability-orchestration
   摘要：启动 wave4 runtime-capability 拆分，把同一个剩余 P0 分成 smoke、metadata、history 三条通道，避免重复 wave3 里过宽的 protocol prototype。
   原因：Runtime capability E2E observability 仍是主要闭环缺口；拆开测试、runtime metadata 和 history replay 能让每个子分支更窄、更容易 review。
-  验证：pending
+  验证：`git push origin main-codex-docs`；`git push -u origin wt/wave4-runtime-smoke`；`git push -u origin wt/wave4-runtime-metadata`；`git push -u origin wt/wave4-runtime-history`；`bun run kernel:tmux -- --wave4 --launch-codex`
+
+- 状态：open
+  操作者：main-codex
+  范围：kernel-wave4-child-run
+  摘要：已从推送后的追加式 worktree 启动 `flyflor-wave4`，包含 runtime-smoke、runtime-metadata、runtime-history 三个子 Codex 窗口。
+  原因：用户要求把并发吞吐拉满，同时保留协调者 review、干净 worktree 和零残留尾巴。
+  验证：`tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`

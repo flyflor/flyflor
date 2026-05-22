@@ -133,4 +133,11 @@
   Scope: kernel-wave4-runtime-capability-orchestration
   Summary: Started a wave4 runtime-capability split with smoke, metadata, and history lanes so the remaining P0 can move in parallel without repeating the broad protocol prototype from wave3.
   Reason: Runtime capability E2E observability remains the main closure gap; splitting tests, runtime metadata, and history replay keeps each child branch narrow and reviewable.
-  Verification: pending
+  Verification: `git push origin main-codex-docs`; `git push -u origin wt/wave4-runtime-smoke`; `git push -u origin wt/wave4-runtime-metadata`; `git push -u origin wt/wave4-runtime-history`; `bun run kernel:tmux -- --wave4 --launch-codex`
+
+- Status: open
+  Actor: main-codex
+  Scope: kernel-wave4-child-run
+  Summary: Launched `flyflor-wave4` with runtime-smoke, runtime-metadata, and runtime-history child Codex windows from pushed additive worktrees.
+  Reason: The user requested maximum parallel throughput while preserving coordinator review, clean worktrees, and no residual tails.
+  Verification: `tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`

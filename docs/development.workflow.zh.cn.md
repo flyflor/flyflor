@@ -489,3 +489,11 @@ bun run kernel:tmux -- --wave4 --launch-codex
 - 没有 failing test 逼迫时，不做大范围 protocol type migration
 - 不做语义字符匹配
 - 失败 prototype 进入 commit 前必须丢弃，只保留 LOGS/TODO 记录
+
+启动状态：
+
+- 协调者提交：`90cecbb`
+- 分支已推送：是
+- 活跃 tmux session：`flyflor-wave4`
+- 活跃窗口：`runtime-smoke`、`runtime-metadata`、`runtime-history`
+- review 策略：主 Codex 只接收已提交、已验证、窄范围的子切片；canonical TODO/LOGS/workflow 更新继续留在 `main-codex-docs`

@@ -206,6 +206,7 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   - `wt/wave4-runtime-metadata`
   - `wt/wave4-runtime-history`
 - [x] 保留此前 kernel/wave2/wave3 worktree；wave4 只追加。
-- [ ] 从 `main-codex-docs@1f45a72` 创建并推送三个 wave4 分支。
-- [ ] 编排提交落主线后启动 `flyflor-wave4` 子 Codex 窗口。
+- [x] 从 `main-codex-docs@1f45a72` 创建并推送三个 wave4 分支。
+- [x] 编排提交落主线后启动 `flyflor-wave4` 子 Codex 窗口。
 - [ ] 主 Codex review 规则：只合并通过验证的实现/测试切片；失败 prototype 必须丢弃并记录，不能留下 dirty tail。
+- [ ] 随 wave4 子分支落地进行 review，并把主线 canonical TODO/LOGS/workflow 历史与子分支本地记录分开维护。

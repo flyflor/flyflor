@@ -489,3 +489,11 @@ Coordinator constraints:
 - no broad protocol type migration unless a failing test forces it
 - no semantic character matching
 - failed prototypes are discarded before commit, with LOGS/TODO notes only
+
+Launch state:
+
+- coordinator commit: `90cecbb`
+- branches pushed: yes
+- active tmux session: `flyflor-wave4`
+- active windows: `runtime-smoke`, `runtime-metadata`, `runtime-history`
+- review policy: main Codex accepts only committed, validated, narrow child slices; canonical TODO/LOGS/workflow updates remain on `main-codex-docs`

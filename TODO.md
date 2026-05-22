@@ -264,6 +264,7 @@ Latest full seal validation in this workspace passed:
   - `wt/wave4-runtime-metadata`
   - `wt/wave4-runtime-history`
 - [x] Keep previous kernel/wave2/wave3 worktrees intact; wave4 is additive.
-- [ ] Create and push the three wave4 branches from `main-codex-docs@1f45a72`.
-- [ ] Launch `flyflor-wave4` child Codex windows after the orchestration commit lands.
+- [x] Create and push the three wave4 branches from `main-codex-docs@1f45a72`.
+- [x] Launch `flyflor-wave4` child Codex windows after the orchestration commit lands.
 - [ ] Main Codex review rule: merge only passing implementation/test slices; failed prototypes must be discarded and recorded without dirty tails.
+- [ ] Review wave4 child outputs as they land and keep mainline canonical TODO/LOGS/workflow history separate from local child notes.
