@@ -309,3 +309,17 @@
   Summary: Replacing the old wave layout with six full-kernel lanes: scope-memory, fork-ask-crystal, runtime-executive, socket-protocol, release-seal, and docs-contracts-report.
   Reason: The intelligent-lifeform kernel still needs Scope/Memory, fork/ASK ghost/crystal, Runtime/Executive loop, Socket protocol, release validation, and canonical project-report work to proceed in parallel without violating owner boundaries.
   Verification: pending new worktree creation, branch push, child handoff prompts, focused validations, and coordinator merge review
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-v2-child-launch-paused
+  Summary: Created and pushed the six Kernel V2 worktrees, briefly launched child Codex workers, then shut all six down at the user's request before accepting any child changes.
+  Reason: The workflow needs the per-worktree control files and review protocol tightened before full parallel development resumes.
+  Verification: child worker shutdown notifications for all six launched agents; `git status --short --branch`
+
+- Status: open
+  Actor: main-codex
+  Scope: worktree-control-file-protocol
+  Summary: Strengthening the `git worktree + tmux + Codex` workflow so every child worktree has independent `TODO.md`, `AGENTS.md`, and `LOGS.md` control records before relaunch.
+  Reason: Parallel Codex work must be observable and reviewable: `TODO.md` carries task list/status, `AGENTS.md` carries local constitution/red lines, and `LOGS.md` carries change history with reasons. Child control files are append/status-only and every merge must pass main Codex review.
+  Verification: pending local control-file initialization in all six worktrees, docs check, branch commits, and push

@@ -497,14 +497,17 @@ Latest full seal validation in this workspace passed:
 - [x] Prune stale remote refs and delete old remote `codex/*` development branches.
 - [x] Leave `origin/master` as the only remote branch.
 - [x] Record the new full-kernel worktree split before launching child work.
-- [ ] Create and push the new Kernel V2 worktrees:
+- [x] Create and push the new Kernel V2 worktrees:
   - `wt/kernel-scope-memory`
   - `wt/kernel-fork-ask-crystal`
   - `wt/kernel-runtime-executive`
   - `wt/kernel-socket-protocol`
   - `wt/kernel-release-seal`
   - `wt/docs-contracts-report`
-- [ ] Launch or hand off the new child Codex lanes with explicit owned surfaces and validation commands.
+- [x] Launch child Codex lanes once, then stop them at user request before accepting any child changes.
+- [ ] Initialize each new worktree with independent local `TODO.md`, `AGENTS.md`, and `LOGS.md` control sections before relaunching parallel Codex work.
+- [ ] Relaunch child Codex lanes only after their local control files state task list, work status, local red lines, change-log requirements, and handoff conditions.
+- [ ] Require every child worktree to commit local control-file updates together with its implementation/docs work before main Codex review.
 
 Kernel V2 acceptance focus:
 

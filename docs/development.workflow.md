@@ -61,11 +61,13 @@ And each Markdown file must keep its `.zh.cn.md` companion.
 
 Local control-file rules:
 
-- `TODO.md`: only add items or change status markers; do not delete history.
-- `AGENTS.md`: append-only when new local rules are truly needed.
-- `LOGS.md`: append-only.
+- `TODO.md`: task list and work status. Child Codex may only add entries or change status markers; it must not delete, rewrite, or compress history.
+- `AGENTS.md`: local constitution and red lines. Child Codex may only append stricter local rules; it must not weaken or remove inherited repository rules.
+- `LOGS.md`: historical change log and reason list. Child Codex must append every meaningful change with reason and verification; it must not delete or rewrite prior log entries.
 
-These files are primarily local worktree records. Mainline review should merge owned implementation/docs first, and only merge child control-file history when that is explicitly desired.
+These files are not optional notes; they are part of the parallel-development protocol. A child worktree is not ready for review unless its local `TODO.md`, `AGENTS.md`, and `LOGS.md` reflect the current task status and handoff state.
+
+These files are primarily local worktree records. Mainline review should merge owned implementation/docs first, and only merge child control-file history when that is explicitly desired. If a child control file contains useful canonical knowledge, the main Codex summarizes it into the root `TODO.md`, root `LOGS.md`, or `docs/development.workflow*.md` instead of blindly merging noisy local history.
 
 ## Ownership rules
 
@@ -113,11 +115,15 @@ bun run kernel:tmux -- --launch-codex
 
 Mainline merge discipline is strict:
 
-1. review child diff by owned files
-2. reject or trim overreach
-3. merge only the intended files
-4. run mainline validation again
-5. write the final coordinator log entry
+1. confirm the child worktree has a local commit and clean status
+2. inspect the child `TODO.md`, `AGENTS.md`, and `LOGS.md` for task state, red-line changes, reasons, and verification
+3. review child diff by owned files
+4. reject or trim overreach
+5. merge only the intended files
+6. run mainline validation again
+7. write the final coordinator log entry
+
+No child work is merged directly because it exists. Every change passes through main Codex review. If a child branch is partially useful, the coordinator cherry-picks or manually ports only the approved files and records the rejection reason for the rest.
 
 If the main worktree is on a managed branch such as `gitbutler/workspace`, switch to a normal branch before the final commit. Do not bypass hooks destructively.
 
