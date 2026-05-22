@@ -2,7 +2,7 @@
 
 Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单文件二进制交付。
 
-核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、gateway、sandbox、skills、context 等外部交互。
+核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、socket、sandbox、skills、context 等外部交互。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -14,7 +14,7 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 - `brain.db` 是按月分片的 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
-- 未来 CLI、Gateway、TUI 用 Rust 重写；当前 Bun 主线只保留 event 血管与 WS/control 协议。
+- 未来 CLI、TUI 与 socket shell 可用 Rust 重写；当前 Bun 主线保留 socket 血管层与 WS/control 协议。
 - 简单问题直接回，复杂问题走黑板；当思考或执行抵达边界时，通过 Ask 显式向用户求证，再把高价值结果送入结晶链路。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 
@@ -42,9 +42,9 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 - `Ask`：认知闭环器官
 - `Executive`：执行外骨骼
 
-## Gateway 现状
+## Socket 现状
 
-主线 Gateway 已收缩为最小血管层：
+主线 socket 已收缩为最小血管层：
 
 - `/ws` WebSocket control/event
 - `/health`
@@ -106,11 +106,11 @@ bun run chat
 ```bash
 ./dist/flyflor       # 本地 stdio chat 调试入口
 ./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
-./dist/flyflor gateway
+./dist/flyflor socket  # 主 socket 血管入口；gateway 仍是兼容命令
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
-bun run gateway      # 源码模式启动最小 Gateway：/ws /health
-bun run gateway:dev  # dev 源码模式：同步模板后用 Bun watch 直接跑 gateway
-sh scripts/gateway.dev.sh # gateway dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
+bun run socket       # 源码模式启动最小 socket：/ws /health
+bun run socket:dev   # 同步模板后用 Bun watch 直接跑 socket
+sh scripts/gateway.dev.sh # socket dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
 ```
 
@@ -158,12 +158,12 @@ bun run docker:chat                       # 进入容器内的本地 stdio chat 
 bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
 bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Replay 与 brain.db 写入
 bun run smoke:agent:live                  # 读取真实 provider，临时 HOME 内检查完整 agent turn
-bun run smoke:gateway:service             # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
+bun run smoke:socket:service              # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
-bun run smoke:release                     # docs + type + tests + agent smoke + release assets + gateway service + docker smoke
+bun run smoke:release                     # docs + type + tests + agent smoke + release assets + socket service + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互
@@ -218,7 +218,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | -------------- | --------------------------------------------------------------------------- |
 | `app.ts`       | 薄入口，启动 FlyFlor 主类                                                   |
 | `src/app.ts`   | FlyFlor composition root，显式 DI 容器                                      |
-| `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、scope、plugin         |
+| `src/agent`    | runtime、blackboard、sandbox、worker、MCP、scope、plugin                  |
+| `src/socket`   | socket 血管层：`/ws`、`/health`、live turn、event、operation、ledger query/replay |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
 | `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；历史 `src/fch/mindstream` 已移除 |
 | `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；历史 `src/fch/crystal` 已移除 |
@@ -333,10 +334,10 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 
 ```bash
 flyflor            # 本地 stdio chat 调试入口
-flyflor gateway    # 最小 Gateway：/ws /health
+flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 ```
 
-当前主线只把这两个 Bun 入口当成调试/血管面保留。后续第一方 CLI、TUI、channel shell 和 gateway surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
+当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
 
 ## 工程规则
 

@@ -263,7 +263,7 @@ Most recent coordinator validation:
   - `bun run test:live`
   - `bun run smoke:agent:live`
 - Rust-shell bootstrap guard now also lives in deterministic smoke:
-  - `bun run smoke:gateway:control`
+  - `bun run smoke:socket:control`
 
 Next scaling rule:
 
@@ -339,7 +339,7 @@ Active wave2 branches:
   - owned surface: memory/context stores, decay, forgetting, vector recall, related tests
 - `wt/wave2-runtime-executive`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-runtime-executive`
-  - owned surface: runtime, gateway WS/control, executive capability execution, related tests/docs
+  - owned surface: runtime, socket WS/control, executive capability execution, related tests/docs
 - `wt/wave2-scope-crystal`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-scope-crystal`
   - owned surface: ask, scope, codename promotion, crystal consolidation/forgetting, related tests
@@ -376,7 +376,7 @@ Coordinator-owned merge rules for this wave:
 Validation already run on the staged mainline snapshot:
 
 - `bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`
-- `bun run smoke:gateway:control`
+- `bun run smoke:socket:control`
 - `bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`
 - `bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`
 - `bun run docs:check`
@@ -408,7 +408,7 @@ Active wave3 branches:
   - owned surface: memory lifecycle, `brain.db` ledger/query/replay/audit behavior, decay, hot memory, dream, recall, archive behavior, related tests
 - `wt/wave3-runtime-capability`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
-  - owned surface: runtime, gateway WS/control, executive capability execution, sandbox/trust visibility, related scripts/tests/docs
+  - owned surface: runtime, socket WS/control, executive capability execution, sandbox/trust visibility, related scripts/tests/docs
 - `wt/wave3-scope-constitution`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
   - owned surface: scope scaffold constitution files, ask/scope/codename boundaries, `templates/projects/**`, related tests

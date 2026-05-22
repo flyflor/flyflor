@@ -224,9 +224,10 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:source"]).toContain("install.source.sh");
         expect(packageJson.scripts?.["install:docker"]).toContain("install.docker.sh");
         expect(packageJson.scripts?.["install:windows"]).toContain("install.ps1");
-        // Gateway service smoke writes only inside a temporary HOME and keeps
+        // Socket service smoke writes only inside a temporary HOME and keeps
         // host launchd/systemd state untouched.
-        expect(packageJson.scripts?.["smoke:gateway:service"]).toContain("gateway.service.smoke.ts");
+        expect(packageJson.scripts?.["smoke:socket:service"]).toContain("gateway.service.smoke.ts");
+        expect(packageJson.scripts?.["smoke:gateway:service"]).toContain("smoke:socket:service");
         // Live MCP smoke is intentionally opt-in and must stay outside the
         // deterministic `test` / `ci` gates, but it still needs a stable package
         // entrypoint for real third-party recovery checks.

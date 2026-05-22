@@ -25,4 +25,4 @@ echo "[gateway.dev.sh] old run logs pruned; current log reset"
 
 cd "$ROOT_DIR"
 
-bun run gateway:dev 2>&1 | tee "$CURRENT_LOG" | tee "$RUN_LOG"
+bun run socket:dev 2>&1 | tee "$CURRENT_LOG" | tee "$RUN_LOG"

@@ -740,7 +740,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 - `context.activeScope` 是 canonical 字段，只有在 `id + projectDir + projectMemoryDir` 都齐全时才会被接收
 - `context.activeProject` 是兼容别名；若同时传入，以 `activeScope` 为准
 - `chatType` 缺失时默认 `direct`
-- `platform actor id` 缺失时默认 `ws-user`
+- `platform actor id` 缺失时默认 `ws-actor`
 - `conversationKey` / `threadId` 只属于 socket route，不会参与认知连续性
 
 代码：
@@ -976,7 +976,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
   "payload": {
     "requestId": "runtime-req-1",
     "types": ["gateway.message.received"],
-    "classes": ["gateway"]
+    "classes": ["control"]
   }
 }
 ```
@@ -1001,7 +1001,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
       {
         "requestId": "runtime-req-1",
         "types": ["gateway.message.received"],
-        "classes": ["gateway"]
+        "classes": ["control"]
       }
     ]
   }

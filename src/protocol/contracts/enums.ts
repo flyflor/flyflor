@@ -266,6 +266,7 @@ export const RuntimeMode = {
      */
     Idle: "idle",
     Gateway: "gateway",
+    Socket: "socket",
     Tui: "tui",
 } as const;
 

@@ -6,6 +6,8 @@ Status: Bun kernel sealed. The mainline is now the Cognitive-Executive-Agent Arc
 
 This file is the handoff note for the next conversation. It should describe only the current contract and the next work. Historical plans live under `docs/old-docs/` and must not redefine runtime behavior.
 
+Latest active owner note: `src/socket` owns the socket vascular layer. Older lines in this TODO that place gateway under `src/agent` are preserved as historical task state and are superseded for new work.
+
 ## Sealed Contract
 
 - Context assembly is `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`.
@@ -307,7 +309,7 @@ Latest full seal validation in this workspace passed:
   - docs checks
   - `bun run check`
   - `bun run build:binary`
-- [ ] Commit and push the reviewed socket wire closure from `main-codex-docs`.
+- [x] Commit and push the reviewed socket wire closure from `main-codex-docs`.
 
 ## 2026-05-22 Socket Wire Closure Final State
 
@@ -322,5 +324,21 @@ Latest full seal validation in this workspace passed:
   - `bun test tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/runtime.executive.boundaries.test.ts`
   - `bun run docs:check`
   - `bun run check`
+  - `bun run build:binary`
+  - `git diff --check`
+
+## 2026-05-22 Polish Addendum
+
+- [x] Superseded older top-level handoff wording that still placed gateway under `src/agent`; active owner is `src/socket`.
+- [x] Kept `flyflor gateway`, `GatewayMessage`, and `gateway.*` names only as CLI/wire compatibility vocabulary, not architecture owner names.
+- [x] Added `flyflor socket` / `bun run socket` as the primary socket entrypoint while keeping `gateway` aliases for compatibility.
+- [x] Shifted service smoke, quality gates, README commands, and workflow docs to socket-first naming.
+- [x] Tightened Apifox OpenAPI with `SocketClientEnvelope`, `flyflor.event.v1` event.publish examples, required payload schemas for `history.list` / `gateway.message.send`, and `client.hello` shape alignment.
+- [x] Guarded docs against `event.subscribe.classes=["gateway"]`; examples now use `classes=["control"]`.
+- [x] Final polish validation passed:
+  - `bun run docs:check`
+  - `bun run check`
+  - focused socket/install/docs tests
+  - `bun run test`
   - `bun run build:binary`
   - `git diff --check`

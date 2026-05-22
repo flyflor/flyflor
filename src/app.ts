@@ -91,7 +91,7 @@ export class FlyFlor {
     }
 
     public async start(): Promise<void> {
-        if (this.dependencies.mode.is(RuntimeMode.Gateway)) {
+        if (this.dependencies.mode.is(RuntimeMode.Socket) || this.dependencies.mode.is(RuntimeMode.Gateway)) {
             this.dependencies.gateway.start();
             return;
         }
@@ -209,7 +209,7 @@ function createDefaultEventSink(mode: RuntimeModeType, config: FlyflorConfig): E
             }
         }
     }
-    const primary = mode === RuntimeMode.Gateway ? new ConsoleEventSink() : new NullEventSink();
+    const primary = mode === RuntimeMode.Socket || mode === RuntimeMode.Gateway ? new ConsoleEventSink() : new NullEventSink();
     return new CompositeEventSink([primary, ...audits]);
 }
 

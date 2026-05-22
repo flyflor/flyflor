@@ -282,7 +282,7 @@ export class SocketModule extends Socket {
     protected log(step: string, payload: Record<string, unknown> = {}): void {
         console.error(
             JSON.stringify({
-                scope: "gateway.module",
+                scope: "socket.module",
                 step,
                 ...payload,
             }),

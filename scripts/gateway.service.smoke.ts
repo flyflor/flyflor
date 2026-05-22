@@ -2,12 +2,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-interface GatewayServiceSmokeReport {
+interface SocketServiceSmokeReport {
     checks: Array<{ detail?: string; name: string; ok: boolean }>;
     tempHome: string;
 }
 
-interface GatewayServicePlan {
+interface SocketServicePlan {
     content: string;
     servicePath: string;
     startCommand: string;
@@ -25,8 +25,8 @@ const SERVICE_TARGET = {
 
 type ServiceTarget = (typeof SERVICE_TARGET)[keyof typeof SERVICE_TARGET];
 
-export async function runGatewayServiceSmoke(): Promise<GatewayServiceSmokeReport> {
-    const root = await mkdtemp(join(tmpdir(), "flyflor-gateway-service-smoke-"));
+export async function runGatewayServiceSmoke(): Promise<SocketServiceSmokeReport> {
+    const root = await mkdtemp(join(tmpdir(), "flyflor-socket-service-smoke-"));
     try {
         const tempHome = join(root, "home");
         const paths = {
@@ -38,32 +38,32 @@ export async function runGatewayServiceSmoke(): Promise<GatewayServiceSmokeRepor
         await mkdir(paths.logDir, { recursive: true });
 
         const binary = join(repoRoot, "dist", "flyflor");
-        const systemdPlan = buildGatewayServicePlan(paths, {
+        const systemdPlan = buildSocketServicePlan(paths, {
             binary,
-            serviceName: "flyflor-gateway",
+            serviceName: "flyflor-socket",
             target: SERVICE_TARGET.Systemd,
             userHome: tempHome,
         });
-        const launchdPlan = buildGatewayServicePlan(paths, {
+        const launchdPlan = buildSocketServicePlan(paths, {
             binary,
-            serviceName: "com.flyflor.gateway",
+            serviceName: "com.flyflor.socket",
             target: SERVICE_TARGET.Launchd,
             userHome: tempHome,
         });
 
-        await writeGatewayServicePlan(systemdPlan);
-        await writeGatewayServicePlan(launchdPlan);
+        await writeSocketServicePlan(systemdPlan);
+        await writeSocketServicePlan(launchdPlan);
 
         const checks = [
             check("systemd plan writes into temporary home", systemdPlan.servicePath.startsWith(tempHome), systemdPlan.servicePath),
             check("launchd plan writes into temporary home", launchdPlan.servicePath.startsWith(tempHome), launchdPlan.servicePath),
             check(
-                "systemd plan starts flyflor gateway run",
-                systemdPlan.content.includes(`${binary} gateway run`) && systemdPlan.content.includes(paths.projectDir),
+                "systemd plan starts flyflor socket run",
+                systemdPlan.content.includes(`${binary} socket run`) && systemdPlan.content.includes(paths.projectDir),
             ),
             check(
-                "launchd plan starts flyflor gateway run",
-                launchdPlan.content.includes("<string>gateway</string>") &&
+                "launchd plan starts flyflor socket run",
+                launchdPlan.content.includes("<string>socket</string>") &&
                     launchdPlan.content.includes("<string>run</string>") &&
                     launchdPlan.content.includes(binary),
             ),
@@ -76,7 +76,7 @@ export async function runGatewayServiceSmoke(): Promise<GatewayServiceSmokeRepor
             ),
             check(
                 "rendered files were written",
-                (await readFile(systemdPlan.servicePath, "utf8")).includes("Description=Flyflor Gateway") &&
+                (await readFile(systemdPlan.servicePath, "utf8")).includes("Description=Flyflor Socket") &&
                     (await readFile(launchdPlan.servicePath, "utf8")).includes("<key>Label</key>"),
             ),
             check(
@@ -90,15 +90,15 @@ export async function runGatewayServiceSmoke(): Promise<GatewayServiceSmokeRepor
     }
 }
 
-async function writeGatewayServicePlan(plan: GatewayServicePlan): Promise<void> {
+async function writeSocketServicePlan(plan: SocketServicePlan): Promise<void> {
     await mkdir(dirname(plan.servicePath), { recursive: true });
     await writeFile(plan.servicePath, plan.content, "utf8");
 }
 
-function buildGatewayServicePlan(
+function buildSocketServicePlan(
     paths: { cacheDir: string; logDir: string; projectDir: string },
     options: { binary: string; serviceName: string; target: ServiceTarget; userHome: string },
-): GatewayServicePlan {
+): SocketServicePlan {
     if (options.target === SERVICE_TARGET.Systemd) {
         const unitName = options.serviceName.endsWith(".service") ? options.serviceName : `${options.serviceName}.service`;
         const servicePath = join(options.userHome, ".config", "systemd", "user", unitName);
@@ -107,13 +107,13 @@ function buildGatewayServicePlan(
             servicePath,
             content: [
                 "[Unit]",
-                "Description=Flyflor Gateway",
+                "Description=Flyflor Socket",
                 "After=network-online.target",
                 "Wants=network-online.target",
                 "",
                 "[Service]",
                 "Type=simple",
-                `ExecStart=${systemdUnitArg(options.binary)} gateway run`,
+                `ExecStart=${systemdUnitArg(options.binary)} socket run`,
                 `WorkingDirectory=${systemdUnitArg(paths.projectDir)}`,
                 "Restart=always",
                 "RestartSec=3",
@@ -130,7 +130,7 @@ function buildGatewayServicePlan(
 
     const plistName = options.serviceName.endsWith(".plist") ? options.serviceName : `${options.serviceName}.plist`;
     const label = plistName.replace(/\.plist$/u, "");
-    const logFile = join(paths.logDir, "gateway.log");
+    const logFile = join(paths.logDir, "socket.log");
     const servicePath = join(options.userHome, "Library", "LaunchAgents", plistName);
     return {
         target: SERVICE_TARGET.Launchd,
@@ -145,7 +145,7 @@ function buildGatewayServicePlan(
             `  <key>ProgramArguments</key>`,
             `  <array>`,
             `    <string>${xmlEscape(options.binary)}</string>`,
-            `    <string>gateway</string>`,
+            `    <string>socket</string>`,
             `    <string>run</string>`,
             `  </array>`,
             `  <key>WorkingDirectory</key>`,
@@ -196,7 +196,7 @@ if (import.meta.main) {
     }
     const failed = report.checks.filter((entry) => !entry.ok);
     if (failed.length > 0) {
-        console.error(`gateway service smoke failed: ${failed.length} issue(s)`);
+        console.error(`socket service smoke failed: ${failed.length} issue(s)`);
         process.exit(1);
     }
 }

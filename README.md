@@ -106,10 +106,10 @@ bun run chat
 ```bash
 ./dist/flyflor       # 本地 stdio chat 调试入口
 ./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
-./dist/flyflor gateway
+./dist/flyflor socket  # 主 socket 血管入口；gateway 仍是兼容命令
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
-bun run gateway      # 兼容命令：源码模式启动最小 socket：/ws /health
-bun run gateway:dev  # 兼容命令：同步模板后用 Bun watch 直接跑 socket
+bun run socket       # 源码模式启动最小 socket：/ws /health
+bun run socket:dev   # 同步模板后用 Bun watch 直接跑 socket
 sh scripts/gateway.dev.sh # socket dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
 ```
@@ -158,12 +158,12 @@ bun run docker:chat                       # 进入容器内的本地 stdio chat 
 bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
 bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Replay 与 brain.db 写入
 bun run smoke:agent:live                  # 读取真实 provider，临时 HOME 内检查完整 agent turn
-bun run smoke:gateway:service             # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
+bun run smoke:socket:service              # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
 bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
 bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
 bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
 bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
-bun run smoke:release                     # docs + type + tests + agent smoke + release assets + gateway service + docker smoke
+bun run smoke:release                     # docs + type + tests + agent smoke + release assets + socket service + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
 docker exec -it flyflor-dev flyflor       # 进入容器交互
@@ -218,7 +218,8 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 | -------------- | --------------------------------------------------------------------------- |
 | `app.ts`       | 薄入口，启动 FlyFlor 主类                                                   |
 | `src/app.ts`   | FlyFlor composition root，显式 DI 容器                                      |
-| `src/agent`    | runtime、gateway、blackboard、sandbox、worker、MCP、scope、plugin         |
+| `src/agent`    | runtime、blackboard、sandbox、worker、MCP、scope、plugin                  |
+| `src/socket`   | socket 血管层：`/ws`、`/health`、live turn、event、operation、ledger query/replay |
 | `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
 | `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；历史 `src/fch/mindstream` 已移除 |
 | `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；历史 `src/fch/crystal` 已移除 |
@@ -333,10 +334,10 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 
 ```bash
 flyflor            # 本地 stdio chat 调试入口
-flyflor gateway    # 最小 Gateway：/ws /health
+flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 ```
 
-当前主线只把这两个 Bun 入口当成调试/血管面保留。后续第一方 CLI、TUI、channel shell 和 gateway surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
+当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
 
 ## 工程规则
 

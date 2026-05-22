@@ -29,7 +29,9 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": ["Socket"],
+        "tags": [
+          "Socket"
+        ],
         "summary": "Health check",
         "description": "Returns process health without invoking runtime thinking, memory, Crystal, Scope, or ledger replay.",
         "operationId": "getSocketHealth",
@@ -54,7 +56,9 @@
     },
     "/ws": {
       "get": {
-        "tags": ["Socket"],
+        "tags": [
+          "Socket"
+        ],
         "summary": "WebSocket upgrade",
         "description": "Upgrades to the flyflor.ws.v1 socket protocol. Apifox should connect to ws://127.0.0.1:8788/ws and exchange the message examples in this contract. The connection clientId is a live transport peer id only; it is not a user/session/chat continuity owner.",
         "operationId": "upgradeSocket",
@@ -103,7 +107,9 @@
     "schemas": {
       "HealthResponse": {
         "type": "object",
-        "required": ["ok"],
+        "required": [
+          "ok"
+        ],
         "properties": {
           "ok": {
             "type": "boolean",
@@ -114,7 +120,9 @@
       },
       "UnauthorizedResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "string",
@@ -125,7 +133,9 @@
       },
       "NotReadyResponse": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "string",
@@ -136,7 +146,12 @@
       },
       "SocketEnvelope": {
         "type": "object",
-        "required": ["protocol", "id", "type", "at"],
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at"
+        ],
         "properties": {
           "protocol": {
             "type": "string",
@@ -160,14 +175,22 @@
           },
           "payload": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Payload shape depends on type. Required for gateway.message.send and history.list, optional for client.hello, gateway.status.get, capability.catalog.get, event.subscribe, event.unsubscribe and ping."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Control envelope for flyflor.ws.v1. Runtime event broadcasts use SocketEventEnvelope with flyflor.event.v1; event.publish is not a ws control message type."
       },
       "SocketEventEnvelope": {
         "type": "object",
-        "required": ["protocol", "id", "type", "at", "payload"],
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "payload"
+        ],
         "properties": {
           "protocol": {
             "type": "string",
@@ -201,7 +224,6 @@
           "capability.catalog.snapshot",
           "client.hello",
           "error",
-          "event.publish",
           "event.subscribe",
           "event.unsubscribe",
           "gateway.message.send",
@@ -219,7 +241,13 @@
       },
       "ServerHelloPayload": {
         "type": "object",
-        "required": ["capabilities", "clientId", "connectedAt", "kits", "status"],
+        "required": [
+          "capabilities",
+          "clientId",
+          "connectedAt",
+          "kits",
+          "status"
+        ],
         "properties": {
           "capabilities": {
             "$ref": "#/components/schemas/SurfaceCapabilities"
@@ -243,7 +271,12 @@
       },
       "SurfaceCapabilities": {
         "type": "object",
-        "required": ["commands", "eventStream", "protocol", "semanticTypes"],
+        "required": [
+          "commands",
+          "eventStream",
+          "protocol",
+          "semanticTypes"
+        ],
         "properties": {
           "commands": {
             "type": "array",
@@ -263,7 +296,17 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["ask", "data", "error", "event", "input", "ping", "pong", "stream", "todo"]
+              "enum": [
+                "ask",
+                "data",
+                "error",
+                "event",
+                "input",
+                "ping",
+                "pong",
+                "stream",
+                "todo"
+              ]
             }
           }
         },
@@ -271,7 +314,12 @@
       },
       "ExternalKitCatalog": {
         "type": "object",
-        "required": ["schemaVersion", "builtAt", "kits", "capabilities"],
+        "required": [
+          "schemaVersion",
+          "builtAt",
+          "kits",
+          "capabilities"
+        ],
         "properties": {
           "schemaVersion": {
             "type": "integer",
@@ -331,13 +379,35 @@
           },
           "version": {
             "type": "string"
+          },
+          "client": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "description": "Preferred nested client metadata shape used by docs/ws.doc.md."
           }
         },
-        "additionalProperties": true
+        "additionalProperties": true,
+        "description": "Optional client hello metadata. The server currently acknowledges it without using it for cognitive continuity or connection identity changes."
       },
       "GatewayStatusSnapshot": {
         "type": "object",
-        "required": ["channels", "connectedCount", "degradedCount", "gatewayRunning", "host", "port", "streamingCount"],
+        "required": [
+          "channels",
+          "connectedCount",
+          "degradedCount",
+          "gatewayRunning",
+          "host",
+          "port",
+          "streamingCount"
+        ],
         "properties": {
           "channels": {
             "type": "array",
@@ -382,10 +452,22 @@
       },
       "ChannelStatusSnapshot": {
         "type": "object",
-        "required": ["adapter", "configured", "connected", "implemented", "name", "state", "streaming", "transport"],
+        "required": [
+          "adapter",
+          "configured",
+          "connected",
+          "implemented",
+          "name",
+          "state",
+          "streaming",
+          "transport"
+        ],
         "properties": {
           "adapter": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "configured": {
             "type": "boolean"
@@ -419,7 +501,10 @@
         "type": "object",
         "properties": {
           "catalog": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": true
           },
           "kits": {
@@ -430,7 +515,7 @@
       },
       "HistoryListPayload": {
         "type": "object",
-        "description": "Global brain.db ledger query/replay pagination. This is not session restore and does not assemble prompt context.",
+        "description": "Required payload for history.list. This is a brain.db ledger query/replay surface, not a session restore or context assembly input.",
         "properties": {
           "beforeTs": {
             "type": "integer"
@@ -443,7 +528,9 @@
       },
       "HistorySnapshotPayload": {
         "type": "object",
-        "required": ["history"],
+        "required": [
+          "history"
+        ],
         "properties": {
           "history": {
             "type": "array",
@@ -459,7 +546,12 @@
       },
       "HistoryTurnSnapshot": {
         "type": "object",
-        "required": ["assistantText", "eventId", "ts", "userText"],
+        "required": [
+          "assistantText",
+          "eventId",
+          "ts",
+          "userText"
+        ],
         "properties": {
           "assistantText": {
             "type": "string"
@@ -481,8 +573,10 @@
       },
       "MessageSendPayload": {
         "type": "object",
-        "required": ["text"],
-        "description": "Live input. conversationKey, user.id and threadId are routing/audit/dedup/reply-anchor provenance only; they do not define the lifeform's cognitive continuity.",
+        "required": [
+          "text"
+        ],
+        "description": "Required payload for gateway.message.send. payload.text is mandatory; route/user/thread fields are transport provenance only.",
         "properties": {
           "id": {
             "type": "string"
@@ -496,7 +590,12 @@
           },
           "chatType": {
             "type": "string",
-            "enum": ["direct", "group", "thread", "unknown"]
+            "enum": [
+              "direct",
+              "group",
+              "thread",
+              "unknown"
+            ]
           },
           "threadId": {
             "type": "string",
@@ -559,7 +658,11 @@
       },
       "RuntimeScope": {
         "type": "object",
-        "required": ["id", "projectDir", "projectMemoryDir"],
+        "required": [
+          "id",
+          "projectDir",
+          "projectMemoryDir"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -578,7 +681,10 @@
       },
       "TurnDeltaPayload": {
         "type": "object",
-        "required": ["delta", "messageId"],
+        "required": [
+          "delta",
+          "messageId"
+        ],
         "properties": {
           "delta": {
             "type": "string"
@@ -591,7 +697,9 @@
       },
       "TurnFinalPayload": {
         "type": "object",
-        "required": ["reply"],
+        "required": [
+          "reply"
+        ],
         "properties": {
           "reply": {
             "$ref": "#/components/schemas/GatewayReplyLike"
@@ -601,7 +709,10 @@
       },
       "TurnErrorPayload": {
         "type": "object",
-        "required": ["message", "messageId"],
+        "required": [
+          "message",
+          "messageId"
+        ],
         "properties": {
           "message": {
             "type": "string"
@@ -614,7 +725,11 @@
       },
       "GatewayReplyLike": {
         "type": "object",
-        "required": ["messageId", "route", "text"],
+        "required": [
+          "messageId",
+          "route",
+          "text"
+        ],
         "properties": {
           "messageId": {
             "type": "string"
@@ -666,7 +781,14 @@
       },
       "AskMetadata": {
         "type": "object",
-        "required": ["choiceCount", "freeform", "prompt", "questionCount", "reason", "snapshotId"],
+        "required": [
+          "choiceCount",
+          "freeform",
+          "prompt",
+          "questionCount",
+          "reason",
+          "snapshotId"
+        ],
         "properties": {
           "choiceCount": {
             "type": "integer"
@@ -735,7 +857,13 @@
       },
       "ExecutiveToolLoopMetadata": {
         "type": "object",
-        "required": ["askId", "message", "resume", "stepCount", "stop"],
+        "required": [
+          "askId",
+          "message",
+          "resume",
+          "stepCount",
+          "stop"
+        ],
         "properties": {
           "askId": {
             "type": "string"
@@ -748,7 +876,9 @@
           },
           "resume": {
             "type": "object",
-            "required": ["mode"],
+            "required": [
+              "mode"
+            ],
             "properties": {
               "mode": {
                 "type": "string",
@@ -797,11 +927,16 @@
       },
       "EventPublishPayload": {
         "type": "object",
-        "required": ["event"],
+        "required": [
+          "event"
+        ],
         "properties": {
           "event": {
             "type": "object",
-            "required": ["type", "at"],
+            "required": [
+              "type",
+              "at"
+            ],
             "properties": {
               "type": {
                 "type": "string"
@@ -825,11 +960,20 @@
       },
       "ErrorPayload": {
         "type": "object",
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "properties": {
           "code": {
             "type": "string",
-            "enum": ["internal", "invalid-envelope", "invalid-payload", "unauthorized", "unsupported-message"]
+            "enum": [
+              "internal",
+              "invalid-envelope",
+              "invalid-payload",
+              "unauthorized",
+              "unsupported-message"
+            ]
           },
           "details": {
             "type": "object",
@@ -843,6 +987,206 @@
           }
         },
         "additionalProperties": true
+      },
+      "ClientHelloEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "client.hello"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/ClientHelloPayload"
+              }
+            }
+          }
+        ]
+      },
+      "PingEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "ping"
+              }
+            }
+          }
+        ]
+      },
+      "GatewayStatusGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "gateway.status.get"
+              }
+            }
+          }
+        ]
+      },
+      "CapabilityCatalogGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "capability.catalog.get"
+              }
+            }
+          }
+        ]
+      },
+      "HistoryListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "history.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/HistoryListPayload"
+              }
+            }
+          }
+        ]
+      },
+      "GatewayMessageSendEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "gateway.message.send"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/MessageSendPayload"
+              }
+            }
+          }
+        ]
+      },
+      "EventSubscribeEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "event.subscribe"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/EventSubscription"
+              }
+            }
+          }
+        ]
+      },
+      "EventUnsubscribeEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "event.unsubscribe"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/EventSubscription"
+              }
+            }
+          }
+        ]
+      },
+      "SocketClientEnvelope": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ClientHelloEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/PingEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/GatewayStatusGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/CapabilityCatalogGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/HistoryListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/GatewayMessageSendEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/EventSubscribeEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/EventUnsubscribeEnvelope"
+          }
+        ],
+        "description": "Inbound client control frames. Use this schema in Apifox when validating client-to-server WS messages; gateway.message.send and history.list require payload objects."
       }
     },
     "examples": {
@@ -874,8 +1218,27 @@
             "capabilities": {
               "protocol": "flyflor.ws.v1",
               "eventStream": true,
-              "commands": ["client.hello", "gateway.status.get", "capability.catalog.get", "history.list", "gateway.message.send", "event.subscribe", "event.unsubscribe", "ping"],
-              "semanticTypes": ["input", "stream", "event", "ask", "todo", "data", "error", "ping", "pong"]
+              "commands": [
+                "client.hello",
+                "gateway.status.get",
+                "capability.catalog.get",
+                "history.list",
+                "gateway.message.send",
+                "event.subscribe",
+                "event.unsubscribe",
+                "ping"
+              ],
+              "semanticTypes": [
+                "input",
+                "stream",
+                "event",
+                "ask",
+                "todo",
+                "data",
+                "error",
+                "ping",
+                "pong"
+              ]
             },
             "kits": {
               "schemaVersion": 1,
@@ -905,8 +1268,10 @@
           "at": "2026-05-22T00:00:01.000Z",
           "requestId": "req-client-hello-1",
           "payload": {
-            "name": "apifox",
-            "version": "1.0.0"
+            "client": {
+              "name": "apifox",
+              "version": "1.0.0"
+            }
           }
         }
       },
@@ -1094,7 +1459,9 @@
                 "title": "Project Scope"
               },
               "contextForkId": "fork-1",
-              "skillNames": ["review"]
+              "skillNames": [
+                "review"
+              ]
             }
           }
         }
@@ -1163,8 +1530,14 @@
                 "ask": {
                   "choiceCount": 2,
                   "choices": [
-                    { "id": "a", "label": "保留兼容" },
-                    { "id": "b", "label": "立即破坏性改名" }
+                    {
+                      "id": "a",
+                      "label": "保留兼容"
+                    },
+                    {
+                      "id": "b",
+                      "label": "立即破坏性改名"
+                    }
                   ],
                   "freeform": true,
                   "prompt": "这轮是否保留 wire v1 兼容？",
@@ -1273,8 +1646,13 @@
           "at": "2026-05-22T00:00:11.000Z",
           "requestId": "req-events-1",
           "payload": {
-            "classes": ["control", "effect"],
-            "types": ["executive.capability.catalog.built"]
+            "classes": [
+              "control",
+              "effect"
+            ],
+            "types": [
+              "executive.capability.catalog.built"
+            ]
           }
         }
       },
@@ -1287,7 +1665,10 @@
           "at": "2026-05-22T00:00:12.000Z",
           "requestId": "req-events-1",
           "payload": {
-            "classes": ["control", "effect"]
+            "classes": [
+              "control",
+              "effect"
+            ]
           }
         }
       },
@@ -1295,7 +1676,7 @@
         "summary": "event.publish",
         "value": {
           "protocol": "flyflor.event.v1",
-          "id": "env-event-publish-1",
+          "id": "event-publish-1",
           "type": "event.publish",
           "at": "2026-05-22T00:00:13.000Z",
           "requestId": "req-turn-1",

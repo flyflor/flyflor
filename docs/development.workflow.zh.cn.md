@@ -263,7 +263,7 @@ git worktree list
   - `bun run test:live`
   - `bun run smoke:agent:live`
 - Rust 外壳 bootstrap guard 也已进入 deterministic smoke：
-  - `bun run smoke:gateway:control`
+  - `bun run smoke:socket:control`
 
 下一条扩容规则：
 
@@ -339,7 +339,7 @@ bun run kernel:tmux -- --wave2 --launch-codex
   - owned surface：memory/context store、decay、forgetting、vector recall 与相关测试
 - `wt/wave2-runtime-executive`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-runtime-executive`
-  - owned surface：runtime、gateway WS/control、executive capability execution 与相关测试/文档
+  - owned surface：runtime、socket WS/control、executive capability execution 与相关测试/文档
 - `wt/wave2-scope-crystal`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-scope-crystal`
   - owned surface：ask、scope、codename promotion、crystal consolidation/forgetting 与相关测试
@@ -376,7 +376,7 @@ bun run kernel:tmux -- --wave2 --launch-codex
 已在暂存后的主线快照上运行的验证：
 
 - `bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`
-- `bun run smoke:gateway:control`
+- `bun run smoke:socket:control`
 - `bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`
 - `bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`
 - `bun run docs:check`
@@ -408,7 +408,7 @@ bun run kernel:tmux -- --wave3 --launch-codex
   - owned surface：memory lifecycle、`brain.db` ledger/query/replay/audit 行为、decay、hot memory、dream、recall、archive 行为与相关测试
 - `wt/wave3-runtime-capability`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
-  - owned surface：runtime、gateway WS/control、executive capability execution、sandbox/trust visibility 与相关脚本/测试/文档
+  - owned surface：runtime、socket WS/control、executive capability execution、sandbox/trust visibility 与相关脚本/测试/文档
 - `wt/wave3-scope-constitution`
   - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
   - owned surface：scope scaffold 宪法层文件、ask/scope/codename 边界、`templates/projects/**` 与相关测试

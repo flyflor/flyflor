@@ -24,7 +24,7 @@ const LEGACY_MEMORY_PATH_REFERENCES = [
     "sqlite.graph.store.ts",
 ];
 const SINGLE_OWNER_COMPONENT_FILES = [
-    "src/agent/gateway/adapters.component.ts",
+    "src/socket/adapters.component.ts",
     "src/components/base.component.ts",
     "src/config/config.component.ts",
     "src/agent/context/context.scope.component.ts",
@@ -382,6 +382,7 @@ describe("repository naming boundary", () => {
         // compatibility shells makes the Agent boundary ambiguous.
         expect(await exists(join(REPO_ROOT, "src", "context"))).toBe(false);
         expect(await exists(join(REPO_ROOT, "src", "skills"))).toBe(false);
+        expect(await exists(join(REPO_ROOT, "src", "agent", "gateway"))).toBe(false);
     });
 
     test("hippocampus memory capability subdirectories expose an index entrypoint", async () => {

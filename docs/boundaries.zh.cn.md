@@ -7,7 +7,7 @@
 ## 1. 项目定位
 
 - 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --allow-unresolved=""`。
-- 整体架构命名为 Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）：Cognitive（Mindstream / Crystal / Hippocampus）是认知内核，Executive（Capability / Tool / Trust / Loop）是能力外骨架，Agent 是 runtime / gateway / sandbox / skills / context 等外在交互形态。
+- 整体架构命名为 Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）：Cognitive（Mindstream / Crystal / Hippocampus）是认知内核，Executive（Capability / Tool / Trust / Loop）是能力外骨架，Agent 是 runtime / sandbox / skills / context 等外在运行态，Socket 是 live turn / event / operation / ledger query 的血管层。
 - 输入渠道统一归一化为 `GatewayMessage`。
 - 智能体执行可观察、可中断、可恢复、可审计。
 - 工具 / MCP / 插件 / 技能 / 记忆都有显式边界。
@@ -19,8 +19,9 @@
 ```
 app.ts            程序入口，只做版本/模式分派
 src/app.ts        FlyFlor composition root
-src/agent/        runtime / gateway / blackboard / sandbox / context / skills / worker / mcp / plugin
+src/agent/        runtime / blackboard / sandbox / context / skills / worker / mcp / plugin
 src/agent/di/     @Module / @Provide / @Inject metadata 与显式容器
+src/socket/       /ws / /health / live turn / event / operation / ledger query-replay
 src/cognitive/    认知内核目标目录
 src/cognitive/mindstream/   Mindstream 心流层
 src/cognitive/crystal/ reflection / Gem / drift
@@ -36,7 +37,7 @@ templates/        提示词与记忆 Markdown 模板
 目录归属硬规则：
 
 - 新增顶层或一级源码目录前，必须说明它属于 cognitive、executive、agent、events、protocol、config、command、runtime data 或 user workspace 的哪一层。
-- 历史 `src/fch`、`src/executive`、`src/skills` 与 `src/context` 物理路径已移除；新公开文档和新代码只能使用 `src/cognitive`、`src/executive`、`src/agent/skills`、`src/agent/context` 的目标语义。
+- 历史 `src/fch`、旧执行层物理路径、`src/skills`、`src/context` 与迁移后的 `src/agent/gateway` 物理路径已移除；新公开文档和新代码只能使用 `src/cognitive`、`src/executive`、`src/socket`、`src/agent/skills`、`src/agent/context` 的目标语义。
 - 新增 capability 目录必须说明来源是 core、MCP、plugin、skill、channel、user tool 还是 subagent，并经 executive descriptor registry 进入 Tool Plan。
 - 用户数据、密钥、日志、数据库、缓存和工作区文件只能放运行态目录，不能进入源码约定和二进制产物。
 - 配置文件只表达覆盖项；不能靠配置字段给无 owner 目录补语义。
@@ -80,11 +81,11 @@ flowchart LR
 硬规则：
 
 - `src/cognitive/mindstream` / `src/cognitive/crystal` / `src/cognitive/hippocampus` / `src/executive` / 能力实现禁止 import `command` 或入口层。
-- `gateway` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
+- `socket` 不知道模型 provider；`blackboard` 不执行工具或写长期记忆；`worker` 不动态扫描或动态 import。
 - 当前注意力连续性由 `FocusPointer` 协议字段、显式 `activeScope` / `contextForkId`、codename 锚点和 memory activation 共同表达；实现入口在 `src/protocol/contracts/memory.atom.ts`、`src/agent/context` 与 `src/cognitive/hippocampus/memory`。其他目录不得重新实现隐式会话容器。
 - `sandbox` 是工具 / shell / 网络 / 插件 / MCP 副作用的唯一审批边界。
-- 主线 `gateway` 只保留 WS/control/event 血管，不承载第一方 CLI/TUI/channel adapter。
-- `gateway`、`runtime`、`blackboard`、`worker`、`sandbox`、`memory` 都是 Event Fabric 的参与者；`src/events` 拥有事件发布、订阅、分类和 fan-out，gateway 不拥有事件总线。
+- 主线 `src/socket` 只保留 WS/control/event 血管，不承载第一方 CLI/TUI/channel adapter；`gateway.*` 只保留为 `flyflor.ws.v1` wire compatibility 名称。
+- `socket`、`runtime`、`blackboard`、`worker`、`sandbox`、`memory` 都是 Event Fabric 的参与者；`src/events` 拥有事件发布、订阅、分类和 fan-out，socket 不拥有事件总线。
 - 跨目录禁止深层私有导入；先在 `index.ts` 暴露 public API。
 - `protocol` / `agent/di` 不能成为垃圾桶；只服务单一领域的类型必须回到对应目录。
 
@@ -93,14 +94,14 @@ flowchart LR
 只保留：`@Module` / `@Provide` / `@Inject` / `@Component` / `@Event` / `@Worker` / `@Channel` / `@Plugin`。
 
 - `@Provide` 是注入底座；`@Module` / `@Component` 必须复用 `Provide` 的 metadata 注册路径，禁止各自维护第二套注入协议。
-- Gateway / Blackboard / Memory / Runtime / Sandbox / Context / Crystal 等边界必须优先用 `FlyflorComponent` 继承链表达：`class MemoryModule extends Memory`、`class ContextScopeComponent extends ContextComponent`、`class CrystalMemoryComponent extends CrystalComponent`。
+- Socket / Blackboard / Memory / Runtime / Sandbox / Context / Crystal 等边界必须优先用 `FlyflorComponent` 继承链表达；Gateway 只作为 v1 wire/compatibility alias 保留。示例：`class SocketModule extends Socket`、`class MemoryModule extends Memory`、`class ContextScopeComponent extends ContextComponent`、`class CrystalMemoryComponent extends CrystalComponent`。
 - 本地状态与 IO 存储属于 Component：`BrainStore`、`SQLiteGraphStore`、`SQLiteMemoryStore`、Markdown/scope memory store 等必须继承 `BrainComponent` / `GraphComponent` / `SQLiteComponent` / `MemoryComponent`，避免回退成额外中间层或散落工具类。
 - Redis / SurrealDB 作为原型定位继续保留 `RedisComponent` / `SurrealComponent` 基类；默认运行时不启用外部 Redis / SurrealDB backend，未来恢复外部存储时必须通过这两个 Component 边界接入。
 - `kind` / `layer` / `provider` 默认由 `FlyflorComponent` 继承链与类名推断；`name` 只作展示字段，不参与注入匹配；`tags` 不用于 `@Module` / `@Component`。
 - `@Component()` / `@Module()` 默认无参数、默认单例；只有偏离默认值（例如 factory scope、channel / worker / plugin 特例）时才显式写参数。
 - `@Event(type)` 只登记显式事件 hook metadata，不做反射类型推断、不扫描目录；实例必须由 composition root 或组件 owner 调用 `EventsComponent.registerHooks(instance)` 显式接入。
 - Runtime 副作用优先事件化：主 turn pipeline 可以发布结构化 RuntimeEvent，统计、审计、usage、后处理等非路由关键路径放在 `*.event.ts` handler；handler 只能消费 JSON payload 和显式注入组件，不能反向读取自然语言做业务判断。
-- Event Fabric 是所有交互面的订阅广播中枢，未来外部 TUI 仓库只能依赖 event/control transport，不 import runtime、gateway 或 memory 私有实现。
+- Event Fabric 是所有交互面的订阅广播中枢，未来外部 TUI 仓库只能依赖 event/control transport，不 import runtime、socket 或 memory 私有实现。
 - 不新增专用 decorator，不使用 reflect-metadata，不做自动目录扫描，不做动态 require / import。
 - 依赖注入仅在 composition root 使用显式 token/provider 绑定；允许 `DependencyContainer.bindClass()` 按构造函数 `@Inject(ClassToken)` 自动实例化，但注册目标仍必须由 composition root 显式列出。
 - DI key 优先使用 class 对象本身：`@Inject(RuntimeModule)`、`container.resolve(RuntimeModule)`。`ConfigComponent` / `RuntimeModeComponent` / `EventsComponent` / `ModelComponent` / `AdaptersComponent` 这类边界必须是域内 `component.ts` 的真实组件，不能只是空壳 token；只有非 class 值才使用 `createInjectionToken()` 创建对象 token；禁止新增裸字符串 token。

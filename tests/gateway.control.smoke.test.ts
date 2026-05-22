@@ -13,7 +13,7 @@ describe("gateway control smoke", () => {
         ]);
 
         expect(exitCode).toBe(0);
-        expect(stderr).toContain('"scope":"gateway.module"');
+        expect(stderr).toContain('"scope":"socket.module"');
         expect(stderr).toContain('"step":"start.ready"');
 
         const report = JSON.parse(stdout) as {

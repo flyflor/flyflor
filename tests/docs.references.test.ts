@@ -65,6 +65,9 @@ describe("documentation references", () => {
         expect(doc).toContain("turn.final");
         expect(doc).toContain("invalid-envelope");
         expect(doc).toContain("gateway.message.send payload requires text");
+        expect(doc).toContain('"classes": ["control"]');
+        expect(doc).not.toContain('"classes": ["gateway"]');
+        expect(doc).toContain("ws-actor");
         expect(doc).toContain("历史对话列表获取");
         expect(doc).toContain("history.list");
         expect(doc).toContain("history.snapshot");
@@ -78,18 +81,25 @@ describe("documentation references", () => {
         const contract = JSON.parse(text) as {
             components?: {
                 examples?: Record<string, { value?: unknown }>;
-                schemas?: Record<string, unknown>;
+                schemas?: Record<string, { enum?: string[]; oneOf?: unknown[] }>;
             };
             openapi?: string;
             paths?: Record<string, unknown>;
         };
         const wireText = JSON.stringify(contract);
+        const socketMessageTypes = contract.components?.schemas?.SocketMessageType?.enum ?? [];
 
         expect(contract.openapi).toBe("3.1.0");
         expect(contract.paths).toHaveProperty("/health");
         expect(contract.paths).toHaveProperty("/ws");
         expect(contract.components?.schemas).toHaveProperty("SocketEnvelope");
         expect(contract.components?.schemas).toHaveProperty("SocketEventEnvelope");
+        expect(contract.components?.schemas).toHaveProperty("SocketClientEnvelope");
+        expect(contract.components?.schemas?.SocketClientEnvelope?.oneOf?.length).toBeGreaterThan(0);
+        expect(socketMessageTypes).toContain("gateway.message.send");
+        expect(socketMessageTypes).toContain("history.list");
+        expect(socketMessageTypes).not.toContain("event.publish");
+        expect(contract.components?.examples?.EventPublish?.value).toMatchObject({ protocol: "flyflor.event.v1" });
         expect(wireText).toContain("flyflor.ws.v1");
         expect(wireText).toContain("flyflor.event.v1");
         expect(wireText).toContain("gateway.message.send");

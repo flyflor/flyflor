@@ -11,10 +11,10 @@ const mode = normalizeEntryMode(process.argv.slice(2));
 const app = await getFlyFlor({ argv: ["bun", "flyflor", mode], mode });
 await app.start();
 
-function normalizeEntryMode(argv: string[]): typeof RuntimeMode.Chat | typeof RuntimeMode.Gateway {
+function normalizeEntryMode(argv: string[]): typeof RuntimeMode.Chat | typeof RuntimeMode.Gateway | typeof RuntimeMode.Socket {
     const first = argv[0];
-    if (first === RuntimeMode.Gateway) {
-        return RuntimeMode.Gateway;
+    if (first === RuntimeMode.Socket || first === RuntimeMode.Gateway) {
+        return first;
     }
     return RuntimeMode.Chat;
 }
