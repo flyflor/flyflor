@@ -801,6 +801,7 @@ export class MemoryModule extends Memory {
         // LF-R3 Ask 一等公民：先把"用户对上一轮 ask 的答复"落到 brain（ask-answer-pair 事件），
         // 再处理本轮可能新发起的 ask。两个写入顺序固定，避免 chain 被错误跨轮接续。
         const pendingAskBefore = this.findPendingAsk(ownerKey);
+        const answeredAskSnapshotId = pendingAskBefore?.snapshotId;
         if (pendingAskBefore) {
             this.events.publish(
                 event(
@@ -983,6 +984,8 @@ export class MemoryModule extends Memory {
         );
 
         return {
+            askEventId,
+            answeredAskSnapshotId,
             candidates,
             promoted: promotedRecords,
         };

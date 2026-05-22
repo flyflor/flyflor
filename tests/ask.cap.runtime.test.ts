@@ -20,7 +20,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import { resolve } from "node:path";
-import { mkdir, symlink } from "node:fs/promises";
+import { mkdir, readFile, readdir, symlink } from "node:fs/promises";
 
 const tempRoots: string[] = [];
 const cleanup = async () => {
@@ -189,6 +189,15 @@ class ForkMergedClosureModel implements ModelClient {
     }
 }
 
+class CapturingModel implements ModelClient {
+    public readonly prompts: string[] = [];
+    public constructor(private readonly response: string) {}
+    public async generate(messages: Array<{ content: string }>): Promise<string> {
+        this.prompts.push(messages.map((message) => message.content).join("\n"));
+        return this.response;
+    }
+}
+
 describe("LF-R3 slice D — runtime cap enforcement", () => {
     test("model-emitted ask is dropped when chainDepth would exceed maxChainDepth", async () => {
         try {
@@ -248,6 +257,216 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                 expect(reply.text).toContain("   1. main");
                 expect(reply.text).toContain("   3. Other — type your own answer");
                 expect(reply.text).toContain("2. Should I proceed now?");
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("unanswered ask is saved as a ghost snapshot with scope and fork context", async () => {
+        try {
+            const config = await makeConfig();
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const model = new CapturingModel([
+                    "Need a decision.",
+                    "<flyflor_agent_ask>",
+                    JSON.stringify({
+                        reason: AskReason.PolicyDecision,
+                        prompt: "Pick the merge direction.",
+                        continuationHint: { title: "Merge direction", contextHint: "fork needs a decision" },
+                    }),
+                    "</flyflor_agent_ask>",
+                ].join("\n"));
+                const runtime = new RuntimeModule(config, model, events, undefined, memory);
+                const context = {
+                    ...ctx(),
+                    activeScope: {
+                        id: "scope-ghost",
+                        title: "Ghost Scope",
+                        projectDir: config.paths.projectDir,
+                        projectMemoryDir: join(config.paths.projectDir, ".flyflor", "memory"),
+                    },
+                    contextForkId: "fork-ghost",
+                };
+                const reply = await runtime.handleMessage(gwMsg("merge this branch", "m-ghost-1"), context);
+
+                expect(reply.metadata?.kind).toBe("ask");
+                const snapshotId = String(reply.metadata?.behaviorSnapshotId);
+                const raw = await readFile(join(config.paths.storageDir, "continuation-ghosts", `${snapshotId}.json`), "utf8");
+                const snapshot = JSON.parse(raw) as {
+                    activeScope?: { id?: string };
+                    contextForkId?: string;
+                    continuationId?: string;
+                    snapshotId?: string;
+                };
+                expect(snapshot).toMatchObject({
+                    activeScope: { id: "scope-ghost" },
+                    contextForkId: "fork-ghost",
+                    snapshotId,
+                });
+                expect(snapshot.continuationId).toMatch(/^continuation-/);
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("explicit continue restores pending ask scope and fork without reading text intent", async () => {
+        try {
+            const config = await makeConfig();
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const firstModel = new CapturingModel([
+                    "<flyflor_agent_ask>",
+                    JSON.stringify({
+                        reason: AskReason.PolicyDecision,
+                        prompt: "Pick the merge direction.",
+                        continuationHint: { title: "Merge direction" },
+                    }),
+                    "</flyflor_agent_ask>",
+                ].join("\n"));
+                const runtime = new RuntimeModule(config, firstModel, events, undefined, memory);
+                const scope = {
+                    id: "scope-resume",
+                    title: "Resume Scope",
+                    projectDir: config.paths.projectDir,
+                    projectMemoryDir: join(config.paths.projectDir, ".flyflor", "memory"),
+                };
+                const askReply = await runtime.handleMessage(
+                    gwMsg("merge branch", "m-resume-1"),
+                    { ...ctx(), requestId: "req-resume-1", activeScope: scope, contextForkId: "fork-resume" },
+                );
+
+                const secondModel = new CapturingModel("continuing now");
+                const runtime2 = new RuntimeModule(config, secondModel, events, undefined, memory);
+                const finalReply = await runtime2.handleMessage(
+                    {
+                        ...gwMsg("use the left branch", "m-resume-2"),
+                        metadata: {
+                            continuation: {
+                                mode: "continue",
+                                snapshotId: String(askReply.metadata?.behaviorSnapshotId),
+                            },
+                        },
+                    },
+                    { ...ctx(), requestId: "req-resume-2", contextForkId: undefined },
+                );
+
+                expect(finalReply.metadata?.kind).toBe("reply");
+                expect(secondModel.prompts[0]).toContain("You previously asked the user");
+                expect(secondModel.prompts[0]).toContain("Pick the merge direction.");
+                expect(memory.peekActiveAsk("fork:fork-resume")).toBeNull();
+                const remaining = await readdir(join(config.paths.storageDir, "continuation-ghosts"));
+                expect(remaining).toEqual([]);
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("direct answer to pending ask clears its ghost snapshot without explicit continue", async () => {
+        try {
+            const config = await makeConfig();
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const runtime = new RuntimeModule(config, new CapturingModel([
+                    "<flyflor_agent_ask>",
+                    JSON.stringify({ reason: AskReason.PolicyDecision, prompt: "Choose a branch." }),
+                    "</flyflor_agent_ask>",
+                ].join("\n")), events, undefined, memory);
+                const askReply = await runtime.handleMessage(
+                    gwMsg("seed ask", "m-direct-answer-1"),
+                    { ...ctx(), requestId: "req-direct-answer-1" },
+                );
+                const snapshotPath = join(
+                    config.paths.storageDir,
+                    "continuation-ghosts",
+                    `${String(askReply.metadata?.behaviorSnapshotId)}.json`,
+                );
+                expect(await readFile(snapshotPath, "utf8")).toContain("Choose a branch.");
+
+                const runtime2 = new RuntimeModule(config, new CapturingModel("handled"), events, undefined, memory);
+                await runtime2.handleMessage(
+                    gwMsg("left branch", "m-direct-answer-2"),
+                    { ...ctx(), requestId: "req-direct-answer-2" },
+                );
+
+                const remaining = await readdir(join(config.paths.storageDir, "continuation-ghosts"));
+                expect(remaining).toEqual([]);
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("explicit continue with missing or conflicting snapshot returns structured ask", async () => {
+        try {
+            const config = await makeConfig();
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const runtime = new RuntimeModule(config, new CapturingModel("unused"), events, undefined, memory);
+                const missing = await runtime.handleMessage(
+                    {
+                        ...gwMsg("not a semantic trigger", "m-missing"),
+                        metadata: { continuation: { mode: "continue", snapshotId: "behavior-missing" } },
+                    },
+                    { ...ctx(), requestId: "req-missing" },
+                );
+                expect(missing.metadata).toMatchObject({
+                    kind: "ask",
+                    continuation: { resume: "failed", reason: "missing" },
+                });
+
+                const askRuntime = new RuntimeModule(config, new CapturingModel([
+                    "<flyflor_agent_ask>",
+                    JSON.stringify({ reason: AskReason.PolicyDecision, prompt: "Choose" }),
+                    "</flyflor_agent_ask>",
+                ].join("\n")), events, undefined, memory);
+                const askReply = await askRuntime.handleMessage(
+                    gwMsg("seed ask", "m-conflict-1"),
+                    {
+                        ...ctx(),
+                        requestId: "req-conflict-1",
+                        contextForkId: "fork-a",
+                    },
+                );
+                const conflict = await runtime.handleMessage(
+                    {
+                        ...gwMsg("resume with wrong fork", "m-conflict-2"),
+                        metadata: {
+                            continuation: {
+                                mode: "continue",
+                                snapshotId: String(askReply.metadata?.behaviorSnapshotId),
+                            },
+                        },
+                    },
+                    {
+                        ...ctx(),
+                        requestId: "req-conflict-2",
+                        contextForkId: "fork-b",
+                    },
+                );
+                expect(conflict.metadata).toMatchObject({
+                    kind: "ask",
+                    continuation: { resume: "failed", reason: "conflict" },
+                });
             } finally {
                 memory.dispose();
             }

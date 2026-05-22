@@ -96,6 +96,8 @@ export interface MemoryEpisodeProvenance {
 }
 
 export interface TurnMemoryResult {
+    askEventId?: string;
+    answeredAskSnapshotId?: string;
     candidates: MemoryCandidate[];
     promoted: MemoryRecord[];
 }

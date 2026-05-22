@@ -509,3 +509,11 @@
   原因：该 lane 将 ASK、Scope、Fork、Executive loop snapshot 通过 `/ws` control/event surface 对外显式可见，是上线前外部 client 可观察闭环的关键接口。
   效率：child 用时约 15m16s；11 files changed，667 insertions，8 deletions；分类为 control `+15/-8`，docs/openapi `+174/-0`，src `+224/-0`，tests `+254/-0`。
   验证：待主线重跑 protocol/socket/docs focused tests、`bun run docs:check`、`bun run check`、`git diff --check`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-ask-ghost-continue-merge
+  摘要：开始 review 并合并 `wt/ask-ghost-continue` 的提交 `f748f4b`。
+  原因：该 lane 持久化 unanswered ASK ghost continuation，并支持显式 structured `continue` 恢复 scope/fork/loop context，是长线 loop 不丢失的核心闭环。
+  效率：child 用时约 18m12s；8 files changed，535 insertions，14 deletions；分类为 control `+14/-7`，src `+301/-6`，tests `+220/-1`。
+  验证：待主线重跑 ASK/continuation focused tests、`bun run check`、`git diff --check`

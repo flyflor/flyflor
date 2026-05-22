@@ -35,8 +35,11 @@ import { parseMemoryActions } from "../../cognitive/hippocampus/memory/actions/i
 import { AgentAskParser } from "../../cognitive/hippocampus/ask/index.ts";
 import {
     ContextForkMergeKind,
+    ContinuationGhostStore,
     ContinuationDecisionParser,
     type ContextForkMergeDecision,
+    type ContinuationGhostResumeRequest,
+    type ContinuationGhostSnapshot,
 } from "../../cognitive/hippocampus/continuation/index.ts";
 import {
     buildContextForkClosureCandidate,
@@ -274,6 +277,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly mcpToolPlan: RuntimeMcpToolPlanComponent;
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
     protected readonly mcpCapabilityReader: RuntimeMcpCapabilityReader;
+    protected readonly continuationGhosts: ContinuationGhostStore;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照。Key 只来自显式 scope / fork；没有显式范围时退回 turn-local。
@@ -312,6 +316,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.mcpToolPlan = new RuntimeMcpToolPlanComponent();
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
+        this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
     }
 
     /** 预热记忆层；在 SocketModule 启动后立即调用。 */
@@ -437,6 +442,102 @@ export class RuntimeModule extends RuntimeBoundary {
         }
     }
 
+    private async restoreContinuationContext(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        request: ContinuationGhostResumeRequest,
+    ): Promise<{ context: RuntimeContext } | { reply: GatewayReply }> {
+        const lookup = await this.continuationGhosts.lookup(request);
+        if (lookup.status !== "found") {
+            return {
+                reply: this.replyFromGhostResumeProblem(message, context, lookup.status),
+            };
+        }
+        const snapshot = lookup.snapshot;
+        if (snapshot.activeScope && context.activeScope && context.activeScope.id !== snapshot.activeScope.id) {
+            return {
+                reply: this.replyFromGhostResumeProblem(message, context, "conflict"),
+            };
+        }
+        if (snapshot.contextForkId && context.contextForkId && context.contextForkId !== snapshot.contextForkId) {
+            return {
+                reply: this.replyFromGhostResumeProblem(message, context, "conflict"),
+            };
+        }
+        if (snapshot.continuationId) {
+            this.memory.resumeContinuation(snapshot.continuationId);
+        }
+        return {
+            context: {
+                ...context,
+                activeScope: context.activeScope ?? snapshot.activeScope,
+                activeProject: context.activeProject ?? snapshot.activeScope,
+                contextForkId: context.contextForkId ?? snapshot.contextForkId,
+            },
+        };
+    }
+
+    private replyFromGhostResumeProblem(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        reason: "conflict" | "invalid" | "invalid-request" | "missing",
+    ): GatewayReply {
+        const prompt =
+            reason === "conflict"
+                ? "Cannot continue that pending ASK because this request already carries a different explicit scope or fork."
+                : reason === "missing"
+                  ? "Cannot continue that pending ASK because its snapshot is no longer available."
+                  : "Cannot continue that pending ASK because the structured continue request is invalid.";
+        const ask: AgentAsk = {
+            reason: AskReason.PolicyDecision,
+            prompt,
+            freeform: true,
+            choices: [
+                {
+                    label: "Start fresh",
+                    value: "fresh",
+                    description: "Ignore the unavailable pending snapshot and handle this as a new turn.",
+                },
+            ],
+        };
+        return {
+            messageId: crypto.randomUUID(),
+            route: message.route,
+            text: renderAskReplyText(ask),
+            metadata: {
+                kind: "ask" as const,
+                behaviorSnapshotId: `behavior-${context.requestId}`,
+                ask: buildAskMetadata(ask, `behavior-${context.requestId}`),
+                continuation: {
+                    resume: "failed",
+                    reason,
+                },
+            },
+        };
+    }
+
+    private async completeAnsweredAskGhost(
+        message: GatewayMessage,
+        answeredAskSnapshotId?: string,
+    ): Promise<void> {
+        if (answeredAskSnapshotId) {
+            await this.continuationGhosts.complete(answeredAskSnapshotId);
+            return;
+        }
+        const read = this.continuationGhosts.readResumeRequest(message.metadata);
+        if (!read.ok || !read.request) {
+            return;
+        }
+        if (read.request.snapshotId) {
+            await this.continuationGhosts.complete(read.request.snapshotId);
+            return;
+        }
+        const lookup = await this.continuationGhosts.lookup(read.request);
+        if (lookup.status === "found") {
+            await this.continuationGhosts.complete(lookup.snapshot.snapshotId);
+        }
+    }
+
     /** CLI 接口：dream 状态快照。 */
     public dreamSnapshot(): { dreamEnabled: boolean; dreamBusy: boolean; users: number } {
         return this.memory.dreamSnapshot();
@@ -471,16 +572,26 @@ export class RuntimeModule extends RuntimeBoundary {
         options: RuntimeStreamOptions = {},
     ): Promise<GatewayReply> {
         await this.warmup();
+        const resumeRead = this.continuationGhosts.readResumeRequest(message.metadata);
+        if (!resumeRead.ok) {
+            return this.replyFromGhostResumeProblem(message, context, "invalid-request");
+        }
+        const restored = resumeRead.request
+            ? await this.restoreContinuationContext(message, context, resumeRead.request)
+            : { context };
+        if ("reply" in restored) {
+            return restored.reply;
+        }
         await this.inflight.markStart({
-            requestId: context.requestId,
-            sourceKey: sourceKeyForMessage(message, context),
+            requestId: restored.context.requestId,
+            sourceKey: sourceKeyForMessage(message, restored.context),
             sourceSurface: sourceSurfaceForMessage(message),
             originalUserMessage: message.text.slice(0, 500),
             startedAtMs: Date.now(),
         });
         try {
             this.throwIfAborted(options.signal);
-            const prepared = await this.prepareTurn(message, context);
+            const prepared = await this.prepareTurn(message, restored.context);
             this.throwIfAborted(options.signal);
             const assembled = await this.assembleTurnContext(message, prepared, options);
             this.throwIfAborted(options.signal);
@@ -495,10 +606,10 @@ export class RuntimeModule extends RuntimeBoundary {
                 event(RuntimeEventType.AgentTurnEnd, { channel: sourceSurfaceForMessage(message) }, context.requestId),
             );
             await this.flushEventHooks();
-            this.sandboxQuota.forgetRequest(context.requestId);
+            this.sandboxQuota.forgetRequest(restored.context.requestId);
             return generated.reply;
         } finally {
-            await this.inflight.markEnd(context.requestId);
+            await this.inflight.markEnd(restored.context.requestId);
         }
     }
 
@@ -1118,7 +1229,7 @@ export class RuntimeModule extends RuntimeBoundary {
             taskPlans,
         } = generated;
 
-        await this.memory.rememberTurn(
+        const memoryResult = await this.memory.rememberTurn(
             message,
             reply,
             enrichedContext,
@@ -1145,6 +1256,28 @@ export class RuntimeModule extends RuntimeBoundary {
                 taskPlans,
             },
         );
+        if (ask && memoryResult.askEventId) {
+            const continuation = this.memory
+                .listActiveContinuations(continuityOwnerKey(message, enrichedContext), { limit: 8 })
+                .find((row) => row.parentId === memoryResult.askEventId);
+            const ghostSnapshot: ContinuationGhostSnapshot = {
+                ask,
+                ...(enrichedContext.activeScope ? { activeScope: enrichedContext.activeScope } : {}),
+                ...(continuation ? { continuationId: continuation.id } : {}),
+                ...(enrichedContext.contextForkId ? { contextForkId: enrichedContext.contextForkId } : {}),
+                createdAt: enrichedContext.now,
+                ...(generated.executiveAskRequired ? { executiveToolLoop: generated.executiveAskRequired as unknown as Record<string, unknown> } : {}),
+                ownerKey: continuityOwnerKey(message, enrichedContext),
+                requestId: enrichedContext.requestId,
+                snapshotId: behaviorSnapshotId,
+                sourceKey: sourceKeyForMessage(message, enrichedContext),
+                sourceSurface: sourceSurfaceForMessage(message),
+            };
+            await this.continuationGhosts.record(ghostSnapshot);
+        }
+        if (!ask) {
+            await this.completeAnsweredAskGhost(message, memoryResult.answeredAskSnapshotId);
+        }
         this.memory.recordBehaviorSnapshot({
             snapshotId: behaviorSnapshotId,
             ask,
