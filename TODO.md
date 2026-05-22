@@ -507,10 +507,10 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 重新启动并发 Codex 工作前，为每个新 worktree 初始化独立本地 `TODO.md`、`AGENTS.md` 和 `LOGS.md` 控制段。
 - [x] 只有当本地控制文件写明任务列表、工作状态、本地红线、变更日志要求和交还条件后，才重新启动 child Codex lane。
 - [x] 要求每个 child worktree 在主 Codex review 前，把本地控制文件更新与 implementation/docs 工作一起提交。
-- [ ] 监控 `flyflor-kernel-v2` tmux lane，并中断任何漂移出归属 surface 的 child lane。
-- [ ] 按顺序 review child commit：docs-contracts-report、scope-memory、fork-ask-crystal、runtime-executive、socket-protocol、release-seal。
-- [ ] 只合并已 review 的 implementation/docs surface；有价值的 child control-file 历史摘要进 root handoff docs，而不是盲目合并本地噪声。
-- [ ] 每个被接受的 child merge 后运行 focused validation。
+- [x] 监控 `flyflor-kernel-v2` tmux lane，并中断任何漂移出归属 surface 的 child lane。
+- [x] 按顺序 review child commit：docs-contracts-report、scope-memory、fork-ask-crystal、runtime-executive、socket-protocol、release-seal。
+- [x] 只合并已 review 的 implementation/docs surface；有价值的 child control-file 历史摘要进 root handoff docs，而不是盲目合并本地噪声。
+- [x] 每个被接受的 child merge 后运行 focused validation。
 
 Kernel V2 acceptance focus：
 
@@ -541,12 +541,20 @@ Kernel V2 acceptance focus：
 - [x] 停止并回收已合入的 `fork-ask-crystal` Codex lane。
 - [x] review 并选择性合并 `wt/kernel-runtime-executive` residue：Executive loop guard snapshot 由 runtime 真实生成，重复失败结果立即 ASK 暂停，并进入 `executive.loop.paused` payload。
   - 验证：`bun test tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts`
-- [ ] 停止并回收已合入的 `runtime-executive` Codex lane。
+- [x] 停止并回收已合入的 `runtime-executive` Codex lane。
 - [x] review `wt/kernel-socket-protocol` residue：有效的 event selector guard / OpenAPI enum / WS 文档已在主线；剩余差异会回退 `loopGuardSnapshot`、old-docs 链接和当前协议 guard，因此不合入。
-- [ ] 停止并回收已完成 review 的 `socket-protocol` Codex lane。
+- [x] 停止并回收已完成 review 的 `socket-protocol` Codex lane。
 - [x] review `wt/kernel-scope-memory` residue：owned code/test surface 已被主线吸收，无需再合入；保留分支作为 review evidence。
-- [ ] 停止并回收已完成 review 的 `scope-memory` Codex lane。
+- [x] 停止并回收已完成 review 的 `scope-memory` Codex lane。
 - [x] review `wt/kernel-release-seal` residue：install/Docker scripts 和 tests 与主线一致；剩余 README/control-file diff 违反当前英文 README 与控制文件中文单本政策，不合入。
-- [ ] 停止并回收已完成 review 的 `release-seal` Codex lane。
-- [ ] 继续 review 并选择性合并剩余 child commits，优先级：docs-report。
+- [x] 停止并回收已完成 review 的 `release-seal` Codex lane。
+- [x] 继续 review 并选择性合并剩余 child commits，优先级：docs-report。
 - [ ] 最终 seal 前重新跑完整主线验证，并提交/push coordinator snapshot。
+
+## 2026-05-23 Kernel V2 docs-report 收口
+
+- [x] review `wt/docs-contracts-report` residue：只保留 `docs/project.report.md` 和索引链接；拒绝过宽 README rewrite、old-docs 回迁、`AGENTS/TODO/LOGS.zh.cn.md` 控制副本和会回退当前协议/运行时的旧差异。
+- [x] 将项目报告对齐到当前主线事实：fork merge parsing、conflict ASK、fork closure Crystal candidate、Executive loop guard snapshot 和 repeated failure ASK pause 已合入；ASK ghost/continue 端到端恢复仍是剩余闭合目标。
+- [x] 确认当前 `flyflor-kernel-v2` tmux 只剩 `main` 和 `docs-report`，其他 child lane 已停止回收。
+- [x] docs-report 提交前停止并回收最后一个 `docs-report` Codex lane。
+- [x] 最终检查不再有空转 child Codex 进程；提交后 push `master`。

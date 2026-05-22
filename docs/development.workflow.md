@@ -854,3 +854,20 @@ Immediate coordinator queue:
 3. review and merge remaining child commits in order: fork-ask-crystal, runtime-executive residue, socket-protocol residue, release-seal, docs-report
 4. run `bun run check` and `git diff --check`
 5. update root `TODO.md` and `LOGS.md` before any pause or final seal
+
+## 2026-05-23 Kernel V2 Lane Recycle Snapshot
+
+Coordinator state after selective merge review:
+
+- `master` has absorbed the accepted implementation/test surfaces from `wt/kernel-fork-ask-crystal` and `wt/kernel-runtime-executive`.
+- `wt/kernel-socket-protocol`, `wt/kernel-scope-memory`, and `wt/kernel-release-seal` have been reviewed and recycled. Their remaining diffs are either already represented in mainline or would violate current protocol/docs/control-file policy.
+- `wt/docs-contracts-report` is reviewed selectively. Only `docs/project.report.md` and canonical index links are retained; broad README rewrites, old-docs movement, and control-file companion copies are rejected.
+- Current tmux state before final docs-report shutdown is `main` plus `docs-report`; all other child Codex lanes have been stopped.
+
+Remaining coordinator actions:
+
+1. run docs and focused protocol/runtime validation on the final mainline snapshot
+2. commit the docs-report selection and root control-file/workflow records
+3. stop the final `docs-report` tmux lane
+4. verify no child Codex process is idle
+5. push `master`

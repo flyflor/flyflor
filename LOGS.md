@@ -421,3 +421,31 @@
   摘要：review `wt/kernel-release-seal` 后确认 installer/Docker scripts 和 install tests 与主线一致；剩余 diff 主要来自旧 README 中文化、`TODO.zh.cn.md` / `LOGS.zh.cn.md` 控制副本和旧文档策略，不合入。
   原因：主线已经满足“不创建全局 bin，只安装到 `~/.flyflor` / prefix，未来 `npm i -g flyflor` 连接 `/ws`”的安装策略；继续合入 release 分支剩余差异会破坏当前 README 英文入口和控制文件中文单本规则。
   验证：`git diff master..wt/kernel-release-seal -- scripts/install.sh scripts/install.source.sh scripts/install.docker.sh scripts/install.ps1 tests/install.script.test.ts docker-compose.yml docker/README.md docker/README.zh.cn.md scripts/docker.dev.smoke.ts tests/docker.dev.smoke.test.ts`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-docs-report-selective-merge
+  摘要：review `wt/docs-contracts-report` 后只保留 `docs/project.report.md` 与 canonical index 链接；拒绝过宽 README rewrite、old-docs 回迁、控制文件 `.zh.cn.md` 副本和会回退当前主线协议/运行时事实的旧差异。
+  原因：项目需要一个清晰的 Kernel V2 contract anchor，但不能让文档 lane 把已经收口的 README 英文入口、控制文件中文单本、Rust 外部交接口径和 loopGuard/fork merge 实现回退。
+  验证：待 `bun run docs:check`、focused docs/naming/protocol/runtime tests、`bun run check`、`git diff --check`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v2-child-lane-recycle
+  摘要：fork-ask-crystal、runtime-executive、socket-protocol、scope-memory 和 release-seal 子 Codex lane 已 review 后停止回收；当前仅剩 `docs-report` 等待最终提交后关闭。
+  原因：用户要求主 Codex 及时合并、及时回收、不要让 Codex 空转；review 完成的 worktree 只能保留为 evidence，不能继续消耗 tmux/codex 资源。
+  验证：`tmux list-windows -t flyflor-kernel-v2 -F '#{window_index}:#{window_name}:#{pane_current_command}:#{pane_current_path}'`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-child-lane-recycle
+  摘要：最终进程核查只剩主 Codex 自己和主 tmux window；无 `flyflor-wt-*` child Codex 进程继续运行。
+  原因：并发 lane 已完成 review、合并或拒绝，继续保留子进程会制造空转和状态噪声。
+  验证：`tmux list-windows -t flyflor-kernel-v2 -F '#{window_index}:#{window_name}:#{pane_current_command}:#{pane_current_path}'`; `ps -axo pid,ppid,stat,command | rg -i 'flyflor-wt|codex --dangerously-bypass|codex'`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-child-lane-recycle
+  摘要：停止并回收最后一个 `docs-report` tmux window；`flyflor-kernel-v2` 现在只保留主协调 window。
+  原因：docs-report 已选择性合并并完成验证，继续保留 child Codex 会造成空转和状态误判。
+  验证：待最终 `tmux list-windows` 与 child Codex process scan

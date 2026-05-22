@@ -855,3 +855,20 @@ Kernel V2 硬设计点：
 3. 按顺序 review 并合并剩余 child commit：fork-ask-crystal、runtime-executive residue、socket-protocol residue、release-seal、docs-report
 4. 运行 `bun run check` 和 `git diff --check`
 5. 每次暂停或最终 seal 前更新根 `TODO.md` 与 `LOGS.md`
+
+## 2026-05-23 Kernel V2 Lane 回收快照
+
+选择性合并 review 后的协调者状态：
+
+- `master` 已吸收 `wt/kernel-fork-ask-crystal` 与 `wt/kernel-runtime-executive` 中被接受的 implementation/test surface。
+- `wt/kernel-socket-protocol`、`wt/kernel-scope-memory` 和 `wt/kernel-release-seal` 已完成 review 并回收。它们的剩余 diff 要么已经被主线覆盖，要么会违反当前 protocol/docs/control-file policy。
+- `wt/docs-contracts-report` 只做选择性保留。主线只保留 `docs/project.report.md` 和 canonical index 链接；拒绝过宽 README rewrite、old-docs 移动和控制文件 companion copy。
+- 最终关闭 docs-report 前，当前 tmux 状态为 `main` 加 `docs-report`；其他 child Codex lane 已停止。
+
+剩余协调动作：
+
+1. 在最终主线快照上运行 docs、protocol 和 runtime focused validation
+2. 提交 docs-report 选择性合并与根控制文件/workflow 记录
+3. 停止最后一个 `docs-report` tmux lane
+4. 确认没有 child Codex 进程空转
+5. push `master`

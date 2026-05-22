@@ -281,6 +281,7 @@ Full documentation index: [docs/README.md](docs/README.md).
 | --- | --- |
 | [TODO.md](TODO.md) | Current handoff, migration status and validation commands. |
 | [docs/README.md](docs/README.md) | Active documentation index and reading order. |
+| [docs/project.report.md](docs/project.report.md) | Current project report, design philosophy, red lines, closure model and Kernel V2 lane decisions. |
 | [docs/architecture.md](docs/architecture.md) | Cognitive / Executive / Agent architecture, composition root and process model. |
 | [docs/refactor.roadmap.md](docs/refactor.roadmap.md) | Refactor direction and active maintenance posture. |
 | [docs/directory.architecture.md](docs/directory.architecture.md) | Source, config, runtime and workspace directory ownership. |
