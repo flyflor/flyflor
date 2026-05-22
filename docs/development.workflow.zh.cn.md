@@ -257,13 +257,14 @@ git worktree list
 
 最近一次协调者验证：
 
-- `bun run kernel:seal`
-- deterministic suite：`821 pass`，`0 fail`
-- 同一工作区 live 检查通过：
-  - `bun run test:live`
-  - `bun run smoke:agent:live`
-- Rust 外壳 bootstrap guard 也已进入 deterministic smoke：
-  - `bun run smoke:socket:control`
+- 最新完整 deterministic suite：`838 pass`，`0 fail`
+- `bun run docs:check`
+- `bun run check`
+- `bun run test`
+- `bun run build:binary`
+- `git diff --check`
+- socket recovery smoke 已确认 primary `socket` 启动：
+  - `bun run scripts/working.memory.recovery.smoke.ts`
 
 下一条扩容规则：
 
@@ -494,8 +495,8 @@ bun run kernel:tmux -- --wave4 --launch-codex
 
 - 协调者提交：`90cecbb`
 - 分支已推送：是
-- 活跃 tmux session：`flyflor-wave4`
-- 活跃窗口：`runtime-smoke`、`runtime-metadata`、`runtime-history`
+- tmux session：`flyflor-wave4` 保留为可恢复 shell 布局
+- 窗口：`runtime-smoke`、`runtime-metadata`、`runtime-history`
 - review 策略：主 Codex 只接收已提交、已验证、窄范围的子切片；canonical TODO/LOGS/workflow 更新继续留在 `main-codex-docs`
 
 Review 状态：
@@ -542,4 +543,14 @@ Review state：
 - 子 Codex 早期没有落文件后，主 Codex 将其改为 review mode
 - 活跃实现由 coordinator worktree 完成，避免 stale parallel edits
 - Apifox 契约位于 `docs/openapi/flyflor.socket.openapi.json`
-- commit/push 前必须完成最终验证
+- 最终验证已通过，并且 reviewed commits 已通过 `main-codex-docs` 推送
+
+## 2026-05-22 当前协调者快照
+
+- 当前分支：`main-codex-docs`
+- 最新 reviewed commit：`dee560a`
+- 活跃 socket owner：`src/socket`
+- HTTP surface：`/health` 与 `/ws`；`/channels` 继续移除
+- Apifox 契约：`docs/openapi/flyflor.socket.openapi.json`
+- 最新完整 deterministic suite：`838 pass`，`0 fail`
+- socket wire closure 不需要活跃子 Codex 进程；现有 tmux/worktree 布局保留为追加历史和恢复点

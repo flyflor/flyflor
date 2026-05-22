@@ -183,3 +183,10 @@
   Summary: Moved working-memory recovery smoke startup to the primary `socket` command, renamed composition-root internals to `socket` with a legacy `gateway` injection alias, and polished active Executive/README/tmux wording away from Gateway owner language.
   Reason: The socket migration was functionally sealed, but a few active startup and coordination surfaces still made future work look like it should launch or depend on Gateway as an owner rather than the socket vascular layer.
   Verification: `bun run check`; `bun test tests/docker.runtime.smoke.test.ts tests/gateway.control.smoke.test.ts tests/install.script.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`; `bun run scripts/working.memory.recovery.smoke.ts`; `bun run docs:check`; `bun run test`; `bun run build:binary`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: control-state-reconciliation
+  Summary: Reconciled root TODO status markers for already-reviewed wave2/wave3 work, appended the latest socket-owner/full-suite state, and updated bilingual workflow handoff text so wave4 and socket-wire layouts read as reviewed/restorable history instead of active child-agent work.
+  Reason: The code and validation state had advanced past the older orchestration notes; leaving those notes open would mislead the next parallel Codex wave about which branches still need review or validation.
+  Verification: `bun test tests/todo.status.test.ts tests/docs.index.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`; `bun run docs:check`; `bun run check`; `bun run test`; `bun run build:binary`; `git diff --check`

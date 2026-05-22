@@ -257,13 +257,14 @@ Seal-critical implementation state now carried by mainline:
 
 Most recent coordinator validation:
 
-- `bun run kernel:seal`
-- deterministic suite: `821 pass`, `0 fail`
-- live checks passed in the same workspace:
-  - `bun run test:live`
-  - `bun run smoke:agent:live`
-- Rust-shell bootstrap guard now also lives in deterministic smoke:
-  - `bun run smoke:socket:control`
+- latest full deterministic suite: `838 pass`, `0 fail`
+- `bun run docs:check`
+- `bun run check`
+- `bun run test`
+- `bun run build:binary`
+- `git diff --check`
+- socket recovery smoke confirmed primary `socket` startup:
+  - `bun run scripts/working.memory.recovery.smoke.ts`
 
 Next scaling rule:
 
@@ -494,8 +495,8 @@ Launch state:
 
 - coordinator commit: `90cecbb`
 - branches pushed: yes
-- active tmux session: `flyflor-wave4`
-- active windows: `runtime-smoke`, `runtime-metadata`, `runtime-history`
+- tmux session: `flyflor-wave4` is retained as a restorable shell layout
+- windows: `runtime-smoke`, `runtime-metadata`, `runtime-history`
 - review policy: main Codex accepts only committed, validated, narrow child slices; canonical TODO/LOGS/workflow updates remain on `main-codex-docs`
 
 Review state:
@@ -542,4 +543,14 @@ Review state:
 - main Codex redirected child agents to review mode after no early worktree output appeared
 - active implementation was completed in the coordinator worktree to avoid stale parallel edits
 - Apifox contract lives at `docs/openapi/flyflor.socket.openapi.json`
-- final validation is required before commit/push
+- final validation passed and the reviewed commits were pushed through `main-codex-docs`
+
+## 2026-05-22 Current Coordinator Snapshot
+
+- current branch: `main-codex-docs`
+- latest reviewed commit: `dee560a`
+- active socket owner: `src/socket`
+- HTTP surface: `/health` and `/ws`; `/channels` remains removed
+- Apifox contract: `docs/openapi/flyflor.socket.openapi.json`
+- latest full deterministic suite: `838 pass`, `0 fail`
+- no active child Codex process is required for the socket wire closure; existing tmux/worktree layouts are preserved as additive history and restore points

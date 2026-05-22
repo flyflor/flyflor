@@ -15,6 +15,7 @@ describe("TODO status", () => {
         expect(todo).toContain("Next Work");
         expect(todo).toContain("Cognitive-Executive-Agent Architecture");
         expect(todo).toContain("Context assembly is `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`");
+        expect(todo).toContain("Latest active owner note: `src/socket` owns the socket vascular layer.");
         expect(todo).toContain("gateway");
         expect(todo).toContain("WebSocket");
         expect(todo).toContain("Rust");
@@ -71,6 +72,7 @@ describe("TODO status", () => {
 
         expect(todo).toContain("Last sealed validation");
         expect(todo).toContain("820 passing tests");
+        expect(todo).toContain("`838 pass`, `0 fail`");
         expect(roadmap).toContain("Bun 内核封板已完成");
         expect(roadmap).toContain("0 漂移维护");
         expect(roadmap).toContain("TODO.md");

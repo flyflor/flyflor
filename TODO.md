@@ -65,10 +65,10 @@ Main visible surfaces:
 - [x] Created fresh wave2 worktrees from `main-codex-docs@c6d963f`.
 - [x] Started `flyflor-wave2` tmux orchestration with memory, runtime, and scope child Codex windows.
 - [x] Added `bun run kernel:tmux -- --wave2` as the reproducible restore entrypoint.
-- [ ] Review and merge `wt/wave2-memory-seal`.
-- [ ] Review and merge `wt/wave2-runtime-executive`.
-- [ ] Review and merge `wt/wave2-scope-crystal`.
-- [ ] Run mainline validation after wave2 slices land.
+- [x] Review and merge `wt/wave2-memory-seal`.
+- [x] Review and merge `wt/wave2-runtime-executive`.
+- [x] Review and merge `wt/wave2-scope-crystal`.
+- [x] Run mainline validation after wave2 slices land.
 
 ## Next Work
 
@@ -238,9 +238,9 @@ Latest full seal validation in this workspace passed:
   - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
   - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
 - [x] Added `bun run kernel:tmux -- --wave3` as the reproducible restore entrypoint.
-- [ ] Push the three wave3 child branches before child work begins.
-- [ ] Launch `flyflor-wave3` child Codex windows after the orchestration commit lands.
-- [ ] Main Codex review rule: merge only reviewed implementation/test surfaces back to `main-codex-docs`; write canonical TODO/LOGS/workflow history from the main worktree.
+- [x] Push the three wave3 child branches before child work begins.
+- [x] Launch `flyflor-wave3` child Codex windows after the orchestration commit lands.
+- [x] Main Codex review rule: merge only reviewed implementation/test surfaces back to `main-codex-docs`; write canonical TODO/LOGS/workflow history from the main worktree.
 
 ## 2026-05-22 Wave3 Scope Constitution Review
 
@@ -348,3 +348,10 @@ Latest full seal validation in this workspace passed:
 - [x] Shift working-memory recovery smoke startup from the legacy `gateway` command to the primary `socket` command while leaving the existing `gateway` config schema untouched.
 - [x] Rename FlyFlor composition-root internals from `gateway` to `socket`, keeping a legacy `gateway` injection alias for compatibility.
 - [x] Polish active Executive/README/tmux wording so non-wire owner language points at socket instead of Gateway.
+
+## 2026-05-22 Control State Reconciliation
+
+- [x] Supersede the older `Current Mainline` wording: `src/socket` is the active socket vascular owner, while `src/agent` owns runtime/blackboard/sandbox/context/skills/worker/MCP/plugin.
+- [x] Supersede older validation counters with the latest full deterministic suite: `838 pass`, `0 fail`.
+- [x] Mark the already-reviewed wave2 and wave3 orchestration checklist items complete without deleting their historical placement.
+- [x] Reconcile the workflow handoff so wave4 and socket-wire layouts are described as reviewed/restorable history, not active child-agent work.
