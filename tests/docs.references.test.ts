@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import {
+    GatewayControlMessageType,
+    GatewayControlProtocol,
+    TaskPlanStatus,
+} from "../src/protocol/contracts/index.ts";
+import { RuntimeEventType } from "../src/events/index.ts";
+import { GatewayControlErrorCode } from "../src/protocol/control/index.ts";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 
@@ -88,30 +95,120 @@ describe("documentation references", () => {
         };
         const wireText = JSON.stringify(contract);
         const socketMessageTypes = contract.components?.schemas?.SocketMessageType?.enum ?? [];
+        const examples = contract.components?.examples ?? {};
+        const scenarioTypes = [
+            "ServerHello",
+            "ClientHello",
+            "Ack",
+            "GatewayStatusGet",
+            "GatewayStatusSnapshot",
+            "CapabilityCatalogGet",
+            "CapabilityCatalogSnapshot",
+            "HistoryList",
+            "HistorySnapshot",
+            "GatewayMessageSend",
+            "TurnDelta",
+            "TurnFinal",
+            "TurnFinalWithAsk",
+            "TurnFinalWithPlanning",
+            "TurnFinalWithExecutiveLoopPause",
+            "InvalidGatewayMessageSend",
+            "InvalidPayloadError",
+        ].map((name) => readExampleType(examples, name));
 
         expect(contract.openapi).toBe("3.1.0");
         expect(contract.paths).toHaveProperty("/health");
         expect(contract.paths).toHaveProperty("/ws");
+        expect(contract.paths).not.toHaveProperty("/channels");
         expect(contract.components?.schemas).toHaveProperty("SocketEnvelope");
         expect(contract.components?.schemas).toHaveProperty("SocketEventEnvelope");
         expect(contract.components?.schemas).toHaveProperty("SocketClientEnvelope");
         expect(contract.components?.schemas?.SocketClientEnvelope?.oneOf?.length).toBeGreaterThan(0);
-        expect(socketMessageTypes).toContain("gateway.message.send");
-        expect(socketMessageTypes).toContain("history.list");
-        expect(socketMessageTypes).not.toContain("event.publish");
-        expect(contract.components?.examples?.EventPublish?.value).toMatchObject({ protocol: "flyflor.event.v1" });
-        expect(wireText).toContain("flyflor.ws.v1");
-        expect(wireText).toContain("flyflor.event.v1");
-        expect(wireText).toContain("gateway.message.send");
-        expect(wireText).toContain("gateway.status.get");
-        expect(wireText).toContain("gateway.status.snapshot");
-        expect(wireText).toContain("history.list");
-        expect(wireText).toContain("turn.delta");
-        expect(wireText).toContain("turn.final");
-        expect(wireText).toContain("event.publish");
+        expect(socketMessageTypes).toContain(GatewayControlMessageType.GatewayMessageSend);
+        expect(socketMessageTypes).toContain(GatewayControlMessageType.HistoryList);
+        expect(socketMessageTypes).not.toContain(GatewayControlMessageType.EventPublish);
+        expect(examples.EventPublish?.value).toMatchObject({ protocol: GatewayControlProtocol.EventV1 });
+        expect(wireText).toContain(GatewayControlProtocol.WsV1);
+        expect(wireText).toContain(GatewayControlProtocol.EventV1);
+        expect(scenarioTypes).toEqual([
+            GatewayControlMessageType.ServerHello,
+            GatewayControlMessageType.ClientHello,
+            GatewayControlMessageType.Ack,
+            GatewayControlMessageType.GatewayStatusGet,
+            GatewayControlMessageType.GatewayStatusSnapshot,
+            GatewayControlMessageType.CapabilityCatalogGet,
+            GatewayControlMessageType.CapabilityCatalogSnapshot,
+            GatewayControlMessageType.HistoryList,
+            GatewayControlMessageType.HistorySnapshot,
+            GatewayControlMessageType.GatewayMessageSend,
+            GatewayControlMessageType.TurnDelta,
+            GatewayControlMessageType.TurnFinal,
+            GatewayControlMessageType.TurnFinal,
+            GatewayControlMessageType.TurnFinal,
+            GatewayControlMessageType.TurnFinal,
+            GatewayControlMessageType.GatewayMessageSend,
+            GatewayControlMessageType.Error,
+        ]);
+        expect(readExamplePayload(examples, "ClientHello")).toMatchObject({
+            clientId: "apifox-client-1",
+            name: "Apifox",
+            version: "1.0.0",
+        });
+        expect(readExamplePayload(examples, "TurnFinalWithPlanning")).toMatchObject({
+            reply: {
+                metadata: {
+                    planning: {
+                        taskPlans: [{ status: TaskPlanStatus.InProgress }],
+                    },
+                },
+            },
+        });
+        expect(readExamplePayload(examples, "TurnFinalWithExecutiveLoopPause")).toMatchObject({
+            reply: {
+                metadata: {
+                    ask: { executiveToolLoop: { stop: "ask" } },
+                    executiveToolLoop: { stop: "ask" },
+                },
+            },
+        });
+        expect(readExamplePayload(examples, "InvalidPayloadError")).toMatchObject({
+            code: GatewayControlErrorCode.InvalidPayload,
+            message: "gateway.message.send payload requires text",
+        });
+        expect(readExampleEventType(examples, "ExecutiveLoopPausedEvent")).toBe(RuntimeEventType.ExecutiveLoopPaused);
+        expect(readExampleEventType(examples, "ExecutiveLoopResumedEvent")).toBe(RuntimeEventType.ExecutiveLoopResumed);
         expect(wireText).toContain("executiveToolLoop");
         expect(wireText).toContain("MemoryComponent");
         expect(wireText).toContain("CrystalComponent");
+    });
+
+    test("bilingual Apifox scenario docs cover the real socket flow", async () => {
+        const docs = [
+            await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.md")).text(),
+            await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.zh.cn.md")).text(),
+        ];
+
+        for (const doc of docs) {
+            expect(doc).toContain("GET /health");
+            expect(doc).toContain("ws://127.0.0.1:8788/ws");
+            expect(doc).toContain("ServerHello");
+            expect(doc).toContain("ClientHello");
+            expect(doc).toContain("GatewayStatusGet");
+            expect(doc).toContain("CapabilityCatalogGet");
+            expect(doc).toContain("HistoryList");
+            expect(doc).toContain("GatewayMessageSend");
+            expect(doc).toContain("TurnDelta");
+            expect(doc).toContain("TurnFinal");
+            expect(doc).toContain("TurnFinalWithAsk");
+            expect(doc).toContain("TurnFinalWithPlanning");
+            expect(doc).toContain("TurnFinalWithExecutiveLoopPause");
+            expect(doc).toContain("InvalidPayloadError");
+            expect(doc).toContain("MemoryComponent");
+            expect(doc).toContain("CrystalComponent");
+            expect(doc).toContain("brain.db");
+            expect(doc).toContain("wire v2");
+            expect(doc).toContain("/channels");
+        }
     });
 
     test("runtime events docs keep event timeline separate from turn-final authority", async () => {
@@ -202,4 +299,24 @@ async function exists(path: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+function readExampleType(examples: Record<string, { value?: unknown }>, name: string): string | undefined {
+    const value = examples[name]?.value;
+    return isRecord(value) && typeof value.type === "string" ? value.type : undefined;
+}
+
+function readExamplePayload(examples: Record<string, { value?: unknown }>, name: string): unknown {
+    const value = examples[name]?.value;
+    return isRecord(value) ? value.payload : undefined;
+}
+
+function readExampleEventType(examples: Record<string, { value?: unknown }>, name: string): string | undefined {
+    const payload = readExamplePayload(examples, name);
+    if (!isRecord(payload) || !isRecord(payload.event)) return undefined;
+    return typeof payload.event.type === "string" ? payload.event.type : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }

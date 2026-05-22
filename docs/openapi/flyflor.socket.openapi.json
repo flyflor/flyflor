@@ -26,6 +26,39 @@
       "description": "Reusable flyflor.ws.v1 and flyflor.event.v1 frames for Apifox WebSocket scenarios."
     }
   ],
+  "x-apifox-scenarios": [
+    {
+      "name": "Real socket live turn",
+      "description": "GET /health, upgrade /ws, receive server.hello, send client.hello, read status/catalog/history, send gateway.message.send, then observe turn.delta and turn.final.",
+      "steps": [
+        "GET /health -> HealthOk",
+        "GET /ws upgrade -> ServerHello",
+        "send ClientHello -> Ack",
+        "send GatewayStatusGet -> GatewayStatusSnapshot",
+        "send CapabilityCatalogGet -> CapabilityCatalogSnapshot",
+        "send HistoryList -> HistorySnapshot",
+        "send GatewayMessageSend -> TurnDelta -> TurnFinal"
+      ]
+    },
+    {
+      "name": "Turn metadata surfaces",
+      "description": "Render turn.final.reply.metadata.ask, planning, and executiveToolLoop from the examples without treating event timeline frames as turn-final authority.",
+      "steps": [
+        "TurnFinalWithAsk",
+        "TurnFinalWithPlanning",
+        "TurnFinalWithExecutiveLoopPause",
+        "EventSubscribe -> EventPublish"
+      ]
+    },
+    {
+      "name": "Invalid payload",
+      "description": "Send gateway.message.send with an empty payload and expect an error envelope with code invalid-payload.",
+      "steps": [
+        "InvalidGatewayMessageSend",
+        "InvalidPayloadError"
+      ]
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
@@ -379,19 +412,6 @@
           },
           "version": {
             "type": "string"
-          },
-          "client": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": true,
-            "description": "Preferred nested client metadata shape used by docs/ws.doc.md."
           }
         },
         "additionalProperties": true,
@@ -1219,13 +1239,13 @@
               "protocol": "flyflor.ws.v1",
               "eventStream": true,
               "commands": [
-                "client.hello",
-                "gateway.status.get",
                 "capability.catalog.get",
-                "history.list",
-                "gateway.message.send",
+                "client.hello",
                 "event.subscribe",
                 "event.unsubscribe",
+                "gateway.status.get",
+                "history.list",
+                "gateway.message.send",
                 "ping"
               ],
               "semanticTypes": [
@@ -1268,9 +1288,11 @@
           "at": "2026-05-22T00:00:01.000Z",
           "requestId": "req-client-hello-1",
           "payload": {
-            "client": {
-              "name": "apifox",
-              "version": "1.0.0"
+            "clientId": "apifox-client-1",
+            "name": "Apifox",
+            "version": "1.0.0",
+            "capabilities": {
+              "ui": "apifox"
             }
           }
         }
@@ -1423,10 +1445,63 @@
                 "userText": "继续推进 socket 血管层",
                 "assistantText": "我会按 Scope 和当前上下文继续推进。",
                 "metadata": {
+                  "kind": "reply",
+                  "messageId": "event-1",
+                  "executiveToolExecutions": [
+                    {
+                      "capabilityKind": "mcp-tool",
+                      "key": "workspace.read",
+                      "ok": true,
+                      "resultSummary": "kind=text chars=25 preview=approved capability smoke"
+                    }
+                  ],
                   "planning": {
-                    "contextForks": [],
-                    "replays": [],
-                    "taskPlans": []
+                    "contextForks": [
+                      {
+                        "id": "fork-1",
+                        "title": "Replay fork",
+                        "continuitySummary": "Keep the replay context small",
+                        "maxContextTokens": 12000
+                      }
+                    ],
+                    "replays": [
+                      {
+                        "id": "replay-1",
+                        "kind": "blackboard",
+                        "title": "Replay",
+                        "summary": "Replay summary",
+                        "taskPlanId": "task-plan-1",
+                        "contextForkId": "fork-1",
+                        "blackboardTurnId": "bb-1"
+                      }
+                    ],
+                    "taskPlans": [
+                      {
+                        "id": "task-plan-1",
+                        "title": "Socket closure",
+                        "summary": "Finish socket wire closure.",
+                        "status": "in-progress",
+                        "progress": 0.5,
+                        "stepCount": 2,
+                        "completedStepCount": 1,
+                        "steps": [
+                          {
+                            "id": "step-1",
+                            "title": "Confirm current scope",
+                            "status": "done",
+                            "order": 0,
+                            "progress": 1
+                          },
+                          {
+                            "id": "step-2",
+                            "title": "Send next turn",
+                            "status": "in-progress",
+                            "order": 1,
+                            "progress": 0
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               }
@@ -1516,6 +1591,7 @@
           "type": "turn.final",
           "at": "2026-05-22T00:00:07.000Z",
           "requestId": "req-turn-ask-1",
+          "correlationId": "env-message-send-ask-1",
           "payload": {
             "reply": {
               "messageId": "message-ask-1",
@@ -1527,6 +1603,7 @@
               "text": "我需要确认一个边界。",
               "metadata": {
                 "kind": "ask",
+                "messageId": "message-ask-1",
                 "ask": {
                   "choiceCount": 2,
                   "choices": [
@@ -1545,6 +1622,17 @@
                   "questions": [],
                   "reason": "clarification",
                   "snapshotId": "ask-snapshot-1"
+                },
+                "executiveToolLoop": {
+                  "askId": "ask-loop-ask-1",
+                  "loopGuardReason": "unknown-tool-repeat",
+                  "message": "Need execution guidance.",
+                  "resume": {
+                    "mode": "continue",
+                    "requestId": "req-turn-ask-1"
+                  },
+                  "stepCount": 2,
+                  "stop": "ask"
                 }
               }
             }
@@ -1558,6 +1646,8 @@
           "id": "env-turn-final-plan-1",
           "type": "turn.final",
           "at": "2026-05-22T00:00:08.000Z",
+          "requestId": "req-turn-plan-1",
+          "correlationId": "env-message-send-plan-1",
           "payload": {
             "reply": {
               "messageId": "message-plan-1",
@@ -1568,19 +1658,52 @@
               },
               "text": "计划已更新。",
               "metadata": {
+                "kind": "reply",
+                "messageId": "message-plan-1",
                 "planning": {
-                  "contextForks": [],
-                  "replays": [],
+                  "contextForks": [
+                    {
+                      "id": "fork-plan-1",
+                      "title": "Implementation fork",
+                      "continuitySummary": "Keep socket docs and tests in view.",
+                      "maxContextTokens": 12000
+                    }
+                  ],
+                  "replays": [
+                    {
+                      "id": "replay-plan-1",
+                      "kind": "blackboard",
+                      "title": "Planning replay",
+                      "summary": "Replay the current task plan.",
+                      "taskPlanId": "task-plan-1",
+                      "contextForkId": "fork-plan-1"
+                    }
+                  ],
                   "taskPlans": [
                     {
                       "id": "task-plan-1",
                       "title": "Socket closure",
                       "summary": "Finish socket wire closure.",
-                      "status": "in_progress",
-                      "progress": 50,
+                      "status": "in-progress",
+                      "progress": 0.5,
                       "stepCount": 2,
                       "completedStepCount": 1,
-                      "steps": []
+                      "steps": [
+                        {
+                          "id": "step-1",
+                          "title": "Refresh Apifox examples",
+                          "status": "done",
+                          "order": 0,
+                          "progress": 1
+                        },
+                        {
+                          "id": "step-2",
+                          "title": "Run drift guards",
+                          "status": "in-progress",
+                          "order": 1,
+                          "progress": 0
+                        }
+                      ]
                     }
                   ]
                 }
@@ -1596,6 +1719,8 @@
           "id": "env-turn-final-loop-1",
           "type": "turn.final",
           "at": "2026-05-22T00:00:09.000Z",
+          "requestId": "req-turn-loop-1",
+          "correlationId": "env-message-send-loop-1",
           "payload": {
             "reply": {
               "messageId": "message-loop-1",
@@ -1606,17 +1731,46 @@
               },
               "text": "工具预算耗尽，我需要你确认是否继续。",
               "metadata": {
+                "kind": "ask",
+                "messageId": "message-loop-1",
                 "executiveToolLoop": {
                   "askId": "ask-loop-1",
                   "loopGuardReason": "max-calls-exceeded",
                   "message": "Tool budget exhausted.",
                   "resume": {
                     "mode": "continue",
-                    "requestId": "req-turn-1"
+                    "requestId": "req-turn-loop-1"
                   },
                   "stepCount": 8,
                   "stop": "ask",
                   "toolBudgetExhausted": true
+                },
+                "ask": {
+                  "choiceCount": 1,
+                  "choices": [
+                    {
+                      "label": "Continue",
+                      "description": "Resume the paused executive loop."
+                    }
+                  ],
+                  "executiveToolLoop": {
+                    "askId": "ask-loop-1",
+                    "loopGuardReason": "max-calls-exceeded",
+                    "message": "Tool budget exhausted.",
+                    "resume": {
+                      "mode": "continue",
+                      "requestId": "req-turn-loop-1"
+                    },
+                    "stepCount": 8,
+                    "stop": "ask",
+                    "toolBudgetExhausted": true
+                  },
+                  "freeform": true,
+                  "prompt": "工具预算耗尽，是否继续？",
+                  "questionCount": 0,
+                  "questions": [],
+                  "reason": "other",
+                  "snapshotId": "ask-loop-snapshot-1"
                 }
               }
             }
@@ -1647,11 +1801,13 @@
           "requestId": "req-events-1",
           "payload": {
             "classes": [
-              "control",
-              "effect"
+              "ask",
+              "read"
             ],
             "types": [
-              "executive.capability.catalog.built"
+              "executive.capability.catalog.built",
+              "executive.loop.paused",
+              "executive.loop.resumed"
             ]
           }
         }
@@ -1666,8 +1822,8 @@
           "requestId": "req-events-1",
           "payload": {
             "classes": [
-              "control",
-              "effect"
+              "ask",
+              "read"
             ]
           }
         }
@@ -1690,6 +1846,63 @@
           }
         }
       },
+      "ExecutiveLoopPausedEvent": {
+        "summary": "event.publish executive.loop.paused",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-loop-paused-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:13.500Z",
+          "requestId": "req-turn-loop-1",
+          "payload": {
+            "event": {
+              "type": "executive.loop.paused",
+              "at": "2026-05-22T00:00:13.500Z",
+              "requestId": "req-turn-loop-1",
+              "payload": {
+                "askId": "ask-loop-1",
+                "stepCount": 8,
+                "reason": "max-calls-exceeded"
+              }
+            }
+          }
+        }
+      },
+      "ExecutiveLoopResumedEvent": {
+        "summary": "event.publish executive.loop.resumed",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-loop-resumed-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:13.800Z",
+          "requestId": "req-turn-loop-2",
+          "payload": {
+            "event": {
+              "type": "executive.loop.resumed",
+              "at": "2026-05-22T00:00:13.800Z",
+              "requestId": "req-turn-loop-2",
+              "payload": {
+                "askId": "ask-loop-1",
+                "resume": {
+                  "mode": "continue",
+                  "requestId": "req-turn-loop-2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "InvalidGatewayMessageSend": {
+        "summary": "gateway.message.send invalid payload request",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-message-send-invalid-1",
+          "type": "gateway.message.send",
+          "at": "2026-05-22T00:00:14.000Z",
+          "requestId": "req-turn-invalid-1",
+          "payload": {}
+        }
+      },
       "InvalidPayloadError": {
         "summary": "invalid payload error",
         "value": {
@@ -1697,6 +1910,7 @@
           "id": "env-error-1",
           "type": "error",
           "at": "2026-05-22T00:00:14.000Z",
+          "requestId": "req-turn-invalid-1",
           "correlationId": "env-message-send-invalid-1",
           "payload": {
             "code": "invalid-payload",
