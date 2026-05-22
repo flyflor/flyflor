@@ -218,3 +218,10 @@
   Summary: Stopped old active tmux development sessions, kept existing worktrees as additive history, and prepared a new three-lane socket/OpenAPI-only wave for runtime wire polish, Apifox drift guard polish, and live scenario coverage.
   Reason: The active development pool was short by three useful processes and still carried old broader seal lanes; a narrower worktree wave keeps throughput high without letting paused prompt/DB/release work leak back into the socket/OpenAPI closure.
   Verification: pending new branch creation, tmux launch, child Codex reports, focused validations, review, merge, and cleanup
+
+- Status: completed
+  Actor: socket-runtime-wire-polish
+  Scope: socket-runtime-wire-polish
+  Summary: Tightened the `/ws` runtime wire edge cases by returning structured JSON on authorized upgrade failure and preserving protocol parser details on invalid-envelope error responses.
+  Reason: The active socket surface already covered `/health`, `/ws`, hello, ping/pong, status, capability, history, turn, and event lanes; this pass closes small error/upgrade mismatches without changing v1 wire strings or touching DB/context behavior.
+  Verification: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/protocol.control.test.ts`; `bun run check`; `git diff --check`

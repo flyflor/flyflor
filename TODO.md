@@ -393,8 +393,16 @@ Latest full seal validation in this workspace passed:
 - [x] `scripts/socket.live.scenario.ts` and `smoke:socket:live` are present and pass against the configured provider.
 - [x] `/channels` remains removed; HTTP socket surface remains `/health` and `/ws`.
 - [x] `gateway.*` names remain v1 wire compatibility only.
-- [ ] Create `codex/socket-runtime-wire-polish` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`.
+- [x] Create `codex/socket-runtime-wire-polish` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`.
 - [ ] Create `codex/apifox-openapi-drift-guard` at `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`.
 - [ ] Create `codex/socket-live-coverage` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`.
 - [ ] Launch `flyflor-socket-openapi` tmux with main/runtime/openapi/live windows.
 - [ ] Review, merge, validate, push, and clean this socket-only wave.
+
+## 2026-05-22 Socket Runtime Wire Polish
+
+- [x] Keep `/health` returning `{ ok: true }` and `/ws` as the only upgrade route; `/channels` remains 404.
+- [x] Keep `flyflor.ws.v1`, `flyflor.event.v1`, and `gateway.*` v1 wire strings unchanged.
+- [x] Return structured JSON when an authorized `/ws` upgrade fails.
+- [x] Preserve protocol parse details on `error` envelopes for invalid control protocol input.
+- [x] Validate with focused gateway/control tests, `bun run check`, and `git diff --check`.
