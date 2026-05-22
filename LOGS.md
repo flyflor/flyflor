@@ -113,3 +113,10 @@
   Summary: Added a fresh wave3 tmux/worktree lane from `main-codex-docs@281108e` while preserving all previous kernel and wave2 worktrees.
   Reason: The next development pass needs maximum parallel throughput without losing prior execution history; each new branch starts from the reviewed wave2 mainline snapshot and keeps ownership narrow.
   Verification: `bun run kernel:tmux -- --wave3`; `git worktree list`; `tmux list-windows -t flyflor-wave3`
+
+- Status: completed
+  Actor: main-codex
+  Scope: wave3-scope-constitution-review
+  Summary: Reviewed and integrated the wave3 scope constitution slice so promoted scopes receive the full bilingual AGENTS/TODO/LOGS/README/project.memory constitution file set while preserving idempotent no-overwrite behavior.
+  Reason: Scope worktrees need redlines, task state, logs, handoff docs, and local project-memory guidance immediately at scaffold time instead of relying on chat context or later manual repair.
+  Verification: `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`

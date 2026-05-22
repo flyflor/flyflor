@@ -2,7 +2,7 @@
  * Scope 脚手架（ScopeScaffolder）。
  *
  * 当 detectExplicitIntent / detectClusterCandidate 返回非 None 的 trigger 时，
- * 在 workspace/scopes/{scopeId}/{AGENTS,TODO,README}.md 落盘 scope 骨架，并预建 `.flyflor/memory`。
+ * 在 workspace/scopes/{scopeId} 落盘 scope 宪法层文档，并预建 `.flyflor/memory`。
  *
  * 设计约束（与 docs/boundaries.md 对齐）：
  *  - 模板源文件来自 paths.templateDir/projects，磁盘模板目录暂保留兼容命名；
@@ -17,13 +17,31 @@ import type { FlyflorPaths } from "../../../config/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../../events/index.ts";
 import { ScopeTriggerKind, type ScopeTriggerResult } from "./index.ts";
 
-const SCOPE_FILES = ["AGENTS.md", "TODO.md", "README.md"] as const;
+const SCOPE_FILES = [
+    "AGENTS.md",
+    "AGENTS.zh.cn.md",
+    "TODO.md",
+    "TODO.zh.cn.md",
+    "LOGS.md",
+    "LOGS.zh.cn.md",
+    "README.md",
+    "README.zh.cn.md",
+    "project.memory.md",
+    "project.memory.zh.cn.md",
+] as const;
 type ScopeFile = (typeof SCOPE_FILES)[number];
 
 const SCOPE_TEMPLATE_FILES: Record<ScopeFile, string> = {
     "AGENTS.md": "AGENTS.md",
+    "AGENTS.zh.cn.md": "AGENTS.zh.cn.md",
+    "LOGS.md": "LOGS.md",
+    "LOGS.zh.cn.md": "LOGS.zh.cn.md",
+    "project.memory.md": "project.memory.md",
+    "project.memory.zh.cn.md": "project.memory.zh.cn.md",
     "README.md": "README.md",
+    "README.zh.cn.md": "README.zh.cn.md",
     "TODO.md": "TODO.md",
+    "TODO.zh.cn.md": "TODO.zh.cn.md",
 };
 
 export interface ScopeScaffoldInput {

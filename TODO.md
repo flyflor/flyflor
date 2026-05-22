@@ -239,3 +239,13 @@ Latest full seal validation in this workspace passed:
 - [ ] Push the three wave3 child branches before child work begins.
 - [ ] Launch `flyflor-wave3` child Codex windows after the orchestration commit lands.
 - [ ] Main Codex review rule: merge only reviewed implementation/test surfaces back to `main-codex-docs`; write canonical TODO/LOGS/workflow history from the main worktree.
+
+## 2026-05-22 Wave3 Scope Constitution Review
+
+- [x] Reviewed `wt/wave3-scope-constitution`.
+- [x] Merged the implementation/test surface into `main-codex-docs`:
+  - `ScopeScaffolder` now distributes full bilingual scope constitution files.
+  - Existing scope files remain no-overwrite/idempotent.
+  - Scope scaffold and codename promotion tests now cover the expanded template set.
+- [x] Verified on mainline with:
+  - `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`

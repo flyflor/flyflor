@@ -421,3 +421,21 @@ Wave3 协调者约束：
 - HTTP Gateway 继续只保留 `/ws` 和 `/health`
 - `brain.db` 继续只是 ledger/query/replay/audit 状态，不作为 prompt 装配上下文
 - Bun 二进制可编译性仍然是硬门槛
+
+## 2026-05-22 Wave 3 Scope Constitution Review
+
+`wt/wave3-scope-constitution` 已 review 并合入 `main-codex-docs`。
+
+主线现在要求 scope scaffold 写入完整双语宪法层文件集：
+
+- `AGENTS.md` / `AGENTS.zh.cn.md`
+- `TODO.md` / `TODO.zh.cn.md`
+- `LOGS.md` / `LOGS.zh.cn.md`
+- `README.md` / `README.zh.cn.md`
+- `project.memory.md` / `project.memory.zh.cn.md`
+
+规则是不覆盖的幂等性：已存在的 scope 文件只跳过，绝不覆盖本地 scope 状态。
+
+验证：
+
+- `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`

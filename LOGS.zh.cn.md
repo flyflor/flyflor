@@ -78,3 +78,10 @@
   摘要：从 `main-codex-docs@281108e` 新增 wave3 tmux/worktree 通道，同时保留此前所有 kernel 与 wave2 worktree。
   原因：下一轮开发需要最大化并发吞吐，但不能丢失既有执行历史；每个新分支都从已 review 的 wave2 主线快照出发，并保持窄所有权。
   验证：`bun run kernel:tmux -- --wave3`；`git worktree list`；`tmux list-windows -t flyflor-wave3`
+
+- 状态：completed
+  操作者：main-codex
+  范围：wave3-scope-constitution-review
+  摘要：已 review 并整合 wave3 scope constitution 切片，使晋升后的 scope 能获得完整双语 AGENTS/TODO/LOGS/README/project.memory 宪法层文件集，同时保持不覆盖已存在文件的幂等行为。
+  原因：Scope worktree 在 scaffold 时就需要红线、任务状态、日志、交接文档和本地项目记忆指引，不能依赖聊天上下文或后续人工补救。
+  验证：`bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`

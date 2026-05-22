@@ -44,7 +44,18 @@ async function makeFixture(): Promise<{ paths: FlyflorPaths; brain: BrainStore; 
         projectPluginDir: join(root, "project", ".flyflor", "plugins"),
     } satisfies FlyflorPaths;
     await mkdir(join(paths.templateDir, "projects"), { recursive: true });
-    for (const f of ["AGENTS.md", "TODO.md", "README.md"]) {
+    for (const f of [
+        "AGENTS.md",
+        "AGENTS.zh.cn.md",
+        "TODO.md",
+        "TODO.zh.cn.md",
+        "LOGS.md",
+        "LOGS.zh.cn.md",
+        "README.md",
+        "README.zh.cn.md",
+        "project.memory.md",
+        "project.memory.zh.cn.md",
+    ]) {
         await Bun.write(join(paths.templateDir, "projects", f), `# {{title}}\n\nproject={{projectId}} user={{sourceKey}}\ncreated={{createdAt}}\ntrigger={{trigger}}\nrelated={{relatedIds}}\n\n{{goal}}\n`);
     }
     const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });

@@ -421,3 +421,21 @@ Coordinator constraints for wave3:
 - HTTP Gateway remains `/ws` and `/health` only
 - `brain.db` remains ledger/query/replay/audit state and is not treated as prompt assembly context
 - Bun binary compileability remains a hard gate
+
+## 2026-05-22 Wave 3 Scope Constitution Review
+
+`wt/wave3-scope-constitution` has been reviewed into `main-codex-docs`.
+
+Mainline now expects scope scaffolds to write the full bilingual constitution set:
+
+- `AGENTS.md` / `AGENTS.zh.cn.md`
+- `TODO.md` / `TODO.zh.cn.md`
+- `LOGS.md` / `LOGS.zh.cn.md`
+- `README.md` / `README.zh.cn.md`
+- `project.memory.md` / `project.memory.zh.cn.md`
+
+The rule is no-overwrite idempotency: an existing scope file is skipped, never regenerated over local scope state.
+
+Validation:
+
+- `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`

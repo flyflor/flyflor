@@ -181,3 +181,13 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [ ] 在子 Codex 开始工作前推送三个 wave3 子分支。
 - [ ] 编排提交落主线后，启动 `flyflor-wave3` 子 Codex 窗口。
 - [ ] 主 Codex review 规则：只把审过的实现/测试面合回 `main-codex-docs`；canonical TODO/LOGS/workflow 历史由主 worktree 统一写入。
+
+## 2026-05-22 Wave3 Scope Constitution Review
+
+- [x] 已 review `wt/wave3-scope-constitution`。
+- [x] 已把实现/测试面合入 `main-codex-docs`：
+  - `ScopeScaffolder` 现在会分发完整双语 scope 宪法层文件。
+  - 已存在的 scope 文件继续保持不覆盖/幂等。
+  - Scope scaffold 与 codename promotion 测试已覆盖扩展后的模板集合。
+- [x] 已在主线验证：
+  - `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
