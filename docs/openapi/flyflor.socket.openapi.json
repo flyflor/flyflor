@@ -421,6 +421,7 @@
         "type": "object",
         "required": [
           "channels",
+          "clientCount",
           "connectedCount",
           "degradedCount",
           "gatewayRunning",
@@ -778,7 +779,11 @@
             "$ref": "#/components/schemas/AskMetadata"
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "ask",
+              "reply"
+            ]
           },
           "messageId": {
             "type": "string"
@@ -930,7 +935,18 @@
           "classes": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "ask",
+                "control",
+                "effect",
+                "error",
+                "lifecycle",
+                "performance",
+                "question",
+                "read",
+                "write"
+              ]
             }
           },
           "requestId": {
