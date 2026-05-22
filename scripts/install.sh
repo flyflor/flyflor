@@ -5,19 +5,19 @@
 #   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --version v0.4.0
 #   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --home ~/.flyflor
-#   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary --prefix /usr/local/flyflor
+#   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary
 #   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 #
 # Behaviour:
 #   - 默认 source-first：clone / update repo 到 $HOME/.flyflor；
 #   - 配置、prompts、templates、workspace 统一放入 ~/.flyflor/.config；
-#   - 构建 dist/flyflor 并把 flyflor 链接到 ~/.local/bin；
+#   - 构建 dist/flyflor，但不创建全局命令链接；
 #   - --binary 才走 release 二进制 + templates tarball 安装；
-#   - --uninstall 只删除全局命令链接与 binary，保留源码、配置和数据。
+#   - --uninstall 只删除 release binary install path，保留源码、配置和数据。
 #
 # 设计约束：
 #   - POSIX shell，不依赖 bash-only 特性；
-#   - 不写 system 路径除非用户显式 --global-bin 或 --prefix；
+#   - 不写全局 PATH/bin；未来全局 CLI/TUI 由 npm i -g flyflor 提供；
 #   - 源码安装失败立即退出，绝不静默降级到半成品。
 
 set -eu
@@ -26,7 +26,6 @@ VERSION="${FLYFLOR_VERSION:-latest}"
 FLYFLOR_HOME="${FLYFLOR_HOME:-$HOME/.flyflor}"
 PREFIX="${FLYFLOR_PREFIX:-$FLYFLOR_HOME}"
 FLYFLOR_CONFIG_DIR="${FLYFLOR_CONFIG_DIR:-$FLYFLOR_HOME/.config}"
-GLOBAL_BIN_DIR="${FLYFLOR_GLOBAL_BIN_DIR:-$HOME/.local/bin}"
 RELEASE_BASE="${FLYFLOR_RELEASE_BASE:-https://github.com/flyflor/flyflor/releases}"
 REPO_URL="${FLYFLOR_SOURCE_REPO:-https://github.com/flyflor/flyflor.git}"
 BRANCH="${FLYFLOR_SOURCE_BRANCH:-master}"
@@ -54,8 +53,6 @@ while [ $# -gt 0 ]; do
         --repo=*) REPO_URL="${1#--repo=}"; shift ;;
         --branch) need_value "$1" "${2-}"; BRANCH="$2"; shift 2 ;;
         --branch=*) BRANCH="${1#--branch=}"; shift ;;
-        --global-bin) need_value "$1" "${2-}"; GLOBAL_BIN_DIR="$2"; shift 2 ;;
-        --global-bin=*) GLOBAL_BIN_DIR="${1#--global-bin=}"; shift ;;
         --prefix) need_value "$1" "${2-}"; PREFIX="$2"; shift 2 ;;
         --prefix=*) PREFIX="${1#--prefix=}"; shift ;;
         --release-base) need_value "$1" "${2-}"; RELEASE_BASE="$2"; shift 2 ;;
@@ -73,12 +70,11 @@ Options:
   --home <dir>          Flyflor source home (default: \$HOME/.flyflor)
   --repo <url>          Git repository URL (default: Flyflor GitHub repo)
   --branch <name>       Branch to clone or update (default: master)
-  --global-bin <dir>    Directory for the global flyflor command (default: \$HOME/.local/bin)
   --binary              Install release binary instead of source-first checkout
   --source              Force source-first checkout mode (default)
   --prefix <dir>        Binary install prefix when --binary is used
   --release-base <url>  Base URL for release downloads
-  --uninstall           Remove global command link/binary (keeps source, config + data)
+  --uninstall           Remove release binary install path (keeps source, config + data)
   --update              Force re-install latest (default behaviour)
 
 Remote usage:
@@ -89,25 +85,6 @@ EOF
         *) die "unknown option: $1" ;;
     esac
 done
-
-link_global_command() {
-    source_path="$1"
-    mkdir -p "$GLOBAL_BIN_DIR"
-    ln -sf "$source_path" "$GLOBAL_BIN_DIR/$BINARY_NAME"
-    case ":$PATH:" in
-        *":$GLOBAL_BIN_DIR:"*) ;;
-        *)
-            cat <<EOF
-
-Add this line to your shell rc (~/.bashrc, ~/.zshrc):
-
-    export PATH="\$PATH:$GLOBAL_BIN_DIR"
-
-Then restart your shell or run: source ~/.bashrc
-EOF
-            ;;
-    esac
-}
 
 install_source_mode() {
     command -v git >/dev/null 2>&1 || die "git is required"
@@ -138,9 +115,9 @@ install_source_mode() {
     bun run install:templates -- --target "$FLYFLOR_CONFIG_DIR" --source-config
     info "building local binary"
     bun run build:binary
-    link_global_command "$FLYFLOR_HOME/dist/$BINARY_NAME"
-    info "installed $BINARY_NAME -> $GLOBAL_BIN_DIR/$BINARY_NAME"
-    info "done. Run '$BINARY_NAME -h' to get started."
+    info "source checkout ready at $FLYFLOR_HOME"
+    info "local kernel binary: $FLYFLOR_HOME/dist/$BINARY_NAME"
+    info "no global command was installed; future CLI/TUI installs via npm i -g flyflor and connects to this kernel."
 }
 
 UNAME="$(uname -s)"
@@ -178,8 +155,6 @@ PROMPT_DIR="$PREFIX/prompts"
 BIN_PATH="$BIN_DIR/$BINARY_NAME"
 
 if [ "$ACTION" = "uninstall" ]; then
-    info "removing $GLOBAL_BIN_DIR/$BINARY_NAME"
-    rm -f "$GLOBAL_BIN_DIR/$BINARY_NAME"
     info "removing binary install path $BIN_PATH"
     rm -f "$BIN_PATH"
     info "uninstalled. Source, config and data under $FLYFLOR_HOME preserved."
@@ -222,6 +197,5 @@ mv "$BIN_PATH.new" "$BIN_PATH"
 info "extracting templates to $PREFIX"
 tar -xzf "$TMPDIR/templates.tar.gz" -C "$PREFIX"
 
-link_global_command "$BIN_PATH"
 info "installed $BINARY_NAME -> $BIN_PATH"
-info "done. Run '$BINARY_NAME -h' to get started."
+info "no global command was installed; future CLI/TUI installs via npm i -g flyflor and connects to this kernel."

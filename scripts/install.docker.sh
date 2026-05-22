@@ -14,7 +14,6 @@ set -eu
 REPO_URL="${FLYFLOR_DOCKER_REPO:-https://github.com/flyflor/flyflor.git}"
 TARGET_DIR="${FLYFLOR_DOCKER_DIR:-$HOME/.flyflor}"
 BRANCH="${FLYFLOR_DOCKER_BRANCH:-master}"
-GLOBAL_BIN_DIR="${FLYFLOR_GLOBAL_BIN_DIR:-$HOME/.local/bin}"
 
 die() { echo "flyflor-docker-install: $*" >&2; exit 1; }
 info() { echo "flyflor-docker-install: $*"; }
@@ -34,8 +33,6 @@ while [ $# -gt 0 ]; do
         --repo=*) REPO_URL="${1#--repo=}"; shift ;;
         --branch) need_value "$1" "${2-}"; BRANCH="$2"; shift 2 ;;
         --branch=*) BRANCH="${1#--branch=}"; shift ;;
-        --global-bin) need_value "$1" "${2-}"; GLOBAL_BIN_DIR="$2"; shift 2 ;;
-        --global-bin=*) GLOBAL_BIN_DIR="${1#--global-bin=}"; shift ;;
         -h|--help)
             cat <<EOF
 Flyflor Docker bootstrap
@@ -44,7 +41,6 @@ Options:
   --target <dir>   Source home (default: \$HOME/.flyflor)
   --repo <url>     Git repository URL (default: Flyflor GitHub repo)
   --branch <name>  Branch to clone or update (default: master)
-  --global-bin <dir>  Directory for the global flyflor command (default: \$HOME/.local/bin)
 
 Remote usage:
   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash
@@ -88,21 +84,7 @@ info "installing templates into docker config"
 bun run docker:templates
 info "building linux binary and starting docker dev stack"
 bun run docker:up
-info "building host Bun-compiled binary for global command"
+info "building host Bun-compiled binary"
 bun run build:binary
-mkdir -p "$GLOBAL_BIN_DIR"
-ln -sf "$TARGET_DIR/dist/flyflor" "$GLOBAL_BIN_DIR/flyflor"
-case ":$PATH:" in
-    *":$GLOBAL_BIN_DIR:"*) ;;
-    *)
-        cat <<EOF
-
-Add this line to your shell rc (~/.bashrc, ~/.zshrc):
-
-    export PATH="\$PATH:$GLOBAL_BIN_DIR"
-
-Then restart your shell or run: source ~/.bashrc
-EOF
-        ;;
-esac
-info "docker dev stack is up. Run 'flyflor -h' globally or 'bun run docker:logs' inside $TARGET_DIR."
+info "docker dev stack is up. Run 'bun run docker:logs' inside $TARGET_DIR."
+info "no global command was installed; future CLI/TUI installs via npm i -g flyflor and connects to this kernel."

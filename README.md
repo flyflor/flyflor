@@ -1,8 +1,6 @@
 # Flyflor
 
-Flyflor is a Bun + TypeScript intelligent-lifeform runtime kernel designed for single-binary delivery.
-
-The core design is the **Cognitive-Executive-Agent Architecture**: Cognitive owns Mindstream, Crystal intelligence, hippocampus memory, Scope and ASK; Executive owns capability, tool, trust and loop control; Agent owns runtime, socket, sandbox, skills, context and other outward runtime surfaces.
+Flyflor is a Bun + TypeScript intelligent-lifeform runtime kernel designed for single-binary delivery. It is not a chat/session agent. The LLM is fluid intelligence, Memory is context equipment, Crystal is crystallized intelligence, Scope/Fork are explicit durable work domains, and ASK is the closure organ for uncertainty and long-horizon loops.
 
 Official homepage: [https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -10,92 +8,133 @@ Chinese companion: [README.zh.cn.md](README.zh.cn.md).
 
 ## Design Philosophy
 
-- The LLM provides fluid, present-tense reasoning and generation; memory systems preserve, recall, crystallize and correct drift.
-- Flyflor does not treat transcript accumulation as intelligence. Context is assembled from hot memory, Crystal, Scope/Fork, forgetting curves and reflection.
-- Context assembly only comes from `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`.
-- `brain.db` is the monthly ledger/query plane, not a prompt container. History and current context are separate systems.
-- MCP, plugins, skills, channel actions, user commands and subagents must enter the same auditable Executive Tool surface.
-- External kits discover capabilities through manifests and the `/ws` control/event catalog. Catalogs are read-only; execution must pass Executive Tool Runtime plus sandbox/approval.
-- This repository owns the Bun kernel, socket vascular layer and WS/control protocol. Rust shell work is external handoff material only.
-- Simple requests can answer directly; complex requests use Blackboard. ASK is the explicit closure organ for uncertainty, escalation, crystallization and long-horizon loops.
-- Protocols, channels, workers, skills and MCP are explicit boundaries; internal protocol values are centrally registered.
+- **Context is selected, not accumulated.** Raw transcripts and event streams are evidence. Runtime context is assembled from current input, Memory, Crystal, explicit Scope/Fork, and the Executive capability surface.
+- **The ledger is not the mind.** `brain.db` is the monthly life ledger for ledger/query/replay/audit/detail. It is not a session store and never becomes a prompt container.
+- **Long work needs territory.** Scope is the durable work domain; ContextFork is the branch under that domain; codename is only an anchor/proposal/recall boost, not a hidden context bucket.
+- **Uncertainty must close through ASK.** A missing decision, merge conflict, loop guard, crystallization gate, or long-horizon pause should produce structured ASK instead of silent guessing.
+- **Experience becomes Crystal only after evidence.** Gem/Crystal output is stable method or knowledge. Recent conversation, failed guesses, and raw logs do not crystallize without evidence.
+- **Execution is an exoskeleton.** MCP, plugins, skills, channel actions, user tools and subagents enter the same auditable Executive Tool surface with sandbox, approval and events.
+- **No hidden intelligence via string matching.** Business semantic decisions are driven by structured model output, dedicated JSON prompt templates, or numeric resource metrics.
 
-## Architecture Model
+## Code Layering
+
+The core design is the **Cognitive-Executive-Agent Architecture**:
+
+| Layer | Owner | Responsibility |
+| --- | --- | --- |
+| Entry | `app.ts` | Thin mode dispatch only. |
+| Composition | `src/app.ts` | Explicit dependency binding and runtime startup. |
+| Cognitive | `src/cognitive` | Mindstream, Hippocampus Memory, Scope, ASK, Crystal and Gem closure. |
+| Executive | `src/executive` | Capability registry, tool descriptors, trust gates, loop guard and pause/resume. |
+| Agent | `src/agent` | Runtime pipeline, Blackboard, sandbox, context assembly, skills, MCP, plugin, worker. |
+| Socket | `src/socket` | `/ws`, `/health`, live turn, event, operation, ledger query/replay transport. |
+| Events | `src/events` | Runtime event fabric and fan-out. |
+| Protocol | `src/protocol` | Serializable contracts, enums, control envelopes and structured blocks. |
+| Entities | `src/entities` | SQLite row mapping, repositories and schema ownership. |
+| Config/Templates | `src/config`, `templates` | JSONC config defaults, prompt templates and memory templates. |
 
 The runtime is split into two planes:
 
-- Context plane: current input, Memory recall, Crystal recall, explicit `activeScope`, explicit `contextForkId`, visible capability surface.
-- Ledger/query plane: current-month `brain.db`, archived month ledgers, history / replay / audit / blackboard detail.
+- **Context plane:** current input, Memory recall, Crystal recall, explicit `activeScope`, explicit `contextForkId`, and visible capability surface.
+- **Ledger/query plane:** current-month `brain.db`, archived ledgers, history/replay/audit/detail, task plans, fork snapshots and blackboard detail.
 
-Without an explicit Scope:
+No explicit Scope means no fallback Scope, no inbox Scope, and no hidden restore from channel/chat/thread/user metadata. `activeProject` remains a compatibility alias; new code, docs and tests use `activeScope`.
 
-- no fallback Scope is created
-- no inbox Scope is created
-- no work domain is restored from `channel/chat/thread/user`
+## Memory Tree And Scope Vector
 
-`activeProject` remains a compatibility alias. New code, docs and tests should use `activeScope`.
+Flyflor's memory model borrows the useful shape of OpenHuman-style Memory Trees: local-first, provenance-bearing, scored, hierarchical memory instead of opaque vector soup. Flyflor adapts that idea to an agent kernel with a stricter context/ledger split:
 
-The current cognitive organs are:
+- **Constitution layer:** Markdown identity, user preferences, Scope facts and explicit constraints.
+- **Working-memory layer:** `MemoryComponent` local WAL/snapshot episodes, recent ring buffer, TTL, activation and hot-memory compression.
+- **Scope-local tree/vector layer:** each Scope owns its own `.flyflor/scope.db` with vector/tree nodes, hot memory and association rows. This is the project hot zone.
+- **Crystal layer:** `CrystalComponent` owns `crystal.db`, memory nodes, Gem snapshots, drift repair and long-term method crystallization.
+- **Ledger layer:** `brain.db` records life events, state, replay, audit and detail. It can provide provenance and replay, but does not assemble prompts.
 
-- `Mindstream / LLM`: fluid intelligence
-- `MemoryComponent`: hot memory and working buffer
-- `CrystalComponent`: crystallized intelligence and methods
-- `Scope`: independent durable work domain
-- `Ask`: cognitive closure organ
-- `Executive`: execution exoskeleton
+The memory curve is explicit: hot episodes decay quickly, memory nodes decay more slowly, Gems decay very slowly, and stale or contradictory knowledge is repaired or archived. Capacity valves prevent bloat; hot-memory compression writes audit evidence without becoming prompt recall by default.
 
-## Socket Surface
+Scope solidification has two paths:
 
-The active socket surface is intentionally small:
+- **Explicit creation:** when the user clearly starts a project/work item, the system can ASK for confirmation and then create a Scope with constitution, `scope.db`, skills and MCP surface.
+- **Gradual promotion:** when the user repeatedly references a project, the system creates a codename anchor, gathers evidence, then promotes it into a Scope once the evidence and confirmation path are strong enough.
+
+## ASK, Fork And Crystal Closed Loop
+
+The closure loop is the kernel's main long-line mechanism:
+
+1. A turn is equipped with current input + Memory + Crystal + explicit Scope/Fork + Executive capabilities.
+2. Work may branch into a `ContextFork`, similar to a git branch for cognitive state.
+3. A merge request is model-assisted but structured. Conflicts do not silently overwrite; they produce ASK.
+4. An unanswered ASK becomes a ghost/pending snapshot that can be resumed with explicit continue behavior.
+5. A resolved fork/ASK loop produces evidence. Evidence can become a Crystal candidate, and high-quality candidates become Gem knowledge.
+
+This is how Flyflor closes long-horizon loops without turning transport sessions into memory owners.
+
+## WebSocket Surface And OpenAPI
 
 - `/ws` WebSocket control/event
 - `/health`
 
-First-party CLI/TUI/channel adapters have been removed from the main source tree. External clients and custom shells should integrate through [docs/control.protocol.md](docs/control.protocol.md).
-For field-level `/ws` debugging, use [docs/ws.doc.md](docs/ws.doc.md).
+`/ws` is deliberately more than chat. It supports several interaction modes:
+
+- live turn streaming: `gateway.message.send` -> `turn.delta` -> `turn.final`
+- status and capability control: `gateway.status.get`, `capability.catalog.get`
+- ledger query/replay: `history.list`, `history.snapshot`
+- event subscriptions: `event.subscribe` for ASK, execution, memory, channel and runtime timelines
+- Executive loop visibility: paused/resumed loop snapshots, tool execution metadata and guard reasons
+- external client wiring: thin clients, local shells, dashboards, Apifox scenarios and future channel adapters
+
+Wire names such as `gateway.*` are `flyflor.ws.v1` compatibility strings, not architecture owner names. HTTP stays limited to `/ws` and `/health`; `/channels` is not restored.
+
+OpenAPI and WS docs:
+
+- [docs/openapi/flyflor.socket.openapi.json](docs/openapi/flyflor.socket.openapi.json) is the Apifox-importable contract.
+- [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) explains the real Apifox WebSocket flow and example messages.
+- [docs/ws.doc.md](docs/ws.doc.md) is the field-level `/ws` manual.
+- [docs/control.protocol.md](docs/control.protocol.md) is the protocol contract for external clients.
 
 Parallel development and handoff rules live in [docs/development.workflow.md](docs/development.workflow.md).
 
-## 快速开始
+## Quick Start
 
-### 安装（远程一行命令）
+### Remote Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
-# 固定版本：
+# Pinned version:
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --version v0.4.0
-# 自定义 Flyflor home：
+# Custom Flyflor home:
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --home ~/.flyflor
-# 纯 release 二进制安装才显式使用 --binary：
-curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary --prefix /usr/local/flyflor
-# 更新 / 卸载：
-flyflor update -y
+# Release binary mode is explicit and still installs only inside the prefix:
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary
+# Uninstall release binary path while preserving source/config/data:
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在源码根相对的 `.config`，也就是 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，并在 source config 缺失时从 `config.default.jsonc` 初始化最小 `config.jsonc`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
+The default installer is source-first: `~/.flyflor` is the source checkout root, and runtime config, prompts, templates and workspace data live under `~/.flyflor/.config`. The installer runs `bun run build:binary` and leaves the local kernel binary at `~/.flyflor/dist/flyflor`.
 
-### 安装方式
+It deliberately does **not** create a `flyflor` command in `~/.local/bin`, `/usr/local/bin`, or any other global execution directory. The future Rust CLI/TUI distribution owns the global command through `npm i -g flyflor` and connects to this Bun kernel over `/ws`.
 
-正式版提供三条路径。默认路径与源码路径都会把源码保留在 `~/.flyflor`，配置在 `~/.flyflor/.config`；全局命令始终指向编译后二进制，不直接执行 TypeScript 源码：
+### Install Modes
+
+The repository provides three kernel bootstrap paths. The default and source paths keep the source in `~/.flyflor` and config in `~/.flyflor/.config`; none of them writes a global command:
 
 ```bash
-# 1. 默认一键安装：~/.flyflor 是源码根，~/.flyflor/.config 是配置根
+# 1. Default source-first install: ~/.flyflor is source root, ~/.flyflor/.config is config root
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
 
-# 2. 源码安装别名，语义同默认安装，可用 --target 指定源码/配置根
+# 2. Source installer alias; --target can choose the source/config root
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash
 
-# 3. Docker 一键安装，源码仍在 ~/.flyflor，同时拉起 compose
+# 3. Docker dev bootstrap; source remains under ~/.flyflor and compose starts from there
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash
 
-# Windows：用 PowerShell bootstrap 源码安装
+# Windows: PowerShell source bootstrap
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.ps1 | iex"
 ```
 
-已经在源码目录内时，也可以运行 `bun run install:source`、`bun run install:docker` 或 `bun run install:windows` 调试这些 bootstrap 脚本。
+Inside a checkout, use `bun run install:source`, `bun run install:docker`, or `bun run install:windows` to debug the bootstrap scripts.
 
-### 从源码
+### From Source
 
 ```bash
 bun install
@@ -103,93 +142,93 @@ bun run install:templates  # copies prompts/templates/commands into this checkou
 bun run chat
 ```
 
-当前主线常用入口：
+Common current entrypoints:
 
 ```bash
-./dist/flyflor       # 本地 stdio chat 调试入口
-./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
-./dist/flyflor socket  # 主 socket 血管入口；gateway 仍是兼容命令
-bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
-bun run socket       # 源码模式启动最小 socket：/ws /health
-bun run socket:dev   # 同步模板后用 Bun watch 直接跑 socket
-sh scripts/socket.dev.sh # socket dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
-bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
+./dist/flyflor             # local stdio chat debug entrypoint
+./dist/flyflor --accept-hooks
+./dist/flyflor socket      # primary socket vascular entrypoint; gateway remains a compatibility command
+bun run dev                # Bun watch chat mode after syncing templates
+bun run socket             # source mode socket: /ws /health
+bun run socket:dev         # Bun watch socket mode after syncing templates
+sh scripts/socket.dev.sh   # socket dev wrapper with per-run logs
+bun run dev:dist           # watch source and rebuild dist/flyflor
 ```
 
-推荐调试方式：
+Recommended socket debugging:
 
-- 直接运行 `sh scripts/socket.dev.sh`
-- 脚本会在启动前清理 `./.config/logs/socket.dev/current.log`
-- 同时把本轮输出保存到 `./.config/logs/socket.dev/run.YYYYMMDD-HHMMSS.log`
-- 终端仍会实时看到完整输出
+- Run `sh scripts/socket.dev.sh`.
+- It clears `./.config/logs/socket.dev/current.log` before startup.
+- It also writes this run to `./.config/logs/socket.dev/run.YYYYMMDD-HHMMSS.log`.
+- The terminal still streams the full output.
 
-这样每轮调试都是独立日志，不会把旧报错和新报错混在一起。
+That keeps each debug run isolated from older errors.
 
-说明：
+Notes:
 
-- Bun 主线仍保留一个本地 stdio chat 调试面，方便直接驱动 `RuntimeModule`。
-- 未来第一方 CLI / TUI / socket shell 属于外部独立仓库事项；本仓库只保留 `/ws` 对接契约。
-- `setup` / `status` / `doctor` / 第一方 navigator 类命令不再视为主线稳定边界。
+- The Bun mainline keeps a local stdio chat surface for direct `RuntimeModule` debugging.
+- First-party CLI/TUI/socket shell lives outside this repository and should integrate through `/ws`.
+- `setup`, `status`, `doctor`, and first-party navigator commands are not stable mainline boundaries here.
 
-质量验证：
+Quality checks:
 
 ```bash
-bun run check        # TypeScript 类型检查
-bun run test         # 确定性单元测试：离线、stub model、无真实 API 消耗
-bun run test:kernel  # 内核封板关键 deterministic 子集：runtime/memory/blackboard/executive/ws/docs/chaos
-bun run test:live    # 真实模型冒烟：source checkout 默认读取当前仓库 .config/config.jsonc，安装态读取 ~/.flyflor/.config/config.jsonc；手动运行时缺 apiKey 会打印 skipped 诊断
-bun run test:live:docker # 真实模型冒烟：读取 ./docker/config/config.jsonc，并覆盖 runtime + memory 临时状态链路
-bun run provider:ready # 读取当前约定 config，输出结构化 provider readiness（missing / placeholder / configured）
-bun run smoke:agent  # 确定性智能体主路径冒烟：runtime + memory + planning + brain.db
-bun run smoke:agent:live # 真实模型 + runtime + memory + brain.db 冒烟；状态写入临时 HOME，手动运行时缺 apiKey 会打印 skipped 诊断
-bun run smoke:mcp:live # 真实 MCP 冒烟：读取配置中的 MCP server，默认只跑 tools/list
-bun run build:binary # 编译本机二进制
-bun run build:binary:release # 编译本机 + GitHub Release 资产名对齐的 Linux x64 / arm64 二进制
-bun run build:templates:release # 打包 GitHub Release 使用的 flyflor-templates.tar.gz
-bun run build:release # 构建并检查发布所需的二进制 + 模板包
-bun run kernel:seal  # 当前 Bun 内核封板门禁：docs/check/test/smoke/build/live 全绿；kernel:seal 下缺真实 provider 会直接失败
+bun run check                  # TypeScript type check
+bun run test                   # deterministic offline unit tests
+bun run test:kernel            # deterministic kernel seal subset
+bun run test:live              # configured live-model smoke
+bun run test:live:docker       # configured Docker live-model smoke
+bun run provider:ready         # structured provider readiness
+bun run smoke:agent            # deterministic runtime + memory + brain.db smoke
+bun run smoke:agent:live       # live-model runtime + memory + brain.db smoke
+bun run smoke:mcp:live         # real MCP tools/list smoke
+bun run build:binary           # compile local binary
+bun run build:binary:release   # compile release-aligned Linux assets
+bun run build:templates:release
+bun run build:release
+bun run kernel:seal            # full Bun kernel seal; missing live provider is a failure here
 ```
 
 ## Docker Dev
 
-Docker dev 运行已编译的 Linux 二进制，Compose 内不安装依赖也不构建。
+Docker dev runs the compiled Linux binary. Compose does not install dependencies or build the project.
 
 ```bash
-bun run docker:dev                        # 重编 Linux binary + 启动 compose + 跟日志
-bun run docker:chat                       # 进入容器内的本地 stdio chat 调试入口
-bun run smoke:docker                      # 不启动容器，检查 compose / prompt bundle；带 binary gate 时会启动已编译 Linux binary
-bun run smoke:agent                       # 临时 HOME 内检查 runtime 对话、记忆动作、TaskPlan/Fork/Replay 与 brain.db 写入
-bun run smoke:agent:live                  # 读取真实 provider，临时 HOME 内检查完整 agent turn
-bun run smoke:socket:service              # 临时 HOME 内渲染并写入 systemd/launchd 服务文件，不启停宿主服务
-bun run smoke:runtime                     # 已启动 compose 后，检查 doctor / status / recovery；占位 API key 只提示
-bun run smoke:runtime:live                # 已配置真实 API key 后，额外跑一次模型 chat probe
-bun run smoke:recovery                    # 临时 HOME 下检查 local working memory WAL/backup + MCP transport 恢复
-bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断链/重连观察，默认只 list tools
+bun run docker:dev
+bun run docker:chat
+bun run smoke:docker
+bun run smoke:agent
+bun run smoke:agent:live
+bun run smoke:socket:service
+bun run smoke:runtime
+bun run smoke:runtime:live
+bun run smoke:recovery
+bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000
 bun run smoke:release                     # docs + type + tests + agent smoke + release assets + socket service + docker smoke
-bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
-bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
-docker exec -it flyflor-dev flyflor       # 进入容器交互
+bun run ci                                # deterministic local gate; no live credentials
+bun run release:check                     # deterministic release smoke
+docker exec -it flyflor-dev flyflor
 ```
 
-`bun run test` 默认不调用真实模型，避免普通单测受网络、余额和 provider 抖动影响；需要验证你当前配置的真实模型时，先跑 `bun run provider:ready`，再按场景单独跑 `bun run test:live`、`bun run test:live:docker` 或 Docker 场景的 `bun run smoke:runtime:live`。手动 live 探测允许输出 skipped 诊断，但 `bun run kernel:seal` 会把 live provider 缺失视为封板失败。Docker live runtime 继续保留为可选扩展验证，不属于当前 Bun 内核封板硬门槛。
+`bun run test` does not call a real model by default. For configured live-model checks, run `bun run provider:ready` first, then use `bun run test:live`, `bun run test:live:docker`, or Docker-specific live smokes. Manual live probes may print skipped diagnostics when credentials are absent; `bun run kernel:seal` treats missing live provider readiness as a seal failure.
 
-挂载路径：
+Mounts:
 
-| 宿主路径               | 容器路径                        | 用途                  |
+| Host path | Container path | Purpose |
 | ---------------------- | ------------------------------- | --------------------- |
-| `./docker/config`      | `/root/.flyflor/.config`         | dev 配置 + 提示词模板 |
-| `./docker/workspace`   | `/root/.flyflor/.config/workspace` | 工作区数据            |
-| `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor` | 编译好的二进制        |
+| `./docker/config` | `/root/.flyflor/.config` | dev config and prompt templates |
+| `./docker/workspace` | `/root/.flyflor/.config/workspace` | workspace data |
+| `./dist/flyflor-linux` | copied to `/usr/local/bin/flyflor` in the container | compiled container binary |
 
-默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆与 local CrystalComponent 都已启用；`docker/config.default.jsonc` 只在 `docker/config/config.jsonc` 缺失时初始化，避免覆盖本地 provider 密钥；`brain.db` 和 `crystal.db` 分别承载生命事件与晶体图。架构变更后重新编译 + 重启：
+Docker dev defaults to one Flyflor container. Local WAL working memory and local `CrystalComponent` are enabled. `docker/config.default.jsonc` only initializes `docker/config/config.jsonc` when it is missing, so local provider secrets are not overwritten. Rebuild and restart after architecture changes:
 
 ```bash
-bun run docker:up   # = 重编 binary + force-recreate compose
+bun run docker:up
 ```
 
-## 模型配置
+## Model Config
 
-自定义 OpenAI-compatible provider 只需要最小 JSONC：
+A minimal OpenAI-compatible provider config:
 
 ```jsonc
 {
@@ -210,210 +249,65 @@ bun run docker:up   # = 重编 binary + force-recreate compose
 }
 ```
 
-`baseUrl` 存在时默认推断为 OpenAI-compatible，`apiMode` 默认 `chat-completions`；未配置 `activeModel` / `defaultModel` / `models` 时会用已解析的 `apiKey` 探测 `${baseUrl}/models`。Runtime 默认走流式生成；只有模型 client 未暴露 `stream` 方法时才走普通 HTTP 并给调用方返回一段完整 final delta。若 `stream` 方法已存在但请求失败，错误会直接透出，不自动重试另一条 provider 路径。
+When `baseUrl` is present, the provider is inferred as OpenAI-compatible and `apiMode` defaults to `chat-completions`. If `activeModel`, `defaultModel`, and `models` are absent, the loader probes `${baseUrl}/models` with the resolved `apiKey`. Runtime generation is streaming by default; a non-streaming fallback is only used when the model client does not expose `stream`.
 
-## 架构
+## Runtime Flow
 
-### 目录结构
+1. Transport, message and actor provenance are normalized into the socket/control input shape.
+2. Context assembly uses constitution Markdown, Memory recall, Crystal recall, explicit Scope/Fork and the visible Executive capability surface.
+3. The model loop streams output and emits structured blocks for memory actions, ASK, continuation, identity append, TaskPlan, ContextFork and ReplayRecord.
+4. The synchronous tail writes episodes, ledger events, ASK/Continuation/Codename/EQ/planning/fork state, skill usage and runtime snapshots.
+5. Background workers handle consolidation, hot-memory compression, summary, decay, idle, dream, feedback classification and reflection.
 
-| 路径           | 职责                                                                        |
-| -------------- | --------------------------------------------------------------------------- |
-| `app.ts`       | 薄入口，启动 FlyFlor 主类                                                   |
-| `src/app.ts`   | FlyFlor composition root，显式 DI 容器                                      |
-| `src/agent`    | runtime、blackboard、sandbox、worker、MCP、scope、plugin                  |
-| `src/socket`   | socket 血管层：`/ws`、`/health`、live turn、event、operation、ledger query/replay |
-| `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据 + 显式 provider 容器                |
-| `src/cognitive/mindstream` | Mindstream 心流层（模型 provider 与当下推理流）；历史 `src/fch/mindstream` 已移除 |
-| `src/cognitive/crystal` | 晶体智力：episode、memory_node、Gem、consolidation、dream；历史 `src/fch/crystal` 已移除 |
-| `src/cognitive/hippocampus` | 海马体工作记忆：local WAL/snapshot、召回、最近交流 ring、热记忆压缩；历史 `src/fch/hippocampus` 已移除 |
-| `src/events`   | RECL / Event Fabric，所有交互事件的订阅广播中枢                            |
-| `src/executive` | Capability / Tool / Trust / Loop 执行层；旧执行层路径已移除 |
-| `src/agent/context` | 显式 Scope / fork / capability surface 装配；历史 `src/context` 已移除 |
-| `src/agent/skills` | Skill manifest、选择、使用计数、promotion；历史 `src/skills` 已移除 |
-| `src/protocol` | 公共协议、枚举、control envelope、进程 envelope                            |
-| `templates`    | 提示词和记忆 Markdown 模板                                                  |
+External chat-style channels should deliver final-only responses. Runtime may stream internally and through `/ws`, but platform adapters should not turn intermediate deltas into multiple user-visible messages.
 
-### 三层智能模型
+## Engineering Boundaries
 
-- **Mindstream**：心流层，负责 provider 协议转换、流式输出、当前任务的理解、推理、生成、工具编排、黑板讨论和即时决策，目标目录是 `src/cognitive/mindstream`。
-- **Crystal = 晶体智力**：把验证过的经验压缩成可复用 Gem（晶粒），由证据门和质量门控制升格，目标目录是 `src/cognitive/crystal`。
-- **Hippocampus = 海马体**：由 `MemoryComponent` 承载本地工作记忆（WAL + snapshot），由 `CrystalComponent` 承载本地晶体图（`crystal.db` + VectorIndex），目标目录是 `src/cognitive/hippocampus`。
+- Use Bun for dependencies, scripts and binary builds; do not require Node.js.
+- Config lives under `~/.flyflor/.config/config.jsonc` or `./docker/config/config.jsonc` for Docker dev, and JSON config must remain JSONC-compatible.
+- Business config does not use environment variables; provider, model, credentials, sandbox policy and socket behavior go through config/secrets provider.
+- `brain.db` is ledger/query/replay/audit/detail only. It does not assemble prompt context.
+- Business semantic decisions cannot use `text.includes`, regex intent detection, keyword lists, phrase heuristics, sentiment dictionaries or punctuation checks. Use structured model output, dedicated JSON prompt templates or numeric resource metrics.
+- Public events and protocols must be JSON-serializable and use explicit types/enums from `src/protocol`.
+- New runtime dependencies must be compatible with `bun build --compile`: no native addon, postinstall, dynamic require or runtime `node_modules` asset dependency.
+- Secrets, logs, runtime databases and user workspace data must not be compiled into the binary.
+- Boundary, high-risk tool or dependency-policy changes must update [docs/boundaries.md](docs/boundaries.md).
 
-**核心原则：不在堆叠记忆上发力，而在思考能力的自我迭代上发力。**
+## Documentation
 
-### 请求流程
+Full documentation index: [docs/README.md](docs/README.md).
 
-1. 渠道、消息、用户身份归一为 `GatewayMessage`
-2. 路由判断：fastRoute 资源指标短路（本地 cache 恢复热提示，目标 ~70% 命中）或 LLM route，决定 `direct` / `direct-with-watch` / `blackboard`
-3. 上下文装配（热路径）：宪法层 Markdown + Memory recall + Crystal recall + explicit Scope/Fork + visible capability surface
-4. LLM 主循环：流式生成，解析结构化 memory action / Ask / Continuation decision / identity append / TaskPlan / ContextFork / ReplayRecord；TTFB 目标 < 350ms
-5. 同步收尾：写 episode、brain 双写、Ask/Continuation/Codename/EQ/计划/fork/场景摘要状态、skill usage 和 fastRoute snapshot cache
-6. 后台 worker：consolidation、hot-memory compression、summary、decay、idle、dream、feedback classify、reflection
+| Document | Purpose |
+| --- | --- |
+| [TODO.md](TODO.md) | Current handoff, migration status and validation commands. |
+| [docs/README.md](docs/README.md) | Active documentation index and reading order. |
+| [docs/architecture.md](docs/architecture.md) | Cognitive / Executive / Agent architecture, composition root and process model. |
+| [docs/refactor.roadmap.md](docs/refactor.roadmap.md) | Refactor direction and active maintenance posture. |
+| [docs/directory.architecture.md](docs/directory.architecture.md) | Source, config, runtime and workspace directory ownership. |
+| [docs/executive.exoskeleton.md](docs/executive.exoskeleton.md) | Executive capability, tool, trust and loop model. |
+| [docs/runtime.events.md](docs/runtime.events.md) | Event fabric and runtime timeline. |
+| [docs/boundaries.md](docs/boundaries.md) | Engineering boundaries and hard red lines. |
+| [docs/runtime.turn.md](docs/runtime.turn.md) | Single-turn runtime flow. |
+| [docs/memory.system.md](docs/memory.system.md) | Memory, Crystal, Scope/Fork, decay and Dream. |
+| [docs/blackboard.md](docs/blackboard.md) | Blackboard routing, convergence and worker protocol. |
+| [docs/ws.doc.md](docs/ws.doc.md) | Field-level `/ws` manual. |
+| [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) | Apifox import and real socket scenario contract. |
+| [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox decisions and audit. |
+| [docs/mcp.tools.md](docs/mcp.tools.md) | MCP tool loop. |
+| [docs/external.kit.md](docs/external.kit.md) | External kit manifest, discovery and control contract. |
+| [docs/control.protocol.md](docs/control.protocol.md) | WS/control protocol for external clients and thin clients. |
+| [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection to Gem crystallization. |
+| [docs/skill.system.md](docs/skill.system.md) | Skill loading and promotion. |
 
-外部聊天渠道统一 final-only 投递：Runtime 内部可以流式生成并驱动 `/ws` thin client，但 Slack、Telegram、WeChat、WeCom、DingTalk 等平台只在本轮结束后发送一次完整回复，避免把中间 token 当作多条平台消息。正在输入、引用回复、thread/topic、消息更新、reaction、卡片更新统一走 `GatewayOutboundOperation`；平台不支持时只做显式 no-op / final text 降级，不走不稳定 bridge。
+External repository handoff references:
 
-## 记忆系统
+| Document | Purpose |
+| --- | --- |
+| [docs/old-docs/rust.integration.md](docs/old-docs/rust.integration.md) | External Rust socket/channel/cli/tui `/ws` integration handoff. |
+| [docs/old-docs/rust.connection.core.md](docs/old-docs/rust.connection.core.md) | External Rust `/ws` connection core and reconnect state machine. |
+| [docs/old-docs/rust.gateway.shell.backlog.md](docs/old-docs/rust.gateway.shell.backlog.md) | External Rust socket shell backlog reference. |
 
-| 层          | 后端                                           | 职责                                                                                                                                                               |
-| ----------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 宪法层      | Markdown                                       | 身份、用户偏好、scope 事实（手编辑 + 结构化 append，慢变）                                                                                                         |
-| 生命事件层  | SQLite `brain.db`                              | 当前月 ledger：`memory_events` append-only + `memory_state` 当前可见性；TaskPlan / ContextFork / ReplayRecord / detail 索引；不直接参与 prompt 装配 |
-| 工作记忆    | `MemoryComponent`：Local WAL/snapshot          | episode buffer + TTL 遗忘曲线 + 最近交流 ring buffer；到期压缩只写隔离审计；恢复面只暴露结构化文件元数据给诊断脚本或 future WS client                                           |
-| 长期记忆图  | `CrystalComponent`：`crystal.db` + VectorIndex | episode → memory_node → Gem，summary_embedding，本地图关系                                                                                                         |
-| 索引 / 审计 | SQLite                                         | blackboard、candidate、offer、skill/plugin/mcp 辅助状态                                                                                                            |
-
-`RedisComponent` / `SurrealComponent` 作为原型定位基类保留，方便后续恢复外部后端时保持边界清晰；默认正式版不启用 Redis / SurrealDB 服务，外部后端不能绕过 Component 接入。
-
-**长期图主实体：** `episode`、`memory_node`、`gem`（晶粒，crystallized intelligence）、`gem_snapshot`（防漂移版本快照）、`summary_embedding`
-
-**图边：** `next_context`、`similar_ep`、`consolidated_into`、`similar_concept`、`proven_as`、`proven_by`
-
-### Gem（晶体智力固化产物）升格流程
-
-候选来源：runtime LLM 反思（整合 worker 异步触发）、用户显式提升、黑板收敛 / MCP 增强证据与 brain 事件状态；外部 Skill promotion 只作为能力包物化证据，不再和 Gem 本体混名。
-
-当前是双轨固化，避免把 runtime 反思和长期图整合混成一个隐式流程：
-
-- `CrystalGemComponent`：同轮模型已经给出结构化 `ReflectionCandidate` 后，只按证据权重计算 `evidenceScore`；`evidenceScore <= 0` 只保存 candidate，不写 atom / Gem；`evidenceScore > 0` 写 atom 并按 `bucket + symbols` 合并 Gem，重复命中增加 `support`。
-- `ConsolidationWorker` / `CrystalComponent` 长期图：working-memory episode 异步聚合为 `memory_node`，再通过 graph 关系、support、confidence、contradiction 信号维护 Gem。`memory_node.evidenceCount` 是长期图证据计数字段，不是 runtime reflection Gem 的硬门槛。
-
-Evidence Weight 裁判表：
-
-| sourceKind            | weight |
-| --------------------- | ------ |
-| direct / unverified   | 0.0    |
-| blackboard-needs-user | 0.65   |
-| blackboard-converged  | 0.8    |
-| explicit              | 0.9    |
-
-### 遗忘与防膨胀
-
-- **双轨衰减**：episode 5%/天、memory_node 2%/天、Gem 0.5%/天；lastVerifiedAt 超 30 天额外打折。
-- **矛盾检测**：`contradictionCount ≥ 2` → drift-repair；confidence < 0.1 → deprecated 归档。
-- **热记忆压缩**：到期 working-memory episode 可压缩成 `memory_events.type='hot-memory-compression'` 审计事件；不进入 prompt recall / `memory_summary` / CrystalComponent / Gem 候选。
-- **容量阀门**：working memory `maxEpisodesPerUser=200`；长期图 episode 500 / memory_node 100 / Gem 50。
-- **Gem 去重**：symbols IoU ≥ 0.7 且 cosine ≥ 0.85 → merge（`dedupeGems`，纯函数，无字符匹配）。
-
-### Dream 模式（晶体层离线维护）
-
-Dream 是长期晶体层的主动维护 worker，经 `CrystalComponent` 读写本地 `crystal.db`（`gem / memory_node / episode / gem_snapshot`），不触碰工作记忆热窗口。
-
-| Worker          | 作用层                         | 唯一职责                                                        |
-| --------------- | ------------------------------ | --------------------------------------------------------------- |
-| Consolidation   | Working memory → Crystal graph | 升格通道：到期 episode → reinforce / consolidate / discard      |
-| Hot compression | Working memory → brain.db      | 清理通道：到期 episode → 隔离压缩审计 → 删除热窗口 episode      |
-| Decay           | Crystal graph（纯函数）        | 被动衰减：importance × 时间 / verification age                  |
-| Anti-bloat      | Working memory & Crystal graph | 容量阀门：超额强制遗忘 / 归档                                   |
-| Dream           | Crystal graph only             | 晶体维护：drift-repair / recall-reinforce / contradiction-audit |
-
-三类动作：
-
-- `drift-repair`：先写 `gem_snapshot` 存档，再收窄 scope/precondition 或转 deprecated
-- `recall-reinforce`：importance × 1.1，追加 `proven_by` 边
-- `contradiction-audit`：弱侧 `contradictionCount += 1`，confidence × 0.7；< 0.1 → deprecated 归档
-
-触发：定时 30 min 节拍 + 用户 10 min 静默自动触发（类海马 SWR 回放）。
-
-单 pass：≤ 1 次 LLM 调用、≤ 8K token；候选选择仅用资源指标（counter / age / cosine），不用关键词。
-
-## 黑板
-
-Runtime 通过 `blackboard.route.md` 获取结构化路由：
-
-- `direct`：单智能体直接回答
-- `direct-with-watch`：直接回答同时监听升级信号
-- `blackboard`：动态 worker 多轮讨论
-
-黑板特性：
-
-- 同 scope constraint 同时只能一个 turn（lease 机制）
-- 目标 3 轮收敛，5 轮硬上限
-- livelock 检测（两轮无新事实、重复争议、重复失败工具）
-- 流式输出 worker 讨论步骤
-- 无法收敛时由 runtime 合成 Ask（`reason=blackboard-stalemate`），交还用户选择；旧 `flyflor-decision-form` 已退役
-
-## Runtime Surfaces
-
-```bash
-flyflor            # 本地 stdio chat 调试入口
-flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
-```
-
-当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 属于外部独立仓库事项，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
-
-## 工程规则
-
-### DI 与命名
-
-- 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Event`、`@Worker`、`@Channel`、`@Plugin`
-- 边界模块用 `FlyflorComponent` 继承链表达：`class RuntimeModule extends Runtime`、`class MemoryModule extends Memory`、`class ContextScopeComponent extends ContextComponent`；`kind/layer/name/provider` 默认由基类和类名推断
-- `@Module` / `@Component` 复用 `Provide` 注入元数据；默认单例，需要每次重新 `new` 时显式使用 `ProviderScope.Factory`
-- DI key 优先使用 class 对象：`@Inject(RuntimeModule)` / `container.resolve(RuntimeModule)`；模块唯一组件 owner 统一命名为 `component.ts` 且必须有真实边界职责，不能只是空壳 token；非 class 值才使用 `createInjectionToken()`，禁止新增裸字符串 token
-- OOP + use composition：业务能力用 class / Component，组合装配统一放在对应模块 `composition.ts` 并用 `useXxx()` 命名；禁止散落无归属 helper function 拼依赖或路径
-- `index.ts` 只做 barrel export；单出口可以直接一行 export，多出口必须拆到明确角色文件后汇总，禁止把实现逻辑写进 `index.ts`
-- 禁止 `*.exports.ts`；目录导出统一进 `index.ts`。目录已经表达职责时用短名，例如 DI composition 下用 `component.ts` / `event.ts` / `injection.ts` / `module.ts`，factory 下用 `container.ts`
-- 目录 owner 是第一语义：模块内文件不重复目录名前缀，目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`、`consolidation/worker.ts`、`lifecycle/scheduler.ts` 这类按生命周期分组；对外优先导入子目录 `index.ts`
-- SQLite 访问按 `entity/repo -> store -> component` 分层；新增 SQL 优先放到 `src/entities/<domain>/tablename.repo.ts`，repo 只做 row/entity 映射 + SQL function，不做 service 层业务，并使用 `query\`SELECT ... ${value}\`` tagged template 绑定参数，禁止字符串拼接值进入 SQL
-- Store 按模块目录归属，不建跨域假目录：单职责子目录使用模板名 `store.ts` / `types.ts`，例如目标路径 `src/cognitive/hippocampus/memory/brain/store.ts`、`src/cognitive/hippocampus/memory/working/index.ts`、`src/agent/blackboard/store.ts`；`src/components` 只放共享 Component 基类和跨模块基础设施，不允许 `src/components/memory` 这类领域兼容壳。
-- 公开 API 显式写 `public`，内部状态保持 `private` / `protected`
-- 实现文件使用点分后缀：`*.module.ts`、`*.worker.ts`、`*.manager.ts`、`*.adapter.ts`、`*.store.ts`、`*.repo.ts`；目录内唯一组件 owner 直接叫 `component.ts`
-- 目录入口统一为 `index.ts`，不新增连字符或下划线命名的仓库文件
-
-### 零字符匹配红线
-
-业务语义判断（意图、路由、记忆动作、反馈分类、矛盾检测、复杂度评估等）**只能**由模型同轮返回的结构化字段或专用提示词模板的 JSON 输出驱动。
-
-禁止：`text.includes()`、正则识别意图、关键词列表、句式启发式、情感词典、句末标点判断。
-
-性能优化只能用资源指标（token 数、向量相似度、TTL、cluster size）短路。
-
-### 其他约束
-
-- 只使用 Bun 命令管理依赖，不要求安装 Node.js
-- 配置走 `~/.flyflor/.config/config.jsonc`（Docker dev：`./docker/config/config.jsonc`），兼容 JSONC
-- `~/.flyflor/.config/commands.jsonc` 只保留给 future client 的本地命令协议层，不承载模型、凭据和网关配置
-- 业务配置不走环境变量；凭据、沙箱策略走 config/secrets provider
-- 新增运行时依赖前确认兼容 `bun build --compile`（无 native addon、无 postinstall、无动态 require）
-- 不把密钥、日志、会话数据库、用户数据编译进二进制
-- 测试和文档不得使用 `sk-*` 等真实厂商密钥形态；占位值必须明显不可用，避免污染发布扫描
-- 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化
-- 修改边界、高风险工具或依赖策略时同步更新 `docs/boundaries.md`
-
-## 文档
-
-完整文档索引见 [docs/README.md](docs/README.md)。核心文档：
-
-| 文档                                                         | 用途                                   |
-| ------------------------------------------------------------ | -------------------------------------- |
-| [TODO.md](TODO.md)                                           | 当前中文接续路线 / 迁移状态 / 验收命令 |
-| [docs/README.md](docs/README.md)                             | 活跃文档索引与阅读顺序 |
-| [docs/architecture.md](docs/architecture.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
-| [docs/refactor.roadmap.md](docs/refactor.roadmap.md)         | 切除旧身体、保留内核 / 外骨骼 / 事件血管的阶段性重构路线 |
-| [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
-| [docs/executive.exoskeleton.md](docs/executive.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
-| [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |
-| [docs/boundaries.md](docs/boundaries.md)                     | 工程边界与红线                         |
-| [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
-| [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
-| [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
-| [docs/ws.doc.md](docs/ws.doc.md)                             | `/ws` 字段级 API 手册 |
-| [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) | Apifox 导入与真实 socket 场景测试契约 |
-| [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
-| [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
-| [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
-| [docs/control.protocol.md](docs/control.protocol.md)         | 外部客户端 / thin client 直接对接的 WS/control 血管协议 |
-| [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
-| [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
-
-外部仓库参考材料：
-
-| 文档                                                         | 用途                                   |
-| ------------------------------------------------------------ | -------------------------------------- |
-| [docs/old-docs/rust.integration.md](docs/old-docs/rust.integration.md) | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
-| [docs/old-docs/rust.connection.core.md](docs/old-docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
-| [docs/old-docs/rust.gateway.shell.backlog.md](docs/old-docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
-
-历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
+Historical proposals and migration background are archived under [docs/old-docs/README.md](docs/old-docs/README.md). They explain past decisions but do not define the current runtime contract.
 
 <!-- flyflor:prompt-templates:start -->
 # Prompt Template System

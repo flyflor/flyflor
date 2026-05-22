@@ -1,56 +1,94 @@
 # Flyflor
 
-Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单文件二进制交付。
-
-核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、socket、sandbox、skills、context 等外部交互。
+Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单文件二进制交付。它不是 chat/session agent。LLM 是流体智力，Memory 是上下文装备，Crystal 是晶体智力，Scope/Fork 是显式固化工作域，ASK 是不确定性与超长线 loop 的闭环器官。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
 ## 设计哲学
 
-- LLM 负责当下推理与生成，充当流体智力；记忆系统负责沉淀、召回、结晶与偏移修正。
-- 不靠单轮堆叠上下文，而靠热记忆、晶体智力、Scope 生命域、遗忘曲线和反思把经验压成稳定能力。
-- 上下文装配只来自 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
-- `brain.db` 是按月分片的 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
-- 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
-- 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
-- 未来外部客户端可以通过 `/ws` 对接；当前仓库只承载 Bun 主线的 socket 血管层与 WS/control 协议，不承载 Rust 实现。
-- 简单问题直接回，复杂问题走黑板；当思考或执行抵达边界时，通过 Ask 显式向用户求证，再把高价值结果送入结晶链路。
-- 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
+- **上下文是选择出来的，不是堆出来的。** 原始 transcript 和事件流只是证据；运行时上下文来自当前输入、Memory、Crystal、显式 Scope/Fork 和 Executive 能力面。
+- **账本不是心智。** `brain.db` 是按月生命账本，只负责 ledger/query/replay/audit/detail，不是 session store，也不是 prompt 容器。
+- **长期工作需要领地。** Scope 是 durable work domain；ContextFork 是该 domain 下的分支；codename 只是锚点、提议入口和 recall boost，不是隐藏上下文桶。
+- **不确定性必须通过 ASK 闭环。** 缺少决策、merge 冲突、loop guard、结晶门或长线暂停，都应该产出结构化 ASK，而不是静默猜测。
+- **经验必须有证据才结晶。** Gem/Crystal 沉淀的是稳定方法或知识；近期对话、失败猜测和原始日志不会无门槛升格。
+- **执行是外骨骼。** MCP、插件、skill、channel action、用户工具和 subagent 都进入同一套可审计 Executive Tool surface，并受 sandbox、approval 和 event 约束。
+- **禁止把字符匹配伪装成智能。** 业务语义判断只能来自结构化模型输出、专用 JSON prompt 模板或数值资源指标。
 
-## 架构总模型
+## 代码分层
 
-当前运行模型明确拆成两张平面：
+核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：
 
-- Context plane：当前输入、Memory recall、Crystal recall、显式 `activeScope`、显式 `contextForkId`、可见 capability surface
-- Ledger/query plane：当前月 `brain.db`、历史月归档、history / replay / audit / blackboard detail
+| 层 | Owner | 职责 |
+| --- | --- | --- |
+| Entry | `app.ts` | 只做薄模式分派。 |
+| Composition | `src/app.ts` | 显式依赖绑定和 runtime 启动。 |
+| Cognitive | `src/cognitive` | Mindstream、Hippocampus Memory、Scope、ASK、Crystal、Gem 闭环。 |
+| Executive | `src/executive` | Capability registry、tool descriptor、trust gate、loop guard、pause/resume。 |
+| Agent | `src/agent` | Runtime pipeline、Blackboard、sandbox、context assembly、skills、MCP、plugin、worker。 |
+| Socket | `src/socket` | `/ws`、`/health`、live turn、event、operation、ledger query/replay transport。 |
+| Events | `src/events` | Runtime event fabric 和 fan-out。 |
+| Protocol | `src/protocol` | 可序列化 contract、enum、control envelope、structured block。 |
+| Entities | `src/entities` | SQLite row mapping、repo、schema ownership。 |
+| Config/Templates | `src/config`, `templates` | JSONC config 默认值、prompt template、memory template。 |
 
-没有显式 scope 时：
+运行模型拆成两张平面：
 
-- 不创建 fallback scope
-- 不创建 inbox scope
-- 不按 `channel/chat/thread/user` 自动恢复工作域
+- **Context plane：** 当前输入、Memory recall、Crystal recall、显式 `activeScope`、显式 `contextForkId`、可见 capability surface。
+- **Ledger/query plane：** 当前月 `brain.db`、历史月归档、history/replay/audit/detail、task plan、fork snapshot、blackboard detail。
 
-`activeProject` 现在只保留兼容读取；所有新代码、新文档、新测试都以 `activeScope` 为准。
+没有显式 Scope 时，不创建 fallback Scope、不创建 inbox Scope、不按 channel/chat/thread/user metadata 隐式恢复工作域。`activeProject` 只保留兼容读取；新代码、新文档、新测试以 `activeScope` 为准。
 
-从认知器官看，Flyflor 当前由这几部分共同构成：
+## 记忆树与 Scope Vector
 
-- `Mindstream / LLM`：流体智力
-- `MemoryComponent`：热记忆与工作缓冲区
-- `CrystalComponent`：晶体智力与方法结晶区
-- `Scope`：独立生命工作域
-- `Ask`：认知闭环器官
-- `Executive`：执行外骨骼
+Flyflor 参考 OpenHuman 式 Memory Tree 的有效形态：local-first、有 provenance、有评分、有层级摘要，而不是不透明的向量汤。Flyflor 把这个思路收敛到智能体内核，并严格区分 context plane 与 ledger/query plane：
 
-## Socket 现状
+- **宪法层：** Markdown 身份、用户偏好、Scope 事实和显式约束。
+- **工作记忆层：** `MemoryComponent` 本地 WAL/snapshot episode、最近 ring buffer、TTL、activation、hot-memory compression。
+- **Scope-local tree/vector 层：** 每个 Scope 拥有自己的 `.flyflor/scope.db`，包含 vector/tree nodes、hot memory 和 association rows，这是项目热区。
+- **Crystal 层：** `CrystalComponent` 拥有 `crystal.db`、memory node、Gem snapshot、drift repair 和长期方法结晶。
+- **Ledger 层：** `brain.db` 记录生命事件、状态、replay、audit 和 detail；它提供 provenance 和回放，但不装配 prompt。
 
-主线 socket 已收缩为最小血管层：
+记忆曲线是显式的：hot episode 衰减最快，memory node 慢一些，Gem 最慢；过期或矛盾知识进入 repair/archive；容量阀门防止膨胀；hot-memory compression 只写审计证据，默认不进入 prompt recall。
+
+Scope 固化有两条路径：
+
+- **显式创建：** 用户明确开始项目/任务时，系统可先 ASK 确认，再创建带宪法、`scope.db`、skill、MCP surface 的 Scope。
+- **渐进升格：** 用户频繁提起某个项目时，系统先生成 codename 锚点、累积证据，再在证据与确认路径足够强时升格成 Scope。
+
+## ASK、Fork 与 Crystal 闭环
+
+闭环是内核的超长线机制：
+
+1. 当前 turn 装备 current input + Memory + Crystal + explicit Scope/Fork + Executive capabilities。
+2. 工作可进入 `ContextFork`，类似认知状态里的 git branch。
+3. merge 由模型辅助，但输出必须结构化；冲突不能静默覆盖，必须触发 ASK。
+4. 未回答 ASK 变成 ghost/pending snapshot，可通过显式 continue 恢复。
+5. 已解决的 fork/ASK loop 产出 evidence；evidence 可进入 Crystal candidate，高质量 candidate 再升格为 Gem。
+
+这让 Flyflor 能闭合长线任务，而不把 transport session 当成 memory owner。
+
+## WebSocket Surface 与 OpenAPI
 
 - `/ws` WebSocket control/event
 - `/health`
 
-第一方 CLI/TUI/channel adapter 已从主源码剥离，已移除旧实现且不保留兼容目录。后续外部客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
-需要按请求/响应字段直接调试 `/ws` 时，使用 [docs/ws.doc.md](docs/ws.doc.md)。
+`/ws` 不只是 chat，它支持多种玩法：
+
+- live turn streaming：`gateway.message.send` → `turn.delta` → `turn.final`
+- 状态与能力控制：`gateway.status.get`、`capability.catalog.get`
+- 账本 query/replay：`history.list`、`history.snapshot`
+- 事件订阅：`event.subscribe` 订阅 ASK、执行、记忆、channel、runtime 时间线
+- Executive loop 可见性：paused/resumed loop snapshot、tool execution metadata、guard reason
+- 外部客户端接入：thin client、本地 shell、dashboard、Apifox 场景和未来 channel adapter
+
+`gateway.*` 是 `flyflor.ws.v1` 兼容 wire string，不是架构 owner 名称。HTTP 只保留 `/ws` 和 `/health`，不恢复 `/channels`。
+
+OpenAPI 与 WS 文档：
+
+- [docs/openapi/flyflor.socket.openapi.json](docs/openapi/flyflor.socket.openapi.json) 是 Apifox 可导入契约。
+- [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) 说明真实 Apifox WebSocket 流程和 example messages。
+- [docs/ws.doc.md](docs/ws.doc.md) 是 `/ws` 字段级手册。
+- [docs/control.protocol.md](docs/control.protocol.md) 是外部客户端协议契约。
 
 并发开发与新 session 交接约定见 [docs/development.workflow.md](docs/development.workflow.md)。
 
@@ -64,18 +102,19 @@ curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/inst
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --version v0.4.0
 # 自定义 Flyflor home：
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --home ~/.flyflor
-# 纯 release 二进制安装才显式使用 --binary：
-curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary --prefix /usr/local/flyflor
-# 更新 / 卸载：
-flyflor update -y
+# 纯 release 二进制安装才显式使用 --binary，仍只安装到 prefix 内：
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --binary
+# 卸载 release binary path，保留源码、配置和数据：
 curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash -s -- --uninstall
 ```
 
-默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在源码根相对的 `.config`，也就是 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，并在 source config 缺失时从 `config.default.jsonc` 初始化最小 `config.jsonc`，然后把全局 `flyflor` 命令链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；安装后应能直接执行 `flyflor -h`。纯二进制模式需要显式传 `--binary`，它才会从 GitHub Releases 下载匹配平台的 `flyflor-{os}-{arch}` 与 `flyflor-templates.tar.gz`。
+默认一键安装是 source-first：`~/.flyflor` 就是源码仓库根，`config.jsonc`、`commands.jsonc`、`prompts/`、`templates/`、`workspace/` 等运行态统一放在源码根相对的 `.config`，也就是 `~/.flyflor/.config`。安装脚本会运行 `bun run build:binary`，并在 source config 缺失时从 `config.default.jsonc` 初始化最小 `config.jsonc`，本地内核二进制落在 `~/.flyflor/dist/flyflor`。
+
+安装脚本**不会**向 `~/.local/bin`、`/usr/local/bin` 或其他全局执行目录创建 `flyflor` 命令链接。后续全局 CLI/TUI 由外部 `npm i -g flyflor` 安装，并通过 `/ws` 对接这个 Bun 内核。
 
 ### 安装方式
 
-正式版提供三条路径。默认路径与源码路径都会把源码保留在 `~/.flyflor`，配置在 `~/.flyflor/.config`；全局命令始终指向编译后二进制，不直接执行 TypeScript 源码：
+正式版提供三条内核 bootstrap 路径。默认路径与源码路径都会把源码保留在 `~/.flyflor`，配置在 `~/.flyflor/.config`；它们都不写全局命令：
 
 ```bash
 # 1. 默认一键安装：~/.flyflor 是源码根，~/.flyflor/.config 是配置根

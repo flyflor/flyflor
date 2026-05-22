@@ -2,7 +2,6 @@ param(
     [string]$Target = "$HOME\.flyflor",
     [string]$Repo = "https://github.com/flyflor/flyflor.git",
     [string]$Branch = "master",
-    [string]$GlobalBin = "$HOME\.local\bin",
     [string]$ConfigDir = ""
 )
 
@@ -14,8 +13,8 @@ function Write-Info([string]$Message) {
 }
 
 # Windows bootstrap is source-first: ~/.flyflor is the editable checkout and
-# ~/.flyflor/.config is the config/data home. The global command always points
-# at the compiled Bun binary under dist/, never at a source runner.
+# ~/.flyflor/.config is the config/data home. It prepares the local kernel
+# binary but intentionally does not create a global command shim.
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw "git is required"
 }
@@ -53,15 +52,13 @@ try {
     bun run install:templates -- --target $ConfigDir
     Write-Info "building Bun-compiled binary"
     bun run build:binary
-    New-Item -ItemType Directory -Force -Path $GlobalBin | Out-Null
     $binary = Join-Path $Target "dist\flyflor.exe"
     if (-not (Test-Path $binary)) {
         $binary = Join-Path $Target "dist\flyflor"
     }
-    $cmdPath = Join-Path $GlobalBin "flyflor.cmd"
-    Set-Content -Path $cmdPath -Encoding ASCII -Value "@echo off`r`n""$binary"" %*`r`n"
-    Write-Info "installed flyflor command -> $cmdPath"
-    Write-Info "source checkout ready. Run 'flyflor -h' globally or 'bun run chat' inside $Target."
+    Write-Info "source checkout ready at $Target"
+    Write-Info "local kernel binary: $binary"
+    Write-Info "no global command was installed; future CLI/TUI installs via npm i -g flyflor and connects to this kernel."
 } finally {
     Pop-Location
 }

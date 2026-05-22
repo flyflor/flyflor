@@ -204,7 +204,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 - 运行时不依赖用户机器存在 `node_modules`。
 - 不从依赖包目录读取 schema / wasm / 二进制 / 模板，除非构建明确把它们复制到产物旁。
 - 内部提示词模板必须由安装脚本复制到 `~/.flyflor/.config/prompts` 与 `~/.flyflor/.config/templates/*`；缺失即报错，不写兜底。
-- 安装分发固定三条路径：`install.sh` 默认 source-first，把源码 checkout 放在 `~/.flyflor`，配置/运行态放在 `~/.flyflor/.config`，并把全局 `flyflor` 链接到 Bun 编译后的 `~/.flyflor/dist/flyflor`；`install.source.sh` / `install.ps1` 必须保持同一源码根 + `.config` 布局；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。纯 release 二进制安装只能由 `install.sh --binary` 显式触发，`flyflor-templates.tar.gz` 必须由 `build:templates:release` 生成，tar 根布局直接对应配置前缀，禁止发布时手工拼包。
+- 安装分发固定三条路径：`install.sh` 默认 source-first，只把源码 checkout、配置、运行态和本地 Bun binary 准备到 `~/.flyflor` / `~/.flyflor/.config`，不得创建 `~/.local/bin`、`/usr/local/bin` 或其他全局命令链接；`install.source.sh` / `install.ps1` 必须保持同一源码根 + `.config` 布局；`install.docker.sh` 必须保留本机源码并启动既有 compose，不在 compose 内安装依赖或构建项目。未来全局 CLI/TUI 由外部 `npm i -g flyflor` 安装，并通过 `/ws` 对接本仓库 Bun 内核。纯 release 二进制安装只能由 `install.sh --binary` 显式触发，`flyflor-templates.tar.gz` 必须由 `build:templates:release` 生成，tar 根布局直接对应配置前缀，禁止发布时手工拼包。
 - curl-pipe / PowerShell bootstrap 脚本属于发布协议，新增选项必须同步 README 与 `tests/install.script.test.ts`，避免安装入口漂移。
 - 运行时提示词正文只能放在 `templates/prompts/*.md`；TypeScript 代码只允许读取模板、替换占位符和拼接结构化数据，不允许内嵌会注入模型上下文的提示词段落。会作为 `ModelRole.User` / worker task 发给模型的 JSON envelope 也按提示词模板管理。
 - 禁止无法静态解析的 `import()` / `require()` / 按用户输入加载 npm 包。
@@ -250,7 +250,7 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 ```
 ~/.flyflor/
   app.ts / src/ / scripts/     # source-first checkout
-  dist/flyflor                 # Bun compiled global command target
+  dist/flyflor                 # Bun compiled local kernel binary
   .config/
     config.jsonc
     commands.jsonc            # TUI / app slash command rules

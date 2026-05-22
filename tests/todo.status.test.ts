@@ -80,7 +80,7 @@ describe("TODO status", () => {
         expect(roadmap).toContain("TODO.md");
         expect(readme).toContain("bun run kernel:seal");
         expect(readme).toContain("bun run test:kernel");
-        expect(readme).toContain("kernel:seal 下缺真实 provider 会直接失败");
+        expect(readme).toContain("missing live provider is a failure");
     });
 });
 

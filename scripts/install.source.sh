@@ -13,7 +13,8 @@
 #   - clone or update the Flyflor source tree under ~/.flyflor by default;
 #   - install Bun dependencies in that checkout;
 #   - install canonical prompt/templates into ~/.flyflor/.config;
-#   - build the Bun-compiled binary and link it as the global flyflor command;
+#   - build the Bun-compiled binary under dist/;
+#   - do not create a global command; npm i -g flyflor owns the future CLI/TUI;
 #   - leave the source tree editable for future self-iteration.
 
 set -eu
@@ -21,7 +22,6 @@ set -eu
 REPO_URL="${FLYFLOR_SOURCE_REPO:-https://github.com/flyflor/flyflor.git}"
 TARGET_DIR="${FLYFLOR_SOURCE_DIR:-$HOME/.flyflor}"
 BRANCH="${FLYFLOR_SOURCE_BRANCH:-master}"
-GLOBAL_BIN_DIR="${FLYFLOR_GLOBAL_BIN_DIR:-$HOME/.local/bin}"
 
 die() { echo "flyflor-source-install: $*" >&2; exit 1; }
 info() { echo "flyflor-source-install: $*"; }
@@ -41,8 +41,6 @@ while [ $# -gt 0 ]; do
         --repo=*) REPO_URL="${1#--repo=}"; shift ;;
         --branch) need_value "$1" "${2-}"; BRANCH="$2"; shift 2 ;;
         --branch=*) BRANCH="${1#--branch=}"; shift ;;
-        --global-bin) need_value "$1" "${2-}"; GLOBAL_BIN_DIR="$2"; shift 2 ;;
-        --global-bin=*) GLOBAL_BIN_DIR="${1#--global-bin=}"; shift ;;
         -h|--help)
             cat <<EOF
 Flyflor source installer
@@ -51,7 +49,6 @@ Options:
   --target <dir>   Source home (default: \$HOME/.flyflor)
   --repo <url>     Git repository URL (default: Flyflor GitHub repo)
   --branch <name>  Branch to clone or update (default: master)
-  --global-bin <dir>  Directory for the global flyflor command (default: \$HOME/.local/bin)
 
 Remote usage:
   curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash
@@ -91,19 +88,6 @@ info "installing templates into $CONFIG_DIR"
 bun run install:templates -- --target "$CONFIG_DIR" --source-config
 info "building Bun-compiled binary"
 bun run build:binary
-mkdir -p "$GLOBAL_BIN_DIR"
-ln -sf "$TARGET_DIR/dist/flyflor" "$GLOBAL_BIN_DIR/flyflor"
-case ":$PATH:" in
-    *":$GLOBAL_BIN_DIR:"*) ;;
-    *)
-        cat <<EOF
-
-Add this line to your shell rc (~/.bashrc, ~/.zshrc):
-
-    export PATH="\$PATH:$GLOBAL_BIN_DIR"
-
-Then restart your shell or run: source ~/.bashrc
-EOF
-        ;;
-esac
-info "source checkout ready. Run 'flyflor -h' globally or 'bun run chat' inside $TARGET_DIR."
+info "source checkout ready at $TARGET_DIR"
+info "local kernel binary: $TARGET_DIR/dist/flyflor"
+info "no global command was installed; future CLI/TUI installs via npm i -g flyflor and connects to this kernel."

@@ -344,3 +344,10 @@
   Summary: Updated the repository Markdown contract: `README.md` is the English entry, `README.zh.cn.md` is the Chinese companion, prompt templates keep canonical `.md` plus `.zh.cn.md`, active `AGENTS.md`/`TODO.md`/`LOGS.md`/`docs/**/*.md` default to Chinese without mandatory companion copies, Rust handoff docs moved under `docs/old-docs/`, and `abandon/` is reserved for retired non-runtime code.
   Reason: The previous blanket bilingual-document rule conflicted with the current coordinator requirement and kept pulling active docs back toward mechanical duplication. Historical Rust handoff material also needed to stop appearing as active Bun-repo implementation work.
   Verification: `bun test tests/docs.index.test.ts tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/prompt.templates.docs.test.ts`
+
+- Status: completed
+  Actor: main-codex
+  Scope: installer-readme-no-global-bin
+  Summary: Reworked the installer and README contract so one-click source/binary/Docker/Windows bootstraps prepare the Bun kernel under `~/.flyflor` or the explicit prefix without creating a global `flyflor` command link.
+  Reason: The global CLI/TUI command is reserved for the future external `npm i -g flyflor` Rust client, which will connect to the Bun kernel over `/ws`; the Bun repository installer must not occupy `~/.local/bin`, `/usr/local/bin`, or other host execution directories.
+  Verification: `bun test tests/install.script.test.ts tests/docs.index.test.ts tests/docs.references.test.ts tests/prompt.templates.docs.test.ts tests/todo.status.test.ts`; `bun run docs:check`; `git diff --check`
