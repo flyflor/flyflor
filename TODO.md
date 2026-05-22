@@ -542,5 +542,7 @@ Kernel V2 acceptance focus：
 - [x] review 并选择性合并 `wt/kernel-runtime-executive` residue：Executive loop guard snapshot 由 runtime 真实生成，重复失败结果立即 ASK 暂停，并进入 `executive.loop.paused` payload。
   - 验证：`bun test tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts`
 - [ ] 停止并回收已合入的 `runtime-executive` Codex lane。
-- [ ] 继续 review 并选择性合并剩余 child commits，优先级：socket-protocol residue、release-seal、docs-report。
+- [x] review `wt/kernel-socket-protocol` residue：有效的 event selector guard / OpenAPI enum / WS 文档已在主线；剩余差异会回退 `loopGuardSnapshot`、old-docs 链接和当前协议 guard，因此不合入。
+- [ ] 停止并回收已完成 review 的 `socket-protocol` Codex lane。
+- [ ] 继续 review 并选择性合并剩余 child commits，优先级：release-seal、docs-report。
 - [ ] 最终 seal 前重新跑完整主线验证，并提交/push coordinator snapshot。
