@@ -165,3 +165,19 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   - `bun run docs:check`
   - `bun run build:binary`
 - [x] 从 `main-codex-docs` 提交并推送已 review 的 wave2 integration。
+
+## 2026-05-22 Kernel Wave3 编排补充
+
+- [x] 保留此前 kernel 与 wave2 worktree；不删除旧执行历史。
+- [x] 已从 `main-codex-docs@281108e` 创建新的 wave3 分支：
+  - `wt/wave3-memory-lifecycle`
+  - `wt/wave3-runtime-capability`
+  - `wt/wave3-scope-constitution`
+- [x] 已创建新的 wave3 worktree：
+  - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-memory-lifecycle`
+  - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
+  - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
+- [x] 已新增 `bun run kernel:tmux -- --wave3` 作为可复现恢复入口。
+- [ ] 在子 Codex 开始工作前推送三个 wave3 子分支。
+- [ ] 编排提交落主线后，启动 `flyflor-wave3` 子 Codex 窗口。
+- [ ] 主 Codex review 规则：只把审过的实现/测试面合回 `main-codex-docs`；canonical TODO/LOGS/workflow 历史由主 worktree 统一写入。

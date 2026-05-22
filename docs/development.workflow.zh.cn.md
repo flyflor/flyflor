@@ -387,3 +387,37 @@ bun run kernel:tmux -- --wave2 --launch-codex
 2. 运行 `bun run build:binary`
 3. 提交并推送 `main-codex-docs`
 4. 保持 `flyflor-wave2` 可通过 `bun run kernel:tmux -- --wave2` 恢复
+
+## 2026-05-22 Wave 3 Tmux 布局
+
+Wave3 只做追加。review 后也不删除旧 worktree；旧分支继续作为执行历史和恢复锚点保留。
+
+新的 wave3 worktree 都基于 `main-codex-docs@281108e`。
+
+恢复命令：
+
+```bash
+bun run kernel:tmux -- --wave3
+bun run kernel:tmux -- --wave3 --launch-codex
+```
+
+当前 wave3 分支：
+
+- `wt/wave3-memory-lifecycle`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-memory-lifecycle`
+  - owned surface：memory lifecycle、`brain.db` ledger/query/replay/audit 行为、decay、hot memory、dream、recall、archive 行为与相关测试
+- `wt/wave3-runtime-capability`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
+  - owned surface：runtime、gateway WS/control、executive capability execution、sandbox/trust visibility 与相关脚本/测试/文档
+- `wt/wave3-scope-constitution`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
+  - owned surface：scope scaffold 宪法层文件、ask/scope/codename 边界、`templates/projects/**` 与相关测试
+
+Wave3 协调者约束：
+
+- 所有旧 worktree 都保留
+- 所有变更过的子分支在交还前必须 commit 并 push
+- 子分支更新本地 TODO/LOGS，但 canonical 项目历史由主 Codex 在 `main-codex-docs` 写入
+- HTTP Gateway 继续只保留 `/ws` 和 `/health`
+- `brain.db` 继续只是 ledger/query/replay/audit 状态，不作为 prompt 装配上下文
+- Bun 二进制可编译性仍然是硬门槛

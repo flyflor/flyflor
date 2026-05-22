@@ -223,3 +223,19 @@ Latest full seal validation in this workspace passed:
   - `bun run docs:check`
   - `bun run build:binary`
 - [x] Commit and push the reviewed wave2 integration from `main-codex-docs`.
+
+## 2026-05-22 Kernel Wave3 Orchestration Addendum
+
+- [x] Keep all previous kernel and wave2 worktrees intact; do not delete old execution history.
+- [x] Created fresh wave3 branches from `main-codex-docs@281108e`:
+  - `wt/wave3-memory-lifecycle`
+  - `wt/wave3-runtime-capability`
+  - `wt/wave3-scope-constitution`
+- [x] Created fresh wave3 worktrees:
+  - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-memory-lifecycle`
+  - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
+  - `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
+- [x] Added `bun run kernel:tmux -- --wave3` as the reproducible restore entrypoint.
+- [ ] Push the three wave3 child branches before child work begins.
+- [ ] Launch `flyflor-wave3` child Codex windows after the orchestration commit lands.
+- [ ] Main Codex review rule: merge only reviewed implementation/test surfaces back to `main-codex-docs`; write canonical TODO/LOGS/workflow history from the main worktree.

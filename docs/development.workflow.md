@@ -387,3 +387,37 @@ Final closeout before yielding:
 2. run `bun run build:binary`
 3. commit and push `main-codex-docs`
 4. leave `flyflor-wave2` restorable through `bun run kernel:tmux -- --wave2`
+
+## 2026-05-22 Wave 3 Tmux Layout
+
+Wave3 is additive. Do not delete old worktrees after review; older branches remain as execution history and recovery anchors.
+
+Fresh wave3 worktrees are based on `main-codex-docs@281108e`.
+
+Restore command:
+
+```bash
+bun run kernel:tmux -- --wave3
+bun run kernel:tmux -- --wave3 --launch-codex
+```
+
+Active wave3 branches:
+
+- `wt/wave3-memory-lifecycle`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-memory-lifecycle`
+  - owned surface: memory lifecycle, `brain.db` ledger/query/replay/audit behavior, decay, hot memory, dream, recall, archive behavior, related tests
+- `wt/wave3-runtime-capability`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-runtime-capability`
+  - owned surface: runtime, gateway WS/control, executive capability execution, sandbox/trust visibility, related scripts/tests/docs
+- `wt/wave3-scope-constitution`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave3-scope-constitution`
+  - owned surface: scope scaffold constitution files, ask/scope/codename boundaries, `templates/projects/**`, related tests
+
+Coordinator constraints for wave3:
+
+- all old worktrees stay in place
+- all changed child branches must be committed and pushed before yield
+- child branches update local TODO/LOGS, but canonical project history is written by main Codex on `main-codex-docs`
+- HTTP Gateway remains `/ws` and `/health` only
+- `brain.db` remains ledger/query/replay/audit state and is not treated as prompt assembly context
+- Bun binary compileability remains a hard gate

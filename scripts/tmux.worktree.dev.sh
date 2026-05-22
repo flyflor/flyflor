@@ -22,6 +22,12 @@ while [ "$#" -gt 0 ]; do
                 SESSION_NAME="flyflor-wave2"
             fi
             ;;
+        --wave3)
+            WAVE="wave3"
+            if [ "$SESSION_NAME" = "flyflor-kernel" ]; then
+                SESSION_NAME="flyflor-wave3"
+            fi
+            ;;
         --session=*)
             SESSION_NAME=${1#--session=}
             ;;
@@ -79,6 +85,13 @@ if [ "$WAVE" = "wave2" ]; then
     SCOPE_PATH="$BASE_DIR/flyflor-wt-wave2-scope-crystal"
     RUNTIME_BRANCH="wt/wave2-runtime-executive"
     RUNTIME_PATH="$BASE_DIR/flyflor-wt-wave2-runtime-executive"
+elif [ "$WAVE" = "wave3" ]; then
+    CONTEXT_BRANCH="wt/wave3-memory-lifecycle"
+    CONTEXT_PATH="$BASE_DIR/flyflor-wt-wave3-memory-lifecycle"
+    SCOPE_BRANCH="wt/wave3-scope-constitution"
+    SCOPE_PATH="$BASE_DIR/flyflor-wt-wave3-scope-constitution"
+    RUNTIME_BRANCH="wt/wave3-runtime-capability"
+    RUNTIME_PATH="$BASE_DIR/flyflor-wt-wave3-runtime-capability"
 else
     CONTEXT_BRANCH="wt/kernel-context-memory"
     CONTEXT_PATH="$BASE_DIR/flyflor-wt-kernel-context-memory"
@@ -101,9 +114,9 @@ if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     tmux new-window -d -t "$SESSION_NAME" -n scope -c "$SCOPE_PATH"
     tmux new-window -d -t "$SESSION_NAME" -n runtime -c "$RUNTIME_PATH"
     tmux send-keys -t "$SESSION_NAME:main" "printf '%s\n' 'Coordinator branch: main-codex-docs'" C-m
-    tmux send-keys -t "$SESSION_NAME:context" "printf '%s\n' 'Owner branch: wt/kernel-context-memory'" C-m
-    tmux send-keys -t "$SESSION_NAME:scope" "printf '%s\n' 'Owner branch: wt/kernel-scope-crystal-ask'" C-m
-    tmux send-keys -t "$SESSION_NAME:runtime" "printf '%s\n' 'Owner branch: wt/kernel-runtime-executive-ws'" C-m
+    tmux send-keys -t "$SESSION_NAME:context" "printf '%s\n' 'Owner branch: $CONTEXT_BRANCH'" C-m
+    tmux send-keys -t "$SESSION_NAME:scope" "printf '%s\n' 'Owner branch: $SCOPE_BRANCH'" C-m
+    tmux send-keys -t "$SESSION_NAME:runtime" "printf '%s\n' 'Owner branch: $RUNTIME_BRANCH'" C-m
 fi
 
 if [ "$LAUNCH_CODEX" = "1" ]; then
@@ -120,6 +133,19 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
             "$SESSION_NAME:runtime" \
             "$RUNTIME_PATH" \
             "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 runtime executive slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage toward end-to-end Executive capability execution under the intended trust/sandbox surface, plus WS loop pause/resume visibility. Keep HTTP Gateway to /ws and /health only. No private client protocol or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/gateway/executive tests plus check/docs/build as needed, then commit your branch."
+    elif [ "$WAVE" = "wave3" ]; then
+        launch_codex_window \
+            "$SESSION_NAME:context" \
+            "$CONTEXT_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave3 memory lifecycle slice: src/cognitive/hippocampus/memory/**, src/entities/memory/**, src/agent/context/**, scripts/tests that directly validate brain.db ledger/query/replay/audit, decay, hot memory, dream, recall, and archive behavior. Keep brain.db out of prompt assembly semantics; use explicit structure, clocks, resource metrics, and JSON-serializable events. Keep Bun compileability, convention over configuration, OOP + composition, and zero character matching. Update bilingual local TODO/LOGS, validate focused memory tests plus check/docs/build as needed, then commit your branch."
+        launch_codex_window \
+            "$SESSION_NAME:scope" \
+            "$SCOPE_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave3 scope constitution slice: src/cognitive/hippocampus/scope/**, src/cognitive/hippocampus/ask/**, templates/projects/**, scope/codename/crystal-adjacent tests, and local control files. Close the worktree constitution Markdown distribution: scope scaffolds must carry the expected AGENTS/TODO/LOGS/README/project.memory files and bilingual companions without overwriting existing files. Preserve explicit Scope creation, no fallback scope, no codename prompt-container story. Update bilingual local TODO/LOGS, validate focused scope/template/docs tests plus check/docs/build as needed, then commit your branch."
+        launch_codex_window \
+            "$SESSION_NAME:runtime" \
+            "$RUNTIME_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave3 runtime capability slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, src/agent/sandbox/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage to end-to-end Executive capability execution under the intended trust/sandbox surface, including observable loop budget and event/history closure. Keep HTTP Gateway to /ws and /health only; do not reintroduce /channels, private client protocol, dynamic require, or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/gateway/executive/sandbox tests plus check/docs/build as needed, then commit your branch."
     else
         launch_codex_window \
             "$SESSION_NAME:context" \

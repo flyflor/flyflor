@@ -71,3 +71,10 @@
   摘要：已 review 三个 wave2 子分支，并把各自拥有的实现面暂存进 `main-codex-docs`：确定性的 memory recall 时钟与 tie-breaker、通过 WS 发布的 executive loop 生命周期事件、codename 到 scope 的显式台账持久化、嵌套 ask 校验，以及 crystal consolidation 溯源。
   原因：wave2 tmux 拆分已经产出窄实现提交；协调者分支需要一个已 review 的主线快照，在保持 Gateway 暴露面收紧的同时推进 memory、runtime、scope、crystal 的闭环。
   验证：`bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`；`bun run smoke:gateway:control`；`bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`；`bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`；`bun run docs:check`
+
+- 状态：open
+  操作者：main-codex
+  范围：kernel-wave3-tmux-orchestration
+  摘要：从 `main-codex-docs@281108e` 新增 wave3 tmux/worktree 通道，同时保留此前所有 kernel 与 wave2 worktree。
+  原因：下一轮开发需要最大化并发吞吐，但不能丢失既有执行历史；每个新分支都从已 review 的 wave2 主线快照出发，并保持窄所有权。
+  验证：`bun run kernel:tmux -- --wave3`；`git worktree list`；`tmux list-windows -t flyflor-wave3`
