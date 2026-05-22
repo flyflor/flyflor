@@ -255,7 +255,7 @@ describe("reflection → gem consolidation (P0-5)", () => {
             sourceKind: "runtime-reflection",
             content: "merge test",
             createdAt: NOW,
-            evidence: [evidence("blackboard-converged-reflection", 0.6, "k", "x")],
+            evidence: [evidence("blackboard-converged-reflection", 0.8, "k", "x")],
             symbols: ["m"],
             method: "m",
             title: "t",

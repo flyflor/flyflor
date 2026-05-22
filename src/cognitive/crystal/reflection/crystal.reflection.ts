@@ -36,6 +36,58 @@ export interface ContextForkClosureCandidateInput {
     symbols?: string[];
 }
 
+export const CrystalGemQualityGateCode = {
+    Passed: "passed",
+    NoEvidence: "no-evidence",
+    EvidenceBelowThreshold: "evidence-below-threshold",
+    MissingStructuredProvenance: "missing-structured-provenance",
+    RawSource: "raw-source",
+    MissingReusableSurface: "missing-reusable-surface",
+} as const;
+
+export type CrystalGemQualityGateCode = (typeof CrystalGemQualityGateCode)[keyof typeof CrystalGemQualityGateCode];
+
+export interface CrystalGemQualityGateAudit {
+    candidateId: string;
+    code: CrystalGemQualityGateCode;
+    distinctEvidenceSourceIds: number;
+    evidenceCount: number;
+    evidenceScore: number;
+    passed: boolean;
+    positiveEvidenceCount: number;
+    provenance: {
+        evidence: Array<{
+            kind: string;
+            sourceId: string;
+            weight: number;
+        }>;
+        sourceId: string;
+        sourceKind: string;
+    };
+    requirements: {
+        minEvidenceScore: number;
+        minPositiveEvidenceCount: number;
+        minReusableSymbols: number;
+    };
+}
+
+const CrystalGemQualityGateRequirement = {
+    MinEvidenceScore: 0.65,
+    MinPositiveEvidenceCount: 1,
+    MinReusableSymbols: 1,
+} as const;
+
+// These are structured provenance owners that may remain candidate/audit data
+// but must never be promoted directly as durable methodology.
+const CrystalRawCandidateSourceKind = {
+    Conversation: "conversation",
+    LedgerEvent: "ledger-event",
+    Query: "query",
+    RawLedgerEvent: "raw-ledger-event",
+    RecentConversation: "recent-conversation",
+    RuntimeTurn: "runtime-turn",
+} as const;
+
 /**
  * Owns the deterministic, non-LLM part of crystal reflection.
  *
@@ -90,10 +142,11 @@ export class CrystalReflectionComponent extends CrystalComponent {
     }
 
     public crystallizeCandidate(candidate: ReflectionCandidate): { atom: ReflectionAtom; gem: CrystalGem } | undefined {
-        const evidenceScore = this.scoreEvidence(candidate.evidence);
-        if (evidenceScore <= 0) {
+        const qualityGate = this.evaluateGemQualityGate(candidate);
+        if (!qualityGate.passed) {
             return undefined;
         }
+        const evidenceScore = qualityGate.evidenceScore;
 
         const atom: ReflectionAtom = {
             id: `atom-${candidate.id}`,
@@ -109,6 +162,7 @@ export class CrystalReflectionComponent extends CrystalComponent {
                 sourceKind: candidate.sourceKind,
                 sourceId: candidate.sourceId,
                 evidence: candidate.evidence,
+                qualityGate,
             },
         };
 
@@ -127,6 +181,7 @@ export class CrystalReflectionComponent extends CrystalComponent {
             sourceAtomIds: [atom.id],
             metadata: {
                 latestCandidateId: candidate.id,
+                qualityGate,
                 sourceCandidateIds: [candidate.id],
                 sourceKind: candidate.sourceKind,
                 consolidationEvidence: candidate.evidence.map((item) => ({
@@ -137,6 +192,52 @@ export class CrystalReflectionComponent extends CrystalComponent {
         };
 
         return { atom, gem };
+    }
+
+    public attachQualityGateAudit(
+        candidate: ReflectionCandidate,
+        audit: CrystalGemQualityGateAudit = this.evaluateGemQualityGate(candidate),
+    ): ReflectionCandidate {
+        return {
+            ...candidate,
+            metadata: {
+                ...(candidate.metadata ?? {}),
+                qualityGate: audit,
+            },
+        };
+    }
+
+    public evaluateGemQualityGate(candidate: ReflectionCandidate): CrystalGemQualityGateAudit {
+        const evidenceScore = this.scoreEvidence(candidate.evidence);
+        const positiveEvidence = candidate.evidence.filter(
+            (item) => item.weight > 0 && item.kind.trim().length > 0 && item.sourceId.trim().length > 0,
+        );
+        const distinctEvidenceSourceIds = new Set(positiveEvidence.map((item) => item.sourceId)).size;
+        const rawSourceKinds = new Set<string>(Object.values(CrystalRawCandidateSourceKind));
+        const code = this.gemQualityGateCode(candidate, evidenceScore, positiveEvidence.length, rawSourceKinds);
+        return {
+            candidateId: candidate.id,
+            code,
+            distinctEvidenceSourceIds,
+            evidenceCount: candidate.evidence.length,
+            evidenceScore,
+            passed: code === CrystalGemQualityGateCode.Passed,
+            positiveEvidenceCount: positiveEvidence.length,
+            provenance: {
+                evidence: candidate.evidence.map((item) => ({
+                    kind: item.kind,
+                    sourceId: item.sourceId,
+                    weight: this.clamp01(item.weight),
+                })),
+                sourceId: candidate.sourceId,
+                sourceKind: candidate.sourceKind,
+            },
+            requirements: {
+                minEvidenceScore: CrystalGemQualityGateRequirement.MinEvidenceScore,
+                minPositiveEvidenceCount: CrystalGemQualityGateRequirement.MinPositiveEvidenceCount,
+                minReusableSymbols: CrystalGemQualityGateRequirement.MinReusableSymbols,
+            },
+        };
     }
 
     public mergeGem(existing: CrystalGem | undefined, incoming: CrystalGem): CrystalGem {
@@ -160,6 +261,7 @@ export class CrystalReflectionComponent extends CrystalComponent {
             metadata: {
                 ...(existing.metadata ?? {}),
                 latestCandidateId: incoming.metadata?.latestCandidateId,
+                qualityGate: incoming.metadata?.qualityGate,
                 sourceCandidateIds: this.mergeMetadataArray(
                     existing.metadata?.sourceCandidateIds,
                     incoming.metadata?.sourceCandidateIds,
@@ -242,6 +344,30 @@ export class CrystalReflectionComponent extends CrystalComponent {
 
     private stableGemId(bucketId: CrystalBucketId, symbols: string[]): string {
         return `crystal-${this.hashText(`${bucketId}:${symbols.slice(0, 6).join(":")}`)}`;
+    }
+
+    private gemQualityGateCode(
+        candidate: ReflectionCandidate,
+        evidenceScore: number,
+        positiveEvidenceCount: number,
+        rawSourceKinds: Set<string>,
+    ): CrystalGemQualityGateCode {
+        if (candidate.evidence.length === 0) {
+            return CrystalGemQualityGateCode.NoEvidence;
+        }
+        if (rawSourceKinds.has(candidate.sourceKind)) {
+            return CrystalGemQualityGateCode.RawSource;
+        }
+        if (positiveEvidenceCount < CrystalGemQualityGateRequirement.MinPositiveEvidenceCount) {
+            return CrystalGemQualityGateCode.MissingStructuredProvenance;
+        }
+        if (candidate.symbols.length < CrystalGemQualityGateRequirement.MinReusableSymbols) {
+            return CrystalGemQualityGateCode.MissingReusableSurface;
+        }
+        if (evidenceScore < CrystalGemQualityGateRequirement.MinEvidenceScore) {
+            return CrystalGemQualityGateCode.EvidenceBelowThreshold;
+        }
+        return CrystalGemQualityGateCode.Passed;
     }
 
     private extractSymbolTokens(text: string): string[] {
@@ -344,6 +470,14 @@ export function crystallizeCandidate(
     candidate: ReflectionCandidate,
 ): { atom: ReflectionAtom; gem: CrystalGem } | undefined {
     return defaultReflection.crystallizeCandidate(candidate);
+}
+
+export function attachCrystalGemQualityGateAudit(candidate: ReflectionCandidate): ReflectionCandidate {
+    return defaultReflection.attachQualityGateAudit(candidate);
+}
+
+export function evaluateCrystalGemQualityGate(candidate: ReflectionCandidate): CrystalGemQualityGateAudit {
+    return defaultReflection.evaluateGemQualityGate(candidate);
 }
 
 export function mergeCrystalGem(existing: CrystalGem | undefined, incoming: CrystalGem): CrystalGem {

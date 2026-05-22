@@ -78,11 +78,15 @@ export class CrystalGemComponent extends CrystalComponent {
             ...input.promoted.map((record) => this.candidateFromPromotedMemory(record, input.now)),
             ...(input.reflectionCandidates ?? []).map((candidate) => this.reflection.buildCandidate(candidate)),
         ];
+        const auditedCandidates = [];
         const atoms = [];
         const gems = [];
         for (const candidate of candidates) {
-            await this.store.upsertCandidate(candidate);
-            const crystallized = this.reflection.crystallizeCandidate(candidate);
+            const qualityGate = this.reflection.evaluateGemQualityGate(candidate);
+            const auditedCandidate = this.reflection.attachQualityGateAudit(candidate, qualityGate);
+            auditedCandidates.push(auditedCandidate);
+            await this.store.upsertCandidate(auditedCandidate);
+            const crystallized = this.reflection.crystallizeCandidate(auditedCandidate);
             if (!crystallized) {
                 continue;
             }
@@ -93,7 +97,7 @@ export class CrystalGemComponent extends CrystalComponent {
             atoms.push(crystallized.atom);
             gems.push(merged);
         }
-        return { candidates, atoms, gems };
+        return { candidates: auditedCandidates, atoms, gems };
     }
 
     /**
@@ -151,6 +155,7 @@ export class CrystalGemComponent extends CrystalComponent {
             metadata: {
                 bucket: gem.bucket,
                 consolidationEvidence: gem.metadata?.consolidationEvidence,
+                gemQualityGate: gem.metadata?.qualityGate,
                 sourceAtomIds: gem.sourceAtomIds,
                 sourceCandidateIds: gem.metadata?.sourceCandidateIds,
                 symbols: gem.symbols,

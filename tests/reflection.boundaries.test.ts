@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/cognitive/crystal/memory/index.ts";
-import { buildReflectionCandidate, crystallizeCandidate, evidence, recallCrystalGems } from "../src/cognitive/crystal/index.ts";
+import {
+    buildReflectionCandidate,
+    crystallizeCandidate,
+    evaluateCrystalGemQualityGate,
+    evidence,
+    recallCrystalGems,
+} from "../src/cognitive/crystal/index.ts";
 import { MemoryKind } from "../src/protocol/contracts/index.ts";
 import type { CrystalMemoryConfig } from "../src/config/index.ts";
 import type { MemoryRecord } from "../src/cognitive/hippocampus/memory/types.ts";
@@ -123,8 +129,22 @@ describe("Crystal memory boundaries", () => {
         expect(store.candidates.size).toBe(1);
         expect(store.atoms.size).toBe(1);
         expect(store.gems.size).toBe(1);
+        const [candidate] = [...store.candidates.values()];
+        expect(candidate?.metadata?.qualityGate).toMatchObject({
+            candidateId: "runtime-reflection-a",
+            code: "passed",
+            passed: true,
+            provenance: {
+                sourceId: "blackboard-turn-a",
+                sourceKind: "runtime-reflection",
+            },
+        });
         const [gem] = [...store.gems.values()];
         expect(gem?.metadata).toMatchObject({
+            qualityGate: {
+                code: "passed",
+                passed: true,
+            },
             sourceCandidateIds: ["runtime-reflection-a"],
             consolidationEvidence: [
                 expect.objectContaining({
@@ -161,6 +181,77 @@ describe("Crystal memory boundaries", () => {
         expect(store.candidates.size).toBe(1);
         expect(store.atoms.size).toBe(0);
         expect(store.gems.size).toBe(0);
+        const [candidate] = [...store.candidates.values()];
+        expect(candidate?.metadata?.qualityGate).toMatchObject({
+            code: "missing-structured-provenance",
+            passed: false,
+        });
+    });
+
+    test("raw recent conversation and ledger sources never promote directly to gems", async () => {
+        const store = new InMemoryCrystalMemoryStore();
+        const controller = new CrystalMemoryComponent(crystalConfig(), store);
+
+        await controller.recordTurn({
+            now: "2026-05-10T00:00:00.000Z",
+            candidates: [],
+            promoted: [],
+            historyEntries: [],
+            reflectionCandidates: [
+                {
+                    id: "raw-ledger-candidate",
+                    sourceId: "ledger-event-a",
+                    sourceKind: "ledger-event",
+                    content: "A raw ledger event should remain replay evidence only.",
+                    createdAt: "2026-05-10T00:00:00.000Z",
+                    evidence: [evidence("ledger-event-observed", 1, "ledger-event-a", "structured event exists")],
+                    method: "Do not promote raw ledger events directly.",
+                    symbols: ["ledger", "audit"],
+                },
+                {
+                    id: "recent-conversation-candidate",
+                    sourceId: "turn-recent-a",
+                    sourceKind: "recent-conversation",
+                    content: "Recent conversation is not durable methodology by itself.",
+                    createdAt: "2026-05-10T00:00:00.000Z",
+                    evidence: [evidence("recent-turn-observed", 1, "turn-recent-a", "recent turn exists")],
+                    method: "Do not promote raw conversation directly.",
+                    symbols: ["recent", "turn"],
+                },
+            ],
+        });
+
+        expect(store.candidates.size).toBe(2);
+        expect(store.atoms.size).toBe(0);
+        expect(store.gems.size).toBe(0);
+        expect([...store.candidates.values()].map((item) => item.metadata?.qualityGate)).toEqual([
+            expect.objectContaining({ code: "raw-source", passed: false }),
+            expect.objectContaining({ code: "raw-source", passed: false }),
+        ]);
+    });
+
+    test("quality gate explains rejection without text heuristics", () => {
+        const candidate = buildReflectionCandidate({
+            id: "candidate-low-evidence",
+            sourceId: "source-low",
+            sourceKind: "runtime-reflection",
+            content: "A candidate with explicit structure but weak evidence remains auditable.",
+            createdAt: "2026-05-10T00:00:00.000Z",
+            evidence: [evidence("structured-but-weak", 0.4, "source-low", "weak structured support")],
+            symbols: ["structured", "weak"],
+        });
+
+        expect(evaluateCrystalGemQualityGate(candidate)).toMatchObject({
+            candidateId: "candidate-low-evidence",
+            code: "evidence-below-threshold",
+            evidenceScore: 0.4,
+            passed: false,
+            positiveEvidenceCount: 1,
+            provenance: {
+                sourceId: "source-low",
+                sourceKind: "runtime-reflection",
+            },
+        });
     });
 
     test("explicit forget removes a gem from recall without deleting candidate provenance", async () => {

@@ -493,3 +493,11 @@
   原因：该 lane 已完成 scope-local hot-subtree recall 修复，强化 Scope `scope.db` 作为项目热区记忆与多维关联索引的闭环。
   效率：child 用时约 14m19s；4 files changed，68 insertions，28 deletions；分类为 control `+14/-7`，src `+28/-21`，tests `+26/-0`。
   验证：待主线重跑 scope vector focused tests、`bun run check`、`git diff --check`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-crystal-gem-quality-gate-merge
+  摘要：开始 review 并合并 `wt/crystal-gem-quality-gate` 的提交 `ed0c63c`。
+  原因：该 lane 为 Crystal candidate 到 Gem 增加结构化质量门和 replay/audit explainability，是智能体长期晶体知识闭环的核心上线条件。
+  效率：child 用时约 14m38s；7 files changed，269 insertions，14 deletions；分类为 control `+17/-7`，src `+144/-5`，tests `+108/-2`。
+  验证：待主线重跑 crystal/reflection focused tests、`bun run check`、`bun run docs:check`、`bun run build:binary`、`git diff --check`

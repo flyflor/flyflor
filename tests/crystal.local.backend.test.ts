@@ -71,11 +71,26 @@ describe("local crystal backend", () => {
             try {
                 const candidateCount = db.query("SELECT COUNT(*) AS count FROM crystal_candidates").get() as { count: number };
                 const atomCount = db.query("SELECT COUNT(*) AS count FROM crystal_atoms").get() as { count: number };
+                const candidateAudit = db
+                    .query<{ metadata_json: string }, []>(
+                        "SELECT metadata_json FROM crystal_candidates WHERE id = 'reflection-a' LIMIT 1",
+                    )
+                    .get();
                 const gemCount = db.query("SELECT COUNT(*) AS count FROM crystal_gems WHERE id = ?").get(gemId!) as {
                     count: number;
                 };
                 expect(candidateCount.count).toBeGreaterThan(0);
                 expect(atomCount.count).toBeGreaterThan(0);
+                expect(JSON.parse(candidateAudit?.metadata_json ?? "{}")).toMatchObject({
+                    qualityGate: {
+                        code: "passed",
+                        passed: true,
+                        provenance: {
+                            sourceId: "turn-a",
+                            sourceKind: "runtime-reflection",
+                        },
+                    },
+                });
                 expect(gemCount.count).toBe(0);
             } finally {
                 db.close();
