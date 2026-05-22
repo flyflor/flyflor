@@ -23,7 +23,7 @@ services:
         restart: unless-stopped
         working_dir: /root/.flyflor/.config/workspace
         entrypoint: ["/bin/sh", "/root/.flyflor/docker/entrypoint.sh"]
-        command: ["gateway"]
+        command: ["socket"]
         # Dev mounts are explicit and stable: source tree, JSONC config,
         # workspace, global skills/MCP dirs, local durable data, and binary.
         volumes:

@@ -43,6 +43,7 @@ export class DockerDevSmokeRunner {
             "compose defines flyflor dev service",
             compose.includes("flyflor:") && compose.includes("flyflor-dev"),
         );
+        this.push(checks, "compose starts socket command", compose.includes('command: ["socket"]'));
         this.push(checks, "compose exposes no host ports", !/^\s*ports\s*:/mu.test(compose));
         this.push(
             checks,

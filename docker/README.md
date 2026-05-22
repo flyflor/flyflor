@@ -6,9 +6,9 @@
 
 | 服务      | 镜像                                           | 角色                                          | 暴露        |
 | --------- | ---------------------------------------------- | --------------------------------------------- | ----------- |
-| `flyflor` | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / gateway / local working memory | 仅 internal |
+| `flyflor` | `debian:bookworm-slim` + 本地编译 Linux 二进制 | 智能体主进程 / socket / local working memory | 仅 internal |
 
-`flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要临时暴露 gateway 时，用本地 `docker-compose.override.yml` 加端口映射，不提交到仓库。
+`flyflor-internal` bridge 网络保留出站访问能力，用于 LLM / MCP provider；compose 故意不写 `ports:`，等价于对宿主机不可见。需要临时暴露 socket 时，用本地 `docker-compose.override.yml` 加端口映射，不提交到仓库。
 
 ## 目录映射
 
@@ -66,7 +66,7 @@ docker exec -it flyflor-dev flyflor
 
 ## 本地 Override
 
-不要修改 `docker-compose.yml`，新建一个不提交的 override。例如临时打开 gateway 端口：
+不要修改 `docker-compose.yml`，新建一个不提交的 override。例如临时打开 socket 端口：
 
 ```bash
 cat > docker-compose.override.yml <<'YAML'

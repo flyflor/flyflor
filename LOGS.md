@@ -351,3 +351,10 @@
   Summary: Reworked the installer and README contract so one-click source/binary/Docker/Windows bootstraps prepare the Bun kernel under `~/.flyflor` or the explicit prefix without creating a global `flyflor` command link.
   Reason: The global CLI/TUI command is reserved for the future external `npm i -g flyflor` Rust client, which will connect to the Bun kernel over `/ws`; the Bun repository installer must not occupy `~/.local/bin`, `/usr/local/bin`, or other host execution directories.
   Verification: `bun test tests/install.script.test.ts tests/docs.index.test.ts tests/docs.references.test.ts tests/prompt.templates.docs.test.ts tests/todo.status.test.ts`; `bun run docs:check`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: docker-release-socket-command
+  Summary: Merged the release-seal Docker dev startup correction so compose invokes the `socket` command and the Docker smoke runner pins that contract.
+  Reason: The Bun kernel's external surface is `/ws` plus `/health`; Docker dev should not keep the old `gateway` command wording or startup path after the socket-layer rename.
+  Verification: `bun test tests/docker.dev.smoke.test.ts tests/install.script.test.ts`; `bun run docs:check`; `git diff --check`
