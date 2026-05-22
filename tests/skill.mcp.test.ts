@@ -1434,6 +1434,92 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages).toHaveLength(2);
     });
 
+    test("runtime resume turn carries Executive pause ghost and continues tool execution", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-tool-resume-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "one.txt"), "one\n");
+        await writeFile(join(root, "two.txt"), "two\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</flyflor_mcp_calls>',
+            "[]",
+            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"two.txt"}}]}</flyflor_mcp_calls>',
+            "Finished after continuing.",
+            "[]",
+        ]);
+        const events = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, events);
+        const context = {
+            activeScope: {
+                id: "scope-runtime-tool-resume",
+                projectDir: paths.projectDir,
+                projectMemoryDir: paths.projectMemoryDir,
+            },
+        };
+
+        const paused = await runtime.handleMessage(
+            gatewayMessage("inspect both files"),
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 1 },
+        );
+
+        expect(paused.metadata?.kind).toBe("ask");
+        expect(paused.text).toContain("workspace.read:ok");
+        expect(paused.metadata?.ask).toEqual(
+            expect.objectContaining({
+                prompt: expect.stringContaining("workspace.read:ok"),
+            }),
+        );
+        expect(paused.metadata?.executiveToolLoop).toEqual(
+            expect.objectContaining({
+                resume: { mode: "continue" },
+                stop: "ask",
+                toolBudgetExhausted: true,
+            }),
+        );
+
+        const resumed = await runtime.handleMessage(
+            gatewayMessage("continue-tools"),
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 2 },
+        );
+
+        expect(resumed.metadata?.kind).toBe("reply");
+        expect(resumed.text).toBe("Finished after continuing.");
+        expect(resumed.metadata?.executiveToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, key: "workspace.read" }),
+        ]);
+        const resumedPrompt =
+            model.messages
+                .map((messages) => messages.map((message) => message.content).join("\n"))
+                .find((content) => content.includes("[continuation]")) ?? "";
+        expect(resumedPrompt).toContain("[continuation]");
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ type: RuntimeEventType.ExecutiveLoopPaused }),
+                expect.objectContaining({ type: RuntimeEventType.ExecutiveLoopResumed }),
+                expect.objectContaining({
+                    type: RuntimeEventType.McpToolCallExecuted,
+                    payload: expect.objectContaining({
+                        ok: true,
+                        server: "workspace",
+                        tool: "read",
+                    }),
+                }),
+            ]),
+        );
+    });
+
     test("runtime follows through on short confirmations by executing structured tool calls", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-short-confirm-"));
         const paths = testPaths(root);

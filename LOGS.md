@@ -517,3 +517,11 @@
   原因：该 lane 持久化 unanswered ASK ghost continuation，并支持显式 structured `continue` 恢复 scope/fork/loop context，是长线 loop 不丢失的核心闭环。
   效率：child 用时约 18m12s；8 files changed，535 insertions，14 deletions；分类为 control `+14/-7`，src `+301/-6`，tests `+220/-1`。
   验证：待主线重跑 ASK/continuation focused tests、`bun run check`、`git diff --check`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-runtime-loop-resume-merge
+  摘要：开始 review 并合并 `wt/runtime-loop-resume` 的提交 `c600050`。
+  原因：该 lane 将 Executive loop pause 的 ASK ghost 与显式 continue 后续工具执行打通，补齐长线工具 loop 的恢复链路。
+  效率：child 用时约 18m55s；4 files changed，128 insertions，9 deletions；分类为 control `+18/-7`，src `+24/-2`，tests `+86/-0`。
+  验证：待主线重跑 executive/runtime/MCP focused tests、`bun run check`、`git diff --check`

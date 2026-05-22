@@ -1437,10 +1437,12 @@ export class RuntimeModule extends RuntimeBoundary {
                       description: "补充路径、权限、工具选择或约束后继续执行。",
                   };
         const failureSummary = failed.slice(0, 3).map((execution) => `${execution.call.server}.${execution.call.tool}`);
-        const prompt =
+        const progressSummary = this.renderExecutiveToolProgressSummary(executions);
+        const basePrompt =
             askRequired.toolBudgetExhausted === true
                 ? "本轮工具调用预算已用完。要继续执行当前任务，还是先调整目标范围？"
                 : "执行层连续遇到工具阻断。请补充下一步执行策略或调整约束后再继续。";
+        const prompt = progressSummary ? `${basePrompt}\n\n已记录的工具进度：${progressSummary}` : basePrompt;
         return {
             reason: AskReason.PolicyDecision,
             prompt,
@@ -1462,9 +1464,29 @@ export class RuntimeModule extends RuntimeBoundary {
                     askRequired.toolBudgetExhausted === true
                         ? "Tool budget exhausted"
                         : "Tool loop blocked",
-                contextHint: askRequired.message.slice(0, 200),
+                contextHint: progressSummary
+                    ? `${askRequired.message.slice(0, 160)} | ${progressSummary}`
+                    : askRequired.message.slice(0, 200),
             },
         };
+    }
+
+    /**
+     * Executive pause ask ghost must preserve structured tool progress so the
+     * next explicit user "continue" turn can resume with audit context instead
+     * of silently retrying from an empty loop.
+     */
+    private renderExecutiveToolProgressSummary(executions: readonly McpToolCallExecution[]): string | undefined {
+        if (executions.length === 0) return undefined;
+        const entries = executions.slice(0, 6).map((execution) => {
+            const status = execution.ok ? "ok" : "blocked";
+            const key = `${execution.call.server}.${execution.call.tool}`;
+            return `${key}:${status}`;
+        });
+        if (executions.length > entries.length) {
+            entries.push(`more:${executions.length - entries.length}`);
+        }
+        return entries.join(", ");
     }
 
     /**
