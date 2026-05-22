@@ -50,9 +50,11 @@ class FakeSocket {
 class FakeUpgradeServer {
     public upgradeCalls = 0;
 
+    public constructor(private readonly accepted = true) {}
+
     public upgrade(_request: Request, _options: { data: GatewayControlPeer }): boolean {
         this.upgradeCalls += 1;
-        return true;
+        return this.accepted;
     }
 
     public asBunServer(): Bun.Server<GatewayControlPeer> & { upgradeCalls: number } {
@@ -1021,6 +1023,7 @@ describe("SocketControlHub", () => {
                 type: GatewayControlMessageType.Error,
                 payload: expect.objectContaining({
                     code: GatewayControlErrorCode.InvalidEnvelope,
+                    details: { protocol: "invalid" },
                     message: "Unsupported gateway control protocol",
                 }),
             }),
@@ -1141,6 +1144,18 @@ describe("SocketControlHub", () => {
             server,
         );
         expect(allowed).toBeUndefined();
+        expect(server.upgradeCalls).toBe(1);
+        hub.dispose();
+    });
+
+    test("returns structured json when ws upgrade fails after authorization", async () => {
+        const hub = createHub();
+        const server = new FakeUpgradeServer(false).asBunServer();
+
+        const failed = hub.upgrade(new Request("http://localhost/ws"), server);
+
+        expect(failed?.status).toBe(400);
+        await expect(failed?.json()).resolves.toEqual({ error: "gateway_control_upgrade_failed" });
         expect(server.upgradeCalls).toBe(1);
         hub.dispose();
     });

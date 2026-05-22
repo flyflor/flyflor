@@ -163,7 +163,10 @@ export class SocketControlHub implements EventSink {
             },
         });
         this.log(ok ? "upgrade.accepted" : "upgrade.failed", { clientId, url: request.url });
-        return ok ? undefined : new Response("gateway control upgrade failed", { status: 400 });
+        return ok ? undefined : new Response(JSON.stringify({ error: "gateway_control_upgrade_failed" }), {
+            status: 400,
+            headers: { "content-type": "application/json; charset=utf-8" },
+        });
     }
 
     public open(socket: SocketControlSocket): void {
@@ -531,7 +534,12 @@ export class SocketControlHub implements EventSink {
         this.send(
             socket,
             GatewayControlMessageType.Error,
-            buildGatewayControlErrorPayload(cause instanceof Error ? cause.message : String(cause), { code }),
+            buildGatewayControlErrorPayload(cause instanceof Error ? cause.message : String(cause), {
+                code,
+                // Preserve parser/reader diagnostics on the wire. These details
+                // are protocol-shaped, not runtime internals or context state.
+                details: cause instanceof GatewayControlProtocolError ? cause.details : undefined,
+            }),
             source,
         );
     }
