@@ -376,6 +376,7 @@ export class BackgroundScheduler {
                     const r = await this.graph.applyDecaySweep({
                         ownerKey,
                         batchSize: this.opts.decayBatchSize,
+                        nowMs: now,
                         decayMemoryNode: ({ importance, updatedAt }) =>
                             decayImportance({
                                 layer: DecayLayer.MemoryNode,

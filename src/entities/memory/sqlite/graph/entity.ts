@@ -257,19 +257,19 @@ export class SQLiteGraphModel {
         return [...(input.symbols ?? [])].filter(Boolean).join(" ");
     }
 
-    public scoreMemoryNode(row: MemoryNodeRecord, queryEmbedding: number[], querySymbols: string[]): number {
+    public scoreMemoryNode(row: MemoryNodeRecord, queryEmbedding: number[], querySymbols: string[], nowMs = Date.now()): number {
         const textSimilarity = this.cosine(queryEmbedding, row.embedding);
         const symbolOverlap = this.overlapRatio(querySymbols, row.symbols);
         const confidence = this.clamp01(row.confidence);
-        const freshness = this.freshnessScore(row.lastAccessedAt ?? row.updatedAt);
+        const freshness = this.freshnessScore(row.lastAccessedAt ?? row.updatedAt, nowMs);
         return textSimilarity * 0.72 + symbolOverlap * 0.18 + confidence * 0.08 + freshness * 0.02;
     }
 
-    public scoreGem(row: GemRecord, queryEmbedding: number[], querySymbols: string[]): number {
+    public scoreGem(row: GemRecord, queryEmbedding: number[], querySymbols: string[], nowMs = Date.now()): number {
         const textSimilarity = this.cosine(queryEmbedding, row.embedding);
         const symbolOverlap = this.overlapRatio(querySymbols, row.symbols);
         const confidence = this.clamp01(row.confidence);
-        const freshness = this.freshnessScore(row.lastVerifiedAt ?? row.updatedAt);
+        const freshness = this.freshnessScore(row.lastVerifiedAt ?? row.updatedAt, nowMs);
         return textSimilarity * 0.72 + symbolOverlap * 0.18 + confidence * 0.08 + freshness * 0.02;
     }
 
@@ -334,7 +334,14 @@ export class SQLiteGraphModel {
                       .map((n) => n.toFixed(4))
                       .join(",")}`
                 : "none";
-        return [input.ownerKey ?? "anon", symbols, embFingerprint, input.minConfidence ?? "any", input.limit ?? 16].join("|");
+        return [
+            input.ownerKey ?? "anon",
+            symbols,
+            embFingerprint,
+            input.minConfidence ?? "any",
+            input.limit ?? 16,
+            input.nowMs ?? "wall-clock",
+        ].join("|");
     }
 
     private parseJsonArray(value: string): string[] {
@@ -375,8 +382,8 @@ export class SQLiteGraphModel {
         return hits / Math.max(left.length, right.length);
     }
 
-    private freshnessScore(updatedAt: number): number {
-        const ageMs = Math.max(0, Date.now() - updatedAt);
+    private freshnessScore(updatedAt: number, nowMs: number): number {
+        const ageMs = Math.max(0, nowMs - updatedAt);
         const ageDays = ageMs / 86_400_000;
         return 1 / (1 + ageDays);
     }
