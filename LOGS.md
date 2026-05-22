@@ -155,3 +155,17 @@
   Summary: Stopped the active wave4 child Codex processes, kept the tmux layout as shell windows, and confirmed mainline plus all wave4 worktrees are clean and pushed.
   Reason: Each parallel development wave must end with no active child processes, no dirty tails, and no unpushed branch state before the next iteration begins.
   Verification: `tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`; `git status --short --branch` for `main-codex-docs`, `wt/wave4-runtime-smoke`, `wt/wave4-runtime-metadata`, and `wt/wave4-runtime-history`
+
+- Status: completed
+  Actor: main-codex
+  Scope: socket-wire-closure
+  Summary: Moved the active vascular transport owner from `src/agent/gateway` to `src/socket`, introduced `SocketModule` / `SocketControlHub`, preserved `flyflor.ws.v1` and `gateway.*` wire-v1 compatibility strings, and added an Apifox-importable OpenAPI contract for `/health`, `/ws`, live turn, event, status, capability, history, ask, planning, and executive-loop examples.
+  Reason: The project model is an intelligent lifeform, not a session/chat gateway; socket is the correct owner for live turns, events, operations, and ledger query/replay while `brain.db` remains ledger/query/replay/audit only and context assembly remains Memory + Crystal + explicit Scope/Fork.
+  Verification: pending final full validation; early checks passed `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts`; `bun test tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/runtime.executive.boundaries.test.ts`; `bun run docs:check`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: socket-wire-closure-final-validation
+  Summary: Completed the socket wire closure review, removed active future-work prompts that still owned `src/agent/gateway`, corrected directory docs so live `src/executive` remains an active owner, and kept historical gateway references limited to wire-v1 compatibility, old-docs, logs, TODO history, and naming fixtures.
+  Reason: The final handoff must not leave stale owner instructions for future tmux/worktree waves after moving the vascular transport layer to `src/socket`.
+  Verification: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts`; `bun test tests/tui.chat.history.test.ts tests/memory.brain.wire.test.ts tests/context.scope.test.ts tests/graph.recall.test.ts`; `bun test tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/runtime.executive.boundaries.test.ts`; `bun run docs:check`; `bun run check`; `bun run build:binary`; `git diff --check`

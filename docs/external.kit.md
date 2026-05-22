@@ -1,12 +1,12 @@
 # External Kit 协议
 
-External Kit 是主线保留的只读发现协议，不是第一方 CLI/TUI/Gateway 兼容层。
+External Kit 是主线保留的只读发现协议，不是第一方 CLI/TUI/socket 兼容层。
 
 ## 当前主线范围
 
-- `src/agent/gateway/kit/manifest.ts`
-- `src/agent/gateway/kit/catalog.ts`
-- `src/agent/gateway/kit/index.ts`
+- `src/socket/kit/manifest.ts`
+- `src/socket/kit/catalog.ts`
+- `src/socket/kit/index.ts`
 
 它们只负责：
 

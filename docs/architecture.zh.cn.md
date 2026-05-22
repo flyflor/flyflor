@@ -17,7 +17,8 @@ Flyflor 试图实现的是一种会思考、会提问、会形成独立工作域
 - `src/app.ts`：composition root。
 - `src/cognitive/*`：认知内核。
 - `src/executive/*`：Capability / Tool / Trust / Loop 外骨骼。
-- `src/agent/*`：runtime、gateway、sandbox、blackboard、mcp、plugin、skills、context。
+- `src/agent/*`：runtime、sandbox、blackboard、mcp、plugin、skills、context。
+- `src/socket/*`：外显 socket 血管层，当前 transport 是 `/ws` WebSocket，HTTP 只保留 `/health`。
 - `src/events/*`：事件血管。
 - `src/protocol/*`：公共协议。
 - `src/entities/*`：entity / repo / SQL owner。
@@ -26,7 +27,7 @@ Flyflor 试图实现的是一种会思考、会提问、会形成独立工作域
 主线保留两个 Bun 可见入口：
 
 - 本地 `stdio` chat 调试入口
-- 最小 Gateway：`/ws`、`/health`
+- 最小 socket：`/ws`、`/health`
 
 第一方 Bun CLI/TUI/channel adapter 已退出主线，只保留在 `docs/old-docs/` 作为历史材料。
 
@@ -160,7 +161,7 @@ Scope 在这里不是轻量标签，而是智能生命体对长期事情形成�
 - `threadId`
 - transport protocol handshake
 
-这些字段仍可存在于 gateway/raw audit 边界，但不再定义“当前上下文是谁”。
+这些字段仍可存在于 socket/raw audit 边界，但不再定义“当前上下文是谁”。
 
 ## 分层关系
 
@@ -182,7 +183,7 @@ Executive 是 Flyflor 的执行外骨骼。它借给生命体行动能力，但�
 ### Agent
 
 - runtime：单轮主链
-- gateway：transport 血管
+- socket：外显 socket 血管层
 - blackboard：复杂任务工作台
 - sandbox：副作用边界
 - context：显式 scope/fork/capability 装配

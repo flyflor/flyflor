@@ -2,7 +2,7 @@
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { GatewayModule } from "../src/agent/gateway/module.ts";
+import { SocketModule } from "../src/socket/module.ts";
 import type { RuntimeModule } from "../src/agent/runtime/index.ts";
 import { createGatewayControlEnvelope, parseGatewayControlEnvelope } from "../src/protocol/control/index.ts";
 import type { GatewayControlEnvelope, GatewayControlTurnFinalPayload } from "../src/protocol/control/index.ts";
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
 class GatewayAskLoopSmoke {
     private readonly sink = new RecordingSink();
     private readonly events = new EventsComponent(this.sink, new RuntimeEventBus());
-    private gateway: GatewayModule | undefined;
+    private gateway: SocketModule | undefined;
     private root = "";
     private config: FlyflorConfig | undefined;
 
@@ -80,7 +80,7 @@ class GatewayAskLoopSmoke {
             const memory = new MemoryModule(this.config, this.events);
             await memory.warmup();
             const dispatch = new GatewayAskLoopDispatch(memory, this.events);
-            this.gateway = new GatewayModule(
+            this.gateway = new SocketModule(
                 this.config.gateway,
                 ({
                     warmup: async () => undefined,

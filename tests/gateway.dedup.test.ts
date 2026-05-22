@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayModule } from "../src/agent/gateway/module.ts";
-import { buildDedupKey, InMemoryDedupStore } from "../src/agent/gateway/dedup.store.ts";
+import { SocketModule } from "../src/socket/module.ts";
+import { buildDedupKey, InMemoryDedupStore } from "../src/socket/dedup.store.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import {
     Channel,
@@ -72,10 +72,10 @@ describe("InMemoryDedupStore", () => {
     });
 });
 
-describe("GatewayModule dedup telemetry", () => {
+describe("SocketModule dedup telemetry", () => {
     test("publishes a structured warning when reply dedup persistence fails", async () => {
         const events = new CapturingSink();
-        const gateway = new GatewayModule(
+        const gateway = new SocketModule(
             gatewayConfig(),
             {
                 handleMessage: async () => reply("delivered", "msg-record-fail"),
@@ -99,7 +99,7 @@ describe("GatewayModule dedup telemetry", () => {
 
     test("publishes a structured warning when a failed turn cannot release the dedup claim", async () => {
         const events = new CapturingSink();
-        const gateway = new GatewayModule(
+        const gateway = new SocketModule(
             gatewayConfig(),
             {
                 handleMessage: async () => {
@@ -170,7 +170,7 @@ function message(id: string): GatewayMessage {
     };
 }
 
-async function dispatchForTest(gateway: GatewayModule, value: GatewayMessage): Promise<GatewayReply> {
+async function dispatchForTest(gateway: SocketModule, value: GatewayMessage): Promise<GatewayReply> {
     return (
         gateway as unknown as {
             dispatch(message: GatewayMessage): Promise<GatewayReply>;

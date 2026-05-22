@@ -24,7 +24,8 @@ export interface ExplicitScopeSeed {
  * Structured context scope assembly for scope/fork/capability boundaries.
  * This layer is intentionally parallel to neural: it normalizes explicit
  * RuntimeContext fields for runtime, memory, skill, mcp, plugin, and gem
- * assembly, but never reads natural language intent and never stores continuity owners.
+ * assembly, but never reads natural language intent and never stores
+ * transport-derived continuity owners.
  */
 export class ContextScopeComponent extends ContextComponent {
     public constructor(private readonly paths: FlyflorPaths) {
@@ -73,6 +74,8 @@ export function continuityOwnerKey(message: GatewayMessage, context?: RuntimeCon
     const scopeId = context?.activeScope?.id;
     if (scopeId) return `scope:${scopeId}`;
     if (codenameId) return `codename:${codenameId}`;
+    // Deliberately use the current turn id instead of conversationKey/user/thread.
+    // Socket provenance is audit/routing metadata, not cognitive continuity.
     return `turn:${message.id}`;
 }
 

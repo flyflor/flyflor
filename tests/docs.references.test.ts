@@ -73,6 +73,37 @@ describe("documentation references", () => {
         expect(doc).toContain("executive.loop.resumed");
     });
 
+    test("socket OpenAPI contract is Apifox-importable and keeps wire-v1 compatibility examples", async () => {
+        const text = await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.json")).text();
+        const contract = JSON.parse(text) as {
+            components?: {
+                examples?: Record<string, { value?: unknown }>;
+                schemas?: Record<string, unknown>;
+            };
+            openapi?: string;
+            paths?: Record<string, unknown>;
+        };
+        const wireText = JSON.stringify(contract);
+
+        expect(contract.openapi).toBe("3.1.0");
+        expect(contract.paths).toHaveProperty("/health");
+        expect(contract.paths).toHaveProperty("/ws");
+        expect(contract.components?.schemas).toHaveProperty("SocketEnvelope");
+        expect(contract.components?.schemas).toHaveProperty("SocketEventEnvelope");
+        expect(wireText).toContain("flyflor.ws.v1");
+        expect(wireText).toContain("flyflor.event.v1");
+        expect(wireText).toContain("gateway.message.send");
+        expect(wireText).toContain("gateway.status.get");
+        expect(wireText).toContain("gateway.status.snapshot");
+        expect(wireText).toContain("history.list");
+        expect(wireText).toContain("turn.delta");
+        expect(wireText).toContain("turn.final");
+        expect(wireText).toContain("event.publish");
+        expect(wireText).toContain("executiveToolLoop");
+        expect(wireText).toContain("MemoryComponent");
+        expect(wireText).toContain("CrystalComponent");
+    });
+
     test("runtime events docs keep event timeline separate from turn-final authority", async () => {
         const doc = await Bun.file(join(REPO_ROOT, "docs", "runtime.events.md")).text();
 
@@ -130,7 +161,7 @@ describe("documentation references", () => {
         expect(doc).toContain("`src/components`");
         expect(doc).toContain("`src/types`");
         expect(doc).toContain("`src/protocol/control`");
-        expect(doc).toContain("`src/agent/gateway`");
+        expect(doc).toContain("`src/socket`");
     });
 });
 

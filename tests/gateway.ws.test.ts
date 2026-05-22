@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayControlHub } from "../src/agent/gateway/control.ts";
+import { SocketControlHub } from "../src/socket/control.ts";
 import {
     buildBuiltinExternalKitCatalog,
     externalKitCatalogPath,
     loadExternalKitCatalog,
     loadExternalKitCatalogSnapshot,
-} from "../src/agent/gateway/kit/index.ts";
+} from "../src/socket/kit/index.ts";
 import {
     buildGatewayControlSurfaceCapabilities,
     createGatewayControlEnvelope,
@@ -27,7 +27,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
 import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
-import type { GatewayControlDispatchOptions } from "../src/agent/gateway/control.ts";
+import type { GatewayControlDispatchOptions } from "../src/socket/control.ts";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,7 +60,7 @@ class FakeUpgradeServer {
     }
 }
 
-describe("GatewayControlHub", () => {
+describe("SocketControlHub", () => {
     test("announces server capabilities on open", () => {
         const hub = createHub();
         const socket = fakeSocket();
@@ -1159,9 +1159,9 @@ describe("GatewayControlHub", () => {
     });
 });
 
-function createHub(overrides: Partial<ConstructorParameters<typeof GatewayControlHub>[0]> = {}): GatewayControlHub {
+function createHub(overrides: Partial<ConstructorParameters<typeof SocketControlHub>[0]> = {}): SocketControlHub {
     const events = overrides.events ?? new GlobalEventBus();
-    return new GatewayControlHub({
+    return new SocketControlHub({
         config: fakeConfig(),
         dispatch: async (message, options): Promise<GatewayReply> => {
             await options?.onTextDelta?.("delta");

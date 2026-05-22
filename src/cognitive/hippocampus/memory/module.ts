@@ -574,6 +574,8 @@ export class MemoryModule extends Memory {
         const activeScope = context?.activeScope;
         const scopeConstraintId = activeScope?.id;
 
+        // Prompt assembly is Memory + Crystal/graph recall + explicit Scope/Fork.
+        // It never reads the raw brain.db ledger as a session transcript.
         const request: MemorySearchRequest = {
             query: message.text,
             scope: scopeConstraintId ?? "global",
@@ -1666,6 +1668,8 @@ export class MemoryModule extends Memory {
         if (!this.brainOpened) {
             throw new Error("Chat history is unavailable because brain.db is not opened.");
         }
+        // Backing query for socket history.list: read-only ledger replay for
+        // UI/audit/debug, not session restore or prompt/context assembly.
         const rows = this.brain.listEvents({
             type: MemoryEventType.Event,
             untilTs: options.beforeTs,
@@ -2820,7 +2824,7 @@ export class MemoryModule extends Memory {
         }
         if (brainEventToWorkingEpisode.size === 0) return new Map();
         // Working-memory episodes carry the authoritative brain event id in metadata.
-        // Reading prompt atoms from brain.db keeps hippocampus context on the single hot-path store.
+        // Prompt assembly reads scored prompt atoms, not raw ledger transcripts.
         const visible = this.brain.listPromptAtomsWindow(
             latestCreatedAt > 0 ? new Date(latestCreatedAt) : new Date(),
             {

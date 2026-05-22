@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { GatewayModule } from "../src/agent/gateway/module.ts";
+import { SocketModule } from "../src/socket/module.ts";
 import type { GatewayConfig } from "../src/config/index.ts";
 import { Channel, type EventSink, type RuntimeEvent } from "../src/protocol/index.ts";
-import type { GatewayControlPeer } from "../src/agent/gateway/control.ts";
+import type { GatewayControlPeer } from "../src/socket/control.ts";
 
 class NullSink implements EventSink {
     public publish(_event: RuntimeEvent): void {}
@@ -21,7 +21,7 @@ class FakeUpgradeServer {
     }
 }
 
-describe("GatewayModule minimal vascular surface", () => {
+describe("SocketModule minimal vascular surface", () => {
     test("GET /health returns ok without runtime involvement", async () => {
         const gateway = createGateway();
 
@@ -31,7 +31,7 @@ describe("GatewayModule minimal vascular surface", () => {
         await expect(response?.json()).resolves.toEqual({ ok: true });
     });
 
-    test("GET /ws returns 503 before GatewayControlHub is started", async () => {
+    test("GET /ws returns 503 before SocketControlHub is started", async () => {
         const gateway = createGateway();
         const server = new FakeUpgradeServer();
 
@@ -61,8 +61,8 @@ describe("GatewayModule minimal vascular surface", () => {
     });
 });
 
-function createGateway(): GatewayModule {
-    return new GatewayModule(
+function createGateway(): SocketModule {
+    return new SocketModule(
         gatewayConfig(),
         {
             warmup: async () => undefined,
@@ -83,7 +83,7 @@ function gatewayConfig(): GatewayConfig {
 }
 
 async function openHandleRequest(
-    gateway: GatewayModule,
+    gateway: SocketModule,
     request: Request,
     server?: Bun.Server<GatewayControlPeer>,
 ): Promise<Response | undefined> {

@@ -17,7 +17,8 @@
 | 路径 | owner | 责任 |
 | --- | --- | --- |
 | `src/app.ts` | composition root | 启动 Flyflor 主类，显式装配容器，不承载业务流程 |
-| `src/agent` | Agent 外显层 | runtime、gateway、blackboard、sandbox、context、skills、worker、MCP、plugin |
+| `src/agent` | Agent 外显运行态 | runtime、blackboard、sandbox、context、skills、worker、MCP、plugin |
+| `src/socket` | Socket 血管层 | `/ws`、`/health`、live turn、event、operation、ledger query/replay |
 | `src/cognitive` | Cognitive 认知层 | Mindstream、Crystal、Hippocampus |
 | `src/executive` | Executive 外骨架 | capability、tool、trust、loop |
 | `src/events` | 事件血管 | `RuntimeEvent` 发布、订阅、分类、广播 |
@@ -35,7 +36,6 @@
 | --- | --- |
 | `src/agent/runtime` | 单轮主链、turn 生命周期、流式回复、route / ask / blackboard / executive 接线 |
 | `src/agent/context` | 显式 `activeScope`、`contextForkId`、可见 capability surface 的上下文装配 |
-| `src/agent/gateway` | `/ws`、`/health` 最小血管层；只做 transport，不做隐式连续性 |
 | `src/agent/blackboard` | 多 worker 讨论、收敛、cap 后 ask 交还 |
 | `src/agent/sandbox` | shell / network / plugin / MCP / computer 的副作用边界 |
 | `src/agent/mcp` | MCP transport、catalog、执行适配 |
@@ -48,8 +48,20 @@
 关键约束：
 
 - `src/agent/context` 只认显式 scope/fork，不创建 fallback scope，不按 `channel/chat/thread/user` 恢复工作域。
-- `src/agent/gateway` 不拥有 隐式连续性；transport protocol handshake 只属于外部协议握手。
 - `src/agent/prompts` 只做模板渲染，不内嵌大段模型指令正文。
+
+## `src/socket`
+
+| 路径 | 责任 |
+| --- | --- |
+| `src/socket` | `/ws`、`/health` 最小 socket 血管层；只做 transport 和 v1 wire 兼容，不做隐式连续性 |
+| `src/socket/kit` | External kit 只读 catalog 与 manifest 接线 |
+
+关键约束：
+
+- `src/socket` 不拥有隐式连续性；transport protocol handshake 只属于外部协议握手。
+- `gateway.*` 是 `flyflor.ws.v1` 兼容 wire 名称，不代表目录或架构主语。
+- `history.list` 只读 `brain.db` ledger query/replay，不参与 prompt/context assembly。
 
 ## `src/cognitive`
 
@@ -94,7 +106,7 @@ Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cog
 
 它不拥有：
 
-- gateway 协议
+- socket 协议
 - runtime 私有状态
 - 记忆召回规则
 
@@ -123,7 +135,7 @@ Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cog
 
 - 可以知道表结构
 - 不可以知道模型提示词
-- 不可以知道 gateway 连接
+- 不可以知道 socket 连接
 - 不可以做业务语义判断
 
 ## `src/components`
@@ -140,7 +152,7 @@ Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cog
 
 - `src/components/memory`
 - `src/components/crystal`
-- `src/components/gateway`
+- `src/components/socket`
 
 领域 owner 必须回到自己的目录，不准在 `src/components` 里造假边界。
 
@@ -194,9 +206,10 @@ Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cog
 以下路径已经从主源码移除，不允许新增兼容壳或回写：
 
 - `src/fch`
-- `src/executive`
+- old execution-layer physical paths
 - `src/skills`
 - `src/context`
+- `src/agent/gateway`
 - 第一方 CLI/TUI/channel adapter 主源码面
 
 它们的历史解释价值只留在 `docs/old-docs/`。主源码移除之后，活跃文档必须只描述今天仍然真实存在的 owner。

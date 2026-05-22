@@ -2,7 +2,7 @@ import {
     RuntimeModule,
     promptApproveMcpToolCall,
     BlackboardModule,
-    GatewayModule,
+    SocketModule,
     loadPromptTemplates,
     registerModelBackedBlackboardWorker,
     renderBlackboardWorkerSystemPrompt,
@@ -27,7 +27,7 @@ import { RuntimeMode, type EventSink, type ModelClient, type RuntimeMode as Runt
 import { FileAuditSink, HttpAuditSink } from "./agent/sandbox/audit.sink.ts";
 import { join } from "node:path";
 
-export { BlackboardModule, DependencyContainer, GatewayModule, MemoryModule, RuntimeModule, WorkerManager };
+export { BlackboardModule, DependencyContainer, SocketModule, MemoryModule, RuntimeModule, WorkerManager };
 
 @Module({
     providers: [
@@ -40,7 +40,7 @@ export { BlackboardModule, DependencyContainer, GatewayModule, MemoryModule, Run
         BlackboardModule,
         MemoryModule,
         RuntimeModule,
-        GatewayModule,
+        SocketModule,
     ],
     exports: [
         ConfigComponent,
@@ -50,7 +50,7 @@ export { BlackboardModule, DependencyContainer, GatewayModule, MemoryModule, Run
         BlackboardModule,
         MemoryModule,
         RuntimeModule,
-        GatewayModule,
+        SocketModule,
     ],
 })
 export class FlyFlorModule {}
@@ -61,7 +61,7 @@ export interface FlyFlorCreateOptions {
     config?: FlyflorConfig;
     container?: DependencyContainer;
     events?: EventSink;
-    gateway?: GatewayModule;
+    gateway?: SocketModule;
     memory?: MemoryModule;
     mode?: RuntimeModeType | string;
     model?: ModelClient;
@@ -75,7 +75,7 @@ export interface FlyFlorDependencies {
     container: DependencyContainer;
     events: EventsComponent;
     eventDisposers: Array<() => void>;
-    gateway: GatewayModule;
+    gateway: SocketModule;
     memory: MemoryModule;
     mode: RuntimeModeComponent;
     model: ModelComponent;
@@ -141,7 +141,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
     const memory = options.memory ?? createMemory(config.snapshot(), events, model.unwrap());
     const runtime = options.runtime ?? new RuntimeModule(config.snapshot(), model.unwrap(), events, blackboard, memory);
-    const gateway = options.gateway ?? new GatewayModule(config.gateway, runtime, events, { paths: config.paths });
+    const gateway = options.gateway ?? new SocketModule(config.gateway, runtime, events, { paths: config.paths });
     const eventDisposers = registerRuntimeEventHandlers(config, events);
     const container = options.container ?? new DependencyContainer();
 
@@ -176,7 +176,7 @@ function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies
         [BlackboardModule, dependencies.blackboard],
         [MemoryModule, dependencies.memory],
         [RuntimeModule, dependencies.runtime],
-        [GatewayModule, dependencies.gateway],
+        [SocketModule, dependencies.gateway],
     ]);
 
     for (const provider of metadata.providers) {

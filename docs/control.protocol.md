@@ -9,7 +9,7 @@
 ## 相关代码
 
 - `src/protocol/control/envelope.ts`
-- `src/agent/gateway/control.ts`
+- `src/socket/control.ts`
 - `src/protocol/contracts/types.ts`
 
 ## 协议原则

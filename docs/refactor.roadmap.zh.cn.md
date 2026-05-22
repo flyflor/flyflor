@@ -2,7 +2,7 @@
 
 ## 当前阶段
 
-主线已经从“保留第一方迁移期 CLI/TUI/Gateway surface”切到“只保留认知内核 + Executive 外骨骼 + WS/event 血管协议”。
+主线已经从“保留第一方迁移期 CLI/TUI/socket surface”切到“只保留认知内核 + Executive 外骨骼 + WS/event 血管协议”。
 
 当前阶段看根目录 [TODO.md](../TODO.md)。
 
@@ -42,7 +42,7 @@
 - Scope-centric reset 已完成，活动实现统一到 `activeScope`。
 - Context plane 与 Ledger/query plane 已拆开，`brain.db` 不再作为 prompt 容器描述。
 - 旧第一方 shell、CLI、TUI、channel adapter 代码已从仓库移除。
-- 主线 Gateway 已收敛为 WS/control/event。
+- 主线 socket 已收敛为 WS/control/event。
 - R9 已完成：computer exoskeleton capability/tool/trust/sandbox 契约冻结。
 - R10 已完成：long-horizon loop pause/resume contract 冻结。
 

@@ -20,6 +20,7 @@ import {
     RedisComponent,
     Runtime,
     Sandbox,
+    Socket,
     SQLiteComponent,
     SurrealComponent,
 } from "../../../components/component.ts";
@@ -108,6 +109,7 @@ function normalizeComponentMetadata(
 
 function inferComponentKind(target: Function): ComponentKindType {
     const prototype = target.prototype;
+    if (prototype instanceof Socket) return ComponentKind.Gateway;
     if (prototype instanceof Gateway) return ComponentKind.Gateway;
     if (prototype instanceof Blackboard) return ComponentKind.Blackboard;
     if (prototype instanceof Runtime) return ComponentKind.Runtime;
@@ -133,6 +135,7 @@ function inferComponentLayer(target: Function): ArchitectureLayerType {
     if (prototype instanceof Runtime) return ArchitectureLayer.Runtime;
     if (
         prototype instanceof Gateway ||
+        prototype instanceof Socket ||
         prototype instanceof Blackboard ||
         prototype instanceof ContextComponent ||
         prototype instanceof Memory ||

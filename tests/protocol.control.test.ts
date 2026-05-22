@@ -708,6 +708,12 @@ describe("Gateway Control protocol", () => {
         });
     });
 
+    test("keeps gateway-prefixed wire-v1 compatibility message names stable", () => {
+        expect(GatewayControlMessageType.GatewayMessageSend).toBe("gateway.message.send");
+        expect(GatewayControlMessageType.GatewayStatusGet).toBe("gateway.status.get");
+        expect(GatewayControlMessageType.GatewayStatusSnapshot).toBe("gateway.status.snapshot");
+    });
+
     test("filters event envelopes by explicit subscription", () => {
         const event: RuntimeEvent = {
             type: RuntimeEventType.GatewayMessageReceived,

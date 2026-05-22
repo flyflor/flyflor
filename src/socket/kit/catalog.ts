@@ -1,9 +1,9 @@
-import { loadMcpServers } from "../../mcp/registry.ts";
-import { loadPlugins } from "../../plugin/registry.ts";
-import { loadSkills } from "../../skills/registry.ts";
-import { loadToolManifest } from "../../../executive/manifest.ts";
-import { ExternalKitCapabilitySource, type ExternalKitCapabilitySummary } from "../../../protocol/contracts/index.ts";
-import type { FlyflorPaths } from "../../../config/index.ts";
+import { loadMcpServers } from "../../agent/mcp/registry.ts";
+import { loadPlugins } from "../../agent/plugin/registry.ts";
+import { loadSkills } from "../../agent/skills/registry.ts";
+import { loadToolManifest } from "../../executive/manifest.ts";
+import { ExternalKitCapabilitySource, type ExternalKitCapabilitySummary } from "../../protocol/contracts/index.ts";
+import type { FlyflorPaths } from "../../config/index.ts";
 import { loadExternalKitCatalog } from "./manifest.ts";
 
 export async function loadExternalKitCatalogSnapshot(paths: FlyflorPaths, now = new Date().toISOString()) {

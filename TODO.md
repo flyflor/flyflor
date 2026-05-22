@@ -282,3 +282,45 @@ Latest full seal validation in this workspace passed:
 - [x] Verified the integrated mainline snapshot with focused gateway/runtime/history tests, `bun run check`, `bun run docs:check`, `git diff --check`, and `bun run build:binary`.
 - [x] Stopped active wave4 child Codex processes and left the `flyflor-wave4` tmux layout as restorable shell windows.
 - [x] Confirmed mainline and all wave4 worktrees are clean and synced with origin.
+
+## 2026-05-22 Socket Wire Closure Addendum
+
+- [x] Created additive socket-wire worktrees for the planned A-E split:
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/socket.core`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/socket.wire.openapi`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/life.constitution.docs`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/socket.wire.tests`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/ledger.context.boundary`
+- [x] Created `flyflor-socket-wire` tmux layout with main/A/B/C/D/E windows.
+- [x] Main Codex took over implementation after child agents were redirected to review mode, keeping the worktree history additive and avoiding stale child edits.
+- [x] Moved active socket owner from `src/agent/gateway` to `src/socket` while preserving `flyflor.ws.v1`, `flyflor.event.v1`, `/ws`, `/health`, and `gateway.*` wire-v1 compatibility names.
+- [x] Added `SocketModule` and `SocketControlHub` as active internal names with compatibility exports for existing v1 Gateway control vocabulary.
+- [x] Added Apifox-importable contract:
+  - `docs/openapi/flyflor.socket.openapi.json`
+  - `docs/openapi/flyflor.socket.openapi.md`
+  - `docs/openapi/flyflor.socket.openapi.zh.cn.md`
+- [x] Guarded `gateway.message.send`, `gateway.status.get`, and `gateway.status.snapshot` as stable wire-v1 compatibility strings.
+- [x] Reaffirmed `history.list` as `brain.db` ledger/query/replay/audit only, not session restore and not prompt/context assembly.
+- [x] Run final full validation for the socket wire closure:
+  - focused socket/wire tests
+  - ledger/context tests
+  - docs checks
+  - `bun run check`
+  - `bun run build:binary`
+- [ ] Commit and push the reviewed socket wire closure from `main-codex-docs`.
+
+## 2026-05-22 Socket Wire Closure Final State
+
+- [x] Active socket owner is now `src/socket`; any older TODO wording that places gateway under `src/agent` is historical and superseded for new work.
+- [x] HTTP surface remains `/health` and `/ws`; `/channels` stays removed.
+- [x] Wire-v1 compatibility remains locked for `flyflor.ws.v1`, `flyflor.event.v1`, `gateway.message.send`, `gateway.status.get`, and `gateway.status.snapshot`.
+- [x] `docs/openapi/flyflor.socket.openapi.json` is present for Apifox import and is guarded by docs reference tests.
+- [x] `brain.db` remains ledger/query/replay/audit only; context assembly remains Memory + Crystal + explicit Scope/Fork + Executive visible capability surface.
+- [x] Final validation passed:
+  - `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts`
+  - `bun test tests/tui.chat.history.test.ts tests/memory.brain.wire.test.ts tests/context.scope.test.ts tests/graph.recall.test.ts`
+  - `bun test tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/runtime.executive.boundaries.test.ts`
+  - `bun run docs:check`
+  - `bun run check`
+  - `bun run build:binary`
+  - `git diff --check`

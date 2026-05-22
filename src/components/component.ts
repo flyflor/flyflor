@@ -11,7 +11,10 @@ export abstract class FlyflorComponent {
     }
 }
 
-export abstract class Gateway extends FlyflorComponent {}
+export abstract class Socket extends FlyflorComponent {}
+
+/** Legacy component alias for the v1 gateway wire vocabulary. New owners should extend Socket. */
+export abstract class Gateway extends Socket {}
 
 export abstract class Blackboard extends FlyflorComponent {}
 

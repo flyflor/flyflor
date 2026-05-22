@@ -1,4 +1,4 @@
-import type { GatewayReply } from "../../protocol/contracts/index.ts";
+import type { GatewayReply } from "../protocol/contracts/index.ts";
 
 export type DedupClaim =
     | { state: "claimed"; key: string }

@@ -26,13 +26,13 @@ describe("Runtime and Executive tool boundaries", () => {
         }
     });
 
-    test("Executive layer does not import Runtime, command, TUI, or gateway internals", async () => {
+    test("Executive layer does not import Runtime, command, TUI, or socket internals", async () => {
         const files = ["src/executive/manifest.ts", "src/executive/tool.runtime.ts"];
         const sources = await Promise.all(files.map(async (file) => [file, await Bun.file(file).text()] as const));
 
         for (const forbidden of [
             "../agent/runtime",
-            "../agent/gateway",
+            "../socket",
             "../command",
             "../agent/mcp",
             "../agent/sandbox",

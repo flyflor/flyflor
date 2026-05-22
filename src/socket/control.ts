@@ -1,4 +1,4 @@
-import type { GatewayConfig } from "../../config/index.ts";
+import type { GatewayConfig } from "../config/index.ts";
 import {
     buildGatewayControlAckPayload,
     buildGatewayControlCapabilityCatalogPayload,
@@ -28,10 +28,10 @@ import {
     type GatewayControlReplyMetadata,
     type GatewayControlEnvelope,
     type GatewayControlGatewayStatusSnapshot,
-    type GatewayControlPeer,
-    type GatewayControlSocket,
+    type GatewayControlPeer as ProtocolSocketControlPeer,
+    type GatewayControlSocket as ProtocolSocketControlSocket,
     type GatewayControlTodoTaskSnapshot,
-} from "../../protocol/control/index.ts";
+} from "../protocol/control/index.ts";
 import {
     ChannelLinkState,
     GatewayControlMessageType,
@@ -41,14 +41,17 @@ import {
     type GatewayReply,
     type RuntimeContext,
     type RuntimeEvent,
-} from "../../protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../../events/index.ts";
-import type { FlyflorPaths } from "../../config/index.ts";
+} from "../protocol/contracts/index.ts";
+import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../events/index.ts";
+import type { FlyflorPaths } from "../config/index.ts";
 import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
 
-export type { GatewayControlPeer };
+export type SocketControlPeer = ProtocolSocketControlPeer;
+export type SocketControlSocket = ProtocolSocketControlSocket;
+export type GatewayControlPeer = SocketControlPeer;
+export type GatewayControlSocket = SocketControlSocket;
 
-export interface GatewayControlTransportChannelStatusSnapshot {
+export interface SocketControlTransportChannelStatusSnapshot {
     adapter: string | null;
     capabilities: GatewayChannelCapabilities;
     configured: boolean;
@@ -65,8 +68,8 @@ export interface GatewayControlTransportChannelStatusSnapshot {
     transport: ChannelTransport;
 }
 
-export interface GatewayControlTransportStatusSnapshot {
-    channels: GatewayControlTransportChannelStatusSnapshot[];
+export interface SocketControlTransportStatusSnapshot {
+    channels: SocketControlTransportChannelStatusSnapshot[];
     clientCount: number;
     connectedCount: number;
     degradedCount: number;
@@ -79,45 +82,45 @@ export interface GatewayControlTransportStatusSnapshot {
     url?: string;
 }
 
-export interface GatewayControlDispatchOptions {
+export interface SocketControlDispatchOptions {
     context?: RuntimeContext;
     onTextDelta?: (text: string) => void | Promise<void>;
 }
 
-export type GatewayControlMessageDispatcher = (
+export type SocketControlMessageDispatcher = (
     message: GatewayMessage,
-    options?: GatewayControlDispatchOptions,
+    options?: SocketControlDispatchOptions,
 ) => Promise<GatewayReply>;
 
-export interface GatewayControlHubOptions {
+export interface SocketControlHubOptions {
     config: GatewayConfig;
-    dispatch: GatewayControlMessageDispatcher;
+    dispatch: SocketControlMessageDispatcher;
     events: RuntimeEventBus;
     listChatHistory: (input: GatewayControlHistoryListInput) => GatewayControlHistoryTurnSnapshot[];
     paths?: FlyflorPaths;
-    status: () => GatewayControlTransportStatusSnapshot;
+    status: () => SocketControlTransportStatusSnapshot;
 }
 
-type GatewayControlHandler = (
-    socket: GatewayControlSocket,
+type SocketControlHandler = (
+    socket: SocketControlSocket,
     envelope: GatewayControlEnvelope,
 ) => void | Promise<void>;
 
 /**
- * WebSocket control/event transport for first-party clients.
+ * Socket control/event transport for first-party clients.
  *
- * This hub is intentionally generic: it exposes structured gateway commands,
- * runtime event subscriptions and turn deltas over one envelope protocol. TUI,
- * web consoles and future local apps should consume this surface instead of
- * adding terminal-specific branches inside GatewayModule.
+ * The current transport is WebSocket, but this owner is the lifeform vascular
+ * layer: live turns, events, operation snapshots and ledger query/replay move
+ * through here. The `gateway.*` message strings remain wire-v1 compatibility
+ * names and must not be treated as session/chat continuity.
  */
-export class GatewayControlHub implements EventSink {
-    private readonly clients = new Set<GatewayControlSocket>();
-    private readonly handlers = new Map<string, GatewayControlHandler>();
+export class SocketControlHub implements EventSink {
+    private readonly clients = new Set<SocketControlSocket>();
+    private readonly handlers = new Map<string, SocketControlHandler>();
     private capabilityCatalog: Record<string, unknown> | null = null;
     private readonly unsubscribeEvents: () => void;
 
-    public constructor(private readonly options: GatewayControlHubOptions) {
+    public constructor(private readonly options: SocketControlHubOptions) {
         this.handlers.set(GatewayControlMessageType.CapabilityCatalogGet, async (socket, envelope) =>
             this.handleCapabilityCatalogGet(socket, envelope),
         );
@@ -143,7 +146,7 @@ export class GatewayControlHub implements EventSink {
         this.unsubscribeEvents = this.options.events.subscribe(this);
     }
 
-    public upgrade(request: Request, server: Bun.Server<GatewayControlPeer>): Response | undefined {
+    public upgrade(request: Request, server: Bun.Server<SocketControlPeer>): Response | undefined {
         if (!this.authorize(request)) {
             this.log("upgrade.denied", { url: request.url });
             return new Response(JSON.stringify({ error: "gateway_control_unauthorized" }), {
@@ -163,13 +166,13 @@ export class GatewayControlHub implements EventSink {
         return ok ? undefined : new Response("gateway control upgrade failed", { status: 400 });
     }
 
-    public open(socket: GatewayControlSocket): void {
+    public open(socket: SocketControlSocket): void {
         this.clients.add(socket);
         this.log("socket.open", { clientId: socket.data.clientId, connectedAt: socket.data.connectedAt });
         void this.sendServerHello(socket).catch((error) => this.sendError(socket, undefined, error));
     }
 
-    public close(socket: GatewayControlSocket): void {
+    public close(socket: SocketControlSocket): void {
         this.clients.delete(socket);
         this.log("socket.close", { clientId: socket.data.clientId });
     }
@@ -178,7 +181,7 @@ export class GatewayControlHub implements EventSink {
         return this.clients.size;
     }
 
-    public async message(socket: GatewayControlSocket, raw: string | Buffer): Promise<void> {
+    public async message(socket: SocketControlSocket, raw: string | Buffer): Promise<void> {
         let envelope: GatewayControlEnvelope;
         try {
             envelope = parseGatewayControlEnvelope(raw);
@@ -245,7 +248,7 @@ export class GatewayControlHub implements EventSink {
         this.clients.clear();
     }
 
-    private handleClientHello(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private handleClientHello(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         this.log("client.hello", { clientId: socket.data.clientId, correlationId: envelope.id });
         this.send(socket, GatewayControlMessageType.Ack, buildGatewayControlAckPayload({
             clientId: socket.data.clientId,
@@ -254,7 +257,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     private async handleCapabilityCatalogGet(
-        socket: GatewayControlSocket,
+        socket: SocketControlSocket,
         envelope: GatewayControlEnvelope,
     ): Promise<void> {
         const kits = this.options.paths
@@ -269,7 +272,7 @@ export class GatewayControlHub implements EventSink {
         );
     }
 
-    private handleEventSubscribe(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private handleEventSubscribe(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         const subscription = readGatewayControlSubscription(envelope.payload);
         socket.data.subscriptions = [...socket.data.subscriptions, subscription];
         this.log("event.subscribe", {
@@ -281,7 +284,7 @@ export class GatewayControlHub implements EventSink {
         }), envelope);
     }
 
-    private handleEventUnsubscribe(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private handleEventUnsubscribe(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         const subscription = readGatewayControlSubscription(envelope.payload);
         socket.data.subscriptions = socket.data.subscriptions.filter((candidate) => {
             if (subscription.requestId && candidate.requestId !== subscription.requestId) return true;
@@ -300,7 +303,7 @@ export class GatewayControlHub implements EventSink {
         }), envelope);
     }
 
-    private handleGatewayStatusGet(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private handleGatewayStatusGet(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         this.log("gateway.status.get", { clientId: socket.data.clientId });
         this.send(
             socket,
@@ -310,7 +313,7 @@ export class GatewayControlHub implements EventSink {
         );
     }
 
-    private handleHistoryList(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private handleHistoryList(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         const input = readGatewayControlHistoryListInput(envelope.payload);
         const history = this.options.listChatHistory(input);
         this.log("history.snapshot", {
@@ -331,7 +334,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     private async handleGatewayMessageSend(
-        socket: GatewayControlSocket,
+        socket: SocketControlSocket,
         envelope: GatewayControlEnvelope,
     ): Promise<void> {
         const input = readGatewayControlMessageInput(envelope.payload);
@@ -390,7 +393,7 @@ export class GatewayControlHub implements EventSink {
         }
     }
 
-    private handlePing(socket: GatewayControlSocket, envelope: GatewayControlEnvelope): void {
+    private handlePing(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         this.log("ping", { clientId: socket.data.clientId });
         this.send(socket, GatewayControlMessageType.Pong, buildGatewayControlPongPayload(), envelope);
     }
@@ -477,7 +480,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     private send<TPayload extends Record<string, unknown>>(
-        socket: GatewayControlSocket,
+        socket: SocketControlSocket,
         type: Parameters<typeof createGatewayControlEnvelope<TPayload>>[0],
         payload?: TPayload,
         source?: GatewayControlEnvelope,
@@ -499,7 +502,7 @@ export class GatewayControlHub implements EventSink {
         );
     }
 
-    private async sendServerHello(socket: GatewayControlSocket): Promise<void> {
+    private async sendServerHello(socket: SocketControlSocket): Promise<void> {
         const kits = this.options.paths
             ? await loadExternalKitCatalogSnapshot(this.options.paths)
             : buildBuiltinExternalKitCatalog();
@@ -513,7 +516,7 @@ export class GatewayControlHub implements EventSink {
     }
 
     private sendError(
-        socket: GatewayControlSocket,
+        socket: SocketControlSocket,
         source: GatewayControlEnvelope | undefined,
         cause: unknown,
         code: GatewayControlErrorCode = GatewayControlErrorCode.Internal,
@@ -547,7 +550,7 @@ export class GatewayControlHub implements EventSink {
      * Gateway runtime snapshots are local transport state. Protocol snapshots
      * are the stable JSON shape exposed to Rust/thin clients.
      */
-    private protocolStatusSnapshot(status: GatewayControlTransportStatusSnapshot): GatewayControlGatewayStatusSnapshot {
+    private protocolStatusSnapshot(status: SocketControlTransportStatusSnapshot): GatewayControlGatewayStatusSnapshot {
         return {
             channels: status.channels.map((channel) => ({
                 adapter: channel.adapter,
@@ -594,3 +597,10 @@ export class GatewayControlHub implements EventSink {
         );
     }
 }
+
+export type GatewayControlHubOptions = SocketControlHubOptions;
+export type GatewayControlDispatchOptions = SocketControlDispatchOptions;
+export type GatewayControlTransportChannelStatusSnapshot = SocketControlTransportChannelStatusSnapshot;
+export type GatewayControlTransportStatusSnapshot = SocketControlTransportStatusSnapshot;
+export type GatewayControlMessageDispatcher = SocketControlMessageDispatcher;
+export const GatewayControlHub = SocketControlHub;

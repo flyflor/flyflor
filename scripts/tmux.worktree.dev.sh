@@ -151,7 +151,7 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
         launch_codex_window \
             "$SESSION_NAME:runtime" \
             "$RUNTIME_PATH" \
-            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 runtime executive slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage toward end-to-end Executive capability execution under the intended trust/sandbox surface, plus WS loop pause/resume visibility. Keep HTTP Gateway to /ws and /health only. No private client protocol or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/gateway/executive tests plus check/docs/build as needed, then commit your branch."
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 runtime executive slice: src/agent/runtime/**, src/socket/**, src/executive/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage toward end-to-end Executive capability execution under the intended trust/sandbox surface, plus WS loop pause/resume visibility. Keep HTTP socket surface to /ws and /health only. No private client protocol or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/socket/executive tests plus check/docs/build as needed, then commit your branch."
     elif [ "$WAVE" = "wave3" ]; then
         launch_codex_window \
             "$SESSION_NAME:context" \
@@ -164,7 +164,7 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
         launch_codex_window \
             "$SESSION_NAME:runtime" \
             "$RUNTIME_PATH" \
-            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave3 runtime capability slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, src/agent/sandbox/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage to end-to-end Executive capability execution under the intended trust/sandbox surface, including observable loop budget and event/history closure. Keep HTTP Gateway to /ws and /health only; do not reintroduce /channels, private client protocol, dynamic require, or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/gateway/executive/sandbox tests plus check/docs/build as needed, then commit your branch."
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave3 runtime capability slice: src/agent/runtime/**, src/socket/**, src/executive/**, src/agent/sandbox/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage to end-to-end Executive capability execution under the intended trust/sandbox surface, including observable loop budget and event/history closure. Keep HTTP socket surface to /ws and /health only; do not reintroduce /channels, private client protocol, dynamic require, or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/socket/executive/sandbox tests plus check/docs/build as needed, then commit your branch."
     elif [ "$WAVE" = "wave4" ]; then
         launch_codex_window \
             "$SESSION_NAME:$CONTEXT_WINDOW_NAME" \
@@ -177,7 +177,7 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
         launch_codex_window \
             "$SESSION_NAME:$RUNTIME_WINDOW_NAME" \
             "$RUNTIME_PATH" \
-            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-history: src/agent/gateway/control.ts, src/protocol/control/envelope.ts, memory history snapshot mapping tests, and docs for WS/history replay. Surface existing structured runtime metadata in history snapshots without changing execution logic. Do not move types into brain contracts unless a test proves it is necessary; prefer protocol/control-local shape. Keep Gateway HTTP surface unchanged. Update local TODO/LOGS bilingual, run focused history/control tests plus check/build as needed, commit and push."
+            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-history: src/socket/control.ts, src/protocol/control/envelope.ts, memory history snapshot mapping tests, and docs for WS/history replay. Surface existing structured runtime metadata in history snapshots without changing execution logic. Do not move types into brain contracts unless a test proves it is necessary; prefer protocol/control-local shape. Keep socket HTTP surface unchanged. Update local TODO/LOGS bilingual, run focused history/control tests plus check/build as needed, commit and push."
     else
         launch_codex_window \
             "$SESSION_NAME:context" \
@@ -190,7 +190,7 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
         launch_codex_window \
             "$SESSION_NAME:runtime" \
             "$RUNTIME_PATH" \
-            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the runtime-executive-ws slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, related scripts/tests/docs and local control files. Close concrete gaps in ws control flow, event and history surfaces, executive loop pause-resume closure, and thin-client protocol coverage. Update local TODO.md and LOGS.md before stopping, then commit your branch."
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the runtime-executive-ws slice: src/agent/runtime/**, src/socket/**, src/executive/**, related scripts/tests/docs and local control files. Close concrete gaps in ws control flow, event and history surfaces, executive loop pause-resume closure, and thin-client protocol coverage. Update local TODO.md and LOGS.md before stopping, then commit your branch."
     fi
 fi
 

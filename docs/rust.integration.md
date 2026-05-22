@@ -2,7 +2,7 @@
 
 ## 一句话定位
 
-本文是未来 Rust `gateway / channel / cli / tui` 外壳对接当前 Bun 主线的最小接入手册。
+本文是未来 Rust `socket / channel / cli / tui` 外壳对接当前 Bun 主线的最小接入手册。
 
 - Bun 主线负责认知内核、Executive 外骨骼、WS/control 协议和 RuntimeEvent 血管。
 - Rust 外壳负责连接 `/ws`、渲染 UI、闭环 ask、展示 planning、消费事件流。
@@ -19,7 +19,7 @@ Rust 外壳只依赖下面三层：
 不依赖：
 
 - `src/agent/runtime/*` 私有实现
-- `src/agent/gateway/*` 内部 owner 细节
+- `src/socket/*` 内部 owner 细节
 - 历史第一方 Bun CLI / TUI / channel adapter
 
 ## 最小连接流程
@@ -175,7 +175,7 @@ Rust 外壳接入完成的最低标准：
 
 ## 红线
 
-- 不 import Bun runtime/gateway 私有实现。
+- 不 import Bun runtime/socket 私有实现。
 - 不依赖已移除的历史壳体。
 - 不从 reply 文本、事件文本、用户文本做关键词判断。
 - 不把连接级 snapshot、turn 级 snapshot、事件流混成一层状态机。

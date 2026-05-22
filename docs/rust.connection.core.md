@@ -18,7 +18,7 @@
 
 不依赖：
 
-- Bun runtime/gateway 私有类
+- Bun runtime/socket 私有类
 - 历史第一方 Bun CLI/TUI/channel adapter
 - 已移除的旧实现
 

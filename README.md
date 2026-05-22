@@ -2,7 +2,7 @@
 
 Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单文件二进制交付。
 
-核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、gateway、sandbox、skills、context 等外部交互。
+核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、socket、sandbox、skills、context 等外部交互。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -14,7 +14,7 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 - `brain.db` 是按月分片的 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
-- 未来 CLI、Gateway、TUI 用 Rust 重写；当前 Bun 主线只保留 event 血管与 WS/control 协议。
+- 未来 CLI、TUI 与 socket shell 可用 Rust 重写；当前 Bun 主线保留 socket 血管层与 WS/control 协议。
 - 简单问题直接回，复杂问题走黑板；当思考或执行抵达边界时，通过 Ask 显式向用户求证，再把高价值结果送入结晶链路。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 
@@ -42,9 +42,9 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 - `Ask`：认知闭环器官
 - `Executive`：执行外骨骼
 
-## Gateway 现状
+## Socket 现状
 
-主线 Gateway 已收缩为最小血管层：
+主线 socket 已收缩为最小血管层：
 
 - `/ws` WebSocket control/event
 - `/health`
@@ -108,9 +108,9 @@ bun run chat
 ./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
 ./dist/flyflor gateway
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
-bun run gateway      # 源码模式启动最小 Gateway：/ws /health
-bun run gateway:dev  # dev 源码模式：同步模板后用 Bun watch 直接跑 gateway
-sh scripts/gateway.dev.sh # gateway dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
+bun run gateway      # 兼容命令：源码模式启动最小 socket：/ws /health
+bun run gateway:dev  # 兼容命令：同步模板后用 Bun watch 直接跑 socket
+sh scripts/gateway.dev.sh # socket dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
 ```
 
@@ -126,7 +126,7 @@ bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动�
 说明：
 
 - Bun 主线仍保留一个本地 stdio chat 调试面，方便直接驱动 `RuntimeModule`。
-- 未来第一方 CLI / TUI / gateway shell 将由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核。
+- 未来第一方 CLI / TUI / socket shell 将由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核。
 - `setup` / `status` / `doctor` / 第一方 navigator 类命令不再视为主线稳定边界。
 
 质量验证：
@@ -394,13 +394,14 @@ flyflor gateway    # 最小 Gateway：/ws /health
 | [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
 | [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
 | [docs/ws.doc.md](docs/ws.doc.md)                             | `/ws` 字段级 API 手册 |
+| [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) | Apifox 导入与真实 socket 场景测试契约 |
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
 | [docs/control.protocol.md](docs/control.protocol.md)         | Rust / thin client 直接对接的 WS/control 血管协议 |
 | [docs/rust.integration.md](docs/rust.integration.md)         | Rust gateway/channel/cli/tui 外壳最小接入手册 |
 | [docs/rust.connection.core.md](docs/rust.connection.core.md) | Rust Slice 1 `/ws` 连接核心与重连状态机 |
-| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust gateway shell 工程切分 backlog |
+| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust socket shell 工程切分 backlog |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
 

@@ -6,8 +6,8 @@
 
 当前主线 turn 流程：
 
-1. Gateway `/ws` 收到 `gateway.message.send`
-2. `GatewayControlHub` 归一化为 `GatewayMessage`
+1. Socket `/ws` 收到 `gateway.message.send`
+2. `SocketControlHub` 归一化为 `GatewayMessage`
 3. `RuntimeModule.handleMessage` 执行单轮推理、工具循环、记忆写入
 4. `turn.delta` / `turn.final` / `turn.error` 通过 `/ws` 返回
 5. `RuntimeEvent` 通过事件总线广播
@@ -19,7 +19,7 @@
 补充：
 
 - Bun 主线仍保留一个本地 stdio chat 调试入口，可直接调用 `RuntimeModule.handleMessage`。
-- 这条 stdio 路径不是长期协议面；未来第一方 CLI / TUI / gateway shell 统一由 Rust 通过 `/ws` 对接。
+- 这条 stdio 路径不是长期协议面；未来第一方 CLI / TUI / socket shell 统一由 Rust 通过 `/ws` 对接。
 
 ## R10 长线 loop 冻结
 

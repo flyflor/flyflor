@@ -14,14 +14,14 @@
 - 当前 `turn.final` 中 ask/todo/data 的读取方式
 - 对应源码与单元测试位置
 
-如果你在调 Rust CLI / TUI / gateway shell，这份文档应该比 `control.protocol.md` 更像直接可用的接口手册。
+如果你在调 Rust CLI / TUI / socket shell，这份文档应该比 `control.protocol.md` 更像直接可用的接口手册。
 
 ## 相关代码
 
 核心实现：
 
-- `src/agent/gateway/module.ts`
-- `src/agent/gateway/control.ts`
+- `src/socket/module.ts`
+- `src/socket/control.ts`
 - `src/protocol/control/envelope.ts`
 - `src/protocol/control/component.ts`
 - `src/protocol/contracts/enums.ts`
@@ -35,12 +35,12 @@
 
 ## HTTP Surface
 
-Gateway 当前只暴露两个 HTTP 路径：
+Socket 当前只暴露两个 HTTP 路径：
 
 | Path | Method | 作用 | 代码 | 测试 |
 | --- | --- | --- | --- | --- |
-| `/ws` | `GET` | WebSocket upgrade | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
-| `/health` | `GET` | 健康检查 | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
+| `/ws` | `GET` | WebSocket upgrade | `src/socket/module.ts` | `tests/gateway.module.test.ts` |
+| `/health` | `GET` | 健康检查 | `src/socket/module.ts` | `tests/gateway.module.test.ts` |
 
 ### `GET /health`
 
@@ -60,7 +60,7 @@ Gateway 当前只暴露两个 HTTP 路径：
 
 行为：
 
-- 若 GatewayControlHub 未准备好，返回 `503`
+- 若 SocketControlHub 未准备好，返回 `503`
 - 若准备好，执行 WebSocket upgrade
 
 未就绪响应：
@@ -73,7 +73,7 @@ Gateway 当前只暴露两个 HTTP 路径：
 
 参考：
 
-- `tests/gateway.module.test.ts` `GET /ws returns 503 before GatewayControlHub is started`
+- `tests/gateway.module.test.ts` `GET /ws returns 503 before SocketControlHub is started`
 
 ## Protocol Id
 
@@ -138,9 +138,9 @@ Gateway 当前只暴露两个 HTTP 路径：
 
 这条接口的职责非常薄：
 
-- gateway 接收分页参数
-- gateway 直接调用现有持久化历史读取
-- gateway 返回稳定 JSON 快照
+- socket 接收分页参数
+- socket 直接调用现有持久化历史读取
+- socket 返回稳定 JSON 快照
 
 `clientCount` 是 live peer count，只描述当前 WS hub 的实时连接压力，不是静态 channel 数，也不应和 `connectedCount` 混成一回事。
 
@@ -172,8 +172,8 @@ Gateway 当前只暴露两个 HTTP 路径：
 - `src/cognitive/hippocampus/memory/module.ts` `historyPlanningForEvent(...)`
 - `src/entities/memory/brain/event/repo.ts` `list(...)`
 - `src/cognitive/hippocampus/memory/history/turn.ts` `historyTurnFromEvent(...)`
-- `src/agent/gateway/module.ts` `listChatHistory: (input) => this.runtime.listChatHistory(...)`
-- `src/agent/gateway/control.ts` `handleHistoryList(...)`
+- `src/socket/module.ts` `listChatHistory: (input) => this.runtime.listChatHistory(...)`
+- `src/socket/control.ts` `handleHistoryList(...)`
 - `src/protocol/control/envelope.ts` `readGatewayControlHistoryListInput(...)`
 - `src/protocol/control/envelope.ts` `buildGatewayControlHistorySnapshotPayload(...)`
 
@@ -239,7 +239,7 @@ LIMIT ?
 
 用途：
 
-- 读取某个用户的历史对话
+- 读取 brain.db 全局 ledger 历史回放
 - 按时间戳向更早历史翻页
 - 给 Rust TUI / shell / 调试器提供黑板、深度思考、task plan 回放面
 
@@ -496,7 +496,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `sendServerHello(...)`
+- `src/socket/control.ts` `sendServerHello(...)`
 - `src/protocol/control/component.ts`
 
 测试：
@@ -550,7 +550,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `handleClientHello(...)`
+- `src/socket/control.ts` `handleClientHello(...)`
 
 测试：
 
@@ -598,7 +598,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
       "channels": [
         {
           "name": "ws",
-          "adapter": "GatewayControlHub",
+          "adapter": "SocketControlHub",
           "transport": "websocket",
           "connected": true,
           "configured": true,
@@ -624,7 +624,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `handleGatewayStatusGet(...)`
+- `src/socket/control.ts` `handleGatewayStatusGet(...)`
 
 测试：
 
@@ -679,8 +679,8 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `handleCapabilityCatalogGet(...)`
-- `src/agent/gateway/kit/*`
+- `src/socket/control.ts` `handleCapabilityCatalogGet(...)`
+- `src/socket/kit/*`
 
 测试：
 
@@ -741,13 +741,13 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 - `context.activeProject` 是兼容别名；若同时传入，以 `activeScope` 为准
 - `chatType` 缺失时默认 `direct`
 - `platform actor id` 缺失时默认 `ws-user`
-- `conversationKey` / `threadId` 只属于 gateway route，不会参与认知连续性
+- `conversationKey` / `threadId` 只属于 socket route，不会参与认知连续性
 
 代码：
 
 - `src/protocol/control/envelope.ts` `readGatewayControlMessageInput(...)`
 - `src/protocol/control/envelope.ts` `normalizeGatewayControlMessage(...)`
-- `src/agent/gateway/control.ts` `handleGatewayMessageSend(...)`
+- `src/socket/control.ts` `handleGatewayMessageSend(...)`
 
 测试：
 
@@ -823,7 +823,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `handleGatewayMessageSend(...)`
+- `src/socket/control.ts` `handleGatewayMessageSend(...)`
 - `src/protocol/control/envelope.ts` `buildGatewayControlTurnDeltaPayload(...)`
 - `src/protocol/control/envelope.ts` `buildGatewayControlTurnFinalPayload(...)`
 - `src/protocol/control/envelope.ts` `buildGatewayControlTurnErrorPayload(...)`
@@ -1042,8 +1042,8 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `handleEventSubscribe(...)`
-- `src/agent/gateway/control.ts` `handleEventUnsubscribe(...)`
+- `src/socket/control.ts` `handleEventSubscribe(...)`
+- `src/socket/control.ts` `handleEventUnsubscribe(...)`
 - `src/protocol/control/envelope.ts` `shouldDeliverGatewayControlEvent(...)`
 
 测试：
@@ -1087,7 +1087,7 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 代码：
 
-- `src/agent/gateway/control.ts` `handlePing(...)`
+- `src/socket/control.ts` `handlePing(...)`
 
 测试：
 
@@ -1120,7 +1120,7 @@ HTTP status：
 
 代码：
 
-- `src/agent/gateway/control.ts` `authorize(...)`
+- `src/socket/control.ts` `authorize(...)`
 
 测试：
 
@@ -1166,7 +1166,7 @@ HTTP status：
 代码：
 
 - `src/protocol/control/envelope.ts`
-- `src/agent/gateway/control.ts` `sendError(...)`
+- `src/socket/control.ts` `sendError(...)`
 
 测试：
 

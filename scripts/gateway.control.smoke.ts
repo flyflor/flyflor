@@ -2,7 +2,7 @@
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { GatewayModule } from "../src/agent/gateway/module.ts";
+import { SocketModule } from "../src/socket/module.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
 import { createGatewayControlEnvelope, parseGatewayControlEnvelope } from "../src/protocol/control/index.ts";
 import type {
@@ -107,7 +107,7 @@ async function main(): Promise<void> {
 class GatewayControlSmoke {
     private readonly sink = new RecordingSink();
     private readonly events = new EventsComponent(this.sink, new RuntimeEventBus());
-    private gateway: GatewayModule | undefined;
+    private gateway: SocketModule | undefined;
     private root = "";
     private runtime: RuntimeModule | undefined;
 
@@ -118,7 +118,7 @@ class GatewayControlSmoke {
             const memory = new MemoryModule(config, this.events);
             this.runtime = new RuntimeModule(config, new ScriptedStreamingModel(), this.events, undefined, memory);
             const runtime = this.runtime;
-            const gateway = new GatewayModule(config.gateway, runtime, this.events, { paths: config.paths });
+            const gateway = new SocketModule(config.gateway, runtime, this.events, { paths: config.paths });
             const originalHandleMessage = runtime.handleMessage.bind(runtime);
             runtime.handleMessage = ((message, context, options = {}) =>
                 originalHandleMessage(message, context, { ...options, maxToolTurns: message.id === "message-3" ? 2 : 1 })) as typeof runtime.handleMessage;

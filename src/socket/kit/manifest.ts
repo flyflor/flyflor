@@ -9,8 +9,8 @@ import {
     RuntimeEventClass,
     type ExternalKitCatalogSnapshot,
     type ExternalKitManifest,
-} from "../../../protocol/contracts/index.ts";
-import { parseJsonc, type FlyflorPaths } from "../../../config/index.ts";
+} from "../../protocol/contracts/index.ts";
+import { parseJsonc, type FlyflorPaths } from "../../config/index.ts";
 
 export interface ExternalKitManifestFile {
     kits?: Record<string, ExternalKitManifestShape>;

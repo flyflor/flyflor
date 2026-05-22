@@ -5,8 +5,8 @@
 `RuntimeEvent` 是 Flyflor 主线的事件血管系统。
 
 - 所有可观察运行态事实都应通过 `src/events/*` 发布。
-- Gateway `/ws` 的 event stream 只转发这些事件。
-- Rust CLI / TUI / Gateway 未来只读这层，不依赖 Bun 私有状态。
+- Socket `/ws` 的 event stream 只转发这些事件。
+- Rust CLI / TUI / socket 未来只读这层，不依赖 Bun 私有状态。
 
 事件血管暴露的是生命活动时间线，不是隐藏状态机。它告诉外部“这个智能生命体刚才做了什么”，但不替代当前轮结构化权威面。
 
@@ -14,7 +14,7 @@
 
 - 事件必须可 JSON 序列化。
 - 事件只表达结构化事实，不做自然语言语义判断。
-- Gateway 不拥有事件语义，只负责订阅和广播。
+- socket 不拥有事件语义，只负责订阅和广播。
 - 事件可以附带 scope / fork 引用做审计，但不能自己生成工作域连续性。
 - 已移除的旧 CLI/TUI 事件面不允许回流。
 
@@ -25,7 +25,7 @@
 - `agent.turn.start`
 - `agent.turn.end`
 
-### Gateway / Control
+### Socket / Control
 
 - `gateway.message.received`
 - `gateway.start`
@@ -70,7 +70,7 @@
 
 ## Event Matrix
 
-Rust CLI / TUI / Gateway 消费 `RuntimeEvent` 时，建议先区分事件用途，再决定是否要联动 UI：
+Rust CLI / TUI / socket 消费 `RuntimeEvent` 时，建议先区分事件用途，再决定是否要联动 UI：
 
 | 事件族 | 代表事件 | UI 主要职责 | 是否可单独作为恢复权威 |
 | --- | --- | --- | --- |

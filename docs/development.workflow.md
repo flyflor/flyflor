@@ -204,12 +204,12 @@ Active code worktrees:
 - `wt/kernel-runtime-executive-ws`
   - owned files:
     - `src/agent/runtime/**`
-    - `src/agent/gateway/**`
+    - `src/socket/**`
     - `src/executive/**`
     - related scripts/tests/docs and local control files
   - validation:
     - `bun run check`
-    - targeted runtime/gateway/executive tests
+    - targeted runtime/socket/executive tests
 
 Coordinator merge commit on mainline:
 
@@ -312,7 +312,7 @@ Flyflor wants parallel execution, but it still wants one explicit mind holding t
 
 Coordinator-maintained mainline contract after the second integration wave:
 
-- HTTP Gateway remains pruned to `/ws` and `/health`.
+- HTTP socket remains pruned to `/ws` and `/health`.
 - WS `gateway.status.get` remains the structured status lane.
 - `clientCount` is documented and tested as live WS peer count, not static channel count.
 - The docs guard now keeps `clientCount` visible in the Rust/thin-client WS handoff.
@@ -350,7 +350,7 @@ Coordinator probe before launching wave2:
 
 ## 2026-05-22 Wave 2 Reviewed Integration
 
-The coordinator reviewed and staged the wave2 child output into `main-codex-docs` without reopening the HTTP Gateway surface.
+The coordinator reviewed and staged the wave2 child output into `main-codex-docs` without reopening the HTTP socket surface.
 
 Reviewed child commits:
 
@@ -369,7 +369,7 @@ Reviewed child commits:
 Coordinator-owned merge rules for this wave:
 
 - keep child implementation/tests, but write canonical TODO/LOGS/workflow history from the main worktree
-- keep HTTP Gateway limited to `/ws` and `/health`
+- keep HTTP socket limited to `/ws` and `/health`
 - keep WS `gateway.status.get` as the status lane
 - keep `brain.db` as ledger/query/replay/audit state, not a prompt assembly container
 
@@ -418,7 +418,7 @@ Coordinator constraints for wave3:
 - all old worktrees stay in place
 - all changed child branches must be committed and pushed before yield
 - child branches update local TODO/LOGS, but canonical project history is written by main Codex on `main-codex-docs`
-- HTTP Gateway remains `/ws` and `/health` only
+- HTTP socket remains `/ws` and `/health` only
 - `brain.db` remains ledger/query/replay/audit state and is not treated as prompt assembly context
 - Bun binary compileability remains a hard gate
 
@@ -461,7 +461,7 @@ All active wave3 child Codex processes were stopped before handoff. The `flyflor
 
 ## 2026-05-22 Wave 4 Runtime Capability Layout
 
-Wave4 targets one P0: successful runtime capability execution must become observable end to end without widening the HTTP Gateway surface.
+Wave4 targets one P0: successful runtime capability execution must become observable end to end without widening the HTTP socket surface.
 
 Restore command:
 
@@ -503,6 +503,43 @@ Review state:
 - `wt/wave4-runtime-metadata` commit `8eb7444` reviewed and integrated as implementation/test surface only.
 - `wt/wave4-runtime-history` commit `7702efe` reviewed and integrated with an additional mainline execution replay projection from structured ledger provenance.
 - `wt/wave4-runtime-smoke` commit `53342ee` reviewed and integrated after replacing the new capability-history success check with structured `executiveToolExecutions` replay metadata.
-- HTTP Gateway remains `/ws` and `/health`; `/channels` remains removed.
+- HTTP socket remains `/ws` and `/health`; `/channels` remains removed.
 - `history.list` remains ledger/query/replay/audit only and is not a prompt assembly or session restore path.
 - Active child Codex processes were stopped after integration; `flyflor-wave4` remains only as a restorable shell layout.
+
+## 2026-05-22 Socket Wire Closure Layout
+
+This wave moves the active vascular owner to `src/socket` while keeping `flyflor.ws.v1` wire compatibility stable.
+
+Active socket-wire worktrees:
+
+- `codex/socket-core`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/socket.core`
+  - owned surface: `src/socket` core migration review only after main takeover
+- `codex/socket-wire-openapi`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/socket.wire.openapi`
+  - owned surface: OpenAPI/Apifox contract review only after main takeover
+- `codex/life-constitution-docs`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/life.constitution.docs`
+  - owned surface: constitution/docs review only after main takeover
+- `codex/socket-wire-tests`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/socket.wire.tests`
+  - owned surface: tests/reference review only after main takeover
+- `codex/ledger-context-boundary`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/ledger.context.boundary`
+  - owned surface: ledger/context boundary review only after main takeover
+
+Coordinator constraints:
+
+- keep `/ws` and `/health`; do not restore `/channels`
+- keep `flyflor.ws.v1`, `flyflor.event.v1`, `gateway.message.send`, `gateway.status.get`, and `gateway.status.snapshot`
+- treat `gateway.*` as v1 wire compatibility names only
+- keep `brain.db` as ledger/query/replay/audit/detail only
+- context assembly remains current input + MemoryComponent + CrystalComponent + explicit Scope/Fork + Executive visible capability surface
+
+Review state:
+
+- main Codex redirected child agents to review mode after no early worktree output appeared
+- active implementation was completed in the coordinator worktree to avoid stale parallel edits
+- Apifox contract lives at `docs/openapi/flyflor.socket.openapi.json`
+- final validation is required before commit/push

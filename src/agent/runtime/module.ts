@@ -304,7 +304,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
     }
 
-    /** 预热记忆层；在 GatewayModule 启动后立即调用。 */
+    /** 预热记忆层；在 SocketModule 启动后立即调用。 */
     public async warmup(): Promise<void> {
         this.warmupPromise ??= this.performWarmup().catch((error) => {
             this.warmupPromise = undefined;

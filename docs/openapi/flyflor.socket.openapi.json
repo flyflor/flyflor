@@ -1,0 +1,1328 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Flyflor Socket Wire API",
+    "version": "1.0.0",
+    "description": "Apifox-importable contract for Flyflor's socket vascular layer. The current transport is WebSocket at /ws plus GET /health. The flyflor.ws.v1 wire keeps gateway.* message names for compatibility; those names are not the architecture subject and do not imply session/chat continuity. brain.db is a ledger/query/replay/audit plane only. Context assembly comes from current input, MemoryComponent recall, CrystalComponent recall, explicit activeScope/contextForkId, and the visible Executive capability surface."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8788",
+      "description": "Local HTTP health and WebSocket upgrade origin"
+    },
+    {
+      "url": "ws://127.0.0.1:8788",
+      "description": "Local WebSocket origin for Apifox WS testing"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Socket",
+      "description": "Lifeform vascular socket surface. WebSocket is the current transport."
+    },
+    {
+      "name": "Wire Examples",
+      "description": "Reusable flyflor.ws.v1 and flyflor.event.v1 frames for Apifox WebSocket scenarios."
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Socket"],
+        "summary": "Health check",
+        "description": "Returns process health without invoking runtime thinking, memory, Crystal, Scope, or ledger replay.",
+        "operationId": "getSocketHealth",
+        "responses": {
+          "200": {
+            "description": "Socket process is alive.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "examples": {
+                  "ok": {
+                    "$ref": "#/components/examples/HealthOk"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "tags": ["Socket"],
+        "summary": "WebSocket upgrade",
+        "description": "Upgrades to the flyflor.ws.v1 socket protocol. Apifox should connect to ws://127.0.0.1:8788/ws and exchange the message examples in this contract. The connection clientId is a live transport peer id only; it is not a user/session/chat continuity owner.",
+        "operationId": "upgradeSocket",
+        "responses": {
+          "101": {
+            "description": "Switching Protocols. After upgrade the server sends server.hello."
+          },
+          "401": {
+            "description": "Non-local upgrade without a valid control token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "$ref": "#/components/examples/Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Socket control hub is not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotReadyResponse"
+                },
+                "examples": {
+                  "notReady": {
+                    "$ref": "#/components/examples/SocketNotReady"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-apifox-folder": "Socket",
+        "x-flyflor-wire-compat": "gateway.* names are preserved for flyflor.ws.v1 compatibility only.",
+        "x-flyflor-vascular-plane": true
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": ["ok"],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UnauthorizedResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "const": "gateway_control_unauthorized"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotReadyResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "const": "gateway_control_not_ready"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SocketEnvelope": {
+        "type": "object",
+        "required": ["protocol", "id", "type", "at"],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "const": "flyflor.ws.v1"
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SocketMessageType"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SocketEventEnvelope": {
+        "type": "object",
+        "required": ["protocol", "id", "type", "at", "payload"],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "const": "flyflor.event.v1"
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "const": "event.publish"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/EventPublishPayload"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SocketMessageType": {
+        "type": "string",
+        "enum": [
+          "ack",
+          "capability.catalog.get",
+          "capability.catalog.snapshot",
+          "client.hello",
+          "error",
+          "event.publish",
+          "event.subscribe",
+          "event.unsubscribe",
+          "gateway.message.send",
+          "gateway.status.get",
+          "gateway.status.snapshot",
+          "history.list",
+          "history.snapshot",
+          "ping",
+          "pong",
+          "server.hello",
+          "turn.delta",
+          "turn.error",
+          "turn.final"
+        ]
+      },
+      "ServerHelloPayload": {
+        "type": "object",
+        "required": ["capabilities", "clientId", "connectedAt", "kits", "status"],
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/SurfaceCapabilities"
+          },
+          "clientId": {
+            "type": "string",
+            "description": "Live transport peer id only. It is not a user/session/chat continuity owner."
+          },
+          "connectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kits": {
+            "$ref": "#/components/schemas/ExternalKitCatalog"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GatewayStatusSnapshot"
+          }
+        },
+        "additionalProperties": true
+      },
+      "SurfaceCapabilities": {
+        "type": "object",
+        "required": ["commands", "eventStream", "protocol", "semanticTypes"],
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocketMessageType"
+            }
+          },
+          "eventStream": {
+            "type": "boolean",
+            "const": true
+          },
+          "protocol": {
+            "type": "string",
+            "const": "flyflor.ws.v1"
+          },
+          "semanticTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["ask", "data", "error", "event", "input", "ping", "pong", "stream", "todo"]
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ExternalKitCatalog": {
+        "type": "object",
+        "required": ["schemaVersion", "builtAt", "kits", "capabilities"],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "builtAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "AckPayload": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "received": {
+            "$ref": "#/components/schemas/SocketMessageType"
+          },
+          "subscriptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventSubscription"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ClientHelloPayload": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "GatewayStatusSnapshot": {
+        "type": "object",
+        "required": ["channels", "connectedCount", "degradedCount", "gatewayRunning", "host", "port", "streamingCount"],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelStatusSnapshot"
+            }
+          },
+          "clientCount": {
+            "type": "integer",
+            "description": "Live socket peer count, not a channel count or continuity owner."
+          },
+          "connectedCount": {
+            "type": "integer"
+          },
+          "degradedCount": {
+            "type": "integer"
+          },
+          "gatewayRunning": {
+            "type": "boolean"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "streamingCount": {
+            "type": "integer"
+          },
+          "uptimeMs": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChannelStatusSnapshot": {
+        "type": "object",
+        "required": ["adapter", "configured", "connected", "implemented", "name", "state", "streaming", "transport"],
+        "properties": {
+          "adapter": {
+            "type": ["string", "null"]
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "implemented": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "streaming": {
+            "type": "boolean"
+          },
+          "transport": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "CapabilityCatalogPayload": {
+        "type": "object",
+        "properties": {
+          "catalog": {
+            "type": ["object", "null"],
+            "additionalProperties": true
+          },
+          "kits": {
+            "$ref": "#/components/schemas/ExternalKitCatalog"
+          }
+        },
+        "additionalProperties": true
+      },
+      "HistoryListPayload": {
+        "type": "object",
+        "description": "Global brain.db ledger query/replay pagination. This is not session restore and does not assemble prompt context.",
+        "properties": {
+          "beforeTs": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "HistorySnapshotPayload": {
+        "type": "object",
+        "required": ["history"],
+        "properties": {
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryTurnSnapshot"
+            }
+          },
+          "nextBeforeTs": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "HistoryTurnSnapshot": {
+        "type": "object",
+        "required": ["assistantText", "eventId", "ts", "userText"],
+        "properties": {
+          "assistantText": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ReplyMetadata"
+          },
+          "ts": {
+            "type": "integer"
+          },
+          "userText": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "MessageSendPayload": {
+        "type": "object",
+        "required": ["text"],
+        "description": "Live input. conversationKey, user.id and threadId are routing/audit/dedup/reply-anchor provenance only; they do not define the lifeform's cognitive continuity.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "conversationKey": {
+            "type": "string",
+            "description": "Routing/audit/dedup key only. Not a Scope, session, or memory owner."
+          },
+          "chatType": {
+            "type": "string",
+            "enum": ["direct", "group", "thread", "unknown"]
+          },
+          "threadId": {
+            "type": "string",
+            "description": "Platform lane/reply metadata only."
+          },
+          "user": {
+            "$ref": "#/components/schemas/WireUser"
+          },
+          "context": {
+            "$ref": "#/components/schemas/RuntimeContextInput"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "WireUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "External actor provenance only. Not a cognitive continuity owner."
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "RuntimeContextInput": {
+        "type": "object",
+        "description": "Explicit context entry. Flyflor does not infer Scope/Fork from connection, user, chat, thread, or history query fields.",
+        "properties": {
+          "activeScope": {
+            "$ref": "#/components/schemas/RuntimeScope"
+          },
+          "activeProject": {
+            "$ref": "#/components/schemas/RuntimeScope"
+          },
+          "contextForkId": {
+            "type": "string"
+          },
+          "skillNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RuntimeScope": {
+        "type": "object",
+        "required": ["id", "projectDir", "projectMemoryDir"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "projectDir": {
+            "type": "string"
+          },
+          "projectMemoryDir": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "TurnDeltaPayload": {
+        "type": "object",
+        "required": ["delta", "messageId"],
+        "properties": {
+          "delta": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "TurnFinalPayload": {
+        "type": "object",
+        "required": ["reply"],
+        "properties": {
+          "reply": {
+            "$ref": "#/components/schemas/GatewayReplyLike"
+          }
+        },
+        "additionalProperties": true
+      },
+      "TurnErrorPayload": {
+        "type": "object",
+        "required": ["message", "messageId"],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "GatewayReplyLike": {
+        "type": "object",
+        "required": ["messageId", "route", "text"],
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "route": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "text": {
+            "type": "string"
+          },
+          "delivery": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ReplyMetadata"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ReplyMetadata": {
+        "type": "object",
+        "properties": {
+          "ask": {
+            "$ref": "#/components/schemas/AskMetadata"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "planning": {
+            "$ref": "#/components/schemas/PlanningMetadata"
+          },
+          "executiveToolLoop": {
+            "$ref": "#/components/schemas/ExecutiveToolLoopMetadata"
+          },
+          "executiveToolExecutions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "AskMetadata": {
+        "type": "object",
+        "required": ["choiceCount", "freeform", "prompt", "questionCount", "reason", "snapshotId"],
+        "properties": {
+          "choiceCount": {
+            "type": "integer"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "executiveToolLoop": {
+            "$ref": "#/components/schemas/ExecutiveToolLoopMetadata"
+          },
+          "freeform": {
+            "type": "boolean"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "questionCount": {
+            "type": "integer"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "snapshotId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "PlanningMetadata": {
+        "type": "object",
+        "properties": {
+          "contextForks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "replays": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "taskPlans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ExecutiveToolLoopMetadata": {
+        "type": "object",
+        "required": ["askId", "message", "resume", "stepCount", "stop"],
+        "properties": {
+          "askId": {
+            "type": "string"
+          },
+          "loopGuardReason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resume": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "const": "continue"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          },
+          "stepCount": {
+            "type": "integer"
+          },
+          "stop": {
+            "type": "string",
+            "const": "ask"
+          },
+          "toolBudgetExhausted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "EventSubscription": {
+        "type": "object",
+        "properties": {
+          "classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "EventPublishPayload": {
+        "type": "object",
+        "required": ["event"],
+        "properties": {
+          "event": {
+            "type": "object",
+            "required": ["type", "at"],
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ErrorPayload": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": ["internal", "invalid-envelope", "invalid-payload", "unauthorized", "unsupported-message"]
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "examples": {
+      "HealthOk": {
+        "value": {
+          "ok": true
+        }
+      },
+      "Unauthorized": {
+        "value": {
+          "error": "gateway_control_unauthorized"
+        }
+      },
+      "SocketNotReady": {
+        "value": {
+          "error": "gateway_control_not_ready"
+        }
+      },
+      "ServerHello": {
+        "summary": "server.hello after connect",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-server-hello-1",
+          "type": "server.hello",
+          "at": "2026-05-22T00:00:00.000Z",
+          "payload": {
+            "clientId": "socket-peer-1",
+            "connectedAt": "2026-05-22T00:00:00.000Z",
+            "capabilities": {
+              "protocol": "flyflor.ws.v1",
+              "eventStream": true,
+              "commands": ["client.hello", "gateway.status.get", "capability.catalog.get", "history.list", "gateway.message.send", "event.subscribe", "event.unsubscribe", "ping"],
+              "semanticTypes": ["input", "stream", "event", "ask", "todo", "data", "error", "ping", "pong"]
+            },
+            "kits": {
+              "schemaVersion": 1,
+              "builtAt": "2026-05-22T00:00:00.000Z",
+              "kits": [],
+              "capabilities": []
+            },
+            "status": {
+              "channels": [],
+              "clientCount": 1,
+              "connectedCount": 1,
+              "degradedCount": 0,
+              "gatewayRunning": true,
+              "host": "127.0.0.1",
+              "port": 8788,
+              "streamingCount": 1
+            }
+          }
+        }
+      },
+      "ClientHello": {
+        "summary": "client.hello",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-client-hello-1",
+          "type": "client.hello",
+          "at": "2026-05-22T00:00:01.000Z",
+          "requestId": "req-client-hello-1",
+          "payload": {
+            "name": "apifox",
+            "version": "1.0.0"
+          }
+        }
+      },
+      "Ack": {
+        "summary": "ack",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-ack-1",
+          "type": "ack",
+          "at": "2026-05-22T00:00:01.050Z",
+          "requestId": "req-client-hello-1",
+          "correlationId": "env-client-hello-1",
+          "payload": {
+            "clientId": "socket-peer-1",
+            "received": "client.hello"
+          }
+        }
+      },
+      "Ping": {
+        "summary": "ping",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-ping-1",
+          "type": "ping",
+          "at": "2026-05-22T00:00:02.000Z",
+          "requestId": "req-ping-1",
+          "payload": {}
+        }
+      },
+      "Pong": {
+        "summary": "pong",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-pong-1",
+          "type": "pong",
+          "at": "2026-05-22T00:00:02.050Z",
+          "requestId": "req-ping-1",
+          "correlationId": "env-ping-1",
+          "payload": {
+            "now": "2026-05-22T00:00:02.050Z"
+          }
+        }
+      },
+      "GatewayStatusGet": {
+        "summary": "gateway.status.get compatibility request",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-status-get-1",
+          "type": "gateway.status.get",
+          "at": "2026-05-22T00:00:03.000Z",
+          "requestId": "req-status-1",
+          "payload": {}
+        }
+      },
+      "GatewayStatusSnapshot": {
+        "summary": "gateway.status.snapshot compatibility response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-status-snapshot-1",
+          "type": "gateway.status.snapshot",
+          "at": "2026-05-22T00:00:03.050Z",
+          "requestId": "req-status-1",
+          "correlationId": "env-status-get-1",
+          "payload": {
+            "status": {
+              "channels": [
+                {
+                  "adapter": "SocketControlHub",
+                  "configured": true,
+                  "connected": true,
+                  "implemented": true,
+                  "name": "ws",
+                  "state": "connected",
+                  "streaming": true,
+                  "transport": "websocket"
+                }
+              ],
+              "clientCount": 1,
+              "connectedCount": 1,
+              "degradedCount": 0,
+              "gatewayRunning": true,
+              "host": "127.0.0.1",
+              "port": 8788,
+              "streamingCount": 1
+            }
+          }
+        }
+      },
+      "CapabilityCatalogGet": {
+        "summary": "capability.catalog.get",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-capability-get-1",
+          "type": "capability.catalog.get",
+          "at": "2026-05-22T00:00:04.000Z",
+          "requestId": "req-capability-1",
+          "payload": {}
+        }
+      },
+      "CapabilityCatalogSnapshot": {
+        "summary": "capability.catalog.snapshot",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-capability-snapshot-1",
+          "type": "capability.catalog.snapshot",
+          "at": "2026-05-22T00:00:04.050Z",
+          "requestId": "req-capability-1",
+          "correlationId": "env-capability-get-1",
+          "payload": {
+            "catalog": null,
+            "kits": {
+              "schemaVersion": 1,
+              "builtAt": "2026-05-22T00:00:04.050Z",
+              "kits": [],
+              "capabilities": []
+            }
+          }
+        }
+      },
+      "HistoryList": {
+        "summary": "history.list ledger replay request",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-history-list-1",
+          "type": "history.list",
+          "at": "2026-05-22T00:00:05.000Z",
+          "requestId": "req-history-1",
+          "payload": {
+            "limit": 20,
+            "beforeTs": 1770000000000
+          }
+        }
+      },
+      "HistorySnapshot": {
+        "summary": "history.snapshot ledger replay response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-history-snapshot-1",
+          "type": "history.snapshot",
+          "at": "2026-05-22T00:00:05.050Z",
+          "requestId": "req-history-1",
+          "correlationId": "env-history-list-1",
+          "payload": {
+            "nextBeforeTs": 1769999999999,
+            "history": [
+              {
+                "eventId": "event-1",
+                "ts": 1770000000000,
+                "userText": "继续推进 socket 血管层",
+                "assistantText": "我会按 Scope 和当前上下文继续推进。",
+                "metadata": {
+                  "planning": {
+                    "contextForks": [],
+                    "replays": [],
+                    "taskPlans": []
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "GatewayMessageSend": {
+        "summary": "gateway.message.send compatibility live input",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-message-send-1",
+          "type": "gateway.message.send",
+          "at": "2026-05-22T00:00:06.000Z",
+          "requestId": "req-turn-1",
+          "payload": {
+            "id": "message-1",
+            "text": "继续推进这个 Scope",
+            "conversationKey": "routing-lane-1",
+            "threadId": "thread-1",
+            "user": {
+              "id": "external-actor-1",
+              "displayName": "User One"
+            },
+            "context": {
+              "activeScope": {
+                "id": "scope-1",
+                "projectDir": "/workspace/project",
+                "projectMemoryDir": "/workspace/project/.flyflor/memory",
+                "title": "Project Scope"
+              },
+              "contextForkId": "fork-1",
+              "skillNames": ["review"]
+            }
+          }
+        }
+      },
+      "TurnDelta": {
+        "summary": "turn.delta",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-turn-delta-1",
+          "type": "turn.delta",
+          "at": "2026-05-22T00:00:06.100Z",
+          "requestId": "req-turn-1",
+          "correlationId": "env-message-send-1",
+          "payload": {
+            "messageId": "message-1",
+            "delta": "收到"
+          }
+        }
+      },
+      "TurnFinal": {
+        "summary": "turn.final",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-turn-final-1",
+          "type": "turn.final",
+          "at": "2026-05-22T00:00:06.500Z",
+          "requestId": "req-turn-1",
+          "correlationId": "env-message-send-1",
+          "payload": {
+            "reply": {
+              "messageId": "message-1",
+              "route": {
+                "channel": "ws",
+                "conversationKey": "routing-lane-1",
+                "chatType": "direct",
+                "threadId": "thread-1"
+              },
+              "text": "收到，我会继续推进。",
+              "metadata": {
+                "kind": "reply",
+                "messageId": "message-1"
+              }
+            }
+          }
+        }
+      },
+      "TurnFinalWithAsk": {
+        "summary": "turn.final with ask metadata",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-turn-final-ask-1",
+          "type": "turn.final",
+          "at": "2026-05-22T00:00:07.000Z",
+          "requestId": "req-turn-ask-1",
+          "payload": {
+            "reply": {
+              "messageId": "message-ask-1",
+              "route": {
+                "channel": "ws",
+                "conversationKey": "routing-lane-1",
+                "chatType": "direct"
+              },
+              "text": "我需要确认一个边界。",
+              "metadata": {
+                "kind": "ask",
+                "ask": {
+                  "choiceCount": 2,
+                  "choices": [
+                    { "id": "a", "label": "保留兼容" },
+                    { "id": "b", "label": "立即破坏性改名" }
+                  ],
+                  "freeform": true,
+                  "prompt": "这轮是否保留 wire v1 兼容？",
+                  "questionCount": 1,
+                  "questions": [],
+                  "reason": "clarification",
+                  "snapshotId": "ask-snapshot-1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "TurnFinalWithPlanning": {
+        "summary": "turn.final with planning metadata",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-turn-final-plan-1",
+          "type": "turn.final",
+          "at": "2026-05-22T00:00:08.000Z",
+          "payload": {
+            "reply": {
+              "messageId": "message-plan-1",
+              "route": {
+                "channel": "ws",
+                "conversationKey": "routing-lane-1",
+                "chatType": "direct"
+              },
+              "text": "计划已更新。",
+              "metadata": {
+                "planning": {
+                  "contextForks": [],
+                  "replays": [],
+                  "taskPlans": [
+                    {
+                      "id": "task-plan-1",
+                      "title": "Socket closure",
+                      "summary": "Finish socket wire closure.",
+                      "status": "in_progress",
+                      "progress": 50,
+                      "stepCount": 2,
+                      "completedStepCount": 1,
+                      "steps": []
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "TurnFinalWithExecutiveLoopPause": {
+        "summary": "turn.final with executive loop pause",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-turn-final-loop-1",
+          "type": "turn.final",
+          "at": "2026-05-22T00:00:09.000Z",
+          "payload": {
+            "reply": {
+              "messageId": "message-loop-1",
+              "route": {
+                "channel": "ws",
+                "conversationKey": "routing-lane-1",
+                "chatType": "direct"
+              },
+              "text": "工具预算耗尽，我需要你确认是否继续。",
+              "metadata": {
+                "executiveToolLoop": {
+                  "askId": "ask-loop-1",
+                  "loopGuardReason": "max-calls-exceeded",
+                  "message": "Tool budget exhausted.",
+                  "resume": {
+                    "mode": "continue",
+                    "requestId": "req-turn-1"
+                  },
+                  "stepCount": 8,
+                  "stop": "ask",
+                  "toolBudgetExhausted": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "TurnError": {
+        "summary": "turn.error",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-turn-error-1",
+          "type": "turn.error",
+          "at": "2026-05-22T00:00:10.000Z",
+          "requestId": "req-turn-err-1",
+          "payload": {
+            "messageId": "message-err-1",
+            "message": "runtime failed"
+          }
+        }
+      },
+      "EventSubscribe": {
+        "summary": "event.subscribe",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-event-subscribe-1",
+          "type": "event.subscribe",
+          "at": "2026-05-22T00:00:11.000Z",
+          "requestId": "req-events-1",
+          "payload": {
+            "classes": ["control", "effect"],
+            "types": ["executive.capability.catalog.built"]
+          }
+        }
+      },
+      "EventUnsubscribe": {
+        "summary": "event.unsubscribe",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-event-unsubscribe-1",
+          "type": "event.unsubscribe",
+          "at": "2026-05-22T00:00:12.000Z",
+          "requestId": "req-events-1",
+          "payload": {
+            "classes": ["control", "effect"]
+          }
+        }
+      },
+      "EventPublish": {
+        "summary": "event.publish",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "env-event-publish-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:13.000Z",
+          "requestId": "req-turn-1",
+          "payload": {
+            "event": {
+              "type": "executive.capability.catalog.built",
+              "at": "2026-05-22T00:00:13.000Z",
+              "requestId": "req-turn-1",
+              "payload": {}
+            }
+          }
+        }
+      },
+      "InvalidPayloadError": {
+        "summary": "invalid payload error",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-error-1",
+          "type": "error",
+          "at": "2026-05-22T00:00:14.000Z",
+          "correlationId": "env-message-send-invalid-1",
+          "payload": {
+            "code": "invalid-payload",
+            "message": "gateway.message.send payload requires text"
+          }
+        }
+      }
+    }
+  }
+}

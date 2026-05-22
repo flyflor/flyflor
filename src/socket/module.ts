@@ -1,31 +1,31 @@
-import type { GatewayConfig } from "../../config/index.ts";
-import type { FlyflorPaths } from "../../config/index.ts";
-import { Gateway } from "../../components/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
-import { Module } from "../di/decorators/index.ts";
+import type { GatewayConfig } from "../config/index.ts";
+import type { FlyflorPaths } from "../config/index.ts";
+import { Socket } from "../components/index.ts";
+import { event, RuntimeEventType, type EventSink } from "../events/index.ts";
+import { Module } from "../agent/di/decorators/index.ts";
 import type {
     ChannelName,
     GatewayMessage,
     GatewayReply,
     RuntimeContext,
-} from "../../protocol/contracts/index.ts";
-import { Channel, ChannelLinkState, ChannelTransport } from "../../protocol/contracts/index.ts";
-import type { RuntimeModule } from "../runtime/index.ts";
-import { GatewayControlHub, type GatewayControlTransportStatusSnapshot, type GatewayControlPeer } from "./control.ts";
+} from "../protocol/contracts/index.ts";
+import { Channel, ChannelLinkState, ChannelTransport } from "../protocol/contracts/index.ts";
+import type { RuntimeModule } from "../agent/runtime/index.ts";
+import { SocketControlHub, type SocketControlTransportStatusSnapshot, type SocketControlPeer } from "./control.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.store.ts";
 
-export interface GatewayModuleOptions {
+export interface SocketModuleOptions {
     dedup?: MessageDedupStore;
     paths?: FlyflorPaths;
 }
 
 @Module()
-export class GatewayModule extends Gateway {
+export class SocketModule extends Socket {
     protected running = false;
-    protected server?: Bun.Server<GatewayControlPeer>;
+    protected server?: Bun.Server<SocketControlPeer>;
     protected serverUrl?: string;
     protected startedAt?: string;
-    protected controlHub?: GatewayControlHub;
+    protected controlHub?: SocketControlHub;
 
     protected readonly dedup: MessageDedupStore;
     protected readonly paths?: FlyflorPaths;
@@ -34,11 +34,11 @@ export class GatewayModule extends Gateway {
         protected readonly config: GatewayConfig,
         protected readonly runtime: RuntimeModule,
         protected readonly events: EventSink,
-        options: GatewayModuleOptions | MessageDedupStore = {},
+        options: SocketModuleOptions | MessageDedupStore = {},
     ) {
         super();
-        this.dedup = isGatewayModuleOptions(options) ? options.dedup ?? new InMemoryDedupStore() : options;
-        this.paths = isGatewayModuleOptions(options) ? options.paths : undefined;
+        this.dedup = isSocketModuleOptions(options) ? options.dedup ?? new InMemoryDedupStore() : options;
+        this.paths = isSocketModuleOptions(options) ? options.paths : undefined;
     }
 
     public start(): void {
@@ -49,7 +49,7 @@ export class GatewayModule extends Gateway {
         this.log("start.requested", { host: this.config.host, port: this.config.port });
         this.running = true;
         this.startedAt = new Date().toISOString();
-        this.controlHub = new GatewayControlHub({
+        this.controlHub = new SocketControlHub({
             config: this.config,
             dispatch: (message, options) => this.dispatch(message, options),
             events: { subscribe: (sink: EventSink) => this.subscribeEvents(sink) } as never,
@@ -58,7 +58,7 @@ export class GatewayModule extends Gateway {
             status: () => this.getStatusSnapshot(),
         });
         try {
-            this.server = Bun.serve<GatewayControlPeer>({
+            this.server = Bun.serve<SocketControlPeer>({
                 hostname: this.config.host,
                 port: this.config.port,
                 fetch: (request, server) => this.handleRequest(request, server),
@@ -103,13 +103,13 @@ export class GatewayModule extends Gateway {
         this.log("stop.complete");
     }
 
-    public getStatusSnapshot(): GatewayControlTransportStatusSnapshot {
+    public getStatusSnapshot(): SocketControlTransportStatusSnapshot {
         const url = this.serverUrl;
         const clientCount = this.running ? this.controlHub?.getClientCount() ?? 0 : 0;
         return {
             channels: [
                 {
-                    adapter: "GatewayControlHub",
+                    adapter: "SocketControlHub",
                     capabilities: {
                         cardUpdate: false,
                         finalReply: true,
@@ -144,7 +144,7 @@ export class GatewayModule extends Gateway {
 
     protected async handleRequest(
         request: Request,
-        server?: Bun.Server<GatewayControlPeer>,
+        server?: Bun.Server<SocketControlPeer>,
     ): Promise<Response | undefined> {
         const url = new URL(request.url);
         this.log("http.request", { method: request.method, path: url.pathname });
@@ -290,7 +290,10 @@ export class GatewayModule extends Gateway {
     }
 }
 
-function isGatewayModuleOptions(value: GatewayModuleOptions | MessageDedupStore): value is GatewayModuleOptions {
+export type GatewayModuleOptions = SocketModuleOptions;
+export const GatewayModule = SocketModule;
+
+function isSocketModuleOptions(value: SocketModuleOptions | MessageDedupStore): value is SocketModuleOptions {
     return "dedup" in value || "paths" in value;
 }
 

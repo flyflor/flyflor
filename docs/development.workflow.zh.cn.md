@@ -204,12 +204,12 @@ git worktree list
 - `wt/kernel-runtime-executive-ws`
   - owned files:
     - `src/agent/runtime/**`
-    - `src/agent/gateway/**`
+    - `src/socket/**`
     - `src/executive/**`
     - 相关脚本/测试/文档与本地控制文件
   - validation:
     - `bun run check`
-    - 定向 runtime/gateway/executive 测试
+    - 定向 runtime/socket/executive 测试
 
 主线协调合并提交：
 
@@ -312,7 +312,7 @@ Flyflor 需要并发执行力，但也始终需要一个显式心智持有当前
 
 第二波整合后，由协调者维护的主线契约：
 
-- HTTP Gateway 继续只保留 `/ws` 和 `/health`。
+- HTTP socket 继续只保留 `/ws` 和 `/health`。
 - WS `gateway.status.get` 继续作为结构化状态通道。
 - `clientCount` 已在文档和测试中固定为实时 WS peer count，不是静态 channel 数。
 - docs guard 现在会确保 Rust/thin-client 的 WS handoff 持续显式暴露 `clientCount`。
@@ -350,7 +350,7 @@ bun run kernel:tmux -- --wave2 --launch-codex
 
 ## 2026-05-22 Wave 2 Review 后整合
 
-协调者已经 review wave2 子 Codex 输出，并把结果暂存进 `main-codex-docs`，同时没有重新打开 HTTP Gateway 暴露面。
+协调者已经 review wave2 子 Codex 输出，并把结果暂存进 `main-codex-docs`，同时没有重新打开 HTTP socket 暴露面。
 
 已 review 的子提交：
 
@@ -369,7 +369,7 @@ bun run kernel:tmux -- --wave2 --launch-codex
 本波由协调者持有的合并规则：
 
 - 保留子分支实现与测试，但 canonical TODO/LOGS/workflow 历史由主 worktree 统一写入
-- HTTP Gateway 继续只保留 `/ws` 与 `/health`
+- HTTP socket 继续只保留 `/ws` 与 `/health`
 - WS `gateway.status.get` 继续作为状态通道
 - `brain.db` 继续只是 ledger/query/replay/audit 状态，不是 prompt 装配容器
 
@@ -418,7 +418,7 @@ Wave3 协调者约束：
 - 所有旧 worktree 都保留
 - 所有变更过的子分支在交还前必须 commit 并 push
 - 子分支更新本地 TODO/LOGS，但 canonical 项目历史由主 Codex 在 `main-codex-docs` 写入
-- HTTP Gateway 继续只保留 `/ws` 和 `/health`
+- HTTP socket 继续只保留 `/ws` 和 `/health`
 - `brain.db` 继续只是 ledger/query/replay/audit 状态，不作为 prompt 装配上下文
 - Bun 二进制可编译性仍然是硬门槛
 
@@ -461,7 +461,7 @@ Wave3 收口状态：
 
 ## 2026-05-22 Wave 4 Runtime Capability 布局
 
-Wave4 只瞄准一个 P0：成功 runtime capability execution 必须端到端可观察，同时不扩大 HTTP Gateway 暴露面。
+Wave4 只瞄准一个 P0：成功 runtime capability execution 必须端到端可观察，同时不扩大 HTTP socket 暴露面。
 
 恢复命令：
 
@@ -503,6 +503,43 @@ Review 状态：
 - `wt/wave4-runtime-metadata` commit `8eb7444` 已 review，并只整合实现/测试面。
 - `wt/wave4-runtime-history` commit `7702efe` 已 review，并在主线追加从结构化 ledger provenance 投影 execution replay metadata。
 - `wt/wave4-runtime-smoke` commit `53342ee` 已 review，并在合入时把新增 capability-history 成功检查替换为结构化 `executiveToolExecutions` replay metadata。
-- HTTP Gateway 仍然只保留 `/ws` 和 `/health`；`/channels` 继续移除。
+- HTTP socket 仍然只保留 `/ws` 和 `/health`；`/channels` 继续移除。
 - `history.list` 仍然只用于 ledger/query/replay/audit，不是 prompt 装配或 session restore 路径。
 - 整合后已停止活跃子 Codex 进程；`flyflor-wave4` 只保留为可恢复 shell 布局。
+
+## 2026-05-22 Socket Wire Closure Layout
+
+本轮把活跃血管层 owner 迁到 `src/socket`，同时保持 `flyflor.ws.v1` wire 兼容稳定。
+
+活跃 socket-wire worktree：
+
+- `codex/socket-core`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/socket.core`
+  - owned surface：主 Codex 接手后只做 `src/socket` 核心迁移 review
+- `codex/socket-wire-openapi`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/socket.wire.openapi`
+  - owned surface：主 Codex 接手后只做 OpenAPI/Apifox 契约 review
+- `codex/life-constitution-docs`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/life.constitution.docs`
+  - owned surface：主 Codex 接手后只做宪法/文档 review
+- `codex/socket-wire-tests`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/socket.wire.tests`
+  - owned surface：主 Codex 接手后只做测试/reference review
+- `codex/ledger-context-boundary`
+  - path: `/Users/yi./Desktop/yi/flyflors/worktrees/ledger.context.boundary`
+  - owned surface：主 Codex 接手后只做 ledger/context 边界 review
+
+协调约束：
+
+- 保持 `/ws` 与 `/health`；不恢复 `/channels`
+- 保持 `flyflor.ws.v1`、`flyflor.event.v1`、`gateway.message.send`、`gateway.status.get`、`gateway.status.snapshot`
+- `gateway.*` 只作为 v1 wire 兼容名称
+- `brain.db` 只作为 ledger/query/replay/audit/detail
+- 上下文装配仍然是当前输入 + MemoryComponent + CrystalComponent + 显式 Scope/Fork + Executive 可见能力面
+
+Review state：
+
+- 子 Codex 早期没有落文件后，主 Codex 将其改为 review mode
+- 活跃实现由 coordinator worktree 完成，避免 stale parallel edits
+- Apifox 契约位于 `docs/openapi/flyflor.socket.openapi.json`
+- commit/push 前必须完成最终验证

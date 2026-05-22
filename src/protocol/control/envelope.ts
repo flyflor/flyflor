@@ -327,8 +327,10 @@ export interface GatewayControlClientHello {
 
 export interface GatewayControlMessageInput {
     attachments?: GatewayMessage["attachments"];
+    /** Routing/audit/dedup provenance only; never a Scope, session, or memory owner. */
     conversationKey?: string;
     chatType?: GatewayMessage["route"]["chatType"];
+    /** Explicit context assembly entry. The socket layer never infers this from peer/user/thread fields. */
     context?: {
         activeScope?: GatewayControlProjectScope;
         activeProject?: GatewayControlProjectScope;
@@ -338,9 +340,11 @@ export interface GatewayControlMessageInput {
     id?: string;
     metadata?: Record<string, unknown>;
     text: string;
+    /** Platform lane/reply anchor only; not cognitive continuity. */
     threadId?: string;
     user?: {
         displayName?: string;
+        /** External actor provenance only; not cognitive continuity. */
         id?: string;
     };
 }
@@ -362,6 +366,7 @@ export interface GatewayControlSurfaceCapabilities {
 export type GatewayControlSocket = Bun.ServerWebSocket<GatewayControlPeer>;
 
 export interface GatewayControlPeer {
+    /** Live transport peer id only. It is not a user/session/chat continuity owner. */
     clientId: string;
     connectedAt: string;
     subscriptions: GatewayControlSubscription[];
@@ -618,6 +623,9 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
 export function readGatewayControlHistoryListInput(
     payload: Record<string, unknown> | undefined,
 ): GatewayControlHistoryListInput {
+    // history.list is global brain.db ledger query/replay. It deliberately has
+    // no sourceKey, user, session, Scope, or handshake filter and never
+    // participates in prompt/context assembly.
     if (!payload) {
         throw new GatewayControlProtocolError(
             GatewayControlErrorCode.InvalidPayload,

@@ -155,6 +155,11 @@ export interface GatewayOutboundEnvelope {
 
 export interface GatewayMessage {
     id: string;
+    /**
+     * Transport route provenance. channel/conversationKey/thread/user fields
+     * support routing, audit, dedup and reply anchors only; they must not be
+     * promoted into Scope, Fork, memory owner, or prompt assembly continuity.
+     */
     route: GatewayRoute;
     user: GatewayUser;
     text: string;
@@ -205,6 +210,11 @@ export interface GatewayReply {
 export interface RuntimeContext {
     requestId: string;
     now: string;
+    /**
+     * RuntimeContext is the only explicit per-turn context entry surface. Socket
+     * peers, user ids, chat ids, thread ids, and ledger history queries never
+     * create cognitive continuity on their own.
+     */
     /**
      * CLI/API 显式请求预加载的 skill 名称。只按 skill manifest/name 做协议级精确匹配，
      * 不从自然语言里推断业务语义。
