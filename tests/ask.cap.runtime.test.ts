@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
+import { Database } from "bun:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -133,6 +134,61 @@ class MultiQuestionModel implements ModelClient {
     }
 }
 
+class ForkConflictMergeModel implements ModelClient {
+    public async generate(): Promise<string> {
+        return [
+            "Fork merge needs structured resolution.",
+            "<flyflor_continuation_decisions>",
+            JSON.stringify({
+                forkMerges: [
+                    {
+                        forkId: "fork-conflict-runtime",
+                        kind: "conflict-ask",
+                        conflicts: [{ id: "c1", summary: "Two branch results compete.", options: ["left", "right"] }],
+                        conflictAsk: {
+                            reason: AskReason.PolicyDecision,
+                            prompt: "Which fork result should be merged?",
+                            freeform: false,
+                            choices: [
+                                { label: "left", value: "left" },
+                                { label: "right", value: "right" },
+                            ],
+                        },
+                    },
+                ],
+            }),
+            "</flyflor_continuation_decisions>",
+        ].join("\n");
+    }
+}
+
+class ForkMergedClosureModel implements ModelClient {
+    public async generate(): Promise<string> {
+        return [
+            "Fork merge completed.",
+            "<flyflor_continuation_decisions>",
+            JSON.stringify({
+                forkMerges: [
+                    {
+                        forkId: "fork-merged-runtime",
+                        kind: "merged",
+                        mergedSummary: "Merged fork closure into the parent scope with resolved evidence.",
+                        closureEvidence: [
+                            {
+                                kind: "fork-merged",
+                                weight: 0.9,
+                                sourceId: "fork-merged-runtime",
+                                note: "structured runtime merge closure",
+                            },
+                        ],
+                    },
+                ],
+            }),
+            "</flyflor_continuation_decisions>",
+        ].join("\n");
+    }
+}
+
 describe("LF-R3 slice D — runtime cap enforcement", () => {
     test("model-emitted ask is dropped when chainDepth would exceed maxChainDepth", async () => {
         try {
@@ -192,6 +248,65 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                 expect(reply.text).toContain("   1. main");
                 expect(reply.text).toContain("   3. Other — type your own answer");
                 expect(reply.text).toContain("2. Should I proceed now?");
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("fork merge conflict decision is consumed as the runtime ask", async () => {
+        try {
+            const config = await makeConfig();
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const runtime = new RuntimeModule(config, new ForkConflictMergeModel(), events, undefined, memory);
+                const reply = await runtime.handleMessage(gwMsg("merge this fork", "m-fork-conflict"), ctx());
+
+                expect(reply.metadata?.kind).toBe("ask");
+                expect(reply.text).toContain("Which fork result should be merged?");
+                expect(reply.metadata?.ask).toMatchObject({ choiceCount: 2 });
+                expect(memory.peekActiveAsk("fork:test-fork")?.ask.prompt).toBe("Which fork result should be merged?");
+            } finally {
+                memory.dispose();
+            }
+        } finally {
+            await cleanup();
+        }
+    });
+
+    test("merged fork decision records Crystal closure evidence during runtime consumption", async () => {
+        try {
+            const config = await makeConfig();
+            config.memory.crystal.enabled = true;
+            const events = new CapturingSink();
+            const memory = new MemoryModule(config, events);
+            await memory.warmup();
+            try {
+                const runtime = new RuntimeModule(config, new ForkMergedClosureModel(), events, undefined, memory);
+                const reply = await runtime.handleMessage(gwMsg("merge clean fork", "m-fork-merged"), ctx());
+
+                expect(reply.metadata?.kind).toBe("reply");
+                const db = new Database(config.memory.crystal.local.dbFile, { readonly: true });
+                try {
+                    const candidate = db
+                        .query<{ source_kind: string; source_id: string; evidence_json: string }, []>(
+                            "SELECT source_kind, source_id, evidence_json FROM crystal_candidates WHERE source_kind = 'context-fork-closure'",
+                        )
+                        .get();
+                    expect(candidate).toMatchObject({
+                        source_kind: "context-fork-closure",
+                        source_id: "fork-merged-runtime",
+                    });
+                    expect(JSON.parse(candidate?.evidence_json ?? "[]")).toEqual([
+                        expect.objectContaining({ kind: "fork-merged", sourceId: "fork-merged-runtime" }),
+                    ]);
+                } finally {
+                    db.close();
+                }
             } finally {
                 memory.dispose();
             }

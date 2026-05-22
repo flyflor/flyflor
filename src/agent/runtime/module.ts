@@ -33,7 +33,15 @@ import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { parseMemoryActions } from "../../cognitive/hippocampus/memory/actions/index.ts";
 import { AgentAskParser } from "../../cognitive/hippocampus/ask/index.ts";
-import { ContinuationDecisionParser } from "../../cognitive/hippocampus/continuation/index.ts";
+import {
+    ContextForkMergeKind,
+    ContinuationDecisionParser,
+    type ContextForkMergeDecision,
+} from "../../cognitive/hippocampus/continuation/index.ts";
+import {
+    buildContextForkClosureCandidate,
+    type CrystalCandidateInput,
+} from "../../cognitive/crystal/reflection/index.ts";
 import { IdentityAppendParser } from "../../cognitive/hippocampus/identity/index.ts";
 import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../cognitive/hippocampus/memory/index.ts";
 import { LocalHashEmbeddingProvider } from "../../cognitive/hippocampus/embedding/index.ts";
@@ -224,6 +232,7 @@ interface GeneratedTurn {
     executiveToolExecutions: ExecutiveCapabilityExecutionMetadata[];
     selectedSkillNames: string[];
     contextForks: ContextForkRecord[];
+    forkMerges: ContextForkMergeDecision[];
     replayRecords: ReplayRecord[];
     taskPlans: TaskPlanRecord[];
     /** LF-R3 Ask 一等公民：模型本轮显式输出的 ask 块（kind='ask'）。 */
@@ -881,6 +890,9 @@ export class RuntimeModule extends RuntimeBoundary {
         if (continuationDecisions.decisions.length > 0) {
             this.memory.applyContinuationDecisions(continuationDecisions.decisions);
         }
+        const forkMergeAsk = continuationDecisions.forkMerges.find(
+            (merge) => merge.kind === ContextForkMergeKind.ConflictAsk && merge.conflictAsk,
+        )?.conflictAsk;
         // LF-R5 identity 自写：从剩余文本里剥离 <flyflor_identity_append> 块。
         // 仅消费结构化 {kind, content, confidence}，runtime 不读 content 文本含义。
         const identityParsed = this.identityAppendParser.parse(continuationDecisions.text);
@@ -920,7 +932,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // LF-R3 slice C：runtime 用户面 cap 强制——若模型本轮要 ask 但当前 chain 已达上限，
         // 抛弃 ask 改走 reply。Memory 内部的 cap 检查是后台兜底，这里负责对外封顶。
         // 仅由 ask 链深度决定，不再让 EQ 参与路由或 ask cap。
-        let modelAsk: AgentAsk | undefined = askParsed.ask;
+        let modelAsk: AgentAsk | undefined = forkMergeAsk ?? askParsed.ask;
         if (modelAsk) {
             const pending = this.memory.peekActiveAsk(continuityOwnerKey(message, context));
             const baseCap = Math.max(1, this.config.memory.tuning.continuation.maxChainDepth);
@@ -994,6 +1006,7 @@ export class RuntimeModule extends RuntimeBoundary {
             executiveToolExecutions,
             selectedSkillNames,
             contextForks: planningParsed.contextForks,
+            forkMerges: continuationDecisions.forkMerges,
             replayRecords: planningParsed.replayRecords,
             taskPlans: planningParsed.taskPlans,
             ask,
@@ -1070,6 +1083,7 @@ export class RuntimeModule extends RuntimeBoundary {
             executiveToolExecutions,
             selectedSkillNames,
             contextForks: [],
+            forkMerges: [],
             replayRecords: [],
             taskPlans: [],
             ask,
@@ -1097,6 +1111,7 @@ export class RuntimeModule extends RuntimeBoundary {
             selectedSkillNames,
             ask,
             contextForks,
+            forkMerges,
             replayRecords,
             taskPlans,
         } = generated;
@@ -1192,6 +1207,39 @@ export class RuntimeModule extends RuntimeBoundary {
                 ),
             );
         }
+    }
+
+    /**
+     * Runtime consumption for LLM-declared fork merges. Conflict merges are
+     * handled earlier as AgentAsk; only completed merges become Crystal
+     * candidates, and the evidence remains entirely structure-derived.
+     */
+    private async recordMergedForkClosureEvidence(
+        forkMerges: ContextForkMergeDecision[],
+        context: RuntimeContext,
+    ): Promise<void> {
+        const candidates: CrystalCandidateInput[] = forkMerges.flatMap((merge) => {
+            if (
+                merge.kind !== ContextForkMergeKind.Merged ||
+                !merge.mergedSummary ||
+                !merge.closureEvidence ||
+                merge.closureEvidence.length === 0
+            ) {
+                return [];
+            }
+            return [
+                buildContextForkClosureCandidate({
+                    closureEvidence: merge.closureEvidence,
+                    conflictCount: merge.conflicts.length,
+                    createdAt: context.now,
+                    forkId: merge.forkId,
+                    mergedSummary: merge.mergedSummary,
+                    metadata: { requestId: context.requestId },
+                }),
+            ];
+        });
+        if (candidates.length === 0) return;
+        await this.memory.applyReflection(candidates, context);
     }
 
     /**
@@ -1309,6 +1357,12 @@ export class RuntimeModule extends RuntimeBoundary {
                 skillNames: selectedSkillNames,
             },
         });
+        await this.runAsyncTurnTask(
+            () => this.recordMergedForkClosureEvidence(generated.forkMerges, enrichedContext),
+            RuntimeEventType.MemoryReflectionFailed,
+            { stage: "runtime-fork-closure-evidence", requestId: context.requestId },
+            context.requestId,
+        );
         await this.runAsyncTurnTask(
             () => this.memory.classifyAndApplyFeedback(message, enrichedContext),
             RuntimeEventType.MemoryFeedbackFailed,
