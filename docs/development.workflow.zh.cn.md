@@ -307,3 +307,16 @@ git worktree list
 - 再选择性合并
 
 Flyflor 需要并发执行力，但也始终需要一个显式心智持有当前的合并后真相。
+
+## 2026-05-22 第二波整合收口
+
+第二波整合后，由协调者维护的主线契约：
+
+- HTTP Gateway 继续只保留 `/ws` 和 `/health`。
+- WS `gateway.status.get` 继续作为结构化状态通道。
+- `clientCount` 已在文档和测试中固定为实时 WS peer count，不是静态 channel 数。
+- docs guard 现在会确保 Rust/thin-client 的 WS handoff 持续显式暴露 `clientCount`。
+
+本次收口验证：
+
+- `bun test tests/docs.references.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts`

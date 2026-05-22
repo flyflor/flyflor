@@ -60,6 +60,7 @@ describe("documentation references", () => {
         expect(doc).toContain("tests/tui.chat.history.test.ts");
         expect(doc).toContain("server.hello");
         expect(doc).toContain("gateway.status.snapshot");
+        expect(doc).toContain("clientCount");
         expect(doc).toContain("capability.catalog.snapshot");
         expect(doc).toContain("turn.final");
         expect(doc).toContain("invalid-envelope");

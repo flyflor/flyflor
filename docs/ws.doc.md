@@ -142,6 +142,8 @@ Gateway 当前只暴露两个 HTTP 路径：
 - gateway 直接调用现有持久化历史读取
 - gateway 返回稳定 JSON 快照
 
+`clientCount` 是 live peer count，只描述当前 WS hub 的实时连接压力，不是静态 channel 数，也不应和 `connectedCount` 混成一回事。
+
 它不是新的思考逻辑，也不是新的会话层。
 它只是血管层把已存在的持久化历史暴露出来。
 
@@ -571,6 +573,7 @@ interface HistoryTurnSnapshot {
       "url": "http://127.0.0.1:8788/",
       "startedAt": "2026-05-21T00:00:00.000Z",
       "uptimeMs": 1234,
+      "clientCount": 1,
       "connectedCount": 1,
       "degradedCount": 0,
       "streamingCount": 1,

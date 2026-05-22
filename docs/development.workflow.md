@@ -307,3 +307,16 @@ When in doubt:
 - merge selectively
 
 Flyflor wants parallel execution, but it still wants one explicit mind holding the current merged truth.
+
+## 2026-05-22 Integration Wave 2 Closeout
+
+Coordinator-maintained mainline contract after the second integration wave:
+
+- HTTP Gateway remains pruned to `/ws` and `/health`.
+- WS `gateway.status.get` remains the structured status lane.
+- `clientCount` is documented and tested as live WS peer count, not static channel count.
+- The docs guard now keeps `clientCount` visible in the Rust/thin-client WS handoff.
+
+Validation for this closeout:
+
+- `bun test tests/docs.references.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts`

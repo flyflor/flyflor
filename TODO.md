@@ -55,6 +55,7 @@ Main visible surfaces:
 - [x] Kept the WS `gateway.status.get` control snapshot lane intact.
 - [x] Carried a live `clientCount` through gateway status snapshots so peer pressure stays observable without reopening `/channels`.
 - [x] Merged the context-memory clock-driven recall slice back into mainline and re-ran the mainline validation set.
+- [x] Pinned the Rust/thin-client docs and docs guard so `clientCount` stays defined as live WS peer count, not static channel count.
 
 ## Next Work
 

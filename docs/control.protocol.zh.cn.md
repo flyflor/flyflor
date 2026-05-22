@@ -170,6 +170,8 @@
 
 也就是说，协议不会替生命体偷偷决定“你现在正在做什么”。真正的工作域只能通过显式 `activeScope` 与 `contextForkId` 进入当前生命态。
 
+`clientCount` 是 `gateway.status.snapshot` 里的 live peer count，只描述当前 WS hub 的实时连接压力，不是静态 channel 数，也不应被当成 `connectedCount` 的别名。
+
 ## `history.list`
 
 `history.list` 是全局 ledger 查询。
@@ -272,5 +274,6 @@ Rust / thin client 最小读取顺序：
 - `activeProject` 只是兼容读口
 - `history.list` 是 ledger 查询，不是会话恢复
 - `chat/thread/user/channel` 不再承担认知连续性
+- `clientCount` 是 live peer count，不是静态 channel 数
 - `turn.final.reply.metadata` 是当前轮 ask / planning / loop 的唯一权威读取面
 - control 协议只传显式上下文，不允许偷偷重建隐式连续性

@@ -85,3 +85,10 @@
   Summary: Kept the mainline surface pruned to `/ws` and `/health`, recorded the live peer-count status lane, and merged the context-memory clock-driven recall slice back into the coordinator branch.
   Reason: The active gateway should stay thin while still exposing observable hub pressure, and the memory/context slice needed to return to mainline before the next kernel pass.
   Verification: `bun run check`; `bun run docs:check`; `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts tests/graph.recall.test.ts tests/background.scheduler.test.ts tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/hot.memory.compression.worker.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/docs.references.test.ts`; `bun run build:binary`
+
+- Status: completed
+  Actor: main-codex
+  Scope: gateway-status-peer-count-contract
+  Summary: Pinned `clientCount` in the active WS/control docs as live WS peer pressure and added a docs guard so the Rust/thin-client handoff keeps that field visible.
+  Reason: The minimal Gateway no longer exposes HTTP `/channels`, so peer observability must stay explicit on the WS status snapshot without being confused with static channel availability.
+  Verification: `bun test tests/docs.references.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts`
