@@ -263,6 +263,7 @@ export interface GatewayControlChannelStatusSnapshot {
 
 export interface GatewayControlGatewayStatusSnapshot {
     channels: GatewayControlChannelStatusSnapshot[];
+    clientCount?: number;
     connectedCount: number;
     degradedCount: number;
     gatewayRunning: boolean;

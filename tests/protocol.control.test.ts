@@ -204,6 +204,7 @@ describe("Gateway Control protocol", () => {
         expect(
             buildGatewayControlGatewayStatusPayload({
                 channels: [],
+                clientCount: 0,
                 connectedCount: 0,
                 degradedCount: 0,
                 gatewayRunning: false,
@@ -214,6 +215,7 @@ describe("Gateway Control protocol", () => {
         ).toEqual({
             status: {
                 channels: [],
+                clientCount: 0,
                 connectedCount: 0,
                 degradedCount: 0,
                 gatewayRunning: false,
@@ -283,6 +285,7 @@ describe("Gateway Control protocol", () => {
             buildGatewayControlDataPayload({
                 status: {
                     channels: [],
+                    clientCount: 0,
                     connectedCount: 0,
                     degradedCount: 0,
                     gatewayRunning: false,
@@ -305,6 +308,7 @@ describe("Gateway Control protocol", () => {
                 kits: { builtAt: "2026-05-19T00:00:00.000Z", capabilities: [], kits: [], schemaVersion: 1 },
                 status: {
                     channels: [],
+                    clientCount: 0,
                     connectedCount: 0,
                     degradedCount: 0,
                     gatewayRunning: false,
@@ -387,6 +391,7 @@ describe("Gateway Control protocol", () => {
             },
             status: {
                 channels: [],
+                clientCount: 1,
                 connectedCount: 1,
                 degradedCount: 0,
                 gatewayRunning: true,
@@ -406,6 +411,7 @@ describe("Gateway Control protocol", () => {
                 host: "127.0.0.1",
                 port: 7777,
                 connectedCount: 1,
+                clientCount: 1,
             },
             kits: {
                 schemaVersion: 1,
