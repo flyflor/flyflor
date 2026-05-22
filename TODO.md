@@ -546,5 +546,7 @@ Kernel V2 acceptance focus：
 - [ ] 停止并回收已完成 review 的 `socket-protocol` Codex lane。
 - [x] review `wt/kernel-scope-memory` residue：owned code/test surface 已被主线吸收，无需再合入；保留分支作为 review evidence。
 - [ ] 停止并回收已完成 review 的 `scope-memory` Codex lane。
-- [ ] 继续 review 并选择性合并剩余 child commits，优先级：release-seal、docs-report。
+- [x] review `wt/kernel-release-seal` residue：install/Docker scripts 和 tests 与主线一致；剩余 README/control-file diff 违反当前英文 README 与控制文件中文单本政策，不合入。
+- [ ] 停止并回收已完成 review 的 `release-seal` Codex lane。
+- [ ] 继续 review 并选择性合并剩余 child commits，优先级：docs-report。
 - [ ] 最终 seal 前重新跑完整主线验证，并提交/push coordinator snapshot。

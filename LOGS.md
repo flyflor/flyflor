@@ -414,3 +414,10 @@
   摘要：review `wt/kernel-scope-memory` 后确认 owned code/test surface 与主线无剩余差异；`brain.db` prompt recall 移除、Scope hot memory 和 `scope.db` guard 已在主线闭合。
   原因：scope-memory lane 已完成且不应继续空转；控制文件历史不直接合并，主线只保留 canonical 摘要。
   验证：`git diff master..wt/kernel-scope-memory -- src/cognitive/hippocampus/memory/module.ts tests/memory.brain.wire.test.ts tests/runtime.perf.test.ts`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-release-seal-residue
+  摘要：review `wt/kernel-release-seal` 后确认 installer/Docker scripts 和 install tests 与主线一致；剩余 diff 主要来自旧 README 中文化、`TODO.zh.cn.md` / `LOGS.zh.cn.md` 控制副本和旧文档策略，不合入。
+  原因：主线已经满足“不创建全局 bin，只安装到 `~/.flyflor` / prefix，未来 `npm i -g flyflor` 连接 `/ws`”的安装策略；继续合入 release 分支剩余差异会破坏当前 README 英文入口和控制文件中文单本规则。
+  验证：`git diff master..wt/kernel-release-seal -- scripts/install.sh scripts/install.source.sh scripts/install.docker.sh scripts/install.ps1 tests/install.script.test.ts docker-compose.yml docker/README.md docker/README.zh.cn.md scripts/docker.dev.smoke.ts tests/docker.dev.smoke.test.ts`
