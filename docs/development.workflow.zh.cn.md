@@ -872,3 +872,28 @@ Kernel V2 硬设计点：
 3. 停止最后一个 `docs-report` tmux lane
 4. 确认没有 child Codex 进程空转
 5. push `master`
+
+## 2026-05-23 Kernel V3 主线闭合
+
+已接受主线 lane：
+
+- `wt/release-seal-fast` -> `01b2234`：Docker dev 与安装路径不再创建全局 `flyflor` shim。
+- `wt/scope-vector-recall` -> `7b84909`：related scope recall 固定在 root scope-local `scope.db` 内。
+- `wt/crystal-gem-quality-gate` -> `ae45274`：Crystal candidate 到 Gem 增加质量门和 provenance gate。
+- `wt/socket-control-e2e` -> `2232d7a`：`/ws` status 暴露 ASK、Scope、Fork、Executive loop control state。
+- `wt/ask-ghost-continue` -> `ddf4729`：未回答 ASK ghost continuation 落盘，structured `continue` 恢复锚点。
+- `wt/runtime-loop-resume` -> `35cb966`：Executive loop pause/resume 通过 ASK continuation 携带工具进度。
+- `wt/scope-solidification-vector` -> `9592ccd`：Scope 创建消费结构化 ASK confirmation，codename evidence 进入 scope-local `scope.db`。
+
+拒绝 broad merge：
+
+- `wt/docs-contract-sync` 提交 `56c84a7` 相对已合入实现 lane 过期，会删除当前源码、测试、OpenAPI、Docker 与 release 修复。协调者只手动同步其中仍然正确的文档事实。
+
+最终 push 前闭合标准：
+
+- 在主线运行 ASK、Scope、Crystal、Runtime、Socket 和 docs focused suites。
+- 运行 `bun run docs:check`。
+- 运行 `bun run check`。
+- 运行 `bun run build:binary`。
+- 运行 `git diff --check`。
+- 最终主线提交后回收 child tmux window 并移除开发 worktree。

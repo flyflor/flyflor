@@ -2,7 +2,7 @@
 
 状态日期：`2026-05-23`
 
-本文是 Bun + TypeScript 仓库当前的契约叙述。它说明哪些事情已经是事实，Kernel V2 正在闭合哪些事情，以及子 worktree 不能越过哪些红线。本文不会把外部 Rust shell 工作写成本仓库的活跃任务。
+本文是 Bun + TypeScript 仓库当前的契约叙述。它说明哪些事情已经闭合，智能生命体内核如何分层，以及后续子 worktree 不能越过哪些红线。本文不会把外部 Rust shell 工作写成本仓库的活跃任务。
 
 ## 一句话定位
 
@@ -31,16 +31,18 @@ Flyflor 是智能生命体内核，不是 chat/session agent。本仓库负责 B
 - `brain.db` 只做 ledger/query/replay/audit/detail。
 - Scope-local `scope.db` 是 Scope vector、tree、hot-memory 和 association 的 context/index 装备。
 - Runtime context assembly 仍然是 current input + Memory + Crystal + explicit Scope/Fork + Executive visible capability surface。
+- 未回答 ASK 会持久化为 ghost continuation snapshot；显式 structured `continue` 可恢复 scope/fork/loop anchor。
+- Scope 创建通过结构化 ASK confirmation 固化；codename 只能作为 anchor/evidence 渐进升格，并会物化到 scope-local `scope.db` 的 tree/association 证据。
+- Crystal candidate 到 Gem 经过质量门，保留 provenance、reject raw-source leakage，并让 recall metadata 可解释。
+- Executive loop pause/resume 已和 ASK ghost continuation 打通，工具进度随 loop snapshot 恢复。
+- `/ws` control state snapshot 可观察 active ASK、Scope、Fork 与 Executive loop 状态。
+- 安装与 Docker dev 不创建全局 `flyflor` 命令；本仓库只把 Bun 内核安装到 `~/.flyflor` 或显式 prefix。
 
-## 不是当前事实
+## 非目标
 
-以下项目仍是 Kernel V2 的剩余闭合目标或外部交接参考。在对应实现和验证进入主线前，不能写成已经落地。
-
-- 未回答 ASK snapshot 的 ASK ghost resume。
-- ASK ghost 通过显式 `continue` 恢复后的端到端用户面闭环。
-- 本 Bun 仓库内的任何 Rust shell 实现。
-- `/health` 和 `/ws` 之外的任何 HTTP surface。
-- 任何从 transport metadata 派生的认知连续性 owner。
+- 本 Bun 仓库内不实现 Rust shell。未来 Rust CLI/TUI 是外部仓库，通过 `/ws` 对接。
+- 不增加 `/health` 和 `/ws` 之外的 HTTP surface。
+- 不允许任何从 transport metadata 派生的认知连续性 owner。
 
 ## 作者设计思想
 
@@ -92,7 +94,7 @@ Ledger/query plane：
 
 ## Scope/Fork/ASK Ghost/Crystal 闭环模型
 
-当前契约：
+当前闭合契约：
 
 - `Scope` 是唯一显式 durable work domain。
 - `ContextFork` 是 Scope 或 turn-local context 下的显式分支。
@@ -105,12 +107,11 @@ Ledger/query plane：
 2. `conflict-ask` fork merge 会进入 runtime ASK path。
 3. `merged` fork merge 可以生成 `context-fork-closure` Crystal candidate。
 4. Executive loop guard 会产生可见 `loopGuardSnapshot`，重复失败结果会结构化 ASK 暂停。
-
-仍需继续验证和补齐的部分：
-
-1. 未回答 ASK ghost/pending snapshot 的完整恢复体验。
-2. `continue` 恢复后对 scope/fork/loop snapshot 的端到端用户面闭环。
-3. Crystal candidate 到 Gem 的长期质量门和回放可解释性。
+5. 未回答 ASK ghost/pending snapshot 会落盘保存 continuation state。
+6. 显式 `continue` 恢复 scope/fork/loop snapshot，并继续 Executive loop 工具路径。
+7. Scope 固化只消费结构化 ASK confirmation choice；codename evidence 会进入 scope-local `scope.db`。
+8. Crystal candidate 到 Gem 有质量门与 replay/audit explainability。
+9. `/ws` control state snapshot 对外暴露 ASK/Scope/Fork/Executive loop 可见状态。
 
 目标 loop：
 
@@ -141,16 +142,18 @@ flowchart LR
 - 不新增破坏 Bun 单文件二进制编译的运行时依赖。
 - 修改 prompt template 必须同步 canonical `.md` 和 `.zh.cn.md`。
 
-## Kernel V2 Worktree Task Table
+## Kernel V3 Worktree Task Table
 
 | Merge order | Branch | Mainline state | Decision |
 | --- | --- | --- | --- |
-| 1 | `wt/docs-contracts-report` | 本报告被选择性保留；过宽 README / old-docs / control-file diff 不合入。 | 保留报告，主线维护 canonical 摘要。 |
-| 2 | `wt/kernel-scope-memory` | Scope/Memory owned code/test surface 已在主线闭合。 | 回收 lane，分支保留为 evidence。 |
-| 3 | `wt/kernel-fork-ask-crystal` | fork merge parsing、conflict ASK、merged closure Crystal candidate 已合入并通过 focused tests。 | 已合入 implementation/test。 |
-| 4 | `wt/kernel-runtime-executive` | Executive loop guard snapshot 和 repeated failure ASK pause 已合入并通过 focused tests。 | 已合入 implementation/test。 |
-| 5 | `wt/kernel-socket-protocol` | event selector guard / OpenAPI enum / WS docs 已在主线；剩余 diff 会回退当前协议。 | 拒绝剩余 diff，回收 lane。 |
-| 6 | `wt/kernel-release-seal` | installer/Docker scripts 与主线一致；剩余 diff 违反 README/control-file policy。 | 拒绝剩余 diff，回收 lane。 |
+| 1 | `wt/release-seal-fast` | Docker dev 改为显式 `/tmp/flyflor-linux chat`；安装不写全局命令。 | 已合入 `01b2234`。 |
+| 2 | `wt/scope-vector-recall` | Scope Vector 只从 root scope-local `scope.db` 召回 related scope tree/hot-memory/association。 | 已合入 `7b84909`。 |
+| 3 | `wt/crystal-gem-quality-gate` | Crystal Gem candidate 增加质量门、provenance、raw-source rejection 和 explainability。 | 已合入 `ae45274`。 |
+| 4 | `wt/socket-control-e2e` | `/ws` status control state 暴露 ASK/Scope/Fork/Executive loop snapshot。 | 已合入 `2232d7a`。 |
+| 5 | `wt/ask-ghost-continue` | 未回答 ASK ghost continuation 落盘；显式 `continue` 恢复上下文锚点。 | 已合入 `ddf4729`。 |
+| 6 | `wt/runtime-loop-resume` | Executive loop pause ASK ghost 携带工具进度，并在 continue 后恢复执行路径。 | 已合入 `35cb966`。 |
+| 7 | `wt/scope-solidification-vector` | Scope 创建 ASK confirmation 和 codename evidence materialization 闭合。 | 已合入 `9592ccd`。 |
+| 8 | `wt/docs-contract-sync` | 分支过期，会删除已合入实现与 OpenAPI；仅吸收有效事实，拒绝 broad merge。 | 主线手动同步文档。 |
 
 ## 交接影响
 
@@ -162,4 +165,4 @@ Context-assembly impact：本文不改变 runtime assembly。它重申 canonical
 
 Prompt-template impact：本文不改变 runtime prompt templates。Runtime templates 继续是 canonical `.md` 文件，并配套 `.zh.cn.md` 人工审查副本。
 
-Residual risk：本文是 contract anchor。当前主线已经合入 fork/ASK/crystal 和 runtime/executive 的关键 implementation/test 增量，但最终 seal 仍需要完整 `docs:check`、focused docs/naming tests、`bun run check`、`git diff --check`，以及按需要运行更大的 deterministic suite。
+Residual risk：当前 Bun 内核 closure 已在主线形成实现、测试、文档和 release surface。最终上线前仍需按发布流程运行 deterministic seal 与按配置运行 live provider smoke；缺失真实 provider 凭据不影响离线内核闭合判断，但会影响 `kernel:seal` 的 live gate。

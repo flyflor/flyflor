@@ -533,3 +533,27 @@
   原因：该 lane 通过结构化 ASK confirmation 和 codename evidence 升格补齐 Scope durable work domain 固化闭环。
   效率：child 用时约 17m08s；7 files changed，377 insertions，8 deletions；分类为 control `+16/-7`，src `+187/-1`，tests `+174/-0`。
   验证：待主线重跑 scope solidification/vector/codename focused tests、`bun run check`、`bun run docs:check`、`bun run build:binary`、`git diff --check`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v3-scope-solidification-merge
+  摘要：`wt/scope-solidification-vector` 已合入主线提交 `9592ccd`。
+  原因：Scope 创建 ASK confirmation、codename evidence 物化和 scope-local `scope.db` 证据链已通过 review。
+  效率：主线合入 7 files changed，370 insertions，1 deletion；分类为 control `+9/-0`，src `+188/-1`，tests `+174/-0`。
+  验证：`bun test tests/scope.solidification.test.ts tests/scope.vector.test.ts tests/codename.promote.test.ts tests/context.scope.test.ts tests/scope.offer.test.ts` 1.65s；`bun run docs:check` 0.47s；`bun run build:binary` 0.69s；`bun run check` 16.92s；`git diff --check`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v3-docs-contract-sync-review
+  摘要：拒绝直接合并 `wt/docs-contract-sync` 的 `56c84a7`，改为在主线手动同步已合入事实。
+  原因：该分支相对当前主线过期，整分支 diff 会删除已接受的 ASK ghost、Scope 固化、Scope Vector、Crystal Gate、Socket control、Runtime loop、Docker release 与 OpenAPI 内容。
+  效率：拒绝 stale broad merge，避免 39 files 中约 2029 行删除回退；保留文档事实同步为主线小范围 patch。
+  验证：待最终 docs/focused/seal validation
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v3-final-seal-validation
+  摘要：完成 Kernel V3 主线闭合验证，ASK ghost/continue、Scope 固化、Scope Vector、Crystal Gate、Runtime loop resume、Socket control snapshot、Release seal 和文档契约均已进入主线事实。
+  原因：用户要求把智能生命体内核推进到上线可用闭环，并用主线验证而不是子 worktree 自报结果作为最终口径。
+  效率：从 `origin/master` 到当前主线累计 36 files changed，2031 insertions，47 deletions；分类约为 control/docs `+74/-4`、docs/openapi `+174/-0`、scripts/config/package `+5/-5`、src `+908/-36`、tests `+870/-2`。
+  验证：focused seal `bun test ...` 25 files / 251 tests / 17.69s；`bun run docs:check` 0.41s；`bun run build:binary` 0.58s；`bun run check` 13.24s；`git diff --check`

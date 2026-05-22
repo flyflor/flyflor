@@ -901,3 +901,28 @@ Merge posture:
 - reject any change that restores hidden session continuity, `/channels`, `brain.db` prompt recall, or semantic string matching
 - after each accepted lane, run its focused tests on mainline
 - every accepted lane merge must record efficiency metrics: lane elapsed time, merged commit id, file count, insertions/deletions, `src`/`tests`/`docs`/`scripts` line split, validation commands, and validation elapsed time
+
+## 2026-05-23 Kernel V3 Mainline Closure
+
+Accepted mainline lanes:
+
+- `wt/release-seal-fast` -> `01b2234`: Docker dev and installer no longer create a global `flyflor` shim.
+- `wt/scope-vector-recall` -> `7b84909`: related scope recall stays inside root scope-local `scope.db`.
+- `wt/crystal-gem-quality-gate` -> `ae45274`: Crystal candidate to Gem now has quality/provenance gates.
+- `wt/socket-control-e2e` -> `2232d7a`: `/ws` status exposes ASK, Scope, Fork, and Executive loop control state.
+- `wt/ask-ghost-continue` -> `ddf4729`: unanswered ASK ghost continuation persists and structured `continue` restores anchors.
+- `wt/runtime-loop-resume` -> `35cb966`: Executive loop pause/resume carries tool progress through ASK continuation.
+- `wt/scope-solidification-vector` -> `9592ccd`: Scope creation consumes structured ASK confirmation, and codename evidence enters scope-local `scope.db`.
+
+Rejected broad merge:
+
+- `wt/docs-contract-sync` commit `56c84a7` is stale against the accepted implementation lanes and would delete current source, tests, OpenAPI, Docker, and release fixes. The coordinator manually synchronized the valid documentation facts instead of merging the stale branch.
+
+Closure criteria before final push:
+
+- run ASK, Scope, Crystal, Runtime, Socket and docs focused suites on mainline
+- run `bun run docs:check`
+- run `bun run check`
+- run `bun run build:binary`
+- run `git diff --check`
+- recycle child tmux windows and remove development worktrees after the final mainline commit
