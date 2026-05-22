@@ -1,6 +1,6 @@
 import { ExecutiveLoopGuardReason } from "../protocol/contracts/index.ts";
 import { ExecutiveLoopGuard } from "./loop.guard.ts";
-import type { ExecutiveLoopGuardDecision } from "./types.ts";
+import type { ExecutiveLoopGuardDecision, ExecutiveLoopGuardSnapshot } from "./types.ts";
 
 export interface ExecutiveToolCall {
     readonly input: Readonly<Record<string, unknown>>;
@@ -35,6 +35,9 @@ export interface ExecutiveToolRuntimeOptions<TCall extends ExecutiveToolCall, TE
     callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>;
     initialMessages: unknown[];
     loopGuard?: {
+        maxCalls?: number;
+        maxFailedCallRepeats?: number;
+        maxRepeatedCalls?: number;
         maxUnknownToolRepeats?: number;
     };
     maxTurns: number;
@@ -44,6 +47,7 @@ export interface ExecutiveToolRuntimeOptions<TCall extends ExecutiveToolCall, TE
 export interface ExecutiveToolRuntimeAskRequired {
     readonly askId: string;
     readonly loopGuardReason?: ExecutiveLoopGuardReason;
+    readonly loopGuardSnapshot?: ExecutiveLoopGuardSnapshot;
     readonly message: string;
     readonly resume: {
         readonly mode: "continue";
@@ -97,6 +101,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
                     askRequired: {
                         askId: crypto.randomUUID(),
                         loopGuardReason: this.lastLoopGuardReason(blocked),
+                        loopGuardSnapshot: loopGuard.snapshot(),
                         message: "Executive loop guard blocked every tool call in this step.",
                         resume: { mode: "continue" },
                         stepCount: turn + 1,
@@ -114,6 +119,21 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             }
 
             allExecutions.push(...blocked, ...executions, ...resultBlocked);
+            if (resultBlocked.length > 0) {
+                return {
+                    askRequired: {
+                        askId: crypto.randomUUID(),
+                        loopGuardReason: this.lastLoopGuardReason(resultBlocked),
+                        loopGuardSnapshot: loopGuard.snapshot(),
+                        message: "Executive loop guard blocked tool execution results in this step.",
+                        resume: { mode: "continue" },
+                        stepCount: turn + 1,
+                        stop: "ask",
+                    },
+                    rawText: parsed.text || raw,
+                    executions: allExecutions,
+                };
+            }
             // If the model already emitted visible text and every concrete
             // execution in this step failed, keep the user-facing reply instead
             // of turning ordinary denials/schema failures into a guard ask.
@@ -130,6 +150,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             askRequired: {
                 askId: crypto.randomUUID(),
                 loopGuardReason: this.lastLoopGuardReason(allExecutions),
+                loopGuardSnapshot: loopGuard.snapshot(),
                 message: input.noMoreToolsMessage,
                 resume: { mode: "continue" },
                 stepCount: maxTurns,

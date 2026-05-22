@@ -1411,6 +1411,9 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.executiveToolLoop).toEqual(
             expect.objectContaining({
                 askId: expect.any(String),
+                loopGuardSnapshot: expect.objectContaining({
+                    totalCalls: 1,
+                }),
                 resume: { mode: "continue" },
                 stepCount: 1,
                 stop: "ask",
@@ -1486,9 +1489,13 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.executiveToolLoop).toEqual(
             expect.objectContaining({
                 askId: expect.any(String),
-                loopGuardReason: "repeated-call-no-progress",
+                loopGuardReason: "failed-call-repeat",
+                loopGuardSnapshot: expect.objectContaining({
+                    failedCallRepeatCounts: expect.any(Object),
+                    totalCalls: 3,
+                }),
                 resume: { mode: "continue" },
-                stepCount: 4,
+                stepCount: 3,
                 stop: "ask",
             }),
         );
@@ -1517,8 +1524,11 @@ describe("Skill and MCP capability config", () => {
                 expect.objectContaining({
                     type: RuntimeEventType.ExecutiveLoopPaused,
                     payload: expect.objectContaining({
-                        loopGuardReason: "repeated-call-no-progress",
-                        stepCount: 4,
+                        loopGuardReason: "failed-call-repeat",
+                        loopGuardSnapshot: expect.objectContaining({
+                            totalCalls: 3,
+                        }),
+                        stepCount: 3,
                     }),
                 }),
             ]),

@@ -244,6 +244,7 @@ interface GeneratedTurn {
 interface RuntimeExecutiveAskRequired {
     askId: string;
     loopGuardReason?: ExecutiveToolRuntimeAskRequired["loopGuardReason"];
+    loopGuardSnapshot?: ExecutiveToolRuntimeAskRequired["loopGuardSnapshot"];
     message: string;
     resume: ExecutiveToolRuntimeAskRequired["resume"];
     stepCount: number;
@@ -864,6 +865,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     {
                         askId: generated.askRequired?.askId,
                         loopGuardReason: generated.askRequired?.loopGuardReason,
+                        loopGuardSnapshot: generated.askRequired?.loopGuardSnapshot,
                         stepCount: generated.askRequired?.stepCount,
                         toolBudgetExhausted: generated.askRequired?.toolBudgetExhausted === true,
                     },

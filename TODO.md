@@ -538,6 +538,9 @@ Kernel V2 acceptance focus：
   - `feat: parse fork merge closure evidence`
   - `feat: consume fork merge decisions at runtime`
   - 验证：`bun test tests/continuation.decisions.parse.test.ts tests/reflection.gem.consolidation.test.ts tests/ask.cap.runtime.test.ts tests/ask.parse.test.ts tests/ask.reply.test.ts tests/crystal.local.backend.test.ts`
-- [ ] 停止并回收已合入的 `fork-ask-crystal` Codex lane。
-- [ ] 继续 review 并选择性合并剩余 child commits，优先级：runtime-executive residue、socket-protocol residue、release-seal、docs-report。
+- [x] 停止并回收已合入的 `fork-ask-crystal` Codex lane。
+- [x] review 并选择性合并 `wt/kernel-runtime-executive` residue：Executive loop guard snapshot 由 runtime 真实生成，重复失败结果立即 ASK 暂停，并进入 `executive.loop.paused` payload。
+  - 验证：`bun test tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts`
+- [ ] 停止并回收已合入的 `runtime-executive` Codex lane。
+- [ ] 继续 review 并选择性合并剩余 child commits，优先级：socket-protocol residue、release-seal、docs-report。
 - [ ] 最终 seal 前重新跑完整主线验证，并提交/push coordinator snapshot。

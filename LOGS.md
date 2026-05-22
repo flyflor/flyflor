@@ -393,3 +393,10 @@
   摘要：选择性合并 `wt/kernel-fork-ask-crystal` 的实现和测试，不合并子 worktree 本地控制文件历史；主线现在支持解析 fork merge closure evidence、冲突 fork merge 进入 ASK、已合并 fork 证据进入 Crystal candidate。
   原因：Fork 像 branch、冲突触发 ASK、ASK ghost/continue 和闭合证据结晶是当前智能生命体内核闭环的核心设计点，不能让已完成 child lane 空转。
   验证：`bun test tests/continuation.decisions.parse.test.ts tests/reflection.gem.consolidation.test.ts tests/ask.cap.runtime.test.ts tests/ask.parse.test.ts tests/ask.reply.test.ts tests/crystal.local.backend.test.ts`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-runtime-executive-merge
+  摘要：选择性合并 `wt/kernel-runtime-executive` 的剩余有效实现，不回退 fork merge runtime 代码，也不合并会削弱 OpenAPI selector enum guard 的旧分支文档；Executive loop guard snapshot 现在由 runtime 真实生成，重复失败结果会结构化 ASK 暂停。
+  原因：nanobot-style runtime 必须在预算耗尽、unknown tool、重复失败和无进展时给出可审计 pause/resume，而不是继续隐藏重试或只在协议文档里声明 snapshot。
+  验证：`bun test tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts`

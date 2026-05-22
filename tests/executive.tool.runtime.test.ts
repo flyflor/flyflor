@@ -142,6 +142,10 @@ describe("ExecutiveToolRuntime", () => {
         expect(result.askRequired).toEqual({
             askId: expect.any(String),
             loopGuardReason: ExecutiveLoopGuardReason.UnknownToolRepeat,
+            loopGuardSnapshot: expect.objectContaining({
+                totalCalls: 2,
+                unknownToolCounts: { "missing.tool": 2 },
+            }),
             message: "Executive loop guard blocked every tool call in this step.",
             resume: { mode: "continue" },
             stepCount: 2,
@@ -155,7 +159,7 @@ describe("ExecutiveToolRuntime", () => {
         expect(blocked[0]?.reason).toBe(ExecutiveLoopGuardReason.UnknownToolRepeat);
     });
 
-    test("records failed result repeats and emits guard executions back into the transcript", async () => {
+    test("records failed result repeats and pauses with a structured guard snapshot", async () => {
         const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
         const transcriptSizes: number[] = [];
 
@@ -184,14 +188,26 @@ describe("ExecutiveToolRuntime", () => {
             },
         });
 
-        expect(result.rawText).toBe("final");
+        expect(result.rawText).toBe("again");
+        expect(result.askRequired).toEqual({
+            askId: expect.any(String),
+            loopGuardReason: ExecutiveLoopGuardReason.FailedCallRepeat,
+            loopGuardSnapshot: expect.objectContaining({
+                failedCallRepeatCounts: expect.any(Object),
+                totalCalls: 3,
+            }),
+            message: "Executive loop guard blocked tool execution results in this step.",
+            resume: { mode: "continue" },
+            stepCount: 3,
+            stop: "ask",
+        });
         expect(result.executions.map((execution) => execution.error)).toEqual([
             "same failure",
             "same failure",
             "same failure",
             "Executive loop stopped repeated failed call workspace.read.",
         ]);
-        expect(transcriptSizes).toEqual([1, 3, 5, 7]);
+        expect(transcriptSizes).toEqual([1, 3, 5]);
     });
 
     test("returns ask-required when max tool turns are exhausted", async () => {
@@ -213,6 +229,7 @@ describe("ExecutiveToolRuntime", () => {
 
         expect(result.askRequired).toEqual({
             askId: expect.any(String),
+            loopGuardSnapshot: expect.objectContaining({ totalCalls: 1 }),
             message: "no more tools",
             resume: { mode: "continue" },
             stepCount: 1,
@@ -244,6 +261,10 @@ describe("ExecutiveToolRuntime", () => {
         expect(result.askRequired).toEqual({
             askId: expect.any(String),
             loopGuardReason: ExecutiveLoopGuardReason.UnknownToolRepeat,
+            loopGuardSnapshot: expect.objectContaining({
+                totalCalls: 1,
+                unknownToolCounts: { "missing.tool": 1 },
+            }),
             message: "Executive loop guard blocked every tool call in this step.",
             resume: { mode: "continue" },
             stepCount: 1,
@@ -279,6 +300,7 @@ describe("ExecutiveToolRuntime", () => {
 
         expect(result.askRequired).toEqual({
             askId: expect.any(String),
+            loopGuardSnapshot: expect.objectContaining({ totalCalls: 1 }),
             message: "tool budget is exhausted, ask for execution guidance",
             resume: { mode: "continue" },
             stepCount: 1,
