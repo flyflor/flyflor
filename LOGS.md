@@ -407,3 +407,10 @@
   摘要：review `wt/kernel-socket-protocol` 后不再合入剩余 diff；unknown event subscription selector guard、OpenAPI enum drift guard 和 WS 文档说明已经存在于主线，分支剩余差异会移除 `loopGuardSnapshot`、恢复 old Rust doc 路径并削弱当前协议契约。
   原因：子分支基线早于主线 runtime-executive 和文档政策收口，直接合并会造成设计回退；主 Codex 只接受不漂移的 implementation/docs surface。
   验证：review `git diff master..wt/kernel-socket-protocol`；主线已有 `bun test tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/docs.references.test.ts` 通过记录
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-scope-memory-residue
+  摘要：review `wt/kernel-scope-memory` 后确认 owned code/test surface 与主线无剩余差异；`brain.db` prompt recall 移除、Scope hot memory 和 `scope.db` guard 已在主线闭合。
+  原因：scope-memory lane 已完成且不应继续空转；控制文件历史不直接合并，主线只保留 canonical 摘要。
+  验证：`git diff master..wt/kernel-scope-memory -- src/cognitive/hippocampus/memory/module.ts tests/memory.brain.wire.test.ts tests/runtime.perf.test.ts`

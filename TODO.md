@@ -544,5 +544,7 @@ Kernel V2 acceptance focus：
 - [ ] 停止并回收已合入的 `runtime-executive` Codex lane。
 - [x] review `wt/kernel-socket-protocol` residue：有效的 event selector guard / OpenAPI enum / WS 文档已在主线；剩余差异会回退 `loopGuardSnapshot`、old-docs 链接和当前协议 guard，因此不合入。
 - [ ] 停止并回收已完成 review 的 `socket-protocol` Codex lane。
+- [x] review `wt/kernel-scope-memory` residue：owned code/test surface 已被主线吸收，无需再合入；保留分支作为 review evidence。
+- [ ] 停止并回收已完成 review 的 `scope-memory` Codex lane。
 - [ ] 继续 review 并选择性合并剩余 child commits，优先级：release-seal、docs-report。
 - [ ] 最终 seal 前重新跑完整主线验证，并提交/push coordinator snapshot。
