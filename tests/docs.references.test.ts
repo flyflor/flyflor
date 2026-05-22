@@ -4,10 +4,15 @@ import { join } from "node:path";
 import {
     GatewayControlMessageType,
     GatewayControlProtocol,
+    RuntimeEventClass,
     TaskPlanStatus,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType } from "../src/events/index.ts";
-import { GatewayControlErrorCode } from "../src/protocol/control/index.ts";
+import {
+    GatewayControlErrorCode,
+    GatewayControlReplyMetadataKind,
+    GatewayControlSemanticType,
+} from "../src/protocol/control/index.ts";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 
@@ -88,14 +93,26 @@ describe("documentation references", () => {
         const contract = JSON.parse(text) as {
             components?: {
                 examples?: Record<string, { value?: unknown }>;
-                schemas?: Record<string, { enum?: string[]; oneOf?: unknown[] }>;
+                schemas?: Record<string, {
+                    enum?: string[];
+                    oneOf?: Array<{ $ref?: string }>;
+                    properties?: Record<string, {
+                        const?: string;
+                        enum?: string[];
+                        items?: { enum?: string[] };
+                        properties?: Record<string, { const?: string; enum?: string[] }>;
+                    }>;
+                    required?: string[];
+                }>;
             };
             openapi?: string;
             paths?: Record<string, unknown>;
         };
         const wireText = JSON.stringify(contract);
+        const schemas = contract.components?.schemas ?? {};
         const socketMessageTypes = contract.components?.schemas?.SocketMessageType?.enum ?? [];
         const examples = contract.components?.examples ?? {};
+        const clientEnvelopeRefs = contract.components?.schemas?.SocketClientEnvelope?.oneOf?.map((item) => item.$ref) ?? [];
         const scenarioTypes = [
             "ServerHello",
             "ClientHello",
@@ -124,9 +141,33 @@ describe("documentation references", () => {
         expect(contract.components?.schemas).toHaveProperty("SocketEventEnvelope");
         expect(contract.components?.schemas).toHaveProperty("SocketClientEnvelope");
         expect(contract.components?.schemas?.SocketClientEnvelope?.oneOf?.length).toBeGreaterThan(0);
-        expect(socketMessageTypes).toContain(GatewayControlMessageType.GatewayMessageSend);
-        expect(socketMessageTypes).toContain(GatewayControlMessageType.HistoryList);
-        expect(socketMessageTypes).not.toContain(GatewayControlMessageType.EventPublish);
+        expect(socketMessageTypes).toEqual(
+            Object.values(GatewayControlMessageType).filter((type) => type !== GatewayControlMessageType.EventPublish),
+        );
+        expect(clientEnvelopeRefs).toEqual([
+            "#/components/schemas/ClientHelloEnvelope",
+            "#/components/schemas/PingEnvelope",
+            "#/components/schemas/GatewayStatusGetEnvelope",
+            "#/components/schemas/CapabilityCatalogGetEnvelope",
+            "#/components/schemas/HistoryListEnvelope",
+            "#/components/schemas/GatewayMessageSendEnvelope",
+            "#/components/schemas/EventSubscribeEnvelope",
+            "#/components/schemas/EventUnsubscribeEnvelope",
+        ]);
+        expect(schemas.SocketEnvelope?.properties?.protocol?.const).toBe(GatewayControlProtocol.WsV1);
+        expect(schemas.SocketEventEnvelope?.properties?.protocol?.const).toBe(GatewayControlProtocol.EventV1);
+        expect(schemas.SocketEventEnvelope?.properties?.type?.const).toBe(GatewayControlMessageType.EventPublish);
+        expect(schemas.EventSubscription?.properties?.classes?.items?.enum).toEqual(Object.values(RuntimeEventClass));
+        expect(schemas.SurfaceCapabilities?.properties?.semanticTypes?.items?.enum).toEqual(
+            Object.values(GatewayControlSemanticType),
+        );
+        expect(schemas.ErrorPayload?.properties?.code?.enum).toEqual(Object.values(GatewayControlErrorCode));
+        expect(schemas.ReplyMetadata?.properties?.kind?.enum).toEqual(Object.values(GatewayControlReplyMetadataKind));
+        expect(schemas.GatewayStatusSnapshot?.required).toContain("clientCount");
+        expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("sourceKey");
+        expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("scope");
+        expect(schemas.RuntimeContextInput?.properties).toHaveProperty("activeScope");
+        expect(schemas.RuntimeContextInput?.properties).toHaveProperty("activeProject");
         expect(examples.EventPublish?.value).toMatchObject({ protocol: GatewayControlProtocol.EventV1 });
         expect(wireText).toContain(GatewayControlProtocol.WsV1);
         expect(wireText).toContain(GatewayControlProtocol.EventV1);
