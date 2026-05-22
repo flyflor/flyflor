@@ -190,3 +190,10 @@
   Summary: Reconciled root TODO status markers for already-reviewed wave2/wave3 work, appended the latest socket-owner/full-suite state, and updated bilingual workflow handoff text so wave4 and socket-wire layouts read as reviewed/restorable history instead of active child-agent work.
   Reason: The code and validation state had advanced past the older orchestration notes; leaving those notes open would mislead the next parallel Codex wave about which branches still need review or validation.
   Verification: `bun test tests/todo.status.test.ts tests/docs.index.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`; `bun run docs:check`; `bun run check`; `bun run test`; `bun run build:binary`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: socket-smoke-entrypoint-polish
+  Summary: Promoted socket-primary smoke/dev scripts while leaving legacy gateway-named scripts as thin compatibility wrappers.
+  Reason: The active vascular owner is `src/socket`; user-facing smoke and dev entrypoints should no longer teach contributors to run gateway-named implementation files, while v1 wire and CLI compatibility remain intact.
+  Verification: `bun run check`; `bun test tests/gateway.control.smoke.test.ts tests/install.script.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`; `bun run smoke:socket:control`; `bun run smoke:socket:ask-loop`; `bun run smoke:socket:service`; `bun run docs:check`; compatibility wrappers `bun run scripts/gateway.control.smoke.ts`, `bun run scripts/gateway.ask.loop.smoke.ts`, `bun run scripts/gateway.service.smoke.ts`; `git diff --check`; `bun run test`; `bun run build:binary`

@@ -224,3 +224,10 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 已在整合后的主线快照验证 focused gateway/runtime/history tests、`bun run check`、`bun run docs:check`、`git diff --check` 和 `bun run build:binary`。
 - [x] 已停止活跃 wave4 子 Codex 进程，并让 `flyflor-wave4` tmux 布局保留为可恢复 shell 窗口。
 - [x] 已确认主线和所有 wave4 worktree 都 clean 且与 origin 同步。
+
+## 2026-05-22 Socket Smoke Entrypoint Polish
+
+- [x] 将 `scripts/socket.control.smoke.ts`、`scripts/socket.ask.loop.smoke.ts`、`scripts/socket.service.smoke.ts` 和 `scripts/socket.dev.sh` 升为活跃 smoke/dev 入口。
+- [x] 保留 `scripts/gateway.*` 仅作兼容包装；`gateway.*` 仍只是 wire-v1/CLI 兼容词汇，不是活跃架构 owner。
+- [x] 已把 `smoke:socket:*`、README dev 指引和 focused smoke 测试指向 socket-primary 入口。
+- [x] 运行本轮 focused socket smoke/install/docs 检查、全量套件、二进制构建和 diff hygiene。

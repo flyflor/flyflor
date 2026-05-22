@@ -110,15 +110,15 @@ bun run chat
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
 bun run socket       # 源码模式启动最小 socket：/ws /health
 bun run socket:dev   # 同步模板后用 Bun watch 直接跑 socket
-sh scripts/gateway.dev.sh # socket dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
+sh scripts/socket.dev.sh # socket dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
 ```
 
 推荐调试方式：
 
-- 直接运行 `sh scripts/gateway.dev.sh`
-- 脚本会在启动前清理 `./.config/logs/gateway.dev/current.log`
-- 同时把本轮输出保存到 `./.config/logs/gateway.dev/run.YYYYMMDD-HHMMSS.log`
+- 直接运行 `sh scripts/socket.dev.sh`
+- 脚本会在启动前清理 `./.config/logs/socket.dev/current.log`
+- 同时把本轮输出保存到 `./.config/logs/socket.dev/run.YYYYMMDD-HHMMSS.log`
 - 终端仍会实时看到完整输出
 
 这样每轮调试都是独立日志，不会把旧报错和新报错混在一起。

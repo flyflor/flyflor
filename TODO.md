@@ -355,3 +355,10 @@ Latest full seal validation in this workspace passed:
 - [x] Supersede older validation counters with the latest full deterministic suite: `838 pass`, `0 fail`.
 - [x] Mark the already-reviewed wave2 and wave3 orchestration checklist items complete without deleting their historical placement.
 - [x] Reconcile the workflow handoff so wave4 and socket-wire layouts are described as reviewed/restorable history, not active child-agent work.
+
+## 2026-05-22 Socket Smoke Entrypoint Polish
+
+- [x] Promote `scripts/socket.control.smoke.ts`, `scripts/socket.ask.loop.smoke.ts`, `scripts/socket.service.smoke.ts`, and `scripts/socket.dev.sh` as the active smoke/dev entrypoints.
+- [x] Keep `scripts/gateway.*` as compatibility wrappers only; `gateway.*` remains wire-v1/CLI compatibility vocabulary, not an active architecture owner.
+- [x] Point `smoke:socket:*`, README dev guidance, and focused smoke tests at the socket-primary entrypoints.
+- [x] Run focused socket smoke/install/docs checks, full suite, binary build, and diff hygiene for this polish pass.

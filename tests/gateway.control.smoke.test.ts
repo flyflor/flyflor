@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 describe("gateway control smoke", () => {
     test("runs the ws thin-client lifecycle including loop pause-resume and history replay", async () => {
-        const proc = Bun.spawn(["bun", "run", "scripts/gateway.control.smoke.ts"], {
+        const proc = Bun.spawn(["bun", "run", "scripts/socket.control.smoke.ts"], {
             stderr: "pipe",
             stdout: "pipe",
         });

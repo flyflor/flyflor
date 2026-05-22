@@ -120,3 +120,10 @@
   摘要：已停止活跃 wave4 子 Codex 进程，保留 tmux 布局为 shell 窗口，并确认主线与所有 wave4 worktree 都 clean 且已推送。
   原因：每轮并发开发结束时必须没有活跃子进程、没有 dirty tail、没有未推送分支状态，才能进入下一轮迭代。
   验证：`tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`；对 `main-codex-docs`、`wt/wave4-runtime-smoke`、`wt/wave4-runtime-metadata` 和 `wt/wave4-runtime-history` 执行 `git status --short --branch`
+
+- 状态：completed
+  操作者：main-codex
+  范围：socket-smoke-entrypoint-polish
+  摘要：已提升 socket-primary smoke/dev 脚本，同时把旧 gateway 命名脚本保留为极薄兼容包装。
+  原因：活跃血管层 owner 已经是 `src/socket`；面向用户和贡献者的 smoke/dev 入口不应继续教大家运行 gateway 命名实现文件，但 v1 wire 与 CLI 兼容仍需保留。
+  验证：`bun run check`；`bun test tests/gateway.control.smoke.test.ts tests/install.script.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`；`bun run smoke:socket:control`；`bun run smoke:socket:ask-loop`；`bun run smoke:socket:service`；`bun run docs:check`；兼容包装 `bun run scripts/gateway.control.smoke.ts`、`bun run scripts/gateway.ask.loop.smoke.ts`、`bun run scripts/gateway.service.smoke.ts`；`git diff --check`；`bun run test`；`bun run build:binary`
