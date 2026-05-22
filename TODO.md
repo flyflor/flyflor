@@ -54,7 +54,7 @@ Main visible surfaces:
 - [x] Removed the HTTP `/channels` surface from the active minimal Gateway.
 - [x] Kept the WS `gateway.status.get` control snapshot lane intact.
 - [x] Carried a live `clientCount` through gateway status snapshots so peer pressure stays observable without reopening `/channels`.
-- [ ] Merge the context-memory slice and re-run the mainline validation set after the current runtime peer-count worktree lands.
+- [x] Merged the context-memory clock-driven recall slice back into mainline and re-ran the mainline validation set.
 
 ## Next Work
 
