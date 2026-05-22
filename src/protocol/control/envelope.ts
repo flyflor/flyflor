@@ -14,12 +14,12 @@ import {
     type ReplayRecord,
     type TaskPlanRecord,
     type TaskPlanStepRecord,
-    type RuntimeEventClass,
+    RuntimeEventClass,
     type GatewayControlMessageType as GatewayControlMessageTypeValue,
     type GatewayMessage,
     type RuntimeEvent,
 } from "../contracts/index.ts";
-import { classifyRuntimeEvent } from "../../events/index.ts";
+import { classifyRuntimeEvent, RuntimeEventType } from "../../events/index.ts";
 import type { ExternalKitCatalogSnapshot } from "../contracts/index.ts";
 
 export type GatewayControlAckPayload = Record<string, unknown> & {
@@ -325,6 +325,9 @@ export interface GatewayControlClientHello {
     version?: string;
 }
 
+const VALID_RUNTIME_EVENT_CLASSES = new Set<string>(Object.values(RuntimeEventClass));
+const VALID_RUNTIME_EVENT_TYPES = new Set<string>(Object.values(RuntimeEventType));
+
 export interface GatewayControlMessageInput {
     attachments?: GatewayMessage["attachments"];
     /** Routing/audit/dedup provenance only; never a Scope, session, or memory owner. */
@@ -579,10 +582,12 @@ export function normalizeGatewayControlMessage(input: GatewayControlMessageInput
 export function readGatewayControlSubscription(payload: Record<string, unknown> | undefined): GatewayControlSubscription {
     return {
         classes: Array.isArray(payload?.classes)
-            ? payload.classes.filter((item): item is RuntimeEventClass => typeof item === "string")
+            ? payload.classes.map((item) => readRuntimeEventClass(item))
             : undefined,
         requestId: readString(payload?.requestId),
-        types: Array.isArray(payload?.types) ? payload.types.filter((item): item is string => typeof item === "string") : undefined,
+        // Event subscriptions are protocol selectors, so unknown classes/types
+        // are rejected instead of being silently persisted as inert filters.
+        types: Array.isArray(payload?.types) ? payload.types.map((item) => readRuntimeEventType(item)) : undefined,
     };
 }
 
@@ -652,6 +657,28 @@ function readGatewayControlProjectScope(value: unknown): GatewayControlProjectSc
         projectMemoryDir,
         title: readString(value.title),
     };
+}
+
+function readRuntimeEventClass(value: unknown): RuntimeEventClass {
+    if (typeof value === "string" && VALID_RUNTIME_EVENT_CLASSES.has(value)) {
+        return value as RuntimeEventClass;
+    }
+    throw new GatewayControlProtocolError(
+        GatewayControlErrorCode.InvalidPayload,
+        "event subscription classes must use known runtime event classes",
+        { class: typeof value === "string" ? value : undefined },
+    );
+}
+
+function readRuntimeEventType(value: unknown): string {
+    if (typeof value === "string" && VALID_RUNTIME_EVENT_TYPES.has(value)) {
+        return value;
+    }
+    throw new GatewayControlProtocolError(
+        GatewayControlErrorCode.InvalidPayload,
+        "event subscription types must use known runtime event types",
+        { type: typeof value === "string" ? value : undefined },
+    );
 }
 
 export function shouldDeliverGatewayControlEvent(

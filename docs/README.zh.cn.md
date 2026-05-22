@@ -8,24 +8,24 @@
 
 建议按这个顺序读：
 
-1. [boundaries.md](boundaries.md) — 工程红线。这里定义“约定大于配置”、目录/文件名优先、`oop + use composition`、零字符匹配红线，以及这次 scope-centric 重构的硬边界。
-2. [architecture.md](architecture.md) — 当前系统的总模型：Context plane、Ledger/query plane、Cognitive / Executive / Agent 分层、为什么不允许再把流水账当上下文。
-3. [directory.architecture.md](directory.architecture.md) — 代码目录 owner。目录和文件名是第一约定，文档必须与真实路径对齐。
-4. [runtime.turn.md](runtime.turn.md) — 单轮请求从输入到上下文装配、工具执行、黑板、写账本的热路径。
-5. [memory.system.md](memory.system.md) — `Memory + Crystal + explicit Scope/Fork` 的上下文装配模型，以及 `brain.db` 作为 ledger/query plane 的职责。
-6. [blackboard.md](blackboard.md) — 黑板只运行在当前 turn 已装配好的上下文上，不再自带 transport 级连续性。
-7. [control.protocol.md](control.protocol.md) — `/ws` 协议与 `gateway.message.send.payload.context` 的显式上下文入口。
-8. [ws.doc.md](ws.doc.md) — `/ws` 的字段级 API 手册。
-9. [openapi/flyflor.socket.openapi.md](openapi/flyflor.socket.openapi.md) — Apifox 导入与真实 socket 场景测试契约。
-10. [runtime.events.md](runtime.events.md) — 事件时间线与 snapshot 权威面的边界。
-11. [sandbox.capabilities.md](sandbox.capabilities.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
-12. [mcp.tools.md](mcp.tools.md) — MCP 工具面与 transport 恢复边界。
-13. [executive.exoskeleton.md](executive.exoskeleton.md) — Executive 外骨架文档，现行语义已统一到 Executive。
-14. [skill.system.md](skill.system.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
-15. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
-16. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
-17. [external.kit.md](external.kit.md) — External kit 只读发现协议。
-18. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
+1. [boundaries.zh.cn.md](boundaries.zh.cn.md) — 工程红线。这里定义“约定大于配置”、目录/文件名优先、`oop + use composition`、零字符匹配红线，以及这次 scope-centric 重构的硬边界。
+2. [architecture.zh.cn.md](architecture.zh.cn.md) — 当前系统的总模型：Context plane、Ledger/query plane、Cognitive / Executive / Agent 分层、为什么不允许再把流水账当上下文。
+3. [directory.architecture.zh.cn.md](directory.architecture.zh.cn.md) — 代码目录 owner。目录和文件名是第一约定，文档必须与真实路径对齐。
+4. [runtime.turn.zh.cn.md](runtime.turn.zh.cn.md) — 单轮请求从输入到上下文装配、工具执行、黑板、写账本的热路径。
+5. [memory.system.zh.cn.md](memory.system.zh.cn.md) — `Memory + Crystal + explicit Scope/Fork` 的上下文装配模型，以及 `brain.db` 作为 ledger/query plane 的职责。
+6. [blackboard.zh.cn.md](blackboard.zh.cn.md) — 黑板只运行在当前 turn 已装配好的上下文上，不再自带 transport 级连续性。
+7. [control.protocol.zh.cn.md](control.protocol.zh.cn.md) — `/ws` 协议与 `gateway.message.send.payload.context` 的显式上下文入口。
+8. [ws.doc.zh.cn.md](ws.doc.zh.cn.md) — `/ws` 的字段级 API 手册。
+9. [openapi/flyflor.socket.openapi.zh.cn.md](openapi/flyflor.socket.openapi.zh.cn.md) — Apifox 导入与真实 socket 场景测试契约。
+10. [runtime.events.zh.cn.md](runtime.events.zh.cn.md) — 事件时间线与 snapshot 权威面的边界。
+11. [sandbox.capabilities.zh.cn.md](sandbox.capabilities.zh.cn.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
+12. [mcp.tools.zh.cn.md](mcp.tools.zh.cn.md) — MCP 工具面与 transport 恢复边界。
+13. [executive.exoskeleton.zh.cn.md](executive.exoskeleton.zh.cn.md) — Executive 外骨架文档，现行语义已统一到 Executive。
+14. [skill.system.zh.cn.md](skill.system.zh.cn.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
+15. [crystal.reflection.zh.cn.md](crystal.reflection.zh.cn.md) — Crystal 反思与 Gem 结晶边界。
+16. [development.workflow.zh.cn.md](development.workflow.zh.cn.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
+17. [external.kit.zh.cn.md](external.kit.zh.cn.md) — External kit 只读发现协议。
+18. [refactor.roadmap.zh.cn.md](refactor.roadmap.zh.cn.md) — 当前重构方向与文档维护口径。
 19. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
@@ -47,6 +47,6 @@
 
 这些文档只作为未来独立 Rust 仓库的 `/ws` 交接材料，不是本仓库的活动实现计划：
 
-- [rust.integration.md](rust.integration.md)
-- [rust.connection.core.md](rust.connection.core.md)
-- [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md)
+- [old-docs/rust.integration.zh.cn.md](old-docs/rust.integration.zh.cn.md)
+- [old-docs/rust.connection.core.zh.cn.md](old-docs/rust.connection.core.zh.cn.md)
+- [old-docs/rust.gateway.shell.backlog.zh.cn.md](old-docs/rust.gateway.shell.backlog.zh.cn.md)

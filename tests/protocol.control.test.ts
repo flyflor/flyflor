@@ -24,6 +24,7 @@ import {
     parseGatewayControlEnvelope,
     readGatewayControlHistoryListInput,
     readGatewayControlMessageInput,
+    readGatewayControlSubscription,
     shouldDeliverGatewayControlEvent,
 } from "../src/protocol/control/index.ts";
 import {
@@ -735,5 +736,29 @@ describe("Gateway Control protocol", () => {
             true,
         );
         expect(shouldDeliverGatewayControlEvent(event, [{ types: [RuntimeEventType.ChannelError] }])).toBe(false);
+    });
+
+    test("rejects unknown event subscription selectors before they enter socket state", () => {
+        expect(() => readGatewayControlSubscription({ classes: ["unknown-class"] })).toThrow(
+            "event subscription classes must use known runtime event classes",
+        );
+        try {
+            readGatewayControlSubscription({ classes: ["unknown-class"] });
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            expect((error as { code?: string }).code).toBe(GatewayControlErrorCode.InvalidPayload);
+            expect((error as { details?: Record<string, unknown> }).details).toEqual({ class: "unknown-class" });
+        }
+
+        expect(() => readGatewayControlSubscription({ types: ["runtime.unknown"] })).toThrow(
+            "event subscription types must use known runtime event types",
+        );
+        try {
+            readGatewayControlSubscription({ types: ["runtime.unknown"] });
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            expect((error as { code?: string }).code).toBe(GatewayControlErrorCode.InvalidPayload);
+            expect((error as { details?: Record<string, unknown> }).details).toEqual({ type: "runtime.unknown" });
+        }
     });
 });

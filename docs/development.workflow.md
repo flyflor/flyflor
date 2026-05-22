@@ -57,7 +57,7 @@ Each worktree must carry its own local control files:
 - `AGENTS.md`
 - `LOGS.md`
 
-And each Markdown file must keep its `.zh.cn.md` companion.
+Do not create `AGENTS.zh.cn.md`, `TODO.zh.cn.md`, or `LOGS.zh.cn.md` companions for worktree control files. Template sources under `templates/**` still keep `.md` plus `.zh.cn.md` mirror pairs; runtime only loads canonical `.md` templates.
 
 Local control-file rules:
 
@@ -432,13 +432,15 @@ Coordinator constraints for wave3:
 
 `wt/wave3-scope-constitution` has been reviewed into `main-codex-docs`.
 
-Mainline now expects scope scaffolds to write the full bilingual constitution set:
+Mainline now expects scope scaffolds to write the scope constitution set without control-file `.zh.cn.md` companions:
 
-- `AGENTS.md` / `AGENTS.zh.cn.md`
-- `TODO.md` / `TODO.zh.cn.md`
-- `LOGS.md` / `LOGS.zh.cn.md`
+- `AGENTS.md` from `templates/projects/AGENTS.md`
+- `TODO.md` from `templates/projects/TODO.md`
+- `LOGS.md` from `templates/projects/LOGS.md`
 - `README.md` / `README.zh.cn.md`
 - `project.memory.md` / `project.memory.zh.cn.md`
+
+The `templates/projects/AGENTS.zh.cn.md`, `TODO.zh.cn.md`, and `LOGS.zh.cn.md` files remain required Chinese mirror templates for review, but scaffolding does not write those control-file companions into a scope/worktree.
 
 The rule is no-overwrite idempotency: an existing scope file is skipped, never regenerated over local scope state.
 

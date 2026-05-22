@@ -981,6 +981,8 @@ history turn 的回放展示。它只由已存储的结构化 plan/fork/replay �
 }
 ```
 
+`classes` 和 `types` 是封闭协议选择器：`classes` 必须来自 RuntimeEventClass，`types` 必须来自 RuntimeEventType。未知值会返回 `invalid-payload`，不会写入当前 socket peer 的订阅状态。
+
 ### `event.unsubscribe`
 
 请求结构与 subscribe 相同。

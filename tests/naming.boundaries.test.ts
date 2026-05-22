@@ -216,8 +216,8 @@ describe("repository naming boundary", () => {
         expect(legacyNames).toEqual([]);
     });
 
-    test("prompt markdown templates have zh.cn companions", async () => {
-        const files = (await listFiles(join(REPO_ROOT, "templates", "prompts")))
+    test("all markdown templates have zh.cn companions", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "templates")))
             .map((file) => relative(REPO_ROOT, file))
             .filter((file) => file.endsWith(".md") && !file.endsWith(".zh.cn.md"));
         const missing: string[] = [];
@@ -228,10 +228,21 @@ describe("repository naming boundary", () => {
             }
         }
 
-        // Runtime prompt templates keep canonical .md plus Chinese review copy.
-        // AGENTS/TODO/LOGS/docs are Chinese by default and no longer need a
-        // mechanical .zh.cn.md companion.
+        // Runtime only loads canonical .md template files. The .zh.cn.md files
+        // are human-review mirrors and must stay paired across templates/**.
         expect(missing).toEqual([]);
+    });
+
+    test("root control files do not keep zh.cn companions", async () => {
+        const forbidden = ["AGENTS.zh.cn.md", "TODO.zh.cn.md", "LOGS.zh.cn.md"];
+        const existing: string[] = [];
+        for (const file of forbidden) {
+            if (await Bun.file(join(REPO_ROOT, file)).exists()) {
+                existing.push(file);
+            }
+        }
+
+        expect(existing).toEqual([]);
     });
 
     test("prompt and README zh.cn markdown companions are real Chinese review copies", async () => {

@@ -19,11 +19,8 @@ import { ScopeTriggerKind, type ScopeTriggerResult } from "./index.ts";
 
 const SCOPE_FILES = [
     "AGENTS.md",
-    "AGENTS.zh.cn.md",
     "TODO.md",
-    "TODO.zh.cn.md",
     "LOGS.md",
-    "LOGS.zh.cn.md",
     "README.md",
     "README.zh.cn.md",
     "project.memory.md",
@@ -33,15 +30,12 @@ type ScopeFile = (typeof SCOPE_FILES)[number];
 
 const SCOPE_TEMPLATE_FILES: Record<ScopeFile, string> = {
     "AGENTS.md": "AGENTS.md",
-    "AGENTS.zh.cn.md": "AGENTS.zh.cn.md",
     "LOGS.md": "LOGS.md",
-    "LOGS.zh.cn.md": "LOGS.zh.cn.md",
     "project.memory.md": "project.memory.md",
     "project.memory.zh.cn.md": "project.memory.zh.cn.md",
     "README.md": "README.md",
     "README.zh.cn.md": "README.zh.cn.md",
     "TODO.md": "TODO.md",
-    "TODO.zh.cn.md": "TODO.zh.cn.md",
 };
 
 export interface ScopeScaffoldInput {

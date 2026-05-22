@@ -186,6 +186,7 @@ describe("documentation references", () => {
         expect(schemas.SocketEventEnvelope?.properties?.protocol?.const).toBe(GatewayControlProtocol.EventV1);
         expect(schemas.SocketEventEnvelope?.properties?.type?.const).toBe(GatewayControlMessageType.EventPublish);
         expect(schemas.EventSubscription?.properties?.classes?.items?.enum).toEqual(Object.values(RuntimeEventClass));
+        expect(schemas.EventSubscription?.properties?.types?.items?.enum).toEqual(Object.values(RuntimeEventType));
         expect(schemas.SurfaceCapabilities?.properties?.semanticTypes?.items?.enum).toEqual(
             Object.values(GatewayControlSemanticType),
         );

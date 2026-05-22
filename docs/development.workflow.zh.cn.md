@@ -57,7 +57,7 @@ Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：�
 - `AGENTS.md`
 - `LOGS.md`
 
-`README.md` / `README.zh.cn.md` 和提示词模板继续保持中英/审查副本；`AGENTS.md`、`TODO.md`、`LOGS.md` 与 `docs/**/*.md` 默认中文书写，不再强制机械 `.zh.cn.md` 副本。
+不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本。`templates/**` 源模板仍保持 `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
 
 本地控制文件规则：
 
@@ -433,13 +433,15 @@ Wave3 协调者约束：
 
 `wt/wave3-scope-constitution` 已 review 并合入 `main-codex-docs`。
 
-主线现在要求 scope scaffold 写入完整双语宪法层文件集：
+主线现在要求 scope scaffold 写入宪法层文件集，但控制文件不生成 `.zh.cn.md` 副本：
 
-- `AGENTS.md` / `AGENTS.zh.cn.md`
-- `TODO.md` / `TODO.zh.cn.md`
-- `LOGS.md` / `LOGS.zh.cn.md`
+- `AGENTS.md`，来自 `templates/projects/AGENTS.md`
+- `TODO.md`，来自 `templates/projects/TODO.md`
+- `LOGS.md`，来自 `templates/projects/LOGS.md`
 - `README.md` / `README.zh.cn.md`
 - `project.memory.md` / `project.memory.zh.cn.md`
+
+`templates/projects/AGENTS.zh.cn.md`、`TODO.zh.cn.md`、`LOGS.zh.cn.md` 仍是必需的中文镜像模板，用于审查；但 scaffold 不会把这些控制文件副本写入 scope/worktree。
 
 规则是不覆盖的幂等性：已存在的 scope 文件只跳过，绝不覆盖本地 scope 状态。
 

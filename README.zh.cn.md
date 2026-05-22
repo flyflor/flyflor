@@ -86,11 +86,11 @@ Scope 固化有两条路径：
 OpenAPI 与 WS 文档：
 
 - [docs/openapi/flyflor.socket.openapi.json](docs/openapi/flyflor.socket.openapi.json) 是 Apifox 可导入契约。
-- [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) 说明真实 Apifox WebSocket 流程和 example messages。
-- [docs/ws.doc.md](docs/ws.doc.md) 是 `/ws` 字段级手册。
-- [docs/control.protocol.md](docs/control.protocol.md) 是外部客户端协议契约。
+- [docs/openapi/flyflor.socket.openapi.zh.cn.md](docs/openapi/flyflor.socket.openapi.zh.cn.md) 说明真实 Apifox WebSocket 流程和 example messages。
+- [docs/ws.doc.zh.cn.md](docs/ws.doc.zh.cn.md) 是 `/ws` 字段级手册。
+- [docs/control.protocol.zh.cn.md](docs/control.protocol.zh.cn.md) 是外部客户端协议契约。
 
-并发开发与新 session 交接约定见 [docs/development.workflow.md](docs/development.workflow.md)。
+并发开发与新 session 交接约定见 [docs/development.workflow.zh.cn.md](docs/development.workflow.zh.cn.md)。
 
 ## 快速开始
 
@@ -376,7 +376,7 @@ flyflor            # 本地 stdio chat 调试入口
 flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 ```
 
-当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 属于外部独立仓库事项，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
+当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 属于外部独立仓库事项，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.zh.cn.md](docs/control.protocol.zh.cn.md) 与 [docs/ws.doc.zh.cn.md](docs/ws.doc.zh.cn.md)。
 
 ## 工程规则
 
@@ -414,42 +414,42 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 - 不把密钥、日志、会话数据库、用户数据编译进二进制
 - 测试和文档不得使用 `sk-*` 等真实厂商密钥形态；占位值必须明显不可用，避免污染发布扫描
 - 跨模块通信使用显式类型；公共事件和协议必须可 JSON 序列化
-- 修改边界、高风险工具或依赖策略时同步更新 `docs/boundaries.md`
+- 修改边界、高风险工具或依赖策略时同步更新 `docs/boundaries.zh.cn.md`
 
 ## 文档
 
-完整文档索引见 [docs/README.md](docs/README.md)。核心文档：
+完整文档索引见 [docs/README.zh.cn.md](docs/README.zh.cn.md)。核心文档：
 
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
 | [TODO.md](TODO.md)                                           | 当前中文接续路线 / 迁移状态 / 验收命令 |
-| [docs/README.md](docs/README.md)                             | 活跃文档索引与阅读顺序 |
-| [docs/architecture.md](docs/architecture.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
-| [docs/refactor.roadmap.md](docs/refactor.roadmap.md)         | 切除旧身体、保留内核 / 外骨骼 / 事件血管的阶段性重构路线 |
-| [docs/directory.architecture.md](docs/directory.architecture.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
-| [docs/executive.exoskeleton.md](docs/executive.exoskeleton.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
-| [docs/runtime.events.md](docs/runtime.events.md)             | RECL / Event Fabric 事件订阅广播中枢     |
-| [docs/boundaries.md](docs/boundaries.md)                     | 工程边界与红线                         |
-| [docs/runtime.turn.md](docs/runtime.turn.md)                 | 单轮请求完整流程                       |
-| [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
-| [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
-| [docs/ws.doc.md](docs/ws.doc.md)                             | `/ws` 字段级 API 手册 |
-| [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
-| [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
-| [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
-| [docs/control.protocol.md](docs/control.protocol.md)         | 外部客户端 / thin client 直接对接的 WS/control 血管协议 |
-| [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
-| [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
+| [docs/README.zh.cn.md](docs/README.zh.cn.md)                             | 活跃文档索引与阅读顺序 |
+| [docs/architecture.zh.cn.md](docs/architecture.zh.cn.md)                 | Cognitive / Executive / Agent 分层架构 / composition root / 进程模型 |
+| [docs/refactor.roadmap.zh.cn.md](docs/refactor.roadmap.zh.cn.md)         | 切除旧身体、保留内核 / 外骨骼 / 事件血管的阶段性重构路线 |
+| [docs/directory.architecture.zh.cn.md](docs/directory.architecture.zh.cn.md) | 源码 / 配置 / 运行态 / 工作区目录约定 |
+| [docs/executive.exoskeleton.zh.cn.md](docs/executive.exoskeleton.zh.cn.md)         | Executive 外骨架 / Capability / Tool / Trust / Loop |
+| [docs/runtime.events.zh.cn.md](docs/runtime.events.zh.cn.md)             | RECL / Event Fabric 事件订阅广播中枢     |
+| [docs/boundaries.zh.cn.md](docs/boundaries.zh.cn.md)                     | 工程边界与红线                         |
+| [docs/runtime.turn.zh.cn.md](docs/runtime.turn.zh.cn.md)                 | 单轮请求完整流程                       |
+| [docs/memory.system.zh.cn.md](docs/memory.system.zh.cn.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
+| [docs/blackboard.zh.cn.md](docs/blackboard.zh.cn.md)                     | 黑板路由 / 收敛 / Worker 协议          |
+| [docs/ws.doc.zh.cn.md](docs/ws.doc.zh.cn.md)                             | `/ws` 字段级 API 手册 |
+| [docs/sandbox.capabilities.zh.cn.md](docs/sandbox.capabilities.zh.cn.md) | Sandbox 决策与审计                     |
+| [docs/mcp.tools.zh.cn.md](docs/mcp.tools.zh.cn.md)                       | MCP 工具循环                           |
+| [docs/external.kit.zh.cn.md](docs/external.kit.zh.cn.md)                 | 外部套件 manifest / 发现 / control 契约 |
+| [docs/control.protocol.zh.cn.md](docs/control.protocol.zh.cn.md)         | 外部客户端 / thin client 直接对接的 WS/control 血管协议 |
+| [docs/crystal.reflection.zh.cn.md](docs/crystal.reflection.zh.cn.md)     | Reflection → Gem                       |
+| [docs/skill.system.zh.cn.md](docs/skill.system.zh.cn.md)                 | Skill 加载与升格                       |
 
 外部仓库参考材料：
 
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
-| [docs/old-docs/rust.integration.md](docs/old-docs/rust.integration.md) | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
-| [docs/old-docs/rust.connection.core.md](docs/old-docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
-| [docs/old-docs/rust.gateway.shell.backlog.md](docs/old-docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
+| [docs/old-docs/rust.integration.zh.cn.md](docs/old-docs/rust.integration.zh.cn.md) | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
+| [docs/old-docs/rust.connection.core.zh.cn.md](docs/old-docs/rust.connection.core.zh.cn.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
+| [docs/old-docs/rust.gateway.shell.backlog.zh.cn.md](docs/old-docs/rust.gateway.shell.backlog.zh.cn.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
 
-历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
+历史提案和迁移背景已收进 [docs/old-docs/README.zh.cn.md](docs/old-docs/README.zh.cn.md)，只做追溯，不作为当前运行契约。
 
 <!-- flyflor:prompt-templates:start -->
 # 提示词模板系统

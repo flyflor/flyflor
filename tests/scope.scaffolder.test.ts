@@ -11,11 +11,8 @@ import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 const tempRoots: string[] = [];
 const expectedScopeFiles = [
     "AGENTS.md",
-    "AGENTS.zh.cn.md",
     "TODO.md",
-    "TODO.zh.cn.md",
     "LOGS.md",
-    "LOGS.zh.cn.md",
     "README.md",
     "README.zh.cn.md",
     "project.memory.md",
@@ -90,7 +87,6 @@ describe("ScopeScaffolder", () => {
         expect(r.written).toEqual([...expectedScopeFiles]);
         expect(r.skipped).toEqual([]);
         const agents = await Bun.file(join(r.projectDir, "AGENTS.md")).text();
-        const agentsZh = await Bun.file(join(r.projectDir, "AGENTS.zh.cn.md")).text();
         const readme = await Bun.file(join(r.projectDir, "README.md")).text();
         const readmeZh = await Bun.file(join(r.projectDir, "README.zh.cn.md")).text();
         const projectMemory = await Bun.file(join(r.projectDir, "project.memory.md")).text();
@@ -99,8 +95,6 @@ describe("ScopeScaffolder", () => {
         expect(agents).toContain("Test project Agent Guide");
         expect(agents).toContain("Build a memory consolidation pipeline");
         expect(agents).toContain("ep-1, ep-2");
-        expect(agentsZh).toContain("Test project Agent 指南");
-        expect(agentsZh).toContain("Build a memory consolidation pipeline");
         expect(readme).toContain("Test project");
         expect(readme).toContain("AGENTS.md");
         expect(readmeZh).toContain("Test project");
@@ -110,6 +104,9 @@ describe("ScopeScaffolder", () => {
         expect(projectMemoryZh).toContain("Scope 记忆");
         for (const file of expectedScopeFiles) {
             expect(await Bun.file(join(r.projectDir, file)).exists()).toBe(true);
+        }
+        for (const file of ["AGENTS.zh.cn.md", "TODO.zh.cn.md", "LOGS.zh.cn.md"]) {
+            expect(await Bun.file(join(r.projectDir, file)).exists()).toBe(false);
         }
         expect(manifest).toMatchObject({
             scopeId: "abc123",

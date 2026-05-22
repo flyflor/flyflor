@@ -823,6 +823,79 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("returns invalid-payload error for unknown event subscription selectors", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const subscribe = createGatewayControlEnvelope(
+            GatewayControlMessageType.EventSubscribe,
+            {
+                classes: ["unknown-class"],
+                types: ["runtime.unknown"],
+            },
+            { id: "event-sub-invalid-1", requestId: "req-sub-invalid-1" },
+        );
+        await hub.message(socket, JSON.stringify(subscribe));
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "event-sub-invalid-1",
+            requestId: "req-sub-invalid-1",
+            type: GatewayControlMessageType.Error,
+            payload: {
+                code: GatewayControlErrorCode.InvalidPayload,
+                details: { class: "unknown-class" },
+                message: "event subscription classes must use known runtime event classes",
+            },
+        });
+
+        bus.publish({
+            type: RuntimeEventType.ChannelError,
+            at: "2026-05-17T00:00:00.000Z",
+            requestId: "runtime-req-1",
+            payload: { channel: Channel.Ws, error: "boom" },
+        });
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)).toHaveLength(0);
+        hub.dispose();
+    });
+
+    test("returns invalid-payload error for unknown event subscription types", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const subscribe = createGatewayControlEnvelope(
+            GatewayControlMessageType.EventSubscribe,
+            {
+                types: ["runtime.unknown"],
+            },
+            { id: "event-sub-invalid-type-1", requestId: "req-sub-invalid-type-1" },
+        );
+        await hub.message(socket, JSON.stringify(subscribe));
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "event-sub-invalid-type-1",
+            requestId: "req-sub-invalid-type-1",
+            type: GatewayControlMessageType.Error,
+            payload: {
+                code: GatewayControlErrorCode.InvalidPayload,
+                details: { type: "runtime.unknown" },
+                message: "event subscription types must use known runtime event types",
+            },
+        });
+
+        bus.publish({
+            type: RuntimeEventType.ChannelError,
+            at: "2026-05-17T00:00:00.000Z",
+            requestId: "runtime-req-1",
+            payload: { channel: Channel.Ws, error: "boom" },
+        });
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)).toHaveLength(0);
+        hub.dispose();
+    });
+
     test("delivers event.publish when subscribing by runtime event class without a requestId", async () => {
         const bus = new GlobalEventBus();
         const hub = createHub({ events: bus });

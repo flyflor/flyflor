@@ -365,3 +365,10 @@
   Summary: Merged the scope-memory correction that removes `brain.db` prompt-atom recall from `MemoryModule.buildPrompt` and keeps hippocampus activation on working-memory episodes plus explicit Scope hot memory.
   Reason: `brain.db` is the monthly life ledger/query/replay/audit/detail store; prompt/context equipment must come from current input, MemoryComponent, CrystalComponent, explicit Scope/Fork, and Executive-visible capabilities, with Scope hot memory living in scope-local `scope.db`.
   Verification: `bun test tests/runtime.perf.test.ts tests/memory.brain.wire.test.ts tests/context.scope.test.ts tests/scope.vector.test.ts`; `bun run check`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: docs-template-socket-policy-alignment
+  Summary: Tightened the socket event subscription selector contract, split README indexing so English links `docs/*.md` and Chinese links `docs/*.zh.cn.md`, enforced `templates/**` Markdown bilingual mirror pairs, and removed root `AGENTS/TODO/LOGS.zh.cn.md` control-file companions from the active repository surface.
+  Reason: The repository needs a single non-drifting documentation/template policy: runtime loads canonical template `.md` files only, `.zh.cn.md` files are human-review mirrors, and worktree control files remain Chinese singletons instead of duplicated local histories.
+  Verification: `bun test tests/docs.index.test.ts tests/naming.boundaries.test.ts tests/prompt.templates.docs.test.ts tests/scope.scaffolder.test.ts tests/codename.promote.test.ts`; `bun run docs:check`; `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts tests/protocol.contracts.test.ts tests/docs.references.test.ts`; `bun run check`; `git diff --check`
