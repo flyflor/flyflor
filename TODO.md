@@ -376,6 +376,25 @@ Latest full seal validation in this workspace passed:
   - `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
   - `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
 - [x] Assign this wave to Bun kernel seal only; Rust is explicitly out of this repository and will be developed separately.
-- [ ] Launch `flyflor-seal` tmux child Codex windows after the coordinator baseline is committed and pushed.
-- [ ] Merge order is A docs, B OpenAPI/Apifox, D prompt, C real-model socket, E DB/context guard, F zero-character audit, G release/binary seal.
-- [ ] Final acceptance must include provider readiness, deterministic tests, live tests, socket live scenario, binary build, docs check, and diff hygiene.
+- [x] Merged and pushed the socket-only subset from this wave:
+  - `codex/apifox-openapi-scenarios`
+  - `codex/socket-live-model-scenarios`
+- [x] Verified the socket-only subset with focused socket/protocol/docs tests, `bun run docs:check`, configured-provider readiness, `smoke:socket:live`, and `test:live`.
+- [x] Paused the broader docs/prompt/DB/zero-character/release lanes for this round after scope was narrowed to socket layer and OpenAPI/Apifox.
+- [x] Stopped old active tmux development sessions while preserving their worktrees as additive history.
+- [ ] Reallocate a new socket-only tmux/worktree wave from `codex/seal-coordinator`.
+- [ ] New socket-only merge order is runtime wire polish, OpenAPI/Apifox drift polish, live scenario coverage.
+- [ ] Final socket-only acceptance must include focused socket tests, OpenAPI/docs guards, provider readiness, `smoke:socket:live`, `test:live`, `bun run check`, and diff hygiene.
+
+## 2026-05-22 Socket/OpenAPI-Only Reallocation
+
+- [x] Current coordinator branch is `codex/seal-coordinator` at `e5102a5`.
+- [x] `docs/openapi/flyflor.socket.openapi.json` is present and guarded for Apifox import.
+- [x] `scripts/socket.live.scenario.ts` and `smoke:socket:live` are present and pass against the configured provider.
+- [x] `/channels` remains removed; HTTP socket surface remains `/health` and `/ws`.
+- [x] `gateway.*` names remain v1 wire compatibility only.
+- [ ] Create `codex/socket-runtime-wire-polish` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`.
+- [ ] Create `codex/apifox-openapi-drift-guard` at `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`.
+- [ ] Create `codex/socket-live-coverage` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`.
+- [ ] Launch `flyflor-socket-openapi` tmux with main/runtime/openapi/live windows.
+- [ ] Review, merge, validate, push, and clean this socket-only wave.

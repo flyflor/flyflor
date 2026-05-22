@@ -204,3 +204,17 @@
   Summary: Started the next seal wave from a clean single `master`, created `codex/seal-coordinator`, and allocated seven worktrees for docs alignment, Apifox/OpenAPI scenarios, real-model socket scenarios, prompt optimization, DB/context guard, zero-character audit, and release/binary seal.
   Reason: The Bun intelligent-lifeform kernel is mostly sealed; the next closure needs real configured-model scenarios, Apifox-importable contracts, prompt quality, cautious DB/context evolution, and release gates without bringing Rust work into this repository.
   Verification: pending tmux launch, child branch pushes, focused slice validations, live scenario, full deterministic suite, binary build, and final cleanup
+
+- Status: completed
+  Actor: main-codex
+  Scope: socket-openapi-scope-narrowing
+  Summary: Narrowed the active seal wave to socket layer plus OpenAPI/Apifox only, merged the OpenAPI/Apifox and real-model socket scenario slices into `codex/seal-coordinator`, and pushed the coordinator branch.
+  Reason: The user explicitly moved external adapters, Rust work, prompt optimization, DB/context evolution, zero-character audit, and release/binary seal out of the immediate round so the project can close the socket blood-vessel layer and Apifox test surface first.
+  Verification: `bun test tests/docs.references.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/gateway.module.test.ts`; `bun run docs:check`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run provider:ready -- --require-ready`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run smoke:socket:live`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`; `git push origin codex/seal-coordinator`
+
+- Status: open
+  Actor: main-codex
+  Scope: socket-openapi-only-reallocation
+  Summary: Stopped old active tmux development sessions, kept existing worktrees as additive history, and prepared a new three-lane socket/OpenAPI-only wave for runtime wire polish, Apifox drift guard polish, and live scenario coverage.
+  Reason: The active development pool was short by three useful processes and still carried old broader seal lanes; a narrower worktree wave keeps throughput high without letting paused prompt/DB/release work leak back into the socket/OpenAPI closure.
+  Verification: pending new branch creation, tmux launch, child Codex reports, focused validations, review, merge, and cleanup

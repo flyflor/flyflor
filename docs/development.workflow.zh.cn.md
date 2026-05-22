@@ -593,3 +593,62 @@ Worktree：
 - prompt 修改必须保持 canonical `.md` 和 `.zh.cn.md` 同步
 - DB/context 可以改，但必须有兼容测试和边界说明
 - 不做任何业务语义字符匹配
+
+## 2026-05-22 Socket/OpenAPI-Only Reallocation
+
+当前轮次已收窄为只做 socket 层和 OpenAPI/Apifox 场景面。更宽的文档、prompt、DB/context、零字符审计、release、binary、Rust、外接器工作本轮暂停，除非用户重新打开范围。
+
+协调者：
+
+- branch：`codex/seal-coordinator`
+- path：`/Users/yi./Desktop/yi/flyflors/flyflor`
+- 当前已推送基线：`e5102a5`
+- owner：review、merge、validation、TODO/LOGS/workflow 和清理
+
+已合入基线：
+
+- `codex/apifox-openapi-scenarios`
+  - commit：`a67ee30`
+  - result：Apifox 可导入的 socket 契约和场景文档
+- `codex/socket-live-model-scenarios`
+  - commit：`fd99d9e`
+  - result：使用已配置 provider 的 `smoke:socket:live` runner
+
+暂停但保留：
+
+- `codex/docs-alignment-control`
+- `codex/prompt-optimization-seal`
+- `codex/db-context-guard`
+- `codex/zero-character-audit`
+- `codex/release-binary-seal`
+
+新 socket-only worktree：
+
+- `codex/socket-runtime-wire-polish` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`
+  - owned surface：`src/socket/**`、`src/protocol/control/**`、socket smoke/runtime tests
+  - task：查找并闭合 runtime wire 小毛刺，但不重命名 v1 wire string
+- `codex/apifox-openapi-drift-guard` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`
+  - owned surface：`docs/openapi/**`、`docs/ws.doc*`、`docs/control.protocol*`、docs reference tests
+  - task：让 Apifox 契约更难偏离 runtime truth
+- `codex/socket-live-coverage` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`
+  - owned surface：`scripts/socket.live.scenario.ts`、live tests、package smoke script docs
+  - task：扩展真实配置 provider 的 socket 场景覆盖，但不把 offline 测试改成 online
+
+硬约束：
+
+- `/channels` 不能恢复
+- 保持 `flyflor.ws.v1`、`flyflor.event.v1` 和 `gateway.*` wire-v1 名称稳定
+- WebSocket 是 `src/socket` 当前 transport，不是架构身份
+- `history.list` 仍然只是 ledger query/replay/audit，不是 context assembly
+- 本轮不做新的外接器、Rust、prompt、DB、release 或 binary 工作
+
+合并前必跑验证：
+
+- `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/protocol.control.test.ts`
+- `bun test tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`
+- `bun run docs:check`
+- `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run provider:ready -- --require-ready`
+- `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run smoke:socket:live`
+- `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`
+- `bun run check`
+- `git diff --check`

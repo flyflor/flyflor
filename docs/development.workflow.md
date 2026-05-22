@@ -593,3 +593,62 @@ Hard constraints:
 - prompt edits must keep canonical `.md` and `.zh.cn.md` in sync
 - DB/context changes are allowed only with compatibility tests and explicit boundary notes
 - no business semantic character matching
+
+## 2026-05-22 Socket/OpenAPI-Only Reallocation
+
+The active round is now narrowed to the socket layer and OpenAPI/Apifox scenario surface only. Broader docs, prompt, DB/context, zero-character, release, binary, Rust, and external adapter work stays paused for this round unless the user reopens that scope.
+
+Coordinator:
+
+- branch: `codex/seal-coordinator`
+- path: `/Users/yi./Desktop/yi/flyflors/flyflor`
+- current pushed base: `e5102a5`
+- owner: review, merge, validation, TODO/LOGS/workflow, and cleanup
+
+Merged baseline:
+
+- `codex/apifox-openapi-scenarios`
+  - commit: `a67ee30`
+  - result: Apifox-importable socket contract and scenario docs
+- `codex/socket-live-model-scenarios`
+  - commit: `fd99d9e`
+  - result: configured-provider `smoke:socket:live` runner
+
+Paused but preserved:
+
+- `codex/docs-alignment-control`
+- `codex/prompt-optimization-seal`
+- `codex/db-context-guard`
+- `codex/zero-character-audit`
+- `codex/release-binary-seal`
+
+New socket-only worktrees:
+
+- `codex/socket-runtime-wire-polish` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`
+  - owned surface: `src/socket/**`, `src/protocol/control/**`, socket smoke/runtime tests
+  - task: find and close small runtime wire mismatches without renaming v1 wire strings
+- `codex/apifox-openapi-drift-guard` at `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`
+  - owned surface: `docs/openapi/**`, `docs/ws.doc*`, `docs/control.protocol*`, docs reference tests
+  - task: make the Apifox contract harder to drift from runtime truth
+- `codex/socket-live-coverage` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`
+  - owned surface: `scripts/socket.live.scenario.ts`, live tests, package smoke script docs
+  - task: expand real configured-provider socket scenario coverage without moving offline tests online
+
+Hard constraints:
+
+- `/channels` must not return
+- keep `flyflor.ws.v1`, `flyflor.event.v1`, and `gateway.*` wire-v1 names stable
+- WebSocket is the current transport under `src/socket`; it is not the architecture identity
+- `history.list` remains ledger query/replay/audit, not context assembly
+- no new external adapter, Rust, prompt, DB, release, or binary work in this round
+
+Required validation before merge:
+
+- `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/protocol.control.test.ts`
+- `bun test tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`
+- `bun run docs:check`
+- `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run provider:ready -- --require-ready`
+- `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run smoke:socket:live`
+- `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`
+- `bun run check`
+- `git diff --check`
