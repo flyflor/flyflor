@@ -57,3 +57,10 @@
   摘要：memory/context 的窄面验证已经通过，但 `tests/memory.brain.wire.test.ts` 在当前 worktree 仍被仓库环境模块解析故障阻塞，加载 `src/config/config.ts` 时就失败。
   原因：这个测试在真正进入 memory 逻辑前，就因为当前环境里无法解析 `lodash-es/mergeWith.js` 而中断，该问题超出本切片已修改的代码面。
   验证：`bun test tests/memory.brain.wire.test.ts`
+
+- 状态：completed
+  操作者：codex
+  范围：kernel-context-memory-deterministic-decay-recall
+  摘要：把 graph 遗忘与向量 recall 改成显式 clock 驱动：scheduler decay sweep、graph 行时间戳持久化、vector freshness scoring、recall accounting 和确定性 recall cache key 都传递 `nowMs`。
+  原因：遗忘/衰减和向量召回必须是可 replay 的资源指标流程；graph 持久化和 scoring 内部隐藏使用 `Date.now()` 会让同样的定时 sweep 与 recall 受墙钟时间影响。
+  验证：`bun run check`；`bun run docs:check`；`bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts`；`bun test tests/graph.recall.test.ts tests/background.scheduler.test.ts`；`bun test tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts`；`bun test tests/memory.brain.wire.test.ts`；`bun test tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/hot.memory.compression.worker.test.ts`；`bun run build:binary`；完整 `bun run test` 到达 826 pass / 1 fail，失败点是本切片外路径敏感的 `tests/provider.readiness.test.ts`

@@ -178,4 +178,7 @@ Latest full seal validation in this workspace passed:
 - [x] Context continuity owner now prefers explicit `contextForkId` over parent `activeScope` when both are mounted.
 - [x] Vector recall now writes back `recallCount` and `lastAccessedAt` / `lastVerifiedAt`, so dream and decay consume real recall metrics.
 - [x] Added direct tests for graph recall accounting and fork-over-scope continuity ownership.
-- [ ] `tests/memory.brain.wire.test.ts` is still blocked in this worktree by a repo-environment module-resolution failure: `src/config/config.ts` cannot load `lodash-es/mergeWith.js`.
+- [x] Decay sweeps now persist graph row timestamps with the scheduler-injected `nowMs`, keeping forgetting deterministic under tests and replay.
+- [x] Vector recall freshness scoring and recall accounting now accept explicit `nowMs`; deterministic clocks participate in recall cache keys.
+- [x] Restored locked Bun dependencies in this worktree, resolving the local `lodash-es/mergeWith.js` module-resolution blocker for `tests/memory.brain.wire.test.ts`.
+- [ ] Full `bun run test` still has one child-worktree path-sensitive failure outside this slice: `tests/provider.readiness.test.ts` expects `/flyflor/.config`, but this worktree resolves `.config` under `flyflor-wt-kernel-context-memory`.

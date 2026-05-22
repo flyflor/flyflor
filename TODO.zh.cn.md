@@ -139,4 +139,7 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 当 `contextForkId` 与父 `activeScope` 同时存在时，context continuity owner 现在优先选择显式 fork。
 - [x] 向量 recall 现在会回写 `recallCount` 与 `lastAccessedAt` / `lastVerifiedAt`，确保 dream / decay 消费到真实 recall 指标。
 - [x] 已新增 graph recall accounting 和 fork-over-scope continuity ownership 的直接测试。
-- [ ] `tests/memory.brain.wire.test.ts` 在当前 worktree 仍受仓库环境模块解析故障阻塞：`src/config/config.ts` 无法加载 `lodash-es/mergeWith.js`。
+- [x] decay sweep 现在用调度器注入的 `nowMs` 持久化 graph 行时间戳，保证遗忘流程在测试和 replay 下确定。
+- [x] 向量 recall 的 freshness scoring 与 recall accounting 现在支持显式 `nowMs`，确定性 clock 会进入 recall cache key。
+- [x] 已在本 worktree 恢复 lockfile 对应的 Bun 依赖，解除 `tests/memory.brain.wire.test.ts` 的本地 `lodash-es/mergeWith.js` 模块解析阻塞。
+- [ ] 完整 `bun run test` 仍有一个本切片外的 child-worktree 路径敏感失败：`tests/provider.readiness.test.ts` 期待 `/flyflor/.config`，但本 worktree 的 `.config` 位于 `flyflor-wt-kernel-context-memory` 下。

@@ -71,3 +71,10 @@
   Summary: Narrow memory/context validation passed, but `tests/memory.brain.wire.test.ts` is still blocked in this worktree by a repo-environment module-resolution failure while loading `src/config/config.ts`.
   Reason: The test reaches config loading outside the owned fix surface and fails before memory logic runs because `lodash-es/mergeWith.js` is not resolvable in this environment.
   Verification: `bun test tests/memory.brain.wire.test.ts`
+
+- Status: completed
+  Actor: codex
+  Scope: kernel-context-memory-deterministic-decay-recall
+  Summary: Made graph forgetting and vector recall clock-driven by threading explicit `nowMs` through scheduler decay sweeps, persisted graph timestamps, vector freshness scoring, recall accounting, and deterministic recall cache keys.
+  Reason: Forgetting/decay and vector recall must be replayable resource-metric flows; hidden `Date.now()` use inside graph persistence/scoring made identical scheduled sweeps and recalls depend on wall-clock timing.
+  Verification: `bun run check`; `bun run docs:check`; `bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts`; `bun test tests/graph.recall.test.ts tests/background.scheduler.test.ts`; `bun test tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts`; `bun test tests/memory.brain.wire.test.ts`; `bun test tests/activation.test.ts tests/decay.anti.bloat.project.test.ts tests/dream.worker.test.ts tests/hot.memory.compression.worker.test.ts`; `bun run build:binary`; full `bun run test` reached 826 pass / 1 fail on path-sensitive `tests/provider.readiness.test.ts` outside this slice

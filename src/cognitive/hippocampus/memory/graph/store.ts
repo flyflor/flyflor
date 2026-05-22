@@ -376,6 +376,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         if (!this.config.dbFile) return { memoryNodes: 0, gems: 0 };
         await this.initialize();
         const limit = Math.max(1, Math.floor(input.batchSize ?? 200));
+        const nowMs = Number.isFinite(input.nowMs) ? (input.nowMs as number) : Date.now();
         const nodes = [...this.memoryNodes.values()]
             .filter((row) => row.ownerKey === input.ownerKey)
             .sort((left, right) => left.updatedAt - right.updatedAt)
@@ -392,7 +393,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             });
             if (Math.abs(next - row.importance) < 1e-4) continue;
             row.importance = next;
-            row.updatedAt = Date.now();
+            row.updatedAt = nowMs;
             this.persistMemoryNode(row);
             memoryNodes += 1;
         }
@@ -406,7 +407,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             const currentImportance = row.importance ?? row.confidence;
             if (Math.abs(next - currentImportance) < 1e-4) continue;
             row.importance = next;
-            row.updatedAt = Date.now();
+            row.updatedAt = nowMs;
             this.persistGem(row);
             gemCount += 1;
         }
@@ -441,20 +442,22 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
     public async recallMemoryNodes(input: GraphRecallInput): Promise<MemoryNodeRecord[]> {
         if (!this.config.dbFile) return [];
         await this.initialize();
+        const nowMs = Number.isFinite(input.nowMs) ? (input.nowMs as number) : Date.now();
         const cacheKey = sqliteGraphModel.recallCacheKey(input);
         const cached = this.recallCache.get(cacheKey);
         if (cached) {
-            return this.markMemoryNodeRecall(cached, Date.now());
+            return this.markMemoryNodeRecall(cached, nowMs);
         }
-        const result = this.searchMemoryNodes(input, 64);
+        const result = this.searchMemoryNodes(input, 64, nowMs);
         this.recallCache.set(cacheKey, result.map((row) => ({ ...row })));
-        return this.markMemoryNodeRecall(result, Date.now());
+        return this.markMemoryNodeRecall(result, nowMs);
     }
 
     public async recallSkills(input: GraphRecallInput): Promise<GemRecord[]> {
         if (!this.config.dbFile) return [];
         await this.initialize();
-        return this.markGemRecall(this.searchGems(input, 32), Date.now());
+        const nowMs = Number.isFinite(input.nowMs) ? (input.nowMs as number) : Date.now();
+        return this.markGemRecall(this.searchGems(input, 32, nowMs), nowMs);
     }
 
     public async expandSimilarConcept(seedIds: string[], limit: number): Promise<MemoryNodeRecord[]> {
@@ -762,7 +765,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         return true;
     }
 
-    private searchMemoryNodes(input: GraphRecallInput, limit: number): MemoryNodeRecord[] {
+    private searchMemoryNodes(input: GraphRecallInput, limit: number, nowMs: number): MemoryNodeRecord[] {
         const rows = [...this.memoryNodes.values()];
         const symbols = sqliteGraphModel.normalizeSymbols(input.symbols ?? []);
         const queryEmbedding = sqliteGraphModel.buildQueryEmbedding(input, this.vectorDimensions);
@@ -771,7 +774,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .filter((row) => (input.minConfidence !== undefined ? row.confidence >= input.minConfidence : true))
             .map((row) => ({
                 row,
-                score: sqliteGraphModel.scoreMemoryNode(row, queryEmbedding, symbols),
+                score: sqliteGraphModel.scoreMemoryNode(row, queryEmbedding, symbols, nowMs),
             }))
             .filter((entry) => entry.score > 0)
             .sort((left, right) => right.score - left.score || right.row.importance - left.row.importance)
@@ -779,7 +782,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         return scored.map((entry) => ({ ...entry.row, score: entry.score }));
     }
 
-    private searchGems(input: GraphRecallInput, limit: number): GemRecord[] {
+    private searchGems(input: GraphRecallInput, limit: number, nowMs: number): GemRecord[] {
         const rows = [...this.gems.values()];
         const symbols = sqliteGraphModel.normalizeSymbols(input.symbols ?? []);
         const queryEmbedding = sqliteGraphModel.buildQueryEmbedding(input, this.vectorDimensions);
@@ -788,7 +791,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             .filter((row) => (input.minConfidence !== undefined ? row.confidence >= input.minConfidence : true))
             .map((row) => ({
                 row,
-                score: sqliteGraphModel.scoreGem(row, queryEmbedding, symbols),
+                score: sqliteGraphModel.scoreGem(row, queryEmbedding, symbols, nowMs),
             }))
             .filter((entry) => entry.score > 0)
             .sort((left, right) => right.score - left.score || right.row.support - left.row.support)

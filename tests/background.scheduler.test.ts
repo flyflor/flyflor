@@ -33,16 +33,17 @@ class FakeConsolidation {
 }
 
 class FakeGraph {
-    public readonly swept: Array<{ ownerKey: string; batchSize?: number }> = [];
+    public readonly swept: Array<{ ownerKey: string; batchSize?: number; nowMs?: number }> = [];
     public failNext = false;
     public decayBudget = { mn: 3, sk: 1 };
     public async applyDecaySweep(input: {
         ownerKey: string;
         batchSize?: number;
+        nowMs?: number;
         decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
         decayGem: (row: { importance: number; updatedAt: number; lastVerifiedAt?: number }) => number;
     }): Promise<{ memoryNodes: number; gems: number }> {
-        this.swept.push({ ownerKey: input.ownerKey, batchSize: input.batchSize });
+        this.swept.push({ ownerKey: input.ownerKey, batchSize: input.batchSize, nowMs: input.nowMs });
         if (this.failNext) {
             this.failNext = false;
             throw new Error("boom-decay");
@@ -186,6 +187,7 @@ describe("BackgroundScheduler", () => {
         expect(totals.gems).toBe(2);
         expect(graph.swept.map((s) => s.ownerKey).sort()).toEqual(["u1", "u2"]);
         for (const s of graph.swept) expect(s.batchSize).toBe(50);
+        for (const s of graph.swept) expect(s.nowMs).toBe(1_700_000_000_000);
         const swept = events.published.filter((e) => e.type === RuntimeEventType.MemoryDecaySwept);
         expect(swept.length).toBe(1);
     });

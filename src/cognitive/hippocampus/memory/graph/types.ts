@@ -140,6 +140,8 @@ export interface GraphRecallInput {
     embedding?: number[];
     minConfidence?: number;
     limit?: number;
+    /** Optional injected clock for deterministic freshness scoring and recall accounting. */
+    nowMs?: number;
 }
 
 export interface MemoryNodeRecord extends MemoryNodeInput {
@@ -160,6 +162,8 @@ export interface DecaySweepInput {
     ownerKey: string;
     /** 单次扫描每张表最多拉的行数，默认 200。 */
     batchSize?: number;
+    /** Optional injected clock so scheduled forgetting is deterministic under tests/replay. */
+    nowMs?: number;
     decayMemoryNode: (row: { importance: number; updatedAt: number }) => number;
     decayGem: (row: { importance: number; updatedAt: number; lastVerifiedAt?: number }) => number;
 }
