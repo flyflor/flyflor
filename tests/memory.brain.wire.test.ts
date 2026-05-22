@@ -16,6 +16,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import type { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
+import type { ScopeVectorComponent } from "../src/cognitive/hippocampus/scope/vector/component.ts";
 
 const tempRoots: string[] = [];
 
@@ -147,17 +148,40 @@ describe("MemoryModule + BrainStore", () => {
         }
     });
 
-    test("buildPrompt reads brain.db prompt atoms and emits MemoryBrainPromptRecall", async () => {
-        const config = await makeConfig();
-        const sink = new RecordingSink();
-        const memory = new MemoryModule(config, sink);
-        await memory.warmup();
+    test("buildPrompt keeps scope hot memory in prompt without brain.db prompt atoms", async () => {
+            const config = await makeConfig();
+            const sink = new RecordingSink();
+            const memory = new MemoryModule(config, sink);
+            await memory.warmup();
         try {
             const ctx = runtimeContext();
+            const scope = {
+                id: "scope-hot-prompt",
+                title: "Hot Prompt Scope",
+                goal: "scope.db hot memory should stay in prompt",
+                projectDir: join(config.paths.workspaceDir, "scopes", "scope-hot-prompt"),
+                projectMemoryDir: join(config.paths.workspaceDir, "scopes", "scope-hot-prompt", ".flyflor", "memory"),
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastUsedAt: Date.now(),
+                useCount: 1,
+            };
+            const internals = memory as unknown as { brain: BrainStore; scopeVector: ScopeVectorComponent };
+            internals.brain.upsertScope(scope);
+            await internals.scopeVector.upsertScope({ scope, summary: "scope hot memory fixture", nowMs: Date.now() });
+            await internals.scopeVector.recordHotMemory({
+                scopeId: scope.id,
+                summary: "Scope hot memory fixture",
+                text: "scope.db keeps project hot memory visible",
+                symbols: ["scope-db", "hot-memory"],
+                importance: 0.9,
+                nowMs: Date.now(),
+            });
+            const scopedCtx = { ...ctx, activeScope: { ...scope } };
             await memory.rememberTurn(
                 gatewayMessage("brain recall fixture turn"),
                 gatewayReply("ok", "msg-brain-1"),
-                ctx,
+                scopedCtx,
                 [
                     {
                         action: "add",
@@ -174,19 +198,10 @@ describe("MemoryModule + BrainStore", () => {
                 ],
             );
             sink.events.length = 0;
-            const prompt = await memory.buildPrompt(gatewayMessage("what did we say earlier?"), runtimeContext());
-            const recall = sink.events.find((e) => e.type === RuntimeEventType.MemoryBrainPromptRecall) as
-                | { type: string; payload?: { hits?: number; ownerKey?: string } }
-                | undefined;
-            const failed = sink.events.filter((e) => e.type === RuntimeEventType.MemoryBrainWriteFailed);
-            if (!recall) {
-                throw new Error(
-                    `brain prompt recall event missing. events: ${sink.events.map((e) => e.type).join(",")}; failed: ${JSON.stringify(failed)}`,
-                );
-            }
-            expect(recall.payload?.ownerKey).toBe("fork:test-fork");
-            expect(recall.payload?.hits ?? 0).toBeGreaterThanOrEqual(1);
-            expect(prompt).toContain("brain prompt recall fixture atom");
+            const prompt = await memory.buildPrompt(gatewayMessage("what did we say earlier?"), scopedCtx);
+            expect(prompt).toContain("[user] brain recall fixture turn [assistant] ok");
+            expect(prompt).toContain("Scope hot memory fixture");
+            expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryBrainPromptRecall)).toBe(false);
         } finally {
             memory.dispose();
         }

@@ -416,11 +416,12 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         memory.dispose();
     });
 
-    test("buildPrompt only exposes brain prompt atoms after the AtomScore visibility gate", async () => {
+    test("buildPrompt keeps brain prompt atoms out of prompt assembly", async () => {
         const config = await buildConfig();
         config.memory.candidates.autoPromoteExplicit = false;
         config.memory.tuning.atomScore.visibilityThreshold = 0.65;
-        const memory = new MemoryModule(config, new CapturingSink());
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
         await memory.warmup();
         const ctx = withEmbedding(await embedFor(config, "atom visibility"));
 
@@ -460,11 +461,15 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
 
         const prompt = await memory.buildPrompt(msg("atom visibility"), ctx);
 
-        expect(prompt).toContain("high atom passes visibility gate");
+        expect(prompt).toContain("Recent Activated Memory");
+        expect(prompt).not.toContain("high atom passes visibility gate");
         expect(prompt).not.toContain("low atom must stay hidden from prompt");
+        const promptBuilt = events.findOf(RuntimeEventType.MemoryPromptBuilt);
+        expect(promptBuilt?.payload?.brainPromptRecallResults).toBe(0);
+        memory.dispose();
     });
 
-    test("buildPrompt propagates brain prompt recall errors instead of silently dropping recall", async () => {
+    test("buildPrompt does not call brain prompt recall", async () => {
         const config = await buildConfig();
         const memory = new MemoryModule(config, new CapturingSink());
         await memory.warmup();
@@ -473,7 +478,9 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             throw new Error("broken brain prompt recall");
         };
         const ctx = withEmbedding(await embedFor(config, "broken journal"));
-        await expect(memory.buildPrompt(msg("broken journal"), ctx)).rejects.toThrow("broken brain prompt recall");
+        const prompt = await memory.buildPrompt(msg("broken journal"), ctx);
+        expect(prompt).toContain("Recent Activated Memory");
+        memory.dispose();
     });
 
     test("buildPrompt accepts optional context parameter without throwing", async () => {

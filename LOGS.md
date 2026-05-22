@@ -358,3 +358,10 @@
   Summary: Merged the release-seal Docker dev startup correction so compose invokes the `socket` command and the Docker smoke runner pins that contract.
   Reason: The Bun kernel's external surface is `/ws` plus `/health`; Docker dev should not keep the old `gateway` command wording or startup path after the socket-layer rename.
   Verification: `bun test tests/docker.dev.smoke.test.ts tests/install.script.test.ts`; `bun run docs:check`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: scope-memory-prompt-boundary
+  Summary: Merged the scope-memory correction that removes `brain.db` prompt-atom recall from `MemoryModule.buildPrompt` and keeps hippocampus activation on working-memory episodes plus explicit Scope hot memory.
+  Reason: `brain.db` is the monthly life ledger/query/replay/audit/detail store; prompt/context equipment must come from current input, MemoryComponent, CrystalComponent, explicit Scope/Fork, and Executive-visible capabilities, with Scope hot memory living in scope-local `scope.db`.
+  Verification: `bun test tests/runtime.perf.test.ts tests/memory.brain.wire.test.ts tests/context.scope.test.ts tests/scope.vector.test.ts`; `bun run check`; `git diff --check`

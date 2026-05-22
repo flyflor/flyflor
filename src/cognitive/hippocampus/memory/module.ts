@@ -11,7 +11,6 @@ import {
     MarkdownMemoryFile,
     MemoryCandidateStatus,
     MemoryKind,
-    MemoryLayer,
     MemorySourceKind,
     MemoryWorkingBackend,
     ModelRole,
@@ -53,7 +52,7 @@ import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding
 import { MarkdownMemoryStore } from "./markdown/index.ts";
 import { ScopeMemoryStore } from "./scope/index.ts";
 import { ContextForkStore, type ContextForkStoreSource } from "./fork/index.ts";
-import { BrainStore, type BrainPromptAtomWrite, type BrainVisibleAtom } from "./brain/index.ts";
+import { BrainStore, type BrainPromptAtomWrite } from "./brain/index.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary/index.ts";
 import { AskReason, MemoryEventStatus, MemoryEventType, ReplayRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type ContinuationContextEventContent, ContinuationContextReason, ContinuationDecisionKind, type ContinuationDecision, type ContinuationSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ScopeRecord, type ReplayRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
 import { MemoryMatrixAggregator } from "./recall/index.ts";
@@ -584,14 +583,7 @@ export class MemoryModule extends Memory {
 
         // Prompt assembly is Memory + Crystal/graph recall + explicit Scope/Fork.
         // It never reads the raw brain.db ledger as a session transcript.
-        const request: MemorySearchRequest = {
-            query: message.text,
-            scope: scopeConstraintId ?? "global",
-            subjectId: sourceKeyForMessage(message, context),
-            limit: this.config.memory.retrieval.maxResults,
-        };
-
-        const [hippocampus, scopeVector, scopeMemory, brainResults, markdown] = await Promise.all([
+        const [hippocampus, scopeVector, scopeMemory, markdown] = await Promise.all([
             this.assembleHippocampusContext(message, context),
             this.assembleScopeVectorContext(message, context),
             activeScope
@@ -602,16 +594,14 @@ export class MemoryModule extends Memory {
                       scope: scopeConstraintId,
                   })
                 : Promise.resolve(this.scopeMemory.emptySnapshot()),
-            this.recallVisibleBrainMemory(message, context),
             this.markdown.snapshot(),
         ]);
-        const results = dedupeResults(brainResults);
         const scopedPrompt = [scopeVector, scopeMemory.prompt].filter((entry) => entry && entry.trim().length > 0).join("\n\n");
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
             scopedPrompt,
             hippocampus,
-            results,
+            [],
             this.config.memory.retrieval.maxPromptChars,
         );
 
@@ -668,10 +658,10 @@ export class MemoryModule extends Memory {
 
         this.events.publish(
             event(RuntimeEventType.MemoryPromptBuilt, {
-                recallResults: results.length,
+                recallResults: 0,
                 atomScoreThreshold: this.config.memory.tuning.atomScore.visibilityThreshold,
                 hippocampusActivated: hippocampus ? true : false,
-                brainPromptRecallResults: brainResults.length,
+                brainPromptRecallResults: 0,
                 scopeConstraintId: scopeConstraintId ?? "global",
                 scopeMemoryActivated: Boolean(scopeConstraintId) && scopeMemory.prompt ? true : false,
                 scopeVectorActivated: Boolean(scopeVector),
@@ -730,22 +720,18 @@ export class MemoryModule extends Memory {
         ]);
         if (episodeIds.length === 0) return undefined;
         const records = await Promise.all(episodeIds.map((id) => this.workingMemory!.readEpisode(ownerKey, id)));
-        const visibleByEpisode = this.visibleAtomsForEpisodes(ownerKey, records);
         const candidates: ActivationCandidate[] = [];
-        const visibleAtoms = new Map<string, BrainVisibleAtom>();
+        const visibleEpisodes = new Map<string, EpisodeRecord>();
         for (const rec of records) {
             if (!rec) continue;
-            const entries = visibleByEpisode.get(rec.episodeId) ?? [];
-            for (const entry of entries) {
-                visibleAtoms.set(entry.atom.id, entry);
-                candidates.push({
-                    id: entry.atom.id,
-                    embedding: entry.atom.embedding.length > 0 ? entry.atom.embedding : rec.embedding,
-                    concepts: rec.concepts,
-                    importance: entry.score.total,
-                    createdAt: Date.parse(entry.atom.createdAt),
-                });
-            }
+            visibleEpisodes.set(rec.episodeId, rec);
+            candidates.push({
+                id: rec.episodeId,
+                embedding: rec.embedding,
+                concepts: rec.concepts,
+                importance: rec.importance,
+                createdAt: rec.createdAt,
+            });
         }
         if (candidates.length === 0) return undefined;
         const queryEmbedding =
@@ -763,9 +749,9 @@ export class MemoryModule extends Memory {
         if (activated.length === 0) return undefined;
         const lines = activated
             .map((a) => {
-                const entry = visibleAtoms.get(a.id);
+                const entry = visibleEpisodes.get(a.id);
                 if (!entry) return "";
-                const text = entry.atom.text.replace(/\s+/g, " ").trim().slice(0, 240);
+                const text = entry.text.replace(/\s+/g, " ").trim().slice(0, 240);
                 return `- [${a.score.toFixed(2)}] ${text}`;
             })
             .filter((l) => l.length > 0);
@@ -2826,97 +2812,6 @@ export class MemoryModule extends Memory {
         }
     }
 
-    private async recallVisibleBrainMemory(
-        message: GatewayMessage,
-        context?: RuntimeContext,
-    ): Promise<MemorySearchResult[]> {
-        if (!this.brainOpened) return [];
-        const nowMs = Date.parse(context?.now ?? message.receivedAt);
-        const sinceTs = Number.isFinite(nowMs) ? nowMs - 7 * 24 * 60 * 60 * 1000 : Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const visible = this.brain.listPromptAtomsWindow(context?.now ?? message.receivedAt, {
-            days: 7,
-            limit: this.config.memory.retrieval.maxResults,
-            minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
-            ownerKey: continuityOwnerKey(message, context),
-        });
-        this.events.publish(
-            event(RuntimeEventType.MemoryBrainPromptRecall, {
-                ownerKey: continuityOwnerKey(message, context),
-                sinceTs,
-                hits: visible.length,
-            }),
-        );
-        if (visible.length === 0) return [];
-        const queryEmbedding =
-            context?.embedding && context.embedding.length > 0 ? context.embedding : await this.embeddings.embed(message.text);
-        // P0 prompt recall：brain_events 是权威源；召回时仍按资源指标做轻量排序。
-        // 零字符匹配——只看结构化 score + embedding。
-        const activeCodenameOwnerKey = this.peekActiveCodenameOwnerKey(sourceKeyForMessage(message, context), context);
-        const boost = this.config.memory.tuning.inbox.codenameRecallBoost;
-        const results = visible
-            .map((entry) => ({
-                entry,
-                rank: rankVisibleAtom(entry, queryEmbedding, activeCodenameOwnerKey, boost),
-            }))
-            .sort((a, b) => b.rank - a.rank)
-            .slice(0, this.config.memory.retrieval.maxResults)
-            .map(({ entry }) => visibleAtomToMemoryResult(entry, MemoryLayer.Brain));
-        return results;
-    }
-
-    /**
-     * P2：算当前活跃 codename → 对应的 no-scope ownerKey。
-     * 不可用（brain 未开/无 touch 命中）返回 null，rank 函数会跳过 boost。
-     */
-    private peekActiveCodenameOwnerKey(_sourceKey: string, context?: RuntimeContext): string | null {
-        if (!this.brainOpened) return null;
-        const nowMs = context?.now ? Date.parse(context.now) : Date.now();
-        const windowMs = Math.max(0, this.config.memory.tuning.inbox.activeCodenameWindowMinutes) * 60_000;
-        const sinceTs = (Number.isFinite(nowMs) ? nowMs : Date.now()) - windowMs;
-        const cn = this.brain.getMostRecentTouchedCodename(sinceTs);
-        return cn ? `codename:${cn.id}` : null;
-    }
-
-    private visibleAtomsForEpisodes(
-        ownerKey: string,
-        records: Array<EpisodeRecord | undefined>,
-    ): Map<string, BrainVisibleAtom[]> {
-        if (!this.brainOpened) return new Map();
-        const brainEventToWorkingEpisode = new Map<string, string>();
-        let latestCreatedAt = 0;
-        for (const record of records) {
-            if (!record) continue;
-            latestCreatedAt = Math.max(latestCreatedAt, record.createdAt);
-            const brainEventId = readMetadataString(record.metadata, "brainEventId");
-            if (brainEventId) {
-                brainEventToWorkingEpisode.set(brainEventId, record.episodeId);
-            }
-        }
-        if (brainEventToWorkingEpisode.size === 0) return new Map();
-        // Working-memory episodes carry the authoritative brain event id in metadata.
-        // Prompt assembly reads scored prompt atoms, not raw ledger transcripts.
-        const visible = this.brain.listPromptAtomsWindow(
-            latestCreatedAt > 0 ? new Date(latestCreatedAt) : new Date(),
-            {
-                days: 31,
-                limit: Math.max(this.config.memory.retrieval.maxResults * 4, records.length),
-                minScore: this.config.memory.tuning.atomScore.visibilityThreshold,
-                ownerKey,
-            },
-        );
-        const byEpisode = new Map<string, BrainVisibleAtom[]>();
-        for (const entry of visible) {
-            for (const episodeId of entry.atom.episodeIds) {
-                const workingEpisodeId = brainEventToWorkingEpisode.get(episodeId);
-                if (!workingEpisodeId) continue;
-                const existing = byEpisode.get(workingEpisodeId) ?? [];
-                existing.push(entry);
-                byEpisode.set(workingEpisodeId, existing);
-            }
-        }
-        return byEpisode;
-    }
-
     /**
      * 向工作记忆 Component 写入本轮 episode。
      * 失败记录事件后继续抛出。embedding 优先复用 context.embedding；缺省时使用本地 embedding provider。
@@ -3380,11 +3275,6 @@ function uniqueStrings(values: string[]): string[] {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function readMetadataString(metadata: Record<string, unknown>, key: string): string | undefined {
-    const value = metadata[key];
-    return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 export function createMemory(config: FlyflorConfig, events: EventSink, model?: ModelClient): MemoryModule {
     return new MemoryModule(config, events, model);
 }
@@ -3498,16 +3388,6 @@ function clampSigned(value: number): number {
         return 0;
     }
     return Math.max(-1, Math.min(1, value));
-}
-
-function dedupeResults(results: MemorySearchResult[]): MemorySearchResult[] {
-    const byId = new Map<string, MemorySearchResult>();
-    for (const result of results.sort((a, b) => b.score - a.score)) {
-        if (!byId.has(result.record.id)) {
-            byId.set(result.record.id, result);
-        }
-    }
-    return [...byId.values()];
 }
 
 function renderMemoryPrompt(
@@ -3693,67 +3573,6 @@ function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWr
         createdAt: input.createdAt,
     };
     return { atom, score };
-}
-
-type VisibleAtomEntry = {
-    atom: MemoryAtom;
-    score: AtomScore;
-};
-
-function visibleAtomToMemoryResult(entry: VisibleAtomEntry, layer: MemoryLayer): MemorySearchResult {
-    return {
-        layer,
-        score: entry.score.total,
-        record: {
-            id: entry.atom.id,
-            kind: MemoryKind.Summary,
-            content: compactText([entry.atom.task, entry.atom.action, entry.atom.outcome].filter(Boolean).join(" | "), 640),
-            scope: entry.atom.scopeId ?? entry.atom.projectId ?? entry.atom.ownerKey ?? entry.atom.id,
-            subjectId: entry.atom.sourceKey,
-            importance: entry.score.total,
-            confidence: entry.atom.confidence,
-            createdAt: entry.atom.createdAt,
-            updatedAt: entry.atom.refinedAt ?? entry.atom.createdAt,
-            metadata: {
-                atomScore: entry.score,
-                episodeIds: entry.atom.episodeIds,
-                stage: entry.atom.stage,
-            },
-        },
-    };
-}
-
-function rankVisibleAtom(
-    entry: VisibleAtomEntry,
-    queryEmbedding: number[],
-    activeCodenameOwnerKey?: string | null,
-    codenameBoost?: number,
-): number {
-    const similarity =
-        queryEmbedding.length > 0 && entry.atom.embedding.length === queryEmbedding.length
-            ? Math.max(0, cosine(queryEmbedding, entry.atom.embedding))
-            : 0;
-    const codenameBoostScore =
-        activeCodenameOwnerKey && (entry.atom.ownerKey ?? entry.atom.scopeId ?? entry.atom.projectId) === activeCodenameOwnerKey
-            ? Math.max(0, codenameBoost ?? 0)
-            : 0;
-    return entry.score.total * 0.75 + similarity * 0.25 + codenameBoostScore;
-}
-
-function cosine(a: number[], b: number[]): number {
-    if (a.length === 0 || a.length !== b.length) return 0;
-    let dot = 0;
-    let magA = 0;
-    let magB = 0;
-    for (let i = 0; i < a.length; i += 1) {
-        const av = Number.isFinite(a[i]) ? (a[i] as number) : 0;
-        const bv = Number.isFinite(b[i]) ? (b[i] as number) : 0;
-        dot += av * bv;
-        magA += av * av;
-        magB += bv * bv;
-    }
-    if (magA === 0 || magB === 0) return 0;
-    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
 }
 
 function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string {
