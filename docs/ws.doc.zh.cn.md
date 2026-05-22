@@ -299,7 +299,14 @@ LIMIT ?
         "assistantText": "hi",
         "taskPlans": [],
         "replays": [],
-        "contextForks": []
+        "contextForks": [],
+        "metadata": {
+          "planning": {
+            "taskPlans": [],
+            "replays": [],
+            "contextForks": []
+          }
+        }
       }
     ]
   }
@@ -320,12 +327,23 @@ interface HistoryTurnSnapshot {
   assistantText: string;
   eventId: string;
   contextForks?: ContextForkRecord[];
-   replays?: ReplayRecord[];
+  replays?: ReplayRecord[];
   taskPlans?: TaskPlanRecord[];
+  metadata?: {
+    planning?: {
+      contextForks: GatewayControlContextForkSnapshot[];
+      replays: GatewayControlReplaySnapshot[];
+      taskPlans: GatewayControlTodoTaskSnapshot[];
+    };
+  };
   ts: number;
   userText: string;
 }
 ```
+
+`metadata.planning` 对齐 compact 的 `turn.final.reply.metadata.planning` shape，用于持久化
+history turn 的回放展示。它只由已存储的结构化 plan/fork/replay 记录组装，不会把
+`history.list` 变成 session restore 或 prompt 装配路径。
 
 测试：
 

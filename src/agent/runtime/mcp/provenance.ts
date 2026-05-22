@@ -12,6 +12,13 @@ import {
     type McpToolCallExecution,
 } from "../../mcp/index.ts";
 import type { MemoryEpisodeProvenance } from "../../../cognitive/hippocampus/memory/index.ts";
+import { CapabilityExecutionKind } from "../../../protocol/contracts/index.ts";
+import type { ExecutiveCapabilityExecutionMetadata } from "../../../executive/index.ts";
+
+export interface RuntimeExecutiveExecutionMetadataInput {
+    readonly executions: readonly McpToolCallExecution[];
+    readonly requiresApproval: boolean;
+}
 
 export function mcpExecutionsToProvenance(
     executions: McpToolCallExecution[],
@@ -25,6 +32,27 @@ export function mcpExecutionsToProvenance(
             resultSummaryMeta: summary,
             server: execution.call.server,
             tool: execution.call.tool,
+        };
+    });
+}
+
+/**
+ * Executive reply metadata is intentionally smaller than MCP provenance: it is
+ * the stable observability surface for capability execution, not a replay of
+ * third-party payloads or tool-specific response bodies.
+ */
+export function mcpExecutionsToExecutiveMetadata(
+    input: RuntimeExecutiveExecutionMetadataInput,
+): ExecutiveCapabilityExecutionMetadata[] {
+    return input.executions.map((execution) => {
+        const summary = execution.result ? describeMcpResult(execution.result.raw).summary : undefined;
+        return {
+            capabilityKind: capabilityKindForExecution(execution),
+            error: execution.error ? execution.error.slice(0, 240) : undefined,
+            key: `${execution.call.server}.${execution.call.tool}`,
+            ok: execution.ok,
+            requiresApproval: input.requiresApproval,
+            resultSummary: summary ? formatMcpResultSummary(summary, execution.result?.raw) : undefined,
         };
     });
 }
@@ -50,4 +78,10 @@ function previewMcpResult(value: unknown): string {
     } catch {
         return "";
     }
+}
+
+function capabilityKindForExecution(execution: McpToolCallExecution): CapabilityExecutionKind {
+    if (execution.call.server === "shell") return CapabilityExecutionKind.ShellHook;
+    if (execution.call.server === "user") return CapabilityExecutionKind.Plugin;
+    return CapabilityExecutionKind.McpTool;
 }

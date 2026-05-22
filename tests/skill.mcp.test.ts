@@ -608,6 +608,15 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "user", tool: "local.echo" }),
         ]);
+        expect(reply.metadata?.executiveToolExecutions).toEqual([
+            expect.objectContaining({
+                capabilityKind: CapabilityExecutionKind.Plugin,
+                key: "user.local.echo",
+                ok: true,
+                requiresApproval: true,
+                resultSummary: expect.stringContaining("hello user tool"),
+            }),
+        ]);
         const toolResultText = model.messages
             .flat()
             .filter((message) => message.role === ModelRole.User)
@@ -919,6 +928,15 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "fake", tool: "echo" }),
+        ]);
+        expect(reply.metadata?.executiveToolExecutions).toEqual([
+            expect.objectContaining({
+                capabilityKind: CapabilityExecutionKind.McpTool,
+                key: "fake.echo",
+                ok: true,
+                requiresApproval: true,
+                resultSummary: expect.stringContaining("from-tool"),
+            }),
         ]);
         expect(model.messages).toHaveLength(3);
         expect(model.messages[1]?.some((message) => message.role === ModelRole.User)).toBe(true);

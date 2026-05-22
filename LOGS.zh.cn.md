@@ -106,3 +106,10 @@
   摘要：已从推送后的追加式 worktree 启动 `flyflor-wave4`，包含 runtime-smoke、runtime-metadata、runtime-history 三个子 Codex 窗口。
   原因：用户要求把并发吞吐拉满，同时保留协调者 review、干净 worktree 和零残留尾巴。
   验证：`tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`
+
+- 状态：completed
+  操作者：main-codex
+  范围：kernel-wave4-runtime-capability-review
+  摘要：已 review 并整合 wave4 metadata、history、smoke 三个切片到 `main-codex-docs`，新增 live `executiveToolExecutions`、从结构化 ledger provenance 投影的 replay-only execution metadata、compact planning replay metadata，以及成功批准 capability execution 的端到端 WS smoke。
+  原因：Runtime capability execution 需要能通过 live `turn.final`、订阅 runtime event 和 `history.list` 回放被观察到，同时不能扩大 HTTP Gateway、不能恢复 `/channels`，也不能依赖从文本推断 history 分类。
+  验证：`bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/tui.chat.history.test.ts tests/skill.mcp.test.ts`；`bun run check`；`bun run docs:check`；`git diff --check`；`bun run build:binary`

@@ -24,6 +24,7 @@ import {
     loadToolManifest,
     type CapabilityCatalogSnapshot,
     type CapabilitySummary,
+    type ExecutiveCapabilityExecutionMetadata,
     type ExecutiveToolRuntimeAskRequired,
     type ManifestToolDefinition,
 } from "../../executive/index.ts";
@@ -73,6 +74,7 @@ import {
     filterMcpServersByToolset,
     GitToolset,
     mcpCatalogCacheKey,
+    mcpExecutionsToExecutiveMetadata,
     mcpExecutionsToProvenance,
     RuntimeMcpCapabilityReader,
     RuntimeMcpToolPlanComponent,
@@ -219,6 +221,7 @@ interface GeneratedTurn {
     parsed: ReturnType<typeof parseMemoryActions>;
     visibleText: string;
     mcpCallProvenance: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
+    executiveToolExecutions: ExecutiveCapabilityExecutionMetadata[];
     selectedSkillNames: string[];
     contextForks: ContextForkRecord[];
     replayRecords: ReplayRecord[];
@@ -837,6 +840,10 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const selectedSkillNames = selectedSkills.map((skill) => skill.name);
         const mcpCallProvenance = mcpExecutionsToProvenance(generated.mcpToolCalls);
+        const executiveToolExecutions = mcpExecutionsToExecutiveMetadata({
+            executions: generated.mcpToolCalls,
+            requiresApproval: generated.requiresApproval,
+        });
         const rawText = generated.rawText;
         const executiveAsk = generated.askRequired
             ? this.buildExecutiveToolAsk(generated.askRequired, generated.mcpToolCalls)
@@ -862,6 +869,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 mcpServers,
                 sandbox,
                 behaviorSnapshotId,
+                executiveToolExecutions,
                 mcpCallProvenance,
                 executiveAskRequired: generated.askRequired,
             });
@@ -971,6 +979,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                 mcpToolCalls: generated.mcpToolCalls.length,
                 mcpToolExecutions: mcpCallProvenance,
+                executiveToolExecutions,
                 sandboxMode: sandbox.mode,
                 skills: selectedSkillNames,
             },
@@ -982,6 +991,7 @@ export class RuntimeModule extends RuntimeBoundary {
             parsed,
             visibleText,
             mcpCallProvenance,
+            executiveToolExecutions,
             selectedSkillNames,
             contextForks: planningParsed.contextForks,
             replayRecords: planningParsed.replayRecords,
@@ -1004,6 +1014,7 @@ export class RuntimeModule extends RuntimeBoundary {
         sandbox: AssembledTurnContext["sandbox"];
         behaviorSnapshotId: string;
         mcpCallProvenance?: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
+        executiveToolExecutions?: ExecutiveCapabilityExecutionMetadata[];
         executiveAskRequired?: RuntimeExecutiveAskRequired;
     }): GeneratedTurn {
         const {
@@ -1018,6 +1029,7 @@ export class RuntimeModule extends RuntimeBoundary {
         } = input;
         const selectedSkillNames = selectedSkills.map((skill) => skill.name);
         const mcpCallProvenance = input.mcpCallProvenance ?? [];
+        const executiveToolExecutions = input.executiveToolExecutions ?? [];
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
@@ -1043,6 +1055,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                 mcpToolCalls: mcpCallProvenance.length,
                 mcpToolExecutions: mcpCallProvenance,
+                executiveToolExecutions,
                 sandboxMode: sandbox.mode,
                 skills: selectedSkillNames,
                 ...(executiveAskRequired ? { executiveToolLoop: executiveAskRequired } : {}),
@@ -1054,6 +1067,7 @@ export class RuntimeModule extends RuntimeBoundary {
             parsed: { actions: [], text: "" },
             visibleText: ask.prompt,
             mcpCallProvenance,
+            executiveToolExecutions,
             selectedSkillNames,
             contextForks: [],
             replayRecords: [],
@@ -1495,11 +1509,13 @@ export class RuntimeModule extends RuntimeBoundary {
         askRequired?: RuntimeExecutiveAskRequired;
         rawText: string;
         mcpToolCalls: McpToolCallExecution[];
+        requiresApproval: boolean;
     }> {
         if (!mcp.canExecuteTools || mcp.catalog.length === 0) {
             return {
                 rawText: await this.generateModelText(messages, replyPrefix, options),
                 mcpToolCalls: [],
+                requiresApproval: mcp.requiresApproval,
             };
         }
 
@@ -1541,6 +1557,7 @@ export class RuntimeModule extends RuntimeBoundary {
             askRequired: result.askRequired,
             rawText: result.rawText,
             mcpToolCalls: result.mcpToolCalls,
+            requiresApproval: mcp.requiresApproval,
         };
     }
 

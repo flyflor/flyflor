@@ -497,3 +497,11 @@ Launch state:
 - active tmux session: `flyflor-wave4`
 - active windows: `runtime-smoke`, `runtime-metadata`, `runtime-history`
 - review policy: main Codex accepts only committed, validated, narrow child slices; canonical TODO/LOGS/workflow updates remain on `main-codex-docs`
+
+Review state:
+
+- `wt/wave4-runtime-metadata` commit `8eb7444` reviewed and integrated as implementation/test surface only.
+- `wt/wave4-runtime-history` commit `7702efe` reviewed and integrated with an additional mainline execution replay projection from structured ledger provenance.
+- `wt/wave4-runtime-smoke` commit `53342ee` reviewed and integrated after replacing the new capability-history success check with structured `executiveToolExecutions` replay metadata.
+- HTTP Gateway remains `/ws` and `/health`; `/channels` remains removed.
+- `history.list` remains ledger/query/replay/audit only and is not a prompt assembly or session restore path.

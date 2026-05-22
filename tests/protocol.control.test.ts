@@ -27,10 +27,12 @@ import {
     shouldDeliverGatewayControlEvent,
 } from "../src/protocol/control/index.ts";
 import {
+    CapabilityExecutionKind,
     Channel,
     ChatType,
     GatewayControlMessageType,
     GatewayControlProtocol,
+    TaskPlanStatus,
 } from "../src/protocol/contracts/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType } from "../src/events/index.ts";
@@ -231,6 +233,35 @@ describe("Gateway Control protocol", () => {
                     {
                         assistantText: "Hi",
                         eventId: "event-1",
+                        metadata: {
+                            executiveToolExecutions: [{
+                                capabilityKind: CapabilityExecutionKind.McpTool,
+                                key: "workspace.read",
+                                ok: true,
+                                resultSummary: "kind=text chars=25 preview=approved capability smoke",
+                            }],
+                            kind: GatewayControlReplyMetadataKind.Reply,
+                            messageId: "event-1",
+                            planning: {
+                                contextForks: [],
+                                replays: [],
+                                taskPlans: [{
+                                    completedStepCount: 0,
+                                    id: "plan-1",
+                                    progress: 0,
+                                    status: TaskPlanStatus.Planned,
+                                    stepCount: 1,
+                                    steps: [{
+                                        id: "step-1",
+                                        order: 0,
+                                        status: TaskPlanStatus.Planned,
+                                        title: "Step",
+                                    }],
+                                    summary: "Summary",
+                                    title: "Plan",
+                                }],
+                            },
+                        },
                         ts: 100,
                         userText: "Hello",
                     },
@@ -242,6 +273,35 @@ describe("Gateway Control protocol", () => {
                 {
                     assistantText: "Hi",
                     eventId: "event-1",
+                    metadata: {
+                        executiveToolExecutions: [{
+                            capabilityKind: CapabilityExecutionKind.McpTool,
+                            key: "workspace.read",
+                            ok: true,
+                            resultSummary: "kind=text chars=25 preview=approved capability smoke",
+                        }],
+                        kind: GatewayControlReplyMetadataKind.Reply,
+                        messageId: "event-1",
+                        planning: {
+                            contextForks: [],
+                            replays: [],
+                            taskPlans: [{
+                                completedStepCount: 0,
+                                id: "plan-1",
+                                progress: 0,
+                                status: TaskPlanStatus.Planned,
+                                stepCount: 1,
+                                steps: [{
+                                    id: "step-1",
+                                    order: 0,
+                                    status: TaskPlanStatus.Planned,
+                                    title: "Step",
+                                }],
+                                summary: "Summary",
+                                title: "Plan",
+                            }],
+                        },
+                    },
                     ts: 100,
                     userText: "Hello",
                 },
@@ -596,6 +656,16 @@ describe("Gateway Control protocol", () => {
                     {
                         assistantText: "Hi",
                         eventId: "event-1",
+                        metadata: {
+                            executiveToolExecutions: [],
+                            kind: GatewayControlReplyMetadataKind.Reply,
+                            messageId: "event-1",
+                            planning: {
+                                contextForks: [],
+                                replays: [],
+                                taskPlans: [],
+                            },
+                        },
                         ts: 100,
                         userText: "Hello",
                     },
@@ -614,7 +684,19 @@ describe("Gateway Control protocol", () => {
         expect(parseGatewayControlEnvelope(JSON.stringify(snapshotEnvelope))).toMatchObject({
             correlationId: "history-get-1",
             payload: {
-                history: [{ eventId: "event-1" }],
+                history: [{
+                    eventId: "event-1",
+                    metadata: {
+                        executiveToolExecutions: [],
+                        kind: GatewayControlReplyMetadataKind.Reply,
+                        messageId: "event-1",
+                        planning: {
+                            contextForks: [],
+                            replays: [],
+                            taskPlans: [],
+                        },
+                    },
+                }],
                 nextBeforeTs: 99,
             },
             requestId: "req-history-1",

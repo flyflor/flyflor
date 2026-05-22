@@ -266,5 +266,17 @@ Latest full seal validation in this workspace passed:
 - [x] Keep previous kernel/wave2/wave3 worktrees intact; wave4 is additive.
 - [x] Create and push the three wave4 branches from `main-codex-docs@1f45a72`.
 - [x] Launch `flyflor-wave4` child Codex windows after the orchestration commit lands.
-- [ ] Main Codex review rule: merge only passing implementation/test slices; failed prototypes must be discarded and recorded without dirty tails.
-- [ ] Review wave4 child outputs as they land and keep mainline canonical TODO/LOGS/workflow history separate from local child notes.
+- [x] Main Codex review rule: merge only passing implementation/test slices; failed prototypes must be discarded and recorded without dirty tails.
+- [x] Review wave4 child outputs as they land and keep mainline canonical TODO/LOGS/workflow history separate from local child notes.
+
+## 2026-05-22 Wave4 Runtime Capability Review
+
+- [x] Reviewed `wt/wave4-runtime-metadata` and merged the implementation/test surface:
+  - typed `executiveToolExecutions` live reply metadata
+  - bounded MCP/user capability execution projection
+- [x] Reviewed `wt/wave4-runtime-history` and merged the control/history surface:
+  - compact planning replay metadata
+  - replay-only execution metadata projected from structured ledger provenance
+  - no session restore or prompt assembly path
+- [x] Reviewed `wt/wave4-runtime-smoke` and merged the smoke/test surface after replacing the new history success assertion with structured execution metadata checks.
+- [x] Verified the integrated mainline snapshot with focused gateway/runtime/history tests, `bun run check`, `bun run docs:check`, `git diff --check`, and `bun run build:binary`.

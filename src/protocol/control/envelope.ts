@@ -6,6 +6,7 @@ import {
     type AgentAsk,
     type AgentAskChoice,
     type AgentAskQuestion,
+    type CapabilityExecutionKind,
     type ContextForkRecord,
     GatewayControlMessageType,
     GatewayControlProtocol,
@@ -89,8 +90,15 @@ export interface GatewayControlHistoryTurnSnapshot {
     assistantText: string;
     eventId: string;
     contextForks?: ContextForkRecord[];
+    executiveToolExecutions?: GatewayControlExecutiveToolExecutionSnapshot[];
     replays?: ReplayRecord[];
     taskPlans?: TaskPlanRecord[];
+    /**
+     * Control-local replay metadata mirrors `turn.final.reply.metadata` so thin
+     * clients can render historic execution/planning state without importing
+     * runtime internals or promoting this shape into brain contracts.
+     */
+    metadata?: GatewayControlReplyMetadata;
     ts: number;
     userText: string;
 }
@@ -215,6 +223,14 @@ export interface GatewayControlPlanningMetadataSnapshot {
     taskPlans: GatewayControlTodoTaskSnapshot[];
 }
 
+export interface GatewayControlExecutiveToolExecutionSnapshot {
+    capabilityKind: CapabilityExecutionKind;
+    error?: string;
+    key: string;
+    ok: boolean;
+    resultSummary?: string;
+}
+
 export interface GatewayControlLongHorizonLoopSnapshot {
     askId: string;
     loopGuardReason?: string;
@@ -231,8 +247,10 @@ export interface GatewayControlLongHorizonLoopSnapshot {
 export type GatewayControlReplyMetadata = Record<string, unknown> & {
     ask?: GatewayControlAskMetadataSnapshot;
     behaviorSnapshotId?: string;
+    executiveToolExecutions?: GatewayControlExecutiveToolExecutionSnapshot[];
     executiveToolLoop?: GatewayControlLongHorizonLoopSnapshot;
     kind?: GatewayControlReplyMetadataKind;
+    messageId?: string;
     planning?: GatewayControlPlanningMetadataSnapshot;
 };
 

@@ -15,6 +15,7 @@ import {
     buildGatewayControlTurnFinalPayload,
     createGatewayControlEnvelope,
     createGatewayControlEventEnvelope,
+    GatewayControlReplyMetadataKind,
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
     readGatewayControlHistoryListInput,
@@ -23,10 +24,13 @@ import {
     shouldDeliverGatewayControlEvent,
     type GatewayControlHistoryListInput,
     type GatewayControlHistoryTurnSnapshot,
+    type GatewayControlPlanningMetadataSnapshot,
+    type GatewayControlReplyMetadata,
     type GatewayControlEnvelope,
     type GatewayControlGatewayStatusSnapshot,
     type GatewayControlPeer,
     type GatewayControlSocket,
+    type GatewayControlTodoTaskSnapshot,
 } from "../../protocol/control/index.ts";
 import {
     ChannelLinkState,
@@ -319,7 +323,7 @@ export class GatewayControlHub implements EventSink {
             socket,
             GatewayControlMessageType.HistorySnapshot,
             buildGatewayControlHistorySnapshotPayload({
-                history,
+                history: history.map((turn) => this.historyTurnSnapshot(turn)),
                 nextBeforeTs: history.length > 0 && history[0] ? history[0].ts - 1 : undefined,
             }),
             envelope,
@@ -393,6 +397,69 @@ export class GatewayControlHub implements EventSink {
 
     private messageFromInput(input: ReturnType<typeof readGatewayControlMessageInput>): GatewayMessage {
         return normalizeGatewayControlMessage(input);
+    }
+
+    /**
+     * History replay is a read model over already-persisted structured runtime
+     * records. It mirrors compact live `turn.final.reply.metadata` lanes without
+     * importing RuntimeModule internals or changing turn execution.
+     */
+    private historyTurnSnapshot(turn: GatewayControlHistoryTurnSnapshot): GatewayControlHistoryTurnSnapshot {
+        const metadata = this.historyMetadataSnapshot(turn);
+        return metadata ? { ...turn, metadata } : turn;
+    }
+
+    private historyMetadataSnapshot(turn: GatewayControlHistoryTurnSnapshot): GatewayControlReplyMetadata | undefined {
+        const planning = this.historyPlanningMetadata(turn);
+        const executiveToolExecutions = turn.executiveToolExecutions ?? [];
+        if (!planning && executiveToolExecutions.length === 0) return turn.metadata;
+        return {
+            ...(turn.metadata ?? {}),
+            kind: turn.metadata?.kind ?? GatewayControlReplyMetadataKind.Reply,
+            messageId: turn.eventId,
+            ...(executiveToolExecutions.length > 0 ? { executiveToolExecutions } : {}),
+            ...(planning ? { planning } : {}),
+        };
+    }
+
+    private historyPlanningMetadata(
+        turn: GatewayControlHistoryTurnSnapshot,
+    ): GatewayControlPlanningMetadataSnapshot | undefined {
+        const taskPlans = (turn.taskPlans ?? []).map((plan): GatewayControlTodoTaskSnapshot => ({
+            completedStepCount: plan.completedStepCount,
+            id: plan.id,
+            progress: plan.progress,
+            status: plan.status,
+            stepCount: plan.stepCount,
+            steps: (plan.step ?? []).slice(0, 8).map((step) => ({
+                id: step.id,
+                order: step.order,
+                progress: step.progress,
+                status: step.status,
+                title: step.title,
+            })),
+            summary: plan.summary,
+            title: plan.title,
+        }));
+        const contextForks = (turn.contextForks ?? []).map((fork) => ({
+            id: fork.id,
+            continuitySummary: fork.continuitySummary,
+            maxContextTokens: fork.maxContextTokens,
+            title: fork.title,
+        }));
+        const replays = (turn.replays ?? []).map((replay) => ({
+            blackboardTurnId: replay.blackboardTurnId,
+            contextForkId: replay.contextForkId,
+            id: replay.id,
+            kind: replay.kind,
+            summary: replay.summary,
+            taskPlanId: replay.taskPlanId,
+            title: replay.title,
+        }));
+        if (taskPlans.length === 0 && contextForks.length === 0 && replays.length === 0) {
+            return undefined;
+        }
+        return { contextForks, replays, taskPlans };
     }
 
     private contextFromInput(

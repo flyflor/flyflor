@@ -1,5 +1,6 @@
 import type {
     CapabilitySource,
+    CapabilityExecutionKind,
     ToolHiddenReason,
     ExecutiveLoopGuardReason,
     ToolPermission,
@@ -141,6 +142,15 @@ export interface CapabilityCatalogSnapshot {
         readonly tools: number;
         readonly userTools: number;
     };
+}
+
+export interface ExecutiveCapabilityExecutionMetadata {
+    readonly capabilityKind: CapabilityExecutionKind;
+    readonly error?: string;
+    readonly key: string;
+    readonly ok: boolean;
+    readonly requiresApproval: boolean;
+    readonly resultSummary?: string;
 }
 
 export interface ExecutiveLoopGuardEvent {

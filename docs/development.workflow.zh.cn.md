@@ -497,3 +497,11 @@ bun run kernel:tmux -- --wave4 --launch-codex
 - 活跃 tmux session：`flyflor-wave4`
 - 活跃窗口：`runtime-smoke`、`runtime-metadata`、`runtime-history`
 - review 策略：主 Codex 只接收已提交、已验证、窄范围的子切片；canonical TODO/LOGS/workflow 更新继续留在 `main-codex-docs`
+
+Review 状态：
+
+- `wt/wave4-runtime-metadata` commit `8eb7444` 已 review，并只整合实现/测试面。
+- `wt/wave4-runtime-history` commit `7702efe` 已 review，并在主线追加从结构化 ledger provenance 投影 execution replay metadata。
+- `wt/wave4-runtime-smoke` commit `53342ee` 已 review，并在合入时把新增 capability-history 成功检查替换为结构化 `executiveToolExecutions` replay metadata。
+- HTTP Gateway 仍然只保留 `/ws` 和 `/health`；`/channels` 继续移除。
+- `history.list` 仍然只用于 ledger/query/replay/audit，不是 prompt 装配或 session restore 路径。

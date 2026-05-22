@@ -141,3 +141,10 @@
   Summary: Launched `flyflor-wave4` with runtime-smoke, runtime-metadata, and runtime-history child Codex windows from pushed additive worktrees.
   Reason: The user requested maximum parallel throughput while preserving coordinator review, clean worktrees, and no residual tails.
   Verification: `tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-wave4-runtime-capability-review
+  Summary: Reviewed and integrated wave4 metadata, history, and smoke slices into `main-codex-docs`, adding live `executiveToolExecutions`, replay-only execution metadata from structured ledger provenance, compact planning replay metadata, and an end-to-end WS smoke for successful approved capability execution.
+  Reason: Runtime capability execution needed to be observable through live `turn.final`, subscribed runtime events, and `history.list` replay without widening HTTP Gateway, reintroducing `/channels`, or relying on text-derived history classification.
+  Verification: `bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/tui.chat.history.test.ts tests/skill.mcp.test.ts`; `bun run check`; `bun run docs:check`; `git diff --check`; `bun run build:binary`

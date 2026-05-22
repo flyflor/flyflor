@@ -199,6 +199,9 @@
 - 返回的是当前 ledger 的全局流水账分页
 
 scope、fork、replay、plan 只作为 turn 附着的结构化字段随结果返回。
+`history.snapshot.history[].metadata.planning` 复用 live `turn.final.reply.metadata.planning`
+的 compact shape，方便 thin client 在历史回放里展示 plan/fork/replay 状态；它仍然只是
+ledger 查询结果，不是 session 恢复或 prompt 装配入口。
 
 ## 流式回复
 

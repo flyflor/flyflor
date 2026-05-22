@@ -24,6 +24,18 @@ import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import { event, EventsComponent, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 interface GatewayControlSmokeReport {
+    approvedCapabilityEvents: string[];
+    approvedCapabilityHistoryMetadata: Array<{
+        executiveToolExecutions?: GatewayControlSmokeReport["approvedCapabilityMetadata"];
+        kind?: string;
+        messageId?: string;
+    }>;
+    approvedCapabilityMetadata: Array<{
+        capabilityKind?: string;
+        key?: string;
+        ok?: boolean;
+        resultSummary?: string;
+    }>;
     capabilityCommands: string[];
     deltaText: string;
     eventTypes: string[];
@@ -65,6 +77,12 @@ class ScriptedStreamingModel implements ModelClient {
         if (this.callCount === 3) {
             return "Gateway control smoke resumed final reply.";
         }
+        if (this.callCount === 4) {
+            return '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"approved.txt"}}]}</flyflor_mcp_calls>';
+        }
+        if (this.callCount === 5) {
+            return "Approved capability final reply.";
+        }
         return `Gateway control smoke fallback reply for: ${text}`;
     }
 }
@@ -103,7 +121,7 @@ class GatewayControlSmoke {
             const gateway = new GatewayModule(config.gateway, runtime, this.events, { paths: config.paths });
             const originalHandleMessage = runtime.handleMessage.bind(runtime);
             runtime.handleMessage = ((message, context, options = {}) =>
-                originalHandleMessage(message, context, { ...options, maxToolTurns: 1 })) as typeof runtime.handleMessage;
+                originalHandleMessage(message, context, { ...options, maxToolTurns: message.id === "message-3" ? 2 : 1 })) as typeof runtime.handleMessage;
             this.gateway = gateway;
             this.gateway.start();
 
@@ -124,7 +142,7 @@ class GatewayControlSmoke {
                 ws,
                 GatewayControlMessageType.EventSubscribe,
                 {
-                    classes: ["lifecycle", "ask"],
+                    classes: ["lifecycle", "ask", "effect"],
                 },
                 { id: "event-sub-1", requestId: "req-event-sub-1" },
             );
@@ -188,8 +206,33 @@ class GatewayControlSmoke {
 
             send(
                 ws,
+                GatewayControlMessageType.GatewayMessageSend,
+                {
+                    id: "message-3",
+                    text: "read approved project note",
+                    conversationKey: "thin-client",
+                    user: { id: "smoke-user", displayName: "Smoke User" },
+                    context: {
+                        activeScope: {
+                            id: "scope-thin-client",
+                            projectDir: join(config.paths.projectDir, "scope-thin-client"),
+                            projectMemoryDir: join(config.paths.projectDir, "scope-thin-client", ".flyflor", "memory"),
+                            title: "Thin Client Scope",
+                        },
+                    },
+                },
+                { id: "turn-3", requestId: "req-turn-3" },
+            );
+            const approvedFinalEnvelope = await waitForType(
+                received,
+                GatewayControlMessageType.TurnFinal,
+                (envelope) => envelope.requestId === "req-turn-3",
+            );
+
+            send(
+                ws,
                 GatewayControlMessageType.HistoryList,
-                { limit: 5 },
+                { limit: 6 },
                 { id: "history-1", requestId: "req-history-1" },
             );
             const historyEnvelope = await waitForType(received, GatewayControlMessageType.HistorySnapshot);
@@ -199,6 +242,7 @@ class GatewayControlSmoke {
             const hello = first.payload as GatewayControlServerHelloPayload;
             const status = statusEnvelope.payload as GatewayControlGatewayStatusPayload;
             const resumedFinal = resumedFinalEnvelope.payload as GatewayControlTurnFinalPayload;
+            const approvedFinal = approvedFinalEnvelope.payload as GatewayControlTurnFinalPayload;
             const capabilityCommands = readCapabilityCommands(catalogEnvelope.payload);
             const firstTurnDelta = received.find(
                 (envelope) =>
@@ -208,12 +252,30 @@ class GatewayControlSmoke {
             const deltaText = String(firstTurnDelta?.payload?.delta ?? "");
             const finalText = final.reply.text;
             const history = Array.isArray(historyEnvelope.payload?.history)
-                ? historyEnvelope.payload.history as Array<{ assistantText?: string; taskPlans?: unknown[] }>
+                ? historyEnvelope.payload.history as Array<{
+                    assistantText?: string;
+                    metadata?: Record<string, unknown>;
+                    taskPlans?: unknown[];
+                    userText?: string;
+                }>
                 : [];
             const eventTypes = this.sink.events.map((item) => item.type);
             const eventPublishTypes = received
                 .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
                 .map((envelope) => String((envelope.payload as { event?: { type?: string } } | undefined)?.event?.type ?? ""));
+            const approvedCapabilityMetadata = readExecutiveToolExecutions(approvedFinal.reply.metadata);
+            const approvedCapabilityEvents = received
+                .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+                .map((envelope) => (envelope.payload as { event?: { payload?: Record<string, unknown>; requestId?: string; type?: string } } | undefined)?.event)
+                .filter(
+                    (event): event is { type: string; requestId?: string; payload: Record<string, unknown> } =>
+                        event?.type === RuntimeEventType.McpToolCallExecuted &&
+                        event.requestId === "req-turn-3" &&
+                        event.payload?.ok === true &&
+                        event.payload?.server === "workspace" &&
+                        event.payload?.tool === "read",
+                )
+                .map((event) => event.type);
             const historyKinds = history
                 .map((entry) => {
                     const text = String(entry.assistantText ?? "");
@@ -221,8 +283,22 @@ class GatewayControlSmoke {
                     if (text.includes("resumed final")) return "reply";
                     return "unknown";
                 });
+            const approvedCapabilityHistoryMetadata = history
+                .map((entry) => readHistoryMetadata(entry.metadata))
+                .filter((metadata) =>
+                    metadata.executiveToolExecutions?.some(
+                        (execution) =>
+                            execution.ok === true &&
+                            execution.capabilityKind === "mcp-tool" &&
+                            execution.key === "workspace.read" &&
+                            String(execution.resultSummary ?? "").includes("approved capability smoke"),
+                    ),
+                );
 
             return {
+                approvedCapabilityEvents,
+                approvedCapabilityHistoryMetadata,
+                approvedCapabilityMetadata,
                 capabilityCommands,
                 deltaText,
                 eventTypes,
@@ -244,14 +320,27 @@ class GatewayControlSmoke {
                     final.reply.metadata?.kind === "ask" &&
                     resumedFinal.reply.text === "Gateway control smoke resumed final reply." &&
                     resumedFinal.reply.metadata?.kind === "reply" &&
-                    history.length >= 2 &&
+                    approvedFinal.reply.text === "Approved capability final reply." &&
+                    approvedFinal.reply.metadata?.kind === "reply" &&
+                    approvedCapabilityMetadata.some(
+                        (execution) =>
+                            execution.ok === true &&
+                            execution.capabilityKind === "mcp-tool" &&
+                            execution.key === "workspace.read" &&
+                            String(execution.resultSummary ?? "").includes("approved capability smoke"),
+                    ) &&
+                    approvedCapabilityEvents.includes(RuntimeEventType.McpToolCallExecuted) &&
+                    approvedCapabilityHistoryMetadata.some((metadata) => metadata.kind === "reply") &&
+                    history.length >= 3 &&
                     eventTypes.includes(RuntimeEventType.GatewayStart) &&
                     eventTypes.includes(RuntimeEventType.AgentTurnStart) &&
                     eventTypes.includes(RuntimeEventType.AgentTurnEnd) &&
                     eventTypes.includes(RuntimeEventType.ExecutiveLoopPaused) &&
                     eventTypes.includes(RuntimeEventType.ExecutiveLoopResumed) &&
+                    eventTypes.includes(RuntimeEventType.McpToolCallExecuted) &&
                     eventPublishTypes.includes(RuntimeEventType.ExecutiveLoopPaused) &&
-                    eventPublishTypes.includes(RuntimeEventType.ExecutiveLoopResumed),
+                    eventPublishTypes.includes(RuntimeEventType.ExecutiveLoopResumed) &&
+                    eventPublishTypes.includes(RuntimeEventType.McpToolCallExecuted),
                 statusHost: status.status.host,
                 statusPort: status.status.port,
                 tempHome: config.paths.home,
@@ -272,6 +361,7 @@ class GatewayControlSmoke {
         await symlink(join(repoRoot, "templates"), paths.templateDir, "dir");
         await mkdir(paths.projectDir, { recursive: true });
         await Bun.write(join(paths.projectDir, "notes.txt"), "thin client smoke note\n");
+        await Bun.write(join(paths.projectDir, "approved.txt"), "approved capability smoke\n");
         const config = await loadConfigForPaths(paths);
         config.gateway.host = "127.0.0.1";
         config.gateway.port = 0;
@@ -320,6 +410,27 @@ function readCapabilityCommands(payload: Record<string, unknown> | undefined): s
         return [];
     }
     return (kits as { kits: Array<{ id?: string }> }).kits.map((item) => item.id).filter((item): item is string => typeof item === "string");
+}
+
+function readExecutiveToolExecutions(metadata: Record<string, unknown> | undefined): GatewayControlSmokeReport["approvedCapabilityMetadata"] {
+    const executions = metadata?.executiveToolExecutions;
+    if (!Array.isArray(executions)) return [];
+    return executions
+        .filter((execution): execution is Record<string, unknown> => !!execution && typeof execution === "object")
+        .map((execution) => ({
+            capabilityKind: typeof execution.capabilityKind === "string" ? execution.capabilityKind : undefined,
+            key: typeof execution.key === "string" ? execution.key : undefined,
+            ok: typeof execution.ok === "boolean" ? execution.ok : undefined,
+            resultSummary: typeof execution.resultSummary === "string" ? execution.resultSummary : undefined,
+        }));
+}
+
+function readHistoryMetadata(metadata: Record<string, unknown> | undefined): GatewayControlSmokeReport["approvedCapabilityHistoryMetadata"][number] {
+    return {
+        executiveToolExecutions: readExecutiveToolExecutions(metadata),
+        kind: typeof metadata?.kind === "string" ? metadata.kind : undefined,
+        messageId: typeof metadata?.messageId === "string" ? metadata.messageId : undefined,
+    };
 }
 
 function waitForOpen(ws: WebSocket): Promise<void> {

@@ -17,6 +17,23 @@ describe("gateway control smoke", () => {
         expect(stderr).toContain('"step":"start.ready"');
 
         const report = JSON.parse(stdout) as {
+            approvedCapabilityEvents: string[];
+            approvedCapabilityHistoryMetadata: Array<{
+                executiveToolExecutions?: Array<{
+                    capabilityKind?: string;
+                    key?: string;
+                    ok?: boolean;
+                    resultSummary?: string;
+                }>;
+                kind?: string;
+                messageId?: string;
+            }>;
+            approvedCapabilityMetadata: Array<{
+                capabilityKind?: string;
+                key?: string;
+                ok?: boolean;
+                resultSummary?: string;
+            }>;
             capabilityCommands: string[];
             eventTypes: string[];
             eventPublishTypes: string[];
@@ -40,6 +57,29 @@ describe("gateway control smoke", () => {
                 "executive.loop.resumed",
             ]),
         );
+        expect(report.approvedCapabilityMetadata).toEqual([
+            expect.objectContaining({
+                capabilityKind: "mcp-tool",
+                key: "workspace.read",
+                ok: true,
+            }),
+        ]);
+        expect(report.approvedCapabilityMetadata[0]?.resultSummary).toContain("approved capability smoke");
+        expect(report.approvedCapabilityEvents).toEqual(expect.arrayContaining(["mcp.tool.call.executed"]));
+        expect(report.eventPublishTypes).toEqual(expect.arrayContaining(["mcp.tool.call.executed"]));
+        expect(report.approvedCapabilityHistoryMetadata).toEqual([
+            expect.objectContaining({
+                executiveToolExecutions: [
+                    expect.objectContaining({
+                        capabilityKind: "mcp-tool",
+                        key: "workspace.read",
+                        ok: true,
+                        resultSummary: expect.stringContaining("approved capability smoke"),
+                    }),
+                ],
+                kind: "reply",
+            }),
+        ]);
         expect(report.historyCount).toBeGreaterThanOrEqual(2);
         expect(report.historyKinds).toEqual(expect.arrayContaining(["ask", "reply"]));
         expect(report.finalText).toContain("工具调用预算已用完");

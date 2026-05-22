@@ -208,5 +208,17 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 保留此前 kernel/wave2/wave3 worktree；wave4 只追加。
 - [x] 从 `main-codex-docs@1f45a72` 创建并推送三个 wave4 分支。
 - [x] 编排提交落主线后启动 `flyflor-wave4` 子 Codex 窗口。
-- [ ] 主 Codex review 规则：只合并通过验证的实现/测试切片；失败 prototype 必须丢弃并记录，不能留下 dirty tail。
-- [ ] 随 wave4 子分支落地进行 review，并把主线 canonical TODO/LOGS/workflow 历史与子分支本地记录分开维护。
+- [x] 主 Codex review 规则：只合并通过验证的实现/测试切片；失败 prototype 必须丢弃并记录，不能留下 dirty tail。
+- [x] 随 wave4 子分支落地进行 review，并把主线 canonical TODO/LOGS/workflow 历史与子分支本地记录分开维护。
+
+## 2026-05-22 Wave4 Runtime Capability Review
+
+- [x] 已 review `wt/wave4-runtime-metadata`，并合入实现/测试面：
+  - typed `executiveToolExecutions` live reply metadata
+  - 有界 MCP/user capability execution 投影
+- [x] 已 review `wt/wave4-runtime-history`，并合入 control/history 面：
+  - compact planning replay metadata
+  - 从结构化 ledger provenance 投影的 replay-only execution metadata
+  - 不引入 session restore 或 prompt 装配路径
+- [x] 已 review `wt/wave4-runtime-smoke`，并在合入 smoke/test 面时，把新增 history 成功断言替换为结构化 execution metadata 检查。
+- [x] 已在整合后的主线快照验证 focused gateway/runtime/history tests、`bun run check`、`bun run docs:check`、`git diff --check` 和 `bun run build:binary`。

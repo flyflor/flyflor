@@ -299,7 +299,14 @@ LIMIT ?
         "assistantText": "hi",
         "taskPlans": [],
         "replays": [],
-        "contextForks": []
+        "contextForks": [],
+        "metadata": {
+          "planning": {
+            "taskPlans": [],
+            "replays": [],
+            "contextForks": []
+          }
+        }
       }
     ]
   }
@@ -320,12 +327,23 @@ interface HistoryTurnSnapshot {
   assistantText: string;
   eventId: string;
   contextForks?: ContextForkRecord[];
-   replays?: ReplayRecord[];
+  replays?: ReplayRecord[];
   taskPlans?: TaskPlanRecord[];
+  metadata?: {
+    planning?: {
+      contextForks: GatewayControlContextForkSnapshot[];
+      replays: GatewayControlReplaySnapshot[];
+      taskPlans: GatewayControlTodoTaskSnapshot[];
+    };
+  };
   ts: number;
   userText: string;
 }
 ```
+
+`metadata.planning` mirrors the compact `turn.final.reply.metadata.planning` shape for persisted
+history turns. It is assembled from stored structured plan/fork/replay records and does not make
+`history.list` a session restore or prompt assembly path.
 
 测试：
 
