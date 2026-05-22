@@ -471,6 +471,9 @@
           "connectedCount": {
             "type": "integer"
           },
+          "controlState": {
+            "$ref": "#/components/schemas/ControlStateSnapshot"
+          },
           "degradedCount": {
             "type": "integer"
           },
@@ -498,6 +501,110 @@
           }
         },
         "additionalProperties": true
+      },
+      "ControlStateSnapshot": {
+        "type": "object",
+        "description": "Socket-owned live read model fed by real turn.final metadata and RuntimeEvent payloads. This is not a session owner and does not assemble prompt context.",
+        "properties": {
+          "activeAsk": {
+            "$ref": "#/components/schemas/ActiveAskSnapshot"
+          },
+          "activeFork": {
+            "$ref": "#/components/schemas/ActiveForkSnapshot"
+          },
+          "activeScope": {
+            "$ref": "#/components/schemas/RuntimeScope"
+          },
+          "executiveLoop": {
+            "$ref": "#/components/schemas/ExecutiveLoopStateSnapshot"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ActiveAskSnapshot": {
+        "type": "object",
+        "required": [
+          "ask",
+          "at",
+          "messageId",
+          "status"
+        ],
+        "properties": {
+          "ask": {
+            "$ref": "#/components/schemas/AskMetadata"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "resumed"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "ActiveForkSnapshot": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ContextForkSnapshot"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "ExecutiveLoopStateSnapshot": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExecutiveToolLoopMetadata"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "paused",
+                  "resumed"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
       },
       "ChannelStatusSnapshot": {
         "type": "object",
@@ -1725,6 +1832,69 @@
               ],
               "clientCount": 1,
               "connectedCount": 1,
+              "controlState": {
+                "activeAsk": {
+                  "ask": {
+                    "choiceCount": 1,
+                    "choices": [
+                      {
+                        "label": "Continue",
+                        "description": "Proceed with the current plan"
+                      }
+                    ],
+                    "executiveToolLoop": {
+                      "askId": "ask-1",
+                      "message": "Need execution guidance",
+                      "resume": {
+                        "mode": "continue",
+                        "requestId": "req-turn-1"
+                      },
+                      "stepCount": 2,
+                      "stop": "ask",
+                      "toolBudgetExhausted": true
+                    },
+                    "freeform": true,
+                    "prompt": "Need confirmation?",
+                    "questionCount": 0,
+                    "questions": [],
+                    "reason": "policy-decision",
+                    "snapshotId": "snapshot-1"
+                  },
+                  "at": "2026-05-22T00:00:05.050Z",
+                  "messageId": "message-1",
+                  "requestId": "req-turn-1",
+                  "status": "active"
+                },
+                "activeFork": {
+                  "id": "fork-1",
+                  "continuitySummary": "Keep socket control context visible.",
+                  "maxContextTokens": 12000,
+                  "title": "Socket control fork",
+                  "at": "2026-05-22T00:00:05.050Z",
+                  "requestId": "req-turn-1",
+                  "status": "active"
+                },
+                "activeScope": {
+                  "id": "scope-1",
+                  "projectDir": "/workspace/project",
+                  "projectMemoryDir": "/workspace/project/.flyflor/memory",
+                  "title": "Socket Contract Scope"
+                },
+                "executiveLoop": {
+                  "askId": "ask-1",
+                  "message": "Need execution guidance",
+                  "resume": {
+                    "mode": "continue",
+                    "requestId": "req-turn-1"
+                  },
+                  "stepCount": 2,
+                  "stop": "ask",
+                  "toolBudgetExhausted": true,
+                  "at": "2026-05-22T00:00:05.050Z",
+                  "requestId": "req-turn-1",
+                  "status": "paused"
+                }
+              },
               "degradedCount": 0,
               "gatewayRunning": true,
               "host": "127.0.0.1",

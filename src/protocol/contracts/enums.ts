@@ -1,3 +1,11 @@
+export const ControlSnapshotStatus = {
+    Active: "active",
+    Paused: "paused",
+    Resumed: "resumed",
+} as const;
+
+export type ControlSnapshotStatus = (typeof ControlSnapshotStatus)[keyof typeof ControlSnapshotStatus];
+
 export const Channel = {
     Api: "api",
     ApiServer: "api_server",

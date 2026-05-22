@@ -501,3 +501,11 @@
   原因：该 lane 为 Crystal candidate 到 Gem 增加结构化质量门和 replay/audit explainability，是智能体长期晶体知识闭环的核心上线条件。
   效率：child 用时约 14m38s；7 files changed，269 insertions，14 deletions；分类为 control `+17/-7`，src `+144/-5`，tests `+108/-2`。
   验证：待主线重跑 crystal/reflection focused tests、`bun run check`、`bun run docs:check`、`bun run build:binary`、`git diff --check`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-socket-control-e2e-merge
+  摘要：开始 review 并合并 `wt/socket-control-e2e` 的提交 `230f159`。
+  原因：该 lane 将 ASK、Scope、Fork、Executive loop snapshot 通过 `/ws` control/event surface 对外显式可见，是上线前外部 client 可观察闭环的关键接口。
+  效率：child 用时约 15m16s；11 files changed，667 insertions，8 deletions；分类为 control `+15/-8`，docs/openapi `+174/-0`，src `+224/-0`，tests `+254/-0`。
+  验证：待主线重跑 protocol/socket/docs focused tests、`bun run docs:check`、`bun run check`、`git diff --check`

@@ -32,6 +32,7 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - `TurnFinalWithAsk` 展示 `turn.final.reply.metadata.ask`。
 - `TurnFinalWithPlanning` 展示带 task plan、fork、replay snapshot 的 `turn.final.reply.metadata.planning`。
 - `TurnFinalWithExecutiveLoopPause` 同时展示 `reply.metadata.executiveToolLoop` 和 `reply.metadata.ask.executiveToolLoop`。
+- `GatewayStatusSnapshot.payload.status.controlState` 展示当前 socket 可见的 ASK、Scope、Fork 和 Executive loop snapshot，来源是真实 turn metadata 与 runtime events。
 - `EventSubscribe`、`ExecutiveLoopPausedEvent`、`ExecutiveLoopResumedEvent` 展示生命周期事件时间线。当前轮权威状态仍以 `turn.final.reply.metadata` 为准。
 - `InvalidGatewayMessageSend` 接 `InvalidPayloadError` 覆盖缺少 `payload.text` 时的结构化 `invalid-payload` 响应。
 
@@ -40,6 +41,7 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - `GatewayMessageSend.payload.context.activeScope` 和 `contextForkId` 是 socket message 中唯一的显式工作域输入。
 - `activeProject` 只是 `activeScope` 的兼容别名；新的 Apifox example 优先使用 `activeScope`。
 - `HistorySnapshot` 可以携带 reply metadata、task plan、replay 和 context fork snapshot，但这些只是 ledger replay 数据，不要回填成 prompt context。
+- `GatewayStatusSnapshot.payload.status.controlState` 只是 client read model；它不是新的 context owner、session restore surface 或 prompt assembly source。
 - `conversationKey`、`threadId`、`user.id` 适合用于 Apifox 关联和路由断言，但它们不是 memory owner。
 
 ## Drift Guards

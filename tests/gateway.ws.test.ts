@@ -1286,6 +1286,156 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("exposes live ASK, Scope, Fork, and Executive loop snapshots through gateway.status.get", async () => {
+        const hub = createHub({
+            dispatch: async (message) => ({
+                messageId: message.id,
+                route: message.route,
+                text: "Need confirmation?",
+                metadata: {
+                    kind: "ask",
+                    ask: {
+                        choiceCount: 1,
+                        choices: [{ label: "Continue", description: "Proceed with the current plan" }],
+                        executiveToolLoop: {
+                            askId: "ask-1",
+                            loopGuardSnapshot: {
+                                callRepeatCounts: {},
+                                failedCallRepeatCounts: {},
+                                totalCalls: 2,
+                                unknownToolCounts: {},
+                            },
+                            message: "Need one more step",
+                            resume: { mode: "continue", requestId: "client-req-ask" },
+                            stepCount: 2,
+                            stop: "ask",
+                            toolBudgetExhausted: true,
+                        },
+                        freeform: true,
+                        prompt: "Need confirmation?",
+                        questionCount: 0,
+                        questions: [],
+                        reason: "other",
+                        snapshotId: "snapshot-1",
+                    },
+                    executiveToolLoop: {
+                        askId: "ask-1",
+                        loopGuardSnapshot: {
+                            callRepeatCounts: {},
+                            failedCallRepeatCounts: {},
+                            totalCalls: 2,
+                            unknownToolCounts: {},
+                        },
+                        message: "Need one more step",
+                        resume: { mode: "continue", requestId: "client-req-ask" },
+                        stepCount: 2,
+                        stop: "ask",
+                        toolBudgetExhausted: true,
+                    },
+                    planning: {
+                        contextForks: [{
+                            id: "fork-1",
+                            continuitySummary: "Keep socket control context visible.",
+                            maxContextTokens: 12000,
+                            title: "Socket control fork",
+                        }],
+                        replays: [],
+                        taskPlans: [{
+                            completedStepCount: 0,
+                            id: "plan-1",
+                            progress: 0,
+                            status: "planned",
+                            stepCount: 1,
+                            steps: [{ id: "step-1", order: 0, status: "planned", title: "Confirm direction" }],
+                            summary: "Need one confirmation step",
+                            title: "Confirmation",
+                        }],
+                    },
+                },
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.GatewayMessageSend,
+                    {
+                        context: {
+                            activeScope: {
+                                id: "scope-1",
+                                projectDir: "/tmp/scope",
+                                projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                                title: "Scope",
+                            },
+                            contextForkId: "fork-1",
+                        },
+                        id: "message-ask-1",
+                        text: "hello",
+                        user: { id: "u-1" },
+                    },
+                    { id: "send-ask-1", requestId: "client-req-ask" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.GatewayStatusGet,
+                    undefined,
+                    { id: "status-after-ask-1", requestId: "req-status-after-ask-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "status-after-ask-1",
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: {
+                status: {
+                    controlState: {
+                        activeAsk: {
+                            messageId: "message-ask-1",
+                            requestId: "client-req-ask",
+                            status: "active",
+                            ask: {
+                                executiveToolLoop: {
+                                    askId: "ask-1",
+                                    stop: "ask",
+                                },
+                                prompt: "Need confirmation?",
+                                snapshotId: "snapshot-1",
+                            },
+                        },
+                        activeFork: {
+                            id: "fork-1",
+                            requestId: "client-req-ask",
+                            status: "active",
+                            title: "Socket control fork",
+                        },
+                        activeScope: {
+                            id: "scope-1",
+                            projectDir: "/tmp/scope",
+                            projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                            title: "Scope",
+                        },
+                        executiveLoop: {
+                            askId: "ask-1",
+                            requestId: "client-req-ask",
+                            status: "paused",
+                            stop: "ask",
+                            toolBudgetExhausted: true,
+                        },
+                    },
+                },
+            },
+        });
+        hub.dispose();
+    });
+
     test("requires control token for non-local upgrade requests", async () => {
         const hub = createHub({ config: fakeConfig({ control: { token: "secret-token" } }) });
         const server = new FakeUpgradeServer().asBunServer();

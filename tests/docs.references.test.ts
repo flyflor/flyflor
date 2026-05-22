@@ -266,6 +266,27 @@ describe("documentation references", () => {
                 },
             },
         });
+        expect(readExamplePayload(examples, "GatewayStatusSnapshot")).toMatchObject({
+            status: {
+                controlState: {
+                    activeAsk: {
+                        ask: { executiveToolLoop: { stop: "ask" } },
+                        status: "active",
+                    },
+                    activeFork: {
+                        id: "fork-1",
+                        status: "active",
+                    },
+                    activeScope: {
+                        id: "scope-1",
+                    },
+                    executiveLoop: {
+                        status: "paused",
+                        stop: "ask",
+                    },
+                },
+            },
+        });
         expect(readExamplePayload(examples, "InvalidPayloadError")).toMatchObject({
             code: GatewayControlErrorCode.InvalidPayload,
             message: "gateway.message.send payload requires text",
@@ -353,6 +374,7 @@ describe("documentation references", () => {
             expect(doc).toContain("TurnFinalWithAsk");
             expect(doc).toContain("TurnFinalWithPlanning");
             expect(doc).toContain("TurnFinalWithExecutiveLoopPause");
+            expect(doc).toContain("controlState");
             expect(doc).toContain("InvalidPayloadError");
             expect(doc).toContain("MemoryComponent");
             expect(doc).toContain("CrystalComponent");

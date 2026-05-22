@@ -3,6 +3,7 @@ import {
     ChatType,
     ChannelLinkState,
     ChannelTransport,
+    ControlSnapshotStatus,
     type AgentAsk,
     type AgentAskChoice,
     type AgentAskQuestion,
@@ -291,6 +292,7 @@ export interface GatewayControlGatewayStatusSnapshot {
     channels: GatewayControlChannelStatusSnapshot[];
     clientCount?: number;
     connectedCount: number;
+    controlState?: GatewayControlStateSnapshot;
     degradedCount: number;
     gatewayRunning: boolean;
     host: string;
@@ -299,6 +301,48 @@ export interface GatewayControlGatewayStatusSnapshot {
     streamingCount: number;
     uptimeMs?: number;
     url?: string;
+}
+
+export interface GatewayControlScopeSnapshot {
+    id: string;
+    projectDir: string;
+    projectMemoryDir: string;
+    title?: string;
+}
+
+export interface GatewayControlActiveAskSnapshot {
+    ask: GatewayControlAskMetadataSnapshot;
+    at: string;
+    messageId: string;
+    requestId?: string;
+    status: typeof ControlSnapshotStatus.Active | typeof ControlSnapshotStatus.Resumed;
+}
+
+export interface GatewayControlActiveForkSnapshot extends GatewayControlContextForkSnapshot {
+    at: string;
+    requestId?: string;
+    status: typeof ControlSnapshotStatus.Active;
+}
+
+export interface GatewayControlExecutiveLoopStateSnapshot {
+    askId?: GatewayControlLongHorizonLoopSnapshot["askId"];
+    at: string;
+    loopGuardReason?: GatewayControlLongHorizonLoopSnapshot["loopGuardReason"];
+    loopGuardSnapshot?: GatewayControlLongHorizonLoopSnapshot["loopGuardSnapshot"];
+    message?: GatewayControlLongHorizonLoopSnapshot["message"];
+    requestId?: string;
+    resume?: GatewayControlLongHorizonLoopSnapshot["resume"];
+    status: typeof ControlSnapshotStatus.Paused | typeof ControlSnapshotStatus.Resumed;
+    stepCount?: GatewayControlLongHorizonLoopSnapshot["stepCount"];
+    stop?: GatewayControlLongHorizonLoopSnapshot["stop"];
+    toolBudgetExhausted?: GatewayControlLongHorizonLoopSnapshot["toolBudgetExhausted"];
+}
+
+export interface GatewayControlStateSnapshot {
+    activeAsk?: GatewayControlActiveAskSnapshot;
+    activeFork?: GatewayControlActiveForkSnapshot;
+    activeScope?: GatewayControlScopeSnapshot;
+    executiveLoop?: GatewayControlExecutiveLoopStateSnapshot;
 }
 
 export interface GatewayControlEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {

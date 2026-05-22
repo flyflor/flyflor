@@ -15,6 +15,8 @@ import {
     buildGatewayControlTurnFinalPayload,
     createGatewayControlEnvelope,
     createGatewayControlEventEnvelope,
+    type GatewayControlActiveAskSnapshot,
+    type GatewayControlActiveForkSnapshot,
     GatewayControlReplyMetadataKind,
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
@@ -22,18 +24,23 @@ import {
     readGatewayControlMessageInput,
     readGatewayControlSubscription,
     shouldDeliverGatewayControlEvent,
+    type GatewayControlExecutiveLoopStateSnapshot,
     type GatewayControlHistoryListInput,
     type GatewayControlHistoryTurnSnapshot,
+    type GatewayControlLongHorizonLoopSnapshot,
     type GatewayControlPlanningMetadataSnapshot,
     type GatewayControlReplyMetadata,
     type GatewayControlEnvelope,
     type GatewayControlGatewayStatusSnapshot,
+    type GatewayControlScopeSnapshot,
+    type GatewayControlStateSnapshot,
     type GatewayControlPeer as ProtocolSocketControlPeer,
     type GatewayControlSocket as ProtocolSocketControlSocket,
     type GatewayControlTodoTaskSnapshot,
 } from "../protocol/control/index.ts";
 import {
     ChannelLinkState,
+    ControlSnapshotStatus,
     GatewayControlMessageType,
     type GatewayChannelCapabilities,
     type ChannelTransport,
@@ -118,6 +125,7 @@ export class SocketControlHub implements EventSink {
     private readonly clients = new Set<SocketControlSocket>();
     private readonly handlers = new Map<string, SocketControlHandler>();
     private capabilityCatalog: Record<string, unknown> | null = null;
+    private controlState: GatewayControlStateSnapshot = {};
     private readonly unsubscribeEvents: () => void;
 
     public constructor(private readonly options: SocketControlHubOptions) {
@@ -234,6 +242,7 @@ export class SocketControlHub implements EventSink {
         if (event.type === RuntimeEventType.ExecutiveCapabilityCatalogBuilt && event.payload) {
             this.capabilityCatalog = event.payload;
         }
+        this.updateControlStateFromEvent(event);
         const envelope = createGatewayControlEventEnvelope(event);
         for (const client of this.clients) {
             if (shouldDeliverGatewayControlEvent(event, client.data.subscriptions)) {
@@ -368,6 +377,7 @@ export class SocketControlHub implements EventSink {
                 messageId: gatewayMessage.id,
                 requestId: context.requestId,
             });
+            this.updateControlStateFromReply(reply, context);
             this.send(
                 socket,
                 GatewayControlMessageType.TurnFinal,
@@ -482,6 +492,167 @@ export class SocketControlHub implements EventSink {
         };
     }
 
+    private updateControlStateFromReply(reply: GatewayReply, context: RuntimeContext): void {
+        const at = new Date().toISOString();
+        const metadata = reply.metadata as GatewayControlReplyMetadata | undefined;
+        this.controlState = {
+            ...this.controlState,
+            activeScope: this.scopeSnapshotFromContext(context) ?? this.controlState.activeScope,
+            activeFork: this.activeForkSnapshot(metadata?.planning, context, at) ?? this.controlState.activeFork,
+            activeAsk: this.activeAskSnapshot(metadata, reply.messageId, context.requestId, at) ?? this.resumedAskSnapshot(at),
+            executiveLoop: this.executiveLoopSnapshotFromMetadata(metadata, context.requestId, at)
+                ?? this.controlState.executiveLoop,
+        };
+    }
+
+    private updateControlStateFromEvent(event: RuntimeEvent): void {
+        const at = event.at;
+        if (event.type === RuntimeEventType.ExecutiveLoopPaused) {
+            this.controlState = {
+                ...this.controlState,
+                executiveLoop: this.executiveLoopSnapshotFromPayload(event.payload, event.requestId, at),
+            };
+            return;
+        }
+        if (event.type === RuntimeEventType.ExecutiveLoopResumed) {
+            this.controlState = {
+                ...this.controlState,
+                activeAsk: this.resumedAskSnapshot(at),
+                executiveLoop: {
+                    ...(this.controlState.executiveLoop ?? {}),
+                    askId: this.readPayloadString(event.payload, "askId") ?? this.controlState.executiveLoop?.askId,
+                    at,
+                    requestId: event.requestId,
+                    status: ControlSnapshotStatus.Resumed,
+                },
+            };
+            return;
+        }
+        if (event.type === RuntimeEventType.MemoryAskAnswered) {
+            this.controlState = {
+                ...this.controlState,
+                activeAsk: this.resumedAskSnapshot(at),
+            };
+        }
+    }
+
+    private activeAskSnapshot(
+        metadata: GatewayControlReplyMetadata | undefined,
+        messageId: string,
+        requestId: string | undefined,
+        at: string,
+    ): GatewayControlActiveAskSnapshot | undefined {
+        if (!metadata?.ask) return undefined;
+        return {
+            ask: metadata.ask,
+            at,
+            messageId,
+            requestId,
+            status: ControlSnapshotStatus.Active,
+        };
+    }
+
+    private resumedAskSnapshot(at: string): GatewayControlActiveAskSnapshot | undefined {
+        const activeAsk = this.controlState.activeAsk;
+        if (!activeAsk || activeAsk.status !== ControlSnapshotStatus.Active) return activeAsk;
+        return {
+            ...activeAsk,
+            at,
+            status: ControlSnapshotStatus.Resumed,
+        };
+    }
+
+    private activeForkSnapshot(
+        planning: GatewayControlPlanningMetadataSnapshot | undefined,
+        context: RuntimeContext,
+        at: string,
+    ): GatewayControlActiveForkSnapshot | undefined {
+        const fork = planning?.contextForks.find((candidate) => candidate.id === context.contextForkId)
+            ?? planning?.contextForks.at(0);
+        if (!fork) return undefined;
+        return {
+            ...fork,
+            at,
+            requestId: context.requestId,
+            status: ControlSnapshotStatus.Active,
+        };
+    }
+
+    private scopeSnapshotFromContext(context: RuntimeContext): GatewayControlScopeSnapshot | undefined {
+        if (!context.activeScope) return undefined;
+        return {
+            id: context.activeScope.id,
+            projectDir: context.activeScope.projectDir,
+            projectMemoryDir: context.activeScope.projectMemoryDir,
+            title: context.activeScope.title,
+        };
+    }
+
+    private executiveLoopSnapshotFromMetadata(
+        metadata: GatewayControlReplyMetadata | undefined,
+        requestId: string | undefined,
+        at: string,
+    ): GatewayControlExecutiveLoopStateSnapshot | undefined {
+        const loop = metadata?.executiveToolLoop ?? metadata?.ask?.executiveToolLoop;
+        if (!loop) return undefined;
+        return this.executiveLoopSnapshot(loop, requestId, at, ControlSnapshotStatus.Paused);
+    }
+
+    private executiveLoopSnapshot(
+        loop: GatewayControlLongHorizonLoopSnapshot,
+        requestId: string | undefined,
+        at: string,
+        status: GatewayControlExecutiveLoopStateSnapshot["status"],
+    ): GatewayControlExecutiveLoopStateSnapshot {
+        return {
+            askId: loop.askId,
+            at,
+            loopGuardReason: loop.loopGuardReason,
+            loopGuardSnapshot: loop.loopGuardSnapshot,
+            message: loop.message,
+            requestId,
+            resume: loop.resume,
+            status,
+            stepCount: loop.stepCount,
+            stop: loop.stop,
+            toolBudgetExhausted: loop.toolBudgetExhausted,
+        };
+    }
+
+    private executiveLoopSnapshotFromPayload(
+        payload: Record<string, unknown> | undefined,
+        requestId: string | undefined,
+        at: string,
+    ): GatewayControlExecutiveLoopStateSnapshot {
+        return {
+            askId: this.readPayloadString(payload, "askId"),
+            at,
+            loopGuardReason: this.readPayloadString(payload, "loopGuardReason"),
+            loopGuardSnapshot: this.readLoopGuardSnapshot(payload?.loopGuardSnapshot),
+            requestId,
+            status: ControlSnapshotStatus.Paused,
+            stepCount: this.readPayloadNumber(payload, "stepCount"),
+            stop: "ask",
+            toolBudgetExhausted: payload?.toolBudgetExhausted === true ? true : undefined,
+        };
+    }
+
+    private readLoopGuardSnapshot(value: unknown): GatewayControlExecutiveLoopStateSnapshot["loopGuardSnapshot"] {
+        return value && typeof value === "object" && !Array.isArray(value)
+            ? value as GatewayControlExecutiveLoopStateSnapshot["loopGuardSnapshot"]
+            : undefined;
+    }
+
+    private readPayloadString(payload: Record<string, unknown> | undefined, key: string): string | undefined {
+        const value = payload?.[key];
+        return typeof value === "string" && value.length > 0 ? value : undefined;
+    }
+
+    private readPayloadNumber(payload: Record<string, unknown> | undefined, key: string): number | undefined {
+        const value = payload?.[key];
+        return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    }
+
     private send<TPayload extends Record<string, unknown>>(
         socket: SocketControlSocket,
         type: Parameters<typeof createGatewayControlEnvelope<TPayload>>[0],
@@ -579,6 +750,7 @@ export class SocketControlHub implements EventSink {
             // Peer count belongs to the live hub, not the channel registry.
             clientCount: this.clients.size,
             connectedCount: status.connectedCount,
+            controlState: this.controlState,
             degradedCount: status.degradedCount,
             gatewayRunning: status.gatewayRunning,
             host: status.host,

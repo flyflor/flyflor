@@ -32,6 +32,7 @@ Use the example set as reusable Apifox WebSocket messages:
 - `TurnFinalWithAsk` shows `turn.final.reply.metadata.ask`.
 - `TurnFinalWithPlanning` shows `turn.final.reply.metadata.planning` with task plan, fork, and replay snapshots.
 - `TurnFinalWithExecutiveLoopPause` shows both `reply.metadata.executiveToolLoop` and `reply.metadata.ask.executiveToolLoop`.
+- `GatewayStatusSnapshot.payload.status.controlState` shows the current socket-visible ASK, Scope, Fork, and Executive loop snapshot, populated from real turn metadata and runtime events.
 - `EventSubscribe`, `ExecutiveLoopPausedEvent`, and `ExecutiveLoopResumedEvent` show the lifecycle event timeline. The current turn authority remains `turn.final.reply.metadata`.
 - `InvalidGatewayMessageSend` followed by `InvalidPayloadError` covers the structured `invalid-payload` response for missing `payload.text`.
 
@@ -40,6 +41,7 @@ Use the example set as reusable Apifox WebSocket messages:
 - `GatewayMessageSend.payload.context.activeScope` and `contextForkId` are the only explicit working-domain inputs in the socket message.
 - `activeProject` is only a compatibility alias for `activeScope`; prefer `activeScope` in new Apifox examples.
 - `HistorySnapshot` may include reply metadata, task plans, replays, and context fork snapshots as ledger replay data. Do not feed it back as prompt context.
+- `GatewayStatusSnapshot.payload.status.controlState` is a read model for clients; it is not a new context owner, session restore surface, or prompt assembly source.
 - `conversationKey`, `threadId`, and `user.id` are useful for Apifox correlation and routing assertions, but they are not memory owners.
 
 ## Drift Guards
