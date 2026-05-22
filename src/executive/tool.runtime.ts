@@ -65,7 +65,7 @@ export interface ExecutiveToolRuntimeResult<TExecution extends ExecutiveToolExec
  *
  * It only understands structured tool calls, descriptors, loop guard state and
  * execution scheduling. Concrete transports (MCP, shell, user tools, plugins)
- * stay behind callbacks so Executive does not import Runtime or gateway code.
+ * stay behind callbacks so Executive does not import Runtime or socket code.
  */
 export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution extends ExecutiveToolExecution<TCall>> {
     public async run(input: ExecutiveToolRuntimeOptions<TCall, TExecution>): Promise<ExecutiveToolRuntimeResult<TExecution>> {

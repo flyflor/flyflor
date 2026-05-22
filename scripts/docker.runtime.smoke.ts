@@ -40,7 +40,7 @@ export function buildDockerRuntimeSmokePlan(options: DockerRuntimeSmokeOptions =
         {
             name: "status main path",
             command: ["docker", "exec", devContainer, "flyflor", "status"],
-            expect: /Model|Memory|Gateway/iu,
+            expect: /Model|Memory|Socket|Gateway/iu,
         },
     ];
     if (options.chatProbe) {

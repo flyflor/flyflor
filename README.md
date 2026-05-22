@@ -400,7 +400,7 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
 | [docs/control.protocol.md](docs/control.protocol.md)         | Rust / thin client 直接对接的 WS/control 血管协议 |
-| [docs/rust.integration.md](docs/rust.integration.md)         | Rust gateway/channel/cli/tui 外壳最小接入手册 |
+| [docs/rust.integration.md](docs/rust.integration.md)         | Rust socket/channel/cli/tui 外壳最小接入手册 |
 | [docs/rust.connection.core.md](docs/rust.connection.core.md) | Rust Slice 1 `/ws` 连接核心与重连状态机 |
 | [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust socket shell 工程切分 backlog |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |

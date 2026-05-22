@@ -143,7 +143,7 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
         launch_codex_window \
             "$SESSION_NAME:context" \
             "$CONTEXT_PATH" \
-            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 memory seal slice: src/cognitive/hippocampus/memory/**, src/entities/memory/**, src/agent/context/**, related tests and local control files. Close concrete seal gaps around forgetting/decay/vector recall/context assembly with deterministic explicit clocks/resources. Do not change Gateway HTTP surface, DB schema, implicit continuity, or semantic text matching. Keep Bun binary compileability and OOP + composition. Update bilingual local TODO/LOGS, validate focused tests plus check/docs/build as needed, then commit your branch."
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 memory seal slice: src/cognitive/hippocampus/memory/**, src/entities/memory/**, src/agent/context/**, related tests and local control files. Close concrete seal gaps around forgetting/decay/vector recall/context assembly with deterministic explicit clocks/resources. Do not change socket HTTP surface, DB schema, implicit continuity, or semantic text matching. Keep Bun binary compileability and OOP + composition. Update bilingual local TODO/LOGS, validate focused tests plus check/docs/build as needed, then commit your branch."
         launch_codex_window \
             "$SESSION_NAME:scope" \
             "$SCOPE_PATH" \
@@ -169,7 +169,7 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
         launch_codex_window \
             "$SESSION_NAME:$CONTEXT_WINDOW_NAME" \
             "$CONTEXT_PATH" \
-            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-smoke: scripts/gateway.control.smoke.ts, tests/gateway.control.smoke.test.ts, tests/gateway.ws.test.ts, and protocol/control tests only when needed for assertions. Write a failing/then-passing test proving one successful approved capability execution is observable through WS turn.final metadata and event/history surfaces. Do not edit src runtime/executive/protocol implementation except tiny test helpers if unavoidable. Keep HTTP Gateway /ws and /health only. Update local TODO/LOGS bilingual, run focused gateway/control tests plus check/build as needed, commit and push."
+            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-smoke: scripts/gateway.control.smoke.ts, tests/gateway.control.smoke.test.ts, tests/gateway.ws.test.ts, and protocol/control tests only when needed for assertions. Write a failing/then-passing test proving one successful approved capability execution is observable through WS turn.final metadata and event/history surfaces. Do not edit src runtime/executive/protocol implementation except tiny test helpers if unavoidable. Keep HTTP socket /ws and /health only. Update local TODO/LOGS bilingual, run focused gateway/control tests plus check/build as needed, commit and push."
         launch_codex_window \
             "$SESSION_NAME:$SCOPE_WINDOW_NAME" \
             "$SCOPE_PATH" \

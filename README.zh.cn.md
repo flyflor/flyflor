@@ -126,7 +126,7 @@ bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动�
 说明：
 
 - Bun 主线仍保留一个本地 stdio chat 调试面，方便直接驱动 `RuntimeModule`。
-- 未来第一方 CLI / TUI / gateway shell 将由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核。
+- 未来第一方 CLI / TUI / socket shell 将由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核。
 - `setup` / `status` / `doctor` / 第一方 navigator 类命令不再视为主线稳定边界。
 
 质量验证：
@@ -399,9 +399,9 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
 | [docs/control.protocol.md](docs/control.protocol.md)         | Rust / thin client 直接对接的 WS/control 血管协议 |
-| [docs/rust.integration.md](docs/rust.integration.md)         | Rust gateway/channel/cli/tui 外壳最小接入手册 |
+| [docs/rust.integration.md](docs/rust.integration.md)         | Rust socket/channel/cli/tui 外壳最小接入手册 |
 | [docs/rust.connection.core.md](docs/rust.connection.core.md) | Rust Slice 1 `/ws` 连接核心与重连状态机 |
-| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust gateway shell 工程切分 backlog |
+| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust socket shell 工程切分 backlog |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
 

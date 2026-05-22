@@ -342,3 +342,9 @@ Latest full seal validation in this workspace passed:
   - `bun run test`
   - `bun run build:binary`
   - `git diff --check`
+
+## 2026-05-22 Socket Owner Polish Pass 2
+
+- [x] Shift working-memory recovery smoke startup from the legacy `gateway` command to the primary `socket` command while leaving the existing `gateway` config schema untouched.
+- [x] Rename FlyFlor composition-root internals from `gateway` to `socket`, keeping a legacy `gateway` injection alias for compatibility.
+- [x] Polish active Executive/README/tmux wording so non-wire owner language points at socket instead of Gateway.

@@ -61,11 +61,13 @@ export interface FlyFlorCreateOptions {
     config?: FlyflorConfig;
     container?: DependencyContainer;
     events?: EventSink;
+    /** Legacy injection alias for callers that still name the v1 wire surface gateway. */
     gateway?: SocketModule;
     memory?: MemoryModule;
     mode?: RuntimeModeType | string;
     model?: ModelClient;
     runtime?: RuntimeModule;
+    socket?: SocketModule;
     workers?: WorkerManager;
 }
 
@@ -75,11 +77,11 @@ export interface FlyFlorDependencies {
     container: DependencyContainer;
     events: EventsComponent;
     eventDisposers: Array<() => void>;
-    gateway: SocketModule;
     memory: MemoryModule;
     mode: RuntimeModeComponent;
     model: ModelComponent;
     runtime: RuntimeModule;
+    socket: SocketModule;
     workers: WorkerManager;
 }
 
@@ -92,7 +94,7 @@ export class FlyFlor {
 
     public async start(): Promise<void> {
         if (this.dependencies.mode.is(RuntimeMode.Socket) || this.dependencies.mode.is(RuntimeMode.Gateway)) {
-            this.dependencies.gateway.start();
+            this.dependencies.socket.start();
             return;
         }
 
@@ -141,7 +143,7 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
     const memory = options.memory ?? createMemory(config.snapshot(), events, model.unwrap());
     const runtime = options.runtime ?? new RuntimeModule(config.snapshot(), model.unwrap(), events, blackboard, memory);
-    const gateway = options.gateway ?? new SocketModule(config.gateway, runtime, events, { paths: config.paths });
+    const socket = options.socket ?? options.gateway ?? new SocketModule(config.gateway, runtime, events, { paths: config.paths });
     const eventDisposers = registerRuntimeEventHandlers(config, events);
     const container = options.container ?? new DependencyContainer();
 
@@ -151,11 +153,11 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         container,
         events,
         eventDisposers,
-        gateway,
         memory,
         mode,
         model,
         runtime,
+        socket,
         workers,
     };
 }
@@ -176,7 +178,7 @@ function bindFlyFlorModuleProviders(container: DependencyContainer, dependencies
         [BlackboardModule, dependencies.blackboard],
         [MemoryModule, dependencies.memory],
         [RuntimeModule, dependencies.runtime],
-        [SocketModule, dependencies.gateway],
+        [SocketModule, dependencies.socket],
     ]);
 
     for (const provider of metadata.providers) {

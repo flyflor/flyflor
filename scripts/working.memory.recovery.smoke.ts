@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     const tempCacheHome = join(tempHome, ".cache");
     const tempMemoryDir = join(tempConfigHome, "memory");
     const tempLogDir = join(tempHome, "logs");
-    const gatewayCommand = resolveGatewayCommand(repoRoot);
+    const socketCommand = resolveSocketCommand(repoRoot);
 
     try {
         await mkdir(tempConfigHome, { recursive: true });
@@ -41,21 +41,21 @@ async function main(): Promise<void> {
         await writeFile(join(tempConfigHome, "config.jsonc"), renderConfigJsonc(), "utf8");
         await runInstallTemplates(tempConfigHome, repoRoot);
 
-        const firstStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
+        const firstStart = await startSocket(tempHome, tempDataHome, tempCacheHome, repoRoot, socketCommand);
         const firstOutput = await settleAndCollect(firstStart, 1200);
         const firstWarmup = extractWarmup(firstOutput);
         assertWarmup(firstWarmup, "first warmup");
 
         await writeRecoveryWal(tempMemoryDir);
 
-        const secondStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
+        const secondStart = await startSocket(tempHome, tempDataHome, tempCacheHome, repoRoot, socketCommand);
         const secondOutput = await settleAndCollect(secondStart, 1200);
         const recoveryWarmup = extractWarmup(secondOutput);
         assertWarmup(recoveryWarmup, "recovery warmup");
 
         await writeRecoveryBackupSnapshot(tempMemoryDir);
 
-        const thirdStart = await startGateway(tempHome, tempDataHome, tempCacheHome, repoRoot, gatewayCommand);
+        const thirdStart = await startSocket(tempHome, tempDataHome, tempCacheHome, repoRoot, socketCommand);
         const thirdOutput = await settleAndCollect(thirdStart, 1200);
         const backupWarmup = extractWarmup(thirdOutput);
         assertWarmup(backupWarmup, "backup recovery warmup");
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
                 backupWarmup.recoveredFromBackup === true,
             recoveryWarmup,
             tempHome,
-            usedBinary: gatewayCommand.join(" "),
+            usedBinary: socketCommand.join(" "),
         };
 
         console.log(JSON.stringify(report, null, 2));
@@ -84,16 +84,16 @@ async function main(): Promise<void> {
     }
 }
 
-function resolveGatewayCommand(repoRoot: string): string[] {
+function resolveSocketCommand(repoRoot: string): string[] {
     if (process.platform === "linux") {
         // Release smoke should exercise the release asset name first; Docker dev
         // keeps its historical mount artifact as a fallback for local workflows.
         for (const name of ["flyflor-linux-x64", "flyflor-linux"]) {
             const binaryPath = join(repoRoot, "dist", name);
-            if (existsSync(binaryPath)) return [binaryPath, "gateway"];
+            if (existsSync(binaryPath)) return [binaryPath, "socket"];
         }
     }
-    return [process.execPath, "run", "--conditions=browser", "app.ts", "gateway"];
+    return [process.execPath, "run", "--conditions=browser", "app.ts", "socket"];
 }
 
 async function runInstallTemplates(targetHome: string, repoRoot: string): Promise<void> {
@@ -123,7 +123,7 @@ async function runInstallTemplates(targetHome: string, repoRoot: string): Promis
     }
 }
 
-async function startGateway(
+async function startSocket(
     home: string,
     dataHome: string,
     cacheHome: string,

@@ -130,7 +130,7 @@ Executive 的 Loop 层必须防止模型卡在工具回路：
 
 Runtime 工具 loop 由 `ExecutiveToolRuntime` 拥有，Runtime 只传 `generate/parse/execute/renderResults` 回调。执行前用 `knownToolNames`、tool name 和 JSON input 做 preflight；执行后只记录 `ok/error` 结果，用于重复失败检测。被 guard 阻断的调用仍以失败 `McpToolCallExecution` 回灌模型，原因使用 `ExecutiveLoopGuardReason`，便于事件面和 TUI 解释。unknown tool 第一次允许 adapter 返回 catalog/schema/sandbox 失败，重复后立即 guard 阻断；当一轮调用全被阻断或工具预算耗尽时，Executive 返回 ask，不继续开放工具。
 
-调度规则固定在 Executive：`readOnly && concurrencySafe && !exclusive` 的工具可以同批并发，`write` / `execute` / `exclusive` 工具必须串行。具体 transport（MCP、workspace、git、shell、user tool、plugin）只在 runtime-facing adapter 内实现，`src/executive` 不 import Runtime、Gateway、Command、MCP、Sandbox 或 Plugin 私有实现。
+调度规则固定在 Executive：`readOnly && concurrencySafe && !exclusive` 的工具可以同批并发，`write` / `execute` / `exclusive` 工具必须串行。具体 transport（MCP、workspace、git、shell、user tool、plugin）只在 runtime-facing adapter 内实现，`src/executive` 不 import Runtime、Socket、Command、MCP、Sandbox 或 Plugin 私有实现。
 
 每次阻断还会发布 `executive.loop.guard.blocked` RuntimeEvent。事件 payload 只包含 `server`、`tool`、`reason`、`message` 等可 JSON 序列化事实；它用于 TUI、WS、channel adapter 和审计展示，不参与业务语义判断。
 

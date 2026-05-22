@@ -176,3 +176,10 @@
   Summary: Promoted `socket` to the primary CLI/package/service naming, kept `gateway` as compatibility aliases and wire-v1 vocabulary, tightened Apifox OpenAPI client envelope schemas, fixed event subscription class examples, and reinforced docs/tests against active gateway-as-owner drift.
   Reason: After the physical `src/socket` migration, release-facing docs, scripts, service plans, and OpenAPI needed polish so new users and Apifox scenarios start from socket semantics without breaking existing v1 clients.
   Verification: `bun run docs:check`; `bun run check`; `bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/gateway.module.test.ts tests/protocol.control.test.ts tests/naming.boundaries.test.ts tests/install.script.test.ts tests/docs.references.test.ts`; `bun run test`; `bun run build:binary`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: socket-owner-polish-pass-2
+  Summary: Moved working-memory recovery smoke startup to the primary `socket` command, renamed composition-root internals to `socket` with a legacy `gateway` injection alias, and polished active Executive/README/tmux wording away from Gateway owner language.
+  Reason: The socket migration was functionally sealed, but a few active startup and coordination surfaces still made future work look like it should launch or depend on Gateway as an owner rather than the socket vascular layer.
+  Verification: `bun run check`; `bun test tests/docker.runtime.smoke.test.ts tests/gateway.control.smoke.test.ts tests/install.script.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`; `bun run scripts/working.memory.recovery.smoke.ts`; `bun run docs:check`; `bun run test`; `bun run build:binary`; `git diff --check`
