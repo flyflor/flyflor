@@ -534,5 +534,10 @@ Kernel V2 acceptance focus：
   - `bun test tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/docs.references.test.ts`
   - `bun run check`
   - `git diff --check`
-- [ ] 继续 review 并选择性合并剩余 child commits，优先级：fork-ask-crystal、runtime-executive residue、socket-protocol residue、release-seal、docs-report。
+- [x] review 并选择性合并 `wt/kernel-fork-ask-crystal` implementation/test surface：
+  - `feat: parse fork merge closure evidence`
+  - `feat: consume fork merge decisions at runtime`
+  - 验证：`bun test tests/continuation.decisions.parse.test.ts tests/reflection.gem.consolidation.test.ts tests/ask.cap.runtime.test.ts tests/ask.parse.test.ts tests/ask.reply.test.ts tests/crystal.local.backend.test.ts`
+- [ ] 停止并回收已合入的 `fork-ask-crystal` Codex lane。
+- [ ] 继续 review 并选择性合并剩余 child commits，优先级：runtime-executive residue、socket-protocol residue、release-seal、docs-report。
 - [ ] 最终 seal 前重新跑完整主线验证，并提交/push coordinator snapshot。

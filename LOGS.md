@@ -386,3 +386,10 @@
   摘要：核查 `flyflor-kernel-v2` tmux/worktree 真实状态，确认当前为 6 个子 Codex lane 加 1 个主协调 pane；将进度快照、各 lane 状态、闭环逻辑、代码分层和 Scope/ASK/Fork/Crystal 设计口径补入 workflow、architecture、runtime.turn 和 memory.system 文档。
   原因：用户要求当前进度、子进程数量、完成度和项目总体状态，并要求重新对齐文档，清楚讲述闭环逻辑、代码分层和关键信息设计思想；主线在选择性合并前必须防止需求漂移。
   验证：`bun run docs:check`; `bun test tests/docs.index.test.ts tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts`; `bun test tests/ask.reply.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/docs.references.test.ts`; `bun run check`; `git diff --check`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-v2-fork-ask-crystal-merge
+  摘要：选择性合并 `wt/kernel-fork-ask-crystal` 的实现和测试，不合并子 worktree 本地控制文件历史；主线现在支持解析 fork merge closure evidence、冲突 fork merge 进入 ASK、已合并 fork 证据进入 Crystal candidate。
+  原因：Fork 像 branch、冲突触发 ASK、ASK ghost/continue 和闭合证据结晶是当前智能生命体内核闭环的核心设计点，不能让已完成 child lane 空转。
+  验证：`bun test tests/continuation.decisions.parse.test.ts tests/reflection.gem.consolidation.test.ts tests/ask.cap.runtime.test.ts tests/ask.parse.test.ts tests/ask.reply.test.ts tests/crystal.local.backend.test.ts`
