@@ -113,3 +113,10 @@
   摘要：已 review 并整合 wave4 metadata、history、smoke 三个切片到 `main-codex-docs`，新增 live `executiveToolExecutions`、从结构化 ledger provenance 投影的 replay-only execution metadata、compact planning replay metadata，以及成功批准 capability execution 的端到端 WS smoke。
   原因：Runtime capability execution 需要能通过 live `turn.final`、订阅 runtime event 和 `history.list` 回放被观察到，同时不能扩大 HTTP Gateway、不能恢复 `/channels`，也不能依赖从文本推断 history 分类。
   验证：`bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/tui.chat.history.test.ts tests/skill.mcp.test.ts`；`bun run check`；`bun run docs:check`；`git diff --check`；`bun run build:binary`
+
+- 状态：completed
+  操作者：main-codex
+  范围：kernel-wave4-cleanup
+  摘要：已停止活跃 wave4 子 Codex 进程，保留 tmux 布局为 shell 窗口，并确认主线与所有 wave4 worktree 都 clean 且已推送。
+  原因：每轮并发开发结束时必须没有活跃子进程、没有 dirty tail、没有未推送分支状态，才能进入下一轮迭代。
+  验证：`tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`；对 `main-codex-docs`、`wt/wave4-runtime-smoke`、`wt/wave4-runtime-metadata` 和 `wt/wave4-runtime-history` 执行 `git status --short --branch`

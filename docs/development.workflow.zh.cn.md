@@ -505,3 +505,4 @@ Review 状态：
 - `wt/wave4-runtime-smoke` commit `53342ee` 已 review，并在合入时把新增 capability-history 成功检查替换为结构化 `executiveToolExecutions` replay metadata。
 - HTTP Gateway 仍然只保留 `/ws` 和 `/health`；`/channels` 继续移除。
 - `history.list` 仍然只用于 ledger/query/replay/audit，不是 prompt 装配或 session restore 路径。
+- 整合后已停止活跃子 Codex 进程；`flyflor-wave4` 只保留为可恢复 shell 布局。

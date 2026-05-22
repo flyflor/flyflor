@@ -505,3 +505,4 @@ Review state:
 - `wt/wave4-runtime-smoke` commit `53342ee` reviewed and integrated after replacing the new capability-history success check with structured `executiveToolExecutions` replay metadata.
 - HTTP Gateway remains `/ws` and `/health`; `/channels` remains removed.
 - `history.list` remains ledger/query/replay/audit only and is not a prompt assembly or session restore path.
+- Active child Codex processes were stopped after integration; `flyflor-wave4` remains only as a restorable shell layout.

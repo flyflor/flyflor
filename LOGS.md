@@ -148,3 +148,10 @@
   Summary: Reviewed and integrated wave4 metadata, history, and smoke slices into `main-codex-docs`, adding live `executiveToolExecutions`, replay-only execution metadata from structured ledger provenance, compact planning replay metadata, and an end-to-end WS smoke for successful approved capability execution.
   Reason: Runtime capability execution needed to be observable through live `turn.final`, subscribed runtime events, and `history.list` replay without widening HTTP Gateway, reintroducing `/channels`, or relying on text-derived history classification.
   Verification: `bun test tests/gateway.control.smoke.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/tui.chat.history.test.ts tests/skill.mcp.test.ts`; `bun run check`; `bun run docs:check`; `git diff --check`; `bun run build:binary`
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-wave4-cleanup
+  Summary: Stopped the active wave4 child Codex processes, kept the tmux layout as shell windows, and confirmed mainline plus all wave4 worktrees are clean and pushed.
+  Reason: Each parallel development wave must end with no active child processes, no dirty tails, and no unpushed branch state before the next iteration begins.
+  Verification: `tmux list-windows -t flyflor-wave4 -F '#I:#W #{pane_current_path} #{pane_current_command}'`; `git status --short --branch` for `main-codex-docs`, `wt/wave4-runtime-smoke`, `wt/wave4-runtime-metadata`, and `wt/wave4-runtime-history`

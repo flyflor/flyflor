@@ -280,3 +280,5 @@ Latest full seal validation in this workspace passed:
   - no session restore or prompt assembly path
 - [x] Reviewed `wt/wave4-runtime-smoke` and merged the smoke/test surface after replacing the new history success assertion with structured execution metadata checks.
 - [x] Verified the integrated mainline snapshot with focused gateway/runtime/history tests, `bun run check`, `bun run docs:check`, `git diff --check`, and `bun run build:binary`.
+- [x] Stopped active wave4 child Codex processes and left the `flyflor-wave4` tmux layout as restorable shell windows.
+- [x] Confirmed mainline and all wave4 worktrees are clean and synced with origin.

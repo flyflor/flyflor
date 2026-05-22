@@ -222,3 +222,5 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   - 不引入 session restore 或 prompt 装配路径
 - [x] 已 review `wt/wave4-runtime-smoke`，并在合入 smoke/test 面时，把新增 history 成功断言替换为结构化 execution metadata 检查。
 - [x] 已在整合后的主线快照验证 focused gateway/runtime/history tests、`bun run check`、`bun run docs:check`、`git diff --check` 和 `bun run build:binary`。
+- [x] 已停止活跃 wave4 子 Codex 进程，并让 `flyflor-wave4` tmux 布局保留为可恢复 shell 窗口。
+- [x] 已确认主线和所有 wave4 worktree 都 clean 且与 origin 同步。
