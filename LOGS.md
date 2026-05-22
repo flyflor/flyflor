@@ -478,3 +478,18 @@
   原因：这是 Kernel V3 高并发后的第一个完成 lane，直接修正 Docker dev release surface，避免容器内继续创建全局 `flyflor` shim。
   效率：child 用时约 10m44s；10 files changed，25 insertions，17 deletions；分类为 control `+15/-8`，docs `+6/-6`，scripts/config `+3/-3`，tests `+1/-0`。
   验证：待主线重跑 release focused tests、`bun run docs:check`、`bun run build:binary`、`bun run check`、`git diff --check`
+
+- 状态：已完成
+  执行者：child-codex
+  范围：scope-vector-recall
+  摘要：让 ScopeVector hot-subtree recall 在 root scope 的 `scope.db` 内读取已物化的 related scope rows、edges、hot-memory 和 association evidence，并补充 scope-local related row 回归测试。
+  原因：scope-local `scope.db` 是当前 Scope 的 bounded vector/tree/hot-memory/association 装备；召回 related scope 时不能跳去依赖每个 neighbor 项目的独立 DB，也不能退回 `brain.db` 做 prompt assembly。
+  验证：`bun test tests/scope.vector.test.ts tests/memory.brain.wire.test.ts tests/runtime.perf.test.ts`; `bun run check`; `git diff --check`; `bun run docs:check`; `bun run build:binary`; `bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts`; `bun test tests/agent.functional.smoke.test.ts`; `bun run test` 运行到 865 pass，剩余既有环境断言 `tests/provider.readiness.test.ts` 期望路径包含 `/flyflor/.config`，当前 worktree 路径为 `flyflor-wt-scope-vector-recall/.config`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-scope-vector-recall-merge
+  摘要：开始 review 并合并 `wt/scope-vector-recall` 的提交 `23572ae`。
+  原因：该 lane 已完成 scope-local hot-subtree recall 修复，强化 Scope `scope.db` 作为项目热区记忆与多维关联索引的闭环。
+  效率：child 用时约 14m19s；4 files changed，68 insertions，28 deletions；分类为 control `+14/-7`，src `+28/-21`，tests `+26/-0`。
+  验证：待主线重跑 scope vector focused tests、`bun run check`、`git diff --check`

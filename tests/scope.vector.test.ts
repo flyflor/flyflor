@@ -149,6 +149,32 @@ describe("ScopeVectorComponent", () => {
         brain.close();
     });
 
+    test("recalls scope-local related rows from the root scope.db hot subtree", async () => {
+        const { brain, paths } = await fixture({ explicitVectorDb: false });
+        const now = Date.now();
+        const rootDir = join(paths.workspaceDir, "root-scope");
+        const relatedDir = join(paths.workspaceDir, "related-scope");
+        const root = writeScope(brain, "scope-local-root", "Local Root", "scope-local tree root", now, rootDir);
+        const related = writeScope(brain, "scope-local-related", "Local Related", "scope-local association leaf", now, relatedDir);
+        const component = new ScopeVectorComponent(paths, brain, { vectorDimensions: 32 });
+        await component.initialize();
+        await component.upsertScope({
+            scope: root,
+            summary: "Root summary keeps a bounded local tree",
+            relatedScopeIds: [related.id],
+            nowMs: now,
+        });
+
+        const hits = await component.recall({ scopeId: root.id, query: "association leaf", limit: 4, nowMs: now });
+        expect(hits.map((hit) => hit.scopeId)).toContain(root.id);
+        expect(hits.map((hit) => hit.scopeId)).toContain(related.id);
+        expect(tables(join(rootDir, ".flyflor", "scope.db"))).toContain("scope_vectors");
+        expect(Bun.file(join(relatedDir, ".flyflor", "scope.db")).exists()).resolves.toBe(false);
+
+        component.dispose();
+        brain.close();
+    });
+
     test("rebuilds hot scope listing from the vector DB without full resident memory", async () => {
         const { brain, component, paths, vectorDb } = await fixture();
         const now = Date.now();

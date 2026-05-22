@@ -433,16 +433,16 @@ export class ScopeVectorComponent extends BrainComponent {
         const limit = Math.max(1, Math.min(16, Math.floor(input.limit ?? 4)));
         const scopeId = this.resolveScopeId(input);
         if (!scopeId) return [];
-        await this.databaseForScopeId(scopeId);
+        const database = await this.databaseForScopeId(scopeId);
         const cacheKey = this.cacheKey(scopeId, input);
         const cached = this.cache.get(cacheKey, input.nowMs ?? Date.now());
         if (cached) return cached.slice(0, limit);
-        const rows = await this.loadSubtreeRows(scopeId, limit);
+        const rows = await this.loadSubtreeRows(scopeId, limit, database);
         if (rows.length === 0) return [];
         const queryEmbedding = input.queryEmbedding ?? this.embedQuery(input.query ?? scopeId);
         const querySymbols = this.codec.normalizeSymbols([input.query ?? "", input.codenameId ?? "", scopeId]);
         const nowMs = input.nowMs ?? Date.now();
-        const scored = await Promise.all(rows.map((row) => this.scoreRow(row, queryEmbedding, querySymbols, nowMs, input.contextForkId)));
+        const scored = await Promise.all(rows.map((row) => this.scoreRow(row, queryEmbedding, querySymbols, nowMs, input.contextForkId, database)));
         const hits = scored
             .filter((hit) => hit.score > 0)
             .sort((left, right) => {
@@ -479,18 +479,18 @@ export class ScopeVectorComponent extends BrainComponent {
 
     public async recallScopeNeighbors(scopeId: string, limit = 8): Promise<ScopeVectorHit[]> {
         await this.initialize();
-        await this.databaseForScopeId(scopeId);
+        const database = await this.databaseForScopeId(scopeId);
         const nowMs = Date.now();
-        const edges = (await this.loadEdges(scopeId))
+        const edges = (await this.loadEdges(scopeId, database))
             .sort((left, right) => right.score - left.score)
             .slice(0, Math.max(1, Math.min(16, limit)));
-        const rows = (await this.loadAllRows()).filter((row) => row.scopeId !== scopeId);
+        const rows = this.queryRows(database).filter((row) => row.scopeId !== scopeId);
         const hits: ScopeVectorHit[] = [];
         for (const edge of edges) {
             const neighborId = edge.fromScopeId === scopeId ? edge.toScopeId : edge.fromScopeId;
             const row = rows.find((item) => item.scopeId === neighborId);
             if (!row) continue;
-            hits.push(await this.scoreRow(row, this.embedQuery(scopeId), [scopeId, row.scopeId], nowMs));
+            hits.push(await this.scoreRow(row, this.embedQuery(scopeId), [scopeId, row.scopeId], nowMs, undefined, database));
         }
         return hits.slice(0, limit);
     }
@@ -534,8 +534,8 @@ export class ScopeVectorComponent extends BrainComponent {
         });
     }
 
-    private async loadRows(scopeId: string): Promise<ScopeVectorPersistedNode[]> {
-        const db = await this.databaseForScopeId(scopeId);
+    private async loadRows(scopeId: string, database?: Database): Promise<ScopeVectorPersistedNode[]> {
+        const db = database ?? (await this.databaseForScopeId(scopeId));
         return db
             .query<ScopeVectorPersistedNode, [string]>(
                 `SELECT scope_id AS scopeId, owner_key AS ownerKey, title, goal, summary, embedding_json AS embeddingJson, symbol_json AS symbolJson, updated_at AS updatedAt, last_used_at AS lastUsedAt, use_count AS useCount, codename_id AS codenameId, active FROM scope_vectors WHERE scope_id = ?1`,
@@ -543,17 +543,20 @@ export class ScopeVectorComponent extends BrainComponent {
             .all(scopeId);
     }
 
-    private async loadSubtreeRows(scopeId: string, limit: number): Promise<ScopeVectorPersistedNode[]> {
-        const root = await this.loadRows(scopeId);
+    private async loadSubtreeRows(scopeId: string, limit: number, database: Database): Promise<ScopeVectorPersistedNode[]> {
+        // A scope-local `scope.db` stores the bounded hot subtree that is
+        // relevant to this root. Related scope snapshots are materialized here
+        // without opening or depending on every neighbor project's own DB.
+        const root = await this.loadRows(scopeId, database);
         if (root.length === 0) return [];
-        const neighborIds = (await this.loadEdges(scopeId))
+        const neighborIds = (await this.loadEdges(scopeId, database))
             .sort((left, right) => right.score - left.score)
             .slice(0, Math.max(0, limit * 2))
             .map((edge) => (edge.fromScopeId === scopeId ? edge.toScopeId : edge.fromScopeId));
         const rows = new Map<string, ScopeVectorPersistedNode>();
         for (const row of root) rows.set(row.scopeId, row);
         for (const neighborId of neighborIds) {
-            const row = (await this.loadRows(neighborId))[0];
+            const row = (await this.loadRows(neighborId, database))[0];
             if (row) rows.set(row.scopeId, row);
         }
         return [...rows.values()];
@@ -568,8 +571,8 @@ export class ScopeVectorComponent extends BrainComponent {
         return this.queryRows(this.requireDefaultDatabase());
     }
 
-    private async loadEdges(scopeId: string): Promise<ScopeVectorEdge[]> {
-        const db = await this.databaseForScopeId(scopeId);
+    private async loadEdges(scopeId: string, database?: Database): Promise<ScopeVectorEdge[]> {
+        const db = database ?? (await this.databaseForScopeId(scopeId));
         return db
             .query<ScopeVectorEdge, [string]>(
                 `SELECT id, from_scope_id AS fromScopeId, to_scope_id AS toScopeId, kind, score, updated_at AS updatedAt FROM scope_vector_edges WHERE from_scope_id = ?1 OR to_scope_id = ?1`,
@@ -583,15 +586,16 @@ export class ScopeVectorComponent extends BrainComponent {
         querySymbols: string[],
         nowMs: number,
         contextForkId?: string,
+        database?: Database,
     ): Promise<ScopeVectorHit> {
-        const hotMemory = this.loadHotMemory(row.scopeId, queryEmbedding, querySymbols, nowMs, 4);
+        const hotMemory = this.loadHotMemory(row.scopeId, queryEmbedding, querySymbols, nowMs, 4, database);
         const hotBoost = Math.min(0.2, hotMemory.reduce((sum, item) => sum + item.importance, 0) / 20);
         const embedding = this.codec.cosine(queryEmbedding, this.parseEmbedding(row.embeddingJson));
         const symbol = this.codec.symbolOverlap(querySymbols, this.parseSymbols(row.symbolJson));
         const activity = this.activityScore(row.lastUsedAt, row.useCount, nowMs);
         const adjacency = this.adjacencyScore(row.scopeId, contextForkId);
         const activeBoost = row.active ? 0.15 : 0;
-        const association = this.associationScore(row.scopeId, querySymbols);
+        const association = this.associationScore(row.scopeId, querySymbols, database);
         const score = embedding * 0.46 + symbol * 0.16 + association * 0.14 + activity * 0.12 + adjacency * 0.06 + activeBoost + hotBoost;
         return {
             scopeId: row.scopeId,
@@ -600,7 +604,9 @@ export class ScopeVectorComponent extends BrainComponent {
             title: row.title,
             goal: row.goal,
             codenameId: row.codenameId,
-            relatedIds: (await this.loadEdges(row.scopeId)).map((edge) => (edge.fromScopeId === row.scopeId ? edge.toScopeId : edge.fromScopeId)).slice(0, 8),
+            relatedIds: (await this.loadEdges(row.scopeId, database))
+                .map((edge) => (edge.fromScopeId === row.scopeId ? edge.toScopeId : edge.fromScopeId))
+                .slice(0, 8),
             summary: this.renderScopeSummary(row.summary, hotMemory),
             hot: row.active ? true : false,
             evidence: { embedding, symbol: Math.max(symbol, association), activity, adjacency },
@@ -832,8 +838,9 @@ export class ScopeVectorComponent extends BrainComponent {
         querySymbols: string[],
         nowMs: number,
         limit: number,
+        database?: Database,
     ): ScopeHotMemoryRow[] {
-        const db = this.requireDatabaseForScopeId(scopeId);
+        const db = database ?? this.requireDatabaseForScopeId(scopeId);
         const rows = db
             .query<ScopeHotMemoryRow, [string]>(
                 `SELECT id, scope_id AS scopeId, summary, text, embedding_json AS embeddingJson, symbol_json AS symbolJson, importance, created_at AS createdAt, updated_at AS updatedAt, source_id AS sourceId, request_id AS requestId FROM scope_hot_memory WHERE scope_id = ?1 ORDER BY importance DESC, updated_at DESC LIMIT 24`,
@@ -852,9 +859,9 @@ export class ScopeVectorComponent extends BrainComponent {
             .map((entry) => entry.row);
     }
 
-    private associationScore(scopeId: string, querySymbols: string[]): number {
+    private associationScore(scopeId: string, querySymbols: string[], database?: Database): number {
         if (querySymbols.length === 0) return 0;
-        const db = this.requireDatabaseForScopeId(scopeId);
+        const db = database ?? this.requireDatabaseForScopeId(scopeId);
         const terms = new Set(querySymbols);
         const rows = db
             .query<{ term: string; weight: number }, [string]>(
