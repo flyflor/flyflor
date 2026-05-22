@@ -8,7 +8,10 @@
 - 本仓库只承载 Bun + TypeScript 内核；Rust 外壳实现不在本仓库内规划、落地或验证，相关文档只作为后续独立 Rust 仓库的 `/ws` 契约交接材料。
 - 配置固定走 `~/.flyflor/.config/config.jsonc`，Docker dev 对应 `./docker/config/config.jsonc`；所有 JSON 配置必须兼容 JSONC。
 - 业务配置不能走环境变量；provider、模型、渠道凭据、沙箱策略和网关行为必须走 config/secrets provider。
-- 约定大于配置：默认目录、默认 provider、默认 channel registry 应在代码里有清晰约定，配置只覆盖差异。
+- 约定大于配置：默认目录、默认 provider、默认 channel registry、默认生命周期和默认 owner 必须在代码与目录里有清晰约定，配置只覆盖差异，不能用配置补救分层不清。
+- 分层先于复用：代码可以重复，但分层必须明确。宁可在正确 owner 的 class 内保留少量重复转换，也不要为了复用抽成跨域工具函数或无 owner helper；目录、生命周期、状态、IO 副作用和协议边界必须一眼可见。
+- 代码风格锁定 OOP + use Composition API：业务能力用 class / Component / Module / Repo 表达，跨 class 装配只允许放在对应目录 `composition.ts` 中，并统一用 `useXxx()` 命名。禁止新增函数式编程风格的业务模块；确需函数时，只能是 `composition.ts` 装配入口、薄 CLI/script/app 入口、框架强制 handler、测试 fixture、小型纯协议 adapter 或 TypeScript 类型守卫。
+- 目录表达语义，文件名保持短而稳定：优先使用 `module.ts`、`component.ts`、`composition.ts`、`store.ts`、`types.ts`、`repo.ts`、`worker.ts`、`manager.ts`。例如 `src/agent/blackboard/composition.ts` 与 `src/agent/blackboard/store.ts` 已由目录说明 blackboard owner；不要写回 `blackboard.store.ts`、`blackboard.module.ts`、`dependency.container.ts` 这类重复命名。整体结构参考 NestJS / Angular 的模块化边界，而不是散函数脚本集合。
 - Flyflor 是智能生命体内核，不是 chat/session agent。LLM 是流体智力，`MemoryComponent` 是热区记忆，`CrystalComponent` 是晶体智力，显式 `Scope` / `ContextFork` 是固化工作域，`ASK` 是不确定性、结晶、升格和长线 loop 的闭环器官。
 - `brain.db` 是按月生命账本，只负责 ledger/query/replay/audit/detail；它不参与 prompt/context assembly，不是 session store，也不是 prompt 容器。上下文装配主语只能是当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive 可见能力面。
 - `src/socket` 是外显 socket 血管层，承载 live turn、event、operation、ledger query/replay；WebSocket 只是当前默认 transport，不是目录主语。`gateway.*` wire 名称只作为 `flyflor.ws.v1` compatibility 保留，不代表架构仍是 Gateway/session/chat 模型。
@@ -16,7 +19,7 @@
 - 该使用枚举/常量对象时不要裸写字符串；新增协议值先放入 `src/protocol/contracts/enums.ts` 并经 `src/protocol/contracts/index.ts` 暴露，或放入对应 registry。
 - 新增内部结构化协议块必须先登记到 `src/protocol/structured.block.ts`；业务模块只做对应 JSON payload 校验，不得各自手写 tag、边界符或剥离逻辑。
 - 新增代码必须带必要注释说明边界、生命周期、副作用或协议意图；修改旧代码时同步补齐被触碰路径的关键注释，避免无上下文的隐式行为。
-- 目录入口统一为 `index.ts`；禁止新增 `*.exports.ts`。有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `module.ts`、`memory.component.ts`、`blackboard.ts`、`manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`。`templates/**` 中所有 Markdown 模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；运行时只加载 canonical `.md`，`.zh.cn.md` 只是中文镜像审查副本，不进入 manifest 或上下文装配。`README.md` 必须是英文入口并索引 `docs/*.md`，`README.zh.cn.md` 是中文对照并索引 `docs/*.zh.cn.md`；`AGENTS.md`、`TODO.md`、`LOGS.md` 默认中文书写，不创建、不保留 `.zh.cn.md` 副本。目录已经表达职责时使用短名，例如 `composition/component.ts`、`factory/container.ts`、`streaming/visibility.ts`，大模块按生命周期/职责拆子目录，例如 `memory/dream/worker.ts`、`memory/consolidation/worker.ts`、`memory/lifecycle/scheduler.ts`；不要回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts`、`dream.worker.ts` 这类重复命名；不要新增连字符或下划线命名的仓库文件。
+- 目录入口统一为 `index.ts`；禁止新增 `*.exports.ts`。有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `module.ts`、`memory.component.ts`、`blackboard.ts`、`manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`。`templates/**` 中所有 Markdown 模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；运行时只加载 canonical `.md`，`.zh.cn.md` 只是中文镜像审查副本，不进入 manifest 或上下文装配。`README.md` 必须是英文入口并索引 `docs/*.md`，`README.zh.cn.md` 是中文对照并索引 `docs/*.zh.cn.md`；`AGENTS.md`、`TODO.md`、`LOGS.md` 是控制文件，根目录和所有 worktree 内都必须统一使用中文编写，不创建、不保留 `.zh.cn.md` 副本；旧内容本轮可翻译成中文，之后只能追加条目或修改状态标记，禁止删除、压缩或改写历史。目录已经表达职责时使用短名，例如 `composition/component.ts`、`factory/container.ts`、`streaming/visibility.ts`，大模块按生命周期/职责拆子目录，例如 `memory/dream/worker.ts`、`memory/consolidation/worker.ts`、`memory/lifecycle/scheduler.ts`；不要回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts`、`dream.worker.ts` 这类重复命名；不要新增连字符或下划线命名的仓库文件。
 - 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Worker`、`@Channel`、`@Plugin`。
 - `@Provide` 是注入底座；Socket、Blackboard、Memory、Runtime、Sandbox 通过 `class XModule extends X` 表达边界语义；Gateway 只保留为 v1 wire/compatibility alias，不再新增专门 decorator。
 - 入口必须保持薄：`app.ts` 只启动 FlyFlor 主类；依赖注入只能在 composition root 使用显式 token/provider 容器，不做反射扫描或动态加载。

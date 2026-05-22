@@ -1197,6 +1197,12 @@ describe("SocketControlHub", () => {
                             choices: [{ label: "Continue", description: "Proceed with the current plan" }],
                             executiveToolLoop: {
                                 askId: "ask-1",
+                                loopGuardSnapshot: {
+                                    callRepeatCounts: {},
+                                    failedCallRepeatCounts: {},
+                                    totalCalls: 2,
+                                    unknownToolCounts: {},
+                                },
                                 message: "Need one more step",
                                 resume: { mode: "continue" },
                                 stepCount: 2,
@@ -1250,6 +1256,12 @@ describe("SocketControlHub", () => {
                         ask: {
                             executiveToolLoop: {
                                 askId: "ask-1",
+                                loopGuardSnapshot: {
+                                    callRepeatCounts: {},
+                                    failedCallRepeatCounts: {},
+                                    totalCalls: 2,
+                                    unknownToolCounts: {},
+                                },
                                 message: "Need one more step",
                                 resume: { mode: "continue" },
                                 stepCount: 2,

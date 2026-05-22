@@ -870,6 +870,12 @@ history turn 的回放展示。它只由已存储的结构化 plan/fork/replay �
     "executiveToolLoop": {
       "askId": "ask-1",
       "message": "Need one more step",
+      "loopGuardSnapshot": {
+        "callRepeatCounts": {},
+        "failedCallRepeatCounts": {},
+        "totalCalls": 2,
+        "unknownToolCounts": {}
+      },
       "resume": {
         "mode": "continue"
       },

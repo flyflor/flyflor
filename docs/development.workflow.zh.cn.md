@@ -57,7 +57,7 @@ Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：�
 - `AGENTS.md`
 - `LOGS.md`
 
-不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本。`templates/**` 源模板仍保持 `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
+这些控制文件必须统一用中文编写。不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本。`templates/**` 源模板仍保持 `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
 
 本地控制文件规则：
 
@@ -789,3 +789,69 @@ Kernel V2 硬设计点：
 - `scope.db` 是 Scope-local vector/tree/hot-memory/association 上下文装备；`brain.db` 只做 ledger/query/replay/audit/detail。
 - Runtime context 仍然是 current input + Memory + Crystal + explicit Scope/Fork + Executive visible capability surface。
 - Socket transport metadata、client id、conversation key、user 和 thread 都不能成为认知连续性 owner。
+
+## 2026-05-23 Kernel V2 当前进度
+
+当前协调者分支：
+
+- `master`
+- 本轮文档对齐前领先 `origin/master` 5 个提交
+- 主线仍有未提交改动，包含协调者文档/规则更新，以及手工移植中的 runtime-executive `loopGuardSnapshot` 协议补丁
+
+当前 tmux 会话：
+
+- session：`flyflor-kernel-v2`
+- window：7 个
+- 活跃子 Codex lane：6 个
+- 主协调 pane：1 个 shell pane
+
+协调者观察到的 lane 状态：
+
+- `main`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor`
+  - role：协调、review、文档对齐、最终验证
+- `scope-memory`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-scope-memory`
+  - branch：`wt/kernel-scope-memory`
+  - status：clean；focused fixes 已回报完成
+  - key result：测试已固定 `MemoryModule.buildPrompt` 不使用 `brain.db` prompt atom recall
+- `fork-ask-crystal`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-fork-ask-crystal`
+  - branch：`wt/kernel-fork-ask-crystal`
+  - status：clean；子 lane 回报 runtime fork merge consumption 已完成，但尚未合入主线
+  - key result：conflict fork merge 进入 ASK，merged fork evidence 可进入 Crystal candidate
+- `runtime-executive`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-runtime-executive`
+  - branch：`wt/kernel-runtime-executive`
+  - status：clean；branch ahead remote；`loopGuardSnapshot` contract 正在手工移植到主线
+  - key result：可选 loop guard snapshot 属于共享 `/ws` long-horizon loop metadata，不属于私有 runtime metadata
+- `socket-protocol`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-socket-protocol`
+  - branch：`wt/kernel-socket-protocol`
+  - status：clean；socket selector 与 OpenAPI guard 工作已回报完成
+  - key result：unknown event subscription selector class/type rejection 已有 protocol 与 socket-level 回归覆盖
+- `release-seal`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-release-seal`
+  - branch：`wt/kernel-release-seal`
+  - status：clean；本地 branch ahead remote，因为 push 遇到 GitHub/network transport error
+  - key result：installer policy 保持 Bun kernel 只安装到 `~/.flyflor` 或显式 prefix，不创建全局命令链接
+- `docs-report`
+  - path：`/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-contracts-report`
+  - branch：`wt/docs-contracts-report`
+  - status：clean；branch ahead remote by 2 commits
+  - key result：report/document policy 已对齐；普通 docs 默认中文，root README 保持中英入口对
+
+协调者判断：
+
+- 项目状态：Kernel V2 处于多 lane 闭合期，还不是最终 seal
+- 子进程数量：6 个 Codex 子 node 进程，加 1 个主协调 shell pane
+- 完成度估计：各实现切片大多已回报完成，但主线还必须完成选择性 merge、文档对齐、focused validation、完整 `bun run check` 和最终协调提交，才能算闭合
+- 当前合并姿态：只接受经过 review 的 implementation/docs surface；child control-file 知识摘要进根 TODO/LOGS/workflow，不盲目合并本地 worktree 控制历史
+
+协调者下一步队列：
+
+1. 完成这轮 architecture / closed-loop 文档对齐
+2. 在主线重跑 docs check 和 runtime/socket protocol focused tests
+3. 按顺序 review 并合并剩余 child commit：fork-ask-crystal、runtime-executive residue、socket-protocol residue、release-seal、docs-report
+4. 运行 `bun run check` 和 `git diff --check`
+5. 每次暂停或最终 seal 前更新根 `TODO.md` 与 `LOGS.md`

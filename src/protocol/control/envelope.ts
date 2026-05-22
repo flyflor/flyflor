@@ -231,9 +231,17 @@ export interface GatewayControlExecutiveToolExecutionSnapshot {
     resultSummary?: string;
 }
 
+export interface GatewayControlExecutiveLoopGuardSnapshot {
+    callRepeatCounts: Record<string, number>;
+    failedCallRepeatCounts: Record<string, number>;
+    totalCalls: number;
+    unknownToolCounts: Record<string, number>;
+}
+
 export interface GatewayControlLongHorizonLoopSnapshot {
     askId: string;
     loopGuardReason?: string;
+    loopGuardSnapshot?: GatewayControlExecutiveLoopGuardSnapshot;
     message: string;
     resume: {
         mode: "continue";

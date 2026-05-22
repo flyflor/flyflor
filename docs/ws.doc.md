@@ -870,6 +870,12 @@ history turns. It is assembled from stored structured plan/fork/replay records a
     "executiveToolLoop": {
       "askId": "ask-1",
       "message": "Need one more step",
+      "loopGuardSnapshot": {
+        "callRepeatCounts": {},
+        "failedCallRepeatCounts": {},
+        "totalCalls": 2,
+        "unknownToolCounts": {}
+      },
       "resume": {
         "mode": "continue"
       },

@@ -245,6 +245,42 @@ describe("repository naming boundary", () => {
         expect(existing).toEqual([]);
     });
 
+    test("control-file programming rules require Chinese singletons", async () => {
+        const rules = [
+            await Bun.file(join(REPO_ROOT, "AGENTS.md")).text(),
+            await Bun.file(join(REPO_ROOT, "docs", "boundaries.md")).text(),
+            await Bun.file(join(REPO_ROOT, "docs", "development.workflow.md")).text(),
+        ].join("\n");
+
+        for (const file of ["AGENTS.md", "TODO.md", "LOGS.md"]) {
+            expect(rules).toContain(file);
+        }
+        expect(rules).toContain("必须统一使用中文编写");
+        expect(rules).toContain("AGENTS.zh.cn.md");
+        expect(rules).toContain("TODO.zh.cn.md");
+        expect(rules).toContain("LOGS.zh.cn.md");
+    });
+
+    test("architecture style rules lock convention-first oop composition", async () => {
+        const rules = [
+            await Bun.file(join(REPO_ROOT, "AGENTS.md")).text(),
+            await Bun.file(join(REPO_ROOT, "docs", "boundaries.md")).text(),
+        ].join("\n");
+
+        for (const snippet of [
+            "约定大于配置",
+            "代码可以重复，但分层必须明确",
+            "OOP + use Composition API",
+            "禁止新增函数式编程风格的业务模块",
+            "composition.ts",
+            "module.ts",
+            "store.ts",
+            "NestJS / Angular",
+        ]) {
+            expect(rules).toContain(snippet);
+        }
+    });
+
     test("prompt and README zh.cn markdown companions are real Chinese review copies", async () => {
         const rootDocs = ["README.zh.cn.md"].map((file) => join(REPO_ROOT, file));
         const files = [

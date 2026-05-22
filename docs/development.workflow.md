@@ -49,21 +49,21 @@ Each child worktree owns one narrow slice:
 
 Child worktrees should not redefine global project history. They return focused commits for review.
 
-## Required control files per worktree
+## 每个 worktree 必备控制文件
 
-Each worktree must carry its own local control files:
+每个 worktree 都必须带自己的本地控制文件：
 
 - `TODO.md`
 - `AGENTS.md`
 - `LOGS.md`
 
-Do not create `AGENTS.zh.cn.md`, `TODO.zh.cn.md`, or `LOGS.zh.cn.md` companions for worktree control files. Template sources under `templates/**` still keep `.md` plus `.zh.cn.md` mirror pairs; runtime only loads canonical `.md` templates.
+这些控制文件必须统一用中文编写。不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本。`templates/**` 源模板仍保持 `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
 
-Local control-file rules:
+本地控制文件规则：
 
-- `TODO.md`: task list and work status. Child Codex may only add entries or change status markers; it must not delete, rewrite, or compress history.
-- `AGENTS.md`: local constitution and red lines. Child Codex may only append stricter local rules; it must not weaken or remove inherited repository rules.
-- `LOGS.md`: historical change log and reason list. Child Codex must append every meaningful change with reason and verification; it must not delete or rewrite prior log entries.
+- `TODO.md`：任务列表与工作状态。子 Codex 只能新增条目或修改状态标记，不能删除、改写或压缩历史。
+- `AGENTS.md`：本地宪法与红线。子 Codex 只能追加更严格的本地规则，不能削弱或删除继承的仓库规则。
+- `LOGS.md`：历史变动与变动原因列表。子 Codex 必须把每个有意义的变更、原因和验证结果追加进去，不能删除或改写旧日志。
 
 These files are not optional notes; they are part of the parallel-development protocol. A child worktree is not ready for review unless its local `TODO.md`, `AGENTS.md`, and `LOGS.md` reflect the current task status and handoff state.
 
@@ -788,3 +788,69 @@ Kernel V2 hard design points:
 - `scope.db` is Scope-local vector/tree/hot-memory/association context equipment. `brain.db` remains ledger/query/replay/audit/detail only.
 - Runtime context remains current input + Memory + Crystal + explicit Scope/Fork + Executive visible capability surface.
 - Socket transport metadata, client ids, conversation keys, users, and threads never become cognitive continuity owners.
+
+## 2026-05-23 Kernel V2 Current Progress
+
+Current coordinator branch:
+
+- `master`
+- ahead of `origin/master` by 5 commits before this documentation alignment pass
+- dirty mainline contains coordinator documentation/rule updates plus a manually ported runtime-executive `loopGuardSnapshot` contract patch
+
+Current tmux session:
+
+- session: `flyflor-kernel-v2`
+- windows: 7
+- active child Codex lanes: 6
+- main coordinator pane: 1 shell pane
+
+Live lane state observed by the coordinator:
+
+- `main`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor`
+  - role: coordinator, review, docs alignment, final validation
+- `scope-memory`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-scope-memory`
+  - branch: `wt/kernel-scope-memory`
+  - status: clean; focused fixes reported complete
+  - key result: tests now assert `MemoryModule.buildPrompt` does not use `brain.db` prompt atom recall
+- `fork-ask-crystal`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-fork-ask-crystal`
+  - branch: `wt/kernel-fork-ask-crystal`
+  - status: clean; runtime fork merge consumption reported complete in child lane but not yet merged to mainline
+  - key result: conflict fork merges enter ASK, merged fork evidence can create Crystal candidates
+- `runtime-executive`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-runtime-executive`
+  - branch: `wt/kernel-runtime-executive`
+  - status: clean; branch ahead of remote; `loopGuardSnapshot` contract is being manually ported to mainline
+  - key result: optional loop guard snapshot belongs to shared `/ws` long-horizon loop metadata, not private runtime metadata
+- `socket-protocol`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-socket-protocol`
+  - branch: `wt/kernel-socket-protocol`
+  - status: clean; focused socket selector and OpenAPI guard work reported complete
+  - key result: unknown event subscription selector class/type rejection has protocol and socket-level regression coverage
+- `release-seal`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-kernel-release-seal`
+  - branch: `wt/kernel-release-seal`
+  - status: clean; local branch ahead of remote because push hit network/GitHub transport errors
+  - key result: installer policy keeps Bun kernel under `~/.flyflor` or explicit prefix and does not create global command links
+- `docs-report`
+  - path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/flyflor-wt-docs-contracts-report`
+  - branch: `wt/docs-contracts-report`
+  - status: clean; branch ahead of remote by 2 commits
+  - key result: report/document policy aligned; ordinary docs default Chinese, root README remains bilingual entry pair
+
+Coordinator assessment:
+
+- project state: Kernel V2 is in multi-lane closure, not final seal
+- child process count: 6 Codex child node processes plus 1 coordinator shell pane
+- completion estimate: implementation slices are mostly reported complete, but mainline is not closed until selective merges, docs alignment, focused validations, full `bun run check`, and final coordinator commit pass
+- current merge posture: accept only reviewed implementation/docs surfaces; summarize child control-file knowledge into root TODO/LOGS/workflow instead of blindly merging local worktree control histories
+
+Immediate coordinator queue:
+
+1. finish this architecture/closed-loop documentation alignment
+2. rerun docs checks and focused runtime/socket protocol tests on mainline
+3. review and merge remaining child commits in order: fork-ask-crystal, runtime-executive residue, socket-protocol residue, release-seal, docs-report
+4. run `bun run check` and `git diff --check`
+5. update root `TODO.md` and `LOGS.md` before any pause or final seal

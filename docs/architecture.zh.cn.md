@@ -42,6 +42,7 @@ flowchart LR
         Memory["Memory recall"]
         Crystal["Crystal recall"]
         Scope["explicit activeScope"]
+        ScopeIndex["scope.db vector / tree / hot memory / association"]
         Fork["explicit contextForkId"]
         Exec["Executive visible capability surface"]
     end
@@ -50,14 +51,14 @@ flowchart LR
         Brain["current-month brain.db"]
         Archive["readonly archived months"]
         Replay["history / audit / replay / replay / blackboard detail"]
-        ScopeVector["Scope Vector permanent graph index"]
     end
 ```
 
 硬规则：
 
 - `brain.db` 原始 event 流不能直接塞进 prompt。
-- 只有 recall、summary、scope-local index、Scope Vector permanent graph index 和 vector / summary-first 检索产物才能进入上下文。
+- 只有 `MemoryComponent`、`CrystalComponent`、显式 Scope/Fork、scope-local `scope.db` 二次索引，以及 Executive 可见能力面可以参与上下文装配。
+- `scope.db` 是 Scope 的上下文装备索引；`brain.db` 是生命账本。两者可以通过 ledger id / provenance id 建立溯源关系，但不能混成同一个 prompt 容器。
 - “历史记录完整保存”与“当前该给模型看什么”是两套系统。
 
 ## 智能生命体的四个器官
@@ -108,7 +109,7 @@ Flyflor 当前活跃设计可以理解成四个彼此协作的认知器官：
 - 保存 fork 详细对话
 - 保存 blackboard 深度思考详情
 - 服务历史查询、审计、回放、摘要、replay/detail 检索
-- 为 Scope Vector permanent graph index 提供可恢复的 ledger 锚点
+- 为 Scope Vector / Crystal / replay 提供可恢复的 ledger 锚点和 provenance，不拥有上下文装备索引
 
 `brain.db` 不是单一永续总库，而是按月分片的生命账本：
 
@@ -117,11 +118,12 @@ Flyflor 当前活跃设计可以理解成四个彼此协作的认知器官：
 
 也就是说，Flyflor 的生命日志会随着月份诞生新的账本分片，但上下文装配仍然不直接从这些账本原文取材。
 
-Scope Vector permanent graph index 是独立的长期 graph/tree index：默认落在每个 Scope 的 `<scope.projectDir>/.flyflor/scope.db`，保留 scope / fork / recall 之间的稳定连边、记忆树节点、热区项目记忆和多维关联词索引，但仍然不承担 prompt 容器职责。
+Scope Vector 是 Scope-local graph/tree/vector index：默认落在每个 Scope 的 `<scope.projectDir>/.flyflor/scope.db`，保留 scope / fork / recall 之间的稳定连边、记忆树节点、热区项目记忆和多维关联词索引。它是上下文装备索引，不是生命账本，也不承担 prompt 原文容器职责。
 
 它不是：
 
 - prompt 热区本体
+- `brain.db` 分片
 - 当前 self
 - 当前 scope
 - 会话容器

@@ -55,6 +55,12 @@ describe("runtime ask replies", () => {
             buildAskMetadata(ask, "snapshot-2", {
                 askId: "ask-1",
                 loopGuardReason: "unknown-tool-repeat",
+                loopGuardSnapshot: {
+                    callRepeatCounts: {},
+                    failedCallRepeatCounts: {},
+                    totalCalls: 2,
+                    unknownToolCounts: { "missing.tool": 2 },
+                },
                 message: "Need execution guidance",
                 resume: { mode: "continue" },
                 stepCount: 2,
@@ -66,6 +72,12 @@ describe("runtime ask replies", () => {
             executiveToolLoop: {
                 askId: "ask-1",
                 loopGuardReason: "unknown-tool-repeat",
+                loopGuardSnapshot: {
+                    callRepeatCounts: {},
+                    failedCallRepeatCounts: {},
+                    totalCalls: 2,
+                    unknownToolCounts: { "missing.tool": 2 },
+                },
                 message: "Need execution guidance",
                 resume: { mode: "continue" },
                 stepCount: 2,

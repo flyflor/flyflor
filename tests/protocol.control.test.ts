@@ -493,6 +493,12 @@ describe("Gateway Control protocol", () => {
         const executiveToolLoop = {
             askId: "ask-1",
             loopGuardReason: "unknown-tool-repeat",
+            loopGuardSnapshot: {
+                callRepeatCounts: {},
+                failedCallRepeatCounts: {},
+                totalCalls: 2,
+                unknownToolCounts: { "missing.tool": 2 },
+            },
             message: "Need execution guidance",
             resume: { mode: "continue" as const, requestId: "req-1" },
             stepCount: 2,

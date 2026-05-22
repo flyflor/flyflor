@@ -99,21 +99,6 @@
           "101": {
             "description": "Switching Protocols. After upgrade the server sends server.hello."
           },
-          "401": {
-            "description": "Non-local upgrade without a valid control token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedResponse"
-                },
-                "examples": {
-                  "unauthorized": {
-                    "$ref": "#/components/examples/Unauthorized"
-                  }
-                }
-              }
-            }
-          },
           "400": {
             "description": "Authorized upgrade was attempted, but the underlying WebSocket upgrade failed.",
             "content": {
@@ -124,6 +109,21 @@
                 "examples": {
                   "upgradeFailed": {
                     "$ref": "#/components/examples/SocketUpgradeFailed"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non-local upgrade without a valid control token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "$ref": "#/components/examples/Unauthorized"
                   }
                 }
               }
@@ -1105,6 +1105,39 @@
           "toolBudgetExhausted": {
             "type": "boolean",
             "const": true
+          },
+          "loopGuardSnapshot": {
+            "type": "object",
+            "required": [
+              "callRepeatCounts",
+              "failedCallRepeatCounts",
+              "totalCalls",
+              "unknownToolCounts"
+            ],
+            "properties": {
+              "callRepeatCounts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "failedCallRepeatCounts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "totalCalls": {
+                "type": "integer"
+              },
+              "unknownToolCounts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              }
+            },
+            "additionalProperties": true
           }
         },
         "additionalProperties": true
@@ -1951,7 +1984,15 @@
                     "requestId": "req-turn-ask-1"
                   },
                   "stepCount": 2,
-                  "stop": "ask"
+                  "stop": "ask",
+                  "loopGuardSnapshot": {
+                    "callRepeatCounts": {},
+                    "failedCallRepeatCounts": {},
+                    "totalCalls": 2,
+                    "unknownToolCounts": {
+                      "missing.tool": 2
+                    }
+                  }
                 }
               }
             }

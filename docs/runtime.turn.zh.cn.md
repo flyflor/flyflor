@@ -63,6 +63,20 @@ Scope、Ask 和长线 loop 在主线 turn 里是同一条生命连续性链上�
 
 因此，Scope 不是“项目模式开关”，Ask 也不是“失败弹窗”；两者共同构成 Flyflor 的显式长期连续性机制。
 
+## Fork、Ghost 与结晶闭环
+
+`ContextFork` 的行为按分支理解，而不是按聊天副本理解：
+
+1. 用户或模型结构化输出可以让当前交流进入某个 `contextForkId`
+2. fork 只在显式传入时参与上下文装配，不从 transport metadata 自动恢复
+3. 用户可以要求 LLM 辅助合并 fork
+4. merge 输出必须是结构化结果；冲突进入 ASK，而不是静默覆盖父 Scope
+5. 如果 ASK 没有得到回答，runtime 保留 ghost / pending snapshot
+6. 用户后续显式 `continue` 时，可以恢复该 scope / fork / loop snapshot 并继续闭环
+7. 已闭合的 fork merge、ASK answer 和任务收束证据，可以进入 Crystal candidate，再由质量门升格为 Gem
+
+这条链路把“长线 loop”从隐藏后台任务改成可审计、可暂停、可继续、可结晶的生命闭环。`brain.db` 记录过程和回放锚点；`scope.db` 保存 Scope 相关热区记忆、向量树和关联词索引；Crystal 只吸收已经闭合且有证据的长期方法。
+
 ## 已移除的主线表面
 
 以下内容不再属于主线稳定边界：

@@ -210,6 +210,12 @@ describe("documentation references", () => {
         expect(schemas.ExecutiveToolLoopMetadata?.properties?.loopGuardReason?.enum).toEqual(
             Object.values(ExecutiveLoopGuardReason),
         );
+        expect(schemas.ExecutiveToolLoopMetadata?.properties?.loopGuardSnapshot?.required).toEqual([
+            "callRepeatCounts",
+            "failedCallRepeatCounts",
+            "totalCalls",
+            "unknownToolCounts",
+        ]);
         expect(schemas.UpgradeFailedResponse?.properties?.error?.const).toBe("gateway_control_upgrade_failed");
         expect(schemas.GatewayStatusSnapshot?.required).toContain("clientCount");
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("sourceKey");

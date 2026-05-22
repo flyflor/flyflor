@@ -96,6 +96,7 @@ flowchart LR
 - scope 下可复用压缩结果
 - scope 相关 recall 索引
 - `<scope.projectDir>/.flyflor/scope.db` 中的 Scope Vector、tree node、hot memory 和 association index
+- 用户提到该 Scope 时，用向量相似度、树节点、关联词和 provenance 召回热区项目记忆，再装配到当前 turn 的热区
 
 它的设计主语不是“项目目录附属配置”，而是智能生命体对长期事情形成的独立生命工作域。
 
@@ -112,6 +113,8 @@ flowchart LR
 - 通过 `channel/chat/thread/user` 自动猜出来的工作域
 
 `scope.db` 与 `brain.db` 必须分离：`brain.db` 是按月生命账本，负责 ledger/query/replay/audit/detail；`scope.db` 是某个 Scope 的上下文装备索引，保存类似 MemoryComponent 热区记忆的项目记忆、记忆树节点、多维关联词和向量召回材料。用户显式进入一个 Scope，或 codename 锚点升格成 Scope 后，运行时才能用 Scope Vector 把这些二次产物装配进热区。
+
+Scope 热区记忆不是生命账本副本。它是项目记忆：从 turn、ASK、fork merge、task plan、blackboard 收束和 Crystal evidence 中提炼出的可召回片段。多维关联词只用于检索和装备，不允许变成业务语义判断规则；召回排序依赖向量相似度、图关系、TTL、activation、cluster size 和 provenance 等结构化信号。
 
 ## Fork
 

@@ -15,7 +15,7 @@
 
 ## 2. 目录与命名
 
-目录是架构协议：目录必须表达边界、生命周期、能力来源和运行态位置；配置只覆盖差异，不允许用配置弥补目录混乱。目录架构详见 [directory.architecture.md](directory.architecture.md)。
+目录是架构协议：目录必须表达边界、生命周期、能力来源和运行态位置；约定大于配置，配置只覆盖差异，不允许用配置弥补目录混乱。代码可以重复，但分层必须明确；宁可在正确 owner 内保留少量重复，也不要为了复用抽成跨域工具函数或无 owner helper。目录架构详见 [directory.architecture.md](directory.architecture.md)。
 
 ```
 app.ts            程序入口，只做版本/模式分派
@@ -48,10 +48,10 @@ templates/        提示词与记忆 Markdown 模板
 - 目录入口统一 `index.ts`；跨目录导入优先指向 `index.ts`。
 - `index.ts` 是唯一目录导出面；禁止新增 `*.exports.ts`，已有 public API 必须直接在目录 `index.ts` 汇总。
 - 实现文件按角色加点分后缀：`*.module.ts` / `*.worker.ts` / `*.manager.ts` / `*.adapter.ts` / `*.store.ts` / `*.repo.ts` / `*.route.ts` / `*.executor.ts`。目录内唯一 Component owner 必须直接命名为 `component.ts`；只有同目录存在多个组件边界时才使用 `*.component.ts` 加限定前缀。
-- 目录已表达职责时不重复写长前缀：`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
+- 目录已表达职责时不重复写长前缀，文件名应短而稳定：`src/agent/blackboard/composition.ts`、`src/agent/blackboard/store.ts`、`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `blackboard.store.ts`、`blackboard.module.ts`、`component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
 - 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`，以及 `consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
-- `templates/**` 中所有 Markdown 模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；canonical `.md` 是运行时模板，`.zh.cn.md` 是中文镜像审查副本，不进入 manifest、prompt/context 装配或业务加载路径。`README.md` 必须作为英文入口并索引 `docs/*.md`，`README.zh.cn.md` 作为中文对照并索引 `docs/*.zh.cn.md`。`AGENTS.md`、`TODO.md`、`LOGS.md` 默认中文书写，不创建、不保留 `.zh.cn.md` 副本。
+- `templates/**` 中所有 Markdown 模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；canonical `.md` 是运行时模板，`.zh.cn.md` 是中文镜像审查副本，不进入 manifest、prompt/context 装配或业务加载路径。`README.md` 必须作为英文入口并索引 `docs/*.md`，`README.zh.cn.md` 作为中文对照并索引 `docs/*.zh.cn.md`。`AGENTS.md`、`TODO.md`、`LOGS.md` 是控制文件，根目录和所有 worktree 内都必须统一使用中文编写，不创建、不保留 `.zh.cn.md` 副本；旧内容本轮可翻译成中文，之后只能追加条目或修改状态标记，禁止删除、压缩或改写历史。
 - 退役但仍有追溯价值的文档必须放入 `docs/old-docs/`；退役代码或脚本只允许放入仓库根 `abandon/`，且必须带说明文件标明不可编译、不可导入、不可作为运行契约。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
@@ -112,8 +112,10 @@ flowchart LR
 
 ## 4.1 OOP + use composition 编程风格
 
+- 代码风格锁定 OOP + use Composition API，并参考 NestJS / Angular 的结构化模块边界：业务 owner 必须由 class / Component / Module / Repo 表达，目录就是模块边界，`module.ts` / `store.ts` / `composition.ts` 等短文件名由目录层级区分语义。
+- 禁止新增函数式编程风格的业务模块；函数不能成为业务 owner。确需函数时，只能是 `composition.ts` 装配入口、薄 CLI/script/app 入口、框架强制 handler、测试 fixture、小型纯协议 adapter 或 TypeScript 类型守卫。
 - 业务能力默认用 class / Component / Module / Repo 表达；局部 helper 应优先变成 `private` / `protected` class 方法，不能散落在文件底部形成“函数垃圾区”。
-- 跨 class 的组合入口统一使用 `useXxx()` composition。`useXxx()` 可以返回 class 实例或装配对象，但它只做装配，不承载复杂业务流程。
+- 跨 class 的组合入口统一放在对应目录 `composition.ts`，并使用 `useXxx()` composition。`useXxx()` 可以返回 class 实例或装配对象，但它只做装配，不承载复杂业务流程。
 - 目录约定优先于文件长名：`src/config/component.ts` 已经表达 config 域，不再写 `config.component.ts`；目标 `src/cognitive/mindstream/component.ts` 已经表达 model provider 域，不再写 `model.component.ts`。长名只用于同目录多 owner 或协议需要显式区分时。
 - 允许的函数形态只有：`useXxx()` composition 入口、CLI / script / app 的薄入口、框架强制导出的 handler、测试 fixture、小型纯协议 adapter（例如 tagged template `query`）以及 TypeScript 类型守卫。除此之外新增顶层 `function` 前必须先考虑 class 方法或 `*.composition.ts`。
 - 已存在的大型函数式模块要按触碰即迁移原则处理：改到该文件时必须把同一职责的 helper 收进 class / Component，或者抽到同目录 `*.composition.ts` 并用 `useXxx()` 命名；禁止继续追加新的无归属 helper。
