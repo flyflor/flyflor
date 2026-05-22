@@ -26,6 +26,16 @@ export interface CrystalCandidateInput {
     metadata?: Record<string, unknown>;
 }
 
+export interface ContextForkClosureCandidateInput {
+    closureEvidence: CrystalEvidence[];
+    conflictCount?: number;
+    createdAt: string;
+    forkId: string;
+    mergedSummary: string;
+    metadata?: Record<string, unknown>;
+    symbols?: string[];
+}
+
 /**
  * Owns the deterministic, non-LLM part of crystal reflection.
  *
@@ -52,6 +62,31 @@ export class CrystalReflectionComponent extends CrystalComponent {
                 title: input.title,
             },
         };
+    }
+
+    /**
+     * Converts a completed fork merge into crystal evidence. Conflict detection
+     * and merge intent must already be expressed by structured fields upstream;
+     * this method never inspects natural-language text to decide merge success.
+     */
+    public buildContextForkClosureCandidate(input: ContextForkClosureCandidateInput): ReflectionCandidate {
+        return this.buildCandidate({
+            id: `fork-closure-${this.hashText(`${input.forkId}:${input.mergedSummary}`)}`,
+            sourceId: input.forkId,
+            sourceKind: "context-fork-closure",
+            content: input.mergedSummary,
+            createdAt: input.createdAt,
+            evidence: input.closureEvidence,
+            method: input.mergedSummary,
+            title: `fork-closure:${input.forkId}`,
+            symbols: this.normalizeSymbols(["context-fork", "closure", input.forkId, ...(input.symbols ?? [])]),
+            metadata: {
+                ...(input.metadata ?? {}),
+                conflictCount: Math.max(0, Math.floor(input.conflictCount ?? 0)),
+                forkId: input.forkId,
+                schemaVersion: 1,
+            },
+        });
     }
 
     public crystallizeCandidate(candidate: ReflectionCandidate): { atom: ReflectionAtom; gem: CrystalGem } | undefined {
@@ -299,6 +334,10 @@ const defaultReflection = new CrystalReflectionComponent();
 
 export function buildReflectionCandidate(input: CrystalCandidateInput): ReflectionCandidate {
     return defaultReflection.buildCandidate(input);
+}
+
+export function buildContextForkClosureCandidate(input: ContextForkClosureCandidateInput): ReflectionCandidate {
+    return defaultReflection.buildContextForkClosureCandidate(input);
 }
 
 export function crystallizeCandidate(

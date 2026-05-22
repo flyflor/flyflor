@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { CrystalMemoryComponent, InMemoryCrystalMemoryStore } from "../src/cognitive/crystal/memory/index.ts";
 import {
+    buildContextForkClosureCandidate,
     buildReflectionCandidate,
     crystallizeCandidate,
     evidence,
@@ -370,5 +371,40 @@ describe("reflection → gem consolidation (P0-5)", () => {
             symbols: ["x"],
         });
         expect(crystallizeCandidate(c)).toBeUndefined();
+    });
+
+    test("context fork closure evidence crystallizes with fork provenance", async () => {
+        const { svc, store } = makeComponent();
+        const candidate = buildContextForkClosureCandidate({
+            forkId: "fork-closure-a",
+            mergedSummary: "Merged fork closure into the parent scope after explicit conflict resolution.",
+            createdAt: NOW,
+            conflictCount: 1,
+            closureEvidence: [
+                evidence("fork-conflict-ask-resolved", 0.9, "ask-1", "user resolved the structured fork conflict"),
+                evidence("fork-merged", 0.8, "fork-closure-a", "merge summary accepted"),
+            ],
+            symbols: ["scope", "merge"],
+        });
+
+        const result = await svc.recordTurn({
+            requestId: "fork-closure-turn",
+            now: NOW,
+            candidates: [],
+            promoted: [],
+            historyEntries: [],
+            reflectionCandidates: [candidate],
+        });
+
+        expect(result.gems).toHaveLength(1);
+        const [gem] = [...store.gems.values()];
+        expect(gem?.metadata).toMatchObject({
+            sourceKind: "context-fork-closure",
+            consolidationEvidence: expect.arrayContaining([
+                expect.objectContaining({ kind: "fork-conflict-ask-resolved", candidateId: candidate.id }),
+                expect.objectContaining({ kind: "fork-merged", candidateId: candidate.id }),
+            ]),
+        });
+        expect(gem?.metadata?.sourceCandidateIds).toContain(candidate.id);
     });
 });

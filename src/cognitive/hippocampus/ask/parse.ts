@@ -53,8 +53,16 @@ export class AgentAskParser {
         return { ask: firstAsk, text: extracted.text, dropped };
     }
 
+    public normalizePayload(payload: unknown): AgentAsk {
+        return this.readAskPayload(payload);
+    }
+
     private readAsk(rawJson: string): AgentAsk {
         const payload = parseStructuredJson(rawJson);
+        return this.readAskPayload(payload);
+    }
+
+    private readAskPayload(payload: unknown): AgentAsk {
         if (!payload || typeof payload !== "object") {
             throw new Error("flyflor_agent_ask must be a JSON object.");
         }

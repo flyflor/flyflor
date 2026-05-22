@@ -23,6 +23,7 @@ describe("LF-R4 continuation decisions parser", () => {
             { continuationId: "continuation-a", kind: "resume" },
             { continuationId: "continuation-b", kind: "fresh" },
         ]);
+        expect(r.forkMerges).toEqual([]);
         expect(r.dropped).toBe(0);
         expect(r.text).not.toContain("flyflor_continuation_decisions");
         expect(r.text).toContain("Sure, here we go.");
@@ -69,5 +70,81 @@ describe("LF-R4 continuation decisions parser", () => {
         const r = parseContinuationDecisions(raw);
         expect(r.decisions).toEqual([]);
         expect(r.dropped).toBe(1);
+    });
+
+    test("parses fork merge closure evidence from object payload", () => {
+        const raw = `<flyflor_continuation_decisions>${JSON.stringify({
+            decisions: [{ continuationId: "continuation-a", kind: "fork" }],
+            forkMerges: [
+                {
+                    forkId: "fork-a",
+                    kind: "merged",
+                    mergedSummary: "Merged branch decisions into the parent scope.",
+                    closureEvidence: [
+                        {
+                            kind: "fork-merged",
+                            weight: 0.9,
+                            sourceId: "fork-a",
+                            note: "model supplied a resolved merge summary",
+                        },
+                    ],
+                },
+            ],
+        })}</flyflor_continuation_decisions>`;
+        const r = parseContinuationDecisions(raw);
+        expect(r.decisions).toEqual([{ continuationId: "continuation-a", kind: "fork" }]);
+        expect(r.forkMerges).toEqual([
+            {
+                conflicts: [],
+                forkId: "fork-a",
+                kind: "merged",
+                mergedSummary: "Merged branch decisions into the parent scope.",
+                closureEvidence: [
+                    {
+                        kind: "fork-merged",
+                        weight: 0.9,
+                        sourceId: "fork-a",
+                        note: "model supplied a resolved merge summary",
+                    },
+                ],
+            },
+        ]);
+    });
+
+    test("keeps conflict merge only when a structured conflict ask is present", () => {
+        const raw = `<flyflor_continuation_decisions>${JSON.stringify({
+            forkMerges: [
+                {
+                    forkId: "fork-missing-ask",
+                    kind: "conflict-ask",
+                    conflicts: [{ id: "c1", summary: "Two valid targets.", options: ["left", "right"] }],
+                },
+                {
+                    forkId: "fork-with-ask",
+                    kind: "conflict-ask",
+                    conflicts: [{ id: "c1", summary: "Two valid targets.", options: ["left", "right"] }],
+                    conflictAsk: {
+                        reason: "policy-decision",
+                        prompt: "Which branch target should win?",
+                        freeform: false,
+                        choices: [
+                            { label: "left", value: "left" },
+                            { label: "right", value: "right" },
+                        ],
+                    },
+                },
+            ],
+        })}</flyflor_continuation_decisions>`;
+        const r = parseContinuationDecisions(raw);
+        expect(r.forkMerges).toHaveLength(1);
+        expect(r.forkMerges[0]).toMatchObject({
+            forkId: "fork-with-ask",
+            kind: "conflict-ask",
+            conflictAsk: {
+                reason: "policy-decision",
+                prompt: "Which branch target should win?",
+                freeform: false,
+            },
+        });
     });
 });
