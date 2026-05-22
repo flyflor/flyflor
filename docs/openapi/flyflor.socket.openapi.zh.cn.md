@@ -10,10 +10,35 @@
 - `clientId`、`conversationKey`、`threadId`、`user.id` 只用于 live peer、routing、audit、dedup、reply anchor，不承担认知连续性。
 - 真正上下文装配来自当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive 可见能力面。
 
-Apifox 使用方式：
+## Apifox 流程
 
 1. 导入 `docs/openapi/flyflor.socket.openapi.json`。
 2. 启动 Flyflor socket 服务。
-3. 先请求 `GET /health`。
+3. 请求 `GET /health`，预期 `HealthOk`。
 4. 用 Apifox WebSocket 连接 `ws://127.0.0.1:8788/ws`。
-5. 按 examples 发送 `client.hello`、`gateway.status.get`、`capability.catalog.get`、`history.list`、`gateway.message.send`，观察 `server.hello`、`ack`、`history.snapshot`、`turn.delta`、`turn.final`、`event.publish`。
+5. upgrade 后先观察 `ServerHello`。
+6. 发送 `ClientHello`，预期 `Ack`。
+7. 发送 `GatewayStatusGet`，预期 `GatewayStatusSnapshot`。
+8. 发送 `CapabilityCatalogGet`，预期 `CapabilityCatalogSnapshot`。
+9. 发送 `HistoryList`，预期 `HistorySnapshot`。
+10. 发送 `GatewayMessageSend`，观察一个或多个 `TurnDelta`，最后收到 `TurnFinal`。
+
+## Metadata 场景
+
+这些 examples 可以直接作为 Apifox WebSocket 消息复用：
+
+- `TurnFinalWithAsk` 展示 `turn.final.reply.metadata.ask`。
+- `TurnFinalWithPlanning` 展示带 task plan、fork、replay snapshot 的 `turn.final.reply.metadata.planning`。
+- `TurnFinalWithExecutiveLoopPause` 同时展示 `reply.metadata.executiveToolLoop` 和 `reply.metadata.ask.executiveToolLoop`。
+- `EventSubscribe`、`ExecutiveLoopPausedEvent`、`ExecutiveLoopResumedEvent` 展示生命周期事件时间线。当前轮权威状态仍以 `turn.final.reply.metadata` 为准。
+- `InvalidGatewayMessageSend` 接 `InvalidPayloadError` 覆盖缺少 `payload.text` 时的结构化 `invalid-payload` 响应。
+
+## Drift Guards
+
+OpenAPI contract 只是 `src/protocol/control` 的文档描述，不创造 runtime truth。修改时必须对齐：
+
+- `tests/docs.references.test.ts`
+- `tests/protocol.control.test.ts`
+- `tests/gateway.ws.test.ts`
+
+不要新增 wire v2，不要改名 `gateway.*` 兼容字符串，不要恢复 `/channels`。
