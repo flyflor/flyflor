@@ -57,6 +57,17 @@ Main visible surfaces:
 - [x] Merged the context-memory clock-driven recall slice back into mainline and re-ran the mainline validation set.
 - [x] Pinned the Rust/thin-client docs and docs guard so `clientCount` stays defined as live WS peer count, not static channel count.
 
+## 2026-05-22 Kernel Wave 2 Tmux Orchestration
+
+- [x] Preserved and pushed the previous `wt/kernel-scope-crystal-ask` ready-for-review control commit.
+- [x] Created fresh wave2 worktrees from `main-codex-docs@c6d963f`.
+- [x] Started `flyflor-wave2` tmux orchestration with memory, runtime, and scope child Codex windows.
+- [x] Added `bun run kernel:tmux -- --wave2` as the reproducible restore entrypoint.
+- [ ] Review and merge `wt/wave2-memory-seal`.
+- [ ] Review and merge `wt/wave2-runtime-executive`.
+- [ ] Review and merge `wt/wave2-scope-crystal`.
+- [ ] Run mainline validation after wave2 slices land.
+
 ## Next Work
 
 0. Treat the next phase as a coordinated large refactor whose target is the full intelligent-lifeform kernel, not just isolated seal fixes; every pause or handoff must update the repo handoff docs before ending.

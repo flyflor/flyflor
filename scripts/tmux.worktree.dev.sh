@@ -6,6 +6,7 @@ BASE_DIR=$(dirname "$ROOT_DIR")
 SESSION_NAME="flyflor-kernel"
 ATTACH="0"
 LAUNCH_CODEX="0"
+WAVE="kernel"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -14,6 +15,12 @@ while [ "$#" -gt 0 ]; do
             ;;
         --launch-codex)
             LAUNCH_CODEX="1"
+            ;;
+        --wave2)
+            WAVE="wave2"
+            if [ "$SESSION_NAME" = "flyflor-kernel" ]; then
+                SESSION_NAME="flyflor-wave2"
+            fi
             ;;
         --session=*)
             SESSION_NAME=${1#--session=}
@@ -58,12 +65,21 @@ launch_codex_window() {
     tmux send-keys -t "$target" "codex --dangerously-bypass-approvals-and-sandbox --cd '$path' \"$escaped_prompt\"" C-m
 }
 
-CONTEXT_BRANCH="wt/kernel-context-memory"
-CONTEXT_PATH="$BASE_DIR/flyflor-wt-kernel-context-memory"
-SCOPE_BRANCH="wt/kernel-scope-crystal-ask"
-SCOPE_PATH="$BASE_DIR/flyflor-wt-kernel-scope-crystal-ask"
-RUNTIME_BRANCH="wt/kernel-runtime-executive-ws"
-RUNTIME_PATH="$BASE_DIR/flyflor-wt-kernel-runtime-executive-ws"
+if [ "$WAVE" = "wave2" ]; then
+    CONTEXT_BRANCH="wt/wave2-memory-seal"
+    CONTEXT_PATH="$BASE_DIR/flyflor-wt-wave2-memory-seal"
+    SCOPE_BRANCH="wt/wave2-scope-crystal"
+    SCOPE_PATH="$BASE_DIR/flyflor-wt-wave2-scope-crystal"
+    RUNTIME_BRANCH="wt/wave2-runtime-executive"
+    RUNTIME_PATH="$BASE_DIR/flyflor-wt-wave2-runtime-executive"
+else
+    CONTEXT_BRANCH="wt/kernel-context-memory"
+    CONTEXT_PATH="$BASE_DIR/flyflor-wt-kernel-context-memory"
+    SCOPE_BRANCH="wt/kernel-scope-crystal-ask"
+    SCOPE_PATH="$BASE_DIR/flyflor-wt-kernel-scope-crystal-ask"
+    RUNTIME_BRANCH="wt/kernel-runtime-executive-ws"
+    RUNTIME_PATH="$BASE_DIR/flyflor-wt-kernel-runtime-executive-ws"
+fi
 
 ensure_worktree "$CONTEXT_BRANCH" "$CONTEXT_PATH"
 ensure_worktree "$SCOPE_BRANCH" "$SCOPE_PATH"
@@ -81,18 +97,33 @@ if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
 fi
 
 if [ "$LAUNCH_CODEX" = "1" ]; then
-    launch_codex_window \
-        "$SESSION_NAME:context" \
-        "$CONTEXT_PATH" \
-        "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the context-memory slice: src/cognitive/hippocampus/memory/**, src/entities/memory/**, src/agent/context/**, related tests and local control files. Close concrete gaps in monthly brain shard handling, forgetting and decay, vector recall, and context assembly. Update local TODO.md and LOGS.md before stopping, then commit your branch."
-    launch_codex_window \
-        "$SESSION_NAME:scope" \
-        "$SCOPE_PATH" \
-        "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the scope-crystal-ask slice: src/cognitive/hippocampus/scope/**, src/cognitive/hippocampus/ask/**, src/cognitive/crystal/**, related tests and local control files. Close concrete gaps in ask closure, scope promotion, crystal consolidation, forgetting, and recall evidence. Update local TODO.md and LOGS.md before stopping, then commit your branch."
-    launch_codex_window \
-        "$SESSION_NAME:runtime" \
-        "$RUNTIME_PATH" \
-        "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the runtime-executive-ws slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, related scripts/tests/docs and local control files. Close concrete gaps in ws control flow, event and history surfaces, executive loop pause-resume closure, and thin-client protocol coverage. Update local TODO.md and LOGS.md before stopping, then commit your branch."
+    if [ "$WAVE" = "wave2" ]; then
+        launch_codex_window \
+            "$SESSION_NAME:context" \
+            "$CONTEXT_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 memory seal slice: src/cognitive/hippocampus/memory/**, src/entities/memory/**, src/agent/context/**, related tests and local control files. Close concrete seal gaps around forgetting/decay/vector recall/context assembly with deterministic explicit clocks/resources. Do not change Gateway HTTP surface, DB schema, implicit continuity, or semantic text matching. Keep Bun binary compileability and OOP + composition. Update bilingual local TODO/LOGS, validate focused tests plus check/docs/build as needed, then commit your branch."
+        launch_codex_window \
+            "$SESSION_NAME:scope" \
+            "$SCOPE_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 scope-crystal slice: src/cognitive/hippocampus/scope/**, src/cognitive/hippocampus/ask/**, src/cognitive/crystal/**, related tests and local control files. Close ask/codename/scope/gem loop gaps: structured ask closure, codename-to-scope promotion, crystal consolidation evidence, and explicit forgetting without provenance deletion. Respect zero character matching, no fallback scope, and no prompt-container brain.db story. Update bilingual local TODO/LOGS, run focused guards/check as needed, then commit your branch."
+        launch_codex_window \
+            "$SESSION_NAME:runtime" \
+            "$RUNTIME_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave2 runtime executive slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage toward end-to-end Executive capability execution under the intended trust/sandbox surface, plus WS loop pause/resume visibility. Keep HTTP Gateway to /ws and /health only. No private client protocol or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/gateway/executive tests plus check/docs/build as needed, then commit your branch."
+    else
+        launch_codex_window \
+            "$SESSION_NAME:context" \
+            "$CONTEXT_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the context-memory slice: src/cognitive/hippocampus/memory/**, src/entities/memory/**, src/agent/context/**, related tests and local control files. Close concrete gaps in monthly brain shard handling, forgetting and decay, vector recall, and context assembly. Update local TODO.md and LOGS.md before stopping, then commit your branch."
+        launch_codex_window \
+            "$SESSION_NAME:scope" \
+            "$SCOPE_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the scope-crystal-ask slice: src/cognitive/hippocampus/scope/**, src/cognitive/hippocampus/ask/**, src/cognitive/crystal/**, related tests and local control files. Close concrete gaps in ask closure, scope promotion, crystal consolidation, forgetting, and recall evidence. Update local TODO.md and LOGS.md before stopping, then commit your branch."
+        launch_codex_window \
+            "$SESSION_NAME:runtime" \
+            "$RUNTIME_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the runtime-executive-ws slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, related scripts/tests/docs and local control files. Close concrete gaps in ws control flow, event and history surfaces, executive loop pause-resume closure, and thin-client protocol coverage. Update local TODO.md and LOGS.md before stopping, then commit your branch."
+    fi
 fi
 
 echo "tmux session ready: $SESSION_NAME"

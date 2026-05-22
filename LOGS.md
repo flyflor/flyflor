@@ -92,3 +92,10 @@
   Summary: Pinned `clientCount` in the active WS/control docs as live WS peer pressure and added a docs guard so the Rust/thin-client handoff keeps that field visible.
   Reason: The minimal Gateway no longer exposes HTTP `/channels`, so peer observability must stay explicit on the WS status snapshot without being confused with static channel availability.
   Verification: `bun test tests/docs.references.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts`
+
+- Status: open
+  Actor: main-codex
+  Scope: kernel-wave2-tmux-orchestration
+  Summary: Preserved the previous scope child branch, created fresh wave2 worktrees from `main-codex-docs@c6d963f`, and launched `flyflor-wave2` with memory, runtime, and scope child Codex windows.
+  Reason: The next kernel pass needs faster closure without letting child sessions continue on stale pre-merge worktree baselines.
+  Verification: `git worktree list`; `tmux list-windows -t flyflor-wave2`; `bun test tests/provider.readiness.test.ts tests/ask.cap.runtime.test.ts`

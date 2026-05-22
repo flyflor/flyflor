@@ -320,3 +320,30 @@ Coordinator-maintained mainline contract after the second integration wave:
 Validation for this closeout:
 
 - `bun test tests/docs.references.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts`
+
+## 2026-05-22 Wave 2 Tmux Layout
+
+Fresh wave2 worktrees are based on `main-codex-docs@c6d963f` and intentionally do not reuse the previous kernel worktrees as execution baselines.
+
+Restore command:
+
+```bash
+bun run kernel:tmux -- --wave2
+bun run kernel:tmux -- --wave2 --launch-codex
+```
+
+Active wave2 branches:
+
+- `wt/wave2-memory-seal`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-memory-seal`
+  - owned surface: memory/context stores, decay, forgetting, vector recall, related tests
+- `wt/wave2-runtime-executive`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-runtime-executive`
+  - owned surface: runtime, gateway WS/control, executive capability execution, related tests/docs
+- `wt/wave2-scope-crystal`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-scope-crystal`
+  - owned surface: ask, scope, codename promotion, crystal consolidation/forgetting, related tests
+
+Coordinator probe before launching wave2:
+
+- `bun test tests/provider.readiness.test.ts tests/ask.cap.runtime.test.ts`

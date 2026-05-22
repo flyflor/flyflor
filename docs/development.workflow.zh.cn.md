@@ -320,3 +320,30 @@ Flyflor 需要并发执行力，但也始终需要一个显式心智持有当前
 本次收口验证：
 
 - `bun test tests/docs.references.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts`
+
+## 2026-05-22 Wave 2 Tmux 布局
+
+新的 wave2 worktree 都基于 `main-codex-docs@c6d963f`，刻意不复用上一轮 kernel worktree 作为执行基线。
+
+恢复命令：
+
+```bash
+bun run kernel:tmux -- --wave2
+bun run kernel:tmux -- --wave2 --launch-codex
+```
+
+当前 wave2 分支：
+
+- `wt/wave2-memory-seal`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-memory-seal`
+  - owned surface：memory/context store、decay、forgetting、vector recall 与相关测试
+- `wt/wave2-runtime-executive`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-runtime-executive`
+  - owned surface：runtime、gateway WS/control、executive capability execution 与相关测试/文档
+- `wt/wave2-scope-crystal`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave2-scope-crystal`
+  - owned surface：ask、scope、codename promotion、crystal consolidation/forgetting 与相关测试
+
+启动 wave2 前的协调者探测：
+
+- `bun test tests/provider.readiness.test.ts tests/ask.cap.runtime.test.ts`
