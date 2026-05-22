@@ -49,6 +49,13 @@ Main visible surfaces:
 - Rust/thin-client contract: `docs/control.protocol.md`, `docs/ws.doc.md`, `docs/runtime.events.md`.
 - Rust implementation handoff: `docs/rust.integration.md`, `docs/rust.connection.core.md`, `docs/rust.gateway.shell.backlog.md`.
 
+## 2026-05-22 Kernel Integration Wave 2
+
+- [x] Removed the HTTP `/channels` surface from the active minimal Gateway.
+- [x] Kept the WS `gateway.status.get` control snapshot lane intact.
+- [x] Carried a live `clientCount` through gateway status snapshots so peer pressure stays observable without reopening `/channels`.
+- [ ] Merge the context-memory slice and re-run the mainline validation set after the current runtime peer-count worktree lands.
+
 ## Next Work
 
 0. Treat the next phase as a coordinated large refactor whose target is the full intelligent-lifeform kernel, not just isolated seal fixes; every pause or handoff must update the repo handoff docs before ending.
@@ -65,7 +72,7 @@ Main visible surfaces:
 11. Split the first document pass into three child worktrees after the mainline architecture anchor is updated.
 12. Keep the active code-worktree split (`wt/kernel-context-memory`, `wt/kernel-scope-crystal-ask`, `wt/kernel-runtime-executive-ws`) alive until the WS-visible intelligent-lifeform kernel loop is complete.
 13. Preserve `bun run kernel:tmux` as the new-environment restore entrypoint for worktree + tmux orchestration.
-14. Remove the HTTP `/channels` surface from the active minimal Gateway while keeping the WS `gateway.status.get` control snapshot lane.
+14. Keep the HTTP Gateway pruned to `/ws` and `/health` while preserving the WS `gateway.status.get` control snapshot lane and the live peer-count signal.
 
 ## Red Lines
 

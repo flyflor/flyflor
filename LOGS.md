@@ -78,3 +78,10 @@
   Summary: Removed the active `/channels` HTTP surface, retired the live gateway.channels docs, and aligned the active docs, tests, and gateway module to keep only `/ws` and `/health` on the HTTP side.
   Reason: The thin Gateway should not duplicate connection snapshot semantics once WS control already carries `gateway.status.get` and `gateway.status.snapshot`.
   Verification: `bun test tests/gateway.module.test.ts tests/todo.status.test.ts tests/docs.references.test.ts`; `bun run docs:check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-integration-wave-2
+  Summary: Kept the mainline surface pruned to `/ws` and `/health`, recorded the live peer-count status lane, and queued the remaining context-memory merge and validation pass.
+  Reason: The active gateway should stay thin while still exposing observable hub pressure, and the next merge step is the context-memory slice already staged in its child worktree.
+  Verification: mainline docs updated; validation will be rerun after the context-memory worktree merge
