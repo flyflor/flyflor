@@ -71,3 +71,10 @@
   Summary: Planned the active-priority prune of the HTTP `/channels` surface from the minimal Gateway while keeping the WS `gateway.status.get` snapshot lane intact.
   Reason: The current iteration is targeting a smaller Gateway surface and faster closure, so the REST status endpoint is redundant once WS control already exposes structured connection state.
   Verification: pending
+
+- Status: completed
+  Actor: main-codex
+  Scope: gateway-http-surface-prune
+  Summary: Removed the active `/channels` HTTP surface, retired the live gateway.channels docs, and aligned the active docs, tests, and gateway module to keep only `/ws` and `/health` on the HTTP side.
+  Reason: The thin Gateway should not duplicate connection snapshot semantics once WS control already carries `gateway.status.get` and `gateway.status.snapshot`.
+  Verification: `bun test tests/gateway.module.test.ts tests/todo.status.test.ts tests/docs.references.test.ts`; `bun run docs:check`

@@ -57,3 +57,10 @@
   摘要：计划把活动最小 Gateway 的 HTTP `/channels` 暴露面收掉，同时保留 WS `gateway.status.get` 快照通道不动。
   原因：当前迭代追求更小的 Gateway 表面积和更快的闭环，所以在 WS 控制面已经提供结构化连接状态后，REST 状态口是冗余的。
   验证：pending
+
+- 状态：completed
+  操作者：main-codex
+  范围：gateway-http-surface-prune
+  摘要：移除了活动 `/channels` HTTP 暴露面，退役了 live gateway.channels 文档，并把活动文档、测试和 gateway 模块收口到只保留 `/ws` 和 `/health`。
+  原因：thin Gateway 不应在 REST 和 WS 两侧重复表达连接状态快照语义，因为 WS 控制面已经承载了 `gateway.status.get` 与 `gateway.status.snapshot`。
+  验证：`bun test tests/gateway.module.test.ts tests/todo.status.test.ts tests/docs.references.test.ts`；`bun run docs:check`
