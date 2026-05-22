@@ -127,3 +127,10 @@
   Summary: Pushed all wave3 child branches, stopped child Codex processes, kept the scope constitution implementation merged, preserved memory/runtime validation notes on their branches, and discarded the incomplete runtime/protocol prototype before it reached mainline.
   Reason: The project rule is additive worktree history with zero dirty tails; failed or incomplete exploration must be recorded without leaving broken code or unpushed local state.
   Verification: `git status --short --branch` across mainline and all wave3 worktrees; `tmux list-windows -t flyflor-wave3`
+
+- Status: open
+  Actor: main-codex
+  Scope: kernel-wave4-runtime-capability-orchestration
+  Summary: Started a wave4 runtime-capability split with smoke, metadata, and history lanes so the remaining P0 can move in parallel without repeating the broad protocol prototype from wave3.
+  Reason: Runtime capability E2E observability remains the main closure gap; splitting tests, runtime metadata, and history replay keeps each child branch narrow and reviewable.
+  Verification: pending

@@ -458,3 +458,34 @@ Wave3 closeout state:
   - branch clean
 
 All active wave3 child Codex processes were stopped before handoff. The `flyflor-wave3` tmux layout remains as a restorable shell layout, not an active child-agent run.
+
+## 2026-05-22 Wave 4 Runtime Capability Layout
+
+Wave4 targets one P0: successful runtime capability execution must become observable end to end without widening the HTTP Gateway surface.
+
+Restore command:
+
+```bash
+bun run kernel:tmux -- --wave4
+bun run kernel:tmux -- --wave4 --launch-codex
+```
+
+Active wave4 branches:
+
+- `wt/wave4-runtime-smoke`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave4-runtime-smoke`
+  - owned surface: gateway control smoke and WS/control tests proving successful approved capability execution is visible
+- `wt/wave4-runtime-metadata`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave4-runtime-metadata`
+  - owned surface: Runtime/Executive typed metadata for successful capability execution
+- `wt/wave4-runtime-history`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave4-runtime-history`
+  - owned surface: WS history snapshot mapping of existing structured runtime metadata
+
+Coordinator constraints:
+
+- no `/channels`
+- no private WS control message type
+- no broad protocol type migration unless a failing test forces it
+- no semantic character matching
+- failed prototypes are discarded before commit, with LOGS/TODO notes only

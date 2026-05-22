@@ -256,3 +256,14 @@ Latest full seal validation in this workspace passed:
 - [x] Pushed `wt/wave3-runtime-capability` with exploration notes; the incomplete runtime/protocol prototype was discarded and no implementation was merged from that branch.
 - [x] Pushed `wt/wave3-scope-constitution` after the local validation log tail.
 - [x] Stopped active wave3 child Codex processes and left all wave3 worktrees clean.
+
+## 2026-05-22 Kernel Wave4 Runtime Capability Addendum
+
+- [x] Plan wave4 as one P0 split across three narrow runtime capability lanes:
+  - `wt/wave4-runtime-smoke`
+  - `wt/wave4-runtime-metadata`
+  - `wt/wave4-runtime-history`
+- [x] Keep previous kernel/wave2/wave3 worktrees intact; wave4 is additive.
+- [ ] Create and push the three wave4 branches from `main-codex-docs@1f45a72`.
+- [ ] Launch `flyflor-wave4` child Codex windows after the orchestration commit lands.
+- [ ] Main Codex review rule: merge only passing implementation/test slices; failed prototypes must be discarded and recorded without dirty tails.

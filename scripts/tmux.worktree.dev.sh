@@ -7,6 +7,9 @@ SESSION_NAME="flyflor-kernel"
 ATTACH="0"
 LAUNCH_CODEX="0"
 WAVE="kernel"
+CONTEXT_WINDOW_NAME="context"
+SCOPE_WINDOW_NAME="scope"
+RUNTIME_WINDOW_NAME="runtime"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -26,6 +29,15 @@ while [ "$#" -gt 0 ]; do
             WAVE="wave3"
             if [ "$SESSION_NAME" = "flyflor-kernel" ]; then
                 SESSION_NAME="flyflor-wave3"
+            fi
+            ;;
+        --wave4)
+            WAVE="wave4"
+            CONTEXT_WINDOW_NAME="runtime-smoke"
+            SCOPE_WINDOW_NAME="runtime-metadata"
+            RUNTIME_WINDOW_NAME="runtime-history"
+            if [ "$SESSION_NAME" = "flyflor-kernel" ]; then
+                SESSION_NAME="flyflor-wave4"
             fi
             ;;
         --session=*)
@@ -92,6 +104,13 @@ elif [ "$WAVE" = "wave3" ]; then
     SCOPE_PATH="$BASE_DIR/flyflor-wt-wave3-scope-constitution"
     RUNTIME_BRANCH="wt/wave3-runtime-capability"
     RUNTIME_PATH="$BASE_DIR/flyflor-wt-wave3-runtime-capability"
+elif [ "$WAVE" = "wave4" ]; then
+    CONTEXT_BRANCH="wt/wave4-runtime-smoke"
+    CONTEXT_PATH="$BASE_DIR/flyflor-wt-wave4-runtime-smoke"
+    SCOPE_BRANCH="wt/wave4-runtime-metadata"
+    SCOPE_PATH="$BASE_DIR/flyflor-wt-wave4-runtime-metadata"
+    RUNTIME_BRANCH="wt/wave4-runtime-history"
+    RUNTIME_PATH="$BASE_DIR/flyflor-wt-wave4-runtime-history"
 else
     CONTEXT_BRANCH="wt/kernel-context-memory"
     CONTEXT_PATH="$BASE_DIR/flyflor-wt-kernel-context-memory"
@@ -110,13 +129,13 @@ ensure_shared_node_modules "$RUNTIME_PATH"
 
 if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     tmux new-session -d -s "$SESSION_NAME" -n main -c "$ROOT_DIR"
-    tmux new-window -d -t "$SESSION_NAME" -n context -c "$CONTEXT_PATH"
-    tmux new-window -d -t "$SESSION_NAME" -n scope -c "$SCOPE_PATH"
-    tmux new-window -d -t "$SESSION_NAME" -n runtime -c "$RUNTIME_PATH"
+    tmux new-window -d -t "$SESSION_NAME" -n "$CONTEXT_WINDOW_NAME" -c "$CONTEXT_PATH"
+    tmux new-window -d -t "$SESSION_NAME" -n "$SCOPE_WINDOW_NAME" -c "$SCOPE_PATH"
+    tmux new-window -d -t "$SESSION_NAME" -n "$RUNTIME_WINDOW_NAME" -c "$RUNTIME_PATH"
     tmux send-keys -t "$SESSION_NAME:main" "printf '%s\n' 'Coordinator branch: main-codex-docs'" C-m
-    tmux send-keys -t "$SESSION_NAME:context" "printf '%s\n' 'Owner branch: $CONTEXT_BRANCH'" C-m
-    tmux send-keys -t "$SESSION_NAME:scope" "printf '%s\n' 'Owner branch: $SCOPE_BRANCH'" C-m
-    tmux send-keys -t "$SESSION_NAME:runtime" "printf '%s\n' 'Owner branch: $RUNTIME_BRANCH'" C-m
+    tmux send-keys -t "$SESSION_NAME:$CONTEXT_WINDOW_NAME" "printf '%s\n' 'Owner branch: $CONTEXT_BRANCH'" C-m
+    tmux send-keys -t "$SESSION_NAME:$SCOPE_WINDOW_NAME" "printf '%s\n' 'Owner branch: $SCOPE_BRANCH'" C-m
+    tmux send-keys -t "$SESSION_NAME:$RUNTIME_WINDOW_NAME" "printf '%s\n' 'Owner branch: $RUNTIME_BRANCH'" C-m
 fi
 
 if [ "$LAUNCH_CODEX" = "1" ]; then
@@ -146,6 +165,19 @@ if [ "$LAUNCH_CODEX" = "1" ]; then
             "$SESSION_NAME:runtime" \
             "$RUNTIME_PATH" \
             "Read docs/boundaries.md, docs/development.workflow.md, local AGENTS.md, local TODO.md, and local LOGS.md. Own only the wave3 runtime capability slice: src/agent/runtime/**, src/agent/gateway/**, src/executive/**, src/agent/sandbox/**, related scripts/tests/docs and local control files. Move from protocol-closed /ws coverage to end-to-end Executive capability execution under the intended trust/sandbox surface, including observable loop budget and event/history closure. Keep HTTP Gateway to /ws and /health only; do not reintroduce /channels, private client protocol, dynamic require, or semantic text matching. Update bilingual local TODO/LOGS, validate focused runtime/gateway/executive/sandbox tests plus check/docs/build as needed, then commit your branch."
+    elif [ "$WAVE" = "wave4" ]; then
+        launch_codex_window \
+            "$SESSION_NAME:$CONTEXT_WINDOW_NAME" \
+            "$CONTEXT_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-smoke: scripts/gateway.control.smoke.ts, tests/gateway.control.smoke.test.ts, tests/gateway.ws.test.ts, and protocol/control tests only when needed for assertions. Write a failing/then-passing test proving one successful approved capability execution is observable through WS turn.final metadata and event/history surfaces. Do not edit src runtime/executive/protocol implementation except tiny test helpers if unavoidable. Keep HTTP Gateway /ws and /health only. Update local TODO/LOGS bilingual, run focused gateway/control tests plus check/build as needed, commit and push."
+        launch_codex_window \
+            "$SESSION_NAME:$SCOPE_WINDOW_NAME" \
+            "$SCOPE_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-metadata: src/agent/runtime/**, src/executive/**, src/agent/runtime/mcp/**, and focused runtime/executive tests. Add the smallest typed runtime/executive metadata needed for successful capability execution observability. Do not touch protocol/control history mapping or Gateway smoke. No broad contract moves, no private WS messages, no semantic character matching. Update local TODO/LOGS bilingual, run focused runtime/executive tests plus check/build as needed, commit and push."
+        launch_codex_window \
+            "$SESSION_NAME:$RUNTIME_WINDOW_NAME" \
+            "$RUNTIME_PATH" \
+            "Read docs/boundaries.md, docs/development.workflow.md, AGENTS.md, TODO.md, and LOGS.md. Own only wave4 runtime-history: src/agent/gateway/control.ts, src/protocol/control/envelope.ts, memory history snapshot mapping tests, and docs for WS/history replay. Surface existing structured runtime metadata in history snapshots without changing execution logic. Do not move types into brain contracts unless a test proves it is necessary; prefer protocol/control-local shape. Keep Gateway HTTP surface unchanged. Update local TODO/LOGS bilingual, run focused history/control tests plus check/build as needed, commit and push."
     else
         launch_codex_window \
             "$SESSION_NAME:context" \

@@ -92,3 +92,10 @@
   摘要：已推送所有 wave3 子分支、停止子 Codex 进程、保留已合入的 scope constitution 实现，把 memory/runtime 验证记录保存在各自分支，并在进入主线前丢弃未完成的 runtime/protocol prototype。
   原因：项目规则要求追加式 worktree 历史且不能留下 dirty tail；失败或未完成探索必须记录，但不能留下破损代码或未推送本地状态。
   验证：对主线与所有 wave3 worktree 执行 `git status --short --branch`；`tmux list-windows -t flyflor-wave3`
+
+- 状态：open
+  操作者：main-codex
+  范围：kernel-wave4-runtime-capability-orchestration
+  摘要：启动 wave4 runtime-capability 拆分，把同一个剩余 P0 分成 smoke、metadata、history 三条通道，避免重复 wave3 里过宽的 protocol prototype。
+  原因：Runtime capability E2E observability 仍是主要闭环缺口；拆开测试、runtime metadata 和 history replay 能让每个子分支更窄、更容易 review。
+  验证：pending

@@ -458,3 +458,34 @@ Wave3 收口状态：
   - 分支 clean
 
 交接前已停止所有活跃 wave3 子 Codex 进程。`flyflor-wave3` tmux 布局仍保留为可恢复 shell 布局，不再是活跃 child-agent run。
+
+## 2026-05-22 Wave 4 Runtime Capability 布局
+
+Wave4 只瞄准一个 P0：成功 runtime capability execution 必须端到端可观察，同时不扩大 HTTP Gateway 暴露面。
+
+恢复命令：
+
+```bash
+bun run kernel:tmux -- --wave4
+bun run kernel:tmux -- --wave4 --launch-codex
+```
+
+当前 wave4 分支：
+
+- `wt/wave4-runtime-smoke`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave4-runtime-smoke`
+  - owned surface：gateway control smoke 与 WS/control tests，用来证明成功 approved capability execution 可见
+- `wt/wave4-runtime-metadata`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave4-runtime-metadata`
+  - owned surface：Runtime/Executive 针对成功 capability execution 的 typed metadata
+- `wt/wave4-runtime-history`
+  - path: `/Users/yi./Desktop/yi/flyflors/flyflor-wt-wave4-runtime-history`
+  - owned surface：WS history snapshot 对既有结构化 runtime metadata 的映射
+
+协调者约束：
+
+- 不恢复 `/channels`
+- 不新增私有 WS control message type
+- 没有 failing test 逼迫时，不做大范围 protocol type migration
+- 不做语义字符匹配
+- 失败 prototype 进入 commit 前必须丢弃，只保留 LOGS/TODO 记录

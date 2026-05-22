@@ -198,3 +198,14 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 已推送 `wt/wave3-runtime-capability` 的探索记录；未完成的 runtime/protocol prototype 已丢弃，没有实现合入主线。
 - [x] 已推送 `wt/wave3-scope-constitution` 的本地验证日志尾巴。
 - [x] 已停止活跃 wave3 子 Codex 进程，并让所有 wave3 worktree 保持 clean。
+
+## 2026-05-22 Kernel Wave4 Runtime Capability 补充
+
+- [x] 将 wave4 规划为同一个 P0 的三条窄 runtime capability 通道：
+  - `wt/wave4-runtime-smoke`
+  - `wt/wave4-runtime-metadata`
+  - `wt/wave4-runtime-history`
+- [x] 保留此前 kernel/wave2/wave3 worktree；wave4 只追加。
+- [ ] 从 `main-codex-docs@1f45a72` 创建并推送三个 wave4 分支。
+- [ ] 编排提交落主线后启动 `flyflor-wave4` 子 Codex 窗口。
+- [ ] 主 Codex review 规则：只合并通过验证的实现/测试切片；失败 prototype 必须丢弃并记录，不能留下 dirty tail。
