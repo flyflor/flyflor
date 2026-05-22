@@ -26,7 +26,7 @@ Flyflor 试图实现的是一种会思考、会提问、会形成独立工作域
 主线保留两个 Bun 可见入口：
 
 - 本地 `stdio` chat 调试入口
-- 最小 Gateway：`/ws`、`/health`、`/channels`
+- 最小 Gateway：`/ws`、`/health`
 
 第一方 Bun CLI/TUI/channel adapter 已退出主线，只保留在 `docs/old-docs/` 作为历史材料。
 

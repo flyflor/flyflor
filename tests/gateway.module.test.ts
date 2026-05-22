@@ -31,22 +31,6 @@ describe("GatewayModule minimal vascular surface", () => {
         await expect(response?.json()).resolves.toEqual({ ok: true });
     });
 
-    test("GET /channels returns the minimal gateway status snapshot", async () => {
-        const gateway = createGateway();
-
-        const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/channels"));
-        const body = (await response?.json()) as {
-            gateway: { gatewayRunning: boolean; channels: Array<{ name: string }> };
-            channels: Array<{ name: string }>;
-        };
-
-        expect(response?.status).toBe(200);
-        expect(body.gateway.gatewayRunning).toBe(false);
-        expect(body.gateway.channels).toHaveLength(1);
-        expect(body.gateway.channels[0]?.name).toBe(Channel.Ws);
-        expect(body.channels).toEqual(body.gateway.channels);
-    });
-
     test("GET /ws returns 503 before GatewayControlHub is started", async () => {
         const gateway = createGateway();
         const server = new FakeUpgradeServer();
@@ -62,6 +46,15 @@ describe("GatewayModule minimal vascular surface", () => {
         const gateway = createGateway();
 
         const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/unknown"));
+
+        expect(response?.status).toBe(404);
+        await expect(response?.json()).resolves.toEqual({ error: "not_found" });
+    });
+
+    test("GET /channels now returns not found", async () => {
+        const gateway = createGateway();
+
+        const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/channels"));
 
         expect(response?.status).toBe(404);
         await expect(response?.json()).resolves.toEqual({ error: "not_found" });

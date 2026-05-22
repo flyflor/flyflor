@@ -35,7 +35,7 @@
 | --- | --- |
 | `src/agent/runtime` | 单轮主链、turn 生命周期、流式回复、route / ask / blackboard / executive 接线 |
 | `src/agent/context` | 显式 `activeScope`、`contextForkId`、可见 capability surface 的上下文装配 |
-| `src/agent/gateway` | `/ws`、`/health`、`/channels` 最小血管层；只做 transport，不做隐式连续性 |
+| `src/agent/gateway` | `/ws`、`/health` 最小血管层；只做 transport，不做隐式连续性 |
 | `src/agent/blackboard` | 多 worker 讨论、收敛、cap 后 ask 交还 |
 | `src/agent/sandbox` | shell / network / plugin / MCP / computer 的副作用边界 |
 | `src/agent/mcp` | MCP transport、catalog、执行适配 |

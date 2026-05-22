@@ -50,3 +50,10 @@
   摘要：完成第一波代码 worktree 切片 review 与整合，把 live brain shard 轮换加固、crystal/scope/ask 收口，以及 ws thin-client loop smoke 和 request correlation 守卫合回 `main-codex-docs`。
   原因：项目需要一个已经审过的主线快照，使记忆轮换、crystal 召回/遗忘、ask/scope 固化以及 ws loop 可见性可以同时存在，作为下一轮长线内核推进的起点。
   验证：`bun test tests/brain.store.test.ts tests/context.scope.test.ts tests/graph.recall.test.ts tests/ask.parse.test.ts tests/scope.scaffolder.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts`；`bun run smoke:gateway:ask-loop`；`bun run smoke:gateway:control`；`bun run check`
+
+- 状态：open
+  操作者：main-codex
+  范围：gateway-http-surface-prune
+  摘要：计划把活动最小 Gateway 的 HTTP `/channels` 暴露面收掉，同时保留 WS `gateway.status.get` 快照通道不动。
+  原因：当前迭代追求更小的 Gateway 表面积和更快的闭环，所以在 WS 控制面已经提供结构化连接状态后，REST 状态口是冗余的。
+  验证：pending

@@ -82,7 +82,6 @@ export class GatewayModule extends Gateway {
         this.serverUrl = this.server.url.toString();
         this.log("start.ready", {
             health: `${this.serverUrl}health`,
-            channels: `${this.serverUrl}channels`,
             ws: `${this.serverUrl}ws`,
         });
         this.events.publish(event(RuntimeEventType.GatewayStart, { url: this.serverUrl }));
@@ -158,13 +157,6 @@ export class GatewayModule extends Gateway {
         if (request.method === "GET" && url.pathname === "/health") {
             this.log("http.health");
             return json({ ok: true });
-        }
-        if (request.method === "GET" && url.pathname === "/channels") {
-            this.log("http.channels");
-            return json({
-                gateway: this.getStatusSnapshot(),
-                channels: this.getStatusSnapshot().channels,
-            });
         }
         this.log("http.not_found", { method: request.method, path: url.pathname });
         return json({ error: "not_found" }, 404);

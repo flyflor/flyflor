@@ -45,7 +45,7 @@ This file is the handoff note for the next conversation. It should describe only
 Main visible surfaces:
 
 - Local stdio debug chat.
-- Minimal Gateway: `/ws`, `/health`, `/channels`.
+- Minimal Gateway: `/ws`, `/health`.
 - Rust/thin-client contract: `docs/control.protocol.md`, `docs/ws.doc.md`, `docs/runtime.events.md`.
 - Rust implementation handoff: `docs/rust.integration.md`, `docs/rust.connection.core.md`, `docs/rust.gateway.shell.backlog.md`.
 
@@ -65,6 +65,7 @@ Main visible surfaces:
 11. Split the first document pass into three child worktrees after the mainline architecture anchor is updated.
 12. Keep the active code-worktree split (`wt/kernel-context-memory`, `wt/kernel-scope-crystal-ask`, `wt/kernel-runtime-executive-ws`) alive until the WS-visible intelligent-lifeform kernel loop is complete.
 13. Preserve `bun run kernel:tmux` as the new-environment restore entrypoint for worktree + tmux orchestration.
+14. Remove the HTTP `/channels` surface from the active minimal Gateway while keeping the WS `gateway.status.get` control snapshot lane.
 
 ## Red Lines
 

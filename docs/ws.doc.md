@@ -35,13 +35,12 @@
 
 ## HTTP Surface
 
-Gateway 当前只暴露三个 HTTP 路径：
+Gateway 当前只暴露两个 HTTP 路径：
 
 | Path | Method | 作用 | 代码 | 测试 |
 | --- | --- | --- | --- | --- |
 | `/ws` | `GET` | WebSocket upgrade | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
 | `/health` | `GET` | 健康检查 | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
-| `/channels` | `GET` | 当前血管状态快照 | `src/agent/gateway/module.ts` | `tests/gateway.module.test.ts` |
 
 ### `GET /health`
 
@@ -56,57 +55,6 @@ Gateway 当前只暴露三个 HTTP 路径：
 参考：
 
 - `tests/gateway.module.test.ts` `GET /health returns ok without runtime involvement`
-
-### `GET /channels`
-
-响应主体：
-
-```json
-{
-  "gateway": {
-    "gatewayRunning": true,
-    "host": "127.0.0.1",
-    "port": 8788,
-    "channels": [
-      {
-        "name": "ws",
-        "adapter": "GatewayControlHub",
-        "transport": "websocket",
-        "connected": true,
-        "streaming": true,
-        "configured": true,
-        "implemented": true,
-        "state": "connected",
-        "capabilities": {
-          "finalReply": true,
-          "typing": true,
-          "replyReference": true,
-          "thread": true,
-          "messageUpdate": false,
-          "cardUpdate": false,
-          "reactions": false,
-          "topicCreate": false
-        }
-      }
-    ],
-    "connectedCount": 1,
-    "degradedCount": 0,
-    "streamingCount": 1,
-    "startedAt": "2026-05-21T00:00:00.000Z",
-    "uptimeMs": 1234,
-    "url": "http://127.0.0.1:8788/"
-  },
-  "channels": [
-    {
-      "name": "ws"
-    }
-  ]
-}
-```
-
-参考：
-
-- `tests/gateway.module.test.ts` `GET /channels returns the minimal gateway status snapshot`
 
 ### `GET /ws`
 
@@ -1244,6 +1192,5 @@ HTTP status：
 
 - `docs/control.protocol.md`
 - `docs/runtime.events.md`
-- `docs/gateway.channels.md`
 - `docs/rust.integration.md`
 - `docs/rust.connection.core.md`

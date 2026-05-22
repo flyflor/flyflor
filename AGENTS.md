@@ -37,3 +37,4 @@ bun run build:binary
 - 当前主线目标是完成“智能生命体内核”的大重构，而不是只维持局部 seal。
 - 当工作再次扩成多切片时，优先通过 `git worktree + tmux + Codex` 拆并行切片，提高吞吐。
 - 每次暂停、结束或准备切换环境前，必须先更新根目录 `TODO.md`、`LOGS.md`、`docs/development.workflow.md`、`docs/development.workflow.zh.cn.md`，并 push 所有需要保留的分支。
+- 主线迭代优先收缩暴露面：能删的 HTTP 状态口优先删，若 WS 控制面已经提供同等结构化快照，就不要再保留重复 REST 入口。

@@ -45,7 +45,7 @@
 当前可见主面：
 
 - 本地 stdio debug chat。
-- 最小 Gateway：`/ws`、`/health`、`/channels`。
+- 最小 Gateway：`/ws`、`/health`。
 - Rust/thin-client 契约：`docs/control.protocol.md`、`docs/ws.doc.md`、`docs/runtime.events.md`。
 - Rust 实现交接：`docs/rust.integration.md`、`docs/rust.connection.core.md`、`docs/rust.gateway.shell.backlog.md`。
 
@@ -65,6 +65,7 @@
 11. 在主线架构锚点更新完成后，把第一批文档工作拆成三个子 worktree。
 12. 在 WS 可见的智能生命体内核闭环完成前，保持当前代码 worktree 切片（`wt/kernel-context-memory`、`wt/kernel-scope-crystal-ask`、`wt/kernel-runtime-executive-ws`）持续运作。
 13. 把 `bun run kernel:tmux` 固化为新环境恢复 worktree + tmux 编排的入口。
+14. 从活动最小 Gateway 中移除 HTTP `/channels` 暴露面，同时保留 WS `gateway.status.get` 控制面快照通道。
 
 ## 红线
 

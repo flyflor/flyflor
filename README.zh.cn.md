@@ -48,7 +48,6 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 
 - `/ws` WebSocket control/event
 - `/health`
-- `/channels`
 
 第一方 CLI/TUI/channel adapter 已从主源码剥离，已移除旧实现且不保留兼容目录。后续 Rust 客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
 需要按请求/响应字段直接调试 `/ws` 时，使用 [docs/ws.doc.md](docs/ws.doc.md)。
@@ -109,7 +108,7 @@ bun run chat
 ./dist/flyflor --accept-hooks # 本地快速调试：本进程自动允许 shell.run
 ./dist/flyflor gateway
 bun run dev          # dev 源码模式：同步模板后用 Bun watch 直接跑 chat
-bun run gateway      # 源码模式启动最小 Gateway：/ws /health /channels
+bun run gateway      # 源码模式启动最小 Gateway：/ws /health
 bun run gateway:dev  # dev 源码模式：同步模板后用 Bun watch 直接跑 gateway
 sh scripts/gateway.dev.sh # gateway dev 外挂包装：启动前清理旧日志，并单独保存本轮会话日志
 bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动重编 dist/flyflor
@@ -334,7 +333,7 @@ Runtime 通过 `blackboard.route.md` 获取结构化路由：
 
 ```bash
 flyflor            # 本地 stdio chat 调试入口
-flyflor gateway    # 最小 Gateway：/ws /health /channels
+flyflor gateway    # 最小 Gateway：/ws /health
 ```
 
 当前主线只把这两个 Bun 入口当成调试/血管面保留。后续第一方 CLI、TUI、channel shell 和 gateway surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
@@ -395,7 +394,6 @@ flyflor gateway    # 最小 Gateway：/ws /health /channels
 | [docs/memory.system.md](docs/memory.system.md)               | 四层记忆 / 升格 / 衰减 / Dream         |
 | [docs/blackboard.md](docs/blackboard.md)                     | 黑板路由 / 收敛 / Worker 协议          |
 | [docs/ws.doc.md](docs/ws.doc.md)                             | `/ws` 字段级 API 手册 |
-| [docs/gateway.channels.md](docs/gateway.channels.md)         | 主线最小 Gateway 血管层                 |
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |

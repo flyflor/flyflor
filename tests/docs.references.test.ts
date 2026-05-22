@@ -39,13 +39,6 @@ describe("documentation references", () => {
         expect(staleClaims).toEqual([]);
     });
 
-    test("gateway docs use the shipped GatewayMessage id field", async () => {
-        const doc = await Bun.file(join(REPO_ROOT, "docs", "gateway.channels.md")).text();
-        expect(doc).toContain("interface GatewayMessage");
-        expect(doc).toContain("id: string;");
-        expect(doc).not.toContain("interface GatewayMessage {\n    messageId: string;");
-    });
-
     test("control protocol docs keep snapshot layers distinct and a single error section", async () => {
         const doc = await Bun.file(join(REPO_ROOT, "docs", "control.protocol.md")).text();
         const errorHeadings = doc.match(/^## Error$/gmu) ?? [];

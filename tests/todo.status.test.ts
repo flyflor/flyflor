@@ -22,22 +22,20 @@ describe("TODO status", () => {
     });
 
     test("active docs now describe only ws/event gateway as mainline surface", async () => {
-        const [todo, readme, architecture, docsIndex, gateway, directory, boundaries, controlProtocol] = await Promise.all([
+        const [todo, readme, architecture, docsIndex, directory, boundaries, controlProtocol] = await Promise.all([
             readFile(ROOT_TODO_PATH, "utf8"),
             readFile(README_PATH, "utf8"),
             readFile(join(import.meta.dir, "..", "docs", "architecture.md"), "utf8"),
             readFile(join(import.meta.dir, "..", "docs", "README.md"), "utf8"),
-            readFile(join(import.meta.dir, "..", "docs", "gateway.channels.md"), "utf8"),
             readFile(join(import.meta.dir, "..", "docs", "directory.architecture.md"), "utf8"),
             readFile(join(import.meta.dir, "..", "docs", "boundaries.md"), "utf8"),
             readFile(join(import.meta.dir, "..", "docs", "control.protocol.md"), "utf8"),
         ]);
 
-        const active = `${todo}\n${readme}\n${architecture}\n${docsIndex}\n${gateway}\n${directory}\n${boundaries}\n${controlProtocol}`;
+        const active = `${todo}\n${readme}\n${architecture}\n${docsIndex}\n${directory}\n${boundaries}\n${controlProtocol}`;
         expect(active).toContain("WS");
         expect(active).toContain("/ws");
         expect(active).toContain("/health");
-        expect(active).toContain("/channels");
         expect(active).toContain("control");
         expect(active).toContain("event");
         expect(active).toContain("Rust");

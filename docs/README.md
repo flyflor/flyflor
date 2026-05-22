@@ -17,19 +17,18 @@
 7. [control.protocol.md](control.protocol.md) — `/ws` 协议与 `gateway.message.send.payload.context` 的显式上下文入口。
 8. [ws.doc.md](ws.doc.md) — `/ws` 的字段级 API 手册。
 9. [runtime.events.md](runtime.events.md) — 事件时间线与 snapshot 权威面的边界。
-10. [gateway.channels.md](gateway.channels.md) — 最小 Gateway 血管层。
-11. [sandbox.capabilities.md](sandbox.capabilities.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
-12. [mcp.tools.md](mcp.tools.md) — MCP 工具面与 transport 恢复边界。
-13. [executive.exoskeleton.md](executive.exoskeleton.md) — Executive 外骨架文档，现行语义已统一到 Executive。
-14. [skill.system.md](skill.system.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
-15. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
-16. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
-17. [external.kit.md](external.kit.md) — External kit 只读发现协议。
-18. [rust.integration.md](rust.integration.md) — Rust 外壳最小接入。
-19. [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心。
-20. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust shell 分 slice backlog。
-21. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
-22. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
+10. [sandbox.capabilities.md](sandbox.capabilities.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
+11. [mcp.tools.md](mcp.tools.md) — MCP 工具面与 transport 恢复边界。
+12. [executive.exoskeleton.md](executive.exoskeleton.md) — Executive 外骨架文档，现行语义已统一到 Executive。
+13. [skill.system.md](skill.system.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
+14. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
+15. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
+16. [external.kit.md](external.kit.md) — External kit 只读发现协议。
+17. [rust.integration.md](rust.integration.md) — Rust 外壳最小接入。
+18. [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心。
+19. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust shell 分 slice backlog。
+20. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
+21. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
 
