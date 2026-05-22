@@ -56,6 +56,13 @@ ensure_worktree() {
     git -C "$ROOT_DIR" worktree add "$path" "$branch" >/dev/null
 }
 
+ensure_shared_node_modules() {
+    path="$1"
+    if [ -e "$ROOT_DIR/node_modules" ] && [ ! -e "$path/node_modules" ]; then
+        ln -s "$ROOT_DIR/node_modules" "$path/node_modules"
+    fi
+}
+
 launch_codex_window() {
     target="$1"
     path="$2"
@@ -84,6 +91,9 @@ fi
 ensure_worktree "$CONTEXT_BRANCH" "$CONTEXT_PATH"
 ensure_worktree "$SCOPE_BRANCH" "$SCOPE_PATH"
 ensure_worktree "$RUNTIME_BRANCH" "$RUNTIME_PATH"
+ensure_shared_node_modules "$CONTEXT_PATH"
+ensure_shared_node_modules "$SCOPE_PATH"
+ensure_shared_node_modules "$RUNTIME_PATH"
 
 if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     tmux new-session -d -s "$SESSION_NAME" -n main -c "$ROOT_DIR"
