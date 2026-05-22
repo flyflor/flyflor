@@ -449,3 +449,17 @@
   摘要：停止并回收最后一个 `docs-report` tmux window；`flyflor-kernel-v2` 现在只保留主协调 window。
   原因：docs-report 已选择性合并并完成验证，继续保留 child Codex 会造成空转和状态误判。
   验证：待最终 `tmux list-windows` 与 child Codex process scan
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-high-concurrency-launch
+  摘要：按用户要求从低并发窄切调整为 8 条 child Codex 高并发推进；主 Codex 只负责调度、review、合并、验证和纠偏。
+  原因：上一轮并发吞吐不够，主线需要尽快把 ASK ghost/continue、Scope 固化、Scope vector recall、Crystal Gem gate、Runtime loop resume、Socket E2E、Release seal 和 Docs sync 全部推到上线闭环。
+  验证：`tmux list-windows -t flyflor-kernel-v3 -F '#{window_index}:#{window_name}:#{pane_current_command}:#{pane_current_path}'`; 8 条 child window 均为 Codex `node` 进程
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-merge-efficiency-metrics
+  摘要：新增每次 child merge 的效率统计要求：记录 lane 用时、合并提交、文件数、插入/删除、`src`/`tests`/`docs`/`scripts` 分类行数、验证命令与耗时。
+  原因：用户要求看到高并发 Codex 的实际效率提升，不能只汇报“已启动并发”，必须用每次合并的数据证明吞吐。
+  验证：从下一次 accepted lane merge 开始，在 `LOGS.md` 和最终汇报中附带 `git diff --shortstat`、`git diff --numstat` 分类摘要和验证耗时

@@ -558,3 +558,25 @@ Kernel V2 acceptance focus：
 - [x] 确认当前 `flyflor-kernel-v2` tmux 只剩 `main` 和 `docs-report`，其他 child lane 已停止回收。
 - [x] docs-report 提交前停止并回收最后一个 `docs-report` Codex lane。
 - [x] 最终检查不再有空转 child Codex 进程；提交后 push `master`。
+
+## 2026-05-23 Kernel V3 高并发上线闭环
+
+- [x] 清理旧 Kernel V2 worktree、本地 `wt/*` 分支和远端 `origin/wt/*` 分支。
+- [x] 基于 `master` 创建 8 条 Kernel V3 高并发 worktree：
+  - `wt/ask-ghost-continue`
+  - `wt/scope-solidification-vector`
+  - `wt/scope-vector-recall`
+  - `wt/crystal-gem-quality-gate`
+  - `wt/runtime-loop-resume`
+  - `wt/socket-control-e2e`
+  - `wt/release-seal-fast`
+  - `wt/docs-contract-sync`
+- [x] 每条 worktree 初始化中文 `TODO.md`、`AGENTS.md`、`LOGS.md` lane 控制段。
+- [x] 推送 8 条新远端分支。
+- [x] 启动 `flyflor-kernel-v3` tmux：1 个主协调 window + 8 个 child Codex window。
+- [ ] 每 20-30 分钟轮询 child lane 状态，谁先完成谁先 review。
+- [ ] 合并通过 review 的 implementation/docs commit，并立即运行 focused validation。
+- [ ] 每次合并必须统计并记录效率数据：lane 用时、合并提交、文件数、插入/删除、`src`/`tests`/`docs`/`scripts` 分类行数、验证命令与耗时。
+- [ ] 拒绝或重派偏离 owned surface、broad docs rewrite、回退架构红线的 child diff。
+- [ ] 最终运行上线 seal：focused ASK/Scope/Crystal/Runtime/Socket/docs tests、`bun run docs:check`、`bun run check`、`bun run build:binary`、`git diff --check`。
+- [ ] 回收所有 child Codex、清理/保留分支按合并状态记录，推送 `master`。

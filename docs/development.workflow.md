@@ -871,3 +871,33 @@ Remaining coordinator actions:
 3. stop the final `docs-report` tmux lane
 4. verify no child Codex process is idle
 5. push `master`
+
+## 2026-05-23 Kernel V3 High-Concurrency Closure
+
+The coordinator shifted from low-concurrency narrow slices to high-concurrency closure. Main Codex now owns scheduling, review, merge, validation, and drift correction only.
+
+Active session:
+
+- tmux session: `flyflor-kernel-v3`
+- coordinator window: `main`
+- child Codex windows: `ask-ghost`, `scope-solidify`, `scope-vector`, `crystal-gate`, `loop-resume`, `socket-e2e`, `release-fast`, `docs-sync`
+
+Active lanes:
+
+- `wt/ask-ghost-continue`: ASK ghost/pending snapshot and explicit `continue` restore.
+- `wt/scope-solidification-vector`: explicit Scope creation ASK and codename promotion.
+- `wt/scope-vector-recall`: scope-local `scope.db` vector/tree/hot-memory/association recall.
+- `wt/crystal-gem-quality-gate`: Crystal candidate quality gate and replay/audit explainability.
+- `wt/runtime-loop-resume`: Executive loop pause/resume integrated with ASK continue.
+- `wt/socket-control-e2e`: `/ws` control/event visibility for ASK, Scope, Fork, and loop snapshots.
+- `wt/release-seal-fast`: Bun binary, installer, Docker dev, and template release seal.
+- `wt/docs-contract-sync`: documentation sync for facts already merged to mainline.
+
+Merge posture:
+
+- merge the first completed reviewable lane immediately; do not wait for all lanes
+- prefer small cherry-picks over broad merges
+- reject broad docs rewrites outside `docs-contract-sync`
+- reject any change that restores hidden session continuity, `/channels`, `brain.db` prompt recall, or semantic string matching
+- after each accepted lane, run its focused tests on mainline
+- every accepted lane merge must record efficiency metrics: lane elapsed time, merged commit id, file count, insertions/deletions, `src`/`tests`/`docs`/`scripts` line split, validation commands, and validation elapsed time
