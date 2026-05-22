@@ -184,9 +184,9 @@
   原因：Scope Vector 已在 `src/cognitive/hippocampus/scope/vector` 有 coordinator canonical owner；真实模型 live gate 必须在配置 provider 未就绪时清晰失败。
   验证：review `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`、`/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests` 与 `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios` diff
 
-- 状态：in-progress
+- 状态：completed
   操作者：main-codex
   范围：master-handoff
-  摘要：已把交接目标从 `codex/seal-coordinator` 更新为 `master`，准备先提交 coordinator 快照，再合并回主分支。
+  摘要：已把交接目标从 `codex/seal-coordinator` 更新为 `master`，提交 coordinator 快照，把当前 worktree 切回 `master`，并将 `master` fast-forward 到 seal 快照。
   原因：下一个环境 / session 应从 canonical mainline 启动，而不是 staging 分支。
-  验证：等待 commit、checkout `master`、merge 与 push
+  验证：`git switch master`；`git merge --ff-only codex/seal-coordinator`；等待 `git push origin master`

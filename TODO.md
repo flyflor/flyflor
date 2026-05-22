@@ -474,7 +474,7 @@ Latest full seal validation in this workspace passed:
 
 - [x] Final handoff target is `master`, not `codex/seal-coordinator`.
 - [x] `codex/seal-coordinator` is only the staging/coordinator branch for this seal wave.
-- [ ] Commit the staged coordinator snapshot.
-- [ ] Switch the current worktree back to `master`.
-- [ ] Merge the coordinator snapshot into `master`.
+- [x] Commit the staged coordinator snapshot.
+- [x] Switch the current worktree back to `master`.
+- [x] Merge the coordinator snapshot into `master`.
 - [ ] Push `master` for the next session.

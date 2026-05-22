@@ -721,5 +721,7 @@ Scope Vector owner contract：
 
 - 最终交接分支是 `master`
 - `codex/seal-coordinator` 只是本轮 staging/coordinator 分支
-- 结束本 session 前，先提交已 stage 的 coordinator 快照，再切回 `master`，合并快照，push `master`，并让当前 worktree 停在 `master`
+- coordinator 快照 commit：`811fba1`
+- 当前 worktree 已切回 `master`，并 fast-forward 到 seal 快照
+- 结束本 session 前，push `master`，并让当前 worktree 停在 `master`
 - `git diff --check`

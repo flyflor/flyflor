@@ -722,4 +722,6 @@ Fresh-session handoff target:
 
 - the final handoff branch is `master`
 - `codex/seal-coordinator` is only the staging/coordinator branch for this wave
-- before ending this session, commit the staged coordinator snapshot, switch back to `master`, merge the snapshot, push `master`, and leave the worktree on `master`
+- coordinator snapshot commit: `811fba1`
+- current worktree has been switched back to `master` and fast-forwarded to the seal snapshot
+- before ending this session, push `master` and leave the worktree on `master`

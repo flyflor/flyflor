@@ -307,7 +307,7 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 
 - [x] 最终交接目标是 `master`，不是 `codex/seal-coordinator`。
 - [x] `codex/seal-coordinator` 只作为本轮 seal wave 的 staging/coordinator 分支。
-- [ ] 提交已 stage 的 coordinator 快照。
-- [ ] 把当前 worktree 切回 `master`。
-- [ ] 将 coordinator 快照合并进 `master`。
+- [x] 提交已 stage 的 coordinator 快照。
+- [x] 把当前 worktree 切回 `master`。
+- [x] 将 coordinator 快照合并进 `master`。
 - [ ] push `master` 给下一个 session。
