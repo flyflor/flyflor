@@ -1,58 +1,60 @@
 # Flyflor
 
-Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单文件二进制交付。
+Flyflor is a Bun + TypeScript intelligent-lifeform runtime kernel designed for single-binary delivery.
 
-核心设计命名为 **Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）**：Cognitive 心晶海马认知内核负责 Mindstream、晶体智力（Gem）和海马体遗忘曲线；Executive 能力外骨架负责 Capability / Tool / Trust / Loop；Agent 运行态外显层负责 runtime、socket、sandbox、skills、context 等外部交互。
+The core design is the **Cognitive-Executive-Agent Architecture**: Cognitive owns Mindstream, Crystal intelligence, hippocampus memory, Scope and ASK; Executive owns capability, tool, trust and loop control; Agent owns runtime, socket, sandbox, skills, context and other outward runtime surfaces.
 
-官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
+Official homepage: [https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
-## 设计哲学
+Chinese companion: [README.zh.cn.md](README.zh.cn.md).
 
-- LLM 负责当下推理与生成，充当流体智力；记忆系统负责沉淀、召回、结晶与偏移修正。
-- 不靠单轮堆叠上下文，而靠热记忆、晶体智力、Scope 生命域、遗忘曲线和反思把经验压成稳定能力。
-- 上下文装配只来自 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
-- `brain.db` 是按月分片的 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
-- 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
-- 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
-- 未来外部客户端可以通过 `/ws` 对接；当前仓库只承载 Bun 主线的 socket 血管层与 WS/control 协议，不承载 Rust 实现。
-- 简单问题直接回，复杂问题走黑板；当思考或执行抵达边界时，通过 Ask 显式向用户求证，再把高价值结果送入结晶链路。
-- 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
+## Design Philosophy
 
-## 架构总模型
+- The LLM provides fluid, present-tense reasoning and generation; memory systems preserve, recall, crystallize and correct drift.
+- Flyflor does not treat transcript accumulation as intelligence. Context is assembled from hot memory, Crystal, Scope/Fork, forgetting curves and reflection.
+- Context assembly only comes from `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`.
+- `brain.db` is the monthly ledger/query plane, not a prompt container. History and current context are separate systems.
+- MCP, plugins, skills, channel actions, user commands and subagents must enter the same auditable Executive Tool surface.
+- External kits discover capabilities through manifests and the `/ws` control/event catalog. Catalogs are read-only; execution must pass Executive Tool Runtime plus sandbox/approval.
+- This repository owns the Bun kernel, socket vascular layer and WS/control protocol. Rust shell work is external handoff material only.
+- Simple requests can answer directly; complex requests use Blackboard. ASK is the explicit closure organ for uncertainty, escalation, crystallization and long-horizon loops.
+- Protocols, channels, workers, skills and MCP are explicit boundaries; internal protocol values are centrally registered.
 
-当前运行模型明确拆成两张平面：
+## Architecture Model
 
-- Context plane：当前输入、Memory recall、Crystal recall、显式 `activeScope`、显式 `contextForkId`、可见 capability surface
-- Ledger/query plane：当前月 `brain.db`、历史月归档、history / replay / audit / blackboard detail
+The runtime is split into two planes:
 
-没有显式 scope 时：
+- Context plane: current input, Memory recall, Crystal recall, explicit `activeScope`, explicit `contextForkId`, visible capability surface.
+- Ledger/query plane: current-month `brain.db`, archived month ledgers, history / replay / audit / blackboard detail.
 
-- 不创建 fallback scope
-- 不创建 inbox scope
-- 不按 `channel/chat/thread/user` 自动恢复工作域
+Without an explicit Scope:
 
-`activeProject` 现在只保留兼容读取；所有新代码、新文档、新测试都以 `activeScope` 为准。
+- no fallback Scope is created
+- no inbox Scope is created
+- no work domain is restored from `channel/chat/thread/user`
 
-从认知器官看，Flyflor 当前由这几部分共同构成：
+`activeProject` remains a compatibility alias. New code, docs and tests should use `activeScope`.
 
-- `Mindstream / LLM`：流体智力
-- `MemoryComponent`：热记忆与工作缓冲区
-- `CrystalComponent`：晶体智力与方法结晶区
-- `Scope`：独立生命工作域
-- `Ask`：认知闭环器官
-- `Executive`：执行外骨骼
+The current cognitive organs are:
 
-## Socket 现状
+- `Mindstream / LLM`: fluid intelligence
+- `MemoryComponent`: hot memory and working buffer
+- `CrystalComponent`: crystallized intelligence and methods
+- `Scope`: independent durable work domain
+- `Ask`: cognitive closure organ
+- `Executive`: execution exoskeleton
 
-主线 socket 已收缩为最小血管层：
+## Socket Surface
+
+The active socket surface is intentionally small:
 
 - `/ws` WebSocket control/event
 - `/health`
 
-第一方 CLI/TUI/channel adapter 已从主源码剥离，已移除旧实现且不保留兼容目录。后续外部客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
-需要按请求/响应字段直接调试 `/ws` 时，使用 [docs/ws.doc.md](docs/ws.doc.md)。
+First-party CLI/TUI/channel adapters have been removed from the main source tree. External clients and custom shells should integrate through [docs/control.protocol.md](docs/control.protocol.md).
+For field-level `/ws` debugging, use [docs/ws.doc.md](docs/ws.doc.md).
 
-并发开发与新 session 交接约定见 [docs/development.workflow.md](docs/development.workflow.md)。
+Parallel development and handoff rules live in [docs/development.workflow.md](docs/development.workflow.md).
 
 ## 快速开始
 
@@ -407,9 +409,9 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
-| [docs/rust.integration.md](docs/rust.integration.md)         | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
-| [docs/rust.connection.core.md](docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
-| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
+| [docs/old-docs/rust.integration.md](docs/old-docs/rust.integration.md) | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
+| [docs/old-docs/rust.connection.core.md](docs/old-docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
+| [docs/old-docs/rust.gateway.shell.backlog.md](docs/old-docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 

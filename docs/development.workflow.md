@@ -156,8 +156,7 @@ Before the coordinator stops for any reason, it must update:
 1. root `TODO.md`
 2. root `LOGS.md`
 3. `docs/development.workflow.md`
-4. `docs/development.workflow.zh.cn.md`
-5. push every changed branch/worktree branch that should survive a machine/session switch
+4. push every changed branch/worktree branch that should survive a machine/session switch
 
 ## Current snapshot
 
@@ -742,7 +741,7 @@ Main Codex role for Kernel V2:
 - own architecture guardrails, merge review, canonical TODO/LOGS/workflow, and final validation
 - avoid large feature ownership unless a small critical patch is needed
 - reject child work that changes v1 wire strings, DB/context assembly, scope/fork continuity, sandbox/trust policy, or prompt templates outside its owned surface
-- before any pause, update root `TODO.md`, root `LOGS.md`, this file, the `.zh.cn.md` companion, and push branches that should survive
+- before any pause, update root `TODO.md`, root `LOGS.md`, this file, and push branches that should survive
 
 New worktree allocation:
 

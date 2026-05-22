@@ -1213,5 +1213,5 @@ HTTP status：
 
 - `docs/control.protocol.md`
 - `docs/runtime.events.md`
-- `docs/rust.integration.md`
-- `docs/rust.connection.core.md`
+- `docs/old-docs/rust.integration.md`
+- `docs/old-docs/rust.connection.core.md`

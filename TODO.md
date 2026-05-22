@@ -32,7 +32,7 @@ Latest active owner note: `src/socket` owns the socket vascular layer. Older lin
 - Updated docs so active contracts describe the Context plane and Ledger/query plane as separate systems.
 - Kept `mindstream`, `hippocampus`, `crystal`, `dream`, and `Gem` names intact.
 - Kept prompt prose under `templates/prompts` and verified prompt docs/manifest sync.
-- Kept every canonical Markdown source paired with a `.zh.cn.md` Chinese review copy.
+- Kept runtime prompt templates paired with `.zh.cn.md` Chinese review copies; active `AGENTS.md`, `TODO.md`, `LOGS.md`, and `docs/**/*.md` now default to Chinese without mandatory companion copies.
 
 ## Current Mainline
 
@@ -48,8 +48,8 @@ Main visible surfaces:
 
 - Local stdio debug chat.
 - Minimal Gateway: `/ws`, `/health`.
-- Rust/thin-client contract: `docs/control.protocol.md`, `docs/ws.doc.md`, `docs/runtime.events.md`.
-- Rust implementation handoff: `docs/rust.integration.md`, `docs/rust.connection.core.md`, `docs/rust.gateway.shell.backlog.md`.
+- Thin-client contract: `docs/control.protocol.md`, `docs/ws.doc.md`, `docs/runtime.events.md`.
+- Archived Rust implementation handoff: `docs/old-docs/rust.integration.md`, `docs/old-docs/rust.connection.core.md`, `docs/old-docs/rust.gateway.shell.backlog.md`.
 
 ## 2026-05-22 Kernel Integration Wave 2
 
@@ -73,13 +73,13 @@ Main visible surfaces:
 ## Next Work
 
 0. Treat the next phase as a coordinated large refactor whose target is the full intelligent-lifeform kernel, not just isolated seal fixes; every pause or handoff must update the repo handoff docs before ending.
-1. Implement Rust shell slices from `docs/rust.gateway.shell.backlog.md`.
+1. Keep Rust shell slices outside this Bun repository; archived handoff material lives under `docs/old-docs/`.
 2. Keep Bun mainline focused on cognition, Executive, WebSocket/event protocol, memory, blackboard, sandbox, MCP, and plugin surfaces.
 3. Continue shrinking `activeProject` to compatibility-only code paths; do not use it in new contracts.
 4. Keep `brain.db` query/replay behavior separate from prompt assembly.
 5. Keep scope-local prompt recall behind scope memory indexes, summaries, and vector/summary-first retrieval.
 6. Keep all new prompt prose in `templates/prompts` with `.zh.cn.md` copies.
-7. Keep all new Markdown paired with `.zh.cn.md`.
+7. Keep new `AGENTS.md`, `TODO.md`, `LOGS.md`, and `docs/**/*.md` Chinese by default; do not create mechanical `.zh.cn.md` companions outside prompt templates or README.
 8. Add tests before changing protocol, storage schema, or runtime context assembly.
 9. Align all active docs with the "intelligent lifeform kernel" framing before starting multi-worktree implementation.
 10. Introduce append-only `LOGS.md` control files for the main worktree and future child worktrees.
@@ -175,8 +175,7 @@ Latest full seal validation in this workspace passed:
   1. update `TODO.md`
   2. update `LOGS.md`
   3. update `docs/development.workflow.md`
-  4. update `docs/development.workflow.zh.cn.md`
-  5. push every changed branch/worktree branch before yielding the repository
+  4. push every changed branch/worktree branch before yielding the repository
 - When implementation pressure rises, split code work into new `git worktree + tmux + Codex` slices instead of stretching one thread too far.
 - Active code worktrees initialized from `main-codex-docs`:
   - `wt/kernel-context-memory`

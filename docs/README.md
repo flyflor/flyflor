@@ -1,6 +1,6 @@
 # Flyflor 文档索引
 
-本目录只保留当前运行契约。会误导实现、已经退役、或只剩历史解释价值的文档统一移入 [old-docs/](old-docs/)。
+本目录只保留当前运行契约，默认用中文书写，不再为每份文档强制维护 `.zh.cn.md` 副本。会误导实现、已经退役、或只剩历史解释价值的文档统一移入 [old-docs/](old-docs/)。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
@@ -45,8 +45,8 @@
 
 ## 外部仓库参考
 
-这些文档只作为未来独立 Rust 仓库的 `/ws` 交接材料，不是本仓库的活动实现计划：
+这些文档已归档，只作为未来独立 Rust 仓库的 `/ws` 交接材料，不是本仓库的活动实现计划：
 
-- [rust.integration.md](rust.integration.md)
-- [rust.connection.core.md](rust.connection.core.md)
-- [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md)
+- [old-docs/rust.integration.md](old-docs/rust.integration.md)
+- [old-docs/rust.connection.core.md](old-docs/rust.connection.core.md)
+- [old-docs/rust.gateway.shell.backlog.md](old-docs/rust.gateway.shell.backlog.md)

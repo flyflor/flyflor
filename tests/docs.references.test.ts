@@ -364,8 +364,8 @@ describe("documentation references", () => {
         expect(doc).toContain("`RuntimeEvent` 默认是时间线事实流");
     });
 
-    test("rust integration guide keeps the ws handoff checklist stable", async () => {
-        const doc = await Bun.file(join(REPO_ROOT, "docs", "rust.integration.md")).text();
+    test("archived rust integration guide keeps the ws handoff checklist stable", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "old-docs", "rust.integration.md")).text();
 
         expect(doc).toContain("## 最小连接流程");
         expect(doc).toContain("## Snapshot 分层");
@@ -376,8 +376,8 @@ describe("documentation references", () => {
         expect(doc).toContain("event.publish");
     });
 
-    test("rust connection core guide keeps handshake and reconnect contracts stable", async () => {
-        const doc = await Bun.file(join(REPO_ROOT, "docs", "rust.connection.core.md")).text();
+    test("archived rust connection core guide keeps handshake and reconnect contracts stable", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "old-docs", "rust.connection.core.md")).text();
 
         expect(doc).toContain("/ws");
         expect(doc).toContain("server.hello");
@@ -391,8 +391,8 @@ describe("documentation references", () => {
         expect(doc).toContain("连接级状态与 Turn 级状态分层");
     });
 
-    test("rust gateway shell backlog keeps the implementation slices stable", async () => {
-        const doc = await Bun.file(join(REPO_ROOT, "docs", "rust.gateway.shell.backlog.md")).text();
+    test("archived rust gateway shell backlog keeps the implementation slices stable", async () => {
+        const doc = await Bun.file(join(REPO_ROOT, "docs", "old-docs", "rust.gateway.shell.backlog.md")).text();
 
         expect(doc).toContain("## Slice 1: Connection Core");
         expect(doc).toContain("rust.connection.core.md");

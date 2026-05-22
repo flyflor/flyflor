@@ -12,6 +12,9 @@
 - [todo.history.md](todo.history.md) — 旧 TODO 中已经完成的路线、阶段表与收口记录。
 - [todo.next.md](todo.next.md) — 发布前从根目录移出的下一阶段候选，只做规划参考，不作为当前运行契约。
 - [todo.active.md](todo.active.md) — 旧活跃 TODO 路径的归档指针；当前路线已移动到根目录 `TODO.md`。
+- [rust.integration.md](rust.integration.md) — 未来独立 Rust 仓库的 `/ws` 接入交接材料，不属于本 Bun 仓库实现面。
+- [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心与重连状态机交接材料。
+- [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust socket shell backlog 参考，已从活跃 docs 根目录下沉。
 - [scripts/tui.history.seed.ts](scripts/tui.history.seed.ts) — TUI 历史滚动性能造数脚本，归档为手工参考，不属于发布脚本面。
 
 ## R5 替代说明

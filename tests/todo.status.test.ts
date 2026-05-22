@@ -19,7 +19,7 @@ describe("TODO status", () => {
         expect(todo).toContain("gateway");
         expect(todo).toContain("WebSocket");
         expect(todo).toContain("Rust");
-        expect(todo).toContain("docs/rust.connection.core.md");
+        expect(todo).toContain("docs/old-docs/rust.connection.core.md");
     });
 
     test("active docs now describe only ws/event gateway as mainline surface", async () => {
@@ -57,10 +57,12 @@ describe("TODO status", () => {
         expect(directory).toContain("`src/types`");
     });
 
-    test("retired shell backup directory is removed from the repository", async () => {
+    test("abandon directory is reserved for retired non-runtime code", async () => {
         const rootEntries = await readdir(join(import.meta.dir, ".."));
-        const retiredDirectory = ["aba", "ndon"].join("");
-        expect(rootEntries).not.toContain(retiredDirectory);
+        expect(rootEntries).toContain("abandon");
+        const readme = await readFile(join(import.meta.dir, "..", "abandon", "README.md"), "utf8");
+        expect(readme).toContain("不可编译");
+        expect(readme).toContain("不可导入");
     });
 
     test("roadmap and todo stay aligned on the sealed Bun kernel state", async () => {

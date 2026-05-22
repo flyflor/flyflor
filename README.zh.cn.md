@@ -406,9 +406,9 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 
 | 文档                                                         | 用途                                   |
 | ------------------------------------------------------------ | -------------------------------------- |
-| [docs/rust.integration.md](docs/rust.integration.md)         | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
-| [docs/rust.connection.core.md](docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
-| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
+| [docs/old-docs/rust.integration.md](docs/old-docs/rust.integration.md) | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
+| [docs/old-docs/rust.connection.core.md](docs/old-docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
+| [docs/old-docs/rust.gateway.shell.backlog.md](docs/old-docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 

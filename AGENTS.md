@@ -16,7 +16,7 @@
 - 该使用枚举/常量对象时不要裸写字符串；新增协议值先放入 `src/protocol/contracts/enums.ts` 并经 `src/protocol/contracts/index.ts` 暴露，或放入对应 registry。
 - 新增内部结构化协议块必须先登记到 `src/protocol/structured.block.ts`；业务模块只做对应 JSON payload 校验，不得各自手写 tag、边界符或剥离逻辑。
 - 新增代码必须带必要注释说明边界、生命周期、副作用或协议意图；修改旧代码时同步补齐被触碰路径的关键注释，避免无上下文的隐式行为。
-- 目录入口统一为 `index.ts`；禁止新增 `*.exports.ts`。有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `module.ts`、`memory.component.ts`、`blackboard.ts`、`manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`；每一份仓库 Markdown 源文件都必须有同目录同名 `.zh.cn.md` 中文副本；提示词工程模板的 canonical `.md` 用英文书写，`.zh.cn.md` 用中文同步维护；其他文档允许 `.md` 直接中文书写，但仍要同步 `.zh.cn.md` 便于中英对照审查；目录已经表达职责时使用短名，例如 `composition/component.ts`、`factory/container.ts`、`streaming/visibility.ts`，大模块按生命周期/职责拆子目录，例如 `memory/dream/worker.ts`、`memory/consolidation/worker.ts`、`memory/lifecycle/scheduler.ts`；不要回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts`、`dream.worker.ts` 这类重复命名；不要新增连字符或下划线命名的仓库文件。
+- 目录入口统一为 `index.ts`；禁止新增 `*.exports.ts`。有明确角色的实现文件、脚本、提示词和内部模板必须使用点分后缀，例如 `module.ts`、`memory.component.ts`、`blackboard.ts`、`manager.ts`、`http.adapter.ts`、`sqlite.store.ts`、`blackboard.route.md`、`blackboard.route.zh.cn.md`。提示词工程模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；`README.md` 必须是英文入口，`README.zh.cn.md` 是中文对照；`AGENTS.md`、`TODO.md`、`LOGS.md` 和 `docs/**/*.md` 默认中文书写，不强制 `.zh.cn.md` 副本。目录已经表达职责时使用短名，例如 `composition/component.ts`、`factory/container.ts`、`streaming/visibility.ts`，大模块按生命周期/职责拆子目录，例如 `memory/dream/worker.ts`、`memory/consolidation/worker.ts`、`memory/lifecycle/scheduler.ts`；不要回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts`、`dream.worker.ts` 这类重复命名；不要新增连字符或下划线命名的仓库文件。
 - 只保留必要 decorator：`@Module`、`@Provide`、`@Inject`、`@Component`、`@Worker`、`@Channel`、`@Plugin`。
 - `@Provide` 是注入底座；Socket、Blackboard、Memory、Runtime、Sandbox 通过 `class XModule extends X` 表达边界语义；Gateway 只保留为 v1 wire/compatibility alias，不再新增专门 decorator。
 - 入口必须保持薄：`app.ts` 只启动 FlyFlor 主类；依赖注入只能在 composition root 使用显式 token/provider 容器，不做反射扫描或动态加载。
@@ -41,7 +41,7 @@ bun run build:binary
 
 - 当前主线目标是完成“智能生命体内核”的大重构，而不是只维持局部 seal。
 - 当工作再次扩成多切片时，优先通过 `git worktree + tmux + Codex` 拆并行切片，提高吞吐。
-- 每次暂停、结束或准备切换环境前，必须先更新根目录 `TODO.md`、`LOGS.md`、`docs/development.workflow.md`、`docs/development.workflow.zh.cn.md`，并 push 所有需要保留的分支。
+- 每次暂停、结束或准备切换环境前，必须先更新根目录 `TODO.md`、`LOGS.md` 和 `docs/development.workflow.md`，并 push 所有需要保留的分支。
 - 主线迭代优先收缩暴露面：能删的 HTTP 状态口优先删，若 WS 控制面已经提供同等结构化快照，就不要再保留重复 REST 入口。
 - HTTP surface 固定收缩为 `/ws` 与 `/health`；`/channels` 不恢复。需要状态、能力、历史、事件和 live turn 时走 socket control/event wire，不新增重复 REST 状态口。
 - 当前 release-seal 下一阶段聚焦 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型的 socket 场景、prompt 优化、DB/context guard、release/binary 验证；不得把精力转回本仓库内 Rust 实现。

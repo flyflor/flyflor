@@ -337,3 +337,10 @@
   Summary: Relaunched `flyflor-kernel-v2` tmux with six concurrent Codex lanes after control-file initialization.
   Reason: The project needs parallel throughput while main Codex stays responsible for design drift control, owned-surface review, and selective merge.
   Verification: `tmux list-windows -t flyflor-kernel-v2 -F '#I:#W #{pane_current_path} #{pane_current_command}'`; pending child commits and review
+
+- Status: completed
+  Actor: main-codex
+  Scope: documentation-constitution-realignment
+  Summary: Updated the repository Markdown contract: `README.md` is the English entry, `README.zh.cn.md` is the Chinese companion, prompt templates keep canonical `.md` plus `.zh.cn.md`, active `AGENTS.md`/`TODO.md`/`LOGS.md`/`docs/**/*.md` default to Chinese without mandatory companion copies, Rust handoff docs moved under `docs/old-docs/`, and `abandon/` is reserved for retired non-runtime code.
+  Reason: The previous blanket bilingual-document rule conflicted with the current coordinator requirement and kept pulling active docs back toward mechanical duplication. Historical Rust handoff material also needed to stop appearing as active Bun-repo implementation work.
+  Verification: `bun test tests/docs.index.test.ts tests/docs.references.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts tests/prompt.templates.docs.test.ts`

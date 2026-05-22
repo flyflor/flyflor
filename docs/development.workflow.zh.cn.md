@@ -57,7 +57,7 @@ Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：�
 - `AGENTS.md`
 - `LOGS.md`
 
-并且每个 Markdown 文件都必须保留对应的 `.zh.cn.md` 副本。
+`README.md` / `README.zh.cn.md` 和提示词模板继续保持中英/审查副本；`AGENTS.md`、`TODO.md`、`LOGS.md` 与 `docs/**/*.md` 默认中文书写，不再强制机械 `.zh.cn.md` 副本。
 
 本地控制文件规则：
 
@@ -742,7 +742,7 @@ Kernel V2 中主 Codex 的职责：
 - 负责架构红线、合并审查、canonical TODO/LOGS/workflow 和最终验证
 - 除少量关键 patch 外，不长期持有大功能实现
 - 子 worktree 如果越权修改 v1 wire string、DB/context assembly、scope/fork 连续性、sandbox/trust policy 或 prompt template，必须打回或拆分
-- 每次暂停前必须更新根 `TODO.md`、根 `LOGS.md`、本文件、对应 `.zh.cn.md`，并 push 需要保留的分支
+- 每次暂停前必须更新根 `TODO.md`、根 `LOGS.md`、本文件，并 push 需要保留的分支
 
 新 worktree 分配：
 

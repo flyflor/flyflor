@@ -8,7 +8,7 @@
 
 - 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --allow-unresolved=""`。
 - 整体架构命名为 Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）：Cognitive（Mindstream / Crystal / Hippocampus）是认知内核，Executive（Capability / Tool / Trust / Loop）是能力外骨架，Agent 是 runtime / sandbox / skills / context 等外在运行态，Socket 是 live turn / event / operation / ledger query 的血管层。
-- 当前 release-seal 波次聚焦 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型 socket 场景、prompt 优化、DB/context guard 和 release/binary 验证；Rust 相关文档仅作为外部独立仓库的 `/ws` 交接材料。
+- 当前 release-seal 波次聚焦 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型 socket 场景、prompt 优化、DB/context guard 和 release/binary 验证；Rust 相关文档仅作为外部独立仓库的 `/ws` 交接材料，并统一归档在 `docs/old-docs/`。
 - 输入渠道统一归一化为 `GatewayMessage`。
 - 智能体执行可观察、可中断、可恢复、可审计。
 - 工具 / MCP / 插件 / 技能 / 记忆都有显式边界。
@@ -51,7 +51,8 @@ templates/        提示词与记忆 Markdown 模板
 - 目录已表达职责时不重复写长前缀：`src/agent/di/composition/component.ts` / `event.ts` / `injection.ts` / `module.ts`，`src/agent/di/factory/container.ts`，`src/agent/runtime/streaming/visibility.ts`。禁止回退到 `component.metadata.ts`、`dependency.container.ts`、`protocol.visibility.ts` 这类重复命名。
 - 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`，以及 `consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
-- 每一份仓库 Markdown 源文件都必须有同目录同名 `.zh.cn.md` 中文副本。提示词工程模板的 canonical `.md` 用英文书写，`.zh.cn.md` 用中文同步维护；其他文档允许 `.md` 直接中文书写，但仍要同步 `.zh.cn.md` 便于中英对照审查。新增、移动或重命名 `.md` 时必须同步处理对应中文副本；运行态缓存目录不作为源文件例外。
+- 提示词工程模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；canonical `.md` 是运行时模板，`.zh.cn.md` 是中文审查副本。`README.md` 必须作为英文入口，`README.zh.cn.md` 作为中文对照。`AGENTS.md`、`TODO.md`、`LOGS.md` 和 `docs/**/*.md` 默认中文书写，不强制 `.zh.cn.md` 副本；已有副本可以保留，但新文档不再为了形式新增机械副本。
+- 退役但仍有追溯价值的文档必须放入 `docs/old-docs/`；退役代码或脚本只允许放入仓库根 `abandon/`，且必须带说明文件标明不可编译、不可导入、不可作为运行契约。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
 - 单职责短文件保留语义名：`types.ts` / `scope.ts`。

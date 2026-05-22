@@ -216,12 +216,8 @@ describe("repository naming boundary", () => {
         expect(legacyNames).toEqual([]);
     });
 
-    test("every canonical markdown source has a zh.cn companion", async () => {
-        const rootDocs = ["AGENTS.md", "README.md", "TODO.md", "LOGS.md"].map((file) => join(REPO_ROOT, file));
-        const files = [
-            ...rootDocs,
-            ...(await Promise.all(["docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
-        ]
+    test("prompt markdown templates have zh.cn companions", async () => {
+        const files = (await listFiles(join(REPO_ROOT, "templates", "prompts")))
             .map((file) => relative(REPO_ROOT, file))
             .filter((file) => file.endsWith(".md") && !file.endsWith(".zh.cn.md"));
         const missing: string[] = [];
@@ -232,16 +228,17 @@ describe("repository naming boundary", () => {
             }
         }
 
-        // Markdown is a bilingual contract in this repo. Every source document
-        // needs a Chinese review copy beside it so edits cannot drift silently.
+        // Runtime prompt templates keep canonical .md plus Chinese review copy.
+        // AGENTS/TODO/LOGS/docs are Chinese by default and no longer need a
+        // mechanical .zh.cn.md companion.
         expect(missing).toEqual([]);
     });
 
-    test("zh.cn markdown companions are real Chinese review copies", async () => {
-        const rootDocs = ["AGENTS.zh.cn.md", "README.zh.cn.md", "TODO.zh.cn.md", "LOGS.zh.cn.md"].map((file) => join(REPO_ROOT, file));
+    test("prompt and README zh.cn markdown companions are real Chinese review copies", async () => {
+        const rootDocs = ["README.zh.cn.md"].map((file) => join(REPO_ROOT, file));
         const files = [
             ...rootDocs,
-            ...(await Promise.all(["docker", "docs", "templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
+            ...(await Promise.all(["templates"].map((dir) => listFiles(join(REPO_ROOT, dir))))).flat(),
         ]
             .map((file) => relative(REPO_ROOT, file))
             .filter((file) => file.endsWith(".zh.cn.md"));
