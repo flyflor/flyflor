@@ -110,7 +110,7 @@ interface ScopeTreeNodeInput {
     id?: string;
     scopeId: string;
     parentId?: string;
-    kind: "root" | "summary" | "hot-memory" | "association";
+    kind: "root" | "summary" | "hot-memory" | "association" | "codename";
     title: string;
     summary: string;
     symbols?: string[];
@@ -333,6 +333,9 @@ export class ScopeVectorComponent extends BrainComponent {
             nowMs,
         }, database);
         this.upsertAssociations(database, node.scopeId, symbols, "scope", node.scopeId, nowMs, 1);
+        if (codename) {
+            await this.upsertCodenameEvidence(database, input.scope.id, codename, nowMs);
+        }
         this.invalidateScopeCache(node.scopeId);
         this.hotScopeIds.add(node.scopeId);
         if (input.relatedScopeIds && input.relatedScopeIds.length > 0) {
@@ -633,6 +636,11 @@ export class ScopeVectorComponent extends BrainComponent {
         return this.codec.normalizeSymbols(symbols.filter((value): value is string => typeof value === "string"));
     }
 
+    private buildCodenameSymbols(codename: CodenameRecord): string[] {
+        const symbols = [codename.id, codename.name, codename.description, codename.workingDir, codename.scopeId];
+        return this.codec.normalizeSymbols(symbols.filter((value): value is string => typeof value === "string"));
+    }
+
     private buildTurnSummary(messageText: string, replyText: string, gems: CrystalGem[] = []): string {
         const head = [messageText, replyText].filter(Boolean).join("\n");
         const gemText = gems.length > 0 ? gems.map((gem) => [gem.bucket, gem.title, gem.method].filter(Boolean).join(" ")).join(" | ") : "";
@@ -775,6 +783,37 @@ export class ScopeVectorComponent extends BrainComponent {
             depth: 0,
             nowMs,
         }, database);
+        if (codename) {
+            await this.upsertCodenameEvidence(database, scope.id, codename, nowMs);
+        }
+    }
+
+    private async upsertCodenameEvidence(
+        database: Database,
+        scopeId: string,
+        codename: CodenameRecord,
+        nowMs: number,
+    ): Promise<void> {
+        const symbols = this.buildCodenameSymbols(codename);
+        const summary = [codename.name, codename.description, `uses:${codename.useCount}`]
+            .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+            .join(" | ");
+        // Codename evidence is materialized in scope.db for recall only. The
+        // codename remains an anchor; the durable continuity owner is scope:<id>.
+        await this.upsertTreeNode({
+            scopeId,
+            id: `${scopeId}:codename:${codename.id}`,
+            parentId: `${scopeId}:root`,
+            kind: "codename",
+            title: codename.name,
+            summary,
+            symbols,
+            sourceId: codename.id,
+            score: Math.min(1, Math.max(0.2, codename.useCount / 10)),
+            depth: 1,
+            nowMs,
+        }, database);
+        this.upsertAssociations(database, scopeId, symbols, "codename", codename.id, nowMs, 0.9);
     }
 
     private async upsertTreeNode(input: ScopeTreeNodeInput, database: Database): Promise<void> {

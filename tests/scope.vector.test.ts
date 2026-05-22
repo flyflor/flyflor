@@ -131,6 +131,42 @@ describe("ScopeVectorComponent", () => {
         brain.close();
     });
 
+    test("materializes promoted codename evidence into scope.db", async () => {
+        const { brain, component, vectorDb } = await fixture();
+        const now = Date.now();
+        const scope = writeScope(brain, "scope-codename-evidence", "Codename Evidence", "promotion evidence", now);
+        const codename: CodenameRecord = {
+            id: "cn-evidence",
+            name: "flyflor-vector",
+            description: "Scope vector evidence",
+            createdAt: now,
+            lastUsedAt: now,
+            useCount: 9,
+            scopeId: scope.id,
+        };
+        brain.upsertCodename(codename);
+        await component.syncScopeFromBrain(scope.id);
+
+        const db = new Database(vectorDb);
+        try {
+            const tree = db
+                .query<{ kind: string; source_id: string | null }, []>(
+                    "SELECT kind, source_id FROM scope_tree_nodes WHERE kind = 'codename'",
+                )
+                .all();
+            const association = db
+                .query<{ term: string; kind: string }, [string]>(
+                    "SELECT term, kind FROM scope_associations WHERE scope_id = ? AND kind = 'codename' ORDER BY term",
+                )
+                .all(scope.id);
+            expect(tree).toContainEqual({ kind: "codename", source_id: codename.id });
+            expect(association.map((row) => row.term)).toContain("flyflor-vector");
+        } finally {
+            db.close();
+            brain.close();
+        }
+    });
+
     test("returns only the bounded hot subtree instead of all scopes", async () => {
         const { brain, component } = await fixture();
         const now = Date.now();

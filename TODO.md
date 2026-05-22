@@ -578,5 +578,6 @@ Kernel V2 acceptance focus：
 - [ ] 合并通过 review 的 implementation/docs commit，并立即运行 focused validation。
 - [ ] 每次合并必须统计并记录效率数据：lane 用时、合并提交、文件数、插入/删除、`src`/`tests`/`docs`/`scripts` 分类行数、验证命令与耗时。
 - [ ] 拒绝或重派偏离 owned surface、broad docs rewrite、回退架构红线的 child diff。
+- [ ] review 并合并 `wt/scope-solidification-vector`：结构化 ASK confirmation 创建 Scope，codename evidence 写入 scope-local `scope.db` tree/association。
 - [ ] 最终运行上线 seal：focused ASK/Scope/Crystal/Runtime/Socket/docs tests、`bun run docs:check`、`bun run check`、`bun run build:binary`、`git diff --check`。
 - [ ] 回收所有 child Codex、清理/保留分支按合并状态记录，推送 `master`。
