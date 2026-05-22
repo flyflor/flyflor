@@ -23,7 +23,7 @@
         "docs:check": "bun run docs:prompts:check && bun run scripts/test.ts docs",
         "docker:up": "bun run docker:templates && bun run build:binary:docker && docker compose up -d --force-recreate",
         "docker:dev": "bun run docker:up && bun run docker:logs",
-        "docker:chat": "bun run docker:up && docker exec -it flyflor-dev flyflor",
+        "docker:chat": "bun run docker:up && docker exec -it flyflor-dev /tmp/flyflor-linux chat",
         "docker:logs": "docker compose logs -f --tail=200",
         "docker:down": "docker compose down",
         "docker:nuke": "docker compose down -v",

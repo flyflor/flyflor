@@ -4,7 +4,6 @@ set -eu
 WORKSPACE_BIN="/root/.flyflor/dist/flyflor-linux"
 MOUNTED_BIN="/mounted/flyflor-linux"
 LOCAL_BIN="/tmp/flyflor-linux"
-LINK_BIN="/usr/local/bin/flyflor"
 
 if [ -f "$WORKSPACE_BIN" ]; then
     SOURCE_BIN="$WORKSPACE_BIN"
@@ -19,6 +18,5 @@ fi
 
 cp "$SOURCE_BIN" "$LOCAL_BIN"
 chmod +x "$LOCAL_BIN"
-ln -sf "$LOCAL_BIN" "$LINK_BIN"
 
 exec "$LOCAL_BIN" "$@"

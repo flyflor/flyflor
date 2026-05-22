@@ -463,3 +463,18 @@
   摘要：新增每次 child merge 的效率统计要求：记录 lane 用时、合并提交、文件数、插入/删除、`src`/`tests`/`docs`/`scripts` 分类行数、验证命令与耗时。
   原因：用户要求看到高并发 Codex 的实际效率提升，不能只汇报“已启动并发”，必须用每次合并的数据证明吞吐。
   验证：从下一次 accepted lane merge 开始，在 `LOGS.md` 和最终汇报中附带 `git diff --shortstat`、`git diff --numstat` 分类摘要和验证耗时
+
+- 状态：已完成
+  执行者：child-codex
+  范围：release-seal-fast
+  摘要：移除 Docker dev 容器内 `/usr/local/bin/flyflor` command shim，改为显式执行 `/tmp/flyflor-linux chat`，并用 Docker dev smoke 固定“不创建全局命令链接”的 release 契约。
+  原因：Release Seal Fast lane 只负责 Bun kernel release seal；全局 `flyflor` command 归未来外部 CLI/TUI，installer 和 Docker dev 都不应占用全局执行目录。
+  验证：`bun test tests/install.script.test.ts tests/docker.dev.smoke.test.ts tests/release.assets.test.ts`; `bun run build:binary`; `bun run check`; `git diff --check`
+
+- 状态：进行中
+  执行者：main-codex
+  范围：kernel-v3-release-seal-fast-merge
+  摘要：开始 review 并合并 `wt/release-seal-fast` 的首个可交付提交 `084e872`。
+  原因：这是 Kernel V3 高并发后的第一个完成 lane，直接修正 Docker dev release surface，避免容器内继续创建全局 `flyflor` shim。
+  效率：child 用时约 10m44s；10 files changed，25 insertions，17 deletions；分类为 control `+15/-8`，docs `+6/-6`，scripts/config `+3/-3`，tests `+1/-0`。
+  验证：待主线重跑 release focused tests、`bun run docs:check`、`bun run build:binary`、`bun run check`、`git diff --check`

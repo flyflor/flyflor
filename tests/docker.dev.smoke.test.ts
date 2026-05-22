@@ -18,6 +18,7 @@ describe("Docker dev smoke", () => {
         expect(checks.map((check) => check.name)).toContain("compose starts socket command");
         expect(checks.map((check) => check.name)).toContain("docker config enables local crystal graph");
         expect(checks.map((check) => check.name)).toContain("docker prompt manifest matches runtime");
+        expect(checks.map((check) => check.name)).toContain("entrypoint avoids global command link");
     });
 
     test("docker workspace runtime state stays ignored and untracked", async () => {

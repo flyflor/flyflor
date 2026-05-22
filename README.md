@@ -207,7 +207,7 @@ bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000
 bun run smoke:release                     # docs + type + tests + agent smoke + release assets + socket service + docker smoke
 bun run ci                                # deterministic local gate; no live credentials
 bun run release:check                     # deterministic release smoke
-docker exec -it flyflor-dev flyflor
+docker exec -it flyflor-dev /tmp/flyflor-linux chat
 ```
 
 `bun run test` does not call a real model by default. For configured live-model checks, run `bun run provider:ready` first, then use `bun run test:live`, `bun run test:live:docker`, or Docker-specific live smokes. Manual live probes may print skipped diagnostics when credentials are absent; `bun run kernel:seal` treats missing live provider readiness as a seal failure.
@@ -218,7 +218,7 @@ Mounts:
 | ---------------------- | ------------------------------- | --------------------- |
 | `./docker/config` | `/root/.flyflor/.config` | dev config and prompt templates |
 | `./docker/workspace` | `/root/.flyflor/.config/workspace` | workspace data |
-| `./dist/flyflor-linux` | copied to `/usr/local/bin/flyflor` in the container | compiled container binary |
+| `./dist/flyflor-linux` | copied to `/tmp/flyflor-linux` in the container | compiled container binary |
 
 Docker dev defaults to one Flyflor container. Local WAL working memory and local `CrystalComponent` are enabled. `docker/config.default.jsonc` only initializes `docker/config/config.jsonc` when it is missing, so local provider secrets are not overwritten. Rebuild and restart after architecture changes:
 

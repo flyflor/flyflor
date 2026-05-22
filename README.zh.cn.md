@@ -205,7 +205,7 @@ bun run smoke:mcp:live -- --rounds 10 --delay-ms 30000 # 真实 MCP 长时间断
 bun run smoke:release                     # docs + type + tests + agent smoke + release assets + socket service + docker smoke
 bun run ci                                # 本地确定性门禁：不跑真实模型凭据，检查 docs/type/tests/binary/gateway/docker 静态烟测
 bun run release:check                     # 本地发布门禁：完整 deterministic release smoke；真实模型另跑 smoke:runtime:live
-docker exec -it flyflor-dev flyflor       # 进入容器交互
+docker exec -it flyflor-dev /tmp/flyflor-linux chat
 ```
 
 `bun run test` 默认不调用真实模型，避免普通单测受网络、余额和 provider 抖动影响；需要验证你当前配置的真实模型时，先跑 `bun run provider:ready`，再按场景单独跑 `bun run test:live`、`bun run test:live:docker` 或 Docker 场景的 `bun run smoke:runtime:live`。手动 live 探测允许输出 skipped 诊断，但 `bun run kernel:seal` 会把 live provider 缺失视为封板失败。Docker live runtime 继续保留为可选扩展验证，不属于当前 Bun 内核封板硬门槛。
@@ -216,7 +216,7 @@ docker exec -it flyflor-dev flyflor       # 进入容器交互
 | ---------------------- | ------------------------------- | --------------------- |
 | `./docker/config`      | `/root/.flyflor/.config`         | dev 配置 + 提示词模板 |
 | `./docker/workspace`   | `/root/.flyflor/.config/workspace` | 工作区数据            |
-| `./dist/flyflor-linux` | 复制至 `/usr/local/bin/flyflor` | 编译好的二进制        |
+| `./dist/flyflor-linux` | 复制至 `/tmp/flyflor-linux` | 编译好的二进制        |
 
 默认 Docker dev 为单 Flyflor 容器，本地 WAL 工作记忆与 local CrystalComponent 都已启用；`docker/config.default.jsonc` 只在 `docker/config/config.jsonc` 缺失时初始化，避免覆盖本地 provider 密钥；`brain.db` 和 `crystal.db` 分别承载生命事件与晶体图。架构变更后重新编译 + 重启：
 

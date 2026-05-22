@@ -61,7 +61,7 @@ bun run ci               # 本地确定性门禁：docs/type/tests/binary + dock
 ```bash
 docker compose up -d
 docker compose logs -f flyflor
-docker exec -it flyflor-dev flyflor
+docker exec -it flyflor-dev /tmp/flyflor-linux chat
 ```
 
 ## 本地 Override

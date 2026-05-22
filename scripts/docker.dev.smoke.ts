@@ -85,6 +85,8 @@ export class DockerDevSmokeRunner {
             "entrypoint keeps mounted binary fallback",
             entrypoint.includes('MOUNTED_BIN="/mounted/flyflor-linux"'),
         );
+        this.push(checks, "entrypoint avoids global command link", !entrypoint.includes("/usr/local/bin/flyflor"));
+        this.push(checks, "entrypoint avoids symlink command shim", !entrypoint.includes("ln -sf"));
 
         checks.push(...(await this.checkDockerPromptBundle()));
         if (options.requireBinary) {
