@@ -120,3 +120,10 @@
   Summary: Reviewed and integrated the wave3 scope constitution slice so promoted scopes receive the full bilingual AGENTS/TODO/LOGS/README/project.memory constitution file set while preserving idempotent no-overwrite behavior.
   Reason: Scope worktrees need redlines, task state, logs, handoff docs, and local project-memory guidance immediately at scaffold time instead of relying on chat context or later manual repair.
   Verification: `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
+
+- Status: completed
+  Actor: main-codex
+  Scope: wave3-residual-cleanup
+  Summary: Pushed all wave3 child branches, stopped child Codex processes, kept the scope constitution implementation merged, preserved memory/runtime validation notes on their branches, and discarded the incomplete runtime/protocol prototype before it reached mainline.
+  Reason: The project rule is additive worktree history with zero dirty tails; failed or incomplete exploration must be recorded without leaving broken code or unpushed local state.
+  Verification: `git status --short --branch` across mainline and all wave3 worktrees; `tmux list-windows -t flyflor-wave3`

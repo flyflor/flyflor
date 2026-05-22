@@ -249,3 +249,10 @@ Latest full seal validation in this workspace passed:
   - Scope scaffold and codename promotion tests now cover the expanded template set.
 - [x] Verified on mainline with:
   - `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
+
+## 2026-05-22 Wave3 Residual Cleanup
+
+- [x] Pushed `wt/wave3-memory-lifecycle` with validation-only handoff notes; no implementation was merged from that branch.
+- [x] Pushed `wt/wave3-runtime-capability` with exploration notes; the incomplete runtime/protocol prototype was discarded and no implementation was merged from that branch.
+- [x] Pushed `wt/wave3-scope-constitution` after the local validation log tail.
+- [x] Stopped active wave3 child Codex processes and left all wave3 worktrees clean.

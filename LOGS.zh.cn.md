@@ -85,3 +85,10 @@
   摘要：已 review 并整合 wave3 scope constitution 切片，使晋升后的 scope 能获得完整双语 AGENTS/TODO/LOGS/README/project.memory 宪法层文件集，同时保持不覆盖已存在文件的幂等行为。
   原因：Scope worktree 在 scaffold 时就需要红线、任务状态、日志、交接文档和本地项目记忆指引，不能依赖聊天上下文或后续人工补救。
   验证：`bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
+
+- 状态：completed
+  操作者：main-codex
+  范围：wave3-residual-cleanup
+  摘要：已推送所有 wave3 子分支、停止子 Codex 进程、保留已合入的 scope constitution 实现，把 memory/runtime 验证记录保存在各自分支，并在进入主线前丢弃未完成的 runtime/protocol prototype。
+  原因：项目规则要求追加式 worktree 历史且不能留下 dirty tail；失败或未完成探索必须记录，但不能留下破损代码或未推送本地状态。
+  验证：对主线与所有 wave3 worktree 执行 `git status --short --branch`；`tmux list-windows -t flyflor-wave3`

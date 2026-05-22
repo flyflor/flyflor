@@ -439,3 +439,22 @@ The rule is no-overwrite idempotency: an existing scope file is skipped, never r
 Validation:
 
 - `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
+
+## 2026-05-22 Wave 3 Cleanup State
+
+Wave3 closeout state:
+
+- `wt/wave3-scope-constitution`
+  - implementation reviewed and merged to `main-codex-docs`
+  - branch pushed and clean
+- `wt/wave3-memory-lifecycle`
+  - validation-only handoff notes pushed
+  - no implementation merged
+  - branch clean
+- `wt/wave3-runtime-capability`
+  - exploration notes pushed
+  - incomplete runtime/protocol prototype discarded after failing `bun run check`
+  - no implementation merged
+  - branch clean
+
+All active wave3 child Codex processes were stopped before handoff. The `flyflor-wave3` tmux layout remains as a restorable shell layout, not an active child-agent run.

@@ -191,3 +191,10 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
   - Scope scaffold 与 codename promotion 测试已覆盖扩展后的模板集合。
 - [x] 已在主线验证：
   - `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
+
+## 2026-05-22 Wave3 残留清理
+
+- [x] 已推送 `wt/wave3-memory-lifecycle` 的 validation-only 交接记录；该分支没有实现合入主线。
+- [x] 已推送 `wt/wave3-runtime-capability` 的探索记录；未完成的 runtime/protocol prototype 已丢弃，没有实现合入主线。
+- [x] 已推送 `wt/wave3-scope-constitution` 的本地验证日志尾巴。
+- [x] 已停止活跃 wave3 子 Codex 进程，并让所有 wave3 worktree 保持 clean。

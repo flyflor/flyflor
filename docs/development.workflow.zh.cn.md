@@ -439,3 +439,22 @@ Wave3 协调者约束：
 验证：
 
 - `bun test tests/scope.scaffolder.test.ts tests/codename.promote.test.ts tests/naming.boundaries.test.ts`
+
+## 2026-05-22 Wave 3 清理状态
+
+Wave3 收口状态：
+
+- `wt/wave3-scope-constitution`
+  - 实现已 review 并合入 `main-codex-docs`
+  - 分支已推送且 clean
+- `wt/wave3-memory-lifecycle`
+  - validation-only 交接记录已推送
+  - 没有实现合入
+  - 分支 clean
+- `wt/wave3-runtime-capability`
+  - 探索记录已推送
+  - 未完成的 runtime/protocol prototype 因未通过 `bun run check` 已丢弃
+  - 没有实现合入
+  - 分支 clean
+
+交接前已停止所有活跃 wave3 子 Codex 进程。`flyflor-wave3` tmux 布局仍保留为可恢复 shell 布局，不再是活跃 child-agent run。
