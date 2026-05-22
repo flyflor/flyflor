@@ -64,3 +64,10 @@
   摘要：移除了活动 `/channels` HTTP 暴露面，退役了 live gateway.channels 文档，并把活动文档、测试和 gateway 模块收口到只保留 `/ws` 和 `/health`。
   原因：thin Gateway 不应在 REST 和 WS 两侧重复表达连接状态快照语义，因为 WS 控制面已经承载了 `gateway.status.get` 与 `gateway.status.snapshot`。
   验证：`bun test tests/gateway.module.test.ts tests/todo.status.test.ts tests/docs.references.test.ts`；`bun run docs:check`
+
+- 状态：completed
+  操作者：main-codex
+  范围：kernel-wave2-reviewed-integration
+  摘要：已 review 三个 wave2 子分支，并把各自拥有的实现面暂存进 `main-codex-docs`：确定性的 memory recall 时钟与 tie-breaker、通过 WS 发布的 executive loop 生命周期事件、codename 到 scope 的显式台账持久化、嵌套 ask 校验，以及 crystal consolidation 溯源。
+  原因：wave2 tmux 拆分已经产出窄实现提交；协调者分支需要一个已 review 的主线快照，在保持 Gateway 暴露面收紧的同时推进 memory、runtime、scope、crystal 的闭环。
+  验证：`bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`；`bun run smoke:gateway:control`；`bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`；`bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`；`bun run docs:check`

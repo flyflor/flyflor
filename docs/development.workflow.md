@@ -347,3 +347,43 @@ Active wave2 branches:
 Coordinator probe before launching wave2:
 
 - `bun test tests/provider.readiness.test.ts tests/ask.cap.runtime.test.ts`
+
+## 2026-05-22 Wave 2 Reviewed Integration
+
+The coordinator reviewed and staged the wave2 child output into `main-codex-docs` without reopening the HTTP Gateway surface.
+
+Reviewed child commits:
+
+- `wt/wave2-memory-seal`
+  - deterministic spreading activation ordering
+  - deterministic graph recall ordering
+  - recall cache and contradiction audit paths honor the injected clock
+- `wt/wave2-runtime-executive`
+  - gateway control smoke now uses the real event component and runtime bus
+  - WS subscribers assert `executive.loop.paused` and `executive.loop.resumed` as delivered `event.publish` envelopes
+- `wt/wave2-scope-crystal`
+  - nested non-freeform asks require their own structured choices
+  - codename promotion writes an explicit `Scope` ledger row
+  - crystal gems preserve source candidate ids and consolidation evidence metadata
+
+Coordinator-owned merge rules for this wave:
+
+- keep child implementation/tests, but write canonical TODO/LOGS/workflow history from the main worktree
+- keep HTTP Gateway limited to `/ws` and `/health`
+- keep WS `gateway.status.get` as the status lane
+- keep `brain.db` as ledger/query/replay/audit state, not a prompt assembly container
+
+Validation already run on the staged mainline snapshot:
+
+- `bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`
+- `bun run smoke:gateway:control`
+- `bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`
+- `bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`
+- `bun run docs:check`
+
+Final closeout before yielding:
+
+1. run `bun run check`
+2. run `bun run build:binary`
+3. commit and push `main-codex-docs`
+4. leave `flyflor-wave2` restorable through `bun run kernel:tmux -- --wave2`

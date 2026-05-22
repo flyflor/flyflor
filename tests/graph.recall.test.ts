@@ -182,4 +182,103 @@ describe("SQLiteGraphStore recall accounting", () => {
             await rm(root, { force: true, recursive: true });
         }
     });
+
+    test("vector recall uses deterministic resource tie-breakers", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-graph-recall-tie-"));
+        const dbFile = join(root, "crystal.db");
+        const store = new SQLiteGraphStore({ dbFile });
+        try {
+            const recallNow = Date.UTC(2026, 4, 2, 0, 0, 0);
+            const updatedAt = Date.UTC(2026, 4, 1, 0, 0, 0);
+            await store.upsertMemoryNode({
+                id: "node-b",
+                ownerKey: "fork:test-fork",
+                symbols: ["same"],
+                summary: "same",
+                embedding: [1, 0, 0, 0],
+                confidence: 0.8,
+                evidenceCount: 1,
+                importance: 0.7,
+                updatedAt,
+            });
+            await store.upsertMemoryNode({
+                id: "node-a",
+                ownerKey: "fork:test-fork",
+                symbols: ["same"],
+                summary: "same",
+                embedding: [1, 0, 0, 0],
+                confidence: 0.8,
+                evidenceCount: 1,
+                importance: 0.7,
+                updatedAt,
+            });
+
+            const recalled = await store.recallMemoryNodes({
+                ownerKey: "fork:test-fork",
+                embedding: [1, 0, 0, 0],
+                symbols: ["same"],
+                limit: 2,
+                nowMs: recallNow,
+            });
+            expect(recalled.map((row) => row.id)).toEqual(["node-a", "node-b"]);
+            expect(recalled.map((row) => row.lastAccessedAt)).toEqual([recallNow, recallNow]);
+        } finally {
+            await rm(root, { force: true, recursive: true });
+        }
+    });
+
+    test("forgetting audit edges persist the injected mutation clock", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-graph-forget-clock-"));
+        const dbFile = join(root, "crystal.db");
+        const store = new SQLiteGraphStore({ dbFile });
+        try {
+            const nowMs = Date.UTC(2026, 4, 4, 0, 0, 0);
+            await store.upsertMemoryNode({
+                id: "left",
+                ownerKey: "fork:test-fork",
+                symbols: ["left"],
+                summary: "left",
+                embedding: [1, 0, 0, 0],
+                confidence: 0.9,
+                evidenceCount: 1,
+                importance: 0.7,
+                updatedAt: nowMs - 1000,
+            });
+            await store.upsertMemoryNode({
+                id: "right",
+                ownerKey: "fork:test-fork",
+                symbols: ["right"],
+                summary: "right",
+                embedding: [0, 1, 0, 0],
+                confidence: 0.9,
+                evidenceCount: 1,
+                importance: 0.7,
+                updatedAt: nowMs - 1000,
+            });
+
+            const applied = await store.applyContradictionAudit({
+                table: "memory_node",
+                id: "left",
+                confidenceMultiplier: 0.8,
+                contradictionDelta: 1,
+                nowMs,
+                relateWith: { table: "memory_node", id: "right" },
+            });
+            expect(applied).toBe(true);
+
+            const db = new Database(dbFile, { readonly: true });
+            try {
+                const edge = db
+                    .query<{ at: number | null; created_at: number }, [string]>(
+                        "SELECT at, created_at FROM graph_edges WHERE id = ?1",
+                    )
+                    .get("memory_node:left:contradicts:memory_node:right");
+                expect(edge).toEqual({ at: nowMs, created_at: nowMs });
+            } finally {
+                db.close();
+            }
+        } finally {
+            await rm(root, { force: true, recursive: true });
+        }
+    });
 });

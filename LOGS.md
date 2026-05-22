@@ -99,3 +99,10 @@
   Summary: Preserved the previous scope child branch, created fresh wave2 worktrees from `main-codex-docs@c6d963f`, and launched `flyflor-wave2` with memory, runtime, and scope child Codex windows.
   Reason: The next kernel pass needs faster closure without letting child sessions continue on stale pre-merge worktree baselines.
   Verification: `git worktree list`; `tmux list-windows -t flyflor-wave2`; `bun test tests/provider.readiness.test.ts tests/ask.cap.runtime.test.ts`
+
+- Status: completed
+  Actor: main-codex
+  Scope: kernel-wave2-reviewed-integration
+  Summary: Reviewed the three wave2 child branches and staged their owned implementation surfaces into `main-codex-docs`: deterministic memory recall clocks and tie-breakers, WS-published executive loop lifecycle events, explicit codename-to-scope ledger persistence, nested ask validation, and crystal consolidation provenance.
+  Reason: The wave2 tmux split produced narrow implementation commits; the coordinator branch needed a single reviewed snapshot that keeps the Gateway surface pruned while advancing memory, runtime, scope, and crystal closure together.
+  Verification: `bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`; `bun run smoke:gateway:control`; `bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`; `bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`; `bun run docs:check`

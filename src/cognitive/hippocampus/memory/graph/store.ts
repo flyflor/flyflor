@@ -444,12 +444,12 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const nowMs = Number.isFinite(input.nowMs) ? (input.nowMs as number) : Date.now();
         const cacheKey = sqliteGraphModel.recallCacheKey(input);
-        const cached = this.recallCache.get(cacheKey);
+        const cached = this.recallCache.get(cacheKey, nowMs);
         if (cached) {
             return this.markMemoryNodeRecall(cached, nowMs);
         }
         const result = this.searchMemoryNodes(input, 64, nowMs);
-        this.recallCache.set(cacheKey, result.map((row) => ({ ...row })));
+        this.recallCache.set(cacheKey, result.map((row) => ({ ...row })), nowMs);
         return this.markMemoryNodeRecall(result, nowMs);
     }
 
@@ -777,7 +777,17 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
                 score: sqliteGraphModel.scoreMemoryNode(row, queryEmbedding, symbols, nowMs),
             }))
             .filter((entry) => entry.score > 0)
-            .sort((left, right) => right.score - left.score || right.row.importance - left.row.importance)
+            .sort((left, right) => {
+                const byScore = right.score - left.score;
+                if (byScore !== 0) return byScore;
+                const byImportance = right.row.importance - left.row.importance;
+                if (byImportance !== 0) return byImportance;
+                const leftFreshnessTs = left.row.lastAccessedAt ?? left.row.updatedAt;
+                const rightFreshnessTs = right.row.lastAccessedAt ?? right.row.updatedAt;
+                const byFreshness = rightFreshnessTs - leftFreshnessTs;
+                if (byFreshness !== 0) return byFreshness;
+                return left.row.id.localeCompare(right.row.id);
+            })
             .slice(0, Math.max(1, Math.min(limit, 64)));
         return scored.map((entry) => ({ ...entry.row, score: entry.score }));
     }
@@ -794,7 +804,17 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
                 score: sqliteGraphModel.scoreGem(row, queryEmbedding, symbols, nowMs),
             }))
             .filter((entry) => entry.score > 0)
-            .sort((left, right) => right.score - left.score || right.row.support - left.row.support)
+            .sort((left, right) => {
+                const byScore = right.score - left.score;
+                if (byScore !== 0) return byScore;
+                const bySupport = right.row.support - left.row.support;
+                if (bySupport !== 0) return bySupport;
+                const leftFreshnessTs = left.row.lastVerifiedAt ?? left.row.updatedAt;
+                const rightFreshnessTs = right.row.lastVerifiedAt ?? right.row.updatedAt;
+                const byFreshness = rightFreshnessTs - leftFreshnessTs;
+                if (byFreshness !== 0) return byFreshness;
+                return left.row.id.localeCompare(right.row.id);
+            })
             .slice(0, Math.max(1, Math.min(limit, 32)));
         return scored.map((entry) => ({ ...entry.row, score: entry.score }));
     }
@@ -811,6 +831,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         await this.initialize();
         const id = `${fromTable}:${fromId}:${edge}:${toTable}:${toId}`;
         const ownerKey = this.lookupOwnerKey(fromTable, fromId) ?? this.lookupOwnerKey(toTable, toId);
+        const createdAt = typeof content?.at === "number" && Number.isFinite(content.at) ? content.at : Date.now();
         const record: GraphEdgeRecord = {
             id,
             ownerKey,
@@ -822,7 +843,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
             score: typeof content?.score === "number" ? content.score : undefined,
             at: typeof content?.at === "number" ? content.at : undefined,
             metadata: sqliteGraphModel.normalizeRecord(content),
-            createdAt: Date.now(),
+            createdAt,
         };
         this.edges.set(record.id, record);
         this.requiredDatabase()

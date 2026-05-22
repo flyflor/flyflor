@@ -141,3 +141,27 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - 接下来的内核缺口：
   - 从“协议闭环”的 `/ws` 覆盖继续推进到“在预期 trust surface 下的更完整 executive capability 执行”
   - 把遗忘/衰减与向量召回行为继续并入更宽的 kernel seal 验证
+
+## 2026-05-22 Kernel Wave2 Review 补充
+
+- [x] 已推送 wave2 子分支供协调者 review：
+  - `wt/wave2-memory-seal`
+  - `wt/wave2-runtime-executive`
+  - `wt/wave2-scope-crystal`
+- [x] 已 review 并暂存 memory seal 切片到 `main-codex-docs`：
+  - activation 与 graph recall 使用确定性 tie-breaker
+  - recall cache 使用注入时钟
+  - contradiction audit edge 使用确定性时间戳
+- [x] 已 review 并暂存 runtime/executive 切片到 `main-codex-docs`：
+  - gateway control smoke 接入真实 `EventsComponent`
+  - WS `event.publish` 断言 executive loop pause/resume
+- [x] 已 review 并暂存 scope/crystal 切片到 `main-codex-docs`：
+  - 嵌套 non-freeform ask 校验
+  - codename 晋升时创建显式 scope 台账行
+  - crystal gem metadata 保留 source candidate 与 consolidation evidence 溯源
+- [x] HTTP Gateway 继续只保留 `/ws` 和 `/health`；没有恢复 `/channels` 暴露面。
+- [x] 对合并后的 wave2 主线快照运行最终验证：
+  - `bun run check`
+  - `bun run docs:check`
+  - `bun run build:binary`
+- [x] 从 `main-codex-docs` 提交并推送已 review 的 wave2 integration。

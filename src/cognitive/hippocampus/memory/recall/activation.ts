@@ -79,7 +79,16 @@ export class SpreadingActivationEngine {
                 });
             }
         }
-        scored.sort((a, b) => b.score - a.score);
+        scored.sort((a, b) => {
+            const byScore = b.score - a.score;
+            if (byScore !== 0) return byScore;
+            const byRecency = b.breakdown.recency - a.breakdown.recency;
+            if (byRecency !== 0) return byRecency;
+            const byImportance = b.breakdown.importance - a.breakdown.importance;
+            if (byImportance !== 0) return byImportance;
+            // Equal resource scores must not inherit caller iteration order.
+            return a.id.localeCompare(b.id);
+        });
         return scored.slice(0, Math.max(0, input.topK));
     }
 

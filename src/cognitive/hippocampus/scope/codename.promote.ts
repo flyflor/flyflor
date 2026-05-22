@@ -12,6 +12,7 @@ import type { BrainStore } from "../memory/brain/store.ts";
 import type { CodenameRecord } from "../../../protocol/contracts/index.ts";
 import { ScopeTriggerDetector, ScopeTriggerKind, type ScopeTriggerConfig, type ScopeTriggerResult } from "./index.ts";
 import { ScopeScaffolder } from "./scaffolder.ts";
+import { join } from "node:path";
 
 export interface CodenamePromotionOptions {
     /** 跳过阈值检测，强制升格（来自 CLI promote --force / 模型显式 promote=true）。 */
@@ -61,13 +62,28 @@ export class CodenamePromotionComponent {
             return { promoted: false, rationale: trigger.rationale, record };
         }
         const scopeId = this.deriveScopeId(record);
-        await scaffolder.scaffold({
+        const createdAt = opts.createdAt ?? new Date(nowMs).toISOString();
+        const scaffolded = await scaffolder.scaffold({
             scopeId,
             title: record.description ?? record.name,
             goal: record.description ?? `Working context anchor: ${record.name}`,
             sourceKey: record.id,
             trigger,
-            createdAt: opts.createdAt ?? new Date(nowMs).toISOString(),
+            createdAt,
+        });
+        const existingScope = brain.getScope(scopeId);
+        // Promotion creates an explicit Scope ledger row. The codename remains
+        // only an anchor/boost; future continuity must mount scope:<id>.
+        brain.upsertScope({
+            id: scopeId,
+            title: record.description ?? record.name,
+            goal: record.description ?? `Working context anchor: ${record.name}`,
+            projectDir: scaffolded.projectDir,
+            projectMemoryDir: join(scaffolded.projectDir, ".flyflor", "memory"),
+            createdAt: existingScope?.createdAt ?? Date.parse(createdAt),
+            updatedAt: nowMs,
+            lastUsedAt: Math.max(record.lastUsedAt, nowMs),
+            useCount: Math.max(existingScope?.useCount ?? 0, record.useCount),
         });
         brain.bindCodenameScope(record.id, scopeId);
         const updated = brain.getCodename(record.id) ?? { ...record, scopeId };

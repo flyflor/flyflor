@@ -21,12 +21,13 @@ import {
     type ModelMessage,
 } from "../src/protocol/contracts/index.ts";
 import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
-import { event, RuntimeEventType, type EventSink } from "../src/events/index.ts";
+import { event, EventsComponent, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 interface GatewayControlSmokeReport {
     capabilityCommands: string[];
     deltaText: string;
     eventTypes: string[];
+    eventPublishTypes: string[];
     historyCount: number;
     historyKinds: string[];
     loopSnapshotKind?: string;
@@ -86,7 +87,8 @@ async function main(): Promise<void> {
 }
 
 class GatewayControlSmoke {
-    private readonly events = new RecordingSink();
+    private readonly sink = new RecordingSink();
+    private readonly events = new EventsComponent(this.sink, new RuntimeEventBus());
     private gateway: GatewayModule | undefined;
     private root = "";
     private runtime: RuntimeModule | undefined;
@@ -122,7 +124,7 @@ class GatewayControlSmoke {
                 ws,
                 GatewayControlMessageType.EventSubscribe,
                 {
-                    classes: ["lifecycle"],
+                    classes: ["lifecycle", "ask"],
                 },
                 { id: "event-sub-1", requestId: "req-event-sub-1" },
             );
@@ -208,7 +210,7 @@ class GatewayControlSmoke {
             const history = Array.isArray(historyEnvelope.payload?.history)
                 ? historyEnvelope.payload.history as Array<{ assistantText?: string; taskPlans?: unknown[] }>
                 : [];
-            const eventTypes = this.events.events.map((item) => item.type);
+            const eventTypes = this.sink.events.map((item) => item.type);
             const eventPublishTypes = received
                 .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
                 .map((envelope) => String((envelope.payload as { event?: { type?: string } } | undefined)?.event?.type ?? ""));
@@ -224,6 +226,7 @@ class GatewayControlSmoke {
                 capabilityCommands,
                 deltaText,
                 eventTypes,
+                eventPublishTypes,
                 historyCount: history.length,
                 historyKinds,
                 loopSnapshotKind: String(final.reply.metadata?.kind ?? ""),
@@ -246,7 +249,9 @@ class GatewayControlSmoke {
                     eventTypes.includes(RuntimeEventType.AgentTurnStart) &&
                     eventTypes.includes(RuntimeEventType.AgentTurnEnd) &&
                     eventTypes.includes(RuntimeEventType.ExecutiveLoopPaused) &&
-                    eventTypes.includes(RuntimeEventType.ExecutiveLoopResumed),
+                    eventTypes.includes(RuntimeEventType.ExecutiveLoopResumed) &&
+                    eventPublishTypes.includes(RuntimeEventType.ExecutiveLoopPaused) &&
+                    eventPublishTypes.includes(RuntimeEventType.ExecutiveLoopResumed),
                 statusHost: status.status.host,
                 statusPort: status.status.port,
                 tempHome: config.paths.home,

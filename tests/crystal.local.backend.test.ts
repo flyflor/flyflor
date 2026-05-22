@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,6 +54,7 @@ describe("local crystal backend", () => {
             expect(recalled.length).toBeGreaterThan(0);
             expect(recalled[0]?.record.content).toContain("blocker");
             expect(recalled[0]?.record.metadata).toMatchObject({
+                consolidationEvidence: expect.any(Array),
                 recallReasons: expect.any(Array),
                 recallEvidence: {
                     bucketMatch: expect.any(Number),
@@ -65,6 +67,19 @@ describe("local crystal backend", () => {
             const gemId = recalled[0]?.record.id;
             expect(gemId).toBeDefined();
             expect(await svc.forgetGem(gemId!)).toBe(true);
+            const db = new Database(join(root, "crystal.db"), { readonly: true });
+            try {
+                const candidateCount = db.query("SELECT COUNT(*) AS count FROM crystal_candidates").get() as { count: number };
+                const atomCount = db.query("SELECT COUNT(*) AS count FROM crystal_atoms").get() as { count: number };
+                const gemCount = db.query("SELECT COUNT(*) AS count FROM crystal_gems WHERE id = ?").get(gemId!) as {
+                    count: number;
+                };
+                expect(candidateCount.count).toBeGreaterThan(0);
+                expect(atomCount.count).toBeGreaterThan(0);
+                expect(gemCount.count).toBe(0);
+            } finally {
+                db.close();
+            }
             const afterForget = await svc.recall({
                 query: "missing facts blocker list",
                 scope: "stdio:test",

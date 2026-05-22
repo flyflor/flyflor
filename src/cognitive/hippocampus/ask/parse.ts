@@ -74,6 +74,9 @@ export class AgentAskParser {
         if (!freeform && !hasStructuredChoices) {
             throw new Error("flyflor_agent_ask with freeform=false requires at least one structured choice.");
         }
+        if (questions?.some((question) => question.freeform === false && (question.choices?.length ?? 0) === 0)) {
+            throw new Error("flyflor_agent_ask question with freeform=false requires structured choices.");
+        }
         const ask: AgentAsk = {
             reason,
             prompt: prompt.slice(0, 2000),

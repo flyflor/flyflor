@@ -112,6 +112,14 @@ describe("LF-R2 promoteCodename helper", () => {
             expect(result.scopeId).toBe("cn-fly");
             const fresh = brain.getCodename(id);
             expect(fresh?.scopeId).toBe("cn-fly");
+            const scope = brain.getScope("cn-fly");
+            expect(scope).toMatchObject({
+                id: "cn-fly",
+                title: "flyflor monorepo",
+                goal: "flyflor monorepo",
+            });
+            expect(scope?.projectDir).toBe(join(paths.workspaceDir, "scopes", "cn-fly"));
+            expect(scope?.projectMemoryDir).toBe(join(paths.workspaceDir, "scopes", "cn-fly", ".flyflor", "memory"));
             const dirExists = await Bun.file(join(paths.workspaceDir, "scopes", "cn-fly", "AGENTS.md")).exists();
             expect(dirExists).toBe(true);
         } finally {
@@ -175,6 +183,13 @@ describe("LF-R2 promoteCodename helper", () => {
             try {
                 const row = db.query("SELECT scope_id FROM codenames WHERE id = ?").get(id) as { scope_id: string };
                 expect(row.scope_id).toBe("cn-verify");
+                const scope = db.query("SELECT id, project_memory_dir FROM scopes WHERE id = ?").get("cn-verify") as
+                    | { id: string; project_memory_dir: string }
+                    | null;
+                expect(scope).toEqual({
+                    id: "cn-verify",
+                    project_memory_dir: join(paths.workspaceDir, "scopes", "cn-verify", ".flyflor", "memory"),
+                });
             } finally {
                 db.close();
             }

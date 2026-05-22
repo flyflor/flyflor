@@ -199,3 +199,27 @@ Latest full seal validation in this workspace passed:
 - Immediate next kernel gaps:
   - move from protocol-closed `/ws` loop coverage to fuller end-to-end executive capability execution under the intended trust surface
   - continue integrating forgetting/decay and vector recall behavior into broader kernel seal validation
+
+## 2026-05-22 Kernel Wave2 Review Addendum
+
+- [x] Pushed wave2 child branches for coordinator review:
+  - `wt/wave2-memory-seal`
+  - `wt/wave2-runtime-executive`
+  - `wt/wave2-scope-crystal`
+- [x] Reviewed and staged the memory seal slice into `main-codex-docs`:
+  - deterministic activation and graph recall tie-breakers
+  - injected recall cache clock usage
+  - deterministic contradiction audit edge timestamps
+- [x] Reviewed and staged the runtime/executive slice into `main-codex-docs`:
+  - real `EventsComponent` gateway control smoke wiring
+  - WS `event.publish` assertions for executive loop pause/resume
+- [x] Reviewed and staged the scope/crystal slice into `main-codex-docs`:
+  - nested non-freeform ask validation
+  - explicit scope ledger row creation during codename promotion
+  - crystal gem metadata provenance for source candidates and consolidation evidence
+- [x] Kept HTTP Gateway closed to `/ws` and `/health`; no `/channels` surface was restored.
+- [x] Run final mainline validation for the merged wave2 snapshot:
+  - `bun run check`
+  - `bun run docs:check`
+  - `bun run build:binary`
+- [x] Commit and push the reviewed wave2 integration from `main-codex-docs`.

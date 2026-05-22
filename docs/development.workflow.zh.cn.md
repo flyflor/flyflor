@@ -347,3 +347,43 @@ bun run kernel:tmux -- --wave2 --launch-codex
 启动 wave2 前的协调者探测：
 
 - `bun test tests/provider.readiness.test.ts tests/ask.cap.runtime.test.ts`
+
+## 2026-05-22 Wave 2 Review 后整合
+
+协调者已经 review wave2 子 Codex 输出，并把结果暂存进 `main-codex-docs`，同时没有重新打开 HTTP Gateway 暴露面。
+
+已 review 的子提交：
+
+- `wt/wave2-memory-seal`
+  - spreading activation 使用确定性排序
+  - graph recall 使用确定性排序
+  - recall cache 与 contradiction audit 路径遵守注入时钟
+- `wt/wave2-runtime-executive`
+  - gateway control smoke 改为使用真实 event component 与 runtime bus
+  - WS 订阅者断言 `executive.loop.paused` 与 `executive.loop.resumed` 会作为 `event.publish` envelope 送达
+- `wt/wave2-scope-crystal`
+  - 嵌套 non-freeform ask 必须拥有自己的结构化 choices
+  - codename 晋升会写入显式 `Scope` 台账行
+  - crystal gem 会保留 source candidate id 与 consolidation evidence metadata
+
+本波由协调者持有的合并规则：
+
+- 保留子分支实现与测试，但 canonical TODO/LOGS/workflow 历史由主 worktree 统一写入
+- HTTP Gateway 继续只保留 `/ws` 与 `/health`
+- WS `gateway.status.get` 继续作为状态通道
+- `brain.db` 继续只是 ledger/query/replay/audit 状态，不是 prompt 装配容器
+
+已在暂存后的主线快照上运行的验证：
+
+- `bun test tests/activation.test.ts tests/graph.recall.test.ts tests/context.scope.test.ts tests/brain.store.test.ts tests/decay.anti.bloat.project.test.ts`
+- `bun run smoke:gateway:control`
+- `bun test tests/executive.tool.runtime.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/runtime.executive.boundaries.test.ts`
+- `bun test tests/ask.parse.test.ts tests/codename.promote.test.ts tests/crystal.local.backend.test.ts tests/reflection.boundaries.test.ts tests/reflection.gem.consolidation.test.ts`
+- `bun run docs:check`
+
+交还前的最终收口：
+
+1. 运行 `bun run check`
+2. 运行 `bun run build:binary`
+3. 提交并推送 `main-codex-docs`
+4. 保持 `flyflor-wave2` 可通过 `bun run kernel:tmux -- --wave2` 恢复

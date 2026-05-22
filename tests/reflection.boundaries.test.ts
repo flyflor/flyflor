@@ -123,6 +123,16 @@ describe("Crystal memory boundaries", () => {
         expect(store.candidates.size).toBe(1);
         expect(store.atoms.size).toBe(1);
         expect(store.gems.size).toBe(1);
+        const [gem] = [...store.gems.values()];
+        expect(gem?.metadata).toMatchObject({
+            sourceCandidateIds: ["runtime-reflection-a"],
+            consolidationEvidence: [
+                expect.objectContaining({
+                    candidateId: "runtime-reflection-a",
+                    kind: "blackboard-needs-user-reflection",
+                }),
+            ],
+        });
     });
 
     test("garbage reflection candidates are stored as candidates without becoming gems", async () => {
@@ -174,6 +184,7 @@ describe("Crystal memory boundaries", () => {
         expect(await controller.forgetGem(gemId!)).toBe(true);
         expect(store.gems.has(gemId!)).toBe(false);
         expect(store.candidates.size).toBe(1);
+        expect(store.atoms.size).toBe(1);
 
         const recalled = await controller.recall({
             query: "missing facts blockers",
@@ -183,7 +194,6 @@ describe("Crystal memory boundaries", () => {
         expect(recalled).toEqual([]);
         expect(await controller.forgetGem(gemId!)).toBe(false);
     });
-
 });
 
 function crystalConfig(): CrystalMemoryConfig {

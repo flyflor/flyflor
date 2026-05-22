@@ -65,7 +65,7 @@ describe("spreadActivation (no string match, pure resource metrics)", () => {
 
     test("topK limits results", () => {
         const candidates: ActivationCandidate[] = Array.from({ length: 20 }, (_, i) =>
-            candidate({ id: `c${i}`, embedding: [Math.random(), Math.random(), 0, 0] }),
+            candidate({ id: `c${i}`, embedding: [20 - i, i + 1, 0, 0] }),
         );
         const result = spreadActivation({
             queryEmbedding: [1, 0, 0, 0],
@@ -75,6 +75,20 @@ describe("spreadActivation (no string match, pure resource metrics)", () => {
             topK: 3,
         });
         expect(result.length).toBeLessThanOrEqual(3);
+    });
+
+    test("equal resource scores use deterministic id ordering", () => {
+        const result = spreadActivation({
+            queryEmbedding: [1, 0, 0, 0],
+            hotConcepts: [],
+            candidates: [
+                candidate({ id: "memory-b", embedding: [1, 0, 0, 0], importance: 0.5, createdAt: nowMs }),
+                candidate({ id: "memory-a", embedding: [1, 0, 0, 0], importance: 0.5, createdAt: nowMs }),
+            ],
+            nowMs,
+            topK: 2,
+        });
+        expect(result.map((row) => row.id)).toEqual(["memory-a", "memory-b"]);
     });
 
     test("minScore filter drops weak candidates", () => {

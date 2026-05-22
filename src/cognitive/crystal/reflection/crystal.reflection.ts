@@ -73,6 +73,7 @@ export class CrystalReflectionComponent extends CrystalComponent {
             metadata: {
                 sourceKind: candidate.sourceKind,
                 sourceId: candidate.sourceId,
+                evidence: candidate.evidence,
             },
         };
 
@@ -91,7 +92,12 @@ export class CrystalReflectionComponent extends CrystalComponent {
             sourceAtomIds: [atom.id],
             metadata: {
                 latestCandidateId: candidate.id,
+                sourceCandidateIds: [candidate.id],
                 sourceKind: candidate.sourceKind,
+                consolidationEvidence: candidate.evidence.map((item) => ({
+                    ...item,
+                    candidateId: candidate.id,
+                })),
             },
         };
 
@@ -119,6 +125,16 @@ export class CrystalReflectionComponent extends CrystalComponent {
             metadata: {
                 ...(existing.metadata ?? {}),
                 latestCandidateId: incoming.metadata?.latestCandidateId,
+                sourceCandidateIds: this.mergeMetadataArray(
+                    existing.metadata?.sourceCandidateIds,
+                    incoming.metadata?.sourceCandidateIds,
+                    64,
+                ),
+                consolidationEvidence: this.mergeMetadataArray(
+                    existing.metadata?.consolidationEvidence,
+                    incoming.metadata?.consolidationEvidence,
+                    128,
+                ),
             },
         };
     }
@@ -251,6 +267,14 @@ export class CrystalReflectionComponent extends CrystalComponent {
     private compactText(text: string, limit: number): string {
         const compacted = text.replace(/\s+/g, " ").trim();
         return compacted.length <= limit ? compacted : compacted.slice(0, limit).trimEnd();
+    }
+
+    private mergeMetadataArray(left: unknown, right: unknown, limit: number): unknown[] | undefined {
+        const merged = [...(Array.isArray(left) ? left : []), ...(Array.isArray(right) ? right : [])];
+        if (merged.length === 0) {
+            return undefined;
+        }
+        return merged.slice(-limit);
     }
 
     private hashText(text: string): string {

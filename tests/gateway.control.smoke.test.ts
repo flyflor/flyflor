@@ -19,6 +19,7 @@ describe("gateway control smoke", () => {
         const report = JSON.parse(stdout) as {
             capabilityCommands: string[];
             eventTypes: string[];
+            eventPublishTypes: string[];
             finalText: string;
             helloSemanticTypes: string[];
             historyCount: number;
@@ -33,6 +34,12 @@ describe("gateway control smoke", () => {
         expect(report.helloSemanticTypes).toContain("stream");
         expect(report.loopSnapshotKind).toBe("ask");
         expect(report.resumedReplyKind).toBe("reply");
+        expect(report.eventPublishTypes).toEqual(
+            expect.arrayContaining([
+                "executive.loop.paused",
+                "executive.loop.resumed",
+            ]),
+        );
         expect(report.historyCount).toBeGreaterThanOrEqual(2);
         expect(report.historyKinds).toEqual(expect.arrayContaining(["ask", "reply"]));
         expect(report.finalText).toContain("工具调用预算已用完");

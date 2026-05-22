@@ -53,6 +53,10 @@ describe("LF-R3 parseAgentAsk", () => {
                 {
                     prompt: "Should I proceed now?",
                     freeform: false,
+                    choices: [
+                        { label: "yes", value: "yes" },
+                        { label: "no", value: "no" },
+                    ],
                     relatedIds: ["project-1"],
                     rationale: "needs timing confirmation",
                 },
@@ -63,6 +67,7 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(r.ask?.questions?.[0]?.id).toBe("scope");
         expect(r.ask?.questions?.[0]?.choices?.length).toBe(2);
         expect(r.ask?.questions?.[1]?.freeform).toBe(false);
+        expect(r.ask?.questions?.[1]?.choices?.length).toBe(2);
         expect(r.ask?.questions?.[1]?.relatedIds).toEqual(["project-1"]);
     });
 
@@ -93,6 +98,23 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(root.dropped).toBe(1);
         expect(nested.ask).toBeUndefined();
         expect(nested.dropped).toBe(1);
+    });
+
+    test("rejects nested non-freeform question without its own choices", () => {
+        const r = parseAgentAsk(
+            wrap(
+                JSON.stringify({
+                    reason: AskReason.UserIntentUnclear,
+                    prompt: "Need two confirmations.",
+                    questions: [
+                        { prompt: "Which target?", choices: [{ label: "main", value: "main" }] },
+                        { prompt: "Proceed now?", freeform: false },
+                    ],
+                }),
+            ),
+        );
+        expect(r.ask).toBeUndefined();
+        expect(r.dropped).toBe(1);
     });
 
     test("multiple ask blocks → first wins, rest counted as dropped", () => {

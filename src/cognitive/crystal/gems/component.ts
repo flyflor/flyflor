@@ -150,7 +150,9 @@ export class CrystalGemComponent extends CrystalComponent {
             updatedAt: gem.updatedAt,
             metadata: {
                 bucket: gem.bucket,
+                consolidationEvidence: gem.metadata?.consolidationEvidence,
                 sourceAtomIds: gem.sourceAtomIds,
+                sourceCandidateIds: gem.metadata?.sourceCandidateIds,
                 symbols: gem.symbols,
                 recallReasons,
                 recallEvidence,
