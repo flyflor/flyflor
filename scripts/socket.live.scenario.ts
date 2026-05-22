@@ -15,7 +15,9 @@ import {
 } from "../src/config/index.ts";
 import {
     createGatewayControlEnvelope,
+    type GatewayControlCapabilityCatalogPayload,
     type GatewayControlEnvelope,
+    type GatewayControlEventPublishPayload,
     type GatewayControlGatewayStatusPayload,
     type GatewayControlHistorySnapshotPayload,
     type GatewayControlServerHelloPayload,
@@ -29,10 +31,13 @@ import {
     RuntimeEventClass,
     type GatewayMessage,
 } from "../src/protocol/contracts/index.ts";
-import { RuntimeEventType } from "../src/events/index.ts";
+import { EventsComponent, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 
 interface SocketLiveScenarioReport {
+    capabilityKitIds: string[];
     eventTypes: string[];
+    eventPublishTypes: string[];
+    failedChecks: string[];
     finalText: string;
     historyCount: number;
     historyKinds: string[];
@@ -78,7 +83,8 @@ class SocketLiveScenario {
                 );
             }
 
-            const events = new RecordingSink();
+            const sink = new RecordingSink();
+            const events = new EventsComponent(sink, new RuntimeEventBus());
             const memory = new MemoryModule(config, events);
             this.runtime = new RuntimeModule(config, createModelClient(config.model), events, undefined, memory);
             this.socket = new SocketModule(config.gateway, this.runtime, events, { paths: config.paths });
@@ -136,9 +142,22 @@ class SocketLiveScenario {
             const statusEnvelope = await waitForType(received, GatewayControlMessageType.GatewayStatusSnapshot);
             const status = statusEnvelope.payload as GatewayControlGatewayStatusPayload;
 
+            send(ws, GatewayControlMessageType.CapabilityCatalogGet, undefined, {
+                id: "catalog-1",
+                requestId: "req-catalog-1",
+            });
+            const catalogEnvelope = await waitForType(received, GatewayControlMessageType.CapabilityCatalogSnapshot);
+            const capabilityKitIds = readCapabilityKitIds(
+                catalogEnvelope.payload as GatewayControlCapabilityCatalogPayload | undefined,
+            );
+
             const message = this.message();
             send(ws, GatewayControlMessageType.GatewayMessageSend, message, { id: "turn-1", requestId: "req-turn-1" });
-            const firstDeltaEnvelope = await waitForType(received, GatewayControlMessageType.TurnDelta);
+            const firstDeltaEnvelope = await waitForType(
+                received,
+                GatewayControlMessageType.TurnDelta,
+                (envelope) => envelope.requestId === "req-turn-1",
+            );
             const finalEnvelope = await waitForType(
                 received,
                 GatewayControlMessageType.TurnFinal,
@@ -167,24 +186,37 @@ class SocketLiveScenario {
                 (entry) =>
                     entry.assistantText.trim() === final.reply.text.trim() || entry.eventId === final.reply.messageId,
             );
-            const eventTypes = events.types;
-            const ok =
-                hello.capabilities.commands.includes(GatewayControlMessageType.ClientHello) &&
-                hello.capabilities.commands.includes(GatewayControlMessageType.GatewayMessageSend) &&
-                hello.capabilities.commands.includes(GatewayControlMessageType.HistoryList) &&
-                hello.capabilities.commands.includes(GatewayControlMessageType.GatewayStatusGet) &&
-                status.status.gatewayRunning === true &&
-                status.status.url === url &&
-                final.reply.text.trim().length > 0 &&
-                delta.delta.trim().length > 0 &&
-                history.history.length > 0 &&
-                historyMatchesFinal &&
-                eventTypes.includes(RuntimeEventType.AgentTurnStart) &&
-                eventTypes.includes(RuntimeEventType.AgentTurnEnd) &&
-                eventTypes.includes(RuntimeEventType.GatewayStart);
+            const eventTypes = sink.types;
+            const eventPublishTypes = received
+                .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+                .map((envelope) =>
+                    String(
+                        (
+                            (envelope.payload as GatewayControlEventPublishPayload | undefined)?.event as
+                                | { type?: string }
+                                | undefined
+                        )?.type ?? "",
+                    ),
+                );
+            const failedChecks = collectFailedChecks({
+                capabilityKitIds,
+                delta,
+                eventPublishTypes,
+                eventTypes,
+                final,
+                hello,
+                historyCount: history.history.length,
+                historyMatchesFinal,
+                status,
+                url,
+            });
+            const ok = failedChecks.length === 0;
 
             return {
+                capabilityKitIds,
                 eventTypes,
+                eventPublishTypes,
+                failedChecks,
                 finalText: final.reply.text,
                 historyCount: history.history.length,
                 historyKinds,
@@ -298,13 +330,77 @@ class SocketLiveScenario {
 class RecordingSink {
     public readonly events: Array<{ type: string }> = [];
 
-    public publish(event: { type: string }): void {
+    public publish(event: Parameters<EventSink["publish"]>[0]): void {
         this.events.push({ type: event.type });
     }
 
     public get types(): string[] {
         return this.events.map((event) => event.type);
     }
+}
+
+function readCapabilityKitIds(payload: GatewayControlCapabilityCatalogPayload | undefined): string[] {
+    const kits = payload?.kits;
+    if (!kits || !Array.isArray(kits.kits)) {
+        return [];
+    }
+    return kits.kits.map((kit) => kit.id).filter((id): id is string => typeof id === "string");
+}
+
+function collectFailedChecks(input: {
+    capabilityKitIds: string[];
+    delta: GatewayControlTurnDeltaPayload;
+    eventPublishTypes: string[];
+    eventTypes: string[];
+    final: GatewayControlTurnFinalPayload;
+    hello: GatewayControlServerHelloPayload;
+    historyCount: number;
+    historyMatchesFinal: boolean;
+    status: GatewayControlGatewayStatusPayload;
+    url: string;
+}): string[] {
+    const checks: Array<[string, boolean]> = [
+        [
+            "server.hello advertised client.hello",
+            input.hello.capabilities.commands.includes(GatewayControlMessageType.ClientHello),
+        ],
+        [
+            "server.hello advertised capability.catalog.get",
+            input.hello.capabilities.commands.includes(GatewayControlMessageType.CapabilityCatalogGet),
+        ],
+        [
+            "server.hello advertised gateway.message.send",
+            input.hello.capabilities.commands.includes(GatewayControlMessageType.GatewayMessageSend),
+        ],
+        [
+            "server.hello advertised history.list",
+            input.hello.capabilities.commands.includes(GatewayControlMessageType.HistoryList),
+        ],
+        [
+            "server.hello advertised gateway.status.get",
+            input.hello.capabilities.commands.includes(GatewayControlMessageType.GatewayStatusGet),
+        ],
+        ["status reports running socket", input.status.status.gatewayRunning === true],
+        ["status returns the active websocket url", input.status.status.url === input.url],
+        ["capability catalog includes builtin gateway kit", input.capabilityKitIds.includes("builtin.gateway")],
+        ["capability catalog includes builtin capability kit", input.capabilityKitIds.includes("builtin.capabilities")],
+        ["turn.delta carried provider text", input.delta.delta.trim().length > 0],
+        ["turn.final carried provider text", input.final.reply.text.trim().length > 0],
+        ["history.list returned at least one turn", input.historyCount > 0],
+        ["history.list replay includes the live final reply", input.historyMatchesFinal],
+        ["event sink observed gateway.start", input.eventTypes.includes(RuntimeEventType.GatewayStart)],
+        ["event sink observed agent.turn.start", input.eventTypes.includes(RuntimeEventType.AgentTurnStart)],
+        ["event sink observed agent.turn.end", input.eventTypes.includes(RuntimeEventType.AgentTurnEnd)],
+        [
+            "socket event stream published agent.turn.start",
+            input.eventPublishTypes.includes(RuntimeEventType.AgentTurnStart),
+        ],
+        [
+            "socket event stream published agent.turn.end",
+            input.eventPublishTypes.includes(RuntimeEventType.AgentTurnEnd),
+        ],
+    ];
+    return checks.filter(([, passed]) => !passed).map(([name]) => name);
 }
 
 function send(
