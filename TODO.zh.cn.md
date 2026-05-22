@@ -231,3 +231,20 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 保留 `scripts/gateway.*` 仅作兼容包装；`gateway.*` 仍只是 wire-v1/CLI 兼容词汇，不是活跃架构 owner。
 - [x] 已把 `smoke:socket:*`、README dev 指引和 focused smoke 测试指向 socket-primary 入口。
 - [x] 运行本轮 focused socket smoke/install/docs 检查、全量套件、二进制构建和 diff hygiene。
+
+## 2026-05-22 Seal Wave Real-Model Allocation
+
+- [x] 在新一轮 seal wave 前，已回到单 `master` 主线。
+- [x] 已从 `master` 创建协调分支 `codex/seal-coordinator`。
+- [x] 已创建 seal wave worktree：
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/docs.alignment.control`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.scenarios`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/prompt.optimization.seal`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/db.context.guard`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
+- [x] 本轮只面向 Bun 内核封版；Rust 明确不属于本仓库，会单独起仓库开发。
+- [ ] 协调基线 commit 并 push 后，启动 `flyflor-seal` tmux 子 Codex 窗口。
+- [ ] 合并顺序为 A 文档、B OpenAPI/Apifox、D prompt、C 真实模型 socket、E DB/context guard、F 零字符审计、G release/binary seal。
+- [ ] 最终验收必须包含 provider readiness、deterministic tests、live tests、socket live scenario、binary build、docs check 和 diff hygiene。

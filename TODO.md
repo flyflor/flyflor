@@ -362,3 +362,20 @@ Latest full seal validation in this workspace passed:
 - [x] Keep `scripts/gateway.*` as compatibility wrappers only; `gateway.*` remains wire-v1/CLI compatibility vocabulary, not an active architecture owner.
 - [x] Point `smoke:socket:*`, README dev guidance, and focused smoke tests at the socket-primary entrypoints.
 - [x] Run focused socket smoke/install/docs checks, full suite, binary build, and diff hygiene for this polish pass.
+
+## 2026-05-22 Seal Wave Real-Model Allocation
+
+- [x] Reset to single `master` mainline before the new seal wave.
+- [x] Created coordinator branch `codex/seal-coordinator` from `master`.
+- [x] Created seal wave worktrees:
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/docs.alignment.control`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.scenarios`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/prompt.optimization.seal`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/db.context.guard`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
+- [x] Assign this wave to Bun kernel seal only; Rust is explicitly out of this repository and will be developed separately.
+- [ ] Launch `flyflor-seal` tmux child Codex windows after the coordinator baseline is committed and pushed.
+- [ ] Merge order is A docs, B OpenAPI/Apifox, D prompt, C real-model socket, E DB/context guard, F zero-character audit, G release/binary seal.
+- [ ] Final acceptance must include provider readiness, deterministic tests, live tests, socket live scenario, binary build, docs check, and diff hygiene.

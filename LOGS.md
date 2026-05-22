@@ -197,3 +197,10 @@
   Summary: Promoted socket-primary smoke/dev scripts while leaving legacy gateway-named scripts as thin compatibility wrappers.
   Reason: The active vascular owner is `src/socket`; user-facing smoke and dev entrypoints should no longer teach contributors to run gateway-named implementation files, while v1 wire and CLI compatibility remain intact.
   Verification: `bun run check`; `bun test tests/gateway.control.smoke.test.ts tests/install.script.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`; `bun run smoke:socket:control`; `bun run smoke:socket:ask-loop`; `bun run smoke:socket:service`; `bun run docs:check`; compatibility wrappers `bun run scripts/gateway.control.smoke.ts`, `bun run scripts/gateway.ask.loop.smoke.ts`, `bun run scripts/gateway.service.smoke.ts`; `git diff --check`; `bun run test`; `bun run build:binary`
+
+- Status: open
+  Actor: main-codex
+  Scope: seal-wave-real-model-allocation
+  Summary: Started the next seal wave from a clean single `master`, created `codex/seal-coordinator`, and allocated seven worktrees for docs alignment, Apifox/OpenAPI scenarios, real-model socket scenarios, prompt optimization, DB/context guard, zero-character audit, and release/binary seal.
+  Reason: The Bun intelligent-lifeform kernel is mostly sealed; the next closure needs real configured-model scenarios, Apifox-importable contracts, prompt quality, cautious DB/context evolution, and release gates without bringing Rust work into this repository.
+  Verification: pending tmux launch, child branch pushes, focused slice validations, live scenario, full deterministic suite, binary build, and final cleanup

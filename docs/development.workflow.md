@@ -554,3 +554,42 @@ Review state:
 - Apifox contract: `docs/openapi/flyflor.socket.openapi.json`
 - latest full deterministic suite: `838 pass`, `0 fail`
 - no active child Codex process is required for the socket wire closure; existing tmux/worktree layouts are preserved as additive history and restore points
+
+## 2026-05-22 Seal Wave Real-Model Layout
+
+This wave is Bun-only. Rust is out of this repository and will be developed separately.
+
+Coordinator:
+
+- branch: `codex/seal-coordinator`
+- path: `/Users/yi./Desktop/yi/flyflors/flyflor`
+- owner: main Codex review, merge, validation, TODO/LOGS/workflow, final cleanup
+
+Worktrees:
+
+- `codex/docs-alignment-control` at `/Users/yi./Desktop/yi/flyflors/worktrees/docs.alignment.control`
+  - docs alignment, remove active Rust-in-this-repo planning, lock real-model seal wave wording
+- `codex/apifox-openapi-scenarios` at `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.scenarios`
+  - OpenAPI/Apifox scenario contract and drift guards
+- `codex/socket-live-model-scenarios` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios`
+  - real configured-provider socket scenario runner and `smoke:socket:live`
+- `codex/prompt-optimization-seal` at `/Users/yi./Desktop/yi/flyflors/worktrees/prompt.optimization.seal`
+  - runtime prompt optimization with `.zh.cn.md` companions
+- `codex/db-context-guard` at `/Users/yi./Desktop/yi/flyflors/worktrees/db.context.guard`
+  - cautious DB/context guard or migration only when real scenario gaps require it
+- `codex/zero-character-audit` at `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
+  - zero character matching audit and guard tests
+- `codex/release-binary-seal` at `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
+  - release/install/binary/docker seal
+
+Merge order: docs -> OpenAPI -> prompt -> real-model socket -> DB/context guard -> zero-character audit -> release/binary.
+
+Hard constraints:
+
+- no `/channels`
+- no wire v2 and no v1 wire string changes
+- no Rust implementation or Rust planning as active repository work
+- default tests stay deterministic/offline; real-model validation lives in live/smoke gates
+- prompt edits must keep canonical `.md` and `.zh.cn.md` in sync
+- DB/context changes are allowed only with compatibility tests and explicit boundary notes
+- no business semantic character matching

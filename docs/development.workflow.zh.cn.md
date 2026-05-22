@@ -554,3 +554,42 @@ Review state：
 - Apifox 契约：`docs/openapi/flyflor.socket.openapi.json`
 - 最新完整 deterministic suite：`838 pass`，`0 fail`
 - socket wire closure 不需要活跃子 Codex 进程；现有 tmux/worktree 布局保留为追加历史和恢复点
+
+## 2026-05-22 Seal Wave Real-Model Layout
+
+本轮只做 Bun 仓库封版。Rust 不进入本仓库，会单独起仓库开发。
+
+协调者：
+
+- branch：`codex/seal-coordinator`
+- path：`/Users/yi./Desktop/yi/flyflors/flyflor`
+- owner：主 Codex review、merge、validation、TODO/LOGS/workflow 和最终清理
+
+Worktree：
+
+- `codex/docs-alignment-control` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/docs.alignment.control`
+  - 文档对齐，移除 Rust 本仓库活跃计划，锁定真实模型 seal wave 口径
+- `codex/apifox-openapi-scenarios` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.scenarios`
+  - OpenAPI/Apifox 场景契约和 drift guard
+- `codex/socket-live-model-scenarios` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios`
+  - 真实配置 provider 的 socket scenario runner 和 `smoke:socket:live`
+- `codex/prompt-optimization-seal` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/prompt.optimization.seal`
+  - runtime prompt 优化，并同步 `.zh.cn.md` 副本
+- `codex/db-context-guard` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/db.context.guard`
+  - 只有真实场景暴露缺口时，才审慎补 DB/context guard 或 migration
+- `codex/zero-character-audit` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
+  - 零字符匹配审计和 guard tests
+- `codex/release-binary-seal` 位于 `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
+  - release/install/binary/docker 封口
+
+合并顺序：docs -> OpenAPI -> prompt -> real-model socket -> DB/context guard -> zero-character audit -> release/binary。
+
+硬约束：
+
+- 不恢复 `/channels`
+- 不做 wire v2，不改 v1 wire string
+- 不在本仓库做 Rust 实现或把 Rust 作为活跃计划
+- 默认测试保持 deterministic/offline；真实模型验证只进入 live/smoke gate
+- prompt 修改必须保持 canonical `.md` 和 `.zh.cn.md` 同步
+- DB/context 可以改，但必须有兼容测试和边界说明
+- 不做任何业务语义字符匹配

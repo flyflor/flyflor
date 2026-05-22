@@ -127,3 +127,10 @@
   摘要：已提升 socket-primary smoke/dev 脚本，同时把旧 gateway 命名脚本保留为极薄兼容包装。
   原因：活跃血管层 owner 已经是 `src/socket`；面向用户和贡献者的 smoke/dev 入口不应继续教大家运行 gateway 命名实现文件，但 v1 wire 与 CLI 兼容仍需保留。
   验证：`bun run check`；`bun test tests/gateway.control.smoke.test.ts tests/install.script.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`；`bun run smoke:socket:control`；`bun run smoke:socket:ask-loop`；`bun run smoke:socket:service`；`bun run docs:check`；兼容包装 `bun run scripts/gateway.control.smoke.ts`、`bun run scripts/gateway.ask.loop.smoke.ts`、`bun run scripts/gateway.service.smoke.ts`；`git diff --check`；`bun run test`；`bun run build:binary`
+
+- 状态：open
+  操作者：main-codex
+  范围：seal-wave-real-model-allocation
+  摘要：已从干净单 `master` 启动下一轮 seal wave，创建 `codex/seal-coordinator`，并分配七个 worktree：文档对齐、Apifox/OpenAPI 场景、真实模型 socket 场景、prompt 优化、DB/context guard、零字符审计和 release/binary seal。
+  原因：Bun 智能生命体内核已经基本封板；下一步闭环需要真实配置模型场景、Apifox 可导入契约、prompt 质量、审慎 DB/context 演进和 release 门禁，同时 Rust 不进入本仓库。
+  验证：等待 tmux 启动、子分支推送、各切片定点验证、live scenario、完整 deterministic suite、binary build 和最终清理
