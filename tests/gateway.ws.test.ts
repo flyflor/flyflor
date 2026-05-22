@@ -693,6 +693,45 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("keeps empty history.list replay as a ledger boundary with no next cursor", async () => {
+        let dispatchCount = 0;
+        const hub = createHub({
+            dispatch: async (message) => {
+                dispatchCount += 1;
+                return { messageId: message.id, route: message.route, text: "unexpected" };
+            },
+            listChatHistory: (input) => {
+                expect(input).toEqual({ beforeTs: undefined, limit: 1 });
+                return [];
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.HistoryList,
+                    { limit: 1 },
+                    { id: "history-empty-1", requestId: "req-history-empty-1" },
+                ),
+            ),
+        );
+
+        expect(dispatchCount).toBe(0);
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "history-empty-1",
+            requestId: "req-history-empty-1",
+            type: GatewayControlMessageType.HistorySnapshot,
+            payload: {
+                history: [],
+            },
+        });
+        expect(sent(socket).at(-1)?.payload).not.toHaveProperty("nextBeforeTs");
+        hub.dispose();
+    });
+
     test("responds to ping with pong without affecting the connection snapshot surface", async () => {
         const hub = createHub();
         const socket = fakeSocket();
@@ -908,11 +947,16 @@ describe("SocketControlHub", () => {
                         text: "hello",
                         user: { id: "u-1" },
                     },
-                    { requestId: "client-req-1" },
+                    { id: "send-live-1", requestId: "client-req-1" },
                 ),
             ),
         );
 
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.message).toMatchObject({
+            text: "hello",
+            user: { id: "u-1" },
+        });
         expect(calls[0]?.message.route).toMatchObject({
             channel: Channel.Ws,
             conversationKey: "ws-conversation",
@@ -923,6 +967,35 @@ describe("SocketControlHub", () => {
             contextForkId: "fork-1",
             requestId: "client-req-1",
             skillNames: ["skill-a"],
+        });
+        expect(sent(socket)[1]).toMatchObject({
+            correlationId: "send-live-1",
+            requestId: "client-req-1",
+            type: GatewayControlMessageType.TurnDelta,
+            payload: {
+                delta: "hel",
+                messageId: calls[0]?.message.id,
+            },
+        });
+        expect(sent(socket)[2]).toMatchObject({
+            correlationId: "send-live-1",
+            requestId: "client-req-1",
+            type: GatewayControlMessageType.TurnDelta,
+            payload: {
+                delta: "lo",
+                messageId: calls[0]?.message.id,
+            },
+        });
+        expect(sent(socket)[3]).toMatchObject({
+            correlationId: "send-live-1",
+            requestId: "client-req-1",
+            type: GatewayControlMessageType.TurnFinal,
+            payload: {
+                reply: {
+                    messageId: calls[0]?.message.id,
+                    text: "hello",
+                },
+            },
         });
         expect(sent(socket).map((envelope) => envelope.type)).toEqual([
             GatewayControlMessageType.ServerHello,

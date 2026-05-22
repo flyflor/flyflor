@@ -8,6 +8,7 @@
 
 - 单文件二进制目标：`bun build --compile --target=bun --packages=bundle --allow-unresolved=""`。
 - 整体架构命名为 Cognitive-Executive-Agent Architecture（心智-执行-外显三层架构）：Cognitive（Mindstream / Crystal / Hippocampus）是认知内核，Executive（Capability / Tool / Trust / Loop）是能力外骨架，Agent 是 runtime / sandbox / skills / context 等外在运行态，Socket 是 live turn / event / operation / ledger query 的血管层。
+- 当前 release-seal 波次聚焦 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型 socket 场景、prompt 优化、DB/context guard 和 release/binary 验证；Rust 相关文档仅作为外部独立仓库的 `/ws` 交接材料。
 - 输入渠道统一归一化为 `GatewayMessage`。
 - 智能体执行可观察、可中断、可恢复、可审计。
 - 工具 / MCP / 插件 / 技能 / 记忆都有显式边界。
@@ -144,7 +145,7 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 
 - `Capability` 描述“能做什么”，统一接入内置能力、MCP、插件、skill、channel action、用户自定义命令和 subagent。
 - `Tool` 把 capability 适配成模型可调用 schema，声明 scope、permission、readOnly、concurrencySafe、exclusive 和 result limit。
-- 电脑控制 capability 必须额外声明结构化 `computer` profile，作为 future Rust exoskeleton 的稳定契约；不得靠工具名字符串或提示词文本推断控制类别。
+- 电脑控制 capability 必须额外声明结构化 `computer` profile，作为未来外部 computer exoskeleton 的稳定契约；不得靠工具名字符串或提示词文本推断控制类别。
 - `Trust` 根据 channel、sender、group、workspace/scope、sandbox、approval、permission cap、secrets provider 和 config 计算本次是否可执行。
 - `Loop` 负责 tool plan、并发调度、结果压缩、失败恢复、unknown tool 防护、重复调用防护、无进展检测、审批中断和恢复。
 

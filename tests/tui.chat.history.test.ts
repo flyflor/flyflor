@@ -98,6 +98,14 @@ function runtimeContext(id: string, now: string): RuntimeContext {
     return { requestId: id, now, embedding: [] };
 }
 
+function nextMonthKey(monthKey: string): string {
+    const [yearRaw, monthRaw] = monthKey.split("-");
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const date = new Date(Date.UTC(year, month, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 describe("TUI chat history source", () => {
     test("lists chat turns chronologically and pages older turns by timestamp", async () => {
         const config = await makeConfig();
@@ -204,6 +212,85 @@ describe("TUI chat history source", () => {
             const latest = memory.listChatHistory({ limit: 1 });
             expect(latest[0]?.taskPlans?.[0]?.title).toBe("Plan");
             expect(latest[0]?.replays?.[0]?.summary).toBe("Replay summary");
+        } finally {
+            memory.dispose();
+        }
+    });
+
+    test("history.list replays turn planning metadata after monthly brain archive rotation", async () => {
+        const config = await makeConfig();
+        const memory = new MemoryModule(config, new RecordingSink());
+        await memory.warmup();
+        try {
+            const now = "2026-05-14T00:00:05.500Z";
+            await memory.rememberTurn(
+                gatewayMessage("archive this planning turn", "msg-archive-history", now),
+                gatewayReply("archived planning ready", "rep-archive-history"),
+                runtimeContext("req-archive-history", now),
+                [],
+                {},
+                undefined,
+                {
+                    contextForks: [
+                        {
+                            id: "fork-archive-history",
+                            ownerKey: "scope:history",
+                            sourceKey: "u1",
+                            title: "Archived history fork",
+                            summary: "Summary",
+                            continuitySummary: "History replay remains query-only.",
+                            maxContextTokens: 16000,
+                            inheritedEventIds: ["msg-archive-history"],
+                            createdAt: now,
+                            updatedAt: now,
+                        },
+                    ],
+                    taskPlans: [
+                        {
+                            id: "plan-archive-history",
+                            ownerKey: "scope:history",
+                            sourceKey: "u1",
+                            title: "Archived history plan",
+                            summary: "Summary",
+                            status: TaskPlanStatus.Planned,
+                            progress: 0,
+                            stepCount: 1,
+                            completedStepCount: 0,
+                            step: [{ id: "s1", title: "Replay", status: TaskPlanStatus.Planned, order: 0 }],
+                            createdAt: now,
+                            updatedAt: now,
+                        },
+                    ],
+                    replayRecords: [
+                        {
+                            id: "replay-archive-history",
+                            ownerKey: "scope:history",
+                            sourceKey: "u1",
+                            kind: ReplayRecordKind.DeepThink,
+                            title: "Archived history replay",
+                            summary: "Replay summary",
+                            visibleFacts: ["history.list is ledger replay"],
+                            openQuestions: [],
+                            contextForkId: "fork-archive-history",
+                            taskPlanId: "plan-archive-history",
+                            createdAt: now,
+                            updatedAt: now,
+                        },
+                    ],
+                },
+            );
+
+            const brain = (memory as unknown as { brain: BrainStore }).brain;
+            const liveMonth = brain.listShards().find((item) => item.id === "live")?.monthKey;
+            if (!liveMonth) throw new Error("live shard month missing");
+            brain.sealLiveShardIfStale(Date.parse(`${nextMonthKey(liveMonth)}-01T00:00:00.000Z`));
+
+            const archived = memory.listChatHistory({ limit: 1 });
+            expect(archived[0]?.userText).toBe("archive this planning turn");
+            expect(archived[0]?.assistantText).toBe("archived planning ready");
+            expect(archived[0]?.contextForks?.[0]?.id).toBe("fork-archive-history");
+            expect(archived[0]?.taskPlans?.[0]?.id).toBe("plan-archive-history");
+            expect(archived[0]?.replays?.[0]?.visibleFacts).toEqual(["history.list is ledger replay"]);
         } finally {
             memory.dispose();
         }

@@ -555,7 +555,7 @@ export class SocketControlHub implements EventSink {
     }
 
     /**
-     * Gateway runtime snapshots are local transport state. Protocol snapshots
+     * Socket runtime snapshots are local transport state. Protocol snapshots
      * are the stable JSON shape exposed to Rust/thin clients.
      */
     private protocolStatusSnapshot(status: SocketControlTransportStatusSnapshot): GatewayControlGatewayStatusSnapshot {
@@ -598,7 +598,7 @@ export class SocketControlHub implements EventSink {
     private log(step: string, payload: Record<string, unknown> = {}): void {
         console.error(
             JSON.stringify({
-                scope: "gateway.control",
+                scope: "socket.control",
                 step,
                 ...payload,
             }),

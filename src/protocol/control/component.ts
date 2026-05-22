@@ -11,8 +11,8 @@ export type { GatewayControlSurfaceCapabilities } from "./envelope.ts";
 /**
  * Stable control/event transport capability snapshot.
  *
- * This lives in protocol instead of gateway so future Rust clients/servers can
- * negotiate the same vascular surface without importing Bun gateway details.
+ * This lives in protocol instead of the socket runtime so future clients can
+ * negotiate the same vascular surface without importing Bun implementation details.
  */
 export function buildGatewayControlSurfaceCapabilities(
     commands: readonly string[] = Object.values(GatewayControlMessageType),

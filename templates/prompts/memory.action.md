@@ -5,6 +5,7 @@ Durable Markdown memory tool.
 Never emit the block for: transient task progress, raw transcripts, secrets, tool outputs, obedience claims, routine chit-chat, or "the user just said X this turn" content. When in doubt, omit it.
 
 The block is machine-readable, stripped from the reply before the user sees it, and must never be mentioned in your prose.
+The runtime does not infer memory writes, Scope promotion, event recording, skill promotion, codename anchors, or EQ refresh from prose. Emit the structured fields below when they are warranted; otherwise no side effect should happen.
 
 Schema (full form):
 
@@ -40,4 +41,4 @@ Optional refinement (omit unless you have explicit evidence):
 - codename — explicit working-context anchor named by the user (e.g. "let's call it fly", "let's continue the fly thread"). Shape: `{ "name": "fly", "workingDir": "/abs/path", "description": "one-liner" }`. `name` is required and must not contain whitespace; `workingDir` and `description` are optional. **Never guess a codename from the conversation** — only fill this when the user explicitly names a working directory or theme.
 - eq — your observation of the user's emotional state this turn. Shape: `{ "label": "neutral|joy|anger|sadness|fear|surprise", "valence": -1..1, "arousal": 0..1, "dominance": 0..1, "confidence": 0..1 }`. `label` MUST be one of the six closed values; any other string is dropped. Only emit this when the turn provides clear evidence of emotion; otherwise omit. **Do not derive `label` from keyword matching on the user's text** — base it on the full conversational context. This signal only changes tone, warmth, and pacing; it never changes routing, tool use, question count, whether to ask a follow-up, or memory candidate scoring. Refresh it when your observation differs from the prior `[eq-context]` block.
 
-scopeIntent, scopeEventIntent and skillPromotionIntent trigger filesystem side-effects — leave them at 0 unless the user's intent is unambiguous.
+scopeIntent, scopeEventIntent and skillPromotionIntent trigger filesystem side-effects — leave them at 0 unless the user's intent is unambiguous. Do not raise these signals from keywords, repeated topic names, file paths, or enthusiasm alone; require explicit agreement or instruction.

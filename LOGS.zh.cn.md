@@ -134,3 +134,59 @@
   摘要：已从干净单 `master` 启动下一轮 seal wave，创建 `codex/seal-coordinator`，并分配七个 worktree：文档对齐、Apifox/OpenAPI 场景、真实模型 socket 场景、prompt 优化、DB/context guard、零字符审计和 release/binary seal。
   原因：Bun 智能生命体内核已经基本封板；下一步闭环需要真实配置模型场景、Apifox 可导入契约、prompt 质量、审慎 DB/context 演进和 release 门禁，同时 Rust 不进入本仓库。
   验证：等待 tmux 启动、子分支推送、各切片定点验证、live scenario、完整 deterministic suite、binary build 和最终清理
+
+- 状态：open
+  操作者：main-codex
+  范围：scope-vector-seal-wave-orchestration
+  摘要：已扩展 `flyflor-seal` 覆盖所有活跃 lane，创建 `codex/scope-vector-core` 与 `codex/scope-vector-tests`，并启动剩余 zero-character 与 Scope Vector 子 Codex，同时主协调 worktree 保持已验证的 Scope Vector 基线。
+  原因：用户要求拉满 worktree 火力并强化 coordinator 掌控；Scope 图谱索引现在必须成为一等 seal wave，而不是隐含的主线程补丁。
+  验证：`git worktree list --porcelain`；`tmux list-windows -t flyflor-seal -F '#I:#W #{pane_current_path} #{pane_current_command}'`
+
+- 状态：completed
+  操作者：main-codex
+  范围：scope-vector-coordinator-baseline
+  摘要：新增 `ScopeVectorComponent`，具备独立 SQLite DB、确定性 vector codec、有界 hot-subtree cache、codename/scope lookup，以及 MemoryModule prompt/turn/scope/codename 集成。
+  原因：常驻 Scope 实体需要快速图谱/树索引与召回层，但不能把所有 Scope 常驻内存，不能添加遗忘曲线，也不能把 `brain.db` 变成 prompt context。
+  验证：`bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/memory.brain.wire.test.ts`；`bun run check`；`git diff --check`
+
+- 状态：completed
+  操作者：release-binary-seal
+  范围：release-binary-seal-review
+  摘要：已确认 binary/install/docker-dev/release-assets/socket-service 检查通过，且无需代码或文档变更；`smoke:release` 仅因本机 Docker daemon 不可用而阻塞。
+  原因：Bun 二进制打包是封版硬指标，但剩余 release smoke 阻塞属于环境可用性问题，不是仓库代码问题。
+  验证：`bun run build:binary`；`bun test tests/install.script.test.ts tests/docker.dev.smoke.test.ts tests/release.assets.test.ts`；`bun run smoke:socket:service`；`git diff --check`；`bun run smoke:release` 阻塞于 `Cannot connect to the Docker daemon at unix:///Users/yi./.docker/run/docker.sock`
+
+- 状态：completed
+  操作者：db-context-guard
+  范围：db-context-guard-review
+  摘要：已复核 ledger/context 边界，并只做了 history replay 断言相关测试修正；没有 runtime code、DB schema 或 context assembly 变更。
+  原因：seal wave 允许 DB/context 审慎演进，但只有必要缺口才应改变实现；本轮确认当前边界成立，并修正测试去断言持久化 replay content 而非原始 transport message id。
+  验证：`bun test tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts tests/tui.chat.history.test.ts tests/memory.brain.wire.test.ts`；`bun run check`；`git diff --check`
+
+- 状态：completed
+  操作者：socket-live-coverage
+  范围：socket-regression-coverage
+  摘要：新增 socket-level 回归覆盖，验证 `/ws` 成功 upgrade 与空 `history.list` replay 边界，不改变产品逻辑。
+  原因：socket 血管层需要守住最小 HTTP surface 与 replay-only history 行为，同时保持 v1 wire compatibility。
+  验证：`bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`；`git diff --check`
+
+- 状态：completed
+  操作者：main-codex
+  范围：full-worktree-closeout-review
+  摘要：已把 `flyflor-seal` 记录的每个 worktree lane 都拉起为真实 Codex worker，review 全部子输出，合入安全的 socket-runtime、socket-coverage、OpenAPI drift 与 zero-character guard 增量，并保留 coordinator Scope Vector 实现为 canonical。
+  原因：用户明确要求 coordinator 有掌控力且不能忽略任何 worktree；本轮收口把并发 wave 转成已验证主线增量，同时拒绝重复或偏离架构的 proposal。
+  验证：`tmux list-panes -a -F '#{window_index}:#{window_name}:#{pane_current_command}:#{pane_dead}'`；`bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`
+
+- 状态：rejected
+  操作者：main-codex
+  范围：child-lane-rejections
+  摘要：拒绝另起 `src/entities/scope` 的 Scope Vector split、skipped/proposal 形态 Scope Vector tests，以及把 provider-not-ready 从 fail-fast 降级为 `ok: false` report 的 socket-live 改动。
+  原因：Scope Vector 已在 `src/cognitive/hippocampus/scope/vector` 有 coordinator canonical owner；真实模型 live gate 必须在配置 provider 未就绪时清晰失败。
+  验证：review `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`、`/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests` 与 `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios` diff
+
+- 状态：in-progress
+  操作者：main-codex
+  范围：master-handoff
+  摘要：已把交接目标从 `codex/seal-coordinator` 更新为 `master`，准备先提交 coordinator 快照，再合并回主分支。
+  原因：下一个环境 / session 应从 canonical mainline 启动，而不是 staging 分支。
+  验证：等待 commit、checkout `master`、merge 与 push

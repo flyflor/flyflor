@@ -5,6 +5,7 @@ Markdown 长期记忆工具。
 下列情况绝不输出该块：临时任务进度、原始转录、密钥、工具输出、服从/权威声明、闲聊、"用户这一轮刚说了 X" 之类的瞬时内容。拿不准时省略。
 
 该块机器可读，回复给用户前会被剥离；不要在回答中提及该块。
+运行时不会从自然语言推断记忆写入、Scope 升格、事件记录、skill 升格、codename 锚点或 EQ 刷新。确实需要副作用时输出下方结构化字段；否则不应发生副作用。
 
 完整格式：
 
@@ -40,4 +41,4 @@ Markdown 长期记忆工具。
 - codename —— 用户**明确**给出的工作上下文锚点（"叫它 fly"、"我们继续 fly 这条线"）。结构：`{ "name": "fly", "workingDir": "/abs/path", "description": "一句话摘要" }`。`name` 必填且不含空白；`workingDir` / `description` 可选。**绝不要从对话里猜代号**——只在用户用自然语言明确命名某个工作目录或主题时才填。
 - eq —— 你对当前轮用户情绪的观察。结构：`{ "label": "neutral|joy|anger|sadness|fear|surprise", "valence": -1..1, "arousal": 0..1, "dominance": 0..1, "confidence": 0..1 }`。`label` 必须取这六个封闭枚举值之一，其他字符串会被丢弃。仅在本轮存在明显情绪证据时输出，否则省略。**不要基于用户文本中的关键词派生 `label`**——以整段对话上下文为依据。这个信号只影响语气、暖度和节奏，不改变路由、工具使用、提问数量、是否继续追问，也不参与记忆候选打分。只有当你的判断与上轮 `[eq-context]` 块不一致时才需要刷新。
 
-scopeIntent、scopeEventIntent 和 skillPromotionIntent 涉及文件系统副作用——在用户意图毫不含糊之前，保持为 0。
+scopeIntent、scopeEventIntent 和 skillPromotionIntent 涉及文件系统副作用——在用户意图毫不含糊之前，保持为 0。不要因为关键词、反复出现的话题名、文件路径或情绪强度就提高这些信号；必须有明确同意或明确指令。

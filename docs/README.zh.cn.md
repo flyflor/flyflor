@@ -25,11 +25,8 @@
 15. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
 16. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
 17. [external.kit.md](external.kit.md) — External kit 只读发现协议。
-18. [rust.integration.md](rust.integration.md) — Rust 外壳最小接入。
-19. [rust.connection.core.md](rust.connection.core.md) — Rust `/ws` 连接核心。
-20. [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md) — Rust shell 分 slice backlog。
-21. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
-22. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
+18. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
+19. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
 
@@ -45,3 +42,11 @@
 ## 归档区
 
 [old-docs/](old-docs/) 只存历史材料。它们可以解释为什么曾经这么做，但不能反向定义今天的运行契约。
+
+## 外部仓库参考
+
+这些文档只作为未来独立 Rust 仓库的 `/ws` 交接材料，不是本仓库的活动实现计划：
+
+- [rust.integration.md](rust.integration.md)
+- [rust.connection.core.md](rust.connection.core.md)
+- [rust.gateway.shell.backlog.md](rust.gateway.shell.backlog.md)

@@ -248,3 +248,66 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [ ] 协调基线 commit 并 push 后，启动 `flyflor-seal` tmux 子 Codex 窗口。
 - [ ] 合并顺序为 A 文档、B OpenAPI/Apifox、D prompt、C 真实模型 socket、E DB/context guard、F 零字符审计、G release/binary seal。
 - [ ] 最终验收必须包含 provider readiness、deterministic tests、live tests、socket live scenario、binary build、docs check 和 diff hygiene。
+
+## 2026-05-22 Scope Vector Seal Wave
+
+- [x] 已把 `flyflor-seal` tmux 从单协调窗口扩展为覆盖所有活跃 worktree lane 的完整布局。
+- [x] 已新增 Scope Vector worktree：
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests`
+- [x] 主协调 worktree 已实现并验证 Scope Vector 基线：
+  - 独立 `scope-vector/scope-vector.db`
+  - `ScopeVectorComponent`
+  - 确定性 Scope vector codec
+  - 有界 hot subtree 召回
+  - MemoryModule prompt/turn/scope/codename 集成
+- [x] Scope Vector 继续保持 `brain.db` 只做 ledger/query/replay/audit，且不会给常驻 Scope 实体添加遗忘曲线。
+- [x] 已验证主协调 Scope Vector 基线：
+  - `bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/memory.brain.wire.test.ts`
+  - `bun run check`
+  - `git diff --check`
+- [x] Socket runtime wire worker 回报无需 runtime 变更；v1 wire 和 `/health` + `/ws` 暴露面保持稳定。
+- [x] Apifox/OpenAPI worker 已 polish `docs/openapi/**`；wire string、DB schema、context assembly 均未改变。
+- [x] Prompt optimization worker 已在其 worktree 完成 canonical `.md` 与 `.zh.cn.md` prompt 更新。
+- [x] DB/context worker 已完成 ledger/query/replay guard 复核，仅有测试修正；DB schema 和 context assembly 未改变。
+- [x] Socket coverage worker 只新增 socket 回归覆盖；产品逻辑未改变。
+- [x] Release/binary worker 已通过 binary/install/docker-dev/release-assets/socket-service 检查；`smoke:release` 仅因 Docker daemon 未运行而阻塞。
+- [x] 按冲突风险顺序 review 并合并已完成 worktree diff 到 `codex/seal-coordinator`。
+- [x] 收集 zero-character 与 Scope Vector 子 Codex 报告，决定合并其工作或保留为 review evidence。
+- [x] 合并后运行最终 seal 验收。
+
+## 2026-05-22 全 Worktree 收口 Review
+
+- [x] 已把 `flyflor-seal` 记录的所有 tmux/worktree lane 都拉起为真实 Codex worker，而不是空 shell。
+- [x] 已接受 socket-runtime 命名 polish：内部日志使用 `socket.control`；v1 `gateway.*` wire string 不变。
+- [x] 已接受 socket coverage 增量，覆盖成功 `/ws` upgrade 与带关联 id 的 `turn.delta` / `turn.final` envelope。
+- [x] 已接受 OpenAPI drift guard 增量，把 Apifox schema enum 与 examples 反向绑定到 runtime protocol reader。
+- [x] 已接受 zero-character audit 扩展，覆盖 blackboard、worker、context、完整 memory、scope 与 Executive 语义路径。
+- [x] 保留 coordinator `ScopeVectorComponent` 为 canonical；本轮拒绝子分支另起 `src/entities/scope` owner split。
+- [x] 拒绝 `scope-vector-tests` proposal 测试，因为它们仍是 skipped/proposal 形态，并重复 canonical Scope Vector 测试面。
+- [x] 拒绝 socket-live worker 把 provider-not-ready 从 fail-fast 降级为 `ok: false` report；live gate 必须在真实 provider 未就绪时清晰失败。
+- [x] docs lane 中过宽的 Rust wording 仅作为 review evidence；本仓库继续只聚焦 Bun 内核，既有 Rust handoff docs 保持外部参考。
+
+## 2026-05-22 新 Session 交接封口
+
+- [x] 已为新的 Codex session 准备 `codex/seal-coordinator` 仓库状态。
+- [x] 已 stage 一个一致的交接快照，覆盖 Scope Vector、socket/OpenAPI drift guard、prompt polish、DB/context tests、zero-character guard 与 release notes。
+- [x] 已确认所有 `flyflor-seal` tmux pane 都回到 shell，所有记录的 worktree 仍保留为 review evidence。
+- [x] 已确认被接受的子 lane 变更进入 coordinator，被拒绝的子 lane proposal 均有原因记录。
+- [x] 交接前最终验证：
+  - `bun run docs:check`
+  - focused socket / Scope Vector / DB-context / docs / naming tests
+  - `bun run check`
+  - `bun run build:binary`
+  - `bun run test`（`850 pass`，`0 fail`）
+  - `git diff --check`
+- [x] 唯一已知环境阻塞仍是 `smoke:release` 中 compose 部分需要本机 Docker daemon 可用。
+
+## 2026-05-22 Master 交接
+
+- [x] 最终交接目标是 `master`，不是 `codex/seal-coordinator`。
+- [x] `codex/seal-coordinator` 只作为本轮 seal wave 的 staging/coordinator 分支。
+- [ ] 提交已 stage 的 coordinator 快照。
+- [ ] 把当前 worktree 切回 `master`。
+- [ ] 将 coordinator 快照合并进 `master`。
+- [ ] push `master` 给下一个 session。

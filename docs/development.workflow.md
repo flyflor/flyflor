@@ -652,3 +652,74 @@ Required validation before merge:
 - `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-22 Scope Vector Seal Wave
+
+Current coordinator:
+
+- branch: `codex/seal-coordinator`
+- path: `/Users/yi./Desktop/yi/flyflors/flyflor`
+- tmux session: `flyflor-seal`
+- coordinator role: review, merge, validation, canonical TODO/LOGS/workflow, and final cleanup
+
+Active tmux/worktree lanes:
+
+- `docs` -> `/Users/yi./Desktop/yi/flyflors/worktrees/docs.alignment.control`
+- `openapi-scenarios` -> `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.scenarios`
+- `openapi-drift` -> `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`
+- `socket-runtime` -> `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`
+- `socket-live` -> `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios`
+- `socket-coverage` -> `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`
+- `prompt` -> `/Users/yi./Desktop/yi/flyflors/worktrees/prompt.optimization.seal`
+- `db-context` -> `/Users/yi./Desktop/yi/flyflors/worktrees/db.context.guard`
+- `zero-char` -> `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
+- `release` -> `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
+- `scope-vector-core` -> `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`
+- `scope-vector-tests` -> `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests`
+
+Scope Vector owner contract:
+
+- `ScopeVectorComponent` owns a separate SQLite DB under `storageDir/scope-vector/scope-vector.db`.
+- Scope Vector owns deterministic vector encoding and bounded hot-subtree recall, similar in spirit to the Crystal vector index.
+- Scope is permanent; this component does not implement forgetting or decay over Scope identity.
+- The hot cache is only a performance layer and may be rebuilt from SQLite.
+- `brain.db` remains ledger/query/replay/audit and is never treated as prompt transcript assembly.
+- Context assembly remains current input + MemoryComponent + CrystalComponent + explicit Scope/Fork + Executive visible capability surface.
+- No semantic `includes`, regex, keyword lists, or punctuation heuristics may drive Scope recall or promotion.
+
+Current completed reports:
+
+- socket runtime wire: no changes needed; focused socket/control tests passed.
+- OpenAPI/Apifox scenarios: `docs/openapi/**` polished; wire strings, DB schema, and context assembly unchanged.
+- prompt optimization: prompt `.md` / `.zh.cn.md` pairs updated in its lane and validated.
+- DB/context guard: test-only fixes; DB schema and context assembly unchanged.
+- socket coverage: test-only socket regression coverage.
+- release/binary: binary/install/docker-dev/release-assets/socket-service checks passed; `smoke:release` is blocked by Docker daemon availability.
+
+Merge rules for this wave:
+
+- main Codex may keep the coordinator Scope Vector baseline as the canonical implementation if child Scope Vector work returns as review evidence only.
+- merge test-only lanes before broad prompt/docs lanes when conflicts are low.
+- never merge a child branch that silently changes v1 wire strings, DB schema, context assembly, or Scope forgetting semantics.
+- after each merge, run focused validation for the touched surface and `git diff --check`.
+- before cleanup, confirm `tmux list-windows -t flyflor-seal` and `git worktree list --porcelain` match the recorded active lanes.
+
+Closeout review:
+
+- all recorded tmux/worktree lanes were launched as real Codex workers and returned to shell
+- accepted into coordinator:
+  - `socket-runtime-wire-polish`: internal log scope now says `socket.control`; no wire string changed
+  - `socket-live-coverage`: successful `/ws` upgrade and correlated `turn.delta` / `turn.final` guards
+  - `apifox-openapi-drift-guard`: schema enum drift checks and runtime-reader parsing of OpenAPI examples
+  - `zero-character-audit`: expanded semantic-path scan over blackboard, worker, context, full memory, scope, and Executive
+- kept as review evidence, not merged:
+  - `scope-vector-core`: alternate `src/entities/scope` split conflicts with the coordinator canonical `src/cognitive/hippocampus/scope/vector` owner
+  - `scope-vector-tests`: skipped/proposal tests duplicate the canonical Scope Vector coverage
+  - `socket-live-model-scenarios`: provider-not-ready must remain fail-fast, not an `ok: false` report
+  - broad docs Rust wording moves that would create directory churn outside the Bun-kernel focus
+
+Fresh-session handoff target:
+
+- the final handoff branch is `master`
+- `codex/seal-coordinator` is only the staging/coordinator branch for this wave
+- before ending this session, commit the staged coordinator snapshot, switch back to `master`, merge the snapshot, push `master`, and leave the worktree on `master`

@@ -415,3 +415,66 @@ Latest full seal validation in this workspace passed:
 - [x] Added coordinator OpenAPI closeout for `/ws` 400 `gateway_control_upgrade_failed`.
 - [x] `smoke:socket:live` now proves capability catalog, socket `event.publish`, `turn.delta`, `turn.final`, and `history.list` replay against the configured provider.
 - [x] No wire-v1 string changed, no DB/context schema changed, and `/channels` stayed removed.
+
+## 2026-05-22 Scope Vector Seal Wave
+
+- [x] Expanded `flyflor-seal` tmux from a single coordinator window to all active worktree lanes.
+- [x] Created additional Scope Vector worktrees:
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`
+  - `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests`
+- [x] Main coordinator implemented a verified Scope Vector baseline in the coordinator worktree:
+  - independent `scope-vector/scope-vector.db`
+  - `ScopeVectorComponent`
+  - deterministic Scope vector codec
+  - bounded hot subtree recall
+  - MemoryModule prompt/turn/scope/codename integration
+- [x] Scope Vector keeps `brain.db` as ledger/query/replay/audit only and does not add a forgetting curve to permanent Scope entities.
+- [x] Verified coordinator Scope Vector baseline:
+  - `bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/memory.brain.wire.test.ts`
+  - `bun run check`
+  - `git diff --check`
+- [x] Socket runtime wire worker reported no runtime changes needed; v1 wire and `/health` + `/ws` surface remain stable.
+- [x] Apifox/OpenAPI worker polished `docs/openapi/**`; wire strings, DB schema, and context assembly unchanged.
+- [x] Prompt optimization worker completed canonical `.md` and `.zh.cn.md` prompt updates in its worktree.
+- [x] DB/context worker completed ledger/query/replay guard review with test-only fixes; DB schema and context assembly unchanged.
+- [x] Socket coverage worker added socket regression coverage only; product logic unchanged.
+- [x] Release/binary worker passed binary/install/docker-dev/release-assets/socket-service checks; `smoke:release` is blocked only by Docker daemon not running.
+- [x] Review and merge completed worktree diffs into `codex/seal-coordinator` in a conflict-aware order.
+- [x] Collect zero-character and Scope Vector child reports, then decide whether to merge their work or keep them as review evidence.
+- [x] Run final seal validation after merges.
+
+## 2026-05-22 Full Worktree Closeout Review
+
+- [x] Launched all recorded `flyflor-seal` tmux/worktree lanes with real Codex workers, not idle shells.
+- [x] Accepted socket-runtime naming polish: internal logs now use `socket.control`; v1 `gateway.*` wire strings remain unchanged.
+- [x] Accepted socket coverage increments for successful `/ws` upgrade and correlated `turn.delta` / `turn.final` envelopes.
+- [x] Accepted OpenAPI drift guard increments that bind Apifox schema enums and examples back to runtime protocol readers.
+- [x] Accepted zero-character audit expansion across blackboard, worker, context, full memory, scope, and Executive semantic paths.
+- [x] Kept the coordinator `ScopeVectorComponent` as canonical; rejected the child `scope-vector-core` alternate `src/entities/scope` owner split for this round.
+- [x] Rejected `scope-vector-tests` proposal tests because they were skipped/proposal-shaped and duplicated the canonical Scope Vector test surface.
+- [x] Rejected the socket-live worker change that downgraded provider-not-ready from fail-fast to an `ok: false` report; live gate must fail clearly when no configured provider is ready.
+- [x] Kept docs-lane Rust wording as review evidence only where it was too broad; this repo remains Bun-kernel focused while existing Rust handoff docs stay external references.
+
+## 2026-05-22 New Session Handoff Seal
+
+- [x] Prepared the repository for a fresh Codex session on `codex/seal-coordinator`.
+- [x] Staged one coherent handoff snapshot covering Scope Vector, socket/OpenAPI drift guard, prompt polish, DB/context tests, zero-character guard, and release notes.
+- [x] Confirmed all `flyflor-seal` tmux panes returned to shell and all recorded worktrees remain available as review evidence.
+- [x] Confirmed accepted child-lane changes are in coordinator and rejected child-lane proposals are documented with reasons.
+- [x] Final validation before handoff:
+  - `bun run docs:check`
+  - focused socket / Scope Vector / DB-context / docs / naming tests
+  - `bun run check`
+  - `bun run build:binary`
+  - `bun run test` (`850 pass`, `0 fail`)
+  - `git diff --check`
+- [x] Known environment-only blocker remains Docker daemon availability for the compose portion of `smoke:release`.
+
+## 2026-05-22 Master Handoff
+
+- [x] Final handoff target is `master`, not `codex/seal-coordinator`.
+- [x] `codex/seal-coordinator` is only the staging/coordinator branch for this seal wave.
+- [ ] Commit the staged coordinator snapshot.
+- [ ] Switch the current worktree back to `master`.
+- [ ] Merge the coordinator snapshot into `master`.
+- [ ] Push `master` for the next session.

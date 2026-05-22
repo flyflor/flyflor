@@ -6,13 +6,16 @@ import { dirname, join, resolve } from "node:path";
 import { MemoryModule } from "../src/agent/index.ts";
 import { loadConfigForPaths, type FlyflorConfig, type FlyflorPaths } from "../src/config/index.ts";
 import {
+    AskReason,
     Channel,
     ChatType,
+    type AgentAsk,
     type GatewayMessage,
     type GatewayReply,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
+import type { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 
 const tempRoots: string[] = [];
 
@@ -184,6 +187,38 @@ describe("MemoryModule + BrainStore", () => {
             expect(recall.payload?.ownerKey).toBe("fork:test-fork");
             expect(recall.payload?.hits ?? 0).toBeGreaterThanOrEqual(1);
             expect(prompt).toContain("brain prompt recall fixture atom");
+        } finally {
+            memory.dispose();
+        }
+    });
+
+    test("pending ASK continuation survives monthly brain shard sealing", async () => {
+        const config = await makeConfig();
+        const memory = new MemoryModule(config, new RecordingSink());
+        await memory.warmup();
+        try {
+            const ask: AgentAsk = {
+                reason: AskReason.UserIntentUnclear,
+                prompt: "Which archived path should continue?",
+                freeform: true,
+                continuationHint: { title: "Archived ask continuation" },
+            };
+            await memory.rememberTurn(
+                gatewayMessage("archive ask fixture"),
+                gatewayReply("Which archived path should continue?", "msg-ask-archive"),
+                runtimeContext(),
+                [],
+                {},
+                ask,
+            );
+
+            const brain = (memory as unknown as { brain: BrainStore }).brain;
+            const sealed = brain.sealLiveShardIfStale(Date.parse("2026-06-01T00:00:00.000Z"));
+            expect(sealed?.status).toBe("archived");
+
+            const prompt = await memory.buildPrompt(gatewayMessage("continue the archived one"), runtimeContext());
+            expect(prompt).toContain("[continuation]");
+            expect(prompt).toContain("Which archived path should continue?");
         } finally {
             memory.dispose();
         }

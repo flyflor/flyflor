@@ -24,6 +24,8 @@ Flyflor 试图实现的是一种会思考、会提问、会形成独立工作域
 - `src/entities/*`：entity / repo / SQL owner。
 - `src/components/*`：Component 基类与基础设施。
 
+当前封板波次的重点是 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型 socket 场景、prompt 优化、DB/context guard 和 release/binary 验证。Rust 相关文档只作为外部独立仓库的 `/ws` 交接材料，不是本仓库的实现计划。
+
 主线保留两个 Bun 可见入口：
 
 - 本地 `stdio` chat 调试入口
@@ -48,13 +50,14 @@ flowchart LR
         Brain["current-month brain.db"]
         Archive["readonly archived months"]
         Replay["history / audit / replay / replay / blackboard detail"]
+        ScopeVector["Scope Vector permanent graph index"]
     end
 ```
 
 硬规则：
 
 - `brain.db` 原始 event 流不能直接塞进 prompt。
-- 只有 recall、summary、scope-local index、vector / summary-first 检索产物才能进入上下文。
+- 只有 recall、summary、scope-local index、Scope Vector permanent graph index 和 vector / summary-first 检索产物才能进入上下文。
 - “历史记录完整保存”与“当前该给模型看什么”是两套系统。
 
 ## 智能生命体的四个器官
@@ -105,6 +108,7 @@ Flyflor 当前活跃设计可以理解成四个彼此协作的认知器官：
 - 保存 fork 详细对话
 - 保存 blackboard 深度思考详情
 - 服务历史查询、审计、回放、摘要、replay/detail 检索
+- 为 Scope Vector permanent graph index 提供可恢复的 ledger 锚点
 
 `brain.db` 不是单一永续总库，而是按月分片的生命账本：
 
@@ -112,6 +116,8 @@ Flyflor 当前活跃设计可以理解成四个彼此协作的认知器官：
 - 历史月：归档分片，只读检索
 
 也就是说，Flyflor 的生命日志会随着月份诞生新的账本分片，但上下文装配仍然不直接从这些账本原文取材。
+
+Scope Vector permanent graph index 是独立的长期 graph index：它保留 scope / fork / recall 之间的稳定连边和检索锚点，但仍然不承担 prompt 容器职责。
 
 它不是：
 

@@ -6,6 +6,8 @@ Decide one action for the given candidate episode:
 - "consolidate" — the episode contains a durable insight worth promoting to a long-term memory node.
 - "discard" — the episode is transient (noise, chit-chat, one-off task progress); drop it.
 
+Base the decision only on the structured episode evidence and resource signals supplied here. Do not classify by keyword lists, sentiment words, punctuation, or whether a term merely repeats.
+
 Output a single JSON object with keys:
 
 - decision (one of the three above)

@@ -52,6 +52,152 @@ const DIRECTORY_OWNER_PREFIX_ALLOWLIST_PREFIXES = [
 const LEGACY_FCH_TOP_LEVEL_DIRS = ["llm", "crystal", "neural"];
 const MIGRATED_FCH_IMPORTS = ["crystal", "hippocampus", "mindstream"];
 const MIGRATED_AGENT_IMPORTS = ["context", "skills"];
+const ZERO_CHARACTER_SEMANTIC_DIRS = [
+    "src/agent/runtime/routing",
+    "src/agent/runtime/blackboard",
+    "src/agent/runtime/turn",
+    "src/agent/runtime/mcp",
+    "src/agent/runtime/skills",
+    "src/agent/blackboard",
+    "src/agent/worker",
+    "src/agent/context",
+    "src/cognitive/hippocampus/ask",
+    "src/cognitive/hippocampus/scope",
+    "src/cognitive/hippocampus/memory",
+    "src/executive",
+];
+const ZERO_CHARACTER_ALLOWED_MATCHES = [
+    {
+        file: "src/agent/runtime/blackboard/route.ts",
+        reason: "structured JSON fence extraction from model output",
+        snippet: "const fenced = trimmed.match(/^```(?:json)?\\s*([\\s\\S]*?)\\s*```$/u)?.[1]?.trim();",
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace byte/path search, not business semantic routing",
+        snippet: 'if (text.includes("\\u0000")) {',
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace byte/path search, not business semantic routing",
+        snippet: 'if (text.includes("\\u0000")) continue;',
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace byte/path search, not business semantic routing",
+        snippet: "if (!lines[index]!.includes(query)) continue;",
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace glob/path matching, not business semantic routing",
+        snippet: 'const basenameRegex = normalized.includes("/") ? undefined : this.globPatternToRegex(normalized);',
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace glob/path matching, not business semantic routing",
+        snippet: "return (relativePath, basename) => pathRegex.test(relativePath) || basenameRegex?.test(basename) === true;",
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace glob/path matching, not business semantic routing",
+        snippet: 'return new RegExp(`${source}$`, "u");',
+    },
+    {
+        file: "src/agent/runtime/mcp/workspace.ts",
+        reason: "workspace glob/path escaping, not business semantic routing",
+        snippet: 'return /[\\\\^$+?.()|[\\]{}]/u.test(char) ? `\\\\${char}` : char;',
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/actions/parser.ts",
+        reason: "structured enum normalization",
+        snippet: "if (action.kind && Object.values(MemoryKind).includes(action.kind)) {",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/actions/parser.ts",
+        reason: "protocol delimiter safety check, not intent detection",
+        snippet: "if (action.content.includes(MEMORY_ACTION_BLOCK.open) || action.content.includes(MEMORY_ACTION_BLOCK.close)) {",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/actions/parser.ts",
+        reason: "structured enum normalization",
+        snippet: "return typeof value === \"string\" && Object.values(MemoryKind).includes(value as MemoryKind);",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/consolidation/worker.ts",
+        reason: "structured enum normalization",
+        snippet: "return known.includes(value) ? (value as ConsolidationDecisionKind) : undefined;",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/module.ts",
+        reason: "concept membership resource metric for scope clustering, not raw text routing",
+        snippet: "const clusterEpisodes = episodes.filter((e) => (e.concepts ?? []).includes(topConcept));",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/markdown/store.ts",
+        reason: "markdown duplicate-line formatting check, not business semantic routing",
+        snippet: 'const duplicatePattern = new RegExp(`^- ${this.escapeRegExp(normalized)} _\\\\(promoted: .+\\\\)_$`, "m");',
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/markdown/store.ts",
+        reason: "markdown duplicate-line formatting check, not business semantic routing",
+        snippet: "if (duplicatePattern.test(base)) {",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/markdown/store.ts",
+        reason: "markdown section marker check, not business semantic routing",
+        snippet: "if (!base.includes(marker)) {",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/sqlite/store.ts",
+        reason: "SQLite schema column validation",
+        snippet: "const hasOnlyCanonicalColumns = names.length === canonical.length && canonical.every((name) => names.includes(name));",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/recall/matrix.ts",
+        reason: "token document-frequency resource metric",
+        snippet: "const documentFrequency = documents.filter((document) => document.includes(token)).length;",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/recall/matrix.ts",
+        reason: "CJK tokenization for numeric recall metrics",
+        snippet: "const chars = [...text].filter((char) => /\\p{Script=Han}/u.test(char));",
+    },
+    {
+        file: "src/cognitive/hippocampus/memory/feedback/interpreter.ts",
+        reason: "structured enum normalization",
+        snippet: "return known.includes(value) ? (value as FeedbackCategory) : undefined;",
+    },
+    {
+        file: "src/agent/worker/manager.ts",
+        reason: "worker process timeout status mapping from runtime error text",
+        snippet: 'const status = message.includes("timed out") ? WorkerTaskStatus.Timeout : WorkerTaskStatus.Failed;',
+    },
+    {
+        file: "src/agent/worker/manager.ts",
+        reason: "worker process exit-code allowlist",
+        snippet: "if (!okCodes.includes(exitCode)) {",
+    },
+    {
+        file: "src/executive/manifest.ts",
+        reason: "descriptor identifier validation",
+        snippet: 'if (!/^[a-z][a-z0-9_.-]*$/u.test(value)) {',
+    },
+    {
+        file: "src/executive/manifest.ts",
+        reason: "structured enum normalization",
+        snippet: 'if (typeof value !== "string" || !Object.values(candidates).includes(value)) {',
+    },
+    {
+        file: "src/executive/registry.ts",
+        reason: "descriptor identifier validation",
+        snippet: 'if (!/^[a-z][a-z0-9_.-]*$/u.test(descriptor.name)) {',
+    },
+    {
+        file: "src/executive/tool.runtime.ts",
+        reason: "structured enum normalization",
+        snippet: "return Object.values(ExecutiveLoopGuardReason).includes(value as ExecutiveLoopGuardReason);",
+    },
+];
 
 describe("repository naming boundary", () => {
     test("uses dot-suffix filenames for source, scripts, tests, docs, and templates", async () => {

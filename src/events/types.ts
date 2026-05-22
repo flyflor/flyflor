@@ -81,6 +81,8 @@ export const RuntimeEventType = {
     MemoryScopeCandidateRecorded: "memory.scope.candidate.recorded",
     MemoryScopeMemoryRecalled: "memory.scope.memory.recalled",
     MemoryScopeMemoryWritten: "memory.scope.memory.written",
+    MemoryScopeVectorRecalled: "memory.scope.vector.recalled",
+    MemoryScopeVectorWritten: "memory.scope.vector.written",
     MemoryScopeOfferProposed: "memory.scope.offer.proposed",
     MemoryScopeOfferExpired: "memory.scope.offer.expired",
     MemoryScopeOfferConsumed: "memory.scope.offer.consumed",

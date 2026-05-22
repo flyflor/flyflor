@@ -232,3 +232,59 @@
   Summary: Reviewed and merged socket runtime wire polish, OpenAPI drift guard, and real socket live coverage into `codex/seal-coordinator`; added the coordinator closeout for `/ws` 400 `gateway_control_upgrade_failed` in the Apifox contract.
   Reason: The active round is limited to socket layer plus OpenAPI/Apifox; the merged slices close runtime error consistency, contract drift, and real configured-provider scenario coverage without changing wire-v1 names, DB/context assembly, or the minimal `/health` + `/ws` HTTP surface.
   Verification: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/protocol.control.test.ts`; `bun test tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`; `bun run docs:check`; `bun run check`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run provider:ready -- --require-ready`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run smoke:socket:live`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`; `git diff --check`
+
+- Status: open
+  Actor: main-codex
+  Scope: scope-vector-seal-wave-orchestration
+  Summary: Expanded `flyflor-seal` to cover all active lanes, created `codex/scope-vector-core` and `codex/scope-vector-tests`, and launched remaining zero-character and Scope Vector child agents while keeping the coordinator on the verified Scope Vector baseline.
+  Reason: The user requested full worktree firepower and stronger coordinator control; Scope graph indexing is now a first-class seal wave instead of an implicit main-thread patch.
+  Verification: `git worktree list --porcelain`; `tmux list-windows -t flyflor-seal -F '#I:#W #{pane_current_path} #{pane_current_command}'`
+
+- Status: completed
+  Actor: main-codex
+  Scope: scope-vector-coordinator-baseline
+  Summary: Added `ScopeVectorComponent` with its own SQLite DB, deterministic vector codec, bounded hot-subtree cache, codename/scope lookup, and MemoryModule prompt/turn/scope/codename integration.
+  Reason: Permanent Scope entities need a fast graph/tree index and recall layer without loading every Scope into memory, without applying forgetting curves, and without turning `brain.db` into prompt context.
+  Verification: `bun test tests/scope.vector.test.ts tests/context.scope.test.ts tests/codename.promote.test.ts tests/memory.brain.wire.test.ts`; `bun run check`; `git diff --check`
+
+- Status: completed
+  Actor: release-binary-seal
+  Scope: release-binary-seal-review
+  Summary: Confirmed binary/install/docker-dev/release-assets/socket-service checks pass without code or doc changes; `smoke:release` is blocked by the local Docker daemon being unavailable.
+  Reason: Bun binary packaging is a hard seal criterion, but the remaining release smoke blocker is environment availability rather than repository code.
+  Verification: `bun run build:binary`; `bun test tests/install.script.test.ts tests/docker.dev.smoke.test.ts tests/release.assets.test.ts`; `bun run smoke:socket:service`; `git diff --check`; blocked `bun run smoke:release` with `Cannot connect to the Docker daemon at unix:///Users/yi./.docker/run/docker.sock`
+
+- Status: completed
+  Actor: db-context-guard
+  Scope: db-context-guard-review
+  Summary: Reviewed ledger/context boundaries and made test-only fixes around history replay assertions; no runtime code, DB schema, or context assembly changes were made.
+  Reason: The seal wave allows DB/context evolution only when necessary; this pass confirmed the current boundary is sound and corrected tests to assert persisted replay content rather than an original transport message id.
+  Verification: `bun test tests/brain.store.test.ts tests/brain.archive.test.ts tests/context.scope.test.ts tests/tui.chat.history.test.ts tests/memory.brain.wire.test.ts`; `bun run check`; `git diff --check`
+
+- Status: completed
+  Actor: socket-live-coverage
+  Scope: socket-regression-coverage
+  Summary: Added socket-level regression coverage for successful `/ws` upgrade and empty `history.list` replay boundary without product logic changes.
+  Reason: The socket vascular layer needs regression guards for the minimal HTTP surface and replay-only history behavior while preserving v1 wire compatibility.
+  Verification: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/gateway.dedup.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: full-worktree-closeout-review
+  Summary: Launched every recorded `flyflor-seal` worktree lane with real Codex workers, reviewed all child outputs, merged the safe socket-runtime, socket-coverage, OpenAPI drift, and zero-character guard increments, and kept the coordinator Scope Vector implementation as canonical.
+  Reason: The user explicitly asked for coordinator control and no ignored worktrees; this closeout converts the parallel wave into verified mainline increments while rejecting duplicate or off-architecture proposals.
+  Verification: `tmux list-panes -a -F '#{window_index}:#{window_name}:#{pane_current_command}:#{pane_dead}'`; `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/docs.references.test.ts tests/naming.boundaries.test.ts`
+
+- Status: rejected
+  Actor: main-codex
+  Scope: child-lane-rejections
+  Summary: Rejected the alternate `src/entities/scope` Scope Vector split, skipped/proposal Scope Vector tests, and the socket-live change that converted provider-not-ready from fail-fast into an `ok: false` report.
+  Reason: Scope Vector already has a canonical coordinator owner under `src/cognitive/hippocampus/scope/vector`; live model gates must fail clearly when the configured provider is not ready.
+  Verification: review of `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`, `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests`, and `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios` diffs
+
+- Status: in-progress
+  Actor: main-codex
+  Scope: master-handoff
+  Summary: Updated the handoff target from `codex/seal-coordinator` to `master` and prepared to commit the coordinator snapshot before merging it into the main branch.
+  Reason: The next environment/session should start from the canonical mainline, not a staging branch.
+  Verification: pending commit, checkout `master`, merge, push

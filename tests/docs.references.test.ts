@@ -2,8 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
+    CapabilityExecutionKind,
+    ChannelLinkState,
+    ChannelTransport,
+    ChatType,
+    ExecutiveLoopGuardReason,
     GatewayControlMessageType,
     GatewayControlProtocol,
+    ReplayRecordKind,
     RuntimeEventClass,
     TaskPlanStatus,
 } from "../src/protocol/contracts/index.ts";
@@ -12,9 +18,22 @@ import {
     GatewayControlErrorCode,
     GatewayControlReplyMetadataKind,
     GatewayControlSemanticType,
+    parseGatewayControlEnvelope,
+    readGatewayControlHistoryListInput,
+    readGatewayControlMessageInput,
+    readGatewayControlSubscription,
 } from "../src/protocol/control/index.ts";
 
 const REPO_ROOT = join(import.meta.dir, "..");
+
+type OpenApiSchema = {
+    const?: string;
+    enum?: string[];
+    items?: OpenApiSchema;
+    oneOf?: Array<{ $ref?: string }>;
+    properties?: Record<string, OpenApiSchema>;
+    required?: string[];
+};
 
 describe("documentation references", () => {
     test("referenced test files exist", async () => {
@@ -93,17 +112,7 @@ describe("documentation references", () => {
         const contract = JSON.parse(text) as {
             components?: {
                 examples?: Record<string, { value?: unknown }>;
-                schemas?: Record<string, {
-                    enum?: string[];
-                    oneOf?: Array<{ $ref?: string }>;
-                    properties?: Record<string, {
-                        const?: string;
-                        enum?: string[];
-                        items?: { enum?: string[] };
-                        properties?: Record<string, { const?: string; enum?: string[] }>;
-                    }>;
-                    required?: string[];
-                }>;
+                schemas?: Record<string, OpenApiSchema>;
             };
             openapi?: string;
             paths?: Record<string, {
@@ -180,8 +189,26 @@ describe("documentation references", () => {
         expect(schemas.SurfaceCapabilities?.properties?.semanticTypes?.items?.enum).toEqual(
             Object.values(GatewayControlSemanticType),
         );
+        expect(schemas.ChannelStatusSnapshot?.properties?.state?.enum).toEqual(Object.values(ChannelLinkState));
+        expect(schemas.ChannelStatusSnapshot?.properties?.transport?.enum).toEqual(Object.values(ChannelTransport));
+        expect(schemas.MessageSendPayload?.properties?.chatType?.enum).toEqual(Object.values(ChatType));
         expect(schemas.ErrorPayload?.properties?.code?.enum).toEqual(Object.values(GatewayControlErrorCode));
         expect(schemas.ReplyMetadata?.properties?.kind?.enum).toEqual(Object.values(GatewayControlReplyMetadataKind));
+        expect(
+            schemas.ReplyMetadata?.properties?.executiveToolExecutions?.items?.properties?.capabilityKind?.enum,
+        ).toEqual(Object.values(CapabilityExecutionKind));
+        expect(schemas.PlanningMetadata?.properties?.taskPlans?.items?.properties?.status?.enum).toEqual(
+            Object.values(TaskPlanStatus),
+        );
+        expect(
+            schemas.PlanningMetadata?.properties?.taskPlans?.items?.properties?.steps?.items?.properties?.status?.enum,
+        ).toEqual(Object.values(TaskPlanStatus));
+        expect(schemas.PlanningMetadata?.properties?.replays?.items?.properties?.kind?.enum).toEqual(
+            Object.values(ReplayRecordKind),
+        );
+        expect(schemas.ExecutiveToolLoopMetadata?.properties?.loopGuardReason?.enum).toEqual(
+            Object.values(ExecutiveLoopGuardReason),
+        );
         expect(schemas.UpgradeFailedResponse?.properties?.error?.const).toBe("gateway_control_upgrade_failed");
         expect(schemas.GatewayStatusSnapshot?.required).toContain("clientCount");
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("sourceKey");
@@ -241,6 +268,62 @@ describe("documentation references", () => {
         expect(wireText).toContain("executiveToolLoop");
         expect(wireText).toContain("MemoryComponent");
         expect(wireText).toContain("CrystalComponent");
+    });
+
+    test("socket OpenAPI examples parse through the runtime control readers", async () => {
+        const text = await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.json")).text();
+        const contract = JSON.parse(text) as {
+            components?: {
+                examples?: Record<string, { value?: unknown }>;
+            };
+        };
+        const examples = contract.components?.examples ?? {};
+        const parseableControlExamples = [
+            "ClientHello",
+            "GatewayStatusGet",
+            "CapabilityCatalogGet",
+            "HistoryList",
+            "GatewayMessageSend",
+            "EventSubscribe",
+            "EventUnsubscribe",
+            "InvalidGatewayMessageSend",
+        ];
+
+        for (const name of parseableControlExamples) {
+            expect(() => parseGatewayControlEnvelope(JSON.stringify(examples[name]?.value))).not.toThrow();
+        }
+        expect(() => parseGatewayControlEnvelope(JSON.stringify(examples.EventPublish?.value))).toThrow(
+            "Unsupported gateway control protocol",
+        );
+
+        expect(readGatewayControlHistoryListInput(readExamplePayloadRecord(examples, "HistoryList"))).toEqual({
+            beforeTs: 1770000000000,
+            limit: 20,
+        });
+        expect(readGatewayControlMessageInput(readExamplePayloadRecord(examples, "GatewayMessageSend"))).toMatchObject({
+            context: {
+                activeScope: {
+                    id: "scope-1",
+                    projectDir: "/workspace/project",
+                    projectMemoryDir: "/workspace/project/.flyflor/memory",
+                },
+                contextForkId: "fork-1",
+                skillNames: ["review"],
+            },
+            text: "继续推进这个 Scope",
+            user: {
+                id: "external-actor-1",
+            },
+        });
+        expect(readGatewayControlSubscription(readExamplePayloadRecord(examples, "EventSubscribe"))).toEqual({
+            classes: [RuntimeEventClass.Ask, RuntimeEventClass.Read],
+            requestId: undefined,
+            types: [
+                RuntimeEventType.ExecutiveCapabilityCatalogBuilt,
+                RuntimeEventType.ExecutiveLoopPaused,
+                RuntimeEventType.ExecutiveLoopResumed,
+            ],
+        });
     });
 
     test("bilingual Apifox scenario docs cover the real socket flow", async () => {
@@ -370,6 +453,14 @@ function readExampleType(examples: Record<string, { value?: unknown }>, name: st
 function readExamplePayload(examples: Record<string, { value?: unknown }>, name: string): unknown {
     const value = examples[name]?.value;
     return isRecord(value) ? value.payload : undefined;
+}
+
+function readExamplePayloadRecord(
+    examples: Record<string, { value?: unknown }>,
+    name: string,
+): Record<string, unknown> | undefined {
+    const payload = readExamplePayload(examples, name);
+    return isRecord(payload) ? payload : undefined;
 }
 
 function readExampleEventType(examples: Record<string, { value?: unknown }>, name: string): string | undefined {

@@ -651,4 +651,75 @@ Worktree：
 - `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run smoke:socket:live`
 - `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`
 - `bun run check`
+
+## 2026-05-22 Scope Vector Seal Wave
+
+当前协调者：
+
+- branch：`codex/seal-coordinator`
+- path：`/Users/yi./Desktop/yi/flyflors/flyflor`
+- tmux session：`flyflor-seal`
+- coordinator role：review、merge、validation、canonical TODO/LOGS/workflow 和最终清理
+
+活跃 tmux/worktree lane：
+
+- `docs` -> `/Users/yi./Desktop/yi/flyflors/worktrees/docs.alignment.control`
+- `openapi-scenarios` -> `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.scenarios`
+- `openapi-drift` -> `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`
+- `socket-runtime` -> `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`
+- `socket-live` -> `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.model.scenarios`
+- `socket-coverage` -> `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`
+- `prompt` -> `/Users/yi./Desktop/yi/flyflors/worktrees/prompt.optimization.seal`
+- `db-context` -> `/Users/yi./Desktop/yi/flyflors/worktrees/db.context.guard`
+- `zero-char` -> `/Users/yi./Desktop/yi/flyflors/worktrees/zero.character.audit`
+- `release` -> `/Users/yi./Desktop/yi/flyflors/worktrees/release.binary.seal`
+- `scope-vector-core` -> `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.core`
+- `scope-vector-tests` -> `/Users/yi./Desktop/yi/flyflors/worktrees/scope.vector.tests`
+
+Scope Vector owner contract：
+
+- `ScopeVectorComponent` 拥有独立 SQLite DB：`storageDir/scope-vector/scope-vector.db`。
+- Scope Vector 自己封装确定性 vector 编码和有界 hot-subtree 召回，设计精神接近 Crystal vector index。
+- Scope 是常驻实体；该 component 不对 Scope identity 实现遗忘或 decay。
+- hot cache 只是性能层，可从 SQLite 重建。
+- `brain.db` 仍然只做 ledger/query/replay/audit，不能被当作 prompt transcript assembly。
+- context assembly 仍然来自 current input + MemoryComponent + CrystalComponent + explicit Scope/Fork + Executive visible capability surface。
+- Scope 召回或升格不得由语义 `includes`、regex、关键词表或标点启发式驱动。
+
+当前已完成回报：
+
+- socket runtime wire：无需变更；focused socket/control tests 已通过。
+- OpenAPI/Apifox scenarios：已 polish `docs/openapi/**`；wire string、DB schema、context assembly 未改变。
+- prompt optimization：已在对应 lane 更新 prompt `.md` / `.zh.cn.md` 并通过验证。
+- DB/context guard：仅测试修正；DB schema 与 context assembly 未改变。
+- socket coverage：仅新增 socket 回归测试。
+- release/binary：binary/install/docker-dev/release-assets/socket-service 检查通过；`smoke:release` 阻塞于 Docker daemon 可用性。
+
+本轮合并规则：
+
+- 如果 Scope Vector 子 worktree 只返回 review evidence，主 Codex 可以保留 coordinator Scope Vector 基线作为 canonical implementation。
+- 低冲突 test-only lane 优先于大范围 prompt/docs lane 合并。
+- 任何静默改变 v1 wire string、DB schema、context assembly 或 Scope forgetting 语义的子分支不得合入。
+- 每次合并后运行对应 focused validation 和 `git diff --check`。
+- 清理前必须确认 `tmux list-windows -t flyflor-seal` 与 `git worktree list --porcelain` 和记录的活跃 lane 一致。
+
+收口 review：
+
+- 所有记录的 tmux/worktree lane 都已作为真实 Codex worker 拉起，并已回到 shell
+- 已合入 coordinator：
+  - `socket-runtime-wire-polish`：内部 log scope 改为 `socket.control`；wire string 不变
+  - `socket-live-coverage`：成功 `/ws` upgrade 与带关联 id 的 `turn.delta` / `turn.final` guard
+  - `apifox-openapi-drift-guard`：schema enum drift 检查，以及 OpenAPI examples 通过 runtime reader 反向解析
+  - `zero-character-audit`：把语义路径扫描扩展到 blackboard、worker、context、完整 memory、scope 与 Executive
+- 仅作为 review evidence，未合入：
+  - `scope-vector-core`：另起 `src/entities/scope` split，与 coordinator canonical `src/cognitive/hippocampus/scope/vector` owner 冲突
+  - `scope-vector-tests`：skipped/proposal 测试重复 canonical Scope Vector 覆盖
+  - `socket-live-model-scenarios`：provider-not-ready 必须保持 fail-fast，不能降级成 `ok: false` report
+  - 过宽的 docs Rust wording 移动会制造 Bun 内核之外的目录噪音
+
+新 session 交接目标：
+
+- 最终交接分支是 `master`
+- `codex/seal-coordinator` 只是本轮 staging/coordinator 分支
+- 结束本 session 前，先提交已 stage 的 coordinator 快照，再切回 `master`，合并快照，push `master`，并让当前 worktree 停在 `master`
 - `git diff --check`

@@ -36,28 +36,35 @@ describe("documentation index", () => {
         expect(missing).toEqual([]);
     });
 
-    test("rust integration guide is indexed as a core handoff document", async () => {
+    test("rust integration guide is indexed only as an external reference", async () => {
         const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
         const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
 
+        expect(docsReadme).toContain("## 外部仓库参考");
         expect(docsReadme).toContain("](rust.integration.md)");
         expect(rootReadme).toContain("](docs/rust.integration.md)");
+        expect(docsReadme).not.toContain("Rust 外壳最小接入");
+        expect(rootReadme).not.toContain("Rust socket/channel/cli/tui 外壳最小接入手册");
     });
 
-    test("rust gateway shell backlog is indexed as a core planning document", async () => {
+    test("rust gateway shell backlog is indexed only as an external reference", async () => {
         const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
         const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
 
         expect(docsReadme).toContain("](rust.gateway.shell.backlog.md)");
         expect(rootReadme).toContain("](docs/rust.gateway.shell.backlog.md)");
+        expect(docsReadme).not.toContain("Rust shell 分 slice backlog");
+        expect(rootReadme).not.toContain("Rust socket shell 工程切分 backlog");
     });
 
-    test("rust connection core guide is indexed as a core handoff document", async () => {
+    test("rust connection core guide is indexed only as an external reference", async () => {
         const rootReadme = await readFile(join(REPO_ROOT, "README.md"), "utf8");
         const docsReadme = await readFile(join(REPO_ROOT, "docs", "README.md"), "utf8");
 
         expect(docsReadme).toContain("](rust.connection.core.md)");
         expect(rootReadme).toContain("](docs/rust.connection.core.md)");
+        expect(docsReadme).not.toContain("Rust `/ws` 连接核心");
+        expect(rootReadme).not.toContain("Rust Slice 1 `/ws` 连接核心与重连状态机");
     });
 
     test("public docs and package metadata point at the official homepage", async () => {

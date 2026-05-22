@@ -14,7 +14,7 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 - `brain.db` 是按月分片的 ledger/query plane，不是 prompt 容器；“历史记录”与“当前上下文”是两套系统。
 - 能力外骨架不靠固定工具清单扩张；MCP、插件、skill、channel action、用户自定义命令和 subagent 都必须统一包装成可审计的 Tool。
 - 外部套件通过 External Kit manifest 与 `/ws` control/event catalog 发现能力；catalog 只读声明，不执行工具，真实执行必须进入 Executive Tool Runtime 与 sandbox/approval。
-- 未来 CLI、TUI 与 socket shell 可用 Rust 重写；当前 Bun 主线保留 socket 血管层与 WS/control 协议。
+- 未来外部客户端可以通过 `/ws` 对接；当前仓库只承载 Bun 主线的 socket 血管层与 WS/control 协议，不承载 Rust 实现。
 - 简单问题直接回，复杂问题走黑板；当思考或执行抵达边界时，通过 Ask 显式向用户求证，再把高价值结果送入结晶链路。
 - 协议、渠道、Worker、Skill、MCP 都是显式边界，所有内部协议统一管理，避免坏数据互相断链。
 
@@ -49,7 +49,7 @@ Flyflor 是一个 Bun + TypeScript 智能生命体运行时内核，目标是单
 - `/ws` WebSocket control/event
 - `/health`
 
-第一方 CLI/TUI/channel adapter 已从主源码剥离，已移除旧实现且不保留兼容目录。后续 Rust 客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
+第一方 CLI/TUI/channel adapter 已从主源码剥离，已移除旧实现且不保留兼容目录。后续外部客户端与自定义实现只需要对接 [docs/control.protocol.md](docs/control.protocol.md)。
 需要按请求/响应字段直接调试 `/ws` 时，使用 [docs/ws.doc.md](docs/ws.doc.md)。
 
 并发开发与新 session 交接约定见 [docs/development.workflow.md](docs/development.workflow.md)。
@@ -126,7 +126,7 @@ bun run dev:dist     # dev dist 模式：同步模板后 watch 源码并自动�
 说明：
 
 - Bun 主线仍保留一个本地 stdio chat 调试面，方便直接驱动 `RuntimeModule`。
-- 未来第一方 CLI / TUI / socket shell 将由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核。
+- 未来第一方 CLI / TUI / socket shell 属于外部独立仓库事项；本仓库只保留 `/ws` 对接契约。
 - `setup` / `status` / `doctor` / 第一方 navigator 类命令不再视为主线稳定边界。
 
 质量验证：
@@ -337,7 +337,7 @@ flyflor            # 本地 stdio chat 调试入口
 flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 ```
 
-当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 会由 Rust 重写，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
+当前主线只把这两个 Bun 入口当成调试/血管面保留；`gateway` 在这里是 CLI 兼容命令名，不是架构 owner。后续第一方 CLI、TUI、channel shell 和 socket surface 属于外部独立仓库事项，并通过 `/ws` 对接当前 Bun 内核；退役壳体见 [docs/old-docs/cli.commands.md](docs/old-docs/cli.commands.md)，现行协议见 [docs/control.protocol.md](docs/control.protocol.md) 与 [docs/ws.doc.md](docs/ws.doc.md)。
 
 ## 工程规则
 
@@ -398,12 +398,17 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.md](docs/mcp.tools.md)                       | MCP 工具循环                           |
 | [docs/external.kit.md](docs/external.kit.md)                 | 外部套件 manifest / 发现 / control 契约 |
-| [docs/control.protocol.md](docs/control.protocol.md)         | Rust / thin client 直接对接的 WS/control 血管协议 |
-| [docs/rust.integration.md](docs/rust.integration.md)         | Rust socket/channel/cli/tui 外壳最小接入手册 |
-| [docs/rust.connection.core.md](docs/rust.connection.core.md) | Rust Slice 1 `/ws` 连接核心与重连状态机 |
-| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | Rust socket shell 工程切分 backlog |
+| [docs/control.protocol.md](docs/control.protocol.md)         | 外部客户端 / thin client 直接对接的 WS/control 血管协议 |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md)     | Reflection → Gem                       |
 | [docs/skill.system.md](docs/skill.system.md)                 | Skill 加载与升格                       |
+
+外部仓库参考材料：
+
+| 文档                                                         | 用途                                   |
+| ------------------------------------------------------------ | -------------------------------------- |
+| [docs/rust.integration.md](docs/rust.integration.md)         | 外部独立 Rust 仓库的 socket/channel/cli/tui `/ws` 接入手册 |
+| [docs/rust.connection.core.md](docs/rust.connection.core.md) | 外部独立 Rust 仓库的 `/ws` 连接核心与重连状态机 |
+| [docs/rust.gateway.shell.backlog.md](docs/rust.gateway.shell.backlog.md) | 外部独立 Rust 仓库的 socket shell 工程切分参考 |
 
 历史提案和迁移背景已收进 [docs/old-docs/README.md](docs/old-docs/README.md)，只做追溯，不作为当前运行契约。
 

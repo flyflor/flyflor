@@ -46,6 +46,7 @@ import {
 } from "../scope/index.ts";
 import { CodenamePromotionComponent } from "../scope/codename.promote.ts";
 import { ScopeScaffolder } from "../scope/scaffolder.ts";
+import { ScopeVectorComponent, type ScopeVectorHit } from "../scope/vector/component.ts";
 import { SpreadingActivationEngine, type ActivationCandidate } from "./recall/index.ts";
 import { kindForMemoryAction, targetFileForMemoryAction } from "./actions/index.ts";
 import { LocalHashEmbeddingProvider, type EmbeddingProvider } from "../embedding/index.ts";
@@ -166,6 +167,8 @@ export class MemoryModule extends Memory {
     private readonly idle: IdleSupervisor;
     private readonly model: ModelClient | undefined;
     private readonly scopeScaffolder: ScopeScaffolder;
+    /** Scope graph index owner: separate SQLite DB + bounded hot subtree cache, never brain.db prompt replay. */
+    private readonly scopeVector: ScopeVectorComponent;
     /** Scope/fork/skill 固化触发只读结构化信号和资源指标，不解析自然语言。 */
     private readonly scopeTriggerDetector: ScopeTriggerDetector;
     /** Codename → scope 升格副作用 owner，避免 runtime 直接调用兼容 helper。 */
@@ -218,6 +221,9 @@ export class MemoryModule extends Memory {
                   })
                 : null;
         this.scopeScaffolder = new ScopeScaffolder(config.paths, this.events);
+        this.scopeVector = new ScopeVectorComponent(config.paths, this.brain, {
+            vectorDimensions: config.memory.embedding.dimensions,
+        });
         this.scopeTriggerDetector = new ScopeTriggerDetector();
         this.codenamePromotion = new CodenamePromotionComponent();
         // 后台调度器仅在三件依赖（工作记忆 Component + 长期图 Component + 模型）齐备时启用；
@@ -278,6 +284,7 @@ export class MemoryModule extends Memory {
 
     public async warmup(): Promise<void> {
         await this.ensureBrainOpen("warmup-open");
+        await this.scopeVector.initialize();
         if (this.scheduler) {
             this.scheduler.start();
         } else {
@@ -353,8 +360,9 @@ export class MemoryModule extends Memory {
         }
         if (this.hotMemoryCompressionTimer !== undefined) {
             clearInterval(this.hotMemoryCompressionTimer);
-            this.hotMemoryCompressionTimer = undefined;
+        this.hotMemoryCompressionTimer = undefined;
         }
+        this.scopeVector.dispose();
         this.workingMemory?.dispose();
         if (this.brainOpened) {
             this.brain.close();
@@ -583,8 +591,9 @@ export class MemoryModule extends Memory {
             limit: this.config.memory.retrieval.maxResults,
         };
 
-        const [hippocampus, scopeMemory, brainResults, markdown] = await Promise.all([
+        const [hippocampus, scopeVector, scopeMemory, brainResults, markdown] = await Promise.all([
             this.assembleHippocampusContext(message, context),
+            this.assembleScopeVectorContext(message, context),
             activeScope
                 ? this.scopeMemoryForScope(activeScope).snapshot({
                       maxChars: this.config.memory.retrieval.maxPromptChars,
@@ -597,9 +606,10 @@ export class MemoryModule extends Memory {
             this.markdown.snapshot(),
         ]);
         const results = dedupeResults(brainResults);
+        const scopedPrompt = [scopeVector, scopeMemory.prompt].filter((entry) => entry && entry.trim().length > 0).join("\n\n");
         const memoryBody = renderMemoryPrompt(
             markdown.prompt,
-            scopeMemory.prompt,
+            scopedPrompt,
             hippocampus,
             results,
             this.config.memory.retrieval.maxPromptChars,
@@ -664,6 +674,7 @@ export class MemoryModule extends Memory {
                 brainPromptRecallResults: brainResults.length,
                 scopeConstraintId: scopeConstraintId ?? "global",
                 scopeMemoryActivated: Boolean(scopeConstraintId) && scopeMemory.prompt ? true : false,
+                scopeVectorActivated: Boolean(scopeVector),
                 scopeMemoryManifestPath: scopeMemory.manifest.paths.manifest,
                 scopeMemoryRecallReceiptId: scopeMemory.receipt?.id,
                 scopeMemoryRecallResults: scopeMemory.results.length,
@@ -671,6 +682,34 @@ export class MemoryModule extends Memory {
         );
 
         return body;
+    }
+
+    /**
+     * Scope Vector context: explicit Scope/Codename anchors resolve into a
+     * bounded graph summary. It never replays full scope history or reads
+     * brain.db ledger text into the prompt.
+     */
+    private async assembleScopeVectorContext(
+        message: GatewayMessage,
+        context?: RuntimeContext,
+    ): Promise<string | undefined> {
+        if (!context?.activeScope?.id) return undefined;
+        const hits = await this.scopeVector.recall({
+            activeScope: context.activeScope,
+            contextForkId: context.contextForkId,
+            limit: Math.min(4, this.config.memory.retrieval.maxResults),
+            query: message.text,
+            queryEmbedding: context.embedding,
+        });
+        if (hits.length === 0) return undefined;
+        this.events.publish(
+            event(RuntimeEventType.MemoryScopeVectorRecalled, {
+                activeScopeId: context.activeScope.id,
+                results: hits.length,
+                hotScopeIds: this.scopeVector.getHotScopeIds().length,
+            }),
+        );
+        return renderScopeVectorPrompt(hits);
     }
 
     /**
@@ -908,7 +947,29 @@ export class MemoryModule extends Memory {
             }),
         );
 
-        const [candidateResults, scopeRecords] = await Promise.all([candidatePipeline, scopeMemoryPipeline]);
+        const scopeVectorPipeline =
+            activeScope
+                ? this.scopeVector
+                      .noteTurn({
+                          context,
+                          messageText: message.text,
+                          replyText: reply.text,
+                          activeScope,
+                          codename: codenameId ? this.brain.getCodename(codenameId) : null,
+                          nowMs: Date.parse(context.now),
+                      })
+                      .then(() => {
+                          this.events.publish(
+                              event(
+                                  RuntimeEventType.MemoryScopeVectorWritten,
+                                  { scopeId: activeScope.id, source: "turn" },
+                                  context.requestId,
+                              ),
+                          );
+                      })
+                : Promise.resolve();
+
+        const [candidateResults, scopeRecords] = await Promise.all([candidatePipeline, scopeMemoryPipeline, scopeVectorPipeline]);
         const promoted: MemoryRecord[] = candidateResults.filter((r): r is MemoryRecord => r !== undefined);
         const promotedRecords = [...promoted, ...scopeRecords];
 
@@ -1535,6 +1596,7 @@ export class MemoryModule extends Memory {
         try {
             const result = await this.codenamePromotion.promote(this.brain, this.scopeScaffolder, codenameId, opts);
             if (result.promoted && result.record && result.scopeId) {
+                await this.scopeVector.syncScopeFromBrain(result.scopeId);
                 this.events.publish(
                     event(RuntimeEventType.MemoryCodenamePromoted, {
                         id: result.record.id,
@@ -1603,7 +1665,15 @@ export class MemoryModule extends Memory {
             },
             createdAt: new Date(nowMs).toISOString(),
         });
-        return this.brain.upsertScope(record);
+        const written = this.brain.upsertScope(record);
+        await this.scopeVector.upsertScope({ scope: written, nowMs });
+        this.events.publish(
+            event(RuntimeEventType.MemoryScopeVectorWritten, {
+                scopeId: written.id,
+                source: "scope.create-or-use",
+            }),
+        );
+        return written;
     }
 
     /** @deprecated Use createOrUseScope. */
@@ -3454,6 +3524,18 @@ function renderMemoryPrompt(
         renderedResults: results.length > 0 ? renderResults(results) : "",
     });
     return content.length <= maxChars ? content : content.slice(0, maxChars).trimEnd();
+}
+
+function renderScopeVectorPrompt(hits: ScopeVectorHit[]): string {
+    const lines = hits.map((hit) => {
+        const title = hit.title ?? hit.scopeId;
+        const summary = (hit.summary ?? "").replace(/\s+/g, " ").trim().slice(0, 220);
+        const related = hit.relatedIds.length > 0 ? ` related=${hit.relatedIds.slice(0, 4).join(",")}` : "";
+        const codename = hit.codenameId ? ` codename=${hit.codenameId}` : "";
+        const body = summary.length > 0 ? ` ${summary}` : "";
+        return `- [${hit.kind} ${hit.score.toFixed(2)}] ${title}${codename}${related}${body}`;
+    });
+    return `Scope vector context (bounded hot subtree; no full scope replay):\n${lines.join("\n")}`;
 }
 
 function renderResults(results: MemorySearchResult[]): string {

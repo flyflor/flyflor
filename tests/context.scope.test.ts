@@ -83,6 +83,23 @@ describe("ContextScopeComponent", () => {
             ),
         ).toBe("fork:fork-active");
     });
+
+    test("continuity owner ignores transport metadata when no explicit scope or fork is mounted", () => {
+        expect(
+            continuityOwnerKey({
+                id: "msg-transport",
+                receivedAt: "2026-05-17T00:00:00.000Z",
+                text: "hello",
+                attachments: [],
+                user: { id: "user-transport", displayName: "User" },
+                route: {
+                    channel: Channel.Stdio,
+                    chatType: ChatType.Direct,
+                    conversationKey: "chat-transport",
+                },
+            }),
+        ).toBe("turn:msg-transport");
+    });
 });
 
 function paths(root: string): FlyflorPaths {

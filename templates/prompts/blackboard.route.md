@@ -34,6 +34,7 @@ Hard rules (apply before anything else):
 - "blackboard" requires at least one proposer AND one independent challenger (≥ 2 workers). If you can only justify one worker, choose "direct" or "direct-with-watch".
 - Treat worker selection as a small game: bid the smallest worker set that can both PRODUCE a candidate answer AND independently CHALLENGE it. Most blackboard cases land at 2–3 workers.
 - Do not rely on any built-in role catalog. Use only the semantics of this request to decide how many workers to create, which claims they own, and which claims they must challenge.
+- Use the request meaning, explicit constraints, structured context, and available capability descriptors. Do not route by keyword lists, punctuation, message length alone, or named-role triggers without real constraint tension.
 - Worker names should be short display names for dialogue output. Avoid diagnostic role ids, qa labels, and implementation log phrases in the plan.
 
 Mode selection:

@@ -119,7 +119,7 @@ Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cog
 | `src/protocol/processes` | 进程间 envelope |
 | `src/protocol/structured.block.ts` | 模型结构化块登记表 |
 
-`src/protocol/control` 是 Rust 外壳和 thin client 的长期接线面。这里可以兼容读取 `activeProject`，但 canonical 字段只能是 `activeScope`。
+`src/protocol/control` 是外部独立 Rust 仓库和 thin client 的长期接线面。这里可以兼容读取 `activeProject`，但 canonical 字段只能是 `activeScope`。
 
 ## `src/entities`
 

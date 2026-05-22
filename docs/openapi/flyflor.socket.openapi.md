@@ -1,13 +1,13 @@
 # Flyflor Socket OpenAPI
 
-`flyflor.socket.openapi.json` is the Apifox-importable contract for real socket scenario testing.
+`flyflor.socket.openapi.json` is the Apifox-importable contract for real socket scenario testing. Use the component examples as raw WebSocket JSON bodies after connecting to `/ws`.
 
 Notes:
 
 - The active transport is `/ws` WebSocket. HTTP only keeps `/health` and `/ws` upgrade.
-- `gateway.*` names are `flyflor.ws.v1` compatibility wire names, not the architecture subject.
-- `history.list` only queries the `brain.db` life ledger for ledger/query/replay/audit. It is not session restore and does not assemble prompt context.
-- `clientId`, `conversationKey`, `threadId`, and `user.id` are live peer, routing, audit, dedup, and reply-anchor provenance only. They do not carry cognitive continuity.
+- `gateway.*` names are `flyflor.ws.v1` v1 compatibility wire names, not the architecture subject.
+- `history.list` only queries the `brain.db` life ledger for ledger/query/replay/audit. It is not session restore, a prompt container, or context assembly.
+- `clientId`, `conversationKey`, `threadId`, and `user.id` are live peer, routing, audit, dedup, and reply-anchor provenance only. They do not carry or create cognitive continuity.
 - Real context assembly comes from current input, `MemoryComponent`, `CrystalComponent`, explicit `Scope/Fork`, and the Executive visible capability surface.
 
 ## Apifox Flow
@@ -23,6 +23,8 @@ Notes:
 9. Send `HistoryList` and expect `HistorySnapshot`.
 10. Send `GatewayMessageSend`; observe one or more `TurnDelta` frames and a final `TurnFinal`.
 
+Apifox import note: the OpenAPI file documents `/ws` as an upgrade endpoint, but the scenario messages live under `components.examples`. For WebSocket tests, paste each example `value` as the outgoing JSON body and keep the `protocol`, `type`, and request ids intact.
+
 ## Metadata Scenarios
 
 Use the example set as reusable Apifox WebSocket messages:
@@ -32,6 +34,13 @@ Use the example set as reusable Apifox WebSocket messages:
 - `TurnFinalWithExecutiveLoopPause` shows both `reply.metadata.executiveToolLoop` and `reply.metadata.ask.executiveToolLoop`.
 - `EventSubscribe`, `ExecutiveLoopPausedEvent`, and `ExecutiveLoopResumedEvent` show the lifecycle event timeline. The current turn authority remains `turn.final.reply.metadata`.
 - `InvalidGatewayMessageSend` followed by `InvalidPayloadError` covers the structured `invalid-payload` response for missing `payload.text`.
+
+## Boundary Checks
+
+- `GatewayMessageSend.payload.context.activeScope` and `contextForkId` are the only explicit working-domain inputs in the socket message.
+- `activeProject` is only a compatibility alias for `activeScope`; prefer `activeScope` in new Apifox examples.
+- `HistorySnapshot` may include reply metadata, task plans, replays, and context fork snapshots as ledger replay data. Do not feed it back as prompt context.
+- `conversationKey`, `threadId`, and `user.id` are useful for Apifox correlation and routing assertions, but they are not memory owners.
 
 ## Drift Guards
 

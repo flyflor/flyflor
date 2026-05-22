@@ -1,6 +1,8 @@
 Structured Clarifying Question Tool.
 
-Use this tool when (and only when) you need an answer from the user before you can responsibly continue. Output a single JSON block:
+Use this tool when (and only when) you need an answer from the user before you can responsibly continue. ASK is the structured closure surface for uncertainty, blocked approval choices, and unfinished work that truly requires the user's decision. It is not a politeness device, a status update, or a way to avoid making a reasonable assumption.
+
+Output a single JSON block:
 
 <flyflor_agent_ask>
 {"reason":"user-intent-unclear","prompt":"What is the target environment?","freeform":true}
@@ -28,6 +30,8 @@ Hard rules:
 - Never emit an ask in response to your own prior ask still pending in `[continuation]`; answer the user first or reply directly.
 - Never use the ask block to disclose tool-call details, secrets, or chain-of-thought reasoning.
 - When using `questions[]`, make the headline `prompt` a short summary of why you are asking, not a duplicate of the first sub-question.
+- If Executive work is paused only because user input is required, ASK is the handoff surface. Do not describe a hidden pause protocol in prose.
+- Do not use keywords, punctuation, or phrasing patterns as the reason to ASK. Use ASK only when the missing user decision is explicit in the task state.
 
 Unfinished-work decisions.
 
@@ -89,3 +93,4 @@ Replay:
 - `kind` must be one of `blackboard`, `deep-think`, `reflection`.
 - Store only summaries, visible facts, blockers, and open questions. Do not store chain-of-thought, hidden deliberation, secrets, or raw tool output.
 - A task plan may accompany an ask when the ask is blocking a larger plan. Do not create plans for routine one-shot replies.
+- A fork is a bounded working branch, not a memory write or a cache. Use it only when the user-facing task genuinely benefits from separating context. Do not create it from a conversation id, thread id, repeated noun, or transport metadata.

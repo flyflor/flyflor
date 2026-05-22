@@ -23,45 +23,73 @@ class FakeUpgradeServer {
 
 describe("SocketModule minimal vascular surface", () => {
     test("GET /health returns ok without runtime involvement", async () => {
-        const gateway = createGateway();
+        const socketModule = createSocketModule();
 
-        const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/health"));
+        const response = await openHandleRequest(socketModule, new Request("http://127.0.0.1/health"));
 
         expect(response?.status).toBe(200);
         await expect(response?.json()).resolves.toEqual({ ok: true });
     });
 
     test("GET /ws returns 503 before SocketControlHub is started", async () => {
-        const gateway = createGateway();
+        const socketModule = createSocketModule();
         const server = new FakeUpgradeServer();
 
-        const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/ws"), server.asBunServer());
+        const response = await openHandleRequest(socketModule, new Request("http://127.0.0.1/ws"), server.asBunServer());
 
         expect(response?.status).toBe(503);
         await expect(response?.json()).resolves.toEqual({ error: "gateway_control_not_ready" });
         expect(server.upgradeCalls).toBe(0);
     });
 
-    test("unknown route returns structured 404 json", async () => {
-        const gateway = createGateway();
+    test("GET /ws upgrades when SocketControlHub is ready", async () => {
+        const socketModule = createSocketModule();
+        const server = new FakeUpgradeServer();
+        (
+            socketModule as unknown as {
+                controlHub: {
+                    upgrade(request: Request, server: Bun.Server<GatewayControlPeer>): Response | undefined;
+                };
+            }
+        ).controlHub = {
+            upgrade: (request: Request, bunServer: Bun.Server<GatewayControlPeer>) =>
+                bunServer.upgrade(request, {
+                    data: {
+                        clientId: "test-client",
+                        connectedAt: "2026-05-22T00:00:00.000Z",
+                        subscriptions: [],
+                    },
+                })
+                    ? undefined
+                    : new Response("upgrade failed", { status: 400 }),
+        };
 
-        const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/unknown"));
+        const response = await openHandleRequest(socketModule, new Request("http://127.0.0.1/ws"), server.asBunServer());
+
+        expect(response).toBeUndefined();
+        expect(server.upgradeCalls).toBe(1);
+    });
+
+    test("unknown route returns structured 404 json", async () => {
+        const socketModule = createSocketModule();
+
+        const response = await openHandleRequest(socketModule, new Request("http://127.0.0.1/unknown"));
 
         expect(response?.status).toBe(404);
         await expect(response?.json()).resolves.toEqual({ error: "not_found" });
     });
 
     test("GET /channels now returns not found", async () => {
-        const gateway = createGateway();
+        const socketModule = createSocketModule();
 
-        const response = await openHandleRequest(gateway, new Request("http://127.0.0.1/channels"));
+        const response = await openHandleRequest(socketModule, new Request("http://127.0.0.1/channels"));
 
         expect(response?.status).toBe(404);
         await expect(response?.json()).resolves.toEqual({ error: "not_found" });
     });
 });
 
-function createGateway(): SocketModule {
+function createSocketModule(): SocketModule {
     return new SocketModule(
         gatewayConfig(),
         {
@@ -83,12 +111,12 @@ function gatewayConfig(): GatewayConfig {
 }
 
 async function openHandleRequest(
-    gateway: SocketModule,
+    socketModule: SocketModule,
     request: Request,
     server?: Bun.Server<GatewayControlPeer>,
 ): Promise<Response | undefined> {
     return (
-        gateway as unknown as {
+        socketModule as unknown as {
             handleRequest(request: Request, server?: Bun.Server<GatewayControlPeer>): Promise<Response | undefined>;
         }
     ).handleRequest(request, server);

@@ -8,7 +8,9 @@
 - bucketHint：可选短小写 slug，用于聚合相似方法（自由命名，请选一个未来同类方法会复用的稳定标签，如 "debugging"、"code-review"）。不确定时省略。
 - coordinates：可选 `{ key: number }` 字典，值域 0..1。key 自由命名，但应是你有明确先验理由使用的稳定语义维度（如 "specificity"、"reusability"）。如果没有合适维度，整个字段省略。
 
-不要使用固定分类表。symbols 和 bucketHint 必须来自证据本身。
+不要使用固定分类表、关键词列表或文件名 / 路径线索。symbols 和 bucketHint 必须来自证据本身。
+
+这一层只从已经存在的证据里抽取可复用方法。它不写记忆，不做路由，不决定 ASK，不创建 Scope/Fork，也不把当前这轮内容当成可复用知识来概括。
 
 只输出 JSON 数组，不要任何额外说明，不要代码围栏。
 

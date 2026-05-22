@@ -3,7 +3,7 @@
   "info": {
     "title": "Flyflor Socket Wire API",
     "version": "1.0.0",
-    "description": "Apifox-importable contract for Flyflor's socket vascular layer. The current transport is WebSocket at /ws plus GET /health. The flyflor.ws.v1 wire keeps gateway.* message names for compatibility; those names are not the architecture subject and do not imply session/chat continuity. brain.db is a ledger/query/replay/audit plane only. Context assembly comes from current input, MemoryComponent recall, CrystalComponent recall, explicit activeScope/contextForkId, and the visible Executive capability surface."
+    "description": "Apifox-importable contract for Flyflor's socket vascular layer. The current transport is WebSocket at /ws plus GET /health. The flyflor.ws.v1 wire keeps gateway.* message names for v1 compatibility; those names are not the architecture subject and do not imply session/chat continuity. history.list reads brain.db as a ledger/query/replay/audit plane only; it is not prompt or context assembly. conversationKey and user.id are provenance/routing fields only. Context assembly comes from current input, MemoryComponent recall, CrystalComponent recall, explicit activeScope/contextForkId, and the visible Executive capability surface."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "servers": [
@@ -23,16 +23,16 @@
     },
     {
       "name": "Wire Examples",
-      "description": "Reusable flyflor.ws.v1 and flyflor.event.v1 frames for Apifox WebSocket scenarios."
+      "description": "Reusable flyflor.ws.v1 client/server frames and flyflor.event.v1 event frames for Apifox WebSocket scenarios."
     }
   ],
   "x-apifox-scenarios": [
     {
       "name": "Real socket live turn",
-      "description": "GET /health, upgrade /ws, receive server.hello, send client.hello, read status/catalog/history, send gateway.message.send, then observe turn.delta and turn.final.",
+      "description": "GET /health, connect Apifox WebSocket to /ws, receive server.hello, send client.hello, read status/catalog/history, send gateway.message.send, then observe turn.delta and turn.final.",
       "steps": [
         "GET /health -> HealthOk",
-        "GET /ws upgrade -> ServerHello",
+        "WS ws://127.0.0.1:8788/ws -> ServerHello",
         "send ClientHello -> Ack",
         "send GatewayStatusGet -> GatewayStatusSnapshot",
         "send CapabilityCatalogGet -> CapabilityCatalogSnapshot",
@@ -52,7 +52,7 @@
     },
     {
       "name": "Invalid payload",
-      "description": "Send gateway.message.send with an empty payload and expect an error envelope with code invalid-payload.",
+      "description": "Send gateway.message.send with an empty payload and expect a flyflor.ws.v1 error envelope with code invalid-payload.",
       "steps": [
         "InvalidGatewayMessageSend",
         "InvalidPayloadError"
@@ -93,7 +93,7 @@
           "Socket"
         ],
         "summary": "WebSocket upgrade",
-        "description": "Upgrades to the flyflor.ws.v1 socket protocol. Apifox should connect to ws://127.0.0.1:8788/ws and exchange the message examples in this contract. The connection clientId is a live transport peer id only; it is not a user/session/chat continuity owner.",
+        "description": "Upgrades to the flyflor.ws.v1 socket protocol. Apifox should connect to ws://127.0.0.1:8788/ws and exchange the message examples in this contract as raw JSON WebSocket messages. The connection clientId is a live transport peer id only; it is not a user/session/chat continuity owner.",
         "operationId": "upgradeSocket",
         "responses": {
           "101": {
@@ -531,13 +531,32 @@
             "type": "string"
           },
           "state": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "connected",
+              "degraded",
+              "disabled",
+              "needs-binding",
+              "needs-setup",
+              "polling",
+              "processing",
+              "replying",
+              "waiting",
+              "unknown"
+            ]
           },
           "streaming": {
             "type": "boolean"
           },
           "transport": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "http",
+              "polling",
+              "stdio",
+              "websocket",
+              "worker"
+            ]
           },
           "capabilities": {
             "type": "object",
@@ -564,7 +583,7 @@
       },
       "HistoryListPayload": {
         "type": "object",
-        "description": "Required payload for history.list. This is a brain.db ledger query/replay surface, not a session restore or context assembly input.",
+        "description": "Required payload for history.list. This is a brain.db ledger query/replay/audit surface, not a session restore, prompt container, or context assembly input.",
         "properties": {
           "beforeTs": {
             "type": "integer"
@@ -625,7 +644,7 @@
         "required": [
           "text"
         ],
-        "description": "Required payload for gateway.message.send. payload.text is mandatory; route/user/thread fields are transport provenance only.",
+        "description": "Required payload for gateway.message.send. payload.text is mandatory; route/user/thread fields are transport provenance only and do not create cognitive continuity.",
         "properties": {
           "id": {
             "type": "string"
@@ -635,7 +654,7 @@
           },
           "conversationKey": {
             "type": "string",
-            "description": "Routing/audit/dedup key only. Not a Scope, session, or memory owner."
+            "description": "Routing/audit/dedup/reply-anchor key only. Not a Scope, session, memory owner, or cognitive continuity source."
           },
           "chatType": {
             "type": "string",
@@ -648,7 +667,7 @@
           },
           "threadId": {
             "type": "string",
-            "description": "Platform lane/reply metadata only."
+            "description": "Platform lane/reply metadata only. Not a Scope/Fork or cognitive continuity source."
           },
           "user": {
             "$ref": "#/components/schemas/WireUser"
@@ -675,7 +694,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "External actor provenance only. Not a cognitive continuity owner."
+            "description": "External actor provenance only. user.id is not a cognitive continuity owner."
           },
           "displayName": {
             "type": "string"
@@ -685,7 +704,7 @@
       },
       "RuntimeContextInput": {
         "type": "object",
-        "description": "Explicit context entry. Flyflor does not infer Scope/Fork from connection, user, chat, thread, or history query fields.",
+        "description": "Explicit context entry. Flyflor does not infer Scope/Fork from connection, user, chat, thread, conversationKey, or history query fields; current turn context assembly remains current input + MemoryComponent + CrystalComponent + explicit Scope/Fork + Executive visible capability surface.",
         "properties": {
           "activeScope": {
             "$ref": "#/components/schemas/RuntimeScope"
@@ -694,7 +713,8 @@
             "$ref": "#/components/schemas/RuntimeScope"
           },
           "contextForkId": {
-            "type": "string"
+            "type": "string",
+            "description": "Explicit ContextFork id. It is accepted only when provided by the client or runtime metadata, not inferred from natural language or transport ids."
           },
           "skillNames": {
             "type": "array",
@@ -826,6 +846,29 @@
             "type": "array",
             "items": {
               "type": "object",
+              "properties": {
+                "capabilityKind": {
+                  "type": "string",
+                  "enum": [
+                    "computer",
+                    "mcp-tool",
+                    "plugin",
+                    "shell-hook"
+                  ]
+                },
+                "error": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "resultSummary": {
+                  "type": "string"
+                }
+              },
               "additionalProperties": true
             }
           }
@@ -888,6 +931,20 @@
             "type": "array",
             "items": {
               "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "continuitySummary": {
+                  "type": "string"
+                },
+                "maxContextTokens": {
+                  "type": "integer"
+                }
+              },
               "additionalProperties": true
             }
           },
@@ -895,6 +952,34 @@
             "type": "array",
             "items": {
               "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "blackboard",
+                    "deep-think",
+                    "reflection"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "taskPlanId": {
+                  "type": "string"
+                },
+                "contextForkId": {
+                  "type": "string"
+                },
+                "blackboardTurnId": {
+                  "type": "string"
+                }
+              },
               "additionalProperties": true
             }
           },
@@ -902,6 +987,67 @@
             "type": "array",
             "items": {
               "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "blocked",
+                    "done",
+                    "in-progress",
+                    "planned",
+                    "waiting"
+                  ]
+                },
+                "progress": {
+                  "type": "number"
+                },
+                "stepCount": {
+                  "type": "integer"
+                },
+                "completedStepCount": {
+                  "type": "integer"
+                },
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "blocked",
+                          "done",
+                          "in-progress",
+                          "planned",
+                          "waiting"
+                        ]
+                      },
+                      "order": {
+                        "type": "integer"
+                      },
+                      "progress": {
+                        "type": "number"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                }
+              },
               "additionalProperties": true
             }
           }
@@ -922,7 +1068,13 @@
             "type": "string"
           },
           "loopGuardReason": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "failed-call-repeat",
+              "max-calls-exceeded",
+              "repeated-call-no-progress",
+              "unknown-tool-repeat"
+            ]
           },
           "message": {
             "type": "string"
@@ -1250,7 +1402,7 @@
             "$ref": "#/components/schemas/EventUnsubscribeEnvelope"
           }
         ],
-        "description": "Inbound client control frames. Use this schema in Apifox when validating client-to-server WS messages; gateway.message.send and history.list require payload objects."
+        "description": "Inbound client control frames. Use this schema in Apifox when validating client-to-server WS messages; send the example value as the raw WebSocket body. gateway.message.send and history.list require payload objects."
       }
     },
     "examples": {

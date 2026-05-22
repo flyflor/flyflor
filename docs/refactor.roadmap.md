@@ -50,12 +50,12 @@
 
 - Bun 内核封板已完成：`kernel:seal` 已在真实 provider 下跑通，`docs:check`、`check`、deterministic tests、smoke、build、`test:live` 与 `smoke:agent:live` 全绿。
 - R7/R8 已转为“0 漂移维护”：活跃文档、测试注释与主线边界表述必须持续和现状保持同步。
-- `src/protocol/control/*`、`docs/control.protocol.md`、`runtime.events` 与 Rust handoff 文档已经冻结主面；后续重点从 Bun 内核封板切换到 Rust 外壳接线与实现切片。
+- `src/protocol/control/*`、`docs/control.protocol.md`、`runtime.events` 与相关 thin-client 文档已经冻结主面；后续重点保持 Bun 内核封板，不再把本仓库写成 Rust 外壳实现计划。
 - `kernel:seal` 继续保留为 Bun 内核回归门禁；`smoke:runtime:live` 保持 Docker 扩展验证，不进入当前封板硬门槛。
 
 ## 后续
 
-- 按 `docs/rust.gateway.shell.backlog.md` 推进 Rust shell slices。
+- 只保留 `docs/rust.*` 作为未来独立仓库的 `/ws` 交接材料，不在本仓库推进 Rust shell slices。
 - Bun 主线继续只保留认知内核、Executive 外骨骼和 WS/event 血管。
 - `activeProject` 只能作为兼容读口；所有新文档和新测试只写 `activeScope`。
 - `brain.db` 只能描述为 ledger/query plane。

@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { spawnSync } from "node:child_process";
 import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
-import { MemoryEventType } from "../src/protocol/contracts/index.ts";
+import {
+    MemoryEventType,
+    ReplayRecordKind,
+    TaskPlanStatus,
+} from "../src/protocol/contracts/index.ts";
 
 const root = join(tmpdir(), `flyflor-archive-test-${Date.now()}`);
 const brainPath = join(root, "brain.db");
@@ -36,6 +40,49 @@ beforeAll(async () => {
         bucketKey: "2026-04",
         content: "april summary",
         createdAt: Date.UTC(2026, 3, 30),
+    });
+    store.writeContextFork({
+        id: "fork-old",
+        ownerKey: "scope:test",
+        sourceKey: "u1",
+        title: "Archived fork",
+        summary: "Fork summary",
+        continuitySummary: "Archived scope only.",
+        maxContextTokens: 12000,
+        inheritedEventIds: ["e-old-1"],
+        createdAt: "2026-04-16T00:00:00.000Z",
+        updatedAt: "2026-04-16T00:00:00.000Z",
+        sourceEventId: "e-old-1",
+    });
+    store.writeTaskPlan({
+        id: "plan-old",
+        ownerKey: "scope:test",
+        sourceKey: "u1",
+        title: "Archived plan",
+        summary: "Plan summary",
+        status: TaskPlanStatus.InProgress,
+        progress: 0.5,
+        stepCount: 1,
+        completedStepCount: 0,
+        step: [{ id: "step-old", title: "Replay archive", status: TaskPlanStatus.Planned, order: 0 }],
+        createdAt: "2026-04-16T00:00:00.000Z",
+        updatedAt: "2026-04-16T00:00:00.000Z",
+        sourceEventId: "e-old-1",
+    });
+    store.writeReplayRecord({
+        id: "replay-old",
+        ownerKey: "scope:test",
+        sourceKey: "u1",
+        kind: ReplayRecordKind.DeepThink,
+        title: "Archived replay",
+        summary: "Replay summary",
+        visibleFacts: ["archive keeps replay"],
+        openQuestions: [],
+        contextForkId: "fork-old",
+        taskPlanId: "plan-old",
+        sourceEventId: "e-old-1",
+        createdAt: "2026-04-16T00:00:00.000Z",
+        updatedAt: "2026-04-16T00:00:00.000Z",
     });
     store.close();
 
@@ -71,8 +118,20 @@ describe("scripts/brain.archive.ts", () => {
             const summaryIds = (
                 archiveDb.query("SELECT id FROM memory_summary ORDER BY id").all() as Array<{ id: string }>
             ).map((row) => row.id);
+            const forkIds = (archiveDb.query("SELECT id FROM context_forks ORDER BY id").all() as Array<{ id: string }>).map(
+                (row) => row.id,
+            );
+            const taskPlanIds = (
+                archiveDb.query("SELECT id FROM task_plans ORDER BY id").all() as Array<{ id: string }>
+            ).map((row) => row.id);
+            const replayIds = (
+                archiveDb.query("SELECT id FROM replay_records ORDER BY id").all() as Array<{ id: string }>
+            ).map((row) => row.id);
             expect(eventIds).toEqual(["e-old-1", "e-old-2"]);
             expect(summaryIds).toEqual(["summary-old"]);
+            expect(forkIds).toEqual(["fork-old"]);
+            expect(taskPlanIds).toEqual(["plan-old"]);
+            expect(replayIds).toEqual(["replay-old"]);
         } finally {
             archiveDb.close();
         }
@@ -88,5 +147,20 @@ describe("scripts/brain.archive.ts", () => {
         } finally {
             liveDb.close();
         }
+
+        const reopened = new BrainStore({ dbPath: brainPath });
+        return reopened.open().then(() => {
+            try {
+                // Archive catalog locators are the cross-shard replay index. These
+                // reads must work after the live db has been replaced with a fresh shard.
+                expect(reopened.getContextFork("fork-old")?.continuitySummary).toBe("Archived scope only.");
+                expect(reopened.listTaskPlans({ sourceEventId: "e-old-1" })[0]?.id).toBe("plan-old");
+                expect(reopened.listReplayRecords({ sourceEventId: "e-old-1" })[0]?.visibleFacts).toEqual([
+                    "archive keeps replay",
+                ]);
+            } finally {
+                reopened.close();
+            }
+        });
     });
 });
