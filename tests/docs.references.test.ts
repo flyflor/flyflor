@@ -106,7 +106,17 @@ describe("documentation references", () => {
                 }>;
             };
             openapi?: string;
-            paths?: Record<string, unknown>;
+            paths?: Record<string, {
+                get?: {
+                    responses?: Record<string, {
+                        content?: {
+                            "application/json"?: {
+                                schema?: { $ref?: string };
+                            };
+                        };
+                    }>;
+                };
+            }>;
         };
         const wireText = JSON.stringify(contract);
         const schemas = contract.components?.schemas ?? {};
@@ -137,6 +147,15 @@ describe("documentation references", () => {
         expect(contract.paths).toHaveProperty("/health");
         expect(contract.paths).toHaveProperty("/ws");
         expect(contract.paths).not.toHaveProperty("/channels");
+        expect(contract.paths?.["/ws"]?.get?.responses?.["400"]?.content?.["application/json"]?.schema?.$ref).toBe(
+            "#/components/schemas/UpgradeFailedResponse",
+        );
+        expect(contract.paths?.["/ws"]?.get?.responses?.["401"]?.content?.["application/json"]?.schema?.$ref).toBe(
+            "#/components/schemas/UnauthorizedResponse",
+        );
+        expect(contract.paths?.["/ws"]?.get?.responses?.["503"]?.content?.["application/json"]?.schema?.$ref).toBe(
+            "#/components/schemas/NotReadyResponse",
+        );
         expect(contract.components?.schemas).toHaveProperty("SocketEnvelope");
         expect(contract.components?.schemas).toHaveProperty("SocketEventEnvelope");
         expect(contract.components?.schemas).toHaveProperty("SocketClientEnvelope");
@@ -163,6 +182,7 @@ describe("documentation references", () => {
         );
         expect(schemas.ErrorPayload?.properties?.code?.enum).toEqual(Object.values(GatewayControlErrorCode));
         expect(schemas.ReplyMetadata?.properties?.kind?.enum).toEqual(Object.values(GatewayControlReplyMetadataKind));
+        expect(schemas.UpgradeFailedResponse?.properties?.error?.const).toBe("gateway_control_upgrade_failed");
         expect(schemas.GatewayStatusSnapshot?.required).toContain("clientCount");
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("sourceKey");
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("scope");

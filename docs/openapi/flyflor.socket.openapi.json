@@ -114,6 +114,21 @@
               }
             }
           },
+          "400": {
+            "description": "Authorized upgrade was attempted, but the underlying WebSocket upgrade failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeFailedResponse"
+                },
+                "examples": {
+                  "upgradeFailed": {
+                    "$ref": "#/components/examples/SocketUpgradeFailed"
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Socket control hub is not ready.",
             "content": {
@@ -173,6 +188,19 @@
           "error": {
             "type": "string",
             "const": "gateway_control_not_ready"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpgradeFailedResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "const": "gateway_control_upgrade_failed"
           }
         },
         "additionalProperties": false
@@ -1239,6 +1267,11 @@
       "SocketNotReady": {
         "value": {
           "error": "gateway_control_not_ready"
+        }
+      },
+      "SocketUpgradeFailed": {
+        "value": {
+          "error": "gateway_control_upgrade_failed"
         }
       },
       "ServerHello": {

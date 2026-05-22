@@ -225,3 +225,10 @@
   Summary: Tightened the `/ws` runtime wire edge cases by returning structured JSON on authorized upgrade failure and preserving protocol parser details on invalid-envelope error responses.
   Reason: The active socket surface already covered `/health`, `/ws`, hello, ping/pong, status, capability, history, turn, and event lanes; this pass closes small error/upgrade mismatches without changing v1 wire strings or touching DB/context behavior.
   Verification: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/protocol.control.test.ts`; `bun run check`; `git diff --check`
+
+- Status: completed
+  Actor: main-codex
+  Scope: socket-openapi-only-wave-review
+  Summary: Reviewed and merged socket runtime wire polish, OpenAPI drift guard, and real socket live coverage into `codex/seal-coordinator`; added the coordinator closeout for `/ws` 400 `gateway_control_upgrade_failed` in the Apifox contract.
+  Reason: The active round is limited to socket layer plus OpenAPI/Apifox; the merged slices close runtime error consistency, contract drift, and real configured-provider scenario coverage without changing wire-v1 names, DB/context assembly, or the minimal `/health` + `/ws` HTTP surface.
+  Verification: `bun test tests/gateway.module.test.ts tests/gateway.ws.test.ts tests/gateway.control.smoke.test.ts tests/protocol.control.test.ts`; `bun test tests/docs.references.test.ts tests/naming.boundaries.test.ts tests/todo.status.test.ts`; `bun run docs:check`; `bun run check`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run provider:ready -- --require-ready`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run smoke:socket:live`; `FLYFLOR_HOME=/Users/yi./Desktop/yi/flyflors/flyflor bun run test:live`; `git diff --check`

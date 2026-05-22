@@ -382,9 +382,9 @@ Latest full seal validation in this workspace passed:
 - [x] Verified the socket-only subset with focused socket/protocol/docs tests, `bun run docs:check`, configured-provider readiness, `smoke:socket:live`, and `test:live`.
 - [x] Paused the broader docs/prompt/DB/zero-character/release lanes for this round after scope was narrowed to socket layer and OpenAPI/Apifox.
 - [x] Stopped old active tmux development sessions while preserving their worktrees as additive history.
-- [ ] Reallocate a new socket-only tmux/worktree wave from `codex/seal-coordinator`.
-- [ ] New socket-only merge order is runtime wire polish, OpenAPI/Apifox drift polish, live scenario coverage.
-- [ ] Final socket-only acceptance must include focused socket tests, OpenAPI/docs guards, provider readiness, `smoke:socket:live`, `test:live`, `bun run check`, and diff hygiene.
+- [x] Reallocate a new socket-only tmux/worktree wave from `codex/seal-coordinator`.
+- [x] New socket-only merge order is runtime wire polish, OpenAPI/Apifox drift polish, live scenario coverage.
+- [x] Final socket-only acceptance passed with focused socket tests, OpenAPI/docs guards, provider readiness, `smoke:socket:live`, `test:live`, `bun run check`, and diff hygiene.
 
 ## 2026-05-22 Socket/OpenAPI-Only Reallocation
 
@@ -394,10 +394,10 @@ Latest full seal validation in this workspace passed:
 - [x] `/channels` remains removed; HTTP socket surface remains `/health` and `/ws`.
 - [x] `gateway.*` names remain v1 wire compatibility only.
 - [x] Create `codex/socket-runtime-wire-polish` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.runtime.wire.polish`.
-- [ ] Create `codex/apifox-openapi-drift-guard` at `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`.
-- [ ] Create `codex/socket-live-coverage` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`.
-- [ ] Launch `flyflor-socket-openapi` tmux with main/runtime/openapi/live windows.
-- [ ] Review, merge, validate, push, and clean this socket-only wave.
+- [x] Create `codex/apifox-openapi-drift-guard` at `/Users/yi./Desktop/yi/flyflors/worktrees/apifox.openapi.drift.guard`.
+- [x] Create `codex/socket-live-coverage` at `/Users/yi./Desktop/yi/flyflors/worktrees/socket.live.coverage`.
+- [x] Launch `flyflor-socket-openapi` tmux with main/runtime/openapi/live windows.
+- [x] Review, merge, validate, push, and clean this socket-only wave.
 
 ## 2026-05-22 Socket Runtime Wire Polish
 
@@ -406,3 +406,12 @@ Latest full seal validation in this workspace passed:
 - [x] Return structured JSON when an authorized `/ws` upgrade fails.
 - [x] Preserve protocol parse details on `error` envelopes for invalid control protocol input.
 - [x] Validate with focused gateway/control tests, `bun run check`, and `git diff --check`.
+
+## 2026-05-22 Socket/OpenAPI-Only Wave Final State
+
+- [x] Merged `codex/socket-runtime-wire-polish` commit `923f5cb`.
+- [x] Merged `codex/apifox-openapi-drift-guard` commit `6ed3e71`.
+- [x] Merged `codex/socket-live-coverage` commit `5f91d77`.
+- [x] Added coordinator OpenAPI closeout for `/ws` 400 `gateway_control_upgrade_failed`.
+- [x] `smoke:socket:live` now proves capability catalog, socket `event.publish`, `turn.delta`, `turn.final`, and `history.list` replay against the configured provider.
+- [x] No wire-v1 string changed, no DB/context schema changed, and `/channels` stayed removed.
