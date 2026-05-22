@@ -48,6 +48,7 @@
         "smoke:agent:live": "bun test tests/live.agent.test.ts",
         "smoke:socket:ask-loop": "bun run scripts/socket.ask.loop.smoke.ts",
         "smoke:socket:control": "bun run scripts/socket.control.smoke.ts",
+        "smoke:socket:live": "bun run scripts/socket.live.scenario.ts",
         "smoke:socket:service": "bun run scripts/socket.service.smoke.ts",
         "smoke:gateway:ask-loop": "bun run smoke:socket:ask-loop",
         "smoke:gateway:control": "bun run smoke:socket:control",
