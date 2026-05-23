@@ -42,6 +42,9 @@ type PostmanCollectionItem = {
         body?: {
             raw?: string;
         };
+        url?: {
+            raw?: string;
+        };
     };
 };
 
@@ -459,9 +462,10 @@ describe("documentation references", () => {
         expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/expect/thought-snapshot"))).toBe(true);
         expect(apifoxOpenApi["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
 
-        const sendItems = apifoxItems.filter((item) => item.name?.startsWith("WS Send / "));
+        const sendItems = apifoxItems.filter((item) => item.name?.startsWith("Frame 示例-发送 / "));
         expect(sendItems.length).toBeGreaterThan(0);
         for (const item of sendItems) {
+            expect(item.request?.url?.raw).toStartWith("http://127.0.0.1:8788/__apifox/ws/send/");
             const raw = item.request?.body?.raw;
             expect(typeof raw).toBe("string");
             expect(() => parseGatewayControlEnvelope(raw ?? "")).not.toThrow();

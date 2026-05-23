@@ -165,7 +165,6 @@ function buildPostmanCollection(frames: FrameExample[], examples: Record<string,
         item: folders,
         variable: [
             { key: "http_origin", value: "http://127.0.0.1:8788", type: "string" },
-            { key: "ws_origin", value: "ws://127.0.0.1:8788", type: "string" },
         ],
     };
 }
@@ -174,7 +173,7 @@ function postmanItem(frame: FrameExample, examples: Record<string, JsonRecord>):
     const direction = frame.direction === "client->server" ? "send" : "expect";
     const docPath = ["__apifox", "ws", direction, kebab(frame.name)];
     return {
-        name: `${frame.direction === "client->server" ? "WS Send" : "WS Expect"} / ${frame.name}`,
+        name: `${frame.direction === "client->server" ? "Frame 示例-发送" : "Frame 示例-期望"} / ${frame.name}`,
         request: {
             method: "POST",
             header: [
@@ -194,15 +193,17 @@ function postmanItem(frame: FrameExample, examples: Record<string, JsonRecord>):
                 },
             },
             url: {
-                raw: `{{http_origin}}/${docPath.join("/")}`,
-                host: ["{{http_origin}}"],
+                raw: `http://127.0.0.1:8788/${docPath.join("/")}`,
+                protocol: "http",
+                host: ["127", "0", "0", "1"],
+                port: "8788",
                 path: docPath,
             },
             description: [
-                `Real WebSocket URL: {{ws_origin}}/ws`,
+                "真实 WebSocket 地址：ws://127.0.0.1:8788/ws",
                 `Direction: ${frame.direction}`,
                 `Example name: ${frame.name}`,
-                "This HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor.",
+                "这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。",
             ].join("\n"),
         },
         response: (frame.expected ?? []).map((name) => postmanResponse(name, examples[name], frame)),
@@ -238,8 +239,10 @@ function postmanResponse(name: string, body: JsonRecord | undefined, frame: Fram
                 options: { raw: { language: "json" } },
             },
             url: {
-                raw: `{{http_origin}}/__apifox/ws/${frame.direction === "client->server" ? "send" : "expect"}/${kebab(frame.name)}`,
-                host: ["{{http_origin}}"],
+                raw: `http://127.0.0.1:8788/__apifox/ws/${frame.direction === "client->server" ? "send" : "expect"}/${kebab(frame.name)}`,
+                protocol: "http",
+                host: ["127", "0", "0", "1"],
+                port: "8788",
                 path: ["__apifox", "ws", frame.direction === "client->server" ? "send" : "expect", kebab(frame.name)],
             },
         },

@@ -10,7 +10,7 @@
       "name": "00 Handshake",
       "item": [
         {
-          "name": "WS Send / ClientHello",
+          "name": "Frame 示例-发送 / ClientHello",
           "request": {
             "method": "POST",
             "header": [
@@ -30,10 +30,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/client-hello",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/client-hello",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -41,7 +46,7 @@
                 "client-hello"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ClientHello\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ClientHello\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -65,10 +70,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/client-hello",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/client-hello",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -107,7 +117,7 @@
           }
         },
         {
-          "name": "WS Send / Ping",
+          "name": "Frame 示例-发送 / Ping",
           "request": {
             "method": "POST",
             "header": [
@@ -127,10 +137,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/ping",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/ping",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -138,7 +153,7 @@
                 "ping"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: Ping\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: Ping\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -162,10 +177,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/ping",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/ping",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -204,7 +224,7 @@
           }
         },
         {
-          "name": "WS Expect / ServerHello",
+          "name": "Frame 示例-期望 / ServerHello",
           "request": {
             "method": "POST",
             "header": [
@@ -224,10 +244,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/server-hello",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/server-hello",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -235,7 +260,7 @@
                 "server-hello"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ServerHello\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ServerHello\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -257,7 +282,7 @@
           }
         },
         {
-          "name": "WS Expect / Ack",
+          "name": "Frame 示例-期望 / Ack",
           "request": {
             "method": "POST",
             "header": [
@@ -277,10 +302,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/ack",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/ack",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -288,7 +318,7 @@
                 "ack"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: Ack\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: Ack\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -310,7 +340,7 @@
           }
         },
         {
-          "name": "WS Expect / Pong",
+          "name": "Frame 示例-期望 / Pong",
           "request": {
             "method": "POST",
             "header": [
@@ -330,10 +360,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/pong",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/pong",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -341,7 +376,7 @@
                 "pong"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: Pong\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: Pong\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -368,7 +403,7 @@
       "name": "01 Control",
       "item": [
         {
-          "name": "WS Send / GatewayStatusGet",
+          "name": "Frame 示例-发送 / GatewayStatusGet",
           "request": {
             "method": "POST",
             "header": [
@@ -388,10 +423,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/gateway-status-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-status-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -399,7 +439,7 @@
                 "gateway-status-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: GatewayStatusGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: GatewayStatusGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -423,10 +463,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/gateway-status-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-status-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -465,7 +510,7 @@
           }
         },
         {
-          "name": "WS Send / CapabilityCatalogGet",
+          "name": "Frame 示例-发送 / CapabilityCatalogGet",
           "request": {
             "method": "POST",
             "header": [
@@ -485,10 +530,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/capability-catalog-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/capability-catalog-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -496,7 +546,7 @@
                 "capability-catalog-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: CapabilityCatalogGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: CapabilityCatalogGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -520,10 +570,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/capability-catalog-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/capability-catalog-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -562,7 +617,7 @@
           }
         },
         {
-          "name": "WS Expect / GatewayStatusSnapshot",
+          "name": "Frame 示例-期望 / GatewayStatusSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -582,10 +637,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/gateway-status-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/gateway-status-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -593,7 +653,7 @@
                 "gateway-status-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: GatewayStatusSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: GatewayStatusSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -615,7 +675,7 @@
           }
         },
         {
-          "name": "WS Expect / CapabilityCatalogSnapshot",
+          "name": "Frame 示例-期望 / CapabilityCatalogSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -635,10 +695,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/capability-catalog-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/capability-catalog-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -646,7 +711,7 @@
                 "capability-catalog-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: CapabilityCatalogSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: CapabilityCatalogSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -673,7 +738,7 @@
       "name": "02 Live Turn",
       "item": [
         {
-          "name": "WS Send / GatewayMessageSend",
+          "name": "Frame 示例-发送 / GatewayMessageSend",
           "request": {
             "method": "POST",
             "header": [
@@ -693,10 +758,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/gateway-message-send",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-message-send",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -704,7 +774,7 @@
                 "gateway-message-send"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: GatewayMessageSend\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: GatewayMessageSend\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -728,10 +798,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/gateway-message-send",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-message-send",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -771,10 +846,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/gateway-message-send",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-message-send",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -814,10 +894,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/gateway-message-send",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-message-send",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -857,10 +942,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/gateway-message-send",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-message-send",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -900,10 +990,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/gateway-message-send",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/gateway-message-send",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -942,7 +1037,7 @@
           }
         },
         {
-          "name": "WS Send / InvalidGatewayMessageSend",
+          "name": "Frame 示例-发送 / InvalidGatewayMessageSend",
           "request": {
             "method": "POST",
             "header": [
@@ -962,10 +1057,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/invalid-gateway-message-send",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/invalid-gateway-message-send",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -973,7 +1073,7 @@
                 "invalid-gateway-message-send"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: InvalidGatewayMessageSend\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: InvalidGatewayMessageSend\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -997,10 +1097,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/invalid-gateway-message-send",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/invalid-gateway-message-send",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1039,7 +1144,7 @@
           }
         },
         {
-          "name": "WS Expect / TurnDelta",
+          "name": "Frame 示例-期望 / TurnDelta",
           "request": {
             "method": "POST",
             "header": [
@@ -1059,10 +1164,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/turn-delta",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/turn-delta",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1070,7 +1180,7 @@
                 "turn-delta"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TurnDelta\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TurnDelta\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1092,7 +1202,7 @@
           }
         },
         {
-          "name": "WS Expect / TurnFinal",
+          "name": "Frame 示例-期望 / TurnFinal",
           "request": {
             "method": "POST",
             "header": [
@@ -1112,10 +1222,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/turn-final",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/turn-final",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1123,7 +1238,7 @@
                 "turn-final"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TurnFinal\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TurnFinal\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1145,7 +1260,7 @@
           }
         },
         {
-          "name": "WS Expect / TurnFinalWithAsk",
+          "name": "Frame 示例-期望 / TurnFinalWithAsk",
           "request": {
             "method": "POST",
             "header": [
@@ -1165,10 +1280,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/turn-final-with-ask",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/turn-final-with-ask",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1176,7 +1296,7 @@
                 "turn-final-with-ask"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TurnFinalWithAsk\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TurnFinalWithAsk\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1198,7 +1318,7 @@
           }
         },
         {
-          "name": "WS Expect / TurnFinalWithPlanning",
+          "name": "Frame 示例-期望 / TurnFinalWithPlanning",
           "request": {
             "method": "POST",
             "header": [
@@ -1218,10 +1338,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/turn-final-with-planning",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/turn-final-with-planning",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1229,7 +1354,7 @@
                 "turn-final-with-planning"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TurnFinalWithPlanning\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TurnFinalWithPlanning\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1251,7 +1376,7 @@
           }
         },
         {
-          "name": "WS Expect / TurnFinalWithExecutiveLoopPause",
+          "name": "Frame 示例-期望 / TurnFinalWithExecutiveLoopPause",
           "request": {
             "method": "POST",
             "header": [
@@ -1271,10 +1396,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/turn-final-with-executive-loop-pause",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/turn-final-with-executive-loop-pause",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1282,7 +1412,7 @@
                 "turn-final-with-executive-loop-pause"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TurnFinalWithExecutiveLoopPause\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TurnFinalWithExecutiveLoopPause\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1304,7 +1434,7 @@
           }
         },
         {
-          "name": "WS Expect / TurnError",
+          "name": "Frame 示例-期望 / TurnError",
           "request": {
             "method": "POST",
             "header": [
@@ -1324,10 +1454,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/turn-error",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/turn-error",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1335,7 +1470,7 @@
                 "turn-error"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TurnError\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TurnError\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1357,7 +1492,7 @@
           }
         },
         {
-          "name": "WS Expect / InvalidPayloadError",
+          "name": "Frame 示例-期望 / InvalidPayloadError",
           "request": {
             "method": "POST",
             "header": [
@@ -1377,10 +1512,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/invalid-payload-error",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/invalid-payload-error",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1388,7 +1528,7 @@
                 "invalid-payload-error"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: InvalidPayloadError\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: InvalidPayloadError\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -1415,7 +1555,7 @@
       "name": "03 TUI Read Queries",
       "item": [
         {
-          "name": "WS Send / HistoryList",
+          "name": "Frame 示例-发送 / HistoryList",
           "request": {
             "method": "POST",
             "header": [
@@ -1435,10 +1575,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/history-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/history-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1446,7 +1591,7 @@
                 "history-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: HistoryList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: HistoryList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -1470,10 +1615,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/history-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/history-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1512,7 +1662,7 @@
           }
         },
         {
-          "name": "WS Send / HistoryDetailGet",
+          "name": "Frame 示例-发送 / HistoryDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -1532,10 +1682,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/history-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/history-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1543,7 +1698,7 @@
                 "history-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: HistoryDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: HistoryDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -1567,10 +1722,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/history-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/history-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1609,7 +1769,7 @@
           }
         },
         {
-          "name": "WS Send / ScopeList",
+          "name": "Frame 示例-发送 / ScopeList",
           "request": {
             "method": "POST",
             "header": [
@@ -1629,10 +1789,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/scope-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/scope-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1640,7 +1805,7 @@
                 "scope-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ScopeList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ScopeList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -1664,10 +1829,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/scope-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/scope-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1706,7 +1876,7 @@
           }
         },
         {
-          "name": "WS Send / ScopeDetailGet",
+          "name": "Frame 示例-发送 / ScopeDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -1726,10 +1896,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/scope-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/scope-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1737,7 +1912,7 @@
                 "scope-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ScopeDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ScopeDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -1761,10 +1936,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/scope-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/scope-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1803,7 +1983,7 @@
           }
         },
         {
-          "name": "WS Send / ForkList",
+          "name": "Frame 示例-发送 / ForkList",
           "request": {
             "method": "POST",
             "header": [
@@ -1823,10 +2003,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/fork-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/fork-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1834,7 +2019,7 @@
                 "fork-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ForkList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ForkList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -1858,10 +2043,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/fork-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/fork-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1900,7 +2090,7 @@
           }
         },
         {
-          "name": "WS Send / ForkDetailGet",
+          "name": "Frame 示例-发送 / ForkDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -1920,10 +2110,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/fork-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/fork-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -1931,7 +2126,7 @@
                 "fork-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ForkDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ForkDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -1955,10 +2150,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/fork-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/fork-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -1997,7 +2197,7 @@
           }
         },
         {
-          "name": "WS Send / AskList",
+          "name": "Frame 示例-发送 / AskList",
           "request": {
             "method": "POST",
             "header": [
@@ -2017,10 +2217,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/ask-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/ask-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2028,7 +2233,7 @@
                 "ask-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: AskList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: AskList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2052,10 +2257,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/ask-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/ask-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2094,7 +2304,7 @@
           }
         },
         {
-          "name": "WS Send / AskDetailGet",
+          "name": "Frame 示例-发送 / AskDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -2114,10 +2324,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/ask-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/ask-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2125,7 +2340,7 @@
                 "ask-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: AskDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: AskDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2149,10 +2364,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/ask-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/ask-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2191,7 +2411,7 @@
           }
         },
         {
-          "name": "WS Send / BlackboardList",
+          "name": "Frame 示例-发送 / BlackboardList",
           "request": {
             "method": "POST",
             "header": [
@@ -2211,10 +2431,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/blackboard-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/blackboard-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2222,7 +2447,7 @@
                 "blackboard-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: BlackboardList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: BlackboardList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2246,10 +2471,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/blackboard-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/blackboard-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2288,7 +2518,7 @@
           }
         },
         {
-          "name": "WS Send / BlackboardDetailGet",
+          "name": "Frame 示例-发送 / BlackboardDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -2308,10 +2538,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/blackboard-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/blackboard-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2319,7 +2554,7 @@
                 "blackboard-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: BlackboardDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: BlackboardDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2343,10 +2578,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/blackboard-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/blackboard-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2385,7 +2625,7 @@
           }
         },
         {
-          "name": "WS Send / TaskList",
+          "name": "Frame 示例-发送 / TaskList",
           "request": {
             "method": "POST",
             "header": [
@@ -2405,10 +2645,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/task-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/task-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2416,7 +2661,7 @@
                 "task-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: TaskList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: TaskList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2440,10 +2685,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/task-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/task-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2482,7 +2732,7 @@
           }
         },
         {
-          "name": "WS Send / TaskDetailGet",
+          "name": "Frame 示例-发送 / TaskDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -2502,10 +2752,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/task-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/task-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2513,7 +2768,7 @@
                 "task-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: TaskDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: TaskDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2537,10 +2792,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/task-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/task-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2579,7 +2839,7 @@
           }
         },
         {
-          "name": "WS Send / ReplayList",
+          "name": "Frame 示例-发送 / ReplayList",
           "request": {
             "method": "POST",
             "header": [
@@ -2599,10 +2859,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/replay-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/replay-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2610,7 +2875,7 @@
                 "replay-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ReplayList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ReplayList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2634,10 +2899,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/replay-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/replay-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2676,7 +2946,7 @@
           }
         },
         {
-          "name": "WS Send / ReplayDetailGet",
+          "name": "Frame 示例-发送 / ReplayDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -2696,10 +2966,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/replay-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/replay-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2707,7 +2982,7 @@
                 "replay-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ReplayDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ReplayDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2731,10 +3006,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/replay-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/replay-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2773,7 +3053,7 @@
           }
         },
         {
-          "name": "WS Send / ThoughtDetailGet",
+          "name": "Frame 示例-发送 / ThoughtDetailGet",
           "request": {
             "method": "POST",
             "header": [
@@ -2793,10 +3073,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/thought-detail-get",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/thought-detail-get",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2804,7 +3089,7 @@
                 "thought-detail-get"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: ThoughtDetailGet\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: ThoughtDetailGet\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2828,10 +3113,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/thought-detail-get",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/thought-detail-get",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2870,7 +3160,7 @@
           }
         },
         {
-          "name": "WS Send / CrystalList",
+          "name": "Frame 示例-发送 / CrystalList",
           "request": {
             "method": "POST",
             "header": [
@@ -2890,10 +3180,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/crystal-list",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/crystal-list",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -2901,7 +3196,7 @@
                 "crystal-list"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: CrystalList\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: CrystalList\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -2925,10 +3220,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/crystal-list",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/crystal-list",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -2972,7 +3272,7 @@
       "name": "04 TUI Snapshots",
       "item": [
         {
-          "name": "WS Expect / HistorySnapshot",
+          "name": "Frame 示例-期望 / HistorySnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -2992,10 +3292,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/history-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/history-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3003,7 +3308,7 @@
                 "history-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: HistorySnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: HistorySnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3025,7 +3330,7 @@
           }
         },
         {
-          "name": "WS Expect / HistoryDetailSnapshot",
+          "name": "Frame 示例-期望 / HistoryDetailSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3045,10 +3350,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/history-detail-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/history-detail-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3056,7 +3366,7 @@
                 "history-detail-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: HistoryDetailSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: HistoryDetailSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3078,7 +3388,7 @@
           }
         },
         {
-          "name": "WS Expect / ScopeSnapshot",
+          "name": "Frame 示例-期望 / ScopeSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3098,10 +3408,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/scope-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/scope-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3109,7 +3424,7 @@
                 "scope-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ScopeSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ScopeSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3131,7 +3446,7 @@
           }
         },
         {
-          "name": "WS Expect / ScopeDetailSnapshot",
+          "name": "Frame 示例-期望 / ScopeDetailSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3151,10 +3466,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/scope-detail-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/scope-detail-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3162,7 +3482,7 @@
                 "scope-detail-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ScopeDetailSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ScopeDetailSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3184,7 +3504,7 @@
           }
         },
         {
-          "name": "WS Expect / ForkListSnapshot",
+          "name": "Frame 示例-期望 / ForkListSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3204,10 +3524,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/fork-list-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/fork-list-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3215,7 +3540,7 @@
                 "fork-list-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ForkListSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ForkListSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3237,7 +3562,7 @@
           }
         },
         {
-          "name": "WS Expect / ForkSnapshot",
+          "name": "Frame 示例-期望 / ForkSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3257,10 +3582,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/fork-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/fork-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3268,7 +3598,7 @@
                 "fork-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ForkSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ForkSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3290,7 +3620,7 @@
           }
         },
         {
-          "name": "WS Expect / AskSnapshot",
+          "name": "Frame 示例-期望 / AskSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3310,10 +3640,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/ask-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/ask-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3321,7 +3656,7 @@
                 "ask-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: AskSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: AskSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3343,7 +3678,7 @@
           }
         },
         {
-          "name": "WS Expect / AskDetailSnapshot",
+          "name": "Frame 示例-期望 / AskDetailSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3363,10 +3698,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/ask-detail-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/ask-detail-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3374,7 +3714,7 @@
                 "ask-detail-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: AskDetailSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: AskDetailSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3396,7 +3736,7 @@
           }
         },
         {
-          "name": "WS Expect / BlackboardSnapshot",
+          "name": "Frame 示例-期望 / BlackboardSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3416,10 +3756,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/blackboard-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/blackboard-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3427,7 +3772,7 @@
                 "blackboard-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: BlackboardSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: BlackboardSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3449,7 +3794,7 @@
           }
         },
         {
-          "name": "WS Expect / BlackboardDetailSnapshot",
+          "name": "Frame 示例-期望 / BlackboardDetailSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3469,10 +3814,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/blackboard-detail-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/blackboard-detail-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3480,7 +3830,7 @@
                 "blackboard-detail-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: BlackboardDetailSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: BlackboardDetailSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3502,7 +3852,7 @@
           }
         },
         {
-          "name": "WS Expect / TaskSnapshot",
+          "name": "Frame 示例-期望 / TaskSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3522,10 +3872,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/task-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/task-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3533,7 +3888,7 @@
                 "task-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TaskSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TaskSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3555,7 +3910,7 @@
           }
         },
         {
-          "name": "WS Expect / TaskDetailSnapshot",
+          "name": "Frame 示例-期望 / TaskDetailSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3575,10 +3930,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/task-detail-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/task-detail-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3586,7 +3946,7 @@
                 "task-detail-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: TaskDetailSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: TaskDetailSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3608,7 +3968,7 @@
           }
         },
         {
-          "name": "WS Expect / ReplaySnapshot",
+          "name": "Frame 示例-期望 / ReplaySnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3628,10 +3988,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/replay-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/replay-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3639,7 +4004,7 @@
                 "replay-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ReplaySnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ReplaySnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3661,7 +4026,7 @@
           }
         },
         {
-          "name": "WS Expect / ReplayDetailSnapshot",
+          "name": "Frame 示例-期望 / ReplayDetailSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3681,10 +4046,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/replay-detail-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/replay-detail-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3692,7 +4062,7 @@
                 "replay-detail-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ReplayDetailSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ReplayDetailSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3714,7 +4084,7 @@
           }
         },
         {
-          "name": "WS Expect / ThoughtSnapshot",
+          "name": "Frame 示例-期望 / ThoughtSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3734,10 +4104,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/thought-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/thought-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3745,7 +4120,7 @@
                 "thought-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ThoughtSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ThoughtSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3767,7 +4142,7 @@
           }
         },
         {
-          "name": "WS Expect / CrystalSnapshot",
+          "name": "Frame 示例-期望 / CrystalSnapshot",
           "request": {
             "method": "POST",
             "header": [
@@ -3787,10 +4162,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/crystal-snapshot",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/crystal-snapshot",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3798,7 +4178,7 @@
                 "crystal-snapshot"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: CrystalSnapshot\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: CrystalSnapshot\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -3825,7 +4205,7 @@
       "name": "05 Event Stream",
       "item": [
         {
-          "name": "WS Send / EventSubscribe",
+          "name": "Frame 示例-发送 / EventSubscribe",
           "request": {
             "method": "POST",
             "header": [
@@ -3845,10 +4225,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/event-subscribe",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/event-subscribe",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -3856,7 +4241,7 @@
                 "event-subscribe"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: EventSubscribe\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: EventSubscribe\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [
             {
@@ -3880,10 +4265,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/event-subscribe",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/event-subscribe",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -3923,10 +4313,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/event-subscribe",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/event-subscribe",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -3966,10 +4361,15 @@
                   }
                 },
                 "url": {
-                  "raw": "{{http_origin}}/__apifox/ws/send/event-subscribe",
+                  "raw": "http://127.0.0.1:8788/__apifox/ws/send/event-subscribe",
+                  "protocol": "http",
                   "host": [
-                    "{{http_origin}}"
+                    "127",
+                    "0",
+                    "0",
+                    "1"
                   ],
+                  "port": "8788",
                   "path": [
                     "__apifox",
                     "ws",
@@ -4008,7 +4408,7 @@
           }
         },
         {
-          "name": "WS Send / EventUnsubscribe",
+          "name": "Frame 示例-发送 / EventUnsubscribe",
           "request": {
             "method": "POST",
             "header": [
@@ -4028,10 +4428,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/send/event-unsubscribe",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/send/event-unsubscribe",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -4039,7 +4444,7 @@
                 "event-unsubscribe"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: client->server\nExample name: EventUnsubscribe\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: client->server\nExample name: EventUnsubscribe\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -4061,7 +4466,7 @@
           }
         },
         {
-          "name": "WS Expect / EventPublish",
+          "name": "Frame 示例-期望 / EventPublish",
           "request": {
             "method": "POST",
             "header": [
@@ -4081,10 +4486,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/event-publish",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/event-publish",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -4092,7 +4502,7 @@
                 "event-publish"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: EventPublish\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: EventPublish\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -4114,7 +4524,7 @@
           }
         },
         {
-          "name": "WS Expect / ExecutiveLoopPausedEvent",
+          "name": "Frame 示例-期望 / ExecutiveLoopPausedEvent",
           "request": {
             "method": "POST",
             "header": [
@@ -4134,10 +4544,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/executive-loop-paused-event",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/executive-loop-paused-event",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -4145,7 +4560,7 @@
                 "executive-loop-paused-event"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ExecutiveLoopPausedEvent\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ExecutiveLoopPausedEvent\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -4167,7 +4582,7 @@
           }
         },
         {
-          "name": "WS Expect / ExecutiveLoopResumedEvent",
+          "name": "Frame 示例-期望 / ExecutiveLoopResumedEvent",
           "request": {
             "method": "POST",
             "header": [
@@ -4187,10 +4602,15 @@
               }
             },
             "url": {
-              "raw": "{{http_origin}}/__apifox/ws/expect/executive-loop-resumed-event",
+              "raw": "http://127.0.0.1:8788/__apifox/ws/expect/executive-loop-resumed-event",
+              "protocol": "http",
               "host": [
-                "{{http_origin}}"
+                "127",
+                "0",
+                "0",
+                "1"
               ],
+              "port": "8788",
               "path": [
                 "__apifox",
                 "ws",
@@ -4198,7 +4618,7 @@
                 "executive-loop-resumed-event"
               ]
             },
-            "description": "Real WebSocket URL: {{ws_origin}}/ws\nDirection: server->client\nExample name: ExecutiveLoopResumedEvent\nThis HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor."
+            "description": "真实 WebSocket 地址：ws://127.0.0.1:8788/ws\nDirection: server->client\nExample name: ExecutiveLoopResumedEvent\n这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。"
           },
           "response": [],
           "event": [
@@ -4226,11 +4646,6 @@
     {
       "key": "http_origin",
       "value": "http://127.0.0.1:8788",
-      "type": "string"
-    },
-    {
-      "key": "ws_origin",
-      "value": "ws://127.0.0.1:8788",
       "type": "string"
     }
   ]
