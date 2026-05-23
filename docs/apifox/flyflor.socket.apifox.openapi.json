@@ -163,6 +163,12 @@
               "user": {
                 "id": "external-actor-1",
                 "displayName": "User One"
+              },
+              "context": {
+                "toolApprovals": {
+                  "mcpToolCalls": false,
+                  "userToolCalls": false
+                }
               }
             }
           },
@@ -1597,7 +1603,8 @@
                   "text",
                   "conversationKey",
                   "threadId",
-                  "user"
+                  "user",
+                  "context"
                 ],
                 "properties": {
                   "id": {
@@ -1624,6 +1631,31 @@
                       },
                       "displayName": {
                         "type": "string"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "context": {
+                    "type": "object",
+                    "required": [
+                      "toolApprovals"
+                    ],
+                    "properties": {
+                      "toolApprovals": {
+                        "type": "object",
+                        "required": [
+                          "mcpToolCalls",
+                          "userToolCalls"
+                        ],
+                        "properties": {
+                          "mcpToolCalls": {
+                            "type": "boolean"
+                          },
+                          "userToolCalls": {
+                            "type": "boolean"
+                          }
+                        },
+                        "additionalProperties": true
                       }
                     },
                     "additionalProperties": true

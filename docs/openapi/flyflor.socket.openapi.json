@@ -851,6 +851,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "toolApprovals": {
+            "$ref": "#/components/schemas/RuntimeToolApprovals"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RuntimeToolApprovals": {
+        "type": "object",
+        "description": "Explicit one-turn tool approval bridge for trusted local WS/TUI clients. These flags only install approval callbacks for this gateway.message.send turn; they do not change sandbox policy, config, catalog visibility, or future turns.",
+        "properties": {
+          "mcpToolCalls": {
+            "type": "boolean",
+            "description": "When true, approve MCP-compatible runtime tool calls for this turn after the normal catalog, schema, Executive, and sandbox gates."
+          },
+          "userToolCalls": {
+            "type": "boolean",
+            "description": "When true, approve user-manifest tool calls for this turn after the normal catalog, schema, Executive, and sandbox gates."
           }
         },
         "additionalProperties": false
@@ -2482,6 +2500,12 @@
             "user": {
               "id": "external-actor-1",
               "displayName": "User One"
+            },
+            "context": {
+              "toolApprovals": {
+                "mcpToolCalls": false,
+                "userToolCalls": false
+              }
             }
           }
         }

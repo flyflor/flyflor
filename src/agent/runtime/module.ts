@@ -181,7 +181,7 @@ const BUILTIN_SHELL_CATALOG_ENTRY: McpToolCatalogEntry = {
     tool: {
         name: BUILTIN_SHELL_TOOL,
         description:
-            "Run an approved local process in an explicit working directory with structured stdin, timeout, and bounded output. Execution is only available when the current tool plan and sandbox policy allow it.",
+            "Run an approved local executable with argv args, explicit working directory, structured stdin, timeout, and bounded output. This is not a shell language: do not pass POSIX shell, PowerShell, pipes, redirects, or heredoc syntax unless the command is an explicit shell executable. Execution is only available when the current tool plan and sandbox policy allow it.",
         inputSchema: {
             type: "object",
             properties: {
@@ -838,7 +838,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 : mcpExecution.canExecute
                   ? ToolPermission.Network
                   : undefined,
-            projectScoped: Boolean(context.activeScope) || sourceSurfaceForMessage(message) === Channel.Stdio,
+            projectScoped: Boolean(context.activeScope) || this.isLocalProjectSurface(sourceSurfaceForMessage(message)),
             prompts: mcpCatalogBuild.prompts,
             pluginCapabilities: pluginCapabilityCatalog,
             resources: mcpCatalogBuild.resources,
@@ -2133,6 +2133,10 @@ export class RuntimeModule extends RuntimeBoundary {
             ...(includeShell ? [gitToolset.serverDefinition()] : []),
             ...(includeShell ? [this.builtinShellServerDefinition()] : []),
         ];
+    }
+
+    private isLocalProjectSurface(channel: string): boolean {
+        return channel === Channel.Stdio || channel === Channel.Ws;
     }
 
     private builtinShellServerDefinition(): Awaited<ReturnType<typeof loadMcpServers>>[number] {

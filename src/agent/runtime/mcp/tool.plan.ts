@@ -182,6 +182,6 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
     }
 
     private surfaceForChannel(channel: ChannelName): TrustSurface {
-        return channel === Channel.Stdio ? TrustSurface.Local : TrustSurface.Channel;
+        return channel === Channel.Stdio || channel === Channel.Ws ? TrustSurface.Local : TrustSurface.Channel;
     }
 }

@@ -1,8 +1,10 @@
-# MCP 工具系统
+# MCP Tool System
 
 ## 一句话定位
 
-Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等 capability。当前 runtime 通过 Executive Tool Runtime 执行 tools；resources / prompts 已进入 Executive descriptor，并通过 `RuntimeMcpCapabilityReader` 做受控读取。所有执行和读取仍经 Executive Tool Plan、Sandbox 决策和审计事件。
+Flyflor treats MCP as one capability ingress, not the whole execution model. Built-in local file/git/shell capabilities are registered by code, external MCP/user/plugin capabilities are discovered from explicit manifests or servers, and the prompt only receives the filtered catalog for the current turn. Runtime executes tools through Executive Tool Runtime; resources and prompts enter Executive descriptors and can be read through `RuntimeMcpCapabilityReader`. Every execution/read still passes Executive Tool Plan, Sandbox decisions, and audit events.
+
+This is registry-driven rather than prompt-discovered: the model may only call tools present in the JSON catalog. It must not invent shell/git/file abilities from natural language. Configuration only controls policies, credentials, paths, and external registrations; it must not compensate for unclear ownership or missing core capabilities.
 
 ## 相关代码路径
 
@@ -13,7 +15,7 @@ Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等
 - `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
 - `src/agent/mcp/schema.validate.ts` — tool inputSchema 轻量校验
 - `src/agent/runtime/module.ts` — catalog TTL/LRU 缓存 + 工具循环
-- `src/agent/runtime/mcp/workspace.ts` — 内置只读 workspace 工具（list/read/search/glob/stat）
+- `src/agent/runtime/mcp/workspace.ts` — built-in local file tools (`list/read/search/glob/stat/tree/write/edit`)
 - `src/agent/runtime/mcp/git.ts` — 内置只读 git 工具（status/diff/show）
 - `src/agent/prompts/index.ts` — `renderMcpContextPrompt`
 - `templates/prompts/mcp.context.md` — 模型协议提示与工具目录说明
@@ -82,25 +84,32 @@ resources / prompts 只消费 MCP 标准结构化字段，不从描述文本推�
 
 ## 调用协议（模型侧）
 
-模型在同一轮回复内插入：
+The model emits this structured block in a turn:
 
 ````markdown
 <flyflor_mcp_calls>{"calls":[{"server":"filesystem","tool":"read","input":{"path":"./README.md"}}]}</flyflor_mcp_calls>
 ````
 
-代码校验 `server / tool` 是否在 catalog，并在调用前对 `input` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。工具目录和工具结果回灌只由代码输出 JSON 数据；调用规则和结果使用说明统一写在 `mcp.context.md` 模板里。
+Runtime verifies `server / tool` against the current catalog and validates `input` against the lightweight JSON Schema subset before execution. Complex schemas are still enforced by the source server/tool. Tool catalogs and tool results are code-generated JSON; `mcp.context.md` only explains the protocol and how to use the visible catalog.
 
 ## 内置工具
 
-Runtime 默认会把只读 `workspace` server 注入工具目录，让模型能先看见当前工作区再回答本地代码问题：
+Runtime injects a built-in `workspace` server so local CLI/TUI turns can inspect and edit files without relying on platform-specific shell snippets:
 
 - `workspace.list`：列出目录项。
 - `workspace.read`：读取 UTF-8 文本文件，带 offset/limit 上限。
 - `workspace.search`：做精确文本搜索，跳过 `.git`、`node_modules`、`dist` 等重目录。
 - `workspace.glob`：按 `**/*.ts` 这类 glob 模式发现文件路径，默认跳过 `.git`、`node_modules`、`dist` 等重目录，并对扫描量和返回量设上限。
 - `workspace.stat`：读取文件或目录元信息，不读取文件内容。
+- `workspace.tree`：返回有深度和条数上限的递归目录树；用于项目级阅读、审查和架构梳理的第一步。
+- `workspace.write`：创建或覆盖 UTF-8 文本文件，写入走审批/审计，使用 Node/Bun 文件 API 和原子临时文件替换。
+- `workspace.edit`：对现有文本文件执行一次精确片段替换；匹配为 0 或多次时硬失败，除非显式 `replaceAll=true`。
 
-`workspace` 工具不写文件、不 spawn 子进程。工作区内相对路径默认可读；绝对路径或 realpath 后逃出 `paths.projectDir` 的上级路径会先走同一套工具审批回调，用户批准后才允许只读访问。执行类能力仍需要 sandbox：例如 `shell.run` 只有在 `shellHookApproval=allow/ask` 时才会出现在工具目录里；本地交互式 chat 默认临时使用 `ask`，`--accept-hooks` 临时使用 `allow`。
+`workspace` tools do not spawn shell processes. Relative paths resolve from `paths.projectDir`; absolute paths may target any local file. Project-local reads run directly; reads outside the project and every write/edit request require the same approval callback and publish sandbox approval/denial events. Missing approval is an explicit tool error, not a silent fallback. This keeps Windows/macOS compatibility because file work uses `node:path` and `node:fs/promises`, not `bash`, `cat`, `sed`, heredocs, or Unix-only patches.
+
+Execution-class tools still require sandbox permission. `shell.run` appears only when `shellHookApproval=allow/ask`; `--accept-hooks` is an explicit process flag that upgrades shell hooks to `allow` for the current local process.
+
+`shell.run` is cross-platform only at the process-spawn boundary: it uses argv-style execution (`command` + `args[]`) instead of an implicit Unix shell. It does not make `ls`, `cat`, `sed`, POSIX pipelines, heredocs, or PowerShell builtins portable. Cross-platform file work must use `workspace.*`; shell should call real executables only when the user or task explicitly requires a local process.
 
 工作区或全局 `tools.jsonc` 中声明的 user tools 会以虚拟 `user` server 暴露，例如 `user.local.echo`。它们仍复用 `<flyflor_mcp_calls>` 调用协议，但执行不走远端 MCP server，而是走本地 `process-json` bridge 和 Plugin sandbox gate。这样模型侧只有一个工具调用协议，执行侧仍能保留 Executive descriptor、approval、audit、result summary 和 loop guard。
 
@@ -111,6 +120,16 @@ Runtime 默认会把只读 `workspace` server 注入工具目录，让模型能�
 - `git.show`：执行 bounded `git show --no-ext-diff --stat --patch --format=fuller`，默认查看 `HEAD`，支持 revision 和单一路径过滤。
 
 `git` 工具底层仍走 `ShellHookExecutor`，命令白名单固定为 `git`，argv 由代码组装，不接受模型传入任意命令字符串；因此它继承 `shellHookApproval=allow/ask/deny` 的审批、超时、输出截断和审计事件。
+
+## Capability Registration Model
+
+The execution surface is assembled from three registries:
+
+- Built-in registry: code-owned local file tools, git tools, and shell hook descriptor.
+- Scanned registry: MCP `tools/resources/prompts`, user `tools.jsonc`, and plugin manifests.
+- Turn registry: Executive Trust + Sandbox filters the above into the catalog visible to the model for this specific turn.
+
+The prompt is not a discovery mechanism. It only receives the already-filtered catalog and tells the model to call exact `server`/`tool` names from that catalog.
 
 ## 数据结构
 

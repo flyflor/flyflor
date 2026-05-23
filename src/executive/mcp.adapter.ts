@@ -164,6 +164,7 @@ export class McpCatalogAdapter {
 
     private permissionFor(entry: McpCatalogEntry): ToolPermission {
         if (entry.server === "computer") return ToolPermission.Computer;
+        if (entry.server === this.workspaceServer && this.isWorkspaceWriteTool(entry.tool.name)) return ToolPermission.Write;
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return ToolPermission.Read;
         if (entry.server === this.shellServer) return ToolPermission.Execute;
         return ToolPermission.Network;
@@ -171,6 +172,7 @@ export class McpCatalogAdapter {
 
     private readOnlyFor(entry: McpCatalogEntry): boolean {
         if (entry.server === "computer") return false;
+        if (entry.server === this.workspaceServer && this.isWorkspaceWriteTool(entry.tool.name)) return false;
         return entry.server !== this.shellServer;
     }
 
@@ -184,5 +186,9 @@ export class McpCatalogAdapter {
     private safeName(value: string): string {
         const normalized = value.toLowerCase().replace(/[^a-z0-9_.-]+/gu, ".");
         return normalized.replace(/^[^a-z]+/u, "") || "item";
+    }
+
+    private isWorkspaceWriteTool(toolName: string): boolean {
+        return toolName === "write" || toolName === "edit";
     }
 }

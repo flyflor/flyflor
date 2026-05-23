@@ -8,7 +8,7 @@ if (process.argv.includes("--version") || process.argv.includes("-V")) {
 }
 
 const mode = normalizeEntryMode(process.argv.slice(2));
-const app = await getFlyFlor({ argv: ["bun", "flyflor", mode], mode });
+const app = await getFlyFlor({ argv: process.argv, mode });
 await app.start();
 
 function normalizeEntryMode(argv: string[]): typeof RuntimeMode.Chat | typeof RuntimeMode.Gateway | typeof RuntimeMode.Socket {

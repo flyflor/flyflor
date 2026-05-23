@@ -646,3 +646,27 @@ Kernel V2 acceptance focus：
 - [x] `scope.recall` 提示词明确为语义裁决器：先判断 `none | load | ask`，再决定是否加载命名工作上下文记录。
 - [x] 扩展 prompt lint，检查 canonical `.md`、`.zh.cn.md` 镜像和 docs prompt 模板正文不得暴露内部术语。
 - [x] 运行提示词 focused tests、docs check、type check 和 `git diff --check`。
+
+## 2026-05-23 Dream Graph 旧库 Schema 修复
+
+- [x] 复现 `memory.dream.failed` collect 阶段 `SQLiteError: no such column: owner_key` 根因：旧 `crystal.db` graph 表缺 `owner_key`，`CREATE TABLE IF NOT EXISTS` 不会补列。
+- [x] 在 `SQLiteGraphStore` 初始化时检测旧 graph 表关键列，发现 legacy schema 后按当前旧数据清空策略 drop graph tables 并重建。
+- [x] 补充旧 `graph_gems` 缺 `owner_key` 的回归测试，确保 dream-style owner query 不再报错。
+- [x] 修正 WS full E2E scripted fallback 对 scope recall 提示词的探测条件，避免依赖已清理的内部短语。
+- [x] 运行 graph/dream focused tests、真实 `/ws` 全场景 E2E、type check、docs check 和 `git diff --check`。
+
+## 2026-05-24 核心调度与执行审批闭合
+
+- [x] 明确执行层策略：不把 `shell.run` 做成跨平台脚本语言，跨平台文件能力走 `workspace.*`，本地进程只走单 executable + argv。
+- [x] 为 WS/TUI 本地入口补齐 `gateway.message.send.payload.context.toolApprovals` 契约，本轮审批只安装当前 turn 的 approve callback，不修改 sandbox/config/catalog。
+- [x] 更新 OpenAPI/Apifox 源契约、消息目录和 tester，确保前端能在真实 `/ws` 上看到 `mcpToolCalls` / `userToolCalls` 示例。
+- [x] 修正 runtime 类型出口，让 socket 只通过 runtime index 引用 `RuntimeStreamOptions`。
+- [x] 运行 focused WS/Executive/Skill/Docs 测试、真实 `/ws` 全场景 E2E、`docs:check`、`check` 和 `git diff --check`。
+
+## 2026-05-24 本地代码阅读调用层修复
+
+- [x] 复盘调用层问题：模型会在本地项目阅读请求中直接自然语言声称已查看，而没有先输出工具调用块。
+- [x] 将 `templates/prompts/mcp.context.md` / `.zh.cn.md` 改为本地路径、代码库、文件内容和项目审查请求必须先调用文件工具，收到工具结果后才能声明已读。
+- [x] 新增内建只读 `workspace.tree`，返回带深度和条数上限的递归目录树，作为项目级扫描第一步。
+- [x] `workspace.tree` 默认跳过运行态顶层目录和重目录，避免 `.flyflor`、brain、cache、memory、prompts 等运行态数据淹没源码结构。
+- [x] 补充 workspace tree、prompt lint 和文档测试，验证工具目录暴露 tree 且本地项目报告链路先拿结构证据。

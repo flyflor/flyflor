@@ -2,7 +2,9 @@
 
 ## 一句话定位
 
-Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等 capability。当前 runtime 通过 Executive Tool Runtime 执行 tools；resources / prompts 已进入 Executive descriptor，并通过 `RuntimeMcpCapabilityReader` 做受控读取。所有执行和读取仍经 Executive Tool Plan、Sandbox 决策和审计事件。
+Flyflor 把 MCP 当成能力接入层之一，而不是完整执行模型。内建本地文件/git/shell 能力由代码注册，外部 MCP/user/plugin 能力由显式 manifest 或 server 扫描发现，提示词只拿到本轮过滤后的 catalog。当前 runtime 通过 Executive Tool Runtime 执行 tools；resources / prompts 已进入 Executive descriptor，并通过 `RuntimeMcpCapabilityReader` 做受控读取。所有执行和读取仍经 Executive Tool Plan、Sandbox 决策和审计事件。
+
+这不是“提示词自行发现工具”：模型只能调用 JSON catalog 中存在的工具，不能从自然语言猜测 shell/git/file 能力。配置只负责策略、凭据、路径和外部注册，不能用来补救 owner 不清或核心能力缺失。
 
 ## 相关代码路径
 
@@ -13,7 +15,7 @@ Flyflor 把 MCP 当成能力接入层：tools、resources、prompts 都是一等
 - `src/agent/mcp/tool.calls.ts` — `<flyflor_mcp_calls>` 解析
 - `src/agent/mcp/schema.validate.ts` — tool inputSchema 轻量校验
 - `src/agent/runtime/module.ts` — catalog TTL/LRU 缓存 + 工具循环
-- `src/agent/runtime/mcp/workspace.ts` — 内置只读 workspace 工具（list/read/search/glob/stat）
+- `src/agent/runtime/mcp/workspace.ts` — 内建本地文件工具（list/read/search/glob/stat/tree/write/edit）
 - `src/agent/runtime/mcp/git.ts` — 内置只读 git 工具（status/diff/show）
 - `src/agent/prompts/index.ts` — `renderMcpContextPrompt`
 - `templates/prompts/mcp.context.md` — 模型协议提示与工具目录说明
@@ -88,19 +90,26 @@ resources / prompts 只消费 MCP 标准结构化字段，不从描述文本推�
 <flyflor_mcp_calls>{"calls":[{"server":"filesystem","tool":"read","input":{"path":"./README.md"}}]}</flyflor_mcp_calls>
 ````
 
-代码校验 `server / tool` 是否在 catalog，并在调用前对 `input` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。工具目录和工具结果回灌只由代码输出 JSON 数据；调用规则和结果使用说明统一写在 `mcp.context.md` 模板里。
+代码校验 `server / tool` 是否在本轮 catalog，并在调用前对 `input` 做轻量 JSON Schema 校验；复杂 schema 仍以 server 端校验为准。工具目录和工具结果回灌只由代码输出 JSON 数据；调用规则和结果使用说明统一写在 `mcp.context.md` 模板里。
 
 ## 内置工具
 
-Runtime 默认会把只读 `workspace` server 注入工具目录，让模型能先看见当前工作区再回答本地代码问题：
+Runtime 默认会把内建 `workspace` server 注入工具目录，让本地 CLI/TUI 可以检查和编辑文件，不需要依赖平台相关 shell 片段：
 
 - `workspace.list`：列出目录项。
 - `workspace.read`：读取 UTF-8 文本文件，带 offset/limit 上限。
 - `workspace.search`：做精确文本搜索，跳过 `.git`、`node_modules`、`dist` 等重目录。
 - `workspace.glob`：按 `**/*.ts` 这类 glob 模式发现文件路径，默认跳过 `.git`、`node_modules`、`dist` 等重目录，并对扫描量和返回量设上限。
 - `workspace.stat`：读取文件或目录元信息，不读取文件内容。
+- `workspace.tree`：返回有深度和条数上限的递归目录树；用于项目级阅读、审查和架构梳理的第一步。
+- `workspace.write`：创建或覆盖 UTF-8 文本文件，写入走审批/审计，使用 Node/Bun 文件 API 和原子临时文件替换。
+- `workspace.edit`：对现有文本文件执行一次精确片段替换；匹配为 0 或多次时硬失败，除非显式 `replaceAll=true`。
 
-`workspace` 工具不写文件、不 spawn 子进程。工作区内相对路径默认可读；绝对路径或 realpath 后逃出 `paths.projectDir` 的上级路径会先走同一套工具审批回调，用户批准后才允许只读访问。执行类能力仍需要 sandbox：例如 `shell.run` 只有在 `shellHookApproval=allow/ask` 时才会出现在工具目录里；本地交互式 chat 默认临时使用 `ask`，`--accept-hooks` 临时使用 `allow`。
+`workspace` 工具不 spawn 子进程。相对路径从 `paths.projectDir` 解析；绝对路径可以指向电脑上的任意本地文件。项目内读取直接执行；项目外读取和所有写入/编辑请求都必须走同一套审批回调，并发布 sandbox approval/denial 事件。没有审批就是明确工具错误，不做静默兜底。文件能力使用 `node:path` 与 `node:fs/promises`，不依赖 `bash`、`cat`、`sed`、heredoc 或 Unix-only patch，因此 macOS/Windows 都保持同一条路径。
+
+执行类能力仍需要 sandbox：例如 `shell.run` 只有在 `shellHookApproval=allow/ask` 时才会出现在工具目录里；`--accept-hooks` 是显式进程参数，只对当前本地进程把 shell hook 升级为 `allow`。
+
+`shell.run` 只在进程启动边界跨平台：它使用 argv 风格执行（`command` + `args[]`），不会隐式进入 Unix shell。它不能让 `ls`、`cat`、`sed`、POSIX 管道、heredoc 或 PowerShell builtin 自动跨平台。跨平台文件工作必须使用 `workspace.*`；shell 只用于用户或任务明确需要本地进程时调用真实可执行文件。
 
 工作区或全局 `tools.jsonc` 中声明的 user tools 会以虚拟 `user` server 暴露，例如 `user.local.echo`。它们仍复用 `<flyflor_mcp_calls>` 调用协议，但执行不走远端 MCP server，而是走本地 `process-json` bridge 和 Plugin sandbox gate。这样模型侧只有一个工具调用协议，执行侧仍能保留 Executive descriptor、approval、audit、result summary 和 loop guard。
 
@@ -111,6 +120,16 @@ Runtime 默认会把只读 `workspace` server 注入工具目录，让模型能�
 - `git.show`：执行 bounded `git show --no-ext-diff --stat --patch --format=fuller`，默认查看 `HEAD`，支持 revision 和单一路径过滤。
 
 `git` 工具底层仍走 `ShellHookExecutor`，命令白名单固定为 `git`，argv 由代码组装，不接受模型传入任意命令字符串；因此它继承 `shellHookApproval=allow/ask/deny` 的审批、超时、输出截断和审计事件。
+
+## 能力注册模型
+
+执行面由三层 registry 装配：
+
+- 内建 registry：代码 owner 注册本地文件工具、git 工具和 shell hook descriptor。
+- 扫描 registry：MCP `tools/resources/prompts`、用户 `tools.jsonc`、plugin manifest。
+- 轮内 registry：Executive Trust + Sandbox 把上面能力过滤成本轮模型可见 catalog。
+
+提示词不是发现机制。它只接收已经过滤好的 catalog，并要求模型使用 catalog 里的精确 `server` / `tool` 名称。
 
 ## 数据结构
 

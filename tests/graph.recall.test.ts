@@ -6,6 +6,57 @@ import { Database } from "bun:sqlite";
 import { SQLiteGraphStore } from "../src/cognitive/hippocampus/memory/graph/index.ts";
 
 describe("SQLiteGraphStore recall accounting", () => {
+    test("drops legacy graph tables without owner_key before dream-style owner queries", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-graph-legacy-owner-"));
+        const dbFile = join(root, "crystal.db");
+        const legacy = new Database(dbFile);
+        try {
+            legacy.exec(`
+                CREATE TABLE graph_gems (
+                    id TEXT PRIMARY KEY,
+                    symbols_json TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    embedding_json TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    support INTEGER NOT NULL,
+                    protected INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+            `);
+            legacy.run(
+                "INSERT INTO graph_gems (id, symbols_json, summary, embedding_json, confidence, support, protected, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                ["legacy-gem", "[\"old\"]", "old gem", "[1,0,0,0]", 0.2, 1, 0, 1],
+            );
+        } finally {
+            legacy.close();
+        }
+
+        const store = new SQLiteGraphStore({ dbFile });
+        try {
+            const rows = await store.listGemDriftCandidates({
+                ownerKey: "turn:test",
+                nowMs: Date.UTC(2026, 4, 23, 0, 0, 0),
+                minContradictionCount: 1,
+                maxStaleMs: 1,
+                maxConfidence: 1,
+                limit: 10,
+            });
+            expect(rows).toEqual([]);
+
+            const db = new Database(dbFile, { readonly: true });
+            try {
+                const columns = db.query("PRAGMA table_info(graph_gems)").all() as Array<{ name: string }>;
+                expect(columns.map((column) => column.name)).toContain("owner_key");
+                const legacyRows = db.query("SELECT id FROM graph_gems").all();
+                expect(legacyRows).toEqual([]);
+            } finally {
+                db.close();
+            }
+        } finally {
+            await rm(root, { force: true, recursive: true });
+        }
+    });
+
     test("recallMemoryNodes increments recallCount and lastAccessedAt for returned nodes", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-graph-recall-"));
         const dbFile = join(root, "crystal.db");

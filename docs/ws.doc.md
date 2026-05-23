@@ -775,6 +775,10 @@ history turns. It is assembled from stored structured plan/fork/replay records a
     "context": {
       "contextForkId": "fork-1",
       "skillNames": ["review"],
+      "toolApprovals": {
+        "mcpToolCalls": false,
+        "userToolCalls": false
+      },
       "activeScope": {
         "id": "scope-1",
         "projectDir": "/workspace/project",
@@ -802,9 +806,15 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 - envelope 顶层 `requestId` 会直接透传给 runtime，成为同一轮 `turn.*` 与 `event.publish` 的关联键
 - `context.activeScope` 是 canonical 字段，只有在 `id + projectDir + projectMemoryDir` 都齐全时才会被接收
 - `context.activeProject` 是兼容别名；若同时传入，以 `activeScope` 为准
+- `context.toolApprovals` 是本轮显式工具审批桥，只对当前 `gateway.message.send` 生效
+- `toolApprovals.mcpToolCalls=true` 时，WS 会为本轮 MCP-compatible 工具调用安装 approve callback；catalog、schema、Executive 调度和 sandbox gate 仍然照常执行
+- `toolApprovals.userToolCalls=true` 时，WS 会为本轮 user manifest tool 调用安装 approve callback；它不会修改全局 sandbox 配置，也不会影响下一轮
+- 未传或为 `false` 时，缺少审批会作为明确工具错误返回，不做静默兜底
 - `chatType` 缺失时默认 `direct`
 - `platform actor id` 缺失时默认 `ws-actor`
 - `conversationKey` / `threadId` 只属于 socket route，不会参与认知连续性
+
+TUI/本地调试端只有在用户已经确认本轮允许执行工具时才应传 `toolApprovals=true`。只读 query 命令不需要这个字段。
 
 代码：
 

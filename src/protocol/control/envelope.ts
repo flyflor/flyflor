@@ -395,6 +395,7 @@ export interface GatewayControlMessageInput {
         activeProject?: GatewayControlProjectScope;
         contextForkId?: string;
         skillNames?: string[];
+        toolApprovals?: GatewayControlToolApprovals;
     };
     id?: string;
     metadata?: Record<string, unknown>;
@@ -406,6 +407,11 @@ export interface GatewayControlMessageInput {
         /** External actor provenance only; not cognitive continuity. */
         id?: string;
     };
+}
+
+export interface GatewayControlToolApprovals {
+    mcpToolCalls?: boolean;
+    userToolCalls?: boolean;
 }
 
 export interface GatewayControlProjectScope {
@@ -705,10 +711,19 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
                   skillNames: Array.isArray(payload.context.skillNames)
                       ? payload.context.skillNames.filter((item): item is string => typeof item === "string")
                       : undefined,
+                  toolApprovals: readGatewayControlToolApprovals(payload.context.toolApprovals),
               }
             : undefined,
         attachments: Array.isArray(payload.attachments) ? payload.attachments as GatewayMessage["attachments"] : undefined,
         metadata: isRecord(payload.metadata) ? payload.metadata : undefined,
+    };
+}
+
+function readGatewayControlToolApprovals(value: unknown): GatewayControlToolApprovals | undefined {
+    if (!isRecord(value)) return undefined;
+    return {
+        mcpToolCalls: value.mcpToolCalls === true,
+        userToolCalls: value.userToolCalls === true,
     };
 }
 

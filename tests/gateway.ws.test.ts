@@ -1146,6 +1146,10 @@ describe("SocketControlHub", () => {
                             },
                             contextForkId: "fork-1",
                             skillNames: ["skill-a"],
+                            toolApprovals: {
+                                mcpToolCalls: true,
+                                userToolCalls: true,
+                            },
                         },
                         text: "hello",
                         user: { id: "u-1" },
@@ -1171,6 +1175,8 @@ describe("SocketControlHub", () => {
             requestId: "client-req-1",
             skillNames: ["skill-a"],
         });
+        expect(await calls[0]?.options?.approveMcpToolCall?.({ server: "workspace", tool: "write", input: {} })).toBe(true);
+        expect(await calls[0]?.options?.approveUserToolCall?.({ descriptor: { name: "user.tool" } } as never)).toBe(true);
         expect(sent(socket)[1]).toMatchObject({
             correlationId: "send-live-1",
             requestId: "client-req-1",

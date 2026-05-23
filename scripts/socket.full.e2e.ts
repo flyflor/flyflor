@@ -46,7 +46,7 @@ class RecordingSink implements EventSink {
 class ScriptedE2EModel implements ModelClient {
     public async generate(messages: ModelMessage[]): Promise<string> {
         const system = messages[0]?.content ?? "";
-        if (system.includes("scope recall gate")) {
+        if (system.includes("Task: decide whether the current user request refers to one existing named work context.")) {
             return JSON.stringify({
                 decision: "load",
                 scopeId: SCOPE_ID,

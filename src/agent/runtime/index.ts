@@ -1,4 +1,9 @@
-export { RuntimeModule, startHumanChat, promptApproveMcpToolCall } from "./module.ts";
+export {
+    RuntimeModule,
+    startHumanChat,
+    promptApproveMcpToolCall,
+    type RuntimeStreamOptions,
+} from "./module.ts";
 export {
     decideBlackboardRoute,
     parseBlackboardRouteDecision,

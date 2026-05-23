@@ -1,5 +1,5 @@
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, parse, relative, resolve } from "node:path";
 import type { FlyflorPaths } from "../../../config/index.ts";
 import type {
     McpCallResult,
@@ -10,11 +10,14 @@ import type {
 
 export const WORKSPACE_SERVER = "workspace";
 
-const WORKSPACE_LIST_TOOL = "list";
-const WORKSPACE_READ_TOOL = "read";
-const WORKSPACE_SEARCH_TOOL = "search";
-const WORKSPACE_GLOB_TOOL = "glob";
-const WORKSPACE_STAT_TOOL = "stat";
+export const WORKSPACE_LIST_TOOL = "list";
+export const WORKSPACE_READ_TOOL = "read";
+export const WORKSPACE_SEARCH_TOOL = "search";
+export const WORKSPACE_GLOB_TOOL = "glob";
+export const WORKSPACE_STAT_TOOL = "stat";
+export const WORKSPACE_TREE_TOOL = "tree";
+export const WORKSPACE_WRITE_TOOL = "write";
+export const WORKSPACE_EDIT_TOOL = "edit";
 const DEFAULT_LIST_LIMIT = 200;
 const MAX_LIST_LIMIT = 1_000;
 const DEFAULT_READ_LIMIT = 20_000;
@@ -26,7 +29,26 @@ const MAX_SEARCH_FILE_BYTES = 1_000_000;
 const DEFAULT_GLOB_LIMIT = 200;
 const MAX_GLOB_LIMIT = 1_000;
 const MAX_GLOB_ENTRIES = 5_000;
+const DEFAULT_TREE_DEPTH = 3;
+const MAX_TREE_DEPTH = 8;
+const DEFAULT_TREE_ENTRIES = 400;
+const MAX_TREE_ENTRIES = 2_000;
+const MAX_WRITE_BYTES = 1_000_000;
+const MAX_EDIT_OLD_TEXT_BYTES = 200_000;
+const MAX_EDIT_NEW_TEXT_BYTES = 1_000_000;
 const SKIPPED_SEARCH_DIRS = new Set([".git", "node_modules", "dist", ".cache", ".DS_Store"]);
+const SKIPPED_TREE_ROOT_DIRS = new Set([
+    ".flyflor",
+    "brain",
+    "cache",
+    "data",
+    "logs",
+    "mcp",
+    "memory",
+    "plugins",
+    "prompts",
+    "workspace",
+]);
 
 export interface WorkspaceToolAccess {
     approved: boolean;
@@ -131,6 +153,57 @@ export class WorkspaceToolset {
                     },
                 },
             },
+            {
+                server: WORKSPACE_SERVER,
+                tool: {
+                    name: WORKSPACE_TREE_TOOL,
+                    description:
+                        "Return a bounded recursive file tree for a local directory. Use this first when a user asks to inspect, review, understand, or summarize a code project.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            path: { type: "string" },
+                            maxDepth: { type: "number" },
+                            maxEntries: { type: "number" },
+                        },
+                    },
+                },
+            },
+            {
+                server: WORKSPACE_SERVER,
+                tool: {
+                    name: WORKSPACE_WRITE_TOOL,
+                    description:
+                        "Create or overwrite a UTF-8 text file on the local computer. Requires write approval.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            path: { type: "string" },
+                            content: { type: "string" },
+                            overwrite: { type: "boolean" },
+                        },
+                        required: ["path", "content"],
+                    },
+                },
+            },
+            {
+                server: WORKSPACE_SERVER,
+                tool: {
+                    name: WORKSPACE_EDIT_TOOL,
+                    description:
+                        "Replace one exact UTF-8 text segment in an existing local text file. Requires write approval and fails when the match count is not exactly one unless replaceAll is true.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            path: { type: "string" },
+                            oldText: { type: "string" },
+                            newText: { type: "string" },
+                            replaceAll: { type: "boolean" },
+                        },
+                        required: ["path", "oldText", "newText"],
+                    },
+                },
+            },
         ];
     }
 
@@ -153,6 +226,15 @@ export class WorkspaceToolset {
         }
         if (call.tool === WORKSPACE_STAT_TOOL) {
             return { raw: await this.statPath(call.input, { approved: true, reason: "project-local" }) };
+        }
+        if (call.tool === WORKSPACE_TREE_TOOL) {
+            return { raw: await this.tree(call.input, { approved: true, reason: "project-local" }) };
+        }
+        if (call.tool === WORKSPACE_WRITE_TOOL) {
+            return { raw: await this.write(call.input, { approved: true, reason: "project-local-write" }) };
+        }
+        if (call.tool === WORKSPACE_EDIT_TOOL) {
+            return { raw: await this.edit(call.input, { approved: true, reason: "project-local-write" }) };
         }
         return {
             isError: true,
@@ -178,14 +260,34 @@ export class WorkspaceToolset {
         if (call.tool === WORKSPACE_STAT_TOOL) {
             return { raw: await this.statPath(call.input, access) };
         }
+        if (call.tool === WORKSPACE_TREE_TOOL) {
+            return { raw: await this.tree(call.input, access) };
+        }
+        if (call.tool === WORKSPACE_WRITE_TOOL) {
+            return { raw: await this.write(call.input, access) };
+        }
+        if (call.tool === WORKSPACE_EDIT_TOOL) {
+            return { raw: await this.edit(call.input, access) };
+        }
         return this.execute(call);
     }
 
-    public async requiresApproval(call: McpToolCallRequest): Promise<{ path: string; target: string } | undefined> {
+    public async requiresApproval(
+        call: McpToolCallRequest,
+    ): Promise<{ outsideProject: boolean; path: string; target: string } | undefined> {
         if (!this.canHandle(call)) return undefined;
+        if (this.isWriteTool(call.tool)) {
+            const path = this.pathInput(call);
+            const resolved = await this.resolveWritablePath(path);
+            return { outsideProject: resolved.outsideProject, path, target: resolved.target };
+        }
         const rawPath = this.pathInput(call);
         const resolved = await this.resolveExistingPath(rawPath);
-        return resolved.outsideProject ? { path: rawPath, target: resolved.target } : undefined;
+        return resolved.outsideProject ? { outsideProject: true, path: rawPath, target: resolved.target } : undefined;
+    }
+
+    public isWriteTool(tool: string): boolean {
+        return tool === WORKSPACE_WRITE_TOOL || tool === WORKSPACE_EDIT_TOOL;
     }
 
     private async list(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
@@ -345,6 +447,94 @@ export class WorkspaceToolset {
         };
     }
 
+    private async tree(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
+        const resolved = await this.resolveExistingPath(this.optionalString(input.path) ?? ".");
+        this.assertAccess(resolved, access);
+        const info = await stat(resolved.target);
+        if (!info.isDirectory()) {
+            throw new Error("workspace.tree target must be a directory.");
+        }
+        const root = await this.displayRoot(resolved.target);
+        const maxDepth = this.clampedNumber(input.maxDepth, DEFAULT_TREE_DEPTH, MAX_TREE_DEPTH);
+        const maxEntries = this.clampedNumber(input.maxEntries, DEFAULT_TREE_ENTRIES, MAX_TREE_ENTRIES);
+        const seen = { count: 0, truncated: false };
+        const entries = await this.collectTreeEntries(resolved.target, root, 0, maxDepth, maxEntries, seen);
+        return {
+            path: this.relativePath(root, resolved.target),
+            maxDepth,
+            entries,
+            totalEntries: seen.count,
+            truncated: seen.truncated,
+        };
+    }
+
+    private async write(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
+        const path = this.requiredString(input.path, "workspace.write requires input.path.");
+        const content = this.requiredStringAllowEmpty(input.content, "workspace.write requires input.content.");
+        const resolved = await this.resolveWritablePath(path);
+        this.assertAccess(resolved, access);
+        if (this.byteLength(content) > MAX_WRITE_BYTES) {
+            throw new Error(`workspace.write content exceeds ${MAX_WRITE_BYTES} bytes.`);
+        }
+        const existed = await Bun.file(resolved.target).exists();
+        if (existed && input.overwrite !== true) {
+            throw new Error("workspace.write target exists; set overwrite=true to replace it.");
+        }
+        await this.atomicWriteText(resolved.target, content);
+        const info = await stat(resolved.target);
+        const root = await this.displayRoot(resolved.target);
+        return {
+            path: this.relativePath(root, resolved.target),
+            bytes: info.size,
+            chars: content.length,
+            created: !existed,
+            overwritten: existed,
+        };
+    }
+
+    private async edit(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
+        const path = this.requiredString(input.path, "workspace.edit requires input.path.");
+        const oldText = this.requiredStringPreserve(input.oldText, "workspace.edit requires non-empty input.oldText.");
+        const newText = this.requiredStringAllowEmpty(input.newText, "workspace.edit requires input.newText.");
+        const resolved = await this.resolveExistingPath(path);
+        this.assertAccess(resolved, access);
+        if (this.byteLength(oldText) > MAX_EDIT_OLD_TEXT_BYTES) {
+            throw new Error(`workspace.edit oldText exceeds ${MAX_EDIT_OLD_TEXT_BYTES} bytes.`);
+        }
+        if (this.byteLength(newText) > MAX_EDIT_NEW_TEXT_BYTES) {
+            throw new Error(`workspace.edit newText exceeds ${MAX_EDIT_NEW_TEXT_BYTES} bytes.`);
+        }
+        const info = await stat(resolved.target);
+        if (!info.isFile()) {
+            throw new Error(`workspace.edit target is not a file: ${path}`);
+        }
+        const text = await readFile(resolved.target, "utf8");
+        if (text.includes("\u0000")) {
+            throw new Error(`workspace.edit target appears to be binary: ${path}`);
+        }
+        const count = this.countOccurrences(text, oldText);
+        if (count === 0) {
+            throw new Error("workspace.edit oldText was not found.");
+        }
+        const replaceAll = input.replaceAll === true;
+        if (!replaceAll && count !== 1) {
+            throw new Error(`workspace.edit oldText matched ${count} times; set replaceAll=true or provide a unique segment.`);
+        }
+        const next = replaceAll ? text.split(oldText).join(newText) : text.replace(oldText, newText);
+        if (this.byteLength(next) > MAX_WRITE_BYTES) {
+            throw new Error(`workspace.edit result exceeds ${MAX_WRITE_BYTES} bytes.`);
+        }
+        await this.atomicWriteText(resolved.target, next);
+        const nextInfo = await stat(resolved.target);
+        const root = await this.displayRoot(resolved.target);
+        return {
+            path: this.relativePath(root, resolved.target),
+            replacements: replaceAll ? count : 1,
+            bytes: nextInfo.size,
+            chars: next.length,
+        };
+    }
+
     private async collectSearchFiles(dir: string, output: string[], maxFiles: number): Promise<void> {
         if (output.length >= maxFiles) return;
         const entries = await readdir(dir, { withFileTypes: true });
@@ -401,6 +591,65 @@ export class WorkspaceToolset {
         }
     }
 
+    private async collectTreeEntries(
+        dir: string,
+        displayRoot: string,
+        depth: number,
+        maxDepth: number,
+        maxEntries: number,
+        seen: { count: number; truncated: boolean },
+    ): Promise<Array<{ depth: number; path: string; type: "directory" | "file" }>> {
+        if (depth >= maxDepth || seen.count >= maxEntries) {
+            if (seen.count >= maxEntries) seen.truncated = true;
+            return [];
+        }
+        const out: Array<{ depth: number; path: string; type: "directory" | "file" }> = [];
+        const entries = await readdir(dir, { withFileTypes: true });
+        for (const entry of entries.sort((a, b) => `${a.isDirectory() ? 0 : 1}:${a.name}`.localeCompare(`${b.isDirectory() ? 0 : 1}:${b.name}`))) {
+            if (seen.count >= maxEntries) {
+                seen.truncated = true;
+                break;
+            }
+            const fullPath = resolve(dir, entry.name);
+            if (entry.isSymbolicLink() || this.shouldSkipTreeEntry(fullPath, displayRoot, entry.name)) continue;
+            if (!entry.isDirectory() && !entry.isFile()) continue;
+            const type = entry.isDirectory() ? "directory" : "file";
+            seen.count += 1;
+            out.push({ depth, path: this.normalizePath(relative(displayRoot, fullPath)), type });
+            if (entry.isDirectory()) {
+                out.push(...await this.collectTreeEntries(fullPath, displayRoot, depth + 1, maxDepth, maxEntries, seen));
+            }
+        }
+        return out;
+    }
+
+    private shouldSkipTreeEntry(fullPath: string, displayRoot: string, name: string): boolean {
+        if (SKIPPED_SEARCH_DIRS.has(name)) return true;
+        const rel = this.normalizePath(relative(displayRoot, fullPath));
+        if (!rel.includes("/") && SKIPPED_TREE_ROOT_DIRS.has(name)) return true;
+        const resolved = resolve(fullPath);
+        const runtimeDirs = [
+            this.paths.cacheDir,
+            this.paths.configDir,
+            this.paths.logDir,
+            this.paths.memoryDir,
+            this.paths.mcpDir,
+            this.paths.pluginDir,
+            this.paths.promptDir,
+            this.paths.storageDir,
+            this.paths.workspaceDir,
+            this.paths.projectFlyflorDir,
+            this.paths.projectKitDir,
+            this.paths.projectMcpDir,
+            this.paths.projectMemoryDir,
+            this.paths.projectPluginDir,
+            this.paths.projectSkillDir,
+        ]
+            .filter((path): path is string => typeof path === "string" && path.length > 0)
+            .map((path) => resolve(path));
+        return runtimeDirs.includes(resolved);
+    }
+
     private async resolveExistingPath(path: string): Promise<{ outsideProject: boolean; target: string }> {
         const root = await this.projectRoot();
         const candidate = await realpath(isAbsolute(path) ? path : resolve(root, path));
@@ -409,6 +658,21 @@ export class WorkspaceToolset {
             return { outsideProject: false, target: candidate };
         }
         return { outsideProject: true, target: candidate };
+    }
+
+    private async resolveWritablePath(path: string): Promise<{ outsideProject: boolean; target: string }> {
+        if (path.includes("\u0000")) {
+            throw new Error("workspace path contains a NUL byte.");
+        }
+        const root = await this.projectRoot();
+        const candidate = isAbsolute(path) ? resolve(path) : resolve(root, path);
+        const parent = await this.resolveWritableParent(dirname(candidate));
+        const target = resolve(parent.real, relative(parent.input, candidate));
+        const rel = relative(root, target);
+        if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+            return { outsideProject: false, target };
+        }
+        return { outsideProject: true, target };
     }
 
     private async projectRoot(): Promise<string> {
@@ -423,12 +687,31 @@ export class WorkspaceToolset {
         return value.trim();
     }
 
+    private requiredStringAllowEmpty(value: unknown, message: string): string {
+        if (typeof value !== "string") {
+            throw new Error(message);
+        }
+        return value;
+    }
+
+    private requiredStringPreserve(value: unknown, message: string): string {
+        if (typeof value !== "string" || value.length === 0) {
+            throw new Error(message);
+        }
+        return value;
+    }
+
     private optionalString(value: unknown): string | undefined {
         return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
     }
 
     private pathInput(call: McpToolCallRequest): string {
-        if (call.tool === WORKSPACE_READ_TOOL || call.tool === WORKSPACE_STAT_TOOL) {
+        if (
+            call.tool === WORKSPACE_READ_TOOL ||
+            call.tool === WORKSPACE_STAT_TOOL ||
+            call.tool === WORKSPACE_WRITE_TOOL ||
+            call.tool === WORKSPACE_EDIT_TOOL
+        ) {
             return this.requiredString(call.input.path, `workspace.${call.tool} requires input.path.`);
         }
         return this.optionalString(call.input.path) ?? ".";
@@ -443,7 +726,7 @@ export class WorkspaceToolset {
     private async displayRoot(target: string): Promise<string> {
         const project = await this.projectRoot();
         const rel = relative(project, target);
-        return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel)) ? project : "/";
+        return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel)) ? project : parse(target).root;
     }
 
     private clampedNumber(value: unknown, fallback: number, max: number): number {
@@ -500,5 +783,57 @@ export class WorkspaceToolset {
 
     private escapeRegexChar(char: string): string {
         return /[\\^$+?.()|[\]{}]/u.test(char) ? `\\${char}` : char;
+    }
+
+    private countOccurrences(text: string, needle: string): number {
+        let count = 0;
+        let offset = 0;
+        while (offset <= text.length) {
+            const next = text.indexOf(needle, offset);
+            if (next < 0) break;
+            count += 1;
+            offset = next + needle.length;
+        }
+        return count;
+    }
+
+    private byteLength(text: string): number {
+        return new TextEncoder().encode(text).byteLength;
+    }
+
+    private async atomicWriteText(path: string, content: string): Promise<void> {
+        await mkdir(dirname(path), { recursive: true });
+        const temp = resolve(dirname(path), `.${basename(path)}.${crypto.randomUUID()}.tmp`);
+        try {
+            await writeFile(temp, content, "utf8");
+            await rename(temp, path);
+        } catch (error) {
+            try {
+                await Bun.file(temp).delete();
+            } catch {
+                // Best-effort cleanup only; the original write error is more useful.
+            }
+            throw error;
+        }
+    }
+
+    private async resolveWritableParent(path: string): Promise<{ input: string; real: string }> {
+        try {
+            const info = await stat(path);
+            if (!info.isDirectory()) {
+                throw new Error(`workspace writable parent is not a directory: ${path}`);
+            }
+            return { input: path, real: await realpath(path) };
+        } catch (error) {
+            const code = error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined;
+            if (code !== "ENOENT") {
+                throw error;
+            }
+        }
+        const parent = dirname(path);
+        if (parent === path) {
+            return { input: path, real: await realpath(path) };
+        }
+        return this.resolveWritableParent(parent);
     }
 }

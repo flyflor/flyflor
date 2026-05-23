@@ -10,7 +10,7 @@ import type {
     RuntimeContext,
 } from "../protocol/contracts/index.ts";
 import { Channel, ChannelLinkState, ChannelTransport } from "../protocol/contracts/index.ts";
-import type { RuntimeModule } from "../agent/runtime/index.ts";
+import type { RuntimeModule, RuntimeStreamOptions } from "../agent/runtime/index.ts";
 import { SocketControlHub, type SocketControlTransportStatusSnapshot, type SocketControlPeer } from "./control.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.store.ts";
 import { SocketQueryComponent } from "./query/index.ts";
@@ -172,7 +172,12 @@ export class SocketModule extends Socket {
 
     protected async dispatch(
         message: GatewayMessage,
-        options: { context?: RuntimeContext; onTextDelta?: (text: string) => void | Promise<void> } = {},
+        options: {
+            context?: RuntimeContext;
+            onTextDelta?: (text: string) => void | Promise<void>;
+            approveMcpToolCall?: RuntimeStreamOptions["approveMcpToolCall"];
+            approveUserToolCall?: RuntimeStreamOptions["approveUserToolCall"];
+        } = {},
     ): Promise<GatewayReply> {
         const context: RuntimeContext = options.context ?? {
             requestId: crypto.randomUUID(),

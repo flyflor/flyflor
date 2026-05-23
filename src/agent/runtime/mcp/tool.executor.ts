@@ -280,12 +280,20 @@ export class RuntimeMcpToolExecutor {
         if (!requested) return { approved: true, reason: "project-local" };
         const descriptor = { server: call.server, tool: call.tool, path: requested.path, target: requested.target };
         this.events.publish(
-            event(RuntimeEventType.SandboxToolApprovalRequested, { kind: "workspace-read", ...descriptor }, requestId),
+            event(
+                RuntimeEventType.SandboxToolApprovalRequested,
+                { kind: workspaceToolset.isWriteTool(call.tool) ? "workspace-write" : "workspace-read", ...descriptor },
+                requestId,
+            ),
         );
         const approved = approveMcpToolCall ? await approveMcpToolCall(call) : false;
         if (!approved) {
             this.events.publish(
-                event(RuntimeEventType.SandboxToolApprovalDenied, { kind: "workspace-read", ...descriptor }, requestId),
+                event(
+                    RuntimeEventType.SandboxToolApprovalDenied,
+                    { kind: workspaceToolset.isWriteTool(call.tool) ? "workspace-write" : "workspace-read", ...descriptor },
+                    requestId,
+                ),
             );
             return { approved: false, reason: `workspace access was not approved: ${requested.target}` };
         }
@@ -482,6 +490,10 @@ export class RuntimeMcpToolExecutor {
         if (typeof command !== "string" || command.trim().length === 0) {
             return { ok: false, error: "shell.run requires input.command." };
         }
+        const commandText = command.trim();
+        if (/[\r\n]/u.test(commandText)) {
+            return { ok: false, error: "shell.run input.command must be a single executable, not a script." };
+        }
         const args = call.input.args;
         if (args !== undefined && (!Array.isArray(args) || args.some((item) => typeof item !== "string"))) {
             return { ok: false, error: "shell.run input.args must be string[]." };
@@ -494,7 +506,7 @@ export class RuntimeMcpToolExecutor {
         if (timeoutMs !== undefined && typeof timeoutMs !== "number") return { ok: false, error: "shell.run input.timeoutMs must be a number." };
         return {
             ok: true,
-            command: command.trim(),
+            command: commandText,
             args: Array.isArray(args) ? args : [],
             cwd: typeof cwd === "string" && cwd.trim() ? cwd.trim() : this.config.paths.projectDir,
             stdin,
@@ -584,6 +596,9 @@ export class RuntimeMcpToolExecutor {
         if (entry.server === "git") {
             return { concurrencySafe: false, exclusive: false, readOnly: true };
         }
+        if (entry.server === "workspace" && this.isWorkspaceWriteTool(entry.tool.name)) {
+            return { concurrencySafe: false, exclusive: false, readOnly: false };
+        }
         if (entry.server === USER_TOOL_SERVER) {
             return { concurrencySafe: false, exclusive: true, readOnly: false };
         }
@@ -609,6 +624,10 @@ export class RuntimeMcpToolExecutor {
 
     private callKey(call: Pick<McpToolCallRequest, "server" | "tool">): string {
         return `${call.server}.${call.tool}`;
+    }
+
+    private isWorkspaceWriteTool(toolName: string): boolean {
+        return toolName === "write" || toolName === "edit";
     }
 
     private pluginCommand(): string {

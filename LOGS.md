@@ -621,3 +621,27 @@
   原因：模型只理解同轮注入的文字，不能假设它知道内部开发定义；提示词必须像交给外部临时执行者的任务说明，避免把内部术语当作模型可执行语义。
   效率：当前工作区累计 107 files changed，7349 insertions，17164 deletions；本轮增量集中在 `templates/prompts/*`、`src/agent/prompts/*`、`src/protocol/structured.block.ts`、`tests/prompt.lint.test.ts` 和 `tests/scope.recall.test.ts`。
   验证：`rg` 禁词扫描 `templates/prompts` 零命中；`bun test tests/prompt.lint.test.ts` 10 pass；`bun test tests/structured.block.test.ts tests/scope.recall.test.ts tests/ask.parse.test.ts tests/continuation.decisions.parse.test.ts tests/identity.parse.test.ts tests/planning.blocks.test.ts tests/skill.mcp.test.ts` 78 pass；`bun run docs:prompts:check`；`bun run docs:check` 26 pass；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：dream-graph-legacy-schema-reset
+  摘要：修复真实运行中 `memory.dream.failed` / `SQLiteError: no such column: owner_key`：`SQLiteGraphStore` 初始化现在会检测旧 `crystal.db` graph 表缺少 `owner_key` / recall 关键列时 drop graph tables 并重建当前 schema；同时修正 WS full E2E scripted fallback 不再依赖旧提示词内部短语。
+  原因：旧 `crystal.db` 已存在时，`CREATE TABLE IF NOT EXISTS` 不会补新列，dream collect 的 owner-scoped 查询会直接失败；当前策略是不保留旧运行态 DB 数据，旧 schema 应自动清空重建。
+  效率：本轮改动集中在 3 files：`src/cognitive/hippocampus/memory/graph/store.ts` 增加 legacy schema guard，`tests/graph.recall.test.ts` 增加回归测试，`scripts/socket.full.e2e.ts` 更新中性提示词探测条件。
+  验证：`bun test tests/graph.recall.test.ts tests/dream.worker.test.ts tests/dream.zero.write.test.ts` 25 pass；`bun run e2e:ws:full` 真实 WS 全场景通过，`failedChecks: []`；`bun run check`；`bun run docs:check` 26 pass；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：executive-socket-tool-approval-closure
+  摘要：收束核心调度与执行审批契约：WS `gateway.message.send.payload.context.toolApprovals` 现在在 OpenAPI、Apifox messages、tester、WS 文档和 docs guard 中完整可见；runtime 类型出口同步暴露 `RuntimeStreamOptions`，socket 不再引用未导出的类型。
+  原因：TUI/前端需要通过真实 `/ws` 发起本轮显式工具审批，执行层必须保持 Executive catalog/schema/sandbox gate 清晰，不把 `shell.run` 伪装成跨平台脚本，也不能靠提示词补执行兼容性。
+  效率：本轮新增/调整集中在 8 个文件，138 insertions、5 deletions；派生 Apifox 产物由 `bun run docs:apifox` 自动刷新，未新增运行时依赖。
+  验证：`bun test tests/docs.references.test.ts tests/protocol.control.test.ts` 30 pass；`bun test tests/gateway.ws.test.ts tests/app.cli.test.ts tests/runtime.mcp.tool.plan.test.ts tests/skill.mcp.test.ts` 92 pass；`bun run docs:check` 26 pass；`bun run check`；`bun run e2e:ws:full` 真实 WS 全场景通过且 `failedChecks: []`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：local-code-inspection-tool-call-layer
+  摘要：修复本地代码阅读调用层偏弱的问题：新增 `workspace.tree` 作为项目结构扫描第一步，并把模型可见工具提示词改为本地路径、仓库、代码库、文件内容和项目审查请求必须先调用文件工具，收到工具结果后才能声明已读。
+  原因：真实对话中模型会在没有工具结果时声称“可以查看/已经阅读项目”，导致它无法像 Codex/OpenCode 一样先扫描、再读关键文件、最后基于证据输出架构和进度判断；调用层必须用能力目录和提示词共同压住这条行为红线。
+  效率：本轮新增/调整集中在 workspace 工具、MCP 提示词、工具文档和测试；提交前统计以 `git diff --stat` 为准。
+  验证：`bun test tests/skill.mcp.test.ts --test-name-pattern "workspace tree|workspace tools|workspace glob"`；`bun test tests/skill.mcp.test.ts tests/runtime.mcp.tool.plan.test.ts`；`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。

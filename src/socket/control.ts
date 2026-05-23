@@ -55,6 +55,7 @@ import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../event
 import type { FlyflorPaths } from "../config/index.ts";
 import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
 import type { SocketQueryComponentPort } from "./query/index.ts";
+import type { RuntimeStreamOptions } from "../agent/runtime/index.ts";
 
 export type SocketControlPeer = ProtocolSocketControlPeer;
 export type SocketControlSocket = ProtocolSocketControlSocket;
@@ -95,6 +96,8 @@ export interface SocketControlTransportStatusSnapshot {
 export interface SocketControlDispatchOptions {
     context?: RuntimeContext;
     onTextDelta?: (text: string) => void | Promise<void>;
+    approveMcpToolCall?: RuntimeStreamOptions["approveMcpToolCall"];
+    approveUserToolCall?: RuntimeStreamOptions["approveUserToolCall"];
 }
 
 export type SocketControlMessageDispatcher = (
@@ -396,6 +399,12 @@ export class SocketControlHub implements EventSink {
                         context.requestId,
                     );
                 },
+                approveMcpToolCall: input.context?.toolApprovals?.mcpToolCalls === true
+                    ? async () => true
+                    : undefined,
+                approveUserToolCall: input.context?.toolApprovals?.userToolCalls === true
+                    ? async () => true
+                    : undefined,
             });
             this.log("turn.final", {
                 channel: gatewayMessage.route.channel,

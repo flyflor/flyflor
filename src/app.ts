@@ -21,7 +21,7 @@ import {
     type DependencyToken,
 } from "./agent/di/index.ts";
 import { CompositeEventSink, ConsoleEventSink, EventsComponent, NullEventSink } from "./events/index.ts";
-import { RuntimeModeComponent } from "./protocol/contracts/index.ts";
+import { RuntimeModeComponent, ToolApprovalMode } from "./protocol/contracts/index.ts";
 import { createModelClient, ModelComponent } from "./cognitive/mindstream/index.ts";
 import { RuntimeMode, type EventSink, type ModelClient, type RuntimeMode as RuntimeModeType } from "./protocol/index.ts";
 import { FileAuditSink, HttpAuditSink } from "./agent/sandbox/audit.sink.ts";
@@ -134,7 +134,7 @@ async function createFlyFlorApplication(options: FlyFlorCreateOptions): Promise<
 
 async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise<FlyFlorDependencies> {
     const mode = new RuntimeModeComponent(normalizeRuntimeMode(options.mode ?? options.argv?.[2]));
-    const config = new ConfigComponent(options.config ?? (await loadConfig()));
+    const config = new ConfigComponent(applyCliRuntimeOverrides(options.config ?? (await loadConfig()), options.argv ?? process.argv));
     await loadPromptTemplates(config.paths);
     const events = new EventsComponent(options.events ?? createDefaultEventSink(mode.value, config.snapshot()));
     const model = new ModelComponent(options.model ?? createModelClient(config.model, events));
@@ -159,6 +159,19 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         runtime,
         socket,
         workers,
+    };
+}
+
+function applyCliRuntimeOverrides(config: FlyflorConfig, argv: readonly string[]): FlyflorConfig {
+    if (!argv.includes("--accept-hooks")) {
+        return config;
+    }
+    return {
+        ...config,
+        sandbox: {
+            ...config.sandbox,
+            shellHookApproval: ToolApprovalMode.Allow,
+        },
     };
 }
 

@@ -221,6 +221,8 @@ describe("lintPromptTemplates", () => {
             "To request MCP execution",
             "Use these tool results to answer the original user request",
             "Tool-call budget is exhausted for this turn",
+            "For any request about a local path",
+            "Do not say you can see, have read, or have checked local files",
         ];
         for (const file of sourceFiles) {
             if (file.endsWith(join("src", "agent", "prompts", "template.manifest.ts"))) {

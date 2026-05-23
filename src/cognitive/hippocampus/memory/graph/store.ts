@@ -66,6 +66,7 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         database.exec("PRAGMA synchronous = NORMAL");
         database.exec("PRAGMA foreign_keys = ON");
         database.exec("PRAGMA busy_timeout = 5000");
+        this.resetLegacyGraphTables(database);
         database.exec(`
             CREATE TABLE IF NOT EXISTS graph_episodes (
                 id TEXT PRIMARY KEY,
@@ -158,7 +159,6 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
                 created_at INTEGER NOT NULL
             );
         `);
-        this.migrateOwnerColumns(database);
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_episodes_owner ON graph_episodes(owner_key)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_nodes_owner ON graph_memory_nodes(owner_key)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_graph_nodes_importance ON graph_memory_nodes(importance DESC)");
@@ -936,8 +936,142 @@ export class SQLiteGraphStore extends GraphComponent implements MemoryGraphStore
         return undefined;
     }
 
-    private migrateOwnerColumns(database: Database): void {
-        void database;
+    /**
+     * Pre-seal graph rows may have old table shapes without owner_key or recall
+     * accounting columns. Current policy is destructive reset for old local DBs:
+     * keep the file path, drop legacy graph tables, and rebuild the current
+     * schema instead of mixing old session/project semantics into owner-scoped
+     * memory.
+     */
+    private resetLegacyGraphTables(database: Database): void {
+        if (!this.hasLegacyGraphSchema(database)) return;
+        for (const table of [
+            "graph_episodes",
+            "graph_memory_nodes",
+            "graph_gems",
+            "graph_summary_embeddings",
+            "graph_gem_snapshots",
+            "graph_edges",
+        ]) {
+            database.exec(`DROP TABLE IF EXISTS ${table};`);
+        }
+    }
+
+    private hasLegacyGraphSchema(database: Database): boolean {
+        return (
+            this.hasLegacyColumns(database, "graph_episodes", [
+                "id",
+                "owner_key",
+                "text",
+                "concepts_json",
+                "embedding_json",
+                "importance",
+                "source_kind",
+                "created_at",
+                "metadata_json",
+            ]) ||
+            this.hasLegacyColumns(database, "graph_memory_nodes", [
+                "id",
+                "owner_key",
+                "symbols_json",
+                "summary",
+                "embedding_json",
+                "confidence",
+                "evidence_count",
+                "importance",
+                "updated_at",
+                "recall_count",
+                "contradiction_count",
+                "last_accessed_at",
+                "superseded_by",
+                "scope_note",
+            ]) ||
+            this.hasLegacyColumns(database, "graph_gems", [
+                "id",
+                "owner_key",
+                "symbols_json",
+                "summary",
+                "embedding_json",
+                "importance",
+                "confidence",
+                "support",
+                "protected",
+                "updated_at",
+                "recall_count",
+                "contradiction_count",
+                "last_verified_at",
+                "status",
+                "scope_note",
+                "superseded_by",
+            ]) ||
+            this.hasLegacyColumns(database, "graph_summary_embeddings", [
+                "id",
+                "owner_key",
+                "summary_id",
+                "time_range",
+                "bucket_key",
+                "embedding_json",
+                "created_at",
+            ]) ||
+            this.hasLegacyColumns(database, "graph_gem_snapshots", [
+                "id",
+                "gem_id",
+                "owner_key",
+                "reason",
+                "taken_at",
+                "summary",
+                "symbols_json",
+                "confidence",
+                "support",
+                "protected",
+                "updated_at",
+            ]) ||
+            this.hasLegacyColumns(database, "graph_edges", [
+                "id",
+                "owner_key",
+                "from_table",
+                "from_id",
+                "edge",
+                "to_table",
+                "to_id",
+                "score",
+                "at",
+                "metadata_json",
+                "created_at",
+            ])
+        );
+    }
+
+    private hasLegacyColumns(database: Database, table: string, expectedColumns: string[]): boolean {
+        if (!this.tableExists(database, table)) return false;
+        const actual = this.tableColumns(database, table);
+        return expectedColumns.some((column) => !actual.includes(column));
+    }
+
+    private tableExists(database: Database, table: string): boolean {
+        const row = database
+            .query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+            .get(table);
+        return Boolean(row);
+    }
+
+    private tableColumns(database: Database, table: string): string[] {
+        this.assertKnownGraphTable(table);
+        return (database.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((row) => row.name);
+    }
+
+    private assertKnownGraphTable(table: string): void {
+        const allowed = new Set([
+            "graph_episodes",
+            "graph_memory_nodes",
+            "graph_gems",
+            "graph_summary_embeddings",
+            "graph_gem_snapshots",
+            "graph_edges",
+        ]);
+        if (!allowed.has(table)) {
+            throw new Error(`Unknown graph table for schema inspection: ${table}`);
+        }
     }
 
     private requiredDatabase(): Database {

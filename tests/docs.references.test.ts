@@ -124,6 +124,9 @@ describe("documentation references", () => {
         expect(doc).toContain("src/socket/query");
         expect(doc).toContain("ask.list");
         expect(doc).toContain("blackboard.detail.get");
+        expect(doc).toContain("toolApprovals");
+        expect(doc).toContain("mcpToolCalls");
+        expect(doc).toContain("userToolCalls");
         expect(doc).toContain("executive.loop.paused");
         expect(doc).toContain("executive.loop.resumed");
     });
@@ -258,6 +261,9 @@ describe("documentation references", () => {
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("scope");
         expect(schemas.RuntimeContextInput?.properties).toHaveProperty("activeScope");
         expect(schemas.RuntimeContextInput?.properties).toHaveProperty("activeProject");
+        expect(schemas.RuntimeContextInput?.properties).toHaveProperty("toolApprovals");
+        expect(schemas.RuntimeToolApprovals?.properties).toHaveProperty("mcpToolCalls");
+        expect(schemas.RuntimeToolApprovals?.properties).toHaveProperty("userToolCalls");
         expect(examples.EventPublish?.value).toMatchObject({ protocol: GatewayControlProtocol.EventV1 });
         expect(wireText).toContain(GatewayControlProtocol.WsV1);
         expect(wireText).toContain(GatewayControlProtocol.EventV1);
@@ -365,7 +371,12 @@ describe("documentation references", () => {
             limit: 20,
         });
         expect(readGatewayControlMessageInput(readExamplePayloadRecord(examples, "GatewayMessageSend"))).toMatchObject({
-            context: undefined,
+            context: {
+                toolApprovals: {
+                    mcpToolCalls: false,
+                    userToolCalls: false,
+                },
+            },
             text: "你好，请用一句话回复。",
             user: {
                 id: "external-actor-1",
@@ -494,6 +505,7 @@ describe("documentation references", () => {
             expect(doc).toContain("TurnFinalWithExecutiveLoopPause");
             expect(doc).toContain("controlState");
             expect(doc).toContain("InvalidPayloadError");
+            expect(doc).toContain("toolApprovals");
             expect(doc).toContain("MemoryComponent");
             expect(doc).toContain("CrystalComponent");
             expect(doc).toContain("brain.db");
