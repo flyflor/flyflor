@@ -9,6 +9,7 @@ export const USER_TOOL_SERVER = "user";
 
 export interface UserToolInvocationInput {
     approve?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
+    executionKind?: import("../../../protocol/contracts/index.ts").CapabilityExecutionKind;
     events: EventSink;
     input: Record<string, unknown>;
     paths: FlyflorPaths;
@@ -34,6 +35,7 @@ export async function invokeUserTool(input: UserToolInvocationInput): Promise<Pl
         events: input.events,
         allowedCommands: [executor.command],
         approve: input.approve ? () => input.approve!(input.tool) : undefined,
+        executionKind: input.executionKind,
         maxOutputBytes: executor.maxOutputBytes,
         maxTimeoutMs: executor.timeoutMs,
     });

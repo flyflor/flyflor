@@ -14,6 +14,7 @@
  * - **可注入 spawn**：测试可替换子进程执行器。
  */
 import { CapabilityExecutionKind } from "../../protocol/contracts/index.ts";
+import type { CapabilityExecutionKind as CapabilityExecutionKindType } from "../../protocol/contracts/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { gateCapabilityExecution, type SandboxPolicy } from "../sandbox/module.ts";
 import type { PluginDefinition } from "./index.ts";
@@ -63,6 +64,7 @@ export interface PluginRunnerOptions {
     maxOutputBytes?: number;
     maxTimeoutMs?: number;
     approve?: (spec: PluginInvocationSpec) => boolean | Promise<boolean>;
+    executionKind?: CapabilityExecutionKindType;
     now?: () => number;
     spawn?: PluginSpawnFn;
 }
@@ -80,6 +82,7 @@ export class PluginRunner {
     private readonly approve?: (spec: PluginInvocationSpec) => boolean | Promise<boolean>;
     private readonly now: () => number;
     private readonly spawnFn: PluginSpawnFn;
+    private readonly executionKind: CapabilityExecutionKindType;
 
     public constructor(options: PluginRunnerOptions) {
         this.policy = options.policy;
@@ -90,6 +93,7 @@ export class PluginRunner {
         this.approve = options.approve;
         this.now = options.now ?? (() => Date.now());
         this.spawnFn = options.spawn ?? defaultSpawn;
+        this.executionKind = options.executionKind ?? CapabilityExecutionKind.Plugin;
     }
 
     public async invoke(spec: PluginInvocationSpec): Promise<PluginInvocationResult> {
@@ -107,7 +111,7 @@ export class PluginRunner {
         const descriptor = { plugin: spec.plugin.name, command: spec.command };
         const gate = await gateCapabilityExecution({
             policy: this.policy,
-            kind: CapabilityExecutionKind.Plugin,
+            kind: this.executionKind,
             events: this.events,
             descriptor,
             preDeny: !this.allowed.has(spec.command)

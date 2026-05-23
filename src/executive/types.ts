@@ -136,6 +136,7 @@ export interface CapabilityCatalogSnapshot {
     readonly totals: {
         readonly capabilities: number;
         readonly hidden: number;
+        readonly externalTools?: number;
         readonly pluginCapabilities: number;
         readonly prompts: number;
         readonly resources: number;

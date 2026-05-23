@@ -171,6 +171,48 @@ describe("RuntimeMcpToolPlanComponent", () => {
             }),
         );
     });
+
+    test("keeps unavailable external sidecar tools hidden with availability diagnostics", () => {
+        const plan = new RuntimeMcpToolPlanComponent().buildCapabilities({
+            channel: Channel.Stdio,
+            externalTools: [
+                {
+                    available: false,
+                    unavailableReason: "external sidecar command is unavailable",
+                    tool: {
+                        enabled: true,
+                        manifestSource: "project",
+                        descriptor: {
+                            category: ToolCategory.Computer,
+                            concurrencySafe: false,
+                            description: "Open browser",
+                            exclusive: true,
+                            inputSchema: { type: "object" },
+                            name: "browser.open",
+                            permission: ToolPermission.Computer,
+                            readOnly: false,
+                            resultLimit: { maxChars: 4000 },
+                            scope: [ToolScope.Local, ToolScope.Debug],
+                            source: "user",
+                            computer: {
+                                action: "browser",
+                                observationOnly: false,
+                                requiresFocusTarget: true,
+                            },
+                        },
+                    },
+                },
+            ],
+            maxPermission: ToolPermission.Computer,
+            projectScoped: true,
+            tools: [],
+        });
+
+        expect(plan.externalTools).toEqual([]);
+        expect(plan.hiddenCapabilities).toEqual([
+            { name: "browser.open", reasons: [ToolHiddenReason.Availability] },
+        ]);
+    });
 });
 
 function entry(server: string, name: string): McpToolCatalogEntry {

@@ -11,6 +11,7 @@ import {
     ExecutiveComponent,
     ComputerProfileComponent,
     McpCatalogAdapter,
+    type ExternalToolDefinition,
     type ManifestToolDefinition,
     type ToolDescriptor,
     type McpPromptCatalogEntry,
@@ -38,6 +39,7 @@ export interface RuntimeMcpCapabilityPlanInput {
     readonly prompts?: readonly RuntimeMcpPromptCatalogEntry[];
     readonly resources?: readonly RuntimeMcpResourceCatalogEntry[];
     readonly tools: readonly McpToolCatalogEntry[];
+    readonly externalTools?: readonly ExternalToolDefinition[];
     readonly userTools?: readonly RuntimeUserToolCatalogEntry[];
     readonly channel: ChannelName;
     readonly maxPermission?: ToolPermission;
@@ -57,6 +59,7 @@ export interface RuntimeMcpCapabilityPlanResult {
     readonly prompts: RuntimeMcpPromptCatalogEntry[];
     readonly resources: RuntimeMcpResourceCatalogEntry[];
     readonly tools: McpToolCatalogEntry[];
+    readonly externalTools: ExternalToolDefinition[];
     readonly userTools: RuntimeUserToolCatalogEntry[];
 }
 
@@ -149,11 +152,14 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
         for (const entry of input.userTools ?? []) {
             executive.registerTool(entry.tool.descriptor);
         }
+        for (const entry of input.externalTools ?? []) {
+            executive.registerTool(entry.tool.descriptor);
+        }
         for (const entry of input.pluginCapabilities ?? []) {
             executive.registerTool(entry.descriptor);
         }
 
-        const trust = this.trustContext(executive, input);
+        const trust = this.trustContext(executive, input, input.externalTools ?? []);
         const plan = executive.buildToolPlan(trust);
         const visibleNames = new Set(plan.visible.map((entry) => entry.descriptor.name));
         return {
@@ -165,6 +171,9 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
                 visibleNames.has(this.descriptorForPromptEntry(entry).name),
             ),
             userTools: (input.userTools ?? []).filter((entry) => visibleNames.has(entry.tool.descriptor.name)),
+            externalTools: (input.externalTools ?? []).filter((entry) =>
+                visibleNames.has(entry.tool.descriptor.name),
+            ),
             pluginCapabilities: (input.pluginCapabilities ?? []).filter((entry) =>
                 visibleNames.has(entry.descriptor.name),
             ),
@@ -179,12 +188,24 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
     private trustContext(
         executive: ExecutiveComponent,
         input: Pick<RuntimeMcpCapabilityPlanInput, "channel" | "maxPermission" | "projectScoped">,
+        externalTools: readonly ExternalToolDefinition[],
     ): TrustContext {
-        return executive.buildTrustContext({
+        const base = executive.buildTrustContext({
             maxPermission: input.maxPermission,
             projectScoped: input.projectScoped,
             surface: this.surfaceForChannel(input.channel),
         });
+        const unavailable = externalTools.filter((entry) => !entry.available).map((entry) => entry.tool.descriptor.name);
+        if (unavailable.length === 0) {
+            return base;
+        }
+        return {
+            ...base,
+            unavailableTools: new Set([
+                ...(base.unavailableTools ? [...base.unavailableTools] : []),
+                ...unavailable,
+            ]),
+        };
     }
 
     private surfaceForChannel(channel: ChannelName): TrustSurface {

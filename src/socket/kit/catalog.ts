@@ -1,18 +1,19 @@
 import { loadMcpServers } from "../../agent/mcp/registry.ts";
 import { loadPlugins } from "../../agent/plugin/registry.ts";
 import { loadSkills } from "../../agent/skills/registry.ts";
-import { loadToolManifest } from "../../executive/manifest.ts";
+import { loadExternalTools, loadToolManifest } from "../../executive/index.ts";
 import { ExternalKitCapabilitySource, type ExternalKitCapabilitySummary } from "../../protocol/contracts/index.ts";
 import type { FlyflorPaths } from "../../config/index.ts";
 import { loadExternalKitCatalog } from "./manifest.ts";
 
 export async function loadExternalKitCatalogSnapshot(paths: FlyflorPaths, now = new Date().toISOString()) {
-    const [catalog, mcpServers, plugins, skills, userTools] = await Promise.all([
+    const [catalog, mcpServers, plugins, skills, userTools, externalTools] = await Promise.all([
         loadExternalKitCatalog(paths, now),
         loadMcpServers(paths),
         loadPlugins(paths),
         loadSkills(paths),
         loadToolManifest(paths),
+        loadExternalTools(paths),
     ]);
     return {
         ...catalog,
@@ -52,6 +53,13 @@ export async function loadExternalKitCatalogSnapshot(paths: FlyflorPaths, now = 
                 name: tool.descriptor.name,
                 source: ExternalKitCapabilitySource.UserTool,
                 sourceId: tool.manifestSource,
+            })),
+            ...externalTools.map((entry): ExternalKitCapabilitySummary => ({
+                description: entry.unavailableReason ?? entry.tool.descriptor.description,
+                enabled: entry.available,
+                name: entry.tool.descriptor.name,
+                source: ExternalKitCapabilitySource.UserTool,
+                sourceId: entry.sidecarId ? `external:${entry.sidecarId}` : "external:missing",
             })),
         ].sort((left, right) => left.source.localeCompare(right.source) || left.name.localeCompare(right.name)),
     };

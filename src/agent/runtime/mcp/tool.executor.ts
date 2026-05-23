@@ -355,6 +355,9 @@ export class RuntimeMcpToolExecutor {
         }
         const result = await invokeUserTool({
             approve: approveUserToolCall,
+            executionKind: this.computerProfile.isComputerControlled(tool.descriptor)
+                ? CapabilityExecutionKind.Computer
+                : CapabilityExecutionKind.Plugin,
             events: this.events,
             input: call.input,
             paths: this.config.paths,

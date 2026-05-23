@@ -22,12 +22,14 @@ import {
     ToolPermission,
 } from "../../protocol/contracts/index.ts";
 import {
+    loadExternalTools,
     loadToolManifest,
     type CapabilityCatalogSnapshot,
     type CapabilitySummary,
     type ExecutiveCapabilityExecutionMetadata,
     type ExecutiveToolRuntimeAskRequired,
     type ExecutiveToolRuntimeBudget,
+    type ExternalToolDefinition,
     type ManifestToolDefinition,
 } from "../../executive/index.ts";
 import { Runtime as RuntimeBoundary } from "../../components/index.ts";
@@ -239,6 +241,7 @@ interface AssembledTurnContext {
     mcpToolCatalog: McpToolCatalogEntry[];
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
     userToolCatalog: RuntimeUserToolCatalogEntry[];
+    externalToolCatalog: ExternalToolDefinition[];
 }
 
 /** Phase 3 输出：完整 GatewayReply + persist/async 阶段需要的中间值。 */
@@ -828,6 +831,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const gitToolset = new GitToolset(this.config.paths);
         const processToolset = new ProcessToolset(this.config.paths);
         const userToolCatalog = await this.buildUserToolCatalog();
+        const externalToolCatalog = await this.buildExternalToolCatalog();
         const pluginCapabilityCatalog = await this.buildPluginCapabilityCatalog();
 
         const snapshotForEscalation = await this.fastRouteSnapshots.get(snapshotKey);
@@ -869,9 +873,11 @@ export class RuntimeModule extends RuntimeBoundary {
             pluginCapabilities: pluginCapabilityCatalog,
             resources: mcpCatalogBuild.resources,
             tools: unplannedToolCatalog,
+            externalTools: externalToolCatalog,
             userTools: userToolCatalog,
         });
         const visibleUserToolCatalog = capabilityPlan.userTools;
+        const visibleExternalToolCatalog = capabilityPlan.externalTools;
         const visiblePluginCapabilityCatalog = capabilityPlan.pluginCapabilities;
         const pluginToolCatalog = visiblePluginCapabilityCatalog.map((entry) => this.pluginCapabilityToolCatalogEntry(entry));
         const toolCatalog = [
@@ -890,6 +896,7 @@ export class RuntimeModule extends RuntimeBoundary {
             resources: capabilityPlan.resources,
             staleSources: mcpCatalogBuild.staleServers,
             tools: capabilityPlan.tools,
+            externalTools: visibleExternalToolCatalog,
             userTools: visibleUserToolCatalog,
         });
         this.events.publish(
@@ -914,6 +921,7 @@ export class RuntimeModule extends RuntimeBoundary {
                         prompts: visiblePromptNames.length,
                         resources: visibleResourceNames.length,
                         tools: toolCatalog.length,
+                        externalTools: visibleExternalToolCatalog.length,
                         userTools: visibleUserToolCatalog.length,
                     },
                 },
@@ -958,6 +966,7 @@ export class RuntimeModule extends RuntimeBoundary {
             mcpToolCatalog: toolCatalog,
             pluginCapabilityCatalog: visiblePluginCapabilityCatalog,
             userToolCatalog: visibleUserToolCatalog,
+            externalToolCatalog: visibleExternalToolCatalog,
         };
     }
 
@@ -967,6 +976,7 @@ export class RuntimeModule extends RuntimeBoundary {
      */
     private createCapabilityCatalogSnapshot(input: {
         builtAt: string;
+        externalTools: readonly ExternalToolDefinition[];
         failedSources: readonly string[];
         hiddenCapabilities: readonly RuntimeMcpHiddenTool[];
         pluginCapabilities: readonly RuntimePluginCapabilityCatalogEntry[];
@@ -982,11 +992,13 @@ export class RuntimeModule extends RuntimeBoundary {
             ...input.prompts.map((entry) => this.mcpToolPlan.descriptorForPromptEntry(entry)),
             ...input.pluginCapabilities.map((entry) => entry.descriptor),
             ...input.userTools.map((entry) => entry.tool.descriptor),
+            ...input.externalTools.map((entry) => entry.tool.descriptor),
         ];
         return {
             builtAt: input.builtAt,
             capabilities: descriptors.map((descriptor): CapabilitySummary => ({
                 category: descriptor.category,
+                computer: descriptor.computer,
                 concurrencySafe: descriptor.concurrencySafe,
                 exclusive: descriptor.exclusive,
                 name: descriptor.name,
@@ -1038,6 +1050,7 @@ export class RuntimeModule extends RuntimeBoundary {
             mcpToolCatalog,
             pluginCapabilityCatalog: _pluginCapabilityCatalog,
             userToolCatalog,
+            externalToolCatalog,
         } =
             assembled;
         const behaviorSnapshotId = `behavior-${context.requestId}`;
@@ -1092,7 +1105,17 @@ export class RuntimeModule extends RuntimeBoundary {
             canExecuteTools: mcpExecution.canExecute || shellExecution.canExecute || workspaceToolset.catalog().length > 0,
             requiresApproval: mcpExecution.requiresApproval || shellExecution.requiresApproval || pluginExecution.requiresApproval,
             catalog: mcpToolCatalog,
-            userToolCatalog,
+            userToolCatalog: [...userToolCatalog, ...externalToolCatalog.map((entry) => ({
+                catalog: {
+                    server: USER_TOOL_SERVER,
+                    tool: {
+                        name: entry.tool.descriptor.name,
+                        description: entry.tool.descriptor.description,
+                        inputSchema: entry.tool.descriptor.inputSchema,
+                    },
+                },
+                tool: entry.tool,
+            }))],
             pluginCapabilityCatalog: _pluginCapabilityCatalog,
             workspaceToolset,
             gitToolset,
@@ -2081,6 +2104,10 @@ export class RuntimeModule extends RuntimeBoundary {
                     },
                 },
             }));
+    }
+
+    private async buildExternalToolCatalog(): Promise<ExternalToolDefinition[]> {
+        return loadExternalTools(this.config.paths);
     }
 
     private async buildPluginCapabilityCatalog(): Promise<RuntimePluginCapabilityCatalogEntry[]> {

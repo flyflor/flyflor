@@ -33,6 +33,7 @@
         "install:docker": "sh scripts/install.docker.sh",
         "install:source": "sh scripts/install.source.sh",
         "install:windows": "powershell -ExecutionPolicy Bypass -File scripts/install.ps1",
+        "install:xtools:mock": "sh scripts/install.xtools.mock.sh",
         "install:templates": "bun run scripts/install.templates.ts",
         "install:templates:force": "bun run scripts/install.templates.ts --force",
         "provider:ready": "bun run scripts/provider.readiness.ts --json",
