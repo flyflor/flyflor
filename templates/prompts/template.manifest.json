@@ -142,6 +142,15 @@
       ]
     },
     {
+      "key": "mcpToolNeed",
+      "filename": "mcp.tool.need.md",
+      "requiredPlaceholders": [
+        "assistantDraft",
+        "toolCatalogJson",
+        "userRequest"
+      ]
+    },
+    {
       "key": "mcpToolBudgetExhausted",
       "filename": "mcp.tool.budget.exhausted.md",
       "requiredPlaceholders": []

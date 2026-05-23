@@ -20,6 +20,7 @@ export const PROMPT_TEMPLATE_ORDER = [
     "memoryWorkContextOffer",
     "memorySkillOffer",
     "mcpContext",
+    "mcpToolNeed",
     "mcpToolBudgetExhausted",
     "runtimeAskContinuation",
     "runtimeIdleResume",
@@ -146,6 +147,11 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
         callSite: "renderMcpContextPrompt",
         filename: "mcp.context.md",
         requiredPlaceholders: ["mcpEntries"],
+    },
+    mcpToolNeed: {
+        callSite: "RuntimeMcpToolNeedComponent.decide",
+        filename: "mcp.tool.need.md",
+        requiredPlaceholders: ["assistantDraft", "toolCatalogJson", "userRequest"],
     },
     mcpToolBudgetExhausted: {
         callSite: "renderMcpToolBudgetExhaustedPrompt",

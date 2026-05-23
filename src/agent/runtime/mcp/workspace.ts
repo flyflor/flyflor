@@ -219,7 +219,7 @@ export class WorkspaceToolset {
                 tool: {
                     name: WORKSPACE_DELETE_TOOL,
                     description:
-                        "Delete a local file or directory. Requires computer approval and returns a structured failure on missing paths or filesystem errors.",
+                        "Delete one local file or, when recursive=true, one local directory. Requires computer approval and returns a structured failure on filesystem errors.",
                     inputSchema: {
                         type: "object",
                         properties: {
@@ -604,15 +604,20 @@ export class WorkspaceToolset {
         const resolved = await this.resolveExistingPath(path);
         this.assertAccess(resolved, access);
         const info = await stat(resolved.target);
-        if (info.isDirectory() && input.recursive !== true) {
+        const recursive = input.recursive === true;
+        if (info.isDirectory() && !recursive) {
             throw new Error("workspace.delete target is a directory; set recursive=true to delete it.");
         }
-        await rm(resolved.target, { recursive: info.isDirectory(), force: false });
+        if (!info.isDirectory() && !info.isFile()) {
+            throw new Error(`workspace.delete target is not a file or directory: ${path}`);
+        }
         const root = await this.displayRoot(resolved.target);
+        await rm(resolved.target, { recursive, force: false });
         return {
             path: this.relativePath(root, resolved.target),
             deleted: true,
-            type: info.isDirectory() ? "directory" : info.isFile() ? "file" : "other",
+            recursive,
+            type: info.isDirectory() ? "directory" : "file",
         };
     }
 
@@ -955,7 +960,8 @@ export class WorkspaceToolset {
             call.tool === WORKSPACE_READ_TOOL ||
             call.tool === WORKSPACE_STAT_TOOL ||
             call.tool === WORKSPACE_WRITE_TOOL ||
-            call.tool === WORKSPACE_EDIT_TOOL
+            call.tool === WORKSPACE_EDIT_TOOL ||
+            call.tool === WORKSPACE_DELETE_TOOL
         ) {
             return this.requiredString(call.input.path, `workspace.${call.tool} requires input.path.`);
         }

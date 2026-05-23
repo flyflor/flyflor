@@ -1352,8 +1352,74 @@ describe("Skill and MCP capability config", () => {
         expect(systemPrompt).toContain('"name": "tree"');
         expect(systemPrompt).toContain('"name": "write"');
         expect(systemPrompt).toContain('"name": "edit"');
+        expect(systemPrompt).toContain('"name": "delete"');
         expect(systemPrompt).not.toContain('"name": "shell"');
         expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("needle line");
+    });
+
+    test("runtime asks the model to choose a workspace tool when the first draft skips tool calls", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-tool-need-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "project overview\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            "Let me inspect the project first.",
+            '{"decision":"use_tools","calls":[{"server":"workspace","tool":"read","input":{"path":"README.md"}}],"reason":"local-file-required"}',
+            "Read final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("Read README.md and summarize it"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Read final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages[1]?.[0]?.content).toContain("Tool catalog JSON");
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("project overview");
+    });
+
+    test("runtime keeps skipped-tool drafts out of streamed output before forced workspace tools run", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-tool-need-stream-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "notes.txt"), "streamed tool result\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            "Let me inspect notes.txt first.",
+            '{"decision":"use_tools","calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}],"reason":"local-file-required"}',
+            "Stream final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+        const deltas: string[] = [];
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage("Read notes.txt and summarize it"),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            {
+                onTextDelta: (text) => {
+                    deltas.push(text);
+                },
+            },
+        );
+
+        expect(reply.text).toBe("Stream final.");
+        expect(deltas.join("")).toBe("Stream final.");
+        expect(deltas.join("")).not.toContain("Let me inspect");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
     });
 
     test("runtime exposes local file tools for websocket TUI turns without explicit scope", async () => {
@@ -1385,7 +1451,7 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("ws local file");
     });
 
-    test("runtime exposes workspace write/edit as approved file capabilities", async () => {
+    test("runtime exposes workspace write/edit/delete as approved file capabilities", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-write-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -1394,6 +1460,7 @@ describe("Skill and MCP capability config", () => {
         const model = new SequencedModel([
             '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"write","input":{"path":"notes.txt","content":"alpha\\nold\\n","overwrite":true}}]}</agent_tool_calls>',
             '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"edit","input":{"path":"notes.txt","oldText":"old","newText":"new"}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"delete","input":{"path":"notes.txt"}}]}</agent_tool_calls>',
             "Write edit final.",
             "[]",
         ]);
@@ -1414,11 +1481,13 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "write" }),
             expect.objectContaining({ ok: true, server: "workspace", tool: "edit" }),
+            expect.objectContaining({ ok: true, server: "workspace", tool: "delete" }),
         ]);
-        expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("alpha\nnew\n");
+        expect(await Bun.file(join(root, "notes.txt")).exists()).toBe(false);
         const systemPrompt = model.messages[0]?.find((message) => message.role === ModelRole.System)?.content ?? "";
         expect(systemPrompt).toContain('"name": "write"');
         expect(systemPrompt).toContain('"name": "edit"');
+        expect(systemPrompt).toContain('"name": "delete"');
     });
 
     test("runtime can write outside project only after explicit approval", async () => {

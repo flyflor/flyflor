@@ -192,6 +192,6 @@ export class McpCatalogAdapter {
     }
 
     private isWorkspaceWriteTool(toolName: string): boolean {
-        return toolName === "write" || toolName === "edit";
+        return toolName === "write" || toolName === "edit" || toolName === "delete";
     }
 }

@@ -45,6 +45,12 @@ export interface McpContextPromptInput {
 
 export interface McpToolBudgetExhaustedPromptInput {}
 
+export interface McpToolNeedPromptInput {
+    assistantDraft: string;
+    toolCatalogJson: string;
+    userRequest: string;
+}
+
 export interface BlackboardAdvisoryPromptInput {
     compactRounds?: string[];
     configured: boolean;
@@ -296,6 +302,16 @@ export function renderMcpContextPrompt(input: McpContextPromptInput): string {
     });
 }
 
+export function renderMcpToolNeedPrompt(input: McpToolNeedPromptInput): string {
+    // Dedicated model gate: Runtime consumes only the JSON decision and catalog tool ids,
+    // then sends any selected calls back through Executive/Sandbox instead of trusting prose.
+    return renderTemplate(requiredTemplates().mcpToolNeed.content, {
+        assistantDraft: input.assistantDraft,
+        toolCatalogJson: input.toolCatalogJson,
+        userRequest: input.userRequest,
+    });
+}
+
 export function renderMcpToolBudgetExhaustedPrompt(_input: McpToolBudgetExhaustedPromptInput = {}): string {
     return requiredTemplates().mcpToolBudgetExhausted.content;
 }
@@ -540,6 +556,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     crystalReflection: ["evidence"],
     feedbackClassify: ["currentUserText", "previousAssistantText"],
     mcpContext: ["mcpEntries"],
+    mcpToolNeed: ["assistantDraft", "toolCatalogJson", "userRequest"],
     memoryAction: [],
     memoryConsolidation: ["episode"],
     memoryHotCompress: ["episodes"],

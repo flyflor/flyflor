@@ -4,6 +4,7 @@ export * from "./git.ts";
 export * from "./process.ts";
 export * from "./tool.plan.ts";
 export * from "./tool.executor.ts";
+export * from "./tool.need.ts";
 export * from "./toolset.ts";
 export * from "./user.tool.ts";
 export * from "./workspace.ts";

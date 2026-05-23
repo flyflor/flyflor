@@ -680,3 +680,11 @@
   摘要：在 `ExecutiveToolRuntime` 内落地三层预算 `modelToolTurnBudget` / `executionOperationBudget` / `riskQuota`，ASK 暂停 payload 增加 pause/continue/narrow/stop 与 crystal candidate 结构；Runtime MCP adapter 透传预算并把预算阻断保留为结构化工具结果。
   原因：执行循环需要把模型工具轮次、内部操作数和高风险额度分开表达，普通工具失败不能被吞掉或升级成 turn error。
   验证：`bun test tests/executive.tool.runtime.test.ts`；`bun test tests/skill.mcp.test.ts --test-name-pattern "runtime returns an ask when maxToolTurns is exhausted|runtime resume turn carries Executive pause ghost and continues tool execution|runtime feeds Executive loop guard diagnostics back after repeated failed tool calls"`；`bun run check`；待最终 `git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：computer-control-tool-loop-stage-isolation
+  摘要：收拾电脑控制调用层半成品：补齐 `mcpToolNeed` prompt manifest/render 校验，新增模型结构化工具需求裁决，修正 WS 流式首轮不先外显无工具草稿，新增 `workspace.delete` 并纳入 catalog/schema/审批/Executive descriptor。
+  原因：当前智能体遇到本地代码阅读、文件整理和项目检查时可能只输出自然语言草稿而不进入工具循环；阶段性补洞必须先恢复可验证状态，再把完整电脑控制设计隔离到独立 worktree 慢慢推进，避免继续污染 master。
+  效率：当前未提交 diff 统计为 12 files changed，约 392 insertions、15 deletions；运行时代码集中在 `src/agent/runtime/mcp`、`src/agent/runtime/module.ts`、`src/executive/mcp.adapter.ts`，测试集中在 `tests/skill.mcp.test.ts`。
+  验证：`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts tests/skill.mcp.test.ts --timeout 60000` 93 pass；`bun run check`；`git diff --check`。

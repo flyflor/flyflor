@@ -961,3 +961,15 @@ Validation:
 - `bun test tests/skill.mcp.test.ts --test-name-pattern "runtime returns an ask when maxToolTurns is exhausted|runtime resume turn carries Executive pause ghost and continues tool execution|runtime feeds Executive loop guard diagnostics back after repeated failed tool calls"`
 - `bun run check`
 - final `git diff --check` before commit
+
+## 2026-05-24 Computer Control Worktree Isolation
+
+The current master line only keeps the verified stage-one fixes for local tool follow-through:
+
+- the model can be asked for a structured `answer | use_tools` decision when its first draft skips required local tools
+- the decision may only select tools already present in the runtime catalog
+- selected calls still return through Executive, sandbox approval, schema validation, loop guard, event audit, and tool-result feedback
+- streamed turns do not expose skipped-tool drafts before the tool decision is made
+- `workspace.delete` is a real workspace write tool and therefore remains behind write approval
+
+This is not the final computer-control architecture. The full implementation must continue in an isolated worktree and must cover protocol-level tool registration, cross-platform file/process/git operations, approval UX, sandbox policy, result compaction, tool memory, and real `/ws` scenario tests. Do not expand that large design directly on `master`.

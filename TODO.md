@@ -711,3 +711,13 @@ Kernel V2 acceptance focus：
 - [x] 工具失败保持为结构化 tool result；adapter 覆盖率协议错误仍显式抛出。
 - [x] 补齐 focused tests，覆盖预算耗尽、ASK pause payload、失败结果和 Runtime MCP resume 入口。
 - [x] 运行 focused tests、`bun run check`、`git diff --check` 后提交本 lane。
+
+## 2026-05-24 电脑控制调用层阶段性隔离
+
+- [x] 修复 `mcpToolNeed` prompt manifest 占位符校验缺口，恢复 prompt lint。
+- [x] 新增 `RuntimeMcpToolNeedComponent`，当模型首轮没有结构化工具调用但本地任务需要工具时，由同模型输出 JSON 裁决，再回到 Executive 工具循环执行。
+- [x] 修正流式首轮工具裁决顺序：需要工具时不提前向 WS/TUI 外显“我先看看”一类草稿。
+- [x] 新增 `workspace.delete`，进入 workspace catalog、schema、审批和 Executive descriptor，作为写能力的一部分。
+- [x] 补充 focused 测试：首轮跳过工具调用、流式草稿不外显、workspace delete 执行链路。
+- [ ] 在独立 worktree 中继续设计完整电脑控制层：协议级工具注册、跨平台进程/文件/git 能力、沙盒审批、结果回灌、loop guard、真实 WS 场景测试。
+- [ ] 主分支只保留已验证补洞；完整执行层重构不得继续污染 master。

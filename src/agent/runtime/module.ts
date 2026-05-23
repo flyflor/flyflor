@@ -17,8 +17,9 @@ import {
     BlackboardTurnStatus,
     CapabilityExecutionKind,
     Channel,
-    ToolPermission,
     ContinuationContextReason,
+    ModelRole,
+    ToolPermission,
 } from "../../protocol/contracts/index.ts";
 import {
     loadToolManifest,
@@ -91,6 +92,8 @@ import {
     ProcessToolset,
     PROCESS_SERVER,
     RuntimeMcpCapabilityReader,
+    RuntimeMcpToolNeedComponent,
+    RuntimeMcpToolNeedDecisionKind,
     RuntimeMcpToolPlanComponent,
     RuntimeMcpToolExecutor,
     type RuntimeMcpHiddenTool,
@@ -290,6 +293,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly fastRouteEvaluator: FastRouteEvaluator;
     protected readonly routeEscalationPolicy: RouteEscalationPolicy;
     protected readonly mcpToolPlan: RuntimeMcpToolPlanComponent;
+    protected readonly mcpToolNeed: RuntimeMcpToolNeedComponent;
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
     protected readonly mcpCapabilityReader: RuntimeMcpCapabilityReader;
     protected readonly continuationGhosts: ContinuationGhostStore;
@@ -330,6 +334,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.fastRouteEvaluator = new FastRouteEvaluator();
         this.routeEscalationPolicy = new RouteEscalationPolicy();
         this.mcpToolPlan = new RuntimeMcpToolPlanComponent();
+        this.mcpToolNeed = new RuntimeMcpToolNeedComponent();
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
         this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
@@ -1900,14 +1905,22 @@ export class RuntimeModule extends RuntimeBoundary {
             generate: async (transcript, turn) => {
                 this.throwIfAborted(options.signal);
                 const modelTranscript = transcript as ModelMessage[];
-                if (options.onTextDelta && turn === 0 && !firstTurnStreamed.value) {
-                    firstTurnStreamed.value = true;
-                    return this.generateModelText(modelTranscript, replyPrefix, options);
-                }
-                const raw = await this.model.generate(modelTranscript, { signal: options.signal });
+                const shouldStreamVisibleText = options.onTextDelta && (turn > 0 || firstTurnStreamed.value);
+                const raw = shouldStreamVisibleText
+                    ? await this.generateModelText(modelTranscript, replyPrefix, options)
+                    : await this.model.generate(modelTranscript, { signal: options.signal });
                 const parsedCalls = parseMcpToolCalls(raw);
-                if (options.onTextDelta && turn > 0 && parsedCalls.calls.length === 0) {
-                    await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`);
+                if (turn === 0 && parsedCalls.calls.length === 0) {
+                    const forced = await this.decideInitialToolNeed(raw, modelTranscript, mcp, options);
+                    if (forced) return forced;
+                    if (options.onTextDelta && !firstTurnStreamed.value) {
+                        firstTurnStreamed.value = true;
+                        await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`);
+                    }
+                }
+                if (turn === 0 && parsedCalls.calls.length > 0 && parsedCalls.text && options.onTextDelta) {
+                    firstTurnStreamed.value = true;
+                    await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text)}`);
                 }
                 return raw;
             },
@@ -1930,6 +1943,29 @@ export class RuntimeModule extends RuntimeBoundary {
             mcpToolCalls: result.mcpToolCalls,
             requiresApproval: mcp.requiresApproval,
         };
+    }
+
+    private async decideInitialToolNeed(
+        assistantDraft: string,
+        messages: ModelMessage[],
+        mcp: {
+            catalog: McpToolCatalogEntry[];
+        },
+        options: RuntimeStreamOptions,
+    ): Promise<string | undefined> {
+        const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
+        if (!userMessage) return undefined;
+        const decision = await this.mcpToolNeed.decide({
+            assistantDraft,
+            catalog: mcp.catalog,
+            model: this.model,
+            signal: options.signal,
+            userRequest: userMessage.content,
+        });
+        if (decision.decision !== RuntimeMcpToolNeedDecisionKind.UseTools || decision.calls.length === 0) {
+            return undefined;
+        }
+        return `<agent_tool_calls>${JSON.stringify({ calls: decision.calls })}</agent_tool_calls>`;
     }
 
     private executiveToolBudget(options: RuntimeStreamOptions): Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget {
