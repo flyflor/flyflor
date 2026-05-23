@@ -382,14 +382,10 @@ describe("documentation references", () => {
             join(REPO_ROOT, "docs", "apifox", "flyflor.socket.apifox.openapi.json"),
         ).text();
         const apifox = JSON.parse(apifoxText) as {
-            apiCollection?: Array<{
-                items?: Array<{
-                    api?: { requestBody?: { raw?: string }; schema?: unknown };
-                    extensions?: Record<string, unknown>;
-                }>;
-            }>;
-            examples?: Record<string, unknown>;
-            realSurface?: unknown;
+            openapi?: string;
+            components?: { examples?: Record<string, { value?: unknown }>; schemas?: Record<string, OpenApiSchema> };
+            paths?: Record<string, unknown>;
+            "x-flyflor-real-surface"?: string[];
         };
         const apifoxOpenApi = JSON.parse(apifoxOpenApiText) as {
             openapi?: string;
@@ -398,8 +394,7 @@ describe("documentation references", () => {
             "x-flyflor-real-surface"?: string[];
         };
         const canonicalPaths = Object.keys(canonical.paths ?? {}).sort();
-        const apifoxItems = (apifox.apiCollection ?? []).flatMap((folder) => folder.items ?? []);
-        const apifoxExampleNames = Object.keys(apifox.examples ?? {});
+        const apifoxExampleNames = Object.keys(apifox.components?.examples ?? {});
         const expectedExamples = [
             "AskDetailGet",
             "AskDetailSnapshot",
@@ -440,18 +435,20 @@ describe("documentation references", () => {
             "ExecutiveLoopResumedEvent",
         ];
 
+        expect(apifox).toEqual(apifoxOpenApi);
+        expect(apifox.openapi).toBe("3.0.3");
         expect(apifoxOpenApi.openapi).toBe("3.0.3");
         expect(canonicalPaths).toEqual(["/health", "/ws"]);
-        expect(apifox.realSurface).toEqual([
-            { method: "GET", path: "/health" },
-            { method: "WS", path: "/ws" },
-        ]);
-        expect(apifoxItems.length).toBeGreaterThanOrEqual(55);
+        expect(apifox["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
+        expect(Object.keys(apifox.paths ?? {}).filter((path) => path.startsWith("/__apifox/ws/")).length).toBeGreaterThanOrEqual(
+            55,
+        );
         for (const name of Object.keys(canonical.components?.examples ?? {})) {
             expect(apifoxExampleNames).toContain(name);
         }
         for (const name of expectedExamples) {
             expect(apifoxExampleNames).toContain(name);
+            expect(apifox.components?.schemas).toHaveProperty(`${name}Frame`);
             expect(apifoxOpenApi.components?.schemas).toHaveProperty(`${name}Frame`);
         }
 
@@ -462,16 +459,26 @@ describe("documentation references", () => {
         expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/send/scope-detail-get"))).toBe(true);
         expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/expect/thought-snapshot"))).toBe(true);
         expect(apifoxOpenApi["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
+        expect(findMissingLocalRefs(apifox)).toEqual([]);
         expect(findMissingLocalRefs(apifoxOpenApi)).toEqual([]);
+        expect(findEmptyOneOf(apifox)).toEqual([]);
         expect(findEmptyOneOf(apifoxOpenApi)).toEqual([]);
 
-        const sendItems = apifoxItems.filter((item) => item.extensions?.["x-flyflor-direction"] === "client->server");
-        expect(sendItems.length).toBeGreaterThan(0);
-        for (const item of sendItems) {
-            expect(item.api?.schema).toBeTruthy();
-            const raw = item.api?.requestBody?.raw;
-            expect(typeof raw).toBe("string");
-            expect(() => parseGatewayControlEnvelope(raw ?? "")).not.toThrow();
+        const sendOperations = Object.entries(apifox.paths ?? {}).filter(
+            ([path, item]) =>
+                path.startsWith("/__apifox/ws/send/") &&
+                isRecord(item) &&
+                isRecord(item.post) &&
+                item.post["x-flyflor-direction"] === "client->server",
+        );
+        expect(sendOperations.length).toBeGreaterThan(0);
+        for (const [, item] of sendOperations) {
+            if (!isRecord(item) || !isRecord(item.post)) continue;
+            const examples = readOperationExamples(item.post);
+            expect(examples.length).toBeGreaterThan(0);
+            for (const example of examples) {
+                expect(() => parseGatewayControlEnvelope(JSON.stringify(example))).not.toThrow();
+            }
         }
     });
 
@@ -650,6 +657,17 @@ function collectRefs(value: unknown, refs: Set<string>): void {
     if (!isRecord(value)) return;
     if (typeof value.$ref === "string") refs.add(value.$ref);
     for (const item of Object.values(value)) collectRefs(item, refs);
+}
+
+function readOperationExamples(operation: Record<string, unknown>): unknown[] {
+    const requestBody = operation.requestBody;
+    if (!isRecord(requestBody) || !isRecord(requestBody.content)) return [];
+    const json = requestBody.content["application/json"];
+    if (!isRecord(json) || !isRecord(json.examples)) return [];
+    return Object.values(json.examples)
+        .filter(isRecord)
+        .map((example) => example.value)
+        .filter((value) => value !== undefined);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

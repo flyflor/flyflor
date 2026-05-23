@@ -43,9 +43,8 @@ const source = JSON.parse(await readFile(sourcePath, "utf8")) as OpenApiContract
 const canonicalExamples = readCanonicalExamples(source);
 const examples = { ...canonicalExamples, ...extraExamples() };
 const frames = buildFrames(examples);
-const apifox = buildApifoxProject(frames, examples);
 const apifoxOpenApi = buildApifoxOpenApi(source, frames, examples);
-const generatedApifox = `${JSON.stringify(apifox, null, 2)}\n`;
+const generatedApifox = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
 const generatedApifoxOpenApi = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
 
 if (writeMode) {
@@ -144,71 +143,6 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
         serverFrame("ExecutiveLoopPausedEvent", "05 Event Stream", examples),
         serverFrame("ExecutiveLoopResumedEvent", "05 Event Stream", examples),
     ];
-}
-
-function buildApifoxProject(frames: FrameExample[], examples: Record<string, JsonRecord>): JsonRecord {
-    const folders = Array.from(new Set(frames.map((frame) => frame.folder))).map((folder) => ({
-        name: folder,
-        type: "folder",
-        items: frames
-            .filter((frame) => frame.folder === folder)
-            .map((frame) => ({
-                name: `${frame.direction === "client->server" ? "WS Send" : "WS Expect"} / ${frame.name}`,
-                type: "api",
-                api: {
-                    protocol: "websocket",
-                    method: "GET",
-                    path: "/ws",
-                    url: "{{ws_origin}}/ws",
-                    requestBody: {
-                        mode: "raw",
-                        raw: JSON.stringify(frame.value, null, 2),
-                        type: "json",
-                    },
-                    responseExamples: (frame.expected ?? []).map((name) => ({
-                        name,
-                        body: examples[name] ?? null,
-                        schema: examples[name] ? schemaForEnvelope(examples[name]) : undefined,
-                    })),
-                    schema: schemaForEnvelope(frame.value),
-                },
-                extensions: {
-                    "x-flyflor-direction": frame.direction,
-                    "x-flyflor-example-name": frame.name,
-                    "x-flyflor-real-surface": "/ws",
-                    "x-flyflor-summary": frame.summary,
-                },
-            })),
-    }));
-
-    return {
-        apifoxProject: "1.0.0",
-        info: {
-            name: "Flyflor WebSocket 测试示例",
-            description:
-                "Apifox project-style WebSocket example set generated from the canonical /ws OpenAPI examples. Real HTTP surface remains only GET /health and WS /ws.",
-            version: source.info?.version ?? "1.0.0",
-        },
-        source: {
-            canonicalOpenApi: "../openapi/flyflor.socket.openapi.json",
-            generatedBy: "scripts/build.apifox.socket.ts",
-        },
-        realSurface: [
-            { method: "GET", path: "/health" },
-            { method: "WS", path: "/ws" },
-        ],
-        environmentCollection: [
-            {
-                name: "Local Socket",
-                variables: [
-                    { name: "http_origin", value: "http://127.0.0.1:8788" },
-                    { name: "ws_origin", value: "ws://127.0.0.1:8788" },
-                ],
-            },
-        ],
-        apiCollection: folders,
-        examples,
-    };
 }
 
 function buildApifoxOpenApi(
