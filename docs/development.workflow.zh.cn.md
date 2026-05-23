@@ -897,3 +897,25 @@ Kernel V2 硬设计点：
 - 运行 `bun run build:binary`。
 - 运行 `git diff --check`。
 - 最终主线提交后回收 child tmux window 并移除开发 worktree。
+
+## 2026-05-24 xtools 合并闭合
+
+已接受主线提交：
+
+- `16273c7`：底层执行原语。`workspace.patch` 已按真实写能力分类，workspace/git/process 测试覆盖读取、写入、patch、目录树、搜索、glob、二进制拒绝和进程结果回灌。
+- `284c171`：有界 `subagent.batch`。模型可以把独立辅助任务并发拆出；子任务工具目录会被收窄，不能递归调用 batch；`needs_user` 保持结构化；batch provenance 写入行为快照。
+- `25fedc7`：descriptor-only external sidecar catalog。browser、screen、computer、vision、audio、web、LSP、background task 从 `external.tools.jsonc` 检测，有则注册，无则 hidden/unavailable，不进入 Bun binary。
+
+协调者决策：
+
+- 内建文件读写、patch、git、process 能力仍属于 runtime MCP 执行原语；external tools 不重复实现文件工具。
+- `subagent.batch` 在父级 Executive 预算中按一次执行操作扣减，同时保留子级 loop guard 和工具结果。
+- browser/computer sidecar 通过既有 process-json runner 执行，但权限面走 computer approval。
+- 新增子代理 runtime events 已写入 `docs/openapi/flyflor.socket.openapi.json`，保持 Apifox 和 `/ws` event subscription 枚举一致。
+
+验证：
+
+- `bun test tests/skill.mcp.test.ts tests/event.component.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/computer.coding.tools.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- 本轮剩余闭合动作是最终 binary build 和 xtools worktree 清理。

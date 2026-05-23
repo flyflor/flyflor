@@ -1028,3 +1028,25 @@ Validation:
 - `bun test tests/computer.coding.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/executive.core.test.ts`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-24 xtools Merge Closure
+
+Accepted mainline commits:
+
+- `16273c7`: core execution primitives. `workspace.patch` is now correctly classified as a write tool, and workspace/git/process execution tests cover read, write, patch, tree, search, glob, binary refusal, and process result feedback.
+- `284c171`: bounded `subagent.batch`. The model can fan out independent helper tasks, child tool catalogs are narrowed, children cannot recursively call the batch tool, child `needs_user` results stay structured, and batch provenance is written into behavior snapshots.
+- `25fedc7`: descriptor-only external sidecar catalog. Browser, screen, computer, vision, audio, web, LSP, and background-task tools are detected from `external.tools.jsonc`, hidden when unavailable, and kept outside the Bun binary.
+
+Coordinator decisions:
+
+- Keep built-in file/read/write/patch/git/process capability inside runtime MCP execution primitives; external tools must not duplicate file tools.
+- Treat `subagent.batch` as one parent execution operation while preserving child-level tool loop guards and results.
+- Keep browser/computer sidecars behind the computer approval surface through the existing process-json runner.
+- Add the new subagent runtime events to `docs/openapi/flyflor.socket.openapi.json` so Apifox and `/ws` event subscriptions stay aligned.
+
+Validation:
+
+- `bun test tests/skill.mcp.test.ts tests/event.component.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts tests/external.tools.test.ts tests/gateway.ws.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/computer.coding.tools.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- final binary build and xtools worktree cleanup are the remaining closure actions for this round

@@ -745,3 +745,24 @@ Kernel V2 acceptance focus：
 - [x] 确保工具结果摘要、原始结果引用、错误信息能稳定回灌给模型。
 - [x] 补充或更新 smoke/test，覆盖真实读项目、搜索、patch 临时文件、process.run。
 - [x] 运行验证并在 `LOGS.md` 追加结果。
+
+## 2026-05-24 xtools-subagent
+
+- [x] 新增内建 `subagent.batch`，允许模型把独立检查拆给多个辅助任务并发执行。
+- [x] 子任务只能使用父级目录中收窄后的工具集合，禁止递归调用 `subagent.batch`。
+- [x] 多个子任务在父级 Executive 预算中按一个 batch 操作扣减，子任务内部仍有独立工具轮次上限。
+- [x] 子任务需要用户决定时返回结构化 `needs_user`，不直接向用户提问。
+- [x] 子代理事件写入 runtime event stream，并把 batch/child 计数写入 `brain.db` 行为快照 provenance。
+- [x] 更新工具提示词中英文镜像，说明可并发拆分任务但不能暴露内部实现判断。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 后合入主线。
+
+## 2026-05-24 xtools-external-kit
+
+- [x] 新增 descriptor-only 外挂工具目录，覆盖 browser、screen、computer、vision、audio、web、LSP、background task。
+- [x] 外挂工具只通过 `external.tools.jsonc` sidecar manifest 检测注册；缺失时隐藏为 unavailable，不阻塞启动。
+- [x] 外挂工具不重新实现文件读写；核心文件/patch/git/process 能力仍由内建执行原语负责。
+- [x] Browser/computer 类工具携带 computer profile，运行时走 computer approval surface；普通 user tool 仍走 plugin approval。
+- [x] 新增 mock sidecar 安装脚本和测试 sidecar，只用于本地/测试目录能力面，不把 Playwright/OCR/Whisper/LSP 等重依赖编入 Bun binary。
+- [x] Socket kit catalog 暴露可用/不可用 external capabilities，方便 TUI/前端显示能力面。
+- [x] 更新 OpenAPI/Apifox 事件枚举，补齐新增子代理事件订阅类型。
+- [x] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 后合入主线。

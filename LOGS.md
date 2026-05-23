@@ -713,3 +713,19 @@
   摘要：审查并封住内建 workspace/git/process/shell 执行原语：确认 `workspace.tree/read/search/glob/stat/write/edit/delete/patch`、`git.status/diff/show`、`process.run` 和 `shell.run` 的 runtime 接线；修正 Executive descriptor 中 `workspace.patch` 的写权限分类，使工具可见性、预算风险和审批语义与真实写入行为一致；补充真实临时项目读树、glob、搜索、截断读取、二进制拒绝、patch add/update/move/delete 和 `process.run` 成功/失败结构化结果覆盖。
   原因：`workspace.patch` 已经是实际写能力，但 catalog/trust descriptor 漏判为只读会导致本地 TUI/WS 写权限面不稳定；Codex/OpenCode 风格底层执行原语需要用可执行测试证明读写、执行和错误回灌，而不是依赖提示词约束。
   验证：`bun test tests/computer.coding.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/executive.core.test.ts`；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：xtools-subagent
+  范围：子代理批处理执行
+  摘要：新增 `subagent.batch` 内建工具、`RuntimeSubagentBatchComponent`、子任务事件、父级预算 batch 扣减、`brain.db` 行为快照 provenance 和 focused tests；子任务会复用真实模型生成，不是伪执行。
+  原因：用户要求多个子代理由 LLM 决定并发数量，多个子代理只占用一个工具额度，同时所有子代理调用必须写入 `brain.db` 形成审计关联。
+  效率：合入提交 `284c171`，19 files changed，787 insertions，11 deletions。
+  验证：`bun test tests/skill.mcp.test.ts tests/event.component.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts` 81 pass；主线综合 focused tests 161 pass；`bun run check`。
+
+- 状态：已完成
+  执行者：xtools-external-kit
+  范围：外挂功能工具目录
+  摘要：新增 descriptor-only external tool registry，覆盖 browser/screen/computer/vision/audio/web/LSP/background task；运行时检测 `external.tools.jsonc` sidecar，有则注册，无则 hidden/unavailable；新增 mock sidecar installer 和 socket kit catalog 暴露。
+  原因：浏览器、屏幕、鼠标键盘、视觉、OCR、语音、搜索、LSP 等属于可外挂能力，不应把重依赖打进 Bun kernel；核心读写仍走内建执行原语，外部能力只做功能扩展。
+  效率：合入提交 `25fedc7`，16 files changed，1036 insertions，6 deletions；契约修正另补 `EventSubscription.types` 4 个子代理事件。
+  验证：`bun test tests/external.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/computer.coding.tools.test.ts` 84 pass；`bun run docs:check` 26 pass；主线综合 focused tests 161 pass；`bun run check`。
