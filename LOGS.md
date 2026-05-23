@@ -666,3 +666,10 @@
   摘要：本 lane 只补工具生命周期事件、socket 订阅/查询可见面和文档契约。
   原因：TUI 需要看到执行血管事件，但 gateway/socket 能查 DB 或订阅事件解决的内容不能侵入智能体核心。
   验证：待补 focused tests、docs check、`bun run check`、`git diff --check`。
+
+- 状态：进行中
+  执行者：codex-lane-computer-coding-tools
+  范围：computer-coding-tools
+  摘要：本 lane 只补电脑控制基础工具面：文件、patch、git、process/shell 风险边界。
+  原因：智能体需要像 Codex/OpenCode 一样真正读写和执行，但不能靠提示词硬凑，也不能破坏现有认知/记忆主链。
+  验证：待补 focused tests、`bun run check`、`git diff --check`。

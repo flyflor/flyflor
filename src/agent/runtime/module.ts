@@ -87,6 +87,8 @@ import {
     mcpCatalogCacheKey,
     mcpExecutionsToExecutiveMetadata,
     mcpExecutionsToProvenance,
+    ProcessToolset,
+    PROCESS_SERVER,
     RuntimeMcpCapabilityReader,
     RuntimeMcpToolPlanComponent,
     RuntimeMcpToolExecutor,
@@ -221,6 +223,7 @@ interface AssembledTurnContext {
     shellExecution: ReturnType<typeof decideCapabilityExecution>;
     workspaceToolset: WorkspaceToolset;
     gitToolset: GitToolset;
+    processToolset: ProcessToolset;
     blackboardRun: RuntimeBlackboardRun | undefined;
     mcpToolCatalog: McpToolCatalogEntry[];
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
@@ -803,6 +806,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const shellExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.ShellHook);
         const workspaceToolset = new WorkspaceToolset(this.config.paths);
         const gitToolset = new GitToolset(this.config.paths);
+        const processToolset = new ProcessToolset(this.config.paths);
         const userToolCatalog = await this.buildUserToolCatalog();
         const pluginCapabilityCatalog = await this.buildPluginCapabilityCatalog();
 
@@ -822,6 +826,7 @@ export class RuntimeModule extends RuntimeBoundary {
         );
         const builtinToolCatalog = [
             ...workspaceToolset.catalog(),
+            ...(shellExecution.canExecute ? processToolset.catalog() : []),
             ...(shellExecution.canExecute ? gitToolset.catalog() : []),
             ...(shellExecution.canExecute ? [BUILTIN_SHELL_CATALOG_ENTRY] : []),
         ];
@@ -905,6 +910,7 @@ export class RuntimeModule extends RuntimeBoundary {
                         ...mcpServers.filter((server) => server.enabled).map((server) => server.name),
                         BUILTIN_WORKSPACE_SERVER,
                         ...(shellExecution.canExecute ? [BUILTIN_GIT_SERVER] : []),
+                        ...(shellExecution.canExecute ? [PROCESS_SERVER] : []),
                         ...(shellExecution.canExecute ? [BUILTIN_SHELL_SERVER] : []),
                     ],
                     staleServers: mcpCatalogBuild.staleServers,
@@ -926,6 +932,7 @@ export class RuntimeModule extends RuntimeBoundary {
             shellExecution,
             workspaceToolset,
             gitToolset,
+            processToolset,
             blackboardRun,
             mcpToolCatalog: toolCatalog,
             pluginCapabilityCatalog: visiblePluginCapabilityCatalog,
@@ -1005,6 +1012,7 @@ export class RuntimeModule extends RuntimeBoundary {
             shellExecution,
             workspaceToolset,
             gitToolset,
+            processToolset,
             blackboardRun,
             mcpToolCatalog,
             pluginCapabilityCatalog: _pluginCapabilityCatalog,
@@ -1047,7 +1055,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 blackboardContext: this.blackboardOutput.renderBlackboardPrompt(blackboardRun),
                 mcp: {
                     canExecuteTools: true,
-                    servers: this.builtinMcpServers(mcpServers, workspaceToolset, gitToolset, shellExecution.canExecute),
+                    servers: this.builtinMcpServers(mcpServers, workspaceToolset, gitToolset, processToolset, shellExecution.canExecute),
                     tools: mcpToolCatalog,
                 },
                 memoryContext: memoryPrompt,
@@ -1067,6 +1075,7 @@ export class RuntimeModule extends RuntimeBoundary {
             pluginCapabilityCatalog: _pluginCapabilityCatalog,
             workspaceToolset,
             gitToolset,
+            processToolset,
             requestId: context.requestId,
             approveMcpToolCall: options.approveMcpToolCall,
             approveUserToolCall: options.approveUserToolCall,
@@ -1853,6 +1862,7 @@ export class RuntimeModule extends RuntimeBoundary {
             pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
             workspaceToolset: WorkspaceToolset;
             gitToolset: GitToolset;
+            processToolset: ProcessToolset;
             approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
             approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
             requestId: string;
@@ -1899,6 +1909,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 pluginCapabilityCatalog: mcp.pluginCapabilityCatalog,
                 workspaceToolset: mcp.workspaceToolset,
                 gitToolset: mcp.gitToolset,
+                processToolset: mcp.processToolset,
                 requestId: mcp.requestId,
                 requiresApproval: mcp.requiresApproval,
                 approveMcpToolCall: mcp.approveMcpToolCall,
@@ -2125,12 +2136,14 @@ export class RuntimeModule extends RuntimeBoundary {
         mcpServers: Awaited<ReturnType<typeof loadMcpServers>>,
         workspaceToolset: WorkspaceToolset,
         gitToolset: GitToolset,
+        processToolset: ProcessToolset,
         includeShell: boolean,
     ): Awaited<ReturnType<typeof loadMcpServers>> {
         return [
             ...mcpServers,
             workspaceToolset.serverDefinition(),
             ...(includeShell ? [gitToolset.serverDefinition()] : []),
+            ...(includeShell ? [processToolset.serverDefinition()] : []),
             ...(includeShell ? [this.builtinShellServerDefinition()] : []),
         ];
     }

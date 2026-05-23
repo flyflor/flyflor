@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, parse, relative, resolve } from "node:path";
 import type { FlyflorPaths } from "../../../config/index.ts";
 import type {
@@ -18,6 +18,8 @@ export const WORKSPACE_STAT_TOOL = "stat";
 export const WORKSPACE_TREE_TOOL = "tree";
 export const WORKSPACE_WRITE_TOOL = "write";
 export const WORKSPACE_EDIT_TOOL = "edit";
+export const WORKSPACE_DELETE_TOOL = "delete";
+export const WORKSPACE_PATCH_TOOL = "patch";
 const DEFAULT_LIST_LIMIT = 200;
 const MAX_LIST_LIMIT = 1_000;
 const DEFAULT_READ_LIMIT = 20_000;
@@ -36,6 +38,7 @@ const MAX_TREE_ENTRIES = 2_000;
 const MAX_WRITE_BYTES = 1_000_000;
 const MAX_EDIT_OLD_TEXT_BYTES = 200_000;
 const MAX_EDIT_NEW_TEXT_BYTES = 1_000_000;
+const MAX_PATCH_BYTES = 1_000_000;
 const SKIPPED_SEARCH_DIRS = new Set([".git", "node_modules", "dist", ".cache", ".DS_Store"]);
 const SKIPPED_TREE_ROOT_DIRS = new Set([
     ".flyflor",
@@ -54,6 +57,13 @@ export interface WorkspaceToolAccess {
     approved: boolean;
     reason: string;
 }
+
+type PatchChange = { op: " " | "-" | "+"; text: string };
+
+type PatchOperation =
+    | { type: "add"; path: string; content: string }
+    | { type: "delete"; path: string }
+    | { type: "update"; path: string; moveTo?: string; changes: PatchChange[] };
 
 export class WorkspaceToolset {
     private projectRootCache: string | undefined;
@@ -204,6 +214,37 @@ export class WorkspaceToolset {
                     },
                 },
             },
+            {
+                server: WORKSPACE_SERVER,
+                tool: {
+                    name: WORKSPACE_DELETE_TOOL,
+                    description:
+                        "Delete a local file or directory. Requires computer approval and returns a structured failure on missing paths or filesystem errors.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            path: { type: "string" },
+                            recursive: { type: "boolean" },
+                        },
+                        required: ["path"],
+                    },
+                },
+            },
+            {
+                server: WORKSPACE_SERVER,
+                tool: {
+                    name: WORKSPACE_PATCH_TOOL,
+                    description:
+                        "Apply a small structured text patch to local files. Requires computer approval before any file write, delete, or move is performed.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            patch: { type: "string" },
+                        },
+                        required: ["patch"],
+                    },
+                },
+            },
         ];
     }
 
@@ -235,6 +276,12 @@ export class WorkspaceToolset {
         }
         if (call.tool === WORKSPACE_EDIT_TOOL) {
             return { raw: await this.edit(call.input, { approved: true, reason: "project-local-write" }) };
+        }
+        if (call.tool === WORKSPACE_DELETE_TOOL) {
+            return { raw: await this.deletePath(call.input, { approved: true, reason: "project-local-delete" }) };
+        }
+        if (call.tool === WORKSPACE_PATCH_TOOL) {
+            return { raw: await this.patch(call.input, { approved: true, reason: "project-local-patch" }) };
         }
         return {
             isError: true,
@@ -269,6 +316,12 @@ export class WorkspaceToolset {
         if (call.tool === WORKSPACE_EDIT_TOOL) {
             return { raw: await this.edit(call.input, access) };
         }
+        if (call.tool === WORKSPACE_DELETE_TOOL) {
+            return { raw: await this.deletePath(call.input, access) };
+        }
+        if (call.tool === WORKSPACE_PATCH_TOOL) {
+            return { raw: await this.patch(call.input, access) };
+        }
         return this.execute(call);
     }
 
@@ -276,6 +329,14 @@ export class WorkspaceToolset {
         call: McpToolCallRequest,
     ): Promise<{ outsideProject: boolean; path: string; target: string } | undefined> {
         if (!this.canHandle(call)) return undefined;
+        if (call.tool === WORKSPACE_PATCH_TOOL) {
+            const patch = this.requiredString(call.input.patch, "workspace.patch requires input.patch.");
+            return {
+                outsideProject: false,
+                path: "<patch>",
+                target: this.patchTargetsSummary(this.parsePatch(patch)),
+            };
+        }
         if (this.isWriteTool(call.tool)) {
             const path = this.pathInput(call);
             const resolved = await this.resolveWritablePath(path);
@@ -287,7 +348,10 @@ export class WorkspaceToolset {
     }
 
     public isWriteTool(tool: string): boolean {
-        return tool === WORKSPACE_WRITE_TOOL || tool === WORKSPACE_EDIT_TOOL;
+        return tool === WORKSPACE_WRITE_TOOL ||
+            tool === WORKSPACE_EDIT_TOOL ||
+            tool === WORKSPACE_DELETE_TOOL ||
+            tool === WORKSPACE_PATCH_TOOL;
     }
 
     private async list(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
@@ -535,6 +599,42 @@ export class WorkspaceToolset {
         };
     }
 
+    private async deletePath(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
+        const path = this.requiredString(input.path, "workspace.delete requires input.path.");
+        const resolved = await this.resolveExistingPath(path);
+        this.assertAccess(resolved, access);
+        const info = await stat(resolved.target);
+        if (info.isDirectory() && input.recursive !== true) {
+            throw new Error("workspace.delete target is a directory; set recursive=true to delete it.");
+        }
+        await rm(resolved.target, { recursive: info.isDirectory(), force: false });
+        const root = await this.displayRoot(resolved.target);
+        return {
+            path: this.relativePath(root, resolved.target),
+            deleted: true,
+            type: info.isDirectory() ? "directory" : info.isFile() ? "file" : "other",
+        };
+    }
+
+    private async patch(input: Record<string, unknown>, access: WorkspaceToolAccess): Promise<Record<string, unknown>> {
+        const patch = this.requiredString(input.patch, "workspace.patch requires input.patch.");
+        if (this.byteLength(patch) > MAX_PATCH_BYTES) {
+            throw new Error(`workspace.patch input exceeds ${MAX_PATCH_BYTES} bytes.`);
+        }
+        const operations = this.parsePatch(patch);
+        for (const operation of operations) {
+            await this.assertPatchOperationAccess(operation, access);
+        }
+        const applied: Array<Record<string, unknown>> = [];
+        for (const operation of operations) {
+            applied.push(await this.applyPatchOperation(operation));
+        }
+        return {
+            applied,
+            operationCount: applied.length,
+        };
+    }
+
     private async collectSearchFiles(dir: string, output: string[], maxFiles: number): Promise<void> {
         if (output.length >= maxFiles) return;
         const entries = await readdir(dir, { withFileTypes: true });
@@ -551,6 +651,151 @@ export class WorkspaceToolset {
                 output.push(fullPath);
             }
         }
+    }
+
+    private parsePatch(patch: string): PatchOperation[] {
+        const lines = patch.split(/\r?\n/u);
+        if (lines[0] !== "*** Begin Patch") {
+            throw new Error("workspace.patch must start with *** Begin Patch.");
+        }
+        let index = 1;
+        const operations: PatchOperation[] = [];
+        while (index < lines.length) {
+            const line = lines[index]!;
+            if (line === "*** End Patch") {
+                if (operations.length === 0) throw new Error("workspace.patch contains no operations.");
+                return operations;
+            }
+            if (line.startsWith("*** Add File: ")) {
+                const path = line.slice("*** Add File: ".length).trim();
+                const content: string[] = [];
+                index += 1;
+                while (index < lines.length && !lines[index]!.startsWith("*** ")) {
+                    const item = lines[index]!;
+                    if (!item.startsWith("+")) throw new Error(`workspace.patch add file line must start with +: ${path}`);
+                    content.push(item.slice(1));
+                    index += 1;
+                }
+                operations.push({ type: "add", path, content: content.join("\n") + (content.length > 0 ? "\n" : "") });
+                continue;
+            }
+            if (line.startsWith("*** Delete File: ")) {
+                operations.push({ type: "delete", path: line.slice("*** Delete File: ".length).trim() });
+                index += 1;
+                continue;
+            }
+            if (line.startsWith("*** Update File: ")) {
+                const path = line.slice("*** Update File: ".length).trim();
+                index += 1;
+                let moveTo: string | undefined;
+                if (lines[index]?.startsWith("*** Move to: ")) {
+                    moveTo = lines[index]!.slice("*** Move to: ".length).trim();
+                    index += 1;
+                }
+                const changes: PatchChange[] = [];
+                while (index < lines.length && !lines[index]!.startsWith("*** ")) {
+                    const item = lines[index]!;
+                    if (item.startsWith("@@")) {
+                        index += 1;
+                        continue;
+                    }
+                    const op = item[0];
+                    if (op !== " " && op !== "-" && op !== "+") {
+                        throw new Error(`workspace.patch update line must start with space, -, +, or @@: ${path}`);
+                    }
+                    changes.push({ op: op as PatchChange["op"], text: item.slice(1) });
+                    index += 1;
+                }
+                if (!moveTo && changes.length === 0) {
+                    throw new Error(`workspace.patch update operation is empty: ${path}`);
+                }
+                operations.push({ type: "update", path, moveTo, changes });
+                continue;
+            }
+            throw new Error(`workspace.patch unexpected line: ${line}`);
+        }
+        throw new Error("workspace.patch must end with *** End Patch.");
+    }
+
+    private async assertPatchOperationAccess(operation: PatchOperation, access: WorkspaceToolAccess): Promise<void> {
+        if (operation.type === "delete" || operation.type === "update") {
+            this.assertAccess(await this.resolveExistingPath(operation.path), access);
+        }
+        if (operation.type === "add") {
+            this.assertAccess(await this.resolveWritablePath(operation.path), access);
+        }
+        if (operation.type === "update" && operation.moveTo) {
+            this.assertAccess(await this.resolveWritablePath(operation.moveTo), access);
+        }
+    }
+
+    private async applyPatchOperation(operation: PatchOperation): Promise<Record<string, unknown>> {
+        if (operation.type === "add") {
+            const resolved = await this.resolveWritablePath(operation.path);
+            if (await Bun.file(resolved.target).exists()) {
+                throw new Error(`workspace.patch add target already exists: ${operation.path}`);
+            }
+            await this.atomicWriteText(resolved.target, operation.content);
+            return { type: "add", path: operation.path, bytes: this.byteLength(operation.content) };
+        }
+        if (operation.type === "delete") {
+            const resolved = await this.resolveExistingPath(operation.path);
+            const info = await stat(resolved.target);
+            if (!info.isFile()) throw new Error(`workspace.patch delete target is not a file: ${operation.path}`);
+            await rm(resolved.target, { force: false });
+            return { type: "delete", path: operation.path };
+        }
+        const resolved = await this.resolveExistingPath(operation.path);
+        const info = await stat(resolved.target);
+        if (!info.isFile()) throw new Error(`workspace.patch update target is not a file: ${operation.path}`);
+        const before = await readFile(resolved.target, "utf8");
+        if (before.includes("\u0000")) {
+            throw new Error(`workspace.patch update target appears to be binary: ${operation.path}`);
+        }
+        const after = this.applyPatchChanges(before, operation);
+        if (this.byteLength(after) > MAX_WRITE_BYTES) {
+            throw new Error(`workspace.patch result exceeds ${MAX_WRITE_BYTES} bytes.`);
+        }
+        const target = operation.moveTo ? (await this.resolveWritablePath(operation.moveTo)).target : resolved.target;
+        await this.atomicWriteText(target, after);
+        if (operation.moveTo) {
+            await rm(resolved.target, { force: false });
+        }
+        return {
+            type: "update",
+            path: operation.path,
+            movedTo: operation.moveTo,
+            bytes: this.byteLength(after),
+        };
+    }
+
+    private applyPatchChanges(before: string, operation: Extract<PatchOperation, { type: "update" }>): string {
+        if (operation.changes.length === 0) return before;
+        const oldText = operation.changes
+            .filter((change) => change.op !== "+")
+            .map((change) => change.text)
+            .join("\n");
+        const newText = operation.changes
+            .filter((change) => change.op !== "-")
+            .map((change) => change.text)
+            .join("\n");
+        const beforeHasNewline = before.endsWith("\n");
+        const oldSegment = oldText + (oldText.length > 0 || beforeHasNewline ? "\n" : "");
+        const newSegment = newText + (newText.length > 0 || beforeHasNewline ? "\n" : "");
+        const count = this.countOccurrences(before, oldSegment);
+        if (count === 0) {
+            throw new Error(`workspace.patch context was not found: ${operation.path}`);
+        }
+        if (count !== 1) {
+            throw new Error(`workspace.patch context matched ${count} times: ${operation.path}`);
+        }
+        return before.replace(oldSegment, newSegment);
+    }
+
+    private patchTargetsSummary(operations: readonly PatchOperation[]): string {
+        return operations
+            .map((operation) => operation.type === "update" && operation.moveTo ? `${operation.path} -> ${operation.moveTo}` : operation.path)
+            .join(", ");
     }
 
     private async collectGlobMatches(

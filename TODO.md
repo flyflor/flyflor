@@ -686,9 +686,19 @@ Kernel V2 acceptance focus：
 
 ## 2026-05-24 Socket 工具事件 lane
 
-- [ ] 阅读 `src/events/**`、`src/socket/**`、`src/protocol/control/**` 和现有 query reader。
-- [ ] 为工具调用生命周期补齐事件类型和 socket 事件订阅/查询面：started/progress/succeeded/failed/output persisted/budget exhausted/ask required。
-- [ ] 只通过 event emit/subscribe 和 DB/read snapshot 暴露信息，不入侵 Runtime 主链。
-- [ ] 更新 WS 文档、OpenAPI/Apifox messages 和 docs guard 示例。
-- [ ] 补齐 focused tests，覆盖事件订阅、快照查询、错误事件和文档示例可解析。
-- [ ] 运行 `bun test` focused、`bun run docs:check`、`bun run check`、`git diff --check` 后提交本 lane。
+- [x] 阅读 `src/events/**`、`src/socket/**`、`src/protocol/control/**` 和现有 query reader。
+- [x] 为工具调用生命周期补齐事件类型和 socket 事件订阅/查询面：started/progress/succeeded/failed/output persisted/budget exhausted/ask required。
+- [x] 只通过 event emit/subscribe 和 DB/read snapshot 暴露信息，不入侵 Runtime 主链。
+- [x] 更新 WS 文档、OpenAPI/Apifox messages 和 docs guard 示例。
+- [x] 补齐 focused tests，覆盖事件订阅、快照查询、错误事件和文档示例可解析。
+- [x] 运行 `bun test` focused、`bun run docs:check`、`bun run check`、`git diff --check` 后提交本 lane。
+
+## 2026-05-24 电脑工具 lane
+
+- [x] 阅读 `src/agent/runtime/mcp/workspace.ts`、`git.ts`、`tool.executor.ts`、`src/agent/sandbox/**` 和 Codex/OpenCode 的 read/edit/shell/patch 设计。
+- [x] 在 `src/agent/runtime/computer/**` 或现有 runtime/mcp owner 下补齐跨平台文件/patch/git/process 基础能力；保持目录语义清晰。
+- [x] `process.run` 使用 executable + argv 作为主路径；`shell.run` 仅作为高风险逃生口，并清晰返回错误。
+- [x] 文件读写不做 workspace 人为限制，但必须经过 sandbox/approval/audit gate。
+- [x] 不引入 native addon、postinstall 或无法 `bun build --compile` 的运行时依赖。
+- [x] 补齐 focused tests，覆盖读取、写入、删除、patch、git/process 失败结果。
+- [x] 运行 `bun test` focused、`bun run check`、`git diff --check` 后提交本 lane。
