@@ -35,6 +35,16 @@ type OpenApiSchema = {
     required?: string[];
 };
 
+type PostmanCollectionItem = {
+    item?: PostmanCollectionItem[];
+    name?: string;
+    request?: {
+        body?: {
+            raw?: string;
+        };
+    };
+};
+
 describe("documentation references", () => {
     test("referenced test files exist", async () => {
         const docs = ["README.md", ...(await listMarkdownFiles(join(REPO_ROOT, "docs")))];
@@ -382,14 +392,8 @@ describe("documentation references", () => {
             join(REPO_ROOT, "docs", "apifox", "flyflor.socket.apifox.openapi.json"),
         ).text();
         const apifox = JSON.parse(apifoxText) as {
-            apiCollection?: Array<{
-                items?: Array<{
-                    api?: { requestBody?: { raw?: string }; schema?: unknown };
-                    extensions?: Record<string, unknown>;
-                }>;
-            }>;
-            examples?: Record<string, unknown>;
-            realSurface?: unknown;
+            info?: { schema?: string };
+            item?: PostmanCollectionItem[];
         };
         const apifoxOpenApi = JSON.parse(apifoxOpenApiText) as {
             components?: { schemas?: Record<string, OpenApiSchema> };
@@ -397,8 +401,8 @@ describe("documentation references", () => {
             "x-flyflor-real-surface"?: string[];
         };
         const canonicalPaths = Object.keys(canonical.paths ?? {}).sort();
-        const apifoxItems = (apifox.apiCollection ?? []).flatMap((folder) => folder.items ?? []);
-        const apifoxExampleNames = Object.keys(apifox.examples ?? {});
+        const apifoxItems = flattenPostmanItems(apifox.item ?? []);
+        const apifoxItemNames = apifoxItems.map((item) => item.name).filter((name): name is string => typeof name === "string");
         const expectedExamples = [
             "AskDetailGet",
             "AskDetailSnapshot",
@@ -440,16 +444,10 @@ describe("documentation references", () => {
         ];
 
         expect(canonicalPaths).toEqual(["/health", "/ws"]);
-        expect(apifox.realSurface).toEqual([
-            { method: "GET", path: "/health" },
-            { method: "WS", path: "/ws" },
-        ]);
+        expect(apifox.info?.schema).toBe("https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
         expect(apifoxItems.length).toBeGreaterThanOrEqual(55);
-        for (const name of Object.keys(canonical.components?.examples ?? {})) {
-            expect(apifoxExampleNames).toContain(name);
-        }
         for (const name of expectedExamples) {
-            expect(apifoxExampleNames).toContain(name);
+            expect(apifoxItemNames.some((itemName) => itemName.endsWith(`/ ${name}`))).toBe(true);
             expect(apifoxOpenApi.components?.schemas).toHaveProperty(`${name}Frame`);
         }
 
@@ -461,11 +459,10 @@ describe("documentation references", () => {
         expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/expect/thought-snapshot"))).toBe(true);
         expect(apifoxOpenApi["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
 
-        const sendItems = apifoxItems.filter((item) => item.extensions?.["x-flyflor-direction"] === "client->server");
+        const sendItems = apifoxItems.filter((item) => item.name?.startsWith("WS Send / "));
         expect(sendItems.length).toBeGreaterThan(0);
         for (const item of sendItems) {
-            expect(item.api?.schema).toBeTruthy();
-            const raw = item.api?.requestBody?.raw;
+            const raw = item.request?.body?.raw;
             expect(typeof raw).toBe("string");
             expect(() => parseGatewayControlEnvelope(raw ?? "")).not.toThrow();
         }
@@ -613,6 +610,10 @@ function readExampleEventType(examples: Record<string, { value?: unknown }>, nam
     const payload = readExamplePayload(examples, name);
     if (!isRecord(payload) || !isRecord(payload.event)) return undefined;
     return typeof payload.event.type === "string" ? payload.event.type : undefined;
+}
+
+function flattenPostmanItems(items: PostmanCollectionItem[]): PostmanCollectionItem[] {
+    return items.flatMap((item) => (item.item ? flattenPostmanItems(item.item) : [item]));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

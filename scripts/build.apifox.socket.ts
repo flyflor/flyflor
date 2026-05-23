@@ -43,7 +43,7 @@ const source = JSON.parse(await readFile(sourcePath, "utf8")) as OpenApiContract
 const canonicalExamples = readCanonicalExamples(source);
 const examples = { ...canonicalExamples, ...extraExamples() };
 const frames = buildFrames(examples);
-const apifox = buildApifoxProject(frames, examples);
+const apifox = buildPostmanCollection(frames, examples);
 const apifoxOpenApi = buildApifoxOpenApi(source, frames, examples);
 const generatedApifox = `${JSON.stringify(apifox, null, 2)}\n`;
 const generatedApifoxOpenApi = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
@@ -146,68 +146,107 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
     ];
 }
 
-function buildApifoxProject(frames: FrameExample[], examples: Record<string, JsonRecord>): JsonRecord {
+function buildPostmanCollection(frames: FrameExample[], examples: Record<string, JsonRecord>): JsonRecord {
     const folders = Array.from(new Set(frames.map((frame) => frame.folder))).map((folder) => ({
         name: folder,
-        type: "folder",
-        items: frames
+        item: frames
             .filter((frame) => frame.folder === folder)
-            .map((frame) => ({
-                name: `${frame.direction === "client->server" ? "WS Send" : "WS Expect"} / ${frame.name}`,
-                type: "api",
-                api: {
-                    protocol: "websocket",
-                    method: "GET",
-                    path: "/ws",
-                    url: "{{ws_origin}}/ws",
-                    requestBody: {
-                        mode: "raw",
-                        raw: JSON.stringify(frame.value, null, 2),
-                        type: "json",
-                    },
-                    responseExamples: (frame.expected ?? []).map((name) => ({
-                        name,
-                        body: examples[name] ?? null,
-                        schema: examples[name] ? schemaForEnvelope(examples[name]) : undefined,
-                    })),
-                    schema: schemaForEnvelope(frame.value),
-                },
-                extensions: {
-                    "x-flyflor-direction": frame.direction,
-                    "x-flyflor-example-name": frame.name,
-                    "x-flyflor-real-surface": "/ws",
-                    "x-flyflor-summary": frame.summary,
-                },
-            })),
+            .map((frame) => postmanItem(frame, examples)),
     }));
 
     return {
-        apifoxProject: "1.0.0",
         info: {
             name: "Flyflor Socket WS Examples",
             description:
-                "Apifox project-style WebSocket example set generated from the canonical /ws OpenAPI examples. Real HTTP surface remains only GET /health and WS /ws.",
-            version: source.info?.version ?? "1.0.0",
+                "Postman Collection v2.1 import file for Apifox. Each item is a WebSocket frame example; use the request body as the raw JSON sent to ws://127.0.0.1:8788/ws.",
+            schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+            _postman_id: "flyflor-socket-ws-examples",
         },
-        source: {
-            canonicalOpenApi: "../openapi/flyflor.socket.openapi.json",
-            generatedBy: "scripts/build.apifox.socket.ts",
-        },
-        realSurface: [
-            { method: "GET", path: "/health" },
-            { method: "WS", path: "/ws" },
+        item: folders,
+        variable: [
+            { key: "http_origin", value: "http://127.0.0.1:8788", type: "string" },
+            { key: "ws_origin", value: "ws://127.0.0.1:8788", type: "string" },
         ],
-        environmentCollection: [
+    };
+}
+
+function postmanItem(frame: FrameExample, examples: Record<string, JsonRecord>): JsonRecord {
+    const direction = frame.direction === "client->server" ? "send" : "expect";
+    const docPath = ["__apifox", "ws", direction, kebab(frame.name)];
+    return {
+        name: `${frame.direction === "client->server" ? "WS Send" : "WS Expect"} / ${frame.name}`,
+        request: {
+            method: "POST",
+            header: [
+                {
+                    key: "Content-Type",
+                    value: "application/json",
+                    type: "text",
+                },
+            ],
+            body: {
+                mode: "raw",
+                raw: JSON.stringify(frame.value, null, 2),
+                options: {
+                    raw: {
+                        language: "json",
+                    },
+                },
+            },
+            url: {
+                raw: `{{http_origin}}/${docPath.join("/")}`,
+                host: ["{{http_origin}}"],
+                path: docPath,
+            },
+            description: [
+                `Real WebSocket URL: {{ws_origin}}/ws`,
+                `Direction: ${frame.direction}`,
+                `Example name: ${frame.name}`,
+                "This HTTP-looking request is an Apifox/Postman import carrier only. Copy the raw JSON body into the WebSocket message editor.",
+            ].join("\n"),
+        },
+        response: (frame.expected ?? []).map((name) => postmanResponse(name, examples[name], frame)),
+        event: [
             {
-                name: "Local Socket",
-                variables: [
-                    { name: "http_origin", value: "http://127.0.0.1:8788" },
-                    { name: "ws_origin", value: "ws://127.0.0.1:8788" },
-                ],
+                listen: "test",
+                script: {
+                    type: "text/javascript",
+                    exec: [
+                        "// Import carrier only. Real verification happens on the WebSocket /ws connection.",
+                        "pm.test('Flyflor WS frame example is present', function () {",
+                        "  pm.expect(pm.request.body.raw).to.be.a('string');",
+                        "});",
+                    ],
+                },
             },
         ],
-        apiCollection: folders,
-        examples,
+        protocolProfileBehavior: {
+            disableBodyPruning: true,
+        },
+    };
+}
+
+function postmanResponse(name: string, body: JsonRecord | undefined, frame: FrameExample): JsonRecord {
+    return {
+        name,
+        originalRequest: {
+            method: "POST",
+            header: [{ key: "Content-Type", value: "application/json", type: "text" }],
+            body: {
+                mode: "raw",
+                raw: JSON.stringify(frame.value, null, 2),
+                options: { raw: { language: "json" } },
+            },
+            url: {
+                raw: `{{http_origin}}/__apifox/ws/${frame.direction === "client->server" ? "send" : "expect"}/${kebab(frame.name)}`,
+                host: ["{{http_origin}}"],
+                path: ["__apifox", "ws", frame.direction === "client->server" ? "send" : "expect", kebab(frame.name)],
+            },
+        },
+        status: "OK",
+        code: 200,
+        header: [{ key: "Content-Type", value: "application/json" }],
+        body: JSON.stringify(body ?? {}, null, 2),
     };
 }
 

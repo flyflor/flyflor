@@ -4,10 +4,10 @@
 
 本目录提供两份 Apifox 专用测试产物：
 
-- [flyflor.socket.apifox.json](flyflor.socket.apifox.json)：Apifox project-style WebSocket 示例集合。每个条目都带 `{{ws_origin}}/ws`、raw JSON body、方向和期望返回示例。
+- [flyflor.socket.apifox.json](flyflor.socket.apifox.json)：推荐导入文件，Postman Collection v2.1 格式。Apifox 官方支持导入 Postman Collection v2.1；导入列表会按 folder/item 展开。
 - [flyflor.socket.apifox.openapi.json](flyflor.socket.apifox.openapi.json)：Apifox 展开视图。它保留真实 `/health`、`/ws`，并额外生成 `/__apifox/ws/...` doc-only 伪操作，让 Apifox 路径树能直接点开每个 WS frame 示例。
 
-这些 `/__apifox/ws/...` 路径不是 Flyflor 服务端接口，不允许在实现中新增对应 HTTP 路由。真实测试方式始终是连接 `ws://127.0.0.1:8788/ws`，然后发送集合里的 raw JSON WebSocket body。
+这些 `/__apifox/ws/...` 路径不是 Flyflor 服务端接口，不允许在实现中新增对应 HTTP 路由。Postman Collection 里的 HTTP-looking request 只是导入承载体；真实测试方式始终是连接 `ws://127.0.0.1:8788/ws`，然后把条目里的 raw JSON body 复制到 WebSocket message editor 发送。
 
 Apifox 的 schema 校验参考 [JSON Schema 文档](https://apifox.pkfare.com/help/reference/json-schema/)。生成器会为每个 frame 生成独立 JSON Schema：`protocol` 和 `type` 使用 `enum` 固定，`at` 使用 `date-time`，payload 按示例结构生成 `required`、`properties` 和数组 item schema。
 
