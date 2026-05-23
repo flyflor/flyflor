@@ -35,6 +35,7 @@ import { type RuntimePluginCapabilityCatalogEntry, type RuntimeUserToolCatalogEn
 import { USER_TOOL_SERVER, invokeUserTool } from "./user.tool.ts";
 import { type WorkspaceToolAccess, WorkspaceToolset } from "./workspace.ts";
 import { GitToolset } from "./git.ts";
+import { ProcessToolset, PROCESS_SERVER } from "./process.ts";
 
 const BUILTIN_SHELL_SERVER = "shell";
 const BUILTIN_SHELL_TOOL = "run";
@@ -44,6 +45,7 @@ export interface RuntimeMcpToolExecutorInput {
     approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
     catalog: McpToolCatalogEntry[];
     gitToolset: GitToolset;
+    processToolset: ProcessToolset;
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
     requiresApproval: boolean;
     requestId: string;
@@ -77,7 +79,7 @@ export class RuntimeMcpToolExecutor {
     private readonly executive = new ExecutiveToolRuntime<McpToolCallRequest & { key: string }, McpToolCallExecution & { call: McpToolCallRequest & { key: string } }>();
     private readonly computerProfile = new ComputerProfileComponent();
     private readonly adapter = new McpCatalogAdapter({
-        coreServers: new Set(["workspace", "git", BUILTIN_SHELL_SERVER]),
+        coreServers: new Set(["workspace", "git", PROCESS_SERVER, BUILTIN_SHELL_SERVER]),
         gitServer: "git",
         shellServer: BUILTIN_SHELL_SERVER,
         workspaceServer: "workspace",
@@ -154,6 +156,15 @@ export class RuntimeMcpToolExecutor {
                     call,
                     input.gitToolset,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["git tool not in catalog"] },
+                    input.approveMcpToolCall,
+                ));
+                continue;
+            }
+            if (input.processToolset.canHandle(call)) {
+                executions.push(await this.executeProcessToolCall(
+                    call,
+                    input.processToolset,
+                    catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["process tool not in catalog"] },
                     input.approveMcpToolCall,
                 ));
                 continue;
@@ -297,7 +308,7 @@ export class RuntimeMcpToolExecutor {
             );
             return { approved: false, reason: `workspace access was not approved: ${requested.target}` };
         }
-        return { approved: true, reason: "approved-outside-project" };
+        return { approved: true, reason: workspaceToolset.isWriteTool(call.tool) ? "approved-computer-control" : "approved-outside-project" };
     }
 
     private workspaceToolError(raw: unknown): string {
@@ -427,6 +438,74 @@ export class RuntimeMcpToolExecutor {
         } catch (error) {
             return { call, ok: false, error: error instanceof Error ? error.message : String(error) };
         }
+    }
+
+    private async executeProcessToolCall(
+        call: McpToolCallRequest & { key: string },
+        processToolset: ProcessToolset,
+        schemaCheck: { ok: boolean; errors: string[] },
+        approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+    ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
+        if (!schemaCheck.ok) {
+            return { call, ok: false, error: `process tool input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
+        }
+        let executable: string;
+        try {
+            executable = processToolset.executableInput(call);
+        } catch (error) {
+            return { call, ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+        const executor = new ShellHookExecutor({
+            policy: createSandboxPolicy(this.config.sandbox),
+            events: this.events,
+            allowedCommands: [executable],
+            approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
+        });
+        try {
+            const result = await processToolset.execute(call, executor);
+            const error = result.isError ? this.processToolError(result.raw) : undefined;
+            return {
+                call,
+                ok: !result.isError,
+                result,
+                error,
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+                call,
+                ok: false,
+                result: {
+                    isError: true,
+                    raw: {
+                        executable,
+                        argv: Array.isArray(call.input.argv) ? call.input.argv : [],
+                        cwd: typeof call.input.cwd === "string" && call.input.cwd.trim() ? call.input.cwd.trim() : this.config.paths.projectDir,
+                        stdout: "",
+                        stderr: "",
+                        exitCode: null,
+                        timedOut: false,
+                        truncated: false,
+                        durationMs: 0,
+                        error: message,
+                    },
+                },
+                error: message,
+            };
+        }
+    }
+
+    private processToolError(raw: unknown): string {
+        if (raw && typeof raw === "object") {
+            const value = raw as { error?: unknown; exitCode?: unknown; stderr?: unknown; executable?: unknown; timedOut?: unknown };
+            if (typeof value.error === "string") return value.error;
+            if (value.timedOut === true) return "process.run timed out.";
+            if (typeof value.exitCode === "number" && value.exitCode !== 0) {
+                const stderr = typeof value.stderr === "string" && value.stderr.trim() ? `: ${value.stderr.trim().slice(0, 240)}` : "";
+                return `process.run exited with code ${value.exitCode}${stderr}`;
+            }
+        }
+        return "process.run failed.";
     }
 
     private gitToolError(raw: unknown): string | undefined {
@@ -593,6 +672,9 @@ export class RuntimeMcpToolExecutor {
         if (entry.server === BUILTIN_SHELL_SERVER) {
             return { concurrencySafe: false, exclusive: true, readOnly: false };
         }
+        if (entry.server === PROCESS_SERVER) {
+            return { concurrencySafe: false, exclusive: true, readOnly: false };
+        }
         if (entry.server === "git") {
             return { concurrencySafe: false, exclusive: false, readOnly: true };
         }
@@ -627,7 +709,7 @@ export class RuntimeMcpToolExecutor {
     }
 
     private isWorkspaceWriteTool(toolName: string): boolean {
-        return toolName === "write" || toolName === "edit";
+        return toolName === "write" || toolName === "edit" || toolName === "delete" || toolName === "patch";
     }
 
     private pluginCommand(): string {

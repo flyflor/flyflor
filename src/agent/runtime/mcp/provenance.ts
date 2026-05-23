@@ -81,7 +81,7 @@ function previewMcpResult(value: unknown): string {
 }
 
 function capabilityKindForExecution(execution: McpToolCallExecution): CapabilityExecutionKind {
-    if (execution.call.server === "shell") return CapabilityExecutionKind.ShellHook;
+    if (execution.call.server === "shell" || execution.call.server === "process") return CapabilityExecutionKind.ShellHook;
     if (execution.call.server === "user") return CapabilityExecutionKind.Plugin;
     return CapabilityExecutionKind.McpTool;
 }

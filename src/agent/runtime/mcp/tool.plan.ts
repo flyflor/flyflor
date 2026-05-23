@@ -20,6 +20,7 @@ import {
 } from "../../../executive/index.ts";
 import type { McpPromptDefinition, McpResourceDefinition, McpToolCatalogEntry } from "../../mcp/index.ts";
 import { GIT_SERVER } from "./git.ts";
+import { PROCESS_SERVER } from "./process.ts";
 import { WORKSPACE_SERVER } from "./workspace.ts";
 
 const SHELL_SERVER = "shell";
@@ -94,7 +95,7 @@ export interface RuntimePluginCapabilityCatalogEntry {
 @Component()
 export class RuntimeMcpToolPlanComponent extends Runtime {
     private readonly adapter = new McpCatalogAdapter({
-        coreServers: new Set([WORKSPACE_SERVER, GIT_SERVER, SHELL_SERVER]),
+        coreServers: new Set([WORKSPACE_SERVER, GIT_SERVER, PROCESS_SERVER, SHELL_SERVER]),
         gitServer: GIT_SERVER,
         shellServer: SHELL_SERVER,
         workspaceServer: WORKSPACE_SERVER,

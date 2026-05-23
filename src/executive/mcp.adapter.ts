@@ -41,6 +41,7 @@ export interface McpPromptCatalogEntry {
 export interface McpCatalogAdapterOptions {
     readonly coreServers?: ReadonlySet<string>;
     readonly gitServer?: string;
+    readonly processServer?: string;
     readonly shellServer?: string;
     readonly workspaceServer?: string;
 }
@@ -48,14 +49,16 @@ export interface McpCatalogAdapterOptions {
 export class McpCatalogAdapter {
     private readonly coreServers: ReadonlySet<string>;
     private readonly gitServer: string;
+    private readonly processServer: string;
     private readonly shellServer: string;
     private readonly workspaceServer: string;
 
     public constructor(options: McpCatalogAdapterOptions = {}) {
         this.workspaceServer = options.workspaceServer ?? "workspace";
         this.gitServer = options.gitServer ?? "git";
+        this.processServer = options.processServer ?? "process";
         this.shellServer = options.shellServer ?? "shell";
-        this.coreServers = options.coreServers ?? new Set([this.workspaceServer, this.gitServer, this.shellServer]);
+        this.coreServers = options.coreServers ?? new Set([this.workspaceServer, this.gitServer, this.processServer, this.shellServer]);
     }
 
     public descriptorFor(entry: McpCatalogEntry): ToolDescriptor {
@@ -150,36 +153,36 @@ export class McpCatalogAdapter {
     private categoryFor(entry: McpCatalogEntry): ToolCategory {
         if (entry.server === "computer") return ToolCategory.Computer;
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return ToolCategory.Coding;
-        if (entry.server === this.shellServer) return ToolCategory.System;
+        if (entry.server === this.processServer || entry.server === this.shellServer) return ToolCategory.System;
         return ToolCategory.Integration;
     }
 
     private concurrencySafeFor(entry: McpCatalogEntry): boolean {
-        return entry.server !== this.shellServer;
+        return entry.server !== this.processServer && entry.server !== this.shellServer;
     }
 
     private exclusiveFor(entry: McpCatalogEntry): boolean {
-        return entry.server === this.shellServer;
+        return entry.server === this.processServer || entry.server === this.shellServer;
     }
 
     private permissionFor(entry: McpCatalogEntry): ToolPermission {
         if (entry.server === "computer") return ToolPermission.Computer;
         if (entry.server === this.workspaceServer && this.isWorkspaceWriteTool(entry.tool.name)) return ToolPermission.Write;
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return ToolPermission.Read;
-        if (entry.server === this.shellServer) return ToolPermission.Execute;
+        if (entry.server === this.processServer || entry.server === this.shellServer) return ToolPermission.Execute;
         return ToolPermission.Network;
     }
 
     private readOnlyFor(entry: McpCatalogEntry): boolean {
         if (entry.server === "computer") return false;
         if (entry.server === this.workspaceServer && this.isWorkspaceWriteTool(entry.tool.name)) return false;
-        return entry.server !== this.shellServer;
+        return entry.server !== this.processServer && entry.server !== this.shellServer;
     }
 
     private scopeFor(entry: McpCatalogEntry): readonly ToolScope[] {
         if (entry.server === "computer") return [ToolScope.Local, ToolScope.Debug];
         if (entry.server === this.workspaceServer || entry.server === this.gitServer) return [ToolScope.Workspace];
-        if (entry.server === this.shellServer) return [ToolScope.Local];
+        if (entry.server === this.processServer || entry.server === this.shellServer) return [ToolScope.Local];
         return [ToolScope.Core];
     }
 

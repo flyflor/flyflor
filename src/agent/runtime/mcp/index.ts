@@ -1,6 +1,7 @@
 export * from "./capability.reader.ts";
 export * from "./provenance.ts";
 export * from "./git.ts";
+export * from "./process.ts";
 export * from "./tool.plan.ts";
 export * from "./tool.executor.ts";
 export * from "./toolset.ts";
