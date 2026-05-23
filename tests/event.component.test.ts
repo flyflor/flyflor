@@ -7,7 +7,7 @@ import { Event } from "../src/agent/di/index.ts";
 import type { FlyflorPaths } from "../src/config/index.ts";
 import { classifyRuntimeEvent, EventsComponent, NullEventSink, RuntimeEventType, RuntimeEventBus } from "../src/events/index.ts";
 import { loadSkillUsageSummary } from "../src/agent/skills/index.ts";
-import { RuntimeEventClass, type RuntimeEvent } from "../src/protocol/contracts/index.ts";
+import { RuntimeEventClass, ToolLifecycleEventType, type RuntimeEvent } from "../src/protocol/contracts/index.ts";
 
 class RecordingHook {
     public readonly seen: string[] = [];
@@ -79,6 +79,24 @@ describe("EventsComponent explicit hooks", () => {
         expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
         expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveLoopGuardBlocked)).toBe(RuntimeEventClass.Effect);
         expect(classifyRuntimeEvent(RuntimeEventType.McpCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
+    });
+
+    test("tool lifecycle event protocol constants are stable and classified for socket subscriptions", () => {
+        expect(RuntimeEventType.ToolStarted).toBe(ToolLifecycleEventType.Started);
+        expect(RuntimeEventType.ToolProgress).toBe(ToolLifecycleEventType.Progress);
+        expect(RuntimeEventType.ToolSucceeded).toBe(ToolLifecycleEventType.Succeeded);
+        expect(RuntimeEventType.ToolFailed).toBe(ToolLifecycleEventType.Failed);
+        expect(RuntimeEventType.ToolOutputPersisted).toBe(ToolLifecycleEventType.OutputPersisted);
+        expect(RuntimeEventType.ToolBudgetExhausted).toBe(ToolLifecycleEventType.BudgetExhausted);
+        expect(RuntimeEventType.ToolAskRequired).toBe(ToolLifecycleEventType.AskRequired);
+
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolStarted)).toBe(RuntimeEventClass.Effect);
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolProgress)).toBe(RuntimeEventClass.Effect);
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolSucceeded)).toBe(RuntimeEventClass.Effect);
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolFailed)).toBe(RuntimeEventClass.Error);
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolOutputPersisted)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolBudgetExhausted)).toBe(RuntimeEventClass.Ask);
+        expect(classifyRuntimeEvent(RuntimeEventType.ToolAskRequired)).toBe(RuntimeEventClass.Ask);
     });
 
     test("event classes keep ask timeline events separate from planning write events", () => {

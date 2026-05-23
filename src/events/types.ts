@@ -1,3 +1,4 @@
+import { ToolLifecycleEventType } from "../protocol/contracts/index.ts";
 import type { RuntimeEvent } from "../protocol/contracts/index.ts";
 
 export const RuntimeEventType = {
@@ -111,6 +112,13 @@ export const RuntimeEventType = {
     RuntimeModeEntered: "runtime.mode.entered",
     RuntimeModeAwakened: "runtime.mode.awakened",
     SkillContextBuilt: "skill.context.built",
+    ToolAskRequired: ToolLifecycleEventType.AskRequired,
+    ToolBudgetExhausted: ToolLifecycleEventType.BudgetExhausted,
+    ToolFailed: ToolLifecycleEventType.Failed,
+    ToolOutputPersisted: ToolLifecycleEventType.OutputPersisted,
+    ToolProgress: ToolLifecycleEventType.Progress,
+    ToolStarted: ToolLifecycleEventType.Started,
+    ToolSucceeded: ToolLifecycleEventType.Succeeded,
     ProcessExit: "process.exit",
     ProcessOutput: "process.output",
     ProcessOutputTruncated: "process.output.truncated",

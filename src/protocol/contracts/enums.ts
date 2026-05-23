@@ -264,6 +264,18 @@ export const ExecutiveLoopGuardReason = {
 
 export type ExecutiveLoopGuardReason = (typeof ExecutiveLoopGuardReason)[keyof typeof ExecutiveLoopGuardReason];
 
+export const ToolLifecycleEventType = {
+    AskRequired: "tool.ask_required",
+    BudgetExhausted: "tool.budget.exhausted",
+    Failed: "tool.failed",
+    OutputPersisted: "tool.output.persisted",
+    Progress: "tool.progress",
+    Started: "tool.started",
+    Succeeded: "tool.succeeded",
+} as const;
+
+export type ToolLifecycleEventType = (typeof ToolLifecycleEventType)[keyof typeof ToolLifecycleEventType];
+
 export const RuntimeMode = {
     Chat: "chat",
     Cli: "cli",
