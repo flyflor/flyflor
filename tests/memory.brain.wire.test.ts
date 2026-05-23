@@ -81,6 +81,48 @@ describe("MemoryModule + BrainStore", () => {
         memory.dispose();
     });
 
+    test("rememberTurn does not derive brain event ids from reusable client message ids", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const memory = new MemoryModule(config, sink);
+        const message = gatewayMessage("same visible message id");
+        message.id = "message-1";
+        const context = runtimeContext();
+        context.requestId = "req-turn-1";
+        context.now = "2026-05-23T05:05:00.000Z";
+
+        await memory.rememberTurn(message, gatewayReply("first", "reply-1"), context);
+        await memory.rememberTurn(message, gatewayReply("second", "reply-2"), context);
+
+        const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
+        try {
+            const rows = db.query("SELECT id FROM memory_events WHERE type = 'event' ORDER BY ts").all() as Array<{ id: string }>;
+            expect(rows).toHaveLength(2);
+            expect(rows[0]?.id).not.toBe(rows[1]?.id);
+            expect(rows.map((row) => row.id)).not.toContain("message-1");
+        } finally {
+            db.close();
+        }
+        memory.dispose();
+    });
+
+    test("markdown memory prompt reads canonical uppercase files and ignores zh.cn mirrors", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const memory = new MemoryModule(config, sink);
+        await memory.warmup();
+        await Bun.write(join(config.paths.workspaceDir, "MEMORY.md"), "canonical memory line\n");
+        await Bun.write(join(config.paths.workspaceDir, "MEMORY.zh.cn.md"), "中文镜像不应进入画像\n");
+        await Bun.write(join(config.paths.workspaceDir, "SOUL.md"), "legacy soul should not enter runtime prompt\n");
+
+        const prompt = await memory.buildPrompt(gatewayMessage("check markdown memory"), runtimeContext());
+
+        expect(prompt).toContain("canonical memory line");
+        expect(prompt).not.toContain("中文镜像不应进入画像");
+        expect(prompt).not.toContain("legacy soul should not enter runtime prompt");
+        memory.dispose();
+    });
+
     test("model-supplied codename action persists into brain.codenames", async () => {
         const config = await makeConfig();
         const sink = new RecordingSink();

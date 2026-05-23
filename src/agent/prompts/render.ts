@@ -139,7 +139,7 @@ export interface RuntimeIdentityContextPromptInput {
     identityEntries: string;
 }
 
-export interface ScopeOfferPromptInput {
+export interface WorkContextOfferPromptInput {
     evidenceScore: string;
     relatedCount: string;
     remainingTurns: string;
@@ -152,6 +152,12 @@ export interface SkillOfferPromptInput {
     remainingTurns: string;
     support: string;
     tools: string;
+}
+
+export interface ScopeRecallPromptInput {
+    candidateJson: string;
+    currentContextJson: string;
+    request: string;
 }
 
 interface PromptTemplate {
@@ -449,8 +455,19 @@ export function renderRuntimeIdentityContextPrompt(input: RuntimeIdentityContext
     });
 }
 
-export function renderScopeOfferPrompt(input: ScopeOfferPromptInput): string {
-    return renderTemplate(requiredTemplates().memoryScopeOffer.content, {
+export function renderScopeRecallPrompt(input: ScopeRecallPromptInput): string {
+    // Scope recall is the semantic gate before scope memory assembly. The runtime
+    // only accepts the returned JSON decision; vector hits are candidate evidence,
+    // never a keyword trigger.
+    return renderTemplate(requiredTemplates().scopeRecall.content, {
+        candidateJson: input.candidateJson,
+        currentContextJson: input.currentContextJson,
+        request: input.request,
+    });
+}
+
+export function renderWorkContextOfferPrompt(input: WorkContextOfferPromptInput): string {
+    return renderTemplate(requiredTemplates().memoryWorkContextOffer.content, {
         evidenceScore: input.evidenceScore,
         relatedCount: input.relatedCount,
         remainingTurns: input.remainingTurns,
@@ -528,7 +545,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     memoryHotCompress: ["episodes"],
     memoryContext: ["hippocampus", "markdownContent", "retrievedResults", "scopeMemory"],
     memoryDream: ["candidates", "ownerKey"],
-    memoryScopeOffer: ["evidenceScore", "relatedCount", "remainingTurns", "title"],
+    memoryWorkContextOffer: ["evidenceScore", "relatedCount", "remainingTurns", "title"],
     memorySkillOffer: ["confidence", "name", "remainingTurns", "support", "tools"],
     runtimeAskContinuation: ["chainDepth", "choices", "prompt", "reason"],
     mcpToolBudgetExhausted: [],
@@ -536,6 +553,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     runtimeEqContext: ["ageBucket", "arousal", "confidence", "directive", "dominance", "label", "valence"],
     runtimeContinuationHint: ["continuationEntries"],
     runtimeIdentityContext: ["identityEntries"],
+    scopeRecall: ["candidateJson", "currentContextJson", "request"],
     runtimeSystem: [
         "askSchemaInstructions",
         "behaviorPriorityInstructions",
@@ -669,7 +687,7 @@ async function lintUnknownPromptFiles(promptDir: string, issues: PromptTemplateL
         PROMPT_TEMPLATE_MANIFEST_FILE,
         ...PROMPT_TEMPLATE_ORDER.flatMap((key) => {
             const spec = PROMPT_TEMPLATE_DEFINITIONS[key];
-            return [spec.filename];
+            return [spec.filename, mirrorPromptFilename(spec.filename)];
         }),
     ]);
     let entries: Array<{ isFile: () => boolean; name: string }> = [];
@@ -698,6 +716,10 @@ async function lintUnknownPromptFiles(promptDir: string, issues: PromptTemplateL
             detail: "prompt file is not registered in template manifest",
         });
     }
+}
+
+function mirrorPromptFilename(filename: string): string {
+    return filename.endsWith(".md") ? filename.replace(/\.md$/u, ".zh.cn.md") : filename;
 }
 
 async function readPromptTemplateManifest(promptDir: string): Promise<PromptTemplateBundleManifest> {

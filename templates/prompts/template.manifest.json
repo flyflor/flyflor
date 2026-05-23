@@ -114,7 +114,7 @@
       ]
     },
     {
-      "key": "memoryScopeOffer",
+      "key": "memoryWorkContextOffer",
       "filename": "memory.scope.offer.md",
       "requiredPlaceholders": [
         "evidenceScore",
@@ -188,6 +188,15 @@
       "filename": "runtime.identity.context.md",
       "requiredPlaceholders": [
         "identityEntries"
+      ]
+    },
+    {
+      "key": "scopeRecall",
+      "filename": "scope.recall.md",
+      "requiredPlaceholders": [
+        "candidateJson",
+        "currentContextJson",
+        "request"
       ]
     },
     {

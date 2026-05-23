@@ -66,7 +66,7 @@ describe("runtime planning structured blocks", () => {
 
     test("drops malformed planning blocks and keeps visible text", () => {
         const parser = new PlanningBlockParser();
-        const raw = `hello\n<flyflor_task_plan>{"summary":"missing title"}</flyflor_task_plan>`;
+        const raw = `hello\n<agent_task_plan>{"summary":"missing title"}</agent_task_plan>`;
         const parsed = parser.parse(raw, {
             now: "bad-date",
             ownerKey: "turn:req-1",

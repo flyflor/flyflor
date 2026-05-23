@@ -127,7 +127,7 @@ describe("LLM client factory", () => {
 
             await expect(
                 client.generate([
-                    { role: "assistant", content: "<flyflor_mcp_calls>{}</flyflor_mcp_calls>" },
+                    { role: "assistant", content: "<agent_tool_calls>{}</agent_tool_calls>" },
                     { role: "user", content: '{"mcpToolResults":{"results":[]}}' },
                 ]),
             ).resolves.toBe("ok");

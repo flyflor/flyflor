@@ -23,16 +23,16 @@ describe("structured internal protocol blocks", () => {
             ].sort(),
         );
         expect(structuredBlock(StructuredBlockProtocol.AgentAsk)).toEqual({
-            close: "</flyflor_agent_ask>",
-            open: "<flyflor_agent_ask>",
+            close: "</agent_question>",
+            open: "<agent_question>",
             protocol: StructuredBlockProtocol.AgentAsk,
-            tag: "flyflor_agent_ask",
+            tag: "agent_question",
         });
         expect(structuredBlock(StructuredBlockProtocol.TaskPlan)).toEqual({
-            close: "</flyflor_task_plan>",
-            open: "<flyflor_task_plan>",
+            close: "</agent_task_plan>",
+            open: "<agent_task_plan>",
             protocol: StructuredBlockProtocol.TaskPlan,
-            tag: "flyflor_task_plan",
+            tag: "agent_task_plan",
         });
     });
 
@@ -52,7 +52,7 @@ describe("structured internal protocol blocks", () => {
         ]);
         expect(result.text).toContain("hello");
         expect(result.text).toContain("middle");
-        expect(result.text).toContain("flyflor_memory_actions");
+        expect(result.text).toContain("agent_memory_update");
         expect(result.text).toContain("bye");
     });
 });

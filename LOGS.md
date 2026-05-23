@@ -581,3 +581,43 @@
   原因：canonical OpenAPI 真实 surface 只有 `/health` 和 `/ws`，Apifox 路径视图只显示两个接口，无法满足 TUI/WS frame 测试示例展开需求；必须在不污染真实服务契约的前提下补齐可测试示例。
   效率：新增生成脚本 701 行；生成 Apifox project JSON 12410 行、Apifox OpenAPI 视图 12499 行；手写 docs/test/package 约 127 insertions、21 deletions。
   验证：`bun run docs:check` 26 pass；`bun test tests/docs.references.test.ts` 13 pass；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：apifox-real-ws-correction
+  摘要：纠正 Apifox 产物方向，移除导入承载体和辅助伪路径，只保留真实 `/health`、`/ws`、WS raw frame 消息目录和浏览器测试页；默认 `GatewayMessageSend` 示例改为无 Scope 的第一条对话；补齐旧 `brain.db` / `memory.sqlite` owner_key 迁移。
+  原因：前端需要真实可用的 WebSocket 联调材料；任何 HTTP 伪发送入口或不可写占位 Scope 路径都会误导实现和测试，旧本地 DB schema 也必须能自动升级，不能让 TUI/前端为后端迁移兜底。
+  效率：最终合并统计见 `ws-client-id-and-soul-profile-seal`；本轮大幅删除旧 Apifox project JSON，改为真实 OpenAPI + messages catalog + tester HTML。
+  验证：已通过真实 `bun run socket` + WebSocket `GatewayMessageSend` 冒烟，收到 `turn.delta` 和 `turn.final`；最终 `bun run docs:apifox`、focused tests、`bun run docs:check`、`bun run check`、`bun run build:binary`、`git diff --check` 全部通过。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：legacy-db-destructive-reset
+  摘要：按用户最新要求改为旧数据全部清空：旧 `brain.db` 检测到旧表/旧列/缺失当前关键列时直接 drop 运行态账本表并重建；旧月份 legacy brain 不再走 archive；旧 `memory.sqlite` 的 pending offer / memory 表同样清空重建，不再生成 `memory.project.sqlite` 旁路文件。
+  原因：当前 release-seal 之后不保留旧本地运行态数据，避免旧 user/session/project/scene 语义混入新的 Scope/ASK/Fork/Brain 分层。
+  效率：最终合并统计见 `ws-client-id-and-soul-profile-seal`；DB reset 变更集中在 brain schema/store、sqlite memory store 与对应测试。
+  验证：`bun test tests/brain.store.test.ts tests/skill.offer.test.ts` 25 pass；最终 seal 通过 focused/docs/check/build/diff。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：ws-client-id-and-soul-profile-seal
+  摘要：修复真实 `/ws` 连续复用 Apifox 示例时的 `UNIQUE constraint failed: memory_events.id`：WS 内部 turn id 改为 runtime UUID，客户端 `payload.id` 只作为 public messageId/metadata 回显；已生成回复后的 memory/ledger 写入失败不再降级为 `turn.error`。同时明确全局 Markdown 灵魂画像只读取 `.config/workspace/{SELF.md,IDENTITY.md,USER.md,MEMORY.md}`，`.zh.cn.md` 与旧 `SOUL.md` 不进入 prompt/context，并清理本地 `.config` 旧模板残留。
+  原因：前端/Apifox 会重复发送示例 message id，协议层 id 不能污染内部账本主键；`.zh.cn.md` 是审查副本，不能进入灵魂画像，否则会制造中英双份和旧 SOUL 双身份源。
+  效率：当前 tracked diff 合计 34 files changed，6631 insertions，16707 deletions；删除主要来自旧 `docs/apifox/flyflor.socket.apifox.json` 和旧伪路径视图收缩。新增/变更集中在 `src/socket/control.ts`、`src/protocol/control/envelope.ts`、`src/cognitive/hippocampus/memory/*`、Apifox 生成脚本/产物、安装脚本、文档和测试。
+  验证：`bun test tests/install.script.test.ts tests/memory.brain.wire.test.ts tests/runtime.perf.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/todo.status.test.ts tests/naming.boundaries.test.ts` 134 pass；`bun run docs:check` 26 pass；`bun run check`；`bun run build:binary`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：scope-recall-gate-and-ws-full-e2e
+  摘要：新增 Scope 回忆门控实现、scope recall 提示词与 runtime events，并补充真实 `/ws` 全场景 E2E 脚本；文档同步说明自然语言提起 Scope 时必须先由 LLM 判断 `none | load | ask`。
+  原因：用户指出之前 Scope 装配路径偏差：触发关键字后不能先装配，必须先进入“回忆中”并由 LLM 语义裁决；scope-local `scope.db` 是项目热区记忆树和向量索引，独立于 `brain.db` 生命账本。
+  效率：当前工作区累计 49 files changed，约 6933 insertions，16728 deletions；删除主要来自废弃 Apifox 伪 project JSON 与控制模板 `.zh.cn.md` 残留，新增集中在 scope recall component、真实 WS E2E、Apifox WS messages/tester、DB reset/migration guard、文档和测试。
+  验证：`bun test tests/scope.recall.test.ts tests/inflight.tracker.test.ts tests/naming.boundaries.test.ts tests/scope.scaffolder.test.ts tests/release.assets.test.ts tests/scope.vector.test.ts tests/memory.brain.wire.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts` 123 pass；`bun run e2e:ws:full` 通过，覆盖 live turn、scope recall events、scope vector/memory recall、history/scope/fork/ask/task/replay/thought/crystal snapshots；`bun run docs:check` 26 pass；`bun run check`；`bun run build:binary`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：prompt-engineering-neutral-language-seal
+  摘要：清理 `templates/prompts/**` 模型可见提示词，把产品名、内部 DB 名、器官隐喻和 Scope/Fork/ASK/MCP/Crystal/Gem 等开发黑话改成中性的任务/输入/输出/决策规则；`agent_*` 结构化块命名和 scope recall 语义裁决提示词已同步测试。
+  原因：模型只理解同轮注入的文字，不能假设它知道内部开发定义；提示词必须像交给外部临时执行者的任务说明，避免把内部术语当作模型可执行语义。
+  效率：当前工作区累计 107 files changed，7349 insertions，17164 deletions；本轮增量集中在 `templates/prompts/*`、`src/agent/prompts/*`、`src/protocol/structured.block.ts`、`tests/prompt.lint.test.ts` 和 `tests/scope.recall.test.ts`。
+  验证：`rg` 禁词扫描 `templates/prompts` 零命中；`bun test tests/prompt.lint.test.ts` 10 pass；`bun test tests/structured.block.test.ts tests/scope.recall.test.ts tests/ask.parse.test.ts tests/continuation.decisions.parse.test.ts tests/identity.parse.test.ts tests/planning.blocks.test.ts tests/skill.mcp.test.ts` 78 pass；`bun run docs:prompts:check`；`bun run docs:check` 26 pass；`bun run check`；`git diff --check`。

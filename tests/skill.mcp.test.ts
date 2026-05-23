@@ -582,7 +582,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"local.echo","input":{"text":"hello user tool"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"user","tool":"local.echo","input":{"text":"hello user tool"}}]}</agent_tool_calls>',
             "Final from user tool.",
             "[]",
         ]);
@@ -659,7 +659,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"local.echo","input":{"text":"blocked"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"user","tool":"local.echo","input":{"text":"blocked"}}]}</agent_tool_calls>',
             "Denied final.",
         ]);
         const runtime = new RuntimeModule(
@@ -721,7 +721,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"local.echo","input":{}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"user","tool":"local.echo","input":{}}]}</agent_tool_calls>',
             "Schema final.",
         ]);
         const runtime = new RuntimeModule(
@@ -757,7 +757,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{"text":"hello plugin"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{"text":"hello plugin"}}]}</agent_tool_calls>',
             "Plugin final.",
             "[]",
         ]);
@@ -805,7 +805,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{}}]}</agent_tool_calls>',
             "Plugin schema final.",
         ]);
         const runtime = new RuntimeModule(
@@ -841,7 +841,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{"text":"blocked"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"user","tool":"plugin.demo.echo","input":{"text":"blocked"}}]}</agent_tool_calls>',
             "Plugin denied final.",
         ]);
         const sink = new CapturingSink();
@@ -894,7 +894,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"from-tool"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"from-tool"}}]}</agent_tool_calls>',
             "Final from MCP result.",
             "[]",
         ]);
@@ -978,7 +978,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"fake","tool":"echo","input":{}}]}</agent_tool_calls>',
             "Schema final.",
         ]);
         const runtime = new RuntimeModule(
@@ -1023,7 +1023,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"from-tool"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"from-tool"}}]}</agent_tool_calls>',
             "Final without MCP result.",
         ]);
         const runtime = new RuntimeModule(
@@ -1071,7 +1071,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"allowed"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"allowed"}}]}</agent_tool_calls>',
             "Allowed final.",
             "[]",
         ]);
@@ -1105,7 +1105,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"pwd"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"pwd"}}]}</agent_tool_calls>',
             "Shell final.",
             "[]",
         ]);
@@ -1147,7 +1147,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"pwd"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"shell","tool":"run","input":{"command":"pwd"}}]}</agent_tool_calls>',
             "Shell ask final.",
             "[]",
         ]);
@@ -1193,7 +1193,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"git","tool":"status","input":{}},{"server":"git","tool":"diff","input":{"path":"tracked.txt","context":1}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"git","tool":"status","input":{}},{"server":"git","tool":"diff","input":{"path":"tracked.txt","context":1}}]}</agent_tool_calls>',
             "Git final.",
             "[]",
         ]);
@@ -1241,7 +1241,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"git","tool":"status","input":{}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"git","tool":"status","input":{}}]}</agent_tool_calls>',
             "Git denied final.",
         ]);
         const runtime = new RuntimeModule(
@@ -1278,7 +1278,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"notes.txt"}}]}</agent_tool_calls>',
             "Workspace final.",
             "[]",
         ]);
@@ -1324,8 +1324,8 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"pattern":"**/*.ts","path":"src"}}]}</flyflor_mcp_calls>',
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"stat","input":{"path":"src/agent/tool.ts"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"pattern":"**/*.ts","path":"src"}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"stat","input":{"path":"src/agent/tool.ts"}}]}</agent_tool_calls>',
             "Glob stat final.",
             "[]",
         ]);
@@ -1360,9 +1360,9 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"list","input":{"path":"."}}]}</flyflor_mcp_calls>',
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"package.json"}}]}</flyflor_mcp_calls>',
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"search","input":{"query":"multi turn","path":"README.md"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"list","input":{"path":"."}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"package.json"}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"search","input":{"query":"multi turn","path":"README.md"}}]}</agent_tool_calls>',
             "Multi final.",
             "[]",
         ]);
@@ -1390,7 +1390,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</agent_tool_calls>',
             "[]",
         ]);
         const events = new CapturingSink();
@@ -1443,9 +1443,9 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</agent_tool_calls>',
             "[]",
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"two.txt"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"two.txt"}}]}</agent_tool_calls>',
             "Finished after continuing.",
             "[]",
         ]);
@@ -1528,7 +1528,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"todo.txt"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"todo.txt"}}]}</agent_tool_calls>',
             "Done after reading todo.",
             "[]",
         ]);
@@ -1555,7 +1555,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const repeatedFailure =
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"missing.txt"}}]}</flyflor_mcp_calls>';
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"missing.txt"}}]}</agent_tool_calls>';
         const model = new SequencedModel([repeatedFailure, repeatedFailure, repeatedFailure, repeatedFailure, "[]"]);
         const events = new CapturingSink();
         const runtime = new RuntimeModule(baseConfig, model, events);
@@ -1634,7 +1634,7 @@ describe("Skill and MCP capability config", () => {
         const model = new SequencedModel([
             ...files.map(
                 (file) =>
-                    `<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"${file}"}}]}</flyflor_mcp_calls>`,
+                    `<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"${file}"}}]}</agent_tool_calls>`,
             ),
             "Loop final.",
             "[]",
@@ -1670,7 +1670,7 @@ describe("Skill and MCP capability config", () => {
             input: { path: file },
         }));
         const model = new SequencedModel([
-            `<flyflor_mcp_calls>${JSON.stringify({ calls: batchCalls })}</flyflor_mcp_calls>`,
+            `<agent_tool_calls>${JSON.stringify({ calls: batchCalls })}</agent_tool_calls>`,
             "Batch final.",
             "[]",
         ]);
@@ -1701,7 +1701,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"name":"workspace.read","arguments":{"path":"README.md"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"name":"workspace.read","arguments":{"path":"README.md"}}]}</agent_tool_calls>',
             "Shape final.",
             "[]",
         ]);
@@ -1729,7 +1729,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","path":"README.md"}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","path":"README.md"}]}</agent_tool_calls>',
             "Lift final.",
             "[]",
         ]);
@@ -1757,7 +1757,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}</agent_tool_calls>',
             "Function final.",
             "[]",
         ]);
@@ -1784,7 +1784,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            'Visible before <flyflor_mcp_calls>{"calls":[{"path":"."}]}</flyflor_mcp_calls> visible after',
+            'Visible before <agent_tool_calls>{"calls":[{"path":"."}]}</agent_tool_calls> visible after',
             "[]",
         ]);
         const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
@@ -1804,7 +1804,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"not-json"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"not-json"}}]}</agent_tool_calls>',
         ]);
         const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
 
@@ -1824,7 +1824,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"../outside.txt"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"../outside.txt"}}]}</agent_tool_calls>',
             "Escape final.",
         ]);
         const runtime = new RuntimeModule(
@@ -1861,7 +1861,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"path":"../outside-dir","pattern":"*.ts"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"path":"../outside-dir","pattern":"*.ts"}}]}</agent_tool_calls>',
             "Glob escape final.",
         ]);
         const runtime = new RuntimeModule(
@@ -1898,7 +1898,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            `<flyflor_mcp_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":${JSON.stringify(outside)}}}]}</flyflor_mcp_calls>`,
+            `<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":${JSON.stringify(outside)}}}]}</agent_tool_calls>`,
             "Approved final.",
             "[]",
         ]);
@@ -1947,7 +1947,7 @@ describe("Skill and MCP capability config", () => {
 
         const baseConfig = await loadConfigForPaths(paths);
         const model = new SequencedModel([
-            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"blocked"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"blocked"}}]}</agent_tool_calls>',
             "Noninteractive final.",
         ]);
         const runtime = new RuntimeModule(
@@ -1982,7 +1982,7 @@ describe("Skill and MCP capability config", () => {
         const baseConfig = await loadConfigForPaths(paths);
         const model = new StreamingModel([
             "visible-before ",
-            '<flyflor_mcp_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"hidden"}}]}</flyflor_mcp_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"fake","tool":"echo","input":{"text":"hidden"}}]}</agent_tool_calls>',
             " visible-after",
         ]);
         const runtime = new RuntimeModule(
@@ -2013,7 +2013,7 @@ describe("Skill and MCP capability config", () => {
 
         expect(deltas.join("")).toBe("visible-before  visible-after");
         expect(reply.text).toBe("visible-before  visible-after");
-        expect(deltas.join("")).not.toContain("flyflor_mcp_calls");
+        expect(deltas.join("")).not.toContain("agent_tool_calls");
         expect(reply.metadata?.kind).toBe("reply");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(reply.metadata?.mcpToolExecutions).toEqual(

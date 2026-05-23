@@ -121,7 +121,7 @@ describe("BrainStore", () => {
         }
     });
 
-    test("upgrades a legacy brain.db before owner-key indexes are created", async () => {
+    test("clears a legacy brain.db before owner-key indexes are created", async () => {
         const dir = await mkdtemp(join(tmpdir(), "flyflor-brain-legacy-"));
         const brainPath = join(dir, "brain.db");
         const db = new Database(brainPath);
@@ -158,14 +158,8 @@ describe("BrainStore", () => {
                 expect(columns).toContain("parent_id");
                 expect(columns).toContain("embedding_id");
                 expect(columns).toContain("importance");
-                const row = reopened
-                    .query<{ importance: number; owner_key: string | null; role: string | null }, [string]>(
-                        "SELECT owner_key, role, importance FROM memory_events WHERE id = ?1",
-                    )
-                    .get("legacy-1");
-                expect(row?.owner_key).toBe("legacy-1");
-                expect(row?.role).toBeNull();
-                expect(row?.importance).toBe(0.5);
+                const eventCount = (reopened.query("SELECT COUNT(*) AS count FROM memory_events").get() as { count: number }).count;
+                expect(eventCount).toBe(0);
                 const plan = queryPlan(
                     reopened,
                     `EXPLAIN QUERY PLAN
@@ -176,6 +170,126 @@ describe("BrainStore", () => {
                     ["legacy-1", MemoryEventType.Event, 10],
                 );
                 expect(plan).toContain("idx_events_owner_type_ts");
+            } finally {
+                reopened.close();
+            }
+            store.appendEvent({
+                ownerKey: "scope:current",
+                id: "current-1",
+                ts: Date.UTC(2026, 4, 23, 4, 0, 0),
+                sourceKey: "req-current-1",
+                sourceSurface: "ws",
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: { text: "current" },
+            });
+            expect(store.getEvent("current-1")?.ownerKey).toBe("scope:current");
+        } finally {
+            store.close();
+        }
+    });
+
+    test("clears legacy user_id memory_events table so new append path works", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "flyflor-brain-user-id-legacy-"));
+        const brainPath = join(dir, "brain.db");
+        const db = new Database(brainPath);
+        try {
+            const now = Date.UTC(2026, 4, 23, 4, 0, 0);
+            db.exec(`
+                CREATE TABLE memory_events (
+                    id TEXT PRIMARY KEY,
+                    ts INTEGER NOT NULL,
+                    time_bucket TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    channel_id TEXT,
+                    codename_id TEXT,
+                    type TEXT NOT NULL,
+                    role TEXT,
+                    content TEXT NOT NULL,
+                    parent_id TEXT,
+                    embedding_id TEXT,
+                    importance REAL NOT NULL DEFAULT 0.5
+                );
+            `);
+            db.prepare(
+                `INSERT INTO memory_events (
+                    id, ts, time_bucket, user_id, channel_id, type, role, content
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+            ).run("legacy-user-1", now, "2026-05-23", "human", "ws", "event", "user", "{}");
+        } finally {
+            db.close();
+        }
+
+        const store = new BrainStore({ dbPath: brainPath });
+        try {
+            await store.open();
+            const migrated = new Database(brainPath);
+            try {
+                const columns = tableColumns(migrated, "memory_events");
+                expect(columns).toContain("owner_key");
+                expect(columns).not.toContain("user_id");
+                const eventCount = (migrated.query("SELECT COUNT(*) AS count FROM memory_events").get() as { count: number }).count;
+                expect(eventCount).toBe(0);
+            } finally {
+                migrated.close();
+            }
+
+            store.appendEvent({
+                id: "new-turn-1",
+                ts: Date.UTC(2026, 4, 23, 4, 1, 0),
+                ownerKey: "turn:new-turn-1",
+                sourceKey: "req-new-turn-1",
+                sourceSurface: "ws",
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: { text: "hello" },
+            });
+            expect(store.getEvent("new-turn-1")?.ownerKey).toBe("turn:new-turn-1");
+        } finally {
+            store.close();
+        }
+    });
+
+    test("clears old-month legacy brain.db instead of archiving old rows", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "flyflor-brain-old-month-legacy-"));
+        const brainPath = join(dir, "brain.db");
+        const db = new Database(brainPath);
+        try {
+            db.exec(`
+                CREATE TABLE memory_events (
+                    id TEXT PRIMARY KEY,
+                    ts INTEGER NOT NULL,
+                    time_bucket TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    content TEXT NOT NULL
+                );
+            `);
+            db.prepare(
+                `INSERT INTO memory_events (id, ts, time_bucket, type, content) VALUES (?1, ?2, ?3, ?4, ?5)`,
+            ).run("legacy-old-month", Date.UTC(2020, 0, 2), "2020-01-02", "event", "{}");
+        } finally {
+            db.close();
+        }
+
+        const store = new BrainStore({ dbPath: brainPath });
+        try {
+            await store.open();
+            const archiveEntries = (() => {
+                let catalog: Database | null = null;
+                try {
+                    catalog = new Database(join(dir, "brain", "catalog", "brain.catalog.db"));
+                    return catalog.query("SELECT id FROM brain_shards WHERE status = 'archived'").all();
+                } catch {
+                    return [];
+                } finally {
+                    catalog?.close();
+                }
+            })();
+            expect(archiveEntries).toHaveLength(0);
+            const reopened = new Database(brainPath);
+            try {
+                const eventCount = (reopened.query("SELECT COUNT(*) AS count FROM memory_events").get() as { count: number }).count;
+                expect(eventCount).toBe(0);
             } finally {
                 reopened.close();
             }

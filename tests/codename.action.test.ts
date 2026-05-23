@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseMemoryActions } from "../src/cognitive/hippocampus/memory/actions/index.ts";
 
-const wrap = (json: string): string => `<flyflor_memory_actions>\n${json}\n</flyflor_memory_actions>`;
+const wrap = (json: string): string => `<agent_memory_update>\n${json}\n</agent_memory_update>`;
 
 describe("LF-R2 codename in MemoryAction", () => {
     test("model-supplied codename normalizes name/workingDir/description", () => {

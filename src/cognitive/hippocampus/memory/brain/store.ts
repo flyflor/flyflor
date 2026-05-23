@@ -809,6 +809,9 @@ function utcMonthKey(nowMs: number): string {
 function detectLiveShardMonth(path: string): string {
     const db = new Database(path, { readonly: true });
     try {
+        if (brainSchema.hasLegacyRuntimeSchema(db)) {
+            return utcMonthKey(Date.now());
+        }
         try {
             const stored = db
                 .query<{ value: string | null }, [string]>("SELECT value FROM brain_meta WHERE key = ?1")

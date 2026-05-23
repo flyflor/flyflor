@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 const ROOT_TODO_PATH = join(import.meta.dir, "..", "TODO.md");
@@ -57,12 +57,13 @@ describe("TODO status", () => {
         expect(directory).toContain("`src/types`");
     });
 
-    test("abandon directory is reserved for retired non-runtime code", async () => {
-        const rootEntries = await readdir(join(import.meta.dir, ".."));
-        expect(rootEntries).toContain("abandon");
-        const readme = await readFile(join(import.meta.dir, "..", "abandon", "README.md"), "utf8");
-        expect(readme).toContain("不可编译");
-        expect(readme).toContain("不可导入");
+    test("retired material stays under old-docs without an active abandon root", async () => {
+        expect(await exists(join(import.meta.dir, "..", "abandon"))).toBe(false);
+        const docsReadme = await readFile(join(import.meta.dir, "..", "docs", "README.md"), "utf8");
+        const oldDocsReadme = await readFile(join(import.meta.dir, "..", "docs", "old-docs", "README.md"), "utf8");
+        expect(docsReadme).toContain("old-docs");
+        expect(oldDocsReadme).toContain("归档文档");
+        expect(oldDocsReadme).toContain("归档清单");
     });
 
     test("roadmap and todo stay aligned on the sealed Bun kernel state", async () => {

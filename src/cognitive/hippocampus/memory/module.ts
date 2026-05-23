@@ -30,7 +30,7 @@ import { event, RuntimeEventType, type EventSink } from "../../../events/index.t
 import {
     loadPromptTemplates,
     renderMemoryContextPrompt,
-    renderScopeOfferPrompt,
+    renderWorkContextOfferPrompt,
     renderRuntimeAskContinuationPrompt,
     renderRuntimeIdleResumePrompt,
     renderRuntimeEqContextPrompt,
@@ -75,6 +75,7 @@ import type {
     MemoryRecord,
     MemorySearchRequest,
     MemorySearchResult,
+    ScopeRecallCandidate,
     MemoryWeights,
     TurnMemoryResult,
 } from "./types.ts";
@@ -845,7 +846,10 @@ export class MemoryModule extends Memory {
             sourceEventId,
         });
 
-        await this.writeEpisodeToWorkingMemory(message, reply, context, ownerKey, importanceFromActions(actions), provenance);
+        await this.writeEpisodeToWorkingMemory(message, reply, context, ownerKey, importanceFromActions(actions), {
+            ...provenance,
+            brainEventId: sourceEventId,
+        });
         // 把当前 owner 登记进后台调度器，确保 ConsolidationWorker / decay sweep 会按节拍 drain。
         // 不扫描外部后端，只信任活跃 turn 触发，避免把后端存储变成全局枚举入口。
         this.activeMemoryOwners.add(ownerKey);
@@ -891,7 +895,7 @@ export class MemoryModule extends Memory {
                     reply,
                     context,
                     memoryScopeId,
-                    turnEpisodeId(message, context),
+                    sourceEventId,
                     this.config.memory.weights,
                     this.matrix,
                 ),
@@ -1336,7 +1340,7 @@ export class MemoryModule extends Memory {
     ): Promise<string> {
         try {
             const normalizedProvenance = normalizeEpisodeProvenance(provenance);
-            const episodeId = turnEpisodeId(message, context);
+            const episodeId = crypto.randomUUID();
             const createdAt = new Date(context.now).toISOString();
             const embedding =
                 actions.length > 0
@@ -1681,6 +1685,48 @@ export class MemoryModule extends Memory {
         return this.brain.listScopes({ limit: options.limit ?? 50 });
     }
 
+    /**
+     * Scope recall candidate assembly is read-only evidence gathering. It does
+     * not load scope memory into the prompt and does not decide semantics; the
+     * runtime recall gate delegates that decision to the model.
+     */
+    public async listScopeRecallCandidates(input: {
+        embedding?: number[];
+        limit?: number;
+        query: string;
+    }): Promise<ScopeRecallCandidate[]> {
+        if (!this.brainOpened) return [];
+        const limit = Math.max(1, Math.min(24, Math.floor(input.limit ?? 12)));
+        const scopes = this.brain.listScopes({ limit });
+        if (scopes.length === 0) return [];
+        await this.scopeVector.initialize();
+        const codenames = this.brain.listCodenames({ limit: limit * 4 });
+        const results: ScopeRecallCandidate[] = [];
+        for (const scope of scopes) {
+            const codename = codenames.find((row) => row.scopeId === scope.id);
+            const vector = (
+                await this.scopeVector.recall({
+                    scopeId: scope.id,
+                    limit: 1,
+                    query: input.query,
+                    queryEmbedding: input.embedding,
+                })
+            )[0];
+            results.push({
+                scope,
+                ...(codename ? { codename } : {}),
+                ...(vector ? { vector, vectorSummary: vector.summary } : {}),
+            });
+        }
+        return results.sort((left, right) => {
+            const leftScore = left.vector?.score ?? 0;
+            const rightScore = right.vector?.score ?? 0;
+            if (rightScore !== leftScore) return rightScore - leftScore;
+            if (right.scope.lastUsedAt !== left.scope.lastUsedAt) return right.scope.lastUsedAt - left.scope.lastUsedAt;
+            return left.scope.id.localeCompare(right.scope.id);
+        });
+    }
+
     public listContextForks(ownerKey: string, options: { limit?: number } = {}): ContextForkRecord[] {
         if (!this.brainOpened) return [];
         return this.brain.listContextForks({ ownerKey, limit: options.limit ?? 50 });
@@ -1965,7 +2011,7 @@ export class MemoryModule extends Memory {
      * decayScore 资源指标排序（不解析任何文本语义），最多展示 3 条。pending ask
      * 的 sibling continuation 已通过 `[continuation]` 单独注入，这里跳过避免重复。
      *
-     * 模型可显式输出 `<flyflor_continuation_decisions>`，由 `applyContinuationDecisions`
+     * 模型可显式输出 `<agent_context_decisions>`，由 `applyContinuationDecisions`
      * 落库处理 `fork` / `fresh` / `resume`；这里不从自然语言推断分支关系。
      */
     private renderContinuationHint(ownerKey: string): string | undefined {
@@ -2856,7 +2902,7 @@ export class MemoryModule extends Memory {
                 ttlSeconds,
                 metadata: {
                     provenance: normalizedProvenance,
-                    brainEventId: turnEpisodeId(message, context),
+                    brainEventId: provenance.brainEventId,
                     schemaVersion: 1,
                 },
             });
@@ -3132,7 +3178,7 @@ export class MemoryModule extends Memory {
      * 渲染由 MemoryModule 持有，避免散落 helper 重新引入隐式业务入口。
      */
     private renderScopeOfferNudge(offer: PendingScopeOffer): string {
-        return renderScopeOfferPrompt({
+        return renderWorkContextOfferPrompt({
             evidenceScore: offer.evidenceScore.toFixed(2),
             relatedCount: String(offer.relatedIds.length),
             remainingTurns: String(offer.ttlTurns),
@@ -3248,6 +3294,7 @@ function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): Memory
             tool: call.tool.trim(),
         }));
     return {
+        ...(provenance.brainEventId ? { brainEventId: provenance.brainEventId } : {}),
         ...(provenance.blackboardTurnId ? { blackboardTurnId: provenance.blackboardTurnId } : {}),
         ...(skillNames.length > 0 ? { skillNames } : {}),
         ...(mcpCalls.length > 0 ? { mcpCalls } : {}),
@@ -3576,12 +3623,6 @@ function brainAtomFromAction(input: BrainAtomFromActionInput): BrainPromptAtomWr
         createdAt: input.createdAt,
     };
     return { atom, score };
-}
-
-function turnEpisodeId(message: GatewayMessage, context: RuntimeContext): string {
-    const hasher = new Bun.CryptoHasher("sha256");
-    hasher.update(`${context.requestId}:${message.id}:${context.now}`);
-    return `episode:${hasher.digest("hex").slice(0, 24)}`;
 }
 
 function focusKeyForMessage(message: GatewayMessage, context?: RuntimeContext): string {

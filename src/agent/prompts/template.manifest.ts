@@ -17,7 +17,7 @@ export const PROMPT_TEMPLATE_ORDER = [
     "memoryHotCompress",
     "memoryContext",
     "memoryDream",
-    "memoryScopeOffer",
+    "memoryWorkContextOffer",
     "memorySkillOffer",
     "mcpContext",
     "mcpToolBudgetExhausted",
@@ -26,6 +26,7 @@ export const PROMPT_TEMPLATE_ORDER = [
     "runtimeEqContext",
     "runtimeContinuationHint",
     "runtimeIdentityContext",
+    "scopeRecall",
     "runtimeSystem",
     "skillContext",
 ] as const;
@@ -131,8 +132,8 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
         filename: "memory.dream.md",
         requiredPlaceholders: ["candidates", "ownerKey"],
     },
-    memoryScopeOffer: {
-        callSite: "renderScopeOfferPrompt",
+    memoryWorkContextOffer: {
+        callSite: "renderWorkContextOfferPrompt",
         filename: "memory.scope.offer.md",
         requiredPlaceholders: ["evidenceScore", "relatedCount", "remainingTurns", "title"],
     },
@@ -175,6 +176,11 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
         callSite: "renderRuntimeIdentityContextPrompt",
         filename: "runtime.identity.context.md",
         requiredPlaceholders: ["identityEntries"],
+    },
+    scopeRecall: {
+        callSite: "ScopeRecallComponent.decide",
+        filename: "scope.recall.md",
+        requiredPlaceholders: ["candidateJson", "currentContextJson", "request"],
     },
     runtimeSystem: {
         callSite: "renderRuntimeSystemPrompt",

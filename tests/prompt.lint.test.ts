@@ -138,49 +138,53 @@ describe("lintPromptTemplates", () => {
         expect(report.issues.some((i) => i.kind === "manifest-template-mismatch")).toBe(true);
     });
 
-    test("runtime prompt templates do not expose internal roadmap labels", async () => {
+    test("model-facing prompt templates avoid product names and internal shorthand", async () => {
         const promptDir = join(process.cwd(), "templates", "prompts");
-        const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
-        const offenders: string[] = [];
-        for (const file of files) {
-            const body = await readFile(join(promptDir, file), "utf8");
-            if (/\bLF-[A-Z0-9]+/.test(body)) offenders.push(file);
-        }
-        expect(offenders).toEqual([]);
-    });
-
-    test("runtime prompt template prose avoids unexplained internal metaphors", async () => {
-        const promptDir = join(process.cwd(), "templates", "prompts");
-        const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
+        const files = await listMarkdownFiles(promptDir);
         const forbidden = [
             /\bLF-[A-Z0-9]+/,
+            /\bFlyflor\b/i,
+            /\.flyflor\b/i,
+            /\bscope\.db\b/i,
+            /\bbrain\.db\b/i,
+            /\bhot memory\b/i,
+            /\bmemory tree\b/i,
+            /\brecall gate\b/i,
+            /\bScope\b/,
+            /\bFork\b/,
+            /\bASK\b/,
+            /\bExecutive\b/,
             /\bHippocampus\b/i,
-            /海马体/,
-            /晶体/,
-            /结晶/,
-            /\bDream\b/,
-            /\bdream\b/,
-            /\bcrystal\b/i,
+            /\bMCP\b/,
             /\bGem\b/,
             /\bgem\b/,
             /\bmemory_node\b/,
+            /热区/u,
+            /记忆树/u,
+            /回忆门/u,
+            /海马/u,
+            /水晶/u,
+            /晶体/,
+            /结晶/,
+            /灵魂/u,
+            /画像/u,
+            /器官/u,
+            /闭环/u,
+            /黑板/u,
         ];
         const offenders: string[] = [];
         for (const file of files) {
-            const body = await readFile(join(promptDir, file), "utf8");
-            const prose = body
-                .split("\n")
-                .join("\n")
-                .replace(/\{\{[^}]+\}\}/g, "");
+            const body = await readFile(file, "utf8");
+            const prose = stripPromptNoise(body);
             const hit = forbidden.find((pattern) => pattern.test(prose));
-            if (hit) offenders.push(`${file}: ${String(hit)}`);
+            if (hit) offenders.push(`${file.replace(`${promptDir}/`, "")}: ${String(hit)}`);
         }
         expect(offenders).toEqual([]);
     });
 
     test("runtime prompt templates use Scope wording instead of project containers", async () => {
         const promptDir = join(process.cwd(), "templates", "prompts");
-        const files = (await readdir(promptDir)).filter((name) => name.endsWith(".md"));
+        const files = await listMarkdownFiles(promptDir);
         const forbidden = [
             /\bproject notes\b/i,
             /\bproject event\b/i,
@@ -193,10 +197,10 @@ describe("lintPromptTemplates", () => {
         ];
         const offenders: string[] = [];
         for (const file of files) {
-            const body = await readFile(join(promptDir, file), "utf8");
-            const prose = body.replace(/\{\{[^}]+\}\}/g, "");
+            const body = await readFile(file, "utf8");
+            const prose = stripPromptNoise(body);
             const hit = forbidden.find((pattern) => pattern.test(prose));
-            if (hit) offenders.push(`${file}: ${String(hit)}`);
+            if (hit) offenders.push(`${file.replace(`${promptDir}/`, "")}: ${String(hit)}`);
         }
         expect(offenders).toEqual([]);
     });
@@ -246,4 +250,27 @@ async function listTypeScriptFiles(dir: string): Promise<string[]> {
         }
     }
     return out;
+}
+
+async function listMarkdownFiles(dir: string): Promise<string[]> {
+    const out: string[] = [];
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+            out.push(...(await listMarkdownFiles(path)));
+            continue;
+        }
+        if (entry.isFile() && entry.name.endsWith(".md")) {
+            out.push(path);
+        }
+    }
+    return out;
+}
+
+function stripPromptNoise(body: string): string {
+    return body
+        .replace(/\{\{[^}]+\}\}/g, "")
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/`[^`]+`/g, "")
+        .replace(/<agent_[a-z_]+>[\s\S]*?<\/agent_[a-z_]+>/g, "");
 }

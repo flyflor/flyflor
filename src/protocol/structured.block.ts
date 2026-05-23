@@ -1,11 +1,11 @@
 /**
  * Internal model-facing structured block protocol.
  *
- * Flyflor uses lightweight tagged JSON blocks instead of XML:
+ * Runtime prompts use lightweight tagged JSON blocks instead of XML:
  *
- * <flyflor_protocol_name>
+ * <agent_protocol_name>
  * {"json":"payload"}
- * </flyflor_protocol_name>
+ * </agent_protocol_name>
  *
  * This file is the single registry for block delimiters. Feature modules own
  * their payload validation, but they must not hand-write protocol tags.
@@ -34,14 +34,14 @@ export interface StructuredBlockDefinition {
 const STRUCTURED_BLOCK_TAGS: Record<StructuredBlockProtocol, string> = {
     // 新增模型可输出的内部协议块时先登记在这里，再由业务模块挂自己的 JSON 校验器。
     // 这样 tag 拼写、边界符和剥离行为只有一个来源，避免不同模块写出互不兼容的坏数据。
-    [StructuredBlockProtocol.AgentAsk]: "flyflor_agent_ask",
-    [StructuredBlockProtocol.ContextFork]: "flyflor_context_fork",
-    [StructuredBlockProtocol.ContinuationDecisions]: "flyflor_continuation_decisions",
-    [StructuredBlockProtocol.IdentityAppend]: "flyflor_identity_append",
-    [StructuredBlockProtocol.MemoryActions]: "flyflor_memory_actions",
-    [StructuredBlockProtocol.McpCalls]: "flyflor_mcp_calls",
-    [StructuredBlockProtocol.ReplayRecord]: "flyflor_replay_record",
-    [StructuredBlockProtocol.TaskPlan]: "flyflor_task_plan",
+    [StructuredBlockProtocol.AgentAsk]: "agent_question",
+    [StructuredBlockProtocol.ContextFork]: "agent_context_branch",
+    [StructuredBlockProtocol.ContinuationDecisions]: "agent_context_decisions",
+    [StructuredBlockProtocol.IdentityAppend]: "agent_profile_update",
+    [StructuredBlockProtocol.MemoryActions]: "agent_memory_update",
+    [StructuredBlockProtocol.McpCalls]: "agent_tool_calls",
+    [StructuredBlockProtocol.ReplayRecord]: "agent_replay_summary",
+    [StructuredBlockProtocol.TaskPlan]: "agent_task_plan",
 };
 
 export const STRUCTURED_BLOCKS: Record<StructuredBlockProtocol, StructuredBlockDefinition> = Object.fromEntries(

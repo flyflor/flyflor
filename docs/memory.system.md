@@ -29,7 +29,7 @@ flowchart LR
 ### Context assembly 负责什么
 
 - 当前输入
-- Markdown 宪法层
+- Markdown 宪法层：`~/.flyflor/.config/workspace/{SELF.md,IDENTITY.md,USER.md,MEMORY.md}`
 - Memory recall（热记忆）
 - Crystal recall（晶体智力）
 - 显式 scope
@@ -78,6 +78,7 @@ flowchart LR
 ## 相关代码路径
 
 - `src/cognitive/hippocampus/memory/module.ts` — Memory 主入口
+- `src/cognitive/hippocampus/memory/markdown/store.ts` — 全局 Markdown 宪法层，只读取 `SELF.md` / `IDENTITY.md` / `USER.md` / `MEMORY.md`
 - `src/cognitive/hippocampus/memory/brain/store.ts` — `brain.db` store 门面
 - `src/entities/memory/brain/*` — brain 表 owner 的 entity / repo
 - `src/cognitive/hippocampus/memory/working/*` — working memory
@@ -86,6 +87,23 @@ flowchart LR
 - `src/cognitive/crystal/*` — crystal recall / graph / gem
 
 ## Scope-local memory
+
+## Markdown 宪法层
+
+全局 Markdown 画像固定存放在 `config.paths.workspaceDir`，默认路径是 `~/.flyflor/.config/workspace`。
+
+运行时只读取四个 canonical 文件：
+
+- `SELF.md`
+- `IDENTITY.md`
+- `USER.md`
+- `MEMORY.md`
+
+初始化模板来自 `config.paths.templateDir/memory`，默认路径是 `~/.flyflor/.config/templates/memory`，文件名为 `self.md` / `identity.md` / `user.md` / `memory.md`。这些小写模板只负责首次生成大写 workspace 文件。
+
+`.zh.cn.md` 是模板镜像和人工审查副本，不得进入 prompt/context/灵魂画像。旧残留 `SOUL.md` / `SOUL.zh.cn.md` 也不是当前运行契约的一部分；OpenHuman 里的 `SOUL.md` 思路只能作为历史参考，Flyflor 当前用 `IDENTITY.md` 承担身份边界。
+
+这层类似宪法，不是对话账本，也不是 OpenHuman 记忆树。OpenHuman 的记忆树把外部资料切成 Markdown chunk，再用 SQLite 保存层级摘要；Flyflor 只把这个思想借给 Scope：全局画像保持四文件稳定，项目热区记忆进入 scope-local `scope.db` 与 `project.memory.md`。
 
 显式 `activeScope` 存在时，runtime 可以读取 scope-local memory。
 
@@ -115,6 +133,16 @@ flowchart LR
 `scope.db` 与 `brain.db` 必须分离：`brain.db` 是按月生命账本，负责 ledger/query/replay/audit/detail；`scope.db` 是某个 Scope 的上下文装备索引，保存类似 MemoryComponent 热区记忆的项目记忆、记忆树节点、多维关联词和向量召回材料。用户显式进入一个 Scope，或 codename 锚点升格成 Scope 后，运行时才能用 Scope Vector 把这些二次产物装配进热区。
 
 Scope 热区记忆不是生命账本副本。它是项目记忆：从 turn、ASK、fork merge、task plan、blackboard 收束和 Crystal evidence 中提炼出的可召回片段。多维关联词只用于检索和装备，不允许变成业务语义判断规则；召回排序依赖向量相似度、图关系、TTL、activation、cluster size 和 provenance 等结构化信号。
+
+自然语言 Scope 召回必须先经过 LLM 门控，而不是关键词触发。运行时流程是：
+
+1. `ScopeRecallComponent` 发布 `scope.recall.started`，用户面可显示“回忆中”。
+2. `MemoryModule.listScopeRecallCandidates()` 只读 `brain.db.scopes/codenames` 和 scope-local `scope.db`，组装候选证据。
+3. LLM 用 `templates/prompts/scope.recall.md` 输出 `none | load | ask` 的结构化 JSON。
+4. `load` 才把 `activeScope` 写入本轮 enriched context，然后装配 Scope 宪法、Scope Memory 和 Scope Vector。
+5. `ask` 直接生成 `AgentAsk`，等待用户确认；未回复时仍进入 ASK ghost/continue 闭环。
+
+向量分数、关联词、codename 只用于召回候选和排序，不能替代 LLM 做语义判断。
 
 ## Fork
 

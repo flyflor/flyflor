@@ -1,13 +1,13 @@
 /**
  * Continuation 决策块解析器（LF-R4 fork/fresh hint）。
  *
- * 模型同轮可在自由文本中嵌入一个 `<flyflor_continuation_decisions>{json[]}</flyflor_continuation_decisions>` 块，
+ * 模型同轮可在自由文本中嵌入一个 `<agent_context_decisions>{json[]}</agent_context_decisions>` 块，
  * 表达对当前 `[continuation-hint]` 中候选 continuation 的处理意图：
  *
  * ```
- * <flyflor_continuation_decisions>
+ * <agent_context_decisions>
  * [{"continuationId":"continuation-xxx","kind":"fresh"}, {"continuationId":"continuation-yyy","kind":"resume"}]
- * </flyflor_continuation_decisions>
+ * </agent_context_decisions>
  * ```
  *
  * runtime 严禁通过 text.includes / 关键词判断 continuation 关联（业务语义零字符匹配红线）；
@@ -173,7 +173,7 @@ export class ContinuationDecisionParser {
         ) {
             return [];
         }
-        throw new Error(`flyflor_continuation_decisions must be an array or object with ${arrayKey}[].`);
+        throw new Error(`agent_context_decisions must be an array or object with ${arrayKey}[].`);
     }
 
     private readOptionalArrayPayload(payload: unknown, arrayKey: string): unknown[] | undefined {

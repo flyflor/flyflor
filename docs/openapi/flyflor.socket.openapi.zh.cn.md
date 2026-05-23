@@ -40,7 +40,9 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 
 ## 边界检查
 
-- `GatewayMessageSend.payload.context.activeScope` 和 `contextForkId` 是 socket message 中唯一的显式工作域输入。
+- 默认 `GatewayMessageSend` 示例刻意不带 `payload.context`，这样前端第一条对话消息可以直接发送，不会因为本机没有 Scope 目录而失败。
+- 当 client 已经拿到真实 Scope/Fork 时，`GatewayMessageSend.payload.context.activeScope` 和 `contextForkId` 才作为 socket message 中唯一的显式工作域输入。
+- 发送 `activeScope` 时，`projectDir` 和 `projectMemoryDir` 必须是真实可写路径，通常来自 Scope 创建、列表或详情结果，不能复制占位路径。
 - `activeProject` 只是 `activeScope` 的兼容别名；新的 Apifox example 优先使用 `activeScope`。
 - `HistorySnapshot` 可以携带 reply metadata、task plan、replay 和 context fork snapshot，但这些只是 ledger replay 数据，不要回填成 prompt context。
 - read-model query 命令返回的 `*.snapshot.payload.data` 只是 TUI 可检查状态，不要回填成 prompt context。

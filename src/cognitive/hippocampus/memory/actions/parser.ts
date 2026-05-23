@@ -68,7 +68,7 @@ export function parseMemoryActions(rawText: string, maxActions: number): ParsedM
     }
 
     if (actions.length > maxActions) {
-        throw new Error(`flyflor_memory_actions returned ${actions.length} items, max is ${maxActions}.`);
+        throw new Error(`agent_memory_update returned ${actions.length} items, max is ${maxActions}.`);
     }
     for (const [index, action] of actions.entries()) {
         assertSafeAction(action, index);
@@ -106,11 +106,11 @@ function readActions(rawJson: string): MemoryAction[] {
     const payload = parseStructuredJson(rawJson);
     const items = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.actions) ? payload.actions : null;
     if (!items) {
-        throw new Error("flyflor_memory_actions must be a JSON array or an object with actions[].");
+        throw new Error("agent_memory_update must be a JSON array or an object with actions[].");
     }
     return items.map((item, index) => {
         if (!isMemoryAction(item)) {
-            throw new Error(`flyflor_memory_actions item ${index + 1} is invalid.`);
+            throw new Error(`agent_memory_update item ${index + 1} is invalid.`);
         }
         return normalizeAction(item);
     });
@@ -132,10 +132,10 @@ function isMemoryAction(value: unknown): value is MemoryAction {
 
 function assertSafeAction(action: MemoryAction, index: number): void {
     if (action.content.length < 2 || action.content.length > 500) {
-        throw new Error(`flyflor_memory_actions item ${index + 1} has invalid content length.`);
+        throw new Error(`agent_memory_update item ${index + 1} has invalid content length.`);
     }
     if (action.content.includes(MEMORY_ACTION_BLOCK.open) || action.content.includes(MEMORY_ACTION_BLOCK.close)) {
-        throw new Error(`flyflor_memory_actions item ${index + 1} contains nested action tags.`);
+        throw new Error(`agent_memory_update item ${index + 1} contains nested action tags.`);
     }
 }
 

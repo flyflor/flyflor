@@ -57,6 +57,8 @@ Scope solidification has two paths:
 - **Explicit creation:** when the user clearly starts a project/work item, the system can ASK for confirmation and then create a Scope with constitution, `scope.db`, skills and MCP surface.
 - **Gradual promotion:** when the user repeatedly references a project, the system creates a codename anchor, gathers evidence, then promotes it into a Scope once the evidence and confirmation path are strong enough.
 
+Natural Scope recall is a two-stage gate: Flyflor first emits a visible recall phase (`scope.recall.started`, surfaced as "回忆中"), then an LLM judges `none | load | ask` from the current request and Scope candidates. Vector hits, codenames and association rows only supply evidence. If the LLM returns `load`, Runtime equips the Scope constitution and scope-local `scope.db` tree/vector/hot memory before prompt assembly. If it returns `ask`, Runtime asks the user instead of guessing.
+
 ## ASK, Fork And Crystal Closed Loop
 
 The closure loop is the kernel's main long-line mechanism:
@@ -326,7 +328,7 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; ca
 - `templates/prompts/` - built-in runtime templates
 - `templates/prompts/docs/` - docs renderer templates, not runtime prompts
 - `scripts/install.templates.ts` - install into the config directory
-- `~/.flyflor/.config/prompts/` - user override directory
+- user config prompt directory - optional override directory
 
 ## Bundle Version
 
@@ -350,7 +352,7 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; ca
 | `memoryHotCompress` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | `episodes` |
 | `memoryContext` | `memory.context.md` | `renderMemoryPrompt` | `hippocampus` / `markdownContent` / `retrievedResults` / `scopeMemory` |
 | `memoryDream` | `memory.dream.md` | `DreamWorker` | `candidates` / `ownerKey` |
-| `memoryScopeOffer` | `memory.scope.offer.md` | `renderScopeOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memoryWorkContextOffer` | `memory.scope.offer.md` | `renderWorkContextOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
 | `memorySkillOffer` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
 | `mcpContext` | `mcp.context.md` | `renderMcpContextPrompt` | `mcpEntries` |
 | `mcpToolBudgetExhausted` | `mcp.tool.budget.exhausted.md` | `renderMcpToolBudgetExhaustedPrompt` | — |
@@ -382,7 +384,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/.config/prompts/"]
+    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["user config prompt directory"]
     Userdir -- runtime override --> Render["render functions"]
     Builtin -- canonical --> Render
 ```

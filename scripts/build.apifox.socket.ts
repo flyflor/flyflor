@@ -9,10 +9,10 @@ type JsonSchema = JsonRecord;
 
 interface OpenApiContract {
     components?: {
-        examples?: Record<string, { summary?: string; value?: unknown }>;
+        examples?: Record<string, { value?: unknown }>;
+        schemas?: Record<string, JsonSchema>;
     };
     info?: JsonRecord;
-    openapi?: string;
     paths?: JsonRecord;
     servers?: unknown[];
 }
@@ -22,14 +22,14 @@ interface FrameExample {
     expected?: string[];
     folder: string;
     name: string;
-    summary: string;
     value: JsonRecord;
 }
 
 const repoRoot = join(import.meta.dir, "..");
 const sourcePath = join(repoRoot, "docs", "openapi", "flyflor.socket.openapi.json");
-const apifoxPath = join(repoRoot, "docs", "apifox", "flyflor.socket.apifox.json");
+const messageCatalogPath = join(repoRoot, "docs", "apifox", "flyflor.socket.messages.json");
 const apifoxOpenApiPath = join(repoRoot, "docs", "apifox", "flyflor.socket.apifox.openapi.json");
+const testerPath = join(repoRoot, "docs", "apifox", "flyflor.socket.tester.html");
 const args = new Set(process.argv.slice(2));
 const writeMode = args.has("--write");
 const checkMode = args.has("--check");
@@ -40,25 +40,31 @@ if (!writeMode && !checkMode) {
 }
 
 const source = JSON.parse(await readFile(sourcePath, "utf8")) as OpenApiContract;
-const canonicalExamples = readCanonicalExamples(source);
-const examples = { ...canonicalExamples, ...extraExamples() };
+const examples = { ...readCanonicalExamples(source), ...extraExamples() };
 const frames = buildFrames(examples);
-const apifox = buildPostmanCollection(frames, examples);
-const apifoxOpenApi = buildApifoxOpenApi(source, frames, examples);
-const generatedApifox = `${JSON.stringify(apifox, null, 2)}\n`;
-const generatedApifoxOpenApi = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
+const catalog = buildMessageCatalog(frames, examples);
+const apifoxOpenApi = buildRealOpenApi(source, catalog);
+const tester = buildTesterHtml(catalog);
+
+const generatedCatalog = `${JSON.stringify(catalog, null, 2)}\n`;
+const generatedOpenApi = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
+const generatedTester = `${tester.trimEnd()}\n`;
 
 if (writeMode) {
-    await mkdir(dirname(apifoxPath), { recursive: true });
-    await writeFile(apifoxPath, generatedApifox, "utf8");
-    await writeFile(apifoxOpenApiPath, generatedApifoxOpenApi, "utf8");
-    console.log(`wrote ${apifoxPath}`);
+    await mkdir(dirname(messageCatalogPath), { recursive: true });
+    await writeFile(messageCatalogPath, generatedCatalog, "utf8");
+    await writeFile(apifoxOpenApiPath, generatedOpenApi, "utf8");
+    await writeFile(testerPath, generatedTester, "utf8");
+    console.log(`wrote ${messageCatalogPath}`);
     console.log(`wrote ${apifoxOpenApiPath}`);
+    console.log(`wrote ${testerPath}`);
 } else {
-    await assertGenerated(apifoxPath, generatedApifox);
-    await assertGenerated(apifoxOpenApiPath, generatedApifoxOpenApi);
-    console.log(`ok ${apifoxPath}`);
+    await assertGenerated(messageCatalogPath, generatedCatalog);
+    await assertGenerated(apifoxOpenApiPath, generatedOpenApi);
+    await assertGenerated(testerPath, generatedTester);
+    console.log(`ok ${messageCatalogPath}`);
     console.log(`ok ${apifoxOpenApiPath}`);
+    console.log(`ok ${testerPath}`);
 }
 
 function readCanonicalExamples(contract: OpenApiContract): Record<string, JsonRecord> {
@@ -146,194 +152,258 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
     ];
 }
 
-function buildPostmanCollection(frames: FrameExample[], examples: Record<string, JsonRecord>): JsonRecord {
-    const folders = Array.from(new Set(frames.map((frame) => frame.folder))).map((folder) => ({
-        name: folder,
-        item: frames
-            .filter((frame) => frame.folder === folder)
-            .map((frame) => postmanItem(frame, examples)),
+function buildMessageCatalog(frames: FrameExample[], examples: Record<string, JsonRecord>): JsonRecord {
+    const messages = frames.map((frame) => ({
+        direction: frame.direction,
+        expected: frame.expected ?? [],
+        folder: frame.folder,
+        name: frame.name,
+        schema: schemaForEnvelope(frame.value),
+        type: frame.value.type,
+        value: frame.value,
     }));
-
     return {
+        name: "Flyflor WebSocket Message Catalog",
+        version: source.info?.version ?? "1.0.0",
+        realEndpoint: {
+            health: "http://127.0.0.1:8788/health",
+            websocket: "ws://127.0.0.1:8788/ws",
+        },
+        usage: [
+            "运行 `bun run socket` 启动 Flyflor。",
+            "在 Apifox 或浏览器客户端创建真实 WebSocket 请求：ws://127.0.0.1:8788/ws。",
+            "把本目录 client->server message 的 value 作为 raw JSON WebSocket 消息发送。",
+            "不要创建辅助 HTTP 发送接口；Flyflor 的真实服务面只有 /health 和 /ws。",
+        ],
+        groups: Array.from(new Set(frames.map((frame) => frame.folder))).map((folder) => ({
+            name: folder,
+            messages: messages.filter((message) => message.folder === folder).map((message) => message.name),
+        })),
+        messages,
+        examples,
+    };
+}
+
+function buildRealOpenApi(contract: OpenApiContract, catalog: JsonRecord): JsonRecord {
+    return {
+        openapi: "3.0.3",
         info: {
-            name: "Flyflor Socket WS Examples",
+            title: "Flyflor 真实 WebSocket 接口",
+            version: contract.info?.version ?? "1.0.0",
             description:
-                "Postman Collection v2.1 import file for Apifox. Each item is a WebSocket frame example; use the request body as the raw JSON sent to ws://127.0.0.1:8788/ws.",
-            schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-            _postman_id: "flyflor-socket-ws-examples",
+                "给前端联调用的真实 Flyflor HTTP/WebSocket 服务面。真实路径只有 /health 和 /ws；WebSocket 消息示例在 flyflor.socket.messages.json。",
         },
-        item: folders,
-        variable: [
-            { key: "http_origin", value: "http://127.0.0.1:8788", type: "string" },
-        ],
+        servers: normalizeServers(contract.servers),
+        paths: {
+            "/health": buildHealthPath(),
+            "/ws": buildWsPath(catalog, contract),
+        },
+        components: {
+            schemas: {
+                HealthResponse: {
+                    type: "object",
+                    required: ["ok"],
+                    properties: { ok: { type: "boolean" } },
+                    additionalProperties: false,
+                },
+                WebSocketClientMessage:
+                    contract.components?.schemas?.["ClientToServerEnvelope"] ?? schemaForCatalogMessages(catalog, "client->server"),
+                WebSocketServerMessage:
+                    contract.components?.schemas?.["ServerToClientEnvelope"] ?? schemaForCatalogMessages(catalog, "server->client"),
+            },
+        },
+        "x-flyflor-message-catalog": "flyflor.socket.messages.json",
+        "x-flyflor-real-surface": ["/health", "/ws"],
     };
 }
 
-function postmanItem(frame: FrameExample, examples: Record<string, JsonRecord>): JsonRecord {
-    const direction = frame.direction === "client->server" ? "send" : "expect";
-    const docPath = ["__apifox", "ws", direction, kebab(frame.name)];
+function buildHealthPath(): JsonRecord {
     return {
-        name: `${frame.direction === "client->server" ? "Frame 示例-发送" : "Frame 示例-期望"} / ${frame.name}`,
-        request: {
-            method: "POST",
-            header: [
-                {
-                    key: "Content-Type",
-                    value: "application/json",
-                    type: "text",
-                },
-            ],
-            body: {
-                mode: "raw",
-                raw: JSON.stringify(frame.value, null, 2),
-                options: {
-                    raw: {
-                        language: "json",
-                    },
-                },
-            },
-            url: {
-                raw: `http://127.0.0.1:8788/${docPath.join("/")}`,
-                protocol: "http",
-                host: ["127", "0", "0", "1"],
-                port: "8788",
-                path: docPath,
-            },
-            description: [
-                "真实 WebSocket 地址：ws://127.0.0.1:8788/ws",
-                `Direction: ${frame.direction}`,
-                `Example name: ${frame.name}`,
-                "这个 HTTP 请求只是 Apifox/Postman 导入承载项，不是真实服务接口。不要点这里的发送；请复制 Body raw JSON 到 Apifox 的 WebSocket message editor 发送。",
-            ].join("\n"),
-        },
-        response: (frame.expected ?? []).map((name) => postmanResponse(name, examples[name], frame)),
-        event: [
-            {
-                listen: "test",
-                script: {
-                    type: "text/javascript",
-                    exec: [
-                        "// Import carrier only. Real verification happens on the WebSocket /ws connection.",
-                        "pm.test('Flyflor WS frame example is present', function () {",
-                        "  pm.expect(pm.request.body.raw).to.be.a('string');",
-                        "});",
-                    ],
-                },
-            },
-        ],
-        protocolProfileBehavior: {
-            disableBodyPruning: true,
-        },
-    };
-}
-
-function postmanResponse(name: string, body: JsonRecord | undefined, frame: FrameExample): JsonRecord {
-    return {
-        name,
-        originalRequest: {
-            method: "POST",
-            header: [{ key: "Content-Type", value: "application/json", type: "text" }],
-            body: {
-                mode: "raw",
-                raw: JSON.stringify(frame.value, null, 2),
-                options: { raw: { language: "json" } },
-            },
-            url: {
-                raw: `http://127.0.0.1:8788/__apifox/ws/${frame.direction === "client->server" ? "send" : "expect"}/${kebab(frame.name)}`,
-                protocol: "http",
-                host: ["127", "0", "0", "1"],
-                port: "8788",
-                path: ["__apifox", "ws", frame.direction === "client->server" ? "send" : "expect", kebab(frame.name)],
-            },
-        },
-        status: "OK",
-        code: 200,
-        header: [{ key: "Content-Type", value: "application/json" }],
-        body: JSON.stringify(body ?? {}, null, 2),
-    };
-}
-
-function buildApifoxOpenApi(
-    contract: OpenApiContract,
-    frames: FrameExample[],
-    examples: Record<string, JsonRecord>,
-): JsonRecord {
-    const paths: JsonRecord = {
-        "/health": contract.paths?.["/health" as keyof typeof contract.paths],
-        "/ws": contract.paths?.["/ws" as keyof typeof contract.paths],
-    };
-
-    for (const frame of frames) {
-        const path = `/__apifox/ws/${frame.direction === "client->server" ? "send" : "expect"}/${kebab(frame.name)}`;
-        paths[path] = {
-            post: {
-                tags: [frame.folder],
-                summary: `${frame.direction === "client->server" ? "WS send" : "WS expected"}: ${frame.name}`,
-                description:
-                    "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
-                operationId: `apifox${frame.direction === "client->server" ? "Send" : "Expect"}${frame.name}`,
-                requestBody: {
-                    required: true,
+        get: {
+            tags: ["真实服务面"],
+            summary: "健康检查",
+            description: "真实 HTTP endpoint。它不触发 runtime thinking 或 context assembly。",
+            operationId: "getHealth",
+            responses: {
+                "200": {
+                    description: "Socket process is alive.",
                     content: {
                         "application/json": {
                             schema: {
-                                $ref: `#/components/schemas/${frame.name}Frame`,
+                                type: "object",
+                                required: ["ok"],
+                                properties: { ok: { type: "boolean" } },
+                                additionalProperties: false,
                             },
-                            examples: {
-                                [frame.name]: {
-                                    value: frame.value,
-                                },
-                            },
+                            example: { ok: true },
                         },
                     },
                 },
-                responses: {
-                    "200": {
-                        description: "Doc-only expected WebSocket frame examples.",
-                        content: {
-                            "application/json": {
-                                schema: {
-                                    oneOf: (frame.expected ?? [frame.name])
-                                        .filter((name) => examples[name])
-                                        .map((name) => ({ $ref: `#/components/schemas/${name}Frame` })),
-                                },
-                                examples: Object.fromEntries(
-                                    (frame.expected ?? [frame.name])
-                                        .filter((name) => examples[name])
-                                        .map((name) => [name, { value: examples[name] }]),
-                                ),
-                            },
-                        },
-                    },
-                },
-                "x-apifox-folder": frame.folder,
-                "x-flyflor-doc-only": true,
-                "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
-                "x-flyflor-direction": frame.direction,
             },
-        };
-    }
-
-    return {
-        openapi: "3.1.0",
-        info: {
-            title: "Flyflor Apifox WS Example View",
-            version: contract.info?.version ?? "1.0.0",
-            description:
-                "Apifox-only expanded view for WebSocket frame testing. The canonical service contract is docs/openapi/flyflor.socket.openapi.json and still exposes only /health and /ws.",
         },
-        servers: contract.servers,
-        tags: Array.from(new Set(frames.map((frame) => frame.folder))).map((name) => ({ name })),
-        paths,
-        components: {
-            examples: Object.fromEntries(Object.entries(examples).map(([name, value]) => [name, { value }])),
-            schemas: Object.fromEntries(
-                Object.entries(examples).map(([name, value]) => [`${name}Frame`, schemaForEnvelope(value)]),
+    };
+}
+
+function buildWsPath(catalog: JsonRecord, contract: OpenApiContract): JsonRecord {
+    const sendMessages = Array.isArray(catalog.messages)
+        ? catalog.messages.filter((message): message is JsonRecord => isRecord(message) && message.direction === "client->server")
+        : [];
+    const serverMessages = Array.isArray(catalog.messages)
+        ? catalog.messages.filter((message): message is JsonRecord => isRecord(message) && message.direction === "server->client")
+        : [];
+    return {
+        get: {
+            tags: ["真实服务面"],
+            summary: "WebSocket 连接入口",
+            description:
+                "真实 WebSocket endpoint。连接 ws://127.0.0.1:8788/ws，并发送 flyflor.socket.messages.json 里的 raw JSON frame。Apifox 里必须新建 WebSocket 请求，不要用 HTTP 请求模拟。",
+            operationId: "connectWebSocket",
+            responses: {
+                "101": {
+                    description: "Switching Protocols. The server sends server.hello immediately after upgrade.",
+                },
+                "400": readWsResponse(contract, "400"),
+                "401": readWsResponse(contract, "401"),
+                "503": readWsResponse(contract, "503"),
+            },
+            "x-flyflor-websocket-url": "ws://127.0.0.1:8788/ws",
+            "x-flyflor-client-message-examples": Object.fromEntries(
+                sendMessages.map((message) => [String(message.name), message.value]),
+            ),
+            "x-flyflor-server-message-examples": Object.fromEntries(
+                serverMessages.map((message) => [String(message.name), message.value]),
             ),
         },
-        "x-flyflor-canonical-openapi": "../openapi/flyflor.socket.openapi.json",
-        "x-flyflor-real-surface": ["/health", "/ws"],
     };
+}
+
+function schemaForCatalogMessages(catalog: JsonRecord, direction: string): JsonSchema {
+    const messages = Array.isArray(catalog.messages)
+        ? catalog.messages.filter((message): message is JsonRecord => isRecord(message) && message.direction === direction)
+        : [];
+    return {
+        oneOf: messages
+            .map((message) => message.schema)
+            .filter((schema): schema is JsonSchema => isRecord(schema)),
+    };
+}
+
+function readWsResponse(contract: OpenApiContract, status: string): unknown {
+    const wsPath = contract.paths?.["/ws"];
+    if (!isRecord(wsPath)) return undefined;
+    const get = wsPath.get;
+    if (!isRecord(get) || !isRecord(get.responses)) return undefined;
+    return get.responses[status];
+}
+
+function buildTesterHtml(catalog: JsonRecord): string {
+    const embeddedCatalog = JSON.stringify(catalog);
+    return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flyflor WebSocket Tester</title>
+  <style>
+    body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f6f7fb; }
+    header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #dfe3ea; }
+    main { display: grid; grid-template-columns: 280px 1fr; gap: 16px; padding: 16px; }
+    button, select, input, textarea { font: inherit; }
+    button { border: 1px solid #b8c0cc; background: #fff; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+    button.primary { color: #fff; background: #6750e8; border-color: #6750e8; }
+    aside, section { background: #fff; border: 1px solid #dfe3ea; border-radius: 8px; }
+    aside { padding: 12px; }
+    section { padding: 14px; }
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    input { flex: 1; border: 1px solid #c9d0dc; border-radius: 6px; padding: 8px; }
+    select { width: 100%; border: 1px solid #c9d0dc; border-radius: 6px; padding: 8px; margin-bottom: 10px; }
+    textarea { width: 100%; min-height: 360px; box-sizing: border-box; border: 1px solid #c9d0dc; border-radius: 6px; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    pre { min-height: 240px; max-height: 420px; overflow: auto; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 12px; }
+    .status { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Flyflor WebSocket Tester</strong>
+    <span>真实连接：ws://127.0.0.1:8788/ws</span>
+  </header>
+  <main>
+    <aside>
+      <label>消息示例</label>
+      <select id="messageSelect"></select>
+      <button id="loadButton">载入示例</button>
+    </aside>
+    <section>
+      <div class="row">
+        <input id="urlInput" value="ws://127.0.0.1:8788/ws">
+        <button id="connectButton" class="primary">连接</button>
+        <button id="closeButton">断开</button>
+        <span id="status" class="status">未连接</span>
+      </div>
+      <textarea id="bodyInput"></textarea>
+      <div class="row">
+        <button id="sendButton" class="primary">发送 WebSocket 消息</button>
+        <button id="clearButton">清空日志</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+  <script>
+    const catalog = ${embeddedCatalog};
+    let socket = null;
+    const select = document.querySelector("#messageSelect");
+    const body = document.querySelector("#bodyInput");
+    const log = document.querySelector("#log");
+    const status = document.querySelector("#status");
+    const clientMessages = catalog.messages.filter((message) => message.direction === "client->server");
+    for (const message of clientMessages) {
+      const option = document.createElement("option");
+      option.value = message.name;
+      option.textContent = message.folder + " / " + message.name;
+      select.appendChild(option);
+    }
+    function append(prefix, value) {
+      log.textContent += "[" + new Date().toLocaleTimeString() + "] " + prefix + " " + value + "\\n";
+      log.scrollTop = log.scrollHeight;
+    }
+    function loadSelected() {
+      const message = clientMessages.find((item) => item.name === select.value) || clientMessages[0];
+      body.value = JSON.stringify(message.value, null, 2);
+    }
+    document.querySelector("#loadButton").onclick = loadSelected;
+    document.querySelector("#connectButton").onclick = () => {
+      socket = new WebSocket(document.querySelector("#urlInput").value);
+      socket.onopen = () => { status.textContent = "已连接"; append("open", "connected"); };
+      socket.onclose = (event) => { status.textContent = "已断开"; append("close", event.code + " " + event.reason); };
+      socket.onerror = () => append("error", "websocket error");
+      socket.onmessage = (event) => append("recv", event.data);
+    };
+    document.querySelector("#closeButton").onclick = () => socket && socket.close();
+    document.querySelector("#sendButton").onclick = () => {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        append("error", "not connected");
+        return;
+      }
+      socket.send(body.value);
+      append("send", body.value);
+    };
+    document.querySelector("#clearButton").onclick = () => { log.textContent = ""; };
+    loadSelected();
+  </script>
+</body>
+</html>`;
+}
+
+function normalizeServers(servers: unknown[] | undefined): Array<{ url: string; description?: string }> {
+    if (!Array.isArray(servers)) {
+        return [{ url: "http://127.0.0.1:8788", description: "Local Flyflor socket service" }];
+    }
+    return servers
+        .filter(isRecord)
+        .map((server) => ({
+            url: typeof server.url === "string" ? server.url : "http://127.0.0.1:8788",
+            description: typeof server.description === "string" ? server.description : undefined,
+        }));
 }
 
 function schemaForEnvelope(value: JsonRecord): JsonSchema {
@@ -349,22 +419,14 @@ function schemaForEnvelope(value: JsonRecord): JsonSchema {
             properties[key] = schemaForJson(item, 0);
         }
     }
-    return {
-        type: "object",
-        required,
-        properties,
-        additionalProperties: false,
-    };
+    return { type: "object", required, properties, additionalProperties: false };
 }
 
 function schemaForJson(value: unknown, depth: number): JsonSchema {
     if (value === null) return { type: "null" };
     if (Array.isArray(value)) {
         const first = value.find((item) => item !== null);
-        return {
-            type: "array",
-            items: first === undefined || depth > 6 ? {} : schemaForJson(first, depth + 1),
-        };
+        return { type: "array", items: first === undefined || depth > 6 ? {} : schemaForJson(first, depth + 1) };
     }
     if (typeof value === "object") {
         if (depth > 6) return { type: "object", additionalProperties: true };
@@ -413,14 +475,8 @@ function frame(
         expected,
         folder,
         name,
-        summary: readSummary(value),
         value,
     };
-}
-
-function readSummary(value: JsonRecord): string {
-    const type = typeof value.type === "string" ? value.type : "http";
-    return `${type} example`;
 }
 
 function extraExamples(): Record<string, JsonRecord> {
@@ -724,10 +780,6 @@ function ws(id: string, type: string, requestId: string, payload: unknown, corre
         ...(correlationId ? { correlationId } : {}),
         payload,
     };
-}
-
-function kebab(value: string): string {
-    return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 async function assertGenerated(path: string, expected: string): Promise<void> {

@@ -92,9 +92,9 @@ class AskingModel implements ModelClient {
     public async generate(): Promise<string> {
         return [
             "I need clarification.",
-            "<flyflor_agent_ask>",
+            "<agent_question>",
             JSON.stringify({ reason: AskReason.UserIntentUnclear, prompt: this.askPrompt }),
-            "</flyflor_agent_ask>",
+            "</agent_question>",
         ].join("\n");
     }
 }

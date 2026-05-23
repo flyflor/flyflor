@@ -8,9 +8,7 @@ import type { Database } from "bun:sqlite";
  */
 export class BrainSchema {
     public install(db: Database): void {
-        this.installCompatibilityMigrations(db);
-        this.addMemoryEventCoreColumns(db);
-        this.addOwnerSourceColumns(db);
+        this.resetLegacyRuntimeTables(db);
         db.exec(`
             CREATE TABLE IF NOT EXISTS memory_events (
                 id TEXT PRIMARY KEY,
@@ -181,55 +179,142 @@ export class BrainSchema {
         `);
     }
 
-    private installCompatibilityMigrations(db: Database): void {
-        this.renameProjectsTable(db);
-        this.renameCodenameScopeColumn(db);
-        this.renameTaskPlanReplayColumn(db);
-        this.renameReplayRecordsTable(db);
+    /**
+     * Legacy brain.db data is not carried across the release-seal boundary.
+     * If an old table/column shape is detected, clear the runtime ledger tables
+     * and let the canonical DDL below recreate an empty current schema.
+     */
+    private resetLegacyRuntimeTables(db: Database): void {
+        if (!this.hasLegacyRuntimeSchema(db)) return;
+        db.exec("PRAGMA foreign_keys = OFF;");
+        for (const table of [
+            "memory_links",
+            "memory_state",
+            "memory_events",
+            "memory_summary",
+            "memory_eq_state",
+            "task_plans",
+            "context_forks",
+            "replay_records",
+            "scene_records",
+            "codenames",
+            "scopes",
+            "projects",
+            "brain_meta",
+        ]) {
+            db.exec(`DROP TABLE IF EXISTS ${table};`);
+        }
+        db.exec("PRAGMA foreign_keys = ON;");
     }
 
-    private addOwnerSourceColumns(db: Database): void {
-        for (const table of ["memory_eq_state", "task_plans", "context_forks", "replay_records"]) {
-            if (!this.tableExists(db, table)) continue;
-            const columns = db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((row) => row.name);
-            if (!columns.includes("owner_key")) {
-                db.exec(`ALTER TABLE ${table} ADD COLUMN owner_key TEXT;`);
-                db.exec(`UPDATE ${table} SET owner_key = 'record:' || rowid WHERE owner_key IS NULL;`);
-            }
-            if (!columns.includes("source_key")) {
-                db.exec(`ALTER TABLE ${table} ADD COLUMN source_key TEXT;`);
-            }
-        }
+    public hasLegacyRuntimeSchema(db: Database): boolean {
+        if (this.tableExists(db, "projects") || this.tableExists(db, "scene_records")) return true;
+        if (this.hasLegacyColumns(db, "memory_events", [
+            "id",
+            "ts",
+            "time_bucket",
+            "owner_key",
+            "source_key",
+            "source_surface",
+            "codename_id",
+            "type",
+            "role",
+            "content",
+            "parent_id",
+            "embedding_id",
+            "importance",
+        ])) return true;
+        if (this.hasLegacyColumns(db, "codenames", [
+            "id",
+            "name",
+            "working_dir",
+            "description",
+            "created_at",
+            "last_used_at",
+            "use_count",
+            "scope_id",
+        ])) return true;
+        if (this.hasLegacyColumns(db, "scopes", [
+            "id",
+            "title",
+            "goal",
+            "project_dir",
+            "project_memory_dir",
+            "created_at",
+            "updated_at",
+            "last_used_at",
+            "use_count",
+        ])) return true;
+        if (this.hasLegacyColumns(db, "memory_eq_state", [
+            "owner_key",
+            "source_key",
+            "valence",
+            "arousal",
+            "dominance",
+            "label",
+            "confidence",
+            "updated_at",
+        ])) return true;
+        if (this.hasLegacyColumns(db, "task_plans", [
+            "id",
+            "owner_key",
+            "source_key",
+            "title",
+            "summary",
+            "status",
+            "progress",
+            "step_count",
+            "completed_step_count",
+            "steps_json",
+            "created_at",
+            "updated_at",
+            "source_event_id",
+            "source_ask_id",
+            "source_blackboard_turn_id",
+            "source_replay_id",
+        ])) return true;
+        if (this.hasLegacyColumns(db, "context_forks", [
+            "id",
+            "owner_key",
+            "source_key",
+            "parent_id",
+            "title",
+            "summary",
+            "scope_summary",
+            "max_context_tokens",
+            "inherited_event_ids_json",
+            "created_at",
+            "updated_at",
+            "source_event_id",
+            "source_ask_id",
+            "source_blackboard_turn_id",
+        ])) return true;
+        return this.hasLegacyColumns(db, "replay_records", [
+            "id",
+            "owner_key",
+            "source_key",
+            "kind",
+            "title",
+            "summary",
+            "detail",
+            "visible_facts_json",
+            "open_questions_json",
+            "task_plan_id",
+            "context_fork_id",
+            "blackboard_turn_id",
+            "source_event_id",
+            "created_at",
+            "updated_at",
+        ]);
     }
 
-    private addMemoryEventCoreColumns(db: Database): void {
-        if (!this.tableExists(db, "memory_events")) return;
-        const columns = db.query<{ name: string }, []>("PRAGMA table_info(memory_events)").all().map((row) => row.name);
-        if (!columns.includes("codename_id")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN codename_id TEXT;");
+    private hasLegacyColumns(db: Database, table: string, canonicalColumns: string[]): boolean {
+        if (!this.tableExists(db, table)) return false;
+        const columns = this.columns(db, table);
+        if (["user_id", "channel_id", "project_id", "legacy_source_key", "audit_source_key", "source_scene_id"].some((name) => columns.includes(name))) {
+            return true;
         }
-        if (!columns.includes("owner_key")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN owner_key TEXT;");
-            db.exec("UPDATE memory_events SET owner_key = id WHERE owner_key IS NULL;");
-        }
-        if (!columns.includes("source_key")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN source_key TEXT;");
-        }
-        if (!columns.includes("source_surface")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN source_surface TEXT;");
-        }
-        if (!columns.includes("role")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN role TEXT;");
-        }
-        if (!columns.includes("parent_id")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN parent_id TEXT;");
-        }
-        if (!columns.includes("embedding_id")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN embedding_id TEXT;");
-        }
-        if (!columns.includes("importance")) {
-            db.exec("ALTER TABLE memory_events ADD COLUMN importance REAL NOT NULL DEFAULT 0.5;");
-        }
+        return canonicalColumns.some((name) => !columns.includes(name));
     }
 
     private tableExists(db: Database, table: string): boolean {
@@ -239,53 +324,10 @@ export class BrainSchema {
         return Boolean(row);
     }
 
-    private renameTaskPlanReplayColumn(db: Database): void {
-        const columns = db.query<{ name: string }, []>("PRAGMA table_info(task_plans)").all().map((row) => row.name);
-        if (columns.includes("source_replay_id")) return;
-        if (columns.includes("source_scene_id")) {
-            db.exec("ALTER TABLE task_plans RENAME COLUMN source_scene_id TO source_replay_id;");
-        }
+    private columns(db: Database, table: string): string[] {
+        return db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((row) => row.name);
     }
 
-    private renameProjectsTable(db: Database): void {
-        const tables = db
-            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
-            .all()
-            .map((row) => row.name);
-        if (tables.includes("projects") && !tables.includes("scopes")) {
-            db.exec("ALTER TABLE projects RENAME TO scopes;");
-        }
-    }
-
-    private renameCodenameScopeColumn(db: Database): void {
-        if (!this.tableExists(db, "codenames")) return;
-        const columns = db.query<{ name: string }, []>("PRAGMA table_info(codenames)").all().map((row) => row.name);
-        if (columns.includes("project_id") && !columns.includes("scope_id")) {
-            db.exec("ALTER TABLE codenames RENAME COLUMN project_id TO scope_id;");
-        }
-    }
-
-    private renameReplayRecordsTable(db: Database): void {
-        const tables = db
-            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
-            .all()
-            .map((row) => row.name);
-        if (tables.includes("scene_records")) {
-            if (!tables.includes("replay_records")) {
-                db.exec("ALTER TABLE scene_records RENAME TO replay_records;");
-            }
-        }
-        const indexes = db
-            .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'index'")
-            .all()
-            .map((row) => row.name);
-        if (indexes.includes("idx_scene_records_source_event")) {
-            db.exec("DROP INDEX idx_scene_records_source_event;");
-        }
-        if (indexes.includes("idx_scene_records_blackboard")) {
-            db.exec("DROP INDEX idx_scene_records_blackboard;");
-        }
-    }
 }
 
 export const brainSchema = new BrainSchema();

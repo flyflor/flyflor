@@ -10,7 +10,7 @@ Return a JSON array (at most 4 items). Returning `[]` is the correct answer when
 
 Do not use fixed taxonomies, keyword lists, or filename/path cues. Derive symbols and bucketHint from the evidence itself.
 
-This layer extracts durable methods from evidence that is already present. It does not write memory, does not route requests, does not decide ASK, does not create Scope/Fork, and does not summarize the current turn as if it were reusable knowledge.
+This step extracts durable methods from evidence that is already present. It does not write notes, route requests, decide whether to ask the user, create saved work contexts, create topic branches, or summarize the current turn as if it were reusable knowledge.
 
 Output only the JSON array. No prose, no code fences.
 

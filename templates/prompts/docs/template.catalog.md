@@ -12,7 +12,7 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; ca
 - `templates/prompts/` - built-in runtime templates
 - `templates/prompts/docs/` - docs renderer templates, not runtime prompts
 - `scripts/install.templates.ts` - install into the config directory
-- `~/.flyflor/.config/prompts/` - user override directory
+- user config prompt directory - optional override directory
 
 ## Bundle Version
 
@@ -36,7 +36,7 @@ All model-facing instructions live in `templates/prompts/`, grouped by topic; ca
 | `memoryHotCompress` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | `episodes` |
 | `memoryContext` | `memory.context.md` | `renderMemoryPrompt` | `hippocampus` / `markdownContent` / `retrievedResults` / `scopeMemory` |
 | `memoryDream` | `memory.dream.md` | `DreamWorker` | `candidates` / `ownerKey` |
-| `memoryScopeOffer` | `memory.scope.offer.md` | `renderScopeOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memoryWorkContextOffer` | `memory.scope.offer.md` | `renderWorkContextOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
 | `memorySkillOffer` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
 | `mcpContext` | `mcp.context.md` | `renderMcpContextPrompt` | `mcpEntries` |
 | `mcpToolBudgetExhausted` | `mcp.tool.budget.exhausted.md` | `renderMcpToolBudgetExhaustedPrompt` | — |
@@ -68,7 +68,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/.config/prompts/"]
+    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["user config prompt directory"]
     Userdir -- runtime override --> Render["render functions"]
     Builtin -- canonical --> Render
 ```

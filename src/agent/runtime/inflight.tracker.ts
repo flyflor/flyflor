@@ -37,7 +37,10 @@ export class InFlightTracker {
     }
 
     public async markEnd(requestId: string): Promise<void> {
-        await unlink(this.fileFor(requestId));
+        await unlink(this.fileFor(requestId)).catch((error) => {
+            if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+            throw error;
+        });
     }
 
     public async recoverOrphans(): Promise<InFlightRecord[]> {

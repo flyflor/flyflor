@@ -120,6 +120,8 @@ Flyflor 当前活跃设计可以理解成四个彼此协作的认知器官：
 
 Scope Vector 是 Scope-local graph/tree/vector index：默认落在每个 Scope 的 `<scope.projectDir>/.flyflor/scope.db`，保留 scope / fork / recall 之间的稳定连边、记忆树节点、热区项目记忆和多维关联词索引。它是上下文装备索引，不是生命账本，也不承担 prompt 原文容器职责。
 
+自然语言提起 Scope 时，第一层不是向量命中，而是 LLM 语义门控。Runtime 先发布 `scope.recall.started`（用户面“回忆中”），再把候选 Scope、codename 和 scope.db 摘要交给 `ScopeRecallComponent` 判断 `none | load | ask`。只有 `load` 会进入 activeScope 装配；不确定或冲突时必须 ASK。
+
 它不是：
 
 - prompt 热区本体

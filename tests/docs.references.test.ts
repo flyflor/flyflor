@@ -35,17 +35,23 @@ type OpenApiSchema = {
     required?: string[];
 };
 
-type PostmanCollectionItem = {
-    item?: PostmanCollectionItem[];
-    name?: string;
-    request?: {
-        body?: {
-            raw?: string;
-        };
-        url?: {
-            raw?: string;
-        };
+type SocketMessageCatalog = {
+    realEndpoint?: {
+        health?: string;
+        websocket?: string;
     };
+    groups?: Array<{ name?: string; messages?: string[] }>;
+    messages?: SocketCatalogMessage[];
+};
+
+type SocketCatalogMessage = {
+    direction?: string;
+    expected?: string[];
+    folder?: string;
+    name?: string;
+    schema?: OpenApiSchema;
+    type?: string;
+    value?: unknown;
 };
 
 describe("documentation references", () => {
@@ -359,16 +365,8 @@ describe("documentation references", () => {
             limit: 20,
         });
         expect(readGatewayControlMessageInput(readExamplePayloadRecord(examples, "GatewayMessageSend"))).toMatchObject({
-            context: {
-                activeScope: {
-                    id: "scope-1",
-                    projectDir: "/workspace/project",
-                    projectMemoryDir: "/workspace/project/.flyflor/memory",
-                },
-                contextForkId: "fork-1",
-                skillNames: ["review"],
-            },
-            text: "继续推进这个 Scope",
+            context: undefined,
+            text: "你好，请用一句话回复。",
             user: {
                 id: "external-actor-1",
             },
@@ -384,28 +382,28 @@ describe("documentation references", () => {
         });
     });
 
-    test("Apifox WS example artifacts expand every TUI socket frame without changing the real HTTP surface", async () => {
+    test("Apifox WS artifacts expose only real socket entrypoints and a usable message catalog", async () => {
         const canonicalText = await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.json")).text();
         const canonical = JSON.parse(canonicalText) as {
             components?: { examples?: Record<string, { value?: unknown }> };
             paths?: Record<string, unknown>;
         };
-        const apifoxText = await Bun.file(join(REPO_ROOT, "docs", "apifox", "flyflor.socket.apifox.json")).text();
+        const catalogText = await Bun.file(join(REPO_ROOT, "docs", "apifox", "flyflor.socket.messages.json")).text();
         const apifoxOpenApiText = await Bun.file(
             join(REPO_ROOT, "docs", "apifox", "flyflor.socket.apifox.openapi.json"),
         ).text();
-        const apifox = JSON.parse(apifoxText) as {
-            info?: { schema?: string };
-            item?: PostmanCollectionItem[];
-        };
+        const testerHtml = await Bun.file(join(REPO_ROOT, "docs", "apifox", "flyflor.socket.tester.html")).text();
+        const catalog = JSON.parse(catalogText) as SocketMessageCatalog;
         const apifoxOpenApi = JSON.parse(apifoxOpenApiText) as {
             components?: { schemas?: Record<string, OpenApiSchema> };
             paths?: Record<string, unknown>;
             "x-flyflor-real-surface"?: string[];
+            "x-flyflor-message-catalog"?: string;
         };
         const canonicalPaths = Object.keys(canonical.paths ?? {}).sort();
-        const apifoxItems = flattenPostmanItems(apifox.item ?? []);
-        const apifoxItemNames = apifoxItems.map((item) => item.name).filter((name): name is string => typeof name === "string");
+        const apifoxPaths = Object.keys(apifoxOpenApi.paths ?? {}).sort();
+        const messages = catalog.messages ?? [];
+        const messageNames = messages.map((message) => message.name).filter((name): name is string => typeof name === "string");
         const expectedExamples = [
             "AskDetailGet",
             "AskDetailSnapshot",
@@ -447,29 +445,31 @@ describe("documentation references", () => {
         ];
 
         expect(canonicalPaths).toEqual(["/health", "/ws"]);
-        expect(apifox.info?.schema).toBe("https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
-        expect(apifoxItems.length).toBeGreaterThanOrEqual(55);
-        for (const name of expectedExamples) {
-            expect(apifoxItemNames.some((itemName) => itemName.endsWith(`/ ${name}`))).toBe(true);
-            expect(apifoxOpenApi.components?.schemas).toHaveProperty(`${name}Frame`);
-        }
-
-        const apifoxPaths = Object.keys(apifoxOpenApi.paths ?? {});
-        expect(apifoxPaths).toContain("/health");
-        expect(apifoxPaths).toContain("/ws");
-        expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/send/history-detail-get"))).toBe(true);
-        expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/send/scope-detail-get"))).toBe(true);
-        expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/expect/thought-snapshot"))).toBe(true);
+        expect(apifoxPaths).toEqual(["/health", "/ws"]);
         expect(apifoxOpenApi["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
-
-        const sendItems = apifoxItems.filter((item) => item.name?.startsWith("Frame 示例-发送 / "));
-        expect(sendItems.length).toBeGreaterThan(0);
-        for (const item of sendItems) {
-            expect(item.request?.url?.raw).toStartWith("http://127.0.0.1:8788/__apifox/ws/send/");
-            const raw = item.request?.body?.raw;
-            expect(typeof raw).toBe("string");
-            expect(() => parseGatewayControlEnvelope(raw ?? "")).not.toThrow();
+        expect(apifoxOpenApi["x-flyflor-message-catalog"]).toBe("flyflor.socket.messages.json");
+        expect(catalog.realEndpoint?.health).toBe("http://127.0.0.1:8788/health");
+        expect(catalog.realEndpoint?.websocket).toBe("ws://127.0.0.1:8788/ws");
+        expect(messages.length).toBeGreaterThanOrEqual(55);
+        for (const name of expectedExamples) {
+            expect(messageNames).toContain(name);
         }
+
+        const clientMessages = messages.filter((message) => message.direction === "client->server");
+        expect(clientMessages.map((message) => message.name)).toContain("GatewayMessageSend");
+        expect(clientMessages.map((message) => message.name)).toContain("HistoryList");
+        expect(clientMessages.map((message) => message.name)).toContain("ScopeDetailGet");
+        expect(clientMessages.map((message) => message.name)).toContain("ThoughtDetailGet");
+        expect(clientMessages.map((message) => message.name)).toContain("EventSubscribe");
+        for (const message of clientMessages) {
+            expect(() => parseGatewayControlEnvelope(JSON.stringify(message.value))).not.toThrow();
+        }
+
+        expect(catalogText).not.toContain("__apifox");
+        expect(apifoxOpenApiText).not.toContain("__apifox");
+        expect(testerHtml).not.toContain("__apifox");
+        expect(testerHtml).toContain("new WebSocket");
+        expect(testerHtml).toContain("ws://127.0.0.1:8788/ws");
     });
 
     test("bilingual Apifox scenario docs cover the real socket flow", async () => {
@@ -614,10 +614,6 @@ function readExampleEventType(examples: Record<string, { value?: unknown }>, nam
     const payload = readExamplePayload(examples, name);
     if (!isRecord(payload) || !isRecord(payload.event)) return undefined;
     return typeof payload.event.type === "string" ? payload.event.type : undefined;
-}
-
-function flattenPostmanItems(items: PostmanCollectionItem[]): PostmanCollectionItem[] {
-    return items.flatMap((item) => (item.item ? flattenPostmanItems(item.item) : [item]));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

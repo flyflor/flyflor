@@ -120,8 +120,8 @@ export interface FocusPointer {
 }
 
 /**
- * identity 自写一次 append 的审计记录。落 `~/.flyflor/identity/revert.log.jsonl`。
- * R3 红线：必须包含 beforeHash / afterHash / atomIds，才允许后续 revert。
+ * Legacy identity self-write audit shape retained for old structured blocks.
+ * The active Markdown constitution lives under config workspace canonical files.
  */
 export interface IdentityAppendEntry {
     entryId: string;

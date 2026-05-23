@@ -643,11 +643,12 @@ export function normalizeGatewayControlMessage(input: GatewayControlMessageInput
         );
     }
     const actorId = input.user?.id ?? "ws-actor";
+    const messageId = input.id ?? crypto.randomUUID();
     return {
-        id: input.id ?? crypto.randomUUID(),
+        id: messageId,
         route: {
             channel: Channel.Ws,
-            conversationKey: input.conversationKey ?? input.id ?? "ws-conversation",
+            conversationKey: input.conversationKey ?? "ws-conversation",
             chatType: input.chatType ?? ChatType.Direct,
             threadId: input.threadId,
         },
@@ -657,7 +658,10 @@ export function normalizeGatewayControlMessage(input: GatewayControlMessageInput
         },
         text: input.text,
         attachments: input.attachments,
-        metadata: input.metadata,
+        metadata: {
+            ...(input.metadata ?? {}),
+            clientMessageId: input.id,
+        },
         receivedAt: new Date().toISOString(),
     };
 }

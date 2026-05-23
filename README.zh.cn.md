@@ -55,6 +55,8 @@ Scope 固化有两条路径：
 - **显式创建：** 用户明确开始项目/任务时，系统可先 ASK 确认，再创建带宪法、`scope.db`、skill、MCP surface 的 Scope。
 - **渐进升格：** 用户频繁提起某个项目时，系统先生成 codename 锚点、累积证据，再在证据与确认路径足够强时升格成 Scope。
 
+自然语言提起 Scope 时走两段门控：Flyflor 先发出可见的回忆阶段（`scope.recall.started`，用户面表现为“回忆中”），再由 LLM 根据当前请求和 Scope 候选判断 `none | load | ask`。向量命中、codename 和关联词只提供证据，不负责语义裁决。LLM 返回 `load` 时，Runtime 才装配 Scope 宪法和 scope-local `scope.db` 记忆树/向量/热区记忆；返回 `ask` 时必须反问用户，不能猜。
+
 ## ASK、Fork 与 Crystal 闭环
 
 闭环是内核的超长线机制：
@@ -467,7 +469,7 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 - `templates/prompts/` - 内置运行时模板
 - `templates/prompts/docs/` - 文档渲染模板，不是运行时 prompt
 - `scripts/install.templates.ts` - 安装到配置目录
-- `~/.flyflor/.config/prompts/` - 用户覆盖目录
+- 用户配置提示词目录 - 可选覆盖目录
 
 ## 模板包版本
 
@@ -491,7 +493,7 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 | `memoryHotCompress` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | `episodes` |
 | `memoryContext` | `memory.context.md` | `renderMemoryPrompt` | `hippocampus` / `markdownContent` / `retrievedResults` / `scopeMemory` |
 | `memoryDream` | `memory.dream.md` | `DreamWorker` | `candidates` / `ownerKey` |
-| `memoryScopeOffer` | `memory.scope.offer.md` | `renderScopeOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memoryWorkContextOffer` | `memory.scope.offer.md` | `renderWorkContextOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
 | `memorySkillOffer` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
 | `mcpContext` | `mcp.context.md` | `renderMcpContextPrompt` | `mcpEntries` |
 | `mcpToolBudgetExhausted` | `mcp.tool.budget.exhausted.md` | `renderMcpToolBudgetExhaustedPrompt` | — |
@@ -523,7 +525,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/.config/prompts/"]
+    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["用户配置提示词目录"]
     Userdir -- runtime override --> Render["render functions"]
     Builtin -- canonical --> Render
 ```

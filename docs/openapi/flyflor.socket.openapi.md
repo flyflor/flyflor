@@ -40,7 +40,9 @@ Use the example set as reusable Apifox WebSocket messages:
 
 ## Boundary Checks
 
-- `GatewayMessageSend.payload.context.activeScope` and `contextForkId` are the only explicit working-domain inputs in the socket message.
+- The default `GatewayMessageSend` example intentionally has no `payload.context`, so a frontend can send the first conversation message without creating local Scope directories.
+- `GatewayMessageSend.payload.context.activeScope` and `contextForkId` are the only explicit working-domain inputs in the socket message when the client already has a real Scope/Fork.
+- When sending `activeScope`, `projectDir` and `projectMemoryDir` must be real writable paths returned by Scope creation/list/detail, not copied placeholder paths.
 - `activeProject` is only a compatibility alias for `activeScope`; prefer `activeScope` in new Apifox examples.
 - `HistorySnapshot` may include reply metadata, task plans, replays, and context fork snapshots as ledger replay data. Do not feed it back as prompt context.
 - `*.snapshot.payload.data` from read-model query commands is inspectable TUI state only. Do not feed it back as prompt context.

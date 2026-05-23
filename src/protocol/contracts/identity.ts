@@ -4,7 +4,7 @@
  * 设计要点（当前契约见 `docs/boundaries.md` R3，历史背景见 `docs/old-docs/legacy.architecture.history.md`）：
  * - Identity = `memory_events.type = 'identity-append'` 的一系列 append-only 行。
  *   每行携带模型同轮结构化输出的一段自述：偏好、风格、习惯、长期目标、约束等。
- * - 写入完全由模型自决（同轮 `<flyflor_identity_append>` 块），
+ * - 写入完全由模型自决（同轮 `<agent_profile_update>` 块），
  *   runtime 不解析对话文本派生 identity 内容（业务语义零字符匹配红线）。
  * - 可回滚：CLI `flyflor identity revert <id>` 将该行 status 置 `archived`，
  *   后续 `[identity]` prompt 注入会跳过该行。Revert 不删除底层 event 行，

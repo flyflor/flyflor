@@ -1,7 +1,7 @@
 /**
  * Identity append 解析器（LF-R5）。
  *
- * 模型同轮可输出一个 `<flyflor_identity_append>[json[]]</flyflor_identity_append>` 块，
+ * 模型同轮可输出一个 `<agent_profile_update>[json[]]</agent_profile_update>` 块，
  * 每个 entry 形如：`{ "kind": "preference", "content": "<= 240 字自述", "confidence": 0.8 }`。
  *
  * 红线：runtime 只做 enum + 长度校验，绝不解析 content 文本派生 kind 或拆分语义。
@@ -52,7 +52,7 @@ export class IdentityAppendParser {
     private readAppends(rawJson: string): IdentityAppendCandidate[] {
         const payload = parseStructuredJson(rawJson);
         if (!Array.isArray(payload)) {
-            throw new Error("flyflor_identity_append must be a JSON array.");
+            throw new Error("agent_profile_update must be a JSON array.");
         }
         const out: IdentityAppendCandidate[] = [];
         for (const item of payload) {

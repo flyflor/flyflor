@@ -13,9 +13,9 @@ describe("LF-R4 continuation decisions parser", () => {
     test("parses a valid block and strips it from text", () => {
         const raw = [
             "Sure, here we go.",
-            "<flyflor_continuation_decisions>",
+            "<agent_context_decisions>",
             `[{"continuationId":"continuation-a","kind":"resume"},{"continuationId":"continuation-b","kind":"fresh"}]`,
-            "</flyflor_continuation_decisions>",
+            "</agent_context_decisions>",
             "Done.",
         ].join("\n");
         const r = parseContinuationDecisions(raw);
@@ -25,18 +25,18 @@ describe("LF-R4 continuation decisions parser", () => {
         ]);
         expect(r.forkMerges).toEqual([]);
         expect(r.dropped).toBe(0);
-        expect(r.text).not.toContain("flyflor_continuation_decisions");
+        expect(r.text).not.toContain("agent_context_decisions");
         expect(r.text).toContain("Sure, here we go.");
         expect(r.text).toContain("Done.");
     });
 
     test("drops items with unknown kind or empty continuationId", () => {
-        const raw = `<flyflor_continuation_decisions>${JSON.stringify([
+        const raw = `<agent_context_decisions>${JSON.stringify([
             { continuationId: "continuation-a", kind: "resume" },
             { continuationId: "", kind: "fresh" },
             { continuationId: "continuation-b", kind: "bogus" },
             { continuationId: "continuation-c", kind: "fork" },
-        ])}</flyflor_continuation_decisions>`;
+        ])}</agent_context_decisions>`;
         const r = parseContinuationDecisions(raw);
         expect(r.decisions).toEqual([
             { continuationId: "continuation-a", kind: "resume" },
@@ -45,10 +45,10 @@ describe("LF-R4 continuation decisions parser", () => {
     });
 
     test("deduplicates repeated continuationIds, counting extras as dropped", () => {
-        const raw = `<flyflor_continuation_decisions>${JSON.stringify([
+        const raw = `<agent_context_decisions>${JSON.stringify([
             { continuationId: "continuation-a", kind: "resume" },
             { continuationId: "continuation-a", kind: "fresh" },
-        ])}</flyflor_continuation_decisions>`;
+        ])}</agent_context_decisions>`;
         const r = parseContinuationDecisions(raw);
         expect(r.decisions).toEqual([{ continuationId: "continuation-a", kind: "resume" }]);
         expect(r.dropped).toBe(1);
@@ -59,21 +59,21 @@ describe("LF-R4 continuation decisions parser", () => {
             continuationId: `continuation-${i}`,
             kind: "fresh" as const,
         }));
-        const raw = `<flyflor_continuation_decisions>${JSON.stringify(items)}</flyflor_continuation_decisions>`;
+        const raw = `<agent_context_decisions>${JSON.stringify(items)}</agent_context_decisions>`;
         const r = parseContinuationDecisions(raw, 3);
         expect(r.decisions.length).toBe(3);
         expect(r.dropped).toBe(7);
     });
 
     test("ignores malformed JSON entirely", () => {
-        const raw = "<flyflor_continuation_decisions>{not json}</flyflor_continuation_decisions>";
+        const raw = "<agent_context_decisions>{not json}</agent_context_decisions>";
         const r = parseContinuationDecisions(raw);
         expect(r.decisions).toEqual([]);
         expect(r.dropped).toBe(1);
     });
 
     test("parses fork merge closure evidence from object payload", () => {
-        const raw = `<flyflor_continuation_decisions>${JSON.stringify({
+        const raw = `<agent_context_decisions>${JSON.stringify({
             decisions: [{ continuationId: "continuation-a", kind: "fork" }],
             forkMerges: [
                 {
@@ -90,7 +90,7 @@ describe("LF-R4 continuation decisions parser", () => {
                     ],
                 },
             ],
-        })}</flyflor_continuation_decisions>`;
+        })}</agent_context_decisions>`;
         const r = parseContinuationDecisions(raw);
         expect(r.decisions).toEqual([{ continuationId: "continuation-a", kind: "fork" }]);
         expect(r.forkMerges).toEqual([
@@ -112,7 +112,7 @@ describe("LF-R4 continuation decisions parser", () => {
     });
 
     test("keeps conflict merge only when a structured conflict ask is present", () => {
-        const raw = `<flyflor_continuation_decisions>${JSON.stringify({
+        const raw = `<agent_context_decisions>${JSON.stringify({
             forkMerges: [
                 {
                     forkId: "fork-missing-ask",
@@ -134,7 +134,7 @@ describe("LF-R4 continuation decisions parser", () => {
                     },
                 },
             ],
-        })}</flyflor_continuation_decisions>`;
+        })}</agent_context_decisions>`;
         const r = parseContinuationDecisions(raw);
         expect(r.forkMerges).toHaveLength(1);
         expect(r.forkMerges[0]).toMatchObject({

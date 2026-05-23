@@ -13,9 +13,9 @@ describe("LF-R5 identity append parser", () => {
     test("parses a single valid entry and strips block", () => {
         const raw = [
             "ok noted.",
-            "<flyflor_identity_append>",
+            "<agent_profile_update>",
             `[{"kind":"preference","content":"replies in Mandarin","confidence":0.85}]`,
-            "</flyflor_identity_append>",
+            "</agent_profile_update>",
             "done.",
         ].join("\n");
         const r = parseIdentityAppends(raw);
@@ -23,16 +23,16 @@ describe("LF-R5 identity append parser", () => {
             { kind: "preference", content: "replies in Mandarin", confidence: 0.85 },
         ]);
         expect(r.dropped).toBe(0);
-        expect(r.text).not.toContain("flyflor_identity_append");
+        expect(r.text).not.toContain("agent_profile_update");
         expect(r.text).toContain("ok noted.");
     });
 
     test("drops entries with invalid kind or empty content", () => {
-        const raw = `<flyflor_identity_append>${JSON.stringify([
+        const raw = `<agent_profile_update>${JSON.stringify([
             { kind: "preference", content: "stays" },
             { kind: "bogus", content: "not in enum" },
             { kind: "goal", content: "   " },
-        ])}</flyflor_identity_append>`;
+        ])}</agent_profile_update>`;
         const r = parseIdentityAppends(raw);
         expect(r.candidates).toEqual([
             { kind: "preference", content: "stays", confidence: 1 },
@@ -41,18 +41,18 @@ describe("LF-R5 identity append parser", () => {
 
     test("truncates content over 240 chars", () => {
         const longContent = "a".repeat(300);
-        const raw = `<flyflor_identity_append>${JSON.stringify([
+        const raw = `<agent_profile_update>${JSON.stringify([
             { kind: "self-model", content: longContent },
-        ])}</flyflor_identity_append>`;
+        ])}</agent_profile_update>`;
         const r = parseIdentityAppends(raw);
         expect(r.candidates[0]?.content.length).toBe(240);
     });
 
     test("clamps confidence to [0,1]", () => {
-        const raw = `<flyflor_identity_append>${JSON.stringify([
+        const raw = `<agent_profile_update>${JSON.stringify([
             { kind: "preference", content: "lo", confidence: -0.5 },
             { kind: "preference", content: "hi", confidence: 7 },
-        ])}</flyflor_identity_append>`;
+        ])}</agent_profile_update>`;
         const r = parseIdentityAppends(raw);
         expect(r.candidates[0]?.confidence).toBe(0);
         expect(r.candidates[1]?.confidence).toBe(1);
@@ -63,14 +63,14 @@ describe("LF-R5 identity append parser", () => {
             kind: "preference" as const,
             content: `c${i}`,
         }));
-        const raw = `<flyflor_identity_append>${JSON.stringify(items)}</flyflor_identity_append>`;
+        const raw = `<agent_profile_update>${JSON.stringify(items)}</agent_profile_update>`;
         const r = parseIdentityAppends(raw, 3);
         expect(r.candidates.length).toBe(3);
         expect(r.dropped).toBe(5);
     });
 
     test("ignores malformed JSON", () => {
-        const raw = "<flyflor_identity_append>{nope}</flyflor_identity_append>";
+        const raw = "<agent_profile_update>{nope}</agent_profile_update>";
         const r = parseIdentityAppends(raw);
         expect(r.candidates).toEqual([]);
         expect(r.dropped).toBe(1);

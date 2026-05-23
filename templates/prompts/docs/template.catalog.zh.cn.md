@@ -12,7 +12,7 @@
 - `templates/prompts/` - 内置运行时模板
 - `templates/prompts/docs/` - 文档渲染模板，不是运行时 prompt
 - `scripts/install.templates.ts` - 安装到配置目录
-- `~/.flyflor/.config/prompts/` - 用户覆盖目录
+- 用户配置提示词目录 - 可选覆盖目录
 
 ## 模板包版本
 
@@ -36,7 +36,7 @@
 | `memoryHotCompress` | `memory.hot.compress.md` | `HotMemoryCompressionWorker` | `episodes` |
 | `memoryContext` | `memory.context.md` | `renderMemoryPrompt` | `hippocampus` / `markdownContent` / `retrievedResults` / `scopeMemory` |
 | `memoryDream` | `memory.dream.md` | `DreamWorker` | `candidates` / `ownerKey` |
-| `memoryScopeOffer` | `memory.scope.offer.md` | `renderScopeOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
+| `memoryWorkContextOffer` | `memory.scope.offer.md` | `renderWorkContextOfferPrompt` | `evidenceScore` / `relatedCount` / `remainingTurns` / `title` |
 | `memorySkillOffer` | `memory.skill.offer.md` | `renderSkillOfferPrompt` | `confidence` / `name` / `remainingTurns` / `support` / `tools` |
 | `mcpContext` | `mcp.context.md` | `renderMcpContextPrompt` | `mcpEntries` |
 | `mcpToolBudgetExhausted` | `mcp.tool.budget.exhausted.md` | `renderMcpToolBudgetExhaustedPrompt` | — |
@@ -68,7 +68,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["~/.flyflor/.config/prompts/"]
+    Builtin["templates/prompts/*.md"] -- bun run scripts/install.templates.ts --> Userdir["用户配置提示词目录"]
     Userdir -- runtime override --> Render["render functions"]
     Builtin -- canonical --> Render
 ```

@@ -610,3 +610,39 @@ Kernel V2 acceptance focus：
 - [x] 每个 Apifox frame 生成 JSON Schema，固定 `protocol`/`type` enum，并按示例 payload 生成 required/properties。
 - [x] 将 `docs:apifox:check` 纳入 `docs:check`，防止 Apifox 产物漂移。
 - [x] 增加 docs guard：Apifox 产物必须包含所有 canonical examples 和 TUI query/detail/snapshot examples，所有 client->server raw frame 必须能被 runtime control parser 解析。
+
+## 2026-05-23 Apifox 真实 WS 联调纠偏
+
+- [x] 废弃 `docs/apifox/flyflor.socket.apifox.json` 导入承载体，不再提供任何 HTTP 伪发送入口。
+- [x] 重生成 `docs/apifox/flyflor.socket.apifox.openapi.json`，只保留真实 `/health` 和 `/ws`。
+- [x] 新增 `docs/apifox/flyflor.socket.messages.json`，作为前端和 Apifox 共用的 WS raw frame 消息目录。
+- [x] 新增 `docs/apifox/flyflor.socket.tester.html`，可直接打开并连接真实 `ws://127.0.0.1:8788/ws`。
+- [x] 更新 `docs/apifox/README.md`，明确 Apifox 必须新建 WebSocket 请求并发送 raw JSON frame。
+- [x] 增加 docs guard：Apifox/OpenAPI/HTML 产物不得包含辅助伪路径，OpenAPI paths 必须严格等于 `["/health", "/ws"]`。
+- [x] 修正默认 `GatewayMessageSend` 示例：不再携带 `/workspace/project` 这类不可写占位 Scope 路径，确保前端第一条对话可直接发送。
+- [x] 补齐旧 `brain.db` / `memory.sqlite` 的 owner_key 迁移，避免真实 `/ws` turn 因旧 schema 报错。
+- [x] 用真实 `bun run socket` + WebSocket 客户端验证 `GatewayMessageSend -> turn.delta -> turn.final`。
+- [x] 按最新要求废弃旧 DB 数据保留策略：旧 `brain.db` / `memory.sqlite` schema 检测后直接清空运行态表并重建当前 schema，旧月份旧 brain 不再归档保存。
+- [x] 修复 WS 连续复用 Apifox 示例 `payload.id` / `requestId` 导致 `memory_events.id` 唯一键冲突的问题：内部 turn id 改为 runtime UUID，对外仍回显客户端 messageId。
+- [x] 明确 `.config` Markdown 画像路径：运行时只读取 `~/.flyflor/.config/workspace/{SELF.md,IDENTITY.md,USER.md,MEMORY.md}`，`.zh.cn.md` 和旧 `SOUL.md` 不进入灵魂画像。
+- [x] 清理本地 `.config/templates/memory` 旧大写模板和 `SOUL` 残留，补齐小写 canonical 模板；安装脚本新增 legacy prune。
+- [x] 跑最终 docs/apifox/focused/check/build/diff 验证并记录结果。
+
+## 2026-05-23 Scope 回忆门控与 WS 全场景 E2E
+
+- [x] 新增 `ScopeRecallComponent`：自然语言提起 Scope 时先进入 LLM 语义门控，输出 `none | load | ask`，再决定是否装配 Scope。
+- [x] 新增 `templates/prompts/scope.recall.md` / `.zh.cn.md`，运行时只使用 canonical `.md`。
+- [x] 新增 scope recall runtime events：`scope.recall.started`、`scope.recall.decided`、`scope.recall.loaded`、`scope.recall.ask`，用户面可显示“回忆中”。
+- [x] 新增 `MemoryModule.listScopeRecallCandidates()`，只读 `brain.db` scopes/codenames 与 scope-local `scope.db` 候选证据，不把向量结果当语义裁判。
+- [x] 更新 README / 架构 / 记忆系统文档，明确 `scope.db` 是项目热区记忆树与上下文装备索引，`brain.db` 仍是生命账本。
+- [x] 新增真实 `/ws` 全场景 E2E 脚本 `bun run e2e:ws:full`，覆盖 live turn、scope recall events、history/scope/fork/ask/blackboard/task/replay/thought/crystal query snapshot。
+- [x] 最终运行 focused scope recall tests、`bun run e2e:ws:full`、docs/check/build/diff 并记录结果。
+
+## 2026-05-23 提示词工程去内部术语治理
+
+- [x] 全量检查 `templates/prompts/**` 模型可见模板，移除产品名、内部器官隐喻、内部 DB 名、Scope/Fork/ASK/MCP/Crystal/Gem 等开发黑话。
+- [x] 将运行时提示词改成外部临时模型可理解的任务/输入/输出/规则表达；必要协议字段只作为 JSON 契约存在，不再用内部术语解释。
+- [x] 将结构化块 tag 统一到 `agent_*` 中性命名，并更新解析测试。
+- [x] `scope.recall` 提示词明确为语义裁决器：先判断 `none | load | ask`，再决定是否加载命名工作上下文记录。
+- [x] 扩展 prompt lint，检查 canonical `.md`、`.zh.cn.md` 镜像和 docs prompt 模板正文不得暴露内部术语。
+- [x] 运行提示词 focused tests、docs check、type check 和 `git diff --check`。

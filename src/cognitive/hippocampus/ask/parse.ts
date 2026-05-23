@@ -1,11 +1,11 @@
 /**
  * Ask 块解析器（LF-R3）。
  *
- * 模型同轮可在自由文本中嵌入一个 `<flyflor_agent_ask>{json}</flyflor_agent_ask>` 块
+ * 模型同轮可在自由文本中嵌入一个 `<agent_question>{json}</agent_question>` 块
  * 来表达 `kind='ask'`。runtime 严禁通过 text.includes / 正则 / 关键词判断是否要 ask
  * （业务语义零字符匹配红线）；ask 必须由模型显式输出本块。
  *
- * 与 `<flyflor_memory_actions>` 解析互不干扰：解析顺序由调用方决定，本模块只剥离自身块。
+ * 与 `<agent_memory_update>` 解析互不干扰：解析顺序由调用方决定，本模块只剥离自身块。
  *
  * 互斥规则：reply 与 ask 同轮二选一，runtime 在 reply 流水线判断
  * `parsed.ask !== undefined` → 切换到 ask 渲染分支。
@@ -64,13 +64,13 @@ export class AgentAskParser {
 
     private readAskPayload(payload: unknown): AgentAsk {
         if (!payload || typeof payload !== "object") {
-            throw new Error("flyflor_agent_ask must be a JSON object.");
+            throw new Error("agent_question must be a JSON object.");
         }
         const obj = payload as Record<string, unknown>;
         const reason = this.normalizeReason(obj.reason);
-        if (!reason) throw new Error(`flyflor_agent_ask has invalid reason: ${String(obj.reason)}`);
+        if (!reason) throw new Error(`agent_question has invalid reason: ${String(obj.reason)}`);
         const prompt = typeof obj.prompt === "string" ? obj.prompt.trim() : "";
-        if (!prompt) throw new Error("flyflor_agent_ask requires non-empty prompt.");
+        if (!prompt) throw new Error("agent_question requires non-empty prompt.");
         const choices = this.normalizeChoices(obj.choices);
         const questions = this.normalizeQuestions(obj.questions);
         const freeform = typeof obj.freeform === "boolean" ? obj.freeform : true;
@@ -80,10 +80,10 @@ export class AgentAskParser {
         const hasStructuredChoices =
             (choices?.length ?? 0) > 0 || (questions?.some((question) => (question.choices?.length ?? 0) > 0) ?? false);
         if (!freeform && !hasStructuredChoices) {
-            throw new Error("flyflor_agent_ask with freeform=false requires at least one structured choice.");
+            throw new Error("agent_question with freeform=false requires at least one structured choice.");
         }
         if (questions?.some((question) => question.freeform === false && (question.choices?.length ?? 0) === 0)) {
-            throw new Error("flyflor_agent_ask question with freeform=false requires structured choices.");
+            throw new Error("agent_question question with freeform=false requires structured choices.");
         }
         const ask: AgentAsk = {
             reason,

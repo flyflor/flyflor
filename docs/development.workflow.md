@@ -57,7 +57,7 @@ Child worktrees should not redefine global project history. They return focused 
 - `AGENTS.md`
 - `LOGS.md`
 
-这些控制文件必须统一用中文编写。不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本。`templates/**` 源模板仍保持 `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
+这些控制文件必须统一用中文编写。不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本；`templates/projects` 里的这三类控制模板也只保留 `.md` 单本。其他提示词和项目说明模板继续保持 canonical `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
 
 本地控制文件规则：
 
@@ -440,7 +440,7 @@ Mainline now expects scope scaffolds to write the scope constitution set without
 - `README.md` / `README.zh.cn.md`
 - `project.memory.md` / `project.memory.zh.cn.md`
 
-The `templates/projects/AGENTS.zh.cn.md`, `TODO.zh.cn.md`, and `LOGS.zh.cn.md` files remain required Chinese mirror templates for review, but scaffolding does not write those control-file companions into a scope/worktree.
+`templates/projects/AGENTS.md`、`TODO.md` 和 `LOGS.md` 默认就是中文控制模板，不再保留 `.zh.cn.md` 镜像；scaffold 也不会把控制文件副本写入 scope/worktree。
 
 The rule is no-overwrite idempotency: an existing scope file is skipped, never regenerated over local scope state.
 
@@ -926,3 +926,15 @@ Closure criteria before final push:
 - run `bun run build:binary`
 - run `git diff --check`
 - recycle child tmux windows and remove development worktrees after the final mainline commit
+
+## 2026-05-23 Prompt Engineering Neutrality Rule
+
+Runtime prompt templates are written for a temporary external model, not for a developer who knows this codebase. Model-visible text must explain the task, inputs, output shape, and decision rules in ordinary language.
+
+Hard prompt rules:
+
+- Do not expose product names, internal database names, organ metaphors, or development shorthand in model-visible prose.
+- Use neutral wording such as named work context, topic branch, clarification question, reusable workflow, durable note, available tools, and multi-participant discussion.
+- Keep internal protocol field names only when they are required JSON contracts; explain their behavior in plain language.
+- Keep canonical `.md` and `.zh.cn.md` prompt mirrors aligned. The `.zh.cn.md` files remain audit mirrors and are not runtime templates.
+- `tests/prompt.lint.test.ts` owns the guardrail for forbidden prompt-visible internal terms.

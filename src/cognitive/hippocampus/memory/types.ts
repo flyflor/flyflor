@@ -6,6 +6,8 @@ import type {
     MemorySourceKind,
 } from "../../../protocol/contracts/index.ts";
 import type { GatewayMessage, GatewayReply, RuntimeContext } from "../../../protocol/contracts/index.ts";
+import type { CodenameRecord, ScopeRecord } from "../../../protocol/contracts/index.ts";
+import type { ScopeVectorHit } from "../scope/vector/component.ts";
 
 export interface MemoryRecord {
     id: string;
@@ -82,6 +84,8 @@ export interface MemoryCandidate {
 
 export interface MemoryEpisodeProvenance {
     behaviorSnapshotId?: string;
+    /** Authoritative brain.db event id for the turn that produced this working-memory episode. */
+    brainEventId?: string;
     /** Summary/link id for a blackboard turn. Stored as structured provenance, not as prompt-visible reasoning. */
     blackboardTurnId?: string;
     mcpCalls?: Array<{
@@ -113,6 +117,13 @@ export interface MemorySearchResult {
     record: MemoryRecord;
     score: number;
     layer: MemoryLayer;
+}
+
+export interface ScopeRecallCandidate {
+    scope: ScopeRecord;
+    codename?: CodenameRecord;
+    vector?: ScopeVectorHit;
+    vectorSummary?: string;
 }
 
 export interface MemoryTurn {

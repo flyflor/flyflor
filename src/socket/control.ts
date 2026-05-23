@@ -376,10 +376,12 @@ export class SocketControlHub implements EventSink {
         const input = readGatewayControlMessageInput(envelope.payload);
         const context = this.contextFromInput(input.context, envelope.requestId);
         const gatewayMessage = this.messageFromInput(input);
+        const publicMessageId = this.publicMessageId(gatewayMessage);
         this.log("turn.start", {
             channel: gatewayMessage.route.channel,
             clientId: socket.data.clientId,
             messageId: gatewayMessage.id,
+            publicMessageId,
             requestId: context.requestId,
         });
         try {
@@ -389,7 +391,7 @@ export class SocketControlHub implements EventSink {
                     this.send(
                         socket,
                         GatewayControlMessageType.TurnDelta,
-                        buildGatewayControlTurnDeltaPayload(delta, gatewayMessage.id),
+                        buildGatewayControlTurnDeltaPayload(delta, publicMessageId),
                         envelope,
                         context.requestId,
                     );
@@ -399,13 +401,15 @@ export class SocketControlHub implements EventSink {
                 channel: gatewayMessage.route.channel,
                 clientId: socket.data.clientId,
                 messageId: gatewayMessage.id,
+                publicMessageId,
                 requestId: context.requestId,
             });
-            this.updateControlStateFromReply(reply, context);
+            const publicReply = { ...reply, messageId: publicMessageId };
+            this.updateControlStateFromReply(publicReply, context);
             this.send(
                 socket,
                 GatewayControlMessageType.TurnFinal,
-                buildGatewayControlTurnFinalPayload(reply),
+                buildGatewayControlTurnFinalPayload(publicReply),
                 envelope,
                 context.requestId,
             );
@@ -415,6 +419,7 @@ export class SocketControlHub implements EventSink {
                 clientId: socket.data.clientId,
                 message: error instanceof Error ? error.message : String(error),
                 messageId: gatewayMessage.id,
+                publicMessageId,
                 requestId: context.requestId,
             });
             this.send(
@@ -422,7 +427,7 @@ export class SocketControlHub implements EventSink {
                 GatewayControlMessageType.TurnError,
                 buildGatewayControlTurnErrorPayload(
                     error instanceof Error ? error.message : String(error),
-                    gatewayMessage.id,
+                    publicMessageId,
                 ),
                 envelope,
                 context.requestId,
@@ -524,7 +529,21 @@ export class SocketControlHub implements EventSink {
     }
 
     private messageFromInput(input: ReturnType<typeof readGatewayControlMessageInput>): GatewayMessage {
-        return normalizeGatewayControlMessage(input);
+        const message = normalizeGatewayControlMessage(input);
+        return {
+            ...message,
+            id: crypto.randomUUID(),
+            metadata: {
+                ...(message.metadata ?? {}),
+                clientMessageId: message.id,
+            },
+        };
+    }
+
+    private publicMessageId(message: GatewayMessage): string {
+        return typeof message.metadata?.clientMessageId === "string" && message.metadata.clientMessageId.length > 0
+            ? message.metadata.clientMessageId
+            : message.id;
     }
 
     /**

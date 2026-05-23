@@ -93,7 +93,7 @@ export class PlanningBlockParser {
     }
 
     private normalizeTaskPlan(value: unknown, context: PlanningBlockParseContext): TaskPlanRecord {
-        const record = this.requireRecord(value, "flyflor_task_plan item");
+        const record = this.requireRecord(value, "agent_task_plan item");
         const now = this.normalizeIso(context.now);
         const steps = this.readSteps(record.steps ?? record.step);
         const completedStepCount = steps.filter((step) => step.status === TaskPlanStatusEnum.Done).length;
@@ -105,8 +105,8 @@ export class PlanningBlockParser {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `plan-${crypto.randomUUID()}`,
             ownerKey: context.ownerKey,
             sourceKey: context.sourceKey,
-            title: this.requiredText(record.title, "flyflor_task_plan.title", 160),
-            summary: this.requiredText(record.summary, "flyflor_task_plan.summary", 1200),
+            title: this.requiredText(record.title, "agent_task_plan.title", 160),
+            summary: this.requiredText(record.summary, "agent_task_plan.summary", 1200),
             status,
             progress,
             stepCount: steps.length,
@@ -155,7 +155,7 @@ export class PlanningBlockParser {
     }
 
     private normalizeContextFork(value: unknown, context: PlanningBlockParseContext): ContextForkRecord {
-        const record = this.requireRecord(value, "flyflor_context_fork item");
+        const record = this.requireRecord(value, "agent_context_branch item");
         const now = this.normalizeIso(context.now);
         const inheritedEventIds = this.readStringArray(record.inheritedEventIds).slice(0, 64);
         if (context.sourceEventId && !inheritedEventIds.includes(context.sourceEventId)) {
@@ -166,9 +166,9 @@ export class PlanningBlockParser {
             ownerKey: context.ownerKey,
             sourceKey: context.sourceKey,
             parentId: this.readNonEmptyString(record.parentId)?.slice(0, 120),
-            title: this.requiredText(record.title, "flyflor_context_fork.title", 160),
-            summary: this.requiredText(record.summary, "flyflor_context_fork.summary", 1200),
-            continuitySummary: this.requiredText(record.continuitySummary, "flyflor_context_fork.continuitySummary", 1200),
+            title: this.requiredText(record.title, "agent_context_branch.title", 160),
+            summary: this.requiredText(record.summary, "agent_context_branch.summary", 1200),
+            continuitySummary: this.requiredText(record.continuitySummary, "agent_context_branch.continuitySummary", 1200),
             maxContextTokens: this.clampInt(this.readNumber(record.maxContextTokens) ?? 12_000, 1_000, 200_000),
             inheritedEventIds,
             createdAt: this.readIso(record.createdAt) ?? now,
@@ -186,15 +186,15 @@ export class PlanningBlockParser {
     }
 
     private normalizeReplayRecord(value: unknown, context: PlanningBlockParseContext): ReplayRecord {
-        const record = this.requireRecord(value, "flyflor_replay_record item");
+        const record = this.requireRecord(value, "agent_replay_summary item");
         const now = this.normalizeIso(context.now);
         return {
             id: this.readNonEmptyString(record.id)?.slice(0, 120) ?? `replay-${crypto.randomUUID()}`,
             ownerKey: context.ownerKey,
             sourceKey: context.sourceKey,
             kind: this.readReplayKind(record.kind) ?? ReplayRecordKindEnum.DeepThink,
-            title: this.requiredText(record.title, "flyflor_replay_record.title", 160),
-            summary: this.requiredText(record.summary, "flyflor_replay_record.summary", 1600),
+            title: this.requiredText(record.title, "agent_replay_summary.title", 160),
+            summary: this.requiredText(record.summary, "agent_replay_summary.summary", 1600),
             detail: this.readNonEmptyString(record.detail)?.slice(0, 4000),
             visibleFacts: this.readStringArray(record.visibleFacts).slice(0, 24),
             openQuestions: this.readStringArray(record.openQuestions).slice(0, 16),

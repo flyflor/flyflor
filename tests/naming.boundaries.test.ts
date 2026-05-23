@@ -217,9 +217,10 @@ describe("repository naming boundary", () => {
     });
 
     test("all markdown templates have zh.cn companions", async () => {
+        const controlFiles = new Set(["templates/projects/AGENTS.md", "templates/projects/TODO.md", "templates/projects/LOGS.md"]);
         const files = (await listFiles(join(REPO_ROOT, "templates")))
             .map((file) => relative(REPO_ROOT, file))
-            .filter((file) => file.endsWith(".md") && !file.endsWith(".zh.cn.md"));
+            .filter((file) => file.endsWith(".md") && !file.endsWith(".zh.cn.md") && !controlFiles.has(file));
         const missing: string[] = [];
         for (const file of files) {
             const companion = file.replace(/\.md$/u, ".zh.cn.md");
@@ -238,6 +239,18 @@ describe("repository naming boundary", () => {
         const existing: string[] = [];
         for (const file of forbidden) {
             if (await Bun.file(join(REPO_ROOT, file)).exists()) {
+                existing.push(file);
+            }
+        }
+
+        expect(existing).toEqual([]);
+    });
+
+    test("project control templates do not keep zh.cn companions", async () => {
+        const forbidden = ["AGENTS.zh.cn.md", "TODO.zh.cn.md", "LOGS.zh.cn.md"];
+        const existing: string[] = [];
+        for (const file of forbidden) {
+            if (await Bun.file(join(REPO_ROOT, "templates", "projects", file)).exists()) {
                 existing.push(file);
             }
         }

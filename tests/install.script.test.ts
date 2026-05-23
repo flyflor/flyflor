@@ -236,6 +236,31 @@ describe("source/docker/windows installers", () => {
         expect(text).not.toContain('join(homedir(), ".flyflor", ".config")');
     });
 
+    test("template install prunes legacy uppercase and soul memory templates", async () => {
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "config");
+        const memoryDir = join(target, "templates", "memory");
+        await mkdir(memoryDir, { recursive: true });
+        for (const file of ["MEMORY.md", "SELF.md", "SOUL.md", "SOUL.zh.cn.md", "USER.md", "soul.md", "soul.zh.cn.md"]) {
+            await writeFile(join(memoryDir, file), "legacy\n");
+        }
+
+        const proc = Bun.spawn(["bun", "run", INSTALL_TEMPLATES_TS, "--", "--target", target], {
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        for (const file of ["MEMORY.md", "SELF.md", "SOUL.md", "SOUL.zh.cn.md", "USER.md", "soul.md", "soul.zh.cn.md"]) {
+            await expect(stat(join(memoryDir, file))).rejects.toThrow();
+        }
+        expect(await readFile(join(memoryDir, "identity.md"), "utf8")).toContain("Identity");
+        expect(await readFile(join(memoryDir, "identity.zh.cn.md"), "utf8")).toContain("身份");
+    });
+
     test(
         "在沙盒内实测源码安装，checkout 留在目标目录",
         async () => {

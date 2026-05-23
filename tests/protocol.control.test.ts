@@ -667,7 +667,21 @@ describe("Gateway Control protocol", () => {
             threadId: "thread-1",
         });
         expect(message.user).toEqual({ id: "user-1", displayName: "User One" });
+        expect(message.metadata?.clientMessageId).toBeUndefined();
         expect(message.text).toBe("hello");
+    });
+
+    test("does not use payload id as default conversation identity", () => {
+        const input = readGatewayControlMessageInput({
+            id: "message-1",
+            text: "hello",
+            user: { id: "user-1" },
+        });
+        const message = normalizeGatewayControlMessage(input);
+
+        expect(message.id).toBe("message-1");
+        expect(message.metadata?.clientMessageId).toBe("message-1");
+        expect(message.route.conversationKey).toBe("ws-conversation");
     });
 
     test("prefers explicit activeScope and keeps activeProject as compatibility input", () => {

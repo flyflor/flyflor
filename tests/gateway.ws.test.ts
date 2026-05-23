@@ -1177,7 +1177,7 @@ describe("SocketControlHub", () => {
             type: GatewayControlMessageType.TurnDelta,
             payload: {
                 delta: "hel",
-                messageId: calls[0]?.message.id,
+                messageId: calls[0]?.message.metadata?.clientMessageId,
             },
         });
         expect(sent(socket)[2]).toMatchObject({
@@ -1186,7 +1186,7 @@ describe("SocketControlHub", () => {
             type: GatewayControlMessageType.TurnDelta,
             payload: {
                 delta: "lo",
-                messageId: calls[0]?.message.id,
+                messageId: calls[0]?.message.metadata?.clientMessageId,
             },
         });
         expect(sent(socket)[3]).toMatchObject({
@@ -1195,7 +1195,7 @@ describe("SocketControlHub", () => {
             type: GatewayControlMessageType.TurnFinal,
             payload: {
                 reply: {
-                    messageId: calls[0]?.message.id,
+                    messageId: calls[0]?.message.metadata?.clientMessageId,
                     text: "hello",
                 },
             },
@@ -1205,6 +1205,48 @@ describe("SocketControlHub", () => {
             GatewayControlMessageType.TurnDelta,
             GatewayControlMessageType.TurnDelta,
             GatewayControlMessageType.TurnFinal,
+        ]);
+        hub.dispose();
+    });
+
+    test("keeps client message ids as public anchors while dispatching unique internal ids", async () => {
+        const calls: GatewayMessage[] = [];
+        const hub = createHub({
+            dispatch: async (message, options) => {
+                calls.push(message);
+                await options?.onTextDelta?.("ok");
+                return { messageId: message.id, route: message.route, text: "done" };
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+        const payload = {
+            id: "message-1",
+            text: "repeatable Apifox example id",
+            user: { id: "u-1" },
+        };
+
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayMessageSend, payload, { id: "send-a", requestId: "req-a" })),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayMessageSend, payload, { id: "send-b", requestId: "req-b" })),
+        );
+
+        expect(calls).toHaveLength(2);
+        expect(calls[0]?.id).not.toBe("message-1");
+        expect(calls[1]?.id).not.toBe("message-1");
+        expect(calls[0]?.id).not.toBe(calls[1]?.id);
+        const publicFrames = sent(socket).filter((envelope) =>
+            envelope.type === GatewayControlMessageType.TurnDelta || envelope.type === GatewayControlMessageType.TurnFinal
+        );
+        expect(publicFrames.map((envelope) => (envelope.payload as { messageId?: string; reply?: { messageId?: string } }).messageId ?? (envelope.payload as { reply?: { messageId?: string } }).reply?.messageId)).toEqual([
+            "message-1",
+            "message-1",
+            "message-1",
+            "message-1",
         ]);
         hub.dispose();
     });

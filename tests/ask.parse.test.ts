@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { parseAgentAsk } from "../src/cognitive/hippocampus/ask/index.ts";
 import { AskReason } from "../src/protocol/contracts/index.ts";
 
-const wrap = (json: string): string => `<flyflor_agent_ask>\n${json}\n</flyflor_agent_ask>`;
+const wrap = (json: string): string => `<agent_question>\n${json}\n</agent_question>`;
 
 describe("LF-R3 parseAgentAsk", () => {
     test("parses minimum valid ask block (reason + prompt)", () => {
@@ -11,7 +11,7 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(r.ask?.reason).toBe(AskReason.UserIntentUnclear);
         expect(r.ask?.prompt).toBe("Did you mean A or B?");
         expect(r.ask?.freeform).toBe(true);
-        expect(r.text).not.toContain("flyflor_agent_ask");
+        expect(r.text).not.toContain("agent_question");
         expect(r.dropped).toBe(0);
     });
 
@@ -127,7 +127,7 @@ describe("LF-R3 parseAgentAsk", () => {
     });
 
     test("malformed JSON in block is dropped without throwing", () => {
-        const r = parseAgentAsk("<flyflor_agent_ask>{not valid json}</flyflor_agent_ask>");
+        const r = parseAgentAsk("<agent_question>{not valid json}</agent_question>");
         expect(r.ask).toBeUndefined();
         expect(r.dropped).toBe(1);
     });

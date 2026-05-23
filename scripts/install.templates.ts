@@ -1,5 +1,4 @@
-import { copyFile, mkdir, readdir } from "node:fs/promises";
-import { homedir } from "node:os";
+import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 interface InstallOptions {
@@ -35,6 +34,7 @@ await installTemplateGroup({
     force: options.force,
     source: join(repoRoot, "templates", "memory"),
 });
+await pruneLegacyMemoryTemplates(options.targetHome);
 
 await installTemplateGroup({
     destination: join(options.targetHome, "templates", "projects"),
@@ -81,6 +81,27 @@ async function installTemplateGroup(input: { destination: string; force: boolean
         }
         await copyFile(sourcePath, destinationPath);
         console.log(`${input.force ? "write" : "copy"} ${basename(destinationPath)}`);
+    }
+}
+
+async function pruneLegacyMemoryTemplates(targetHome: string): Promise<void> {
+    const memoryTemplateDir = join(targetHome, "templates", "memory");
+    const legacyFiles = [
+        "MEMORY.md",
+        "SELF.md",
+        "SOUL.md",
+        "SOUL.zh.cn.md",
+        "USER.md",
+        "soul.md",
+        "soul.zh.cn.md",
+    ];
+    for (const file of legacyFiles) {
+        const path = join(memoryTemplateDir, file);
+        try {
+            await rm(path, { force: true });
+        } catch (error) {
+            throw new Error(`Failed to prune legacy memory template ${path}: ${String(error)}`);
+        }
     }
 }
 

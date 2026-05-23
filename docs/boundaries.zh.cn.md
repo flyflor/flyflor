@@ -256,10 +256,10 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
     config.jsonc
     commands.jsonc            # TUI / app slash command rules
     prompts/                  # 内部提示词模板（不属于用户工作区）
-    templates/memory/         # memory/self/identity/user 初始模板源文件
+    templates/memory/         # memory/self/identity/user 初始模板源文件；.zh.cn.md 只作审查镜像
     templates/projects/       # 项目骨架模板
     workspace/                # 用户工作区（可编辑）
-      SELF.md / IDENTITY.md / USER.md / MEMORY.md
+      SELF.md / IDENTITY.md / USER.md / MEMORY.md  # 灵魂画像/全局宪法，运行时只读这四个 canonical 文件
       scopes/<scopeId>/
       .flyflor/{skills,mcp,plugins,memory}/  # 项目局部 capability
     skills/ / mcp/ / plugins/ # 全局 capability
@@ -333,7 +333,8 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ### R3 — Identity 自写：append-only + revertable
 
-- `~/.flyflor/identity/{identity.md,user.md}` 由 agent 直接 append，但必须满足三件事：
+- `~/.flyflor/.config/workspace/{IDENTITY.md,USER.md,SELF.md,MEMORY.md}` 是全局 Markdown 宪法层。运行时只枚举这四个 canonical 大写文件；`*.zh.cn.md` 只允许作为模板镜像或人工审查副本，不得进入 prompt/context/灵魂画像。
+- agent 对这四个文件的写入必须是 append-only，并满足三件事：
     1. 写入前后落 `revert.log.jsonl`，记录 `beforeHash` / `afterHash` / `appendedText` / `atomIds` 完整证据链。
     2. 频率门：每文件每天最多 `memory.tuning.identity.appendDailyLimitPerFile` 次（默认 3）；超额走 dream 慢通道，不丢弃。
     3. 用户可 1-click revert（`flyflor identity revert <entryId>`），revert 后回写反向标记 atom，未来同主题 append 概率下调。

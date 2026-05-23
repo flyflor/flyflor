@@ -96,9 +96,9 @@ class AskingModel implements ModelClient {
     public async generate(): Promise<string> {
         return [
             "Sure, but first I need clarification.",
-            "<flyflor_agent_ask>",
+            "<agent_question>",
             JSON.stringify({ reason: AskReason.UserIntentUnclear, prompt: this.askPrompt }),
-            "</flyflor_agent_ask>",
+            "</agent_question>",
         ].join("\n");
     }
 }
@@ -107,7 +107,7 @@ class MultiQuestionModel implements ModelClient {
     public async generate(): Promise<string> {
         return [
             "Need to confirm a few details.",
-            "<flyflor_agent_ask>",
+            "<agent_question>",
             JSON.stringify({
                 reason: AskReason.UserIntentUnclear,
                 prompt: "I need two confirmations.",
@@ -129,7 +129,7 @@ class MultiQuestionModel implements ModelClient {
                     },
                 ],
             }),
-            "</flyflor_agent_ask>",
+            "</agent_question>",
         ].join("\n");
     }
 }
@@ -138,7 +138,7 @@ class ForkConflictMergeModel implements ModelClient {
     public async generate(): Promise<string> {
         return [
             "Fork merge needs structured resolution.",
-            "<flyflor_continuation_decisions>",
+            "<agent_context_decisions>",
             JSON.stringify({
                 forkMerges: [
                     {
@@ -157,7 +157,7 @@ class ForkConflictMergeModel implements ModelClient {
                     },
                 ],
             }),
-            "</flyflor_continuation_decisions>",
+            "</agent_context_decisions>",
         ].join("\n");
     }
 }
@@ -166,7 +166,7 @@ class ForkMergedClosureModel implements ModelClient {
     public async generate(): Promise<string> {
         return [
             "Fork merge completed.",
-            "<flyflor_continuation_decisions>",
+            "<agent_context_decisions>",
             JSON.stringify({
                 forkMerges: [
                     {
@@ -184,7 +184,7 @@ class ForkMergedClosureModel implements ModelClient {
                     },
                 ],
             }),
-            "</flyflor_continuation_decisions>",
+            "</agent_context_decisions>",
         ].join("\n");
     }
 }
@@ -274,13 +274,13 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
             try {
                 const model = new CapturingModel([
                     "Need a decision.",
-                    "<flyflor_agent_ask>",
+                    "<agent_question>",
                     JSON.stringify({
                         reason: AskReason.PolicyDecision,
                         prompt: "Pick the merge direction.",
                         continuationHint: { title: "Merge direction", contextHint: "fork needs a decision" },
                     }),
-                    "</flyflor_agent_ask>",
+                    "</agent_question>",
                 ].join("\n"));
                 const runtime = new RuntimeModule(config, model, events, undefined, memory);
                 const context = {
@@ -326,13 +326,13 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
             await memory.warmup();
             try {
                 const firstModel = new CapturingModel([
-                    "<flyflor_agent_ask>",
+                    "<agent_question>",
                     JSON.stringify({
                         reason: AskReason.PolicyDecision,
                         prompt: "Pick the merge direction.",
                         continuationHint: { title: "Merge direction" },
                     }),
-                    "</flyflor_agent_ask>",
+                    "</agent_question>",
                 ].join("\n"));
                 const runtime = new RuntimeModule(config, firstModel, events, undefined, memory);
                 const scope = {
@@ -383,9 +383,9 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
             await memory.warmup();
             try {
                 const runtime = new RuntimeModule(config, new CapturingModel([
-                    "<flyflor_agent_ask>",
+                    "<agent_question>",
                     JSON.stringify({ reason: AskReason.PolicyDecision, prompt: "Choose a branch." }),
-                    "</flyflor_agent_ask>",
+                    "</agent_question>",
                 ].join("\n")), events, undefined, memory);
                 const askReply = await runtime.handleMessage(
                     gwMsg("seed ask", "m-direct-answer-1"),
@@ -435,9 +435,9 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                 });
 
                 const askRuntime = new RuntimeModule(config, new CapturingModel([
-                    "<flyflor_agent_ask>",
+                    "<agent_question>",
                     JSON.stringify({ reason: AskReason.PolicyDecision, prompt: "Choose" }),
-                    "</flyflor_agent_ask>",
+                    "</agent_question>",
                 ].join("\n")), events, undefined, memory);
                 const askReply = await askRuntime.handleMessage(
                     gwMsg("seed ask", "m-conflict-1"),

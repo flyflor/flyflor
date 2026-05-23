@@ -57,7 +57,7 @@ Flyflor 当前通过 `git worktree + tmux + Codex` 的协调式流程开发：�
 - `AGENTS.md`
 - `LOGS.md`
 
-这些控制文件必须统一用中文编写。不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本。`templates/**` 源模板仍保持 `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
+这些控制文件必须统一用中文编写。不要为 worktree 控制文件创建 `AGENTS.zh.cn.md`、`TODO.zh.cn.md` 或 `LOGS.zh.cn.md` 副本；`templates/projects` 里的这三类控制模板也只保留 `.md` 单本。其他提示词和项目说明模板继续保持 canonical `.md` 与 `.zh.cn.md` 镜像配对；运行时只加载 canonical `.md` 模板。
 
 本地控制文件规则：
 
@@ -441,7 +441,7 @@ Wave3 协调者约束：
 - `README.md` / `README.zh.cn.md`
 - `project.memory.md` / `project.memory.zh.cn.md`
 
-`templates/projects/AGENTS.zh.cn.md`、`TODO.zh.cn.md`、`LOGS.zh.cn.md` 仍是必需的中文镜像模板，用于审查；但 scaffold 不会把这些控制文件副本写入 scope/worktree。
+`templates/projects/AGENTS.md`、`TODO.md` 和 `LOGS.md` 默认就是中文控制模板，不再保留 `.zh.cn.md` 镜像；scaffold 也不会把控制文件副本写入 scope/worktree。
 
 规则是不覆盖的幂等性：已存在的 scope 文件只跳过，绝不覆盖本地 scope 状态。
 

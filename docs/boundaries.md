@@ -52,7 +52,7 @@ templates/        提示词与记忆 Markdown 模板
 - 大模块按生命周期/职责拆子目录，子目录入口仍是 `index.ts`：例如目标路径 `src/cognitive/hippocampus/memory/dream/worker.ts`，以及 `consolidation/worker.ts`、`hot/compression.worker.ts`、`lifecycle/scheduler.ts`、`recall/matrix.ts`。对外优先导入子目录入口，不把 `dream.worker.ts`、`background.scheduler.ts`、`hot.memory.compression.worker.ts` 这类 owner 重复文件放在模块根目录。
 - 提示词 / 模板 / 脚本 / 测试辅助同样点分：`blackboard.route.md` / `blackboard.route.zh.cn.md` / `build.docker.binary.ts`。
 - `templates/**` 中所有 Markdown 模板必须保持 canonical `.md` 与 `.zh.cn.md` 一一对应；canonical `.md` 是运行时模板，`.zh.cn.md` 是中文镜像审查副本，不进入 manifest、prompt/context 装配或业务加载路径。`README.md` 必须作为英文入口并索引 `docs/*.md`，`README.zh.cn.md` 作为中文对照并索引 `docs/*.zh.cn.md`。`AGENTS.md`、`TODO.md`、`LOGS.md` 是控制文件，根目录和所有 worktree 内都必须统一使用中文编写，不创建、不保留 `.zh.cn.md` 副本；旧内容本轮可翻译成中文，之后只能追加条目或修改状态标记，禁止删除、压缩或改写历史。
-- 退役但仍有追溯价值的文档必须放入 `docs/old-docs/`；退役代码或脚本只允许放入仓库根 `abandon/`，且必须带说明文件标明不可编译、不可导入、不可作为运行契约。
+- 退役但仍有追溯价值的文档必须放入 `docs/old-docs/`；根目录不保留 `abandon/` 作为活跃结构，退役代码必须删除或移出本仓库，不能作为运行契约、构建输入或导入来源。
 - JSX 环境声明也必须点分命名，例如 `solid.jsx.d.ts`，不要再回到 `solid-jsx.d.ts` 这类连字符文件名。
 - 禁止连字符或下划线命名仓库文件（`component-factory.ts` / `memory_context.md` 均不允许）。
 - 单职责短文件保留语义名：`types.ts` / `scope.ts`。
@@ -257,10 +257,10 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
     config.jsonc
     commands.jsonc            # TUI / app slash command rules
     prompts/                  # 内部提示词模板（不属于用户工作区）
-    templates/memory/         # memory/self/identity/user 初始模板源文件
+    templates/memory/         # memory/self/identity/user 初始模板源文件；.zh.cn.md 只作审查镜像
     templates/projects/       # 项目骨架模板
     workspace/                # 用户工作区（可编辑）
-      SELF.md / IDENTITY.md / USER.md / MEMORY.md
+      SELF.md / IDENTITY.md / USER.md / MEMORY.md  # 灵魂画像/全局宪法，运行时只读这四个 canonical 文件
       scopes/<scopeId>/
       .flyflor/{skills,mcp,plugins,memory}/  # 项目局部 capability
     skills/ / mcp/ / plugins/ # 全局 capability
@@ -334,7 +334,8 @@ bun build --compile --target=bun --packages=bundle --allow-unresolved="" \
 
 ### R3 — Identity 自写：append-only + revertable
 
-- `~/.flyflor/identity/{identity.md,user.md}` 由 agent 直接 append，但必须满足三件事：
+- `~/.flyflor/.config/workspace/{IDENTITY.md,USER.md,SELF.md,MEMORY.md}` 是全局 Markdown 宪法层。运行时只枚举这四个 canonical 大写文件；`*.zh.cn.md` 只允许作为模板镜像或人工审查副本，不得进入 prompt/context/灵魂画像。
+- agent 对这四个文件的写入必须是 append-only，并满足三件事：
     1. 写入前后落 `revert.log.jsonl`，记录 `beforeHash` / `afterHash` / `appendedText` / `atomIds` 完整证据链。
     2. 频率门：每文件每天最多 `memory.tuning.identity.appendDailyLimitPerFile` 次（默认 3）；超额走 dream 慢通道，不丢弃。
     3. 用户可 1-click revert（`flyflor identity revert <entryId>`），revert 后回写反向标记 atom，未来同主题 append 概率下调。

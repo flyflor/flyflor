@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -115,6 +116,75 @@ describe("detectExplicitSkillIntent", () => {
 });
 
 describe("pending_skill_offer DAO + consume lifecycle", () => {
+    test("clears legacy user_id table before installing owner_key schema", async () => {
+        const config = await testConfig();
+        const db = new Database(join(config.paths.memoryDir, "memory.sqlite"));
+        try {
+            db.exec(`
+                CREATE TABLE pending_skill_offer (
+                    user_id TEXT PRIMARY KEY,
+                    skill_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    support INTEGER NOT NULL,
+                    confidence REAL NOT NULL,
+                    mcp_tools_json TEXT NOT NULL,
+                    related_ids_json TEXT NOT NULL,
+                    proposed_at TEXT NOT NULL,
+                    ttl_turns INTEGER NOT NULL
+                );
+            `);
+            db.prepare(
+                `INSERT INTO pending_skill_offer (
+                    user_id, skill_id, name, description, summary, support, confidence,
+                    mcp_tools_json, related_ids_json, proposed_at, ttl_turns
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+            ).run(
+                "scope:legacy",
+                "skill-legacy",
+                "legacy-skill",
+                "Legacy skill offer.",
+                "summary",
+                3,
+                0.7,
+                "[]",
+                "[]",
+                new Date().toISOString(),
+                2,
+            );
+        } finally {
+            db.close();
+        }
+
+        const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);
+        const got = await store.getSkillOffer("scope:legacy");
+        expect(got).toBeUndefined();
+        const reopened = new Database(join(config.paths.memoryDir, "memory.sqlite"));
+        try {
+            const columns = reopened.query("PRAGMA table_info(pending_skill_offer)").all() as Array<{ name: string }>;
+            expect(columns.map((column) => column.name)).toContain("owner_key");
+            expect(columns.map((column) => column.name)).not.toContain("user_id");
+        } finally {
+            reopened.close();
+        }
+
+        await store.upsertSkillOffer({
+            ownerKey: "scope:current",
+            skillId: "skill-current",
+            name: "current-skill",
+            description: "Current skill offer.",
+            summary: "summary",
+            support: 3,
+            confidence: 0.7,
+            mcpTools: [],
+            relatedIds: [],
+            proposedAt: new Date().toISOString(),
+            ttlTurns: 2,
+        });
+        expect((await store.getSkillOffer("scope:current"))?.skillId).toBe("skill-current");
+    });
+
     test("upsert / get / ttl decrement / delete", async () => {
         const config = await testConfig();
         const store = new SQLiteMemoryStore(config.paths, config.memory.sqlite);

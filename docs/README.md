@@ -18,7 +18,7 @@
 8. [control.protocol.md](control.protocol.md) — `/ws` 协议与 `gateway.message.send.payload.context` 的显式上下文入口。
 9. [ws.doc.md](ws.doc.md) — `/ws` 的字段级 API 手册。
 10. [openapi/flyflor.socket.openapi.md](openapi/flyflor.socket.openapi.md) — Apifox 导入与真实 socket 场景测试契约。
-11. [apifox/README.md](apifox/README.md) — Apifox 专用 WS 示例集合，展开所有 WebSocket frame 示例和 JSON Schema。
+11. [apifox/README.md](apifox/README.md) — Apifox 真实 WebSocket 联调说明、消息目录和本地测试页。
 12. [runtime.events.md](runtime.events.md) — 事件时间线与 snapshot 权威面的边界。
 13. [sandbox.capabilities.md](sandbox.capabilities.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
 14. [mcp.tools.md](mcp.tools.md) — MCP 工具面与 transport 恢复边界。

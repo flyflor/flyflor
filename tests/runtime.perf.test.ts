@@ -319,6 +319,37 @@ describe("Runtime fastRoute cache observability", () => {
         )).toBe(true);
         runtime.dispose();
     });
+
+    test("post-reply memory persistence failures publish events without failing the reply", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = {
+            warmup: async () => undefined,
+            rememberTurn: async () => {
+                throw new Error("memory-write-down");
+            },
+            recordBehaviorSnapshot: () => null,
+            recordContinuationFromReason: () => null,
+            listActiveContinuations: () => [],
+            buildPrompt: async () => "",
+            classifyAndApplyFeedback: async () => undefined,
+            recordDebateEpisode: async () => undefined,
+            dispose: () => undefined,
+        } as unknown as MemoryModule;
+        const runtime = new RuntimeModule(config, new StaticTextModel("reply survives memory failure"), events, undefined, memory);
+
+        const reply = await runtime.handleMessage(
+            msg("memory failure turn"),
+            withEmbedding(await embedFor(config, "memory failure turn")),
+        );
+
+        expect(reply.text).toBe("reply survives memory failure");
+        expect(events.findOf(RuntimeEventType.MemoryBrainWriteFailed)?.payload).toMatchObject({
+            error: "memory-write-down",
+            stage: "runtime-persist-turn",
+        });
+        runtime.dispose();
+    });
 });
 
 describe("Memory module warmup, embedding reuse, episode capture", () => {

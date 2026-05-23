@@ -107,6 +107,7 @@ import {
     type FastRouteResult,
     type FastRouteSnapshotStore,
 } from "./routing/index.ts";
+import { ScopeRecallComponent, ScopeRecallDecisionKind, type ScopeRecallDecision } from "../../cognitive/hippocampus/scope/index.ts";
 import { selectRuntimeSkills } from "./skills/index.ts";
 import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/index.ts";
 import {
@@ -204,6 +205,7 @@ interface PreparedTurn {
     embedding: number[];
     snapshotKey: string;
     fastRoute: FastRouteResult;
+    scopeRecall?: ScopeRecallDecision;
     ttfbDone: () => void;
 }
 
@@ -278,6 +280,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
     protected readonly mcpCapabilityReader: RuntimeMcpCapabilityReader;
     protected readonly continuationGhosts: ContinuationGhostStore;
+    protected readonly scopeRecall: ScopeRecallComponent;
     private warmupPromise: Promise<void> | undefined;
     /**
      * 上一轮的路由快照。Key 只来自显式 scope / fork；没有显式范围时退回 turn-local。
@@ -317,6 +320,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
         this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
+        this.scopeRecall = new ScopeRecallComponent();
     }
 
     /** 预热记忆层；在 SocketModule 启动后立即调用。 */
@@ -591,14 +595,14 @@ export class RuntimeModule extends RuntimeBoundary {
         });
         try {
             this.throwIfAborted(options.signal);
-            const prepared = await this.prepareTurn(message, restored.context);
+            const prepared = await this.prepareTurn(message, restored.context, options);
             this.throwIfAborted(options.signal);
             const assembled = await this.assembleTurnContext(message, prepared, options);
             this.throwIfAborted(options.signal);
             const generated = await this.generateTurnReply(message, prepared, assembled, options);
 
             this.throwIfAborted(options.signal);
-            await this.persistTurn(message, prepared, assembled, generated);
+            await this.persistTurnWithoutFailingReply(message, prepared, assembled, generated);
             await this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
 
             prepared.ttfbDone();
@@ -617,7 +621,11 @@ export class RuntimeModule extends RuntimeBoundary {
      * Phase 1：发布 start 事件、记录 ttfb 计时、加载提示词模板、复用 embedding，
      * 并依据资源指标评估 fastRoute（决定是否短路 LLM 路由调用）。
      */
-    protected async prepareTurn(message: GatewayMessage, context: RuntimeContext): Promise<PreparedTurn> {
+    protected async prepareTurn(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        options: RuntimeStreamOptions = {},
+    ): Promise<PreparedTurn> {
         this.events.publish(
             event(RuntimeEventType.AgentTurnStart, { channel: sourceSurfaceForMessage(message) }, context.requestId),
         );
@@ -629,7 +637,25 @@ export class RuntimeModule extends RuntimeBoundary {
         await loadPromptTemplates(this.config.paths);
 
         const embedding = await this.embeddings.embed(message.text);
-        const enrichedContext: RuntimeContext = { ...context, embedding };
+        let enrichedContext: RuntimeContext = { ...context, embedding };
+        const scopeRecall = await this.resolveScopeRecall(message, enrichedContext, options.signal);
+        if (scopeRecall?.decision === ScopeRecallDecisionKind.Load && scopeRecall.scope) {
+            enrichedContext = {
+                ...enrichedContext,
+                activeScope: {
+                    id: scopeRecall.scope.id,
+                    title: scopeRecall.scope.title,
+                    projectDir: scopeRecall.scope.projectDir,
+                    projectMemoryDir: scopeRecall.scope.projectMemoryDir,
+                },
+                activeProject: {
+                    id: scopeRecall.scope.id,
+                    title: scopeRecall.scope.title,
+                    projectDir: scopeRecall.scope.projectDir,
+                    projectMemoryDir: scopeRecall.scope.projectMemoryDir,
+                },
+            };
+        }
         const snapshotKey = this.snapshotKeyFor(enrichedContext);
         const fastRouteSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const fastRoute = this.fastRouteEvaluator.evaluate({
@@ -644,7 +670,81 @@ export class RuntimeModule extends RuntimeBoundary {
             { bypass: fastRoute.bypass, reason: fastRoute.reason, ...(fastRoute.metrics ?? {}) },
             context.requestId,
         );
-        return { context, enrichedContext, embedding, snapshotKey, fastRoute, ttfbDone };
+        return { context, enrichedContext, embedding, snapshotKey, fastRoute, scopeRecall, ttfbDone };
+    }
+
+    private async resolveScopeRecall(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        signal?: AbortSignal,
+    ): Promise<ScopeRecallDecision | undefined> {
+        if (context.activeScope) return undefined;
+        this.events.publish(
+            event(
+                RuntimeEventType.ScopeRecallStarted,
+                {
+                    phase: "recalling",
+                    visibleLabel: "回忆中",
+                },
+                context.requestId,
+            ),
+        );
+        const candidates = await this.memory.listScopeRecallCandidates({
+            embedding: context.embedding,
+            limit: 12,
+            query: message.text,
+        });
+        if (candidates.length === 0) {
+            this.events.publish(
+                event(RuntimeEventType.ScopeRecallDecided, { decision: ScopeRecallDecisionKind.None, candidates: 0 }, context.requestId),
+            );
+            return undefined;
+        }
+        const decision = await this.scopeRecall.decide({
+            candidates,
+            context,
+            model: this.model,
+            request: message.text,
+            signal,
+        });
+        this.events.publish(
+            event(
+                RuntimeEventType.ScopeRecallDecided,
+                {
+                    decision: decision.decision,
+                    confidence: decision.confidence,
+                    candidateScopeIds: decision.candidateScopeIds,
+                    scopeId: decision.scope?.id,
+                    reason: decision.reason,
+                },
+                context.requestId,
+            ),
+        );
+        if (decision.decision === ScopeRecallDecisionKind.Load && decision.scope) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.ScopeRecallLoaded,
+                    {
+                        scopeId: decision.scope.id,
+                        title: decision.scope.title,
+                        confidence: decision.confidence,
+                    },
+                    context.requestId,
+                ),
+            );
+        } else if (decision.decision === ScopeRecallDecisionKind.Ask) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.ScopeRecallAsk,
+                    {
+                        candidateScopeIds: decision.candidateScopeIds,
+                        confidence: decision.confidence,
+                    },
+                    context.requestId,
+                ),
+            );
+        }
+        return decision;
     }
 
     /**
@@ -913,6 +1013,19 @@ export class RuntimeModule extends RuntimeBoundary {
             assembled;
         const behaviorSnapshotId = `behavior-${context.requestId}`;
 
+        const scopeRecallAsk = prepared.scopeRecall?.ask;
+        if (scopeRecallAsk) {
+            return this.replyFromAsk({
+                ask: scopeRecallAsk,
+                message,
+                blackboardRun,
+                selectedSkills,
+                mcpServers,
+                sandbox,
+                behaviorSnapshotId,
+            });
+        }
+
         // LF-R3 slice D：黑板封顶（NeedsUser）→ 直接合成 AgentAsk 短路返回，不再调用 LLM。
         // 黑板已经穷尽 round 没有定论，由 runtime 把"需要用户决断"的语义透传给用户。
         const stalemateAsk = this.blackboardOutput.buildBlackboardStalemateAsk(blackboardRun);
@@ -997,7 +1110,7 @@ export class RuntimeModule extends RuntimeBoundary {
             });
         }
         const parsed = parseMemoryActions(rawText, this.config.memory.candidates.maxCandidatesPerTurn);
-        // LF-R4 fork/fresh hint：先剥离 <flyflor_continuation_decisions> 块，再交给 ask 解析。
+        // LF-R4 fork/fresh hint：先剥离 <agent_context_decisions> 块，再交给 ask 解析。
         // 仅消费结构化 {continuationId, kind}，runtime 不读 continuation 关联的自然语言语义。
         const continuationDecisions = this.continuationDecisionParser.parse(parsed.text);
         if (continuationDecisions.decisions.length > 0) {
@@ -1006,7 +1119,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const forkMergeAsk = continuationDecisions.forkMerges.find(
             (merge) => merge.kind === ContextForkMergeKind.ConflictAsk && merge.conflictAsk,
         )?.conflictAsk;
-        // LF-R5 identity 自写：从剩余文本里剥离 <flyflor_identity_append> 块。
+        // LF-R5 identity 自写：从剩余文本里剥离 <agent_profile_update> 块。
         // 仅消费结构化 {kind, content, confidence}，runtime 不读 content 文本含义。
         const identityParsed = this.identityAppendParser.parse(continuationDecisions.text);
         if (identityParsed.candidates.length > 0) {
@@ -1029,7 +1142,7 @@ export class RuntimeModule extends RuntimeBoundary {
             requestId: context.requestId,
         });
         // LF-R3 Ask 一等公民：从剥离 memory_actions + continuation_decisions + identity 后的剩余文本里解析
-        // <flyflor_agent_ask> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
+        // <agent_question> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
         // 渲染，原模型 reply 文本忽略。
         const askParsed = this.agentAskParser.parse(planningParsed.text);
         const visibleSource = parseMcpToolCalls(askParsed.text || rawText).text || askParsed.text || rawText;
@@ -1339,6 +1452,34 @@ export class RuntimeModule extends RuntimeBoundary {
                         key: snapshotKey,
                     },
                     context.requestId,
+                ),
+            );
+        }
+    }
+
+    /**
+     * Once the visible reply exists, memory/ledger persistence is a durable
+     * side effect. Failures are published as structured events and must not
+     * convert an already streamed reply into `turn.error`.
+     */
+    protected async persistTurnWithoutFailingReply(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        assembled: AssembledTurnContext,
+        generated: GeneratedTurn,
+    ): Promise<void> {
+        try {
+            await this.persistTurn(message, prepared, assembled, generated);
+        } catch (error) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryBrainWriteFailed,
+                    {
+                        error: error instanceof Error ? error.message : String(error),
+                        messageId: message.id,
+                        stage: "runtime-persist-turn",
+                    },
+                    prepared.enrichedContext.requestId,
                 ),
             );
         }

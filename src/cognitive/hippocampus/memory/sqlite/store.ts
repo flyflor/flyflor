@@ -39,11 +39,7 @@ export class SQLiteMemoryStore extends SQLiteComponent {
         }
 
         await mkdir(this.paths.memoryDir, { recursive: true });
-        let database = this.openMemoryDatabase(join(this.paths.memoryDir, "memory.sqlite"));
-        if (this.hasIncompatibleMemorySchema(database)) {
-            database.close();
-            database = this.openMemoryDatabase(join(this.paths.memoryDir, "memory.project.sqlite"));
-        }
+        const database = this.openMemoryDatabase(join(this.paths.memoryDir, "memory.sqlite"));
         this.installSchema(database);
         this.database = database;
         this.repo = new SQLiteMemoryRepo(database, this.config);
@@ -120,6 +116,7 @@ export class SQLiteMemoryStore extends SQLiteComponent {
     }
 
     private installSchema(database: Database): void {
+        this.resetLegacyMemoryTables(database);
         database.exec(`
             CREATE TABLE IF NOT EXISTS memory_candidates (
                 id TEXT PRIMARY KEY,
@@ -187,15 +184,9 @@ export class SQLiteMemoryStore extends SQLiteComponent {
                 ttl_turns INTEGER NOT NULL
             );
         `);
-        this.migrateOfferTables(database);
-        this.migrateMemoryRecords(database);
         database.exec("CREATE INDEX IF NOT EXISTS idx_candidates_status ON memory_candidates(status, created_at)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_memories_scope_updated ON memories(scope, updated_at DESC)");
         database.exec("CREATE INDEX IF NOT EXISTS idx_memories_subject ON memories(subject_id, updated_at DESC)");
-    }
-
-    private hasIncompatibleMemorySchema(database: Database): boolean {
-        return this.tableExists(database, "memory_candidates") && !this.tableHasColumn(database, "memory_candidates", "source_id");
     }
 
     private tableExists(database: Database, table: string): boolean {
@@ -206,53 +197,48 @@ export class SQLiteMemoryStore extends SQLiteComponent {
         return Boolean(row);
     }
 
-    private tableHasColumn(database: Database, table: string, column: string): boolean {
+    private tableColumns(database: Database, table: string): string[] {
         this.assertKnownMemoryTable(table);
-        const rows = database.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-        return rows.some((row) => row.name === column);
+        return (database.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((row) => row.name);
     }
 
-    private migrateOfferTables(database: Database): void {
-        this.migrateLegacyPendingScopeOfferTable(database);
-        if (this.tableExists(database, "pending_scope_offer")) {
-            const hasScopeId = this.tableHasColumn(database, "pending_scope_offer", "scope_id");
-            const hasProjectId = this.tableHasColumn(database, "pending_scope_offer", "project_id");
-            if (!hasScopeId && hasProjectId) {
-                database.exec("ALTER TABLE pending_scope_offer RENAME COLUMN project_id TO scope_id;");
-            }
+    /**
+     * Old memory.sqlite rows are release-preseal data. Keep the file path, but
+     * drop legacy table shapes instead of translating user_id/project_id rows.
+     */
+    private resetLegacyMemoryTables(database: Database): void {
+        if (!this.hasLegacyMemorySchema(database)) return;
+        for (const table of [
+            "memory_candidates",
+            "memories",
+            "memories_fts",
+            "pending_scope_offer",
+            "pending_project_offer",
+            "pending_skill_offer",
+        ]) {
+            database.exec(`DROP TABLE IF EXISTS ${table};`);
         }
     }
 
-    private migrateLegacyPendingScopeOfferTable(database: Database): void {
-        if (!this.tableExists(database, "pending_project_offer")) {
-            return;
-        }
-
-        const ownerColumn = "owner_key";
-        const scopeColumn = this.tableHasColumn(database, "pending_project_offer", "scope_id") ? "scope_id" : "project_id";
-        this.assertKnownMemoryColumn(ownerColumn);
-        this.assertKnownMemoryColumn(scopeColumn);
-        if (!this.tableHasColumn(database, "pending_project_offer", ownerColumn)) {
-            database.exec("DROP TABLE pending_project_offer;");
-            return;
-        }
-        database.exec(`
-            INSERT OR REPLACE INTO pending_scope_offer (
-                owner_key, scope_id, title, goal, trigger_kind, evidence_score,
-                related_ids_json, proposed_at, ttl_turns
-            )
-            SELECT
-                ${ownerColumn}, ${scopeColumn}, title, goal, trigger_kind, evidence_score,
-                related_ids_json, proposed_at, ttl_turns
-            FROM pending_project_offer;
-        `);
-        database.exec("DROP TABLE pending_project_offer;");
-    }
-
-    private migrateMemoryRecords(database: Database): void {
-        if (!this.tableExists(database, "memories")) return;
-        const columns = database.query("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
-        const canonical = [
+    private hasLegacyMemorySchema(database: Database): boolean {
+        if (this.tableExists(database, "pending_project_offer")) return true;
+        if (this.hasLegacyColumns(database, "memory_candidates", [
+            "id",
+            "target_file",
+            "kind",
+            "status",
+            "source_kind",
+            "content",
+            "project_id",
+            "source_id",
+            "source_message_id",
+            "source_reply_id",
+            "created_at",
+            "promoted_at",
+            "weights_json",
+            "metadata_json",
+        ])) return true;
+        if (this.hasLegacyColumns(database, "memories", [
             "id",
             "kind",
             "content",
@@ -263,36 +249,40 @@ export class SQLiteMemoryStore extends SQLiteComponent {
             "created_at",
             "updated_at",
             "metadata_json",
-        ];
-        const names = columns.map((column) => column.name);
-        const hasOnlyCanonicalColumns = names.length === canonical.length && canonical.every((name) => names.includes(name));
-        if (hasOnlyCanonicalColumns) return;
-        database.exec(`
-            CREATE TABLE IF NOT EXISTS memories_next (
-                id TEXT PRIMARY KEY,
-                kind TEXT NOT NULL,
-                content TEXT NOT NULL,
-                scope TEXT NOT NULL,
-                subject_id TEXT,
-                importance REAL NOT NULL DEFAULT 0.5,
-                confidence REAL NOT NULL DEFAULT 1.0,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                metadata_json TEXT
-            );
-        `);
-        database.exec(`
-            INSERT OR REPLACE INTO memories_next (
-                id, kind, content, scope, subject_id, importance, confidence,
-                created_at, updated_at, metadata_json
-            )
-            SELECT
-                id, kind, content, scope, subject_id, importance, confidence,
-                created_at, updated_at, metadata_json
-            FROM memories;
-        `);
-        database.exec("DROP TABLE memories;");
-        database.exec("ALTER TABLE memories_next RENAME TO memories;");
+        ])) return true;
+        if (this.hasLegacyColumns(database, "pending_scope_offer", [
+            "owner_key",
+            "scope_id",
+            "title",
+            "goal",
+            "trigger_kind",
+            "evidence_score",
+            "related_ids_json",
+            "proposed_at",
+            "ttl_turns",
+        ])) return true;
+        return this.hasLegacyColumns(database, "pending_skill_offer", [
+            "owner_key",
+            "skill_id",
+            "name",
+            "description",
+            "summary",
+            "support",
+            "confidence",
+            "mcp_tools_json",
+            "related_ids_json",
+            "proposed_at",
+            "ttl_turns",
+        ]);
+    }
+
+    private hasLegacyColumns(database: Database, table: string, canonicalColumns: string[]): boolean {
+        if (!this.tableExists(database, table)) return false;
+        const columns = this.tableColumns(database, table);
+        if (["user_id", "project_id"].some((name) => columns.includes(name) && !canonicalColumns.includes(name))) {
+            return true;
+        }
+        return canonicalColumns.some((name) => !columns.includes(name));
     }
 
     private assertKnownMemoryTable(table: string): void {
@@ -304,12 +294,6 @@ export class SQLiteMemoryStore extends SQLiteComponent {
             table !== "pending_skill_offer"
         ) {
             throw new Error(`Unknown memory table: ${table}`);
-        }
-    }
-
-    private assertKnownMemoryColumn(column: string): void {
-        if (column !== "owner_key" && column !== "scope_id" && column !== "project_id") {
-            throw new Error(`Unknown memory column: ${column}`);
         }
     }
 }

@@ -1,4 +1,4 @@
-下面这段描述的是智能体**可以**调用的 MCP 服务和工具——它们是能力清单，不是已经执行过的结果。
+下面这段描述的是助手**可以**调用的工具。它们是能力清单，不是已经执行过的结果。
 
 如何使用这一段：
 
@@ -7,10 +7,10 @@
 - 读取和搜索源码时优先使用文件工具。只有当 workspace 工具无法表达需要的动作时，再使用 shell。
 - 当目录里有 `git` 工具时，用 `git.status` 和 `git.diff` 查看本地改动，用 `git.show` 查看 commit/object。观察 git 状态时优先使用这些结构化只读 git 工具，而不是 `shell.run`。
 - 要调用工具时，**只**输出这个结构化块并停止生成；运行时会执行调用，并把结果作为后续消息发回，你再在那之后完成回复：
-  `<flyflor_mcp_calls>{"calls":[{"server":"server-name","tool":"tool-name","input":{}}]}</flyflor_mcp_calls>`
+  `<agent_tool_calls>{"calls":[{"server":"server-name","tool":"tool-name","input":{}}]}</agent_tool_calls>`
 - 使用目录 JSON 里的精确 `server` 和 `tool` 名称。
 - 绝不要声称某个工具已经执行过，也绝不要捏造工具输出。只有当运行时把工具结果作为 tool 消息回传到本对话后，你才能陈述结果。
-- 如果 `mcpCatalog.servers` 为空或 `mcpCatalog.canExecuteTools` 为 false，不要输出调用块。用你已有的内容回答，并在相关时告知用户 MCP 不可用。
+- 如果工具目录为空或标明当前不能执行工具，不要输出调用块。用你已有的内容回答，并在相关时告知用户工具不可用。
 - 当运行时发回 tool-result 消息后，用这些结果回答原始用户请求。除非确实有必要，不要再次请求同一个工具。
 
 {{mcpEntries}}
