@@ -2,7 +2,7 @@
   "apifoxProject": "1.0.0",
   "info": {
     "name": "Flyflor WebSocket 测试示例",
-    "description": "从 canonical /ws OpenAPI examples 生成的 Apifox WebSocket 测试集合。真实 HTTP surface 仍只有 GET /health 和 WS /ws。",
+    "description": "Apifox project-style WebSocket example set generated from the canonical /ws OpenAPI examples. Real HTTP surface remains only GET /health and WS /ws.",
     "version": "1.0.0"
   },
   "source": {
@@ -21,7 +21,7 @@
   ],
   "environmentCollection": [
     {
-      "name": "本地 Socket",
+      "name": "Local Socket",
       "variables": [
         {
           "name": "http_origin",
@@ -36,11 +36,11 @@
   ],
   "apiCollection": [
     {
-      "name": "00 握手连接",
+      "name": "00 Handshake",
       "type": "folder",
       "items": [
         {
-          "name": "WS 发送 / ClientHello",
+          "name": "WS Send / ClientHello",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -203,7 +203,7 @@
           }
         },
         {
-          "name": "WS 发送 / Ping",
+          "name": "WS Send / Ping",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -334,7 +334,7 @@
           }
         },
         {
-          "name": "WS 期望 / ServerHello",
+          "name": "WS Expect / ServerHello",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -504,7 +504,7 @@
           }
         },
         {
-          "name": "WS 期望 / Ack",
+          "name": "WS Expect / Ack",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -582,7 +582,7 @@
           }
         },
         {
-          "name": "WS 期望 / Pong",
+          "name": "WS Expect / Pong",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -658,11 +658,11 @@
       ]
     },
     {
-      "name": "01 控制面",
+      "name": "01 Control",
       "type": "folder",
       "items": [
         {
-          "name": "WS 发送 / GatewayStatusGet",
+          "name": "WS Send / GatewayStatusGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -1211,7 +1211,7 @@
           }
         },
         {
-          "name": "WS 发送 / CapabilityCatalogGet",
+          "name": "WS Send / CapabilityCatalogGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -1375,7 +1375,7 @@
           }
         },
         {
-          "name": "WS 期望 / GatewayStatusSnapshot",
+          "name": "WS Expect / GatewayStatusSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -1784,7 +1784,7 @@
           }
         },
         {
-          "name": "WS 期望 / CapabilityCatalogSnapshot",
+          "name": "WS Expect / CapabilityCatalogSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -1887,11 +1887,11 @@
       ]
     },
     {
-      "name": "02 实时对话",
+      "name": "02 Live Turn",
       "type": "folder",
       "items": [
         {
-          "name": "WS 发送 / GatewayMessageSend",
+          "name": "WS Send / GatewayMessageSend",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -3175,7 +3175,7 @@
           }
         },
         {
-          "name": "WS 发送 / InvalidGatewayMessageSend",
+          "name": "WS Send / InvalidGatewayMessageSend",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -3311,7 +3311,7 @@
           }
         },
         {
-          "name": "WS 期望 / TurnDelta",
+          "name": "WS Expect / TurnDelta",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -3389,7 +3389,7 @@
           }
         },
         {
-          "name": "WS 期望 / TurnFinal",
+          "name": "WS Expect / TurnFinal",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -3518,7 +3518,7 @@
           }
         },
         {
-          "name": "WS 期望 / TurnFinalWithAsk",
+          "name": "WS Expect / TurnFinalWithAsk",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -3787,7 +3787,7 @@
           }
         },
         {
-          "name": "WS 期望 / TurnFinalWithPlanning",
+          "name": "WS Expect / TurnFinalWithPlanning",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -4033,7 +4033,7 @@
           }
         },
         {
-          "name": "WS 期望 / TurnFinalWithExecutiveLoopPause",
+          "name": "WS Expect / TurnFinalWithExecutiveLoopPause",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -4316,7 +4316,7 @@
           }
         },
         {
-          "name": "WS 期望 / TurnError",
+          "name": "WS Expect / TurnError",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -4390,7 +4390,7 @@
           }
         },
         {
-          "name": "WS 期望 / InvalidPayloadError",
+          "name": "WS Expect / InvalidPayloadError",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -4470,11 +4470,11 @@
       ]
     },
     {
-      "name": "03 TUI 只读查询",
+      "name": "03 TUI Read Queries",
       "type": "folder",
       "items": [
         {
-          "name": "WS 发送 / HistoryList",
+          "name": "WS Send / HistoryList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -4878,7 +4878,7 @@
           }
         },
         {
-          "name": "WS 发送 / HistoryDetailGet",
+          "name": "WS Send / HistoryDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -5101,7 +5101,7 @@
           }
         },
         {
-          "name": "WS 发送 / ScopeList",
+          "name": "WS Send / ScopeList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -5300,7 +5300,7 @@
           }
         },
         {
-          "name": "WS 发送 / ScopeDetailGet",
+          "name": "WS Send / ScopeDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -5638,7 +5638,7 @@
           }
         },
         {
-          "name": "WS 发送 / ForkList",
+          "name": "WS Send / ForkList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -5810,7 +5810,7 @@
           }
         },
         {
-          "name": "WS 发送 / ForkDetailGet",
+          "name": "WS Send / ForkDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -5998,7 +5998,7 @@
           }
         },
         {
-          "name": "WS 发送 / AskList",
+          "name": "WS Send / AskList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -6202,7 +6202,7 @@
           }
         },
         {
-          "name": "WS 发送 / AskDetailGet",
+          "name": "WS Send / AskDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -6397,7 +6397,7 @@
           }
         },
         {
-          "name": "WS 发送 / BlackboardList",
+          "name": "WS Send / BlackboardList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -6630,7 +6630,7 @@
           }
         },
         {
-          "name": "WS 发送 / BlackboardDetailGet",
+          "name": "WS Send / BlackboardDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -6890,7 +6890,7 @@
           }
         },
         {
-          "name": "WS 发送 / TaskList",
+          "name": "WS Send / TaskList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -7076,7 +7076,7 @@
           }
         },
         {
-          "name": "WS 发送 / TaskDetailGet",
+          "name": "WS Send / TaskDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -7299,7 +7299,7 @@
           }
         },
         {
-          "name": "WS 发送 / ReplayList",
+          "name": "WS Send / ReplayList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -7486,7 +7486,7 @@
           }
         },
         {
-          "name": "WS 发送 / ReplayDetailGet",
+          "name": "WS Send / ReplayDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -7693,7 +7693,7 @@
           }
         },
         {
-          "name": "WS 发送 / ThoughtDetailGet",
+          "name": "WS Send / ThoughtDetailGet",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -7907,7 +7907,7 @@
           }
         },
         {
-          "name": "WS 发送 / CrystalList",
+          "name": "WS Send / CrystalList",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -8082,11 +8082,11 @@
       ]
     },
     {
-      "name": "04 TUI 快照响应",
+      "name": "04 TUI Snapshots",
       "type": "folder",
       "items": [
         {
-          "name": "WS 期望 / HistorySnapshot",
+          "name": "WS Expect / HistorySnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -8355,7 +8355,7 @@
           }
         },
         {
-          "name": "WS 期望 / HistoryDetailSnapshot",
+          "name": "WS Expect / HistoryDetailSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -8499,7 +8499,7 @@
           }
         },
         {
-          "name": "WS 期望 / ScopeSnapshot",
+          "name": "WS Expect / ScopeSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -8621,7 +8621,7 @@
           }
         },
         {
-          "name": "WS 期望 / ScopeDetailSnapshot",
+          "name": "WS Expect / ScopeDetailSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -8855,7 +8855,7 @@
           }
         },
         {
-          "name": "WS 期望 / ForkListSnapshot",
+          "name": "WS Expect / ForkListSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -8953,7 +8953,7 @@
           }
         },
         {
-          "name": "WS 期望 / ForkSnapshot",
+          "name": "WS Expect / ForkSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9069,7 +9069,7 @@
           }
         },
         {
-          "name": "WS 期望 / AskSnapshot",
+          "name": "WS Expect / AskSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9193,7 +9193,7 @@
           }
         },
         {
-          "name": "WS 期望 / AskDetailSnapshot",
+          "name": "WS Expect / AskDetailSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9314,7 +9314,7 @@
           }
         },
         {
-          "name": "WS 期望 / BlackboardSnapshot",
+          "name": "WS Expect / BlackboardSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9456,7 +9456,7 @@
           }
         },
         {
-          "name": "WS 期望 / BlackboardDetailSnapshot",
+          "name": "WS Expect / BlackboardDetailSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9628,7 +9628,7 @@
           }
         },
         {
-          "name": "WS 期望 / TaskSnapshot",
+          "name": "WS Expect / TaskSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9734,7 +9734,7 @@
           }
         },
         {
-          "name": "WS 期望 / TaskDetailSnapshot",
+          "name": "WS Expect / TaskDetailSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9873,7 +9873,7 @@
           }
         },
         {
-          "name": "WS 期望 / ReplaySnapshot",
+          "name": "WS Expect / ReplaySnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -9983,7 +9983,7 @@
           }
         },
         {
-          "name": "WS 期望 / ReplayDetailSnapshot",
+          "name": "WS Expect / ReplayDetailSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -10114,7 +10114,7 @@
           }
         },
         {
-          "name": "WS 期望 / ThoughtSnapshot",
+          "name": "WS Expect / ThoughtSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -10251,7 +10251,7 @@
           }
         },
         {
-          "name": "WS 期望 / CrystalSnapshot",
+          "name": "WS Expect / CrystalSnapshot",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -10355,11 +10355,11 @@
       ]
     },
     {
-      "name": "05 事件流",
+      "name": "05 Event Stream",
       "type": "folder",
       "items": [
         {
-          "name": "WS 发送 / EventSubscribe",
+          "name": "WS Send / EventSubscribe",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -10757,7 +10757,7 @@
           }
         },
         {
-          "name": "WS 发送 / EventUnsubscribe",
+          "name": "WS Send / EventUnsubscribe",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -10830,7 +10830,7 @@
           }
         },
         {
-          "name": "WS 期望 / EventPublish",
+          "name": "WS Expect / EventPublish",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -10924,7 +10924,7 @@
           }
         },
         {
-          "name": "WS 期望 / ExecutiveLoopPausedEvent",
+          "name": "WS Expect / ExecutiveLoopPausedEvent",
           "type": "api",
           "api": {
             "protocol": "websocket",
@@ -11032,7 +11032,7 @@
           }
         },
         {
-          "name": "WS 期望 / ExecutiveLoopResumedEvent",
+          "name": "WS Expect / ExecutiveLoopResumedEvent",
           "type": "api",
           "api": {
             "protocol": "websocket",

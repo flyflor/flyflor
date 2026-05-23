@@ -392,6 +392,7 @@ describe("documentation references", () => {
             realSurface?: unknown;
         };
         const apifoxOpenApi = JSON.parse(apifoxOpenApiText) as {
+            openapi?: string;
             components?: { schemas?: Record<string, OpenApiSchema> };
             paths?: Record<string, unknown>;
             "x-flyflor-real-surface"?: string[];
@@ -439,6 +440,7 @@ describe("documentation references", () => {
             "ExecutiveLoopResumedEvent",
         ];
 
+        expect(apifoxOpenApi.openapi).toBe("3.0.3");
         expect(canonicalPaths).toEqual(["/health", "/ws"]);
         expect(apifox.realSurface).toEqual([
             { method: "GET", path: "/health" },
@@ -460,6 +462,8 @@ describe("documentation references", () => {
         expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/send/scope-detail-get"))).toBe(true);
         expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/expect/thought-snapshot"))).toBe(true);
         expect(apifoxOpenApi["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
+        expect(findMissingLocalRefs(apifoxOpenApi)).toEqual([]);
+        expect(findEmptyOneOf(apifoxOpenApi)).toEqual([]);
 
         const sendItems = apifoxItems.filter((item) => item.extensions?.["x-flyflor-direction"] === "client->server");
         expect(sendItems.length).toBeGreaterThan(0);
@@ -613,6 +617,39 @@ function readExampleEventType(examples: Record<string, { value?: unknown }>, nam
     const payload = readExamplePayload(examples, name);
     if (!isRecord(payload) || !isRecord(payload.event)) return undefined;
     return typeof payload.event.type === "string" ? payload.event.type : undefined;
+}
+
+function findMissingLocalRefs(contract: {
+    components?: { schemas?: Record<string, unknown> };
+    paths?: Record<string, unknown>;
+}): string[] {
+    const schemas = contract.components?.schemas ?? {};
+    const refs = new Set<string>();
+    collectRefs(contract.paths, refs);
+    return Array.from(refs)
+        .filter((ref) => ref.startsWith("#/components/schemas/"))
+        .map((ref) => ref.slice("#/components/schemas/".length))
+        .filter((name) => !schemas[name])
+        .sort();
+}
+
+function findEmptyOneOf(value: unknown, path = "$"): string[] {
+    if (Array.isArray(value)) {
+        return value.flatMap((item, index) => findEmptyOneOf(item, `${path}[${index}]`));
+    }
+    if (!isRecord(value)) return [];
+    const current = Array.isArray(value.oneOf) && value.oneOf.length === 0 ? [path] : [];
+    return current.concat(Object.entries(value).flatMap(([key, item]) => findEmptyOneOf(item, `${path}.${key}`)));
+}
+
+function collectRefs(value: unknown, refs: Set<string>): void {
+    if (Array.isArray(value)) {
+        for (const item of value) collectRefs(item, refs);
+        return;
+    }
+    if (!isRecord(value)) return;
+    if (typeof value.$ref === "string") refs.add(value.$ref);
+    for (const item of Object.values(value)) collectRefs(item, refs);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
