@@ -43,8 +43,9 @@ const source = JSON.parse(await readFile(sourcePath, "utf8")) as OpenApiContract
 const canonicalExamples = readCanonicalExamples(source);
 const examples = { ...canonicalExamples, ...extraExamples() };
 const frames = buildFrames(examples);
+const apifox = buildApifoxProject(frames, examples);
 const apifoxOpenApi = buildApifoxOpenApi(source, frames, examples);
-const generatedApifox = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
+const generatedApifox = `${JSON.stringify(apifox, null, 2)}\n`;
 const generatedApifoxOpenApi = `${JSON.stringify(apifoxOpenApi, null, 2)}\n`;
 
 if (writeMode) {
@@ -145,14 +146,79 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
     ];
 }
 
+function buildApifoxProject(frames: FrameExample[], examples: Record<string, JsonRecord>): JsonRecord {
+    const folders = Array.from(new Set(frames.map((frame) => frame.folder))).map((folder) => ({
+        name: folder,
+        type: "folder",
+        items: frames
+            .filter((frame) => frame.folder === folder)
+            .map((frame) => ({
+                name: `${frame.direction === "client->server" ? "WS Send" : "WS Expect"} / ${frame.name}`,
+                type: "api",
+                api: {
+                    protocol: "websocket",
+                    method: "GET",
+                    path: "/ws",
+                    url: "{{ws_origin}}/ws",
+                    requestBody: {
+                        mode: "raw",
+                        raw: JSON.stringify(frame.value, null, 2),
+                        type: "json",
+                    },
+                    responseExamples: (frame.expected ?? []).map((name) => ({
+                        name,
+                        body: examples[name] ?? null,
+                        schema: examples[name] ? schemaForEnvelope(examples[name]) : undefined,
+                    })),
+                    schema: schemaForEnvelope(frame.value),
+                },
+                extensions: {
+                    "x-flyflor-direction": frame.direction,
+                    "x-flyflor-example-name": frame.name,
+                    "x-flyflor-real-surface": "/ws",
+                    "x-flyflor-summary": frame.summary,
+                },
+            })),
+    }));
+
+    return {
+        apifoxProject: "1.0.0",
+        info: {
+            name: "Flyflor Socket WS Examples",
+            description:
+                "Apifox project-style WebSocket example set generated from the canonical /ws OpenAPI examples. Real HTTP surface remains only GET /health and WS /ws.",
+            version: source.info?.version ?? "1.0.0",
+        },
+        source: {
+            canonicalOpenApi: "../openapi/flyflor.socket.openapi.json",
+            generatedBy: "scripts/build.apifox.socket.ts",
+        },
+        realSurface: [
+            { method: "GET", path: "/health" },
+            { method: "WS", path: "/ws" },
+        ],
+        environmentCollection: [
+            {
+                name: "Local Socket",
+                variables: [
+                    { name: "http_origin", value: "http://127.0.0.1:8788" },
+                    { name: "ws_origin", value: "ws://127.0.0.1:8788" },
+                ],
+            },
+        ],
+        apiCollection: folders,
+        examples,
+    };
+}
+
 function buildApifoxOpenApi(
     contract: OpenApiContract,
     frames: FrameExample[],
     examples: Record<string, JsonRecord>,
 ): JsonRecord {
     const paths: JsonRecord = {
-        "/health": buildHealthPath(examples),
-        "/ws": buildWsPath(examples),
+        "/health": contract.paths?.["/health" as keyof typeof contract.paths],
+        "/ws": contract.paths?.["/ws" as keyof typeof contract.paths],
     };
 
     for (const frame of frames) {
@@ -184,7 +250,11 @@ function buildApifoxOpenApi(
                         description: "Doc-only expected WebSocket frame examples.",
                         content: {
                             "application/json": {
-                                schema: responseSchemaForFrame(frame, examples),
+                                schema: {
+                                    oneOf: (frame.expected ?? [frame.name])
+                                        .filter((name) => examples[name])
+                                        .map((name) => ({ $ref: `#/components/schemas/${name}Frame` })),
+                                },
                                 examples: Object.fromEntries(
                                     (frame.expected ?? [frame.name])
                                         .filter((name) => examples[name])
@@ -203,14 +273,14 @@ function buildApifoxOpenApi(
     }
 
     return {
-        openapi: "3.0.3",
+        openapi: "3.1.0",
         info: {
-            title: "Flyflor WebSocket 测试示例",
+            title: "Flyflor Apifox WS Example View",
             version: contract.info?.version ?? "1.0.0",
             description:
-                "Apifox 专用 WebSocket frame 测试展开视图。真实服务契约仍是 docs/openapi/flyflor.socket.openapi.json，并且只暴露 /health 与 /ws。",
+                "Apifox-only expanded view for WebSocket frame testing. The canonical service contract is docs/openapi/flyflor.socket.openapi.json and still exposes only /health and /ws.",
         },
-        servers: normalizeServers(contract.servers),
+        servers: contract.servers,
         tags: Array.from(new Set(frames.map((frame) => frame.folder))).map((name) => ({ name })),
         paths,
         components: {
@@ -222,105 +292,6 @@ function buildApifoxOpenApi(
         "x-flyflor-canonical-openapi": "../openapi/flyflor.socket.openapi.json",
         "x-flyflor-real-surface": ["/health", "/ws"],
     };
-}
-
-function buildHealthPath(examples: Record<string, JsonRecord>): JsonRecord {
-    return {
-        get: {
-            tags: ["00 服务入口"],
-            summary: "健康检查",
-            description: "真实服务入口：GET /health。",
-            operationId: "getSocketHealth",
-            responses: {
-                "200": {
-                    description: "服务存活。",
-                    content: {
-                        "application/json": {
-                            schema: {
-                                type: "object",
-                                required: ["ok"],
-                                properties: {
-                                    ok: { type: "boolean" },
-                                },
-                                additionalProperties: false,
-                            },
-                            examples: {
-                                HealthOk: {
-                                    value: examples.HealthOk ?? { ok: true },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            "x-apifox-folder": "00 服务入口",
-        },
-    };
-}
-
-function buildWsPath(examples: Record<string, JsonRecord>): JsonRecord {
-    return {
-        get: {
-            tags: ["00 服务入口"],
-            summary: "WebSocket 连接入口",
-            description: "真实服务入口：连接 ws://127.0.0.1:8788/ws，然后发送本集合里的 raw JSON frame。",
-            operationId: "connectSocketWebSocket",
-            responses: {
-                "101": {
-                    description: "Switching Protocols。连接后服务端发送 server.hello。",
-                },
-                "400": errorResponse("升级失败", examples.SocketUpgradeFailed),
-                "401": errorResponse("未授权", examples.Unauthorized),
-                "503": errorResponse("服务未就绪", examples.SocketNotReady),
-            },
-            "x-apifox-folder": "00 服务入口",
-        },
-    };
-}
-
-function errorResponse(description: string, example: JsonRecord | undefined): JsonRecord {
-    return {
-        description,
-        content: {
-            "application/json": {
-                schema: {
-                    type: "object",
-                    required: ["error"],
-                    properties: {
-                        error: { type: "string" },
-                    },
-                    additionalProperties: false,
-                },
-                examples: example ? { error: { value: example } } : undefined,
-            },
-        },
-    };
-}
-
-function responseSchemaForFrame(frame: FrameExample, examples: Record<string, JsonRecord>): JsonSchema {
-    const refs = (frame.expected ?? [frame.name])
-        .filter((name) => examples[name])
-        .map((name) => ({ $ref: `#/components/schemas/${name}Frame` }));
-    if (refs.length === 0) {
-        return {
-            type: "object",
-            additionalProperties: true,
-        };
-    }
-    if (refs.length === 1) return refs[0] ?? {};
-    return { oneOf: refs };
-}
-
-function normalizeServers(servers: unknown[] | undefined): Array<{ url: string; description?: string }> {
-    if (!Array.isArray(servers)) {
-        return [{ url: "http://127.0.0.1:8788", description: "本地 Flyflor socket 服务" }];
-    }
-    return servers
-        .filter(isRecord)
-        .map((server) => ({
-            url: typeof server.url === "string" ? server.url : "http://127.0.0.1:8788",
-            description: typeof server.description === "string" ? server.description : undefined,
-        }));
 }
 
 function schemaForEnvelope(value: JsonRecord): JsonSchema {

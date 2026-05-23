@@ -1,9 +1,9 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
-    "title": "Flyflor WebSocket 测试示例",
+    "title": "Flyflor Apifox WS Example View",
     "version": "1.0.0",
-    "description": "Apifox 专用 WebSocket frame 测试展开视图。真实服务契约仍是 docs/openapi/flyflor.socket.openapi.json，并且只暴露 /health 与 /ws。"
+    "description": "Apifox-only expanded view for WebSocket frame testing. The canonical service contract is docs/openapi/flyflor.socket.openapi.json and still exposes only /health and /ws."
   },
   "servers": [
     {
@@ -39,134 +39,91 @@
     "/health": {
       "get": {
         "tags": [
-          "00 服务入口"
+          "Socket"
         ],
-        "summary": "健康检查",
-        "description": "真实服务入口：GET /health。",
+        "summary": "Health check",
+        "description": "Returns process health without invoking runtime thinking, memory, Crystal, Scope, or ledger replay.",
         "operationId": "getSocketHealth",
         "responses": {
           "200": {
-            "description": "服务存活。",
+            "description": "Socket process is alive.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "ok"
-                  ],
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  },
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/HealthResponse"
                 },
                 "examples": {
-                  "HealthOk": {
-                    "value": {
-                      "ok": true
-                    }
+                  "ok": {
+                    "$ref": "#/components/examples/HealthOk"
                   }
                 }
               }
             }
           }
-        },
-        "x-apifox-folder": "00 服务入口"
+        }
       }
     },
     "/ws": {
       "get": {
         "tags": [
-          "00 服务入口"
+          "Socket"
         ],
-        "summary": "WebSocket 连接入口",
-        "description": "真实服务入口：连接 ws://127.0.0.1:8788/ws，然后发送本集合里的 raw JSON frame。",
-        "operationId": "connectSocketWebSocket",
+        "summary": "WebSocket upgrade",
+        "description": "Upgrades to the flyflor.ws.v1 socket protocol. Apifox should connect to ws://127.0.0.1:8788/ws and exchange the message examples in this contract as raw JSON WebSocket messages. The connection clientId is a live transport peer id only; it is not a user/session/chat continuity owner.",
+        "operationId": "upgradeSocket",
         "responses": {
           "101": {
-            "description": "Switching Protocols。连接后服务端发送 server.hello。"
+            "description": "Switching Protocols. After upgrade the server sends server.hello."
           },
           "400": {
-            "description": "升级失败",
+            "description": "Authorized upgrade was attempted, but the underlying WebSocket upgrade failed.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/UpgradeFailedResponse"
                 },
                 "examples": {
-                  "error": {
-                    "value": {
-                      "error": "gateway_control_upgrade_failed"
-                    }
+                  "upgradeFailed": {
+                    "$ref": "#/components/examples/SocketUpgradeFailed"
                   }
                 }
               }
             }
           },
           "401": {
-            "description": "未授权",
+            "description": "Non-local upgrade without a valid control token.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/UnauthorizedResponse"
                 },
                 "examples": {
-                  "error": {
-                    "value": {
-                      "error": "gateway_control_unauthorized"
-                    }
+                  "unauthorized": {
+                    "$ref": "#/components/examples/Unauthorized"
                   }
                 }
               }
             }
           },
           "503": {
-            "description": "服务未就绪",
+            "description": "Socket control hub is not ready.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/NotReadyResponse"
                 },
                 "examples": {
-                  "error": {
-                    "value": {
-                      "error": "gateway_control_not_ready"
-                    }
+                  "notReady": {
+                    "$ref": "#/components/examples/SocketNotReady"
                   }
                 }
               }
             }
           }
         },
-        "x-apifox-folder": "00 服务入口"
+        "x-apifox-folder": "Socket",
+        "x-flyflor-wire-compat": "gateway.* names are preserved for flyflor.ws.v1 compatibility only.",
+        "x-flyflor-vascular-plane": true
       }
     },
     "/__apifox/ws/send/client-hello": {
@@ -212,7 +169,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AckFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AckFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "Ack": {
@@ -276,7 +237,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PongFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PongFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "Pong": {
@@ -382,7 +347,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServerHelloFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerHelloFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ServerHello": {
@@ -489,7 +458,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AckFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AckFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "Ack": {
@@ -556,7 +529,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PongFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PongFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "Pong": {
@@ -619,7 +596,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GatewayStatusSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/GatewayStatusSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "GatewayStatusSnapshot": {
@@ -765,7 +746,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CapabilityCatalogSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CapabilityCatalogSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "CapabilityCatalogSnapshot": {
@@ -920,7 +905,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GatewayStatusSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/GatewayStatusSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "GatewayStatusSnapshot": {
@@ -1075,7 +1064,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CapabilityCatalogSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CapabilityCatalogSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "CapabilityCatalogSnapshot": {
@@ -1470,7 +1463,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvalidPayloadErrorFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidPayloadErrorFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "InvalidPayloadError": {
@@ -1538,7 +1535,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TurnDeltaFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TurnDeltaFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TurnDelta": {
@@ -1618,7 +1619,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TurnFinalFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TurnFinalFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TurnFinal": {
@@ -1747,7 +1752,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TurnFinalWithAskFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TurnFinalWithAskFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TurnFinalWithAsk": {
@@ -1922,7 +1931,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TurnFinalWithPlanningFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TurnFinalWithPlanningFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TurnFinalWithPlanning": {
@@ -2098,7 +2111,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TurnFinalWithExecutiveLoopPauseFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TurnFinalWithExecutiveLoopPauseFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TurnFinalWithExecutiveLoopPause": {
@@ -2215,7 +2232,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TurnErrorFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TurnErrorFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TurnError": {
@@ -2282,7 +2303,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvalidPayloadErrorFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidPayloadErrorFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "InvalidPayloadError": {
@@ -2349,7 +2374,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HistorySnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HistorySnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "HistorySnapshot": {
@@ -2482,7 +2511,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HistoryDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HistoryDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "HistoryDetailSnapshot": {
@@ -2563,7 +2596,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScopeSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScopeSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ScopeSnapshot": {
@@ -2642,7 +2679,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScopeDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScopeDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ScopeDetailSnapshot": {
@@ -2749,7 +2790,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ForkListSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ForkListSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ForkListSnapshot": {
@@ -2821,7 +2866,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ForkSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ForkSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ForkSnapshot": {
@@ -2896,7 +2945,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AskSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AskSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "AskSnapshot": {
@@ -2974,7 +3027,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AskDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AskDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "AskDetailSnapshot": {
@@ -3052,7 +3109,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlackboardSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/BlackboardSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "BlackboardSnapshot": {
@@ -3137,7 +3198,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlackboardDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/BlackboardDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "BlackboardDetailSnapshot": {
@@ -3229,7 +3294,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TaskSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TaskSnapshot": {
@@ -3303,7 +3372,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TaskDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TaskDetailSnapshot": {
@@ -3390,7 +3463,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReplaySnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReplaySnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ReplaySnapshot": {
@@ -3465,7 +3542,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReplayDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReplayDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ReplayDetailSnapshot": {
@@ -3543,7 +3624,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThoughtSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ThoughtSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ThoughtSnapshot": {
@@ -3622,7 +3707,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrystalSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CrystalSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "CrystalSnapshot": {
@@ -3764,7 +3853,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HistorySnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HistorySnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "HistorySnapshot": {
@@ -3914,7 +4007,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HistoryDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HistoryDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "HistoryDetailSnapshot": {
@@ -4010,7 +4107,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScopeSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScopeSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ScopeSnapshot": {
@@ -4131,7 +4232,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScopeDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScopeDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ScopeDetailSnapshot": {
@@ -4245,7 +4350,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ForkListSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ForkListSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ForkListSnapshot": {
@@ -4327,7 +4436,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ForkSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ForkSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ForkSnapshot": {
@@ -4415,7 +4528,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AskSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AskSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "AskSnapshot": {
@@ -4505,7 +4622,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AskDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AskDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "AskDetailSnapshot": {
@@ -4602,7 +4723,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlackboardSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/BlackboardSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "BlackboardSnapshot": {
@@ -4713,7 +4838,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BlackboardDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/BlackboardDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "BlackboardDetailSnapshot": {
@@ -4813,7 +4942,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TaskSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TaskSnapshot": {
@@ -4909,7 +5042,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TaskDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "TaskDetailSnapshot": {
@@ -5006,7 +5143,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReplaySnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReplaySnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ReplaySnapshot": {
@@ -5095,7 +5236,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReplayDetailSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReplayDetailSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ReplayDetailSnapshot": {
@@ -5188,7 +5333,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThoughtSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ThoughtSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ThoughtSnapshot": {
@@ -5276,7 +5425,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrystalSnapshotFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CrystalSnapshotFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "CrystalSnapshot": {
@@ -5483,8 +5636,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "oneOf": []
                 },
                 "examples": {}
               }
@@ -5540,7 +5692,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EventPublishFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EventPublishFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "EventPublish": {
@@ -5618,7 +5774,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExecutiveLoopPausedEventFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ExecutiveLoopPausedEventFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ExecutiveLoopPausedEvent": {
@@ -5702,7 +5862,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExecutiveLoopResumedEventFrame"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ExecutiveLoopResumedEventFrame"
+                    }
+                  ]
                 },
                 "examples": {
                   "ExecutiveLoopResumedEvent": {

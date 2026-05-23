@@ -4,10 +4,8 @@
 
 本目录提供两份 Apifox 专用测试产物：
 
-- [flyflor.socket.apifox.json](flyflor.socket.apifox.json)：推荐导入文件，标准 OpenAPI 3.0.3 格式。
-- [flyflor.socket.apifox.openapi.json](flyflor.socket.apifox.openapi.json)：同内容镜像，保留 `.openapi.json` 文件名给明确需要 OpenAPI 后缀的工具。
-
-两份文件内容一致，都会保留真实 `/health`、`/ws`，并额外生成 `/__apifox/ws/...` doc-only 伪操作，让 Apifox 路径树能直接点开每个 WS frame 示例。
+- [flyflor.socket.apifox.json](flyflor.socket.apifox.json)：Apifox project-style WebSocket 示例集合。每个条目都带 `{{ws_origin}}/ws`、raw JSON body、方向和期望返回示例。
+- [flyflor.socket.apifox.openapi.json](flyflor.socket.apifox.openapi.json)：Apifox 展开视图。它保留真实 `/health`、`/ws`，并额外生成 `/__apifox/ws/...` doc-only 伪操作，让 Apifox 路径树能直接点开每个 WS frame 示例。
 
 这些 `/__apifox/ws/...` 路径不是 Flyflor 服务端接口，不允许在实现中新增对应 HTTP 路由。真实测试方式始终是连接 `ws://127.0.0.1:8788/ws`，然后发送集合里的 raw JSON WebSocket body。
 
