@@ -682,3 +682,13 @@ Kernel V2 acceptance focus：
 - [x] 新增内建只读 `workspace.tree`，返回带深度和条数上限的递归目录树，作为项目级扫描第一步。
 - [x] `workspace.tree` 默认跳过运行态顶层目录和重目录，避免 `.flyflor`、brain、cache、memory、prompts 等运行态数据淹没源码结构。
 - [x] 补充 workspace tree、prompt lint 和文档测试，验证工具目录暴露 tree 且本地项目报告链路先拿结构证据。
+
+## 2026-05-24 电脑工具 lane
+
+- [ ] 阅读 `src/agent/runtime/mcp/workspace.ts`、`git.ts`、`tool.executor.ts`、`src/agent/sandbox/**` 和 Codex/OpenCode 的 read/edit/shell/patch 设计。
+- [ ] 在 `src/agent/runtime/computer/**` 或现有 runtime/mcp owner 下补齐跨平台文件/patch/git/process 基础能力；保持目录语义清晰。
+- [ ] `process.run` 使用 executable + argv 作为主路径；`shell.run` 仅作为高风险逃生口，并清晰返回错误。
+- [ ] 文件读写不做 workspace 人为限制，但必须经过 sandbox/approval/audit gate。
+- [ ] 不引入 native addon、postinstall 或无法 `bun build --compile` 的运行时依赖。
+- [ ] 补齐 focused tests，覆盖读取、写入、删除、patch、git/process 失败结果。
+- [ ] 运行 `bun test` focused、`bun run check`、`git diff --check` 后提交本 lane。

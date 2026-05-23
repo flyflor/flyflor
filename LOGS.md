@@ -652,3 +652,10 @@
   原因：真实对话中模型会在没有工具结果时声称“可以查看/已经阅读项目”，导致它无法像 Codex/OpenCode 一样先扫描、再读关键文件、最后基于证据输出架构和进度判断；调用层必须用能力目录和提示词共同压住这条行为红线。
   效率：本轮新增/调整集中在 workspace 工具、MCP 提示词、工具文档和测试；提交前统计以 `git diff --stat` 为准。
   验证：`bun test tests/skill.mcp.test.ts --test-name-pattern "workspace tree|workspace tools|workspace glob"`；`bun test tests/skill.mcp.test.ts tests/runtime.mcp.tool.plan.test.ts`；`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
+  执行者：codex-lane-computer-coding-tools
+  范围：computer-coding-tools
+  摘要：本 lane 只补电脑控制基础工具面：文件、patch、git、process/shell 风险边界。
+  原因：智能体需要像 Codex/OpenCode 一样真正读写和执行，但不能靠提示词硬凑，也不能破坏现有认知/记忆主链。
+  验证：待补 focused tests、`bun run check`、`git diff --check`。
