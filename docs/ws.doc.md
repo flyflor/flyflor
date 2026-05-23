@@ -304,6 +304,8 @@ list 命令的 `data` 是数组；detail 命令的 `data` 是对象或 `null`。
 所有 `*.detail.get` 都是只读 query/read-model 命令。请求 `payload` 只携带结构化 id，不进入
 Runtime，不触发模型、工具、记忆装配或上下文推断。响应统一使用对应 `*.snapshot` envelope，
 并把详情对象放在 `payload.data`；查不到时 `payload.data` 为 `null`。
+所有只读 query snapshot 都可以带可选 `payload.cache`，用于暴露 socket read-cache 的
+`hit`、`key` 和 `ttlMs`。
 
 ### `fork.detail.get -> fork.snapshot`
 
@@ -757,6 +759,8 @@ interface HistoryTurnSnapshot {
 `metadata.planning` mirrors the compact `turn.final.reply.metadata.planning` shape for persisted
 history turns. It is assembled from stored structured plan/fork/replay records and does not make
 `history.list` a session restore or prompt assembly path.
+`history.snapshot.payload.cache` is optional and carries read-cache `hit`, `key`, and `ttlMs`
+metadata when the response came through the socket read-cache layer.
 
 测试：
 
