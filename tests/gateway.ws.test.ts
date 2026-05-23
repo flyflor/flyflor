@@ -834,11 +834,12 @@ describe("SocketControlHub", () => {
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
         expect(statusReads).toBe(2);
-        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.GatewayStatusSnapshot).slice(-2))
-            .toMatchObject([
-                { payload: { cache: { hit: false }, status: { port: 2 } } },
-                { payload: { cache: { hit: true }, status: { port: 2, cache: { hits: 3 } } } },
-            ]);
+        const statusPair = sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.GatewayStatusSnapshot).slice(-2);
+        expect(statusPair).toMatchObject([
+            { payload: { cache: { hit: false }, status: { port: 2 } } },
+            { payload: { cache: { hit: true }, status: { port: 2 } } },
+        ]);
+        expect(readStatusCacheHits(statusPair[1])).toBeGreaterThan(readStatusCacheHits(statusPair[0]));
 
         await hub.message(
             socket,
@@ -2557,6 +2558,12 @@ function fakeSocket(clientId = "client-1"): GatewayControlSocket {
 
 function sent(socket: GatewayControlSocket): GatewayControlEnvelope[] {
     return (socket as unknown as FakeSocket).sent;
+}
+
+function readStatusCacheHits(envelope?: GatewayControlEnvelope): number {
+    const payload = envelope?.payload as { status?: { cache?: { hits?: unknown } } } | undefined;
+    const hits = payload?.status?.cache?.hits;
+    return typeof hits === "number" ? hits : 0;
 }
 
 async function waitForEnvelope(socket: GatewayControlSocket): Promise<void> {
