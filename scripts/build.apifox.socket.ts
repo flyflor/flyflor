@@ -110,6 +110,7 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
         clientFrame("ScopeList", "03 TUI Read Queries", ["ScopeSnapshot"], examples),
         clientFrame("ScopeDetailGet", "03 TUI Read Queries", ["ScopeDetailSnapshot"], examples),
         clientFrame("ForkList", "03 TUI Read Queries", ["ForkListSnapshot"], examples),
+        clientFrame("ForkCreate", "03 TUI Read Queries", ["ForkSnapshot"], examples),
         clientFrame("ForkDetailGet", "03 TUI Read Queries", ["ForkSnapshot"], examples),
         clientFrame("AskList", "03 TUI Read Queries", ["AskSnapshot"], examples),
         clientFrame("AskDetailGet", "03 TUI Read Queries", ["AskDetailSnapshot"], examples),

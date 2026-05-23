@@ -129,6 +129,18 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 
 预期结果是 clean pass。
 
+## 2026-05-24 TUI 第一阶段内核联调
+
+- [x] 审查 `src/protocol/contracts/enums.ts`、`src/protocol/control/envelope.ts`、`src/socket/control.ts`、`src/socket/module.ts` 中已有 `fork.create` 改动。
+- [x] 保留 `fork.create` 作为 socket/control 层状态变更命令，不进入 `RuntimeModule.handleMessage`，不改 MemoryModule / Executive 主链。
+- [x] 通过注入回调调用 `RuntimeModule.createContextFork(...)`，并返回 `fork.snapshot.payload.data.fork`。
+- [x] 固定 owner key 规则：scope 优先，其次 parent/context fork，最后 turn-local request。
+- [x] 更新 `controlState.activeFork`，让 TUI 可用 `gateway.status.get` 看到最新 active fork。
+- [x] 确认 query read model 能支持 `history.list`、`history.detail.get`、`ask.list`、`ask.detail.get`、`fork.list`、`fork.detail.get`、`blackboard.detail.get`、`task.list`、`task.detail.get`、`replay.list`、`replay.detail.get`、`thought.detail.get`。
+- [x] 同步 OpenAPI/Apifox socket 契约与文档示例。
+- [x] 补充 `docs/ws.doc.md` / `docs/ws.doc.zh.cn.md` 中 `fork.create` 请求、响应与 owner key 规则。
+- [ ] 若 TUI 第一阶段需要可点击创建 fork 的真实端到端 smoke，再新增一条真实 `/ws` client 场景测试覆盖 `fork.create -> fork.detail.get -> gateway.status.get`。
+
 ## 2026-05-22 Seal 补充
 
 - 主协调分支：`main-codex-docs`

@@ -331,6 +331,7 @@ export const GatewayControlMessageType = {
     BlackboardSnapshot: "blackboard.snapshot",
     CrystalList: "crystal.list",
     CrystalSnapshot: "crystal.snapshot",
+    ForkCreate: "fork.create",
     ForkDetailGet: "fork.detail.get",
     ForkList: "fork.list",
     ForkSnapshot: "fork.snapshot",

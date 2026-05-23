@@ -208,6 +208,7 @@ describe("documentation references", () => {
             "#/components/schemas/BlackboardDetailGetEnvelope",
             "#/components/schemas/CrystalListEnvelope",
             "#/components/schemas/ForkListEnvelope",
+            "#/components/schemas/ForkCreateEnvelope",
             "#/components/schemas/ForkDetailGetEnvelope",
             "#/components/schemas/HistoryDetailGetEnvelope",
             "#/components/schemas/ReplayListEnvelope",
@@ -426,6 +427,7 @@ describe("documentation references", () => {
             "BlackboardSnapshot",
             "CrystalList",
             "CrystalSnapshot",
+            "ForkCreate",
             "ForkDetailGet",
             "ForkList",
             "ForkListSnapshot",
@@ -470,6 +472,7 @@ describe("documentation references", () => {
         expect(clientMessages.map((message) => message.name)).toContain("GatewayMessageSend");
         expect(clientMessages.map((message) => message.name)).toContain("HistoryList");
         expect(clientMessages.map((message) => message.name)).toContain("ScopeDetailGet");
+        expect(clientMessages.map((message) => message.name)).toContain("ForkCreate");
         expect(clientMessages.map((message) => message.name)).toContain("ThoughtDetailGet");
         expect(clientMessages.map((message) => message.name)).toContain("EventSubscribe");
         for (const message of clientMessages) {

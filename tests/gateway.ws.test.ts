@@ -22,6 +22,7 @@ import {
     TaskPlanStatus,
     ToolPermission,
     GatewayControlMessageType,
+    type ContextForkRecord,
     type GatewayMessage,
     type GatewayReply,
 } from "../src/protocol/contracts/index.ts";
@@ -80,6 +81,7 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.ClientHello,
                         GatewayControlMessageType.EventSubscribe,
                         GatewayControlMessageType.EventUnsubscribe,
+                        GatewayControlMessageType.ForkCreate,
                         GatewayControlMessageType.GatewayStatusGet,
                         GatewayControlMessageType.HistoryDetailGet,
                         GatewayControlMessageType.ScopeList,
@@ -859,6 +861,158 @@ describe("SocketControlHub", () => {
                 payload: { data: [{ id: "scope-core", codenameIds: ["codename-core"] }] },
             },
         ]);
+        hub.dispose();
+    });
+
+    test("creates a context fork through an injected control callback and returns fork.snapshot", async () => {
+        const created: Array<{
+            record: ContextForkRecord;
+            source?: { assistantText?: string; eventId?: string; userText?: string };
+        }> = [];
+        const hub = createHub({
+            createContextFork: async (record, source) => {
+                created.push({ record, source });
+                return {
+                    ...record,
+                    id: "fork-created",
+                    createdAt: "2026-05-24T00:00:00.000Z",
+                    updatedAt: "2026-05-24T00:00:00.000Z",
+                };
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ForkCreate,
+                    {
+                        title: "TUI fork title",
+                        summary: "summary from selected turn",
+                        continuitySummary: "summary for future context",
+                        maxContextTokens: 12000,
+                        inheritedEventIds: ["source-event-id"],
+                        sourceEventId: "source-event-id",
+                        sourceAskId: "source-ask-id",
+                        sourceBlackboardTurnId: "blackboard-turn-id",
+                        context: {
+                            contextForkId: "current-active-fork-id",
+                            activeScope: {
+                                id: "scope-id",
+                                projectDir: "/tmp/scope",
+                                projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                                title: "Scope",
+                            },
+                        },
+                    },
+                    { id: "fork-create-1", requestId: "req-fork-create-1" },
+                ),
+            ),
+        );
+
+        expect(created).toHaveLength(1);
+        expect(created[0]?.record).toMatchObject({
+            continuitySummary: "summary for future context",
+            inheritedEventIds: ["source-event-id"],
+            maxContextTokens: 12000,
+            ownerKey: "scope:scope-id",
+            parentId: "current-active-fork-id",
+            scopeId: "scope-id",
+            sourceAskId: "source-ask-id",
+            sourceBlackboardTurnId: "blackboard-turn-id",
+            sourceEventId: "source-event-id",
+            summary: "summary from selected turn",
+            title: "TUI fork title",
+        });
+        expect(created[0]?.source).toEqual({ eventId: "source-event-id" });
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "fork-create-1",
+            requestId: "req-fork-create-1",
+            type: GatewayControlMessageType.ForkSnapshot,
+            payload: {
+                data: {
+                    fork: {
+                        id: "fork-created",
+                        ownerKey: "scope:scope-id",
+                        parentId: "current-active-fork-id",
+                        scopeId: "scope-id",
+                        title: "TUI fork title",
+                    },
+                },
+            },
+        });
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.GatewayStatusGet,
+                    undefined,
+                    { id: "status-after-fork-create-1", requestId: "req-status-after-fork-create-1" },
+                ),
+            ),
+        );
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: {
+                status: {
+                    controlState: {
+                        activeFork: {
+                            id: "fork-created",
+                            requestId: "req-fork-create-1",
+                            status: "active",
+                            title: "TUI fork title",
+                        },
+                    },
+                },
+            },
+        });
+        hub.dispose();
+    });
+
+    test("creates fork owner from parent or request when no scope is available", async () => {
+        const records: ContextForkRecord[] = [];
+        const hub = createHub({
+            createContextFork: async (record) => {
+                records.push(record);
+                return record;
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ForkCreate,
+                    {
+                        title: "Parent fork",
+                        summary: "summary",
+                        parentId: "parent-fork",
+                    },
+                    { id: "fork-create-parent", requestId: "req-parent" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ForkCreate,
+                    {
+                        title: "Turn fork",
+                        summary: "summary",
+                    },
+                    { id: "fork-create-turn", requestId: "req-turn" },
+                ),
+            ),
+        );
+
+        expect(records.map((record) => record.ownerKey)).toEqual(["fork:parent-fork", "turn:req-turn"]);
+        expect(records[0]?.parentId).toBe("parent-fork");
+        expect(records[1]?.parentId).toBeUndefined();
         hub.dispose();
     });
 

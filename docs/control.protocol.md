@@ -41,12 +41,12 @@
 
 | lane | 作用 | 当前主要 transport |
 | --- | --- | --- |
-| `input` | 客户端发起输入 | `gateway.message.send` |
+| `input` | 客户端发起输入与显式状态变更 | `gateway.message.send` `fork.create` |
 | `stream` | 服务端流式回复 | `turn.delta` `turn.final` `turn.error` |
 | `event` | 事件广播与订阅 | `event.publish` `event.subscribe` `event.unsubscribe` |
 | `ask` | 服务端请求用户补充 | 当前附着在 `turn.final.reply.metadata.ask` |
 | `todo` | 结构化任务计划 | 当前附着在 `turn.final.reply.metadata.planning.taskPlans` |
-| `data` | 只读快照 | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.snapshot` |
+| `data` | 快照数据 | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.snapshot` `fork.snapshot` |
 | `error` | 控制面错误 | `error` |
 | `ping` | 心跳请求 | `ping` |
 | `pong` | 心跳响应 | `pong` |
@@ -61,6 +61,8 @@
 - `event.publish`
 - `event.subscribe`
 - `event.unsubscribe`
+- `fork.create`
+- `fork.snapshot`
 - `gateway.message.send`
 - `gateway.status.get`
 - `gateway.status.snapshot`

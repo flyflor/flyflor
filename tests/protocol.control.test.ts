@@ -23,6 +23,7 @@ import {
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
     readGatewayControlHistoryListInput,
+    readGatewayControlForkCreateInput,
     readGatewayControlMessageInput,
     readGatewayControlSubscription,
     shouldDeliverGatewayControlEvent,
@@ -479,6 +480,9 @@ describe("Gateway Control protocol", () => {
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.GatewayMessageSend)).toBe(
             GatewayControlSemanticType.Input,
         );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ForkCreate)).toBe(
+            GatewayControlSemanticType.Input,
+        );
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.TurnDelta)).toBe(
             GatewayControlSemanticType.Stream,
         );
@@ -646,9 +650,60 @@ describe("Gateway Control protocol", () => {
 
     test("rejects invalid message payloads with structured protocol errors", () => {
         expect(() => readGatewayControlMessageInput(undefined)).toThrow("gateway.message.send requires payload");
+        expect(() => readGatewayControlForkCreateInput(undefined)).toThrow("fork.create requires payload");
+        expect(() => readGatewayControlForkCreateInput({ summary: "s" })).toThrow("fork.create payload requires title");
+        expect(() => readGatewayControlForkCreateInput({ title: "Fork" })).toThrow("fork.create payload requires summary");
         expect(() => readGatewayControlHistoryListInput(undefined)).toThrow("history.list requires payload");
         expect(readGatewayControlHistoryListInput({ limit: 10 })).toEqual({ beforeTs: undefined, limit: 10 });
         expect(() => normalizeGatewayControlMessage({ text: "" })).toThrow("gateway.message.send payload requires text");
+    });
+
+    test("reads fork.create payload as an explicit control command", () => {
+        const input = readGatewayControlForkCreateInput({
+            title: "  TUI fork title  ",
+            summary: "summary from selected turn",
+            continuitySummary: "",
+            parentId: "parent-fork",
+            scopeId: "scope-1",
+            maxContextTokens: 999_999,
+            inheritedEventIds: [" source-event-id ", "", 12],
+            sourceEventId: "source-event-id",
+            sourceAskId: "source-ask-id",
+            sourceBlackboardTurnId: "blackboard-turn-id",
+            context: {
+                contextForkId: "current-active-fork-id",
+                activeScope: {
+                    id: "scope-1",
+                    projectDir: "/tmp/scope",
+                    projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                    title: "Scope",
+                },
+            },
+        });
+
+        expect(input).toEqual({
+            title: "TUI fork title",
+            summary: "summary from selected turn",
+            continuitySummary: "summary from selected turn",
+            parentId: "parent-fork",
+            scopeId: "scope-1",
+            maxContextTokens: 200_000,
+            inheritedEventIds: ["source-event-id"],
+            sourceEventId: "source-event-id",
+            sourceAskId: "source-ask-id",
+            sourceBlackboardTurnId: "blackboard-turn-id",
+            id: undefined,
+            context: {
+                contextForkId: "current-active-fork-id",
+                activeScope: {
+                    id: "scope-1",
+                    projectDir: "/tmp/scope",
+                    projectMemoryDir: "/tmp/scope/.flyflor/memory",
+                    title: "Scope",
+                },
+                activeProject: undefined,
+            },
+        });
     });
 
     test("normalizes gateway.message.send payload into a ws GatewayMessage", () => {

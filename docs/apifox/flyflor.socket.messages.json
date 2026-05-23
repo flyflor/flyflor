@@ -53,6 +53,7 @@
         "ScopeList",
         "ScopeDetailGet",
         "ForkList",
+        "ForkCreate",
         "ForkDetailGet",
         "AskList",
         "AskDetailGet",
@@ -3155,6 +3156,170 @@
         "payload": {
           "scopeId": "scope-1",
           "limit": 20
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
+        "ForkSnapshot"
+      ],
+      "folder": "03 TUI Read Queries",
+      "name": "ForkCreate",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "fork.create"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "title",
+              "summary",
+              "continuitySummary",
+              "parentId",
+              "scopeId",
+              "maxContextTokens",
+              "inheritedEventIds",
+              "sourceEventId",
+              "sourceAskId",
+              "sourceBlackboardTurnId",
+              "context"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "continuitySummary": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": "string"
+              },
+              "scopeId": {
+                "type": "string"
+              },
+              "maxContextTokens": {
+                "type": "integer"
+              },
+              "inheritedEventIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "sourceEventId": {
+                "type": "string"
+              },
+              "sourceAskId": {
+                "type": "string"
+              },
+              "sourceBlackboardTurnId": {
+                "type": "string"
+              },
+              "context": {
+                "type": "object",
+                "required": [
+                  "contextForkId",
+                  "activeScope"
+                ],
+                "properties": {
+                  "contextForkId": {
+                    "type": "string"
+                  },
+                  "activeScope": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "projectDir",
+                      "projectMemoryDir",
+                      "title"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "projectDir": {
+                        "type": "string"
+                      },
+                      "projectMemoryDir": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "fork.create",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-fork-create-1",
+        "type": "fork.create",
+        "at": "2026-05-22T00:00:05.320Z",
+        "requestId": "req-fork-create-1",
+        "payload": {
+          "title": "TUI fork title",
+          "summary": "summary from selected turn",
+          "continuitySummary": "summary for future context",
+          "parentId": "current-fork-id-if-any",
+          "scopeId": "scope-1",
+          "maxContextTokens": 12000,
+          "inheritedEventIds": [
+            "source-event-id"
+          ],
+          "sourceEventId": "source-event-id",
+          "sourceAskId": "source-ask-id",
+          "sourceBlackboardTurnId": "blackboard-turn-id",
+          "context": {
+            "contextForkId": "current-active-fork-id",
+            "activeScope": {
+              "id": "scope-1",
+              "projectDir": "/workspace/project",
+              "projectMemoryDir": "/workspace/project/.flyflor/memory",
+              "title": "Socket Contract Scope"
+            }
+          }
         }
       }
     },
@@ -7240,6 +7405,36 @@
             }
           }
         ]
+      }
+    },
+    "ForkCreate": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-fork-create-1",
+      "type": "fork.create",
+      "at": "2026-05-22T00:00:05.320Z",
+      "requestId": "req-fork-create-1",
+      "payload": {
+        "title": "TUI fork title",
+        "summary": "summary from selected turn",
+        "continuitySummary": "summary for future context",
+        "parentId": "current-fork-id-if-any",
+        "scopeId": "scope-1",
+        "maxContextTokens": 12000,
+        "inheritedEventIds": [
+          "source-event-id"
+        ],
+        "sourceEventId": "source-event-id",
+        "sourceAskId": "source-ask-id",
+        "sourceBlackboardTurnId": "blackboard-turn-id",
+        "context": {
+          "contextForkId": "current-active-fork-id",
+          "activeScope": {
+            "id": "scope-1",
+            "projectDir": "/workspace/project",
+            "projectMemoryDir": "/workspace/project/.flyflor/memory",
+            "title": "Socket Contract Scope"
+          }
+        }
       }
     },
     "GatewayMessageSend": {

@@ -124,6 +124,7 @@ Socket 当前只暴露两个 HTTP 路径：
 - `blackboard.snapshot`
 - `crystal.list`
 - `crystal.snapshot`
+- `fork.create`
 - `fork.detail.get`
 - `fork.list`
 - `fork.snapshot`
@@ -298,6 +299,90 @@ LIMIT ?
 
 list 命令的 `data` 是数组；detail 命令的 `data` 是对象或 `null`。
 
+## `fork.create`
+
+`fork.create` 是状态变更 control command，不是只读 query。它只在 `src/socket/control.ts`
+处理 wire 校验、owner key 归属和 `controlState.activeFork` 更新，然后通过注入回调调用
+`RuntimeModule.createContextFork(...)` 完成持久化。它不会把 TUI 专用逻辑塞进
+`RuntimeModule.handleMessage`，也不会从 `conversationKey`、`threadId`、`user.id` 或
+`clientId` 推断认知 owner。
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-fork-create-1",
+  "type": "fork.create",
+  "at": "2026-05-22T00:00:05.320Z",
+  "requestId": "req-fork-create-1",
+  "payload": {
+    "title": "TUI fork title",
+    "summary": "summary from selected turn",
+    "continuitySummary": "summary for future context",
+    "parentId": "current-fork-id-if-any",
+    "scopeId": "scope-1",
+    "maxContextTokens": 12000,
+    "inheritedEventIds": ["source-event-id"],
+    "sourceEventId": "source-event-id",
+    "sourceAskId": "source-ask-id",
+    "sourceBlackboardTurnId": "blackboard-turn-id",
+    "context": {
+      "contextForkId": "current-active-fork-id",
+      "activeScope": {
+        "id": "scope-1",
+        "projectDir": "/workspace/project",
+        "projectMemoryDir": "/workspace/project/.flyflor/memory",
+        "title": "Socket Contract Scope"
+      }
+    }
+  }
+}
+```
+
+owner key 规则：
+
+- 有 `scopeId` 或 `context.activeScope.id` 时，使用 `scope:<scopeId>`。
+- 否则有 `parentId` 或 `context.contextForkId` 时，使用 `fork:<id>`。
+- 否则使用 `turn:<requestId>`；没有 `requestId` 时由内核生成 turn-local id。
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-fork-snapshot-1",
+  "type": "fork.snapshot",
+  "at": "2026-05-22T00:00:05.420Z",
+  "requestId": "req-fork-create-1",
+  "correlationId": "env-fork-create-1",
+  "payload": {
+    "data": {
+      "fork": {
+        "id": "fork-created",
+        "ownerKey": "scope:scope-1",
+        "scopeId": "scope-1",
+        "parentId": "current-fork-id-if-any",
+        "title": "TUI fork title",
+        "summary": "summary from selected turn",
+        "continuitySummary": "summary for future context",
+        "maxContextTokens": 12000,
+        "inheritedEventIds": ["source-event-id"],
+        "sourceEventId": "source-event-id",
+        "sourceAskId": "source-ask-id",
+        "sourceBlackboardTurnId": "blackboard-turn-id",
+        "createdAt": "2026-05-22T00:00:05.400Z",
+        "updatedAt": "2026-05-22T00:00:05.400Z"
+      }
+    }
+  }
+}
+```
+
+成功后 `gateway.status.get` 返回的 `gateway.status.snapshot.payload.controlState.activeFork`
+会反映最新 active fork。TUI 需要展开详情时继续使用 `fork.detail.get`，该查询仍只读
+DB/read-model。
+
 ## `history.list`
 
 用途：
@@ -420,12 +505,12 @@ history turns. It is assembled from stored structured plan/fork/replay records a
 
 | Lane | 主要 message |
 | --- | --- |
-| `input` | `gateway.message.send` |
+| `input` | `gateway.message.send` `fork.create` |
 | `stream` | `turn.delta` `turn.final` `turn.error` |
 | `event` | `event.publish` `event.subscribe` `event.unsubscribe` |
 | `ask` | 当前附着在 `turn.final.reply.metadata.ask` |
 | `todo` | 当前附着在 `turn.final.reply.metadata.planning.taskPlans` |
-| `data` | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.list` `history.snapshot` |
+| `data` | `server.hello` `ack` `gateway.status.snapshot` `capability.catalog.snapshot` `history.list` `history.snapshot` `fork.snapshot` |
 | `error` | `error` |
 | `ping` | `ping` |
 | `pong` | `pong` |

@@ -409,6 +409,25 @@ export interface GatewayControlMessageInput {
     };
 }
 
+export interface GatewayControlForkCreateInput {
+    context?: {
+        activeScope?: GatewayControlProjectScope;
+        activeProject?: GatewayControlProjectScope;
+        contextForkId?: string;
+    };
+    continuitySummary: string;
+    id?: string;
+    inheritedEventIds: string[];
+    maxContextTokens: number;
+    parentId?: string;
+    scopeId?: string;
+    sourceAskId?: string;
+    sourceBlackboardTurnId?: string;
+    sourceEventId?: string;
+    summary: string;
+    title: string;
+}
+
 export interface GatewayControlToolApprovals {
     mcpToolCalls?: boolean;
     userToolCalls?: boolean;
@@ -554,6 +573,7 @@ export function classifyGatewayControlSemanticType(
 ): GatewayControlSemanticType {
     switch (type) {
         case GatewayControlMessageType.GatewayMessageSend:
+        case GatewayControlMessageType.ForkCreate:
             return GatewayControlSemanticType.Input;
         case GatewayControlMessageType.TurnDelta:
         case GatewayControlMessageType.TurnFinal:
@@ -719,6 +739,41 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
     };
 }
 
+export function readGatewayControlForkCreateInput(
+    payload: Record<string, unknown> | undefined,
+): GatewayControlForkCreateInput {
+    if (!payload) {
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidPayload,
+            "fork.create requires payload",
+        );
+    }
+    const title = readRequiredTrimmedString(payload.title, "fork.create payload requires title", 160);
+    const summary = readRequiredTrimmedString(payload.summary, "fork.create payload requires summary", 1200);
+    const continuitySummary = readTrimmedString(payload.continuitySummary, 1200) ?? summary;
+    const context = isRecord(payload.context)
+        ? {
+              activeScope: readGatewayControlProjectScope(payload.context.activeScope),
+              activeProject: readGatewayControlProjectScope(payload.context.activeProject),
+              contextForkId: readTrimmedString(payload.context.contextForkId, 120),
+          }
+        : undefined;
+    return {
+        context,
+        continuitySummary,
+        id: readTrimmedString(payload.id, 120),
+        inheritedEventIds: readStringArray(payload.inheritedEventIds, 64, 120),
+        maxContextTokens: clampInteger(readNumber(payload.maxContextTokens) ?? 12_000, 1_000, 200_000),
+        parentId: readTrimmedString(payload.parentId, 120),
+        scopeId: readTrimmedString(payload.scopeId, 120),
+        sourceAskId: readTrimmedString(payload.sourceAskId, 120),
+        sourceBlackboardTurnId: readTrimmedString(payload.sourceBlackboardTurnId, 120),
+        sourceEventId: readTrimmedString(payload.sourceEventId, 120),
+        summary,
+        title,
+    };
+}
+
 function readGatewayControlToolApprovals(value: unknown): GatewayControlToolApprovals | undefined {
     if (!isRecord(value)) return undefined;
     return {
@@ -816,6 +871,35 @@ function readString(value: unknown): string | undefined {
     return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function readTrimmedString(value: unknown, maxLength: number): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed.slice(0, maxLength) : undefined;
+}
+
+function readRequiredTrimmedString(value: unknown, message: string, maxLength: number): string {
+    const read = readTrimmedString(value, maxLength);
+    if (!read) {
+        throw new GatewayControlProtocolError(GatewayControlErrorCode.InvalidPayload, message);
+    }
+    return read;
+}
+
+function readStringArray(value: unknown, maxItems: number, maxLength: number): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item) => readTrimmedString(item, maxLength))
+        .filter((item): item is string => Boolean(item))
+        .slice(0, maxItems);
+}
+
 function readNumber(value: unknown): number | undefined {
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+    const integer = Math.floor(value);
+    if (integer < min) return min;
+    if (integer > max) return max;
+    return integer;
 }

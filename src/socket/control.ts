@@ -21,6 +21,7 @@ import {
     GatewayControlReplyMetadataKind,
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
+    readGatewayControlForkCreateInput,
     readGatewayControlHistoryListInput,
     readGatewayControlMessageInput,
     readGatewayControlQueryPayload,
@@ -46,6 +47,7 @@ import {
     GatewayControlMessageType,
     type GatewayChannelCapabilities,
     type ChannelTransport,
+    type ContextForkRecord,
     type GatewayMessage,
     type GatewayReply,
     type RuntimeContext,
@@ -107,6 +109,14 @@ export type SocketControlMessageDispatcher = (
 
 export interface SocketControlHubOptions {
     config: GatewayConfig;
+    /**
+     * Explicit state-changing fork command boundary for clients. Socket owns
+     * wire validation; Runtime/Memory still own durable fork persistence.
+     */
+    createContextFork?: (
+        record: ContextForkRecord,
+        source?: { assistantText?: string; eventId?: string; userText?: string },
+    ) => Promise<ContextForkRecord>;
     dispatch: SocketControlMessageDispatcher;
     events: RuntimeEventBus;
     paths?: FlyflorPaths;
@@ -146,6 +156,9 @@ export class SocketControlHub implements EventSink {
         );
         this.handlers.set(GatewayControlMessageType.EventUnsubscribe, (socket, envelope) =>
             this.handleEventUnsubscribe(socket, envelope),
+        );
+        this.handlers.set(GatewayControlMessageType.ForkCreate, (socket, envelope) =>
+            this.handleForkCreate(socket, envelope),
         );
         this.handlers.set(GatewayControlMessageType.GatewayStatusGet, (socket, envelope) =>
             this.handleGatewayStatusGet(socket, envelope),
@@ -370,6 +383,65 @@ export class SocketControlHub implements EventSink {
             type: envelope.type,
         });
         this.send(socket, snapshotType, buildGatewayControlQuerySnapshotPayload(data ?? null), envelope);
+    }
+
+    private async handleForkCreate(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
+        if (!this.options.createContextFork) {
+            throw new GatewayControlProtocolError(
+                GatewayControlErrorCode.Internal,
+                "fork.create is unavailable",
+            );
+        }
+        const input = readGatewayControlForkCreateInput(envelope.payload);
+        const now = new Date().toISOString();
+        const scope = input.context?.activeScope ?? input.context?.activeProject;
+        const scopeId = input.scopeId ?? scope?.id;
+        const parentId = input.parentId ?? input.context?.contextForkId;
+        const ownerKey = this.forkOwnerKey(scopeId, parentId, envelope.requestId);
+        const fork: ContextForkRecord = {
+            id: input.id ?? `fork-${crypto.randomUUID()}`,
+            ownerKey,
+            ...(scopeId ? { scopeId } : {}),
+            ...(parentId ? { parentId } : {}),
+            title: input.title,
+            summary: input.summary,
+            continuitySummary: input.continuitySummary,
+            maxContextTokens: input.maxContextTokens,
+            inheritedEventIds: input.inheritedEventIds,
+            createdAt: now,
+            updatedAt: now,
+            ...(input.sourceEventId ? { sourceEventId: input.sourceEventId } : {}),
+            ...(input.sourceAskId ? { sourceAskId: input.sourceAskId } : {}),
+            ...(input.sourceBlackboardTurnId ? { sourceBlackboardTurnId: input.sourceBlackboardTurnId } : {}),
+        };
+        const written = await this.options.createContextFork(fork, {
+            eventId: input.sourceEventId,
+        });
+        this.controlState = {
+            ...this.controlState,
+            activeFork: {
+                id: written.id,
+                continuitySummary: written.continuitySummary,
+                maxContextTokens: written.maxContextTokens,
+                title: written.title,
+                at: now,
+                requestId: envelope.requestId,
+                status: ControlSnapshotStatus.Active,
+            },
+        };
+        this.log("fork.created", {
+            clientId: socket.data.clientId,
+            forkId: written.id,
+            ownerKey: written.ownerKey,
+            requestId: envelope.requestId,
+        });
+        this.send(
+            socket,
+            GatewayControlMessageType.ForkSnapshot,
+            buildGatewayControlQuerySnapshotPayload({ fork: written }),
+            envelope,
+            envelope.requestId,
+        );
     }
 
     private async handleGatewayMessageSend(
@@ -630,6 +702,12 @@ export class SocketControlHub implements EventSink {
             contextForkId: input?.contextForkId,
             skillNames: input?.skillNames,
         };
+    }
+
+    private forkOwnerKey(scopeId: string | undefined, parentId: string | undefined, requestId: string | undefined): string {
+        if (scopeId) return `scope:${scopeId}`;
+        if (parentId) return `fork:${parentId}`;
+        return `turn:${requestId ?? crypto.randomUUID()}`;
     }
 
     private updateControlStateFromReply(reply: GatewayReply, context: RuntimeContext): void {

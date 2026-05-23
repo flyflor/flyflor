@@ -55,6 +55,7 @@ export class SocketModule extends Socket {
         void this.queryComponent?.initialize();
         this.controlHub = new SocketControlHub({
             config: this.config,
+            createContextFork: (record, source) => this.runtime.createContextFork(record, source),
             dispatch: (message, options) => this.dispatch(message, options),
             events: { subscribe: (sink: EventSink) => this.subscribeEvents(sink) } as never,
             paths: this.paths,
