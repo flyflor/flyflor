@@ -89,6 +89,7 @@ OpenAPI and WS docs:
 
 - [docs/openapi/flyflor.socket.openapi.json](docs/openapi/flyflor.socket.openapi.json) is the Apifox-importable contract.
 - [docs/openapi/flyflor.socket.openapi.md](docs/openapi/flyflor.socket.openapi.md) explains the real Apifox WebSocket flow and example messages.
+- [docs/apifox/README.md](docs/apifox/README.md) provides the Apifox-only WS example set with every frame expanded for testing.
 - [docs/ws.doc.md](docs/ws.doc.md) is the field-level `/ws` manual.
 - [docs/control.protocol.md](docs/control.protocol.md) is the protocol contract for external clients.
 

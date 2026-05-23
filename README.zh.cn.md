@@ -87,6 +87,7 @@ OpenAPI 与 WS 文档：
 
 - [docs/openapi/flyflor.socket.openapi.json](docs/openapi/flyflor.socket.openapi.json) 是 Apifox 可导入契约。
 - [docs/openapi/flyflor.socket.openapi.zh.cn.md](docs/openapi/flyflor.socket.openapi.zh.cn.md) 说明真实 Apifox WebSocket 流程和 example messages。
+- [docs/apifox/README.md](docs/apifox/README.md) 提供 Apifox 专用 WS 示例集合，把所有 frame 展开成可测试条目。
 - [docs/ws.doc.zh.cn.md](docs/ws.doc.zh.cn.md) 是 `/ws` 字段级手册。
 - [docs/control.protocol.zh.cn.md](docs/control.protocol.zh.cn.md) 是外部客户端协议契约。
 

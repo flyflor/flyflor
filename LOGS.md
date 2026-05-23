@@ -573,3 +573,11 @@
   原因：用户要求剩余工作全部完成，把智能生命体核心推到 99%+，为后续 Rust TUI/CLI 开发提供稳定 `/ws` 契约。
   效率：tracked diff 13 files changed，1144 insertions，25 deletions；新增 `src/socket/query` 7 files / 1088 lines，合计约 2232 insertions，25 deletions；`dist/flyflor` 65M。
   验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/scope.solidification.test.ts tests/scope.vector.test.ts tests/codename.promote.test.ts tests/context.scope.test.ts tests/scope.offer.test.ts tests/ask.reply.test.ts tests/ask.parse.test.ts tests/executive.tool.runtime.test.ts tests/crystal.local.backend.test.ts tests/reflection.gem.consolidation.test.ts` 124 pass；`bun run docs:check` 25 pass；`bun run check`；`bun run build:binary`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：apifox-ws-example-collection
+  摘要：新增 Apifox 专用 WS 示例集合与展开视图：`docs/apifox/flyflor.socket.apifox.json` 提供 project-style WebSocket raw frame 条目，`docs/apifox/flyflor.socket.apifox.openapi.json` 提供 doc-only `/__apifox/ws/...` 视图，便于 Apifox 左侧路径树逐项测试。
+  原因：canonical OpenAPI 真实 surface 只有 `/health` 和 `/ws`，Apifox 路径视图只显示两个接口，无法满足 TUI/WS frame 测试示例展开需求；必须在不污染真实服务契约的前提下补齐可测试示例。
+  效率：新增生成脚本 701 行；生成 Apifox project JSON 12410 行、Apifox OpenAPI 视图 12499 行；手写 docs/test/package 约 127 insertions、21 deletions。
+  验证：`bun run docs:check` 26 pass；`bun test tests/docs.references.test.ts` 13 pass；`bun run check`；`git diff --check`。

@@ -600,3 +600,13 @@ Kernel V2 acceptance focus：
 - [x] 跑最终核心 focused seal：ASK、Scope、Scope Vector、Crystal、Executive、Socket、Docs 相关测试。
 - [x] 跑最终工程 seal：`bun run docs:check`、`bun run check`、`bun run build:binary`、`git diff --check`。
 - [x] 提交 `/ws` TUI read-model query 闭合变更。
+
+## 2026-05-23 Apifox WS 示例集合闭合
+
+- [x] 保持 canonical OpenAPI `docs/openapi/flyflor.socket.openapi.json` 不动，真实 HTTP surface 仍只有 `/health` 和 `/ws`。
+- [x] 新增 `scripts/build.apifox.socket.ts`，从 canonical OpenAPI examples 派生 Apifox 专用 WS 示例集合。
+- [x] 新增 `docs/apifox/flyflor.socket.apifox.json`，把 handshake、control、live turn、TUI read queries、TUI snapshots 和 event stream 展开成可测试条目。
+- [x] 新增 `docs/apifox/flyflor.socket.apifox.openapi.json`，使用 doc-only `/__apifox/ws/...` 伪操作让 Apifox 左侧路径树能点开所有 WS frame 示例。
+- [x] 每个 Apifox frame 生成 JSON Schema，固定 `protocol`/`type` enum，并按示例 payload 生成 required/properties。
+- [x] 将 `docs:apifox:check` 纳入 `docs:check`，防止 Apifox 产物漂移。
+- [x] 增加 docs guard：Apifox 产物必须包含所有 canonical examples 和 TUI query/detail/snapshot examples，所有 client->server raw frame 必须能被 runtime control parser 解析。

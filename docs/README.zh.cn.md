@@ -17,16 +17,17 @@
 7. [control.protocol.zh.cn.md](control.protocol.zh.cn.md) — `/ws` 协议与 `gateway.message.send.payload.context` 的显式上下文入口。
 8. [ws.doc.zh.cn.md](ws.doc.zh.cn.md) — `/ws` 的字段级 API 手册。
 9. [openapi/flyflor.socket.openapi.zh.cn.md](openapi/flyflor.socket.openapi.zh.cn.md) — Apifox 导入与真实 socket 场景测试契约。
-10. [runtime.events.zh.cn.md](runtime.events.zh.cn.md) — 事件时间线与 snapshot 权威面的边界。
-11. [sandbox.capabilities.zh.cn.md](sandbox.capabilities.zh.cn.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
-12. [mcp.tools.zh.cn.md](mcp.tools.zh.cn.md) — MCP 工具面与 transport 恢复边界。
-13. [executive.exoskeleton.zh.cn.md](executive.exoskeleton.zh.cn.md) — Executive 外骨架文档，现行语义已统一到 Executive。
-14. [skill.system.zh.cn.md](skill.system.zh.cn.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
-15. [crystal.reflection.zh.cn.md](crystal.reflection.zh.cn.md) — Crystal 反思与 Gem 结晶边界。
-16. [development.workflow.zh.cn.md](development.workflow.zh.cn.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
-17. [external.kit.zh.cn.md](external.kit.zh.cn.md) — External kit 只读发现协议。
-18. [refactor.roadmap.zh.cn.md](refactor.roadmap.zh.cn.md) — 当前重构方向与文档维护口径。
-19. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
+10. [apifox/README.md](apifox/README.md) — Apifox 专用 WS 示例集合，展开所有 WebSocket frame 示例和 JSON Schema。
+11. [runtime.events.zh.cn.md](runtime.events.zh.cn.md) — 事件时间线与 snapshot 权威面的边界。
+12. [sandbox.capabilities.zh.cn.md](sandbox.capabilities.zh.cn.md) — Capability / Tool / Trust / approval / sandbox 运行边界。
+13. [mcp.tools.zh.cn.md](mcp.tools.zh.cn.md) — MCP 工具面与 transport 恢复边界。
+14. [executive.exoskeleton.zh.cn.md](executive.exoskeleton.zh.cn.md) — Executive 外骨架文档，现行语义已统一到 Executive。
+15. [skill.system.zh.cn.md](skill.system.zh.cn.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
+16. [crystal.reflection.zh.cn.md](crystal.reflection.zh.cn.md) — Crystal 反思与 Gem 结晶边界。
+17. [development.workflow.zh.cn.md](development.workflow.zh.cn.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
+18. [external.kit.zh.cn.md](external.kit.zh.cn.md) — External kit 只读发现协议。
+19. [refactor.roadmap.zh.cn.md](refactor.roadmap.zh.cn.md) — 当前重构方向与文档维护口径。
+20. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
 

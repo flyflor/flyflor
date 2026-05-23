@@ -371,6 +371,106 @@ describe("documentation references", () => {
         });
     });
 
+    test("Apifox WS example artifacts expand every TUI socket frame without changing the real HTTP surface", async () => {
+        const canonicalText = await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.json")).text();
+        const canonical = JSON.parse(canonicalText) as {
+            components?: { examples?: Record<string, { value?: unknown }> };
+            paths?: Record<string, unknown>;
+        };
+        const apifoxText = await Bun.file(join(REPO_ROOT, "docs", "apifox", "flyflor.socket.apifox.json")).text();
+        const apifoxOpenApiText = await Bun.file(
+            join(REPO_ROOT, "docs", "apifox", "flyflor.socket.apifox.openapi.json"),
+        ).text();
+        const apifox = JSON.parse(apifoxText) as {
+            apiCollection?: Array<{
+                items?: Array<{
+                    api?: { requestBody?: { raw?: string }; schema?: unknown };
+                    extensions?: Record<string, unknown>;
+                }>;
+            }>;
+            examples?: Record<string, unknown>;
+            realSurface?: unknown;
+        };
+        const apifoxOpenApi = JSON.parse(apifoxOpenApiText) as {
+            components?: { schemas?: Record<string, OpenApiSchema> };
+            paths?: Record<string, unknown>;
+            "x-flyflor-real-surface"?: string[];
+        };
+        const canonicalPaths = Object.keys(canonical.paths ?? {}).sort();
+        const apifoxItems = (apifox.apiCollection ?? []).flatMap((folder) => folder.items ?? []);
+        const apifoxExampleNames = Object.keys(apifox.examples ?? {});
+        const expectedExamples = [
+            "AskDetailGet",
+            "AskDetailSnapshot",
+            "AskList",
+            "AskSnapshot",
+            "BlackboardDetailGet",
+            "BlackboardDetailSnapshot",
+            "BlackboardList",
+            "BlackboardSnapshot",
+            "CrystalList",
+            "CrystalSnapshot",
+            "ForkDetailGet",
+            "ForkList",
+            "ForkListSnapshot",
+            "ForkSnapshot",
+            "HistoryDetailGet",
+            "HistoryDetailSnapshot",
+            "HistoryList",
+            "HistorySnapshot",
+            "ReplayDetailGet",
+            "ReplayDetailSnapshot",
+            "ReplayList",
+            "ReplaySnapshot",
+            "ScopeDetailGet",
+            "ScopeDetailSnapshot",
+            "ScopeList",
+            "ScopeSnapshot",
+            "TaskDetailGet",
+            "TaskDetailSnapshot",
+            "TaskList",
+            "TaskSnapshot",
+            "ThoughtDetailGet",
+            "ThoughtSnapshot",
+            "EventSubscribe",
+            "EventUnsubscribe",
+            "EventPublish",
+            "ExecutiveLoopPausedEvent",
+            "ExecutiveLoopResumedEvent",
+        ];
+
+        expect(canonicalPaths).toEqual(["/health", "/ws"]);
+        expect(apifox.realSurface).toEqual([
+            { method: "GET", path: "/health" },
+            { method: "WS", path: "/ws" },
+        ]);
+        expect(apifoxItems.length).toBeGreaterThanOrEqual(55);
+        for (const name of Object.keys(canonical.components?.examples ?? {})) {
+            expect(apifoxExampleNames).toContain(name);
+        }
+        for (const name of expectedExamples) {
+            expect(apifoxExampleNames).toContain(name);
+            expect(apifoxOpenApi.components?.schemas).toHaveProperty(`${name}Frame`);
+        }
+
+        const apifoxPaths = Object.keys(apifoxOpenApi.paths ?? {});
+        expect(apifoxPaths).toContain("/health");
+        expect(apifoxPaths).toContain("/ws");
+        expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/send/history-detail-get"))).toBe(true);
+        expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/send/scope-detail-get"))).toBe(true);
+        expect(apifoxPaths.some((path) => path.startsWith("/__apifox/ws/expect/thought-snapshot"))).toBe(true);
+        expect(apifoxOpenApi["x-flyflor-real-surface"]).toEqual(["/health", "/ws"]);
+
+        const sendItems = apifoxItems.filter((item) => item.extensions?.["x-flyflor-direction"] === "client->server");
+        expect(sendItems.length).toBeGreaterThan(0);
+        for (const item of sendItems) {
+            expect(item.api?.schema).toBeTruthy();
+            const raw = item.api?.requestBody?.raw;
+            expect(typeof raw).toBe("string");
+            expect(() => parseGatewayControlEnvelope(raw ?? "")).not.toThrow();
+        }
+    });
+
     test("bilingual Apifox scenario docs cover the real socket flow", async () => {
         const docs = [
             await Bun.file(join(REPO_ROOT, "docs", "openapi", "flyflor.socket.openapi.md")).text(),
