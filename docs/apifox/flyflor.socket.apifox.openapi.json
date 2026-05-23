@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Flyflor Apifox WS Example View",
+    "title": "Flyflor WebSocket 测试示例",
     "version": "1.0.0",
-    "description": "Apifox-only expanded view for WebSocket frame testing. The canonical service contract is docs/openapi/flyflor.socket.openapi.json and still exposes only /health and /ws."
+    "description": "Apifox 专用 WebSocket frame 测试展开视图。真实服务契约仍是 docs/openapi/flyflor.socket.openapi.json，并且只暴露 /health 与 /ws。"
   },
   "servers": [
     {
@@ -17,22 +17,22 @@
   ],
   "tags": [
     {
-      "name": "00 Handshake"
+      "name": "00 握手连接"
     },
     {
-      "name": "01 Control"
+      "name": "01 控制面"
     },
     {
-      "name": "02 Live Turn"
+      "name": "02 实时对话"
     },
     {
-      "name": "03 TUI Read Queries"
+      "name": "03 TUI 只读查询"
     },
     {
-      "name": "04 TUI Snapshots"
+      "name": "04 TUI 快照响应"
     },
     {
-      "name": "05 Event Stream"
+      "name": "05 事件流"
     }
   ],
   "paths": {
@@ -129,7 +129,7 @@
     "/__apifox/ws/send/client-hello": {
       "post": {
         "tags": [
-          "00 Handshake"
+          "00 握手连接"
         ],
         "summary": "WS send: ClientHello",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -195,7 +195,7 @@
             }
           }
         },
-        "x-apifox-folder": "00 Handshake",
+        "x-apifox-folder": "00 握手连接",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -204,7 +204,7 @@
     "/__apifox/ws/send/ping": {
       "post": {
         "tags": [
-          "00 Handshake"
+          "00 握手连接"
         ],
         "summary": "WS send: Ping",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -262,7 +262,7 @@
             }
           }
         },
-        "x-apifox-folder": "00 Handshake",
+        "x-apifox-folder": "00 握手连接",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -271,7 +271,7 @@
     "/__apifox/ws/expect/server-hello": {
       "post": {
         "tags": [
-          "00 Handshake"
+          "00 握手连接"
         ],
         "summary": "WS expected: ServerHello",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -412,7 +412,7 @@
             }
           }
         },
-        "x-apifox-folder": "00 Handshake",
+        "x-apifox-folder": "00 握手连接",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -421,7 +421,7 @@
     "/__apifox/ws/expect/ack": {
       "post": {
         "tags": [
-          "00 Handshake"
+          "00 握手连接"
         ],
         "summary": "WS expected: Ack",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -484,7 +484,7 @@
             }
           }
         },
-        "x-apifox-folder": "00 Handshake",
+        "x-apifox-folder": "00 握手连接",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -493,7 +493,7 @@
     "/__apifox/ws/expect/pong": {
       "post": {
         "tags": [
-          "00 Handshake"
+          "00 握手连接"
         ],
         "summary": "WS expected: Pong",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -554,7 +554,7 @@
             }
           }
         },
-        "x-apifox-folder": "00 Handshake",
+        "x-apifox-folder": "00 握手连接",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -563,7 +563,7 @@
     "/__apifox/ws/send/gateway-status-get": {
       "post": {
         "tags": [
-          "01 Control"
+          "01 控制面"
         ],
         "summary": "WS send: GatewayStatusGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -704,7 +704,7 @@
             }
           }
         },
-        "x-apifox-folder": "01 Control",
+        "x-apifox-folder": "01 控制面",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -713,7 +713,7 @@
     "/__apifox/ws/send/capability-catalog-get": {
       "post": {
         "tags": [
-          "01 Control"
+          "01 控制面"
         ],
         "summary": "WS send: CapabilityCatalogGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -777,7 +777,7 @@
             }
           }
         },
-        "x-apifox-folder": "01 Control",
+        "x-apifox-folder": "01 控制面",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -786,7 +786,7 @@
     "/__apifox/ws/expect/gateway-status-snapshot": {
       "post": {
         "tags": [
-          "01 Control"
+          "01 控制面"
         ],
         "summary": "WS expected: GatewayStatusSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1013,7 +1013,7 @@
             }
           }
         },
-        "x-apifox-folder": "01 Control",
+        "x-apifox-folder": "01 控制面",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -1022,7 +1022,7 @@
     "/__apifox/ws/expect/capability-catalog-snapshot": {
       "post": {
         "tags": [
-          "01 Control"
+          "01 控制面"
         ],
         "summary": "WS expected: CapabilityCatalogSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1095,7 +1095,7 @@
             }
           }
         },
-        "x-apifox-folder": "01 Control",
+        "x-apifox-folder": "01 控制面",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -1104,7 +1104,7 @@
     "/__apifox/ws/send/gateway-message-send": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS send: GatewayMessageSend",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1421,7 +1421,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -1430,7 +1430,7 @@
     "/__apifox/ws/send/invalid-gateway-message-send": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS send: InvalidGatewayMessageSend",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1489,7 +1489,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -1498,7 +1498,7 @@
     "/__apifox/ws/expect/turn-delta": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: TurnDelta",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1561,7 +1561,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -1570,7 +1570,7 @@
     "/__apifox/ws/expect/turn-final": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: TurnFinal",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1657,7 +1657,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -1666,7 +1666,7 @@
     "/__apifox/ws/expect/turn-final-with-ask": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: TurnFinalWithAsk",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -1827,7 +1827,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -1836,7 +1836,7 @@
     "/__apifox/ws/expect/turn-final-with-planning": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: TurnFinalWithPlanning",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2015,7 +2015,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -2024,7 +2024,7 @@
     "/__apifox/ws/expect/turn-final-with-executive-loop-pause": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: TurnFinalWithExecutiveLoopPause",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2187,7 +2187,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -2196,7 +2196,7 @@
     "/__apifox/ws/expect/turn-error": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: TurnError",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2257,7 +2257,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -2266,7 +2266,7 @@
     "/__apifox/ws/expect/invalid-payload-error": {
       "post": {
         "tags": [
-          "02 Live Turn"
+          "02 实时对话"
         ],
         "summary": "WS expected: InvalidPayloadError",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2329,7 +2329,7 @@
             }
           }
         },
-        "x-apifox-folder": "02 Live Turn",
+        "x-apifox-folder": "02 实时对话",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -2338,7 +2338,7 @@
     "/__apifox/ws/send/history-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: HistoryList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2467,7 +2467,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2476,7 +2476,7 @@
     "/__apifox/ws/send/history-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: HistoryDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2552,7 +2552,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2561,7 +2561,7 @@
     "/__apifox/ws/send/scope-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ScopeList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2635,7 +2635,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2644,7 +2644,7 @@
     "/__apifox/ws/send/scope-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ScopeDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2745,7 +2745,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2754,7 +2754,7 @@
     "/__apifox/ws/send/fork-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ForkList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2822,7 +2822,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2831,7 +2831,7 @@
     "/__apifox/ws/send/fork-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ForkDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2900,7 +2900,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2909,7 +2909,7 @@
     "/__apifox/ws/send/ask-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: AskList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -2983,7 +2983,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -2992,7 +2992,7 @@
     "/__apifox/ws/send/ask-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: AskDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3063,7 +3063,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3072,7 +3072,7 @@
     "/__apifox/ws/send/blackboard-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: BlackboardList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3154,7 +3154,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3163,7 +3163,7 @@
     "/__apifox/ws/send/blackboard-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: BlackboardDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3248,7 +3248,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3257,7 +3257,7 @@
     "/__apifox/ws/send/task-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: TaskList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3328,7 +3328,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3337,7 +3337,7 @@
     "/__apifox/ws/send/task-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: TaskDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3418,7 +3418,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3427,7 +3427,7 @@
     "/__apifox/ws/send/replay-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ReplayList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3498,7 +3498,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3507,7 +3507,7 @@
     "/__apifox/ws/send/replay-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ReplayDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3580,7 +3580,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3589,7 +3589,7 @@
     "/__apifox/ws/send/thought-detail-get": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: ThoughtDetailGet",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3663,7 +3663,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3672,7 +3672,7 @@
     "/__apifox/ws/send/crystal-list": {
       "post": {
         "tags": [
-          "03 TUI Read Queries"
+          "03 TUI 只读查询"
         ],
         "summary": "WS send: CrystalList",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3740,7 +3740,7 @@
             }
           }
         },
-        "x-apifox-folder": "03 TUI Read Queries",
+        "x-apifox-folder": "03 TUI 只读查询",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -3749,7 +3749,7 @@
     "/__apifox/ws/expect/history-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: HistorySnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -3946,7 +3946,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -3955,7 +3955,7 @@
     "/__apifox/ws/expect/history-detail-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: HistoryDetailSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4048,7 +4048,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4057,7 +4057,7 @@
     "/__apifox/ws/expect/scope-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ScopeSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4146,7 +4146,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4155,7 +4155,7 @@
     "/__apifox/ws/expect/scope-detail-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ScopeDetailSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4298,7 +4298,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4307,7 +4307,7 @@
     "/__apifox/ws/expect/fork-list-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ForkListSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4382,7 +4382,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4391,7 +4391,7 @@
     "/__apifox/ws/expect/fork-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ForkSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4470,7 +4470,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4479,7 +4479,7 @@
     "/__apifox/ws/expect/ask-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: AskSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4566,7 +4566,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4575,7 +4575,7 @@
     "/__apifox/ws/expect/ask-detail-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: AskDetailSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4658,7 +4658,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4667,7 +4667,7 @@
     "/__apifox/ws/expect/blackboard-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: BlackboardSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4768,7 +4768,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4777,7 +4777,7 @@
     "/__apifox/ws/expect/blackboard-detail-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: BlackboardDetailSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4888,7 +4888,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4897,7 +4897,7 @@
     "/__apifox/ws/expect/task-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: TaskSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -4976,7 +4976,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -4985,7 +4985,7 @@
     "/__apifox/ws/expect/task-detail-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: TaskDetailSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5088,7 +5088,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5097,7 +5097,7 @@
     "/__apifox/ws/expect/replay-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ReplaySnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5178,7 +5178,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5187,7 +5187,7 @@
     "/__apifox/ws/expect/replay-detail-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ReplayDetailSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5274,7 +5274,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5283,7 +5283,7 @@
     "/__apifox/ws/expect/thought-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: ThoughtSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5372,7 +5372,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5381,7 +5381,7 @@
     "/__apifox/ws/expect/crystal-snapshot": {
       "post": {
         "tags": [
-          "04 TUI Snapshots"
+          "04 TUI 快照响应"
         ],
         "summary": "WS expected: CrystalSnapshot",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5458,7 +5458,7 @@
             }
           }
         },
-        "x-apifox-folder": "04 TUI Snapshots",
+        "x-apifox-folder": "04 TUI 快照响应",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5467,7 +5467,7 @@
     "/__apifox/ws/send/event-subscribe": {
       "post": {
         "tags": [
-          "05 Event Stream"
+          "05 事件流"
         ],
         "summary": "WS send: EventSubscribe",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5589,7 +5589,7 @@
             }
           }
         },
-        "x-apifox-folder": "05 Event Stream",
+        "x-apifox-folder": "05 事件流",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -5598,7 +5598,7 @@
     "/__apifox/ws/send/event-unsubscribe": {
       "post": {
         "tags": [
-          "05 Event Stream"
+          "05 事件流"
         ],
         "summary": "WS send: EventUnsubscribe",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5643,7 +5643,7 @@
             }
           }
         },
-        "x-apifox-folder": "05 Event Stream",
+        "x-apifox-folder": "05 事件流",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "client->server"
@@ -5652,7 +5652,7 @@
     "/__apifox/ws/expect/event-publish": {
       "post": {
         "tags": [
-          "05 Event Stream"
+          "05 事件流"
         ],
         "summary": "WS expected: EventPublish",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5721,7 +5721,7 @@
             }
           }
         },
-        "x-apifox-folder": "05 Event Stream",
+        "x-apifox-folder": "05 事件流",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5730,7 +5730,7 @@
     "/__apifox/ws/expect/executive-loop-paused-event": {
       "post": {
         "tags": [
-          "05 Event Stream"
+          "05 事件流"
         ],
         "summary": "WS expected: ExecutiveLoopPausedEvent",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5807,7 +5807,7 @@
             }
           }
         },
-        "x-apifox-folder": "05 Event Stream",
+        "x-apifox-folder": "05 事件流",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
@@ -5816,7 +5816,7 @@
     "/__apifox/ws/expect/executive-loop-resumed-event": {
       "post": {
         "tags": [
-          "05 Event Stream"
+          "05 事件流"
         ],
         "summary": "WS expected: ExecutiveLoopResumedEvent",
         "description": "Apifox-only doc operation. Do not call this path on Flyflor. Connect to ws://127.0.0.1:8788/ws and send or compare the raw JSON body.",
@@ -5897,7 +5897,7 @@
             }
           }
         },
-        "x-apifox-folder": "05 Event Stream",
+        "x-apifox-folder": "05 事件流",
         "x-flyflor-doc-only": true,
         "x-flyflor-real-ws-url": "ws://127.0.0.1:8788/ws",
         "x-flyflor-direction": "server->client"
