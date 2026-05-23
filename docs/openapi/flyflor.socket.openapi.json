@@ -290,11 +290,34 @@
           "gateway.message.send",
           "gateway.status.get",
           "gateway.status.snapshot",
+          "ask.detail.get",
+          "ask.snapshot",
+          "ask.list",
+          "blackboard.detail.get",
+          "blackboard.list",
+          "blackboard.snapshot",
+          "crystal.list",
+          "crystal.snapshot",
+          "fork.detail.get",
+          "fork.list",
+          "fork.snapshot",
+          "history.detail.get",
           "history.list",
           "history.snapshot",
           "ping",
           "pong",
+          "replay.detail.get",
+          "replay.list",
+          "replay.snapshot",
+          "scope.detail.get",
+          "scope.list",
+          "scope.snapshot",
           "server.hello",
+          "task.detail.get",
+          "task.list",
+          "task.snapshot",
+          "thought.detail.get",
+          "thought.snapshot",
           "turn.delta",
           "turn.error",
           "turn.final"
@@ -1651,6 +1674,51 @@
             "$ref": "#/components/schemas/HistoryListEnvelope"
           },
           {
+            "$ref": "#/components/schemas/AskListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/AskDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/BlackboardListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/BlackboardDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/CrystalListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ForkListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ForkDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/HistoryDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ReplayListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ReplayDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ScopeListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ScopeDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/TaskListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/TaskDetailGetEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ThoughtDetailGetEnvelope"
+          },
+          {
             "$ref": "#/components/schemas/GatewayMessageSendEnvelope"
           },
           {
@@ -1661,6 +1729,369 @@
           }
         ],
         "description": "Inbound client control frames. Use this schema in Apifox when validating client-to-server WS messages; send the example value as the raw WebSocket body. gateway.message.send and history.list require payload objects."
+      },
+      "QueryPayload": {
+        "type": "object",
+        "description": "Read-only DB query payload. Query commands inspect persisted brain.db, blackboard DB, scope.db, or crystal.db state only; they do not invoke runtime thinking or prompt/context assembly.",
+        "additionalProperties": true
+      },
+      "QuerySnapshotPayload": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "description": "Query result. List commands return arrays; detail commands return an object or null.",
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "AskListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "ask.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "AskDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "ask.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "BlackboardListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "blackboard.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "BlackboardDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "blackboard.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "CrystalListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "crystal.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ForkListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "fork.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ForkDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "fork.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "HistoryDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "history.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ReplayListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "replay.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ReplayDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "replay.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ScopeListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "scope.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ScopeDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "scope.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "TaskListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "task.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "TaskDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "task.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ThoughtDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "thought.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
       }
     },
     "examples": {
@@ -2445,6 +2876,194 @@
           "payload": {
             "code": "invalid-payload",
             "message": "gateway.message.send payload requires text"
+          }
+        }
+      },
+      "AskList": {
+        "summary": "ask.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-ask-list-1",
+          "type": "ask.list",
+          "at": "2026-05-22T00:00:05.100Z",
+          "requestId": "req-ask-list-1",
+          "payload": {
+            "status": "all",
+            "limit": 20
+          }
+        }
+      },
+      "AskSnapshot": {
+        "summary": "ask.snapshot query response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-ask-snapshot-1",
+          "type": "ask.snapshot",
+          "at": "2026-05-22T00:00:05.150Z",
+          "requestId": "req-ask-list-1",
+          "correlationId": "env-ask-list-1",
+          "payload": {
+            "data": [
+              {
+                "status": "active",
+                "ask": {
+                  "reason": "other",
+                  "prompt": "Need confirmation?",
+                  "freeform": true
+                },
+                "event": {
+                  "id": "ask-1",
+                  "type": "ask"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ScopeList": {
+        "summary": "scope.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-scope-list-1",
+          "type": "scope.list",
+          "at": "2026-05-22T00:00:05.200Z",
+          "requestId": "req-scope-list-1",
+          "payload": {
+            "limit": 20
+          }
+        }
+      },
+      "ScopeSnapshot": {
+        "summary": "scope.snapshot query response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-scope-snapshot-1",
+          "type": "scope.snapshot",
+          "at": "2026-05-22T00:00:05.250Z",
+          "requestId": "req-scope-list-1",
+          "correlationId": "env-scope-list-1",
+          "payload": {
+            "data": [
+              {
+                "id": "scope-1",
+                "title": "Flyflor core",
+                "codenameIds": [
+                  "codename-core"
+                ],
+                "indexCounts": {
+                  "vectors": 1,
+                  "treeNodes": 4,
+                  "hotMemory": 8,
+                  "associations": 20
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ForkDetailGet": {
+        "summary": "fork.detail.get read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-fork-detail-1",
+          "type": "fork.detail.get",
+          "at": "2026-05-22T00:00:05.300Z",
+          "requestId": "req-fork-detail-1",
+          "payload": {
+            "forkId": "fork-1"
+          }
+        }
+      },
+      "ForkSnapshot": {
+        "summary": "fork.snapshot query response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-fork-snapshot-1",
+          "type": "fork.snapshot",
+          "at": "2026-05-22T00:00:05.350Z",
+          "requestId": "req-fork-detail-1",
+          "correlationId": "env-fork-detail-1",
+          "payload": {
+            "data": {
+              "fork": {
+                "id": "fork-1",
+                "title": "Replay fork"
+              },
+              "inheritedEvents": [],
+              "asks": [],
+              "taskPlans": [],
+              "replays": []
+            }
+          }
+        }
+      },
+      "BlackboardList": {
+        "summary": "blackboard.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-blackboard-list-1",
+          "type": "blackboard.list",
+          "at": "2026-05-22T00:00:05.400Z",
+          "requestId": "req-blackboard-list-1",
+          "payload": {
+            "scopeId": "scope-1",
+            "status": "all",
+            "limit": 20
+          }
+        }
+      },
+      "TaskList": {
+        "summary": "task.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-task-list-1",
+          "type": "task.list",
+          "at": "2026-05-22T00:00:05.500Z",
+          "requestId": "req-task-list-1",
+          "payload": {
+            "scopeId": "scope-1",
+            "status": "all",
+            "limit": 20
+          }
+        }
+      },
+      "ReplayList": {
+        "summary": "replay.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-replay-list-1",
+          "type": "replay.list",
+          "at": "2026-05-22T00:00:05.600Z",
+          "requestId": "req-replay-list-1",
+          "payload": {
+            "scopeId": "scope-1",
+            "limit": 20
+          }
+        }
+      },
+      "ThoughtDetailGet": {
+        "summary": "thought.detail.get read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-thought-detail-1",
+          "type": "thought.detail.get",
+          "at": "2026-05-22T00:00:05.700Z",
+          "requestId": "req-thought-detail-1",
+          "payload": {
+            "eventId": "event-1"
+          }
+        }
+      },
+      "CrystalList": {
+        "summary": "crystal.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-crystal-list-1",
+          "type": "crystal.list",
+          "at": "2026-05-22T00:00:05.800Z",
+          "requestId": "req-crystal-list-1",
+          "payload": {
+            "limit": 20
           }
         }
       }

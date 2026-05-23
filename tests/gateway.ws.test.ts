@@ -28,6 +28,7 @@ import {
 import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
 import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
 import type { GatewayControlDispatchOptions } from "../src/socket/control.ts";
+import type { SocketQueryComponentPort } from "../src/socket/query/index.ts";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -80,6 +81,21 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.EventSubscribe,
                         GatewayControlMessageType.EventUnsubscribe,
                         GatewayControlMessageType.GatewayStatusGet,
+                        GatewayControlMessageType.HistoryDetailGet,
+                        GatewayControlMessageType.ScopeList,
+                        GatewayControlMessageType.ScopeDetailGet,
+                        GatewayControlMessageType.ForkList,
+                        GatewayControlMessageType.ForkDetailGet,
+                        GatewayControlMessageType.AskList,
+                        GatewayControlMessageType.AskDetailGet,
+                        GatewayControlMessageType.BlackboardList,
+                        GatewayControlMessageType.BlackboardDetailGet,
+                        GatewayControlMessageType.TaskList,
+                        GatewayControlMessageType.TaskDetailGet,
+                        GatewayControlMessageType.ReplayList,
+                        GatewayControlMessageType.ReplayDetailGet,
+                        GatewayControlMessageType.ThoughtDetailGet,
+                        GatewayControlMessageType.CrystalList,
                         GatewayControlMessageType.HistoryList,
                         GatewayControlMessageType.GatewayMessageSend,
                         GatewayControlMessageType.Ping,
@@ -548,7 +564,8 @@ describe("SocketControlHub", () => {
 
     test("returns persisted history snapshots through history.list without routing through turn logic", async () => {
         const hub = createHub({
-            listChatHistory: (input) => {
+            queries: fakeQueries({
+                historyList: (input) => {
                 expect(input).toEqual({ beforeTs: 200, limit: 2 });
                 return [
                     {
@@ -614,7 +631,8 @@ describe("SocketControlHub", () => {
                         userText: "User 2",
                     },
                 ];
-            },
+                },
+            }),
         });
         const socket = fakeSocket();
         hub.open(socket);
@@ -700,10 +718,12 @@ describe("SocketControlHub", () => {
                 dispatchCount += 1;
                 return { messageId: message.id, route: message.route, text: "unexpected" };
             },
-            listChatHistory: (input) => {
+            queries: fakeQueries({
+                historyList: (input) => {
                 expect(input).toEqual({ beforeTs: undefined, limit: 1 });
                 return [];
-            },
+                },
+            }),
         });
         const socket = fakeSocket();
         hub.open(socket);
@@ -729,6 +749,116 @@ describe("SocketControlHub", () => {
             },
         });
         expect(sent(socket).at(-1)?.payload).not.toHaveProperty("nextBeforeTs");
+        hub.dispose();
+    });
+
+    test("serves DB-backed query snapshots without dispatching a live turn", async () => {
+        let dispatchCount = 0;
+        const hub = createHub({
+            dispatch: async (message) => {
+                dispatchCount += 1;
+                return { messageId: message.id, route: message.route, text: "unexpected" };
+            },
+            queries: fakeQueries({
+                askList: (input) => {
+                    expect(input).toEqual({ status: "all", limit: 5 });
+                    return [{
+                        ask: {
+                            reason: "other",
+                            prompt: "Need confirmation?",
+                            freeform: true,
+                        },
+                        event: {
+                            id: "ask-1",
+                            ts: 100,
+                            timeBucket: "2026-05-17",
+                            ownerKey: "scope:core",
+                            type: "ask",
+                            content: {},
+                            importance: 0.5,
+                        },
+                        status: "active",
+                    }];
+                },
+                forkDetail: async (input) => {
+                    expect(input).toEqual({ forkId: "fork-1" });
+                    return {
+                        asks: [],
+                        fork: {
+                            id: "fork-1",
+                            ownerKey: "scope:core",
+                            title: "Fork",
+                            summary: "Fork summary",
+                            continuitySummary: "Fork context",
+                            maxContextTokens: 12000,
+                            inheritedEventIds: [],
+                            createdAt: "2026-05-17T00:00:00.000Z",
+                            updatedAt: "2026-05-17T00:00:00.000Z",
+                        },
+                        inheritedEvents: [],
+                        replays: [],
+                        taskPlans: [],
+                    };
+                },
+                scopeList: () => [{
+                    id: "scope-core",
+                    title: "Core",
+                    projectDir: "/tmp/core",
+                    projectMemoryDir: "/tmp/core/.flyflor/memory",
+                    createdAt: 1,
+                    updatedAt: 2,
+                    lastUsedAt: 3,
+                    useCount: 4,
+                    codenameIds: ["codename-core"],
+                }],
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.AskList,
+                    { status: "all", limit: 5 },
+                    { id: "ask-list-1" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ForkDetailGet,
+                    { forkId: "fork-1" },
+                    { id: "fork-detail-1" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ScopeList, {}, { id: "scope-list-1" })),
+        );
+
+        expect(dispatchCount).toBe(0);
+        expect(sent(socket).slice(-3)).toMatchObject([
+            {
+                correlationId: "ask-list-1",
+                type: GatewayControlMessageType.AskSnapshot,
+                payload: { data: [{ status: "active" }] },
+            },
+            {
+                correlationId: "fork-detail-1",
+                type: GatewayControlMessageType.ForkSnapshot,
+                payload: { data: { fork: { id: "fork-1" } } },
+            },
+            {
+                correlationId: "scope-list-1",
+                type: GatewayControlMessageType.ScopeSnapshot,
+                payload: { data: [{ id: "scope-core", codenameIds: ["codename-core"] }] },
+            },
+        ]);
         hub.dispose();
     });
 
@@ -1491,7 +1621,7 @@ function createHub(overrides: Partial<ConstructorParameters<typeof SocketControl
             return { messageId: message.id, route: message.route, text: "final" };
         },
         events,
-        listChatHistory: () => [],
+        queries: fakeQueries(),
         status: () => ({
             channels: [],
             clientCount: 0,
@@ -1505,6 +1635,29 @@ function createHub(overrides: Partial<ConstructorParameters<typeof SocketControl
         }),
         ...overrides,
     });
+}
+
+function fakeQueries(overrides: Partial<SocketQueryComponentPort> = {}): SocketQueryComponentPort {
+    return {
+        askDetail: () => undefined,
+        askList: () => [],
+        blackboardDetail: async () => undefined,
+        blackboardList: async () => [],
+        crystalList: () => [],
+        forkDetail: async () => undefined,
+        forkList: () => [],
+        historyDetail: async () => undefined,
+        historyList: () => [],
+        initialize: async () => undefined,
+        replayDetail: async () => undefined,
+        replayList: () => [],
+        scopeDetail: () => undefined,
+        scopeList: () => [],
+        taskDetail: () => undefined,
+        taskList: () => [],
+        thoughtDetail: async () => undefined,
+        ...overrides,
+    };
 }
 
 function fakeSocket(clientId = "client-1"): GatewayControlSocket {

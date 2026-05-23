@@ -116,11 +116,34 @@ Socket 当前只暴露两个 HTTP 路径：
 - `gateway.message.send`
 - `gateway.status.get`
 - `gateway.status.snapshot`
+- `ask.detail.get`
+- `ask.list`
+- `ask.snapshot`
+- `blackboard.detail.get`
+- `blackboard.list`
+- `blackboard.snapshot`
+- `crystal.list`
+- `crystal.snapshot`
+- `fork.detail.get`
+- `fork.list`
+- `fork.snapshot`
+- `history.detail.get`
 - `history.list`
 - `history.snapshot`
+- `replay.detail.get`
+- `replay.list`
+- `replay.snapshot`
+- `scope.detail.get`
+- `scope.list`
+- `scope.snapshot`
 - `ping`
 - `pong`
 - `server.hello`
+- `task.detail.get`
+- `task.list`
+- `task.snapshot`
+- `thought.detail.get`
+- `thought.snapshot`
 - `turn.delta`
 - `turn.error`
 - `turn.final`
@@ -139,7 +162,7 @@ Socket 当前只暴露两个 HTTP 路径：
 这条接口的职责非常薄：
 
 - socket 接收分页参数
-- socket 直接调用现有持久化历史读取
+- socket 直接调用 `src/socket/query` 只读 DB/read-model 层
 - socket 返回稳定 JSON 快照
 
 `clientCount` 是 live peer count，只描述当前 WS hub 的实时连接压力，不是静态 channel 数，也不应和 `connectedCount` 混成一回事。
@@ -147,11 +170,12 @@ Socket 当前只暴露两个 HTTP 路径：
 它不是新的思考逻辑，也不是新的会话层。
 它只是血管层把已存在的持久化历史暴露出来。
 
-### 内核当前读法
+### 当前读法
 
 当前历史对话读取入口：
 
-- `src/cognitive/hippocampus/memory/module.ts` `listChatHistory({ beforeTs?, limit? })`
+- `src/socket/query/component.ts` `historyList({ beforeTs?, limit?, scopeId?, contextForkId? })`
+- `src/socket/query/brain.reader.ts` `listHistory(...)`
 
 它实际做的是：
 
@@ -168,11 +192,13 @@ Socket 当前只暴露两个 HTTP 路径：
 
 对应代码：
 
-- `src/cognitive/hippocampus/memory/module.ts` `listChatHistory(...)`
-- `src/cognitive/hippocampus/memory/module.ts` `historyPlanningForEvent(...)`
+- `src/socket/query/component.ts`
+- `src/socket/query/brain.reader.ts`
+- `src/socket/query/blackboard.reader.ts`
+- `src/socket/query/scope.reader.ts`
+- `src/socket/query/crystal.reader.ts`
 - `src/entities/memory/brain/event/repo.ts` `list(...)`
 - `src/cognitive/hippocampus/memory/history/turn.ts` `historyTurnFromEvent(...)`
-- `src/socket/module.ts` `listChatHistory: (input) => this.runtime.listChatHistory(...)`
 - `src/socket/control.ts` `handleHistoryList(...)`
 - `src/protocol/control/envelope.ts` `readGatewayControlHistoryListInput(...)`
 - `src/protocol/control/envelope.ts` `buildGatewayControlHistorySnapshotPayload(...)`
@@ -234,6 +260,43 @@ LIMIT ?
 - `tests/tui.chat.history.test.ts` `includes persisted planning metadata for history side-panel replay`
 - `tests/tui.chat.history.test.ts` `persists deep-think history data for future TUI ask-loop rendering`
 - `tests/tui.chat.history.test.ts` `persists blackboard replay data for future TUI discussion rendering`
+- `tests/gateway.ws.test.ts` `serves DB-backed query snapshots without dispatching a live turn`
+
+## TUI 只读查询面
+
+除 `gateway.message.send` 之外，TUI 展开区需要的数据都走只读 query 命令。原则：
+
+- 能查 DB 的只查 DB。
+- query 命令不调用 RuntimeModule、MemoryModule prompt 装配、模型或工具。
+- live 输入输出只有 `gateway.message.send -> turn.delta/turn.final/turn.error` 会进入智能体核心。
+- `event.publish` 是血管事件流；历史详情、黑板、深度思考、ASK、fork、scope、task、replay 详情由 query snapshot 补齐。
+
+当前已实现命令：
+
+| 请求 | 响应 | 数据来源 | 用途 |
+| --- | --- | --- | --- |
+| `history.list` | `history.snapshot` | `brain.db.memory_events` + planning 表 | 对话列表 |
+| `history.detail.get` | `history.snapshot` | `brain.db` + blackboard DB | 单轮输入输出详情 |
+| `scope.list` / `scope.detail.get` | `scope.snapshot` | `brain.db.scopes` + scope-local `scope.db` | Scope 列表、热区记忆、记忆树、关联词 |
+| `fork.list` / `fork.detail.get` | `fork.snapshot` | `brain.db.context_forks` | fork 列表、继承事件、关联 ask/task/replay |
+| `ask.list` / `ask.detail.get` | `ask.snapshot` | `brain.db.memory_events` ask/answer-pair/state | ASK 当前状态、幽灵续接、回答记录 |
+| `blackboard.list` / `blackboard.detail.get` | `blackboard.snapshot` | blackboard SQLite 表 | 黑板 turn、消息、步骤、决策 |
+| `task.list` / `task.detail.get` | `task.snapshot` | `brain.db.task_plans` | TODO/计划展开 |
+| `replay.list` / `replay.detail.get` | `replay.snapshot` | `brain.db.replay_records` | 深度思考/黑板/replay 摘要 |
+| `thought.detail.get` | `thought.snapshot` | `brain.db` structured event/replay | 深度思考可见摘要，不暴露隐藏 CoT |
+| `crystal.list` | `crystal.snapshot` | `crystal.db.crystal_gems` | 晶体记忆浏览 |
+
+所有通用 query snapshot 使用：
+
+```json
+{
+  "payload": {
+    "data": {}
+  }
+}
+```
+
+list 命令的 `data` 是数组；detail 命令的 `data` 是对象或 `null`。
 
 ## `history.list`
 

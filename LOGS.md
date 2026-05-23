@@ -557,3 +557,19 @@
   原因：用户要求把智能生命体内核推进到上线可用闭环，并用主线验证而不是子 worktree 自报结果作为最终口径。
   效率：从 `origin/master` 到当前主线累计 36 files changed，2031 insertions，47 deletions；分类约为 control/docs `+74/-4`、docs/openapi `+174/-0`、scripts/config/package `+5/-5`、src `+908/-36`、tests `+870/-2`。
   验证：focused seal `bun test ...` 25 files / 251 tests / 17.69s；`bun run docs:check` 0.41s；`bun run build:binary` 0.58s；`bun run check` 13.24s；`git diff --check`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：ws-tui-read-model-query
+  摘要：为 Rust TUI 对接补齐 `/ws` 只读查询面，新增 `src/socket/query`，并把 history/scope/fork/ask/blackboard/task/replay/thought/crystal 查询统一为 DB/read-model snapshot。
+  原因：TUI 展开黑板、深度思考、ASK、fork、scope 记忆树和对话记录时，应能直接查 DB 的就只查 DB；除 `gateway.message.send` 输入输出外，不应入侵智能体核心或触发 prompt/context assembly。
+  效率：20 files changed，约 2232 insertions，25 deletions；分类约为 control `+18/-0`，docs/openapi `+629/-2`，docs/ws `+138/-12`，src/protocol/socket `+183/-5`，src/socket/query `+1088/-0`，tests `+176/-6`。
+  验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts` 60 pass；`bun run docs:check` 25 pass；`bun run check`；`bun run build:binary` 生成 `dist/flyflor` 65M；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：kernel-99-plus-final-close
+  摘要：完成 99%+ 内核封版收口：worktree/`wt/*` 分支清空，旧 tmux session 停止，`/ws` TUI read-model query 变更纳入最终 seal。
+  原因：用户要求剩余工作全部完成，把智能生命体核心推到 99%+，为后续 Rust TUI/CLI 开发提供稳定 `/ws` 契约。
+  效率：tracked diff 13 files changed，1144 insertions，25 deletions；新增 `src/socket/query` 7 files / 1088 lines，合计约 2232 insertions，25 deletions；`dist/flyflor` 65M。
+  验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/scope.solidification.test.ts tests/scope.vector.test.ts tests/codename.promote.test.ts tests/context.scope.test.ts tests/scope.offer.test.ts tests/ask.reply.test.ts tests/ask.parse.test.ts tests/executive.tool.runtime.test.ts tests/crystal.local.backend.test.ts tests/reflection.gem.consolidation.test.ts` 124 pass；`bun run docs:check` 25 pass；`bun run check`；`bun run build:binary`；`git diff --check`。

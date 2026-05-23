@@ -13,6 +13,7 @@ import { Channel, ChannelLinkState, ChannelTransport } from "../protocol/contrac
 import type { RuntimeModule } from "../agent/runtime/index.ts";
 import { SocketControlHub, type SocketControlTransportStatusSnapshot, type SocketControlPeer } from "./control.ts";
 import { buildDedupKey, InMemoryDedupStore, type MessageDedupStore } from "./dedup.store.ts";
+import { SocketQueryComponent } from "./query/index.ts";
 
 export interface SocketModuleOptions {
     dedup?: MessageDedupStore;
@@ -26,6 +27,7 @@ export class SocketModule extends Socket {
     protected serverUrl?: string;
     protected startedAt?: string;
     protected controlHub?: SocketControlHub;
+    protected queryComponent?: SocketQueryComponent;
 
     protected readonly dedup: MessageDedupStore;
     protected readonly paths?: FlyflorPaths;
@@ -49,12 +51,14 @@ export class SocketModule extends Socket {
         this.log("start.requested", { host: this.config.host, port: this.config.port });
         this.running = true;
         this.startedAt = new Date().toISOString();
+        this.queryComponent = this.paths ? new SocketQueryComponent(this.paths) : undefined;
+        void this.queryComponent?.initialize();
         this.controlHub = new SocketControlHub({
             config: this.config,
             dispatch: (message, options) => this.dispatch(message, options),
             events: { subscribe: (sink: EventSink) => this.subscribeEvents(sink) } as never,
-            listChatHistory: (input) => this.runtime.listChatHistory({ beforeTs: input.beforeTs, limit: input.limit }),
             paths: this.paths,
+            queries: this.queryComponent,
             status: () => this.getStatusSnapshot(),
         });
         try {
@@ -96,6 +100,8 @@ export class SocketModule extends Socket {
         this.log("stop.requested", { url: this.serverUrl });
         this.controlHub?.dispose();
         this.controlHub = undefined;
+        this.queryComponent?.dispose();
+        this.queryComponent = undefined;
         this.server?.stop(true);
         this.server = undefined;
         this.running = false;

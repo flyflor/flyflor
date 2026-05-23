@@ -581,4 +581,22 @@ Kernel V2 acceptance focus：
 - [x] review 并合并 `wt/scope-solidification-vector`：结构化 ASK confirmation 创建 Scope，codename evidence 写入 scope-local `scope.db` tree/association。
 - [x] review `wt/docs-contract-sync`：拒绝会删除当前实现的 stale broad merge，仅手动同步有效文档事实。
 - [x] 最终运行上线 seal：focused ASK/Scope/Crystal/Runtime/Socket/docs tests、`bun run docs:check`、`bun run check`、`bun run build:binary`、`git diff --check`。
-- [ ] 回收所有 child Codex、清理/保留分支按合并状态记录，推送 `master`。
+- [x] 回收所有 child Codex、清理/保留分支按合并状态记录，推送 `master`。
+
+## 2026-05-23 WS TUI 只读查询闭合
+
+- [x] 将 `history.list` 从 Runtime/MemoryModule 调用切到 `src/socket/query` DB/read-model 只读层。
+- [x] 新增 `/ws` 查询命令：history/detail、scope/list/detail、fork/list/detail、ask/list/detail、blackboard/list/detail、task/list/detail、replay/list/detail、thought/detail、crystal/list。
+- [x] 保持唯一 live 智能体入口为 `gateway.message.send`；query 命令只读 `brain.db`、blackboard DB、scope-local `scope.db` 和 `crystal.db`。
+- [x] 为 TUI 展开区补齐数据面：对话输入输出、ASK 状态/回答、fork 详情、黑板 steps/messages/decisions、task plan、replay/deep-think 摘要、scope 热区记忆/记忆树/关联词、crystal gems。
+- [x] 更新 WS/OpenAPI 文档，明确 query snapshot 是 inspectable read model，不进入 prompt/context assembly。
+- [x] 补充 socket query control 测试，验证查询不触发 live dispatch。
+- [x] 运行最终 focused tests、docs check、type check、binary build 和 diff check。
+
+## 2026-05-23 99%+ 内核封版收口
+
+- [x] 确认当前只剩主 worktree，无本地 `wt/*` 分支，无远端 `origin/wt/*` 分支。
+- [x] 停止旧 `flyflor-kernel-v2` / `flyflor-kernel-v3` tmux session，确认没有 child Codex 空转。
+- [x] 跑最终核心 focused seal：ASK、Scope、Scope Vector、Crystal、Executive、Socket、Docs 相关测试。
+- [x] 跑最终工程 seal：`bun run docs:check`、`bun run check`、`bun run build:binary`、`git diff --check`。
+- [x] 提交 `/ws` TUI read-model query 闭合变更。

@@ -7,6 +7,7 @@ Notes:
 - The active transport is `/ws` WebSocket. HTTP only keeps `/health` and `/ws` upgrade.
 - `gateway.*` names are `flyflor.ws.v1` v1 compatibility wire names, not the architecture subject.
 - `history.list` only queries the `brain.db` life ledger for ledger/query/replay/audit. It is not session restore, a prompt container, or context assembly.
+- Query commands such as `scope.list`, `fork.detail.get`, `ask.list`, `blackboard.detail.get`, `task.list`, `replay.list`, `thought.detail.get`, and `crystal.list` are DB/read-model only. They do not invoke RuntimeModule, model calls, tools, or prompt/context assembly.
 - `clientId`, `conversationKey`, `threadId`, and `user.id` are live peer, routing, audit, dedup, and reply-anchor provenance only. They do not carry or create cognitive continuity.
 - Real context assembly comes from current input, `MemoryComponent`, `CrystalComponent`, explicit `Scope/Fork`, and the Executive visible capability surface.
 
@@ -21,7 +22,8 @@ Notes:
 7. Send `GatewayStatusGet` and expect `GatewayStatusSnapshot`.
 8. Send `CapabilityCatalogGet` and expect `CapabilityCatalogSnapshot`.
 9. Send `HistoryList` and expect `HistorySnapshot`.
-10. Send `GatewayMessageSend`; observe one or more `TurnDelta` frames and a final `TurnFinal`.
+10. Send `ScopeList`, `AskList`, or `ForkDetailGet` and expect the matching `*.snapshot.payload.data` read-model response.
+11. Send `GatewayMessageSend`; observe one or more `TurnDelta` frames and a final `TurnFinal`.
 
 Apifox import note: the OpenAPI file documents `/ws` as an upgrade endpoint, but the scenario messages live under `components.examples`. For WebSocket tests, paste each example `value` as the outgoing JSON body and keep the `protocol`, `type`, and request ids intact.
 
@@ -41,6 +43,8 @@ Use the example set as reusable Apifox WebSocket messages:
 - `GatewayMessageSend.payload.context.activeScope` and `contextForkId` are the only explicit working-domain inputs in the socket message.
 - `activeProject` is only a compatibility alias for `activeScope`; prefer `activeScope` in new Apifox examples.
 - `HistorySnapshot` may include reply metadata, task plans, replays, and context fork snapshots as ledger replay data. Do not feed it back as prompt context.
+- `*.snapshot.payload.data` from read-model query commands is inspectable TUI state only. Do not feed it back as prompt context.
+- Only `GatewayMessageSend` enters live turn execution; query commands must stay detachable DB reads.
 - `GatewayStatusSnapshot.payload.status.controlState` is a read model for clients; it is not a new context owner, session restore surface, or prompt assembly source.
 - `conversationKey`, `threadId`, and `user.id` are useful for Apifox correlation and routing assertions, but they are not memory owners.
 

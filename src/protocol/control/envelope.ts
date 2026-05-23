@@ -109,6 +109,10 @@ export type GatewayControlHistorySnapshotPayload = Record<string, unknown> & {
     nextBeforeTs?: number;
 };
 
+export type GatewayControlQuerySnapshotPayload = Record<string, unknown> & {
+    data: unknown;
+};
+
 export type GatewayControlServerHelloPayload = Record<string, unknown> & {
     capabilities: GatewayControlSurfaceCapabilities;
     clientId: string;
@@ -509,6 +513,10 @@ export function buildGatewayControlHistorySnapshotPayload(input: {
     return input;
 }
 
+export function buildGatewayControlQuerySnapshotPayload(data: unknown): GatewayControlQuerySnapshotPayload {
+    return { data };
+}
+
 export function buildGatewayControlServerHelloPayload(input: GatewayControlServerHelloPayload): GatewayControlServerHelloPayload {
     return input;
 }
@@ -561,9 +569,32 @@ export function classifyGatewayControlSemanticType(
         case GatewayControlMessageType.ClientHello:
         case GatewayControlMessageType.GatewayStatusGet:
         case GatewayControlMessageType.GatewayStatusSnapshot:
+        case GatewayControlMessageType.AskDetailGet:
+        case GatewayControlMessageType.AskList:
+        case GatewayControlMessageType.AskSnapshot:
+        case GatewayControlMessageType.BlackboardDetailGet:
+        case GatewayControlMessageType.BlackboardList:
+        case GatewayControlMessageType.BlackboardSnapshot:
+        case GatewayControlMessageType.CrystalList:
+        case GatewayControlMessageType.CrystalSnapshot:
+        case GatewayControlMessageType.ForkDetailGet:
+        case GatewayControlMessageType.ForkList:
+        case GatewayControlMessageType.ForkSnapshot:
+        case GatewayControlMessageType.HistoryDetailGet:
         case GatewayControlMessageType.HistoryList:
         case GatewayControlMessageType.HistorySnapshot:
+        case GatewayControlMessageType.ReplayDetailGet:
+        case GatewayControlMessageType.ReplayList:
+        case GatewayControlMessageType.ReplaySnapshot:
+        case GatewayControlMessageType.ScopeDetailGet:
+        case GatewayControlMessageType.ScopeList:
+        case GatewayControlMessageType.ScopeSnapshot:
         case GatewayControlMessageType.ServerHello:
+        case GatewayControlMessageType.TaskDetailGet:
+        case GatewayControlMessageType.TaskList:
+        case GatewayControlMessageType.TaskSnapshot:
+        case GatewayControlMessageType.ThoughtDetailGet:
+        case GatewayControlMessageType.ThoughtSnapshot:
             return GatewayControlSemanticType.Data;
     }
 }
@@ -695,6 +726,12 @@ export function readGatewayControlHistoryListInput(
         beforeTs,
         limit,
     };
+}
+
+export function readGatewayControlQueryPayload(
+    payload: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+    return payload ?? {};
 }
 
 function readGatewayControlProjectScope(value: unknown): GatewayControlProjectScope | undefined {

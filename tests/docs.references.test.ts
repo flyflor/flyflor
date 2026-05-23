@@ -102,7 +102,9 @@ describe("documentation references", () => {
         expect(doc).toContain("历史对话列表获取");
         expect(doc).toContain("history.list");
         expect(doc).toContain("history.snapshot");
-        expect(doc).toContain("listChatHistory");
+        expect(doc).toContain("src/socket/query");
+        expect(doc).toContain("ask.list");
+        expect(doc).toContain("blackboard.detail.get");
         expect(doc).toContain("executive.loop.paused");
         expect(doc).toContain("executive.loop.resumed");
     });
@@ -178,6 +180,21 @@ describe("documentation references", () => {
             "#/components/schemas/GatewayStatusGetEnvelope",
             "#/components/schemas/CapabilityCatalogGetEnvelope",
             "#/components/schemas/HistoryListEnvelope",
+            "#/components/schemas/AskListEnvelope",
+            "#/components/schemas/AskDetailGetEnvelope",
+            "#/components/schemas/BlackboardListEnvelope",
+            "#/components/schemas/BlackboardDetailGetEnvelope",
+            "#/components/schemas/CrystalListEnvelope",
+            "#/components/schemas/ForkListEnvelope",
+            "#/components/schemas/ForkDetailGetEnvelope",
+            "#/components/schemas/HistoryDetailGetEnvelope",
+            "#/components/schemas/ReplayListEnvelope",
+            "#/components/schemas/ReplayDetailGetEnvelope",
+            "#/components/schemas/ScopeListEnvelope",
+            "#/components/schemas/ScopeDetailGetEnvelope",
+            "#/components/schemas/TaskListEnvelope",
+            "#/components/schemas/TaskDetailGetEnvelope",
+            "#/components/schemas/ThoughtDetailGetEnvelope",
             "#/components/schemas/GatewayMessageSendEnvelope",
             "#/components/schemas/EventSubscribeEnvelope",
             "#/components/schemas/EventUnsubscribeEnvelope",

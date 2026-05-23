@@ -7,6 +7,7 @@
 - 当前真实 transport 是 `/ws` WebSocket，HTTP 只保留 `/health` 和 `/ws` upgrade。
 - `gateway.*` 是 `flyflor.ws.v1` 的 v1 兼容 wire 名称，不代表架构主语仍是 Gateway。
 - `history.list` 只查询 `brain.db` 生命账本，用于 ledger/query/replay/audit，不做 session restore，不是 prompt 容器，也不参与 context assembly。
+- `scope.list`、`fork.detail.get`、`ask.list`、`blackboard.detail.get`、`task.list`、`replay.list`、`thought.detail.get`、`crystal.list` 等查询命令只读 DB/read-model，不调用 RuntimeModule、模型、工具或 prompt/context assembly。
 - `clientId`、`conversationKey`、`threadId`、`user.id` 只用于 live peer、routing、audit、dedup、reply anchor，不承担也不创建认知连续性。
 - 真正上下文装配来自当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive 可见能力面。
 
@@ -21,7 +22,8 @@
 7. 发送 `GatewayStatusGet`，预期 `GatewayStatusSnapshot`。
 8. 发送 `CapabilityCatalogGet`，预期 `CapabilityCatalogSnapshot`。
 9. 发送 `HistoryList`，预期 `HistorySnapshot`。
-10. 发送 `GatewayMessageSend`，观察一个或多个 `TurnDelta`，最后收到 `TurnFinal`。
+10. 发送 `ScopeList`、`AskList` 或 `ForkDetailGet`，预期对应 `*.snapshot.payload.data` read-model 响应。
+11. 发送 `GatewayMessageSend`，观察一个或多个 `TurnDelta`，最后收到 `TurnFinal`。
 
 Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，但场景消息放在 `components.examples` 下。做 WebSocket 测试时，复制每个 example 的 `value` 作为 outgoing JSON body，保留其中的 `protocol`、`type` 和 request id。
 
@@ -41,6 +43,8 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - `GatewayMessageSend.payload.context.activeScope` 和 `contextForkId` 是 socket message 中唯一的显式工作域输入。
 - `activeProject` 只是 `activeScope` 的兼容别名；新的 Apifox example 优先使用 `activeScope`。
 - `HistorySnapshot` 可以携带 reply metadata、task plan、replay 和 context fork snapshot，但这些只是 ledger replay 数据，不要回填成 prompt context。
+- read-model query 命令返回的 `*.snapshot.payload.data` 只是 TUI 可检查状态，不要回填成 prompt context。
+- 只有 `GatewayMessageSend` 进入 live turn execution；query 命令必须保持可脱离的 DB 读取。
 - `GatewayStatusSnapshot.payload.status.controlState` 只是 client read model；它不是新的 context owner、session restore surface 或 prompt assembly source。
 - `conversationKey`、`threadId`、`user.id` 适合用于 Apifox 关联和路由断言，但它们不是 memory owner。
 

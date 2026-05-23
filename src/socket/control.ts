@@ -8,6 +8,7 @@ import {
     buildGatewayControlGatewayStatusPayload,
     buildGatewayControlHistorySnapshotPayload,
     buildGatewayControlPongPayload,
+    buildGatewayControlQuerySnapshotPayload,
     buildGatewayControlServerHelloSnapshot,
     buildGatewayControlSurfaceCapabilities,
     buildGatewayControlTurnDeltaPayload,
@@ -22,6 +23,7 @@ import {
     parseGatewayControlEnvelope,
     readGatewayControlHistoryListInput,
     readGatewayControlMessageInput,
+    readGatewayControlQueryPayload,
     readGatewayControlSubscription,
     shouldDeliverGatewayControlEvent,
     type GatewayControlExecutiveLoopStateSnapshot,
@@ -52,6 +54,7 @@ import {
 import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../events/index.ts";
 import type { FlyflorPaths } from "../config/index.ts";
 import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
+import type { SocketQueryComponentPort } from "./query/index.ts";
 
 export type SocketControlPeer = ProtocolSocketControlPeer;
 export type SocketControlSocket = ProtocolSocketControlSocket;
@@ -103,8 +106,8 @@ export interface SocketControlHubOptions {
     config: GatewayConfig;
     dispatch: SocketControlMessageDispatcher;
     events: RuntimeEventBus;
-    listChatHistory: (input: GatewayControlHistoryListInput) => GatewayControlHistoryTurnSnapshot[];
     paths?: FlyflorPaths;
+    queries?: SocketQueryComponentPort;
     status: () => SocketControlTransportStatusSnapshot;
 }
 
@@ -144,7 +147,8 @@ export class SocketControlHub implements EventSink {
         this.handlers.set(GatewayControlMessageType.GatewayStatusGet, (socket, envelope) =>
             this.handleGatewayStatusGet(socket, envelope),
         );
-        this.handlers.set(GatewayControlMessageType.HistoryList, (socket, envelope) =>
+        this.registerQueryHandlers();
+        this.handlers.set(GatewayControlMessageType.HistoryList, async (socket, envelope) =>
             this.handleHistoryList(socket, envelope),
         );
         this.handlers.set(GatewayControlMessageType.GatewayMessageSend, (socket, envelope) =>
@@ -325,9 +329,11 @@ export class SocketControlHub implements EventSink {
         );
     }
 
-    private handleHistoryList(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
+    private async handleHistoryList(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
         const input = readGatewayControlHistoryListInput(envelope.payload);
-        const history = this.options.listChatHistory(input);
+        const queries = this.requiredQueries();
+        await queries.initialize();
+        const history = queries.historyList(input);
         this.log("history.snapshot", {
             beforeTs: input.beforeTs,
             clientId: socket.data.clientId,
@@ -343,6 +349,24 @@ export class SocketControlHub implements EventSink {
             }),
             envelope,
         );
+    }
+
+    private async handleQuery(
+        socket: SocketControlSocket,
+        envelope: GatewayControlEnvelope,
+        snapshotType: Parameters<typeof this.send>[1],
+        reader: (payload: Record<string, unknown>) => unknown | Promise<unknown>,
+    ): Promise<void> {
+        const payload = readGatewayControlQueryPayload(envelope.payload);
+        await this.requiredQueries().initialize();
+        const data = await reader(payload);
+        this.log("query.snapshot", {
+            clientId: socket.data.clientId,
+            requestId: envelope.requestId,
+            snapshotType,
+            type: envelope.type,
+        });
+        this.send(socket, snapshotType, buildGatewayControlQuerySnapshotPayload(data ?? null), envelope);
     }
 
     private async handleGatewayMessageSend(
@@ -409,6 +433,94 @@ export class SocketControlHub implements EventSink {
     private handlePing(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         this.log("ping", { clientId: socket.data.clientId });
         this.send(socket, GatewayControlMessageType.Pong, buildGatewayControlPongPayload(), envelope);
+    }
+
+    private registerQueryHandlers(): void {
+        this.handlers.set(GatewayControlMessageType.HistoryDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.HistorySnapshot, (payload) =>
+                this.requiredQueries().historyDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ScopeList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ScopeSnapshot, (payload) =>
+                this.requiredQueries().scopeList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ScopeDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ScopeSnapshot, (payload) =>
+                this.requiredQueries().scopeDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ForkList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ForkSnapshot, (payload) =>
+                this.requiredQueries().forkList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ForkDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ForkSnapshot, (payload) =>
+                this.requiredQueries().forkDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.AskList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.AskSnapshot, (payload) =>
+                this.requiredQueries().askList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.AskDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.AskSnapshot, (payload) =>
+                this.requiredQueries().askDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.BlackboardList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.BlackboardSnapshot, (payload) =>
+                this.requiredQueries().blackboardList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.BlackboardDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.BlackboardSnapshot, (payload) =>
+                this.requiredQueries().blackboardDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.TaskList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.TaskSnapshot, (payload) =>
+                this.requiredQueries().taskList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.TaskDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.TaskSnapshot, (payload) =>
+                this.requiredQueries().taskDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ReplayList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ReplaySnapshot, (payload) =>
+                this.requiredQueries().replayList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ReplayDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ReplaySnapshot, (payload) =>
+                this.requiredQueries().replayDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ThoughtDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ThoughtSnapshot, (payload) =>
+                this.requiredQueries().thoughtDetail(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.CrystalList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.CrystalSnapshot, (payload) =>
+                this.requiredQueries().crystalList(payload),
+            ),
+        );
+    }
+
+    private requiredQueries(): SocketQueryComponentPort {
+        if (!this.options.queries) {
+            throw new GatewayControlProtocolError(
+                GatewayControlErrorCode.Internal,
+                "Socket query read model is unavailable",
+            );
+        }
+        return this.options.queries;
     }
 
     private messageFromInput(input: ReturnType<typeof readGatewayControlMessageInput>): GatewayMessage {
