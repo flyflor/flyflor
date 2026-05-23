@@ -161,7 +161,7 @@ try {
         ],
     });
 
-    socket = new SocketModule(config.gateway, runtime, events, { paths: config.paths });
+    socket = new SocketModule(config.gateway, runtime, events, { model: config.model, paths: config.paths });
     socket.start();
     const url = socket.getStatusSnapshot().url;
     if (!url) throw new Error("Socket did not start.");

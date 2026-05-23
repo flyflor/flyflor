@@ -29,11 +29,13 @@ const REPO_ROOT = join(import.meta.dir, "..");
 
 type OpenApiSchema = {
     const?: string;
+    description?: string;
     enum?: string[];
     items?: OpenApiSchema;
     oneOf?: Array<{ $ref?: string }>;
     properties?: Record<string, OpenApiSchema>;
     required?: string[];
+    type?: string | string[];
 };
 
 type SocketMessageCatalog = {
@@ -262,6 +264,16 @@ describe("documentation references", () => {
         ]);
         expect(schemas.UpgradeFailedResponse?.properties?.error?.const).toBe("gateway_control_upgrade_failed");
         expect(schemas.GatewayStatusSnapshot?.required).toContain("clientCount");
+        expect(schemas.GatewayStatusSnapshot?.properties).toHaveProperty("cache");
+        expect(schemas.GatewayStatusSnapshot?.properties).toHaveProperty("context");
+        expect(schemas.GatewayStatusSnapshot?.properties).toHaveProperty("model");
+        expect(schemas.ContextTelemetrySnapshot?.properties?.contextWindowPercent?.type).toEqual(["number", "null"]);
+        expect(schemas.ReadCacheMetadata?.required).toEqual(["hit", "key", "ttlMs"]);
+        expect(schemas.ReadCacheStatusSnapshot?.required).toEqual(["entries", "hits", "invalidations", "misses", "ttlMs"]);
+        expect(schemas.HistorySnapshotPayload?.properties).toHaveProperty("cache");
+        expect(schemas.QuerySnapshotPayload?.properties).toHaveProperty("cache");
+        expect(schemas.ModelStatusSnapshot?.properties?.contextWindowTokens?.type).toEqual(["integer", "null"]);
+        expect(schemas.ModelStatusSnapshot?.properties?.maxOutputTokens?.description).toContain("not the model context window");
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("sourceKey");
         expect(schemas.HistoryListPayload?.properties).not.toHaveProperty("scope");
         expect(schemas.RuntimeContextInput?.properties).toHaveProperty("activeScope");
@@ -314,7 +326,26 @@ describe("documentation references", () => {
             },
         });
         expect(readExamplePayload(examples, "GatewayStatusSnapshot")).toMatchObject({
+            cache: {
+                hit: false,
+                ttlMs: 1500,
+            },
             status: {
+                cache: {
+                    ttlMs: 1500,
+                },
+                context: {
+                    compressionThresholdTokens: null,
+                    contextWindowPercent: null,
+                    hotContextTokens: null,
+                    remainingContextTokens: null,
+                },
+                model: {
+                    contextWindowTokens: 400000,
+                    maxOutputTokens: 4096,
+                    model: "gpt-5.5",
+                    providerId: "openai",
+                },
                 controlState: {
                     activeAsk: {
                         ask: { executiveToolLoop: { stop: "ask" } },

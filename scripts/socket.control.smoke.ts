@@ -118,7 +118,7 @@ class SocketControlSmoke {
             const memory = new MemoryModule(config, this.events);
             this.runtime = new RuntimeModule(config, new ScriptedStreamingModel(), this.events, undefined, memory);
             const runtime = this.runtime;
-            const socket = new SocketModule(config.gateway, runtime, this.events, { paths: config.paths });
+            const socket = new SocketModule(config.gateway, runtime, this.events, { model: config.model, paths: config.paths });
             const originalHandleMessage = runtime.handleMessage.bind(runtime);
             runtime.handleMessage = ((message, context, options = {}) =>
                 originalHandleMessage(message, context, { ...options, maxToolTurns: message.id === "message-3" ? 2 : 1 })) as typeof runtime.handleMessage;

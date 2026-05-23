@@ -143,7 +143,9 @@ async function createFlyFlorDependencies(options: FlyFlorCreateOptions): Promise
         options.blackboard ?? new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
     const memory = options.memory ?? createMemory(config.snapshot(), events, model.unwrap());
     const runtime = options.runtime ?? new RuntimeModule(config.snapshot(), model.unwrap(), events, blackboard, memory);
-    const socket = options.socket ?? options.gateway ?? new SocketModule(config.gateway, runtime, events, { paths: config.paths });
+    const socket = options.socket
+        ?? options.gateway
+        ?? new SocketModule(config.gateway, runtime, events, { model: config.model, paths: config.paths });
     const eventDisposers = registerRuntimeEventHandlers(config, events);
     const container = options.container ?? new DependencyContainer();
 

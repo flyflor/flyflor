@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SocketModule } from "../src/socket/module.ts";
-import type { GatewayConfig } from "../src/config/index.ts";
+import type { GatewayConfig, ModelConfig } from "../src/config/index.ts";
 import { Channel, type EventSink, type RuntimeEvent } from "../src/protocol/index.ts";
 import type { GatewayControlPeer } from "../src/socket/control.ts";
 
@@ -87,15 +87,33 @@ describe("SocketModule minimal vascular surface", () => {
         expect(response?.status).toBe(404);
         await expect(response?.json()).resolves.toEqual({ error: "not_found" });
     });
+
+    test("status snapshot carries configured model cap without context-window fallback", () => {
+        const socketModule = createSocketModule({ model: modelConfig() });
+
+        expect(socketModule.getStatusSnapshot()).toMatchObject({
+            context: {
+                compressionThresholdTokens: null,
+                hotContextTokens: null,
+            },
+            model: {
+                contextWindowTokens: 64000,
+                maxTokens: 2048,
+                model: "demo-model",
+                providerId: "custom",
+            },
+        });
+    });
 });
 
-function createSocketModule(): SocketModule {
+function createSocketModule(options: { model?: ModelConfig } = {}): SocketModule {
     return new SocketModule(
         gatewayConfig(),
         {
             warmup: async () => undefined,
         } as never,
         new NullSink(),
+        options,
     );
 }
 
@@ -108,6 +126,21 @@ function gatewayConfig(): GatewayConfig {
         channels: {},
         stdio: false,
     } as GatewayConfig;
+}
+
+function modelConfig(): ModelConfig {
+    return {
+        apiMode: "chat-completions",
+        baseUrl: "https://example.invalid/v1",
+        headers: {},
+        contextWindowTokens: 64000,
+        maxTokens: 2048,
+        model: "demo-model",
+        provider: "openai-compatible",
+        providerId: "custom",
+        temperature: 0.2,
+        timeoutMs: 60_000,
+    } as ModelConfig;
 }
 
 async function openHandleRequest(

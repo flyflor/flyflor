@@ -1,4 +1,4 @@
-import type { GatewayConfig } from "../config/index.ts";
+import type { GatewayConfig, ModelConfig } from "../config/index.ts";
 import type { FlyflorPaths } from "../config/index.ts";
 import { Socket } from "../components/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../events/index.ts";
@@ -17,6 +17,7 @@ import { SocketQueryComponent } from "./query/index.ts";
 
 export interface SocketModuleOptions {
     dedup?: MessageDedupStore;
+    model?: ModelConfig;
     paths?: FlyflorPaths;
 }
 
@@ -30,6 +31,7 @@ export class SocketModule extends Socket {
     protected queryComponent?: SocketQueryComponent;
 
     protected readonly dedup: MessageDedupStore;
+    protected readonly model?: ModelConfig;
     protected readonly paths?: FlyflorPaths;
 
     public constructor(
@@ -40,6 +42,7 @@ export class SocketModule extends Socket {
     ) {
         super();
         this.dedup = isSocketModuleOptions(options) ? options.dedup ?? new InMemoryDedupStore() : options;
+        this.model = isSocketModuleOptions(options) ? options.model : undefined;
         this.paths = isSocketModuleOptions(options) ? options.paths : undefined;
     }
 
@@ -141,6 +144,11 @@ export class SocketModule extends Socket {
             degradedCount: 0,
             gatewayRunning: this.running,
             host: this.config.host,
+            context: {
+                compressionThresholdTokens: null,
+                hotContextTokens: null,
+            },
+            model: this.model,
             port: this.server?.port ?? this.config.port,
             startedAt: this.startedAt,
             streamingCount: this.running ? 1 : 0,
@@ -306,7 +314,7 @@ export type GatewayModuleOptions = SocketModuleOptions;
 export const GatewayModule = SocketModule;
 
 function isSocketModuleOptions(value: SocketModuleOptions | MessageDedupStore): value is SocketModuleOptions {
-    return "dedup" in value || "paths" in value;
+    return "dedup" in value || "model" in value || "paths" in value;
 }
 
 function json(payload: Record<string, unknown>, status = 200): Response {

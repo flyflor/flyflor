@@ -272,6 +272,7 @@ export interface ModelConfig {
     baseUrl: string;
     apiKey?: SecretRef | string;
     headers: Record<string, string>;
+    contextWindowTokens?: number;
     maxTokens: number;
     model: string;
     temperature: number;
@@ -287,6 +288,7 @@ export interface ModelProviderConfig {
     apiKey?: SecretRef | string;
     apiKeyHeader?: string;
     baseUrl?: string;
+    contextWindowTokens?: number;
     defaultModel?: string;
     headers?: Record<string, string>;
     maxTokens?: number;
@@ -1002,12 +1004,67 @@ async function buildModelConfig(
         baseUrl: provider.baseUrl ?? "",
         apiKey,
         headers: provider.headers ?? {},
+        contextWindowTokens: provider.contextWindowTokens ?? knownModelContextWindowTokens(providerId, model) ?? undefined,
         maxTokens: provider.maxTokens ?? 4096,
         model,
         temperature: config?.temperature ?? 0.2,
         timeoutMs: config?.timeoutMs ?? 60_000,
     };
 }
+
+export function knownModelContextWindowTokens(providerId: string, model: string): number | undefined {
+    const normalized = model.trim().toLowerCase();
+    const direct = KNOWN_MODEL_CONTEXT_WINDOWS[normalized];
+    if (direct) return direct;
+
+    const short = normalized.includes("/") ? normalized.split("/").at(-1) ?? normalized : normalized;
+    const aliased = KNOWN_MODEL_CONTEXT_WINDOWS[short];
+    if (aliased) return aliased;
+
+    if ((providerId === ModelProviderId.Claude || providerId === ModelProviderId.Anthropic) && short.startsWith("claude-")) {
+        return 200_000;
+    }
+    if (providerId === ModelProviderId.Gemini && short.startsWith("gemini-")) {
+        return 1_048_576;
+    }
+    if ((providerId === ModelProviderId.Qwen || providerId === ModelProviderId.QwenIntl) && short.startsWith("qwen")) {
+        return 128_000;
+    }
+    return undefined;
+}
+
+const KNOWN_MODEL_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
+    "anthropic/claude-sonnet-4.6": 200_000,
+    "claude-haiku-4-5-20251001": 200_000,
+    "claude-sonnet-4-5-20250929": 200_000,
+    "deepseek-chat": 64_000,
+    "deepseek-reasoner": 64_000,
+    "deepseek-v4-flash": 64_000,
+    "deepseek-v4-pro": 64_000,
+    "gemini-3-flash": 1_048_576,
+    "gemini-3-flash-preview": 1_048_576,
+    "gemini-3-pro-preview": 1_048_576,
+    "glm-4.5-flash": 128_000,
+    "glm-5": 128_000,
+    "google/gemini-3-flash": 1_048_576,
+    "google/gemini-3-flash-preview": 1_048_576,
+    "gpt-4.1-mini": 1_047_576,
+    "gpt-5.5": 400_000,
+    "gpt-5.5-pro": 400_000,
+    "grok-4": 256_000,
+    "grok-code-fast-2": 256_000,
+    "kimi-k2-thinking": 256_000,
+    "kimi-k2-turbo-preview": 256_000,
+    "llama-3.3-70b-versatile": 128_000,
+    "minimax-m2.7": 128_000,
+    "minimax-m2.7-highspeed": 128_000,
+    "mistral-large-latest": 128_000,
+    "openai/gpt-5.5": 400_000,
+    "qwen-max": 128_000,
+    "qwen-plus": 128_000,
+    "qwen3-coder-plus": 128_000,
+    "qwen3-plus": 128_000,
+};
 
 function normalizeModelRegistryConfig(config: ConfigFileShape): ModelRegistryConfig | undefined {
     if (!config.model && !config.providers && !config.agents?.defaults) {

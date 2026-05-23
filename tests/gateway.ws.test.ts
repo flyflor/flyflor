@@ -443,6 +443,76 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("delivers TUI topic refresh events for recall, ask, fork, blackboard, and todo panels", async () => {
+        const bus = new GlobalEventBus();
+        const topicTypes = [
+            RuntimeEventType.ScopeRecallLoaded,
+            RuntimeEventType.ScopeRecallDecided,
+            RuntimeEventType.MemoryContextForkWritten,
+            RuntimeEventType.MemoryAskRecorded,
+            RuntimeEventType.MemoryAskAnswered,
+            RuntimeEventType.BlackboardMessageAppended,
+            RuntimeEventType.BlackboardTurnEnd,
+            RuntimeEventType.MemoryTaskPlanWritten,
+        ];
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    { types: topicTypes },
+                    { id: "topic-subscribe-1", requestId: "req-topic-subscribe-1" },
+                ),
+            ),
+        );
+
+        for (const type of topicTypes) {
+            bus.publish({
+                type,
+                at: "2026-05-24T00:00:00.000Z",
+                requestId: "req-topic-refresh-1",
+                payload: {
+                    askEventId: "ask-1",
+                    blackboardTurnId: "bb-1",
+                    confidence: 0.92,
+                    decision: "load",
+                    forkId: "fork-1",
+                    ownerKey: "scope:core",
+                    planId: "plan-1",
+                    progress: 0.5,
+                    scopeId: "scope-1",
+                    snapshotId: "snapshot-1",
+                    status: "in-progress",
+                    title: "Core scope",
+                },
+            });
+        }
+
+        const published = sent(socket)
+            .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+            .map((envelope) => envelope.payload?.event)
+            .filter((event): event is { type: string; payload?: Record<string, unknown> } =>
+                typeof event === "object" && event !== null && "type" in event,
+            );
+        expect(published.map((event) => event.type)).toEqual(topicTypes);
+        expect(published.find((event) => event.type === RuntimeEventType.ScopeRecallLoaded)?.payload).toMatchObject({
+            scopeId: "scope-1",
+            title: "Core scope",
+            confidence: 0.92,
+        });
+        expect(published.find((event) => event.type === RuntimeEventType.MemoryTaskPlanWritten)?.payload).toMatchObject({
+            planId: "plan-1",
+            ownerKey: "scope:core",
+            status: "in-progress",
+            progress: 0.5,
+        });
+        hub.dispose();
+    });
+
     test("acks client.hello with stable client identity echo", async () => {
         const hub = createHub();
         const socket = fakeSocket();
@@ -547,6 +617,264 @@ describe("SocketControlHub", () => {
                     streamingCount: 0,
                 },
             },
+        });
+        hub.dispose();
+    });
+
+    test("exposes configured model status and resolves known context window tokens", async () => {
+        const hub = createHub({
+            status: () => ({
+                channels: [],
+                clientCount: 0,
+                context: {
+                    compressionThresholdTokens: 360000,
+                    hotContextTokens: 100000,
+                },
+                connectedCount: 1,
+                degradedCount: 0,
+                gatewayRunning: true,
+                host: "127.0.0.1",
+                model: {
+                    apiMode: "chat-completions",
+                    baseUrl: "https://api.openai.com/v1",
+                    contextWindowTokens: 320000,
+                    headers: {},
+                    maxTokens: 4096,
+                    model: "gpt-5.5",
+                    provider: "openai-compatible",
+                    providerId: "openai",
+                    temperature: 0.2,
+                    timeoutMs: 60_000,
+                },
+                port: 0,
+                streamingCount: 1,
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.GatewayStatusGet,
+                    undefined,
+                    { id: "status-model-get-1", requestId: "req-status-model-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "status-model-get-1",
+            requestId: "req-status-model-1",
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: {
+                status: {
+                    context: {
+                        compressionThresholdTokens: 360000,
+                        contextWindowPercent: 0.3125,
+                        hotContextTokens: 100000,
+                        remainingContextTokens: 220000,
+                    },
+                    model: {
+                        contextWindowTokens: 320000,
+                        maxOutputTokens: 4096,
+                        model: "gpt-5.5",
+                        providerId: "openai",
+                    },
+                },
+            },
+        });
+        hub.dispose();
+    });
+
+    test("uses known model context windows when config does not declare one", async () => {
+        const hub = createHub({
+            status: () => ({
+                channels: [],
+                clientCount: 0,
+                connectedCount: 1,
+                degradedCount: 0,
+                gatewayRunning: true,
+                host: "127.0.0.1",
+                model: {
+                    apiMode: "chat-completions",
+                    baseUrl: "https://api.openai.com/v1",
+                    headers: {},
+                    maxTokens: 4096,
+                    model: "gpt-5.5",
+                    provider: "openai-compatible",
+                    providerId: "openai",
+                    temperature: 0.2,
+                    timeoutMs: 60_000,
+                },
+                port: 0,
+                streamingCount: 1,
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            payload: {
+                status: {
+                    context: {
+                        compressionThresholdTokens: null,
+                        contextWindowPercent: null,
+                        hotContextTokens: null,
+                        remainingContextTokens: null,
+                    },
+                    model: {
+                        contextWindowTokens: 400000,
+                        maxOutputTokens: 4096,
+                    },
+                },
+            },
+        });
+        hub.dispose();
+    });
+
+    test("caches status and DB query snapshots with short-lived hit metadata", async () => {
+        let statusReads = 0;
+        let historyReads = 0;
+        let askReads = 0;
+        const bus = new GlobalEventBus();
+        const hub = createHub({
+            createContextFork: async (record) => record,
+            events: bus,
+            queries: fakeQueries({
+                askList: () => {
+                    askReads += 1;
+                    return [{
+                        ask: { reason: "other", prompt: `Ask ${askReads}`, freeform: true },
+                        event: {
+                            id: `ask-${askReads}`,
+                            ts: 100,
+                            timeBucket: "2026-05-24",
+                            ownerKey: "scope:core",
+                            type: "ask",
+                            content: {},
+                            importance: 0.5,
+                        },
+                        status: "active",
+                    }];
+                },
+                historyList: () => {
+                    historyReads += 1;
+                    return [{
+                        assistantText: `Assistant ${historyReads}`,
+                        eventId: `event-${historyReads}`,
+                        ts: 100 + historyReads,
+                        userText: "User",
+                    }];
+                },
+            }),
+            status: () => {
+                statusReads += 1;
+                return {
+                    channels: [],
+                    clientCount: 0,
+                    connectedCount: 1,
+                    degradedCount: 0,
+                    gatewayRunning: true,
+                    host: "127.0.0.1",
+                    port: statusReads,
+                    streamingCount: 1,
+                };
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+        statusReads = 0;
+
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.HistoryList, { limit: 2 })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.HistoryList, { limit: 2 })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.AskList, { status: "all" })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.AskList, { status: "all" })));
+
+        expect(statusReads).toBe(1);
+        expect(historyReads).toBe(1);
+        expect(askReads).toBe(1);
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.GatewayStatusSnapshot).slice(-2))
+            .toMatchObject([
+                { payload: { cache: { hit: false }, status: { cache: { hits: 0, misses: 1 } } } },
+                { payload: { cache: { hit: true }, status: { cache: { hits: 1, misses: 1 } } } },
+            ]);
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.HistorySnapshot).slice(-2))
+            .toMatchObject([
+                { payload: { cache: { hit: false }, history: [{ eventId: "event-1" }] } },
+                { payload: { cache: { hit: true }, history: [{ eventId: "event-1" }] } },
+            ]);
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.AskSnapshot).slice(-2))
+            .toMatchObject([
+                { payload: { cache: { hit: false }, data: [{ event: { id: "ask-1" } }] } },
+                { payload: { cache: { hit: true }, data: [{ event: { id: "ask-1" } }] } },
+            ]);
+
+        bus.publish({
+            type: RuntimeEventType.MemoryAskRecorded,
+            at: "2026-05-24T00:00:00.000Z",
+            payload: { askEventId: "ask-2" },
+        });
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.AskList, { status: "all" })));
+
+        expect(askReads).toBe(2);
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.AskSnapshot,
+            payload: { cache: { hit: false }, data: [{ event: { id: "ask-2" } }] },
+        });
+
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        expect(statusReads).toBe(2);
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.GatewayStatusSnapshot).slice(-2))
+            .toMatchObject([
+                { payload: { cache: { hit: false }, status: { port: 2 } } },
+                { payload: { cache: { hit: true }, status: { port: 2, cache: { hits: 3 } } } },
+            ]);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(GatewayControlMessageType.GatewayMessageSend, {
+                    id: "message-cache-invalidate-1",
+                    text: "invalidate read cache",
+                }),
+            ),
+        );
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        expect(statusReads).toBe(3);
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: { cache: { hit: false }, status: { port: 3 } },
+        });
+
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: { cache: { hit: true }, status: { port: 3 } },
+        });
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(GatewayControlMessageType.ForkCreate, {
+                    title: "Cache invalidation fork",
+                    summary: "Invalidate read cache after fork write.",
+                }),
+            ),
+        );
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusGet)));
+        expect(statusReads).toBe(4);
+        expect(sent(socket).at(-1)).toMatchObject({
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+            payload: { cache: { hit: false }, status: { port: 4 } },
         });
         hub.dispose();
     });
@@ -901,6 +1229,270 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("serves TUI topic context detail chains from query read models", async () => {
+        let dispatchCount = 0;
+        const hub = createHub({
+            dispatch: async (message) => {
+                dispatchCount += 1;
+                return { messageId: message.id, route: message.route, text: "unexpected" };
+            },
+            queries: fakeQueries({
+                askDetail: (input) => {
+                    expect(input).toEqual({ askId: "ask-1" });
+                    return {
+                        ask: {
+                            reason: "other",
+                            prompt: "Pick the deploy target?",
+                            freeform: true,
+                            continuationHint: {
+                                title: "Deploy target decision",
+                                contextHint: "Waiting on target choice",
+                            },
+                        },
+                        event: {
+                            id: "ask-1",
+                            ts: 100,
+                            timeBucket: "2026-05-24",
+                            ownerKey: "scope:core",
+                            type: "ask",
+                            content: {
+                                askId: "ask-1",
+                                snapshotId: "snapshot-1",
+                                requestId: "req-ask-1",
+                                chainDepth: 1,
+                            },
+                            importance: 0.9,
+                        },
+                        state: "live",
+                        status: "active",
+                    };
+                },
+                blackboardDetail: async (input) => {
+                    expect(input).toEqual({ blackboardTurnId: "bb-1" });
+                    return {
+                        asks: [],
+                        forks: [{
+                            id: "fork-from-bb",
+                            ownerKey: "scope:core",
+                            title: "Blackboard fork",
+                            summary: "Fork created from blackboard",
+                            continuitySummary: "Continue from blackboard decision",
+                            maxContextTokens: 12000,
+                            inheritedEventIds: ["event-1"],
+                            createdAt: "2026-05-24T00:00:00.000Z",
+                            updatedAt: "2026-05-24T00:00:00.000Z",
+                        }],
+                        replays: [],
+                        taskPlans: [],
+                        turn: {
+                            id: "bb-1",
+                            scopeId: "scope-1",
+                            status: "converged",
+                            summary: "Workers converged on a deploy target.",
+                            steps: [{ id: "bb-step-1", title: "Compare targets", status: "done" }],
+                            decisions: [{ id: "bb-decision-1", title: "Use staging first", status: "accepted" }],
+                            messages: [{ role: "assistant", content: "Use staging first." }],
+                        } as never,
+                    };
+                },
+                forkDetail: async (input) => {
+                    expect(input).toEqual({ forkId: "fork-1" });
+                    return {
+                        asks: [],
+                        fork: {
+                            id: "fork-1",
+                            ownerKey: "scope:core",
+                            scopeId: "scope-1",
+                            parentId: "fork-parent",
+                            title: "Deploy fork",
+                            summary: "Fork summary for selected turn",
+                            continuitySummary: "Continue with deploy context",
+                            maxContextTokens: 12000,
+                            inheritedEventIds: ["event-1"],
+                            createdAt: "2026-05-24T00:00:00.000Z",
+                            updatedAt: "2026-05-24T00:00:00.000Z",
+                            sourceEventId: "event-1",
+                        },
+                        inheritedEvents: [],
+                        replays: [],
+                        sourceEvent: {
+                            id: "event-1",
+                            ts: 90,
+                            timeBucket: "2026-05-24",
+                            ownerKey: "scope:core",
+                            type: "event",
+                            content: { title: "Source turn" },
+                            importance: 0.5,
+                        },
+                        taskPlans: [],
+                    };
+                },
+                thoughtDetail: async (input) => {
+                    expect(input).toEqual({ eventId: "event-1" });
+                    return {
+                        event: {
+                            id: "event-1",
+                            ts: 90,
+                            timeBucket: "2026-05-24",
+                            ownerKey: "scope:core",
+                            type: "event",
+                            content: {
+                                title: "Recall summary",
+                                summary: "Scope memory matched deploy target discussion.",
+                                status: "loaded",
+                            },
+                            importance: 0.6,
+                        },
+                        forks: [{
+                            id: "fork-1",
+                            ownerKey: "scope:core",
+                            title: "Deploy fork",
+                            summary: "Fork summary for selected turn",
+                            continuitySummary: "Continue with deploy context",
+                            maxContextTokens: 12000,
+                            inheritedEventIds: ["event-1"],
+                            createdAt: "2026-05-24T00:00:00.000Z",
+                            updatedAt: "2026-05-24T00:00:00.000Z",
+                        }],
+                        replays: [],
+                        summary: {
+                            hiddenChainOfThought: false,
+                            content: {
+                                title: "Recall summary",
+                                summary: "Scope memory matched deploy target discussion.",
+                                status: "loaded",
+                            },
+                        },
+                        taskPlans: [],
+                    };
+                },
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ThoughtDetailGet,
+                    { eventId: "event-1" },
+                    { id: "thought-detail-1" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.ForkDetailGet,
+                    { forkId: "fork-1" },
+                    { id: "fork-detail-context-1" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.BlackboardDetailGet,
+                    { blackboardTurnId: "bb-1" },
+                    { id: "blackboard-detail-1" },
+                ),
+            ),
+        );
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.AskDetailGet,
+                    { askId: "ask-1" },
+                    { id: "ask-detail-1" },
+                ),
+            ),
+        );
+
+        expect(dispatchCount).toBe(0);
+        expect(sent(socket).slice(-4)).toMatchObject([
+            {
+                correlationId: "thought-detail-1",
+                type: GatewayControlMessageType.ThoughtSnapshot,
+                payload: {
+                    data: {
+                        event: { id: "event-1" },
+                        summary: {
+                            hiddenChainOfThought: false,
+                            content: {
+                                title: "Recall summary",
+                                summary: "Scope memory matched deploy target discussion.",
+                                status: "loaded",
+                            },
+                        },
+                        forks: [{ id: "fork-1", title: "Deploy fork" }],
+                    },
+                },
+            },
+            {
+                correlationId: "fork-detail-context-1",
+                type: GatewayControlMessageType.ForkSnapshot,
+                payload: {
+                    data: {
+                        fork: {
+                            id: "fork-1",
+                            title: "Deploy fork",
+                            summary: "Fork summary for selected turn",
+                            continuitySummary: "Continue with deploy context",
+                        },
+                    },
+                },
+            },
+            {
+                correlationId: "blackboard-detail-1",
+                type: GatewayControlMessageType.BlackboardSnapshot,
+                payload: {
+                    data: {
+                        turn: {
+                            id: "bb-1",
+                            status: "converged",
+                            summary: "Workers converged on a deploy target.",
+                            steps: [{ id: "bb-step-1", title: "Compare targets", status: "done" }],
+                            decisions: [{ id: "bb-decision-1", title: "Use staging first", status: "accepted" }],
+                        },
+                        forks: [{ id: "fork-from-bb", title: "Blackboard fork" }],
+                    },
+                },
+            },
+            {
+                correlationId: "ask-detail-1",
+                type: GatewayControlMessageType.AskSnapshot,
+                payload: {
+                    data: {
+                        status: "active",
+                        state: "live",
+                        ask: {
+                            prompt: "Pick the deploy target?",
+                            continuationHint: {
+                                title: "Deploy target decision",
+                                contextHint: "Waiting on target choice",
+                            },
+                        },
+                        event: {
+                            id: "ask-1",
+                            content: {
+                                askId: "ask-1",
+                                snapshotId: "snapshot-1",
+                            },
+                        },
+                    },
+                },
+            },
+        ]);
+        expect(sent(socket).at(-1)?.payload?.data).not.toMatchObject({
+            ask: { executiveToolLoop: expect.anything() },
+        });
+        hub.dispose();
+    });
+
     test("creates a context fork through an injected control callback and returns fork.snapshot", async () => {
         const created: Array<{
             record: ContextForkRecord;
@@ -977,6 +1569,16 @@ describe("SocketControlHub", () => {
                         scopeId: "scope-id",
                         title: "TUI fork title",
                     },
+                },
+            },
+        });
+        expect(sent(socket).at(-1)?.payload).toMatchObject({
+            data: {
+                fork: {
+                    id: "fork-created",
+                    sourceEventId: "source-event-id",
+                    sourceAskId: "source-ask-id",
+                    sourceBlackboardTurnId: "blackboard-turn-id",
                 },
             },
         });

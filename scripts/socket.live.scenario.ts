@@ -87,7 +87,7 @@ class SocketLiveScenario {
             const events = new EventsComponent(sink, new RuntimeEventBus());
             const memory = new MemoryModule(config, events);
             this.runtime = new RuntimeModule(config, createModelClient(config.model), events, undefined, memory);
-            this.socket = new SocketModule(config.gateway, this.runtime, events, { paths: config.paths });
+            this.socket = new SocketModule(config.gateway, this.runtime, events, { model: config.model, paths: config.paths });
             this.socket.start();
 
             const url = this.socket.getStatusSnapshot().url;

@@ -488,6 +488,10 @@
               "$ref": "#/components/schemas/ChannelStatusSnapshot"
             }
           },
+          "cache": {
+            "$ref": "#/components/schemas/ReadCacheStatusSnapshot",
+            "description": "Short-lived socket read-cache stats for TUI diagnostics. The cache only covers read-only control/query snapshots."
+          },
           "clientCount": {
             "type": "integer",
             "description": "Live socket peer count, not a channel count or continuity owner."
@@ -498,6 +502,9 @@
           "controlState": {
             "$ref": "#/components/schemas/ControlStateSnapshot"
           },
+          "context": {
+            "$ref": "#/components/schemas/ContextTelemetrySnapshot"
+          },
           "degradedCount": {
             "type": "integer"
           },
@@ -506,6 +513,9 @@
           },
           "host": {
             "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelStatusSnapshot"
           },
           "port": {
             "type": "integer"
@@ -525,6 +535,123 @@
           }
         },
         "additionalProperties": true
+      },
+      "ModelStatusSnapshot": {
+        "type": "object",
+        "required": [
+          "contextWindowTokens",
+          "maxOutputTokens",
+          "model",
+          "providerId"
+        ],
+        "properties": {
+          "contextWindowTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Authoritative model context window from explicit config or a provider/model known mapping. Null means the kernel only knows the generation cap."
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "description": "Configured generation output cap from model.maxTokens. This is not the model context window."
+          },
+          "model": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContextTelemetrySnapshot": {
+        "type": "object",
+        "required": [
+          "compressionThresholdTokens",
+          "contextWindowPercent",
+          "hotContextTokens",
+          "remainingContextTokens"
+        ],
+        "properties": {
+          "compressionThresholdTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Configured compression threshold when the gateway has a real source. Null means unknown."
+          },
+          "contextWindowPercent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "hotContextTokens / model.contextWindowTokens when both values are known; otherwise null."
+          },
+          "hotContextTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Current hot-context token estimate when the gateway has a real source. Null means the CLI should estimate locally."
+          },
+          "remainingContextTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "model.contextWindowTokens - hotContextTokens when both values are known; otherwise null."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadCacheMetadata": {
+        "type": "object",
+        "required": [
+          "hit",
+          "key",
+          "ttlMs"
+        ],
+        "properties": {
+          "hit": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          },
+          "ttlMs": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadCacheStatusSnapshot": {
+        "type": "object",
+        "required": [
+          "entries",
+          "hits",
+          "invalidations",
+          "misses",
+          "ttlMs"
+        ],
+        "properties": {
+          "entries": {
+            "type": "integer"
+          },
+          "hits": {
+            "type": "integer"
+          },
+          "invalidations": {
+            "type": "integer"
+          },
+          "misses": {
+            "type": "integer"
+          },
+          "ttlMs": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
       },
       "ControlStateSnapshot": {
         "type": "object",
@@ -781,6 +908,9 @@
           "history"
         ],
         "properties": {
+          "cache": {
+            "$ref": "#/components/schemas/ReadCacheMetadata"
+          },
           "history": {
             "type": "array",
             "items": {
@@ -1847,6 +1977,9 @@
           "data"
         ],
         "properties": {
+          "cache": {
+            "$ref": "#/components/schemas/ReadCacheMetadata"
+          },
           "data": {
             "description": "Query result. List commands return arrays; detail commands return an object or null.",
             "oneOf": [
@@ -2264,11 +2397,30 @@
             },
             "status": {
               "channels": [],
+              "cache": {
+                "entries": 0,
+                "hits": 0,
+                "invalidations": 0,
+                "misses": 0,
+                "ttlMs": 1500
+              },
               "clientCount": 1,
               "connectedCount": 1,
+              "context": {
+                "compressionThresholdTokens": null,
+                "contextWindowPercent": null,
+                "hotContextTokens": null,
+                "remainingContextTokens": null
+              },
               "degradedCount": 0,
               "gatewayRunning": true,
               "host": "127.0.0.1",
+              "model": {
+                "providerId": "openai",
+                "model": "gpt-5.5",
+                "maxOutputTokens": 4096,
+                "contextWindowTokens": 400000
+              },
               "port": 8788,
               "streamingCount": 1
             }
@@ -2354,6 +2506,11 @@
           "requestId": "req-status-1",
           "correlationId": "env-status-get-1",
           "payload": {
+            "cache": {
+              "hit": false,
+              "key": "gateway.status.get:{}",
+              "ttlMs": 1500
+            },
             "status": {
               "channels": [
                 {
@@ -2367,8 +2524,21 @@
                   "transport": "websocket"
                 }
               ],
+              "cache": {
+                "entries": 0,
+                "hits": 0,
+                "invalidations": 0,
+                "misses": 1,
+                "ttlMs": 1500
+              },
               "clientCount": 1,
               "connectedCount": 1,
+              "context": {
+                "compressionThresholdTokens": null,
+                "contextWindowPercent": null,
+                "hotContextTokens": null,
+                "remainingContextTokens": null
+              },
               "controlState": {
                 "activeAsk": {
                   "ask": {
@@ -2435,6 +2605,12 @@
               "degradedCount": 0,
               "gatewayRunning": true,
               "host": "127.0.0.1",
+              "model": {
+                "providerId": "openai",
+                "model": "gpt-5.5",
+                "maxOutputTokens": 4096,
+                "contextWindowTokens": 400000
+              },
               "port": 8788,
               "streamingCount": 1
             }
@@ -2496,6 +2672,11 @@
           "requestId": "req-history-1",
           "correlationId": "env-history-list-1",
           "payload": {
+            "cache": {
+              "hit": false,
+              "key": "history.list:{\"beforeTs\":1770000000000,\"limit\":20}",
+              "ttlMs": 1500
+            },
             "nextBeforeTs": 1769999999999,
             "history": [
               {
@@ -3190,6 +3371,11 @@
           "requestId": "req-ask-list-1",
           "correlationId": "env-ask-list-1",
           "payload": {
+            "cache": {
+              "hit": false,
+              "key": "ask.list:{\"limit\":20,\"status\":\"all\"}",
+              "ttlMs": 1500
+            },
             "data": [
               {
                 "status": "active",
@@ -3230,6 +3416,11 @@
           "requestId": "req-scope-list-1",
           "correlationId": "env-scope-list-1",
           "payload": {
+            "cache": {
+              "hit": false,
+              "key": "scope.list:{\"limit\":20}",
+              "ttlMs": 1500
+            },
             "data": [
               {
                 "id": "scope-1",

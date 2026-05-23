@@ -1,4 +1,5 @@
-import type { GatewayConfig } from "../config/index.ts";
+import type { GatewayConfig, ModelConfig } from "../config/index.ts";
+import { knownModelContextWindowTokens } from "../config/index.ts";
 import {
     buildGatewayControlAckPayload,
     buildGatewayControlCapabilityCatalogPayload,
@@ -35,6 +36,7 @@ import {
     type GatewayControlReplyMetadata,
     type GatewayControlEnvelope,
     type GatewayControlGatewayStatusSnapshot,
+    type GatewayControlReadCacheMetadata,
     type GatewayControlScopeSnapshot,
     type GatewayControlStateSnapshot,
     type GatewayControlPeer as ProtocolSocketControlPeer,
@@ -57,6 +59,7 @@ import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../event
 import type { FlyflorPaths } from "../config/index.ts";
 import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
 import type { SocketQueryComponentPort } from "./query/index.ts";
+import { SocketReadCache } from "./read.cache.ts";
 import type { RuntimeStreamOptions } from "../agent/runtime/index.ts";
 
 export type SocketControlPeer = ProtocolSocketControlPeer;
@@ -85,14 +88,21 @@ export interface SocketControlTransportStatusSnapshot {
     channels: SocketControlTransportChannelStatusSnapshot[];
     clientCount: number;
     connectedCount: number;
+    context?: SocketControlContextTelemetrySnapshot;
     degradedCount: number;
     gatewayRunning: boolean;
     host: string;
+    model?: ModelConfig;
     port: number;
     startedAt?: string;
     streamingCount: number;
     uptimeMs?: number;
     url?: string;
+}
+
+export interface SocketControlContextTelemetrySnapshot {
+    compressionThresholdTokens?: number | null;
+    hotContextTokens?: number | null;
 }
 
 export interface SocketControlDispatchOptions {
@@ -140,6 +150,7 @@ type SocketControlHandler = (
 export class SocketControlHub implements EventSink {
     private readonly clients = new Set<SocketControlSocket>();
     private readonly handlers = new Map<string, SocketControlHandler>();
+    private readonly readCache = new SocketReadCache<Record<string, unknown>>();
     private capabilityCatalog: Record<string, unknown> | null = null;
     private controlState: GatewayControlStateSnapshot = {};
     private readonly unsubscribeEvents: () => void;
@@ -198,6 +209,7 @@ export class SocketControlHub implements EventSink {
     }
 
     public open(socket: SocketControlSocket): void {
+        this.invalidateReadCache();
         this.clients.add(socket);
         this.log("socket.open", { clientId: socket.data.clientId, connectedAt: socket.data.connectedAt });
         void this.sendServerHello(socket).catch((error) => this.sendError(socket, undefined, error));
@@ -205,6 +217,7 @@ export class SocketControlHub implements EventSink {
 
     public close(socket: SocketControlSocket): void {
         this.clients.delete(socket);
+        this.invalidateReadCache();
         this.log("socket.close", { clientId: socket.data.clientId });
     }
 
@@ -262,6 +275,7 @@ export class SocketControlHub implements EventSink {
         if (event.type === RuntimeEventType.ExecutiveCapabilityCatalogBuilt && event.payload) {
             this.capabilityCatalog = event.payload;
         }
+        this.invalidateReadCache();
         this.updateControlStateFromEvent(event);
         const envelope = createGatewayControlEventEnvelope(event);
         for (const client of this.clients) {
@@ -337,16 +351,39 @@ export class SocketControlHub implements EventSink {
 
     private handleGatewayStatusGet(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {
         this.log("gateway.status.get", { clientId: socket.data.clientId });
+        const key = this.readCacheKey(envelope.type, envelope.payload);
+        const cached = this.readCache.get(key);
+        if (cached) {
+            this.send(
+                socket,
+                GatewayControlMessageType.GatewayStatusSnapshot,
+                this.withReadCacheHit(cached, key),
+                envelope,
+            );
+            return;
+        }
+        const cache = this.readCacheMetadata(key, false);
+        const payload = buildGatewayControlGatewayStatusPayload(
+            this.protocolStatusSnapshot(this.options.status()),
+            cache,
+        );
+        this.readCache.set(key, payload);
         this.send(
             socket,
             GatewayControlMessageType.GatewayStatusSnapshot,
-            buildGatewayControlGatewayStatusPayload(this.protocolStatusSnapshot(this.options.status())),
+            payload,
             envelope,
         );
     }
 
     private async handleHistoryList(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
         const input = readGatewayControlHistoryListInput(envelope.payload);
+        const key = this.readCacheKey(envelope.type, input);
+        const cached = this.readCache.get(key);
+        if (cached) {
+            this.send(socket, GatewayControlMessageType.HistorySnapshot, this.withReadCacheHit(cached, key), envelope);
+            return;
+        }
         const queries = this.requiredQueries();
         await queries.initialize();
         const history = queries.historyList(input);
@@ -356,15 +393,13 @@ export class SocketControlHub implements EventSink {
             count: history.length,
             limit: input.limit,
         });
-        this.send(
-            socket,
-            GatewayControlMessageType.HistorySnapshot,
-            buildGatewayControlHistorySnapshotPayload({
-                history: history.map((turn) => this.historyTurnSnapshot(turn)),
-                nextBeforeTs: history.length > 0 && history[0] ? history[0].ts - 1 : undefined,
-            }),
-            envelope,
-        );
+        const payload = buildGatewayControlHistorySnapshotPayload({
+            cache: this.readCacheMetadata(key, false),
+            history: history.map((turn) => this.historyTurnSnapshot(turn)),
+            nextBeforeTs: history.length > 0 && history[0] ? history[0].ts - 1 : undefined,
+        });
+        this.readCache.set(key, payload);
+        this.send(socket, GatewayControlMessageType.HistorySnapshot, payload, envelope);
     }
 
     private async handleQuery(
@@ -374,6 +409,12 @@ export class SocketControlHub implements EventSink {
         reader: (payload: Record<string, unknown>) => unknown | Promise<unknown>,
     ): Promise<void> {
         const payload = readGatewayControlQueryPayload(envelope.payload);
+        const key = this.readCacheKey(envelope.type, payload);
+        const cached = this.readCache.get(key);
+        if (cached) {
+            this.send(socket, snapshotType, this.withReadCacheHit(cached, key), envelope);
+            return;
+        }
         await this.requiredQueries().initialize();
         const data = await reader(payload);
         this.log("query.snapshot", {
@@ -382,7 +423,9 @@ export class SocketControlHub implements EventSink {
             snapshotType,
             type: envelope.type,
         });
-        this.send(socket, snapshotType, buildGatewayControlQuerySnapshotPayload(data ?? null), envelope);
+        const response = buildGatewayControlQuerySnapshotPayload(data ?? null, this.readCacheMetadata(key, false));
+        this.readCache.set(key, response);
+        this.send(socket, snapshotType, response, envelope);
     }
 
     private async handleForkCreate(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
@@ -417,6 +460,7 @@ export class SocketControlHub implements EventSink {
         const written = await this.options.createContextFork(fork, {
             eventId: input.sourceEventId,
         });
+        this.invalidateReadCache();
         this.controlState = {
             ...this.controlState,
             activeFork: {
@@ -449,6 +493,7 @@ export class SocketControlHub implements EventSink {
         envelope: GatewayControlEnvelope,
     ): Promise<void> {
         const input = readGatewayControlMessageInput(envelope.payload);
+        this.invalidateReadCache();
         const context = this.contextFromInput(input.context, envelope.requestId);
         const gatewayMessage = this.messageFromInput(input);
         const publicMessageId = this.publicMessageId(gatewayMessage);
@@ -972,12 +1017,97 @@ export class SocketControlHub implements EventSink {
             degradedCount: status.degradedCount,
             gatewayRunning: status.gatewayRunning,
             host: status.host,
+            model: status.model
+                ? {
+                      contextWindowTokens: this.resolveContextWindowTokens(status.model),
+                      maxOutputTokens: status.model.maxTokens,
+                      model: status.model.model,
+                      providerId: status.model.providerId,
+                  }
+                : undefined,
             port: status.port,
             startedAt: status.startedAt,
             streamingCount: status.streamingCount,
             uptimeMs: status.uptimeMs,
             url: status.url,
+            cache: this.readCache.stats(),
+            context: this.contextTelemetry(status),
         };
+    }
+
+    private contextTelemetry(status: SocketControlTransportStatusSnapshot): GatewayControlGatewayStatusSnapshot["context"] {
+        const hotContextTokens = this.nullableNonNegativeInteger(status.context?.hotContextTokens);
+        const contextWindowTokens = status.model ? this.resolveContextWindowTokens(status.model) : null;
+        const remainingContextTokens = hotContextTokens !== null && contextWindowTokens !== null
+            ? Math.max(0, contextWindowTokens - hotContextTokens)
+            : null;
+        return {
+            compressionThresholdTokens: this.nullableNonNegativeInteger(status.context?.compressionThresholdTokens),
+            contextWindowPercent: hotContextTokens !== null && contextWindowTokens !== null && contextWindowTokens > 0
+                ? hotContextTokens / contextWindowTokens
+                : null,
+            hotContextTokens,
+            remainingContextTokens,
+        };
+    }
+
+    private invalidateReadCache(): void {
+        this.readCache.clear();
+    }
+
+    private readCacheKey(type: string, payload: unknown): string {
+        return `${type}:${this.stableJson(payload ?? {})}`;
+    }
+
+    private readCacheMetadata(key: string, hit: boolean): GatewayControlReadCacheMetadata {
+        return { hit, key, ttlMs: this.readCache.stats().ttlMs };
+    }
+
+    private withReadCacheHit(payload: Record<string, unknown>, key: string): Record<string, unknown> {
+        const next: Record<string, unknown> = {
+            ...payload,
+            cache: this.readCacheMetadata(key, true),
+        };
+        if (this.isGatewayStatusPayload(payload)) {
+            next.status = {
+                ...payload.status,
+                cache: this.readCache.stats(),
+            };
+        }
+        return next;
+    }
+
+    private isGatewayStatusPayload(payload: Record<string, unknown>): payload is Record<string, unknown> & {
+        status: GatewayControlGatewayStatusSnapshot;
+    } {
+        return Boolean(payload.status && typeof payload.status === "object" && !Array.isArray(payload.status));
+    }
+
+    private resolveContextWindowTokens(model: ModelConfig): number | null {
+        return this.nullablePositiveInteger(model.contextWindowTokens)
+            ?? knownModelContextWindowTokens(model.providerId, model.model)
+            ?? null;
+    }
+
+    private nullableNonNegativeInteger(value: unknown): number | null {
+        return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+    }
+
+    private nullablePositiveInteger(value: unknown): number | null {
+        return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+    }
+
+    private stableJson(value: unknown): string {
+        if (Array.isArray(value)) {
+            return `[${value.map((item) => this.stableJson(item)).join(",")}]`;
+        }
+        if (value && typeof value === "object") {
+            return `{${Object.entries(value as Record<string, unknown>)
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([key, item]) => `${JSON.stringify(key)}:${this.stableJson(item)}`)
+                .join(",")}}`;
+        }
+        return JSON.stringify(value);
     }
 
     private isLocalRequest(request: Request): boolean {

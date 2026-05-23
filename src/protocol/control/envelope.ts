@@ -72,6 +72,7 @@ export type GatewayControlTurnFinalPayload = Record<string, unknown> & {
 };
 
 export type GatewayControlGatewayStatusPayload = Record<string, unknown> & {
+    cache?: GatewayControlReadCacheMetadata;
     status: GatewayControlGatewayStatusSnapshot;
 };
 
@@ -105,13 +106,21 @@ export interface GatewayControlHistoryTurnSnapshot {
 }
 
 export type GatewayControlHistorySnapshotPayload = Record<string, unknown> & {
+    cache?: GatewayControlReadCacheMetadata;
     history: GatewayControlHistoryTurnSnapshot[];
     nextBeforeTs?: number;
 };
 
 export type GatewayControlQuerySnapshotPayload = Record<string, unknown> & {
+    cache?: GatewayControlReadCacheMetadata;
     data: unknown;
 };
+
+export interface GatewayControlReadCacheMetadata {
+    hit: boolean;
+    key: string;
+    ttlMs: number;
+}
 
 export type GatewayControlServerHelloPayload = Record<string, unknown> & {
     capabilities: GatewayControlSurfaceCapabilities;
@@ -293,18 +302,43 @@ export interface GatewayControlChannelStatusSnapshot {
 }
 
 export interface GatewayControlGatewayStatusSnapshot {
+    cache?: GatewayControlReadCacheStatusSnapshot;
     channels: GatewayControlChannelStatusSnapshot[];
     clientCount?: number;
     connectedCount: number;
+    context?: GatewayControlContextTelemetrySnapshot;
     controlState?: GatewayControlStateSnapshot;
     degradedCount: number;
     gatewayRunning: boolean;
     host: string;
+    model?: GatewayControlModelStatusSnapshot;
     port: number;
     startedAt?: string;
     streamingCount: number;
     uptimeMs?: number;
     url?: string;
+}
+
+export interface GatewayControlModelStatusSnapshot {
+    contextWindowTokens: number | null;
+    maxOutputTokens: number;
+    model: string;
+    providerId: string;
+}
+
+export interface GatewayControlContextTelemetrySnapshot {
+    compressionThresholdTokens: number | null;
+    contextWindowPercent: number | null;
+    hotContextTokens: number | null;
+    remainingContextTokens: number | null;
+}
+
+export interface GatewayControlReadCacheStatusSnapshot {
+    entries: number;
+    hits: number;
+    invalidations: number;
+    misses: number;
+    ttlMs: number;
 }
 
 export interface GatewayControlScopeSnapshot {
@@ -520,8 +554,9 @@ export function buildGatewayControlTurnFinalPayload(reply: GatewayReplyLike): Ga
 
 export function buildGatewayControlGatewayStatusPayload(
     status: GatewayControlGatewayStatusSnapshot,
+    cache?: GatewayControlReadCacheMetadata,
 ): GatewayControlGatewayStatusPayload {
-    return { status };
+    return { cache, status };
 }
 
 export function buildGatewayControlCapabilityCatalogPayload(
@@ -532,14 +567,18 @@ export function buildGatewayControlCapabilityCatalogPayload(
 }
 
 export function buildGatewayControlHistorySnapshotPayload(input: {
+    cache?: GatewayControlReadCacheMetadata;
     history: GatewayControlHistoryTurnSnapshot[];
     nextBeforeTs?: number;
 }): GatewayControlHistorySnapshotPayload {
     return input;
 }
 
-export function buildGatewayControlQuerySnapshotPayload(data: unknown): GatewayControlQuerySnapshotPayload {
-    return { data };
+export function buildGatewayControlQuerySnapshotPayload(
+    data: unknown,
+    cache?: GatewayControlReadCacheMetadata,
+): GatewayControlQuerySnapshotPayload {
+    return { cache, data };
 }
 
 export function buildGatewayControlServerHelloPayload(input: GatewayControlServerHelloPayload): GatewayControlServerHelloPayload {

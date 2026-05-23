@@ -65,7 +65,7 @@ class SocketAskLoopSmoke {
                     handleMessage: (message: GatewayMessage, context: RuntimeContext) => dispatch.handleMessage(message, context),
                 } as unknown as RuntimeModule),
                 this.events,
-                { paths: this.config.paths },
+                { model: this.config.model, paths: this.config.paths },
             );
             this.socket.start();
 

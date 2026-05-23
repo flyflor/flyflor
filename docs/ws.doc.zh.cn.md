@@ -698,6 +698,11 @@ DB/read-model。
   "requestId": "req-history-1",
   "correlationId": "history-list-1",
   "payload": {
+    "cache": {
+      "hit": false,
+      "key": "history.list:{\"limit\":20}",
+      "ttlMs": 1500
+    },
     "nextBeforeTs": 1747785599999,
     "history": [
       {
@@ -992,6 +997,11 @@ history turn 的回放展示。它只由已存储的结构化 plan/fork/replay �
   "requestId": "probe-status",
   "correlationId": "env-status-1",
   "payload": {
+    "cache": {
+      "hit": false,
+      "key": "gateway.status.get:{}",
+      "ttlMs": 1500
+    },
     "status": {
       "gatewayRunning": true,
       "host": "127.0.0.1",
@@ -1003,6 +1013,25 @@ history turn 的回放展示。它只由已存储的结构化 plan/fork/replay �
       "connectedCount": 1,
       "degradedCount": 0,
       "streamingCount": 1,
+      "cache": {
+        "entries": 0,
+        "hits": 0,
+        "invalidations": 0,
+        "misses": 1,
+        "ttlMs": 1500
+      },
+      "context": {
+        "hotContextTokens": null,
+        "contextWindowPercent": null,
+        "compressionThresholdTokens": null,
+        "remainingContextTokens": null
+      },
+      "model": {
+        "providerId": "openai",
+        "model": "gpt-5.5",
+        "maxOutputTokens": 4096,
+        "contextWindowTokens": 400000
+      },
       "channels": [
         {
           "name": "ws",
@@ -1029,6 +1058,27 @@ history turn 的回放展示。它只由已存储的结构化 plan/fork/replay �
   }
 }
 ```
+
+`status.model` 是 TUI Context Window 的只读权威出口：
+
+- `providerId`：当前配置的模型 provider。
+- `model`：当前模型名。
+- `maxOutputTokens`：配置里的生成输出上限，即 `model.maxTokens`；这不是上下文窗口。
+- `contextWindowTokens`：模型最大上下文窗口。来源优先级是显式配置、provider/model 已知映射、`null`。不要把 `maxOutputTokens` 当成上下文窗口。
+
+`status.context` 是 TUI Context Window 的只读遥测出口：
+
+- `hotContextTokens`：当前热区 token 估算。没有真实运行态来源时返回 `null`。
+- `contextWindowPercent`：`hotContextTokens / contextWindowTokens`，任一值未知时返回 `null`。
+- `compressionThresholdTokens`：压缩阈值。没有真实配置或运行态来源时返回 `null`。
+- `remainingContextTokens`：剩余上下文窗口 token，任一值未知时返回 `null`。
+
+只读查询缓存元信息：
+
+- `payload.cache.hit` 表示本次 `gateway.status.get` / DB read-model query 是否命中 socket 只读缓存。
+- `payload.cache.key` 由 `type + payload` 生成，只用于调试与 TUI 缓存命中显示。
+- `payload.cache.ttlMs` 当前默认是短 TTL 1500ms。
+- `status.cache` 是 socket read-cache 统计；`gateway.message.send`、`fork.create` 等写操作不缓存，写事件会失效缓存。
 
 代码：
 
