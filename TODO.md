@@ -682,3 +682,12 @@ Kernel V2 acceptance focus：
 - [x] 新增内建只读 `workspace.tree`，返回带深度和条数上限的递归目录树，作为项目级扫描第一步。
 - [x] `workspace.tree` 默认跳过运行态顶层目录和重目录，避免 `.flyflor`、brain、cache、memory、prompts 等运行态数据淹没源码结构。
 - [x] 补充 workspace tree、prompt lint 和文档测试，验证工具目录暴露 tree 且本地项目报告链路先拿结构证据。
+
+## 2026-05-24 Socket 工具事件 lane
+
+- [ ] 阅读 `src/events/**`、`src/socket/**`、`src/protocol/control/**` 和现有 query reader。
+- [ ] 为工具调用生命周期补齐事件类型和 socket 事件订阅/查询面：started/progress/succeeded/failed/output persisted/budget exhausted/ask required。
+- [ ] 只通过 event emit/subscribe 和 DB/read snapshot 暴露信息，不入侵 Runtime 主链。
+- [ ] 更新 WS 文档、OpenAPI/Apifox messages 和 docs guard 示例。
+- [ ] 补齐 focused tests，覆盖事件订阅、快照查询、错误事件和文档示例可解析。
+- [ ] 运行 `bun test` focused、`bun run docs:check`、`bun run check`、`git diff --check` 后提交本 lane。

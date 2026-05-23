@@ -13,6 +13,10 @@ const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
     [RuntimeEventType.MemorySkillOfferProposed]: RuntimeEventClass.Question,
     [RuntimeEventType.ScopeRecallAsk]: RuntimeEventClass.Question,
     [RuntimeEventType.ScopeRecallLoaded]: RuntimeEventClass.Read,
+    [RuntimeEventType.ToolAskRequired]: RuntimeEventClass.Ask,
+    [RuntimeEventType.ToolBudgetExhausted]: RuntimeEventClass.Ask,
+    [RuntimeEventType.ToolFailed]: RuntimeEventClass.Error,
+    [RuntimeEventType.ToolOutputPersisted]: RuntimeEventClass.Write,
 };
 
 /**
@@ -54,6 +58,7 @@ export class RuntimeEventClassifier {
             type.startsWith("plugin.") ||
             type.startsWith("mcp.") ||
             type.startsWith("process.") ||
+            type.startsWith("tool.") ||
             type.startsWith("worker.")
         ) {
             return RuntimeEventClass.Effect;

@@ -22,6 +22,7 @@ import {
     TaskPlanStatus,
     ToolPermission,
     GatewayControlMessageType,
+    ToolLifecycleEventType,
     type ContextForkRecord,
     type GatewayMessage,
     type GatewayReply,
@@ -403,6 +404,42 @@ describe("SocketControlHub", () => {
         expect(sent(socket).map((envelope) => envelope.type)).toContain(GatewayControlMessageType.EventPublish);
         const published = sent(socket).find((envelope) => envelope.type === GatewayControlMessageType.EventPublish);
         expect(published?.payload?.event).toMatchObject({ type: RuntimeEventType.ChannelError });
+        hub.dispose();
+    });
+
+    test("subscribes to all stable tool lifecycle event types", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(GatewayControlMessageType.EventSubscribe, {
+                    types: Object.values(ToolLifecycleEventType),
+                }),
+            ),
+        );
+
+        for (const type of Object.values(ToolLifecycleEventType)) {
+            bus.publish({
+                type,
+                at: "2026-05-24T00:00:00.000Z",
+                requestId: "req-tool-life-1",
+                payload: {
+                    capabilityKind: CapabilityExecutionKind.McpTool,
+                    key: "workspace.read",
+                },
+            });
+        }
+
+        const publishedTypes = sent(socket)
+            .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+            .map((envelope) => envelope.payload?.event)
+            .filter((event): event is { type: string } => typeof event === "object" && event !== null && "type" in event)
+            .map((event) => event.type);
+        expect(publishedTypes).toEqual(Object.values(ToolLifecycleEventType));
         hub.dispose();
     });
 
@@ -1213,6 +1250,52 @@ describe("SocketControlHub", () => {
                     type: RuntimeEventType.AgentTurnStart,
                     requestId: "runtime-req-class-1",
                 }),
+            },
+        });
+        hub.dispose();
+    });
+
+    test("delivers failed tool lifecycle events through the error event class", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    {
+                        classes: ["error"],
+                    },
+                    { id: "event-sub-tool-error-1", requestId: "req-sub-tool-error-1" },
+                ),
+            ),
+        );
+
+        bus.publish({
+            type: RuntimeEventType.ToolFailed,
+            at: "2026-05-24T00:01:00.000Z",
+            requestId: "runtime-req-tool-failed-1",
+            payload: {
+                capabilityKind: CapabilityExecutionKind.McpTool,
+                error: "tool failed",
+                key: "workspace.read",
+            },
+        });
+
+        expect(sent(socket).find((envelope) => envelope.type === GatewayControlMessageType.EventPublish)).toMatchObject({
+            type: GatewayControlMessageType.EventPublish,
+            payload: {
+                event: {
+                    type: RuntimeEventType.ToolFailed,
+                    requestId: "runtime-req-tool-failed-1",
+                    payload: {
+                        error: "tool failed",
+                        key: "workspace.read",
+                    },
+                },
             },
         });
         hub.dispose();

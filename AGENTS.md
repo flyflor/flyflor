@@ -48,3 +48,11 @@ bun run build:binary
 - 主线迭代优先收缩暴露面：能删的 HTTP 状态口优先删，若 WS 控制面已经提供同等结构化快照，就不要再保留重复 REST 入口。
 - HTTP surface 固定收缩为 `/ws` 与 `/health`；`/channels` 不恢复。需要状态、能力、历史、事件和 live turn 时走 socket control/event wire，不新增重复 REST 状态口。
 - 当前 release-seal 下一阶段聚焦 Bun 内核真实封板：OpenAPI/Apifox 契约、真实配置模型的 socket 场景、prompt 优化、DB/context guard、release/binary 验证；不得把精力转回本仓库内 Rust 实现。
+
+## 本 worktree 附加规则：socket-tool-events
+
+- 只修改工具生命周期事件、socket control/event/read snapshot、WS 文档和直接测试。
+- 不修改电脑工具实现、Executive 预算循环、Scope/Memory/Crystal 主链。
+- 能通过 DB/read model 查询的内容只在 socket/query 层读取；需要实时性的内容只通过 event emit/subscribe 暴露。
+- 不新增 REST 状态口；HTTP surface 仍固定为 `/health` 和 `/ws`。
+- 新增 wire type 必须先进 `src/protocol/contracts/enums.ts` 或对应 registry，测试和文档示例必须同步。

@@ -1479,6 +1479,13 @@
                 "runtime.mode.entered",
                 "runtime.mode.awakened",
                 "skill.context.built",
+                "tool.ask_required",
+                "tool.budget.exhausted",
+                "tool.failed",
+                "tool.output.persisted",
+                "tool.progress",
+                "tool.started",
+                "tool.succeeded",
                 "process.exit",
                 "process.output",
                 "process.output.truncated",
@@ -2894,7 +2901,14 @@
             "types": [
               "executive.capability.catalog.built",
               "executive.loop.paused",
-              "executive.loop.resumed"
+              "executive.loop.resumed",
+              "tool.started",
+              "tool.progress",
+              "tool.succeeded",
+              "tool.failed",
+              "tool.output.persisted",
+              "tool.budget.exhausted",
+              "tool.ask_required"
             ]
           }
         }
@@ -2974,6 +2988,153 @@
                   "mode": "continue",
                   "requestId": "req-turn-loop-2"
                 }
+              }
+            }
+          }
+        }
+      },
+      "ToolStartedEvent": {
+        "summary": "event.publish tool.started",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-started-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.000Z",
+          "requestId": "req-tool-life-1",
+          "payload": {
+            "event": {
+              "type": "tool.started",
+              "at": "2026-05-22T00:00:14.000Z",
+              "requestId": "req-tool-life-1",
+              "payload": {
+                "capabilityKind": "mcp-tool",
+                "key": "workspace.read"
+              }
+            }
+          }
+        }
+      },
+      "ToolProgressEvent": {
+        "summary": "event.publish tool.progress",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-progress-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.100Z",
+          "requestId": "req-tool-life-1",
+          "payload": {
+            "event": {
+              "type": "tool.progress",
+              "at": "2026-05-22T00:00:14.100Z",
+              "requestId": "req-tool-life-1",
+              "payload": {
+                "key": "workspace.read",
+                "progress": 0.5
+              }
+            }
+          }
+        }
+      },
+      "ToolSucceededEvent": {
+        "summary": "event.publish tool.succeeded",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-succeeded-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.200Z",
+          "requestId": "req-tool-life-1",
+          "payload": {
+            "event": {
+              "type": "tool.succeeded",
+              "at": "2026-05-22T00:00:14.200Z",
+              "requestId": "req-tool-life-1",
+              "payload": {
+                "key": "workspace.read",
+                "resultSummary": "Read completed."
+              }
+            }
+          }
+        }
+      },
+      "ToolFailedEvent": {
+        "summary": "event.publish tool.failed",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-failed-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.300Z",
+          "requestId": "req-tool-life-2",
+          "payload": {
+            "event": {
+              "type": "tool.failed",
+              "at": "2026-05-22T00:00:14.300Z",
+              "requestId": "req-tool-life-2",
+              "payload": {
+                "key": "workspace.read",
+                "error": "Tool execution failed."
+              }
+            }
+          }
+        }
+      },
+      "ToolOutputPersistedEvent": {
+        "summary": "event.publish tool.output.persisted",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-output-persisted-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.400Z",
+          "requestId": "req-tool-life-1",
+          "payload": {
+            "event": {
+              "type": "tool.output.persisted",
+              "at": "2026-05-22T00:00:14.400Z",
+              "requestId": "req-tool-life-1",
+              "payload": {
+                "key": "workspace.read",
+                "eventId": "event-tool-output-1"
+              }
+            }
+          }
+        }
+      },
+      "ToolBudgetExhaustedEvent": {
+        "summary": "event.publish tool.budget.exhausted",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-budget-exhausted-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.500Z",
+          "requestId": "req-tool-life-3",
+          "payload": {
+            "event": {
+              "type": "tool.budget.exhausted",
+              "at": "2026-05-22T00:00:14.500Z",
+              "requestId": "req-tool-life-3",
+              "payload": {
+                "totalCalls": 8,
+                "budget": 8
+              }
+            }
+          }
+        }
+      },
+      "ToolAskRequiredEvent": {
+        "summary": "event.publish tool.ask_required",
+        "value": {
+          "protocol": "flyflor.event.v1",
+          "id": "event-publish-tool-ask-required-1",
+          "type": "event.publish",
+          "at": "2026-05-22T00:00:14.600Z",
+          "requestId": "req-tool-life-3",
+          "payload": {
+            "event": {
+              "type": "tool.ask_required",
+              "at": "2026-05-22T00:00:14.600Z",
+              "requestId": "req-tool-life-3",
+              "payload": {
+                "askId": "ask-tool-1",
+                "reason": "budget-exhausted"
               }
             }
           }

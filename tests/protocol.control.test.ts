@@ -35,6 +35,7 @@ import {
     GatewayControlMessageType,
     GatewayControlProtocol,
     TaskPlanStatus,
+    ToolLifecycleEventType,
 } from "../src/protocol/contracts/index.ts";
 import type { RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType } from "../src/events/index.ts";
@@ -893,6 +894,26 @@ describe("Gateway Control protocol", () => {
             true,
         );
         expect(shouldDeliverGatewayControlEvent(event, [{ types: [RuntimeEventType.ChannelError] }])).toBe(false);
+    });
+
+    test("accepts stable tool lifecycle runtime event subscriptions", () => {
+        const subscription = readGatewayControlSubscription({
+            types: Object.values(ToolLifecycleEventType),
+        });
+
+        expect(subscription).toEqual({
+            classes: undefined,
+            requestId: undefined,
+            types: [
+                RuntimeEventType.ToolAskRequired,
+                RuntimeEventType.ToolBudgetExhausted,
+                RuntimeEventType.ToolFailed,
+                RuntimeEventType.ToolOutputPersisted,
+                RuntimeEventType.ToolProgress,
+                RuntimeEventType.ToolStarted,
+                RuntimeEventType.ToolSucceeded,
+            ],
+        });
     });
 
     test("rejects unknown event subscription selectors before they enter socket state", () => {
