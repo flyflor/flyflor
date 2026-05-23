@@ -660,14 +660,14 @@
   效率：本轮新增/调整集中在 workspace 工具、MCP 提示词、工具文档和测试；提交前统计以 `git diff --stat` 为准。
   验证：`bun test tests/skill.mcp.test.ts --test-name-pattern "workspace tree|workspace tools|workspace glob"`；`bun test tests/skill.mcp.test.ts tests/runtime.mcp.tool.plan.test.ts`；`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
 
-- 状态：进行中
+- 状态：已完成
   执行者：codex-lane-socket-tool-events
   范围：socket-tool-events
   摘要：本 lane 只补工具生命周期事件、socket 订阅/查询可见面和文档契约。
   原因：TUI 需要看到执行血管事件，但 gateway/socket 能查 DB 或订阅事件解决的内容不能侵入智能体核心。
   验证：待补 focused tests、docs check、`bun run check`、`git diff --check`。
 
-- 状态：进行中
+- 状态：已完成
   执行者：codex-lane-computer-coding-tools
   范围：computer-coding-tools
   摘要：本 lane 只补电脑控制基础工具面：文件、patch、git、process/shell 风险边界。
@@ -688,3 +688,11 @@
   原因：当前智能体遇到本地代码阅读、文件整理和项目检查时可能只输出自然语言草稿而不进入工具循环；阶段性补洞必须先恢复可验证状态，再把完整电脑控制设计隔离到独立 worktree 慢慢推进，避免继续污染 master。
   效率：当前未提交 diff 统计为 12 files changed，约 392 insertions、15 deletions；运行时代码集中在 `src/agent/runtime/mcp`、`src/agent/runtime/module.ts`、`src/executive/mcp.adapter.ts`，测试集中在 `tests/skill.mcp.test.ts`。
   验证：`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts tests/skill.mcp.test.ts --timeout 60000` 93 pass；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：exec-core-tmux-worktree-merge-closure
+  摘要：确认并收口 `flyflor-exec-core-v1` tmux session 下的 `socket-events`、`coding-tools`、`exec-loop` 三条 worktree lane，并吸收 `computer-control-tool-loop` 的有效阶段性补洞；所有 lane 均通过 cherry-pick 或 no-ff merge 进入 `master`，避免旧分支整体 diff 回退主线文档、WS 契约和电脑工具能力。
+  原因：用户要求主 Codex 使用 `git worktree + tmux + codex` 并发，并负责 review、合并、回收和防止需求漂移；本次重点是电脑控制能力、执行预算、工具事件和本地代码阅读调用层闭环。
+  效率：当前 `master` 相对 `origin/master` 为 11 commits ahead，58 files changed，4892 insertions，122 deletions；本轮新合入重点提交包括 `88f06cf`、`0f0f26c`、`8dbff2e`、`aa0f477`。
+  验证：`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts tests/skill.mcp.test.ts --timeout 60000` 93 pass；`bun test tests/computer.coding.tools.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts tests/event.component.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/docs.references.test.ts` 97 pass；`bun run docs:check` 26 pass；`bun run check`；`git diff --check`。
