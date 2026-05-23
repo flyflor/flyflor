@@ -18,12 +18,49 @@ export interface ExecutiveToolRuntimeDescriptor {
     readonly concurrencySafe: boolean;
     readonly exclusive: boolean;
     readonly readOnly: boolean;
+    /** High-risk calls consume the independent risk quota before execution. */
+    readonly risk?: "low" | "high";
+}
+
+export const ExecutiveToolBudgetExhaustedReason = {
+    ExecutionOperation: "execution-operation",
+    ModelToolTurn: "model-tool-turn",
+    RiskQuota: "risk-quota",
+} as const;
+
+export type ExecutiveToolBudgetExhaustedReason =
+    (typeof ExecutiveToolBudgetExhaustedReason)[keyof typeof ExecutiveToolBudgetExhaustedReason];
+
+export interface ExecutiveToolRuntimeBudget {
+    readonly executionOperationBudget?: number;
+    readonly modelToolTurnBudget?: number;
+    readonly riskQuota?: number;
+}
+
+export interface ExecutiveToolRuntimeBudgetSnapshot {
+    readonly executionOperationBudget: number;
+    readonly executionOperationsRemaining: number;
+    readonly executionOperationsUsed: number;
+    readonly modelToolTurnBudget: number;
+    readonly modelToolTurnsRemaining: number;
+    readonly modelToolTurnsUsed: number;
+    readonly riskQuota: number;
+    readonly riskRemaining: number;
+    readonly riskUsed: number;
+}
+
+export interface ExecutiveToolRuntimeBudgetDecision {
+    readonly allow: boolean;
+    readonly budget: ExecutiveToolRuntimeBudgetSnapshot;
+    readonly message: string;
+    readonly reason: ExecutiveToolBudgetExhaustedReason;
 }
 
 export interface ExecutiveToolRuntimeCallbacks<TCall extends ExecutiveToolCall, TExecution extends ExecutiveToolExecution<TCall>> {
     execute(calls: TCall[]): Promise<TExecution[]>;
     generate(messages: unknown[], turn: number): Promise<string>;
     knownToolNames(): ReadonlySet<string>;
+    onBudgetBlocked?(call: TCall, decision: ExecutiveToolRuntimeBudgetDecision): TExecution;
     onExecution?(execution: TExecution, options: { loopGuardBlocked: boolean }): void;
     onLoopGuardBlocked?(call: TCall, decision: ExecutiveLoopGuardDecision): TExecution;
     parse(raw: string): { calls: TCall[]; text: string };
@@ -32,6 +69,7 @@ export interface ExecutiveToolRuntimeCallbacks<TCall extends ExecutiveToolCall, 
 }
 
 export interface ExecutiveToolRuntimeOptions<TCall extends ExecutiveToolCall, TExecution extends ExecutiveToolExecution<TCall>> {
+    budget?: ExecutiveToolRuntimeBudget;
     callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>;
     initialMessages: unknown[];
     loopGuard?: {
@@ -46,9 +84,24 @@ export interface ExecutiveToolRuntimeOptions<TCall extends ExecutiveToolCall, TE
 
 export interface ExecutiveToolRuntimeAskRequired {
     readonly askId: string;
+    readonly budget?: ExecutiveToolRuntimeBudgetSnapshot;
+    readonly budgetExhaustedReason?: ExecutiveToolBudgetExhaustedReason;
+    readonly crystalCandidate: {
+        readonly kind: "executive-loop-pause";
+        readonly reason: string;
+        readonly summary: string;
+    };
     readonly loopGuardReason?: ExecutiveLoopGuardReason;
     readonly loopGuardSnapshot?: ExecutiveLoopGuardSnapshot;
     readonly message: string;
+    readonly pause: {
+        readonly mode: "pause";
+        readonly options: readonly [
+            { readonly mode: "continue" },
+            { readonly mode: "narrow" },
+            { readonly mode: "stop" },
+        ];
+    };
     readonly resume: {
         readonly mode: "continue";
         readonly requestId?: string;
@@ -73,13 +126,18 @@ export interface ExecutiveToolRuntimeResult<TExecution extends ExecutiveToolExec
  */
 export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution extends ExecutiveToolExecution<TCall>> {
     public async run(input: ExecutiveToolRuntimeOptions<TCall, TExecution>): Promise<ExecutiveToolRuntimeResult<TExecution>> {
-        const maxTurns = this.assertPositiveInt(input.maxTurns, "maxTurns");
+        const maxTurns = this.assertPositiveInt(input.budget?.modelToolTurnBudget ?? input.maxTurns, "budget.modelToolTurnBudget");
         if (input.noMoreToolsMessage.length === 0) {
             throw new Error("Executive tool runtime requires a non-empty noMoreToolsMessage.");
         }
         const allExecutions: TExecution[] = [];
         const transcript = [...input.initialMessages];
         const loopGuard = new ExecutiveLoopGuard(input.loopGuard);
+        const budget = new ExecutiveToolBudgetState({
+            executionOperationBudget: input.budget?.executionOperationBudget,
+            modelToolTurnBudget: maxTurns,
+            riskQuota: input.budget?.riskQuota,
+        });
 
         for (let turn = 0; turn < maxTurns; turn += 1) {
             const raw = await input.callbacks.generate(transcript, turn);
@@ -87,6 +145,7 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             if (parsed.calls.length === 0) {
                 return { rawText: parsed.text || raw, executions: allExecutions };
             }
+            budget.consumeModelToolTurn();
 
             const { allowed, blocked } = this.applyLoopGuard(parsed.calls, loopGuard, input.callbacks);
             for (const execution of blocked) {
@@ -100,9 +159,12 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
                 return {
                     askRequired: {
                         askId: crypto.randomUUID(),
+                        budget: budget.snapshot(),
+                        crystalCandidate: this.crystalCandidate("loop-guard", "Executive loop guard blocked every tool call in this step."),
                         loopGuardReason: this.lastLoopGuardReason(blocked),
                         loopGuardSnapshot: loopGuard.snapshot(),
                         message: "Executive loop guard blocked every tool call in this step.",
+                        pause: this.pausePayload(),
                         resume: { mode: "continue" },
                         stepCount: turn + 1,
                         stop: "ask",
@@ -112,20 +174,49 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
                 };
             }
 
-            const executions = await this.executeScheduled(allowed, input.callbacks);
+            const budgeted = this.applyBudget(allowed, budget, input.callbacks);
+            for (const execution of budgeted.blocked) {
+                input.callbacks.onExecution?.(execution, { loopGuardBlocked: false });
+            }
+            const executions = await this.executeScheduled(budgeted.allowed, input.callbacks);
             const resultBlocked = this.applyResultGuard(executions, loopGuard, input.callbacks);
             for (const execution of resultBlocked) {
                 input.callbacks.onExecution?.(execution, { loopGuardBlocked: true });
             }
 
-            allExecutions.push(...blocked, ...executions, ...resultBlocked);
+            allExecutions.push(...blocked, ...executions, ...budgeted.blocked, ...resultBlocked);
+            if (budgeted.blocked.length > 0) {
+                const decision = budgeted.decisions.at(-1);
+                const message = decision?.message ?? "Executive tool budget was exhausted.";
+                return {
+                    askRequired: {
+                        askId: crypto.randomUUID(),
+                        budget: budget.snapshot(),
+                        budgetExhaustedReason: decision?.reason,
+                        crystalCandidate: this.crystalCandidate(decision?.reason ?? "budget", message),
+                        loopGuardReason: this.lastLoopGuardReason(resultBlocked),
+                        loopGuardSnapshot: loopGuard.snapshot(),
+                        message,
+                        pause: this.pausePayload(),
+                        resume: { mode: "continue" },
+                        stepCount: turn + 1,
+                        stop: "ask",
+                        toolBudgetExhausted: true,
+                    },
+                    rawText: parsed.text || raw,
+                    executions: allExecutions,
+                };
+            }
             if (resultBlocked.length > 0) {
                 return {
                     askRequired: {
                         askId: crypto.randomUUID(),
+                        budget: budget.snapshot(),
+                        crystalCandidate: this.crystalCandidate("loop-guard", "Executive loop guard blocked tool execution results in this step."),
                         loopGuardReason: this.lastLoopGuardReason(resultBlocked),
                         loopGuardSnapshot: loopGuard.snapshot(),
                         message: "Executive loop guard blocked tool execution results in this step.",
+                        pause: this.pausePayload(),
                         resume: { mode: "continue" },
                         stepCount: turn + 1,
                         stop: "ask",
@@ -149,9 +240,13 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         return {
             askRequired: {
                 askId: crypto.randomUUID(),
+                budget: budget.snapshot(),
+                budgetExhaustedReason: ExecutiveToolBudgetExhaustedReason.ModelToolTurn,
+                crystalCandidate: this.crystalCandidate(ExecutiveToolBudgetExhaustedReason.ModelToolTurn, input.noMoreToolsMessage),
                 loopGuardReason: this.lastLoopGuardReason(allExecutions),
                 loopGuardSnapshot: loopGuard.snapshot(),
                 message: input.noMoreToolsMessage,
+                pause: this.pausePayload(),
                 resume: { mode: "continue" },
                 stepCount: maxTurns,
                 stop: "ask",
@@ -160,6 +255,27 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             rawText: "",
             executions: allExecutions,
         };
+    }
+
+    private applyBudget(
+        calls: TCall[],
+        budget: ExecutiveToolBudgetState,
+        callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
+    ): { allowed: TCall[]; blocked: TExecution[]; decisions: ExecutiveToolRuntimeBudgetDecision[] } {
+        const allowed: TCall[] = [];
+        const blocked: TExecution[] = [];
+        const decisions: ExecutiveToolRuntimeBudgetDecision[] = [];
+        for (const call of calls) {
+            const descriptor = callbacks.toolDescriptor(call);
+            const decision = budget.inspectExecution({ highRisk: descriptor?.risk === "high" || descriptor?.readOnly === false || descriptor?.exclusive === true });
+            if (decision.allow) {
+                allowed.push(call);
+                continue;
+            }
+            decisions.push(decision);
+            blocked.push(this.budgetBlockedExecution(call, decision, callbacks));
+        }
+        return { allowed, blocked, decisions };
     }
 
     private applyLoopGuard(
@@ -243,7 +359,12 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         calls: readonly TCall[],
         callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
     ): Promise<TExecution[]> {
-        const executions = await callbacks.execute([...calls]);
+        let executions: TExecution[];
+        try {
+            executions = await callbacks.execute([...calls]);
+        } catch (error) {
+            return calls.map((call) => this.toolFailureExecution(call, error));
+        }
         this.assertExecutionCoverage(calls, executions);
         return executions;
     }
@@ -295,6 +416,56 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         } as TExecution;
     }
 
+    private budgetBlockedExecution(
+        call: TCall,
+        decision: ExecutiveToolRuntimeBudgetDecision,
+        callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
+    ): TExecution {
+        const execution = callbacks.onBudgetBlocked?.(call, decision);
+        if (execution) return execution;
+        return {
+            call,
+            ok: false,
+            error: decision.message,
+            result: {
+                budget: decision.budget,
+                kind: "executive-tool-budget",
+                message: decision.message,
+                reason: decision.reason,
+                tool: call.key,
+            },
+        } as TExecution;
+    }
+
+    private toolFailureExecution(call: TCall, error: unknown): TExecution {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+            call,
+            ok: false,
+            error: message,
+            result: {
+                kind: "executive-tool-error",
+                message,
+                tool: call.key,
+            },
+        } as TExecution;
+    }
+
+    private pausePayload(): ExecutiveToolRuntimeAskRequired["pause"] {
+        return {
+            mode: "pause",
+            options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+        };
+    }
+
+    private crystalCandidate(reason: string, summary: string): ExecutiveToolRuntimeAskRequired["crystalCandidate"] {
+        return {
+            kind: "executive-loop-pause",
+            reason,
+            summary,
+        };
+    }
+
     private assistantMessage(content: string): unknown {
         return { role: "assistant", content };
     }
@@ -339,5 +510,76 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             .sort()
             .map((key) => `${JSON.stringify(key)}:${this.stableJson(record[key])}`);
         return `{${entries.join(",")}}`;
+    }
+}
+
+class ExecutiveToolBudgetState {
+    private executionOperationsUsed = 0;
+    private modelToolTurnsUsed = 0;
+    private riskUsed = 0;
+    private readonly executionOperationBudget: number;
+    private readonly modelToolTurnBudget: number;
+    private readonly riskQuota: number;
+
+    public constructor(input: Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget) {
+        this.modelToolTurnBudget = this.assertNonNegativeInt(input.modelToolTurnBudget, "budget.modelToolTurnBudget");
+        this.executionOperationBudget = this.assertNonNegativeInt(
+            input.executionOperationBudget ?? Number.MAX_SAFE_INTEGER,
+            "budget.executionOperationBudget",
+        );
+        this.riskQuota = this.assertNonNegativeInt(input.riskQuota ?? Number.MAX_SAFE_INTEGER, "budget.riskQuota");
+    }
+
+    public consumeModelToolTurn(): void {
+        this.modelToolTurnsUsed += 1;
+    }
+
+    public inspectExecution(input: { highRisk: boolean }): ExecutiveToolRuntimeBudgetDecision {
+        if (this.executionOperationsUsed >= this.executionOperationBudget) {
+            return this.block(ExecutiveToolBudgetExhaustedReason.ExecutionOperation, "Executive execution operation budget is exhausted.");
+        }
+        if (input.highRisk && this.riskUsed >= this.riskQuota) {
+            return this.block(ExecutiveToolBudgetExhaustedReason.RiskQuota, "Executive high-risk operation quota is exhausted.");
+        }
+        this.executionOperationsUsed += 1;
+        if (input.highRisk) {
+            this.riskUsed += 1;
+        }
+        return {
+            allow: true,
+            budget: this.snapshot(),
+            message: "Executive budget allows this tool call.",
+            reason: ExecutiveToolBudgetExhaustedReason.ExecutionOperation,
+        };
+    }
+
+    public snapshot(): ExecutiveToolRuntimeBudgetSnapshot {
+        return {
+            executionOperationBudget: this.executionOperationBudget,
+            executionOperationsRemaining: Math.max(0, this.executionOperationBudget - this.executionOperationsUsed),
+            executionOperationsUsed: this.executionOperationsUsed,
+            modelToolTurnBudget: this.modelToolTurnBudget,
+            modelToolTurnsRemaining: Math.max(0, this.modelToolTurnBudget - this.modelToolTurnsUsed),
+            modelToolTurnsUsed: this.modelToolTurnsUsed,
+            riskQuota: this.riskQuota,
+            riskRemaining: Math.max(0, this.riskQuota - this.riskUsed),
+            riskUsed: this.riskUsed,
+        };
+    }
+
+    private block(reason: ExecutiveToolBudgetExhaustedReason, message: string): ExecutiveToolRuntimeBudgetDecision {
+        return {
+            allow: false,
+            budget: this.snapshot(),
+            message,
+            reason,
+        };
+    }
+
+    private assertNonNegativeInt(value: number, path: string): number {
+        if (!Number.isInteger(value) || value < 0) {
+            throw new Error(`Executive tool runtime ${path} must be a non-negative integer.`);
+        }
+        return value;
     }
 }

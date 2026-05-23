@@ -85,6 +85,36 @@ describe("ExecutiveToolRuntime", () => {
         })).rejects.toThrow("Executive tool adapter returned result 0 for a different tool call.");
     });
 
+    test("keeps ordinary tool adapter failures as structured tool results", async () => {
+        const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
+        const readCall = call("workspace.read", { path: "a" });
+        const calls = [readCall];
+
+        const result = await runtime.executeScheduled(calls, {
+            execute: async () => {
+                throw new Error("transport failed");
+            },
+            generate: async () => "",
+            knownToolNames: () => new Set(calls.map((item) => item.key)),
+            parse: () => ({ calls: [], text: "" }),
+            renderResults: () => "",
+            toolDescriptor: () => ({ concurrencySafe: true, exclusive: false, readOnly: true }),
+        });
+
+        expect(result).toEqual([
+            {
+                call: readCall,
+                ok: false,
+                error: "transport failed",
+                result: {
+                    kind: "executive-tool-error",
+                    message: "transport failed",
+                    tool: "workspace.read",
+                },
+            },
+        ]);
+    });
+
     test("rejects invalid loop budget instead of silently widening it", async () => {
         const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
 
@@ -100,7 +130,7 @@ describe("ExecutiveToolRuntime", () => {
                 renderResults: () => "",
                 toolDescriptor: () => undefined,
             },
-        })).rejects.toThrow("Executive tool runtime maxTurns must be a positive integer.");
+        })).rejects.toThrow("Executive tool runtime budget.modelToolTurnBudget must be a positive integer.");
     });
 
     test("unknown tools are executed once so adapters can return catalog failures, then loop guard blocks repeats", async () => {
@@ -139,18 +169,18 @@ describe("ExecutiveToolRuntime", () => {
             },
         });
 
-        expect(result.askRequired).toEqual({
-            askId: expect.any(String),
+        expect(result.askRequired).toEqual(expect.objectContaining({
             loopGuardReason: ExecutiveLoopGuardReason.UnknownToolRepeat,
             loopGuardSnapshot: expect.objectContaining({
                 totalCalls: 2,
                 unknownToolCounts: { "missing.tool": 2 },
             }),
             message: "Executive loop guard blocked every tool call in this step.",
+            pause: expect.objectContaining({ mode: "pause" }),
             resume: { mode: "continue" },
             stepCount: 2,
             stop: "ask",
-        });
+        }));
         expect(result.rawText).toBe("missing");
         expect(result.executions.map((execution) => execution.error)).toEqual([
             "not available: missing.tool",
@@ -189,18 +219,18 @@ describe("ExecutiveToolRuntime", () => {
         });
 
         expect(result.rawText).toBe("again");
-        expect(result.askRequired).toEqual({
-            askId: expect.any(String),
+        expect(result.askRequired).toEqual(expect.objectContaining({
             loopGuardReason: ExecutiveLoopGuardReason.FailedCallRepeat,
             loopGuardSnapshot: expect.objectContaining({
                 failedCallRepeatCounts: expect.any(Object),
                 totalCalls: 3,
             }),
             message: "Executive loop guard blocked tool execution results in this step.",
+            pause: expect.objectContaining({ mode: "pause" }),
             resume: { mode: "continue" },
             stepCount: 3,
             stop: "ask",
-        });
+        }));
         expect(result.executions.map((execution) => execution.error)).toEqual([
             "same failure",
             "same failure",
@@ -227,15 +257,16 @@ describe("ExecutiveToolRuntime", () => {
             },
         });
 
-        expect(result.askRequired).toEqual({
-            askId: expect.any(String),
+        expect(result.askRequired).toEqual(expect.objectContaining({
+            budgetExhaustedReason: "model-tool-turn",
             loopGuardSnapshot: expect.objectContaining({ totalCalls: 1 }),
             message: "no more tools",
+            pause: expect.objectContaining({ mode: "pause" }),
             resume: { mode: "continue" },
             stepCount: 1,
             stop: "ask",
             toolBudgetExhausted: true,
-        });
+        }));
         expect(result.rawText).toBe("");
         expect(result.executions).toHaveLength(1);
     });
@@ -258,18 +289,18 @@ describe("ExecutiveToolRuntime", () => {
             },
         });
 
-        expect(result.askRequired).toEqual({
-            askId: expect.any(String),
+        expect(result.askRequired).toEqual(expect.objectContaining({
             loopGuardReason: ExecutiveLoopGuardReason.UnknownToolRepeat,
             loopGuardSnapshot: expect.objectContaining({
                 totalCalls: 1,
                 unknownToolCounts: { "missing.tool": 1 },
             }),
             message: "Executive loop guard blocked every tool call in this step.",
+            pause: expect.objectContaining({ mode: "pause" }),
             resume: { mode: "continue" },
             stepCount: 1,
             stop: "ask",
-        });
+        }));
         expect(result.rawText).toBe("missing");
         expect(result.executions).toHaveLength(1);
         expect(result.executions[0]?.error).toBe("Executive loop stopped repeated unknown tool missing.tool.");
@@ -298,16 +329,87 @@ describe("ExecutiveToolRuntime", () => {
             },
         });
 
-        expect(result.askRequired).toEqual({
-            askId: expect.any(String),
+        expect(result.askRequired).toEqual(expect.objectContaining({
+            budgetExhaustedReason: "model-tool-turn",
             loopGuardSnapshot: expect.objectContaining({ totalCalls: 1 }),
             message: "tool budget is exhausted, ask for execution guidance",
+            pause: expect.objectContaining({ mode: "pause" }),
             resume: { mode: "continue" },
             stepCount: 1,
             stop: "ask",
             toolBudgetExhausted: true,
-        });
+        }));
         expect(result.rawText).toBe("");
+    });
+
+    test("separates model turns, execution operations, and risk quota in budget pauses", async () => {
+        const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
+        const executions: TestToolExecution[] = [];
+
+        const result = await runtime.run({
+            budget: {
+                executionOperationBudget: 3,
+                modelToolTurnBudget: 4,
+                riskQuota: 1,
+            },
+            initialMessages: [],
+            maxTurns: 4,
+            noMoreToolsMessage: "no more tools",
+            callbacks: {
+                execute: async (batch) => batch.map((item) => ({ call: item, ok: true, result: { ok: true } })),
+                generate: async () => "call",
+                knownToolNames: () => new Set(["workspace.read", "shell.run"]),
+                onExecution: (execution) => executions.push(execution),
+                parse: () => ({
+                    text: "",
+                    calls: [
+                        call("workspace.read", { path: "a" }),
+                        call("shell.run", { command: "one" }),
+                        call("shell.run", { command: "two" }),
+                    ],
+                }),
+                renderResults: () => "",
+                toolDescriptor: (item) => descriptorFor(item.key),
+            },
+        });
+
+        expect(result.askRequired).toEqual(
+            expect.objectContaining({
+                budget: expect.objectContaining({
+                    executionOperationBudget: 3,
+                    executionOperationsUsed: 2,
+                    modelToolTurnBudget: 4,
+                    modelToolTurnsUsed: 1,
+                    riskQuota: 1,
+                    riskUsed: 1,
+                }),
+                budgetExhaustedReason: "risk-quota",
+                crystalCandidate: expect.objectContaining({
+                    kind: "executive-loop-pause",
+                    reason: "risk-quota",
+                }),
+                pause: {
+                    mode: "pause",
+                    options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+                },
+                resume: { mode: "continue" },
+                stop: "ask",
+                toolBudgetExhausted: true,
+            }),
+        );
+        expect(result.executions.map((execution) => execution.call.key)).toEqual([
+            "workspace.read",
+            "shell.run",
+            "shell.run",
+        ]);
+        expect(result.executions.at(-1)?.result).toEqual(
+            expect.objectContaining({
+                kind: "executive-tool-budget",
+                reason: "risk-quota",
+                tool: "shell.run",
+            }),
+        );
+        expect(executions).toContainEqual(expect.objectContaining({ ok: false, call: call("shell.run", { command: "two" }) }));
     });
 });
 

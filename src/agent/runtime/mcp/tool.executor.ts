@@ -25,6 +25,9 @@ import {
     ComputerProfileComponent,
     McpCatalogAdapter,
     type ExecutiveLoopGuardDecision,
+    type ExecutiveToolBudgetExhaustedReason,
+    type ExecutiveToolRuntimeBudget,
+    type ExecutiveToolRuntimeBudgetDecision,
     type ExecutiveToolRuntimeAskRequired,
     type ExecutiveToolRuntimeDescriptor,
 } from "../../../executive/index.ts";
@@ -54,6 +57,7 @@ export interface RuntimeMcpToolExecutorInput {
 }
 
 export interface RuntimeMcpToolLoopInput {
+    budget: ExecutiveToolRuntimeBudget;
     generate: (messages: unknown[], turn: number) => Promise<string>;
     initialMessages: unknown[];
     maxTurns: number;
@@ -93,6 +97,7 @@ export class RuntimeMcpToolExecutor {
 
     public async runLoop(input: RuntimeMcpToolLoopInput): Promise<RuntimeMcpToolLoopResult> {
         const result = await this.executive.run({
+            budget: input.budget,
             initialMessages: input.initialMessages,
             loopGuard: { maxUnknownToolRepeats: 1 },
             maxTurns: input.maxTurns,
@@ -101,6 +106,7 @@ export class RuntimeMcpToolExecutor {
                 execute: (calls) => this.executeCalls(calls, input.toolExecution),
                 generate: input.generate,
                 knownToolNames: () => this.catalogKeys(input.toolExecution.catalog),
+                onBudgetBlocked: (call, decision) => this.budgetExecution(call, decision),
                 onExecution: (execution, options) =>
                     this.publishMcpToolCallExecution(execution, input.toolExecution.requestId, options.loopGuardBlocked ? false : input.toolExecution.requiresApproval),
                 onLoopGuardBlocked: (call, decision) => this.loopGuardExecution(call, decision, input.toolExecution.requestId),
@@ -650,6 +656,28 @@ export class RuntimeMcpToolExecutor {
         };
     }
 
+    private budgetExecution(
+        call: McpToolCallRequest,
+        decision: ExecutiveToolRuntimeBudgetDecision,
+    ): McpToolCallExecution & { call: McpToolCallRequest & { key: string } } {
+        return {
+            call: { ...call, key: this.callKey(call) },
+            ok: false,
+            error: decision.message,
+            result: {
+                isError: true,
+                raw: {
+                    budget: decision.budget,
+                    kind: "executive-tool-budget",
+                    message: decision.message,
+                    reason: decision.reason satisfies ExecutiveToolBudgetExhaustedReason,
+                    server: call.server,
+                    tool: call.tool,
+                },
+            },
+        };
+    }
+
     private toolRuntimeDescriptor(
         call: McpToolCallRequest,
         catalog: readonly McpToolCatalogEntry[],
@@ -661,6 +689,7 @@ export class RuntimeMcpToolExecutor {
             concurrencySafe: descriptor.concurrencySafe,
             exclusive: descriptor.exclusive,
             readOnly: descriptor.readOnly,
+            risk: descriptor.readOnly && !descriptor.exclusive ? "low" : "high",
         };
     }
 

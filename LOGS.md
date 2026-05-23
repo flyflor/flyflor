@@ -673,3 +673,10 @@
   摘要：本 lane 只补电脑控制基础工具面：文件、patch、git、process/shell 风险边界。
   原因：智能体需要像 Codex/OpenCode 一样真正读写和执行，但不能靠提示词硬凑，也不能破坏现有认知/记忆主链。
   验证：待补 focused tests、`bun run check`、`git diff --check`。
+
+- 状态：已完成
+  执行者：codex-lane-exec-runtime-loop
+  范围：exec-runtime-loop
+  摘要：在 `ExecutiveToolRuntime` 内落地三层预算 `modelToolTurnBudget` / `executionOperationBudget` / `riskQuota`，ASK 暂停 payload 增加 pause/continue/narrow/stop 与 crystal candidate 结构；Runtime MCP adapter 透传预算并把预算阻断保留为结构化工具结果。
+  原因：执行循环需要把模型工具轮次、内部操作数和高风险额度分开表达，普通工具失败不能被吞掉或升级成 turn error。
+  验证：`bun test tests/executive.tool.runtime.test.ts`；`bun test tests/skill.mcp.test.ts --test-name-pattern "runtime returns an ask when maxToolTurns is exhausted|runtime resume turn carries Executive pause ghost and continues tool execution|runtime feeds Executive loop guard diagnostics back after repeated failed tool calls"`；`bun run check`；待最终 `git diff --check`。

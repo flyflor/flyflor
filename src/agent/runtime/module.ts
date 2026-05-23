@@ -26,6 +26,7 @@ import {
     type CapabilitySummary,
     type ExecutiveCapabilityExecutionMetadata,
     type ExecutiveToolRuntimeAskRequired,
+    type ExecutiveToolRuntimeBudget,
     type ManifestToolDefinition,
 } from "../../executive/index.ts";
 import { Runtime as RuntimeBoundary } from "../../components/index.ts";
@@ -134,6 +135,11 @@ export interface RuntimeStreamOptions {
      * inspect/read/search loops; `--max-turns N` narrows the cap for scripted use.
      */
     maxToolTurns?: number;
+    /**
+     * Three-layer Executive budget. `maxToolTurns` remains a compatibility
+     * shortcut for modelToolTurnBudget when this object is not supplied.
+     */
+    executiveToolBudget?: ExecutiveToolRuntimeBudget;
     /** CLI `--toolsets` 透传的逗号分隔白名单，仅保留这些 MCP server。 */
     toolsetAllowlist?: string[];
 }
@@ -251,9 +257,13 @@ interface GeneratedTurn {
 
 interface RuntimeExecutiveAskRequired {
     askId: string;
+    budget?: ExecutiveToolRuntimeAskRequired["budget"];
+    budgetExhaustedReason?: ExecutiveToolRuntimeAskRequired["budgetExhaustedReason"];
+    crystalCandidate: ExecutiveToolRuntimeAskRequired["crystalCandidate"];
     loopGuardReason?: ExecutiveToolRuntimeAskRequired["loopGuardReason"];
     loopGuardSnapshot?: ExecutiveToolRuntimeAskRequired["loopGuardSnapshot"];
     message: string;
+    pause: ExecutiveToolRuntimeAskRequired["pause"];
     resume: ExecutiveToolRuntimeAskRequired["resume"];
     stepCount: number;
     stop: "ask";
@@ -1574,18 +1584,6 @@ export class RuntimeModule extends RuntimeBoundary {
         executions: readonly McpToolCallExecution[],
     ): AgentAsk {
         const failed = executions.filter((execution) => !execution.ok);
-        const choice =
-            askRequired.toolBudgetExhausted === true
-                ? {
-                      label: "继续执行",
-                      value: "continue-tools",
-                      description: "允许下一轮继续使用工具完成当前任务。",
-                  }
-                : {
-                      label: "调整执行方式",
-                      value: "revise-tool-plan",
-                      description: "补充路径、权限、工具选择或约束后继续执行。",
-                  };
         const failureSummary = failed.slice(0, 3).map((execution) => `${execution.call.server}.${execution.call.tool}`);
         const progressSummary = this.renderExecutiveToolProgressSummary(executions);
         const basePrompt =
@@ -1597,11 +1595,20 @@ export class RuntimeModule extends RuntimeBoundary {
             reason: AskReason.PolicyDecision,
             prompt,
             choices: [
-                choice,
+                {
+                    label: "继续执行",
+                    value: "continue-tools",
+                    description: "允许下一轮继续使用工具完成当前任务。",
+                },
                 {
                     label: "缩小范围",
                     value: "narrow-scope",
                     description: "减少本轮目标，只处理最关键部分。",
+                },
+                {
+                    label: "停止并结晶",
+                    value: "stop-and-crystalize",
+                    description: "停止当前执行循环，并把已得到的执行经验作为候选沉淀。",
                 },
             ],
             freeform: true,
@@ -1881,11 +1888,12 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        const maxTurns = Math.max(1, options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT);
+        const budget = this.executiveToolBudget(options);
         const firstTurnStreamed = { value: false };
         const result = await this.mcpToolExecutor.runLoop({
+            budget,
             initialMessages: messages,
-            maxTurns,
+            maxTurns: budget.modelToolTurnBudget,
             noMoreToolsMessage: renderMcpToolBudgetExhaustedPrompt(),
             parse: parseMcpToolCalls,
             renderResults: renderMcpToolResults,
@@ -1921,6 +1929,15 @@ export class RuntimeModule extends RuntimeBoundary {
             rawText: result.rawText,
             mcpToolCalls: result.mcpToolCalls,
             requiresApproval: mcp.requiresApproval,
+        };
+    }
+
+    private executiveToolBudget(options: RuntimeStreamOptions): Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget {
+        const configured = options.executiveToolBudget;
+        return {
+            executionOperationBudget: configured?.executionOperationBudget,
+            modelToolTurnBudget: Math.max(1, configured?.modelToolTurnBudget ?? options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT),
+            riskQuota: configured?.riskQuota,
         };
     }
 

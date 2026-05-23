@@ -702,3 +702,12 @@ Kernel V2 acceptance focus：
 - [x] 不引入 native addon、postinstall 或无法 `bun build --compile` 的运行时依赖。
 - [x] 补齐 focused tests，覆盖读取、写入、删除、patch、git/process 失败结果。
 - [x] 运行 `bun test` focused、`bun run check`、`git diff --check` 后提交本 lane。
+
+## 2026-05-24 执行循环 lane
+
+- [x] 阅读 `src/executive/**`、`src/agent/runtime/mcp/**` 和指定参考项目中 Codex/OpenCode/Hermes/Nanobot 的执行循环；未做 reference 全量扫描。
+- [x] 在 Executive owner 内设计三层预算：`modelToolTurnBudget`、`executionOperationBudget`、`riskQuota`。
+- [x] 工具预算耗尽时输出 ASK pause/continue/narrow/stop 与 crystal candidate 结构，不让模型误以为工具永久封顶。
+- [x] 工具失败保持为结构化 tool result；adapter 覆盖率协议错误仍显式抛出。
+- [x] 补齐 focused tests，覆盖预算耗尽、ASK pause payload、失败结果和 Runtime MCP resume 入口。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 后提交本 lane。

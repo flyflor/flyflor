@@ -938,3 +938,26 @@ Hard prompt rules:
 - Keep internal protocol field names only when they are required JSON contracts; explain their behavior in plain language.
 - Keep canonical `.md` and `.zh.cn.md` prompt mirrors aligned. The `.zh.cn.md` files remain audit mirrors and are not runtime templates.
 - `tests/prompt.lint.test.ts` owns the guardrail for forbidden prompt-visible internal terms.
+
+## 2026-05-24 Exec Runtime Loop Lane
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/coding-worktree/exec-runtime-loop`
+- branch: `wt/exec-runtime-loop`
+- owner: `codex-lane-exec-runtime-loop`
+- scope: `src/executive/**`, Runtime MCP budget bridge, focused tests, root control handoff files
+
+Implemented contract:
+
+- Executive budgets are three separate counters: `modelToolTurnBudget`, `executionOperationBudget`, and `riskQuota`.
+- Budget exhaustion returns a structured ASK pause payload with continue/narrow/stop options and a crystal candidate summary.
+- Ordinary tool adapter failures are converted to structured tool results; adapter coverage mismatches remain protocol errors.
+- Existing `maxToolTurns` remains a Runtime compatibility shortcut for `modelToolTurnBudget`.
+
+Validation:
+
+- `bun test tests/executive.tool.runtime.test.ts`
+- `bun test tests/skill.mcp.test.ts --test-name-pattern "runtime returns an ask when maxToolTurns is exhausted|runtime resume turn carries Executive pause ghost and continues tool execution|runtime feeds Executive loop guard diagnostics back after repeated failed tool calls"`
+- `bun run check`
+- final `git diff --check` before commit
