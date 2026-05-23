@@ -299,6 +299,266 @@ LIMIT ?
 
 list 命令的 `data` 是数组；detail 命令的 `data` 是对象或 `null`。
 
+## Detail Query Envelope Matrix
+
+所有 `*.detail.get` 都是只读 query/read-model 命令。请求 `payload` 只携带结构化 id，不进入
+Runtime，不触发模型、工具、记忆装配或上下文推断。响应统一使用对应 `*.snapshot` envelope，
+并把详情对象放在 `payload.data`；查不到时 `payload.data` 为 `null`。
+
+### `fork.detail.get -> fork.snapshot`
+
+请求：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-fork-detail-1",
+  "type": "fork.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-fork-detail-1",
+  "payload": {
+    "forkId": "fork-1"
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-fork-snapshot-1",
+  "type": "fork.snapshot",
+  "at": "2026-05-22T00:00:05.350Z",
+  "requestId": "req-fork-detail-1",
+  "correlationId": "env-fork-detail-1",
+  "payload": {
+    "data": {
+      "fork": { "id": "fork-1", "title": "Replay fork" },
+      "inheritedEvents": [],
+      "asks": [],
+      "taskPlans": [],
+      "replays": []
+    }
+  }
+}
+```
+
+### `ask.detail.get -> ask.snapshot`
+
+请求 `payload.askId`：
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-ask-detail-1",
+  "type": "ask.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-ask-detail-1",
+  "payload": {
+    "askId": "ask-1"
+  }
+}
+```
+
+响应 `payload.data` 是 `SocketAskSnapshot`：
+
+```json
+{
+  "type": "ask.snapshot",
+  "requestId": "req-ask-detail-1",
+  "correlationId": "env-ask-detail-1",
+  "payload": {
+    "data": {
+      "status": "active",
+      "ask": { "reason": "other", "prompt": "Need confirmation?", "freeform": true },
+      "event": { "id": "ask-1", "type": "ask" }
+    }
+  }
+}
+```
+
+### `blackboard.detail.get -> blackboard.snapshot`
+
+请求 `payload.blackboardTurnId`，响应 `payload.data` 包含 `turn`、`asks`、`forks`、`replays`
+和 `taskPlans`。
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-blackboard-detail-1",
+  "type": "blackboard.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-blackboard-detail-1",
+  "payload": {
+    "blackboardTurnId": "bb-1"
+  }
+}
+```
+
+```json
+{
+  "type": "blackboard.snapshot",
+  "requestId": "req-blackboard-detail-1",
+  "correlationId": "env-blackboard-detail-1",
+  "payload": {
+    "data": {
+      "turn": { "id": "bb-1", "status": "converged" },
+      "asks": [],
+      "forks": [],
+      "replays": [],
+      "taskPlans": []
+    }
+  }
+}
+```
+
+### `thought.detail.get -> thought.snapshot`
+
+请求 `payload.eventId`。响应只暴露安全摘要，`summary.hiddenChainOfThought` 固定为 `false`，
+不暴露隐藏推理正文。
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-thought-detail-1",
+  "type": "thought.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-thought-detail-1",
+  "payload": {
+    "eventId": "event-1"
+  }
+}
+```
+
+```json
+{
+  "type": "thought.snapshot",
+  "requestId": "req-thought-detail-1",
+  "correlationId": "env-thought-detail-1",
+  "payload": {
+    "data": {
+      "event": { "id": "event-1", "type": "event" },
+      "summary": {
+        "hiddenChainOfThought": false,
+        "content": { "summary": "Safe thought summary for TUI expansion." }
+      },
+      "forks": [],
+      "replays": [],
+      "taskPlans": []
+    }
+  }
+}
+```
+
+### `replay.detail.get -> replay.snapshot`
+
+请求 `payload.replayId`，响应 `payload.data` 包含 `replay`、可选 `sourceEvent`、可选
+`taskPlan`、`asks` 和 `forks`。
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-replay-detail-1",
+  "type": "replay.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-replay-detail-1",
+  "payload": {
+    "replayId": "replay-1"
+  }
+}
+```
+
+```json
+{
+  "type": "replay.snapshot",
+  "requestId": "req-replay-detail-1",
+  "correlationId": "env-replay-detail-1",
+  "payload": {
+    "data": {
+      "replay": { "id": "replay-1", "kind": "blackboard", "title": "Replay" },
+      "sourceEvent": { "id": "event-1", "type": "event" },
+      "asks": [],
+      "forks": []
+    }
+  }
+}
+```
+
+### `task.detail.get -> task.snapshot`
+
+请求 `payload.taskPlanId`，响应 `payload.data` 包含 `taskPlan`、`asks`、`forks`、`replays`
+和可选 `sourceEvent`。
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-task-detail-1",
+  "type": "task.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-task-detail-1",
+  "payload": {
+    "taskPlanId": "task-plan-1"
+  }
+}
+```
+
+```json
+{
+  "type": "task.snapshot",
+  "requestId": "req-task-detail-1",
+  "correlationId": "env-task-detail-1",
+  "payload": {
+    "data": {
+      "taskPlan": { "id": "task-plan-1", "title": "Socket closure", "status": "in-progress" },
+      "asks": [],
+      "forks": [],
+      "replays": []
+    }
+  }
+}
+```
+
+### `history.detail.get -> history.snapshot`
+
+请求 `payload.eventId`。实际响应类型是 `history.snapshot`，但 detail 响应走通用 query
+shape：`payload.data` 是详情对象，不是 `history.list` 使用的 `payload.history` 数组。
+
+```json
+{
+  "protocol": "flyflor.ws.v1",
+  "id": "env-history-detail-1",
+  "type": "history.detail.get",
+  "at": "2026-05-22T00:00:05.300Z",
+  "requestId": "req-history-detail-1",
+  "payload": {
+    "eventId": "event-1"
+  }
+}
+```
+
+```json
+{
+  "type": "history.snapshot",
+  "requestId": "req-history-detail-1",
+  "correlationId": "env-history-detail-1",
+  "payload": {
+    "data": {
+      "turn": {
+        "eventId": "event-1",
+        "userText": "继续推进 socket 血管层",
+        "assistantText": "我会按 Scope 和当前上下文继续推进。"
+      },
+      "event": { "id": "event-1", "type": "event" },
+      "asks": [],
+      "taskPlans": [],
+      "replays": [],
+      "thoughtAvailable": true
+    }
+  }
+}
+```
+
 ## `fork.create`
 
 `fork.create` 是状态变更 control command，不是只读 query。它只在 `src/socket/control.ts`

@@ -12,6 +12,7 @@ import {
     ReplayRecordKind,
     RuntimeEventClass,
     TaskPlanStatus,
+    ToolLifecycleEventType,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType } from "../src/events/index.ts";
 import {
@@ -124,6 +125,9 @@ describe("documentation references", () => {
         expect(doc).toContain("src/socket/query");
         expect(doc).toContain("ask.list");
         expect(doc).toContain("blackboard.detail.get");
+        expect(doc).toContain("Detail Query Envelope Matrix");
+        expect(doc).toContain("history.detail.get -> history.snapshot");
+        expect(doc).toContain("payload.data");
         expect(doc).toContain("toolApprovals");
         expect(doc).toContain("mcpToolCalls");
         expect(doc).toContain("userToolCalls");
@@ -390,6 +394,13 @@ describe("documentation references", () => {
                 RuntimeEventType.ExecutiveCapabilityCatalogBuilt,
                 RuntimeEventType.ExecutiveLoopPaused,
                 RuntimeEventType.ExecutiveLoopResumed,
+                ToolLifecycleEventType.Started,
+                ToolLifecycleEventType.Progress,
+                ToolLifecycleEventType.Succeeded,
+                ToolLifecycleEventType.Failed,
+                ToolLifecycleEventType.OutputPersisted,
+                ToolLifecycleEventType.BudgetExhausted,
+                ToolLifecycleEventType.AskRequired,
             ],
         });
     });

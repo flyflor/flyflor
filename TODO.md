@@ -139,6 +139,7 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 确认 query read model 能支持 `history.list`、`history.detail.get`、`ask.list`、`ask.detail.get`、`fork.list`、`fork.detail.get`、`blackboard.detail.get`、`task.list`、`task.detail.get`、`replay.list`、`replay.detail.get`、`thought.detail.get`。
 - [x] 同步 OpenAPI/Apifox socket 契约与文档示例。
 - [x] 补充 `docs/ws.doc.md` / `docs/ws.doc.zh.cn.md` 中 `fork.create` 请求、响应与 owner key 规则。
+- [x] 补充 `docs/ws.doc.md` / `docs/ws.doc.zh.cn.md` 中 TUI 第一阶段 detail query envelope matrix，明确 detail 响应统一走 `payload.data`。
 - [ ] 若 TUI 第一阶段需要可点击创建 fork 的真实端到端 smoke，再新增一条真实 `/ws` client 场景测试覆盖 `fork.create -> fork.detail.get -> gateway.status.get`。
 
 ## 2026-05-22 Seal 补充

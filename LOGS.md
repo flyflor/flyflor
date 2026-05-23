@@ -245,6 +245,13 @@
   摘要：审查并收口 TUI 第一阶段所需的最小 `fork.create` WS control command；保留协议枚举、payload reader、socket/control handler 与 SocketModule 注入回调，修正 fork record 使用标准化 parentId，并同步 OpenAPI/Apifox、测试与 WS 文档。
   原因：TUI 需要在不入侵 Runtime/Memory/Executive 主链的前提下创建显式 ContextFork；状态变更必须走 control command，只读详情继续走 socket query/read model。
   验证：`bun test tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/docs.references.test.ts`; `bun run docs:check`; `bun run check`; `git diff --check`
+
+- 状态：已完成
+  执行者：main-codex
+  范围：tui-phase1-query-event-contract-review
+  摘要：确认 TUI 第一阶段 detail query 与 event.subscribe/event.publish 的真实 WS envelope shape；补充 WS 文档中 detail query matrix，明确 `history.detail.get` 响应类型为 `history.snapshot` 且 detail 数据位于 `payload.data`。
+  原因：TUI 联调需要直接可用的请求/响应样例，避免把 `history.list` 的 `payload.history` 与 detail query 的通用 `payload.data` 混用。
+  验证：`bun test tests/docs.references.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts`; `bun run docs:check`; `bun run check`; `git diff --check`
   验证：`git worktree list --porcelain`; `tmux list-windows -t flyflor-seal -F '#I:#W #{pane_current_path} #{pane_current_command}'`
 
 - 状态：已完成

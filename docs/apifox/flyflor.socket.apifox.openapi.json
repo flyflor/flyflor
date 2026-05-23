@@ -392,7 +392,14 @@
               "types": [
                 "executive.capability.catalog.built",
                 "executive.loop.paused",
-                "executive.loop.resumed"
+                "executive.loop.resumed",
+                "tool.started",
+                "tool.progress",
+                "tool.succeeded",
+                "tool.failed",
+                "tool.output.persisted",
+                "tool.budget.exhausted",
+                "tool.ask_required"
               ]
             }
           },
