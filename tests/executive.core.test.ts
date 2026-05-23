@@ -170,6 +170,7 @@ describe("Executive core", () => {
     test("MCP catalog adapter maps builtin and remote tools into Executive descriptors", () => {
         const adapter = new McpCatalogAdapter();
         const workspace = adapter.descriptorFor(mcpEntry("workspace", "read"));
+        const workspacePatch = adapter.descriptorFor(mcpEntry("workspace", "patch"));
         const shell = adapter.descriptorFor(mcpEntry("shell", "run"));
         const remote = adapter.descriptorFor(mcpEntry("browser", "open"));
         const computer = adapter.descriptorFor(mcpEntry("computer", "click"));
@@ -194,6 +195,14 @@ describe("Executive core", () => {
             name: "workspace.read",
             permission: ToolPermission.Read,
             readOnly: true,
+            scope: [ToolScope.Workspace],
+            source: CapabilitySource.Core,
+        });
+        expect(workspacePatch).toMatchObject({
+            category: ToolCategory.Coding,
+            name: "workspace.patch",
+            permission: ToolPermission.Write,
+            readOnly: false,
             scope: [ToolScope.Workspace],
             source: CapabilitySource.Core,
         });

@@ -706,3 +706,10 @@
   原因：本轮需要并发推进真实执行层、子代理和外挂功能工具，但用户明确要求不要影响其他正在工作的 session，且合并稳定性优先于并发数量。
   效率：启动时 master 为 15 commits ahead；新增 3 个 worktree、3 个 tmux Codex 子进程；每个 lane 已提交控制文件，后续按 core-exec -> subagent -> external-kit 顺序 review/merge。
   验证：`git worktree list --porcelain`；`tmux list-sessions | rg '^xtools-'`；最终验证待子分支完成后执行。
+
+- 状态：已完成
+  执行者：xtools-core-exec
+  范围：底层执行原语
+  摘要：审查并封住内建 workspace/git/process/shell 执行原语：确认 `workspace.tree/read/search/glob/stat/write/edit/delete/patch`、`git.status/diff/show`、`process.run` 和 `shell.run` 的 runtime 接线；修正 Executive descriptor 中 `workspace.patch` 的写权限分类，使工具可见性、预算风险和审批语义与真实写入行为一致；补充真实临时项目读树、glob、搜索、截断读取、二进制拒绝、patch add/update/move/delete 和 `process.run` 成功/失败结构化结果覆盖。
+  原因：`workspace.patch` 已经是实际写能力，但 catalog/trust descriptor 漏判为只读会导致本地 TUI/WS 写权限面不稳定；Codex/OpenCode 风格底层执行原语需要用可执行测试证明读写、执行和错误回灌，而不是依赖提示词约束。
+  验证：`bun test tests/computer.coding.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/executive.core.test.ts`；`bun run check`；`git diff --check`。

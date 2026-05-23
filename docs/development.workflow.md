@@ -1006,3 +1006,25 @@ Coordinator rules:
 - Browser, screen, computer, vision, audio, web search/fetch, LSP, and background-task descriptors are optional external capabilities: detect and register when present, hide/unavailable when absent, and never bundle heavy sidecar dependencies into the Bun binary.
 - Merge order is `xtools-core-exec` -> `xtools-subagent` -> `xtools-external-kit`.
 - Each merge must include `git diff --stat`, focused validation output, and root TODO/LOGS updates.
+
+## 2026-05-24 xtools-core-exec Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-core-exec`
+- branch: `feature/xtools-core-exec`
+- owner: `xtools-core-exec`
+- scope: builtin workspace/git/process/shell execution primitives, Executive descriptor mapping, focused tests, local control handoff files
+
+Implemented contract:
+
+- `workspace.patch` is classified as a workspace write tool in Executive descriptors, matching its runtime approval/write behavior.
+- Workspace project-reading tests cover tree, glob, search, bounded read truncation, runtime-directory skip behavior, and binary refusal.
+- Workspace patch tests cover add, update, move, and delete on temporary project files with structured operation results.
+- `process.run` remains the cross-platform execution path based on `executable + argv`, with success and failure results carrying stdout, stderr, exit code, duration, timeout, and truncation fields.
+
+Validation:
+
+- `bun test tests/computer.coding.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/executive.core.test.ts`
+- `bun run check`
+- `git diff --check`

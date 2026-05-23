@@ -39,7 +39,7 @@ describe("RuntimeMcpToolPlanComponent", () => {
 
     test("treats websocket control as a local project surface for TUI execution", () => {
         const plan = new RuntimeMcpToolPlanComponent().build({
-            catalog: [entry("workspace", "read"), entry("workspace", "write"), entry("shell", "run")],
+            catalog: [entry("workspace", "read"), entry("workspace", "write"), entry("workspace", "patch"), entry("shell", "run")],
             channel: Channel.Ws,
             maxPermission: ToolPermission.Write,
             projectScoped: true,
@@ -48,6 +48,7 @@ describe("RuntimeMcpToolPlanComponent", () => {
         expect(plan.catalog.map((tool) => `${tool.server}.${tool.tool.name}`)).toEqual([
             "workspace.read",
             "workspace.write",
+            "workspace.patch",
         ]);
         expect(hiddenReasons(plan, "shell.run")).toContain(ToolHiddenReason.PermissionCap);
     });

@@ -735,3 +735,13 @@ Kernel V2 acceptance focus：
 - [x] 补充 focused 测试：首轮跳过工具调用、流式草稿不外显、workspace delete 执行链路。
 - [ ] 在独立 worktree 中继续设计完整电脑控制层：协议级工具注册、跨平台进程/文件/git 能力、沙盒审批、结果回灌、loop guard、真实 WS 场景测试。
 - [ ] 主分支只保留已验证补洞；完整执行层重构不得继续污染 master。
+
+## 2026-05-24 xtools-core-exec
+
+- [x] 审查现有 `workspace.*`、`git.*`、`process.run`、`shell.run` 工具链，确认与 Codex/OpenCode 读写执行模型的差距。
+- [x] 强化项目阅读能力：目录树、搜索、glob、批量读取、大文件截断、二进制拒绝、重目录跳过。
+- [x] 强化写入能力：write/edit/delete/patch 必须精确、可审计、失败结构化暴露。
+- [x] 明确跨平台执行契约：`process.run` 使用 executable + argv；`shell.run` 不承诺 shell 脚本可移植。
+- [x] 确保工具结果摘要、原始结果引用、错误信息能稳定回灌给模型。
+- [x] 补充或更新 smoke/test，覆盖真实读项目、搜索、patch 临时文件、process.run。
+- [x] 运行验证并在 `LOGS.md` 追加结果。
