@@ -79,6 +79,7 @@ describe("EventsComponent explicit hooks", () => {
         expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
         expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveLoopGuardBlocked)).toBe(RuntimeEventClass.Effect);
         expect(classifyRuntimeEvent(RuntimeEventType.McpCapabilityCatalogBuilt)).toBe(RuntimeEventClass.Read);
+        expect(classifyRuntimeEvent(RuntimeEventType.SubagentBatchStart)).toBe(RuntimeEventClass.Effect);
     });
 
     test("tool lifecycle event protocol constants are stable and classified for socket subscriptions", () => {

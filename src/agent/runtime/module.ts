@@ -89,6 +89,7 @@ import {
     mcpCatalogCacheKey,
     mcpExecutionsToExecutiveMetadata,
     mcpExecutionsToProvenance,
+    mcpExecutionsToSubagentProvenance,
     ProcessToolset,
     PROCESS_SERVER,
     RuntimeMcpCapabilityReader,
@@ -124,6 +125,7 @@ import {
     renderUserContentWithAttachments,
 } from "./turn/index.ts";
 import { ReflectionWorker } from "./reflection/worker.ts";
+import { RuntimeSubagentBatchComponent, SUBAGENT_BATCH_KEY } from "./subagent/index.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -246,6 +248,7 @@ interface GeneratedTurn {
     parsed: ReturnType<typeof parseMemoryActions>;
     visibleText: string;
     mcpCallProvenance: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
+    subagentBatches: NonNullable<MemoryEpisodeProvenance["subagentBatches"]>;
     executiveToolExecutions: ExecutiveCapabilityExecutionMetadata[];
     selectedSkillNames: string[];
     contextForks: ContextForkRecord[];
@@ -296,6 +299,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly mcpToolNeed: RuntimeMcpToolNeedComponent;
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
     protected readonly mcpCapabilityReader: RuntimeMcpCapabilityReader;
+    protected readonly subagentBatch: RuntimeSubagentBatchComponent;
     protected readonly continuationGhosts: ContinuationGhostStore;
     protected readonly scopeRecall: ScopeRecallComponent;
     private warmupPromise: Promise<void> | undefined;
@@ -337,6 +341,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.mcpToolNeed = new RuntimeMcpToolNeedComponent();
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
+        this.subagentBatch = new RuntimeSubagentBatchComponent(events);
         this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
         this.scopeRecall = new ScopeRecallComponent();
     }
@@ -841,6 +846,7 @@ export class RuntimeModule extends RuntimeBoundary {
         );
         const builtinToolCatalog = [
             ...workspaceToolset.catalog(),
+            this.subagentBatch.catalogEntry(),
             ...(shellExecution.canExecute ? processToolset.catalog() : []),
             ...(shellExecution.canExecute ? gitToolset.catalog() : []),
             ...(shellExecution.canExecute ? [BUILTIN_SHELL_CATALOG_ENTRY] : []),
@@ -903,7 +909,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     resources: visibleResourceNames,
                     servers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                     staleServers: mcpCatalogBuild.staleServers,
-                    tools: toolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
+                tools: toolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
                     totals: {
                         prompts: visiblePromptNames.length,
                         resources: visibleResourceNames.length,
@@ -1092,12 +1098,17 @@ export class RuntimeModule extends RuntimeBoundary {
             gitToolset,
             processToolset,
             requestId: context.requestId,
+            subagentBatch: this.subagentBatch,
+            subagentInitialMessages: modelMessages,
+            subagentGenerate: async (messages, _turn) => this.model.generate(messages as ModelMessage[], { signal: options.signal }),
+            subagentRenderResults: renderMcpToolResults,
             approveMcpToolCall: options.approveMcpToolCall,
             approveUserToolCall: options.approveUserToolCall,
         });
 
         const selectedSkillNames = selectedSkills.map((skill) => skill.name);
         const mcpCallProvenance = mcpExecutionsToProvenance(generated.mcpToolCalls);
+        const subagentBatches = mcpExecutionsToSubagentProvenance(generated.mcpToolCalls);
         const executiveToolExecutions = mcpExecutionsToExecutiveMetadata({
             executions: generated.mcpToolCalls,
             requiresApproval: generated.requiresApproval,
@@ -1130,6 +1141,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 behaviorSnapshotId,
                 executiveToolExecutions,
                 mcpCallProvenance,
+                subagentBatches,
                 executiveAskRequired: generated.askRequired,
             });
         }
@@ -1241,6 +1253,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                 mcpToolCalls: generated.mcpToolCalls.length,
                 mcpToolExecutions: mcpCallProvenance,
+                ...(subagentBatches.length > 0 ? { subagentBatches } : {}),
                 executiveToolExecutions,
                 sandboxMode: sandbox.mode,
                 skills: selectedSkillNames,
@@ -1253,6 +1266,7 @@ export class RuntimeModule extends RuntimeBoundary {
             parsed,
             visibleText,
             mcpCallProvenance,
+            subagentBatches,
             executiveToolExecutions,
             selectedSkillNames,
             contextForks: planningParsed.contextForks,
@@ -1277,6 +1291,7 @@ export class RuntimeModule extends RuntimeBoundary {
         sandbox: AssembledTurnContext["sandbox"];
         behaviorSnapshotId: string;
         mcpCallProvenance?: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
+        subagentBatches?: NonNullable<MemoryEpisodeProvenance["subagentBatches"]>;
         executiveToolExecutions?: ExecutiveCapabilityExecutionMetadata[];
         executiveAskRequired?: RuntimeExecutiveAskRequired;
     }): GeneratedTurn {
@@ -1292,6 +1307,7 @@ export class RuntimeModule extends RuntimeBoundary {
         } = input;
         const selectedSkillNames = selectedSkills.map((skill) => skill.name);
         const mcpCallProvenance = input.mcpCallProvenance ?? [];
+        const subagentBatches = input.subagentBatches ?? [];
         const executiveToolExecutions = input.executiveToolExecutions ?? [];
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
@@ -1318,6 +1334,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                 mcpToolCalls: mcpCallProvenance.length,
                 mcpToolExecutions: mcpCallProvenance,
+                ...(subagentBatches.length > 0 ? { subagentBatches } : {}),
                 executiveToolExecutions,
                 sandboxMode: sandbox.mode,
                 skills: selectedSkillNames,
@@ -1330,6 +1347,7 @@ export class RuntimeModule extends RuntimeBoundary {
             parsed: { actions: [], text: "" },
             visibleText: ask.prompt,
             mcpCallProvenance,
+            subagentBatches,
             executiveToolExecutions,
             selectedSkillNames,
             contextForks: [],
@@ -1375,6 +1393,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 behaviorSnapshotId,
                 blackboardTurnId: blackboardRun?.turnId,
                 mcpCalls: mcpCallProvenance,
+                subagentBatches: generated.subagentBatches,
                 skillNames: selectedSkillNames,
             },
             ask,
@@ -1428,6 +1447,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 : undefined,
             context: enrichedContext,
             mcpCalls: mcpCallProvenance,
+            subagentBatches: generated.subagentBatches,
             memoryActions: parsed.actions.length,
             message,
             reply,
@@ -1875,6 +1895,10 @@ export class RuntimeModule extends RuntimeBoundary {
             workspaceToolset: WorkspaceToolset;
             gitToolset: GitToolset;
             processToolset: ProcessToolset;
+            subagentBatch?: RuntimeSubagentBatchComponent;
+            subagentGenerate: (messages: unknown[], turn: number) => Promise<string>;
+            subagentInitialMessages: ModelMessage[];
+            subagentRenderResults: (executions: McpToolCallExecution[]) => string;
             approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
             approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
             requestId: string;
@@ -1931,6 +1955,10 @@ export class RuntimeModule extends RuntimeBoundary {
                 workspaceToolset: mcp.workspaceToolset,
                 gitToolset: mcp.gitToolset,
                 processToolset: mcp.processToolset,
+                subagentBatch: mcp.subagentBatch,
+                subagentGenerate: mcp.subagentGenerate,
+                subagentInitialMessages: mcp.subagentInitialMessages,
+                subagentRenderResults: mcp.subagentRenderResults,
                 requestId: mcp.requestId,
                 requiresApproval: mcp.requiresApproval,
                 approveMcpToolCall: mcp.approveMcpToolCall,

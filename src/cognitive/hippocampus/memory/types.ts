@@ -96,6 +96,16 @@ export interface MemoryEpisodeProvenance {
         server: string;
         tool: string;
     }>;
+    subagentBatches?: Array<{
+        batchId?: string;
+        children: Array<{
+            id: string;
+            ok: boolean;
+            status: string;
+            toolCalls: number;
+        }>;
+        needsUser: boolean;
+    }>;
     skillNames?: string[];
 }
 

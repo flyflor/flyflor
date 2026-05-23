@@ -15,6 +15,8 @@ export interface ExecutiveToolExecution<TCall extends ExecutiveToolCall = Execut
 }
 
 export interface ExecutiveToolRuntimeDescriptor {
+    /** Batched fan-out calls can consume one parent execution operation while preserving per-child results. */
+    readonly batchBudgetUnit?: "batch";
     readonly concurrencySafe: boolean;
     readonly exclusive: boolean;
     readonly readOnly: boolean;
@@ -265,17 +267,50 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
         const allowed: TCall[] = [];
         const blocked: TExecution[] = [];
         const decisions: ExecutiveToolRuntimeBudgetDecision[] = [];
-        for (const call of calls) {
-            const descriptor = callbacks.toolDescriptor(call);
-            const decision = budget.inspectExecution({ highRisk: descriptor?.risk === "high" || descriptor?.readOnly === false || descriptor?.exclusive === true });
+        const groups = this.groupBudgetUnits(calls, callbacks);
+        for (const group of groups) {
+            const decision = budget.inspectExecution({ highRisk: group.highRisk });
             if (decision.allow) {
-                allowed.push(call);
+                allowed.push(...group.calls);
                 continue;
             }
             decisions.push(decision);
-            blocked.push(this.budgetBlockedExecution(call, decision, callbacks));
+            blocked.push(...group.calls.map((call) => this.budgetBlockedExecution(call, decision, callbacks)));
         }
         return { allowed, blocked, decisions };
+    }
+
+    /**
+     * Some tools are themselves controlled fan-out schedulers. Their descriptor
+     * can declare `batchBudgetUnit` so the parent loop accounts for the outer
+     * operation once while the tool preserves child-level loop guards/results.
+     */
+    private groupBudgetUnits(
+        calls: TCall[],
+        callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
+    ): Array<{ calls: TCall[]; highRisk: boolean }> {
+        const groups: Array<{ calls: TCall[]; highRisk: boolean }> = [];
+        let batch: TCall[] = [];
+        let batchHighRisk = false;
+        const flush = (): void => {
+            if (batch.length === 0) return;
+            groups.push({ calls: batch, highRisk: batchHighRisk });
+            batch = [];
+            batchHighRisk = false;
+        };
+        for (const call of calls) {
+            const descriptor = callbacks.toolDescriptor(call);
+            const highRisk = descriptor?.risk === "high" || descriptor?.readOnly === false || descriptor?.exclusive === true;
+            if (descriptor?.batchBudgetUnit === "batch") {
+                batch.push(call);
+                batchHighRisk = batchHighRisk || highRisk;
+                continue;
+            }
+            flush();
+            groups.push({ calls: [call], highRisk });
+        }
+        flush();
+        return groups;
     }
 
     private applyLoopGuard(

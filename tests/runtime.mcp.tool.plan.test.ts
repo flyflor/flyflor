@@ -153,6 +153,24 @@ describe("RuntimeMcpToolPlanComponent", () => {
         ]);
         expect(plan.hiddenCapabilities).toEqual([]);
     });
+
+    test("exposes subagent.batch as a local helper capability", () => {
+        const plan = new RuntimeMcpToolPlanComponent().build({
+            catalog: [entry("subagent", "batch")],
+            channel: Channel.Stdio,
+            projectScoped: true,
+        });
+
+        expect(plan.catalog.map((tool) => `${tool.server}.${tool.tool.name}`)).toEqual(["subagent.batch"]);
+        expect(plan.plan.visible[0]?.descriptor).toEqual(
+            expect.objectContaining({
+                name: "subagent.batch",
+                source: "subagent",
+                readOnly: true,
+                concurrencySafe: true,
+            }),
+        );
+    });
 });
 
 function entry(server: string, name: string): McpToolCatalogEntry {

@@ -1,6 +1,7 @@
 import { copyFile, mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import {
     callMcpTool,
@@ -1993,6 +1994,126 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "shape-compatible read",
         );
+    });
+
+    test("runtime executes subagent.batch with narrowed child tools and audit events", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-batch-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "a.txt"), "child a content\n");
+        await writeFile(join(root, "b.txt"), "child b content\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const batchCall = {
+            server: "subagent",
+            tool: "batch",
+            input: {
+                concurrency: 8,
+                tasks: [
+                    { id: "a", goal: "read a", toolAllowlist: ["workspace.read", "subagent.batch"] },
+                    { id: "b", goal: "read b", toolAllowlist: ["workspace.read"] },
+                ],
+            },
+        };
+        const model = new SequencedModel([
+            `<agent_tool_calls>${JSON.stringify({ calls: [batchCall] })}</agent_tool_calls>`,
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"a.txt"}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"b.txt"}}]}</agent_tool_calls>',
+            "sub child a done",
+            "sub child b done",
+            "Subagent final.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(gatewayMessage("fan out reads"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.text).toBe("Subagent final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "subagent", tool: "batch" }),
+        ]);
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: false,
+                children: [
+                    expect.objectContaining({ id: "a", ok: true, status: "completed", toolCalls: 1 }),
+                    expect.objectContaining({ id: "b", ok: true, status: "completed", toolCalls: 1 }),
+                ],
+            }),
+        ]);
+        const startEvents = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
+        expect(startEvents).toHaveLength(2);
+        expect(startEvents[0]?.payload?.allowedTools).toEqual(["workspace.read"]);
+        expect(sink.events.map((event) => event.type)).toContain(RuntimeEventType.SubagentBatchEnd);
+        const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
+        try {
+            const row = db
+                .query("SELECT content FROM memory_events WHERE type = 'behavior-snapshot' ORDER BY ts DESC LIMIT 1")
+                .get() as { content: string } | null;
+            expect(row).not.toBeNull();
+            const content = JSON.parse(row!.content) as { triggers?: Record<string, unknown> };
+            expect(content.triggers).toEqual(
+                expect.objectContaining({
+                    subagentBatches: 1,
+                    subagentChildren: 2,
+                    subagentNeedsUser: 0,
+                }),
+            );
+        } finally {
+            db.close();
+        }
+    });
+
+    test("subagent.batch returns needs_user without directly creating an ask", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-needs-user-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"blocked","goal":"blocked child"}],"maxToolTurns":1}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"missing","input":{}}]}</agent_tool_calls>',
+            "Needs user final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new CapturingSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("fan out blocked"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).toBe("reply");
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: true,
+                children: [expect.objectContaining({ id: "blocked", status: "needs_user" })],
+            }),
+        ]);
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "subagent", tool: "batch" }),
+        ]);
+        const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
+        try {
+            const row = db
+                .query("SELECT content FROM memory_events WHERE type = 'behavior-snapshot' ORDER BY ts DESC LIMIT 1")
+                .get() as { content: string } | null;
+            expect(row).not.toBeNull();
+            const content = JSON.parse(row!.content) as { triggers?: Record<string, unknown> };
+            expect(content.triggers).toEqual(
+                expect.objectContaining({
+                    subagentBatches: 1,
+                    subagentChildren: 1,
+                    subagentNeedsUser: 1,
+                }),
+            );
+        } finally {
+            db.close();
+        }
     });
 
     test("runtime lifts top-level workspace tool arguments into input", async () => {

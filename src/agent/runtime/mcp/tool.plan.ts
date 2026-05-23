@@ -22,6 +22,7 @@ import type { McpPromptDefinition, McpResourceDefinition, McpToolCatalogEntry } 
 import { GIT_SERVER } from "./git.ts";
 import { PROCESS_SERVER } from "./process.ts";
 import { WORKSPACE_SERVER } from "./workspace.ts";
+import { RuntimeSubagentBatchComponent, SUBAGENT_BATCH_TOOL, SUBAGENT_SERVER } from "../subagent/index.ts";
 
 const SHELL_SERVER = "shell";
 
@@ -101,6 +102,7 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
         workspaceServer: WORKSPACE_SERVER,
     });
     private readonly computerProfile = new ComputerProfileComponent();
+    private readonly subagentBatch = new RuntimeSubagentBatchComponent();
 
     public build(input: RuntimeMcpToolPlanInput): RuntimeMcpToolPlanResult {
         const capabilityPlan = this.buildCapabilities({
@@ -117,6 +119,9 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
     }
 
     public descriptorForCatalogEntry(entry: McpToolCatalogEntry) {
+        if (entry.server === SUBAGENT_SERVER && entry.tool.name === SUBAGENT_BATCH_TOOL) {
+            return this.subagentBatch.descriptor();
+        }
         const descriptor = this.adapter.descriptorFor(entry);
         const computer = this.computerProfile.profileFor(descriptor);
         return computer ? { ...descriptor, computer } : descriptor;

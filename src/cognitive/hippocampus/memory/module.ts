@@ -124,6 +124,7 @@ export interface BehaviorSnapshotInput {
     codenameId?: string;
     context: RuntimeContext;
     mcpCalls?: NonNullable<MemoryEpisodeProvenance["mcpCalls"]>;
+    subagentBatches?: NonNullable<MemoryEpisodeProvenance["subagentBatches"]>;
     memoryActions: number;
     message: GatewayMessage;
     reply: GatewayReply;
@@ -465,6 +466,8 @@ export class MemoryModule extends Memory {
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
         const snapshotId = input.snapshotId ?? `behavior-${crypto.randomUUID()}`;
         const mcpCalls = input.mcpCalls ?? [];
+        const subagentBatches = input.subagentBatches ?? [];
+        const subagentChildren = subagentBatches.flatMap((batch) => batch.children);
         const outputKind = input.ask ? "ask" : "reply";
         const content: BehaviorSnapshotContent = {
             snapshotId,
@@ -499,6 +502,13 @@ export class MemoryModule extends Memory {
                     : {}),
                 mcpToolCalls: mcpCalls.length,
                 mcpToolFailures: mcpCalls.filter((call) => !call.ok).length,
+                ...(subagentBatches.length > 0
+                    ? {
+                          subagentBatches: subagentBatches.length,
+                          subagentChildren: subagentChildren.length,
+                          subagentNeedsUser: subagentChildren.filter((child) => child.status === "needs_user").length,
+                      }
+                    : {}),
                 skills: uniqueStrings(input.skills ?? []).slice(0, 16),
                 sandboxMode: input.sandboxMode,
             },
@@ -3293,11 +3303,22 @@ function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): Memory
             server: call.server.trim(),
             tool: call.tool.trim(),
         }));
+    const subagentBatches = (provenance.subagentBatches ?? []).slice(0, 4).map((batch) => ({
+        batchId: batch.batchId,
+        needsUser: batch.needsUser,
+        children: batch.children.slice(0, 8).map((child) => ({
+            id: child.id,
+            ok: child.ok,
+            status: child.status,
+            toolCalls: child.toolCalls,
+        })),
+    }));
     return {
         ...(provenance.brainEventId ? { brainEventId: provenance.brainEventId } : {}),
         ...(provenance.blackboardTurnId ? { blackboardTurnId: provenance.blackboardTurnId } : {}),
         ...(skillNames.length > 0 ? { skillNames } : {}),
         ...(mcpCalls.length > 0 ? { mcpCalls } : {}),
+        ...(subagentBatches.length > 0 ? { subagentBatches } : {}),
     };
 }
 
@@ -3312,6 +3333,12 @@ function renderEpisodeText(userText: string, assistantText: string, provenance: 
             const status = call.ok ? "ok" : "failed";
             const detail = call.ok ? call.resultSummary : call.error;
             lines.push(`- ${call.server}.${call.tool}: ${status}${detail ? `; ${detail}` : ""}`);
+        }
+    }
+    if (provenance.subagentBatches && provenance.subagentBatches.length > 0) {
+        lines.push("[subagent]");
+        for (const batch of provenance.subagentBatches) {
+            lines.push(`- batch ${batch.batchId ?? "unknown"}: children=${batch.children.length}; needsUser=${batch.needsUser}`);
         }
     }
     return lines.join("\n").slice(0, 2048);

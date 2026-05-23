@@ -58,6 +58,7 @@ export class RuntimeEventClassifier {
             type.startsWith("plugin.") ||
             type.startsWith("mcp.") ||
             type.startsWith("process.") ||
+            type.startsWith("subagent.") ||
             type.startsWith("tool.") ||
             type.startsWith("worker.")
         ) {

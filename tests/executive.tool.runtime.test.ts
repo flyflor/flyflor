@@ -411,6 +411,59 @@ describe("ExecutiveToolRuntime", () => {
         );
         expect(executions).toContainEqual(expect.objectContaining({ ok: false, call: call("shell.run", { command: "two" }) }));
     });
+
+    test("charges adjacent batch-budget fan-out calls as one parent operation", async () => {
+        const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
+
+        const result = await runtime.run({
+            budget: {
+                executionOperationBudget: 1,
+                modelToolTurnBudget: 2,
+            },
+            initialMessages: [],
+            maxTurns: 2,
+            noMoreToolsMessage: "no more tools",
+            callbacks: {
+                execute: async (batch) => batch.map((item) => ({ call: item, ok: true, result: { ok: true } })),
+                generate: async () => "batch",
+                knownToolNames: () => new Set(["subagent.batch", "workspace.read"]),
+                parse: () => ({
+                    text: "",
+                    calls: [
+                        call("subagent.batch", { tasks: [{ id: "a" }] }),
+                        call("subagent.batch", { tasks: [{ id: "b" }] }),
+                        call("workspace.read", { path: "after-batch" }),
+                    ],
+                }),
+                renderResults: () => "",
+                toolDescriptor: (item) =>
+                    item.key === "subagent.batch"
+                        ? {
+                              batchBudgetUnit: "batch",
+                              concurrencySafe: true,
+                              exclusive: false,
+                              readOnly: true,
+                          }
+                        : descriptorFor(item.key),
+            },
+        });
+
+        expect(result.executions).toHaveLength(3);
+        expect(result.executions.at(-1)?.result).toEqual(
+            expect.objectContaining({
+                kind: "executive-tool-budget",
+                reason: "execution-operation",
+                tool: "workspace.read",
+            }),
+        );
+        expect(result.askRequired?.budget).toEqual(
+            expect.objectContaining({
+                executionOperationBudget: 1,
+                executionOperationsUsed: 1,
+            }),
+        );
+        expect(result.askRequired?.budgetExhaustedReason).toBe("execution-operation");
+    });
 });
 
 function call(key: string, input: Readonly<Record<string, unknown>>): TestToolCall {

@@ -8,6 +8,7 @@ How to use this section:
 - When a user asks for an architecture or progress report for a local project, first inspect the project structure and key files with tools, then answer from the returned evidence.
 - `shell.run` starts a local executable with `command` plus `args[]`; it is not a portable shell script surface. Do not use shell pipelines, redirects, heredocs, `bash -lc`, or PowerShell-only syntax unless the user explicitly asks for that shell.
 - When `git` tools are present, use `git.status` and `git.diff` for local change review, and `git.show` for commit/object inspection. Prefer these structured read-only git tools over `shell.run` for git observation.
+- When `subagent.batch` is present and the task naturally splits into independent checks, use it to run several focused helper tasks at once. Give each helper a clear `goal` and, when possible, a narrow `toolAllowlist` copied from the catalog. Helpers must return a structured `needs_user` result when a user decision is required; they must not ask the user directly. Do not include `subagent.batch` in a helper allowlist.
 - To call tools, output ONLY this structured block and stop generating; the runtime will execute the calls and send the results back as a follow-up message before you finalise your reply:
   `<agent_tool_calls>{"calls":[{"server":"server-name","tool":"tool-name","input":{}}]}</agent_tool_calls>`
 - Use exact `server` and `tool` names from the catalog JSON below.

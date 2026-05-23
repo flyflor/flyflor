@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { FlyflorConfig } from "../../../config/index.ts";
+import type { ModelMessage } from "../../../protocol/contracts/index.ts";
 import {
     CapabilityExecutionKind,
     ExecutiveLoopGuardReason,
@@ -39,6 +40,12 @@ import { USER_TOOL_SERVER, invokeUserTool } from "./user.tool.ts";
 import { type WorkspaceToolAccess, WorkspaceToolset } from "./workspace.ts";
 import { GitToolset } from "./git.ts";
 import { ProcessToolset, PROCESS_SERVER } from "./process.ts";
+import {
+    RuntimeSubagentBatchComponent,
+    SUBAGENT_BATCH_KEY,
+    SUBAGENT_BATCH_TOOL,
+    SUBAGENT_SERVER,
+} from "../subagent/index.ts";
 
 const BUILTIN_SHELL_SERVER = "shell";
 const BUILTIN_SHELL_TOOL = "run";
@@ -52,6 +59,10 @@ export interface RuntimeMcpToolExecutorInput {
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
     requiresApproval: boolean;
     requestId: string;
+    subagentBatch?: RuntimeSubagentBatchComponent;
+    subagentGenerate?: (messages: unknown[], turn: number) => Promise<string>;
+    subagentInitialMessages?: ModelMessage[];
+    subagentRenderResults?: (executions: McpToolCallExecution[]) => string;
     userToolCatalog: RuntimeUserToolCatalogEntry[];
     workspaceToolset: WorkspaceToolset;
 }
@@ -180,6 +191,14 @@ export class RuntimeMcpToolExecutor {
                     call,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["shell.run not in catalog"] },
                     input.approveMcpToolCall,
+                ));
+                continue;
+            }
+            if (key === SUBAGENT_BATCH_KEY) {
+                executions.push(await this.executeSubagentBatchToolCall(
+                    call,
+                    input,
+                    catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["subagent.batch not in catalog"] },
                 ));
                 continue;
             }
@@ -568,6 +587,53 @@ export class RuntimeMcpToolExecutor {
         };
     }
 
+    private async executeSubagentBatchToolCall(
+        call: McpToolCallRequest & { key: string },
+        input: RuntimeMcpToolExecutorInput,
+        schemaCheck: { ok: boolean; errors: string[] },
+    ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
+        if (!schemaCheck.ok) {
+            return { call, ok: false, error: `subagent.batch input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
+        }
+        if (!input.subagentBatch || !input.subagentGenerate || !input.subagentInitialMessages || !input.subagentRenderResults) {
+            return { call, ok: false, error: "subagent.batch executor is not configured." };
+        }
+        const parsed = input.subagentBatch.readInput(call.input);
+        if (!parsed.ok) return { call, ok: false, error: parsed.error };
+        try {
+            const result = await input.subagentBatch.run({
+                batch: parsed.batch,
+                parent: {
+                    catalog: input.catalog,
+                    initialMessages: input.subagentInitialMessages,
+                    requestId: input.requestId,
+                },
+                child: {
+                    approveMcpToolCall: input.approveMcpToolCall,
+                    generate: input.subagentGenerate,
+                    renderResults: input.subagentRenderResults,
+                },
+                executeCalls: (calls, catalog, childRequestId) =>
+                    this.executeCalls(calls, {
+                        ...input,
+                        catalog: [...catalog],
+                        requestId: childRequestId,
+                    }),
+            });
+            return {
+                call,
+                ok: !result.needsUser && result.results.every((item) => item.ok),
+                result: {
+                    isError: result.needsUser || result.results.some((item) => !item.ok),
+                    raw: result,
+                },
+                error: result.needsUser ? "subagent.batch returned needs_user." : undefined,
+            };
+        } catch (error) {
+            return { call, ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+    }
+
     private readShellRunSpec(call: McpToolCallRequest):
         | { ok: true; command: string; args: string[]; cwd: string; stdin?: string; timeoutMs?: number }
         | { ok: false; error: string } {
@@ -693,11 +759,7 @@ export class RuntimeMcpToolExecutor {
         };
     }
 
-    private descriptorFromEntry(entry: McpToolCatalogEntry): {
-        concurrencySafe: boolean;
-        exclusive: boolean;
-        readOnly: boolean;
-    } {
+    private descriptorFromEntry(entry: McpToolCatalogEntry): ExecutiveToolRuntimeDescriptor {
         if (entry.server === BUILTIN_SHELL_SERVER) {
             return { concurrencySafe: false, exclusive: true, readOnly: false };
         }
@@ -712,6 +774,9 @@ export class RuntimeMcpToolExecutor {
         }
         if (entry.server === USER_TOOL_SERVER) {
             return { concurrencySafe: false, exclusive: true, readOnly: false };
+        }
+        if (entry.server === SUBAGENT_SERVER && entry.tool.name === SUBAGENT_BATCH_TOOL) {
+            return { batchBudgetUnit: "batch", concurrencySafe: true, exclusive: false, readOnly: true };
         }
         return { concurrencySafe: true, exclusive: false, readOnly: true };
     }

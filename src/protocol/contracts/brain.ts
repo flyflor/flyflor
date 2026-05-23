@@ -181,6 +181,9 @@ export interface BehaviorSnapshotContent {
         };
         mcpToolCalls: number;
         mcpToolFailures: number;
+        subagentBatches?: number;
+        subagentChildren?: number;
+        subagentNeedsUser?: number;
         skills: string[];
         sandboxMode?: string;
     };

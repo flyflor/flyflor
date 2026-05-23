@@ -8,6 +8,7 @@
 - 当用户要求对本地项目做架构或进度报告时，先用工具检查项目结构和关键文件，再依据返回证据回答。
 - `shell.run` 是以 `command` 加 `args[]` 启动本机可执行文件，不是跨平台 shell 脚本面。除非用户明确要求某个 shell，否则不要使用管道、重定向、heredoc、`bash -lc` 或 PowerShell 专属语法。
 - 当目录里有 `git` 工具时，用 `git.status` 和 `git.diff` 查看本地改动，用 `git.show` 查看 commit/object。观察 git 状态时优先使用这些结构化只读 git 工具，而不是 `shell.run`。
+- 当目录里有 `subagent.batch` 且任务天然能拆成彼此独立的检查时，用它一次运行多个聚焦的辅助任务。每个辅助任务都要给出清晰 `goal`，并尽量从目录里复制一个收窄后的 `toolAllowlist`。辅助任务需要用户决定时必须返回结构化 `needs_user` 结果；不能直接询问用户。不要把 `subagent.batch` 放进辅助任务的允许列表。
 - 要调用工具时，**只**输出这个结构化块并停止生成；运行时会执行调用，并把结果作为后续消息发回，你再在那之后完成回复：
   `<agent_tool_calls>{"calls":[{"server":"server-name","tool":"tool-name","input":{}}]}</agent_tool_calls>`
 - 使用目录 JSON 里的精确 `server` 和 `tool` 名称。
