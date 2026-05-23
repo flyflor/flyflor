@@ -973,3 +973,36 @@ The current master line only keeps the verified stage-one fixes for local tool f
 - `workspace.delete` is a real workspace write tool and therefore remains behind write approval
 
 This is not the final computer-control architecture. The full implementation must continue in an isolated worktree and must cover protocol-level tool registration, cross-platform file/process/git operations, approval UX, sandbox policy, result compaction, tool memory, and real `/ws` scenario tests. Do not expand that large design directly on `master`.
+
+## 2026-05-24 xtools Execution Layer Split
+
+The current execution-layer push uses only `xtools-*` resources so it does not interfere with other active `flyflor-*` sessions.
+
+Active tmux sessions:
+
+- `xtools-core-exec`
+- `xtools-subagent`
+- `xtools-external-kit`
+
+Active worktrees:
+
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-core-exec`
+  - branch: `feature/xtools-core-exec`
+  - owner: Codex/OpenCode-style core execution primitives
+  - allowed surface: workspace/git/process/shell runtime MCP tools, Executive descriptor alignment, focused tests/docs
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-subagent`
+  - branch: `feature/xtools-subagent`
+  - owner: foreground `subagent.batch`, child budget isolation, brain.db provenance
+  - allowed surface: `src/agent/runtime/subagent/**`, runtime MCP registration bridge, events/protocol/provenance, prompt mirrors and focused tests
+- `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-external-kit`
+  - branch: `feature/xtools-external-kit`
+  - owner: optional external functional tool discovery and descriptors
+  - allowed surface: External Kit/socket kit discovery, mock sidecar manifests, installer hints, docs/tests
+
+Coordinator rules:
+
+- Do not kill or modify non-`xtools-*` tmux sessions or worktrees.
+- Core file read/write remains in execution primitives; external kit must not reimplement file tools.
+- Browser, screen, computer, vision, audio, web search/fetch, LSP, and background-task descriptors are optional external capabilities: detect and register when present, hide/unavailable when absent, and never bundle heavy sidecar dependencies into the Bun binary.
+- Merge order is `xtools-core-exec` -> `xtools-subagent` -> `xtools-external-kit`.
+- Each merge must include `git diff --stat`, focused validation output, and root TODO/LOGS updates.

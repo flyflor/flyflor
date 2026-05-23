@@ -142,6 +142,20 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [x] 补充 `docs/ws.doc.md` / `docs/ws.doc.zh.cn.md` 中 TUI 第一阶段 detail query envelope matrix，明确 detail 响应统一走 `payload.data`。
 - [ ] 若 TUI 第一阶段需要可点击创建 fork 的真实端到端 smoke，再新增一条真实 `/ws` client 场景测试覆盖 `fork.create -> fork.detail.get -> gateway.status.get`。
 
+## 2026-05-24 xtools 执行层并发开发
+
+- [x] 将现有 WS/OpenAPI/socket read-cache 改动收拢为 baseline 提交，避免从脏 master 开 worktree。
+- [x] 所有新 worktree 和 tmux session 统一使用 `xtools-*` 前缀，不触碰其他正在工作的 `flyflor-*` session。
+- [x] 创建 `feature/xtools-core-exec`，负责 Codex/OpenCode 风格 workspace/git/process/shell 底层执行原语强化。
+- [x] 创建 `feature/xtools-subagent`，负责 `subagent.batch` 前台批量子代理、预算隔离和 brain.db 关联审计。
+- [x] 创建 `feature/xtools-external-kit`，负责 browser/screen/computer/vision/audio/web/lsp/task 外挂工具发现、descriptor、mock sidecar 和安装脚本。
+- [x] 三个 worktree 均追加中文 `AGENTS.md`、`TODO.md`、`LOGS.md` 控制段，并提交 lane control commit。
+- [x] 三个 worktree 均链接主仓库 `node_modules`，避免重复安装。
+- [x] 启动 `xtools-core-exec`、`xtools-subagent`、`xtools-external-kit` 三个 tmux Codex 子进程。
+- [ ] 主 Codex 持续轮询三个子进程，防止偏离 scope/memory/vector 主链和避免外挂工具重复实现文件读写。
+- [ ] 合并顺序固定为 core-exec -> subagent -> external-kit；每次合并前统计 diff、review、跑 focused tests。
+- [ ] 最终运行 `bun run check`、`bun run build:binary`、WS/工具/子代理/外挂 detector 场景测试，并输出代码量与完成报告。
+
 ## 2026-05-22 Seal 补充
 
 - 主协调分支：`main-codex-docs`

@@ -696,3 +696,13 @@
   原因：用户要求主 Codex 使用 `git worktree + tmux + codex` 并发，并负责 review、合并、回收和防止需求漂移；本次重点是电脑控制能力、执行预算、工具事件和本地代码阅读调用层闭环。
   效率：当前 `master` 相对 `origin/master` 为 11 commits ahead，58 files changed，4892 insertions，122 deletions；本轮新合入重点提交包括 `88f06cf`、`0f0f26c`、`8dbff2e`、`aa0f477`。
   验证：`bun test tests/prompt.lint.test.ts tests/naming.boundaries.test.ts tests/skill.mcp.test.ts --timeout 60000` 93 pass；`bun test tests/computer.coding.tools.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts tests/event.component.test.ts tests/protocol.control.test.ts tests/gateway.ws.test.ts tests/docs.references.test.ts` 97 pass；`bun run docs:check` 26 pass；`bun run check`；`git diff --check`。
+
+## 2026-05-24
+
+- 状态：进行中
+  执行者：main-codex
+  范围：xtools-worktree-tmux-orchestration
+  摘要：从干净 baseline 创建 `xtools-core-exec`、`xtools-subagent`、`xtools-external-kit` 三个 worktree/tmux 子进程；所有新资源统一 `xtools-*` 前缀，并同步 baseline 测试/文档修复到子分支。
+  原因：本轮需要并发推进真实执行层、子代理和外挂功能工具，但用户明确要求不要影响其他正在工作的 session，且合并稳定性优先于并发数量。
+  效率：启动时 master 为 15 commits ahead；新增 3 个 worktree、3 个 tmux Codex 子进程；每个 lane 已提交控制文件，后续按 core-exec -> subagent -> external-kit 顺序 review/merge。
+  验证：`git worktree list --porcelain`；`tmux list-sessions | rg '^xtools-'`；最终验证待子分支完成后执行。
