@@ -72,6 +72,12 @@ bun run build:binary
 - 不实现业务 sidecar，只消费其他 lane 合入后的工具面。
 - 失败必须结构化暴露，禁止通过降低断言伪装通过。
 
+## xtools-lsp-task-data 本地附加红线
+
+- 本 worktree 只处理 LSP、后台任务、archive、data convert 和 hash 能力。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 禁止重复实现 `workspace.*`、`git.*`、`process.run`、`shell.run`。
+
 ## xtools-computer-native 本地附加红线
 
 - 本 worktree 只处理 `screen.*` 和 `computer.*` 外挂 sidecar。

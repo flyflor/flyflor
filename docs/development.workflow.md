@@ -1187,3 +1187,26 @@ Validation:
 - `bun run docs:check`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-24 xtools-lsp-task-data Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-lsp-task-data`
+- branch: `feature/xtools-lsp-task-data`
+- owner: LSP/background/file/archive/data utility external sidecar
+
+Boundary:
+
+- `file.hash`, `archive.create`, `archive.extract`, and `data.convert` are lightweight sidecar utilities
+- they do not replace builtin workspace/git/process/shell tools
+- `lsp.symbols`, `lsp.diagnostics`, and `task.background` require explicit local delegates
+- all file/archive paths must stay under `projectDir`
+- failures return structured JSON and nonzero exit
+
+Validation:
+
+- `bun test tests/utility.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `git diff --check`

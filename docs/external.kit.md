@@ -120,3 +120,27 @@ Mouse and keyboard actions require explicit delegate commands in
 `sidecars.computer.native.config.mouseCommand` and `keyboardCommand`. Missing delegates fail
 with `unavailable`; no hidden fallback performs control actions. Screenshot output paths must
 stay under `projectDir`.
+
+## Utility Sidecar
+
+`scripts/utility.sidecar.ts` covers LSP delegates, background task delegates, file hashing,
+archive create/extract, and small structured data conversion.
+
+```bash
+bun run install:xtools:utility
+```
+
+It registers:
+
+- `lsp.symbols`
+- `lsp.diagnostics`
+- `task.background`
+- `file.hash`
+- `archive.create`
+- `archive.extract`
+- `data.convert`
+
+`file.hash`, `archive.*`, and `data.convert` are lightweight sidecar utilities. They do not
+replace builtin workspace/git/process/shell primitives. LSP and background task execution require
+explicit `lspCommand` and `taskCommand` delegates in `external.tools.jsonc`. File and archive paths
+must stay under `projectDir`.

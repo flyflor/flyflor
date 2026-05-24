@@ -766,6 +766,21 @@
   验证：待实现后补充。
 
 - 状态：进行中
+  执行者：xtools-lsp-task-data
+  范围：lsp-task-data-sidecar
+  摘要：初始化 LSP、后台任务和轻量数据工具 lane。
+  原因：这些能力属于功能性外挂，应该通过 process-json sidecar 注册，不进入内建文件/git/process 原语。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-lsp-task-data
+  范围：lsp-task-data-sidecar
+  摘要：新增 `scripts/utility.sidecar.ts` 和安装脚本，覆盖 `lsp.symbols`、`lsp.diagnostics`、`task.background`、`file.hash`、`archive.create`、`archive.extract`、`data.convert`。轻量 hash/archive/data 在 sidecar 内完成，LSP 与 background task 必须通过显式 delegate。
+  原因：这些能力属于功能性外挂，不应回写内建 workspace/git/process/shell 原语，也不应侵入 Memory、Scope、ASK、Crystal 或 fork 主链。
+  效率：本 lane 扩展 external registry，新增 utility sidecar、installer、process-json 测试、manifest 测试和安装脚本测试。
+  验证：`bun test tests/utility.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
   执行者：xtools-computer-native
   范围：native-computer-sidecar
   摘要：初始化电脑原生控制 lane，准备实现屏幕、鼠标、键盘和窗口能力。
