@@ -10,6 +10,7 @@ const INSTALL_DOCKER_SH = join(ROOT, "scripts", "install.docker.sh");
 const INSTALL_XTOOLS_BROWSER_CDP_SH = join(ROOT, "scripts", "install.xtools.browser-cdp.sh");
 const INSTALL_XTOOLS_SEARCH_WEB_SH = join(ROOT, "scripts", "install.xtools.search-web.sh");
 const INSTALL_XTOOLS_MEDIA_SH = join(ROOT, "scripts", "install.xtools.media.sh");
+const INSTALL_XTOOLS_COMPUTER_USE_SH = join(ROOT, "scripts", "install.xtools.computer-use.sh");
 const INSTALL_XTOOLS_COMPUTER_NATIVE_SH = join(ROOT, "scripts", "install.xtools.computer-native.sh");
 const INSTALL_XTOOLS_UTILITY_SH = join(ROOT, "scripts", "install.xtools.utility.sh");
 const INSTALL_TEMPLATES_TS = join(ROOT, "scripts", "install.templates.ts");
@@ -228,6 +229,7 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:xtools:browser-cdp"]).toContain("install.xtools.browser-cdp.sh");
         expect(packageJson.scripts?.["install:xtools:search-web"]).toContain("install.xtools.search-web.sh");
         expect(packageJson.scripts?.["install:xtools:media"]).toContain("install.xtools.media.sh");
+        expect(packageJson.scripts?.["install:xtools:computer-use"]).toContain("install.xtools.computer-use.sh");
         expect(packageJson.scripts?.["install:xtools:computer-native"]).toContain("install.xtools.computer-native.sh");
         expect(packageJson.scripts?.["install:xtools:utility"]).toContain("install.xtools.utility.sh");
         // Socket service smoke writes only inside a temporary HOME and keeps
@@ -360,6 +362,36 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"screen.screenshot"');
         expect(manifest).toContain('"computer.keyboard"');
         expect(manifest).toContain('"mouseCommand": ""');
+        expect(manifest).not.toContain("playwright");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("Computer use xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_COMPUTER_USE_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_COMPUTER_USE_SH], {
+            env: sandbox.env({
+                FLYFLOR_XTOOLS_TARGET: target,
+                FLYFLOR_SOURCE_ROOT: ROOT,
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"computer.use"');
+        expect(manifest).toContain(`"args": ["${ROOT}/scripts/computer.use.sidecar.ts"]`);
+        expect(manifest).toContain('"backend": "delegate"');
+        expect(manifest).toContain('"delegateCommand": ""');
+        expect(manifest).toContain('"cuaCommand": "cua-driver"');
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });

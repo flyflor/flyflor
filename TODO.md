@@ -817,3 +817,11 @@ Kernel V2 acceptance focus：
 - [x] 实现 `web.search` / `web.fetch` / `web.extract` / `web.download` 搜索网页 lane。
 - [x] 补 provider 配置、搜索缓存、去重、warnings、Top N 补抓和 focused tests。
 - [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-computer-use 本地任务
+
+- [x] 实现高层 `computer.use` process-json sidecar，支持 delegate/cua backend、动作校验、危险输入阻断和 `captureAfter` 后置捕获。
+- [x] 将 `computer.use` 注册进 external tool catalog，并通过 computer descriptor metadata 保留 sandbox/approval/audit 语义。
+- [x] 新增 `install.xtools.computer-use.sh` 和 package script，只写 external tools manifest，不创建 kit 或内核 sidecar import。
+- [x] 补 deterministic tests 覆盖 delegate unavailable、invalid config、action validation、captureAfter、blocked dangerous input、installer manifest 和 catalog count/name。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
