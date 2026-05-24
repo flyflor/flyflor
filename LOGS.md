@@ -751,3 +751,10 @@
   原因：Browser CDP 必须作为外挂能力通过 `~/.flyflor/.config/tools/external.tools.jsonc` 注册，进入 Executive Tool Runtime、PluginRunner、sandbox/approval/quota/audit 链路；内核不直接 import sidecar 实现，也不触碰 Memory、Scope、Crystal、ASK 或 fork 主链。
   效率：合入提交 `603e1b1`，8 files changed，634 insertions。
   验证：`bun test tests/browser.cdp.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts` 28 pass；`bun run docs:check` 26 pass；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：xtools-browser-cdp-cleanup
+  摘要：移除已合并的 `xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支，确认没有同名远端分支，也没有 `xtools-*` tmux 会话残留。
+  原因：该 lane 的业务提交已通过 patch 等价方式进入主线；保留已完成 worktree 会制造下一轮协调误判。
+  验证：`git worktree list --porcelain`；`git branch -r --list 'origin/feature/xtools-browser-cdp'`；`tmux list-sessions | rg '^xtools-'`。
