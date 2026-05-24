@@ -222,6 +222,49 @@ describe("external tool descriptor discovery", () => {
         }
     });
 
+    test("accepts Media sidecar manifest for media tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-media-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "media.local": {
+                            command: "bun",
+                            args: ["scripts/media.sidecar.ts"],
+                            config: {
+                                providerUrl: "http://127.0.0.1:9999/media",
+                                providerHeaders: { authorization: "Bearer test" },
+                                localCommands: {},
+                            },
+                            tools: ["vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "web.search")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "vision.ocr")?.tool.executor).toMatchObject({
+                kind: "process-json",
+                command: "bun",
+                args: ["scripts/media.sidecar.ts"],
+                config: {
+                    providerUrl: "http://127.0.0.1:9999/media",
+                    providerHeaders: { authorization: "Bearer test" },
+                    localCommands: {},
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("adds external sidecar tools to the read-only socket kit catalog", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-catalog-"));
         const paths = testPaths(root);
