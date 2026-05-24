@@ -66,3 +66,17 @@ Example Chrome launch:
   --remote-debugging-port=9222 \
   --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## Search/Web Sidecar
+
+`scripts/web.search.sidecar.ts` is the lightweight process-json adapter for `web.search`,
+`web.fetch`, `web.extract`, and `web.download`. It uses configured providers only; if no
+provider is configured, `web.search` fails explicitly instead of returning placeholder data.
+
+```bash
+bun run install:xtools:search-web
+```
+
+The installer writes `external.tools.jsonc` with an empty `providers` list. Add provider
+entries under `sidecars.web.search.config.providers` in `~/.flyflor/.config/tools/external.tools.jsonc`.
+Generic providers must return an array of objects with `title`, `url`, and `snippet` fields.
