@@ -758,3 +758,9 @@
   摘要：移除已合并的 `xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支，确认没有同名远端分支，也没有 `xtools-*` tmux 会话残留。
   原因：该 lane 的业务提交已通过 patch 等价方式进入主线；保留已完成 worktree 会制造下一轮协调误判。
   验证：`git worktree list --porcelain`；`git branch -r --list 'origin/feature/xtools-browser-cdp'`；`tmux list-sessions | rg '^xtools-'`。
+- 状态：进行中
+  执行者：xtools-computer-native
+  范围：native-computer-sidecar
+  摘要：初始化电脑原生控制 lane，准备实现屏幕、鼠标、键盘和窗口能力。
+  原因：电脑控制必须通过外部 sidecar 进入 Executive/sandbox/approval/audit 链路，不能污染内核。
+  验证：待实现后补充。

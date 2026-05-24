@@ -783,3 +783,9 @@ Kernel V2 acceptance focus：
 - [x] 记录合并统计：`603e1b1`，8 files changed，634 insertions。
 - [x] 停止并确认没有 `xtools-browser-cdp` tmux 子进程继续运行。
 - [x] 移除已合并的 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支。
+## 2026-05-24 xtools-computer-native 本地任务
+
+- [x] 初始化 `xtools-computer-native` worktree，本地控制文件只追加状态。
+- [ ] 实现 `screen.screenshot`、`computer.mouse`、`computer.keyboard`、`computer.window` native sidecar。
+- [ ] 补 macOS / Windows / Linux capability probe 和 focused tests。
+- [ ] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
