@@ -61,9 +61,9 @@ Provider 与 delegate 失败是可见协议结果：
 
 TUI 与 WS consumer 必须把 discovery 当成只读数据。它们可以渲染安装/配置状态、approval 状态、quota 状态、lifecycle event 和 audit 证据；不得直接调用 sidecar script、import sidecar 代码，或从工具名字符串推断高层能力可用性。只有 catalog 暴露所需原子依赖和 approval profile 时，才应该展示 `computer.use`。
 
-当前完整 external surface 共 26 个工具：
+当前完整 external surface 共 27 个工具：
 
-`archive.create`、`archive.extract`、`audio.speak`、`audio.transcribe`、`browser.click`、`browser.evaluate`、`browser.navigate`、`browser.open`、`browser.screenshot`、`browser.snapshot`、`browser.type`、`computer.keyboard`、`computer.mouse`、`computer.window`、`data.convert`、`file.hash`、`lsp.diagnostics`、`lsp.symbols`、`screen.screenshot`、`task.background`、`vision.analyze`、`vision.ocr`、`web.download`、`web.extract`、`web.fetch`、`web.search`。
+`archive.create`、`archive.extract`、`audio.speak`、`audio.transcribe`、`browser.click`、`browser.evaluate`、`browser.navigate`、`browser.open`、`browser.screenshot`、`browser.snapshot`、`browser.type`、`computer.use`、`computer.keyboard`、`computer.mouse`、`computer.window`、`data.convert`、`file.hash`、`lsp.diagnostics`、`lsp.symbols`、`screen.screenshot`、`task.background`、`vision.analyze`、`vision.ocr`、`web.download`、`web.extract`、`web.fetch`、`web.search`。
 
 ## 验证
 

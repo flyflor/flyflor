@@ -61,9 +61,9 @@ The `/ws` protocol exposes the tool capability surface through `server.hello.pay
 
 TUI and WS consumers must treat discovery as read-only data. They may render install/configuration state, approval state, quota state, lifecycle events, and audit evidence. They must not invoke sidecar scripts directly, import sidecar code, or infer high-level tool availability from tool-name strings. `computer.use` should be shown only when the catalog exposes the required atomic dependencies and approval profile.
 
-The full external surface currently contains 26 tools:
+The full external surface currently contains 27 tools:
 
-`archive.create`, `archive.extract`, `audio.speak`, `audio.transcribe`, `browser.click`, `browser.evaluate`, `browser.navigate`, `browser.open`, `browser.screenshot`, `browser.snapshot`, `browser.type`, `computer.keyboard`, `computer.mouse`, `computer.window`, `data.convert`, `file.hash`, `lsp.diagnostics`, `lsp.symbols`, `screen.screenshot`, `task.background`, `vision.analyze`, `vision.ocr`, `web.download`, `web.extract`, `web.fetch`, `web.search`.
+`archive.create`, `archive.extract`, `audio.speak`, `audio.transcribe`, `browser.click`, `browser.evaluate`, `browser.navigate`, `browser.open`, `browser.screenshot`, `browser.snapshot`, `browser.type`, `computer.use`, `computer.keyboard`, `computer.mouse`, `computer.window`, `data.convert`, `file.hash`, `lsp.diagnostics`, `lsp.symbols`, `screen.screenshot`, `task.background`, `vision.analyze`, `vision.ocr`, `web.download`, `web.extract`, `web.fetch`, `web.search`.
 
 ## Validation
 
