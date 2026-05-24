@@ -2,6 +2,42 @@
 
 External Kit is the read-only discovery protocol for optional external capabilities. It is not the first-party CLI, TUI, or socket compatibility layer, and it does not execute tools by itself.
 
+## Three-Layer Tool Model
+
+Flyflor exposes tools in three layers. The layers are additive, but they do not share ownership:
+
+| Layer | Examples | Owner | Execution contract |
+| --- | --- | --- | --- |
+| Builtin coding tools | workspace read/write, patch, git, process, shell | Bun kernel / Executive | First-party coding primitives. They are compiled into the kernel and remain behind sandbox, approval, quota, and audit gates. |
+| Atomic sidecars | `browser.*`, `web.*`, `vision.*`, `audio.*`, `screen.*`, `computer.mouse`, `computer.keyboard`, `lsp.*`, `task.background`, `file.hash`, `archive.*`, `data.convert` | External process-json runners | Small delegated capabilities discovered from `external.tools.jsonc`. Each tool has one narrow capability descriptor and returns structured success, `failed`, or `unavailable`. |
+| High-level computer use | `computer.use` | Future high-level controller | A planning/execution facade over visible atomic computer/screen/browser tools. It is not a replacement for builtin coding tools and must still execute through Executive Tool Runtime. |
+
+`computer.use` is intentionally a high-level capability. It may decide to call atomic sidecars such as screenshot, mouse, keyboard, window, or browser control, but it does not gain a private execution channel. If required delegates or providers are missing, the high-level call must surface the same structured failure semantics as the atomic tool that blocked it.
+
+## Compatibility Matrix
+
+| Capability family | Builtin coding tools | Atomic sidecar | `computer.use` dependency | Notes |
+| --- | --- | --- | --- | --- |
+| Workspace files, patch, git | Yes | No | No | External sidecars must not duplicate first-party coding primitives. |
+| Process and shell escape | Yes | No | No | Shell remains a high-risk builtin escape hatch, not a sidecar abstraction. |
+| Browser CDP | No | Yes | Optional | Requires an existing Chrome/Chromium CDP endpoint. |
+| Search and web fetch | No | Yes | Optional | Search requires configured providers; fetch/extract/download are constrained by sidecar policy and `projectDir`. |
+| Vision and audio | No | Yes | Optional | Requires HTTP provider or per-tool local process-json delegate. No SDK or model asset is bundled. |
+| Screen observation | No | Yes | Yes | Platform commands may provide screenshot/window observation. Missing commands report `unavailable`. |
+| Mouse and keyboard control | No | Yes | Yes | Requires explicit delegate commands and computer approval. No hidden fallback performs control actions. |
+| LSP and background tasks | No | Yes | Optional | Requires explicit delegate commands. |
+| Hash/archive/data conversion | No | Yes | Optional | Lightweight utilities constrained to `projectDir`; they do not replace workspace primitives. |
+
+## Provider And Delegate Failures
+
+External tool failures are part of the protocol, not log-only diagnostics:
+
+- `unavailable`: the sidecar, provider, platform command, or delegate is absent. This is used for missing search providers, missing media providers, missing mouse/keyboard delegates, missing LSP/task delegates, and missing platform screen/window commands.
+- `failed`: the capability was available, but the invocation failed. The result must include the tool name and enough structured detail for audit, such as exit code, stderr summary, provider status, file error, or rejected path.
+- Startup discovery must not fail the Bun kernel just because an optional sidecar is missing. Missing sidecars remain visible as disabled descriptors so clients can explain what is installable or misconfigured.
+
+The sidecar may receive opaque config from `external.tools.jsonc`, but semantic decisions still belong to the model/output protocol or Executive resource metrics. Sidecars must not infer user intent from natural-language text.
+
 ## Runtime Ownership
 
 - `~/.flyflor/.config/tools` is the future user-level control surface for tool registry, installed receipts, enablement, policy, and staging manifests.
@@ -9,6 +45,8 @@ External Kit is the read-only discovery protocol for optional external capabilit
 - `./tools` at the repository root is only a local development workspace beside `src`. It is git ignored and must not be committed.
 
 The development `./tools` directory may contain Browser CDP, screen, vision, audio, LSP, or other sidecar experiments. Runtime discovery must still happen through explicit manifests and structured capability registration. Do not make the kernel import implementation files from `./tools`.
+
+`~/.flyflor/.config/tools` is governance, not payload. It owns user-visible registry state, enablement, policy, install receipts, staged manifests, provider/delegate config, and disabled capability reasons. `~/.flyflor/tools` owns installed runner files. A workspace-local `./.flyflor/tools/external.tools.jsonc` may narrow or add project-local descriptors, but it must not become a source-code import path.
 
 ## Current Mainline Surface
 
@@ -34,6 +72,16 @@ External sidecar discovery reads `external.tools.jsonc` from `~/.flyflor/.config
 - Missing sidecars are reported as unavailable descriptors, not startup failures.
 
 Real execution must enter Executive Tool Runtime, sandbox, approval, quota, and audit events.
+
+## WebSocket And TUI Consumption
+
+`/ws` clients and TUI shells consume the tool surface as data:
+
+- `server.hello.payload.kits` and `capability.catalog.get` expose read-only kit and capability snapshots.
+- Disabled or missing sidecars remain visible with structured reasons, so clients can render installation/configuration states without importing sidecar code.
+- Tool invocation still happens through the normal Executive tool runtime. A TUI must not call sidecar scripts directly or treat kit discovery as an execution API.
+- Runtime event subscriptions may display tool lifecycle, approval, quota, and audit state, but they do not own tool scheduling or provider fallback.
+- `computer.use` consumers should render it as a high-level capability only when its required atomic dependencies and approval profile are visible.
 
 ## Browser CDP Sidecar
 
@@ -144,3 +192,16 @@ It registers:
 replace builtin workspace/git/process/shell primitives. LSP and background task execution require
 explicit `lspCommand` and `taskCommand` delegates in `external.tools.jsonc`. File and archive paths
 must stay under `projectDir`.
+
+## Validation Checklist
+
+Before sealing external tool documentation or installers:
+
+- `external.tools.jsonc` examples keep builtin coding tools, atomic sidecars, and `computer.use` separated.
+- Every provider/delegate-dependent tool documents its `unavailable` behavior.
+- Missing sidecars remain discoverable as disabled descriptors instead of failing kernel startup.
+- Paths that write or download files stay under `projectDir`.
+- WS/TUI docs consume `server.hello.payload.kits`, `capability.catalog.get`, and events only; they do not call sidecar scripts directly.
+- `bun run docs:check`
+- `bun test tests/docs.references.test.ts`
+- `git diff --check`

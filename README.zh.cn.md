@@ -92,6 +92,7 @@ OpenAPI 与 WS 文档：
 - [docs/apifox/README.md](docs/apifox/README.md) 提供 Apifox 专用 WS 示例集合，把所有 frame 展开成可测试条目。
 - [docs/ws.doc.zh.cn.md](docs/ws.doc.zh.cn.md) 是 `/ws` 字段级手册。
 - [docs/control.protocol.zh.cn.md](docs/control.protocol.zh.cn.md) 是外部客户端协议契约。
+- [docs/external.kit.zh.cn.md](docs/external.kit.zh.cn.md) 和 [docs/external.tools.seal.zh.cn.md](docs/external.tools.seal.zh.cn.md) 定义三层工具模型、外挂 sidecar 治理和 WS/TUI capability 消费边界。
 
 并发开发与新 session 交接约定见 [docs/development.workflow.zh.cn.md](docs/development.workflow.zh.cn.md)。
 

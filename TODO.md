@@ -156,6 +156,13 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [ ] 合并顺序固定为 core-exec -> subagent -> external-kit；每次合并前统计 diff、review、跑 focused tests。
 - [ ] 最终运行 `bun run check`、`bun run build:binary`、WS/工具/子代理/外挂 detector 场景测试，并输出代码量与完成报告。
 
+## 2026-05-24 xtools-docs-ws 文档封板
+
+- [x] 在 `feature/xtools-docs-ws` 内补齐三层工具模型文档：内建 coding 工具、原子 process-json sidecar、未来高层 `computer.use`。
+- [x] 在 External Kit 与 External Tools Seal 文档中固定 compatibility matrix、provider/delegate `unavailable` / `failed` 语义、`.config/tools` 治理面和 WS/TUI 只读消费边界。
+- [x] 保持本切片只改文档和控制文件，不修改源码、sidecar、package metadata 或 OpenAPI。
+- [x] 已运行 `bun run docs:check`、`bun test tests/docs.references.test.ts tests/docs.index.test.ts` 和 `git diff --check`。
+
 ## 2026-05-22 Seal 补充
 
 - 主协调分支：`main-codex-docs`
