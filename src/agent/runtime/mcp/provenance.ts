@@ -100,11 +100,35 @@ export function formatMcpResultSummary(summary: McpResultSummary, raw?: unknown)
 
 function previewMcpResult(value: unknown): string {
     if (value === undefined || value === null) return "";
+    const workspaceTree = previewWorkspaceTreeResult(value);
+    if (workspaceTree) return workspaceTree;
     try {
         return (typeof value === "string" ? value : JSON.stringify(value)).replace(/\s+/g, " ").trim().slice(0, 180);
     } catch {
         return "";
     }
+}
+
+function previewWorkspaceTreeResult(value: unknown): string {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+    const record = value as { entries?: unknown; path?: unknown; totalEntries?: unknown; truncated?: unknown };
+    if (!Array.isArray(record.entries)) return "";
+    const entries = record.entries
+        .flatMap((entry) => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+            const item = entry as { path?: unknown; type?: unknown };
+            if (typeof item.path !== "string") return [];
+            return [`${typeof item.type === "string" ? item.type : "entry"}:${item.path}`];
+        })
+        .slice(0, 20);
+    if (entries.length === 0) return "";
+    const path = typeof record.path === "string" ? record.path : ".";
+    return JSON.stringify({
+        path,
+        entries,
+        totalEntries: typeof record.totalEntries === "number" ? record.totalEntries : entries.length,
+        truncated: record.truncated === true,
+    });
 }
 
 function capabilityKindForExecution(execution: McpToolCallExecution): CapabilityExecutionKind {

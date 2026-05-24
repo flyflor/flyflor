@@ -15,6 +15,7 @@ import { RuntimeBlackboardRouteComponent } from "../src/agent/runtime/blackboard
 import { BlackboardModule, SQLiteBlackboardStore, WorkerManager } from "../src/agent/index.ts";
 import { LocalHashEmbeddingProvider } from "../src/cognitive/hippocampus/embedding/index.ts";
 import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
+import type { ScopeVectorComponent } from "../src/cognitive/hippocampus/scope/vector/component.ts";
 import {
     AskReason,
     BlackboardMode,
@@ -273,11 +274,118 @@ describe("fastRoute resource-only short-circuit", () => {
             expect(reply.metadata?.blackboard).toMatchObject({
                 mode: BlackboardMode.Blackboard,
                 status: BlackboardTurnStatus.Converged,
+                rounds: [{
+                    round: 1,
+                    workers: [{
+                        content: "perf-final-worker public blackboard transcript",
+                        outputSummary: "perf-final-worker public blackboard transcript",
+                        workerRole: "perf-final-worker",
+                    }],
+                }],
                 summary: "perf-final-worker public blackboard transcript",
             });
             expect((reply.metadata?.blackboard as { content?: string } | undefined)?.content).toContain(
                 "perf-final-worker public blackboard transcript",
             );
+            expect((reply.metadata?.blackboard as { transcript?: Array<{ content: string }> } | undefined)?.transcript?.[0])
+                .toMatchObject({ content: "perf-final-worker public blackboard transcript" });
+            expect(events.events.filter((entry) => entry.type === RuntimeEventType.BlackboardStarted)).toHaveLength(1);
+            expect(events.events.filter((entry) => entry.type === RuntimeEventType.BlackboardRoundStarted)).toHaveLength(1);
+            expect(events.events.find((entry) => entry.type === RuntimeEventType.BlackboardWorkerDone)?.payload)
+                .toMatchObject({
+                    content: "perf-final-worker public blackboard transcript",
+                    outputSummary: "perf-final-worker public blackboard transcript",
+                    round: 1,
+                    workerName: "Final",
+                });
+            expect(events.events.find((entry) => entry.type === RuntimeEventType.BlackboardCompleted)?.payload)
+                .toMatchObject({
+                    status: BlackboardTurnStatus.Converged,
+                    summary: "perf-final-worker public blackboard transcript",
+                });
+        } finally {
+            runtime.dispose();
+        }
+    });
+
+    test("direct-with-watch exposes structured thought row without polluting reply text", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
+        await memory.warmup();
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, new WorkerManager(events));
+        const runtime = new RuntimeModule(
+            config,
+            new DirectWatchRouteThenReplyModel("clean final answer"),
+            events,
+            blackboard,
+            memory,
+        );
+
+        try {
+            const reply = await runtime.handleMessage(
+                msg("watch this direct path"),
+                withEmbedding(await embedFor(config, "watch this direct path")),
+            );
+
+            expect(reply.text).toBe("clean final answer");
+            expect(reply.text).not.toContain("### 思考中");
+            expect(reply.metadata?.thought).toMatchObject({
+                route: {
+                    mode: BlackboardMode.DirectWithWatch,
+                    reason: "test watch route",
+                },
+                summary: "test watch route",
+            });
+            expect(events.events.map((entry) => entry.type)).toContain(RuntimeEventType.ThoughtStarted);
+            expect(events.events.map((entry) => entry.type)).toContain(RuntimeEventType.ThoughtDelta);
+            expect(events.events.map((entry) => entry.type)).toContain(RuntimeEventType.ThoughtCompleted);
+        } finally {
+            runtime.dispose();
+        }
+    });
+
+    test("scope recall exposes structured recall metadata and events", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
+        await memory.warmup();
+        const scope = await memory.createOrUseScope({
+            path: join(config.paths.workspaceDir, "recall-scope"),
+            goal: "socket recall display",
+            title: "Recall Scope",
+            sourceKey: "test-scope-recall",
+        });
+        const internals = memory as unknown as { scopeVector: ScopeVectorComponent };
+        await internals.scopeVector.recordHotMemory({
+            scopeId: scope.id,
+            summary: "recall display vector summary",
+            text: "recall display evidence",
+            symbols: ["recall", "display"],
+            importance: 0.9,
+            nowMs: Date.now(),
+        });
+        const runtime = new RuntimeModule(config, new ScopeRecallRouteThenReplyModel(scope.id, "recall final answer"), events, undefined, memory);
+
+        try {
+            const reply = await runtime.handleMessage(
+                msg("load the recall display scope"),
+                withEmbedding(await embedFor(config, "load the recall display scope")),
+            );
+
+            expect(reply.text).toBe("recall final answer");
+            expect(reply.metadata?.recall).toMatchObject({
+                status: "load",
+                decision: {
+                    kind: "load",
+                    scopeId: scope.id,
+                },
+            });
+            expect((reply.metadata?.recall as { markdown?: string } | undefined)?.markdown).toContain("### 回忆中");
+            expect(reply.metadata?.memory).toMatchObject({ recall: reply.metadata?.recall });
+            expect(events.events.map((entry) => entry.type)).toContain(RuntimeEventType.MemoryRecallItem);
+            expect(events.events.map((entry) => entry.type)).toContain(RuntimeEventType.MemoryRecallAssembled);
+            expect(events.events.map((entry) => entry.type)).toContain(RuntimeEventType.MemoryRecallCompleted);
         } finally {
             runtime.dispose();
         }
@@ -768,6 +876,15 @@ class StaticTextModel implements ModelClient {
                 reason: "test answer path",
             });
         }
+        if (system.includes("focused helper tasks before the main assistant answers")) {
+            return JSON.stringify({
+                decision: "continue",
+                tasks: [],
+                concurrency: 0,
+                maxToolTurns: 0,
+                reason: "test no subtask delegation",
+            });
+        }
         return this.response;
     }
 }
@@ -861,6 +978,15 @@ class CountingRouteThenReplyModel implements ModelClient {
                 reason: "test answer path",
             });
         }
+        if (first.includes("focused helper tasks before the main assistant answers")) {
+            return JSON.stringify({
+                decision: "continue",
+                tasks: [],
+                concurrency: 0,
+                maxToolTurns: 0,
+                reason: "test no subtask delegation",
+            });
+        }
         return this.reply;
     }
 }
@@ -901,6 +1027,114 @@ class FinalBlackboardRouteThenReplyModel implements ModelClient {
                 decision: "answer",
                 calls: [],
                 reason: "test answer path",
+            });
+        }
+        if (first.includes("focused helper tasks before the main assistant answers")) {
+            return JSON.stringify({
+                decision: "continue",
+                tasks: [],
+                concurrency: 0,
+                maxToolTurns: 0,
+                reason: "test no subtask delegation",
+            });
+        }
+        return this.reply;
+    }
+}
+
+class DirectWatchRouteThenReplyModel implements ModelClient {
+    public constructor(private readonly reply: string) {}
+
+    public async generate(messages: ModelMessage[]): Promise<string> {
+        const first = messages[0]?.content ?? "";
+        if (first.includes("Treat worker selection as a small game")) {
+            return JSON.stringify({
+                mode: BlackboardMode.DirectWithWatch,
+                score: 0.55,
+                reason: "test watch route",
+                signals: ["test-watch"],
+                needsReflectionCandidate: false,
+                workers: [],
+            });
+        }
+        if (first.includes("Decide whether the current request should proceed directly")) {
+            return JSON.stringify({
+                decision: "direct",
+                reason: "test direct path",
+                confidence: 1,
+                planTitle: "",
+                planSummary: "",
+                askPrompt: "",
+            });
+        }
+        if (first.includes("decide whether the assistant must use available local tools")) {
+            return JSON.stringify({
+                decision: "answer",
+                calls: [],
+                reason: "test answer path",
+            });
+        }
+        if (first.includes("focused helper tasks before the main assistant answers")) {
+            return JSON.stringify({
+                decision: "continue",
+                tasks: [],
+                concurrency: 0,
+                maxToolTurns: 0,
+                reason: "test no subtask delegation",
+            });
+        }
+        return this.reply;
+    }
+}
+
+class ScopeRecallRouteThenReplyModel implements ModelClient {
+    public constructor(private readonly scopeId: string, private readonly reply: string) {}
+
+    public async generate(messages: ModelMessage[]): Promise<string> {
+        const first = messages[0]?.content ?? "";
+        if (first.includes("decide whether the current user request refers to one existing named work context")) {
+            return JSON.stringify({
+                decision: "load",
+                scopeId: this.scopeId,
+                candidateScopeIds: [this.scopeId],
+                confidence: 0.93,
+                reason: "structured scope recall fixture",
+            });
+        }
+        if (first.includes("Treat worker selection as a small game")) {
+            return JSON.stringify({
+                mode: BlackboardMode.Direct,
+                score: 0.1,
+                reason: "test direct route",
+                signals: [],
+                needsReflectionCandidate: false,
+                workers: [],
+            });
+        }
+        if (first.includes("Decide whether the current request should proceed directly")) {
+            return JSON.stringify({
+                decision: "direct",
+                reason: "test direct path",
+                confidence: 1,
+                planTitle: "",
+                planSummary: "",
+                askPrompt: "",
+            });
+        }
+        if (first.includes("decide whether the assistant must use available local tools")) {
+            return JSON.stringify({
+                decision: "answer",
+                calls: [],
+                reason: "test answer path",
+            });
+        }
+        if (first.includes("focused helper tasks before the main assistant answers")) {
+            return JSON.stringify({
+                decision: "continue",
+                tasks: [],
+                concurrency: 0,
+                maxToolTurns: 0,
+                reason: "test no subtask delegation",
             });
         }
         return this.reply;

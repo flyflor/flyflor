@@ -1,4 +1,4 @@
-import { sep } from "node:path";
+import { stat } from "node:fs/promises";
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
@@ -58,7 +58,12 @@ import {
     type CrystalCandidateInput,
 } from "../../cognitive/crystal/reflection/index.ts";
 import { IdentityAppendParser } from "../../cognitive/hippocampus/identity/index.ts";
-import { createMemory, type MemoryEpisodeProvenance, type MemoryModule } from "../../cognitive/hippocampus/memory/index.ts";
+import {
+    createMemory,
+    type MemoryEpisodeProvenance,
+    type MemoryModule,
+} from "../../cognitive/hippocampus/memory/index.ts";
+import type { ScopeRecallCandidate } from "../../cognitive/hippocampus/memory/types.ts";
 import { LocalHashEmbeddingProvider } from "../../cognitive/hippocampus/embedding/index.ts";
 import {
     listMcpPrompts,
@@ -135,7 +140,7 @@ import {
     renderUserContentWithAttachments,
 } from "./turn/index.ts";
 import { ReflectionWorker } from "./reflection/worker.ts";
-import { RuntimeSubagentBatchComponent, SUBAGENT_BATCH_KEY } from "./subagent/index.ts";
+import { RuntimeSubagentBatchComponent, RuntimeSubtaskPlanComponent, SUBAGENT_BATCH_KEY } from "./subagent/index.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -319,6 +324,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly mcpToolExecutor: RuntimeMcpToolExecutor;
     protected readonly mcpCapabilityReader: RuntimeMcpCapabilityReader;
     protected readonly subagentBatch: RuntimeSubagentBatchComponent;
+    protected readonly subtaskPlan: RuntimeSubtaskPlanComponent;
     protected readonly continuationGhosts: ContinuationGhostStore;
     protected readonly scopeRecall: ScopeRecallComponent;
     private warmupPromise: Promise<void> | undefined;
@@ -362,6 +368,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
         this.subagentBatch = new RuntimeSubagentBatchComponent(events);
+        this.subtaskPlan = new RuntimeSubtaskPlanComponent();
         this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
         this.scopeRecall = new ScopeRecallComponent();
     }
@@ -742,7 +749,25 @@ export class RuntimeModule extends RuntimeBoundary {
             event(
                 RuntimeEventType.ScopeRecallStarted,
                 {
+                    detail: "Scanning persisted scope candidates, vector matches, and codename anchors before deciding whether to load a scope.",
+                    markdown: "### 回忆中\n\n- 扫描候选 Scope\n- 读取向量召回证据\n- 等待模型基于结构化候选决定是否装配",
                     phase: "recalling",
+                    query: message.text,
+                    summary: "正在检查是否需要装配 Scope 记忆",
+                    visibleLabel: "回忆中",
+                },
+                context.requestId,
+            ),
+        );
+        this.events.publish(
+            event(
+                RuntimeEventType.MemoryRecallStarted,
+                {
+                    detail: "Scanning persisted scope candidates, vector matches, and codename anchors before deciding whether to load a scope.",
+                    markdown: "### 回忆中\n\n- 扫描候选 Scope\n- 读取向量召回证据\n- 等待模型基于结构化候选决定是否装配",
+                    phase: "recalling",
+                    query: message.text,
+                    summary: "正在检查是否需要装配 Scope 记忆",
                     visibleLabel: "回忆中",
                 },
                 context.requestId,
@@ -753,9 +778,48 @@ export class RuntimeModule extends RuntimeBoundary {
             limit: 12,
             query: message.text,
         });
+        const candidateItems = candidates.map((candidate) => this.scopeRecallCandidateTrace(candidate));
+        context.recallTrace = {
+            status: candidates.length > 0 ? "deciding" : "none",
+            summary: candidates.length > 0 ? `找到 ${candidates.length} 个候选 Scope，正在判断是否装配` : "没有找到可装配的 Scope 记忆",
+            markdown: this.renderScopeRecallMarkdown(message.text, candidateItems),
+            query: message.text,
+            items: candidateItems,
+            scopes: candidateItems.map((item) => item.scope),
+            vector: {
+                query: message.text,
+                items: candidateItems.map((item) => item.vector).filter((item) => item !== undefined),
+            },
+            assembledTokens: null,
+        };
+        for (const item of candidateItems) {
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryRecallItem,
+                    {
+                        item,
+                        phase: "candidate",
+                        query: message.text,
+                        summary: item.summary,
+                    },
+                    context.requestId,
+                ),
+            );
+        }
         if (candidates.length === 0) {
             this.events.publish(
                 event(RuntimeEventType.ScopeRecallDecided, { decision: ScopeRecallDecisionKind.None, candidates: 0 }, context.requestId),
+            );
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryRecallCompleted,
+                    {
+                        detail: context.recallTrace,
+                        status: "none",
+                        summary: "没有找到可装配的 Scope 记忆",
+                    },
+                    context.requestId,
+                ),
             );
             return undefined;
         }
@@ -775,11 +839,41 @@ export class RuntimeModule extends RuntimeBoundary {
                     candidateScopeIds: decision.candidateScopeIds,
                     scopeId: decision.scope?.id,
                     reason: decision.reason,
+                    detail: context.recallTrace,
                 },
                 context.requestId,
             ),
         );
+        context.recallTrace = {
+            ...context.recallTrace,
+            status: decision.decision,
+            summary: this.scopeRecallSummary(decision),
+            decision: {
+                kind: decision.decision,
+                confidence: decision.confidence,
+                reason: decision.reason,
+                candidateScopeIds: decision.candidateScopeIds,
+                scopeId: decision.scope?.id,
+            },
+            model: {
+                raw: decision.raw,
+            },
+        };
         if (decision.decision === ScopeRecallDecisionKind.Load && decision.scope) {
+            context.recallTrace = {
+                ...context.recallTrace,
+                assembled: {
+                    activeScope: {
+                        id: decision.scope.id,
+                        title: decision.scope.title,
+                        projectDir: decision.scope.projectDir,
+                        projectMemoryDir: decision.scope.projectMemoryDir,
+                    },
+                    tokens: null,
+                },
+                assembledTokens: null,
+                markdown: this.renderScopeRecallMarkdown(message.text, candidateItems, decision),
+            };
             this.events.publish(
                 event(
                     RuntimeEventType.ScopeRecallLoaded,
@@ -787,6 +881,23 @@ export class RuntimeModule extends RuntimeBoundary {
                         scopeId: decision.scope.id,
                         title: decision.scope.title,
                         confidence: decision.confidence,
+                        detail: context.recallTrace,
+                        markdown: context.recallTrace.markdown,
+                        summary: context.recallTrace.summary,
+                    },
+                    context.requestId,
+                ),
+            );
+            this.events.publish(
+                event(
+                    RuntimeEventType.MemoryRecallAssembled,
+                    {
+                        activeScope: context.recallTrace.assembled,
+                        assembledTokens: null,
+                        detail: context.recallTrace,
+                        markdown: context.recallTrace.markdown,
+                        scopeId: decision.scope.id,
+                        summary: context.recallTrace.summary,
                     },
                     context.requestId,
                 ),
@@ -798,12 +909,88 @@ export class RuntimeModule extends RuntimeBoundary {
                     {
                         candidateScopeIds: decision.candidateScopeIds,
                         confidence: decision.confidence,
+                        detail: context.recallTrace,
+                        summary: context.recallTrace.summary,
                     },
                     context.requestId,
                 ),
             );
         }
+        this.events.publish(
+            event(
+                RuntimeEventType.MemoryRecallCompleted,
+                {
+                    decision: decision.decision,
+                    detail: context.recallTrace,
+                    markdown: context.recallTrace.markdown,
+                    summary: context.recallTrace.summary,
+                },
+                context.requestId,
+            ),
+        );
         return decision;
+    }
+
+    private scopeRecallCandidateTrace(candidate: ScopeRecallCandidate): Record<string, unknown> {
+        return {
+            scope: {
+                id: candidate.scope.id,
+                title: candidate.scope.title,
+                goal: candidate.scope.goal,
+                projectDir: candidate.scope.projectDir,
+                projectMemoryDir: candidate.scope.projectMemoryDir,
+                lastUsedAt: candidate.scope.lastUsedAt,
+                useCount: candidate.scope.useCount,
+            },
+            codename: candidate.codename
+                ? {
+                      id: candidate.codename.id,
+                      name: candidate.codename.name,
+                      description: candidate.codename.description,
+                      useCount: candidate.codename.useCount,
+                  }
+                : undefined,
+            vector: candidate.vector
+                ? {
+                      score: candidate.vector.score,
+                      kind: candidate.vector.kind,
+                      summary: candidate.vector.summary,
+                      evidence: candidate.vector.evidence,
+                      relatedIds: candidate.vector.relatedIds,
+                  }
+                : undefined,
+            summary: candidate.vectorSummary ?? candidate.scope.goal ?? candidate.scope.title,
+        };
+    }
+
+    private scopeRecallSummary(decision: ScopeRecallDecision): string {
+        if (decision.decision === ScopeRecallDecisionKind.Load && decision.scope) {
+            return `已装配 Scope：${decision.scope.title ?? decision.scope.id}`;
+        }
+        if (decision.decision === ScopeRecallDecisionKind.Ask) {
+            return "Scope 回忆需要用户确认";
+        }
+        return "未装配 Scope 记忆";
+    }
+
+    private renderScopeRecallMarkdown(
+        query: string,
+        items: Record<string, unknown>[],
+        decision?: ScopeRecallDecision,
+    ): string {
+        const lines = ["### 回忆中", "", `Query: ${query}`, "", `候选数: ${items.length}`];
+        if (decision) {
+            lines.push("", `Decision: ${decision.decision}`, `Confidence: ${decision.confidence}`, `Reason: ${decision.reason}`);
+            if (decision.scope) lines.push(`Loaded scope: ${decision.scope.title ?? decision.scope.id}`);
+        }
+        for (const item of items.slice(0, 8)) {
+            const scope = item.scope as { id?: string; title?: string } | undefined;
+            const vector = item.vector as { score?: number; summary?: string } | undefined;
+            lines.push("", `- ${scope?.title ?? scope?.id ?? "scope"}`);
+            if (typeof vector?.score === "number") lines.push(`  - vector score: ${vector.score}`);
+            if (vector?.summary) lines.push(`  - summary: ${vector.summary}`);
+        }
+        return lines.join("\n");
     }
 
     protected async resolvePlanningGate(
@@ -831,7 +1018,7 @@ export class RuntimeModule extends RuntimeBoundary {
         prepared: PreparedTurn,
         decision: RuntimePlanningRouteDecision,
     ): GeneratedTurn {
-        const { context } = prepared;
+        const context = prepared.enrichedContext;
         const behaviorSnapshotId = `behavior-${context.requestId}`;
         const base = this.emptyGeneratedTurn(message, context, behaviorSnapshotId);
         if (decision.decision === PlanningRouteDecisionKind.Ask) {
@@ -1255,6 +1442,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ask: scopeRecallAsk,
                 message,
                 blackboardRun,
+                context,
                 selectedSkills,
                 mcpServers,
                 sandbox,
@@ -1270,6 +1458,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ask: stalemateAsk,
                 message,
                 blackboardRun,
+                context,
                 selectedSkills,
                 mcpServers,
                 sandbox,
@@ -1353,6 +1542,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ask: executiveAsk,
                 message,
                 blackboardRun,
+                context,
                 selectedSkills,
                 mcpServers,
                 sandbox,
@@ -1455,6 +1645,8 @@ export class RuntimeModule extends RuntimeBoundary {
                           mode: "direct",
                           reason: "blackboard-controller-not-configured",
                       },
+                ...(prepared.enrichedContext.recallTrace ? { recall: prepared.enrichedContext.recallTrace, memory: { recall: prepared.enrichedContext.recallTrace } } : {}),
+                ...(prepared.enrichedContext.thoughtTrace ? { thought: prepared.enrichedContext.thoughtTrace } : {}),
                 memoryActions: parsed.actions.length,
                 planning: this.planningMetadataBuilder.build(
                     planningParsed.taskPlans,
@@ -1497,6 +1689,7 @@ export class RuntimeModule extends RuntimeBoundary {
         ask: AgentAsk;
         message: GatewayMessage;
         blackboardRun: RuntimeBlackboardRun | undefined;
+        context: RuntimeContext;
         selectedSkills: AssembledTurnContext["selectedSkills"];
         mcpServers: AssembledTurnContext["mcpServers"];
         sandbox: AssembledTurnContext["sandbox"];
@@ -1510,6 +1703,7 @@ export class RuntimeModule extends RuntimeBoundary {
             ask,
             message,
             blackboardRun,
+            context,
             selectedSkills,
             mcpServers,
             sandbox,
@@ -1534,6 +1728,9 @@ export class RuntimeModule extends RuntimeBoundary {
                           mode: "direct",
                           reason: "blackboard-controller-not-configured",
                       },
+                ...(context.recallTrace ? { recall: context.recallTrace, memory: { recall: context.recallTrace } } : {}),
+                ...(context.thoughtTrace ? { thought: context.thoughtTrace } : {}),
+                ...(message.metadata?.continuation ? { continuation: { request: message.metadata.continuation } } : {}),
                 memoryActions: 0,
                 mcpServers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                 mcpToolCalls: mcpCallProvenance.length,
@@ -2150,7 +2347,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const budget = this.executiveToolBudget(options);
         const firstTurnStreamed = { value: false };
-        const initialToolProbe = await this.initialLocalPathProbe(messages, mcp.catalog, mcp.workspaceToolset);
+        const initialToolProbe = await this.initialLocalPathProbe(messages, mcp.catalog, mcp.workspaceToolset, options);
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
@@ -2170,6 +2367,8 @@ export class RuntimeModule extends RuntimeBoundary {
                 if (turn === 0 && parsedCalls.calls.length === 0) {
                     const forced = await this.decideInitialToolNeed(raw, modelTranscript, mcp, options);
                     if (forced) return forced;
+                    const delegated = await this.decideInitialDelegation(modelTranscript, mcp, options);
+                    if (delegated) return delegated;
                     if (options.onTextDelta && !firstTurnStreamed.value) {
                         firstTurnStreamed.value = true;
                         await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`);
@@ -2217,59 +2416,105 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<string | undefined> {
         const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
         if (!userMessage) return undefined;
-        const decision = await this.mcpToolNeed.decide({
-            assistantDraft,
-            catalog: mcp.catalog,
-            model: this.model,
-            signal: options.signal,
-            userRequest: userMessage.content,
-        });
+        let decision: Awaited<ReturnType<RuntimeMcpToolNeedComponent["decide"]>>;
+        try {
+            decision = await this.mcpToolNeed.decide({
+                assistantDraft,
+                catalog: mcp.catalog,
+                model: this.model,
+                signal: options.signal,
+                userRequest: userMessage.content,
+            });
+        } catch {
+            return undefined;
+        }
         if (decision.decision !== RuntimeMcpToolNeedDecisionKind.UseTools || decision.calls.length === 0) {
             return undefined;
         }
         return `<agent_tool_calls>${JSON.stringify({ calls: decision.calls })}</agent_tool_calls>`;
     }
 
+    private async decideInitialDelegation(
+        messages: ModelMessage[],
+        mcp: {
+            catalog: McpToolCatalogEntry[];
+        },
+        options: RuntimeStreamOptions,
+    ): Promise<string | undefined> {
+        const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
+        if (!userMessage) return undefined;
+        if (!mcp.catalog.some((entry) => `${entry.server}.${entry.tool.name}` === SUBAGENT_BATCH_KEY)) return undefined;
+        let decision: ReturnType<RuntimeSubtaskPlanComponent["parse"]>;
+        try {
+            decision = await this.subtaskPlan.decide({
+                catalog: mcp.catalog,
+                model: this.model,
+                signal: options.signal,
+                userRequest: userMessage.content,
+            });
+        } catch {
+            return undefined;
+        }
+        const call = this.subtaskPlan.toToolCall(decision);
+        if (!call) return undefined;
+        return `<agent_tool_calls>${JSON.stringify({ calls: [call] })}</agent_tool_calls>`;
+    }
+
     private async initialLocalPathProbe(
         messages: ModelMessage[],
         catalog: McpToolCatalogEntry[],
         workspaceToolset: WorkspaceToolset,
+        options: RuntimeStreamOptions,
     ): Promise<string | undefined> {
         const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
         if (!userMessage) return undefined;
-        const path = this.firstExistingAbsolutePath(userMessage.content);
+        const path = await this.firstExistingAbsolutePath(userMessage.content);
         if (!path) return undefined;
         const tool = await this.workspaceProbeTool(path, workspaceToolset);
         if (!tool) return undefined;
+        if (tool === "tree") {
+            const delegated = await this.decideInitialDelegation(messages, { catalog }, options);
+            if (delegated) return delegated;
+        }
         const key = `workspace.${tool}`;
         if (!catalog.some((entry) => `${entry.server}.${entry.tool.name}` === key)) return undefined;
         return `<agent_tool_calls>${JSON.stringify({
             calls: [{
                 server: "workspace",
                 tool,
-                input: { path, maxDepth: 3, maxEntries: 200 },
+                input: tool === "tree" ? { path, maxDepth: 3, maxEntries: 200 } : { path },
             }],
         })}</agent_tool_calls>`;
     }
 
-    private firstExistingAbsolutePath(text: string): string | undefined {
+    private async firstExistingAbsolutePath(text: string): Promise<string | undefined> {
         for (const match of text.matchAll(LOCAL_ABSOLUTE_PATH_PATTERN)) {
-            const raw = this.trimLocalPathCandidate(match[1]?.trim() ?? "");
-            if (!raw) continue;
-            if (Bun.file(raw).exists()) return raw;
+            const path = await this.existingAbsolutePathPrefix(match[1]?.trim() ?? "");
+            if (path) return path;
         }
         return undefined;
     }
 
-    private trimLocalPathCandidate(raw: string): string {
-        let candidate = raw;
-        while (candidate.length > 0) {
-            if (Bun.file(candidate).exists()) return candidate;
-            const next = candidate.slice(0, Math.max(candidate.lastIndexOf("/"), candidate.lastIndexOf("\\")));
-            if (!next || next === candidate) return raw;
-            candidate = next;
+    private async existingAbsolutePathPrefix(raw: string): Promise<string | undefined> {
+        if (!raw) return undefined;
+        if (await this.localPathExists(raw)) return raw;
+        for (let index = raw.length - 1; index > 0; index -= 1) {
+            const candidate = raw.slice(0, index);
+            const suffix = raw.slice(index);
+            if (suffix.includes("/") || suffix.includes("\\")) continue;
+            if (candidate === "/" || /^[A-Za-z]:\\?$/u.test(candidate)) continue;
+            if (await this.localPathExists(candidate)) return candidate;
         }
-        return raw;
+        return undefined;
+    }
+
+    private async localPathExists(path: string): Promise<boolean> {
+        try {
+            await stat(path);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     private async workspaceProbeTool(path: string, workspaceToolset: WorkspaceToolset): Promise<string | undefined> {
@@ -2570,6 +2815,45 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const route = preRoute ?? (await this.blackboardRoute.decideBlackboardRoute(this.model, message.text));
         if (route.mode !== BlackboardMode.Blackboard) {
+            if (route.mode === BlackboardMode.DirectWithWatch) {
+                context.thoughtTrace = this.directWatchThoughtTrace(route);
+                this.events.publish(
+                    event(
+                        RuntimeEventType.ThoughtStarted,
+                        {
+                            detail: context.thoughtTrace,
+                            mode: route.mode,
+                            route: context.thoughtTrace.route,
+                            summary: context.thoughtTrace.summary,
+                        },
+                        context.requestId,
+                    ),
+                );
+                this.events.publish(
+                    event(
+                        RuntimeEventType.ThoughtDelta,
+                        {
+                            detail: context.thoughtTrace.detail,
+                            mode: route.mode,
+                            route: context.thoughtTrace.route,
+                            summary: route.reason,
+                        },
+                        context.requestId,
+                    ),
+                );
+                this.events.publish(
+                    event(
+                        RuntimeEventType.ThoughtCompleted,
+                        {
+                            detail: context.thoughtTrace,
+                            mode: route.mode,
+                            route: context.thoughtTrace.route,
+                            summary: context.thoughtTrace.summary,
+                        },
+                        context.requestId,
+                    ),
+                );
+            }
             return {
                 elapsedMs: 0,
                 mode: route.mode,
@@ -2629,7 +2913,65 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        const onWorkerDone = undefined;
+        this.events.publish(
+            event(
+                RuntimeEventType.BlackboardStarted,
+                {
+                    mode: BlackboardMode.Blackboard,
+                    reason: route.reason,
+                    requestId: context.requestId,
+                    status: BlackboardTurnStatus.Running,
+                    summary: route.reason,
+                    turnId: start.turn.id,
+                    workerCount: route.workers.length,
+                    workers: route.workers.map((worker) => ({
+                        name: worker.name,
+                        role: worker.role,
+                    })),
+                },
+                context.requestId,
+            ),
+        );
+
+        let currentRound = 0;
+        const onWorkerDone = async (ev: { round: number; workerName: string; workerRole: string; outputSummary: string; blockers: string[] }) => {
+            if (ev.round !== currentRound) {
+                currentRound = ev.round;
+                this.events.publish(
+                    event(
+                        RuntimeEventType.BlackboardRoundStarted,
+                        {
+                            mode: BlackboardMode.Blackboard,
+                            requestId: context.requestId,
+                            round: ev.round,
+                            status: BlackboardTurnStatus.Running,
+                            summary: `round ${ev.round}`,
+                            turnId: start.turn.id,
+                        },
+                        context.requestId,
+                    ),
+                );
+            }
+            this.events.publish(
+                event(
+                    RuntimeEventType.BlackboardWorkerDone,
+                    {
+                        blockers: ev.blockers,
+                        content: ev.outputSummary,
+                        mode: BlackboardMode.Blackboard,
+                        outputSummary: ev.outputSummary,
+                        requestId: context.requestId,
+                        round: ev.round,
+                        status: BlackboardTurnStatus.Running,
+                        summary: ev.outputSummary,
+                        turnId: start.turn.id,
+                        workerName: ev.workerName,
+                        workerRole: ev.workerRole,
+                    },
+                    context.requestId,
+                ),
+            );
+        };
 
         try {
             const finished = await this.blackboard.runUntilConverged(start.turn.id, {
@@ -2639,12 +2981,14 @@ export class RuntimeModule extends RuntimeBoundary {
             if (!finished) {
                 throw new Error(`Blackboard turn disappeared before convergence: ${start.turn.id}`);
             }
-            return this.blackboardOutput.blackboardRunFromTurn(finished, elapsed(started), route);
+            const run = this.blackboardOutput.blackboardRunFromTurn(finished, elapsed(started), route);
+            this.publishBlackboardCompleted(context.requestId, run);
+            return run;
         } catch (error) {
             await this.blackboard.finishTurn(start.turn.id, BlackboardTurnStatus.Failed, context.now);
             const loaded = await this.blackboard.getTurn(start.turn.id);
             const messageText = error instanceof Error ? error.message : String(error);
-            return {
+            const run: RuntimeBlackboardRun = {
                 elapsedMs: elapsed(started),
                 mode: BlackboardMode.Blackboard,
                 reason: "blackboard-worker-failed",
@@ -2666,6 +3010,66 @@ export class RuntimeModule extends RuntimeBoundary {
                 ],
                 turnId: start.turn.id,
             };
+            this.publishBlackboardCompleted(context.requestId, run);
+            return run;
         }
+    }
+
+    private publishBlackboardCompleted(requestId: string, run: RuntimeBlackboardRun): void {
+        const snapshot = this.blackboardOutput.metadataSnapshot(run);
+        this.events.publish(
+            event(
+                RuntimeEventType.BlackboardCompleted,
+                {
+                    content: snapshot.content,
+                    mode: snapshot.mode,
+                    requestId,
+                    rounds: snapshot.rounds,
+                    status: snapshot.status,
+                    summary: snapshot.summary,
+                    transcript: snapshot.transcript,
+                    turnId: snapshot.turnId,
+                },
+                requestId,
+            ),
+        );
+    }
+
+    private directWatchThoughtTrace(route: RuntimeBlackboardRouteDecision): Record<string, unknown> {
+        return {
+            status: "completed",
+            summary: route.reason,
+            detail: {
+                route: {
+                    mode: route.mode,
+                    reason: route.reason,
+                    score: route.score,
+                    signals: route.signals,
+                    needsReflectionCandidate: route.needsReflectionCandidate,
+                },
+                watch: {
+                    enabled: true,
+                    escalation: "runtime route escalation policy observes structured failure counters on later turns",
+                },
+                tool: {
+                    plannedCalls: [],
+                    source: "direct-with-watch route",
+                },
+            },
+            markdown: [
+                "### 思考中",
+                "",
+                `- 路由：${route.mode}`,
+                `- 原因：${route.reason}`,
+                `- 置信分：${route.score}`,
+                `- 观察：后续由结构化失败计数决定是否升级黑板`,
+            ].join("\n"),
+            route: {
+                mode: route.mode,
+                reason: route.reason,
+                score: route.score,
+                signals: route.signals,
+            },
+        };
     }
 }

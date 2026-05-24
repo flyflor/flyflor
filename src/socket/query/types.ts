@@ -80,7 +80,24 @@ export interface SocketQueryCrystalInput extends SocketQueryPageInput {
 export interface SocketAskSnapshot {
     answer?: MemoryEventRecord;
     ask: AgentAsk;
+    continuation?: {
+        continuationId?: string;
+        context?: unknown;
+        contextHint?: string;
+        mode: "continue";
+        snapshotId?: string;
+        sourceTurnId?: string;
+        title?: string;
+    };
     event: MemoryEventRecord;
+    replayableAsk?: {
+        context?: unknown;
+        contextHint?: string;
+        options?: AgentAsk["choices"];
+        question: string;
+        snapshotId?: string;
+        sourceTurnId?: string;
+    };
     status: "active" | "answered" | "resumed" | "abandoned" | "archived";
     state?: MemoryEventStatus;
 }

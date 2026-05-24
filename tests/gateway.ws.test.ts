@@ -24,6 +24,8 @@ import {
     ToolPermission,
     GatewayControlMessageType,
     ToolLifecycleEventType,
+    MemoryEventType,
+    ModelRole,
     RuntimeEventClass,
     SandboxMode,
     type ContextForkRecord,
@@ -36,6 +38,7 @@ import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
 import type { GatewayControlDispatchOptions } from "../src/socket/control.ts";
 import { SocketQueryComponent, type SocketQueryComponentPort } from "../src/socket/query/index.ts";
 import { BlackboardModule, SQLiteBlackboardStore } from "../src/agent/blackboard/index.ts";
+import { BrainStore } from "../src/cognitive/hippocampus/memory/brain/store.ts";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -523,8 +526,15 @@ describe("SocketControlHub", () => {
     test("delivers TUI topic refresh events for recall, ask, fork, blackboard, and todo panels", async () => {
         const bus = new GlobalEventBus();
         const topicTypes = [
+            RuntimeEventType.MemoryRecallStarted,
+            RuntimeEventType.MemoryRecallItem,
+            RuntimeEventType.MemoryRecallAssembled,
+            RuntimeEventType.MemoryRecallCompleted,
             RuntimeEventType.ScopeRecallLoaded,
             RuntimeEventType.ScopeRecallDecided,
+            RuntimeEventType.ThoughtStarted,
+            RuntimeEventType.ThoughtDelta,
+            RuntimeEventType.ThoughtCompleted,
             RuntimeEventType.MemoryContextForkWritten,
             RuntimeEventType.MemoryAskRecorded,
             RuntimeEventType.MemoryAskAnswered,
@@ -556,14 +566,21 @@ describe("SocketControlHub", () => {
                     askEventId: "ask-1",
                     blackboardTurnId: "bb-1",
                     confidence: 0.92,
+                    detail: {
+                        markdown: "### 回忆中\n\n- candidate scope",
+                    },
                     decision: "load",
                     forkId: "fork-1",
+                    item: { scope: { id: "scope-1", title: "Core scope" }, vector: { score: 0.91 } },
+                    markdown: "### 回忆中\n\n- candidate scope",
                     ownerKey: "scope:core",
                     planId: "plan-1",
                     progress: 0.5,
+                    route: { mode: "direct-with-watch", reason: "observe" },
                     scopeId: "scope-1",
                     snapshotId: "snapshot-1",
                     status: "in-progress",
+                    summary: "Context row summary",
                     title: "Core scope",
                 },
             });
@@ -580,6 +597,14 @@ describe("SocketControlHub", () => {
             scopeId: "scope-1",
             title: "Core scope",
             confidence: 0.92,
+        });
+        expect(published.find((event) => event.type === RuntimeEventType.MemoryRecallAssembled)?.payload).toMatchObject({
+            markdown: "### 回忆中\n\n- candidate scope",
+            scopeId: "scope-1",
+        });
+        expect(published.find((event) => event.type === RuntimeEventType.ThoughtCompleted)?.payload).toMatchObject({
+            route: { mode: "direct-with-watch", reason: "observe" },
+            summary: "Context row summary",
         });
         expect(published.find((event) => event.type === RuntimeEventType.MemoryTaskPlanWritten)?.payload).toMatchObject({
             planId: "plan-1",
@@ -625,6 +650,87 @@ describe("SocketControlHub", () => {
                 RuntimeEventType.BlackboardMessageAppended,
                 RuntimeEventType.BlackboardTurnEnd,
             ]);
+        hub.dispose();
+    });
+
+    test("publishes structured blackboard stream events without assistant text lanes", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    {
+                        types: [
+                            RuntimeEventType.BlackboardStarted,
+                            RuntimeEventType.BlackboardRoundStarted,
+                            RuntimeEventType.BlackboardWorkerDone,
+                            RuntimeEventType.BlackboardCompleted,
+                        ],
+                    },
+                    { id: "blackboard-stream-subscribe-1" },
+                ),
+            ),
+        );
+        for (const runtimeEvent of [
+            {
+                type: RuntimeEventType.BlackboardStarted,
+                payload: { requestId: "req-blackboard-stream-1", turnId: "bb-1", status: "running", summary: "route" },
+            },
+            {
+                type: RuntimeEventType.BlackboardRoundStarted,
+                payload: { requestId: "req-blackboard-stream-1", turnId: "bb-1", round: 1, status: "running" },
+            },
+            {
+                type: RuntimeEventType.BlackboardWorkerDone,
+                payload: {
+                    requestId: "req-blackboard-stream-1",
+                    turnId: "bb-1",
+                    round: 1,
+                    workerName: "Reviewer",
+                    content: "structured worker output",
+                    outputSummary: "structured worker output",
+                    blockers: [],
+                },
+            },
+            {
+                type: RuntimeEventType.BlackboardCompleted,
+                payload: {
+                    requestId: "req-blackboard-stream-1",
+                    turnId: "bb-1",
+                    status: "converged",
+                    summary: "structured worker output",
+                    content: "Round 1\nReviewer: structured worker output",
+                },
+            },
+        ] as const) {
+            bus.publish({
+                type: runtimeEvent.type,
+                at: "2026-05-24T00:00:00.000Z",
+                requestId: "req-blackboard-stream-1",
+                payload: runtimeEvent.payload,
+            });
+        }
+
+        const published = sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish);
+        expect(published.map((envelope) => eventTypeFromEnvelope(envelope))).toEqual([
+            RuntimeEventType.BlackboardStarted,
+            RuntimeEventType.BlackboardRoundStarted,
+            RuntimeEventType.BlackboardWorkerDone,
+            RuntimeEventType.BlackboardCompleted,
+        ]);
+        expect(published[2]?.payload?.event).toMatchObject({
+            payload: {
+                content: "structured worker output",
+                outputSummary: "structured worker output",
+                round: 1,
+                workerName: "Reviewer",
+            },
+        });
         hub.dispose();
     });
 
@@ -876,6 +982,82 @@ describe("SocketControlHub", () => {
             const snapshot = await queries.forkMemory({ scopeId: "scope-1", limit: 5 }, { initialized: true });
             expect(snapshot.forks.map((fork) => fork.id)).toEqual(["fork-unique", "fork-new"]);
             expect(snapshot.forks.find((fork) => fork.id === "fork-old")).toBeUndefined();
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("ask snapshots expose replayable continuation metadata for re-answer", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-ask-reanswer-query-"));
+        try {
+            const paths = testPaths(root);
+            const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
+            await brain.open();
+            brain.appendEvent({
+                id: "ask-reanswer-1",
+                ownerKey: "scope:scope-reanswer",
+                sourceKey: "req-reanswer-1",
+                sourceSurface: Channel.Ws,
+                ts: 100,
+                type: MemoryEventType.Ask,
+                role: ModelRole.Assistant,
+                content: {
+                    askId: "ask-reanswer-1",
+                    snapshotId: "behavior-reanswer-1",
+                    requestId: "req-reanswer-1",
+                    chainDepth: 1,
+                    ask: {
+                        reason: "policy-decision",
+                        prompt: "Pick the direction.",
+                        freeform: true,
+                        choices: [{ label: "Left", value: "left" }],
+                    },
+                },
+            });
+            brain.appendEvent({
+                id: "continuation-reanswer-1",
+                ownerKey: "scope:scope-reanswer",
+                sourceKey: "req-reanswer-1",
+                sourceSurface: Channel.Ws,
+                ts: 101,
+                type: MemoryEventType.ContinuationContext,
+                role: ModelRole.Assistant,
+                parentId: "ask-reanswer-1",
+                content: {
+                    continuationId: "continuation-reanswer-1",
+                    snapshotId: "behavior-reanswer-1",
+                    reason: "ask",
+                    userFacing: {
+                        title: "Pick direction",
+                        askPrompt: "Pick the direction.",
+                        contextHint: "Need a branch decision",
+                    },
+                    snapshot: {
+                        originalUserMessage: "merge branch",
+                    },
+                    requestId: "req-reanswer-1",
+                },
+            });
+            brain.close();
+
+            const queries = new SocketQueryComponent(paths);
+            await queries.initialize();
+            const asks = queries.askList({ scopeId: "scope-reanswer", status: "active", limit: 10 });
+            expect(asks).toHaveLength(1);
+            expect(asks[0]).toMatchObject({
+                continuation: {
+                    continuationId: "continuation-reanswer-1",
+                    mode: "continue",
+                    snapshotId: "behavior-reanswer-1",
+                    contextHint: "Need a branch decision",
+                },
+                replayableAsk: {
+                    question: "Pick the direction.",
+                    snapshotId: "behavior-reanswer-1",
+                    sourceTurnId: "ask-reanswer-1",
+                },
+            });
             queries.dispose();
         } finally {
             await rm(root, { recursive: true, force: true });
@@ -1502,6 +1684,51 @@ describe("SocketControlHub", () => {
             },
         });
         hub.dispose();
+    });
+
+    test("keeps context fork history isolated from root history in the query read model", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-fork-history-query-"));
+        try {
+            const paths = testPaths(root);
+            const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
+            await brain.open();
+            brain.appendEvent({
+                id: "event-root",
+                ownerKey: "scope:scope-1",
+                sourceKey: "req-root",
+                sourceSurface: Channel.Ws,
+                ts: 100,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    userText: "root user",
+                    assistantText: "root assistant",
+                },
+            });
+            brain.appendEvent({
+                id: "event-fork",
+                ownerKey: "fork:fork-1",
+                sourceKey: "req-fork",
+                sourceSurface: Channel.Ws,
+                ts: 200,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    contextForkId: "fork-1",
+                    userText: "fork user",
+                    assistantText: "fork assistant",
+                },
+            });
+            brain.close();
+
+            const queries = new SocketQueryComponent(paths);
+            await queries.initialize();
+            expect(queries.historyList({ scopeId: "scope-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-root"]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-fork"]);
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
     });
 
     test("keeps empty history.list replay as a ledger boundary with no next cursor", async () => {

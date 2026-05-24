@@ -228,6 +228,15 @@ function testControlPromptResponse(messages: ModelMessage[]): string | undefined
             reason: "test answer path",
         });
     }
+    if (system.includes("focused helper tasks before the main assistant answers")) {
+        return JSON.stringify({
+            decision: "continue",
+            tasks: [],
+            concurrency: 0,
+            maxToolTurns: 0,
+            reason: "test no subtask delegation",
+        });
+    }
     return undefined;
 }
 

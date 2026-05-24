@@ -102,6 +102,10 @@ describe("EventsComponent explicit hooks", () => {
 
     test("event classes keep ask timeline events separate from planning write events", () => {
         expect(classifyRuntimeEvent(RuntimeEventType.BlackboardMessageAppended)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.BlackboardStarted)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.BlackboardRoundStarted)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.BlackboardWorkerDone)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.BlackboardCompleted)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.BlackboardTurnEnd)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.BlackboardTurnStart)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryAskRecorded)).toBe(RuntimeEventClass.Ask);

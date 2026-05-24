@@ -1263,3 +1263,22 @@ Validation:
 - `bun test tests/route.escalation.test.ts tests/runtime.perf.test.ts tests/blackboard.boundaries.test.ts tests/runtime.planning.route.test.ts tests/prompt.lint.test.ts tests/ask.cap.runtime.test.ts`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-25 Local Path Hard Execution
+
+Accepted mainline closure:
+
+- owner: `main-codex`
+- scope: runtime MCP first-turn local path probe, workspace read policy, workspace tree summary, focused tests
+- local absolute paths are resource locators, not semantic intent rules; runtime may probe existing paths before the model produces visible text
+- existing directories inject `workspace.tree`; existing files inject `workspace.read`
+- glued user text such as `阅读代码/abs/path说说理解` is resolved by longest existing absolute path prefix
+- read-only workspace tools can inspect absolute paths outside `projectDir`; write/edit/delete/patch remain approval and audit gated
+- tree execution metadata keeps bounded file entries so long absolute paths do not hide the actual project structure in replay and TUI panels
+
+Validation:
+
+- `bun test tests/skill.mcp.test.ts --timeout 30000`
+- `bun test tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts --timeout 30000`
+- `bun run check`
+- `git diff --check`

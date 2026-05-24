@@ -888,3 +888,11 @@
   原因：读本地项目、分析代码这类请求属于执行层工具闭环；前置 planning gate 会消耗模型响应并让工具循环失焦，导致用户看到“我先看看”但没有真实工具调用。
   效率：只修改 `RuntimeModule.resolvePlanningGate` 和直接测试；未触碰 Memory、Scope、ASK、Crystal 主链，未新增关键词、正则或语义字符匹配。
   验证：`bun test tests/runtime.planning.route.test.ts tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/gateway.ws.test.ts --timeout 30000`；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：local-path-hard-execution
+  摘要：修复本地路径执行入口：runtime 在工具循环首轮模型生成前识别已存在的本地绝对路径，目录强制注入 `workspace.tree`，文件强制注入 `workspace.read`；目录/文件存在性改用 `fs.stat`，中文粘连路径改用最长存在路径前缀；workspace tree provenance 摘要优先保留条目文件名。
+  原因：Codex/OpenCode/Claude-Code 风格的本地项目阅读不能依赖模型自觉输出工具 JSON。之前目录探测和粘连路径都会漏，导致用户看到“我先看看项目结构”但没有真实工具调用，或工具结果摘要被长路径截断后丢掉关键文件名。
+  效率：只触碰 Runtime 本地路径探测、workspace tree 摘要和直接测试；保持零字符工程边界，该逻辑只做资源定位，不做意图/语义分类；未修改 Memory、Scope、ASK、Crystal 主链。
+  验证：`bun test tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts --timeout 30000`；`bun run check`；`git diff --check`。

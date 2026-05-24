@@ -513,7 +513,14 @@ export class SocketControlHub implements EventSink {
         this.send(
             socket,
             GatewayControlMessageType.ForkSnapshot,
-            buildGatewayControlQuerySnapshotPayload({ fork: written }),
+            buildGatewayControlQuerySnapshotPayload({
+                fork: written,
+                session: {
+                    activeForkId: written.id,
+                    parentId: written.parentId,
+                    rootId: this.rootForkId(written),
+                },
+            }),
             envelope,
             envelope.requestId,
         );
@@ -882,6 +889,10 @@ export class SocketControlHub implements EventSink {
         if (scopeId) return `scope:${scopeId}`;
         if (parentId) return `fork:${parentId}`;
         return `turn:${requestId ?? crypto.randomUUID()}`;
+    }
+
+    private rootForkId(fork: ContextForkRecord): string {
+        return fork.parentId ?? fork.id;
     }
 
     private updateControlStateFromReply(reply: GatewayReply, context: RuntimeContext): void {

@@ -227,6 +227,12 @@ export interface RuntimeContext {
      */
     embedding?: number[];
     /**
+     * Read-only context-row telemetry assembled during the same turn. It is a
+     * display surface for socket/TUI metadata, not an input for memory routing.
+     */
+    recallTrace?: Record<string, unknown>;
+    thoughtTrace?: Record<string, unknown>;
+    /**
      * 显式 fork 节点。Flyflor 不用隐式会话续命；调用方若要进入分叉话题，
      * 必须传入已持久化的 ContextFork id，runtime 只按该结构化 id 注入范围边界。
      */

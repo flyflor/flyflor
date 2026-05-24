@@ -1445,6 +1445,7 @@ export class MemoryModule extends Memory {
                 content: {
                     userText: input.message.text,
                     assistantText: input.reply.text,
+                    ...(input.context.contextForkId ? { contextForkId: input.context.contextForkId } : {}),
                     provenance: input.provenance,
                     atomIds: input.atomIds,
                     atoms: input.atoms.map((entry) => ({

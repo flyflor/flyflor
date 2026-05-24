@@ -875,3 +875,14 @@ Kernel V2 acceptance focus：
 - [x] 保留显式 Plan 模式 planning route，用户确认型计划流程不受影响。
 - [x] 补“绝对路径本地项目分析”回归：首轮草稿未调用工具时，由 `mcp.tool.need` 结构化输出 `workspace.tree` 并执行。
 - [x] 验证 Stdio/WS 本地工具 catalog、workspace 绝对路径审批、MCP loop、子代理工具调用和 planning gate focused 套件。
+
+## 2026-05-25 本地路径硬执行修复
+
+- 状态：已完成
+- [x] 修复绝对路径请求仍可能只输出“我先看看”而不执行工具的问题：runtime 在模型首轮自由输出前注入本地路径探测工具调用。
+- [x] 修复目录存在判断使用 `Bun.file().exists()` 导致目录探测不稳定的问题，改为 `fs.stat` 级别存在检测。
+- [x] 修复中文文本与绝对路径粘连时只退到父目录的问题，改为最长存在路径前缀识别。
+- [x] 绝对目录自动走 `workspace.tree`，绝对文件自动走 `workspace.read`，不依赖模型自觉生成工具 JSON。
+- [x] 工作区只读工具允许读取项目外绝对路径；写入、编辑、删除、patch 仍保留 approval/audit gate。
+- [x] 强化 workspace tree 的工具结果摘要，长绝对路径不会把 `README.md`、`src/main.ts` 等关键文件名挤出回放/metadata。
+- [x] 运行验证：`bun test tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts --timeout 30000`；`bun run check`；`git diff --check`。

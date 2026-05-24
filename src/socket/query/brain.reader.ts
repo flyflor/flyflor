@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { BrainStore } from "../../cognitive/hippocampus/memory/brain/store.ts";
 import type { FlyflorPaths } from "../../config/index.ts";
 import {
+    ContinuationContextReason,
     MemoryEventStatus,
     MemoryEventType,
     ReplayRecordKind,
@@ -75,6 +76,7 @@ export class SocketBrainReader {
                 limit: input.limit ?? 20,
             })
             .filter((event) => this.matchesContextFork(event, input.contextForkId))
+            .filter((event) => input.contextForkId !== undefined || !event.ownerKey?.startsWith("fork:"))
             .map((event) => this.historyTurnFromEvent(event))
             .reverse();
     }
@@ -244,10 +246,13 @@ export class SocketBrainReader {
         if (!ask) return undefined;
         const state = this.brain.getState(event.id)?.status;
         const answer = this.findAskAnswer(event.id);
+        const continuation = this.findAskContinuation(event);
         return {
             answer,
             ask,
+            continuation,
             event,
+            replayableAsk: this.replayableAsk(event, ask, continuation),
             state,
             status: this.askStatus(state, answer),
         };
@@ -257,6 +262,45 @@ export class SocketBrainReader {
         return this.brain
             .listEvents({ type: MemoryEventType.AskAnswerPair, limit: 200 })
             .find((event) => event.parentId === askEventId);
+    }
+
+    private findAskContinuation(askEvent: MemoryEventRecord): SocketAskSnapshot["continuation"] | undefined {
+        const contentSnapshotId = typeof askEvent.content.snapshotId === "string" ? askEvent.content.snapshotId : undefined;
+        const continuation = this.brain
+            .listActiveContinuations(askEvent.ownerKey ?? "", { limit: 200 })
+            .find((event) => event.parentId === askEvent.id || event.content.snapshotId === contentSnapshotId);
+        if (!continuation) return undefined;
+        const userFacing = isRecord(continuation.content.userFacing) ? continuation.content.userFacing : {};
+        return {
+            continuationId: typeof continuation.content.continuationId === "string" ? continuation.content.continuationId : continuation.id,
+            context: continuation.content.snapshot,
+            contextHint: strictString(userFacing.contextHint, ""),
+            mode: "continue",
+            snapshotId: typeof continuation.content.snapshotId === "string" ? continuation.content.snapshotId : contentSnapshotId,
+            sourceTurnId: continuation.parentId ?? askEvent.parentId,
+            title: strictString(userFacing.title, ""),
+        };
+    }
+
+    private replayableAsk(
+        askEvent: MemoryEventRecord,
+        ask: AgentAsk,
+        continuation: SocketAskSnapshot["continuation"],
+    ): SocketAskSnapshot["replayableAsk"] | undefined {
+        const state = this.brain.getState(askEvent.id)?.status;
+        if (state === MemoryEventStatus.Abandoned || state === MemoryEventStatus.Archived || this.findAskAnswer(askEvent.id)) {
+            return undefined;
+        }
+        const reason = continuation?.continuationId ? ContinuationContextReason.Ask : undefined;
+        return {
+            context: continuation?.context,
+            contextHint: continuation?.contextHint,
+            options: ask.choices,
+            question: ask.prompt,
+            snapshotId: continuation?.snapshotId ?? strictString(askEvent.content.snapshotId, ""),
+            sourceTurnId: continuation?.sourceTurnId ?? askEvent.parentId,
+            ...(reason ? { reason } : {}),
+        } as SocketAskSnapshot["replayableAsk"];
     }
 
     private askStatus(state: MemoryEventStatus | undefined, answer: MemoryEventRecord | undefined): SocketAskSnapshot["status"] {

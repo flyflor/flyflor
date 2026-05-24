@@ -49,6 +49,7 @@ export class ContextScopeComponent extends ContextComponent {
         codenameId?: string;
         context: RuntimeContext;
     }): string | null {
+        if (input.context.contextForkId) return `fork:${input.context.contextForkId}`;
         return input.context.activeScope?.id ?? null;
     }
 

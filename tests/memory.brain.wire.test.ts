@@ -58,6 +58,7 @@ describe("MemoryModule + BrainStore", () => {
                 const parsed = JSON.parse(last.content) as Record<string, unknown>;
                 expect(parsed.userText).toContain("会议结论");
                 expect(parsed.assistantText).toBe("好的，已经记下。");
+                expect(parsed.contextForkId).toBe("test-fork");
             } finally {
                 db.close();
             }

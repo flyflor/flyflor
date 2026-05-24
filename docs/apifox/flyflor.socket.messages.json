@@ -8549,6 +8549,39 @@
         "limit": 20
       }
     },
+    "ForkMemoryGet": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-fork-memory-get-1",
+      "type": "fork.memory.get",
+      "at": "2026-05-22T00:00:05.325Z",
+      "requestId": "req-fork-memory-1",
+      "payload": {
+        "forkId": "fork-1",
+        "limit": 20
+      }
+    },
+    "ForkMemorySnapshot": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-fork-memory-snapshot-1",
+      "type": "fork.memory.snapshot",
+      "at": "2026-05-22T00:00:05.330Z",
+      "requestId": "req-fork-memory-1",
+      "correlationId": "env-fork-memory-get-1",
+      "payload": {
+        "data": {
+          "forkId": "fork-1",
+          "memories": [
+            {
+              "eventId": "event-1",
+              "summary": "Fork memory summary",
+              "source": "brain.db",
+              "ts": 1770000000000
+            }
+          ],
+          "nextBeforeTs": null
+        }
+      }
+    },
     "AskDetailGet": {
       "protocol": "flyflor.ws.v1",
       "id": "env-ask-detail-1",

@@ -39,9 +39,31 @@ export interface RuntimeBlackboardMetadataSnapshot {
     messages: number;
     mode: BlackboardMode;
     reason: string;
+    rounds?: RuntimeBlackboardRoundSnapshot[];
     status?: BlackboardTurnStatusType;
     summary: string;
+    transcript?: RuntimeBlackboardTranscriptMessageSnapshot[];
     turnId?: string;
+}
+
+export interface RuntimeBlackboardRoundSnapshot {
+    round: number;
+    workers: RuntimeBlackboardWorkerSnapshot[];
+}
+
+export interface RuntimeBlackboardTranscriptMessageSnapshot {
+    content: string;
+    role: BlackboardMessage["role"];
+    round?: number;
+    workerRole?: string;
+}
+
+export interface RuntimeBlackboardWorkerSnapshot {
+    blockers: string[];
+    content: string;
+    outputSummary: string;
+    risk: string;
+    workerRole: string;
 }
 
 @Component()
@@ -104,8 +126,10 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
             messages: run.transcript.length,
             mode: run.mode,
             reason: run.reason,
+            rounds: this.roundSnapshots(run),
             status: run.status,
             summary: this.summaryForRun(run),
+            transcript: this.transcriptSnapshots(run),
             turnId: run.turnId,
         };
     }
@@ -221,6 +245,33 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
         const latestStep = run.steps[run.steps.length - 1];
         if (latestStep?.outputSummary) return this.compactDialogueText(latestStep.outputSummary).slice(0, 500);
         return `status=${run.status ?? BlackboardTurnStatus.Running}; reason=${run.reason}`;
+    }
+
+    private roundSnapshots(run: RuntimeBlackboardRun): RuntimeBlackboardRoundSnapshot[] {
+        const rounds = [...new Set(run.steps.map((step) => step.round))]
+            .filter((round) => round > 0)
+            .sort((left, right) => left - right);
+        return rounds.map((round) => ({
+            round,
+            workers: run.steps.filter((step) => step.round === round).map((step) => ({
+                blockers: step.blockers,
+                content: step.outputSummary,
+                outputSummary: step.outputSummary,
+                risk: step.risk,
+                workerRole: step.workerRole,
+            })),
+        }));
+    }
+
+    private transcriptSnapshots(run: RuntimeBlackboardRun): RuntimeBlackboardTranscriptMessageSnapshot[] {
+        return run.transcript
+            .filter((message) => message.visibility === "public")
+            .map((message) => ({
+                content: message.content,
+                role: message.role,
+                round: message.round,
+                workerRole: message.workerRole,
+            }));
     }
 
     private normalizeIso(value: string): string {

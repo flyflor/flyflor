@@ -2,9 +2,13 @@ import { RuntimeEventClass, type RuntimeEventClass as RuntimeEventClassType } fr
 import { RuntimeEventType } from "./types.ts";
 
 const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
+    [RuntimeEventType.BlackboardCompleted]: RuntimeEventClass.Write,
+    [RuntimeEventType.BlackboardRoundStarted]: RuntimeEventClass.Write,
+    [RuntimeEventType.BlackboardStarted]: RuntimeEventClass.Write,
     [RuntimeEventType.BlackboardMessageAppended]: RuntimeEventClass.Write,
     [RuntimeEventType.BlackboardTurnEnd]: RuntimeEventClass.Write,
     [RuntimeEventType.BlackboardTurnStart]: RuntimeEventClass.Write,
+    [RuntimeEventType.BlackboardWorkerDone]: RuntimeEventClass.Write,
     [RuntimeEventType.MemoryAskAnswered]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskChainCapped]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskMutexViolation]: RuntimeEventClass.Ask,
@@ -18,6 +22,13 @@ const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
     [RuntimeEventType.MemorySkillOfferProposed]: RuntimeEventClass.Question,
     [RuntimeEventType.ScopeRecallAsk]: RuntimeEventClass.Question,
     [RuntimeEventType.ScopeRecallLoaded]: RuntimeEventClass.Read,
+    [RuntimeEventType.MemoryRecallAssembled]: RuntimeEventClass.Read,
+    [RuntimeEventType.MemoryRecallCompleted]: RuntimeEventClass.Read,
+    [RuntimeEventType.MemoryRecallItem]: RuntimeEventClass.Read,
+    [RuntimeEventType.MemoryRecallStarted]: RuntimeEventClass.Read,
+    [RuntimeEventType.ThoughtCompleted]: RuntimeEventClass.Read,
+    [RuntimeEventType.ThoughtDelta]: RuntimeEventClass.Read,
+    [RuntimeEventType.ThoughtStarted]: RuntimeEventClass.Read,
     [RuntimeEventType.ToolAskRequired]: RuntimeEventClass.Ask,
     [RuntimeEventType.ToolBudgetExhausted]: RuntimeEventClass.Ask,
     [RuntimeEventType.ToolFailed]: RuntimeEventClass.Error,
