@@ -71,3 +71,10 @@ bun run build:binary
 - 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
 - 系统依赖缺失时必须明确 unavailable 或 failed，禁止静默降级。
 - 所有控制动作必须保留 computer approval、quota 和 audit 语义。
+
+## xtools-search-web 本地附加红线
+
+- 本 worktree 只处理搜索与网页工具：`web.search`、`web.fetch`、`web.extract`、`web.download`。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 搜索 provider 缺失时必须 unavailable 或 failed，禁止假数据兜底。
+- 失败必须结构化暴露，禁止吞错或伪成功。

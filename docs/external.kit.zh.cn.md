@@ -66,3 +66,18 @@ Chrome 启动示例：
   --remote-debugging-port=9222 \
   --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## Search/Web Sidecar
+
+`scripts/web.search.sidecar.ts` 是 `web.search`、`web.fetch`、`web.extract` 和
+`web.download` 的轻量 process-json adapter。它只使用显式配置的 provider；没有
+provider 时 `web.search` 必须明确失败，不返回占位数据。
+
+```bash
+bun run install:xtools:search-web
+```
+
+安装脚本会写入带空 `providers` 列表的 `external.tools.jsonc`。实际使用时，在
+`~/.flyflor/.config/tools/external.tools.jsonc` 的
+`sidecars.web.search.config.providers` 下追加 provider。Generic provider 需要返回包含
+`title`、`url` 和 `snippet` 字段的对象数组。
