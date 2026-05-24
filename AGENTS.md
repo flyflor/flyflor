@@ -65,3 +65,9 @@ bun run build:binary
 - 跨平台能力优先走结构化文件/patch/process API；`shell.run` 不是跨平台抽象，只能作为高风险逃生口。
 - 不做 workspace 限制，但任何写入、删除、进程、shell、网络都必须保留 sandbox/approval/audit gate。
 - 禁止吞错；工具失败必须返回结构化失败结果，包含命令、退出码、stderr 摘要或文件错误原因。
+## xtools-ws-e2e-seal 本地附加红线
+
+- 本 worktree 只处理 WS 场景、Apifox/文档示例、能力矩阵和最终封板报告。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 不实现业务 sidecar，只消费其他 lane 合入后的工具面。
+- 失败必须结构化暴露，禁止通过降低断言伪装通过。

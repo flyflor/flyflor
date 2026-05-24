@@ -758,3 +758,9 @@
   摘要：移除已合并的 `xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支，确认没有同名远端分支，也没有 `xtools-*` tmux 会话残留。
   原因：该 lane 的业务提交已通过 patch 等价方式进入主线；保留已完成 worktree 会制造下一轮协调误判。
   验证：`git worktree list --porcelain`；`git branch -r --list 'origin/feature/xtools-browser-cdp'`；`tmux list-sessions | rg '^xtools-'`。
+- 状态：进行中
+  执行者：xtools-ws-e2e-seal
+  范围：ws-tool-e2e-seal
+  摘要：初始化 WS 工具封板 lane，准备补齐真实 socket 场景、文档示例和最终报告。
+  原因：工具层不是只有单元测试，必须从 `/ws` 协议层证明工具目录、执行、事件、审计和回放完整。
+  验证：待实现后补充。
