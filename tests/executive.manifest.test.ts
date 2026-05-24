@@ -33,6 +33,7 @@ describe("Executive user tool manifest", () => {
                             kind: "process-json",
                             command: "bun",
                             args: ["./tools/search.ts"],
+                            config: { providers: [{ id: "demo", kind: "generic" }] },
                             cwd: "project",
                             timeoutMs: 1000,
                             maxOutputBytes: 4096,
@@ -59,6 +60,7 @@ describe("Executive user tool manifest", () => {
                     kind: "process-json",
                     command: "bun",
                     args: ["./tools/search.ts"],
+                    config: { providers: [{ id: "demo", kind: "generic" }] },
                     cwd: "project",
                     timeoutMs: 1000,
                     maxOutputBytes: 4096,
@@ -180,6 +182,10 @@ describe("Executive user tool manifest", () => {
             {
                 file: { tools: { "local.echo": { executor: { kind: "process-json", command: "bun", env: { TOKEN: 1 } } } } },
                 message: "tools.local.echo.executor.env.TOKEN must be a string.",
+            },
+            {
+                file: { tools: { "local.echo": { executor: { kind: "process-json", command: "bun", config: [] } } } },
+                message: "tools.local.echo.executor.config must be an object.",
             },
         ];
 

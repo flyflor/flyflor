@@ -764,3 +764,18 @@
   摘要：初始化媒体 lane，准备实现视觉、OCR、语音转写和 TTS 外挂能力。
   原因：媒体能力需要支持 provider 或本地工具检测，但不能把重依赖和密钥打进 Bun 内核。
   验证：待实现后补充。
+
+- 状态：进行中
+  执行者：xtools-search-web
+  范围：search-web-sidecar
+  摘要：初始化搜索网页 lane，准备实现 `web.search` 一等能力以及 `web.fetch`、`web.extract`、`web.download`。
+  原因：网络搜索是本轮最高优先级，必须具备 provider 聚合、去重、来源标注、缓存、失败显式暴露和 WS 可回放能力。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-search-web
+  范围：search-web-sidecar
+  摘要：新增 `web.search`、`web.fetch`、`web.extract`、`web.download` process-json sidecar；支持 Brave、Tavily、SerpAPI、Bing、generic provider，provider 聚合、URL 去重、warnings、Top N 补抓、TTL 缓存和项目目录内下载；`external.tools.jsonc` 支持向 sidecar 透传 opaque config。
+  原因：搜索能力必须成为外挂工具层的一等能力，同时内核不能 import provider SDK 或 sidecar 实现；失败必须显式返回非零并写 stderr，不能被 hidden fallback 吞掉。
+  效率：当前 lane diff 约 12 files changed，新增 `scripts/web.search.sidecar.ts`、`scripts/install.xtools.search-web.sh`、`tests/web.search.sidecar.test.ts`，核心注册表只增加 web 工具与 executor config 透传。
+  验证：`bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。

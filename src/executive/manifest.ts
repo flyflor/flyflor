@@ -39,6 +39,7 @@ export interface ToolManifestShape {
 export interface ToolManifestExecutorShape {
     args?: string[];
     command?: string;
+    config?: Record<string, unknown>;
     cwd?: "project" | "config";
     env?: Record<string, string>;
     kind?: "process-json";
@@ -56,6 +57,8 @@ export interface ManifestToolDefinition {
 export interface ToolManifestExecutor {
     args: readonly string[];
     command: string;
+    /** Opaque process-json sidecar configuration. Runtime forwards it without importing sidecar code. */
+    config?: Record<string, unknown>;
     cwd: "project" | "config";
     env?: Record<string, string>;
     kind: "process-json";
@@ -179,6 +182,7 @@ export class ToolManifestComponent extends CapabilityComponent {
         return {
             args: this.optionalStringArray(executor.args, `${path}.args`) ?? [],
             command: this.requiredNonEmptyString(executor.command, `${path}.command`),
+            config: this.optionalObject(executor.config, `${path}.config`, true) as Record<string, unknown> | undefined,
             cwd: this.optionalCwd(executor.cwd, `${path}.cwd`) ?? "project",
             env: this.optionalStringRecord(executor.env, `${path}.env`),
             kind: "process-json",
