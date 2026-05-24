@@ -1113,3 +1113,31 @@ Browser CDP does not launch or bundle Chrome. Start a browser with a remote debu
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## 2026-05-24 xtools-search-web Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-search-web`
+- branch: `feature/xtools-search-web`
+- owner: Web search/fetch/extract/download external sidecar
+
+Allowed surface:
+
+- process-json web sidecar script
+- installer that writes `~/.flyflor/.config/tools/external.tools.jsonc`
+- external tool registry descriptors and focused tests
+- External Kit documentation
+
+Boundary:
+
+- provider credentials and endpoints live in sidecar `config`, not environment variables and not prompt text
+- the Bun kernel forwards opaque config and never imports provider SDKs or sidecar implementation files
+- failed providers are collected as warnings, but total search failure exits nonzero and writes stderr
+- `web.download` may only write under `projectDir`
+
+Validation:
+
+- `bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`
+- `bun run check`
+- `git diff --check`
