@@ -65,3 +65,9 @@ bun run build:binary
 - 跨平台能力优先走结构化文件/patch/process API；`shell.run` 不是跨平台抽象，只能作为高风险逃生口。
 - 不做 workspace 限制，但任何写入、删除、进程、shell、网络都必须保留 sandbox/approval/audit gate。
 - 禁止吞错；工具失败必须返回结构化失败结果，包含命令、退出码、stderr 摘要或文件错误原因。
+## xtools-lsp-task-data 本地附加红线
+
+- 本 worktree 只处理 LSP、后台任务、archive、data convert 和 hash 能力。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 禁止重复实现 `workspace.*`、`git.*`、`process.run`、`shell.run`。
+- 失败必须结构化暴露，禁止吞错或伪成功。
