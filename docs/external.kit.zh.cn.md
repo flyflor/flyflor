@@ -100,3 +100,22 @@ native addon 或 postinstall hook。实际运行通过 `sidecars.media.local.con
 
 如果没有配置 `providerUrl`，也没有匹配的本地命令，sidecar 必须非零退出并返回明确的
 `unavailable` 结构。
+
+## Native Computer Sidecar
+
+`scripts/computer.native.sidecar.ts` 桥接 `screen.screenshot`、`computer.mouse`、
+`computer.keyboard` 和 `computer.window`。
+
+```bash
+bun run install:xtools:computer-native
+```
+
+截图和窗口观察优先使用平台命令：
+
+- macOS：`screencapture`、`osascript`
+- Windows：`powershell`
+- Linux：`grim`、`gnome-screenshot`、`spectacle`、`xdotool` 或 `wmctrl`
+
+鼠标和键盘动作必须在 `sidecars.computer.native.config.mouseCommand` 与
+`keyboardCommand` 中显式配置 delegate 命令。缺少 delegate 时必须返回 `unavailable`；
+禁止隐藏兜底执行控制动作。截图输出路径必须留在 `projectDir` 内。

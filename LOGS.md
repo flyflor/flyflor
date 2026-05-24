@@ -766,6 +766,21 @@
   验证：待实现后补充。
 
 - 状态：进行中
+  执行者：xtools-computer-native
+  范围：native-computer-sidecar
+  摘要：初始化电脑原生控制 lane，准备实现屏幕、鼠标、键盘和窗口能力。
+  原因：电脑控制必须通过外部 sidecar 进入 Executive/sandbox/approval/audit 链路，不能污染内核。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-computer-native
+  范围：native-computer-sidecar
+  摘要：新增 `scripts/computer.native.sidecar.ts` 和安装脚本，覆盖 `screen.screenshot`、`computer.mouse`、`computer.keyboard`、`computer.window`。截图和窗口观察按平台探测系统命令；鼠标键盘必须通过 `external.tools.jsonc` 显式 delegate，缺失时返回 `unavailable`，不做隐藏控制兜底。
+  原因：电脑控制能力必须跨 macOS/Windows/Linux 保持可探测、可失败、可审计；真正控制动作仍在 Executive Tool Runtime、sandbox、approval、quota 和 audit 链路后执行。
+  效率：本 lane 新增 native computer sidecar、installer、process-json 测试、manifest 测试和安装脚本测试。
+  验证：`bun test tests/computer.native.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
   执行者：xtools-media
   范围：media-sidecar
   摘要：初始化媒体 lane，准备实现视觉、OCR、语音转写和 TTS 外挂能力。

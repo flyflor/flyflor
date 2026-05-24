@@ -100,3 +100,23 @@ delegated through `sidecars.media.local.config`:
 
 If neither `providerUrl` nor a matching local command is configured, the sidecar exits nonzero
 with an explicit `unavailable` response.
+
+## Native Computer Sidecar
+
+`scripts/computer.native.sidecar.ts` bridges `screen.screenshot`, `computer.mouse`,
+`computer.keyboard`, and `computer.window`.
+
+```bash
+bun run install:xtools:computer-native
+```
+
+Screenshots and window observation use platform commands when available:
+
+- macOS: `screencapture`, `osascript`
+- Windows: `powershell`
+- Linux: `grim`, `gnome-screenshot`, `spectacle`, `xdotool`, or `wmctrl`
+
+Mouse and keyboard actions require explicit delegate commands in
+`sidecars.computer.native.config.mouseCommand` and `keyboardCommand`. Missing delegates fail
+with `unavailable`; no hidden fallback performs control actions. Screenshot output paths must
+stay under `projectDir`.

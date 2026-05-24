@@ -71,6 +71,13 @@ bun run build:binary
 - 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
 - 禁止重复实现 `workspace.*`、`git.*`、`process.run`、`shell.run`。
 
+## xtools-computer-native 本地附加红线
+
+- 本 worktree 只处理 `screen.*` 和 `computer.*` 外挂 sidecar。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 系统依赖缺失时必须明确 unavailable 或 failed，禁止静默降级。
+- 所有控制动作必须保留 computer approval、quota 和 audit 语义。
+
 ## xtools-media 本地附加红线
 
 - 本 worktree 只处理 `vision.*` 和 `audio.*` 外挂 sidecar。
