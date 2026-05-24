@@ -789,3 +789,10 @@ Kernel V2 acceptance focus：
 - [ ] 补真实 `/ws` 工具全场景、Apifox messages、能力矩阵和封板报告。
 - [ ] 覆盖工具成功、失败、预算耗尽 ASK、history/detail/replay 和子代理场景。
 - [ ] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-search-web 本地任务
+
+- [x] 初始化 `xtools-search-web` worktree，本地控制文件只追加状态。
+- [x] 实现 `web.search` / `web.fetch` / `web.extract` / `web.download` 搜索网页 lane。
+- [x] 补 provider 配置、搜索缓存、去重、warnings、Top N 补抓和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。

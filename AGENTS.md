@@ -71,3 +71,10 @@ bun run build:binary
 - 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
 - 不实现业务 sidecar，只消费其他 lane 合入后的工具面。
 - 失败必须结构化暴露，禁止通过降低断言伪装通过。
+
+## xtools-search-web 本地附加红线
+
+- 本 worktree 只处理搜索与网页工具：`web.search`、`web.fetch`、`web.extract`、`web.download`。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 搜索 provider 缺失时必须 unavailable 或 failed，禁止假数据兜底。
+- 失败必须结构化暴露，禁止吞错或伪成功。

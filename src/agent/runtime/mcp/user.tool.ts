@@ -56,6 +56,7 @@ export async function invokeUserTool(input: UserToolInvocationInput): Promise<Pl
         request: {
             tool: input.tool.descriptor.name,
             input: input.input,
+            config: executor.config,
             cwd: executor.cwd,
             projectDir: input.paths.projectDir,
             configDir: input.paths.configDir,
