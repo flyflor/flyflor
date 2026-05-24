@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 type JsonObject = Record<string, unknown>;
 type UtilityTool =
@@ -107,22 +107,24 @@ class UtilitySidecar {
     private async archiveCreate(invocation: UtilityInvocation): Promise<JsonObject> {
         const output = projectPath(invocation.projectDir, requiredString(invocation.input.output, "input.output"));
         const paths = stringArray(invocation.input.paths, "input.paths").map((entry) => projectPath(invocation.projectDir, entry));
+        const tar = await requiredCommand("tar", "archive.create tar");
         await mkdir(dirname(output), { recursive: true });
         const proc = Bun.spawn({
-            cmd: ["tar", "-czf", output, "-C", invocation.projectDir, ...paths.map((entry) => relativeToProject(invocation.projectDir, entry))],
+            cmd: [tar, "-czf", output, "-C", invocation.projectDir, ...paths.map((entry) => relativeToProject(invocation.projectDir, entry))],
             stdout: "pipe",
             stderr: "pipe",
         });
-        const result = await processResult(proc, "archive.create tar");
+        const result = await processTextResult(proc, "archive.create tar");
         return { output, entries: paths.length, result };
     }
 
     private async archiveExtract(invocation: UtilityInvocation): Promise<JsonObject> {
         const archive = projectPath(invocation.projectDir, requiredString(invocation.input.archive, "input.archive"));
         const outputDir = projectPath(invocation.projectDir, requiredString(invocation.input.outputDir, "input.outputDir"));
+        const tar = await requiredCommand("tar", "archive.extract tar");
         await mkdir(outputDir, { recursive: true });
-        const proc = Bun.spawn({ cmd: ["tar", "-xzf", archive, "-C", outputDir], stdout: "pipe", stderr: "pipe" });
-        const result = await processResult(proc, "archive.extract tar");
+        const proc = Bun.spawn({ cmd: [tar, "-xzf", archive, "-C", outputDir], stdout: "pipe", stderr: "pipe" });
+        const result = await processTextResult(proc, "archive.extract tar");
         return { archive, outputDir, result };
     }
 
@@ -183,7 +185,7 @@ async function delegate(command: string, args: readonly string[], invocation: Ut
     const stdin = proc.stdin as { write(chunk: Uint8Array): unknown; end(): void };
     stdin.write(new TextEncoder().encode(`${JSON.stringify(invocation)}\n`));
     stdin.end();
-    return processResult(proc, `${invocation.tool} delegate`);
+    return processJsonResult(proc, `${invocation.tool} delegate`, command);
 }
 
 interface ProcessJsonChild {
@@ -192,7 +194,7 @@ interface ProcessJsonChild {
     readonly stdout: ReadableStream<Uint8Array> | null;
 }
 
-async function processResult(proc: ProcessJsonChild, label: string): Promise<JsonObject> {
+async function processTextResult(proc: ProcessJsonChild, label: string): Promise<JsonObject> {
     const [exitCode, stdout, stderr] = await Promise.all([
         proc.exited,
         new Response(proc.stdout).text(),
@@ -202,6 +204,30 @@ async function processResult(proc: ProcessJsonChild, label: string): Promise<Jso
         throw new UtilitySidecarError("failed", `${label} failed`, { exitCode, stderr });
     }
     return { exitCode, stdout, stderr };
+}
+
+async function processJsonResult(proc: ProcessJsonChild, label: string, command: string): Promise<JsonObject> {
+    const [exitCode, stdout, stderr] = await Promise.all([
+        proc.exited,
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+    ]);
+    if (exitCode !== 0) {
+        throw new UtilitySidecarError("failed", `${label} failed`, { command, exitCode, stderr });
+    }
+    const response = parseFirstJsonObjectLine(stdout, label);
+    if (response.ok === false) {
+        throw new UtilitySidecarError("failed", `${label} returned failure`, {
+            command,
+            delegate: response,
+            stderr,
+        });
+    }
+    return {
+        command,
+        response,
+        stderr,
+    };
 }
 
 function projectPath(projectDir: string, value: string): string {
@@ -221,7 +247,11 @@ function parseRequest(raw: string): SidecarRequest {
     if (raw.trim().length === 0) {
         throw new UtilitySidecarError("failed", "empty process-json request");
     }
-    return JSON.parse(raw) as SidecarRequest;
+    try {
+        return JSON.parse(raw) as SidecarRequest;
+    } catch (err) {
+        throw new UtilitySidecarError("failed", "process-json request must be valid JSON", { cause: messageFrom(err) });
+    }
 }
 
 function requiredTool(value: unknown): UtilityTool {
@@ -259,11 +289,69 @@ function readString(value: unknown): string | undefined {
     return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+async function requiredCommand(command: string, label: string): Promise<string> {
+    const resolved = await resolveCommand(command);
+    if (!resolved) {
+        throw new UtilitySidecarError("unavailable", `${label} command is unavailable on this platform`, { command });
+    }
+    return resolved;
+}
+
+async function resolveCommand(command: string): Promise<string | undefined> {
+    if (isAbsolute(command)) {
+        return (await pathExists(command)) ? command : undefined;
+    }
+    for (const dir of pathEntries()) {
+        const candidate = join(dir, command);
+        if (await pathExists(candidate)) {
+            return candidate;
+        }
+    }
+    return undefined;
+}
+
+function pathEntries(): string[] {
+    return (process.env.PATH ?? "")
+        .split(delimiter)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+    try {
+        await access(path);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function failureFromError(err: unknown): JsonObject {
     if (err instanceof UtilitySidecarError) {
         return { ok: false, code: err.code, error: err.message, ...err.details };
     }
-    return { ok: false, code: "failed", error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, code: "failed", error: messageFrom(err) };
+}
+
+function parseFirstJsonObjectLine(text: string, path: string): JsonObject {
+    const line = text.split("\n").find((entry) => entry.trim().length > 0);
+    if (!line) {
+        throw new UtilitySidecarError("failed", `${path} produced no stdout response`);
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(line);
+    } catch (err) {
+        throw new UtilitySidecarError("failed", `${path} produced non-json stdout response`, { cause: messageFrom(err) });
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new UtilitySidecarError("failed", `${path} response must be a JSON object`);
+    }
+    return parsed as JsonObject;
+}
+
+function messageFrom(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
 }
 
 await main();

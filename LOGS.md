@@ -832,3 +832,11 @@
   原因：搜索能力必须成为外挂工具层的一等能力，同时内核不能 import provider SDK 或 sidecar 实现；失败必须显式返回非零并写 stderr，不能被 hidden fallback 吞掉。
   效率：当前 lane diff 约 12 files changed，新增 `scripts/web.search.sidecar.ts`、`scripts/install.xtools.search-web.sh`、`tests/web.search.sidecar.test.ts`，核心注册表只增加 web 工具与 executor config 透传。
   验证：`bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：xtools-provider-hardening
+  范围：external-sidecar-provider-hardening
+  摘要：强化 `web.search`、media HTTP/local provider、utility LSP/task delegate 与 archive 平台命令失败结构；缺配置、非法 JSON shape、非 JSON stdout、`ok:false` delegate/provider 和缺 `tar` 都返回带 `code` 的结构化失败。
+  原因：外挂 provider/delegate 不能通过假结果、空结果或吞错伪成功进入工具链；公开工具名保持不变。
+  效率：只修改 sidecar 与直接测试，不触碰 computer.use、docs、OpenAPI、Executive tool registry 或认知主链。
+  验证：`bun test tests/web.search.sidecar.test.ts tests/media.sidecar.test.ts tests/utility.sidecar.test.ts`；`git diff --check`。

@@ -9,8 +9,29 @@ describe("web search process-json sidecar", () => {
     test("fails web.search when no provider is configured", async () => {
         const response = await invokeSidecar({ tool: "web.search", input: { query: "flyflor" }, config: {} }, { expectExit: 1 });
         expect(response.body.ok).toBe(false);
+        expect(response.body.code).toBe("unavailable");
         expect(String(response.body.error)).toContain("no configured provider");
         expect(response.stderr).toContain("no configured provider");
+    });
+
+    test("fails web.search explicitly when every provider returns invalid JSON shape", async () => {
+        const server = new MockSearchServer();
+        try {
+            const response = await invokeSidecar({
+                tool: "web.search",
+                input: { query: "flyflor" },
+                config: {
+                    providers: [{ id: "invalid", kind: "generic", endpoint: `${server.url}/invalid` }],
+                },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("provider invalid response must be an array");
+            expect(response.body.warnings).toEqual([expect.stringContaining("provider invalid response must be an array")]);
+        } finally {
+            server.stop();
+        }
     });
 
     test("aggregates generic providers, dedupes URLs and records warnings", async () => {
@@ -101,6 +122,7 @@ class MockSearchServer {
             fetch: (request) => {
                 const url = new URL(request.url);
                 if (url.pathname === "/bad") return new Response("bad", { status: 500 });
+                if (url.pathname === "/invalid") return Response.json({ results: [] });
                 if (url.pathname === "/one") {
                     return Response.json([
                         { title: "A", url: "https://example.test/a", snippet: "a" },

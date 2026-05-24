@@ -817,3 +817,10 @@ Kernel V2 acceptance focus：
 - [x] 实现 `web.search` / `web.fetch` / `web.extract` / `web.download` 搜索网页 lane。
 - [x] 补 provider 配置、搜索缓存、去重、warnings、Top N 补抓和 focused tests。
 - [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-25 xtools-provider-hardening 本地任务
+
+- [x] 初始化 `xtools-provider-hardening` worktree，本地控制文件只追加状态。
+- [x] 强化 web/media/utility sidecar 的 provider 与 delegate 失败结构。
+- [x] 覆盖缺 provider、provider 响应非法、delegate 缺失、delegate 非 JSON、delegate 显式失败和平台命令缺失。
+- [x] 运行 focused sidecar tests 与 `git diff --check` 并提交给主 Codex review。

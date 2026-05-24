@@ -67,6 +67,44 @@ describe("media process-json sidecar", () => {
             await rm(root, { recursive: true, force: true });
         }
     });
+
+    test("fails explicitly when local media delegate returns non-json", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-media-sidecar-"));
+        const command = join(root, "media-provider.sh");
+        await writeFile(command, "#!/usr/bin/env sh\ncat >/dev/null\nprintf 'not-json\\n'\n");
+        await chmod(command, 0o755);
+        try {
+            const response = await invokeSidecar({
+                tool: "audio.speak",
+                input: { text: "hello" },
+                config: { localCommands: { "audio.speak": { command } } },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("non-json response");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("fails explicitly when HTTP media provider returns failure payload", async () => {
+        const server = new MockMediaServer("failure");
+        try {
+            const response = await invokeSidecar({
+                tool: "vision.analyze",
+                input: { imageUrl: "https://example.test/image.png" },
+                config: { providerUrl: server.url },
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("provider returned failure");
+            expect(response.body.body).toEqual({ ok: false, error: "provider failed" });
+        } finally {
+            server.stop();
+        }
+    });
 });
 
 interface SidecarInvocationResult {
@@ -94,7 +132,7 @@ class MockMediaServer {
     public readonly requests: Array<{ authorization: string | null; tool: unknown }> = [];
     private readonly server: ReturnType<typeof Bun.serve>;
 
-    public constructor() {
+    public constructor(private readonly mode: "success" | "failure" = "success") {
         this.server = Bun.serve({
             port: 0,
             fetch: async (request) => {
@@ -103,6 +141,9 @@ class MockMediaServer {
                     authorization: request.headers.get("authorization"),
                     tool: body.tool,
                 });
+                if (this.mode === "failure") {
+                    return Response.json({ ok: false, error: "provider failed" });
+                }
                 return Response.json({ text: "transcribed" });
             },
         });

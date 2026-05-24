@@ -70,7 +70,7 @@ describe("utility process-json sidecar", () => {
     test("delegates background tasks to an explicit local command", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-utility-"));
         const command = join(root, "task.sh");
-        await writeFile(command, "#!/usr/bin/env sh\ncat >/dev/null\nprintf 'task-ok\\n'\n");
+        await writeFile(command, "#!/usr/bin/env sh\ncat >/dev/null\nprintf '{\"task\":\"ok\"}\\n'\n");
         await chmod(command, 0o755);
         try {
             const response = await invokeSidecarBody({
@@ -79,7 +79,68 @@ describe("utility process-json sidecar", () => {
                 config: { taskCommand: command },
                 projectDir: root,
             });
-            expect((response.result as { stdout: string }).stdout).toBe("task-ok\n");
+            expect((response.result as { response: { task: string } }).response).toEqual({ task: "ok" });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("fails delegate explicitly when local command returns non-json", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-utility-"));
+        const command = join(root, "task.sh");
+        await writeFile(command, "#!/usr/bin/env sh\ncat >/dev/null\nprintf 'task-ok\\n'\n");
+        await chmod(command, 0o755);
+        try {
+            const response = await invokeSidecar({
+                tool: "task.background",
+                input: { task: "demo" },
+                config: { taskCommand: command },
+                projectDir: root,
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("non-json stdout response");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("fails delegate explicitly when local command returns ok false", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-utility-"));
+        const command = join(root, "task.sh");
+        await writeFile(command, "#!/usr/bin/env sh\ncat >/dev/null\nprintf '{\"ok\":false,\"error\":\"delegate failed\"}\\n'\n");
+        await chmod(command, 0o755);
+        try {
+            const response = await invokeSidecar({
+                tool: "task.background",
+                input: { task: "demo" },
+                config: { taskCommand: command },
+                projectDir: root,
+            }, { expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("failed");
+            expect(String(response.body.error)).toContain("returned failure");
+            expect(response.body.delegate).toEqual({ ok: false, error: "delegate failed" });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("fails archive creation explicitly when platform tar command is unavailable", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-utility-"));
+        await writeFile(join(root, "data.txt"), "hello");
+        try {
+            const response = await invokeSidecar({
+                tool: "archive.create",
+                input: { paths: ["data.txt"], output: "archive/test.tar.gz" },
+                projectDir: root,
+            }, { env: { PATH: "" }, expectExit: 1 });
+
+            expect(response.body.ok).toBe(false);
+            expect(response.body.code).toBe("unavailable");
+            expect(String(response.body.error)).toContain("unavailable on this platform");
         } finally {
             await rm(root, { recursive: true, force: true });
         }
@@ -111,8 +172,16 @@ async function invokeSidecarBody(request: Record<string, unknown>): Promise<Reco
     return response.body;
 }
 
-async function invokeSidecar(request: Record<string, unknown>, options: { expectExit?: number } = {}): Promise<SidecarInvocationResult> {
-    const proc = Bun.spawn(["bun", SIDECAR], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+async function invokeSidecar(
+    request: Record<string, unknown>,
+    options: { env?: Record<string, string>; expectExit?: number } = {},
+): Promise<SidecarInvocationResult> {
+    const proc = Bun.spawn([process.execPath, SIDECAR], {
+        env: { ...process.env, ...options.env },
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+    });
     const stdin = proc.stdin as { write(chunk: Uint8Array): unknown; end(): void };
     stdin.write(new TextEncoder().encode(`${JSON.stringify(request)}\n`));
     stdin.end();
