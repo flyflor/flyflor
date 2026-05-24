@@ -72,6 +72,12 @@ bun run build:binary
 - 系统依赖缺失时必须明确 unavailable 或 failed，禁止静默降级。
 - 所有控制动作必须保留 computer approval、quota 和 audit 语义。
 
+## xtools-media 本地附加红线
+
+- 本 worktree 只处理 `vision.*` 和 `audio.*` 外挂 sidecar。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 禁止引入 native addon、postinstall、大模型资产或运行时读取 node_modules 资产。
+
 ## xtools-search-web 本地附加红线
 
 - 本 worktree 只处理搜索与网页工具：`web.search`、`web.fetch`、`web.extract`、`web.download`。
