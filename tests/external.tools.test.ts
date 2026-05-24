@@ -265,6 +265,49 @@ describe("external tool descriptor discovery", () => {
         }
     });
 
+    test("accepts Computer native sidecar manifest for computer tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-computer-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "computer.native": {
+                            command: "bun",
+                            args: ["scripts/computer.native.sidecar.ts"],
+                            config: {
+                                mouseCommand: "cliclick",
+                                mouseArgs: [],
+                                keyboardCommand: "osascript",
+                                keyboardArgs: [],
+                            },
+                            tools: ["screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "vision.ocr")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "computer.mouse")?.tool.descriptor).toMatchObject({
+                exclusive: true,
+                permission: ToolPermission.Computer,
+                computer: {
+                    action: "mouse",
+                    observationOnly: false,
+                    requiresFocusTarget: true,
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("adds external sidecar tools to the read-only socket kit catalog", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-catalog-"));
         const paths = testPaths(root);
