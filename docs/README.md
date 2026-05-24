@@ -27,8 +27,9 @@
 17. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
 18. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
 19. [external.kit.md](external.kit.md) — External kit 只读发现协议。
-20. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
-21. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
+20. [external.tools.seal.md](external.tools.seal.md) — 外挂工具层能力矩阵、WS/TUI 契约和封板验证。
+21. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
+22. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 
 ## 这套文档的核心口径
 

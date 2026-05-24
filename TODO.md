@@ -786,9 +786,9 @@ Kernel V2 acceptance focus：
 ## 2026-05-24 xtools-ws-e2e-seal 本地任务
 
 - [x] 初始化 `xtools-ws-e2e-seal` worktree，本地控制文件只追加状态。
-- [ ] 补真实 `/ws` 工具全场景、Apifox messages、能力矩阵和封板报告。
-- [ ] 覆盖工具成功、失败、预算耗尽 ASK、history/detail/replay 和子代理场景。
-- [ ] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 并提交给主 Codex review。
+- [x] 补真实 `/ws` 工具全场景、Apifox messages、能力矩阵和封板报告。
+- [x] 覆盖工具成功、失败、预算耗尽 ASK、history/detail/replay 和子代理场景。
+- [x] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 并提交给主 Codex review。
 
 ## 2026-05-24 xtools-lsp-task-data 本地任务
 

@@ -765,6 +765,14 @@
   原因：工具层不是只有单元测试，必须从 `/ws` 协议层证明工具目录、执行、事件、审计和回放完整。
   验证：待实现后补充。
 
+- 状态：已完成
+  执行者：xtools-ws-e2e-seal
+  范围：ws-tool-e2e-seal
+  摘要：合入 search-web、media、computer-native、utility 全部工具 lane，新增 `docs/external.tools.seal*.md` 能力矩阵与封板报告，并补 `gateway.ws.test` 确认 `/ws` kit catalog 暴露完整 26 个 external tool surface。
+  原因：TUI/前端需要通过 `/ws` 获得完整工具能力面；缺失 sidecar 也必须以 disabled capability 暴露，而不是让前端猜测或导入 sidecar 实现。
+  效率：WS 封板 lane 只改测试和文档，不新增业务 sidecar；工具实现来自已验证子 lane。
+  验证：`bun test tests/web.search.sidecar.test.ts tests/media.sidecar.test.ts tests/computer.native.sidecar.test.ts tests/utility.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun test tests/gateway.ws.test.ts tests/gateway.module.test.ts tests/protocol.control.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
 - 状态：进行中
   执行者：xtools-lsp-task-data
   范围：lsp-task-data-sidecar

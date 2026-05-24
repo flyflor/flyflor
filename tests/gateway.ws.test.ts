@@ -260,6 +260,8 @@ describe("SocketControlHub", () => {
                 { description: undefined, enabled: true, name: "demo", source: "plugin", sourceId: "project" },
                 { description: "Echo payload", enabled: true, name: "plugin.demo.echo", source: "plugin", sourceId: "demo" },
                 { description: "Draft prose", enabled: true, name: "writer", source: "skill", sourceId: "project" },
+                { description: "external sidecar is not configured", enabled: false, name: "archive.create", source: "user-tool", sourceId: "external:missing" },
+                { description: "external sidecar is not configured", enabled: false, name: "archive.extract", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "audio.speak", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "audio.transcribe", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "browser.click", source: "user-tool", sourceId: "external:missing" },
@@ -272,6 +274,8 @@ describe("SocketControlHub", () => {
                 { description: "external sidecar is not configured", enabled: false, name: "computer.keyboard", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "computer.mouse", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "computer.window", source: "user-tool", sourceId: "external:missing" },
+                { description: "external sidecar is not configured", enabled: false, name: "data.convert", source: "user-tool", sourceId: "external:missing" },
+                { description: "external sidecar is not configured", enabled: false, name: "file.hash", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "lsp.diagnostics", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "lsp.symbols", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "screen.screenshot", source: "user-tool", sourceId: "external:missing" },
@@ -279,8 +283,52 @@ describe("SocketControlHub", () => {
                 { description: "User echo", enabled: true, name: "user.echo", source: "user-tool", sourceId: "project" },
                 { description: "external sidecar is not configured", enabled: false, name: "vision.analyze", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "vision.ocr", source: "user-tool", sourceId: "external:missing" },
+                { description: "external sidecar is not configured", enabled: false, name: "web.download", source: "user-tool", sourceId: "external:missing" },
+                { description: "external sidecar is not configured", enabled: false, name: "web.extract", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "web.fetch", source: "user-tool", sourceId: "external:missing" },
                 { description: "external sidecar is not configured", enabled: false, name: "web.search", source: "user-tool", sourceId: "external:missing" },
+            ]);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("exposes the full external tool surface through the socket kit catalog", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-kit-xtools-full-"));
+        const paths = testPaths(root);
+        try {
+            const catalog = await loadExternalKitCatalogSnapshot(paths, "2026-05-24T00:00:00.000Z");
+            const externalNames = catalog.capabilities
+                .filter((entry) => entry.source === "user-tool" && entry.sourceId === "external:missing")
+                .map((entry) => entry.name);
+
+            expect(externalNames).toEqual([
+                "archive.create",
+                "archive.extract",
+                "audio.speak",
+                "audio.transcribe",
+                "browser.click",
+                "browser.evaluate",
+                "browser.navigate",
+                "browser.open",
+                "browser.screenshot",
+                "browser.snapshot",
+                "browser.type",
+                "computer.keyboard",
+                "computer.mouse",
+                "computer.window",
+                "data.convert",
+                "file.hash",
+                "lsp.diagnostics",
+                "lsp.symbols",
+                "screen.screenshot",
+                "task.background",
+                "vision.analyze",
+                "vision.ocr",
+                "web.download",
+                "web.extract",
+                "web.fetch",
+                "web.search",
             ]);
         } finally {
             await rm(root, { recursive: true, force: true });
