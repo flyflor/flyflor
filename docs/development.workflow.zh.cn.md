@@ -928,6 +928,7 @@ Kernel V2 硬设计点：
 - `./tools` 与 `src` 平级，但必须保持 git ignored，禁止提交。
 - 用户态治理目录仍为 `~/.flyflor/.config/tools`。
 - 用户态已安装 sidecar payload 目录仍为 `~/.flyflor/tools`。
+- `external.tools.jsonc` 从 `~/.flyflor/.config/tools` 和 `./.flyflor/tools` 读取；kit catalog manifest 继续留在既有 kits 目录。
 
 边界：
 

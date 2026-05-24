@@ -8,10 +8,12 @@
 set -eu
 
 FLYFLOR_HOME="${FLYFLOR_HOME:-$HOME/.flyflor}"
-TARGET="${FLYFLOR_XTOOLS_TARGET:-$FLYFLOR_HOME/.config/kits}"
+TARGET="${FLYFLOR_XTOOLS_TARGET:-$FLYFLOR_HOME/.config/tools}"
+KIT_TARGET="${FLYFLOR_XTOOLS_KIT_TARGET:-$FLYFLOR_HOME/.config/kits}"
 SOURCE_ROOT="${FLYFLOR_SOURCE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 
 mkdir -p "$TARGET"
+mkdir -p "$KIT_TARGET"
 
 cat > "$TARGET/external.tools.jsonc" <<EOF
 {
@@ -51,7 +53,7 @@ cat > "$TARGET/external.tools.jsonc" <<EOF
 }
 EOF
 
-cat > "$TARGET/kits.jsonc" <<EOF
+cat > "$KIT_TARGET/kits.jsonc" <<EOF
 {
     "schemaVersion": 1,
     "kits": {
@@ -93,4 +95,5 @@ cat > "$TARGET/kits.jsonc" <<EOF
 }
 EOF
 
-echo "flyflor-xtools: wrote mock external tool manifests to $TARGET"
+echo "flyflor-xtools: wrote mock external tool manifest to $TARGET"
+echo "flyflor-xtools: wrote mock external kit manifest to $KIT_TARGET"

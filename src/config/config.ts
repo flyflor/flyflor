@@ -66,6 +66,7 @@ export interface FlyflorPaths {
     projectDir: string;
     projectFlyflorDir: string;
     projectKitDir?: string;
+    projectToolDir?: string;
     projectSkillDir: string;
     projectMcpDir: string;
     projectPluginDir: string;
@@ -74,6 +75,7 @@ export interface FlyflorPaths {
     logDir: string;
     memoryDir: string;
     kitDir?: string;
+    toolDir?: string;
     pluginDir: string;
     promptDir: string;
     skillDir: string;
@@ -1375,6 +1377,7 @@ function resolvePaths(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): Fly
         projectDir,
         projectFlyflorDir,
         projectKitDir: join(projectFlyflorDir, "kits"),
+        projectToolDir: join(projectFlyflorDir, "tools"),
         projectSkillDir: join(projectFlyflorDir, "skills"),
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),
@@ -1383,6 +1386,7 @@ function resolvePaths(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): Fly
         logDir: join(configDir, "logs"),
         memoryDir: join(configDir, "memory"),
         kitDir: join(configDir, "kits"),
+        toolDir: join(configDir, "tools"),
         pluginDir: join(configDir, "plugins"),
         promptDir: join(configDir, "prompts"),
         skillDir: join(configDir, "skills"),
@@ -1458,6 +1462,8 @@ async function ensureDirectories(paths: FlyflorPaths): Promise<void> {
             paths.memoryDir,
             paths.kitDir,
             paths.projectKitDir,
+            paths.toolDir,
+            paths.projectToolDir,
             paths.pluginDir,
             paths.promptDir,
             paths.skillDir,

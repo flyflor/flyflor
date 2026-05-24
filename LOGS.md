@@ -733,6 +733,6 @@
 - 状态：已完成
   执行者：main-codex
   范围：external-tools-local-dev-layout
-  摘要：确认本地开发期可在仓库根目录使用与 `src/` 平级的 `tools/` 目录承载外挂工具源码和实验实现，并把该目录加入 `.gitignore`；同时把正式用户态治理面固定为 `~/.flyflor/.config/tools`，正式 payload 固定为 `~/.flyflor/tools`。
+  摘要：确认本地开发期可在仓库根目录使用与 `src/` 平级的 `tools/` 目录承载外挂工具源码和实验实现，并把该目录加入 `.gitignore`；同时把正式用户态治理面固定为 `~/.flyflor/.config/tools`，正式 payload 固定为 `~/.flyflor/tools`；本轮继续把 external sidecar manifest 读取路径从 kits 目录迁到专用 tools 控制面，kit catalog manifest 仍留在 kits 目录。
   原因：用户要求本地开发 tools 与 src 平级但不要进入 git；这能提高 Browser CDP 等 sidecar 迭代效率，同时保持内核仓库纯净和正式安装路径清晰。
-  验证：`bun run docs:check` 26 pass；`bun test tests/computer.coding.tools.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts` 87 pass；`bun run check`；`git diff --check`。
+  验证：`bun test tests/external.tools.test.ts tests/gateway.ws.test.ts --test-name-pattern "external|kit|sidecar"` 13 pass；`bun run docs:check` 26 pass；`bun test tests/computer.coding.tools.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts` 87 pass；`bun run check`；`git diff --check`。

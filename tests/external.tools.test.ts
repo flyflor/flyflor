@@ -86,7 +86,7 @@ describe("external tool descriptor discovery", () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-mock-"));
         const paths = testPaths(root);
         try {
-            await mkdir(paths.projectKitDir!, { recursive: true });
+            await mkdir(paths.projectToolDir!, { recursive: true });
             await writeFile(
                 externalToolManifestPath(paths),
                 JSON.stringify({
@@ -132,7 +132,7 @@ describe("external tool descriptor discovery", () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-catalog-"));
         const paths = testPaths(root);
         try {
-            await mkdir(paths.projectKitDir!, { recursive: true });
+            await mkdir(paths.projectToolDir!, { recursive: true });
             await writeFile(
                 externalToolManifestPath(paths),
                 JSON.stringify({
@@ -172,6 +172,13 @@ describe("external tool descriptor discovery", () => {
             await rm(root, { recursive: true, force: true });
         }
     });
+
+    test("resolves external sidecar manifests under the dedicated tools control surface", () => {
+        const paths = testPaths("/tmp/flyflor-xtools-paths");
+
+        expect(externalToolManifestPath(paths, { global: true })).toBe("/tmp/flyflor-xtools-paths/config/tools/external.tools.jsonc");
+        expect(externalToolManifestPath(paths)).toBe("/tmp/flyflor-xtools-paths/project/.flyflor/tools/external.tools.jsonc");
+    });
 });
 
 function hiddenReasons(
@@ -196,6 +203,7 @@ function testPaths(root: string): FlyflorPaths {
         projectDir: join(root, "project"),
         projectFlyflorDir: join(root, "project", ".flyflor"),
         projectKitDir: join(root, "project", ".flyflor", "kits"),
+        projectToolDir: join(root, "project", ".flyflor", "tools"),
         projectMemoryDir: join(root, "project", ".flyflor", "memory"),
         projectMcpDir: join(root, "project", ".flyflor", "mcp"),
         projectPluginDir: join(root, "project", ".flyflor", "plugins"),
@@ -204,6 +212,7 @@ function testPaths(root: string): FlyflorPaths {
         skillDir: join(root, "skills"),
         storageDir: join(root, "storage"),
         templateDir: join(root, "templates"),
+        toolDir: join(root, "config", "tools"),
         workspaceDir: join(root, "workspace"),
     };
 }

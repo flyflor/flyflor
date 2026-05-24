@@ -151,8 +151,8 @@ export class ExternalToolDescriptorComponent {
 
     public path(paths: FlyflorPaths, options: { global?: boolean } = {}): string {
         const root = options.global
-            ? paths.kitDir ?? join(paths.configDir, "kits")
-            : paths.projectKitDir ?? join(paths.projectFlyflorDir, "kits");
+            ? paths.toolDir ?? join(paths.configDir, "tools")
+            : paths.projectToolDir ?? join(paths.projectFlyflorDir, "tools");
         return join(root, "external.tools.jsonc");
     }
 

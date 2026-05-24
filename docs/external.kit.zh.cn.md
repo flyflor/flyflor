@@ -23,6 +23,8 @@ External Kit 是可选外挂能力的只读发现协议，不是第一方 CLI、
 - 汇总 MCP、plugin、skill、user tool 和 external sidecar 的只读 capability catalog
 - 通过 `server.hello` 与 `capability.catalog.snapshot` 暴露只读快照
 
+External sidecar 发现只从 `~/.flyflor/.config/tools` 和 `./.flyflor/tools` 读取 `external.tools.jsonc`。External Kit catalog manifest 仍保留在 kits 目录；这两个控制面必须明确隔离。
+
 ## 边界
 
 - External Kit 不执行工具。

@@ -23,6 +23,8 @@ These modules only:
 - summarize MCP, plugin, skill, user tool, and external sidecar capability catalogs
 - expose read-only snapshots through `server.hello` and `capability.catalog.snapshot`
 
+External sidecar discovery reads `external.tools.jsonc` from `~/.flyflor/.config/tools` and `./.flyflor/tools`. External Kit catalog manifests still live under the kit directories; the two control planes are intentionally separate.
+
 ## Boundaries
 
 - External Kit does not execute tools.

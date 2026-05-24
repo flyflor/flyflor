@@ -1059,6 +1059,7 @@ Decision:
 - `./tools` stays beside `src`, but it is git ignored and must not be committed.
 - User-level governance remains `~/.flyflor/.config/tools`.
 - User-level installed sidecar payloads remain `~/.flyflor/tools`.
+- `external.tools.jsonc` is read from `~/.flyflor/.config/tools` and `./.flyflor/tools`, while kit catalog manifests remain under the existing kit directories.
 
 Boundary:
 

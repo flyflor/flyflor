@@ -772,3 +772,4 @@ Kernel V2 acceptance focus：
 - [x] 明确仓库根目录 `tools/` 是本地开发外挂工作区，与 `src/` 平级但必须 git ignored。
 - [x] 明确正式用户态治理目录仍为 `~/.flyflor/.config/tools`，正式 payload 目录仍为 `~/.flyflor/tools`。
 - [x] 更新 External Kit 文档，禁止内核直接 import 本地 `tools/` 实现文件。
+- [x] 将 external sidecar manifest 读取路径从 kits 目录迁到专用 tools 控制面：全局 `~/.flyflor/.config/tools/external.tools.jsonc`，项目 `./.flyflor/tools/external.tools.jsonc`。
