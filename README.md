@@ -299,6 +299,7 @@ Full documentation index: [docs/README.md](docs/README.md).
 | [docs/sandbox.capabilities.md](docs/sandbox.capabilities.md) | Sandbox decisions and audit. |
 | [docs/mcp.tools.md](docs/mcp.tools.md) | MCP tool loop. |
 | [docs/external.kit.md](docs/external.kit.md) | External kit manifest, discovery and control contract. |
+| [docs/external.tools.seal.md](docs/external.tools.seal.md) | External tool capability matrix, WS/TUI contract and seal validation. |
 | [docs/control.protocol.md](docs/control.protocol.md) | WS/control protocol for external clients and thin clients. |
 | [docs/crystal.reflection.md](docs/crystal.reflection.md) | Reflection to Gem crystallization. |
 | [docs/skill.system.md](docs/skill.system.md) | Skill loading and promotion. |

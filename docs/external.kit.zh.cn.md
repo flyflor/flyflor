@@ -66,3 +66,80 @@ Chrome 启动示例：
   --remote-debugging-port=9222 \
   --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## Search/Web Sidecar
+
+`scripts/web.search.sidecar.ts` 是 `web.search`、`web.fetch`、`web.extract` 和
+`web.download` 的轻量 process-json adapter。它只使用显式配置的 provider；没有
+provider 时 `web.search` 必须明确失败，不返回占位数据。
+
+```bash
+bun run install:xtools:search-web
+```
+
+安装脚本会写入带空 `providers` 列表的 `external.tools.jsonc`。实际使用时，在
+`~/.flyflor/.config/tools/external.tools.jsonc` 的
+`sidecars.web.search.config.providers` 下追加 provider。Generic provider 需要返回包含
+`title`、`url` 和 `snippet` 字段的对象数组。
+
+## Media Sidecar
+
+`scripts/media.sidecar.ts` 是 `vision.analyze`、`vision.ocr`、`audio.transcribe`
+和 `audio.speak` 的轻量桥接层。
+
+```bash
+bun run install:xtools:media
+```
+
+安装脚本只注册 process-json sidecar，不安装 OCR、Whisper、TTS、视觉 SDK、本地模型资产、
+native addon 或 postinstall hook。实际运行通过 `sidecars.media.local.config` 委派：
+
+- `providerUrl`：HTTP JSON provider endpoint。
+- `providerHeaders`：可选 HTTP headers。
+- `localCommands`：可选的按工具划分 process-json 本地命令映射。
+
+如果没有配置 `providerUrl`，也没有匹配的本地命令，sidecar 必须非零退出并返回明确的
+`unavailable` 结构。
+
+## Native Computer Sidecar
+
+`scripts/computer.native.sidecar.ts` 桥接 `screen.screenshot`、`computer.mouse`、
+`computer.keyboard` 和 `computer.window`。
+
+```bash
+bun run install:xtools:computer-native
+```
+
+截图和窗口观察优先使用平台命令：
+
+- macOS：`screencapture`、`osascript`
+- Windows：`powershell`
+- Linux：`grim`、`gnome-screenshot`、`spectacle`、`xdotool` 或 `wmctrl`
+
+鼠标和键盘动作必须在 `sidecars.computer.native.config.mouseCommand` 与
+`keyboardCommand` 中显式配置 delegate 命令。缺少 delegate 时必须返回 `unavailable`；
+禁止隐藏兜底执行控制动作。截图输出路径必须留在 `projectDir` 内。
+
+## Utility Sidecar
+
+`scripts/utility.sidecar.ts` 覆盖 LSP delegate、后台任务 delegate、文件哈希、archive
+创建/解压和小型结构化数据转换。
+
+```bash
+bun run install:xtools:utility
+```
+
+它注册：
+
+- `lsp.symbols`
+- `lsp.diagnostics`
+- `task.background`
+- `file.hash`
+- `archive.create`
+- `archive.extract`
+- `data.convert`
+
+`file.hash`、`archive.*` 和 `data.convert` 是轻量 sidecar utility，不替代内建
+workspace/git/process/shell 原语。LSP 与后台任务执行必须在 `external.tools.jsonc`
+里显式配置 `lspCommand` 和 `taskCommand` delegate。文件和 archive 路径必须留在
+`projectDir` 内。

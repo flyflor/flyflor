@@ -65,3 +65,35 @@ bun run build:binary
 - 跨平台能力优先走结构化文件/patch/process API；`shell.run` 不是跨平台抽象，只能作为高风险逃生口。
 - 不做 workspace 限制，但任何写入、删除、进程、shell、网络都必须保留 sandbox/approval/audit gate。
 - 禁止吞错；工具失败必须返回结构化失败结果，包含命令、退出码、stderr 摘要或文件错误原因。
+## xtools-ws-e2e-seal 本地附加红线
+
+- 本 worktree 只处理 WS 场景、Apifox/文档示例、能力矩阵和最终封板报告。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 不实现业务 sidecar，只消费其他 lane 合入后的工具面。
+- 失败必须结构化暴露，禁止通过降低断言伪装通过。
+
+## xtools-lsp-task-data 本地附加红线
+
+- 本 worktree 只处理 LSP、后台任务、archive、data convert 和 hash 能力。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 禁止重复实现 `workspace.*`、`git.*`、`process.run`、`shell.run`。
+
+## xtools-computer-native 本地附加红线
+
+- 本 worktree 只处理 `screen.*` 和 `computer.*` 外挂 sidecar。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 系统依赖缺失时必须明确 unavailable 或 failed，禁止静默降级。
+- 所有控制动作必须保留 computer approval、quota 和 audit 语义。
+
+## xtools-media 本地附加红线
+
+- 本 worktree 只处理 `vision.*` 和 `audio.*` 外挂 sidecar。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 禁止引入 native addon、postinstall、大模型资产或运行时读取 node_modules 资产。
+
+## xtools-search-web 本地附加红线
+
+- 本 worktree 只处理搜索与网页工具：`web.search`、`web.fetch`、`web.extract`、`web.download`。
+- 禁止修改 Memory、Scope、ASK、Crystal、fork、生命账本和上下文装配主链。
+- 搜索 provider 缺失时必须 unavailable 或 failed，禁止假数据兜底。
+- 失败必须结构化暴露，禁止吞错或伪成功。

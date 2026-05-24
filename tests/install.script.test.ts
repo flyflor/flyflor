@@ -8,6 +8,10 @@ const INSTALL_SH = join(ROOT, "scripts", "install.sh");
 const INSTALL_SOURCE_SH = join(ROOT, "scripts", "install.source.sh");
 const INSTALL_DOCKER_SH = join(ROOT, "scripts", "install.docker.sh");
 const INSTALL_XTOOLS_BROWSER_CDP_SH = join(ROOT, "scripts", "install.xtools.browser-cdp.sh");
+const INSTALL_XTOOLS_SEARCH_WEB_SH = join(ROOT, "scripts", "install.xtools.search-web.sh");
+const INSTALL_XTOOLS_MEDIA_SH = join(ROOT, "scripts", "install.xtools.media.sh");
+const INSTALL_XTOOLS_COMPUTER_NATIVE_SH = join(ROOT, "scripts", "install.xtools.computer-native.sh");
+const INSTALL_XTOOLS_UTILITY_SH = join(ROOT, "scripts", "install.xtools.utility.sh");
 const INSTALL_TEMPLATES_TS = join(ROOT, "scripts", "install.templates.ts");
 const INSTALL_PS1 = join(ROOT, "scripts", "install.ps1");
 const PACKAGE_JSON = join(ROOT, "package.json");
@@ -222,6 +226,10 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:docker"]).toContain("install.docker.sh");
         expect(packageJson.scripts?.["install:windows"]).toContain("install.ps1");
         expect(packageJson.scripts?.["install:xtools:browser-cdp"]).toContain("install.xtools.browser-cdp.sh");
+        expect(packageJson.scripts?.["install:xtools:search-web"]).toContain("install.xtools.search-web.sh");
+        expect(packageJson.scripts?.["install:xtools:media"]).toContain("install.xtools.media.sh");
+        expect(packageJson.scripts?.["install:xtools:computer-native"]).toContain("install.xtools.computer-native.sh");
+        expect(packageJson.scripts?.["install:xtools:utility"]).toContain("install.xtools.utility.sh");
         // Socket service smoke writes only inside a temporary HOME and keeps
         // host launchd/systemd state untouched.
         expect(packageJson.scripts?.["smoke:socket:service"]).toContain("socket.service.smoke.ts");
@@ -265,6 +273,123 @@ describe("source/docker/windows installers", () => {
         expect(manifest).toContain('"FLYFLOR_BROWSER_CDP_URL": "http://127.0.0.1:9333"');
         expect(manifest).toContain('"browser.evaluate"');
         expect(manifest).not.toContain("playwright");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("Search/Web xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_SEARCH_WEB_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_SEARCH_WEB_SH], {
+            env: sandbox.env({
+                FLYFLOR_XTOOLS_TARGET: target,
+                FLYFLOR_SOURCE_ROOT: ROOT,
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"web.search"');
+        expect(manifest).toContain(`"args": ["${ROOT}/scripts/web.search.sidecar.ts"]`);
+        expect(manifest).toContain('"providers": []');
+        expect(manifest).not.toContain("playwright");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("Media xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_MEDIA_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_MEDIA_SH], {
+            env: sandbox.env({
+                FLYFLOR_XTOOLS_TARGET: target,
+                FLYFLOR_SOURCE_ROOT: ROOT,
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"media.local"');
+        expect(manifest).toContain(`"args": ["${ROOT}/scripts/media.sidecar.ts"]`);
+        expect(manifest).toContain('"providerUrl": ""');
+        expect(manifest).toContain('"vision.ocr"');
+        expect(manifest).toContain('"audio.speak"');
+        expect(manifest).not.toContain("whisper");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("Computer native xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_COMPUTER_NATIVE_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_COMPUTER_NATIVE_SH], {
+            env: sandbox.env({
+                FLYFLOR_XTOOLS_TARGET: target,
+                FLYFLOR_SOURCE_ROOT: ROOT,
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"computer.native"');
+        expect(manifest).toContain(`"args": ["${ROOT}/scripts/computer.native.sidecar.ts"]`);
+        expect(manifest).toContain('"screen.screenshot"');
+        expect(manifest).toContain('"computer.keyboard"');
+        expect(manifest).toContain('"mouseCommand": ""');
+        expect(manifest).not.toContain("playwright");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("Utility xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_UTILITY_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_UTILITY_SH], {
+            env: sandbox.env({
+                FLYFLOR_XTOOLS_TARGET: target,
+                FLYFLOR_SOURCE_ROOT: ROOT,
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"utility.local"');
+        expect(manifest).toContain(`"args": ["${ROOT}/scripts/utility.sidecar.ts"]`);
+        expect(manifest).toContain('"file.hash"');
+        expect(manifest).toContain('"archive.extract"');
+        expect(manifest).toContain('"task.background"');
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
 

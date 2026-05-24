@@ -1113,3 +1113,100 @@ Browser CDP does not launch or bundle Chrome. Start a browser with a remote debu
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## 2026-05-24 xtools-search-web Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-search-web`
+- branch: `feature/xtools-search-web`
+- owner: Web search/fetch/extract/download external sidecar
+
+Allowed surface:
+
+- process-json web sidecar script
+- installer that writes `~/.flyflor/.config/tools/external.tools.jsonc`
+- external tool registry descriptors and focused tests
+- External Kit documentation
+
+Boundary:
+
+- provider credentials and endpoints live in sidecar `config`, not environment variables and not prompt text
+- the Bun kernel forwards opaque config and never imports provider SDKs or sidecar implementation files
+- failed providers are collected as warnings, but total search failure exits nonzero and writes stderr
+- `web.download` may only write under `projectDir`
+
+Validation:
+
+- `bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`
+- `bun run check`
+- `git diff --check`
+
+## 2026-05-24 xtools-media Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-media`
+- branch: `feature/xtools-media`
+- owner: Vision/OCR/audio external media sidecar
+
+Boundary:
+
+- the sidecar is only a process-json bridge for `vision.analyze`, `vision.ocr`, `audio.transcribe`, and `audio.speak`
+- provider endpoints, headers, and local delegate commands live in `external.tools.jsonc` `config`
+- business media configuration must not use environment variables
+- failures return structured JSON and nonzero exit; unavailable provider state is explicit
+- no OCR, Whisper, TTS, vision SDK, local model asset, native addon, or postinstall hook is added to the Bun kernel
+
+Validation:
+
+- `bun test tests/media.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run check`
+- `git diff --check`
+
+## 2026-05-24 xtools-computer-native Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-computer-native`
+- branch: `feature/xtools-computer-native`
+- owner: Native screen/window/mouse/keyboard external sidecar
+
+Boundary:
+
+- `screen.screenshot` and `computer.window` may use platform commands discovered at runtime
+- `computer.mouse` and `computer.keyboard` require explicit delegate commands from `external.tools.jsonc` config
+- missing platform commands or delegates return structured `unavailable` failures
+- no hidden fallback performs a control action
+- screenshot writes are constrained under `projectDir`
+- real invocation still enters Executive Tool Runtime, sandbox, approval, quota, and audit events
+
+Validation:
+
+- `bun test tests/computer.native.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `git diff --check`
+
+## 2026-05-24 xtools-lsp-task-data Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-lsp-task-data`
+- branch: `feature/xtools-lsp-task-data`
+- owner: LSP/background/file/archive/data utility external sidecar
+
+Boundary:
+
+- `file.hash`, `archive.create`, `archive.extract`, and `data.convert` are lightweight sidecar utilities
+- they do not replace builtin workspace/git/process/shell tools
+- `lsp.symbols`, `lsp.diagnostics`, and `task.background` require explicit local delegates
+- all file/archive paths must stay under `projectDir`
+- failures return structured JSON and nonzero exit
+
+Validation:
+
+- `bun test tests/utility.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `git diff --check`

@@ -758,3 +758,77 @@
   摘要：移除已合并的 `xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支，确认没有同名远端分支，也没有 `xtools-*` tmux 会话残留。
   原因：该 lane 的业务提交已通过 patch 等价方式进入主线；保留已完成 worktree 会制造下一轮协调误判。
   验证：`git worktree list --porcelain`；`git branch -r --list 'origin/feature/xtools-browser-cdp'`；`tmux list-sessions | rg '^xtools-'`。
+- 状态：进行中
+  执行者：xtools-ws-e2e-seal
+  范围：ws-tool-e2e-seal
+  摘要：初始化 WS 工具封板 lane，准备补齐真实 socket 场景、文档示例和最终报告。
+  原因：工具层不是只有单元测试，必须从 `/ws` 协议层证明工具目录、执行、事件、审计和回放完整。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-ws-e2e-seal
+  范围：ws-tool-e2e-seal
+  摘要：合入 search-web、media、computer-native、utility 全部工具 lane，新增 `docs/external.tools.seal*.md` 能力矩阵与封板报告，并补 `gateway.ws.test` 确认 `/ws` kit catalog 暴露完整 26 个 external tool surface。
+  原因：TUI/前端需要通过 `/ws` 获得完整工具能力面；缺失 sidecar 也必须以 disabled capability 暴露，而不是让前端猜测或导入 sidecar 实现。
+  效率：WS 封板 lane 只改测试和文档，不新增业务 sidecar；工具实现来自已验证子 lane。
+  验证：`bun test tests/web.search.sidecar.test.ts tests/media.sidecar.test.ts tests/computer.native.sidecar.test.ts tests/utility.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun test tests/gateway.ws.test.ts tests/gateway.module.test.ts tests/protocol.control.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
+  执行者：xtools-lsp-task-data
+  范围：lsp-task-data-sidecar
+  摘要：初始化 LSP、后台任务和轻量数据工具 lane。
+  原因：这些能力属于功能性外挂，应该通过 process-json sidecar 注册，不进入内建文件/git/process 原语。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-lsp-task-data
+  范围：lsp-task-data-sidecar
+  摘要：新增 `scripts/utility.sidecar.ts` 和安装脚本，覆盖 `lsp.symbols`、`lsp.diagnostics`、`task.background`、`file.hash`、`archive.create`、`archive.extract`、`data.convert`。轻量 hash/archive/data 在 sidecar 内完成，LSP 与 background task 必须通过显式 delegate。
+  原因：这些能力属于功能性外挂，不应回写内建 workspace/git/process/shell 原语，也不应侵入 Memory、Scope、ASK、Crystal 或 fork 主链。
+  效率：本 lane 扩展 external registry，新增 utility sidecar、installer、process-json 测试、manifest 测试和安装脚本测试。
+  验证：`bun test tests/utility.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
+  执行者：xtools-computer-native
+  范围：native-computer-sidecar
+  摘要：初始化电脑原生控制 lane，准备实现屏幕、鼠标、键盘和窗口能力。
+  原因：电脑控制必须通过外部 sidecar 进入 Executive/sandbox/approval/audit 链路，不能污染内核。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-computer-native
+  范围：native-computer-sidecar
+  摘要：新增 `scripts/computer.native.sidecar.ts` 和安装脚本，覆盖 `screen.screenshot`、`computer.mouse`、`computer.keyboard`、`computer.window`。截图和窗口观察按平台探测系统命令；鼠标键盘必须通过 `external.tools.jsonc` 显式 delegate，缺失时返回 `unavailable`，不做隐藏控制兜底。
+  原因：电脑控制能力必须跨 macOS/Windows/Linux 保持可探测、可失败、可审计；真正控制动作仍在 Executive Tool Runtime、sandbox、approval、quota 和 audit 链路后执行。
+  效率：本 lane 新增 native computer sidecar、installer、process-json 测试、manifest 测试和安装脚本测试。
+  验证：`bun test tests/computer.native.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run docs:check`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
+  执行者：xtools-media
+  范围：media-sidecar
+  摘要：初始化媒体 lane，准备实现视觉、OCR、语音转写和 TTS 外挂能力。
+  原因：媒体能力需要支持 provider 或本地工具检测，但不能把重依赖和密钥打进 Bun 内核。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-media
+  范围：media-sidecar
+  摘要：新增 `scripts/media.sidecar.ts` 和 `install.xtools.media.sh`，覆盖 `vision.analyze`、`vision.ocr`、`audio.transcribe`、`audio.speak`。sidecar 只接受 `external.tools.jsonc` 透传的 `config.providerUrl`、`config.providerHeaders`、`config.localCommands`，不从环境变量读取业务配置，不打包 OCR/Whisper/TTS/视觉 SDK 或模型资产。
+  原因：媒体能力必须是外挂桥接层，真实 provider 或本地命令可替换，但内核只负责 manifest 发现、sandbox/approval/quota/audit 链路和失败显式暴露。
+  效率：本 lane 新增 media sidecar、installer、process-json 测试、manifest 测试和安装脚本测试；focused diff 约 8 files changed。
+  验证：`bun test tests/media.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
+
+- 状态：进行中
+  执行者：xtools-search-web
+  范围：search-web-sidecar
+  摘要：初始化搜索网页 lane，准备实现 `web.search` 一等能力以及 `web.fetch`、`web.extract`、`web.download`。
+  原因：网络搜索是本轮最高优先级，必须具备 provider 聚合、去重、来源标注、缓存、失败显式暴露和 WS 可回放能力。
+  验证：待实现后补充。
+
+- 状态：已完成
+  执行者：xtools-search-web
+  范围：search-web-sidecar
+  摘要：新增 `web.search`、`web.fetch`、`web.extract`、`web.download` process-json sidecar；支持 Brave、Tavily、SerpAPI、Bing、generic provider，provider 聚合、URL 去重、warnings、Top N 补抓、TTL 缓存和项目目录内下载；`external.tools.jsonc` 支持向 sidecar 透传 opaque config。
+  原因：搜索能力必须成为外挂工具层的一等能力，同时内核不能 import provider SDK 或 sidecar 实现；失败必须显式返回非零并写 stderr，不能被 hidden fallback 吞掉。
+  效率：当前 lane diff 约 12 files changed，新增 `scripts/web.search.sidecar.ts`、`scripts/install.xtools.search-web.sh`、`tests/web.search.sidecar.test.ts`，核心注册表只增加 web 工具与 executor config 透传。
+  验证：`bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。

@@ -440,6 +440,7 @@ flyflor gateway    # 兼容命令：启动最小 socket：/ws /health
 | [docs/sandbox.capabilities.zh.cn.md](docs/sandbox.capabilities.zh.cn.md) | Sandbox 决策与审计                     |
 | [docs/mcp.tools.zh.cn.md](docs/mcp.tools.zh.cn.md)                       | MCP 工具循环                           |
 | [docs/external.kit.zh.cn.md](docs/external.kit.zh.cn.md)                 | 外部套件 manifest / 发现 / control 契约 |
+| [docs/external.tools.seal.zh.cn.md](docs/external.tools.seal.zh.cn.md)   | 外挂工具层能力矩阵、WS/TUI 契约和封板验证 |
 | [docs/control.protocol.zh.cn.md](docs/control.protocol.zh.cn.md)         | 外部客户端 / thin client 直接对接的 WS/control 血管协议 |
 | [docs/crystal.reflection.zh.cn.md](docs/crystal.reflection.zh.cn.md)     | Reflection → Gem                       |
 | [docs/skill.system.zh.cn.md](docs/skill.system.zh.cn.md)                 | Skill 加载与升格                       |

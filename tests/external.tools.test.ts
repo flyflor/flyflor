@@ -32,10 +32,16 @@ const EXPECTED_EXTERNAL_TOOLS = [
     "vision.ocr",
     "audio.transcribe",
     "audio.speak",
-    "web.fetch",
     "web.search",
+    "web.fetch",
+    "web.extract",
+    "web.download",
     "lsp.symbols",
     "lsp.diagnostics",
+    "file.hash",
+    "archive.create",
+    "archive.extract",
+    "data.convert",
     "task.background",
 ] as const;
 
@@ -179,6 +185,185 @@ describe("external tool descriptor discovery", () => {
         }
     });
 
+    test("accepts Search/Web sidecar manifest for web tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-search-web-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "web.search": {
+                            command: "bun",
+                            args: ["scripts/web.search.sidecar.ts"],
+                            config: {
+                                cacheTtlMs: 1000,
+                                providers: [{ id: "demo", kind: "generic", endpoint: "https://example.test/search" }],
+                            },
+                            tools: ["web.search", "web.fetch", "web.extract", "web.download"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["web.search", "web.fetch", "web.extract", "web.download"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "browser.open")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "web.search")?.tool.executor).toMatchObject({
+                kind: "process-json",
+                command: "bun",
+                args: ["scripts/web.search.sidecar.ts"],
+                config: {
+                    cacheTtlMs: 1000,
+                    providers: [{ id: "demo", kind: "generic", endpoint: "https://example.test/search" }],
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts Media sidecar manifest for media tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-media-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "media.local": {
+                            command: "bun",
+                            args: ["scripts/media.sidecar.ts"],
+                            config: {
+                                providerUrl: "http://127.0.0.1:9999/media",
+                                providerHeaders: { authorization: "Bearer test" },
+                                localCommands: {},
+                            },
+                            tools: ["vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "web.search")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "vision.ocr")?.tool.executor).toMatchObject({
+                kind: "process-json",
+                command: "bun",
+                args: ["scripts/media.sidecar.ts"],
+                config: {
+                    providerUrl: "http://127.0.0.1:9999/media",
+                    providerHeaders: { authorization: "Bearer test" },
+                    localCommands: {},
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts Computer native sidecar manifest for computer tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-computer-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "computer.native": {
+                            command: "bun",
+                            args: ["scripts/computer.native.sidecar.ts"],
+                            config: {
+                                mouseCommand: "cliclick",
+                                mouseArgs: [],
+                                keyboardCommand: "osascript",
+                                keyboardArgs: [],
+                            },
+                            tools: ["screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "vision.ocr")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "computer.mouse")?.tool.descriptor).toMatchObject({
+                exclusive: true,
+                permission: ToolPermission.Computer,
+                computer: {
+                    action: "mouse",
+                    observationOnly: false,
+                    requiresFocusTarget: true,
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts Utility sidecar manifest for LSP, task and data tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-utility-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "utility.local": {
+                            command: "bun",
+                            args: ["scripts/utility.sidecar.ts"],
+                            config: { lspCommand: "lsp-test", taskCommand: "task-test" },
+                            tools: [
+                                "lsp.symbols",
+                                "lsp.diagnostics",
+                                "task.background",
+                                "file.hash",
+                                "archive.create",
+                                "archive.extract",
+                                "data.convert",
+                            ],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual([
+                "lsp.symbols",
+                "lsp.diagnostics",
+                "file.hash",
+                "archive.create",
+                "archive.extract",
+                "data.convert",
+                "task.background",
+            ]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "file.hash")?.tool.descriptor).toMatchObject({
+                readOnly: true,
+                permission: ToolPermission.Read,
+            });
+            expect(tools.find((entry) => entry.tool.descriptor.name === "archive.create")?.tool.descriptor).toMatchObject({
+                readOnly: false,
+                permission: ToolPermission.Write,
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("adds external sidecar tools to the read-only socket kit catalog", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-catalog-"));
         const paths = testPaths(root);
@@ -191,7 +376,7 @@ describe("external tool descriptor discovery", () => {
                     sidecars: {
                         "mock.web": {
                             command: "bun",
-                            tools: ["web.fetch", "web.search"],
+                            tools: ["web.search", "web.fetch", "web.extract", "web.download"],
                         },
                     },
                 }),
@@ -200,6 +385,20 @@ describe("external tool descriptor discovery", () => {
             const snapshot = await loadExternalKitCatalogSnapshot(paths, "2026-05-24T00:00:00.000Z");
             const web = snapshot.capabilities.filter((entry) => entry.name.startsWith("web."));
             expect(web).toEqual([
+                {
+                    description: "Download a URL to an allowed output path through an external web sidecar.",
+                    enabled: true,
+                    name: "web.download",
+                    source: "user-tool",
+                    sourceId: "external:mock.web",
+                },
+                {
+                    description: "Extract readable content from a URL through an external web sidecar.",
+                    enabled: true,
+                    name: "web.extract",
+                    source: "user-tool",
+                    sourceId: "external:mock.web",
+                },
                 {
                     description: "Fetch a URL through an external web sidecar.",
                     enabled: true,

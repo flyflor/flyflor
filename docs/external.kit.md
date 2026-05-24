@@ -66,3 +66,81 @@ Example Chrome launch:
   --remote-debugging-port=9222 \
   --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## Search/Web Sidecar
+
+`scripts/web.search.sidecar.ts` is the lightweight process-json adapter for `web.search`,
+`web.fetch`, `web.extract`, and `web.download`. It uses configured providers only; if no
+provider is configured, `web.search` fails explicitly instead of returning placeholder data.
+
+```bash
+bun run install:xtools:search-web
+```
+
+The installer writes `external.tools.jsonc` with an empty `providers` list. Add provider
+entries under `sidecars.web.search.config.providers` in `~/.flyflor/.config/tools/external.tools.jsonc`.
+Generic providers must return an array of objects with `title`, `url`, and `snippet` fields.
+
+## Media Sidecar
+
+`scripts/media.sidecar.ts` is the lightweight bridge for `vision.analyze`, `vision.ocr`,
+`audio.transcribe`, and `audio.speak`.
+
+```bash
+bun run install:xtools:media
+```
+
+The installer only registers the process-json sidecar. It does not install OCR, Whisper,
+TTS, vision SDKs, local model assets, native addons, or postinstall hooks. Runtime work is
+delegated through `sidecars.media.local.config`:
+
+- `providerUrl`: HTTP JSON provider endpoint.
+- `providerHeaders`: optional HTTP headers.
+- `localCommands`: optional per-tool process-json delegate map.
+
+If neither `providerUrl` nor a matching local command is configured, the sidecar exits nonzero
+with an explicit `unavailable` response.
+
+## Native Computer Sidecar
+
+`scripts/computer.native.sidecar.ts` bridges `screen.screenshot`, `computer.mouse`,
+`computer.keyboard`, and `computer.window`.
+
+```bash
+bun run install:xtools:computer-native
+```
+
+Screenshots and window observation use platform commands when available:
+
+- macOS: `screencapture`, `osascript`
+- Windows: `powershell`
+- Linux: `grim`, `gnome-screenshot`, `spectacle`, `xdotool`, or `wmctrl`
+
+Mouse and keyboard actions require explicit delegate commands in
+`sidecars.computer.native.config.mouseCommand` and `keyboardCommand`. Missing delegates fail
+with `unavailable`; no hidden fallback performs control actions. Screenshot output paths must
+stay under `projectDir`.
+
+## Utility Sidecar
+
+`scripts/utility.sidecar.ts` covers LSP delegates, background task delegates, file hashing,
+archive create/extract, and small structured data conversion.
+
+```bash
+bun run install:xtools:utility
+```
+
+It registers:
+
+- `lsp.symbols`
+- `lsp.diagnostics`
+- `task.background`
+- `file.hash`
+- `archive.create`
+- `archive.extract`
+- `data.convert`
+
+`file.hash`, `archive.*`, and `data.convert` are lightweight sidecar utilities. They do not
+replace builtin workspace/git/process/shell primitives. LSP and background task execution require
+explicit `lspCommand` and `taskCommand` delegates in `external.tools.jsonc`. File and archive paths
+must stay under `projectDir`.

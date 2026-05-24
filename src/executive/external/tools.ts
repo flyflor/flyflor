@@ -25,6 +25,7 @@ export interface ExternalToolManifestFile {
 export interface ExternalToolSidecarShape {
     readonly args?: string[];
     readonly command?: string;
+    readonly config?: Record<string, unknown>;
     readonly cwd?: "project" | "config";
     readonly enabled?: boolean;
     readonly env?: Record<string, string>;
@@ -59,6 +60,7 @@ export interface ExternalToolSpec {
 interface NormalizedSidecar {
     readonly args: readonly string[];
     readonly command?: string;
+    readonly config?: Record<string, unknown>;
     readonly cwd: "project" | "config";
     readonly enabled: boolean;
     readonly env?: Record<string, string>;
@@ -95,23 +97,17 @@ const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
     mediaTool("vision.ocr", "Extract text from an image through an external OCR sidecar.", ToolPermission.Read, true),
     mediaTool("audio.transcribe", "Transcribe audio through an external speech sidecar.", ToolPermission.Read, true),
     mediaTool("audio.speak", "Speak text through an external TTS sidecar.", ToolPermission.Message, false),
-    networkTool("web.fetch", "Fetch a URL through an external web sidecar."),
-    networkTool("web.search", "Search the web through an external web sidecar."),
+    networkTool("web.search", "Search the web through an external web sidecar.", ["query"]),
+    networkTool("web.fetch", "Fetch a URL through an external web sidecar.", ["url"]),
+    networkTool("web.extract", "Extract readable content from a URL through an external web sidecar.", ["url"]),
+    networkTool("web.download", "Download a URL to an allowed output path through an external web sidecar.", ["url", "path"]),
     codingTool("lsp.symbols", "Read workspace symbols through an external LSP sidecar."),
     codingTool("lsp.diagnostics", "Read workspace diagnostics through an external LSP sidecar."),
-    {
-        category: ToolCategory.System,
-        concurrencySafe: true,
-        description: "Start or inspect an external background task sidecar.",
-        exclusive: false,
-        inputSchema: objectSchema(["task"]),
-        name: "task.background",
-        permission: ToolPermission.Execute,
-        readOnly: false,
-        resultLimit: 8_000,
-        scope: [ToolScope.Background, ToolScope.Core],
-        tags: ["external-tool", "sidecar", "approval:execute"],
-    },
+    utilityTool("file.hash", "Hash a project file through an external utility sidecar.", ToolPermission.Read, true, ["path"]),
+    utilityTool("archive.create", "Create an archive through an external utility sidecar.", ToolPermission.Write, false, ["paths", "output"]),
+    utilityTool("archive.extract", "Extract an archive through an external utility sidecar.", ToolPermission.Write, false, ["archive", "outputDir"]),
+    utilityTool("data.convert", "Convert small structured data through an external utility sidecar.", ToolPermission.Write, false, ["from", "to", "input"]),
+    utilityTool("task.background", "Start or inspect an external background task sidecar.", ToolPermission.Execute, false, ["task"], [ToolScope.Background, ToolScope.Core]),
 ];
 
 /**
@@ -230,6 +226,7 @@ export class ExternalToolDescriptorComponent {
             executor: {
                 args: sidecar.args,
                 command: sidecar.command,
+                config: sidecar.config,
                 cwd: sidecar.cwd,
                 env: sidecar.env,
                 kind: "process-json",
@@ -337,6 +334,7 @@ export class ExternalToolDescriptorComponent {
         return {
             args: this.optionalStringArray(shape.args, `${path}.args`) ?? [],
             command: this.optionalNonEmptyString(shape.command, `${path}.command`),
+            config: this.optionalObject(shape.config, `${path}.config`, true) as Record<string, unknown> | undefined,
             cwd: this.optionalCwd(shape.cwd, `${path}.cwd`) ?? "project",
             enabled: this.optionalBoolean(shape.enabled, `${path}.enabled`) ?? true,
             env: this.optionalStringRecord(shape.env, `${path}.env`),
@@ -390,6 +388,13 @@ export class ExternalToolDescriptorComponent {
         return Object.fromEntries(
             Object.entries(object).map(([key, entry]) => [key, this.requiredString(entry, `${path}.${key}`)]),
         );
+    }
+
+    private optionalObject(value: unknown, path: string, allowUndefined: boolean): Readonly<Record<string, unknown>> | undefined {
+        if (value === undefined && allowUndefined) {
+            return undefined;
+        }
+        return this.requiredObject(value, path);
     }
 
     private optionalNonEmptyString(value: unknown, path: string): string | undefined {
@@ -516,13 +521,13 @@ function mediaTool(
     };
 }
 
-function networkTool(name: string, description: string): ExternalToolSpec {
+function networkTool(name: string, description: string, required: readonly string[] = []): ExternalToolSpec {
     return {
         category: ToolCategory.Network,
         concurrencySafe: true,
         description,
         exclusive: false,
-        inputSchema: objectSchema(["url"]),
+        inputSchema: objectSchema(required),
         name,
         permission: ToolPermission.Network,
         readOnly: true,
@@ -545,6 +550,29 @@ function codingTool(name: string, description: string): ExternalToolSpec {
         resultLimit: 16_000,
         scope: [ToolScope.Workspace],
         tags: ["external-tool", "sidecar", "lsp", "approval:read"],
+    };
+}
+
+function utilityTool(
+    name: string,
+    description: string,
+    permission: ToolPermissionType,
+    readOnly: boolean,
+    required: readonly string[],
+    scope: readonly ToolScopeType[] = [ToolScope.Workspace],
+): ExternalToolSpec {
+    return {
+        category: ToolCategory.System,
+        concurrencySafe: readOnly,
+        description,
+        exclusive: !readOnly,
+        inputSchema: objectSchema(required),
+        name,
+        permission,
+        readOnly,
+        resultLimit: 16_000,
+        scope,
+        tags: ["external-tool", "sidecar", "utility", readOnly ? "approval:read" : "approval:execute"],
     };
 }
 

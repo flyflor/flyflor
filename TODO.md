@@ -783,3 +783,37 @@ Kernel V2 acceptance focus：
 - [x] 记录合并统计：`603e1b1`，8 files changed，634 insertions。
 - [x] 停止并确认没有 `xtools-browser-cdp` tmux 子进程继续运行。
 - [x] 移除已合并的 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支。
+## 2026-05-24 xtools-ws-e2e-seal 本地任务
+
+- [x] 初始化 `xtools-ws-e2e-seal` worktree，本地控制文件只追加状态。
+- [x] 补真实 `/ws` 工具全场景、Apifox messages、能力矩阵和封板报告。
+- [x] 覆盖工具成功、失败、预算耗尽 ASK、history/detail/replay 和子代理场景。
+- [x] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-lsp-task-data 本地任务
+
+- [x] 初始化 `xtools-lsp-task-data` worktree，本地控制文件只追加状态。
+- [x] 实现 `lsp.symbols`、`lsp.diagnostics`、`task.background`、`file.hash`、`archive.*`、`data.convert`。
+- [x] 补轻量 utility sidecar、后台任务句柄和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-computer-native 本地任务
+
+- [x] 初始化 `xtools-computer-native` worktree，本地控制文件只追加状态。
+- [x] 实现 `screen.screenshot`、`computer.mouse`、`computer.keyboard`、`computer.window` native sidecar。
+- [x] 补 macOS / Windows / Linux capability probe 和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-media 本地任务
+
+- [x] 初始化 `xtools-media` worktree，本地控制文件只追加状态。
+- [x] 实现 `vision.analyze`、`vision.ocr`、`audio.transcribe`、`audio.speak` media sidecar。
+- [x] 补 provider/local runtime detection、失败结构和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-search-web 本地任务
+
+- [x] 初始化 `xtools-search-web` worktree，本地控制文件只追加状态。
+- [x] 实现 `web.search` / `web.fetch` / `web.extract` / `web.download` 搜索网页 lane。
+- [x] 补 provider 配置、搜索缓存、去重、warnings、Top N 补抓和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
