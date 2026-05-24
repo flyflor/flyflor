@@ -156,6 +156,13 @@ bun test tests/todo.status.test.ts tests/naming.boundaries.test.ts
 - [ ] 合并顺序固定为 core-exec -> subagent -> external-kit；每次合并前统计 diff、review、跑 focused tests。
 - [ ] 最终运行 `bun run check`、`bun run build:binary`、WS/工具/子代理/外挂 detector 场景测试，并输出代码量与完成报告。
 
+## 2026-05-24 xtools-docs-ws 文档封板
+
+- [x] 在 `feature/xtools-docs-ws` 内补齐三层工具模型文档：内建 coding 工具、原子 process-json sidecar、未来高层 `computer.use`。
+- [x] 在 External Kit 与 External Tools Seal 文档中固定 compatibility matrix、provider/delegate `unavailable` / `failed` 语义、`.config/tools` 治理面和 WS/TUI 只读消费边界。
+- [x] 保持本切片只改文档和控制文件，不修改源码、sidecar、package metadata 或 OpenAPI。
+- [x] 已运行 `bun run docs:check`、`bun test tests/docs.references.test.ts tests/docs.index.test.ts` 和 `git diff --check`。
+
 ## 2026-05-22 Seal 补充
 
 - 主协调分支：`main-codex-docs`
@@ -827,3 +834,18 @@ Kernel V2 acceptance focus：
 - [x] 修正 Apifox message catalog，`task.plan.decide` 的真实返回为 `task.snapshot`，不是 `ack`。
 - [x] 运行验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/runtime.planning.route.test.ts`。
 - [x] 运行封口验证：`bun run check`、`bun run docs:check`、`bun run build:binary`、`git diff --check`。
+
+## 2026-05-25 xtools-provider-hardening 本地任务
+
+- [x] 初始化 `xtools-provider-hardening` worktree，本地控制文件只追加状态。
+- [x] 强化 web/media/utility sidecar 的 provider 与 delegate 失败结构。
+- [x] 覆盖缺 provider、provider 响应非法、delegate 缺失、delegate 非 JSON、delegate 显式失败和平台命令缺失。
+- [x] 运行 focused sidecar tests 与 `git diff --check` 并提交给主 Codex review。
+
+## 2026-05-24 xtools-computer-use 本地任务
+
+- [x] 实现高层 `computer.use` process-json sidecar，支持 delegate/cua backend、动作校验、危险输入阻断和 `captureAfter` 后置捕获。
+- [x] 将 `computer.use` 注册进 external tool catalog，并通过 computer descriptor metadata 保留 sandbox/approval/audit 语义。
+- [x] 新增 `install.xtools.computer-use.sh` 和 package script，只写 external tools manifest，不创建 kit 或内核 sidecar import。
+- [x] 补 deterministic tests 覆盖 delegate unavailable、invalid config、action validation、captureAfter、blocked dangerous input、installer manifest 和 catalog count/name。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。

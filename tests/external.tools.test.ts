@@ -25,6 +25,7 @@ const EXPECTED_EXTERNAL_TOOLS = [
     "browser.navigate",
     "browser.evaluate",
     "screen.screenshot",
+    "computer.use",
     "computer.mouse",
     "computer.keyboard",
     "computer.window",
@@ -58,6 +59,23 @@ describe("external tool descriptor discovery", () => {
             expect(spec.exclusive).toBe(true);
             expect(spec.computer?.requiresFocusTarget).toBe(true);
         }
+        expect(externalToolSpecs().find((entry) => entry.name === "computer.use")).toMatchObject({
+            computer: {
+                action: "computer",
+                observationOnly: false,
+                requiresFocusTarget: true,
+            },
+            inputSchema: {
+                required: ["action"],
+                properties: {
+                    action: {
+                        enum: expect.arrayContaining(["capture", "click", "type", "focus_app"]),
+                    },
+                    captureAfter: { type: "boolean" },
+                },
+            },
+            tags: expect.arrayContaining(["computer-use", "approval:computer"]),
+        });
         expect(externalToolSpecs().find((entry) => entry.name === "screen.screenshot")?.computer).toMatchObject({
             action: "screen",
             observationOnly: true,
@@ -305,6 +323,63 @@ describe("external tool descriptor discovery", () => {
                     action: "mouse",
                     observationOnly: false,
                     requiresFocusTarget: true,
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts Computer use sidecar manifest for high-level computer control only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-computer-use-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "computer.use": {
+                            command: "bun",
+                            args: ["scripts/computer.use.sidecar.ts"],
+                            config: {
+                                backend: "delegate",
+                                delegateCommand: "",
+                                delegateArgs: [],
+                                cuaCommand: "cua-driver",
+                                cuaArgs: [],
+                            },
+                            maxOutputBytes: 524288,
+                            timeoutMs: 20000,
+                            tools: ["computer.use"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual(["computer.use"]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "computer.mouse")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "computer.use")?.tool).toMatchObject({
+                descriptor: {
+                    exclusive: true,
+                    permission: ToolPermission.Computer,
+                    computer: {
+                        action: "computer",
+                        observationOnly: false,
+                        requiresFocusTarget: true,
+                    },
+                    sourceId: "external:computer.use",
+                    tags: expect.arrayContaining(["computer-use", "sidecar:computer.use", "approval:computer"]),
+                },
+                executor: {
+                    kind: "process-json",
+                    command: "bun",
+                    args: ["scripts/computer.use.sidecar.ts"],
+                    timeoutMs: 20000,
+                    maxOutputBytes: 524288,
                 },
             });
         } finally {

@@ -36,6 +36,16 @@ interface SearchResult {
 const DEFAULT_TIMEOUT_MS = 8_000;
 const CACHE = new Map<string, { at: number; value: JsonObject }>();
 
+class WebSidecarError extends Error {
+    public constructor(
+        public readonly code: "failed" | "unavailable" | "unsupported",
+        message: string,
+        public readonly details: JsonObject = {},
+    ) {
+        super(message);
+    }
+}
+
 try {
     const raw = await new Response(Bun.stdin.stream()).text();
     const request = parseRequest(raw);
@@ -44,9 +54,10 @@ try {
     const result = await dispatch(requiredString(request.tool, "request.tool"), input, config, request);
     process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    process.stdout.write(`${JSON.stringify({ ok: false, error: message })}\n`);
-    process.stderr.write(`${message}\n`);
+    const failure = failureFromError(err);
+    const line = `${JSON.stringify(failure)}\n`;
+    process.stdout.write(line);
+    process.stderr.write(line);
     process.exit(1);
 }
 
@@ -61,7 +72,7 @@ async function dispatch(tool: string, input: JsonObject, config: JsonObject, req
         case "web.search":
             return searchWeb(input, config);
         default:
-            throw new Error(`unsupported web sidecar tool: ${tool}`);
+            throw new WebSidecarError("unsupported", `unsupported web sidecar tool: ${tool}`);
     }
 }
 
@@ -72,7 +83,7 @@ async function searchWeb(input: JsonObject, config: JsonObject): Promise<JsonObj
     const ttlMs = boundedInt(config.cacheTtlMs, 600_000, 0, 86_400_000);
     const providers = configuredProviders(config);
     if (providers.length === 0) {
-        throw new Error("web.search has no configured provider");
+        throw new WebSidecarError("unavailable", "web.search has no configured provider");
     }
     const cacheKey = JSON.stringify({ query, limit, includeFetch, providers: providers.map((provider) => provider.id) });
     const cached = CACHE.get(cacheKey);
@@ -93,7 +104,7 @@ async function searchWeb(input: JsonObject, config: JsonObject): Promise<JsonObj
     );
     const results = dedupeResults(settled.flatMap((entry) => entry.results)).slice(0, limit);
     if (results.length === 0) {
-        throw new Error(`web.search failed: ${warnings.join("; ") || "no results"}`);
+        throw new WebSidecarError("failed", `web.search failed: ${warnings.join("; ") || "no results"}`, { warnings });
     }
     const enriched = includeFetch ? await enrichResults(results, boundedInt(input.fetchLimit, 3, 0, 5), warnings) : results;
     const payload = {
@@ -116,17 +127,18 @@ async function searchProvider(provider: SearchProvider, input: JsonObject, limit
         url.searchParams.set("q", query);
         url.searchParams.set("limit", String(limit));
         const json = await fetchJson(url, provider.apiKey);
-        return normalizeResults(json, provider.id, limit);
+        return normalizeResults(requiredArray(json, `provider ${provider.id} response`), provider.id, limit);
     }
     if (!provider.apiKey) {
-        throw new Error("provider apiKey is missing");
+        throw new WebSidecarError("unavailable", "provider apiKey is missing");
     }
     if (provider.kind === "brave") {
         const url = new URL(provider.endpoint ?? "https://api.search.brave.com/res/v1/web/search");
         url.searchParams.set("q", query);
         url.searchParams.set("count", String(limit));
-        const json = await fetchJson(url, provider.apiKey, "X-Subscription-Token");
-        return normalizeResults((json.web as JsonObject | undefined)?.results ?? [], provider.id, limit);
+        const json = asObject(await fetchJson(url, provider.apiKey, "X-Subscription-Token"), `provider ${provider.id} response`);
+        const web = asObject(json.web, `provider ${provider.id} response.web`);
+        return normalizeResults(requiredArray(web.results, `provider ${provider.id} response.web.results`), provider.id, limit);
     }
     if (provider.kind === "tavily") {
         const response = await fetch(provider.endpoint ?? "https://api.tavily.com/search", {
@@ -135,12 +147,20 @@ async function searchProvider(provider: SearchProvider, input: JsonObject, limit
             body: JSON.stringify({ api_key: provider.apiKey, query, max_results: limit }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return normalizeResults(((await response.json()) as JsonObject).results ?? [], provider.id, limit);
+        const json = asObject(await parseResponseJson(response, provider.id), `provider ${provider.id} response`);
+        return normalizeResults(requiredArray(json.results, `provider ${provider.id} response.results`), provider.id, limit);
     }
     const url = new URL(provider.endpoint ?? (provider.kind === "serpapi" ? "https://serpapi.com/search.json" : "https://api.bing.microsoft.com/v7.0/search"));
     url.searchParams.set(provider.kind === "serpapi" ? "q" : "q", query);
-    const json = await fetchJson(url, provider.apiKey, provider.kind === "bing" ? "Ocp-Apim-Subscription-Key" : undefined);
-    return normalizeResults(provider.kind === "bing" ? (json.webPages as JsonObject | undefined)?.value ?? [] : json.organic_results ?? [], provider.id, limit);
+    const json = asObject(
+        await fetchJson(url, provider.apiKey, provider.kind === "bing" ? "Ocp-Apim-Subscription-Key" : undefined),
+        `provider ${provider.id} response`,
+    );
+    if (provider.kind === "bing") {
+        const webPages = asObject(json.webPages, `provider ${provider.id} response.webPages`);
+        return normalizeResults(requiredArray(webPages.value, `provider ${provider.id} response.webPages.value`), provider.id, limit);
+    }
+    return normalizeResults(requiredArray(json.organic_results, `provider ${provider.id} response.organic_results`), provider.id, limit);
 }
 
 async function fetchUrl(url: string, input: JsonObject): Promise<JsonObject> {
@@ -181,7 +201,7 @@ function configuredProviders(config: JsonObject): SearchProvider[] {
         const object = asObject(entry, `config.providers.${index}`);
         const kind = requiredString(object.kind, `config.providers.${index}.kind`) as SearchProvider["kind"];
         if (!["brave", "tavily", "serpapi", "bing", "generic"].includes(kind)) {
-            throw new Error(`unsupported search provider kind: ${kind}`);
+            throw new WebSidecarError("unsupported", `unsupported search provider kind: ${kind}`);
         }
         return {
             id: readString(object.id) ?? `${kind}-${index + 1}`,
@@ -193,12 +213,20 @@ function configuredProviders(config: JsonObject): SearchProvider[] {
     }).filter((provider) => provider.enabled);
 }
 
-async function fetchJson(url: URL, apiKey?: string, header = "Authorization"): Promise<JsonObject> {
+async function fetchJson(url: URL, apiKey?: string, header = "Authorization"): Promise<unknown> {
     const headers: Record<string, string> = {};
     if (apiKey) headers[header] = header === "Authorization" ? `Bearer ${apiKey}` : apiKey;
     const response = await fetchWithTimeout(url, DEFAULT_TIMEOUT_MS, { headers });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return (await response.json()) as JsonObject;
+    return parseResponseJson(response, url.toString());
+}
+
+async function parseResponseJson(response: Response, label: string): Promise<unknown> {
+    try {
+        return await response.json();
+    } catch (err) {
+        throw new WebSidecarError("failed", `${label} returned non-json response`, { cause: messageFrom(err) });
+    }
 }
 
 async function fetchWithTimeout(url: string | URL, timeoutMs: number, init: RequestInit = {}): Promise<Response> {
@@ -211,9 +239,8 @@ async function fetchWithTimeout(url: string | URL, timeoutMs: number, init: Requ
     }
 }
 
-function normalizeResults(value: unknown, provider: string, limit: number): SearchResult[] {
-    const items = Array.isArray(value) ? value : [];
-    return items.slice(0, limit).map((entry, index) => {
+function normalizeResults(value: unknown[], provider: string, limit: number): SearchResult[] {
+    return value.slice(0, limit).map((entry, index) => {
         const object = asObject(entry, `result.${index}`);
         const url = readString(object.url) ?? readString(object.link) ?? readString(object.href) ?? "";
         return {
@@ -277,8 +304,12 @@ function titleFromHtml(value: string): string | undefined {
 }
 
 function parseRequest(raw: string): SidecarRequest {
-    if (raw.trim().length === 0) throw new Error("empty process-json request");
-    return JSON.parse(raw) as SidecarRequest;
+    if (raw.trim().length === 0) throw new WebSidecarError("failed", "empty process-json request");
+    try {
+        return JSON.parse(raw) as SidecarRequest;
+    } catch (err) {
+        throw new WebSidecarError("failed", "process-json request must be valid JSON", { cause: messageFrom(err) });
+    }
 }
 
 function objectInput(value: unknown): JsonObject {
@@ -288,13 +319,20 @@ function objectInput(value: unknown): JsonObject {
 
 function asObject(value: unknown, path: string): JsonObject {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        throw new Error(`${path} must be an object`);
+        throw new WebSidecarError("failed", `${path} must be an object`);
     }
     return value as JsonObject;
 }
 
+function requiredArray(value: unknown, path: string): unknown[] {
+    if (!Array.isArray(value)) {
+        throw new WebSidecarError("failed", `${path} must be an array`);
+    }
+    return value;
+}
+
 function requiredString(value: unknown, path: string): string {
-    if (typeof value !== "string" || value.length === 0) throw new Error(`${path} must be a non-empty string`);
+    if (typeof value !== "string" || value.length === 0) throw new WebSidecarError("failed", `${path} must be a non-empty string`);
     return value;
 }
 
@@ -306,4 +344,15 @@ function boundedInt(value: unknown, fallback: number, min: number, max: number):
     if (value === undefined) return fallback;
     if (typeof value !== "number" || !Number.isInteger(value)) return fallback;
     return Math.max(min, Math.min(max, value));
+}
+
+function failureFromError(err: unknown): JsonObject {
+    if (err instanceof WebSidecarError) {
+        return { ok: false, code: err.code, error: err.message, ...err.details };
+    }
+    return { ok: false, code: "failed", error: messageFrom(err) };
+}
+
+function messageFrom(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
 }

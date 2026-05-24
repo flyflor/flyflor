@@ -26,8 +26,8 @@
 16. [skill.system.md](skill.system.md) — 外部 `SKILL.md` 能力包，不与 Crystal Gem 混用。
 17. [crystal.reflection.md](crystal.reflection.md) — Crystal 反思与 Gem 结晶边界。
 18. [development.workflow.md](development.workflow.md) — `git worktree + tmux + Codex` 并发开发、review 和新 session 交接流程。
-19. [external.kit.md](external.kit.md) — External kit 只读发现协议。
-20. [external.tools.seal.md](external.tools.seal.md) — 外挂工具层能力矩阵、WS/TUI 契约和封板验证。
+19. [external.kit.md](external.kit.md) — External kit 只读发现协议，包含 builtin coding tools、atomic sidecars、`computer.use` 三层工具模型。
+20. [external.tools.seal.md](external.tools.seal.md) — 外挂工具层能力矩阵、provider/delegate 失败语义、WS/TUI 契约和封板验证。
 21. [refactor.roadmap.md](refactor.roadmap.md) — 当前重构方向与文档维护口径。
 22. [../TODO.md](../TODO.md) — 下一段对话的交接说明、红线和验证清单。
 

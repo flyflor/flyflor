@@ -1,5 +1,14 @@
 # Flyflor 日志
 
+## 2026-05-24
+
+- 状态：已完成
+  执行者：xtools-docs-ws
+  范围：external-tools-docs-seal
+  摘要：补齐 External Kit 与 External Tools Seal 的三层工具模型，明确内建 coding 工具、原子 sidecar 和未来 `computer.use` 的边界，并记录 provider/delegate 失败语义、`.config/tools` 运行治理和 WS/TUI 只读消费边界。
+  原因：本 worktree 负责 WS 场景、文档示例、能力矩阵和封板报告；外挂工具面需要先用文档固定分层和失败契约，避免 TUI 或 sidecar 把 discovery 当执行 API。
+  验证：`bun run docs:check`; `bun test tests/docs.references.test.ts tests/docs.index.test.ts`; `git diff --check`
+
 ## 2026-05-21
 
 - 状态：进行中
@@ -839,3 +848,19 @@
   原因：TUI/Rust 前端需要区分 act/plan 交互模式，计划确认必须走显式 WS 控制命令和 DB read model，而不是让 live turn 或前端自行猜测状态。
   效率：主线封口 diff 为 27 个已跟踪文件约 949 行新增、8 行删除，另新增 `src/agent/runtime/planning/route.ts`、`templates/prompts/planning.route.md`、`templates/prompts/planning.route.zh.cn.md`、`tests/runtime.planning.route.test.ts`。
   验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/runtime.planning.route.test.ts`；`bun run docs:check`；`bun run check`；`bun run build:binary`；`git diff --check`。
+
+- 状态：已完成
+  执行者：xtools-provider-hardening
+  范围：external-sidecar-provider-hardening
+  摘要：强化 `web.search`、media HTTP/local provider、utility LSP/task delegate 与 archive 平台命令失败结构；缺配置、非法 JSON shape、非 JSON stdout、`ok:false` delegate/provider 和缺 `tar` 都返回带 `code` 的结构化失败。
+  原因：外挂 provider/delegate 不能通过假结果、空结果或吞错伪成功进入工具链；公开工具名保持不变。
+  效率：只修改 sidecar 与直接测试，不触碰 computer.use、docs、OpenAPI、Executive tool registry 或认知主链。
+  验证：`bun test tests/web.search.sidecar.test.ts tests/media.sidecar.test.ts tests/utility.sidecar.test.ts`；`git diff --check`。
+
+- 状态：已完成
+  执行者：xtools-computer-use
+  范围：computer-use-sidecar
+  摘要：新增高层 `computer.use` process-json sidecar 和安装脚本，支持 delegate/cua backend、动作输入校验、危险输入阻断、`captureAfter` 二次捕获，并把 `computer.use` 纳入 external tool catalog。descriptor 携带 `ToolPermission.Computer`、exclusive、computer profile 和 `approval:computer` 标签，真实执行仍经 Executive user tool runtime、computer approval、quota 和 audit 链路。
+  原因：高层电脑使用能力必须作为外挂 sidecar 暴露，内核只负责 manifest 发现、工具目录、sandbox/approval/audit metadata 和结构化失败，不能导入桌面控制实现或回写 Memory、Scope、ASK、Crystal 主链。
+  效率：本 lane 新增 sidecar、installer、process-json 测试、manifest/catalog 测试和安装脚本测试；修复 external specs public getter 返回内部单例导致测试 matcher 污染的问题。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
