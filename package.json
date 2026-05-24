@@ -36,6 +36,7 @@
         "install:xtools:browser-cdp": "sh scripts/install.xtools.browser-cdp.sh",
         "install:xtools:search-web": "sh scripts/install.xtools.search-web.sh",
         "install:xtools:media": "sh scripts/install.xtools.media.sh",
+        "install:xtools:computer-native": "sh scripts/install.xtools.computer-native.sh",
         "install:xtools:mock": "sh scripts/install.xtools.mock.sh",
         "install:templates": "bun run scripts/install.templates.ts",
         "install:templates:force": "bun run scripts/install.templates.ts --force",

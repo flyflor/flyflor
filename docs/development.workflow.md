@@ -1163,3 +1163,27 @@ Validation:
 - `bun test tests/media.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-24 xtools-computer-native Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-computer-native`
+- branch: `feature/xtools-computer-native`
+- owner: Native screen/window/mouse/keyboard external sidecar
+
+Boundary:
+
+- `screen.screenshot` and `computer.window` may use platform commands discovered at runtime
+- `computer.mouse` and `computer.keyboard` require explicit delegate commands from `external.tools.jsonc` config
+- missing platform commands or delegates return structured `unavailable` failures
+- no hidden fallback performs a control action
+- screenshot writes are constrained under `projectDir`
+- real invocation still enters Executive Tool Runtime, sandbox, approval, quota, and audit events
+
+Validation:
+
+- `bun test tests/computer.native.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `git diff --check`

@@ -790,6 +790,13 @@ Kernel V2 acceptance focus：
 - [ ] 覆盖工具成功、失败、预算耗尽 ASK、history/detail/replay 和子代理场景。
 - [ ] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 并提交给主 Codex review。
 
+## 2026-05-24 xtools-computer-native 本地任务
+
+- [x] 初始化 `xtools-computer-native` worktree，本地控制文件只追加状态。
+- [x] 实现 `screen.screenshot`、`computer.mouse`、`computer.keyboard`、`computer.window` native sidecar。
+- [x] 补 macOS / Windows / Linux capability probe 和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
 ## 2026-05-24 xtools-media 本地任务
 
 - [x] 初始化 `xtools-media` worktree，本地控制文件只追加状态。
