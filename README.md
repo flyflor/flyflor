@@ -94,6 +94,7 @@ OpenAPI and WS docs:
 - [docs/apifox/README.md](docs/apifox/README.md) provides the Apifox-only WS example set with every frame expanded for testing.
 - [docs/ws.doc.md](docs/ws.doc.md) is the field-level `/ws` manual.
 - [docs/control.protocol.md](docs/control.protocol.md) is the protocol contract for external clients.
+- [docs/external.kit.md](docs/external.kit.md) and [docs/external.tools.seal.md](docs/external.tools.seal.md) define the three-layer tool model, external sidecar governance, and WS/TUI capability consumption boundary.
 
 Parallel development and handoff rules live in [docs/development.workflow.md](docs/development.workflow.md).
 

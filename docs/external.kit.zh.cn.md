@@ -2,6 +2,42 @@
 
 External Kit 是可选外挂能力的只读发现协议，不是第一方 CLI、TUI 或 socket 兼容层，也不直接执行工具。
 
+## 三层工具模型
+
+Flyflor 暴露三层工具。三层可以叠加，但 owner 必须分开：
+
+| 层 | 示例 | Owner | 执行契约 |
+| --- | --- | --- | --- |
+| 内建 coding 工具 | workspace read/write、patch、git、process、shell | Bun 内核 / Executive | 第一方 coding 原语，编译进内核，始终在 sandbox、approval、quota 和 audit gate 后执行。 |
+| 原子 sidecar | `browser.*`、`web.*`、`vision.*`、`audio.*`、`screen.*`、`computer.mouse`、`computer.keyboard`、`lsp.*`、`task.background`、`file.hash`、`archive.*`、`data.convert` | 外部 process-json runner | 从 `external.tools.jsonc` 发现的小型委派能力。每个工具只有一个窄 capability descriptor，并返回结构化 success、`failed` 或 `unavailable`。 |
+| 高层 computer use | `computer.use` | 未来高层控制器 | 基于可见原子 computer/screen/browser 工具的规划/执行 facade。它不替代内建 coding 工具，真实执行仍必须进入 Executive Tool Runtime。 |
+
+`computer.use` 是有意保留的高层能力。它可以决定调用 screenshot、mouse、keyboard、window 或 browser control 等原子 sidecar，但不能获得私有执行通道。所需 delegate 或 provider 缺失时，高层调用必须暴露与阻塞它的原子工具一致的结构化失败语义。
+
+## 兼容矩阵
+
+| 能力族 | 内建 coding 工具 | 原子 sidecar | `computer.use` 依赖 | 说明 |
+| --- | --- | --- | --- | --- |
+| Workspace 文件、patch、git | 是 | 否 | 否 | 外挂 sidecar 不得重复实现第一方 coding 原语。 |
+| Process 与 shell 逃生口 | 是 | 否 | 否 | Shell 仍是高风险内建逃生口，不是 sidecar 抽象。 |
+| Browser CDP | 否 | 是 | 可选 | 需要已有 Chrome/Chromium CDP endpoint。 |
+| Search 与 web fetch | 否 | 是 | 可选 | Search 需要显式 provider；fetch/extract/download 受 sidecar policy 和 `projectDir` 约束。 |
+| Vision 与 audio | 否 | 是 | 可选 | 需要 HTTP provider 或按工具配置的本地 process-json delegate，不捆绑 SDK 或模型资产。 |
+| Screen observation | 否 | 是 | 是 | 平台命令可提供截图/窗口观察；缺失时返回 `unavailable`。 |
+| Mouse 与 keyboard control | 否 | 是 | 是 | 必须显式配置 delegate 命令，并走 computer approval；禁止隐藏兜底执行控制动作。 |
+| LSP 与后台任务 | 否 | 是 | 可选 | 必须显式配置 delegate 命令。 |
+| Hash/archive/data conversion | 否 | 是 | 可选 | 限制在 `projectDir` 内的轻量工具，不替代 workspace 原语。 |
+
+## Provider 与 Delegate 失败语义
+
+外挂工具失败是协议的一部分，不是只写日志的诊断：
+
+- `unavailable`：sidecar、provider、平台命令或 delegate 缺失。适用于缺 search provider、media provider、mouse/keyboard delegate、LSP/task delegate，以及平台 screen/window 命令缺失。
+- `failed`：能力存在，但本次调用失败。结果必须包含工具名和足够审计的结构化细节，例如 exit code、stderr 摘要、provider status、文件错误或被拒绝的路径。
+- 启动发现不能因为可选 sidecar 缺失而让 Bun 内核启动失败。缺失 sidecar 仍以 disabled descriptor 暴露，方便客户端解释可安装项或配置问题。
+
+sidecar 可以接收 `external.tools.jsonc` 里的 opaque config，但语义判断仍只属于模型输出协议或 Executive 资源指标。sidecar 不得从自然语言文本推断用户意图。
+
 ## 运行目录归属
 
 - `~/.flyflor/.config/tools` 是后续用户态工具治理面，负责 registry、安装回执、启用状态、权限策略和 staging manifest。
@@ -9,6 +45,8 @@ External Kit 是可选外挂能力的只读发现协议，不是第一方 CLI、
 - 仓库根目录 `./tools` 只作为本地开发工作区，与 `src` 平级。该目录已被 git 忽略，禁止提交。
 
 开发期 `./tools` 可以放 Browser CDP、屏幕、视觉、语音、LSP 或其他 sidecar 实验代码。运行时发现仍必须通过显式 manifest 和结构化 capability 注册完成。内核禁止直接 import `./tools` 中的实现文件。
+
+`~/.flyflor/.config/tools` 是治理面，不是 payload。它拥有用户可见 registry 状态、启用状态、policy、安装回执、staged manifest、provider/delegate config 和 disabled capability reason。`~/.flyflor/tools` 拥有已安装 runner 文件。workspace-local `./.flyflor/tools/external.tools.jsonc` 可以收窄或追加项目本地 descriptor，但不能变成源码 import 路径。
 
 ## 当前主线范围
 
@@ -34,6 +72,16 @@ External sidecar 发现只从 `~/.flyflor/.config/tools` 和 `./.flyflor/tools` 
 - 缺失 sidecar 只能报告为 unavailable descriptor，不能阻塞启动。
 
 真实执行必须进入 Executive Tool Runtime、sandbox、approval、quota 和 audit events。
+
+## WebSocket 与 TUI 消费边界
+
+`/ws` 客户端和 TUI shell 只把工具面当数据消费：
+
+- `server.hello.payload.kits` 和 `capability.catalog.get` 暴露只读 kit 与 capability snapshot。
+- disabled 或 missing sidecar 仍带结构化 reason 可见，因此客户端可以渲染安装/配置状态，而不用 import sidecar 代码。
+- 工具调用仍走正常 Executive tool runtime。TUI 不得直接调用 sidecar script，也不得把 kit discovery 当成执行 API。
+- Runtime event subscription 可以展示 tool lifecycle、approval、quota 和 audit 状态，但不拥有工具调度或 provider fallback。
+- `computer.use` 只有在所需原子依赖和 approval profile 可见时，才应该作为高层能力渲染给用户。
 
 ## Browser CDP Sidecar
 
@@ -143,3 +191,16 @@ bun run install:xtools:utility
 workspace/git/process/shell 原语。LSP 与后台任务执行必须在 `external.tools.jsonc`
 里显式配置 `lspCommand` 和 `taskCommand` delegate。文件和 archive 路径必须留在
 `projectDir` 内。
+
+## 验证清单
+
+封板外挂工具文档或 installer 前检查：
+
+- `external.tools.jsonc` 示例保持内建 coding 工具、原子 sidecar 和 `computer.use` 分层。
+- 每个依赖 provider/delegate 的工具都说明 `unavailable` 行为。
+- 缺失 sidecar 仍作为 disabled descriptor 可发现，而不是让内核启动失败。
+- 写入或下载文件的路径必须留在 `projectDir` 内。
+- WS/TUI 文档只消费 `server.hello.payload.kits`、`capability.catalog.get` 和事件，不直接调用 sidecar script。
+- `bun run docs:check`
+- `bun test tests/docs.references.test.ts`
+- `git diff --check`

@@ -1,5 +1,14 @@
 # Flyflor 日志
 
+## 2026-05-24
+
+- 状态：已完成
+  执行者：xtools-docs-ws
+  范围：external-tools-docs-seal
+  摘要：补齐 External Kit 与 External Tools Seal 的三层工具模型，明确内建 coding 工具、原子 sidecar 和未来 `computer.use` 的边界，并记录 provider/delegate 失败语义、`.config/tools` 运行治理和 WS/TUI 只读消费边界。
+  原因：本 worktree 负责 WS 场景、文档示例、能力矩阵和封板报告；外挂工具面需要先用文档固定分层和失败契约，避免 TUI 或 sidecar 把 discovery 当执行 API。
+  验证：`bun run docs:check`; `bun test tests/docs.references.test.ts tests/docs.index.test.ts`; `git diff --check`
+
 ## 2026-05-21
 
 - 状态：进行中
