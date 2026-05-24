@@ -935,3 +935,26 @@ Kernel V2 硬设计点：
 - Bun 内核必须通过显式 manifest 和 capability descriptor 发现 sidecar。
 - Bun 内核禁止直接 import 本地 `./tools` 实现文件。
 - Browser CDP 以及后续 sidecar 可以先在 `./tools` 本地迭代，再通过 manifest、ASK 确认、安装回执、sandbox 和 audit 升格。
+
+## 2026-05-24 xtools-browser-cdp Worktree
+
+Lane 归属：
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp`
+- branch: `feature/xtools-browser-cdp`
+- tmux: `xtools-browser-cdp`
+- owner: Browser CDP external sidecar
+
+允许范围：
+
+- process-json Browser CDP sidecar 脚本
+- 写入 `~/.flyflor/.config/tools/external.tools.jsonc` 的安装脚本
+- 用于 socket capability 展示的可选 kit catalog manifest
+- focused sidecar / external tool 测试和文档
+
+硬边界：
+
+- 不把 Playwright、Chrome、OCR、Whisper、LSP 或 native dependency 加入 Bun 内核
+- `src` 禁止 import 本地 `./tools` 实现
+- 不修改 Memory、Scope、Crystal、ASK、fork 或 socket query 主链
+- 真实执行必须继续经过 Executive Tool Runtime、sandbox、approval、quota 和 audit events

@@ -773,3 +773,10 @@ Kernel V2 acceptance focus：
 - [x] 明确正式用户态治理目录仍为 `~/.flyflor/.config/tools`，正式 payload 目录仍为 `~/.flyflor/tools`。
 - [x] 更新 External Kit 文档，禁止内核直接 import 本地 `tools/` 实现文件。
 - [x] 将 external sidecar manifest 读取路径从 kits 目录迁到专用 tools 控制面：全局 `~/.flyflor/.config/tools/external.tools.jsonc`，项目 `./.flyflor/tools/external.tools.jsonc`。
+
+## 2026-05-24 xtools-browser-cdp
+
+- [x] 创建 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp`，分支 `feature/xtools-browser-cdp`。
+- [x] 启动 `xtools-browser-cdp` tmux 子进程，只推进 Browser CDP 外挂 sidecar 最小闭环。
+- [ ] Review 子进程提交，确认无重依赖、无内核 import sidecar 实现、无记忆/Scope/ASK 主链漂移。
+- [ ] 合并 Browser CDP sidecar 到主线，运行 focused tests、`bun run docs:check`、`bun run check` 和 `git diff --check`。

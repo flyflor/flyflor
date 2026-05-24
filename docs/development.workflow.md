@@ -1066,3 +1066,26 @@ Boundary:
 - The Bun kernel must discover sidecars through explicit manifests and capability descriptors.
 - The Bun kernel must not import implementation files from local `./tools`.
 - Browser CDP and later sidecars can iterate locally in `./tools`, then graduate through manifest, ASK approval, install receipt, sandbox, and audit.
+
+## 2026-05-24 xtools-browser-cdp Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp`
+- branch: `feature/xtools-browser-cdp`
+- tmux: `xtools-browser-cdp`
+- owner: Browser CDP external sidecar
+
+Allowed surface:
+
+- process-json Browser CDP sidecar script
+- install script for `~/.flyflor/.config/tools/external.tools.jsonc`
+- optional kit catalog manifest for socket capability display
+- focused sidecar/external tool tests and docs
+
+Hard boundaries:
+
+- no Playwright, Chrome, OCR, Whisper, LSP, or native dependency added to the Bun kernel
+- no imports from local `./tools` into `src`
+- no Memory, Scope, Crystal, ASK, fork, or socket query main-chain edits
+- real execution must remain behind Executive Tool Runtime, sandbox, approval, quota, and audit events
