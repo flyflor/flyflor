@@ -34,3 +34,35 @@ External sidecar 发现只从 `~/.flyflor/.config/tools` 和 `./.flyflor/tools` 
 - 缺失 sidecar 只能报告为 unavailable descriptor，不能阻塞启动。
 
 真实执行必须进入 Executive Tool Runtime、sandbox、approval、quota 和 audit events。
+
+## Browser CDP Sidecar
+
+最小 Browser CDP sidecar 是 `scripts/browser.cdp.sidecar.ts` 里的 process-json adapter。
+它不捆绑浏览器运行时，也不安装 Playwright 或 Chrome；只连接已经启动的 Chrome/Chromium
+DevTools Protocol endpoint，默认是 `http://127.0.0.1:9222`。
+
+在源码 checkout 内安装 manifest：
+
+```bash
+bun run install:xtools:browser-cdp
+```
+
+需要改端口时：
+
+```bash
+FLYFLOR_BROWSER_CDP_URL=http://127.0.0.1:9333 bun run install:xtools:browser-cdp
+```
+
+安装脚本默认只向 `~/.flyflor/.config/tools` 写入 `external.tools.jsonc`，除非显式设置
+`FLYFLOR_XTOOLS_TARGET`。它把 `browser.open`、`browser.snapshot`、`browser.screenshot`、
+`browser.click`、`browser.type`、`browser.navigate` 和 `browser.evaluate` 注册到
+`browser.cdp` sidecar。真实调用仍必须经过 Executive tool runtime、sandbox gate、
+approval policy、quota 和 audit events。
+
+Chrome 启动示例：
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/flyflor-browser-cdp
+```

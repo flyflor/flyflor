@@ -128,6 +128,57 @@ describe("external tool descriptor discovery", () => {
         }
     });
 
+    test("accepts Browser CDP sidecar manifest for browser tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-browser-cdp-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "browser.cdp": {
+                            command: "bun",
+                            args: ["scripts/browser.cdp.sidecar.ts"],
+                            env: { FLYFLOR_BROWSER_CDP_URL: "http://127.0.0.1:9222" },
+                            tools: [
+                                "browser.open",
+                                "browser.snapshot",
+                                "browser.screenshot",
+                                "browser.click",
+                                "browser.type",
+                                "browser.navigate",
+                                "browser.evaluate",
+                            ],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual([
+                "browser.open",
+                "browser.snapshot",
+                "browser.screenshot",
+                "browser.click",
+                "browser.type",
+                "browser.navigate",
+                "browser.evaluate",
+            ]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "screen.screenshot")?.available).toBe(false);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "browser.open")?.tool.executor).toMatchObject({
+                kind: "process-json",
+                command: "bun",
+                args: ["scripts/browser.cdp.sidecar.ts"],
+                env: { FLYFLOR_BROWSER_CDP_URL: "http://127.0.0.1:9222" },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("adds external sidecar tools to the read-only socket kit catalog", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-catalog-"));
         const paths = testPaths(root);

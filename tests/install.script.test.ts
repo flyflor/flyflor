@@ -7,6 +7,7 @@ const ROOT = join(import.meta.dir, "..");
 const INSTALL_SH = join(ROOT, "scripts", "install.sh");
 const INSTALL_SOURCE_SH = join(ROOT, "scripts", "install.source.sh");
 const INSTALL_DOCKER_SH = join(ROOT, "scripts", "install.docker.sh");
+const INSTALL_XTOOLS_BROWSER_CDP_SH = join(ROOT, "scripts", "install.xtools.browser-cdp.sh");
 const INSTALL_TEMPLATES_TS = join(ROOT, "scripts", "install.templates.ts");
 const INSTALL_PS1 = join(ROOT, "scripts", "install.ps1");
 const PACKAGE_JSON = join(ROOT, "package.json");
@@ -220,6 +221,7 @@ describe("source/docker/windows installers", () => {
         expect(packageJson.scripts?.["install:source"]).toContain("install.source.sh");
         expect(packageJson.scripts?.["install:docker"]).toContain("install.docker.sh");
         expect(packageJson.scripts?.["install:windows"]).toContain("install.ps1");
+        expect(packageJson.scripts?.["install:xtools:browser-cdp"]).toContain("install.xtools.browser-cdp.sh");
         // Socket service smoke writes only inside a temporary HOME and keeps
         // host launchd/systemd state untouched.
         expect(packageJson.scripts?.["smoke:socket:service"]).toContain("socket.service.smoke.ts");
@@ -234,6 +236,36 @@ describe("source/docker/windows installers", () => {
         const text = await Bun.file(INSTALL_TEMPLATES_TS).text();
         expect(text).toContain('join(repoRoot, ".config")');
         expect(text).not.toContain('join(homedir(), ".flyflor", ".config")');
+    });
+
+    test("Browser CDP xtools installer writes only the external tools manifest", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", INSTALL_XTOOLS_BROWSER_CDP_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+
+        const sandbox = await createInstallSandbox();
+        const target = join(sandbox.root, "tools");
+        const proc = Bun.spawn(["sh", INSTALL_XTOOLS_BROWSER_CDP_SH], {
+            env: sandbox.env({
+                FLYFLOR_XTOOLS_TARGET: target,
+                FLYFLOR_BROWSER_CDP_URL: "http://127.0.0.1:9333",
+                FLYFLOR_SOURCE_ROOT: ROOT,
+            }),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"browser.cdp"');
+        expect(manifest).toContain(`"args": ["${ROOT}/scripts/browser.cdp.sidecar.ts"]`);
+        expect(manifest).toContain('"FLYFLOR_BROWSER_CDP_URL": "http://127.0.0.1:9333"');
+        expect(manifest).toContain('"browser.evaluate"');
+        expect(manifest).not.toContain("playwright");
+        await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
     });
 
     test("template install prunes legacy uppercase and soul memory templates", async () => {

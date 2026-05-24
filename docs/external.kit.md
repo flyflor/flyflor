@@ -34,3 +34,35 @@ External sidecar discovery reads `external.tools.jsonc` from `~/.flyflor/.config
 - Missing sidecars are reported as unavailable descriptors, not startup failures.
 
 Real execution must enter Executive Tool Runtime, sandbox, approval, quota, and audit events.
+
+## Browser CDP Sidecar
+
+The minimal Browser CDP sidecar is a process-json adapter at `scripts/browser.cdp.sidecar.ts`.
+It has no bundled browser runtime and does not install Playwright or Chrome. It connects to an
+already-running Chrome/Chromium DevTools Protocol endpoint, defaulting to `http://127.0.0.1:9222`.
+
+Install the manifest from a source checkout:
+
+```bash
+bun run install:xtools:browser-cdp
+```
+
+Override the endpoint when needed:
+
+```bash
+FLYFLOR_BROWSER_CDP_URL=http://127.0.0.1:9333 bun run install:xtools:browser-cdp
+```
+
+The installer writes only `external.tools.jsonc` under `~/.flyflor/.config/tools` unless
+`FLYFLOR_XTOOLS_TARGET` is set. It registers `browser.open`, `browser.snapshot`,
+`browser.screenshot`, `browser.click`, `browser.type`, `browser.navigate`, and
+`browser.evaluate` to the `browser.cdp` sidecar. Actual invocation still goes through the
+Executive tool runtime, sandbox gate, approval policy, quota, and audit events.
+
+Example Chrome launch:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/flyflor-browser-cdp
+```
