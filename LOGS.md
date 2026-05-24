@@ -758,3 +758,9 @@
   摘要：移除已合并的 `xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支，确认没有同名远端分支，也没有 `xtools-*` tmux 会话残留。
   原因：该 lane 的业务提交已通过 patch 等价方式进入主线；保留已完成 worktree 会制造下一轮协调误判。
   验证：`git worktree list --porcelain`；`git branch -r --list 'origin/feature/xtools-browser-cdp'`；`tmux list-sessions | rg '^xtools-'`。
+- 状态：进行中
+  执行者：xtools-media
+  范围：media-sidecar
+  摘要：初始化媒体 lane，准备实现视觉、OCR、语音转写和 TTS 外挂能力。
+  原因：媒体能力需要支持 provider 或本地工具检测，但不能把重依赖和密钥打进 Bun 内核。
+  验证：待实现后补充。
