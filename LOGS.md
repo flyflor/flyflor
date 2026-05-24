@@ -896,3 +896,11 @@
   原因：Codex/OpenCode/Claude-Code 风格的本地项目阅读不能依赖模型自觉输出工具 JSON。之前目录探测和粘连路径都会漏，导致用户看到“我先看看项目结构”但没有真实工具调用，或工具结果摘要被长路径截断后丢掉关键文件名。
   效率：只触碰 Runtime 本地路径探测、workspace tree 摘要和直接测试；保持零字符工程边界，该逻辑只做资源定位，不做意图/语义分类；未修改 Memory、Scope、ASK、Crystal 主链。
   验证：`bun test tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts --timeout 30000`；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：model-planned-subtask-batch
+  摘要：新增 `mcp.subtask.plan` 提示词和 `RuntimeSubagentPlanner`，在首轮工具草稿缺失或本地目录广域分析时，由模型结构化决定是否把工作委派给 `subagent.batch`。子任务规划只接受 catalog 中真实可用工具，支持收窄 allowlist、并发数和子任务工具轮次；OpenAPI/Apifox 同步补齐 `fork.memory.*` 与全量 runtime event subscription 枚举。
+  原因：用户要求“读完整项目”“搜索多个在线资料”“浏览器登录截图上传”等复合动作压缩成一个父级额度，而不是让主执行循环被许多底层工具调用耗尽；是否拆分必须由模型决策，不能硬编码关键词或任务类型。
+  效率：新增模型规划提示词、planner、runtime 注入路径和 focused 回归；保留 `subagent.batch` 原有 sandbox/audit/provenance 链路，未修改 Memory、Scope、ASK、Crystal 主链。
+  验证：`bun run docs:check`；`bun run check`；`bun test tests/skill.mcp.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`；`git diff --check`。

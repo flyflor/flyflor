@@ -1282,3 +1282,22 @@ Validation:
 - `bun test tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts --timeout 30000`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-25 Model-Planned Subtask Batch
+
+Accepted mainline closure:
+
+- owner: `main-codex`
+- scope: runtime subagent planner, subtask prompt templates, parent-budget delegation, OpenAPI/Apifox enum drift fix, focused tests
+- broad tool work can be delegated to one `subagent.batch` parent operation after the model returns a structured `delegate` decision
+- child tasks carry narrowed tool allowlists, concurrency, and per-child tool-turn ceilings; the parent operation still emits runtime audit/provenance events
+- the code does not classify broad work with user-text keywords, regular expressions, or phrase heuristics; it only validates JSON, tool catalog membership, and resource availability
+- optional `mcp.tool.need` / subtask-planner parse failures fall through to the next gate or visible answer instead of hiding a later valid tool path
+- canonical socket OpenAPI now keeps `SocketMessageType` and `EventSubscription.types` aligned with protocol contracts and `RuntimeEventType`, then regenerates Apifox artifacts
+
+Validation:
+
+- `bun run docs:check`
+- `bun run check`
+- `bun test tests/skill.mcp.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`
+- `git diff --check`

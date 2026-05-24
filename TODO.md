@@ -886,3 +886,13 @@ Kernel V2 acceptance focus：
 - [x] 工作区只读工具允许读取项目外绝对路径；写入、编辑、删除、patch 仍保留 approval/audit gate。
 - [x] 强化 workspace tree 的工具结果摘要，长绝对路径不会把 `README.md`、`src/main.ts` 等关键文件名挤出回放/metadata。
 - [x] 运行验证：`bun test tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts --timeout 30000`；`bun run check`；`git diff --check`。
+
+## 2026-05-25 模型决策子任务批处理封口
+
+- 状态：已完成
+- [x] 新增 `mcp.subtask.plan` 提示词模板和中文镜像，由模型结构化判断当前工具工作是否需要拆成子任务批处理。
+- [x] 新增 runtime subagent planner，校验模型返回的 `continue` / `delegate` 决策、任务数量、并发数、子任务工具 allowlist 和子任务工具轮次。
+- [x] 广域读项目、搜索资料、浏览器/工具组合等复杂工作可被规划成一次 `subagent.batch` 父级工具操作，子任务内部仍保留独立预算、审计事件和 provenance。
+- [x] 保持零字符工程：子任务是否开启、开启几个、允许哪些工具由模型结构化输出决定，代码只做 JSON/schema/catalog/resource 校验。
+- [x] 修正 OpenAPI/Apifox 契约：`SocketMessageType` 与新增 `fork.memory.*` 控制消息对齐，`EventSubscription.types` 与 `RuntimeEventType` 全量对齐。
+- [x] 运行验证：`bun run docs:check`；`bun run check`；`bun test tests/skill.mcp.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`。
