@@ -22,6 +22,7 @@ export interface ToolResultLimit {
 
 export const ComputerControlAction = {
     Browser: "browser",
+    Computer: "computer",
     Keyboard: "keyboard",
     Mouse: "mouse",
     Screen: "screen",

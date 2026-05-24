@@ -840,3 +840,11 @@
   原因：外挂 provider/delegate 不能通过假结果、空结果或吞错伪成功进入工具链；公开工具名保持不变。
   效率：只修改 sidecar 与直接测试，不触碰 computer.use、docs、OpenAPI、Executive tool registry 或认知主链。
   验证：`bun test tests/web.search.sidecar.test.ts tests/media.sidecar.test.ts tests/utility.sidecar.test.ts`；`git diff --check`。
+
+- 状态：已完成
+  执行者：xtools-computer-use
+  范围：computer-use-sidecar
+  摘要：新增高层 `computer.use` process-json sidecar 和安装脚本，支持 delegate/cua backend、动作输入校验、危险输入阻断、`captureAfter` 二次捕获，并把 `computer.use` 纳入 external tool catalog。descriptor 携带 `ToolPermission.Computer`、exclusive、computer profile 和 `approval:computer` 标签，真实执行仍经 Executive user tool runtime、computer approval、quota 和 audit 链路。
+  原因：高层电脑使用能力必须作为外挂 sidecar 暴露，内核只负责 manifest 发现、工具目录、sandbox/approval/audit metadata 和结构化失败，不能导入桌面控制实现或回写 Memory、Scope、ASK、Crystal 主链。
+  效率：本 lane 新增 sidecar、installer、process-json 测试、manifest/catalog 测试和安装脚本测试；修复 external specs public getter 返回内部单例导致测试 matcher 污染的问题。
+  验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。

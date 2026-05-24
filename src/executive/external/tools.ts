@@ -90,6 +90,7 @@ const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
     browserTool("browser.navigate", "Navigate the external browser.", false, ["url"]),
     browserTool("browser.evaluate", "Evaluate script through the external browser sidecar.", false, ["script"]),
     computerTool("screen.screenshot", "Capture the current screen through the external sidecar.", ComputerControlAction.Screen, true),
+    computerUseTool(),
     computerTool("computer.mouse", "Control the mouse through the external computer sidecar.", ComputerControlAction.Mouse, false),
     computerTool("computer.keyboard", "Control the keyboard through the external computer sidecar.", ComputerControlAction.Keyboard, false),
     computerTool("computer.window", "Control windows through the external computer sidecar.", ComputerControlAction.Window, false),
@@ -153,7 +154,7 @@ export class ExternalToolDescriptorComponent {
     }
 
     public specs(): readonly ExternalToolSpec[] {
-        return EXTERNAL_TOOL_SPECS;
+        return EXTERNAL_TOOL_SPECS.map((spec) => this.cloneSpec(spec));
     }
 
     public normalize(file: ExternalToolManifestFile): readonly NormalizedSidecar[] {
@@ -451,6 +452,16 @@ export class ExternalToolDescriptorComponent {
         }
         return value as Readonly<Record<string, unknown>>;
     }
+
+    private cloneSpec(spec: ExternalToolSpec): ExternalToolSpec {
+        return {
+            ...spec,
+            computer: spec.computer ? { ...spec.computer } : undefined,
+            inputSchema: structuredClone(spec.inputSchema) as ExecutiveJsonObject,
+            scope: [...spec.scope],
+            tags: [...spec.tags],
+        };
+    }
 }
 
 function browserTool(name: string, description: string, readOnly: boolean, required: readonly string[] = []): ExternalToolSpec {
@@ -497,6 +508,66 @@ function computerTool(
         resultLimit: readOnly ? 16_000 : 4_000,
         scope: [ToolScope.Local, ToolScope.Debug],
         tags: ["external-tool", "sidecar", "computer", "approval:computer"],
+    };
+}
+
+function computerUseTool(): ExternalToolSpec {
+    const coordinateSchema = {
+        type: "array",
+        items: { type: "number" },
+    };
+    return {
+        category: ToolCategory.Computer,
+        computer: {
+            action: ComputerControlAction.Computer,
+            observationOnly: false,
+            requiresFocusTarget: true,
+        },
+        concurrencySafe: false,
+        description: "Drive a desktop through a high-level capture/action/verify computer-use sidecar.",
+        exclusive: true,
+        inputSchema: {
+            type: "object",
+            required: ["action"],
+            properties: {
+                action: {
+                    type: "string",
+                    enum: [
+                        "capture",
+                        "click",
+                        "double_click",
+                        "right_click",
+                        "drag",
+                        "scroll",
+                        "type",
+                        "key",
+                        "set_value",
+                        "wait",
+                        "list_apps",
+                        "focus_app",
+                    ],
+                },
+                amount: { type: "number" },
+                app: { type: "string" },
+                captureAfter: { type: "boolean" },
+                coordinate: coordinateSchema,
+                direction: { type: "string" },
+                element: { type: "number" },
+                fromCoordinate: coordinateSchema,
+                fromElement: { type: "number" },
+                keys: { type: "string" },
+                text: { type: "string" },
+                toCoordinate: coordinateSchema,
+                toElement: { type: "number" },
+                value: { type: "string" },
+            },
+        },
+        name: "computer.use",
+        permission: ToolPermission.Computer,
+        readOnly: false,
+        resultLimit: 24_000,
+        scope: [ToolScope.Local, ToolScope.Debug],
+        tags: ["external-tool", "sidecar", "computer", "computer-use", "approval:computer"],
     };
 }
 
