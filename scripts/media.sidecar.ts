@@ -185,7 +185,15 @@ class LocalProcessJsonProvider {
                 truncated: stdout.truncated || stderr.truncated,
             });
         }
-        const response = parseFirstJsonLine(stdout.text, `local media command ${this.config.tool}`);
+        const response = parseFirstJsonObjectLine(stdout.text, `local media command ${this.config.tool}`);
+        if (response.ok === false) {
+            throw new MediaSidecarError("failed", `local media command returned failure for ${this.config.tool}`, {
+                command: this.config.command,
+                response,
+                stderr: stderr.text,
+                truncated: stdout.truncated || stderr.truncated,
+            });
+        }
         return {
             provider: "local",
             response,
@@ -233,11 +241,17 @@ class HttpJsonMediaProvider {
             throw new MediaSidecarError("failed", `media HTTP provider request failed: ${messageFrom(err)}`);
         }
         const text = await response.text();
-        const body = parseJsonText(text);
+        const body = parseJsonObjectText(text, "media HTTP provider response");
         if (!response.ok) {
             throw new MediaSidecarError("failed", `media HTTP provider returned ${response.status}`, {
                 status: response.status,
                 body,
+            });
+        }
+        if (body.ok === false) {
+            throw new MediaSidecarError("failed", "media HTTP provider returned failure", {
+                body,
+                status: response.status,
             });
         }
         return {
@@ -262,7 +276,11 @@ function parseRequest(raw: string): SidecarRequest {
     if (raw.trim().length === 0) {
         throw new MediaSidecarError("failed", "empty process-json request");
     }
-    return JSON.parse(raw) as SidecarRequest;
+    try {
+        return JSON.parse(raw) as SidecarRequest;
+    } catch (err) {
+        throw new MediaSidecarError("failed", "process-json request must be valid JSON", { cause: messageFrom(err) });
+    }
 }
 
 function requiredTool(value: unknown): MediaTool {
@@ -364,22 +382,29 @@ function optionalPositiveInt(value: unknown, path: string): number | undefined {
     return value;
 }
 
-function parseFirstJsonLine(text: string, path: string): unknown {
+function parseFirstJsonObjectLine(text: string, path: string): JsonObject {
     const line = text.split("\n").find((entry) => entry.trim().length > 0);
     if (!line) {
         throw new MediaSidecarError("failed", `${path} produced no stdout response`);
     }
-    return JSON.parse(line) as unknown;
+    return parseJsonObjectText(line, `${path} stdout`);
 }
 
-function parseJsonText(text: string): unknown {
+function parseJsonObjectText(text: string, path: string): JsonObject {
     if (text.trim().length === 0) {
-        return {};
+        throw new MediaSidecarError("failed", `${path} produced no JSON response`);
     }
     try {
-        return JSON.parse(text) as unknown;
-    } catch {
-        return { text };
+        const parsed = JSON.parse(text) as unknown;
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+            throw new MediaSidecarError("failed", `${path} must be a JSON object`);
+        }
+        return parsed as JsonObject;
+    } catch (err) {
+        if (err instanceof MediaSidecarError) {
+            throw err;
+        }
+        throw new MediaSidecarError("failed", `${path} produced non-json response`, { cause: messageFrom(err) });
     }
 }
 
