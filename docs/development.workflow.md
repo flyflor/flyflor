@@ -1141,3 +1141,25 @@ Validation:
 - `bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-24 xtools-media Worktree
+
+Lane ownership:
+
+- path: `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-media`
+- branch: `feature/xtools-media`
+- owner: Vision/OCR/audio external media sidecar
+
+Boundary:
+
+- the sidecar is only a process-json bridge for `vision.analyze`, `vision.ocr`, `audio.transcribe`, and `audio.speak`
+- provider endpoints, headers, and local delegate commands live in `external.tools.jsonc` `config`
+- business media configuration must not use environment variables
+- failures return structured JSON and nonzero exit; unavailable provider state is explicit
+- no OCR, Whisper, TTS, vision SDK, local model asset, native addon, or postinstall hook is added to the Bun kernel
+
+Validation:
+
+- `bun test tests/media.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run check`
+- `git diff --check`

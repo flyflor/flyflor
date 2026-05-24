@@ -80,3 +80,23 @@ bun run install:xtools:search-web
 The installer writes `external.tools.jsonc` with an empty `providers` list. Add provider
 entries under `sidecars.web.search.config.providers` in `~/.flyflor/.config/tools/external.tools.jsonc`.
 Generic providers must return an array of objects with `title`, `url`, and `snippet` fields.
+
+## Media Sidecar
+
+`scripts/media.sidecar.ts` is the lightweight bridge for `vision.analyze`, `vision.ocr`,
+`audio.transcribe`, and `audio.speak`.
+
+```bash
+bun run install:xtools:media
+```
+
+The installer only registers the process-json sidecar. It does not install OCR, Whisper,
+TTS, vision SDKs, local model assets, native addons, or postinstall hooks. Runtime work is
+delegated through `sidecars.media.local.config`:
+
+- `providerUrl`: HTTP JSON provider endpoint.
+- `providerHeaders`: optional HTTP headers.
+- `localCommands`: optional per-tool process-json delegate map.
+
+If neither `providerUrl` nor a matching local command is configured, the sidecar exits nonzero
+with an explicit `unavailable` response.

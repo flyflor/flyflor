@@ -81,3 +81,22 @@ bun run install:xtools:search-web
 `~/.flyflor/.config/tools/external.tools.jsonc` 的
 `sidecars.web.search.config.providers` 下追加 provider。Generic provider 需要返回包含
 `title`、`url` 和 `snippet` 字段的对象数组。
+
+## Media Sidecar
+
+`scripts/media.sidecar.ts` 是 `vision.analyze`、`vision.ocr`、`audio.transcribe`
+和 `audio.speak` 的轻量桥接层。
+
+```bash
+bun run install:xtools:media
+```
+
+安装脚本只注册 process-json sidecar，不安装 OCR、Whisper、TTS、视觉 SDK、本地模型资产、
+native addon 或 postinstall hook。实际运行通过 `sidecars.media.local.config` 委派：
+
+- `providerUrl`：HTTP JSON provider endpoint。
+- `providerHeaders`：可选 HTTP headers。
+- `localCommands`：可选的按工具划分 process-json 本地命令映射。
+
+如果没有配置 `providerUrl`，也没有匹配的本地命令，sidecar 必须非零退出并返回明确的
+`unavailable` 结构。
