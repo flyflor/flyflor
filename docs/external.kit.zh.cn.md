@@ -119,3 +119,27 @@ bun run install:xtools:computer-native
 鼠标和键盘动作必须在 `sidecars.computer.native.config.mouseCommand` 与
 `keyboardCommand` 中显式配置 delegate 命令。缺少 delegate 时必须返回 `unavailable`；
 禁止隐藏兜底执行控制动作。截图输出路径必须留在 `projectDir` 内。
+
+## Utility Sidecar
+
+`scripts/utility.sidecar.ts` 覆盖 LSP delegate、后台任务 delegate、文件哈希、archive
+创建/解压和小型结构化数据转换。
+
+```bash
+bun run install:xtools:utility
+```
+
+它注册：
+
+- `lsp.symbols`
+- `lsp.diagnostics`
+- `task.background`
+- `file.hash`
+- `archive.create`
+- `archive.extract`
+- `data.convert`
+
+`file.hash`、`archive.*` 和 `data.convert` 是轻量 sidecar utility，不替代内建
+workspace/git/process/shell 原语。LSP 与后台任务执行必须在 `external.tools.jsonc`
+里显式配置 `lspCommand` 和 `taskCommand` delegate。文件和 archive 路径必须留在
+`projectDir` 内。

@@ -103,19 +103,11 @@ const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
     networkTool("web.download", "Download a URL to an allowed output path through an external web sidecar.", ["url", "path"]),
     codingTool("lsp.symbols", "Read workspace symbols through an external LSP sidecar."),
     codingTool("lsp.diagnostics", "Read workspace diagnostics through an external LSP sidecar."),
-    {
-        category: ToolCategory.System,
-        concurrencySafe: true,
-        description: "Start or inspect an external background task sidecar.",
-        exclusive: false,
-        inputSchema: objectSchema(["task"]),
-        name: "task.background",
-        permission: ToolPermission.Execute,
-        readOnly: false,
-        resultLimit: 8_000,
-        scope: [ToolScope.Background, ToolScope.Core],
-        tags: ["external-tool", "sidecar", "approval:execute"],
-    },
+    utilityTool("file.hash", "Hash a project file through an external utility sidecar.", ToolPermission.Read, true, ["path"]),
+    utilityTool("archive.create", "Create an archive through an external utility sidecar.", ToolPermission.Write, false, ["paths", "output"]),
+    utilityTool("archive.extract", "Extract an archive through an external utility sidecar.", ToolPermission.Write, false, ["archive", "outputDir"]),
+    utilityTool("data.convert", "Convert small structured data through an external utility sidecar.", ToolPermission.Write, false, ["from", "to", "input"]),
+    utilityTool("task.background", "Start or inspect an external background task sidecar.", ToolPermission.Execute, false, ["task"], [ToolScope.Background, ToolScope.Core]),
 ];
 
 /**
@@ -558,6 +550,29 @@ function codingTool(name: string, description: string): ExternalToolSpec {
         resultLimit: 16_000,
         scope: [ToolScope.Workspace],
         tags: ["external-tool", "sidecar", "lsp", "approval:read"],
+    };
+}
+
+function utilityTool(
+    name: string,
+    description: string,
+    permission: ToolPermissionType,
+    readOnly: boolean,
+    required: readonly string[],
+    scope: readonly ToolScopeType[] = [ToolScope.Workspace],
+): ExternalToolSpec {
+    return {
+        category: ToolCategory.System,
+        concurrencySafe: readOnly,
+        description,
+        exclusive: !readOnly,
+        inputSchema: objectSchema(required),
+        name,
+        permission,
+        readOnly,
+        resultLimit: 16_000,
+        scope,
+        tags: ["external-tool", "sidecar", "utility", readOnly ? "approval:read" : "approval:execute"],
     };
 }
 

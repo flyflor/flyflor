@@ -786,9 +786,9 @@ Kernel V2 acceptance focus：
 ## 2026-05-24 xtools-lsp-task-data 本地任务
 
 - [x] 初始化 `xtools-lsp-task-data` worktree，本地控制文件只追加状态。
-- [ ] 实现 `lsp.symbols`、`lsp.diagnostics`、`task.background`、`file.hash`、`archive.*`、`data.convert`。
-- [ ] 补轻量 utility sidecar、后台任务句柄和 focused tests。
-- [ ] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+- [x] 实现 `lsp.symbols`、`lsp.diagnostics`、`task.background`、`file.hash`、`archive.*`、`data.convert`。
+- [x] 补轻量 utility sidecar、后台任务句柄和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
 
 ## 2026-05-24 xtools-computer-native 本地任务
 

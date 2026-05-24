@@ -38,6 +38,10 @@ const EXPECTED_EXTERNAL_TOOLS = [
     "web.download",
     "lsp.symbols",
     "lsp.diagnostics",
+    "file.hash",
+    "archive.create",
+    "archive.extract",
+    "data.convert",
     "task.background",
 ] as const;
 
@@ -302,6 +306,58 @@ describe("external tool descriptor discovery", () => {
                     observationOnly: false,
                     requiresFocusTarget: true,
                 },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts Utility sidecar manifest for LSP, task and data tools only", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-utility-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 1,
+                    sidecars: {
+                        "utility.local": {
+                            command: "bun",
+                            args: ["scripts/utility.sidecar.ts"],
+                            config: { lspCommand: "lsp-test", taskCommand: "task-test" },
+                            tools: [
+                                "lsp.symbols",
+                                "lsp.diagnostics",
+                                "task.background",
+                                "file.hash",
+                                "archive.create",
+                                "archive.extract",
+                                "data.convert",
+                            ],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const available = tools.filter((entry) => entry.available).map((entry) => entry.tool.descriptor.name);
+            expect(available).toEqual([
+                "lsp.symbols",
+                "lsp.diagnostics",
+                "file.hash",
+                "archive.create",
+                "archive.extract",
+                "data.convert",
+                "task.background",
+            ]);
+            expect(tools.find((entry) => entry.tool.descriptor.name === "file.hash")?.tool.descriptor).toMatchObject({
+                readOnly: true,
+                permission: ToolPermission.Read,
+            });
+            expect(tools.find((entry) => entry.tool.descriptor.name === "archive.create")?.tool.descriptor).toMatchObject({
+                readOnly: false,
+                permission: ToolPermission.Write,
             });
         } finally {
             await rm(root, { recursive: true, force: true });
