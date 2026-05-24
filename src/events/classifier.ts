@@ -9,6 +9,8 @@ const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
     [RuntimeEventType.MemoryAskChainCapped]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskMutexViolation]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskRecorded]: RuntimeEventClass.Ask,
+    [RuntimeEventType.MemoryTaskPlanDecided]: RuntimeEventClass.Write,
+    [RuntimeEventType.MemoryTaskPlanDecisionFailed]: RuntimeEventClass.Error,
     [RuntimeEventType.ExecutiveLoopPaused]: RuntimeEventClass.Ask,
     [RuntimeEventType.ExecutiveLoopResumed]: RuntimeEventClass.Ask,
     [RuntimeEventType.BlackboardDecisionRequested]: RuntimeEventClass.Question,

@@ -46,7 +46,31 @@ Mode selection:
     - The request asks to satisfy or balance two or more stakeholders / preferences / competing positions that are genuinely in conflict.
     - The request explicitly asks for review, peer review, debate, multiple perspectives, role-play between named participants, or several rounds of discussion.
     - The request needs implementation plus independent verification, cross-file coordination, evidence checking, or contradiction hunting.
+    - The request defines a self-referential rule or instruction whose required action forbids itself, especially when the user also forbids the direct blocker answer or demands a successful plan. Treat this as constraint-conflict analysis, not as a TODO plan.
+    - The request combines mutually exclusive strict mathematical or geometric definitions while forbidding approximation, metaphor, artistic interpretation, or contradiction and demanding an exact formula. Treat this as constraint-conflict analysis, not as a TODO plan.
     - The request is open-ended and high-stakes (money, safety, legal, hiring, architecture) where a single perspective will predictably miss important risks.
+
+Routing priority rubric:
+
+1. Formal definition conflict: strict mathematical, geometric, logical, protocol, or type definitions that cannot all be true under the user's stated constraints. Route to "blackboard" before planning.
+2. Hard-constraint conflict: self-referential instructions, mutually exclusive constraints, or success conditions that forbid their own satisfaction. Route to "blackboard" before planning.
+3. Blocker-suppression conflict: the user forbids acknowledging a blocker, forbids asking for clarification, or forbids the needed caveat while also requiring a successful conclusion. Route to "blackboard" when this affects correctness.
+4. Multi-perspective work: debate, review, verification, evidence checking, conflicting stakeholders, high-risk reasoning, or implementation plus independent verification. Route to "blackboard" when independent challenge can improve correctness.
+5. TODO plan boundary: requests whose main need is task decomposition, sequencing, or user confirmation before execution belong to the planning route, not this route, unless one of priorities 1–4 is present.
+6. Direct boundary: greetings, ordinary definitions, single exact formulas, straightforward explanations, and easily satisfiable constraints stay "direct".
+
+Must-route-to-blackboard examples:
+
+- "Design a square circle under strict geometric definitions; no approximation, metaphor, art, or contradiction; give an exact area formula."
+- "Rule A must be obeyed, but Rule A says Rule A must not be obeyed; do not say it cannot be done; give a successful action plan."
+- "Implement this change and independently verify it across files before answering."
+
+Must-not-route examples:
+
+- "Hi."
+- "Design a circle and give its area formula."
+- "Explain the difference between a square and a circle."
+- "Create a TODO list for building the feature." Use the planning route if execution should wait for confirmation.
 
 Discussion-value gate: before choosing multi-participant discussion, ask — would a structured worker discussion surface claims or risks a single model pass would miss? If no (all information is already in the request and a single model can satisfy all constraints reliably), use "direct" or "direct-with-watch" instead. Discussion adds latency; justify it with genuine competing claims. Multi-section structured output (multi-day plans, roadmaps, curricula) justifies discussion ONLY when sections have interdependencies workers can challenge each other on. If the request appears unanswerable from available context, use discussion only when it can identify blockers, alternatives, or a safe user-facing decision.
 

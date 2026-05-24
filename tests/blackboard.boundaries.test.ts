@@ -14,6 +14,7 @@ import {
 } from "../src/agent/index.ts";
 import {
     BlackboardDecisionKind,
+    BlackboardMode,
     BlackboardTurnStatus,
     BlackboardWorkerOutcome,
     ComponentKind,
@@ -21,7 +22,7 @@ import {
 } from "../src/protocol/contracts/index.ts";
 import type { BlackboardWorkerResult, BlackboardWorkerTask, RuntimeEvent } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, componentRegistry, type EventSink, Worker } from "../src/agent/di/index.ts";
-import { parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/index.ts";
+import { RuntimeBlackboardRouteComponent, parseBlackboardRouteDecision } from "../src/agent/runtime/blackboard/index.ts";
 
 const tempRoots: string[] = [];
 const TEST_ANALYSIS_ROLE = "analysis-worker";
@@ -193,7 +194,15 @@ describe("Blackboard control boundary", () => {
         expect(routePrompt).toContain("dependsOn value match another worker role exactly");
         expect(routePrompt).toContain("Worker names should be short display names");
         expect(routePrompt).toContain('Use blackboardContract.mode "non-convergent"');
-        expect(routePrompt).toContain("cannot be proven by finite board evidence");
+        expect(routePrompt).toContain("cannot be proven by finite discussion evidence");
+        expect(routePrompt).toContain("Routing priority rubric");
+        expect(routePrompt).toContain("Formal definition conflict");
+        expect(routePrompt).toContain("Blocker-suppression conflict");
+        expect(routePrompt).toContain("TODO plan boundary");
+        expect(routePrompt).toContain("Must-route-to-blackboard examples");
+        expect(routePrompt).toContain("Must-not-route examples");
+        expect(routePrompt).toContain("Design a square circle under strict geometric definitions");
+        expect(routePrompt).toContain("Design a circle and give its area formula");
         expect(routePrompt).not.toContain("Planner/Reviewer");
         expect(routePrompt).not.toContain("Codex");
         expect(workerPrompt).toContain("Read currentRoundSteps before writing");
@@ -349,6 +358,170 @@ describe("Blackboard control boundary", () => {
                 reason: "circular evaluation",
             },
         ]);
+    });
+
+    test("routes self-referential constraint conflicts through model structured output while greetings stay direct", async () => {
+        const route = new RuntimeBlackboardRouteComponent();
+        let conflictModelCalls = 0;
+        let greetingModelCalls = 0;
+        const conflict = await route.decideBlackboardRoute({
+            generate: async () => {
+                conflictModelCalls += 1;
+                return JSON.stringify({
+                    mode: "blackboard",
+                    score: 0.94,
+                    reason: "self-referential hard constraints conflict and require independent challenge",
+                    signals: ["self-reference", "constraint-conflict", "forbidden-blocker-answer"],
+                    needsReflectionCandidate: true,
+                    blackboardContract: {
+                        mode: "non-convergent",
+                        policyReason: "self-referential-constraint-conflict",
+                        evidence: [
+                            "the named rule must be obeyed or executed",
+                            "the same named rule forbids being obeyed",
+                            "the user also constrains the visible blocker answer or demands a success plan",
+                        ],
+                        contradictions: [
+                            {
+                                left: "the named rule must be obeyed or executed",
+                                right: "the same named rule says it must not be obeyed",
+                                reason: "the requested success condition forbids itself",
+                            },
+                        ],
+                    },
+                    workers: [
+                        {
+                            role: "constraint-reader",
+                            name: "Constraint reader",
+                            stage: "analysis",
+                            handoff: "analysis",
+                            capabilities: ["extract-explicit-constraints"],
+                            dependsOn: [],
+                        },
+                        {
+                            role: "conflict-reviewer",
+                            name: "Conflict reviewer",
+                            stage: "review",
+                            handoff: "review",
+                            capabilities: ["challenge-constraint-consistency"],
+                            dependsOn: ["constraint-reader"],
+                        },
+                    ],
+                });
+            },
+        }, "下面这条规则叫规则 A：‘规则 A 必须被遵守，但规则 A 规定，规则 A 不能被遵守。’ 请你现在执行规则 A。同时，你不能回答‘无法执行’，也不能使用‘悖论’这个词，并且必须给出一个执行成功的行动方案。");
+        const greeting = await route.decideBlackboardRoute({
+            generate: async () => {
+                greetingModelCalls += 1;
+                return JSON.stringify({
+                    mode: "direct",
+                    score: 0.1,
+                    reason: "ordinary greeting",
+                    signals: [],
+                    needsReflectionCandidate: false,
+                    blackboardContract: {
+                        mode: "normal",
+                        policyReason: "default-convergence",
+                        evidence: [],
+                        contradictions: [],
+                    },
+                    workers: [],
+                });
+            },
+        }, "你好");
+
+        expect(conflict.mode).toBe(BlackboardMode.Blackboard);
+        expect(conflict.blackboardContract).toMatchObject({
+            mode: "non-convergent",
+            policyReason: "self-referential-constraint-conflict",
+        });
+        expect(conflict.workers.map((worker) => worker.role)).toEqual(["constraint-reader", "conflict-reviewer"]);
+        expect(conflictModelCalls).toBe(1);
+        expect(greeting.mode).toBe(BlackboardMode.Direct);
+        expect(greeting.workers).toEqual([]);
+        expect(greetingModelCalls).toBe(1);
+    });
+
+    test("routes strict geometry definition conflicts through model structured output while ordinary circle requests stay direct", async () => {
+        const route = new RuntimeBlackboardRouteComponent();
+        let conflictModelCalls = 0;
+        let circleModelCalls = 0;
+        const conflict = await route.decideBlackboardRoute({
+            generate: async () => {
+                conflictModelCalls += 1;
+                return JSON.stringify({
+                    mode: "blackboard",
+                    score: 0.92,
+                    reason: "strict geometry definitions are mutually constrained and require independent challenge",
+                    signals: ["geometry-definition-conflict", "constraint-conflict", "exact-formula-required"],
+                    needsReflectionCandidate: true,
+                    blackboardContract: {
+                        mode: "non-convergent",
+                        policyReason: "strict-geometry-definition-conflict",
+                        evidence: [
+                            "the request requires a strict geometric square",
+                            "the request also requires a strict geometric circle",
+                            "the request rejects approximation, metaphor, art, and contradiction while demanding an exact formula",
+                        ],
+                        contradictions: [
+                            {
+                                left: "a strict geometric square has straight sides and vertices",
+                                right: "a strict geometric circle has all boundary points equidistant from one center",
+                                reason: "one object cannot satisfy both exact boundary definitions",
+                            },
+                        ],
+                    },
+                    workers: [
+                        {
+                            role: "definition-reader",
+                            name: "Definition reader",
+                            stage: "analysis",
+                            handoff: "analysis",
+                            capabilities: ["extract-formal-definitions"],
+                            dependsOn: [],
+                        },
+                        {
+                            role: "geometry-reviewer",
+                            name: "Geometry reviewer",
+                            stage: "review",
+                            handoff: "review",
+                            capabilities: ["challenge-geometric-consistency"],
+                            dependsOn: ["definition-reader"],
+                        },
+                    ],
+                });
+            },
+        }, "我需要你设计一个正方形的圆，并且给出它的面积计算公式。要求：必须是严格几何意义上的正方形和圆，不能是比喻、艺术创作或近似图形。必须给出精确公式，不能出现矛盾。");
+        const direct = await route.decideBlackboardRoute({
+            generate: async () => {
+                circleModelCalls += 1;
+                return JSON.stringify({
+                    mode: "direct",
+                    score: 0.18,
+                    reason: "ordinary circle area request",
+                    signals: [],
+                    needsReflectionCandidate: false,
+                    blackboardContract: {
+                        mode: "normal",
+                        policyReason: "default-convergence",
+                        evidence: [],
+                        contradictions: [],
+                    },
+                    workers: [],
+                });
+            },
+        }, "设计一个圆并给出面积公式");
+
+        expect(conflict.mode).toBe(BlackboardMode.Blackboard);
+        expect(conflict.blackboardContract).toMatchObject({
+            mode: "non-convergent",
+            policyReason: "strict-geometry-definition-conflict",
+        });
+        expect(conflict.workers.map((worker) => worker.role)).toEqual(["definition-reader", "geometry-reviewer"]);
+        expect(conflictModelCalls).toBe(1);
+        expect(direct.mode).toBe(BlackboardMode.Direct);
+        expect(direct.workers).toEqual([]);
+        expect(circleModelCalls).toBe(1);
     });
 
     test("startTurn dedupes worker plans and schedules dependency order", async () => {

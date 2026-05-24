@@ -22,6 +22,7 @@ import {
     createGatewayControlEventEnvelope,
     normalizeGatewayControlMessage,
     parseGatewayControlEnvelope,
+    readGatewayControlTaskPlanDecideInput,
     readGatewayControlHistoryListInput,
     readGatewayControlForkCreateInput,
     readGatewayControlMessageInput,
@@ -34,6 +35,7 @@ import {
     ChatType,
     GatewayControlMessageType,
     GatewayControlProtocol,
+    TaskPlanDecisionAction,
     TaskPlanStatus,
     ToolLifecycleEventType,
 } from "../src/protocol/contracts/index.ts";
@@ -484,6 +486,9 @@ describe("Gateway Control protocol", () => {
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ForkCreate)).toBe(
             GatewayControlSemanticType.Input,
         );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.TaskPlanDecide)).toBe(
+            GatewayControlSemanticType.Input,
+        );
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.TurnDelta)).toBe(
             GatewayControlSemanticType.Stream,
         );
@@ -654,9 +659,25 @@ describe("Gateway Control protocol", () => {
         expect(() => readGatewayControlForkCreateInput(undefined)).toThrow("fork.create requires payload");
         expect(() => readGatewayControlForkCreateInput({ summary: "s" })).toThrow("fork.create payload requires title");
         expect(() => readGatewayControlForkCreateInput({ title: "Fork" })).toThrow("fork.create payload requires summary");
+        expect(() => readGatewayControlTaskPlanDecideInput(undefined)).toThrow("task.plan.decide requires payload");
+        expect(() => readGatewayControlTaskPlanDecideInput({ planId: "plan-1", action: "delete" })).toThrow(
+            "task.plan.decide payload requires action confirm|revise|abandon",
+        );
         expect(() => readGatewayControlHistoryListInput(undefined)).toThrow("history.list requires payload");
         expect(readGatewayControlHistoryListInput({ limit: 10 })).toEqual({ beforeTs: undefined, limit: 10 });
         expect(() => normalizeGatewayControlMessage({ text: "" })).toThrow("gateway.message.send payload requires text");
+    });
+
+    test("reads task.plan.decide payload as an explicit control command", () => {
+        expect(readGatewayControlTaskPlanDecideInput({
+            planId: "  plan-1  ",
+            action: TaskPlanDecisionAction.Revise,
+            revision: "  add tests  ",
+        })).toEqual({
+            planId: "plan-1",
+            action: TaskPlanDecisionAction.Revise,
+            revision: "add tests",
+        });
     });
 
     test("reads fork.create payload as an explicit control command", () => {

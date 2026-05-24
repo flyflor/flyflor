@@ -65,6 +65,11 @@ export interface BlackboardRoutePromptInput {
     request: string;
 }
 
+export interface PlanningRoutePromptInput {
+    interactionMode: string;
+    request: string;
+}
+
 export interface BlackboardWorkerEnvelopeInput {
     contract: unknown;
     convergencePolicy: unknown;
@@ -352,6 +357,15 @@ export function renderBlackboardRoutePrompt(input: BlackboardRoutePromptInput): 
     });
 }
 
+export function renderPlanningRoutePrompt(input: PlanningRoutePromptInput): string {
+    // Dedicated model gate: runtime consumes only JSON fields and never uses text matching
+    // to decide whether a turn must stop at a user-confirmed plan.
+    return renderTemplate(requiredTemplates().planningRoute.content, {
+        interactionMode: input.interactionMode,
+        request: input.request,
+    });
+}
+
 export function renderBlackboardWorkerEnvelope(input: BlackboardWorkerEnvelopeInput): string {
     // 必要提示词：worker 会把该 JSON 作为 ModelRole.User 输入；字段说明、输出字段和约束都由模板承载。
     return renderTemplate(requiredTemplates().blackboardWorkerEnvelope.content, {
@@ -571,6 +585,7 @@ const REQUIRED_PLACEHOLDERS: Record<PromptTemplateKey, readonly string[]> = {
     runtimeContinuationHint: ["continuationEntries"],
     runtimeIdentityContext: ["identityEntries"],
     scopeRecall: ["candidateJson", "currentContextJson", "request"],
+    planningRoute: ["interactionMode", "request"],
     runtimeSystem: [
         "askSchemaInstructions",
         "behaviorPriorityInstructions",

@@ -19,6 +19,7 @@ import {
     ChatType,
     CapabilityExecutionKind,
     ReplayRecordKind,
+    TaskPlanDecisionAction,
     TaskPlanStatus,
     ToolPermission,
     GatewayControlMessageType,
@@ -28,6 +29,7 @@ import {
     type ContextForkRecord,
     type GatewayMessage,
     type GatewayReply,
+    type TaskPlanRecord,
 } from "../src/protocol/contracts/index.ts";
 import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
 import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
@@ -103,6 +105,7 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.ThoughtDetailGet,
                         GatewayControlMessageType.CrystalList,
                         GatewayControlMessageType.HistoryList,
+                        GatewayControlMessageType.TaskPlanDecide,
                         GatewayControlMessageType.GatewayMessageSend,
                         GatewayControlMessageType.Ping,
                     ]),
@@ -2209,9 +2212,12 @@ describe("SocketControlHub", () => {
                             },
                         },
                         metadata: {
-                            tui: {
+                            interaction: {
                                 mode: "plan",
                                 yolo: true,
+                            },
+                            tui: {
+                                mode: "chat",
                             },
                             uiMode: "plan",
                         },
@@ -2227,6 +2233,9 @@ describe("SocketControlHub", () => {
         expect(calls[0]?.message).toMatchObject({
             metadata: {
                 tui: {
+                    mode: "chat",
+                },
+                interaction: {
                     mode: "plan",
                     yolo: true,
                 },
@@ -2247,6 +2256,7 @@ describe("SocketControlHub", () => {
             skillNames: ["skill-a"],
         });
         expect(calls[0]?.options?.sandboxMode).toBe(SandboxMode.Yolo);
+        expect(calls[0]?.options?.interactionMode).toBe("plan");
         expect(await calls[0]?.options?.approveMcpToolCall?.({ server: "workspace", tool: "write", input: {} })).toBe(true);
         expect(await calls[0]?.options?.approveUserToolCall?.({ descriptor: { name: "user.tool" } } as never)).toBe(true);
         expect(sent(socket)[1]).toMatchObject({
@@ -2284,6 +2294,74 @@ describe("SocketControlHub", () => {
             GatewayControlMessageType.TurnDelta,
             GatewayControlMessageType.TurnFinal,
         ]);
+        hub.dispose();
+    });
+
+    test("handles task.plan.decide as the control boundary for plan decisions", async () => {
+        const published: RuntimeEventType[] = [];
+        const plan: TaskPlanRecord = {
+            id: "plan-1",
+            ownerKey: "turn:req-1",
+            sourceKey: "turn:req-1",
+            title: "Draft",
+            summary: "Original summary",
+            status: TaskPlanStatus.Waiting,
+            progress: 0,
+            stepCount: 1,
+            completedStepCount: 0,
+            step: [{ id: "step-1", title: "Step", status: TaskPlanStatus.Waiting, order: 0, progress: 0 }],
+            createdAt: "2026-05-24T00:00:00.000Z",
+            updatedAt: "2026-05-24T00:00:00.000Z",
+        };
+        let currentPlan = plan;
+        const bus = new GlobalEventBus();
+        bus.subscribe({ publish: (runtimeEvent) => published.push(runtimeEvent.type as RuntimeEventType) });
+        const hub = createHub({
+            events: bus,
+            queries: fakeQueries({
+                taskPlanDecide: (input) => {
+                    const status = input.action === TaskPlanDecisionAction.Confirm
+                        ? TaskPlanStatus.InProgress
+                        : input.action === TaskPlanDecisionAction.Revise
+                          ? TaskPlanStatus.Waiting
+                          : TaskPlanStatus.Blocked;
+                    currentPlan = {
+                        ...currentPlan,
+                        status,
+                        summary: input.revision ? `${currentPlan.summary}\n\nRevision: ${input.revision}` : currentPlan.summary,
+                    };
+                    return currentPlan;
+                },
+            }),
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(
+            GatewayControlMessageType.TaskPlanDecide,
+            { planId: "plan-1", action: TaskPlanDecisionAction.Confirm },
+            { id: "task-confirm-1", requestId: "req-task-confirm-1" },
+        )));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(
+            GatewayControlMessageType.TaskPlanDecide,
+            { planId: "plan-1", action: TaskPlanDecisionAction.Revise, revision: "Add verification." },
+            { id: "task-revise-1", requestId: "req-task-revise-1" },
+        )));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(
+            GatewayControlMessageType.TaskPlanDecide,
+            { planId: "plan-1", action: TaskPlanDecisionAction.Abandon },
+            { id: "task-abandon-1", requestId: "req-task-abandon-1" },
+        )));
+
+        const snapshots = sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.TaskSnapshot);
+        expect(snapshots.map((envelope) => (envelope.payload as { data?: { taskPlan?: { status?: string } } })?.data?.taskPlan?.status)).toEqual([
+            TaskPlanStatus.InProgress,
+            TaskPlanStatus.Waiting,
+            TaskPlanStatus.Blocked,
+        ]);
+        expect((snapshots[1]?.payload as { data?: { taskPlan?: { summary?: string } } })?.data?.taskPlan?.summary)
+            .toContain("Revision: Add verification.");
+        expect(published.filter((type) => type === RuntimeEventType.MemoryTaskPlanDecided)).toHaveLength(3);
         hub.dispose();
     });
 
@@ -2801,6 +2879,7 @@ function fakeQueries(overrides: Partial<SocketQueryComponentPort> = {}): SocketQ
         scopeDetail: () => undefined,
         scopeList: () => [],
         taskDetail: () => undefined,
+        taskPlanDecide: () => undefined,
         taskList: () => [],
         thoughtDetail: async () => undefined,
         ...overrides,

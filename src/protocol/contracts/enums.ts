@@ -360,6 +360,7 @@ export const GatewayControlMessageType = {
     ScopeSnapshot: "scope.snapshot",
     ServerHello: "server.hello",
     TaskDetailGet: "task.detail.get",
+    TaskPlanDecide: "task.plan.decide",
     TaskList: "task.list",
     TaskSnapshot: "task.snapshot",
     ThoughtDetailGet: "thought.detail.get",

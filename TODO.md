@@ -817,3 +817,13 @@ Kernel V2 acceptance focus：
 - [x] 实现 `web.search` / `web.fetch` / `web.extract` / `web.download` 搜索网页 lane。
 - [x] 补 provider 配置、搜索缓存、去重、warnings、Top N 补抓和 focused tests。
 - [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-25 主线 planning/socket 封口
+
+- [x] 审计当前 `master` 脏改动，确认范围集中在 planning gate、`task.plan.decide`、socket query、事件分类、OpenAPI/Apifox 和对应测试。
+- [x] 新增 runtime planning route：`act` 模式可直接执行，`plan` 模式先生成待确认任务计划，缺失信息时返回 ASK。
+- [x] 保持 blackboard 优先级：约束冲突、多视角讨论和实现+验证类请求先进入黑板，不被 planning gate 抢走。
+- [x] 新增 `/ws` `task.plan.decide` 控制命令，支持 `confirm`、`revise`、`abandon`，通过 DB read model 写回 task plan 状态。
+- [x] 修正 Apifox message catalog，`task.plan.decide` 的真实返回为 `task.snapshot`，不是 `ack`。
+- [x] 运行验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/runtime.planning.route.test.ts`。
+- [x] 运行封口验证：`bun run check`、`bun run docs:check`、`bun run build:binary`、`git diff --check`。

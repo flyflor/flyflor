@@ -832,3 +832,10 @@
   原因：搜索能力必须成为外挂工具层的一等能力，同时内核不能 import provider SDK 或 sidecar 实现；失败必须显式返回非零并写 stderr，不能被 hidden fallback 吞掉。
   效率：当前 lane diff 约 12 files changed，新增 `scripts/web.search.sidecar.ts`、`scripts/install.xtools.search-web.sh`、`tests/web.search.sidecar.test.ts`，核心注册表只增加 web 工具与 executor config 透传。
   验证：`bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
+- 状态：已完成
+  执行者：main-codex
+  范围：main-planning-socket-seal
+  摘要：收口当前 `master` 未提交改动，新增 runtime planning route、`task.plan.decide` WS 控制命令、planning/blackboard 边界提示词、事件分类和 OpenAPI/Apifox 示例；修正 Apifox 中 `task.plan.decide` 期望返回，真实返回为 `task.snapshot`。
+  原因：TUI/Rust 前端需要区分 act/plan 交互模式，计划确认必须走显式 WS 控制命令和 DB read model，而不是让 live turn 或前端自行猜测状态。
+  效率：主线封口 diff 为 27 个已跟踪文件约 949 行新增、8 行删除，另新增 `src/agent/runtime/planning/route.ts`、`templates/prompts/planning.route.md`、`templates/prompts/planning.route.zh.cn.md`、`tests/runtime.planning.route.test.ts`。
+  验证：`bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/runtime.planning.route.test.ts`；`bun run docs:check`；`bun run check`；`bun run build:binary`；`git diff --check`。

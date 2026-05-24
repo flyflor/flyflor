@@ -19,6 +19,8 @@ import {
     type GatewayControlMessageType as GatewayControlMessageTypeValue,
     type GatewayMessage,
     type RuntimeEvent,
+    TaskPlanDecisionAction,
+    type TaskPlanDecisionAction as TaskPlanDecisionActionType,
 } from "../contracts/index.ts";
 import { classifyRuntimeEvent, RuntimeEventType } from "../../events/index.ts";
 import type { ExternalKitCatalogSnapshot } from "../contracts/index.ts";
@@ -462,6 +464,12 @@ export interface GatewayControlForkCreateInput {
     title: string;
 }
 
+export interface GatewayControlTaskPlanDecideInput {
+    action: TaskPlanDecisionActionType;
+    planId: string;
+    revision?: string;
+}
+
 export interface GatewayControlToolApprovals {
     mcpToolCalls?: boolean;
     userToolCalls?: boolean;
@@ -613,6 +621,7 @@ export function classifyGatewayControlSemanticType(
     switch (type) {
         case GatewayControlMessageType.GatewayMessageSend:
         case GatewayControlMessageType.ForkCreate:
+        case GatewayControlMessageType.TaskPlanDecide:
             return GatewayControlSemanticType.Input;
         case GatewayControlMessageType.TurnDelta:
         case GatewayControlMessageType.TurnFinal:
@@ -813,6 +822,30 @@ export function readGatewayControlForkCreateInput(
     };
 }
 
+export function readGatewayControlTaskPlanDecideInput(
+    payload: Record<string, unknown> | undefined,
+): GatewayControlTaskPlanDecideInput {
+    if (!payload) {
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidPayload,
+            "task.plan.decide requires payload",
+        );
+    }
+    const planId = readRequiredTrimmedString(payload.planId, "task.plan.decide payload requires planId", 160);
+    const action = readTaskPlanDecisionAction(payload.action);
+    if (!action) {
+        throw new GatewayControlProtocolError(
+            GatewayControlErrorCode.InvalidPayload,
+            "task.plan.decide payload requires action confirm|revise|abandon",
+        );
+    }
+    return {
+        action,
+        planId,
+        revision: readTrimmedString(payload.revision, 2000),
+    };
+}
+
 function readGatewayControlToolApprovals(value: unknown): GatewayControlToolApprovals | undefined {
     if (!isRecord(value)) return undefined;
     return {
@@ -881,6 +914,16 @@ function readRuntimeEventType(value: unknown): string {
         "event subscription types must use known runtime event types",
         { type: typeof value === "string" ? value : undefined },
     );
+}
+
+function readTaskPlanDecisionAction(value: unknown): TaskPlanDecisionActionType | undefined {
+    return (
+        value === TaskPlanDecisionAction.Confirm ||
+        value === TaskPlanDecisionAction.Revise ||
+        value === TaskPlanDecisionAction.Abandon
+    )
+        ? value
+        : undefined;
 }
 
 export function shouldDeliverGatewayControlEvent(

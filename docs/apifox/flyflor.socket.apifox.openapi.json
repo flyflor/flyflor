@@ -337,6 +337,18 @@
               "taskPlanId": "task-plan-1"
             }
           },
+          "TaskPlanDecide": {
+            "protocol": "flyflor.ws.v1",
+            "id": "env-task-plan-decide-1",
+            "type": "task.plan.decide",
+            "at": "2026-05-22T00:00:05.360Z",
+            "requestId": "req-task-plan-decide-1",
+            "payload": {
+              "planId": "task-plan-1",
+              "action": "confirm",
+              "revision": "Proceed with the current plan."
+            }
+          },
           "ReplayList": {
             "protocol": "flyflor.ws.v1",
             "id": "env-replay-list-1",
@@ -2524,6 +2536,62 @@
                 ],
                 "properties": {
                   "taskPlanId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "protocol",
+              "id",
+              "type",
+              "at",
+              "requestId",
+              "payload"
+            ],
+            "properties": {
+              "protocol": {
+                "type": "string",
+                "enum": [
+                  "flyflor.ws.v1"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "task.plan.decide"
+                ]
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "required": [
+                  "planId",
+                  "action",
+                  "revision"
+                ],
+                "properties": {
+                  "planId": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string"
+                  },
+                  "revision": {
                     "type": "string"
                   }
                 },

@@ -27,6 +27,7 @@ import {
     readGatewayControlMessageInput,
     readGatewayControlQueryPayload,
     readGatewayControlSubscription,
+    readGatewayControlTaskPlanDecideInput,
     shouldDeliverGatewayControlEvent,
     type GatewayControlExecutiveLoopStateSnapshot,
     type GatewayControlHistoryListInput,
@@ -47,7 +48,9 @@ import {
     ChannelLinkState,
     ControlSnapshotStatus,
     GatewayControlMessageType,
+    InteractionMode,
     SandboxMode,
+    TaskPlanDecisionAction,
     type GatewayChannelCapabilities,
     type ChannelTransport,
     type ContextForkRecord,
@@ -111,6 +114,7 @@ export interface SocketControlDispatchOptions {
     onTextDelta?: (text: string) => void | Promise<void>;
     approveMcpToolCall?: RuntimeStreamOptions["approveMcpToolCall"];
     approveUserToolCall?: RuntimeStreamOptions["approveUserToolCall"];
+    interactionMode?: RuntimeStreamOptions["interactionMode"];
     sandboxMode?: RuntimeStreamOptions["sandboxMode"];
 }
 
@@ -179,6 +183,9 @@ export class SocketControlHub implements EventSink {
         this.registerQueryHandlers();
         this.handlers.set(GatewayControlMessageType.HistoryList, async (socket, envelope) =>
             this.handleHistoryList(socket, envelope),
+        );
+        this.handlers.set(GatewayControlMessageType.TaskPlanDecide, (socket, envelope) =>
+            this.handleTaskPlanDecide(socket, envelope),
         );
         this.handlers.set(GatewayControlMessageType.GatewayMessageSend, (socket, envelope) =>
             this.handleGatewayMessageSend(socket, envelope),
@@ -490,6 +497,47 @@ export class SocketControlHub implements EventSink {
         );
     }
 
+    private async handleTaskPlanDecide(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
+        const input = readGatewayControlTaskPlanDecideInput(envelope.payload);
+        try {
+            await this.requiredQueries().initialize();
+            const taskPlan = this.requiredQueries().taskPlanDecide(input);
+            if (!taskPlan) {
+                this.options.events.publish(event(RuntimeEventType.MemoryTaskPlanDecisionFailed, {
+                    action: input.action,
+                    planId: input.planId,
+                    reason: "not-found",
+                }, envelope.requestId));
+                throw new GatewayControlProtocolError(
+                    GatewayControlErrorCode.InvalidPayload,
+                    "task.plan.decide planId was not found",
+                );
+            }
+            this.invalidateReadCache();
+            this.options.events.publish(event(RuntimeEventType.MemoryTaskPlanDecided, {
+                action: input.action,
+                planId: taskPlan.id,
+                revision: input.action === TaskPlanDecisionAction.Revise ? input.revision : undefined,
+                status: taskPlan.status,
+            }, envelope.requestId));
+            this.send(
+                socket,
+                GatewayControlMessageType.TaskSnapshot,
+                buildGatewayControlQuerySnapshotPayload({ taskPlan }),
+                envelope,
+            );
+        } catch (error) {
+            if (!(error instanceof GatewayControlProtocolError)) {
+                this.options.events.publish(event(RuntimeEventType.MemoryTaskPlanDecisionFailed, {
+                    action: input.action,
+                    message: error instanceof Error ? error.message : String(error),
+                    planId: input.planId,
+                }, envelope.requestId));
+            }
+            throw error;
+        }
+    }
+
     private async handleGatewayMessageSend(
         socket: SocketControlSocket,
         envelope: GatewayControlEnvelope,
@@ -500,6 +548,7 @@ export class SocketControlHub implements EventSink {
         const gatewayMessage = this.messageFromInput(input);
         const publicMessageId = this.publicMessageId(gatewayMessage);
         const sandboxMode = this.sandboxModeFromMetadata(gatewayMessage.metadata);
+        const interactionMode = this.interactionModeFromMetadata(gatewayMessage.metadata);
         this.log("turn.start", {
             channel: gatewayMessage.route.channel,
             clientId: socket.data.clientId,
@@ -528,6 +577,7 @@ export class SocketControlHub implements EventSink {
                 approveUserToolCall: input.context?.toolApprovals?.userToolCalls === true
                     ? async () => true
                     : undefined,
+                interactionMode,
                 sandboxMode,
             });
             this.log("turn.final", {
@@ -678,10 +728,22 @@ export class SocketControlHub implements EventSink {
     }
 
     private sandboxModeFromMetadata(metadata: GatewayMessage["metadata"]): RuntimeStreamOptions["sandboxMode"] {
+        const interaction = this.recordValue(metadata?.interaction);
+        if (interaction?.yolo === true) return SandboxMode.Yolo;
         const tui = this.recordValue(metadata?.tui);
         if (tui?.yolo === true) return SandboxMode.Yolo;
         const permissions = this.recordValue(metadata?.permissions);
         return permissions?.mode === SandboxMode.Yolo ? SandboxMode.Yolo : undefined;
+    }
+
+    private interactionModeFromMetadata(metadata: GatewayMessage["metadata"]): RuntimeStreamOptions["interactionMode"] {
+        const interaction = this.recordValue(metadata?.interaction);
+        if (interaction?.mode === InteractionMode.Plan) return InteractionMode.Plan;
+        if (interaction?.mode === InteractionMode.Act) return InteractionMode.Act;
+        const tui = this.recordValue(metadata?.tui);
+        if (tui?.mode === "plan") return InteractionMode.Plan;
+        if (tui?.mode === "chat") return InteractionMode.Act;
+        return undefined;
     }
 
     private recordValue(value: unknown): Record<string, unknown> | undefined {

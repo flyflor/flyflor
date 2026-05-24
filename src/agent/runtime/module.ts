@@ -18,10 +18,15 @@ import {
     CapabilityExecutionKind,
     Channel,
     ContinuationContextReason,
+    InteractionMode,
     ModelRole,
+    PlanningRouteDecisionKind,
     SandboxMode,
+    TaskPlanStatus,
+    TaskPlanDecisionAction,
     ToolApprovalMode,
     ToolPermission,
+    type InteractionMode as InteractionModeType,
 } from "../../protocol/contracts/index.ts";
 import {
     loadExternalTools,
@@ -109,7 +114,7 @@ import {
     USER_TOOL_SERVER,
     WorkspaceToolset,
 } from "./mcp/index.ts";
-import { PlanningBlockParser, PlanningMetadataBuilder } from "./planning/index.ts";
+import { PlanningBlockParser, PlanningMetadataBuilder, RuntimePlanningRouteComponent, type RuntimePlanningRouteDecision } from "./planning/index.ts";
 import {
     FastRouteEvaluator,
     FileBackedFastRouteSnapshotStore,
@@ -151,6 +156,8 @@ export interface RuntimeStreamOptions {
     executiveToolBudget?: ExecutiveToolRuntimeBudget;
     /** CLI `--toolsets` 透传的逗号分隔白名单，仅保留这些 MCP server。 */
     toolsetAllowlist?: string[];
+    /** TUI interaction loop. `plan` stops at a user-confirmable plan draft. */
+    interactionMode?: InteractionModeType;
     /** One-turn high-permission sandbox override from structured control metadata. */
     sandboxMode?: SandboxMode;
 }
@@ -224,6 +231,7 @@ interface PreparedTurn {
     embedding: number[];
     snapshotKey: string;
     fastRoute: FastRouteResult;
+    interactionMode: InteractionModeType;
     scopeRecall?: ScopeRecallDecision;
     ttfbDone: () => void;
 }
@@ -295,6 +303,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly inflight: InFlightTracker;
     protected readonly planningBlockParser: PlanningBlockParser;
     protected readonly planningMetadataBuilder: PlanningMetadataBuilder;
+    protected readonly planningRoute: RuntimePlanningRouteComponent;
     protected readonly blackboardRoute: RuntimeBlackboardRouteComponent;
     protected readonly blackboardOutput: RuntimeBlackboardOutputComponent;
     protected readonly agentAskParser: AgentAskParser;
@@ -337,6 +346,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.fastRouteSnapshots = new FileBackedFastRouteSnapshotStore(config.paths.cacheDir);
         this.planningBlockParser = new PlanningBlockParser();
         this.planningMetadataBuilder = new PlanningMetadataBuilder();
+        this.planningRoute = new RuntimePlanningRouteComponent();
         this.blackboardRoute = new RuntimeBlackboardRouteComponent();
         this.blackboardOutput = new RuntimeBlackboardOutputComponent();
         this.agentAskParser = new AgentAskParser();
@@ -629,7 +639,11 @@ export class RuntimeModule extends RuntimeBoundary {
             this.throwIfAborted(options.signal);
             const assembled = await this.assembleTurnContext(message, prepared, options);
             this.throwIfAborted(options.signal);
-            const generated = await this.generateTurnReply(message, prepared, assembled, options);
+            const planningGate = await this.resolvePlanningGate(message, prepared, assembled, options);
+            this.throwIfAborted(options.signal);
+            const generated = planningGate
+                ? this.generatePlanningGateReply(message, prepared, planningGate)
+                : await this.generateTurnReply(message, prepared, assembled, options);
 
             this.throwIfAborted(options.signal);
             await this.persistTurnWithoutFailingReply(message, prepared, assembled, generated);
@@ -686,6 +700,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 },
             };
         }
+        const interactionMode = options.interactionMode ?? InteractionMode.Act;
         const snapshotKey = this.snapshotKeyFor(enrichedContext);
         const fastRouteSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const fastRoute = this.fastRouteEvaluator.evaluate({
@@ -700,7 +715,7 @@ export class RuntimeModule extends RuntimeBoundary {
             { bypass: fastRoute.bypass, reason: fastRoute.reason, ...(fastRoute.metrics ?? {}) },
             context.requestId,
         );
-        return { context, enrichedContext, embedding, snapshotKey, fastRoute, scopeRecall, ttfbDone };
+        return { context, enrichedContext, embedding, snapshotKey, fastRoute, interactionMode, scopeRecall, ttfbDone };
     }
 
     private async resolveScopeRecall(
@@ -775,6 +790,170 @@ export class RuntimeModule extends RuntimeBoundary {
             );
         }
         return decision;
+    }
+
+    protected async resolvePlanningGate(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        assembled: AssembledTurnContext,
+        options: RuntimeStreamOptions,
+    ): Promise<RuntimePlanningRouteDecision | undefined> {
+        const explicitDecision = this.readPlanDecision(message.metadata);
+        if (explicitDecision?.action === TaskPlanDecisionAction.Confirm) return undefined;
+        if (
+            prepared.interactionMode === InteractionMode.Act &&
+            assembled.blackboardRun &&
+            assembled.blackboardRun.mode !== BlackboardMode.Direct
+        ) {
+            return undefined;
+        }
+        const decision = await this.planningRoute.decide({
+            interactionMode: prepared.interactionMode,
+            model: this.model,
+            request: message.text,
+            signal: options.signal,
+        });
+        if (decision.decision === PlanningRouteDecisionKind.Direct) return undefined;
+        return decision;
+    }
+
+    private generatePlanningGateReply(
+        message: GatewayMessage,
+        prepared: PreparedTurn,
+        decision: RuntimePlanningRouteDecision,
+    ): GeneratedTurn {
+        const { context } = prepared;
+        const behaviorSnapshotId = `behavior-${context.requestId}`;
+        const base = this.emptyGeneratedTurn(message, context, behaviorSnapshotId);
+        if (decision.decision === PlanningRouteDecisionKind.Ask) {
+            const ask: AgentAsk = {
+                reason: AskReason.UserIntentUnclear,
+                prompt: decision.askPrompt ?? "请补充计划所需的关键信息。",
+                freeform: true,
+                rationale: `planning-route:${decision.reason}`,
+                continuationHint: {
+                    title: "Plan needs input",
+                    contextHint: decision.reason.slice(0, 200),
+                },
+            };
+            return {
+                ...base,
+                ask,
+                reply: {
+                    ...base.reply,
+                    text: renderAskReplyText(ask),
+                    metadata: {
+                        ...base.reply.metadata,
+                        kind: "ask",
+                        ask: buildAskMetadata(ask, behaviorSnapshotId),
+                        planningGate: this.planningGateMetadata(decision, prepared.interactionMode),
+                    },
+                },
+                visibleText: ask.prompt,
+            };
+        }
+
+        const plan = this.planDraftFromRoute(message, context, decision);
+        return {
+            ...base,
+            reply: {
+                ...base.reply,
+                text: `已生成待确认计划：${plan.title}`,
+                metadata: {
+                    ...base.reply.metadata,
+                    planning: this.planningMetadataBuilder.build([plan], [], []),
+                    planningGate: this.planningGateMetadata(decision, prepared.interactionMode),
+                },
+            },
+            taskPlans: [plan],
+            visibleText: `已生成待确认计划：${plan.title}`,
+        };
+    }
+
+    private emptyGeneratedTurn(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        behaviorSnapshotId: string,
+    ): GeneratedTurn {
+        return {
+            behaviorSnapshotId,
+            reply: {
+                messageId: crypto.randomUUID(),
+                route: message.route,
+                text: "",
+                metadata: {
+                    behaviorSnapshotId,
+                    kind: "reply",
+                    memoryActions: 0,
+                    mcpServers: [],
+                    mcpToolCalls: 0,
+                    sandboxMode: this.sandboxConfigForTurn({}).mode,
+                    skills: [],
+                },
+            },
+            parsed: parseMemoryActions("", this.config.memory.candidates.maxCandidatesPerTurn),
+            visibleText: "",
+            mcpCallProvenance: [],
+            subagentBatches: [],
+            executiveToolExecutions: [],
+            selectedSkillNames: [],
+            contextForks: [],
+            forkMerges: [],
+            replayRecords: [],
+            taskPlans: [],
+        };
+    }
+
+    private planDraftFromRoute(
+        message: GatewayMessage,
+        context: RuntimeContext,
+        decision: RuntimePlanningRouteDecision,
+    ): TaskPlanRecord {
+        const now = context.now;
+        const title = decision.planTitle ?? "Plan draft";
+        return {
+            id: `plan-${crypto.randomUUID()}`,
+            ownerKey: continuityOwnerKey(message, context),
+            sourceKey: sourceKeyForMessage(message, context),
+            title,
+            summary: decision.planSummary ?? decision.reason,
+            status: TaskPlanStatus.Waiting,
+            progress: 0,
+            stepCount: 1,
+            completedStepCount: 0,
+            step: [{
+                id: "step-1",
+                title,
+                detail: decision.planSummary ?? decision.reason,
+                order: 0,
+                progress: 0,
+                status: TaskPlanStatus.Waiting,
+            }],
+            createdAt: now,
+            updatedAt: now,
+        };
+    }
+
+    private planningGateMetadata(
+        decision: RuntimePlanningRouteDecision,
+        interactionMode: InteractionModeType,
+    ): Record<string, unknown> {
+        return {
+            confidence: decision.confidence,
+            decision: decision.decision,
+            interactionMode,
+            reason: decision.reason,
+        };
+    }
+
+    private readPlanDecision(metadata: Record<string, unknown> | undefined): { action?: string; planId?: string } | undefined {
+        const raw = metadata?.planDecision;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+        const action = (raw as Record<string, unknown>).action;
+        if (action === TaskPlanDecisionAction.Confirm || action === TaskPlanDecisionAction.Revise) {
+            return raw as { action?: string; planId?: string };
+        }
+        return undefined;
     }
 
     /**

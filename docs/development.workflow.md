@@ -1210,3 +1210,22 @@ Validation:
 - `bun run docs:check`
 - `bun run check`
 - `git diff --check`
+
+## 2026-05-25 Main Planning / Socket Seal
+
+Accepted mainline closure:
+
+- owner: `main-codex`
+- scope: runtime planning route, socket `task.plan.decide`, protocol events, OpenAPI/Apifox examples, focused tests
+- new route: `RuntimePlanningRouteComponent` decides `direct`, `plan`, or `ask` from structured model JSON only
+- blackboard precedence: act-mode blackboard requests stay with blackboard and are not intercepted by the planning gate
+- control command: `task.plan.decide` records explicit `confirm`, `revise`, or `abandon` decisions through the socket query/read-model boundary
+- Apifox correction: `task.plan.decide` expects `task.snapshot`, not `ack`
+
+Validation:
+
+- `bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/runtime.planning.route.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `bun run build:binary`
+- `git diff --check`

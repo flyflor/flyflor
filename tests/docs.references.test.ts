@@ -223,6 +223,7 @@ describe("documentation references", () => {
             "#/components/schemas/ScopeDetailGetEnvelope",
             "#/components/schemas/TaskListEnvelope",
             "#/components/schemas/TaskDetailGetEnvelope",
+            "#/components/schemas/TaskPlanDecideEnvelope",
             "#/components/schemas/ThoughtDetailGetEnvelope",
             "#/components/schemas/GatewayMessageSendEnvelope",
             "#/components/schemas/EventSubscribeEnvelope",

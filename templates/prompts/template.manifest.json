@@ -156,6 +156,14 @@
       "requiredPlaceholders": []
     },
     {
+      "key": "planningRoute",
+      "filename": "planning.route.md",
+      "requiredPlaceholders": [
+        "interactionMode",
+        "request"
+      ]
+    },
+    {
       "key": "runtimeAskContinuation",
       "filename": "runtime.ask.continuation.md",
       "requiredPlaceholders": [

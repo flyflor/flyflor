@@ -315,6 +315,7 @@
           "scope.snapshot",
           "server.hello",
           "task.detail.get",
+          "task.plan.decide",
           "task.list",
           "task.snapshot",
           "thought.detail.get",
@@ -898,6 +899,31 @@
           },
           "context": {
             "$ref": "#/components/schemas/RuntimeContextInput"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TaskPlanDecidePayload": {
+        "type": "object",
+        "required": [
+          "action",
+          "planId"
+        ],
+        "description": "State-changing control payload for task.plan.decide. The socket boundary records the user's explicit plan decision and returns an acknowledgement; it does not trigger a DB read query.",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "abandon",
+              "confirm",
+              "revise"
+            ]
+          },
+          "revision": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -1563,6 +1589,8 @@
                 "memory.hot.compression.written",
                 "memory.hot.compression.failed",
                 "memory.task_plan.written",
+                "memory.task_plan.decided",
+                "memory.task_plan.decision.failed",
                 "memory.context_fork.written",
                 "memory.replay_record.written",
                 "memory.consolidation.completed",
@@ -1958,6 +1986,9 @@
             "$ref": "#/components/schemas/TaskDetailGetEnvelope"
           },
           {
+            "$ref": "#/components/schemas/TaskPlanDecideEnvelope"
+          },
+          {
             "$ref": "#/components/schemas/ThoughtDetailGetEnvelope"
           },
           {
@@ -2311,6 +2342,29 @@
               },
               "payload": {
                 "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "TaskPlanDecideEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "task.plan.decide"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/TaskPlanDecidePayload"
               }
             }
           }
@@ -2785,6 +2839,21 @@
                 "title": "Socket Contract Scope"
               }
             }
+          }
+        }
+      },
+      "TaskPlanDecide": {
+        "summary": "task.plan.decide explicit plan decision",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-task-plan-decide-1",
+          "type": "task.plan.decide",
+          "at": "2026-05-22T00:00:05.360Z",
+          "requestId": "req-task-plan-decide-1",
+          "payload": {
+            "planId": "task-plan-1",
+            "action": "confirm",
+            "revision": "Proceed with the current plan."
           }
         }
       },

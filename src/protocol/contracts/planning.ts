@@ -16,6 +16,31 @@ export const TaskPlanStatus = {
 
 export type TaskPlanStatus = (typeof TaskPlanStatus)[keyof typeof TaskPlanStatus];
 
+export const InteractionMode = {
+    Act: "act",
+    Plan: "plan",
+} as const;
+
+export type InteractionMode = (typeof InteractionMode)[keyof typeof InteractionMode];
+
+export const PlanningRouteDecisionKind = {
+    Ask: "ask",
+    Direct: "direct",
+    Plan: "plan",
+} as const;
+
+export type PlanningRouteDecisionKind =
+    (typeof PlanningRouteDecisionKind)[keyof typeof PlanningRouteDecisionKind];
+
+export const TaskPlanDecisionAction = {
+    Abandon: "abandon",
+    Confirm: "confirm",
+    Revise: "revise",
+} as const;
+
+export type TaskPlanDecisionAction =
+    (typeof TaskPlanDecisionAction)[keyof typeof TaskPlanDecisionAction];
+
 export const ReplayRecordKind = {
     Blackboard: "blackboard",
     DeepThink: "deep-think",

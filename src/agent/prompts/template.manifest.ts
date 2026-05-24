@@ -22,6 +22,7 @@ export const PROMPT_TEMPLATE_ORDER = [
     "mcpContext",
     "mcpToolNeed",
     "mcpToolBudgetExhausted",
+    "planningRoute",
     "runtimeAskContinuation",
     "runtimeIdleResume",
     "runtimeEqContext",
@@ -157,6 +158,11 @@ export const PROMPT_TEMPLATE_DEFINITIONS: Record<PromptTemplateKey, PromptTempla
         callSite: "renderMcpToolBudgetExhaustedPrompt",
         filename: "mcp.tool.budget.exhausted.md",
         requiredPlaceholders: [],
+    },
+    planningRoute: {
+        callSite: "RuntimePlanningRouteComponent.decide",
+        filename: "planning.route.md",
+        requiredPlaceholders: ["interactionMode", "request"],
     },
     runtimeAskContinuation: {
         callSite: "renderRuntimeAskContinuationPrompt",

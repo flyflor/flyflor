@@ -107,6 +107,7 @@ describe("EventsComponent explicit hooks", () => {
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryAskRecorded)).toBe(RuntimeEventClass.Ask);
         expect(classifyRuntimeEvent(RuntimeEventType.ExecutiveLoopPaused)).toBe(RuntimeEventClass.Ask);
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryTaskPlanWritten)).toBe(RuntimeEventClass.Write);
+        expect(classifyRuntimeEvent(RuntimeEventType.MemoryTaskPlanDecided)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryContextForkWritten)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.MemoryReplayRecordWritten)).toBe(RuntimeEventClass.Write);
         expect(classifyRuntimeEvent(RuntimeEventType.ChannelError)).toBe(RuntimeEventClass.Error);

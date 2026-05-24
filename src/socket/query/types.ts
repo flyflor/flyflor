@@ -7,6 +7,7 @@ import type {
     ReplayRecord,
     ReplayRecordKind,
     ScopeRecord,
+    TaskPlanDecisionAction,
     TaskPlanRecord,
     TaskPlanStatus,
 } from "../../protocol/contracts/index.ts";
@@ -185,6 +186,11 @@ export interface SocketQueryComponentPort {
     replayList(input: SocketQueryReplayInput): ReplayRecord[];
     scopeDetail(input: SocketQueryDetailInput): SocketScopeDetailSnapshot | undefined;
     scopeList(input: SocketQueryOwnerInput): SocketScopeListItem[];
+    taskPlanDecide(input: {
+        action: TaskPlanDecisionAction;
+        planId: string;
+        revision?: string;
+    }): TaskPlanRecord | undefined;
     taskDetail(input: SocketQueryDetailInput): SocketTaskDetailSnapshot | undefined;
     taskList(input: SocketQueryTaskInput): TaskPlanRecord[];
     thoughtDetail(input: SocketQueryDetailInput): Promise<SocketThoughtDetailSnapshot | undefined>;

@@ -114,6 +114,10 @@ export class SocketBrainReader {
         return this.brain.listTaskPlans({ limit: 500 }).find((plan) => plan.id === id);
     }
 
+    public writeTask(record: TaskPlanRecord): TaskPlanRecord {
+        return this.brain.writeTaskPlan(record);
+    }
+
     public listReplays(input: SocketQueryReplayInput): ReplayRecord[] {
         return this.brain
             .listReplayRecords({

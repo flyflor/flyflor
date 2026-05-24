@@ -66,6 +66,8 @@ export const RuntimeEventType = {
     MemoryHotCompressionWritten: "memory.hot.compression.written",
     MemoryHotCompressionFailed: "memory.hot.compression.failed",
     MemoryTaskPlanWritten: "memory.task_plan.written",
+    MemoryTaskPlanDecided: "memory.task_plan.decided",
+    MemoryTaskPlanDecisionFailed: "memory.task_plan.decision.failed",
     MemoryContextForkWritten: "memory.context_fork.written",
     MemoryReplayRecordWritten: "memory.replay_record.written",
     MemoryConsolidationCompleted: "memory.consolidation.completed",

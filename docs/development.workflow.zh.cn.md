@@ -982,3 +982,22 @@ Browser CDP 不负责启动或打包 Chrome。使用前先启动带 remote debug
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/flyflor-browser-cdp
 ```
+
+## 2026-05-25 主线 Planning / Socket 封口
+
+已接受主线闭合：
+
+- 执行者：`main-codex`
+- 范围：runtime planning route、socket `task.plan.decide`、协议事件、OpenAPI/Apifox 示例和 focused tests
+- 新路由：`RuntimePlanningRouteComponent` 只消费模型结构化 JSON，输出 `direct`、`plan` 或 `ask`
+- 黑板优先：act 模式下需要黑板的请求不被 planning gate 抢走
+- 控制命令：`task.plan.decide` 通过 socket query/read-model 边界记录用户显式 `confirm`、`revise` 或 `abandon`
+- Apifox 修正：`task.plan.decide` 的真实期望返回是 `task.snapshot`，不是 `ack`
+
+验证：
+
+- `bun test tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/docs.references.test.ts tests/runtime.planning.route.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `bun run build:binary`
+- `git diff --check`

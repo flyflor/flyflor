@@ -1,5 +1,5 @@
 import type { FlyflorPaths } from "../../config/index.ts";
-import { MemoryEventType } from "../../protocol/contracts/index.ts";
+import { MemoryEventType, TaskPlanDecisionAction, TaskPlanStatus } from "../../protocol/contracts/index.ts";
 import type { BlackboardTurn } from "../../agent/blackboard/types.ts";
 import { SocketBlackboardReader } from "./blackboard.reader.ts";
 import { normalizeReplayKind, normalizeTaskStatus, SocketBrainReader } from "./brain.reader.ts";
@@ -188,6 +188,41 @@ export class SocketQueryComponent implements SocketQueryComponentPort {
             sourceEvent: taskPlan.sourceEventId ? this.brain.getEvent(taskPlan.sourceEventId) ?? undefined : undefined,
             taskPlan,
         };
+    }
+
+    public taskPlanDecide(input: {
+        action: TaskPlanDecisionAction;
+        planId: string;
+        revision?: string;
+    }) {
+        const plan = this.brain.getTask(input.planId);
+        if (!plan) return undefined;
+        const status = input.action === TaskPlanDecisionAction.Confirm
+            ? TaskPlanStatus.InProgress
+            : input.action === TaskPlanDecisionAction.Revise
+              ? TaskPlanStatus.Waiting
+              : TaskPlanStatus.Blocked;
+        const revision = input.revision?.trim();
+        return this.brain.writeTask({
+            ...plan,
+            status,
+            progress: input.action === TaskPlanDecisionAction.Confirm ? plan.progress : plan.progress,
+            completedStepCount: status === TaskPlanStatus.Blocked ? plan.completedStepCount : plan.completedStepCount,
+            summary: revision && input.action === TaskPlanDecisionAction.Revise
+                ? `${plan.summary}\n\nRevision: ${revision}`
+                : plan.summary,
+            step: (plan.step ?? []).map((step, index) => ({
+                ...step,
+                status: input.action === TaskPlanDecisionAction.Confirm && index === 0
+                    ? TaskPlanStatus.InProgress
+                    : input.action === TaskPlanDecisionAction.Abandon
+                      ? TaskPlanStatus.Blocked
+                      : input.action === TaskPlanDecisionAction.Revise
+                        ? TaskPlanStatus.Waiting
+                        : step.status,
+            })),
+            updatedAt: new Date().toISOString(),
+        });
     }
 
     public replayList(input: SocketQueryReplayInput) {
