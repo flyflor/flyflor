@@ -765,6 +765,14 @@
   原因：媒体能力需要支持 provider 或本地工具检测，但不能把重依赖和密钥打进 Bun 内核。
   验证：待实现后补充。
 
+- 状态：已完成
+  执行者：xtools-media
+  范围：media-sidecar
+  摘要：新增 `scripts/media.sidecar.ts` 和 `install.xtools.media.sh`，覆盖 `vision.analyze`、`vision.ocr`、`audio.transcribe`、`audio.speak`。sidecar 只接受 `external.tools.jsonc` 透传的 `config.providerUrl`、`config.providerHeaders`、`config.localCommands`，不从环境变量读取业务配置，不打包 OCR/Whisper/TTS/视觉 SDK 或模型资产。
+  原因：媒体能力必须是外挂桥接层，真实 provider 或本地命令可替换，但内核只负责 manifest 发现、sandbox/approval/quota/audit 链路和失败显式暴露。
+  效率：本 lane 新增 media sidecar、installer、process-json 测试、manifest 测试和安装脚本测试；focused diff 约 8 files changed。
+  验证：`bun test tests/media.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
+
 - 状态：进行中
   执行者：xtools-search-web
   范围：search-web-sidecar

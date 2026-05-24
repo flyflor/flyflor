@@ -786,9 +786,9 @@ Kernel V2 acceptance focus：
 ## 2026-05-24 xtools-media 本地任务
 
 - [x] 初始化 `xtools-media` worktree，本地控制文件只追加状态。
-- [ ] 实现 `vision.analyze`、`vision.ocr`、`audio.transcribe`、`audio.speak` media sidecar。
-- [ ] 补 provider/local runtime detection、失败结构和 focused tests。
-- [ ] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+- [x] 实现 `vision.analyze`、`vision.ocr`、`audio.transcribe`、`audio.speak` media sidecar。
+- [x] 补 provider/local runtime detection、失败结构和 focused tests。
+- [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
 
 ## 2026-05-24 xtools-search-web 本地任务
 
