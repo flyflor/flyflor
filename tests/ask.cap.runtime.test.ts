@@ -16,6 +16,7 @@ import {
     type AgentAsk,
     type GatewayMessage,
     type ModelClient,
+    type ModelMessage,
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
@@ -93,7 +94,9 @@ function ctx(): RuntimeContext {
 class AskingModel implements ModelClient {
     public readonly id = "test-asking";
     public constructor(private readonly askPrompt: string) {}
-    public async generate(): Promise<string> {
+    public async generate(messages: ModelMessage[] = []): Promise<string> {
+        const control = testControlPromptResponse(messages);
+        if (control) return control;
         return [
             "Sure, but first I need clarification.",
             "<agent_question>",
@@ -104,7 +107,9 @@ class AskingModel implements ModelClient {
 }
 
 class MultiQuestionModel implements ModelClient {
-    public async generate(): Promise<string> {
+    public async generate(messages: ModelMessage[] = []): Promise<string> {
+        const control = testControlPromptResponse(messages);
+        if (control) return control;
         return [
             "Need to confirm a few details.",
             "<agent_question>",
@@ -135,7 +140,9 @@ class MultiQuestionModel implements ModelClient {
 }
 
 class ForkConflictMergeModel implements ModelClient {
-    public async generate(): Promise<string> {
+    public async generate(messages: ModelMessage[] = []): Promise<string> {
+        const control = testControlPromptResponse(messages);
+        if (control) return control;
         return [
             "Fork merge needs structured resolution.",
             "<agent_context_decisions>",
@@ -163,7 +170,9 @@ class ForkConflictMergeModel implements ModelClient {
 }
 
 class ForkMergedClosureModel implements ModelClient {
-    public async generate(): Promise<string> {
+    public async generate(messages: ModelMessage[] = []): Promise<string> {
+        const control = testControlPromptResponse(messages);
+        if (control) return control;
         return [
             "Fork merge completed.",
             "<agent_context_decisions>",
@@ -192,10 +201,34 @@ class ForkMergedClosureModel implements ModelClient {
 class CapturingModel implements ModelClient {
     public readonly prompts: string[] = [];
     public constructor(private readonly response: string) {}
-    public async generate(messages: Array<{ content: string }>): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
         this.prompts.push(messages.map((message) => message.content).join("\n"));
+        const control = testControlPromptResponse(messages);
+        if (control) return control;
         return this.response;
     }
+}
+
+function testControlPromptResponse(messages: ModelMessage[]): string | undefined {
+    const system = messages.find((message) => message.role === "system")?.content ?? "";
+    if (system.includes("Decide whether the current request should proceed directly")) {
+        return JSON.stringify({
+            decision: "direct",
+            reason: "test direct path",
+            confidence: 1,
+            planTitle: "",
+            planSummary: "",
+            askPrompt: "",
+        });
+    }
+    if (system.includes("decide whether the assistant must use available local tools")) {
+        return JSON.stringify({
+            decision: "answer",
+            calls: [],
+            reason: "test answer path",
+        });
+    }
+    return undefined;
 }
 
 describe("LF-R3 slice D — runtime cap enforcement", () => {

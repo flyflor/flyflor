@@ -7,12 +7,11 @@
 
 set -eu
 
-FLYFLOR_HOME="${FLYFLOR_HOME:-$HOME/.flyflor}"
-TARGET="${FLYFLOR_XTOOLS_TARGET:-$FLYFLOR_HOME/.config/tools}"
-KIT_TARGET="${FLYFLOR_XTOOLS_KIT_TARGET:-$FLYFLOR_HOME/.config/kits}"
-SOURCE_ROOT="${FLYFLOR_SOURCE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+TARGET="${FLYFLOR_XTOOLS_TARGET:-./tools}"
+KIT_TARGET="${FLYFLOR_XTOOLS_KIT_TARGET:-./tools/packages/kits}"
+RUNNER="${FLYFLOR_RUNNER:-./dist/flyflor}"
 
-mkdir -p "$TARGET"
+mkdir -p "$TARGET/packages"
 mkdir -p "$KIT_TARGET"
 
 cat > "$TARGET/external.tools.jsonc" <<EOF
@@ -21,8 +20,8 @@ cat > "$TARGET/external.tools.jsonc" <<EOF
     "sidecars": {
         "mock.xtools": {
             "mock": true,
-            "command": "bun",
-            "args": ["$SOURCE_ROOT/scripts/mock.sidecar.ts"],
+            "command": "$RUNNER",
+            "args": ["xtool-sidecar", "mock.xtools"],
             "cwd": "project",
             "timeoutMs": 2000,
             "maxOutputBytes": 65536,
@@ -35,6 +34,7 @@ cat > "$TARGET/external.tools.jsonc" <<EOF
                 "browser.navigate",
                 "browser.evaluate",
                 "screen.screenshot",
+                "computer.use",
                 "computer.mouse",
                 "computer.keyboard",
                 "computer.window",
@@ -42,10 +42,16 @@ cat > "$TARGET/external.tools.jsonc" <<EOF
                 "vision.ocr",
                 "audio.transcribe",
                 "audio.speak",
-                "web.fetch",
                 "web.search",
+                "web.fetch",
+                "web.extract",
+                "web.download",
                 "lsp.symbols",
                 "lsp.diagnostics",
+                "file.hash",
+                "archive.create",
+                "archive.extract",
+                "data.convert",
                 "task.background"
             ]
         }
@@ -75,6 +81,7 @@ cat > "$KIT_TARGET/kits.jsonc" <<EOF
                         "browser.navigate",
                         "browser.evaluate",
                         "screen.screenshot",
+                        "computer.use",
                         "computer.mouse",
                         "computer.keyboard",
                         "computer.window",
@@ -82,10 +89,16 @@ cat > "$KIT_TARGET/kits.jsonc" <<EOF
                         "vision.ocr",
                         "audio.transcribe",
                         "audio.speak",
-                        "web.fetch",
                         "web.search",
+                        "web.fetch",
+                        "web.extract",
+                        "web.download",
                         "lsp.symbols",
                         "lsp.diagnostics",
+                        "file.hash",
+                        "archive.create",
+                        "archive.extract",
+                        "data.convert",
                         "task.background"
                     ]
                 }

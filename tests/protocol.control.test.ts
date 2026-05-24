@@ -894,6 +894,63 @@ describe("Gateway Control protocol", () => {
         expect(GatewayControlMessageType.GatewayStatusSnapshot).toBe("gateway.status.snapshot");
     });
 
+    test("keeps gateway status model and context telemetry fields stable", () => {
+        const envelope = createGatewayControlEnvelope(GatewayControlMessageType.GatewayStatusSnapshot, {
+            status: {
+                channels: [],
+                connectedCount: 1,
+                context: {
+                    compressionThresholdTokens: null,
+                    contextStatus: "unknown",
+                    contextUsedTokens: null,
+                    contextWindowPercent: null,
+                    currentTokens: null,
+                    hotContextTokens: null,
+                    remainingContextTokens: null,
+                },
+                degradedCount: 0,
+                gatewayRunning: true,
+                host: "127.0.0.1",
+                model: {
+                    contextStatus: "available",
+                    contextUsedTokens: 100000,
+                    contextWindowPercent: 0.25,
+                    contextWindowTokens: 400000,
+                    currentTokens: 100000,
+                    maxOutputTokens: 4096,
+                    model: "gpt-5.5",
+                    provider: "openai-compatible",
+                    providerId: "openai",
+                },
+                port: 8788,
+                streamingCount: 1,
+            },
+        });
+
+        expect(parseGatewayControlEnvelope(JSON.stringify(envelope))).toMatchObject({
+            payload: {
+                status: {
+                    context: {
+                        contextStatus: "unknown",
+                        contextUsedTokens: null,
+                        contextWindowPercent: null,
+                        currentTokens: null,
+                    },
+                    model: {
+                        contextStatus: "available",
+                        contextUsedTokens: 100000,
+                        contextWindowPercent: 0.25,
+                        contextWindowTokens: 400000,
+                        currentTokens: 100000,
+                        provider: "openai-compatible",
+                        providerId: "openai",
+                    },
+                },
+            },
+            type: GatewayControlMessageType.GatewayStatusSnapshot,
+        });
+    });
+
     test("filters event envelopes by explicit subscription", () => {
         const event: RuntimeEvent = {
             type: RuntimeEventType.GatewayMessageReceived,

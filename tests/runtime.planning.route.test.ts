@@ -56,7 +56,9 @@ describe("Runtime planning route", () => {
         });
     });
 
-    test("keeps blackboard route ahead of automatic planning in act mode", async () => {
+    test("keeps act mode out of the planning gate so tools can execute", async () => {
+        await expect(invokeResolvePlanningGate(InteractionMode.Act, BlackboardMode.Direct))
+            .resolves.toMatchObject({ calls: 0, result: undefined });
         await expect(invokeResolvePlanningGate(InteractionMode.Act, BlackboardMode.Blackboard))
             .resolves.toMatchObject({ calls: 0, result: undefined });
         await expect(invokeResolvePlanningGate(InteractionMode.Act, BlackboardMode.DirectWithWatch))
@@ -83,7 +85,9 @@ describe("Runtime planning route", () => {
         });
 
         expect(prompt).toContain("Planning route boundary rubric");
-        expect(prompt).toContain("Blackboard-owned conflicts");
+        expect(prompt).toContain("Cross-check-owned conflicts");
+        expect(prompt).toContain("In any interaction mode");
+        expect(prompt).toContain("cannot all be true");
         expect(prompt).toContain("Plan-owned work");
         expect(prompt).toContain("Ask-owned blockers");
         expect(prompt).toContain("Direct-owned requests");

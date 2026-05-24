@@ -93,6 +93,7 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.ScopeList,
                         GatewayControlMessageType.ScopeDetailGet,
                         GatewayControlMessageType.ForkList,
+                        GatewayControlMessageType.ForkMemoryGet,
                         GatewayControlMessageType.ForkDetailGet,
                         GatewayControlMessageType.AskList,
                         GatewayControlMessageType.AskDetailGet,
@@ -735,6 +736,192 @@ describe("SocketControlHub", () => {
         }
     });
 
+    test("serves fork memory panel data from brain.db without runtime dispatch", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-fork-memory-query-"));
+        try {
+            const paths = testPaths(root);
+            const queries = new SocketQueryComponent(paths);
+            await queries.initialize();
+            const records: ContextForkRecord[] = Array.from({ length: 6 }, (_value, index) => ({
+                id: `fork-${index + 1}`,
+                ownerKey: "scope:scope-1",
+                scopeId: "scope-1",
+                parentId: index > 0 ? `fork-${index}` : undefined,
+                title: index === 5 ? "" : `Fork ${index + 1}`,
+                summary: `Fork summary ${index + 1}`,
+                continuitySummary: `Continuity ${index + 1}`,
+                maxContextTokens: 12000,
+                inheritedEventIds: [],
+                createdAt: `2026-05-24T00:00:0${index}.000Z`,
+                updatedAt: `2026-05-24T00:00:0${index}.000Z`,
+                sourceEventId: `event-${index + 1}`,
+            }));
+            for (const record of records) {
+                (queries as unknown as { brain: { brain: { writeContextFork(record: ContextForkRecord): ContextForkRecord } } })
+                    .brain.brain.writeContextFork(record);
+            }
+            const directSnapshot = await queries.forkMemory({ scopeId: "scope-1", limit: 5 }, { initialized: true });
+            expect(directSnapshot.brainDb.status).toBe("available");
+            expect(directSnapshot.brainDb.bytes).toBeGreaterThan(0);
+            expect(directSnapshot.brainDb.human).toMatch(/\d+(\.\d)? (B|KB|MB|GB|TB)/);
+            expect(directSnapshot.forks.map((fork) => fork.id)).toEqual(["fork-6", "fork-5", "fork-4", "fork-3", "fork-2"]);
+
+            const hub = createHub({ queries });
+            const socket = fakeSocket();
+            hub.open(socket);
+
+            await hub.message(
+                socket,
+                JSON.stringify(
+                    createGatewayControlEnvelope(
+                        GatewayControlMessageType.ForkMemoryGet,
+                        { scopeId: "scope-1", limit: 5 },
+                        { id: "fork-memory-get-1", requestId: "req-fork-memory-1" },
+                    ),
+                ),
+            );
+
+            const snapshot = sent(socket).find((envelope) => envelope.correlationId === "fork-memory-get-1");
+            expect(snapshot).toMatchObject({
+                requestId: "req-fork-memory-1",
+                type: GatewayControlMessageType.ForkMemorySnapshot,
+                payload: {
+                    data: {
+                        brainDb: {
+                            bytes: expect.any(Number),
+                            human: expect.any(String),
+                            status: "available",
+                        },
+                    },
+                },
+            });
+            const snapshotPayload = snapshot?.payload as Record<string, unknown> | undefined;
+            const data = snapshotPayload?.data as {
+                brainDb?: { bytes?: number };
+                forks?: Array<{
+                    id: string;
+                    parentId?: string;
+                    sourceEventId?: string;
+                    summary?: string;
+                    title?: string;
+                }>;
+            } | undefined;
+            expect(data?.forks?.map((fork) => fork.id)).toEqual(["fork-6", "fork-5", "fork-4", "fork-3", "fork-2"]);
+            expect(data?.forks?.[0]).toMatchObject({
+                id: "fork-6",
+                title: "Fork summary 6",
+                summary: "Fork summary 6",
+                parentId: "fork-5",
+                sourceEventId: "event-6",
+            });
+            hub.dispose();
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("deduplicates fork memory rows with the same structured source and summaries", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-fork-memory-dedupe-"));
+        try {
+            const paths = testPaths(root);
+            const queries = new SocketQueryComponent(paths);
+            await queries.initialize();
+            const records: ContextForkRecord[] = [
+                {
+                    id: "fork-old",
+                    ownerKey: "scope:scope-1",
+                    scopeId: "scope-1",
+                    title: "Same fork",
+                    summary: "Same user question",
+                    continuitySummary: "Same continuation",
+                    maxContextTokens: 12000,
+                    inheritedEventIds: [],
+                    createdAt: "2026-05-24T00:00:00.000Z",
+                    updatedAt: "2026-05-24T00:00:00.000Z",
+                    sourceEventId: "event-same",
+                },
+                {
+                    id: "fork-new",
+                    ownerKey: "scope:scope-1",
+                    scopeId: "scope-1",
+                    title: "Same fork",
+                    summary: "Same user question",
+                    continuitySummary: "Same continuation",
+                    maxContextTokens: 12000,
+                    inheritedEventIds: ["event-same"],
+                    createdAt: "2026-05-24T00:00:01.000Z",
+                    updatedAt: "2026-05-24T00:00:02.000Z",
+                    sourceEventId: "event-same",
+                },
+                {
+                    id: "fork-unique",
+                    ownerKey: "scope:scope-1",
+                    scopeId: "scope-1",
+                    title: "Unique fork",
+                    summary: "Different user question",
+                    continuitySummary: "Different continuation",
+                    maxContextTokens: 12000,
+                    inheritedEventIds: [],
+                    createdAt: "2026-05-24T00:00:03.000Z",
+                    updatedAt: "2026-05-24T00:00:03.000Z",
+                    sourceEventId: "event-unique",
+                },
+            ];
+            for (const record of records) {
+                (queries as unknown as { brain: { brain: { writeContextFork(record: ContextForkRecord): ContextForkRecord } } })
+                    .brain.brain.writeContextFork(record);
+            }
+
+            const snapshot = await queries.forkMemory({ scopeId: "scope-1", limit: 5 }, { initialized: true });
+            expect(snapshot.forks.map((fork) => fork.id)).toEqual(["fork-unique", "fork-new"]);
+            expect(snapshot.forks.find((fork) => fork.id === "fork-old")).toBeUndefined();
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("fork memory panel reports unknown brain.db when the DB file is absent", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-fork-memory-missing-"));
+        try {
+            const paths = testPaths(root);
+            const queries = new SocketQueryComponent(paths);
+            const hub = createHub({ queries });
+            const socket = fakeSocket();
+            hub.open(socket);
+
+            await hub.message(
+                socket,
+                JSON.stringify(
+                    createGatewayControlEnvelope(
+                        GatewayControlMessageType.ForkMemoryGet,
+                        { limit: 5 },
+                        { id: "fork-memory-missing-1" },
+                    ),
+                ),
+            );
+
+            expect(sent(socket).find((envelope) => envelope.correlationId === "fork-memory-missing-1")).toMatchObject({
+                type: GatewayControlMessageType.ForkMemorySnapshot,
+                payload: {
+                    data: {
+                        brainDb: {
+                            bytes: null,
+                            human: null,
+                            status: "unknown",
+                        },
+                        forks: [],
+                    },
+                },
+            });
+            hub.dispose();
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("acks client.hello with stable client identity echo", async () => {
         const hub = createHub();
         const socket = fakeSocket();
@@ -894,14 +1081,22 @@ describe("SocketControlHub", () => {
                 status: {
                     context: {
                         compressionThresholdTokens: 360000,
+                        contextStatus: "available",
+                        contextUsedTokens: 100000,
                         contextWindowPercent: 0.3125,
+                        currentTokens: 100000,
                         hotContextTokens: 100000,
                         remainingContextTokens: 220000,
                     },
                     model: {
+                        contextStatus: "available",
+                        contextUsedTokens: 100000,
+                        contextWindowPercent: 0.3125,
                         contextWindowTokens: 320000,
+                        currentTokens: 100000,
                         maxOutputTokens: 4096,
                         model: "gpt-5.5",
+                        provider: "openai-compatible",
                         providerId: "openai",
                     },
                 },
@@ -947,13 +1142,21 @@ describe("SocketControlHub", () => {
                 status: {
                     context: {
                         compressionThresholdTokens: null,
+                        contextStatus: "unknown",
+                        contextUsedTokens: null,
                         contextWindowPercent: null,
+                        currentTokens: null,
                         hotContextTokens: null,
                         remainingContextTokens: null,
                     },
                     model: {
+                        contextStatus: "unknown",
+                        contextUsedTokens: null,
+                        contextWindowPercent: null,
                         contextWindowTokens: 400000,
+                        currentTokens: null,
                         maxOutputTokens: 4096,
+                        provider: "openai-compatible",
                     },
                 },
             },
@@ -2873,6 +3076,7 @@ function fakeQueries(overrides: Partial<SocketQueryComponentPort> = {}): SocketQ
         crystalList: () => [],
         forkDetail: async () => undefined,
         forkList: () => [],
+        forkMemory: async () => ({ brainDb: { bytes: null, human: null, status: "unknown" }, forks: [] }),
         historyDetail: async () => undefined,
         historyList: () => [],
         initialize: async () => undefined,

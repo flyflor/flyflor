@@ -71,20 +71,22 @@ class BrowserCdpClient {
     }
 }
 
-try {
-    const raw = await new Response(Bun.stdin.stream()).text();
-    const request = parseRequest(raw);
-    const input = objectInput(request.input);
-    const client = new BrowserCdpClient(
-        readString(input.cdpUrl) ?? readString(input.endpointUrl) ?? Bun.env.FLYFLOR_BROWSER_CDP_URL ?? DEFAULT_CDP_URL,
-    );
-    const result = await dispatch(client, requiredString(request.tool, "request.tool"), input);
-    process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
-} catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    process.stdout.write(`${JSON.stringify({ ok: false, error: message })}\n`);
-    process.stderr.write(`${message}\n`);
-    process.exit(1);
+export async function runBrowserCdpSidecar(): Promise<void> {
+    try {
+        const raw = await new Response(Bun.stdin.stream()).text();
+        const request = parseRequest(raw);
+        const input = objectInput(request.input);
+        const client = new BrowserCdpClient(
+            readString(input.cdpUrl) ?? readString(input.endpointUrl) ?? Bun.env.FLYFLOR_BROWSER_CDP_URL ?? DEFAULT_CDP_URL,
+        );
+        const result = await dispatch(client, requiredString(request.tool, "request.tool"), input);
+        process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stdout.write(`${JSON.stringify({ ok: false, error: message })}\n`);
+        process.stderr.write(`${message}\n`);
+        process.exit(1);
+    }
 }
 
 async function dispatch(client: BrowserCdpClient, tool: string, input: JsonObject): Promise<JsonObject> {
@@ -255,4 +257,8 @@ function timeout(callback: () => void): Timer {
         (timer as { unref: () => void }).unref();
     }
     return timer;
+}
+
+if (import.meta.main) {
+    await runBrowserCdpSidecar();
 }

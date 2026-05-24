@@ -11,13 +11,19 @@ import {
 import type { FastRouteSnapshotStore } from "../src/agent/runtime/routing/index.ts";
 import { PerfMetrics } from "../src/agent/runtime/perf.metrics.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
+import { RuntimeBlackboardRouteComponent } from "../src/agent/runtime/blackboard/index.ts";
+import { BlackboardModule, SQLiteBlackboardStore, WorkerManager } from "../src/agent/index.ts";
 import { LocalHashEmbeddingProvider } from "../src/cognitive/hippocampus/embedding/index.ts";
 import { MemoryModule } from "../src/cognitive/hippocampus/memory/index.ts";
 import {
+    AskReason,
     BlackboardMode,
     BlackboardTurnStatus,
+    BlackboardWorkerOutcome,
     Channel,
     ChatType,
+    type BlackboardWorkerResult,
+    type BlackboardWorkerTask,
     type GatewayMessage,
     type GatewayReply,
     type ModelClient,
@@ -25,6 +31,7 @@ import {
     type RuntimeContext,
 } from "../src/protocol/contracts/index.ts";
 import { RuntimeEventType, type EventSink } from "../src/events/index.ts";
+import { Worker } from "../src/agent/di/index.ts";
 import { loadConfigForPaths, type FlyflorConfig } from "../src/config/index.ts";
 import { loadPromptTemplates } from "../src/agent/prompts/index.ts";
 
@@ -59,18 +66,18 @@ describe("fastRoute resource-only short-circuit", () => {
         expect(result.reason).toBe(FastRouteReason.Disabled);
     });
 
-    test("bypasses by token budget on short messages", () => {
+    test("does not bypass by token budget alone on short messages", () => {
         const result = evaluateFastRoute({
             config: baseConfig,
             nowMs: 0,
             messageChars: 16,
         });
-        expect(result.bypass).toBe(true);
-        expect(result.reason).toBe(FastRouteReason.BypassByBudget);
+        expect(result.bypass).toBe(false);
+        expect(result.reason).toBe(FastRouteReason.NoSnapshot);
         expect(result.metrics?.estimatedTokens).toBe(4);
     });
 
-    test("returns no-snapshot when nothing recorded yet (and message above budget)", () => {
+    test("returns no-snapshot when nothing recorded yet", () => {
         const result = evaluateFastRoute({
             config: baseConfig,
             nowMs: 1_000,
@@ -165,6 +172,115 @@ describe("fastRoute resource-only short-circuit", () => {
         expect(decision.reason).toBe("fastroute:bypass-by-budget");
         expect(decision.workers).toEqual([]);
         expect(decision.blackboardContract.policyReason).toBe("fastroute-bypass");
+    });
+
+    test("short formal-definition conflicts still reach the blackboard route model", async () => {
+        await buildConfig();
+        const model = new RouteJsonModel();
+        const runtime = Object.create(RuntimeModule.prototype) as {
+            blackboard: object;
+            blackboardRoute: RuntimeBlackboardRouteComponent;
+            resolveRouteDecision: (message: GatewayMessage, fastRoute: ReturnType<typeof evaluateFastRoute>) => Promise<{
+                mode: BlackboardMode;
+                blackboardContract: { mode: string };
+            } | undefined>;
+        };
+        runtime.blackboard = {};
+        runtime.blackboardRoute = new RuntimeBlackboardRouteComponent();
+        (runtime as unknown as { model: ModelClient }).model = model;
+
+        const request = "设计严格几何意义上的正方形的圆，不能近似或比喻，给出精确面积公式。";
+        const fastRoute = evaluateFastRoute({
+            config: baseConfig,
+            nowMs: 0,
+            messageChars: request.length,
+        });
+        expect(fastRoute.bypass).toBe(false);
+
+        const decision = await runtime.resolveRouteDecision(msg(request), fastRoute);
+
+        expect(model.calls).toBe(1);
+        expect(decision?.mode).toBe(BlackboardMode.Blackboard);
+        expect(decision?.blackboardContract.mode).toBe("non-convergent");
+    });
+
+    test("active ASK answer bypasses route model and blackboard escalation", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
+        await memory.warmup();
+        const workers = new WorkerManager(events);
+        workers.register(new RuntimePerfAnalysisWorker());
+        workers.register(new RuntimePerfReviewWorker());
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+        const model = new CountingRouteThenReplyModel("answer consumed");
+        const runtime = new RuntimeModule(config, model, events, blackboard, memory);
+
+        try {
+            const first = await runtime.handleMessage(
+                msg("non convergent request"),
+                withEmbedding(await embedFor(config, "non convergent request")),
+            );
+            expect(first.metadata?.kind).toBe("ask");
+            expect(first.metadata?.ask).toMatchObject({ reason: AskReason.BlackboardStalemate });
+            expect(first.metadata?.blackboard).toMatchObject({ status: BlackboardTurnStatus.NeedsUser });
+            expect((first.metadata?.ask as { choices?: unknown[] } | undefined)?.choices?.length ?? 0).toBeGreaterThan(0);
+
+            const second = await runtime.handleMessage(
+                msg("choose the first option"),
+                withEmbedding(await embedFor(config, "choose the first option")),
+            );
+
+            expect(second.metadata?.kind).toBe("reply");
+            expect(second.metadata?.blackboard).toMatchObject({
+                mode: BlackboardMode.Direct,
+                reason: "active-ask-answer",
+            });
+            expect(second.text).toBe("answer consumed");
+            expect(model.routeCalls).toBe(1);
+            expect(events.events.filter((entry) => entry.type === RuntimeEventType.BlackboardTurnStart)).toHaveLength(1);
+        } finally {
+            runtime.dispose();
+        }
+    });
+
+    test("blackboard discussion is exposed as metadata instead of final reply body", async () => {
+        const config = await buildConfig();
+        const events = new CapturingSink();
+        const memory = new MemoryModule(config, events);
+        await memory.warmup();
+        const workers = new WorkerManager(events);
+        workers.register(new RuntimePerfFinalWorker());
+        const blackboard = new BlackboardModule(new SQLiteBlackboardStore(config.paths), events, workers);
+        const model = new FinalBlackboardRouteThenReplyModel("natural final answer");
+        const deltas: string[] = [];
+        const runtime = new RuntimeModule(config, model, events, blackboard, memory);
+
+        try {
+            const reply = await runtime.handleMessage(
+                msg("needs structured blackboard display"),
+                withEmbedding(await embedFor(config, "needs structured blackboard display")),
+                {
+                    onTextDelta: async (delta) => {
+                        deltas.push(delta);
+                    },
+                },
+            );
+
+            expect(reply.text).toBe("natural final answer");
+            expect(reply.text).not.toContain("perf-final-worker public blackboard transcript");
+            expect(deltas.join("")).not.toContain("perf-final-worker public blackboard transcript");
+            expect(reply.metadata?.blackboard).toMatchObject({
+                mode: BlackboardMode.Blackboard,
+                status: BlackboardTurnStatus.Converged,
+                summary: "perf-final-worker public blackboard transcript",
+            });
+            expect((reply.metadata?.blackboard as { content?: string } | undefined)?.content).toContain(
+                "perf-final-worker public blackboard transcript",
+            );
+        } finally {
+            runtime.dispose();
+        }
     });
 
     test("cosine similarity returns 0 when vectors have mismatched length", () => {
@@ -325,12 +441,14 @@ describe("Runtime fastRoute cache observability", () => {
         const events = new CapturingSink();
         const memory = {
             warmup: async () => undefined,
+            listScopeRecallCandidates: async () => [],
             rememberTurn: async () => {
                 throw new Error("memory-write-down");
             },
             recordBehaviorSnapshot: () => null,
             recordContinuationFromReason: () => null,
             listActiveContinuations: () => [],
+            peekActiveAsk: () => null,
             buildPrompt: async () => "",
             classifyAndApplyFeedback: async () => undefined,
             recordDebateEpisode: async () => undefined,
@@ -442,7 +560,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
             embedding: await embedFor(config, "brain-backed hippocampus"),
         });
 
-        expect(prompt).toContain("Recent Activated Memory");
+        expect(prompt).toContain("Recent Notes");
         expect(prompt).toContain("Hippocampus recall must survive sidecar cleanup.");
         memory.dispose();
     });
@@ -492,7 +610,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
 
         const prompt = await memory.buildPrompt(msg("atom visibility"), ctx);
 
-        expect(prompt).toContain("Recent Activated Memory");
+        expect(prompt).toContain("Recent Notes");
         expect(prompt).not.toContain("high atom passes visibility gate");
         expect(prompt).not.toContain("low atom must stay hidden from prompt");
         const promptBuilt = events.findOf(RuntimeEventType.MemoryPromptBuilt);
@@ -510,7 +628,7 @@ describe("Memory module warmup, embedding reuse, episode capture", () => {
         };
         const ctx = withEmbedding(await embedFor(config, "broken journal"));
         const prompt = await memory.buildPrompt(msg("broken journal"), ctx);
-        expect(prompt).toContain("Recent Activated Memory");
+        expect(prompt).toContain("Recent Notes");
         memory.dispose();
     });
 
@@ -631,9 +749,209 @@ function rep(text: string): GatewayReply {
 class StaticTextModel implements ModelClient {
     public constructor(private readonly response: string) {}
 
-    public async generate(_messages: ModelMessage[]): Promise<string> {
+    public async generate(messages: ModelMessage[]): Promise<string> {
+        const system = messages.find((message) => message.role === "system")?.content ?? "";
+        if (system.includes("Decide whether the current request should proceed directly")) {
+            return JSON.stringify({
+                decision: "direct",
+                reason: "test direct path",
+                confidence: 1,
+                planTitle: "",
+                planSummary: "",
+                askPrompt: "",
+            });
+        }
+        if (system.includes("decide whether the assistant must use available local tools")) {
+            return JSON.stringify({
+                decision: "answer",
+                calls: [],
+                reason: "test answer path",
+            });
+        }
         return this.response;
     }
+}
+
+class RouteJsonModel implements ModelClient {
+    public calls = 0;
+
+    public async generate(_messages: ModelMessage[]): Promise<string> {
+        this.calls += 1;
+        return JSON.stringify({
+            mode: BlackboardMode.Blackboard,
+            score: 0.82,
+            reason: "strict geometric definitions conflict under the user's constraints",
+            signals: ["formal-definition-conflict", "exact-formula-required"],
+            needsReflectionCandidate: true,
+            blackboardContract: {
+                mode: "non-convergent",
+                policyReason: "strict definitions cannot be simultaneously satisfied",
+                evidence: ["strict square", "strict circle", "no approximation"],
+                contradictions: [
+                    {
+                        left: "strict square boundary",
+                        right: "strict circle boundary",
+                        reason: "a single planar figure cannot satisfy both definitions exactly",
+                    },
+                ],
+            },
+            workers: [
+                {
+                    role: "geometry-proposer",
+                    name: "Geometry proposer",
+                    stage: "analysis",
+                    handoff: "analysis",
+                    capabilities: ["state formal definitions"],
+                    dependsOn: [],
+                },
+                {
+                    role: "contradiction-checker",
+                    name: "Contradiction checker",
+                    stage: "review",
+                    handoff: "review",
+                    capabilities: ["verify incompatibility"],
+                    dependsOn: ["geometry-proposer"],
+                },
+            ],
+        });
+    }
+}
+
+class CountingRouteThenReplyModel implements ModelClient {
+    public routeCalls = 0;
+
+    public constructor(private readonly reply: string) {}
+
+    public async generate(messages: ModelMessage[]): Promise<string> {
+        const first = messages[0]?.content ?? "";
+        if (first.includes("Treat worker selection as a small game")) {
+            this.routeCalls += 1;
+            return JSON.stringify({
+                mode: BlackboardMode.Blackboard,
+                score: 1,
+                reason: "test non-convergent route",
+                signals: ["test-conflict"],
+                needsReflectionCandidate: false,
+                blackboardContract: {
+                    mode: "non-convergent",
+                    policyReason: "test-hard-cap",
+                    evidence: ["structured-test"],
+                    contradictions: [{ left: "left", right: "right", reason: "incompatible" }],
+                },
+                workers: [
+                    { role: "perf-analysis-worker", name: "Analysis", handoff: "analysis" },
+                    { role: "perf-review-worker", name: "Review", handoff: "review" },
+                ],
+            });
+        }
+        if (first.includes("Decide whether the current request should proceed directly")) {
+            return JSON.stringify({
+                decision: "direct",
+                reason: "test direct path",
+                confidence: 1,
+                planTitle: "",
+                planSummary: "",
+                askPrompt: "",
+            });
+        }
+        if (first.includes("decide whether the assistant must use available local tools")) {
+            return JSON.stringify({
+                decision: "answer",
+                calls: [],
+                reason: "test answer path",
+            });
+        }
+        return this.reply;
+    }
+}
+
+class FinalBlackboardRouteThenReplyModel implements ModelClient {
+    public constructor(private readonly reply: string) {}
+
+    public async generate(messages: ModelMessage[]): Promise<string> {
+        const first = messages[0]?.content ?? "";
+        if (first.includes("Treat worker selection as a small game")) {
+            return JSON.stringify({
+                mode: BlackboardMode.Blackboard,
+                score: 1,
+                reason: "test convergent blackboard route",
+                signals: ["test-convergent"],
+                needsReflectionCandidate: false,
+                blackboardContract: {
+                    mode: "normal",
+                    policyReason: "test-convergent",
+                    evidence: ["structured-test"],
+                    contradictions: [],
+                },
+                workers: [{ role: "perf-final-worker", name: "Final", handoff: "final" }],
+            });
+        }
+        if (first.includes("Decide whether the current request should proceed directly")) {
+            return JSON.stringify({
+                decision: "direct",
+                reason: "test direct path",
+                confidence: 1,
+                planTitle: "",
+                planSummary: "",
+                askPrompt: "",
+            });
+        }
+        if (first.includes("decide whether the assistant must use available local tools")) {
+            return JSON.stringify({
+                decision: "answer",
+                calls: [],
+                reason: "test answer path",
+            });
+        }
+        return this.reply;
+    }
+}
+
+@Worker("perf-analysis-worker")
+class RuntimePerfAnalysisWorker {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+        return runtimePerfBlockedWorkerResult("perf-analysis-worker", input);
+    }
+}
+
+@Worker("perf-final-worker")
+class RuntimePerfFinalWorker {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+        return {
+            inputSummary: input.prompt ?? input.goal,
+            outputSummary: "perf-final-worker public blackboard transcript",
+            agreement: true,
+            outcome: BlackboardWorkerOutcome.Final,
+            answers: ["answer"],
+            newFacts: ["fact"],
+            openIssues: [],
+            blockers: [],
+            questions: [],
+            risk: "low",
+        };
+    }
+}
+
+@Worker("perf-review-worker")
+class RuntimePerfReviewWorker {
+    public run(input: BlackboardWorkerTask): BlackboardWorkerResult {
+        return runtimePerfBlockedWorkerResult("perf-review-worker", input);
+    }
+}
+
+function runtimePerfBlockedWorkerResult(role: string, input: BlackboardWorkerTask): BlackboardWorkerResult {
+    return {
+        inputSummary: input.prompt ?? input.goal,
+        outputSummary: `${role} remains blocked at round ${input.round}`,
+        agreement: false,
+        outcome: BlackboardWorkerOutcome.Continue,
+        answers: [],
+        newFacts: [`${role}.round=${input.round}`],
+        openIssues: [`${role}.needs-user-decision`],
+        blockers: [`${role}.blocked`],
+        questions: [`${role}.choose-next-step`],
+        risk: "medium",
+    };
 }
 
 class FailingFastRouteSnapshotStore implements FastRouteSnapshotStore {

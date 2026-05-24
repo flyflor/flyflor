@@ -119,6 +119,9 @@ export class RouteEscalationPolicy {
         const toolFailure =
             trigger > 0 && (input.toolFailureRatio ?? 0) >= trigger ? previousToolFailure + 1 : 0;
 
+        if (input.askBoundary) {
+            return { watch: 0, failure: 0, toolFailure };
+        }
         if (input.actualMode === BlackboardMode.Direct) {
             return { watch: 0, failure: input.previousFailure, toolFailure };
         }
@@ -141,6 +144,8 @@ export class RouteEscalationPolicy {
 export interface RouteEscalationCounterInput {
     actualMode: BlackboardMode;
     blackboardStatus?: BlackboardTurnStatusType;
+    /** True when this turn creates or consumes an ASK; ASK is the user handoff boundary. */
+    askBoundary?: boolean;
     previousWatch: number;
     previousFailure: number;
     previousToolFailure?: number;

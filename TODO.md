@@ -849,3 +849,29 @@ Kernel V2 acceptance focus：
 - [x] 新增 `install.xtools.computer-use.sh` 和 package script，只写 external tools manifest，不创建 kit 或内核 sidecar import。
 - [x] 补 deterministic tests 覆盖 delegate unavailable、invalid config、action validation、captureAfter、blocked dangerous input、installer manifest 和 catalog count/name。
 - [x] 运行 focused tests、`bun run check`、`git diff --check` 并提交给主 Codex review。
+
+## 2026-05-25 路由短路与提示词稳定性修复
+
+- [x] 移除 fastRoute 的短文本独立 direct bypass，短请求必须仍能进入结构化路由判断。
+- [x] 保留 direct hint 与 embedding 相似度两类结构化复用路径，未新增任何用户文本关键词/正则语义判断。
+- [x] 强化 blackboard route、planning route 与 runtime system 提示词，补齐术语解释、形式定义冲突处理和 act/plan/yolo 边界。
+- [x] 同步 canonical `.md` 与 `.zh.cn.md` 提示词镜像，避免模型面出现内部禁用术语。
+- [x] 补回归测试覆盖短形式定义冲突不会被 fastRoute 吞掉，并更新 prompt lint / planning / blackboard 断言。
+- [x] 运行 focused tests 与 `bun run check`。
+
+## 2026-05-25 黑板封顶 ASK 边界修复
+
+- [x] 将 pending ASK 作为 runtime 轮间结构化边界：用户下一轮回答 active ASK 时强制 direct 消化，不再进入 route LLM、planning gate 或新黑板。
+- [x] 黑板 NeedsUser 合成 ASK 后刷新 fastRoute snapshot 时清零黑板 failure/watch 计数，避免 failure retry 把下一轮重新升级到黑板。
+- [x] 保持零字符工程：产品逻辑只读取 `peekActiveAsk`、ASK 存在性、blackboard status 和计数器，不新增用户文本关键词、正则或句式判断。
+- [x] 补 runtime 回归：黑板封顶返回 `blackboard-stalemate` ASK 且带 choices；用户回答 ASK 后不再启动第二个黑板。
+- [x] 补 ASK 主链测试桩控制面 JSON，保证 planning/tool-need 控制提示不会误伤 ASK 测试。
+- [x] 运行 focused tests、`bun run check`、`git diff --check`。
+
+## 2026-05-25 xtools-tool-call-fix
+
+- 状态：已完成
+- [x] 定位 Act 模式默认 planning gate 抢占模型轮次的问题，执行请求不再先生成计划草稿。
+- [x] 保留显式 Plan 模式 planning route，用户确认型计划流程不受影响。
+- [x] 补“绝对路径本地项目分析”回归：首轮草稿未调用工具时，由 `mcp.tool.need` 结构化输出 `workspace.tree` 并执行。
+- [x] 验证 Stdio/WS 本地工具 catalog、workspace 绝对路径审批、MCP loop、子代理工具调用和 planning gate focused 套件。

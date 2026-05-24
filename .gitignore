@@ -18,7 +18,15 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # local Flyflor runtime state at repo root
 /.flyflor/
 /.config/
-/tools/
+/tools/*
+!/tools/
+!/tools/README.md
+!/tools/external.tools.jsonc
+!/tools/init.ts
+!/tools/init.sh
+!/tools/init.ps1
+/tools/packages/*
+!/tools/packages/
 
 # dotenv environment variable files
 .env

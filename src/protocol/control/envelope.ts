@@ -322,15 +322,23 @@ export interface GatewayControlGatewayStatusSnapshot {
 }
 
 export interface GatewayControlModelStatusSnapshot {
+    contextStatus: "available" | "unknown";
+    contextUsedTokens: number | null;
     contextWindowTokens: number | null;
+    contextWindowPercent: number | null;
+    currentTokens: number | null;
     maxOutputTokens: number;
     model: string;
+    provider: string;
     providerId: string;
 }
 
 export interface GatewayControlContextTelemetrySnapshot {
     compressionThresholdTokens: number | null;
+    contextStatus: "available" | "unknown";
+    contextUsedTokens: number | null;
     contextWindowPercent: number | null;
+    currentTokens: number | null;
     hotContextTokens: number | null;
     remainingContextTokens: number | null;
 }
@@ -653,6 +661,8 @@ export function classifyGatewayControlSemanticType(
         case GatewayControlMessageType.CrystalSnapshot:
         case GatewayControlMessageType.ForkDetailGet:
         case GatewayControlMessageType.ForkList:
+        case GatewayControlMessageType.ForkMemoryGet:
+        case GatewayControlMessageType.ForkMemorySnapshot:
         case GatewayControlMessageType.ForkSnapshot:
         case GatewayControlMessageType.HistoryDetailGet:
         case GatewayControlMessageType.HistoryList:

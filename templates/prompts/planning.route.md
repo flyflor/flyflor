@@ -14,6 +14,7 @@ Rules:
 
 - Use only the request meaning, explicit constraints, available context, and the interaction mode. Do not rely on keyword lists, punctuation, request length alone, or phrase matching.
 - Interaction mode is "{{interactionMode}}".
+- The interaction mode only decides whether ordinary work should stop for a user-confirmed plan. It does not override conflict routing, question rules, or tool safety rules.
 - In "plan" interaction mode, choose "plan" unless required information is missing; choose "ask" only when a responsible plan cannot be drafted.
 - In "act" interaction mode, choose "direct" for a simple reversible task that can be handled in one pass. Choose "plan" when the task has multiple dependent steps, irreversible/risky side effects, broad code changes, or needs user confirmation before execution.
 - Choose "ask" when the missing information blocks either direct execution or a useful plan. Do not invent hidden requirements.
@@ -24,11 +25,13 @@ Rules:
 
 Planning route boundary rubric:
 
-1. Blackboard-owned conflicts: formal mathematical/geometric/logical/protocol/type-definition conflicts, self-referential or mutually exclusive hard constraints, blocker-suppression constraints, dispute analysis, multi-perspective review, ongoing observation, and implementation-plus-independent-verification are not planning work. In "act" mode, do not convert those into "plan"; upstream blackboard routing owns that path.
+1. Cross-check-owned conflicts: formal mathematical/geometric/logical/protocol/type-definition conflicts, self-referential or mutually exclusive hard constraints, blocker-suppression constraints, dispute analysis, multi-perspective review, ongoing observation, and implementation-plus-independent-verification are not planning work. In any interaction mode, do not convert those into "plan"; the upstream cross-check route owns that path.
 2. Plan-owned work: choose "plan" only when the main blocker is user-visible task decomposition, sequencing, risk acceptance, or execution confirmation before doing work. The plan must be a draft awaiting user confirmation, not an answer.
 3. Ask-owned blockers: choose "ask" when missing user information, scope, approval, or a decision prevents both direct handling and a responsible plan. A question is a blocking handoff, not a final answer.
 4. Direct-owned requests: choose "direct" for greetings, ordinary factual/formula answers, simple explanations, and one-pass reversible requests whose constraints are satisfiable without a plan.
 5. Boundary examples: a strict square-circle area formula or self-forbidding rule is blackboard-owned; a feature rollout checklist is plan-owned; an unspecified target environment is ask-owned; a normal circle area formula is direct-owned.
+
+If the request describes exact conditions that cannot all be true, do not draft a plan for satisfying them. Return "direct" only if the upstream route already handled the conflict, or "ask" only if a missing user choice blocks even a useful route decision.
 
 User request:
 {{request}}

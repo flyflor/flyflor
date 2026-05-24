@@ -502,7 +502,7 @@ describe("external tool descriptor discovery", () => {
         const paths = testPaths("/tmp/flyflor-xtools-paths");
 
         expect(externalToolManifestPath(paths, { global: true })).toBe("/tmp/flyflor-xtools-paths/config/tools/external.tools.jsonc");
-        expect(externalToolManifestPath(paths)).toBe("/tmp/flyflor-xtools-paths/project/.flyflor/tools/external.tools.jsonc");
+        expect(externalToolManifestPath(paths)).toBe("/tmp/flyflor-xtools-paths/project/tools/external.tools.jsonc");
     });
 });
 
@@ -528,7 +528,7 @@ function testPaths(root: string): FlyflorPaths {
         projectDir: join(root, "project"),
         projectFlyflorDir: join(root, "project", ".flyflor"),
         projectKitDir: join(root, "project", ".flyflor", "kits"),
-        projectToolDir: join(root, "project", ".flyflor", "tools"),
+        projectToolDir: join(root, "project", "tools"),
         projectMemoryDir: join(root, "project", ".flyflor", "memory"),
         projectMcpDir: join(root, "project", ".flyflor", "mcp"),
         projectPluginDir: join(root, "project", ".flyflor", "plugins"),

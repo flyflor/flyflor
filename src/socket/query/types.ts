@@ -134,6 +134,32 @@ export interface SocketForkDetailSnapshot {
     taskPlans: TaskPlanRecord[];
 }
 
+export interface SocketForkMemoryListItem {
+    createdAt: string;
+    id: string;
+    parentId?: string;
+    scopeId?: string;
+    sourceAskId?: string;
+    sourceBlackboardTurnId?: string;
+    sourceEventId?: string;
+    status?: string;
+    summary: string;
+    title: string;
+    updatedAt: string;
+}
+
+export interface SocketBrainDbFileSnapshot {
+    bytes: number | null;
+    human: string | null;
+    path?: string;
+    status: "available" | "unknown" | "unavailable";
+}
+
+export interface SocketForkMemorySnapshot {
+    brainDb: SocketBrainDbFileSnapshot;
+    forks: SocketForkMemoryListItem[];
+}
+
 export interface SocketBlackboardDetailSnapshot {
     asks: SocketAskSnapshot[];
     forks: ContextForkRecord[];
@@ -179,6 +205,7 @@ export interface SocketQueryComponentPort {
     crystalList(input: SocketQueryCrystalInput): CrystalGem[];
     forkDetail(input: SocketQueryDetailInput): Promise<SocketForkDetailSnapshot | undefined>;
     forkList(input: SocketQueryForkInput): ContextForkRecord[];
+    forkMemory(input: SocketQueryForkInput, options?: { initialized?: boolean }): Promise<SocketForkMemorySnapshot>;
     historyDetail(input: SocketQueryDetailInput): Promise<SocketHistoryDetailSnapshot | undefined>;
     historyList(input: SocketQueryHistoryInput): GatewayControlHistoryTurnSnapshot[];
     initialize(): Promise<void>;

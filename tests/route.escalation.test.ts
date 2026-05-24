@@ -120,6 +120,17 @@ describe("nextEscalationCounters", () => {
         expect(c).toEqual({ watch: 0, failure: 2, toolFailure: 0 });
     });
 
+    test("ask 边界清零黑板 failure，避免用户回答前再次进入黑板", () => {
+        const c = nextEscalationCounters({
+            actualMode: BlackboardMode.Blackboard,
+            askBoundary: true,
+            blackboardStatus: BlackboardTurnStatus.NeedsUser,
+            previousWatch: 3,
+            previousFailure: 4,
+        });
+        expect(c).toEqual({ watch: 0, failure: 0, toolFailure: 0 });
+    });
+
     test("blackboard failed 累计 failure", () => {
         const c = nextEscalationCounters({
             actualMode: BlackboardMode.Blackboard,

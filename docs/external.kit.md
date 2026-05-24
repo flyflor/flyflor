@@ -40,13 +40,11 @@ The sidecar may receive opaque config from `external.tools.jsonc`, but semantic 
 
 ## Runtime Ownership
 
-- `~/.flyflor/.config/tools` is the future user-level control surface for tool registry, installed receipts, enablement, policy, and staging manifests.
-- `~/.flyflor/tools` is the future user-level payload directory for installed sidecar runners and their versioned files.
-- `./tools` at the repository root is only a local development workspace beside `src`. It is git ignored and must not be committed.
+- `tools/external.tools.jsonc` is the project-local external tool registry loaded by the kernel.
+- `tools/packages` is the isolated local payload directory for optional packages and delegates.
+- `tools/init.sh`, `tools/init.ps1`, and `tools/init.ts` initialize the registry without making the kernel import package implementation files.
 
-The development `./tools` directory may contain Browser CDP, screen, vision, audio, LSP, or other sidecar experiments. Runtime discovery must still happen through explicit manifests and structured capability registration. Do not make the kernel import implementation files from `./tools`.
-
-`~/.flyflor/.config/tools` is governance, not payload. It owns user-visible registry state, enablement, policy, install receipts, staged manifests, provider/delegate config, and disabled capability reasons. `~/.flyflor/tools` owns installed runner files. A workspace-local `./.flyflor/tools/external.tools.jsonc` may narrow or add project-local descriptors, but it must not become a source-code import path.
+The `tools/` directory may contain Browser CDP, screen, vision, audio, LSP, or other sidecar packages under `tools/packages`. Runtime discovery still happens only through `tools/external.tools.jsonc` and structured capability registration. Do not make the kernel import implementation files from `tools/packages`.
 
 ## Current Mainline Surface
 
@@ -61,7 +59,7 @@ These modules only:
 - summarize MCP, plugin, skill, user tool, and external sidecar capability catalogs
 - expose read-only snapshots through `server.hello` and `capability.catalog.snapshot`
 
-External sidecar discovery reads `external.tools.jsonc` from `~/.flyflor/.config/tools` and `./.flyflor/tools`. External Kit catalog manifests still live under the kit directories; the two control planes are intentionally separate.
+External sidecar discovery reads `tools/external.tools.jsonc` from the project root. External Kit catalog manifests still live under the kit directories; the two control planes are intentionally separate.
 
 ## Boundaries
 
@@ -101,8 +99,7 @@ Override the endpoint when needed:
 FLYFLOR_BROWSER_CDP_URL=http://127.0.0.1:9333 bun run install:xtools:browser-cdp
 ```
 
-The installer writes only `external.tools.jsonc` under `~/.flyflor/.config/tools` unless
-`FLYFLOR_XTOOLS_TARGET` is set. It registers `browser.open`, `browser.snapshot`,
+The installer writes `tools/external.tools.jsonc` by default unless `FLYFLOR_XTOOLS_TARGET` is set. It registers `browser.open`, `browser.snapshot`,
 `browser.screenshot`, `browser.click`, `browser.type`, `browser.navigate`, and
 `browser.evaluate` to the `browser.cdp` sidecar. Actual invocation still goes through the
 Executive tool runtime, sandbox gate, approval policy, quota, and audit events.
@@ -126,7 +123,7 @@ bun run install:xtools:search-web
 ```
 
 The installer writes `external.tools.jsonc` with an empty `providers` list. Add provider
-entries under `sidecars.web.search.config.providers` in `~/.flyflor/.config/tools/external.tools.jsonc`.
+entries under `sidecars.web.search.config.providers` in `tools/external.tools.jsonc`.
 Generic providers must return an array of objects with `title`, `url`, and `snippet` fields.
 
 ## Media Sidecar

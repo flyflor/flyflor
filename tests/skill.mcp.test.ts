@@ -1386,6 +1386,102 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("project overview");
     });
 
+    test("runtime forces tool use for absolute local project analysis drafts", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-absolute-project-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const externalProject = await mkdtemp(join(tmpdir(), "flyflor-target-project-"));
+        await mkdir(join(externalProject, "src"), { recursive: true });
+        await writeFile(join(externalProject, "README.md"), "absolute project overview\n");
+        await writeFile(join(externalProject, "src", "main.ts"), "export class App {}\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            "项目包含 README 和 src/main.ts。",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage(`读取一下这个项目 ${externalProject} 分析所有代码，说说你的看法。`),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            {
+                approveMcpToolCall: () => true,
+            },
+        );
+
+        expect(reply.text).toBe("项目包含 README 和 src/main.ts。");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
+        ]);
+        expect(model.messages).toHaveLength(2);
+        expect(model.messages[0]?.[0]?.content).toContain('"name": "tree"');
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("src/main.ts");
+    });
+
+    test("runtime reads approved absolute files without relying on model tool JSON", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-absolute-file-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const externalFile = join(await mkdtemp(join(tmpdir(), "flyflor-target-file-")), "notes.md");
+        await writeFile(externalFile, "absolute file contents\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            "文件内容是 absolute file contents。",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage(`读取这个文件 ${externalFile} 并总结。`),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+        );
+
+        expect(reply.text).toBe("文件内容是 absolute file contents。");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
+        expect(model.messages).toHaveLength(2);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("absolute file contents");
+    });
+
+    test("runtime extracts an absolute path even when text is glued to it", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-glued-path-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const externalProject = await mkdtemp(join(tmpdir(), "flyflor-glued-target-"));
+        await writeFile(join(externalProject, "README.md"), "glued path project\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            "已经读取粘连路径项目。",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage(`阅读这个项目的所有代码${externalProject}说说你的理解。`),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+        );
+
+        expect(reply.text).toBe("已经读取粘连路径项目。");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
+        ]);
+        expect(model.messages).toHaveLength(2);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("README.md");
+    });
+
     test("runtime keeps skipped-tool drafts out of streamed output before forced workspace tools run", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-tool-need-stream-"));
         const paths = testPaths(root);
@@ -2211,7 +2307,7 @@ describe("Skill and MCP capability config", () => {
         ).rejects.toThrow("Invalid MCP tool call at mcpCalls[0].tool_calls[0].function.arguments: expected valid JSON object.");
     });
 
-    test("workspace tools require approval for paths outside the project root", async () => {
+    test("workspace read can inspect paths outside the project root without write approval", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-escape-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -2240,14 +2336,12 @@ describe("Skill and MCP capability config", () => {
 
         expect(reply.text).toBe("Escape final.");
         expect(reply.metadata?.mcpToolExecutions).toEqual([
-            expect.objectContaining({ ok: false, server: "workspace", tool: "read" }),
-        ]);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
-            "not approved",
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
         );
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("outside");
     });
 
-    test("workspace glob requires approval for directories outside the project root", async () => {
+    test("workspace glob can inspect directories outside the project root without write approval", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-workspace-glob-escape-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -2277,11 +2371,9 @@ describe("Skill and MCP capability config", () => {
 
         expect(reply.text).toBe("Glob escape final.");
         expect(reply.metadata?.mcpToolExecutions).toEqual([
-            expect.objectContaining({ ok: false, server: "workspace", tool: "glob" }),
-        ]);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
-            "not approved",
+            expect.objectContaining({ ok: true, server: "workspace", tool: "glob" }),
         );
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("outside.ts");
     });
 
     test("workspace tools can read approved absolute paths outside the project root", async () => {

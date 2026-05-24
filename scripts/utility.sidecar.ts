@@ -38,7 +38,7 @@ const UTILITY_TOOLS = new Set<UtilityTool>([
     "data.convert",
 ]);
 
-async function main(): Promise<void> {
+export async function runUtilitySidecar(): Promise<void> {
     try {
         const raw = await new Response(Bun.stdin.stream()).text();
         const request = parseRequest(raw);
@@ -354,4 +354,6 @@ function messageFrom(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
 }
 
-await main();
+if (import.meta.main) {
+    await runUtilitySidecar();
+}

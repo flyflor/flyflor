@@ -66,7 +66,7 @@ const BLOCKED_TYPE_PATTERNS = [
     /:\s*\(\)\s*\{\s*:\|:\s*&\s*\}/iu,
 ];
 
-async function main(): Promise<void> {
+export async function runComputerUseSidecar(): Promise<void> {
     try {
         const raw = await new Response(Bun.stdin.stream()).text();
         const request = parseRequest(raw);
@@ -482,4 +482,6 @@ function failureFromError(err: unknown): JsonObject {
     return { ok: false, code: "failed", error: err instanceof Error ? err.message : String(err) };
 }
 
-await main();
+if (import.meta.main) {
+    await runComputerUseSidecar();
+}

@@ -1229,3 +1229,37 @@ Validation:
 - `bun run check`
 - `bun run build:binary`
 - `git diff --check`
+
+## 2026-05-25 Routing Prompt Stability
+
+Accepted mainline closure:
+
+- owner: `main-codex`
+- scope: fastRoute, route prompt stability, act/plan/yolo mode boundaries, focused tests
+- fastRoute no longer treats short text as enough evidence for direct mode; short messages still reach the route model unless a previous structured direct hint or direct similarity snapshot applies
+- no text keyword, regex, or phrase heuristic was added; formal-definition conflicts remain model-owned structured route decisions
+- blackboard route prompt now explains direct, direct-with-watch, cross-check mode, non-convergent contracts, and exact-condition conflicts in model-readable terms
+- planning route prompt states that interaction mode cannot convert conflict analysis into a user-confirmed plan
+- runtime system prompt states that elevated sandbox modes only affect approved tool execution, not reasoning validity or question requirements
+
+Validation:
+
+- `bun test tests/runtime.perf.test.ts tests/blackboard.boundaries.test.ts tests/runtime.planning.route.test.ts tests/prompt.lint.test.ts`
+- `bun run check`
+
+## 2026-05-25 Blackboard ASK Boundary
+
+Accepted mainline closure:
+
+- owner: `main-codex`
+- scope: runtime active ASK handoff, blackboard failure counters, ASK regression tests
+- active ASK is now a structured routing boundary: the next user message for that owner is passed to the runtime model with ask-continuation context and does not start a new blackboard first
+- automatic planning is skipped while an active ASK is being answered, so ASK consumption is not preempted by a new plan draft
+- blackboard `NeedsUser` ASK creation and later ASK consumption reset blackboard watch/failure counters before fastRoute snapshot persistence
+- no user-text keyword, regex, phrase, punctuation, or sentiment rule was added; the fix only reads ASK existence, blackboard status, and numeric counters
+
+Validation:
+
+- `bun test tests/route.escalation.test.ts tests/runtime.perf.test.ts tests/blackboard.boundaries.test.ts tests/runtime.planning.route.test.ts tests/prompt.lint.test.ts tests/ask.cap.runtime.test.ts`
+- `bun run check`
+- `git diff --check`

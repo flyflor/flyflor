@@ -23,7 +23,7 @@ interface NativeInvocation {
 const NATIVE_TOOLS = new Set<NativeTool>(["screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window"]);
 const DEFAULT_TIMEOUT_MS = 8_000;
 
-async function main(): Promise<void> {
+export async function runComputerNativeSidecar(): Promise<void> {
     try {
         const raw = await new Response(Bun.stdin.stream()).text();
         const request = parseRequest(raw);
@@ -295,4 +295,6 @@ async function pathExists(path: string): Promise<boolean> {
     }
 }
 
-await main();
+if (import.meta.main) {
+    await runComputerNativeSidecar();
+}

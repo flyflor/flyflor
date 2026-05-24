@@ -864,3 +864,27 @@
   原因：高层电脑使用能力必须作为外挂 sidecar 暴露，内核只负责 manifest 发现、工具目录、sandbox/approval/audit metadata 和结构化失败，不能导入桌面控制实现或回写 Memory、Scope、ASK、Crystal 主链。
   效率：本 lane 新增 sidecar、installer、process-json 测试、manifest/catalog 测试和安装脚本测试；修复 external specs public getter 返回内部单例导致测试 matcher 污染的问题。
   验证：`bun test tests/computer.use.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：routing-prompt-stability
+  摘要：修复 fastRoute 短文本预算绕过 route LLM 的问题；短的形式定义冲突请求不再直接走 direct。同步强化 blackboard route、planning route 和 runtime system 提示词，解释交叉检查、非收敛、act/plan/yolo 边界，并保持 canonical 与中文镜像一致。
+  原因：严格几何“正方形的圆”这类短请求包含互斥硬约束，必须由模型结构化路由判断进入交叉检查模式，不能被资源指标短路吞掉；同时提示词必须让模型能稳定理解模式边界，且继续遵守零字符匹配红线。
+  效率：只触碰路由短路、提示词和直接测试；未新增任何基于用户文本的关键词、正则或 includes 语义规则。
+  验证：`bun test tests/runtime.perf.test.ts tests/blackboard.boundaries.test.ts tests/runtime.planning.route.test.ts tests/prompt.lint.test.ts`；`bun run check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：blackboard-ask-boundary
+  摘要：修复黑板封顶后的 ASK 边界：runtime 在 prepareTurn 读取 active ASK 结构化状态，下一轮用户回答 pending ASK 时直接进入模型消化，不再重新 route、planning 或启动第二个 blackboard；persist snapshot 在 ASK 创建或消费时清零黑板 failure/watch 计数。
+  原因：黑板 `NeedsUser` 已经代表需要用户决策，继续用 failure retry 升级器重开黑板会让系统在用户回答前重复辩论，并可能生成违反原约束的最终方案。
+  效率：主链只增加 `activeAsk` 门控和 `askBoundary` 计数器输入；未新增用户文本关键词、正则或句式判断。补 runtime 回归覆盖黑板封顶 ASK、choices、用户回答后不再二次黑板。
+  验证：`bun test tests/route.escalation.test.ts tests/runtime.perf.test.ts tests/blackboard.boundaries.test.ts tests/runtime.planning.route.test.ts tests/prompt.lint.test.ts tests/ask.cap.runtime.test.ts`；`bun run check`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：tool-call-routing-fix
+  摘要：合入 `xtools-tool-call-fix`：Act 模式直接进入正常回复/MCP 工具循环，不再先调用 planning route 生成计划草稿；显式 Plan 模式仍保留 planning route。新增绝对路径项目分析回归，覆盖模型先输出“看一下结构”类草稿时，`mcp.tool.need` 必须生成 `workspace.tree` 并执行。
+  原因：读本地项目、分析代码这类请求属于执行层工具闭环；前置 planning gate 会消耗模型响应并让工具循环失焦，导致用户看到“我先看看”但没有真实工具调用。
+  效率：只修改 `RuntimeModule.resolvePlanningGate` 和直接测试；未触碰 Memory、Scope、ASK、Crystal 主链，未新增关键词、正则或语义字符匹配。
+  验证：`bun test tests/runtime.planning.route.test.ts tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/gateway.ws.test.ts --timeout 30000`；`bun run check`；`git diff --check`。

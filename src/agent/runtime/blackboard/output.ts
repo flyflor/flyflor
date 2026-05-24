@@ -33,6 +33,17 @@ export interface RuntimeBlackboardRun {
     turnId?: string;
 }
 
+export interface RuntimeBlackboardMetadataSnapshot {
+    content?: string;
+    elapsedMs: number;
+    messages: number;
+    mode: BlackboardMode;
+    reason: string;
+    status?: BlackboardTurnStatusType;
+    summary: string;
+    turnId?: string;
+}
+
 @Component()
 export class RuntimeBlackboardOutputComponent extends Runtime {
     public blackboardRunFromTurn(
@@ -75,25 +86,28 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
     }
 
     public renderReplyText(finalAnswer: string, run: RuntimeBlackboardRun | undefined): string {
-        return `${this.renderReplyPrefix(run)}${finalAnswer}`;
+        return finalAnswer;
     }
 
     public renderReplyPrefix(run: RuntimeBlackboardRun | undefined): string {
-        if (!run || run.mode !== BlackboardMode.Blackboard) {
-            return "";
-        }
-        return [...this.renderBlackboardTranscript(run), ...this.renderDecisionLines(run), "", "Final answer:", ""].join("\n");
+        return "";
     }
 
     public renderReplyStreamingPrefix(run: RuntimeBlackboardRun | undefined): string {
-        if (!run || run.mode !== BlackboardMode.Blackboard) {
-            return "";
-        }
-        const decisionLines = this.renderDecisionLines(run);
-        if (decisionLines.length > 0) {
-            return [...decisionLines, "", "Final answer:", ""].join("\n");
-        }
-        return "\n---\n\n";
+        return "";
+    }
+
+    public metadataSnapshot(run: RuntimeBlackboardRun): RuntimeBlackboardMetadataSnapshot {
+        return {
+            content: this.renderBlackboardContent(run),
+            elapsedMs: run.elapsedMs,
+            messages: run.transcript.length,
+            mode: run.mode,
+            reason: run.reason,
+            status: run.status,
+            summary: this.summaryForRun(run),
+            turnId: run.turnId,
+        };
     }
 
     public routeMetadata(route: RuntimeBlackboardRouteDecision): Record<string, unknown> {
@@ -193,6 +207,20 @@ export class RuntimeBlackboardOutputComponent extends Runtime {
             lines.push(`decision: ${this.compactDialogueText(decision.prompt)}`);
         }
         return lines.join("\n").slice(0, 4000);
+    }
+
+    private renderBlackboardContent(run: RuntimeBlackboardRun): string | undefined {
+        if (run.mode !== BlackboardMode.Blackboard) return undefined;
+        return this.renderBlackboardTranscript(run).join("\n").trim() || undefined;
+    }
+
+    private summaryForRun(run: RuntimeBlackboardRun): string {
+        if (run.mode !== BlackboardMode.Blackboard) return run.reason;
+        const latestDecision = run.decisions[run.decisions.length - 1];
+        if (latestDecision) return this.compactDialogueText(latestDecision.prompt).slice(0, 500);
+        const latestStep = run.steps[run.steps.length - 1];
+        if (latestStep?.outputSummary) return this.compactDialogueText(latestStep.outputSummary).slice(0, 500);
+        return `status=${run.status ?? BlackboardTurnStatus.Running}; reason=${run.reason}`;
     }
 
     private normalizeIso(value: string): string {

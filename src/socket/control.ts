@@ -106,6 +106,8 @@ export interface SocketControlTransportStatusSnapshot {
 
 export interface SocketControlContextTelemetrySnapshot {
     compressionThresholdTokens?: number | null;
+    contextUsedTokens?: number | null;
+    currentTokens?: number | null;
     hotContextTokens?: number | null;
 }
 
@@ -437,6 +439,26 @@ export class SocketControlHub implements EventSink {
         this.send(socket, snapshotType, response, envelope);
     }
 
+    private async handleForkMemoryGet(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
+        const payload = readGatewayControlQueryPayload(envelope.payload);
+        const key = this.readCacheKey(envelope.type, payload);
+        const cached = this.readCache.get(key);
+        if (cached) {
+            this.send(socket, GatewayControlMessageType.ForkMemorySnapshot, this.withReadCacheHit(cached, key), envelope);
+            return;
+        }
+        const data = await this.requiredQueries().forkMemory(payload);
+        this.log("query.snapshot", {
+            clientId: socket.data.clientId,
+            requestId: envelope.requestId,
+            snapshotType: GatewayControlMessageType.ForkMemorySnapshot,
+            type: envelope.type,
+        });
+        const response = buildGatewayControlQuerySnapshotPayload(data, this.readCacheMetadata(key, false));
+        this.readCache.set(key, response);
+        this.send(socket, GatewayControlMessageType.ForkMemorySnapshot, response, envelope);
+    }
+
     private async handleForkCreate(socket: SocketControlSocket, envelope: GatewayControlEnvelope): Promise<void> {
         if (!this.options.createContextFork) {
             throw new GatewayControlProtocolError(
@@ -647,6 +669,9 @@ export class SocketControlHub implements EventSink {
             this.handleQuery(socket, envelope, GatewayControlMessageType.ForkSnapshot, (payload) =>
                 this.requiredQueries().forkList(payload),
             ),
+        );
+        this.handlers.set(GatewayControlMessageType.ForkMemoryGet, (socket, envelope) =>
+            this.handleForkMemoryGet(socket, envelope),
         );
         this.handlers.set(GatewayControlMessageType.ForkDetailGet, (socket, envelope) =>
             this.handleQuery(socket, envelope, GatewayControlMessageType.ForkSnapshot, (payload) =>
@@ -1121,14 +1146,7 @@ export class SocketControlHub implements EventSink {
             degradedCount: status.degradedCount,
             gatewayRunning: status.gatewayRunning,
             host: status.host,
-            model: status.model
-                ? {
-                      contextWindowTokens: this.resolveContextWindowTokens(status.model),
-                      maxOutputTokens: status.model.maxTokens,
-                      model: status.model.model,
-                      providerId: status.model.providerId,
-                  }
-                : undefined,
+            model: status.model ? this.modelStatusSnapshot(status) : undefined,
             port: status.port,
             startedAt: status.startedAt,
             streamingCount: status.streamingCount,
@@ -1140,19 +1158,50 @@ export class SocketControlHub implements EventSink {
     }
 
     private contextTelemetry(status: SocketControlTransportStatusSnapshot): GatewayControlGatewayStatusSnapshot["context"] {
-        const hotContextTokens = this.nullableNonNegativeInteger(status.context?.hotContextTokens);
+        const contextUsedTokens = this.contextUsedTokens(status.context);
         const contextWindowTokens = status.model ? this.resolveContextWindowTokens(status.model) : null;
-        const remainingContextTokens = hotContextTokens !== null && contextWindowTokens !== null
-            ? Math.max(0, contextWindowTokens - hotContextTokens)
+        const contextWindowPercent = this.contextWindowPercent(contextUsedTokens, contextWindowTokens);
+        const remainingContextTokens = contextUsedTokens !== null && contextWindowTokens !== null
+            ? Math.max(0, contextWindowTokens - contextUsedTokens)
             : null;
         return {
             compressionThresholdTokens: this.nullableNonNegativeInteger(status.context?.compressionThresholdTokens),
-            contextWindowPercent: hotContextTokens !== null && contextWindowTokens !== null && contextWindowTokens > 0
-                ? hotContextTokens / contextWindowTokens
-                : null,
-            hotContextTokens,
+            contextStatus: contextUsedTokens === null ? "unknown" : "available",
+            contextUsedTokens,
+            contextWindowPercent,
+            currentTokens: contextUsedTokens,
+            hotContextTokens: contextUsedTokens,
             remainingContextTokens,
         };
+    }
+
+    private modelStatusSnapshot(status: SocketControlTransportStatusSnapshot): GatewayControlGatewayStatusSnapshot["model"] {
+        if (!status.model) return undefined;
+        const contextWindowTokens = this.resolveContextWindowTokens(status.model);
+        const contextUsedTokens = this.contextUsedTokens(status.context);
+        return {
+            contextStatus: contextUsedTokens === null ? "unknown" : "available",
+            contextUsedTokens,
+            contextWindowPercent: this.contextWindowPercent(contextUsedTokens, contextWindowTokens),
+            contextWindowTokens,
+            currentTokens: contextUsedTokens,
+            maxOutputTokens: status.model.maxTokens,
+            model: status.model.model,
+            provider: status.model.provider,
+            providerId: status.model.providerId,
+        };
+    }
+
+    private contextUsedTokens(context: SocketControlContextTelemetrySnapshot | undefined): number | null {
+        return this.nullableNonNegativeInteger(context?.contextUsedTokens)
+            ?? this.nullableNonNegativeInteger(context?.currentTokens)
+            ?? this.nullableNonNegativeInteger(context?.hotContextTokens);
+    }
+
+    private contextWindowPercent(usedTokens: number | null, windowTokens: number | null): number | null {
+        return usedTokens !== null && windowTokens !== null && windowTokens > 0
+            ? usedTokens / windowTokens
+            : null;
     }
 
     private invalidateReadCache(): void {

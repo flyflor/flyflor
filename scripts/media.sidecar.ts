@@ -39,7 +39,7 @@ const MEDIA_TOOLS = new Set<MediaTool>([
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024;
 
-async function main(): Promise<void> {
+export async function runMediaSidecar(): Promise<void> {
     try {
         const raw = await new Response(Bun.stdin.stream()).text();
         const request = parseRequest(raw);
@@ -469,4 +469,6 @@ async function pathExists(path: string): Promise<boolean> {
     }
 }
 
-await main();
+if (import.meta.main) {
+    await runMediaSidecar();
+}

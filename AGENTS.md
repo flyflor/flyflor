@@ -7,7 +7,7 @@
 - 只使用 Bun 命令管理依赖和脚本，不要求用户安装 Node.js。
 - 本仓库只承载 Bun + TypeScript 内核；Rust 外壳实现不在本仓库内规划、落地或验证，相关文档只作为后续独立 Rust 仓库的 `/ws` 契约交接材料。
 - 配置固定走 `~/.flyflor/.config/config.jsonc`，Docker dev 对应 `./docker/config/config.jsonc`；所有 JSON 配置必须兼容 JSONC。
-- 本地开发期允许仓库根目录 `tools/` 与 `src/` 平级作为外挂工具源码/实验工作区，但该目录必须保持 git ignored，不进入提交；正式运行治理目录仍是 `~/.flyflor/.config/tools` 和 `~/.flyflor/tools`。
+- 仓库根目录 `tools/` 与 `src/` 平级，作为外挂工具 registry 和包隔离区：`tools/external.tools.jsonc` 必须提交并由内核相对加载，`tools/packages` 放本地 payload 且保持 git ignored；内核禁止直接 import packages 实现文件，只能通过 manifest + process-json 执行。
 - 业务配置不能走环境变量；provider、模型、渠道凭据、沙箱策略和网关行为必须走 config/secrets provider。
 - 约定大于配置：默认目录、默认 provider、默认 channel registry、默认生命周期和默认 owner 必须在代码与目录里有清晰约定，配置只覆盖差异，不能用配置补救分层不清。
 - 分层先于复用：代码可以重复，但分层必须明确。宁可在正确 owner 的 class 内保留少量重复转换，也不要为了复用抽成跨域工具函数或无 owner helper；目录、生命周期、状态、IO 副作用和协议边界必须一眼可见。

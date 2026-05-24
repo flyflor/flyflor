@@ -9,6 +9,8 @@ import type {
     SocketAskSnapshot,
     SocketBlackboardDetailSnapshot,
     SocketForkDetailSnapshot,
+    SocketForkMemoryListItem,
+    SocketForkMemorySnapshot,
     SocketHistoryDetailSnapshot,
     SocketQueryAskInput,
     SocketQueryBlackboardInput,
@@ -114,6 +116,27 @@ export class SocketQueryComponent implements SocketQueryComponentPort {
 
     public forkList(input: SocketQueryForkInput) {
         return this.brain.listForks(input);
+    }
+
+    public async forkMemory(
+        input: SocketQueryForkInput,
+        options: { initialized?: boolean } = {},
+    ): Promise<SocketForkMemorySnapshot> {
+        const db = await this.brain.brainDbFile();
+        if (db.status !== "available") {
+            return {
+                brainDb: db,
+                forks: [],
+            };
+        }
+        if (!options.initialized) {
+            await this.initialize();
+        }
+        return {
+            brainDb: db,
+            forks: this.brain.listForks({ ...input, limit: input.limit ?? 5 }).slice(0, input.limit ?? 5)
+                .map((fork) => this.forkMemoryItem(fork)),
+        };
     }
 
     public async forkDetail(input: SocketQueryDetailInput): Promise<SocketForkDetailSnapshot | undefined> {
@@ -276,6 +299,33 @@ export class SocketQueryComponent implements SocketQueryComponentPort {
 
     private blackboardTurnIdFromEvent(content: Record<string, unknown>): string | undefined {
         return readString(content.blackboardTurnId) ?? readString(content.contextBlackboardTurnId);
+    }
+
+    private forkMemoryItem(fork: {
+        createdAt: string;
+        id: string;
+        parentId?: string;
+        scopeId?: string;
+        sourceAskId?: string;
+        sourceBlackboardTurnId?: string;
+        sourceEventId?: string;
+        summary: string;
+        title: string;
+        updatedAt: string;
+    }): SocketForkMemoryListItem {
+        const title = fork.title || fork.summary || fork.id;
+        return {
+            createdAt: fork.createdAt,
+            id: fork.id,
+            parentId: fork.parentId,
+            scopeId: fork.scopeId,
+            sourceAskId: fork.sourceAskId,
+            sourceBlackboardTurnId: fork.sourceBlackboardTurnId,
+            sourceEventId: fork.sourceEventId,
+            summary: fork.summary || title,
+            title,
+            updatedAt: fork.updatedAt,
+        };
     }
 }
 

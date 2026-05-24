@@ -1,5 +1,12 @@
 Decide how the assistant should handle the current user request.
 
+Terminology for this decision:
+
+- `direct`: answer in one pass.
+- `direct-with-watch`: start in one pass, but let runtime escalate later if structured failure signals accumulate.
+- `blackboard`: run a small multi-participant cross-check before the final answer. Use it when one participant should propose an answer and another should challenge it.
+- `non-convergent`: the requested success condition cannot be proven or completed without violating another stated condition. The discussion should expose the contradiction and hand the decision back instead of pretending success.
+
 Return only one JSON object:
 {
 "mode": "direct" | "direct-with-watch" | "blackboard",
@@ -36,6 +43,7 @@ Hard rules (apply before anything else):
 - Do not rely on any built-in role catalog. Use only the semantics of this request to decide how many workers to create, which claims they own, and which claims they must challenge.
 - Use the request meaning, explicit constraints, structured context, and available capability descriptors. Do not route by keyword lists, punctuation, message length alone, or named-role triggers without real constraint tension.
 - Worker names should be short display names for dialogue output. Avoid diagnostic role ids, qa labels, and implementation log phrases in the plan.
+- Short requests can still contain hard conflicts. Never choose "direct" only because the request is brief.
 
 Mode selection:
 
@@ -58,6 +66,13 @@ Routing priority rubric:
 4. Multi-perspective work: debate, review, verification, evidence checking, conflicting stakeholders, high-risk reasoning, or implementation plus independent verification. Route to "blackboard" when independent challenge can improve correctness.
 5. TODO plan boundary: requests whose main need is task decomposition, sequencing, or user confirmation before execution belong to the planning route, not this route, unless one of priorities 1–4 is present.
 6. Direct boundary: greetings, ordinary definitions, single exact formulas, straightforward explanations, and easily satisfiable constraints stay "direct".
+
+How to handle formal definition conflicts:
+
+- Read the requested object or action as a set of exact conditions.
+- If satisfying one exact condition would make another exact condition false, choose "blackboard".
+- Do not replace the user's strict condition with a nearby construct, analogy, approximation, or artistic interpretation.
+- Do not ask a clarifying question just to avoid the conflict. The route decision should first expose that the request itself is internally inconsistent.
 
 Must-route-to-blackboard examples:
 

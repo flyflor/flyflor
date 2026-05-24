@@ -40,13 +40,11 @@ sidecar 可以接收 `external.tools.jsonc` 里的 opaque config，但语义判�
 
 ## 运行目录归属
 
-- `~/.flyflor/.config/tools` 是后续用户态工具治理面，负责 registry、安装回执、启用状态、权限策略和 staging manifest。
-- `~/.flyflor/tools` 是后续用户态外挂 payload 目录，负责已安装 sidecar runner 和版本化文件。
-- 仓库根目录 `./tools` 只作为本地开发工作区，与 `src` 平级。该目录已被 git 忽略，禁止提交。
+- `tools/external.tools.jsonc` 是内核加载的项目本地外挂工具 registry。
+- `tools/packages` 是可选工具包和 delegate 的本地 payload 隔离区。
+- `tools/init.sh`、`tools/init.ps1`、`tools/init.ts` 负责初始化 registry，但内核禁止直接 import package 实现文件。
 
-开发期 `./tools` 可以放 Browser CDP、屏幕、视觉、语音、LSP 或其他 sidecar 实验代码。运行时发现仍必须通过显式 manifest 和结构化 capability 注册完成。内核禁止直接 import `./tools` 中的实现文件。
-
-`~/.flyflor/.config/tools` 是治理面，不是 payload。它拥有用户可见 registry 状态、启用状态、policy、安装回执、staged manifest、provider/delegate config 和 disabled capability reason。`~/.flyflor/tools` 拥有已安装 runner 文件。workspace-local `./.flyflor/tools/external.tools.jsonc` 可以收窄或追加项目本地 descriptor，但不能变成源码 import 路径。
+`tools/` 可以在 `tools/packages` 下放 Browser CDP、屏幕、视觉、语音、LSP 或其他 sidecar 包。运行时发现只允许通过 `tools/external.tools.jsonc` 和结构化 capability 注册完成。内核禁止直接 import `tools/packages` 中的实现文件。
 
 ## 当前主线范围
 
@@ -61,7 +59,7 @@ sidecar 可以接收 `external.tools.jsonc` 里的 opaque config，但语义判�
 - 汇总 MCP、plugin、skill、user tool 和 external sidecar 的只读 capability catalog
 - 通过 `server.hello` 与 `capability.catalog.snapshot` 暴露只读快照
 
-External sidecar 发现只从 `~/.flyflor/.config/tools` 和 `./.flyflor/tools` 读取 `external.tools.jsonc`。External Kit catalog manifest 仍保留在 kits 目录；这两个控制面必须明确隔离。
+External sidecar 发现只从项目根 `tools/external.tools.jsonc` 读取。External Kit catalog manifest 仍保留在 kits 目录；这两个控制面必须明确隔离。
 
 ## 边界
 
@@ -101,7 +99,7 @@ bun run install:xtools:browser-cdp
 FLYFLOR_BROWSER_CDP_URL=http://127.0.0.1:9333 bun run install:xtools:browser-cdp
 ```
 
-安装脚本默认只向 `~/.flyflor/.config/tools` 写入 `external.tools.jsonc`，除非显式设置
+安装脚本默认写入 `tools/external.tools.jsonc`，除非显式设置
 `FLYFLOR_XTOOLS_TARGET`。它把 `browser.open`、`browser.snapshot`、`browser.screenshot`、
 `browser.click`、`browser.type`、`browser.navigate` 和 `browser.evaluate` 注册到
 `browser.cdp` sidecar。真实调用仍必须经过 Executive tool runtime、sandbox gate、
@@ -126,7 +124,7 @@ bun run install:xtools:search-web
 ```
 
 安装脚本会写入带空 `providers` 列表的 `external.tools.jsonc`。实际使用时，在
-`~/.flyflor/.config/tools/external.tools.jsonc` 的
+`tools/external.tools.jsonc` 的
 `sidecars.web.search.config.providers` 下追加 provider。Generic provider 需要返回包含
 `title`、`url` 和 `snippet` 字段的对象数组。
 

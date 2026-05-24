@@ -190,6 +190,9 @@ describe("Blackboard control boundary", () => {
         ) as { constraints: string[]; expectedOutput: string[]; phase: string; protocol?: string };
 
         expect(routePrompt).toContain("Treat worker selection as a small game");
+        expect(routePrompt).toContain("Short requests can still contain hard conflicts");
+        expect(routePrompt).toContain("How to handle formal definition conflicts");
+        expect(routePrompt).toContain("Do not replace the user's strict condition");
         expect(routePrompt).toContain("Do not rely on any built-in role catalog");
         expect(routePrompt).toContain("dependsOn value match another worker role exactly");
         expect(routePrompt).toContain("Worker names should be short display names");

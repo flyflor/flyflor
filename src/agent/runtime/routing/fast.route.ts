@@ -9,10 +9,11 @@ import type { RuntimeBlackboardRouteDecision } from "../blackboard/route.ts";
  * 只允许使用：
  *   1. 上一轮模型显式给出的 nextRouteHint（结构化输出，age 内有效）；
  *   2. 当前 message embedding 与上一轮 message embedding 的余弦相似度；
- *   3. 估算 token 数（根据字符数粗算，仅作资源指标）。
+ *   3. 估算 token 数（根据字符数粗算，仅作事件指标，不能单独决定路由）。
  *
  * 命中后返回 RuntimeBlackboardRouteDecision（mode=Direct），
- * 主链路跳过 route LLM 调用，预期 60-70% 的轻量请求 bypass。
+ * 主链路跳过 route LLM 调用。短消息本身不再 bypass，因为短请求也可能包含
+ * 形式定义冲突或互斥硬约束，必须交给 route LLM 输出结构化路由判断。
  */
 
 export interface FastRouteSnapshot {
@@ -80,18 +81,10 @@ export class FastRouteEvaluator {
             return { bypass: false, reason: FastRouteReason.Disabled };
         }
 
-        // 资源指标 1：token 预算超低（短消息）→ 一定 bypass。
         const estimatedTokens = Math.ceil(Math.max(0, messageChars) / 4);
-        if (estimatedTokens > 0 && estimatedTokens < config.routeBypassTokenBudget) {
-            return {
-                bypass: true,
-                reason: FastRouteReason.BypassByBudget,
-                metrics: { estimatedTokens },
-            };
-        }
 
         if (!snapshot) {
-            return { bypass: false, reason: FastRouteReason.NoSnapshot };
+            return { bypass: false, reason: FastRouteReason.NoSnapshot, metrics: { estimatedTokens } };
         }
 
         // 资源指标 2：上一轮模型 hint 仍有效 → 直接 bypass。

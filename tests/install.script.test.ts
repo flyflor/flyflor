@@ -13,6 +13,9 @@ const INSTALL_XTOOLS_MEDIA_SH = join(ROOT, "scripts", "install.xtools.media.sh")
 const INSTALL_XTOOLS_COMPUTER_USE_SH = join(ROOT, "scripts", "install.xtools.computer-use.sh");
 const INSTALL_XTOOLS_COMPUTER_NATIVE_SH = join(ROOT, "scripts", "install.xtools.computer-native.sh");
 const INSTALL_XTOOLS_UTILITY_SH = join(ROOT, "scripts", "install.xtools.utility.sh");
+const TOOLS_INIT_TS = join(ROOT, "tools", "init.ts");
+const TOOLS_INIT_SH = join(ROOT, "tools", "init.sh");
+const TOOLS_INIT_PS1 = join(ROOT, "tools", "init.ps1");
 const INSTALL_TEMPLATES_TS = join(ROOT, "scripts", "install.templates.ts");
 const INSTALL_PS1 = join(ROOT, "scripts", "install.ps1");
 const PACKAGE_JSON = join(ROOT, "package.json");
@@ -254,12 +257,12 @@ describe("source/docker/windows installers", () => {
         ).resolves.toBe(0);
 
         const sandbox = await createInstallSandbox();
-        const target = join(sandbox.root, "tools");
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
         const proc = Bun.spawn(["sh", INSTALL_XTOOLS_BROWSER_CDP_SH], {
+            cwd: project,
             env: sandbox.env({
-                FLYFLOR_XTOOLS_TARGET: target,
                 FLYFLOR_BROWSER_CDP_URL: "http://127.0.0.1:9333",
-                FLYFLOR_SOURCE_ROOT: ROOT,
             }),
             stdout: "pipe",
             stderr: "pipe",
@@ -271,7 +274,9 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         expect(manifest).toContain('"browser.cdp"');
-        expect(manifest).toContain(`"args": ["${ROOT}/scripts/browser.cdp.sidecar.ts"]`);
+        expect(manifest).toContain('"command": "./tools/packages/browser-cdp/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "browser.cdp"]');
+        await expect(stat(join(target, "packages", "browser-cdp", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"FLYFLOR_BROWSER_CDP_URL": "http://127.0.0.1:9333"');
         expect(manifest).toContain('"browser.evaluate"');
         expect(manifest).not.toContain("playwright");
@@ -284,12 +289,11 @@ describe("source/docker/windows installers", () => {
         ).resolves.toBe(0);
 
         const sandbox = await createInstallSandbox();
-        const target = join(sandbox.root, "tools");
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
         const proc = Bun.spawn(["sh", INSTALL_XTOOLS_SEARCH_WEB_SH], {
-            env: sandbox.env({
-                FLYFLOR_XTOOLS_TARGET: target,
-                FLYFLOR_SOURCE_ROOT: ROOT,
-            }),
+            cwd: project,
+            env: sandbox.env(),
             stdout: "pipe",
             stderr: "pipe",
         });
@@ -300,7 +304,9 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         expect(manifest).toContain('"web.search"');
-        expect(manifest).toContain(`"args": ["${ROOT}/scripts/web.search.sidecar.ts"]`);
+        expect(manifest).toContain('"command": "./tools/packages/search-web/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "web.search"]');
+        await expect(stat(join(target, "packages", "search-web", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"providers": []');
         expect(manifest).not.toContain("playwright");
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
@@ -312,12 +318,11 @@ describe("source/docker/windows installers", () => {
         ).resolves.toBe(0);
 
         const sandbox = await createInstallSandbox();
-        const target = join(sandbox.root, "tools");
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
         const proc = Bun.spawn(["sh", INSTALL_XTOOLS_MEDIA_SH], {
-            env: sandbox.env({
-                FLYFLOR_XTOOLS_TARGET: target,
-                FLYFLOR_SOURCE_ROOT: ROOT,
-            }),
+            cwd: project,
+            env: sandbox.env(),
             stdout: "pipe",
             stderr: "pipe",
         });
@@ -328,7 +333,9 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         expect(manifest).toContain('"media.local"');
-        expect(manifest).toContain(`"args": ["${ROOT}/scripts/media.sidecar.ts"]`);
+        expect(manifest).toContain('"command": "./tools/packages/media/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "media.local"]');
+        await expect(stat(join(target, "packages", "media", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"providerUrl": ""');
         expect(manifest).toContain('"vision.ocr"');
         expect(manifest).toContain('"audio.speak"');
@@ -342,12 +349,11 @@ describe("source/docker/windows installers", () => {
         ).resolves.toBe(0);
 
         const sandbox = await createInstallSandbox();
-        const target = join(sandbox.root, "tools");
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
         const proc = Bun.spawn(["sh", INSTALL_XTOOLS_COMPUTER_NATIVE_SH], {
-            env: sandbox.env({
-                FLYFLOR_XTOOLS_TARGET: target,
-                FLYFLOR_SOURCE_ROOT: ROOT,
-            }),
+            cwd: project,
+            env: sandbox.env(),
             stdout: "pipe",
             stderr: "pipe",
         });
@@ -358,7 +364,9 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         expect(manifest).toContain('"computer.native"');
-        expect(manifest).toContain(`"args": ["${ROOT}/scripts/computer.native.sidecar.ts"]`);
+        expect(manifest).toContain('"command": "./tools/packages/computer-native/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "computer.native"]');
+        await expect(stat(join(target, "packages", "computer-native", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"screen.screenshot"');
         expect(manifest).toContain('"computer.keyboard"');
         expect(manifest).toContain('"mouseCommand": ""');
@@ -372,12 +380,11 @@ describe("source/docker/windows installers", () => {
         ).resolves.toBe(0);
 
         const sandbox = await createInstallSandbox();
-        const target = join(sandbox.root, "tools");
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
         const proc = Bun.spawn(["sh", INSTALL_XTOOLS_COMPUTER_USE_SH], {
-            env: sandbox.env({
-                FLYFLOR_XTOOLS_TARGET: target,
-                FLYFLOR_SOURCE_ROOT: ROOT,
-            }),
+            cwd: project,
+            env: sandbox.env(),
             stdout: "pipe",
             stderr: "pipe",
         });
@@ -388,7 +395,9 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         expect(manifest).toContain('"computer.use"');
-        expect(manifest).toContain(`"args": ["${ROOT}/scripts/computer.use.sidecar.ts"]`);
+        expect(manifest).toContain('"command": "./tools/packages/computer-use/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "computer.use"]');
+        await expect(stat(join(target, "packages", "computer-use", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"backend": "delegate"');
         expect(manifest).toContain('"delegateCommand": ""');
         expect(manifest).toContain('"cuaCommand": "cua-driver"');
@@ -402,12 +411,11 @@ describe("source/docker/windows installers", () => {
         ).resolves.toBe(0);
 
         const sandbox = await createInstallSandbox();
-        const target = join(sandbox.root, "tools");
+        const project = await createXtoolsProject(sandbox);
+        const target = join(project, "tools");
         const proc = Bun.spawn(["sh", INSTALL_XTOOLS_UTILITY_SH], {
-            env: sandbox.env({
-                FLYFLOR_XTOOLS_TARGET: target,
-                FLYFLOR_SOURCE_ROOT: ROOT,
-            }),
+            cwd: project,
+            env: sandbox.env(),
             stdout: "pipe",
             stderr: "pipe",
         });
@@ -418,11 +426,41 @@ describe("source/docker/windows installers", () => {
 
         const manifest = await readFile(join(target, "external.tools.jsonc"), "utf8");
         expect(manifest).toContain('"utility.local"');
-        expect(manifest).toContain(`"args": ["${ROOT}/scripts/utility.sidecar.ts"]`);
+        expect(manifest).toContain('"command": "./tools/packages/utility/bin/flyflor"');
+        expect(manifest).toContain('"args": ["xtool-sidecar", "utility.local"]');
+        await expect(stat(join(target, "packages", "utility", "bin", "flyflor"))).resolves.toBeTruthy();
         expect(manifest).toContain('"file.hash"');
         expect(manifest).toContain('"archive.extract"');
         expect(manifest).toContain('"task.background"');
         await expect(stat(join(target, "kits.jsonc"))).rejects.toThrow();
+    });
+
+    test("tools initializer writes the project-local registry and packages directory", async () => {
+        await expect(
+            Bun.spawn(["sh", "-n", TOOLS_INIT_SH], { stderr: "pipe" }).exited,
+        ).resolves.toBe(0);
+        expect(await Bun.file(TOOLS_INIT_PS1).text()).toContain("xtool-sidecar");
+
+        const sandbox = await createInstallSandbox();
+        const project = join(sandbox.root, "project");
+        await mkdir(join(project, "dist"), { recursive: true });
+        await writeExecutable(join(project, "dist", "flyflor"), "#!/usr/bin/env sh\necho flyflor\n");
+
+        const proc = Bun.spawn(["bun", TOOLS_INIT_TS, "--mock"], {
+            cwd: project,
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        const exit = await proc.exited;
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toBe("");
+        expect(exit).toBe(0);
+
+        const manifest = await readFile(join(project, "tools", "external.tools.jsonc"), "utf8");
+        expect(manifest).toContain('"command": "./tools/packages/mock/bin/flyflor"');
+        expect(manifest).toContain('"args": [\n                "xtool-sidecar",\n                "mock.xtools"\n            ]');
+        expect(manifest).not.toContain('"command": "bun"');
+        await expect(stat(join(project, "tools", "packages", "mock", "bin", "flyflor"))).resolves.toBeTruthy();
     });
 
     test("template install prunes legacy uppercase and soul memory templates", async () => {
@@ -541,6 +579,13 @@ async function createInstallSandbox(): Promise<InstallSandbox> {
             };
         },
     };
+}
+
+async function createXtoolsProject(sandbox: InstallSandbox): Promise<string> {
+    const project = join(sandbox.root, "project");
+    await mkdir(join(project, "dist"), { recursive: true });
+    await writeExecutable(join(project, "dist", "flyflor"), "#!/usr/bin/env sh\necho flyflor\n");
+    return project;
 }
 
 async function writeExecutable(path: string, body: string): Promise<void> {

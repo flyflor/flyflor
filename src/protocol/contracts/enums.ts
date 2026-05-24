@@ -346,6 +346,8 @@ export const GatewayControlMessageType = {
     ForkCreate: "fork.create",
     ForkDetailGet: "fork.detail.get",
     ForkList: "fork.list",
+    ForkMemoryGet: "fork.memory.get",
+    ForkMemorySnapshot: "fork.memory.snapshot",
     ForkSnapshot: "fork.snapshot",
     HistoryDetailGet: "history.detail.get",
     HistoryList: "history.list",

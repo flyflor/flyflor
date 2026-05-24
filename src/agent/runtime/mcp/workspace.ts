@@ -342,9 +342,7 @@ export class WorkspaceToolset {
             const resolved = await this.resolveWritablePath(path);
             return { outsideProject: resolved.outsideProject, path, target: resolved.target };
         }
-        const rawPath = this.pathInput(call);
-        const resolved = await this.resolveExistingPath(rawPath);
-        return resolved.outsideProject ? { outsideProject: true, path: rawPath, target: resolved.target } : undefined;
+        return undefined;
     }
 
     public isWriteTool(tool: string): boolean {

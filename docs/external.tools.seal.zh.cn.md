@@ -36,11 +36,11 @@
 - `bun run install:xtools:computer-native`
 - `bun run install:xtools:utility`
 
-每个安装脚本默认只写 `~/.flyflor/.config/tools/external.tools.jsonc`，除非设置 `FLYFLOR_XTOOLS_TARGET`。
+每个安装脚本默认写入 `tools/external.tools.jsonc`，并创建 `tools/packages` 作为本地 payload 隔离区。测试或 staging 可以通过 `FLYFLOR_XTOOLS_TARGET` 覆盖 registry 目录。
 
 ## 运行时治理
 
-`~/.flyflor/.config/tools` 是外挂工具 registry 状态、安装回执、启用状态、policy、staged manifest、provider/delegate config 和 disabled capability reason 的运行时治理目录。`~/.flyflor/tools` 是已安装 runner 文件的 payload 目录。仓库本地 `./tools` 仍只是 git ignored 开发工作区，绝不是运行时 import surface。
+`tools/external.tools.jsonc` 是内核加载的项目本地 registry。`tools/packages` 是可选工具包和 delegate 的本地 payload 隔离区。内核只把它们当 descriptor/config 数据处理，禁止直接 import package 实现文件。
 
 `external.tools.jsonc` 条目必须保持 JSONC 兼容，并且只能作为 descriptor/config 数据处理。Bun 内核可以发现 descriptor 并透传 opaque sidecar config，但不能从 config 目录或 `./tools` 加载 sidecar 实现文件。
 
@@ -77,6 +77,6 @@ TUI 与 WS consumer 必须把 discovery 当成只读数据。它们可以渲染�
 
 - 内建 coding 工具、原子 sidecar 和 `computer.use` 已作为独立层记录。
 - Provider/delegate 失败记录为 `unavailable` 或 `failed`，不是静默兜底。
-- `~/.flyflor/.config/tools` 记录为治理目录，`~/.flyflor/tools` 记录为 payload 目录。
+- `tools/external.tools.jsonc` 记录为 registry，`tools/packages` 记录为隔离 payload 目录。
 - WS/TUI 消费保持在 `server.hello.payload.kits`、`capability.catalog.get` 和事件上。
 - 本文档封板不需要修改源码、sidecar 实现、package metadata 或 OpenAPI 契约。

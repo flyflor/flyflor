@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { BrainStore } from "../../cognitive/hippocampus/memory/brain/store.ts";
 import type { FlyflorPaths } from "../../config/index.ts";
@@ -37,10 +38,12 @@ import type {
  */
 export class SocketBrainReader {
     private readonly brain: BrainStore;
+    private readonly dbPath: string;
     private opened = false;
 
     public constructor(paths: FlyflorPaths) {
-        this.brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
+        this.dbPath = join(paths.configDir, "brain.db");
+        this.brain = new BrainStore({ dbPath: this.dbPath });
     }
 
     public async initialize(): Promise<void> {
@@ -83,14 +86,36 @@ export class SocketBrainReader {
     }
 
     public listForks(input: SocketQueryForkInput): ContextForkRecord[] {
-        return this.brain
+        return dedupeContextForks(this.brain
             .listContextForks({
                 ownerKey: input.ownerKey ?? ownerKeyFromScope(input.scopeId),
                 sourceBlackboardTurnId: input.sourceBlackboardTurnId,
                 sourceEventId: input.sourceEventId,
                 limit: input.limit ?? 50,
             })
-            .filter((fork) => optionalEqual(fork.sourceAskId, input.sourceAskId));
+            .filter((fork) => optionalEqual(fork.sourceAskId, input.sourceAskId)));
+    }
+
+    public async brainDbFile(): Promise<{ bytes: number | null; human: string | null; path?: string; status: "available" | "unknown" | "unavailable" }> {
+        try {
+            const info = await stat(this.dbPath);
+            return {
+                bytes: info.size,
+                human: humanBytes(info.size),
+                path: this.dbPath,
+                status: "available",
+            };
+        } catch (error) {
+            const code = error && typeof error === "object" && "code" in error
+                ? String((error as { code?: unknown }).code)
+                : undefined;
+            return {
+                bytes: null,
+                human: null,
+                path: this.dbPath,
+                status: code === "ENOENT" ? "unknown" : "unavailable",
+            };
+        }
     }
 
     public getFork(id: string): ContextForkRecord | null {
@@ -258,6 +283,47 @@ function ownerKeyFromScope(scopeId: string | undefined): string | undefined {
 
 function optionalEqual(value: string | undefined, expected: string | undefined): boolean {
     return expected === undefined || value === expected;
+}
+
+function dedupeContextForks(forks: ContextForkRecord[]): ContextForkRecord[] {
+    const selected = new Map<string, ContextForkRecord>();
+    for (const fork of forks) {
+        const key = contextForkDedupeKey(fork);
+        const existing = selected.get(key);
+        if (!existing || contextForkRank(fork) > contextForkRank(existing)) {
+            selected.set(key, fork);
+        }
+    }
+    return Array.from(selected.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function contextForkDedupeKey(fork: ContextForkRecord): string {
+    return [
+        fork.sourceEventId ?? fork.sourceAskId ?? fork.sourceBlackboardTurnId ?? fork.sourceKey ?? fork.ownerKey,
+        fork.title || fork.id,
+        fork.summary || fork.title || fork.id,
+        fork.continuitySummary || fork.summary || fork.title || fork.id,
+    ].join("\u001f");
+}
+
+function contextForkRank(fork: ContextForkRecord): number {
+    return Date.parse(fork.updatedAt) + filledTextScore(fork.title) + filledTextScore(fork.summary) + filledTextScore(fork.continuitySummary);
+}
+
+function filledTextScore(value: string): number {
+    return value.trim().length > 0 ? 1 : 0;
+}
+
+function humanBytes(bytes: number): string {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let value = bytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+    const fixed = unitIndex === 0 ? String(value) : value.toFixed(1);
+    return `${fixed} ${units[unitIndex]}`;
 }
 
 function readAsk(content: Record<string, unknown>): AgentAsk | undefined {

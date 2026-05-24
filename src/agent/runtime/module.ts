@@ -1,3 +1,4 @@
+import { sep } from "node:path";
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
@@ -200,6 +201,7 @@ const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
 const DEFAULT_MCP_TOOL_LOOP_LIMIT = 64;
+const LOCAL_ABSOLUTE_PATH_PATTERN = /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
 const BUILTIN_SHELL_SERVER = "shell";
 const BUILTIN_SHELL_TOOL = "run";
 const BUILTIN_SHELL_CATALOG_ENTRY: McpToolCatalogEntry = {
@@ -232,6 +234,7 @@ interface PreparedTurn {
     snapshotKey: string;
     fastRoute: FastRouteResult;
     interactionMode: InteractionModeType;
+    activeAsk?: { askId: string; chainDepth: number; ask: AgentAsk };
     scopeRecall?: ScopeRecallDecision;
     ttfbDone: () => void;
 }
@@ -702,6 +705,7 @@ export class RuntimeModule extends RuntimeBoundary {
         }
         const interactionMode = options.interactionMode ?? InteractionMode.Act;
         const snapshotKey = this.snapshotKeyFor(enrichedContext);
+        const activeAsk = this.memory.peekActiveAsk(continuityOwnerKey(message, enrichedContext)) ?? undefined;
         const fastRouteSnapshot = await this.fastRouteSnapshots.get(snapshotKey);
         const fastRoute = this.fastRouteEvaluator.evaluate({
             config: this.config.routing,
@@ -715,7 +719,17 @@ export class RuntimeModule extends RuntimeBoundary {
             { bypass: fastRoute.bypass, reason: fastRoute.reason, ...(fastRoute.metrics ?? {}) },
             context.requestId,
         );
-        return { context, enrichedContext, embedding, snapshotKey, fastRoute, interactionMode, scopeRecall, ttfbDone };
+        return {
+            context,
+            enrichedContext,
+            embedding,
+            snapshotKey,
+            fastRoute,
+            interactionMode,
+            activeAsk,
+            scopeRecall,
+            ttfbDone,
+        };
     }
 
     private async resolveScopeRecall(
@@ -800,13 +814,8 @@ export class RuntimeModule extends RuntimeBoundary {
     ): Promise<RuntimePlanningRouteDecision | undefined> {
         const explicitDecision = this.readPlanDecision(message.metadata);
         if (explicitDecision?.action === TaskPlanDecisionAction.Confirm) return undefined;
-        if (
-            prepared.interactionMode === InteractionMode.Act &&
-            assembled.blackboardRun &&
-            assembled.blackboardRun.mode !== BlackboardMode.Direct
-        ) {
-            return undefined;
-        }
+        if (prepared.activeAsk) return undefined;
+        if (prepared.interactionMode === InteractionMode.Act) return undefined;
         const decision = await this.planningRoute.decide({
             interactionMode: prepared.interactionMode,
             model: this.model,
@@ -982,7 +991,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 buildPromptDone();
                 return p;
             }),
-            this.resolveRouteDecision(message, fastRoute).then((r) => {
+            this.resolveRouteDecision(message, fastRoute, prepared.activeAsk).then((r) => {
                 routeDone();
                 return r;
             }),
@@ -1018,13 +1027,15 @@ export class RuntimeModule extends RuntimeBoundary {
         const pluginCapabilityCatalog = await this.buildPluginCapabilityCatalog();
 
         const snapshotForEscalation = await this.fastRouteSnapshots.get(snapshotKey);
-        const effectivePreRoute = this.applyRouteEscalation(
-            preRoute,
-            snapshotForEscalation,
-            context.requestId,
-            sourceSurfaceForMessage(message),
-            message.text.length,
-        );
+        const effectivePreRoute = prepared.activeAsk
+            ? preRoute
+            : this.applyRouteEscalation(
+                  preRoute,
+                  snapshotForEscalation,
+                  context.requestId,
+                  sourceSurfaceForMessage(message),
+                  message.text.length,
+              );
         const blackboardRun = await this.runBlackboard(message, enrichedContext, options, effectivePreRoute);
         const mcpCatalogBuild = await this.buildMcpCapabilityCatalog(
             mcpServers,
@@ -1439,14 +1450,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     : { kind: "reply" as const }),
                 behaviorSnapshotId,
                 blackboard: blackboardRun
-                    ? {
-                          elapsedMs: blackboardRun.elapsedMs,
-                          messages: blackboardRun.transcript.length,
-                          mode: blackboardRun.mode,
-                          reason: blackboardRun.reason,
-                          status: blackboardRun.status,
-                          turnId: blackboardRun.turnId,
-                      }
+                    ? this.blackboardOutput.metadataSnapshot(blackboardRun)
                     : {
                           mode: "direct",
                           reason: "blackboard-controller-not-configured",
@@ -1525,14 +1529,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ask: buildAskMetadata(ask, behaviorSnapshotId, executiveAskRequired),
                 behaviorSnapshotId,
                 blackboard: blackboardRun
-                    ? {
-                          elapsedMs: blackboardRun.elapsedMs,
-                          messages: blackboardRun.transcript.length,
-                          mode: blackboardRun.mode,
-                          reason: blackboardRun.reason,
-                          status: blackboardRun.status,
-                          turnId: blackboardRun.turnId,
-                      }
+                    ? this.blackboardOutput.metadataSnapshot(blackboardRun)
                     : {
                           mode: "direct",
                           reason: "blackboard-controller-not-configured",
@@ -1674,6 +1671,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const counters = this.routeEscalationPolicy.nextCounters({
             actualMode: lastMode,
             blackboardStatus: blackboardRun?.status,
+            askBoundary: Boolean(ask || prepared.activeAsk),
             previousWatch: previousSnapshot?.consecutiveWatchTurns ?? 0,
             previousFailure: previousSnapshot?.consecutiveBlackboardFailures ?? 0,
             previousToolFailure: previousSnapshot?.consecutiveToolFailureTurns ?? 0,
@@ -1976,8 +1974,33 @@ export class RuntimeModule extends RuntimeBoundary {
     protected async resolveRouteDecision(
         message: GatewayMessage,
         fastRoute: FastRouteResult,
+        activeAsk?: PreparedTurn["activeAsk"],
     ): Promise<RuntimeBlackboardRouteDecision | undefined> {
         if (!this.blackboard) return undefined;
+        if (activeAsk) {
+            // A pending ASK is a structured turn boundary. The next user message
+            // must be offered to the model with the ask-continuation context
+            // before any new blackboard discussion can start.
+            return {
+                mode: BlackboardMode.Direct,
+                score: 1,
+                reason: "active-ask-answer",
+                signals: ["active-ask"],
+                needsReflectionCandidate: false,
+                blackboardContract: {
+                    contradictions: [],
+                    evidence: [],
+                    mode: "normal",
+                    policyReason: "active-ask-answer",
+                },
+                workers: [],
+                raw: JSON.stringify({
+                    mode: BlackboardMode.Direct,
+                    reason: "active-ask-answer",
+                    activeAskId: activeAsk.askId,
+                }),
+            };
+        }
         if (fastRoute.bypass) {
             return this.fastRouteEvaluator.buildBypassDecision(fastRoute.reason);
         }
@@ -2127,6 +2150,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const budget = this.executiveToolBudget(options);
         const firstTurnStreamed = { value: false };
+        const initialToolProbe = await this.initialLocalPathProbe(messages, mcp.catalog, mcp.workspaceToolset);
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
@@ -2136,6 +2160,7 @@ export class RuntimeModule extends RuntimeBoundary {
             renderResults: renderMcpToolResults,
             generate: async (transcript, turn) => {
                 this.throwIfAborted(options.signal);
+                if (turn === 0 && initialToolProbe) return initialToolProbe;
                 const modelTranscript = transcript as ModelMessage[];
                 const shouldStreamVisibleText = options.onTextDelta && (turn > 0 || firstTurnStreamed.value);
                 const raw = shouldStreamVisibleText
@@ -2203,6 +2228,62 @@ export class RuntimeModule extends RuntimeBoundary {
             return undefined;
         }
         return `<agent_tool_calls>${JSON.stringify({ calls: decision.calls })}</agent_tool_calls>`;
+    }
+
+    private async initialLocalPathProbe(
+        messages: ModelMessage[],
+        catalog: McpToolCatalogEntry[],
+        workspaceToolset: WorkspaceToolset,
+    ): Promise<string | undefined> {
+        const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
+        if (!userMessage) return undefined;
+        const path = this.firstExistingAbsolutePath(userMessage.content);
+        if (!path) return undefined;
+        const tool = await this.workspaceProbeTool(path, workspaceToolset);
+        if (!tool) return undefined;
+        const key = `workspace.${tool}`;
+        if (!catalog.some((entry) => `${entry.server}.${entry.tool.name}` === key)) return undefined;
+        return `<agent_tool_calls>${JSON.stringify({
+            calls: [{
+                server: "workspace",
+                tool,
+                input: { path, maxDepth: 3, maxEntries: 200 },
+            }],
+        })}</agent_tool_calls>`;
+    }
+
+    private firstExistingAbsolutePath(text: string): string | undefined {
+        for (const match of text.matchAll(LOCAL_ABSOLUTE_PATH_PATTERN)) {
+            const raw = this.trimLocalPathCandidate(match[1]?.trim() ?? "");
+            if (!raw) continue;
+            if (Bun.file(raw).exists()) return raw;
+        }
+        return undefined;
+    }
+
+    private trimLocalPathCandidate(raw: string): string {
+        let candidate = raw;
+        while (candidate.length > 0) {
+            if (Bun.file(candidate).exists()) return candidate;
+            const next = candidate.slice(0, Math.max(candidate.lastIndexOf("/"), candidate.lastIndexOf("\\")));
+            if (!next || next === candidate) return raw;
+            candidate = next;
+        }
+        return raw;
+    }
+
+    private async workspaceProbeTool(path: string, workspaceToolset: WorkspaceToolset): Promise<string | undefined> {
+        try {
+            const result = await workspaceToolset.executeWithAccess(
+                { server: "workspace", tool: "stat", input: { path } },
+                { approved: true, reason: "runtime-local-path-probe" },
+            );
+            if (result.isError || !result.raw || typeof result.raw !== "object") return undefined;
+            const type = (result.raw as { type?: unknown }).type;
+            return type === "directory" ? "tree" : type === "file" ? "read" : undefined;
+        } catch {
+            return undefined;
+        }
     }
 
     private executiveToolBudget(options: RuntimeStreamOptions): Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget {
@@ -2500,9 +2581,6 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        const workerNames = route.workers.map((w) => w.name || w.role).join("、");
-        await options.onTextDelta?.(`> 🤔 黑板讨论中 · 参与者：${workerNames}\n\n`);
-
         const started = performance.now();
         const scopeConstraintId = scopeConstraintIdForContext(context);
         const start = await this.blackboard.startTurn({
@@ -2551,17 +2629,7 @@ export class RuntimeModule extends RuntimeBoundary {
             };
         }
 
-        let currentRound = 0;
-        const onWorkerDone = options.onTextDelta
-            ? async (ev: { round: number; workerName: string; outputSummary: string; blockers: string[] }) => {
-                  if (ev.round !== currentRound) {
-                      currentRound = ev.round;
-                      await options.onTextDelta!(`> **第 ${ev.round} 轮**\n\n`);
-                  }
-                  const blockerLine = ev.blockers.length > 0 ? `\n> ⚠ ${ev.blockers.slice(0, 2).join("；")}` : "";
-                  await options.onTextDelta!(`> **${ev.workerName}：** ${ev.outputSummary}${blockerLine}\n\n`);
-              }
-            : undefined;
+        const onWorkerDone = undefined;
 
         try {
             const finished = await this.blackboard.runUntilConverged(start.turn.id, {

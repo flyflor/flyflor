@@ -46,19 +46,21 @@ class WebSidecarError extends Error {
     }
 }
 
-try {
-    const raw = await new Response(Bun.stdin.stream()).text();
-    const request = parseRequest(raw);
-    const input = objectInput(request.input);
-    const config = objectInput(request.config ?? {});
-    const result = await dispatch(requiredString(request.tool, "request.tool"), input, config, request);
-    process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
-} catch (err) {
-    const failure = failureFromError(err);
-    const line = `${JSON.stringify(failure)}\n`;
-    process.stdout.write(line);
-    process.stderr.write(line);
-    process.exit(1);
+export async function runWebSearchSidecar(): Promise<void> {
+    try {
+        const raw = await new Response(Bun.stdin.stream()).text();
+        const request = parseRequest(raw);
+        const input = objectInput(request.input);
+        const config = objectInput(request.config ?? {});
+        const result = await dispatch(requiredString(request.tool, "request.tool"), input, config, request);
+        process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+    } catch (err) {
+        const failure = failureFromError(err);
+        const line = `${JSON.stringify(failure)}\n`;
+        process.stdout.write(line);
+        process.stderr.write(line);
+        process.exit(1);
+    }
 }
 
 async function dispatch(tool: string, input: JsonObject, config: JsonObject, request: SidecarRequest): Promise<JsonObject> {
@@ -355,4 +357,8 @@ function failureFromError(err: unknown): JsonObject {
 
 function messageFrom(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
+}
+
+if (import.meta.main) {
+    await runWebSearchSidecar();
 }

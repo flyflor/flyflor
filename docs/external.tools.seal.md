@@ -36,11 +36,11 @@ The sealed surface documents layer 2 and the discovery contract that lets `/ws` 
 - `bun run install:xtools:computer-native`
 - `bun run install:xtools:utility`
 
-Each installer writes only `~/.flyflor/.config/tools/external.tools.jsonc` unless `FLYFLOR_XTOOLS_TARGET` is provided.
+Each installer writes `tools/external.tools.jsonc` by default and creates `tools/packages` for isolated local payloads. `FLYFLOR_XTOOLS_TARGET` may override the registry directory for tests or staging.
 
 ## Runtime Governance
 
-`~/.flyflor/.config/tools` is the runtime governance directory for external tool registry state, install receipts, enablement, policy, staged manifests, provider/delegate config, and disabled capability reasons. `~/.flyflor/tools` is the payload directory for installed runner files. Repository-local `./tools` remains a git-ignored development workspace and is never a runtime import surface.
+`tools/external.tools.jsonc` is the project-local registry loaded by the kernel. `tools/packages` is the isolated local payload directory for optional packages and delegates. The kernel treats both as descriptor/config data and must not import package implementation files directly.
 
 `external.tools.jsonc` entries must stay JSONC-compatible and must be treated as descriptor/config data. The Bun kernel may discover descriptors and pass opaque sidecar config, but it must not load sidecar implementation files from the config directory or from `./tools`.
 
@@ -77,6 +77,6 @@ Seal checklist:
 
 - Builtin coding tools, atomic sidecars, and `computer.use` are documented as separate layers.
 - Provider/delegate failures are documented as `unavailable` or `failed`, not silent fallback.
-- `~/.flyflor/.config/tools` is documented as governance and `~/.flyflor/tools` as payload.
+- `tools/external.tools.jsonc` is documented as the registry and `tools/packages` as the isolated payload area.
 - WS/TUI consumption stays on `server.hello.payload.kits`, `capability.catalog.get`, and events.
 - No source code, sidecar implementation, package metadata, or OpenAPI contract is required for this documentation seal.

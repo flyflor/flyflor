@@ -573,12 +573,13 @@ export interface SandboxConfig {
  * 命中规则（满足任一即 bypass route LLM）：
  *   - 上轮 nextRouteHint === "direct" 且 age < routeHintTtlMs
  *   - cosine(curEmbed, lastEmbed) > similarityBypassThreshold 且上轮 mode 为 direct
- *   - 估算 tokens < routeBypassTokenBudget
+ * routeBypassTokenBudget 只保留为估算 token 指标；短消息不能单独绕过语义路由。
  */
 export interface RoutingConfig {
     fastRouteEnabled: boolean;
     routeHintTtlMs: number;
     similarityBypassThreshold: number;
+    /** 估算 token 指标阈值。短文本本身不再绕过 route LLM，避免短冲突请求误走 direct。 */
     routeBypassTokenBudget: number;
     /** direct-with-watch 模式连续命中多少次后强制升级到 blackboard。0 表示禁用。默认 3。 */
     watchEscalationThreshold?: number;
@@ -1377,7 +1378,7 @@ function resolvePaths(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): Fly
         projectDir,
         projectFlyflorDir,
         projectKitDir: join(projectFlyflorDir, "kits"),
-        projectToolDir: join(projectFlyflorDir, "tools"),
+        projectToolDir: join(projectDir, "tools"),
         projectSkillDir: join(projectFlyflorDir, "skills"),
         projectMcpDir: join(projectFlyflorDir, "mcp"),
         projectPluginDir: join(projectFlyflorDir, "plugins"),

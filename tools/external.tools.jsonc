@@ -1,0 +1,59 @@
+{
+    "schemaVersion": 1,
+    "sidecars": {
+        "browser.cdp": {
+            "command": "./tools/packages/browser-cdp/bin/flyflor",
+            "args": ["xtool-sidecar", "browser.cdp"],
+            "cwd": "project",
+            "env": { "FLYFLOR_BROWSER_CDP_URL": "http://127.0.0.1:9222" },
+            "timeoutMs": 8000,
+            "maxOutputBytes": 65536,
+            "tools": ["browser.open", "browser.snapshot", "browser.screenshot", "browser.click", "browser.type", "browser.navigate", "browser.evaluate"]
+        },
+        "computer.native": {
+            "command": "./tools/packages/computer-native/bin/flyflor",
+            "args": ["xtool-sidecar", "computer.native"],
+            "cwd": "project",
+            "config": { "mouseCommand": "", "mouseArgs": [], "keyboardCommand": "", "keyboardArgs": [] },
+            "timeoutMs": 10000,
+            "maxOutputBytes": 65536,
+            "tools": ["screen.screenshot", "computer.mouse", "computer.keyboard", "computer.window"]
+        },
+        "computer.use": {
+            "command": "./tools/packages/computer-use/bin/flyflor",
+            "args": ["xtool-sidecar", "computer.use"],
+            "cwd": "project",
+            "config": { "backend": "delegate", "delegateCommand": "", "delegateArgs": [], "cuaCommand": "cua-driver", "cuaArgs": [] },
+            "timeoutMs": 20000,
+            "maxOutputBytes": 524288,
+            "tools": ["computer.use"]
+        },
+        "media.local": {
+            "command": "./tools/packages/media/bin/flyflor",
+            "args": ["xtool-sidecar", "media.local"],
+            "cwd": "project",
+            "config": { "providerUrl": "", "providerHeaders": {}, "localCommands": {} },
+            "timeoutMs": 30000,
+            "maxOutputBytes": 262144,
+            "tools": ["vision.analyze", "vision.ocr", "audio.transcribe", "audio.speak"]
+        },
+        "web.search": {
+            "command": "./tools/packages/search-web/bin/flyflor",
+            "args": ["xtool-sidecar", "web.search"],
+            "cwd": "project",
+            "config": { "cacheTtlMs": 600000, "providers": [] },
+            "timeoutMs": 10000,
+            "maxOutputBytes": 65536,
+            "tools": ["web.search", "web.fetch", "web.extract", "web.download"]
+        },
+        "utility.local": {
+            "command": "./tools/packages/utility/bin/flyflor",
+            "args": ["xtool-sidecar", "utility.local"],
+            "cwd": "project",
+            "config": { "lspCommand": "", "lspArgs": [], "taskCommand": "", "taskArgs": [] },
+            "timeoutMs": 30000,
+            "maxOutputBytes": 262144,
+            "tools": ["lsp.symbols", "lsp.diagnostics", "task.background", "file.hash", "archive.create", "archive.extract", "data.convert"]
+        }
+    }
+}
