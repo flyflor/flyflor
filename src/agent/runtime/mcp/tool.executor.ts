@@ -18,6 +18,7 @@ import {
 import {
     createSandboxPolicy,
     gateCapabilityExecution,
+    type SandboxPolicy,
     SandboxQuotaTracker,
     ShellHookExecutor,
 } from "../../sandbox/index.ts";
@@ -59,6 +60,7 @@ export interface RuntimeMcpToolExecutorInput {
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
     requiresApproval: boolean;
     requestId: string;
+    sandboxPolicy?: SandboxPolicy;
     subagentBatch?: RuntimeSubagentBatchComponent;
     subagentGenerate?: (messages: unknown[], turn: number) => Promise<string>;
     subagentInitialMessages?: ModelMessage[];
@@ -119,7 +121,12 @@ export class RuntimeMcpToolExecutor {
                 knownToolNames: () => this.catalogKeys(input.toolExecution.catalog),
                 onBudgetBlocked: (call, decision) => this.budgetExecution(call, decision),
                 onExecution: (execution, options) =>
-                    this.publishMcpToolCallExecution(execution, input.toolExecution.requestId, options.loopGuardBlocked ? false : input.toolExecution.requiresApproval),
+                    this.publishMcpToolCallExecution(
+                        execution,
+                        input.toolExecution.requestId,
+                        options.loopGuardBlocked ? false : input.toolExecution.requiresApproval,
+                        this.sandboxPolicyForInput(input.toolExecution).mode,
+                    ),
                 onLoopGuardBlocked: (call, decision) => this.loopGuardExecution(call, decision, input.toolExecution.requestId),
                 parse: (raw) => {
                     const parsed = input.parse(raw);
@@ -148,7 +155,7 @@ export class RuntimeMcpToolExecutor {
             input.catalog.map((entry) => [`${entry.server}.${entry.tool.name}`, entry]),
         );
         const servers = await loadMcpServers(this.config.paths);
-        const sandboxPolicy = createSandboxPolicy(this.config.sandbox);
+        const sandboxPolicy = this.sandboxPolicyForInput(input);
         const executions: Array<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> = [];
         for (const rawCall of calls) {
             const call = { ...rawCall, key: rawCall.key ?? this.callKey(rawCall) };
@@ -164,6 +171,7 @@ export class RuntimeMcpToolExecutor {
                     input.workspaceToolset,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["workspace tool not in catalog"] },
                     input.requestId,
+                    sandboxPolicy,
                     input.approveMcpToolCall,
                 ));
                 continue;
@@ -174,6 +182,7 @@ export class RuntimeMcpToolExecutor {
                     input.gitToolset,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["git tool not in catalog"] },
                     input.approveMcpToolCall,
+                    sandboxPolicy,
                 ));
                 continue;
             }
@@ -183,6 +192,7 @@ export class RuntimeMcpToolExecutor {
                     input.processToolset,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["process tool not in catalog"] },
                     input.approveMcpToolCall,
+                    sandboxPolicy,
                 ));
                 continue;
             }
@@ -191,6 +201,7 @@ export class RuntimeMcpToolExecutor {
                     call,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["shell.run not in catalog"] },
                     input.approveMcpToolCall,
+                    sandboxPolicy,
                 ));
                 continue;
             }
@@ -211,6 +222,7 @@ export class RuntimeMcpToolExecutor {
                     userTool.tool,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["user tool not in catalog"] },
                     input.approveUserToolCall,
+                    sandboxPolicy,
                 ));
                 continue;
             }
@@ -223,6 +235,7 @@ export class RuntimeMcpToolExecutor {
                     pluginCapability,
                     catalogKeys.has(key) ? schemaCheck : { ok: false, errors: ["plugin capability not in catalog"] },
                     input.approveMcpToolCall,
+                    sandboxPolicy,
                 ));
                 continue;
             }
@@ -280,6 +293,7 @@ export class RuntimeMcpToolExecutor {
         workspaceToolset: WorkspaceToolset,
         schemaCheck: { ok: boolean; errors: string[] },
         requestId: string,
+        sandboxPolicy: SandboxPolicy,
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
@@ -290,7 +304,7 @@ export class RuntimeMcpToolExecutor {
             };
         }
         try {
-            const access = await this.approveWorkspaceAccess(call, workspaceToolset, requestId, approveMcpToolCall);
+            const access = await this.approveWorkspaceAccess(call, workspaceToolset, requestId, sandboxPolicy, approveMcpToolCall);
             if (!access.approved) {
                 return { call, ok: false, error: access.reason };
             }
@@ -310,10 +324,12 @@ export class RuntimeMcpToolExecutor {
         call: McpToolCallRequest,
         workspaceToolset: WorkspaceToolset,
         requestId: string,
+        sandboxPolicy: SandboxPolicy,
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
     ): Promise<WorkspaceToolAccess> {
         const requested = await workspaceToolset.requiresApproval(call);
         if (!requested) return { approved: true, reason: "project-local" };
+        if (sandboxPolicy.mode === "yolo") return { approved: true, reason: "yolo" };
         const descriptor = { server: call.server, tool: call.tool, path: requested.path, target: requested.target };
         this.events.publish(
             event(
@@ -349,6 +365,7 @@ export class RuntimeMcpToolExecutor {
         tool: ManifestToolDefinition,
         schemaCheck: { ok: boolean; errors: string[] },
         approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>,
+        sandboxPolicy: SandboxPolicy = createSandboxPolicy(this.config.sandbox),
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `user tool input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
@@ -361,7 +378,7 @@ export class RuntimeMcpToolExecutor {
             events: this.events,
             input: call.input,
             paths: this.config.paths,
-            policy: createSandboxPolicy(this.config.sandbox),
+            policy: sandboxPolicy,
             tool,
         });
         return {
@@ -388,13 +405,14 @@ export class RuntimeMcpToolExecutor {
         capability: RuntimePluginCapabilityCatalogEntry,
         schemaCheck: { ok: boolean; errors: string[] },
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+        sandboxPolicy: SandboxPolicy = createSandboxPolicy(this.config.sandbox),
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `plugin capability input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
         }
         const command = this.pluginCommand();
         const runner = new PluginRunner({
-            policy: createSandboxPolicy(this.config.sandbox),
+            policy: sandboxPolicy,
             events: this.events,
             allowedCommands: [command],
             approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
@@ -444,12 +462,13 @@ export class RuntimeMcpToolExecutor {
         gitToolset: GitToolset,
         schemaCheck: { ok: boolean; errors: string[] },
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+        sandboxPolicy: SandboxPolicy = createSandboxPolicy(this.config.sandbox),
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `git tool input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
         }
         const executor = new ShellHookExecutor({
-            policy: createSandboxPolicy(this.config.sandbox),
+            policy: sandboxPolicy,
             events: this.events,
             allowedCommands: ["git"],
             approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
@@ -473,6 +492,7 @@ export class RuntimeMcpToolExecutor {
         processToolset: ProcessToolset,
         schemaCheck: { ok: boolean; errors: string[] },
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+        sandboxPolicy: SandboxPolicy = createSandboxPolicy(this.config.sandbox),
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `process tool input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
@@ -484,7 +504,7 @@ export class RuntimeMcpToolExecutor {
             return { call, ok: false, error: error instanceof Error ? error.message : String(error) };
         }
         const executor = new ShellHookExecutor({
-            policy: createSandboxPolicy(this.config.sandbox),
+            policy: sandboxPolicy,
             events: this.events,
             allowedCommands: [executable],
             approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
@@ -551,6 +571,7 @@ export class RuntimeMcpToolExecutor {
         call: McpToolCallRequest & { key: string },
         schemaCheck: { ok: boolean; errors: string[] },
         approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>,
+        sandboxPolicy: SandboxPolicy = createSandboxPolicy(this.config.sandbox),
     ): Promise<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }> {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `shell.run input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
@@ -558,7 +579,7 @@ export class RuntimeMcpToolExecutor {
         const spec = this.readShellRunSpec(call);
         if (!spec.ok) return { call, ok: false, error: spec.error };
         const executor = new ShellHookExecutor({
-            policy: createSandboxPolicy(this.config.sandbox),
+            policy: sandboxPolicy,
             events: this.events,
             allowedCommands: [spec.command],
             approve: approveMcpToolCall ? () => approveMcpToolCall(call) : undefined,
@@ -672,6 +693,7 @@ export class RuntimeMcpToolExecutor {
         execution: McpToolCallExecution,
         requestId: string,
         requiresApproval: boolean,
+        sandboxMode: string,
     ): void {
         const resultDescription = execution.result ? describeMcpResult(execution.result.raw) : undefined;
         this.events.publish(
@@ -681,6 +703,7 @@ export class RuntimeMcpToolExecutor {
                     error: execution.error,
                     ok: execution.ok,
                     requiresApproval,
+                    sandboxMode,
                     ...(resultDescription
                         ? {
                               resultSummary: formatMcpResultSummary(resultDescription.summary, execution.result?.raw),
@@ -693,6 +716,10 @@ export class RuntimeMcpToolExecutor {
                 requestId,
             ),
         );
+    }
+
+    private sandboxPolicyForInput(input: RuntimeMcpToolExecutorInput): SandboxPolicy {
+        return input.sandboxPolicy ?? createSandboxPolicy(this.config.sandbox);
     }
 
     private loopGuardExecution(

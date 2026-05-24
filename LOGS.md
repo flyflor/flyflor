@@ -729,3 +729,10 @@
   原因：浏览器、屏幕、鼠标键盘、视觉、OCR、语音、搜索、LSP 等属于可外挂能力，不应把重依赖打进 Bun kernel；核心读写仍走内建执行原语，外部能力只做功能扩展。
   效率：合入提交 `25fedc7`，16 files changed，1036 insertions，6 deletions；契约修正另补 `EventSubscription.types` 4 个子代理事件。
   验证：`bun test tests/external.tools.test.ts tests/runtime.mcp.tool.plan.test.ts tests/gateway.ws.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts tests/computer.coding.tools.test.ts` 84 pass；`bun run docs:check` 26 pass；主线综合 focused tests 161 pass；`bun run check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：external-tools-local-dev-layout
+  摘要：确认本地开发期可在仓库根目录使用与 `src/` 平级的 `tools/` 目录承载外挂工具源码和实验实现，并把该目录加入 `.gitignore`；同时把正式用户态治理面固定为 `~/.flyflor/.config/tools`，正式 payload 固定为 `~/.flyflor/tools`。
+  原因：用户要求本地开发 tools 与 src 平级但不要进入 git；这能提高 Browser CDP 等 sidecar 迭代效率，同时保持内核仓库纯净和正式安装路径清晰。
+  验证：`bun run docs:check` 26 pass；`bun test tests/computer.coding.tools.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/sandbox.gate.test.ts tests/plugin.runner.test.ts` 87 pass；`bun run check`；`git diff --check`。

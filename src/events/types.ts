@@ -30,6 +30,8 @@ export const RuntimeEventType = {
     SandboxToolApprovalRequested: "sandbox.tool.approval.requested",
     SandboxToolApprovalDenied: "sandbox.tool.approval.denied",
     SandboxToolDenied: "sandbox.tool.denied",
+    SandboxYoloEntered: "sandbox.yolo.entered",
+    SandboxYoloExited: "sandbox.yolo.exited",
     SandboxShellHookStart: "sandbox.shell.hook.start",
     SandboxShellHookEnd: "sandbox.shell.hook.end",
     SandboxShellHookFailed: "sandbox.shell.hook.failed",

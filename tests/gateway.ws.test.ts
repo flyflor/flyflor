@@ -23,6 +23,8 @@ import {
     ToolPermission,
     GatewayControlMessageType,
     ToolLifecycleEventType,
+    RuntimeEventClass,
+    SandboxMode,
     type ContextForkRecord,
     type GatewayMessage,
     type GatewayReply,
@@ -30,7 +32,8 @@ import {
 import { GlobalEventBus, RuntimeEventType } from "../src/events/index.ts";
 import type { FlyflorPaths, GatewayConfig } from "../src/config/index.ts";
 import type { GatewayControlDispatchOptions } from "../src/socket/control.ts";
-import type { SocketQueryComponentPort } from "../src/socket/query/index.ts";
+import { SocketQueryComponent, type SocketQueryComponentPort } from "../src/socket/query/index.ts";
+import { BlackboardModule, SQLiteBlackboardStore } from "../src/agent/blackboard/index.ts";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -531,6 +534,152 @@ describe("SocketControlHub", () => {
             progress: 0.5,
         });
         hub.dispose();
+    });
+
+    test("delivers blackboard refresh events through write-class subscriptions", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    { classes: [RuntimeEventClass.Write] },
+                    { id: "blackboard-write-subscribe-1" },
+                ),
+            ),
+        );
+        bus.publish({
+            type: RuntimeEventType.BlackboardMessageAppended,
+            at: "2026-05-24T00:00:00.000Z",
+            requestId: "req-blackboard-1",
+            payload: { turnId: "bb-1", messageId: "bb-msg-1", role: "worker" },
+        });
+        bus.publish({
+            type: RuntimeEventType.BlackboardTurnEnd,
+            at: "2026-05-24T00:00:01.000Z",
+            requestId: "req-blackboard-1",
+            payload: { turnId: "bb-1", status: "converged" },
+        });
+
+        expect(sent(socket)
+            .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+            .map((envelope) => eventTypeFromEnvelope(envelope))).toEqual([
+                RuntimeEventType.BlackboardMessageAppended,
+                RuntimeEventType.BlackboardTurnEnd,
+            ]);
+        hub.dispose();
+    });
+
+    test("blackboard query read model handles an empty new DB without runtime dispatch", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-blackboard-query-empty-"));
+        try {
+            const queries = new SocketQueryComponent(testPaths(root));
+            await queries.initialize();
+            expect(await queries.blackboardList({ limit: 5 })).toEqual([]);
+            expect(await queries.blackboardDetail({ blackboardTurnId: "missing" })).toBeUndefined();
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("blackboard events emitted by runtime store are published and queryable", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-blackboard-query-live-"));
+        try {
+            const paths = testPaths(root);
+            const bus = new GlobalEventBus();
+            const blackboard = new BlackboardModule(new SQLiteBlackboardStore(paths), bus);
+            const start = await blackboard.startTurn({
+                scopeConstraintId: "scope:blackboard-query",
+                requestId: "req-blackboard-query-1",
+                goal: "Summarize blackboard state for TUI",
+                now: "2026-05-24T00:00:00.000Z",
+                workers: [{ role: "summary-worker", name: "Summary worker" }],
+            });
+            expect(start.acquired).toBe(true);
+            if (!start.acquired) throw new Error("expected blackboard start");
+
+            const hub = createHub({ events: bus, queries: new SocketQueryComponent(paths) });
+            const socket = fakeSocket();
+            hub.open(socket);
+            await hub.message(
+                socket,
+                JSON.stringify(
+                    createGatewayControlEnvelope(
+                        GatewayControlMessageType.EventSubscribe,
+                        { types: [RuntimeEventType.BlackboardMessageAppended, RuntimeEventType.BlackboardTurnEnd] },
+                        { id: "blackboard-live-subscribe-1" },
+                    ),
+                ),
+            );
+
+            await blackboard.appendMessage(start.turn.id, {
+                role: "worker",
+                content: "Blackboard public summary",
+                visibility: "public",
+                createdAt: "2026-05-24T00:00:01.000Z",
+            });
+            await blackboard.finishTurn(start.turn.id, "converged", "2026-05-24T00:00:02.000Z");
+            await hub.message(
+                socket,
+                JSON.stringify(
+                    createGatewayControlEnvelope(
+                        GatewayControlMessageType.BlackboardDetailGet,
+                        { blackboardTurnId: start.turn.id },
+                        { id: "blackboard-live-detail-1" },
+                    ),
+                ),
+            );
+            await hub.message(
+                socket,
+                JSON.stringify(
+                    createGatewayControlEnvelope(
+                        GatewayControlMessageType.BlackboardList,
+                        { scopeId: "scope:blackboard-query", limit: 5 },
+                        { id: "blackboard-live-list-1" },
+                    ),
+                ),
+            );
+
+            expect(sent(socket)
+                .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+                .map((envelope) => eventTypeFromEnvelope(envelope))).toEqual([
+                    RuntimeEventType.BlackboardMessageAppended,
+                    RuntimeEventType.BlackboardTurnEnd,
+                ]);
+            expect(sent(socket).find((envelope) => envelope.correlationId === "blackboard-live-detail-1"))
+                .toMatchObject({
+                    type: GatewayControlMessageType.BlackboardSnapshot,
+                    payload: {
+                        data: {
+                            turn: {
+                                id: start.turn.id,
+                                status: "converged",
+                                goal: "Summarize blackboard state for TUI",
+                                messages: [{ content: "Blackboard public summary", role: "worker" }],
+                            },
+                        },
+                    },
+                });
+            expect(sent(socket).find((envelope) => envelope.correlationId === "blackboard-live-list-1"))
+                .toMatchObject({
+                    type: GatewayControlMessageType.BlackboardSnapshot,
+                    payload: {
+                        data: [{
+                            id: start.turn.id,
+                            status: "converged",
+                            messages: [{ content: "Blackboard public summary" }],
+                        }],
+                    },
+                });
+            hub.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
     });
 
     test("acks client.hello with stable client identity echo", async () => {
@@ -2011,6 +2160,13 @@ describe("SocketControlHub", () => {
                                 userToolCalls: true,
                             },
                         },
+                        metadata: {
+                            tui: {
+                                mode: "plan",
+                                yolo: true,
+                            },
+                            uiMode: "plan",
+                        },
                         text: "hello",
                         user: { id: "u-1" },
                     },
@@ -2021,6 +2177,13 @@ describe("SocketControlHub", () => {
 
         expect(calls).toHaveLength(1);
         expect(calls[0]?.message).toMatchObject({
+            metadata: {
+                tui: {
+                    mode: "plan",
+                    yolo: true,
+                },
+                uiMode: "plan",
+            },
             text: "hello",
             user: { id: "u-1" },
         });
@@ -2035,6 +2198,7 @@ describe("SocketControlHub", () => {
             requestId: "client-req-1",
             skillNames: ["skill-a"],
         });
+        expect(calls[0]?.options?.sandboxMode).toBe(SandboxMode.Yolo);
         expect(await calls[0]?.options?.approveMcpToolCall?.({ server: "workspace", tool: "write", input: {} })).toBe(true);
         expect(await calls[0]?.options?.approveUserToolCall?.({ descriptor: { name: "user.tool" } } as never)).toBe(true);
         expect(sent(socket)[1]).toMatchObject({
@@ -2072,6 +2236,33 @@ describe("SocketControlHub", () => {
             GatewayControlMessageType.TurnDelta,
             GatewayControlMessageType.TurnFinal,
         ]);
+        hub.dispose();
+    });
+
+    test("emits yolo audit events around ws dispatch when requested by structured metadata", async () => {
+        const bus = new GlobalEventBus();
+        const published: string[] = [];
+        bus.subscribe({ publish: (runtimeEvent) => published.push(runtimeEvent.type) });
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.GatewayMessageSend,
+                    {
+                        metadata: { tui: { yolo: true } },
+                        text: "run with yolo",
+                    },
+                    { id: "send-yolo-audit-1", requestId: "req-yolo-audit-1" },
+                ),
+            ),
+        );
+
+        expect(published).toContain(RuntimeEventType.SandboxYoloEntered);
+        expect(published).toContain(RuntimeEventType.SandboxYoloExited);
         hub.dispose();
     });
 
@@ -2584,6 +2775,11 @@ function readStatusCacheHits(envelope?: GatewayControlEnvelope): number {
     const payload = envelope?.payload as { status?: { cache?: { hits?: unknown } } } | undefined;
     const hits = payload?.status?.cache?.hits;
     return typeof hits === "number" ? hits : 0;
+}
+
+function eventTypeFromEnvelope(envelope: GatewayControlEnvelope): string | undefined {
+    const payload = envelope.payload as { event?: { type?: unknown } } | undefined;
+    return typeof payload?.event?.type === "string" ? payload.event.type : undefined;
 }
 
 async function waitForEnvelope(socket: GatewayControlSocket): Promise<void> {

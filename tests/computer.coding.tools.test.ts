@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
 import { RuntimeMcpToolExecutor, WorkspaceToolset, GitToolset, ProcessToolset } from "../src/agent/runtime/mcp/index.ts";
-import { SandboxQuotaTracker } from "../src/agent/sandbox/index.ts";
-import { NullEventSink } from "../src/events/index.ts";
+import { createSandboxPolicy, SandboxQuotaTracker } from "../src/agent/sandbox/index.ts";
+import { NullEventSink, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import {
     SandboxMode,
     ToolApprovalMode,
@@ -192,6 +192,82 @@ describe("computer coding tools", () => {
         expect(denied).toMatchObject({ ok: false, error: expect.stringContaining("not approved") });
     });
 
+    test("per-turn yolo policy bypasses workspace approval and marks tool audit metadata", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-yolo-turn-"));
+        const paths = testPaths(root);
+        const config = await loadConfigForPaths(paths);
+        const events = new CaptureEventSink();
+        const executor = new RuntimeMcpToolExecutor(
+            {
+                ...config,
+                sandbox: {
+                    mode: SandboxMode.Off,
+                    computerApproval: ToolApprovalMode.Ask,
+                },
+            },
+            events,
+            new SandboxQuotaTracker(),
+        );
+        const workspace = new WorkspaceToolset(paths);
+        const yoloPolicy = createSandboxPolicy({
+            mode: SandboxMode.Yolo,
+            computerApproval: ToolApprovalMode.Allow,
+            mcpToolApproval: ToolApprovalMode.Allow,
+            pluginApproval: ToolApprovalMode.Allow,
+            shellHookApproval: ToolApprovalMode.Allow,
+        });
+        const [written] = await executor.executeCalls(
+            [{ server: "workspace", tool: "write", input: { path: "yolo.txt", content: "ok", overwrite: true } }],
+            {
+                catalog: workspace.catalog(),
+                gitToolset: new GitToolset(paths),
+                processToolset: new ProcessToolset(paths),
+                pluginCapabilityCatalog: [],
+                requiresApproval: false,
+                requestId: "req-yolo-tool-1",
+                sandboxPolicy: yoloPolicy,
+                userToolCatalog: [],
+                workspaceToolset: workspace,
+            },
+        );
+        expect(written).toMatchObject({ ok: true });
+        expect(await readFile(join(root, "yolo.txt"), "utf8")).toBe("ok");
+
+        const executorWithLoopAudit = new RuntimeMcpToolExecutor(
+            {
+                ...config,
+                sandbox: { mode: SandboxMode.Off, computerApproval: ToolApprovalMode.Ask },
+            },
+            events,
+            new SandboxQuotaTracker(),
+        );
+        await executorWithLoopAudit.runLoop({
+            budget: { modelToolTurnBudget: 1 },
+            generate: async () => `<agent_tool_calls>${JSON.stringify({ calls: [{ server: "workspace", tool: "read", input: { path: "yolo.txt" } }] })}</agent_tool_calls>`,
+            initialMessages: [],
+            maxTurns: 1,
+            noMoreToolsMessage: "done",
+            parse: (raw) => {
+                const calls = JSON.parse(raw.slice("<agent_tool_calls>".length, -"</agent_tool_calls>".length)).calls;
+                return { calls, text: "" };
+            },
+            renderResults: () => "done",
+            toolExecution: {
+                catalog: workspace.catalog(),
+                gitToolset: new GitToolset(paths),
+                processToolset: new ProcessToolset(paths),
+                pluginCapabilityCatalog: [],
+                requiresApproval: false,
+                requestId: "req-yolo-loop-1",
+                sandboxPolicy: yoloPolicy,
+                userToolCatalog: [],
+                workspaceToolset: workspace,
+            },
+        });
+        expect(events.events.find((item) => item.type === RuntimeEventType.McpToolCallExecuted)?.payload)
+            .toMatchObject({ sandboxMode: SandboxMode.Yolo });
+    });
+
     test("git failure returns command, exit code, and stderr summary", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-git-"));
         const paths = testPaths(root);
@@ -327,6 +403,14 @@ describe("computer coding tools", () => {
         });
     });
 });
+
+class CaptureEventSink implements EventSink {
+    public readonly events: Parameters<EventSink["publish"]>[0][] = [];
+
+    public publish(runtimeEvent: Parameters<EventSink["publish"]>[0]): void {
+        this.events.push(runtimeEvent);
+    }
+}
 
 function testPaths(root: string): FlyflorPaths {
     return {

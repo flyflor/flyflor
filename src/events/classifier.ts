@@ -2,6 +2,9 @@ import { RuntimeEventClass, type RuntimeEventClass as RuntimeEventClassType } fr
 import { RuntimeEventType } from "./types.ts";
 
 const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
+    [RuntimeEventType.BlackboardMessageAppended]: RuntimeEventClass.Write,
+    [RuntimeEventType.BlackboardTurnEnd]: RuntimeEventClass.Write,
+    [RuntimeEventType.BlackboardTurnStart]: RuntimeEventClass.Write,
     [RuntimeEventType.MemoryAskAnswered]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskChainCapped]: RuntimeEventClass.Ask,
     [RuntimeEventType.MemoryAskMutexViolation]: RuntimeEventClass.Ask,

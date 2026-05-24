@@ -766,3 +766,9 @@ Kernel V2 acceptance focus：
 - [x] Socket kit catalog 暴露可用/不可用 external capabilities，方便 TUI/前端显示能力面。
 - [x] 更新 OpenAPI/Apifox 事件枚举，补齐新增子代理事件订阅类型。
 - [x] 运行 focused tests、`bun run docs:check`、`bun run check`、`git diff --check` 后合入主线。
+
+## 2026-05-24 外挂工具本地开发目录
+
+- [x] 明确仓库根目录 `tools/` 是本地开发外挂工作区，与 `src/` 平级但必须 git ignored。
+- [x] 明确正式用户态治理目录仍为 `~/.flyflor/.config/tools`，正式 payload 目录仍为 `~/.flyflor/tools`。
+- [x] 更新 External Kit 文档，禁止内核直接 import 本地 `tools/` 实现文件。

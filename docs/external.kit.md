@@ -1,24 +1,34 @@
-# External Kit 协议
+# External Kit Protocol
 
-External Kit 是主线保留的只读发现协议，不是第一方 CLI/TUI/socket 兼容层。
+External Kit is the read-only discovery protocol for optional external capabilities. It is not the first-party CLI, TUI, or socket compatibility layer, and it does not execute tools by itself.
 
-## 当前主线范围
+## Runtime Ownership
+
+- `~/.flyflor/.config/tools` is the future user-level control surface for tool registry, installed receipts, enablement, policy, and staging manifests.
+- `~/.flyflor/tools` is the future user-level payload directory for installed sidecar runners and their versioned files.
+- `./tools` at the repository root is only a local development workspace beside `src`. It is git ignored and must not be committed.
+
+The development `./tools` directory may contain Browser CDP, screen, vision, audio, LSP, or other sidecar experiments. Runtime discovery must still happen through explicit manifests and structured capability registration. Do not make the kernel import implementation files from `./tools`.
+
+## Current Mainline Surface
 
 - `src/socket/kit/manifest.ts`
 - `src/socket/kit/catalog.ts`
 - `src/socket/kit/index.ts`
+- `src/executive/external/tools.ts`
 
-它们只负责：
+These modules only:
 
-- 读取 builtin / global / workspace-local kit manifest
-- 汇总 MCP / plugin / skill / user tool 的只读 capability catalog
-- 通过 `server.hello` 与 `capability.catalog.snapshot` 暴露给外部客户端
+- read builtin, global, and workspace-local kit manifests
+- summarize MCP, plugin, skill, user tool, and external sidecar capability catalogs
+- expose read-only snapshots through `server.hello` and `capability.catalog.snapshot`
 
-## 不负责
+## Boundaries
 
-- 不执行工具
-- 不 import Runtime 私有实现
-- 不 import CLI/TUI
-- 不 import 已移除的旧实现
+- External Kit does not execute tools.
+- External Kit does not import Runtime private implementation.
+- External Kit does not import CLI/TUI implementation.
+- External tools must not duplicate builtin file read/write, patch, git, process, or shell primitives.
+- Missing sidecars are reported as unavailable descriptors, not startup failures.
 
-真实执行仍然必须进入 Executive Tool Runtime 与 sandbox。
+Real execution must enter Executive Tool Runtime, sandbox, approval, quota, and audit events.

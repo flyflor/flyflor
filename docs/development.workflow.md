@@ -1050,3 +1050,18 @@ Validation:
 - `bun run docs:check`
 - `bun run check`
 - final binary build and xtools worktree cleanup are the remaining closure actions for this round
+
+## 2026-05-24 External Tools Local Development Layout
+
+Decision:
+
+- Repository-root `./tools` is the local development workspace for sidecar source code and experiments.
+- `./tools` stays beside `src`, but it is git ignored and must not be committed.
+- User-level governance remains `~/.flyflor/.config/tools`.
+- User-level installed sidecar payloads remain `~/.flyflor/tools`.
+
+Boundary:
+
+- The Bun kernel must discover sidecars through explicit manifests and capability descriptors.
+- The Bun kernel must not import implementation files from local `./tools`.
+- Browser CDP and later sidecars can iterate locally in `./tools`, then graduate through manifest, ASK approval, install receipt, sandbox, and audit.

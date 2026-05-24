@@ -1527,6 +1527,8 @@
                 "sandbox.tool.approval.requested",
                 "sandbox.tool.approval.denied",
                 "sandbox.tool.denied",
+                "sandbox.yolo.entered",
+                "sandbox.yolo.exited",
                 "sandbox.shell.hook.start",
                 "sandbox.shell.hook.end",
                 "sandbox.shell.hook.failed",

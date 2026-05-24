@@ -919,3 +919,18 @@ Kernel V2 硬设计点：
 - `bun run docs:check`
 - `bun run check`
 - 本轮剩余闭合动作是最终 binary build 和 xtools worktree 清理。
+
+## 2026-05-24 外挂工具本地开发目录
+
+决策：
+
+- 仓库根目录 `./tools` 是外挂 sidecar 源码和实验实现的本地开发工作区。
+- `./tools` 与 `src` 平级，但必须保持 git ignored，禁止提交。
+- 用户态治理目录仍为 `~/.flyflor/.config/tools`。
+- 用户态已安装 sidecar payload 目录仍为 `~/.flyflor/tools`。
+
+边界：
+
+- Bun 内核必须通过显式 manifest 和 capability descriptor 发现 sidecar。
+- Bun 内核禁止直接 import 本地 `./tools` 实现文件。
+- Browser CDP 以及后续 sidecar 可以先在 `./tools` 本地迭代，再通过 manifest、ASK 确认、安装回执、sandbox 和 audit 升格。

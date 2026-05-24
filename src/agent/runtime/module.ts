@@ -19,6 +19,8 @@ import {
     Channel,
     ContinuationContextReason,
     ModelRole,
+    SandboxMode,
+    ToolApprovalMode,
     ToolPermission,
 } from "../../protocol/contracts/index.ts";
 import {
@@ -149,6 +151,8 @@ export interface RuntimeStreamOptions {
     executiveToolBudget?: ExecutiveToolRuntimeBudget;
     /** CLI `--toolsets` 透传的逗号分隔白名单，仅保留这些 MCP server。 */
     toolsetAllowlist?: string[];
+    /** One-turn high-permission sandbox override from structured control metadata. */
+    sandboxMode?: SandboxMode;
 }
 
 export interface RuntimeMcpResourceReadInput {
@@ -823,7 +827,7 @@ export class RuntimeModule extends RuntimeBoundary {
             ),
         );
 
-        const sandbox = createSandboxPolicy(this.config.sandbox);
+        const sandbox = createSandboxPolicy(this.sandboxConfigForTurn(options));
         const mcpExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.McpTool);
         const pluginExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.Plugin);
         const shellExecution = decideCapabilityExecution(sandbox, CapabilityExecutionKind.ShellHook);
@@ -1121,6 +1125,7 @@ export class RuntimeModule extends RuntimeBoundary {
             gitToolset,
             processToolset,
             requestId: context.requestId,
+            sandbox,
             subagentBatch: this.subagentBatch,
             subagentInitialMessages: modelMessages,
             subagentGenerate: async (messages, _turn) => this.model.generate(messages as ModelMessage[], { signal: options.signal }),
@@ -1925,6 +1930,7 @@ export class RuntimeModule extends RuntimeBoundary {
             approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
             approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
             requestId: string;
+            sandbox: AssembledTurnContext["sandbox"];
         },
     ): Promise<{
         askRequired?: RuntimeExecutiveAskRequired;
@@ -1986,6 +1992,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 requiresApproval: mcp.requiresApproval,
                 approveMcpToolCall: mcp.approveMcpToolCall,
                 approveUserToolCall: mcp.approveUserToolCall,
+                sandboxPolicy: mcp.sandbox,
             },
         });
         return {
@@ -2025,6 +2032,18 @@ export class RuntimeModule extends RuntimeBoundary {
             executionOperationBudget: configured?.executionOperationBudget,
             modelToolTurnBudget: Math.max(1, configured?.modelToolTurnBudget ?? options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT),
             riskQuota: configured?.riskQuota,
+        };
+    }
+
+    private sandboxConfigForTurn(options: RuntimeStreamOptions): FlyflorConfig["sandbox"] {
+        if (options.sandboxMode !== SandboxMode.Yolo) return this.config.sandbox;
+        return {
+            ...this.config.sandbox,
+            mode: SandboxMode.Yolo,
+            computerApproval: ToolApprovalMode.Allow,
+            mcpToolApproval: ToolApprovalMode.Allow,
+            pluginApproval: ToolApprovalMode.Allow,
+            shellHookApproval: ToolApprovalMode.Allow,
         };
     }
 

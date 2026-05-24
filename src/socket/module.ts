@@ -186,6 +186,7 @@ export class SocketModule extends Socket {
             onTextDelta?: (text: string) => void | Promise<void>;
             approveMcpToolCall?: RuntimeStreamOptions["approveMcpToolCall"];
             approveUserToolCall?: RuntimeStreamOptions["approveUserToolCall"];
+            sandboxMode?: RuntimeStreamOptions["sandboxMode"];
         } = {},
     ): Promise<GatewayReply> {
         const context: RuntimeContext = options.context ?? {

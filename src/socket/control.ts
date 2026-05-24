@@ -47,6 +47,7 @@ import {
     ChannelLinkState,
     ControlSnapshotStatus,
     GatewayControlMessageType,
+    SandboxMode,
     type GatewayChannelCapabilities,
     type ChannelTransport,
     type ContextForkRecord,
@@ -55,7 +56,7 @@ import {
     type RuntimeContext,
     type RuntimeEvent,
 } from "../protocol/contracts/index.ts";
-import { RuntimeEventType, type EventSink, type RuntimeEventBus } from "../events/index.ts";
+import { event, RuntimeEventType, type EventSink, type RuntimeEventBus } from "../events/index.ts";
 import type { FlyflorPaths } from "../config/index.ts";
 import { buildBuiltinExternalKitCatalog, loadExternalKitCatalogSnapshot } from "./kit/index.ts";
 import type { SocketQueryComponentPort } from "./query/index.ts";
@@ -110,6 +111,7 @@ export interface SocketControlDispatchOptions {
     onTextDelta?: (text: string) => void | Promise<void>;
     approveMcpToolCall?: RuntimeStreamOptions["approveMcpToolCall"];
     approveUserToolCall?: RuntimeStreamOptions["approveUserToolCall"];
+    sandboxMode?: RuntimeStreamOptions["sandboxMode"];
 }
 
 export type SocketControlMessageDispatcher = (
@@ -497,6 +499,7 @@ export class SocketControlHub implements EventSink {
         const context = this.contextFromInput(input.context, envelope.requestId);
         const gatewayMessage = this.messageFromInput(input);
         const publicMessageId = this.publicMessageId(gatewayMessage);
+        const sandboxMode = this.sandboxModeFromMetadata(gatewayMessage.metadata);
         this.log("turn.start", {
             channel: gatewayMessage.route.channel,
             clientId: socket.data.clientId,
@@ -504,6 +507,9 @@ export class SocketControlHub implements EventSink {
             publicMessageId,
             requestId: context.requestId,
         });
+        if (sandboxMode === SandboxMode.Yolo) {
+            this.publishYoloAudit(RuntimeEventType.SandboxYoloEntered, gatewayMessage, publicMessageId, context.requestId);
+        }
         try {
             const reply = await this.options.dispatch(gatewayMessage, {
                 context,
@@ -522,6 +528,7 @@ export class SocketControlHub implements EventSink {
                 approveUserToolCall: input.context?.toolApprovals?.userToolCalls === true
                     ? async () => true
                     : undefined,
+                sandboxMode,
             });
             this.log("turn.final", {
                 channel: gatewayMessage.route.channel,
@@ -558,6 +565,10 @@ export class SocketControlHub implements EventSink {
                 envelope,
                 context.requestId,
             );
+        } finally {
+            if (sandboxMode === SandboxMode.Yolo) {
+                this.publishYoloAudit(RuntimeEventType.SandboxYoloExited, gatewayMessage, publicMessageId, context.requestId);
+            }
         }
     }
 
@@ -664,6 +675,37 @@ export class SocketControlHub implements EventSink {
                 clientMessageId: message.id,
             },
         };
+    }
+
+    private sandboxModeFromMetadata(metadata: GatewayMessage["metadata"]): RuntimeStreamOptions["sandboxMode"] {
+        const tui = this.recordValue(metadata?.tui);
+        if (tui?.yolo === true) return SandboxMode.Yolo;
+        const permissions = this.recordValue(metadata?.permissions);
+        return permissions?.mode === SandboxMode.Yolo ? SandboxMode.Yolo : undefined;
+    }
+
+    private recordValue(value: unknown): Record<string, unknown> | undefined {
+        return value && typeof value === "object" && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : undefined;
+    }
+
+    private publishYoloAudit(
+        type: typeof RuntimeEventType.SandboxYoloEntered | typeof RuntimeEventType.SandboxYoloExited,
+        message: GatewayMessage,
+        publicMessageId: string,
+        requestId: string,
+    ): void {
+        this.options.events?.publish(event(type, {
+            channel: message.route.channel,
+            clientMessageId: typeof message.metadata?.clientMessageId === "string"
+                ? message.metadata.clientMessageId
+                : undefined,
+            messageId: message.id,
+            publicMessageId,
+            sandboxMode: SandboxMode.Yolo,
+            source: "tui",
+        }, requestId));
     }
 
     private publicMessageId(message: GatewayMessage): string {
