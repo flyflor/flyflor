@@ -743,3 +743,11 @@
   摘要：从主线 `56b1962` 创建 `feature/xtools-browser-cdp` worktree，并启动同名 tmux 子进程实现 Browser CDP 外挂 sidecar 最小闭环；本轮只允许 manifest、安装脚本、process-json sidecar、测试和文档，不允许引入重依赖或改动记忆/Scope/ASK 主链。
   原因：Browser CDP 是外挂工具层第一优先级，必须先证明 external tool 能从专用 tools 控制面发现、进入 Runtime 执行链、经过 sandbox 审计并给 TUI/前端暴露能力面。
   验证：待子分支完成后 review、focused tests、docs check、type check。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：xtools-browser-cdp-sidecar-merge
+  摘要：review `feature/xtools-browser-cdp` 并 cherry-pick 到主线为 `603e1b1`。新增轻量 Browser CDP process-json sidecar、安装脚本、focused tests 和 External Kit 文档；sidecar 只连接已启动的 Chrome/Chromium CDP endpoint，不打包 Playwright/Chrome/native dependency。
+  原因：Browser CDP 必须作为外挂能力通过 `~/.flyflor/.config/tools/external.tools.jsonc` 注册，进入 Executive Tool Runtime、PluginRunner、sandbox/approval/quota/audit 链路；内核不直接 import sidecar 实现，也不触碰 Memory、Scope、Crystal、ASK 或 fork 主链。
+  效率：合入提交 `603e1b1`，8 files changed，634 insertions。
+  验证：`bun test tests/browser.cdp.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts` 28 pass；`bun run docs:check` 26 pass；`bun run check`；`git diff --check`。

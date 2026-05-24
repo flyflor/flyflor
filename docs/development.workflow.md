@@ -1089,3 +1089,27 @@ Hard boundaries:
 - no imports from local `./tools` into `src`
 - no Memory, Scope, Crystal, ASK, fork, or socket query main-chain edits
 - real execution must remain behind Executive Tool Runtime, sandbox, approval, quota, and audit events
+
+Merge closure:
+
+- accepted commit: `603e1b1`
+- code stats: 8 files changed, 634 insertions
+- sidecar: `scripts/browser.cdp.sidecar.ts`
+- installer: `scripts/install.xtools.browser-cdp.sh`
+- manifest destination: `~/.flyflor/.config/tools/external.tools.jsonc`
+- project override destination: `./.flyflor/tools/external.tools.jsonc`
+
+Validation:
+
+- `bun test tests/browser.cdp.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `git diff --check`
+
+Operator note:
+
+Browser CDP does not launch or bundle Chrome. Start a browser with a remote debugging endpoint first, then install/register the sidecar. On macOS, a local development launch can look like:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/flyflor-browser-cdp
+```

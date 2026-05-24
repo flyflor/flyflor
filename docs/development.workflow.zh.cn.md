@@ -958,3 +958,27 @@ Lane 归属：
 - `src` 禁止 import 本地 `./tools` 实现
 - 不修改 Memory、Scope、Crystal、ASK、fork 或 socket query 主链
 - 真实执行必须继续经过 Executive Tool Runtime、sandbox、approval、quota 和 audit events
+
+合并闭合：
+
+- 已接受提交：`603e1b1`
+- 代码统计：8 files changed，634 insertions
+- sidecar：`scripts/browser.cdp.sidecar.ts`
+- 安装脚本：`scripts/install.xtools.browser-cdp.sh`
+- 全局 manifest 目标：`~/.flyflor/.config/tools/external.tools.jsonc`
+- 项目 manifest 覆盖目标：`./.flyflor/tools/external.tools.jsonc`
+
+验证：
+
+- `bun test tests/browser.cdp.sidecar.test.ts tests/external.tools.test.ts tests/install.script.test.ts`
+- `bun run docs:check`
+- `bun run check`
+- `git diff --check`
+
+操作备注：
+
+Browser CDP 不负责启动或打包 Chrome。使用前先启动带 remote debugging endpoint 的浏览器，再安装/注册 sidecar。macOS 本地开发启动示例：
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/flyflor-browser-cdp
+```

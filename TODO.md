@@ -778,5 +778,8 @@ Kernel V2 acceptance focus：
 
 - [x] 创建 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp`，分支 `feature/xtools-browser-cdp`。
 - [x] 启动 `xtools-browser-cdp` tmux 子进程，只推进 Browser CDP 外挂 sidecar 最小闭环。
-- [ ] Review 子进程提交，确认无重依赖、无内核 import sidecar 实现、无记忆/Scope/ASK 主链漂移。
-- [ ] 合并 Browser CDP sidecar 到主线，运行 focused tests、`bun run docs:check`、`bun run check` 和 `git diff --check`。
+- [x] Review 子进程提交，确认无重依赖、无内核 import sidecar 实现、无记忆/Scope/ASK 主链漂移。
+- [x] 合并 Browser CDP sidecar 到主线，运行 focused tests、`bun run docs:check`、`bun run check` 和 `git diff --check`。
+- [x] 记录合并统计：`603e1b1`，8 files changed，634 insertions。
+- [x] 停止并确认没有 `xtools-browser-cdp` tmux 子进程继续运行。
+- [ ] 移除已合并的 `/Users/yihuaqing/Desktop/yihuaqing/flyflors/worktrees/xtools-browser-cdp` worktree 和本地 `feature/xtools-browser-cdp` 分支。
