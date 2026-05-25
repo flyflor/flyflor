@@ -205,6 +205,24 @@ describe("lintPromptTemplates", () => {
         expect(offenders).toEqual([]);
     });
 
+    test("runtime.system states structured workspace and sandboxed execution capabilities", async () => {
+        const canonical = await readFile(join(process.cwd(), "templates", "prompts", "runtime.system.md"), "utf8");
+        const zh = await readFile(join(process.cwd(), "templates", "prompts", "runtime.system.zh.cn.md"), "utf8");
+
+        expect(canonical).toContain("reading and editing workspace files");
+        expect(canonical).toContain("running commands or other tools through structured tool calls");
+        expect(canonical).toContain("sandbox/approval policy");
+        expect(canonical).toContain("Do not describe yourself as limited to only viewing files");
+        expect(canonical).toContain("do not claim operating-system or code execution is impossible");
+
+        expect(zh).toContain("读取和编辑工作区文件");
+        expect(zh).toContain("运行命令或其他工具");
+        expect(zh).toContain("结构化工具调用");
+        expect(zh).toContain("沙箱 / 审批策略");
+        expect(zh).toContain("不要把自己描述成只能查看文件");
+        expect(zh).toContain("不要声称无法执行操作系统或代码执行");
+    });
+
     test("runtime prompt prose is not embedded in TypeScript source", async () => {
         const offenders: string[] = [];
         const sourceFiles = await listTypeScriptFiles(join(process.cwd(), "src"));

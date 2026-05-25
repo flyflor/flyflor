@@ -8,6 +8,8 @@
 
 最新 owner 口径：`src/socket` 拥有 socket 血管层。TODO 旧段落里把 gateway 放在 `src/agent` 下的说法只作为历史任务状态保留，后续新工作一律以当前口径为准。
 
+主源码移除口径：旧第一方 shell、`src/agent/gateway` 兼容壳和旧 CLI/TUI/channel adapter 主源码面不恢复；gateway 仅作为 `/ws` wire compatibility 名称保留。
+
 ## 已封板契约
 
 - 上下文装配是 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。
@@ -117,7 +119,16 @@ bun run build:binary
 - `bun run check`
 - `bun run docs:check`
 - `bun run test`，820 个测试通过
+- `bun run test:kernel`，`838 pass`，`0 fail`
 - `bun run build:binary`
+
+## 2026-05-25 文档重产
+
+- [x] 将与当前源码/架构不匹配的活跃文档归档到 `docs/old-docs/2026-05-25-docs-refresh/`，保留原文件名和中英文版本。
+- [x] 重产根 README、docs 索引、architecture、directory、runtime、memory、blackboard、crystal、executive、control、ws、runtime events、development workflow 和 project report。
+- [x] 固定 `brain.db` 只负责 ledger/query/replay/audit/detail，不写成 prompt 容器。
+- [x] 固定提示词分层为 Constitution / Crystal / Memory / Scope/Fork / Executive visible capability / request context。
+- [x] 保持 HTTP surface 为 `/ws` 与 `/health`，`gateway.*` 只作为 wire compatibility。
 
 ## 搜索 Guard
 

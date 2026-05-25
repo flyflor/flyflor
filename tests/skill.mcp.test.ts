@@ -40,6 +40,7 @@ import {
     ToolCategory,
     ToolScope,
     ModelRole,
+    MemoryEventType,
     SandboxMode,
     ToolApprovalMode,
     type GatewayMessage,
@@ -1452,6 +1453,68 @@ describe("Skill and MCP capability config", () => {
         ]);
         expect(model.messages).toHaveLength(2);
         expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("absolute file contents");
+    });
+
+    test("initial local path probe executes tool calls and never leaks protocol blocks to stream, reply, or history", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-probe-hidden-history-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        const externalFile = join(await mkdtemp(join(tmpdir(), "flyflor-target-probe-file-")), "notes.md");
+        await writeFile(externalFile, "probe file contents\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"glob","input":{"path":".","pattern":"**/*"}}]}</agent_tool_calls>',
+            "Probe final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+        const deltas: string[] = [];
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage(`读取这个文件 ${externalFile} 并总结。`),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            {
+                onTextDelta: (text) => {
+                    deltas.push(text);
+                },
+            },
+        );
+
+        const streamed = deltas.join("");
+        expect(streamed).toBe("Probe final.");
+        expect(reply.text).toBe("Probe final.");
+        expect(streamed).not.toContain("agent_tool_calls");
+        expect(reply.text).not.toContain("agent_tool_calls");
+        expect(reply.metadata?.mcpToolExecutions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+                expect.objectContaining({ ok: true, server: "workspace", tool: "glob" }),
+            ]),
+        );
+        const userTranscript = model.messages
+            .flat()
+            .filter((message) => message.role === ModelRole.User)
+            .map((message) => message.content)
+            .join("\n");
+        expect(userTranscript).toContain("probe file contents");
+
+        const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
+        try {
+            const row = db
+                .query<{ content: string }, [string]>(
+                    "SELECT content FROM memory_events WHERE type = ?1 ORDER BY ts DESC LIMIT 1",
+                )
+                .get(MemoryEventType.Event);
+            const content = JSON.parse(row?.content ?? "{}") as { assistantText?: string };
+            expect(content.assistantText).toBe("Probe final.");
+            expect(content.assistantText).not.toContain("agent_tool_calls");
+        } finally {
+            db.close();
+        }
     });
 
     test("runtime extracts an absolute path even when text is glued to it", async () => {

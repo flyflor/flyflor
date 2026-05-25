@@ -1,215 +1,106 @@
-# 目录架构
+# Directory Architecture
 
-## 一句话定位
+## Principle
 
-目录和文件名是 Flyflor 的第一约定。
+Directories are architecture contracts. A path must show ownership, lifecycle and side-effect boundaries before configuration or reuse tries to explain them.
 
-这里不讨论“理论上可以怎么抽象”，只讨论“当前主线代码必须怎么摆”。约定大于配置，owner 大于聪明，分层必须先于复用。
+Flyflor code keeps OOP + use composition:
 
-## 先看三条红线
+- Business owners are classes, Components, Modules, Repos and Workers.
+- Cross-class assembly lives in `composition.ts` and uses `useXxx()`.
+- `index.ts` is a barrel, not an implementation owner.
+- Small duplication inside the correct owner is preferable to a cross-domain helper with unclear lifecycle.
 
-1. 业务代码保持 `oop + use composition`。class / Component / Module 是默认表达方式；`useXxx()` 只做装配。
-2. 目录先表达边界，再谈抽象。允许重复，不为了消灭少量重复去打散 owner。
-3. 文件名必须服从目录语义。目录已经说明职责时，文件名用短名；只有同目录多 owner 时才加限定前缀。
+## Top-Level Source Owners
 
-## 主源码分层
-
-| 路径 | owner | 责任 |
-| --- | --- | --- |
-| `src/app.ts` | composition root | 启动 Flyflor 主类，显式装配容器，不承载业务流程 |
-| `src/agent` | Agent 外显运行态 | runtime、blackboard、sandbox、context、skills、worker、MCP、plugin |
-| `src/socket` | Socket 血管层 | `/ws`、`/health`、live turn、event、operation、ledger query/replay |
-| `src/cognitive` | Cognitive 认知层 | Mindstream、Crystal、Hippocampus |
-| `src/executive` | Executive 外骨架 | capability、tool、trust、loop |
-| `src/events` | 事件血管 | `RuntimeEvent` 发布、订阅、分类、广播 |
-| `src/protocol` | 公共协议 | enum、contract、control envelope、structured block |
-| `src/config` | 配置层 | JSONC 配置、默认值、路径约定 |
-| `src/entities` | 数据实体层 | row / record 映射、repo SQL owner |
-| `src/components` | 基础设施层 | 共享 Component 基类、SQL tagged template 等真正跨域基础设施 |
-| `src/types` | 轻量共享类型层 | 少量全局 type barrel，不回流业务 owner |
-
-## `src/agent`
-
-`src/agent` 只承载“外显运行态”，不承载认知内核，也不充当历史兼容垃圾桶。
-
-| 路径 | 责任 |
+| Path | Owner |
 | --- | --- |
-| `src/agent/runtime` | 单轮主链、turn 生命周期、流式回复、route / ask / blackboard / executive 接线 |
-| `src/agent/context` | 显式 `activeScope`、`contextForkId`、可见 capability surface 的上下文装配 |
-| `src/agent/blackboard` | 多 worker 讨论、收敛、cap 后 ask 交还 |
-| `src/agent/sandbox` | shell / network / plugin / MCP / computer 的副作用边界 |
-| `src/agent/mcp` | MCP transport、catalog、执行适配 |
-| `src/agent/plugin` | plugin manifest、runner、bridge |
-| `src/agent/skills` | `SKILL.md` 能力包接入与使用面 |
-| `src/agent/prompts` | 运行时提示词渲染入口，只读取 `templates/prompts/*.md` |
-| `src/agent/worker` | 后台 worker 与调度 |
-| `src/agent/di` | `@Module`、`@Provide`、`@Inject` 元数据与显式容器 |
+| `src/app.ts` | FlyFlor composition root. |
+| `src/agent` | Runtime, Blackboard, context, sandbox, prompts, skills, MCP, plugins and workers. |
+| `src/cognitive` | Mindstream, Crystal and Hippocampus. |
+| `src/executive` | Capability / Tool / Trust / Loop. |
+| `src/socket` | Socket vascular layer for `/ws`, `/health`, control/event and query snapshots. |
+| `src/events` | Runtime event fabric. |
+| `src/protocol` | Serializable contracts and wire envelopes. |
+| `src/protocol/control` | `/ws` control/event envelopes and external thin-client protocol readers. |
+| `src/config` | JSONC config loading and defaults. |
+| `src/entities` | Entity mapping and repo SQL. |
+| `src/components` | Shared Component bases and truly cross-domain infrastructure. |
+| `src/types` | Small global type barrel only. |
 
-关键约束：
+## Agent
 
-- `src/agent/context` 只认显式 scope/fork，不创建 fallback scope，不按 `channel/chat/thread/user` 恢复工作域。
-- `src/agent/prompts` 只做模板渲染，不内嵌大段模型指令正文。
-
-## `src/socket`
-
-| 路径 | 责任 |
+| Path | Role |
 | --- | --- |
-| `src/socket` | `/ws`、`/health` 最小 socket 血管层；只做 transport 和 v1 wire 兼容，不做隐式连续性 |
-| `src/socket/kit` | External kit 只读 catalog 与 manifest 接线 |
+| `src/agent/runtime` | `RuntimeModule.handleMessage`, turn assembly, planning, routing, MCP/tool wiring, subagents and streaming. |
+| `src/agent/context` | Explicit `activeScope`, `contextForkId`, scope paths and continuity-owner derivation. |
+| `src/agent/blackboard` | Blackboard module/store and worker composition. |
+| `src/agent/sandbox` | Approval, quota, shell hook, audit and side-effect policy. |
+| `src/agent/mcp` | MCP stdio/SSE/HTTP transports, catalog and schema validation. |
+| `src/agent/plugin` | Plugin registry and runner. |
+| `src/agent/skills` | `SKILL.md` registry and selection surface. |
+| `src/agent/prompts` | Template loading/rendering from `templates/prompts`. |
+| `src/agent/worker` | Worker manager and blackboard worker threads. |
+| `src/agent/di` | Decorator metadata and explicit dependency container. |
 
-关键约束：
+`src/agent/context` deliberately uses the current turn id when no scope/fork/codename exists. Conversation/thread/user metadata is not cognitive continuity.
 
-- `src/socket` 不拥有隐式连续性；transport protocol handshake 只属于外部协议握手。
-- `gateway.*` 是 `flyflor.ws.v1` 兼容 wire 名称，不代表目录或架构主语。
-- `history.list` 只读 `brain.db` ledger query/replay，不参与 prompt/context assembly。
+## Cognitive
 
-## `src/cognitive`
-
-| 路径 | 责任 |
+| Path | Role |
 | --- | --- |
-| `src/cognitive/mindstream` | 当前轮理解、推理、生成、模型协议转换 |
-| `src/cognitive/crystal` | 反思、Gem、长期稳定知识与方法复用 |
-| `src/cognitive/hippocampus` | 工作记忆、召回、压缩、遗忘、ledger/query 接线 |
+| `src/cognitive/mindstream` | Model provider clients and protocol conversion. |
+| `src/cognitive/hippocampus/ask` | Structured ASK block parsing. |
+| `src/cognitive/hippocampus/continuation` | Continuation decisions and ghost snapshots. |
+| `src/cognitive/hippocampus/memory` | Memory module, brain ledger store, working memory, hot memory, recall, decay, dream, consolidation, summary, scope memory and fork stores. |
+| `src/cognitive/hippocampus/scope` | Scope triggers, scaffolding, solidification, codename promotion and recall. |
+| `src/cognitive/crystal` | Crystal memory, Gem store and reflection promotion. |
 
-这里尤其要分清两件事：
+## Socket
 
-- 认知层可以读取 recall、summary、scope memory index
-- 认知层不能把 `brain.db` 原始流水直接当 prompt
+`src/socket/module.ts` owns server startup and the HTTP surface. `src/socket/control.ts` owns the WebSocket control hub. `src/socket/query` reads ledger/detail snapshots for socket clients.
 
-Scope 固化触发和 scope-local memory 的活跃代码路径分别是 `src/cognitive/hippocampus/scope/*` 与 `src/cognitive/hippocampus/memory/scope/*`。磁盘字段里仍可能保留 `projectDir` / `projectMemoryDir` 兼容名，但设计主语和代码入口统一为 `Scope`。
+Rules:
 
-## `src/executive`
+- Do not add REST status surfaces beyond `/health`.
+- Do not restore `/channels`.
+- Do not make `gateway.*` names architecture owners; they are wire-v1 compatibility strings.
 
-`src/executive` 是能力外骨架，不是第二套 runtime。
+## Executive
 
-常见 owner：
+`src/executive` contains `registry.ts`, `planner.ts`, `tool.runtime.ts`, `trust.policy.ts`, `loop.guard.ts`, `manifest.ts`, `mcp.adapter.ts`, `computer.profile.ts` and `sidecar/runner.ts`.
 
-- `registry.ts`
-- `planner.ts`
-- `tool.runtime.ts`
-- `loop.guard.ts`
-- `trust.policy.ts`
-- `mcp.adapter.ts`
+This layer does not read natural language to infer intent. It consumes descriptors, config, channel capabilities, sandbox state, approvals and numeric loop metrics.
 
-这一层只消费结构化能力描述、权限、approval、sandbox policy 和数值指标，不做自然语言语义判断。
+## Runtime Data Paths
 
-## `src/events`
-
-`src/events` 是唯一事件血管 owner。
-
-它拥有：
-
-- `bus.ts`
-- `classifier.ts`
-- `runtime.event.ts`
-- sinks / types / component
-
-它不拥有：
-
-- socket 协议
-- runtime 私有状态
-- 记忆召回规则
-
-## `src/protocol`
-
-| 路径 | 责任 |
+| Path | Role |
 | --- | --- |
-| `src/protocol/contracts` | enum、record、transport 共享类型 |
-| `src/protocol/control` | `/ws` control/event envelope、payload schema、semantic lane |
-| `src/protocol/processes` | 进程间 envelope |
-| `src/protocol/structured.block.ts` | 模型结构化块登记表 |
+| `~/.flyflor/.config/config.jsonc` | Main JSONC config. |
+| `./docker/config/config.jsonc` | Docker dev config. |
+| `~/.flyflor/.config/prompts` | Installed prompt templates. |
+| `~/.flyflor/.config/templates/memory` | Installed memory templates. |
+| `~/.flyflor/.config/workspace` | Global Markdown constitution files. |
+| current-month `brain.db` | Writable life ledger. |
+| `brain/archive/` | Read-only historical ledger shards. |
+| `<scope.projectDir>/.flyflor/` | Scope-local memory, skills, MCP and plugin surface. |
 
-`src/protocol/control` 是外部独立 Rust 仓库和 thin client 的长期接线面。这里可以兼容读取 `activeProject`，但 canonical 字段只能是 `activeScope`。
+## Naming
 
-## `src/entities`
+- Directory entry: `index.ts`.
+- Single owner component in a directory: `component.ts`.
+- Role suffixes: `module.ts`, `store.ts`, `repo.ts`, `worker.ts`, `manager.ts`, `adapter.ts`, `runner.ts`, `route.ts`.
+- Prompt/template files use dot suffixes such as `blackboard.route.md` and `blackboard.route.zh.cn.md`.
+- Do not add `*.exports.ts`.
+- Do not add new hyphenated or underscored repository file names.
 
-`src/entities` 只做数据层 owner，不做 service。
+## Retired Paths
 
-典型职责：
-
-- row / record 编解码
-- repo SQL
-- 结构化表 owner
-
-典型边界：
-
-- 可以知道表结构
-- 不可以知道模型提示词
-- 不可以知道 socket 连接
-- 不可以做业务语义判断
-
-## `src/components`
-
-`src/components` 只放真正跨模块的基础设施。
-
-允许：
-
-- 共享 Component 基类
-- SQL helper
-- 少量无领域归属的底座
-
-不允许：
-
-- `src/components/memory`
-- `src/components/crystal`
-- `src/components/socket`
-
-领域 owner 必须回到自己的目录，不准在 `src/components` 里造假边界。
-
-## `src/types`
-
-`src/types` 只保留少量全局 type barrel。
-
-一旦某个类型明显属于某一层或某一模块，就应回到对应目录的 `types.ts` 或 `index.ts`，不要把 `src/types` 变成第二个杂物间。
-
-## 文件命名规则
-
-硬规则：
-
-- 目录入口统一 `index.ts`
-- 目录内唯一组件 owner 直接叫 `component.ts`
-- 角色文件使用点分后缀：`module.ts`、`worker.ts`、`manager.ts`、`adapter.ts`、`store.ts`、`repo.ts`
-- 禁止新增 `*.exports.ts`
-- 禁止新增连字符或下划线命名的仓库文件
-
-例子：
-
-- `src/agent/di/composition/component.ts`
-- `src/agent/runtime/streaming/visibility.ts`
-- `src/cognitive/hippocampus/memory/dream/worker.ts`
-- `src/entities/memory/brain/event/repo.ts`
-
-反例：
-
-- `dependency.container.ts`
-- `protocol.visibility.ts`
-- `dream.worker.ts`
-- `memory_context.ts`
-
-## 运行态目录
-
-源码目录之外，运行态也有明确 owner：
-
-| 路径 | 责任 |
-| --- | --- |
-| `~/.flyflor/.config/config.jsonc` | 主配置 |
-| `~/.flyflor/.config/commands.jsonc` | future client 本地命令协议 |
-| `~/.flyflor/.config/prompts` | 提示词 override |
-| `~/.flyflor/.config/workspace` | 用户工作区 |
-| `~/.flyflor/.config/brain.db` | 当前月 ledger |
-| `~/.flyflor/.config/brain/archive/` | 历史月只读归档 |
-
-这些路径属于运行态，不得被重新解释成源码层抽象。
-
-## 已移除的旧物理路径
-
-以下路径已经从主源码移除，不允许新增兼容壳或回写：
+These paths are not active owner surfaces and must not be recreated as compatibility shells:
 
 - `src/fch`
 - old execution-layer physical paths
 - `src/skills`
 - `src/context`
 - `src/agent/gateway`
-- 第一方 CLI/TUI/channel adapter 主源码面
-
-它们的历史解释价值只留在 `docs/old-docs/`。主源码移除之后，活跃文档必须只描述今天仍然真实存在的 owner。
+- first-party Bun CLI/TUI/channel adapter implementation surfaces

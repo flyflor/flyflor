@@ -1589,7 +1589,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // <agent_question> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
         // 渲染，原模型 reply 文本忽略。
         const askParsed = this.agentAskParser.parse(planningParsed.text);
-        const visibleSource = parseMcpToolCalls(askParsed.text || rawText).text || askParsed.text || rawText;
+        const visibleSource = this.visibleReplyTextFromModelOutput(askParsed.text, rawText);
         if (askParsed.dropped > 0) {
             this.events.publish(
                 event(RuntimeEventType.MemoryAskMutexViolation, {
@@ -2307,6 +2307,19 @@ export class RuntimeModule extends RuntimeBoundary {
             await options.onTextDelta(tail);
         }
         return rawText;
+    }
+
+    /**
+     * Model protocol blocks are consumed by runtime/executive and must never
+     * re-enter reply text or brain history. An empty stripped body is a valid
+     * outcome for tool-only turns, so do not fall back to raw model output.
+     */
+    private visibleReplyTextFromModelOutput(primaryText: string, rawText: string): string {
+        const parsedPrimary = parseMcpToolCalls(primaryText);
+        if (parsedPrimary.text.length > 0) {
+            return filterVisibleProtocolText(parsedPrimary.text);
+        }
+        return filterVisibleProtocolText(parseMcpToolCalls(rawText).text);
     }
 
     private async generateTextWithMcpTools(

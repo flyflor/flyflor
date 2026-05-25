@@ -1,5 +1,14 @@
 # Flyflor 日志
 
+## 2026-05-25
+
+- 状态：已完成
+  执行者：flyflor-codex-docs-agent
+  范围：documentation-regeneration
+  摘要：根据当前 Bun kernel/gateway 源码重产活跃文档，归档旧版 README/docs 到 `docs/old-docs/2026-05-25-docs-refresh/`，新增中英文同步的 architecture、directory、runtime、memory、blackboard、crystal、executive、control、ws、events、workflow 和 project report。
+  原因：旧活跃文档与当前 `src/cognitive`、`src/executive`、`src/agent/runtime`、`src/socket`、`src/events`、`src/config` 分层口径不完全一致，且 docs 索引曾写成不强制中英同步。
+  验证：进行中，先运行 `bun run docs:prompts --write`，随后执行 `bun run docs:check` 并按 guard 失败项修正文档锚点。
+
 ## 2026-05-24
 
 - 状态：已完成
