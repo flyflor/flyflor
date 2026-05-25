@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseAgentAsk } from "../src/cognitive/hippocampus/ask/index.ts";
-import { AskReason } from "../src/protocol/contracts/index.ts";
+import { AskAuthority, AskReason, AskResumePolicy, AskSource } from "../src/protocol/contracts/index.ts";
 
 const wrap = (json: string): string => `<agent_question>\n${json}\n</agent_question>`;
 
@@ -69,6 +69,59 @@ describe("LF-R3 parseAgentAsk", () => {
         expect(r.ask?.questions?.[1]?.freeform).toBe(false);
         expect(r.ask?.questions?.[1]?.choices?.length).toBe(2);
         expect(r.ask?.questions?.[1]?.relatedIds).toEqual(["project-1"]);
+    });
+
+    test("normalizes first-class ASK questions with recommendation and fixed other option", () => {
+        const ask = {
+            reason: AskReason.PolicyDecision,
+            authority: AskAuthority.Executive,
+            source: AskSource.Executive,
+            resumePolicy: AskResumePolicy.Replan,
+            prompt: "Execution needs a decision.",
+            questions: [
+                {
+                    id: "strategy",
+                    prompt: "What should I do next?",
+                    recommendedChoiceId: "continue",
+                    choices: [
+                        { id: "continue", label: "继续执行", value: "continue-tools" },
+                        { id: "narrow", label: "缩小范围", value: "narrow-scope" },
+                        { id: "stop", label: "停止并结晶", value: "stop-and-crystalize" },
+                        { id: "extra", label: "should be dropped" },
+                    ],
+                },
+            ],
+        };
+        const r = parseAgentAsk(wrap(JSON.stringify(ask)));
+        const q = r.ask?.questions?.[0];
+        expect(r.ask?.authority).toBe(AskAuthority.Executive);
+        expect(r.ask?.source).toBe(AskSource.Executive);
+        expect(r.ask?.resumePolicy).toBe(AskResumePolicy.Replan);
+        expect(q?.choices?.map((choice) => choice.id)).toEqual(["continue", "narrow", "stop"]);
+        expect(q?.recommendedChoiceId).toBe("continue");
+        expect(q?.other).toEqual({ id: "other", label: "其他", freeform: true });
+        expect(q?.allowOther).toBe(true);
+    });
+
+    test("defaults missing recommendedChoiceId to the first model choice for legacy compatibility", () => {
+        const ask = {
+            reason: AskReason.UserIntentUnclear,
+            prompt: "Need confirmation.",
+            questions: [
+                {
+                    prompt: "Proceed?",
+                    choices: [
+                        { label: "yes", value: "yes" },
+                        { label: "no", value: "no" },
+                    ],
+                },
+            ],
+        };
+        const r = parseAgentAsk(wrap(JSON.stringify(ask)));
+        const q = r.ask?.questions?.[0];
+        expect(q?.choices?.map((choice) => choice.id)).toEqual(["choice-1", "choice-2"]);
+        expect(q?.recommendedChoiceId).toBe("choice-1");
+        expect(q?.other?.id).toBe("other");
     });
 
     test("rejects unknown reason / missing prompt", () => {

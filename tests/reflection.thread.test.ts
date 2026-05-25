@@ -81,4 +81,45 @@ describe("ReflectionThreadRunner", () => {
         expect(fromThread.map((c) => c.method)).toEqual(fromMain.map((c) => c.method));
         runner.dispose();
     });
+
+    test("turns structured executive ASK evidence into a crystal candidate without promoting it directly", () => {
+        const result = normalizeReflectionRaw("[]", {
+            ...baseSource,
+            executiveToolLoop: {
+                ask: {
+                    authority: "executive",
+                    crystalCandidates: [
+                        {
+                            kind: "tool-stability",
+                            stability: {
+                                effective: "unavailable",
+                                reason: "external sidecar command is unavailable",
+                            },
+                        },
+                    ],
+                    prompt: "tool blocked",
+                    reason: "policy-decision",
+                    source: "tool-stability",
+                },
+                askId: "ask-1",
+                message: "tool blocked",
+                resume: { mode: "continue" },
+                stepCount: 1,
+                stop: "ask",
+            },
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0]).toMatchObject({
+            sourceKind: "executive-ask-candidate",
+            sourceId: "ask-1",
+            title: "executive:tool-stability",
+            evidence: [
+                expect.objectContaining({
+                    kind: "executive-ask-structured-candidate",
+                    weight: 0.55,
+                }),
+            ],
+        });
+    });
 });

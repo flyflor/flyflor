@@ -54,7 +54,9 @@ Scope recall follows a visible gate:
 4. `load` equips `activeScope` for the current turn.
 5. `ask` returns an `AgentAsk` instead of guessing.
 
-ASK is a normal runtime outcome. It appears when scope boundaries, fork merge conflicts, blackboard caps, crystallization gates or tool-loop limits need user judgment.
+ASK is a normal runtime outcome. It appears when scope boundaries, fork merge conflicts, blackboard caps, crystallization gates, tool-loop limits, child subagent `needs_user`, or external tool stability failures need user judgment.
+
+ASK v1 can carry multiple questions. Each question keeps one to three owner-proposed choices, a canonical `recommendedChoiceId`, and a fixed `other` option for user-owned freeform input. Runtime does not parse `other` text semantically; it preserves the answer as next-turn model input, audit data and possible Crystal evidence.
 
 ## Executive Loop Pause
 
@@ -63,9 +65,12 @@ Executive tool execution can pause a turn instead of hiding retries:
 - `ExecutiveToolRuntime` returns structured ask-required state.
 - Runtime publishes `executive.loop.paused`.
 - The final reply metadata has `kind: "ask"` and includes the loop snapshot.
+- `subagent.batch` pauses include `jobId` / `job` metadata and write append-only `brain.db.memory_events.type = "execution-job"` rows.
+- external tool stability pauses use ASK source `tool-stability` and preserve the stability snapshot.
 - A later user answer records an ask-answer pair and can publish `executive.loop.resumed`.
 
 There is no private background continuation protocol. Resumption uses the next structured input and the existing `/ws` event/control surface.
+`brain.db` only stores job/ASK ledger, query, replay, audit and detail data; job ledger rows are not prompt containers and do not participate in context assembly.
 
 ## Blackboard
 

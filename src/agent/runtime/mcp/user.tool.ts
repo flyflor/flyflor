@@ -50,7 +50,7 @@ export async function invokeUserTool(input: UserToolInvocationInput): Promise<Pl
         },
         command: executor.command,
         args: executor.args,
-        cwd: executor.cwd === "config" ? input.paths.configDir : input.paths.projectDir,
+        cwd: userToolWorkingDirectory(input.paths, executor.cwd),
         env: executor.env,
         timeoutMs: executor.timeoutMs,
         request: {
@@ -64,8 +64,10 @@ export async function invokeUserTool(input: UserToolInvocationInput): Promise<Pl
     });
 }
 
-export function userToolWorkingDirectory(paths: FlyflorPaths, cwd: "project" | "config"): string {
-    return cwd === "config" ? paths.configDir : paths.projectDir;
+export function userToolWorkingDirectory(paths: FlyflorPaths, cwd: "project" | "app" | "config" | "workspace"): string {
+    if (cwd === "config") return paths.configDir;
+    if (cwd === "workspace") return paths.workspaceDir;
+    return paths.appRoot ?? paths.projectDir;
 }
 
 export function resolveUserToolArg(paths: FlyflorPaths, value: string): string {

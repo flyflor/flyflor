@@ -9,6 +9,7 @@ import {
     ReplayRecordKind,
     TaskPlanStatus,
     type AgentAsk,
+    type ExecutionJobLedgerContent,
     type ContextForkRecord,
     type MemoryEventRecord,
     type ReplayRecord,
@@ -23,6 +24,8 @@ import {
 } from "../../protocol/contracts/index.ts";
 import type {
     SocketAskSnapshot,
+    SocketExecutionJobSnapshot,
+    SocketQueryExecutionJobInput,
     SocketQueryAskInput,
     SocketQueryDetailInput,
     SocketQueryForkInput,
@@ -227,6 +230,27 @@ export class SocketBrainReader {
         });
     }
 
+    public listExecutionJobs(input: SocketQueryExecutionJobInput): SocketExecutionJobSnapshot[] {
+        const events = this.brain.listEvents({
+            ownerKey: input.ownerKey,
+            type: MemoryEventType.ExecutionJob,
+            limit: Math.max(1, Math.min(500, input.limit ?? 200)),
+        });
+        const grouped = this.executionJobGroups(events)
+            .map((jobEvents) => this.executionJobSnapshot(jobEvents))
+            .filter((snapshot): snapshot is SocketExecutionJobSnapshot => snapshot !== undefined)
+            .filter((snapshot) => optionalEqual(snapshot.requestId, input.requestId))
+            .filter((snapshot) => optionalEqual(snapshot.jobId, input.jobId))
+            .filter((snapshot) => input.status === undefined || input.status === "all" || snapshot.status === input.status)
+            .sort((left, right) => (Date.parse(right.updatedAt ?? "") || 0) - (Date.parse(left.updatedAt ?? "") || 0));
+        return grouped.slice(0, input.limit ?? 50);
+    }
+
+    public executionJobDetail(input: SocketQueryDetailInput): SocketExecutionJobSnapshot | undefined {
+        if (!input.jobId) return undefined;
+        return this.listExecutionJobs({ jobId: input.jobId, limit: 500 }).at(0);
+    }
+
     private historyTurnFromEvent(event: MemoryEventRecord): GatewayControlHistoryTurnSnapshot {
         const planning = this.planningForEvent(event.id);
         return {
@@ -239,6 +263,71 @@ export class SocketBrainReader {
             ts: event.ts,
             userText: strictString(event.content.userText, ""),
         };
+    }
+
+    private executionJobGroups(events: MemoryEventRecord[]): MemoryEventRecord[][] {
+        const groups = new Map<string, MemoryEventRecord[]>();
+        for (const event of events) {
+            const content = readExecutionJobContent(event.content);
+            if (!content) continue;
+            const group = groups.get(content.jobId) ?? [];
+            group.push(event);
+            groups.set(content.jobId, group);
+        }
+        return Array.from(groups.values()).map((group) => group.sort((left, right) => left.ts - right.ts));
+    }
+
+    private executionJobSnapshot(events: MemoryEventRecord[]): SocketExecutionJobSnapshot | undefined {
+        const contents = events.map((event) => readExecutionJobContent(event.content)).filter((item): item is ExecutionJobLedgerContent => item !== undefined);
+        const first = contents[0];
+        if (!first) return undefined;
+        const last = contents[contents.length - 1] ?? first;
+        const children = new Map<string, { childJobId: string; status?: string; toolCalls: number }>();
+        const toolCounts: Record<string, number> = {};
+        let errorSummary: string | undefined;
+        let crystalCandidateSummary: string | undefined;
+        for (const content of contents) {
+            if (content.childJobId) {
+                const child = children.get(content.childJobId) ?? { childJobId: content.childJobId, toolCalls: 0 };
+                if (content.status) child.status = content.status;
+                children.set(content.childJobId, child);
+            }
+            if (content.tool) {
+                toolCounts[content.tool.key] = (toolCounts[content.tool.key] ?? 0) + 1;
+                if (content.childJobId) {
+                    const child = children.get(content.childJobId) ?? { childJobId: content.childJobId, toolCalls: 0 };
+                    child.toolCalls += 1;
+                    children.set(content.childJobId, child);
+                }
+            }
+            if (!errorSummary && content.error) errorSummary = content.error;
+            if (!crystalCandidateSummary && isRecord(content.crystalCandidate) && typeof content.crystalCandidate.summary === "string") {
+                crystalCandidateSummary = content.crystalCandidate.summary.slice(0, 240);
+            }
+        }
+        return {
+            askId: last.askId,
+            children: Array.from(children.values()),
+            completedAt: this.completedAt(contents, events),
+            createdAt: new Date(events[0]?.ts ?? Date.now()).toISOString(),
+            crystalCandidateSummary,
+            errorSummary,
+            events,
+            jobId: first.jobId,
+            parentJobId: first.parentJobId,
+            progress: last.progress,
+            requestId: first.requestId,
+            stage: last.stage,
+            startedAt: new Date(events[0]?.ts ?? Date.now()).toISOString(),
+            status: last.status,
+            toolCounts,
+            updatedAt: new Date(events[events.length - 1]?.ts ?? Date.now()).toISOString(),
+        };
+    }
+
+    private completedAt(contents: readonly ExecutionJobLedgerContent[], events: readonly MemoryEventRecord[]): string | undefined {
+        const index = contents.findIndex((content) => content.kind === "job.completed" || content.kind === "job.failed");
+        return index >= 0 && events[index] ? new Date(events[index]!.ts).toISOString() : undefined;
     }
 
     private askSnapshot(event: MemoryEventRecord): SocketAskSnapshot | undefined {
@@ -377,6 +466,11 @@ function readAsk(content: Record<string, unknown>): AgentAsk | undefined {
     const reason = typeof ask.reason === "string" ? ask.reason : undefined;
     if (!prompt || !reason) return undefined;
     return ask as unknown as AgentAsk;
+}
+
+function readExecutionJobContent(content: Record<string, unknown>): ExecutionJobLedgerContent | undefined {
+    if (typeof content.jobId !== "string" || typeof content.kind !== "string") return undefined;
+    return content as unknown as ExecutionJobLedgerContent;
 }
 
 function strictString(value: unknown, fallback: string): string {

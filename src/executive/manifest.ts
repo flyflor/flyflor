@@ -40,7 +40,7 @@ export interface ToolManifestExecutorShape {
     args?: string[];
     command?: string;
     config?: Record<string, unknown>;
-    cwd?: "project" | "config";
+    cwd?: "project" | "app" | "config" | "workspace";
     env?: Record<string, string>;
     kind?: "process-json";
     maxOutputBytes?: number;
@@ -52,6 +52,8 @@ export interface ManifestToolDefinition {
     enabled: boolean;
     executor?: ToolManifestExecutor;
     manifestSource: ToolManifestSource;
+    /** Descriptor-only health snapshot for external process-json sidecars. */
+    stability?: import("./external/index.ts").ExternalToolStability;
 }
 
 export interface ToolManifestExecutor {
@@ -59,7 +61,7 @@ export interface ToolManifestExecutor {
     command: string;
     /** Opaque process-json sidecar configuration. Runtime forwards it without importing sidecar code. */
     config?: Record<string, unknown>;
-    cwd: "project" | "config";
+    cwd: "project" | "app" | "config" | "workspace";
     env?: Record<string, string>;
     kind: "process-json";
     maxOutputBytes: number;
@@ -286,12 +288,12 @@ export class ToolManifestComponent extends CapabilityComponent {
         return value;
     }
 
-    private optionalCwd(value: unknown, path: string): "project" | "config" | undefined {
+    private optionalCwd(value: unknown, path: string): "project" | "app" | "config" | "workspace" | undefined {
         if (value === undefined) {
             return undefined;
         }
-        if (value !== "project" && value !== "config") {
-            throw new Error(`${path} must be project or config.`);
+        if (value !== "project" && value !== "app" && value !== "config" && value !== "workspace") {
+            throw new Error(`${path} must be project, app, config or workspace.`);
         }
         return value;
     }

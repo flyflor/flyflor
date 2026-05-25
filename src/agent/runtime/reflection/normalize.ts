@@ -53,7 +53,10 @@ interface ExtractedReflectionItem {
 }
 
 export function normalizeReflectionRaw(raw: string, source: ReflectionNormalizeSource): CrystalCandidateInput[] {
-    return parseReflectionItems(raw).map((item, index) => reflectionCandidateFromItem(item, index, source, raw));
+    return [
+        ...structuredExecutiveCandidates(source),
+        ...parseReflectionItems(raw).map((item, index) => reflectionCandidateFromItem(item, index, source, raw)),
+    ];
 }
 
 export function renderReflectionEvidence(source: ReflectionNormalizeSource): string {
@@ -156,6 +159,50 @@ function reflectionEvidenceFor(source: ReflectionNormalizeSource): CrystalEviden
             "blackboard did not reach a verified terminal state",
         ),
     ];
+}
+
+function structuredExecutiveCandidates(source: ReflectionNormalizeSource): CrystalCandidateInput[] {
+    const loop = source.executiveToolLoop;
+    if (!loop) return [];
+    const candidates = loop.ask?.crystalCandidates;
+    if (!Array.isArray(candidates) || candidates.length === 0) return [];
+    return candidates
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
+        .map((item, index) => {
+            const kind = readOptionalString(item.kind) ?? "executive-ask";
+            const sourceId = readOptionalString(item.jobId) ?? loop.askId ?? source.requestId;
+            const title = `executive:${kind}`;
+            const method = JSON.stringify({
+                kind,
+                status: item.status,
+                progress: item.progress,
+                stability: item.stability,
+            });
+            return {
+                id: `executive-ask-${hashText(`${source.requestId}:${index}:${method}`)}`,
+                sourceId,
+                sourceKind: "executive-ask-candidate",
+                content: `${title}: ${method}`,
+                createdAt: source.now,
+                evidence: [
+                    evidence(
+                        "executive-ask-structured-candidate",
+                        0.55,
+                        sourceId,
+                        "executive ASK carried structured candidate evidence",
+                    ),
+                ],
+                method,
+                metadata: {
+                    askId: loop.askId,
+                    jobId: readOptionalString(item.jobId),
+                    schemaVersion: 1,
+                    structuredCandidate: item,
+                },
+                symbols: normalizeStringArray([kind, readOptionalString(item.jobId)].filter((value): value is string => Boolean(value))),
+                title,
+            };
+        });
 }
 
 function parseReflectionItems(raw: string): ExtractedReflectionItem[] {

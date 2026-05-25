@@ -54,7 +54,16 @@ Scope recall 遵循可见 gate：
 4. `load` 为当前 turn 装备 `activeScope`。
 5. `ask` 返回 `AgentAsk`，而不是猜测。
 
-ASK 是正常 runtime outcome。scope 边界、fork merge conflict、blackboard cap、crystallization gate 或 tool-loop limit 需要用户判断时都会出现 ASK。
+ASK 是正常 runtime outcome。scope 边界、fork merge conflict、blackboard cap、crystallization gate、tool-loop limit、子代理 `needs_user` 冒泡，或外部工具 sidecar 缺失、升级中、回滚要求、root-safe/path/version 判定失败时，都会通过 ASK 交给用户裁决。
+
+ASK v1 的结构化显示规则：
+
+- 一次 ASK 可以携带 1-n 个问题，runtime v1 上限为 5。
+- 每个问题携带 1-3 个模型/owner 给出的方案。
+- 每个问题必须有 `recommendedChoiceId`。
+- runtime 固定补齐 `other: { id: "other", label: "其他", freeform: true }`，让用户保留自由输入权。
+- `other` 文本只作为下一轮模型输入、审计和 Crystal evidence，不由 runtime 做自然语言字符匹配解析。
+- 高权限 ASK 可以带 `crystalCandidates`，但只进入 candidate evidence，Gem 升格仍由 Crystal quality gate 决定。
 
 ## Executive Loop Pause
 
@@ -63,9 +72,11 @@ Executive tool execution 可以暂停 turn，而不是隐藏重试：
 - `ExecutiveToolRuntime` 返回结构化 ask-required state。
 - Runtime 发布 `executive.loop.paused`。
 - final reply metadata 带 `kind: "ask"`，并包含 loop snapshot。
+- 如果暂停来自 `subagent.batch`，snapshot 带 `jobId` / `job`，并同步写入 `brain.db.memory_events.type = "execution-job"`。
+- 如果暂停来自外部工具稳定性，ASK source 为 `tool-stability`，metadata 带 stability snapshot。
 - 后续用户回答会记录 ask-answer pair，并可发布 `executive.loop.resumed`。
 
-没有私有后台 continuation protocol。恢复使用下一轮结构化输入和既有 `/ws` event/control surface。
+没有私有后台 continuation protocol，也没有后台自动续跑。恢复完全依赖下一轮结构化输入和既有 `/ws` event/control surface。`brain.db` 只保存 job/ASK ledger、query、replay、audit、detail；不会把 job ledger 作为 prompt/container 参与上下文装配。
 
 ## Blackboard
 

@@ -30,13 +30,67 @@ export const AskReason = {
 
 export type AskReason = (typeof AskReason)[keyof typeof AskReason];
 
+export const AskAuthority = {
+    Normal: "normal",
+    Executive: "executive",
+    Blackboard: "blackboard",
+    Crystal: "crystal",
+    Constitutional: "constitutional",
+} as const;
+
+export type AskAuthority = (typeof AskAuthority)[keyof typeof AskAuthority];
+
+export const AskSource = {
+    Model: "model",
+    Executive: "executive",
+    Blackboard: "blackboard",
+    Scope: "scope",
+    Fork: "fork",
+    Crystal: "crystal",
+    Constitution: "constitution",
+    ToolStability: "tool-stability",
+} as const;
+
+export type AskSource = (typeof AskSource)[keyof typeof AskSource];
+
+export const AskResumePolicy = {
+    Continue: "continue",
+    Replan: "replan",
+    Fork: "fork",
+    Stop: "stop",
+    Crystallize: "crystallize",
+} as const;
+
+export type AskResumePolicy = (typeof AskResumePolicy)[keyof typeof AskResumePolicy];
+
+export const AskCrystalCandidatePolicy = {
+    None: "none",
+    Candidate: "candidate",
+    ConfirmPromote: "confirm-promote",
+} as const;
+
+export type AskCrystalCandidatePolicy =
+    (typeof AskCrystalCandidatePolicy)[keyof typeof AskCrystalCandidatePolicy];
+
 export interface AgentAskChoice {
+    /** Stable option id for UI selection, audit, and ASK-answer replay. */
+    id?: string;
     /** 用户回答时可见的简短标签。模型必须显式给出，禁止 runtime 派生。 */
     label: string;
     /** 该选项被选中时模型期望沿用的代号 / 项目 / 行动等结构化标识。 */
     value?: string;
     /** 可选辅助说明，给用户更多上下文。 */
     description?: string;
+    /** Presentation hint only. The canonical recommendation is question.recommendedChoiceId. */
+    recommended?: boolean;
+    /** Structured execution delta consumed only by the owning ASK source. */
+    executionPatch?: Record<string, unknown>;
+}
+
+export interface AgentAskOtherOption {
+    id: "other";
+    label: string;
+    freeform: true;
 }
 
 export interface AgentAskQuestion {
@@ -46,17 +100,31 @@ export interface AgentAskQuestion {
     prompt: string;
     /** 该子问题的候选项。 */
     choices?: AgentAskChoice[];
+    /** Recommended model choice id. Runtime may default this to the first choice for legacy ASK blocks. */
+    recommendedChoiceId?: string;
+    /** ASK always keeps an explicit freeform escape hatch for user-owned decisions. */
+    other?: AgentAskOtherOption;
+    /** Whether the UI should render the fixed other option. Default true. */
+    allowOther?: boolean;
     /** 是否允许自由文本回答。默认 true。 */
     freeform?: boolean;
     /** 可选关联标识。 */
     relatedIds?: string[];
     /** 短理由，仅供审计。 */
     rationale?: string;
+    /** Whether this answer should become candidate evidence for Crystal. */
+    crystalCandidatePolicy?: AskCrystalCandidatePolicy;
 }
 
 export interface AgentAsk {
     /** 触发反问的语义类别（受 AskReason 枚举约束）。 */
     reason: AskReason;
+    /** ASK 权限层级。缺省为 normal，Executive/Blackboard/Crystal 可升格。 */
+    authority?: AskAuthority;
+    /** ASK 来源 owner。缺省为 model。 */
+    source?: AskSource;
+    /** 用户回答后默认恢复策略。 */
+    resumePolicy?: AskResumePolicy;
     /** 反问主体文本（用户可读）。runtime 不解析本字段语义。 */
     prompt: string;
     /** 可选的多选项，按模型给出的顺序展示。 */
@@ -69,6 +137,8 @@ export interface AgentAsk {
     relatedIds?: string[];
     /** 模型给出的简短理由（debug / 审计用，不影响展示）。 */
     rationale?: string;
+    /** Candidate evidence proposed by high-authority ASK sources. Crystal quality gate still decides promotion. */
+    crystalCandidates?: Record<string, unknown>[];
     /**
      * Continuation Context hint（LF-R4）。模型同轮显式提供 continuation 的用户可见字段，
      * 避免 runtime 用 ask.prompt 首行做 fallback 截断。runtime 不解析、不推断；

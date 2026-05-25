@@ -7,7 +7,7 @@ Notes:
 - The active transport is `/ws` WebSocket. HTTP only keeps `/health` and `/ws` upgrade.
 - `gateway.*` names are `flyflor.ws.v1` v1 compatibility wire names, not the architecture subject.
 - `history.list` only queries the `brain.db` life ledger for ledger/query/replay/audit. It is not session restore, a prompt container, or context assembly.
-- Query commands such as `scope.list`, `fork.detail.get`, `ask.list`, `blackboard.detail.get`, `task.list`, `replay.list`, `thought.detail.get`, and `crystal.list` are DB/read-model only. They do not invoke RuntimeModule, model calls, tools, or prompt/context assembly.
+- Query commands such as `scope.list`, `fork.detail.get`, `ask.list`, `blackboard.detail.get`, `task.list`, `replay.list`, `thought.detail.get`, `crystal.list`, and `execution.job.list` are DB/read-model only. They do not invoke RuntimeModule, model calls, tools, or prompt/context assembly.
 - `clientId`, `conversationKey`, `threadId`, and `user.id` are live peer, routing, audit, dedup, and reply-anchor provenance only. They do not carry or create cognitive continuity.
 - Real context assembly comes from current input, `MemoryComponent`, `CrystalComponent`, explicit `Scope/Fork`, and the Executive visible capability surface.
 
@@ -34,6 +34,8 @@ Use the example set as reusable Apifox WebSocket messages:
 - `TurnFinalWithAsk` shows `turn.final.reply.metadata.ask`.
 - `TurnFinalWithPlanning` shows `turn.final.reply.metadata.planning` with task plan, fork, and replay snapshots.
 - `TurnFinalWithExecutiveLoopPause` shows both `reply.metadata.executiveToolLoop` and `reply.metadata.ask.executiveToolLoop`.
+- `ExecutionJobList`, `ExecutionJobDetailGet`, and `ExecutionJobSnapshot` show Durable Job read-model queries backed by `brain.db` execution-job ledger events.
+- ASK examples use `questions[]`, `recommendedChoiceId`, and fixed `other` options; root `choices` remains a legacy compatibility surface.
 - `GatewayStatusSnapshot.payload.status.controlState` shows the current socket-visible ASK, Scope, Fork, and Executive loop snapshot, populated from real turn metadata and runtime events.
 - `EventSubscribe`, `ExecutiveLoopPausedEvent`, and `ExecutiveLoopResumedEvent` show the lifecycle event timeline. The current turn authority remains `turn.final.reply.metadata`.
 - `InvalidGatewayMessageSend` followed by `InvalidPayloadError` covers the structured `invalid-payload` response for missing `payload.text`.
@@ -47,6 +49,7 @@ Use the example set as reusable Apifox WebSocket messages:
 - `activeProject` is only a compatibility alias for `activeScope`; prefer `activeScope` in new Apifox examples.
 - `HistorySnapshot` may include reply metadata, task plans, replays, and context fork snapshots as ledger replay data. Do not feed it back as prompt context.
 - `*.snapshot.payload.data` from read-model query commands is inspectable TUI state only. Do not feed it back as prompt context.
+- `execution.job.snapshot.payload.data` is long-task progress/audit data only. It is not a prompt container and must not be used as cognitive continuity.
 - Only `GatewayMessageSend` enters live turn execution; query commands must stay detachable DB reads.
 - `GatewayStatusSnapshot.payload.status.controlState` is a read model for clients; it is not a new context owner, session restore surface, or prompt assembly source.
 - `conversationKey`, `threadId`, and `user.id` are useful for Apifox correlation and routing assertions, but they are not memory owners.

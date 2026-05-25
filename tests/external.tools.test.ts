@@ -10,6 +10,7 @@ import {
 import {
     externalToolManifestPath,
     externalToolSpecs,
+    ExternalToolPackageManagerComponent,
     loadExternalTools,
 } from "../src/executive/index.ts";
 import { RuntimeMcpToolPlanComponent } from "../src/agent/runtime/mcp/index.ts";
@@ -90,6 +91,11 @@ describe("external tool descriptor discovery", () => {
             expect(tools).toHaveLength(EXPECTED_EXTERNAL_TOOLS.length);
             expect(tools.every((entry) => !entry.available)).toBe(true);
             expect(tools[0]?.unavailableReason).toBe("external sidecar is not configured");
+            expect(tools[0]?.stability).toMatchObject({
+                discovery: "missing",
+                effective: "unavailable",
+                runtime: "failed",
+            });
 
             const plan = new RuntimeMcpToolPlanComponent().buildCapabilities({
                 channel: Channel.Stdio,
@@ -147,6 +153,149 @@ describe("external tool descriptor discovery", () => {
                 tools: [],
             });
             expect(plan.externalTools.map((entry) => entry.tool.descriptor.name)).toEqual([...EXPECTED_EXTERNAL_TOOLS]);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("accepts v2 app-relative sidecar commands", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-v2-app-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(join(root, "project", "tools", "packages", "mock", "bin"), { recursive: true });
+            await writeFile(join(root, "project", "tools", "packages", "mock", "bin", "flyflor"), "#!/bin/sh\n", "utf8");
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    sidecars: {
+                        "mock.xtools": {
+                            command: "./tools/packages/mock/bin/flyflor",
+                            args: ["xtool-sidecar", "mock.xtools"],
+                            cwd: "app",
+                            tools: ["web.search"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const webSearch = tools.find((entry) => entry.tool.descriptor.name === "web.search");
+            expect(webSearch?.available).toBe(true);
+            expect(webSearch?.stability).toMatchObject({
+                discovery: "configured",
+                effective: "available",
+                path: {
+                    base: "app",
+                    mode: "relative",
+                    portable: true,
+                    rootSafe: true,
+                    state: "resolved",
+                },
+            });
+            expect(webSearch?.tool.executor).toMatchObject({
+                command: "./tools/packages/mock/bin/flyflor",
+                cwd: "app",
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("rejects absolute sidecar commands so registries stay portable", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-absolute-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    sidecars: {
+                        "mock.xtools": {
+                            command: "/usr/local/bin/flyflor",
+                            cwd: "app",
+                            tools: ["web.search"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const webSearch = tools.find((entry) => entry.tool.descriptor.name === "web.search");
+            expect(webSearch?.available).toBe(false);
+            expect(webSearch?.unavailableReason).toBe("external sidecar command must be relative or on PATH");
+            expect(webSearch?.stability).toMatchObject({
+                effective: "unavailable",
+                path: {
+                    portable: false,
+                    rootSafe: false,
+                    state: "outside-root-denied",
+                },
+            });
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("denies app-relative sidecar commands that escape the app root", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-root-escape-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    sidecars: {
+                        "mock.xtools": {
+                            command: "../outside/bin/flyflor",
+                            cwd: "app",
+                            tools: ["web.search"],
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const webSearch = tools.find((entry) => entry.tool.descriptor.name === "web.search");
+            expect(webSearch?.available).toBe(false);
+            expect(webSearch?.stability.path.state).toBe("outside-root-denied");
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("hides sidecars while an upgrade is applying", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-upgrade-applying-"));
+        const paths = testPaths(root);
+        try {
+            await mkdir(join(root, "project", "tools", "packages", "mock", "bin"), { recursive: true });
+            await writeFile(join(root, "project", "tools", "packages", "mock", "bin", "flyflor"), "#!/bin/sh\n", "utf8");
+            await mkdir(paths.projectToolDir!, { recursive: true });
+            await writeFile(
+                externalToolManifestPath(paths),
+                JSON.stringify({
+                    schemaVersion: 2,
+                    sidecars: {
+                        "mock.xtools": {
+                            command: "./tools/packages/mock/bin/flyflor",
+                            cwd: "app",
+                            tools: ["web.search"],
+                            upgrade: "applying",
+                        },
+                    },
+                }),
+            );
+
+            const tools = await loadExternalTools(paths);
+            const webSearch = tools.find((entry) => entry.tool.descriptor.name === "web.search");
+            expect(webSearch?.available).toBe(false);
+            expect(webSearch?.stability).toMatchObject({
+                effective: "unavailable",
+                upgrade: "applying",
+            });
         } finally {
             await rm(root, { recursive: true, force: true });
         }
@@ -504,6 +653,31 @@ describe("external tool descriptor discovery", () => {
         expect(externalToolManifestPath(paths, { global: true })).toBe("/tmp/flyflor-xtools-paths/config/tools/external.tools.jsonc");
         expect(externalToolManifestPath(paths)).toBe("/tmp/flyflor-xtools-paths/project/tools/external.tools.jsonc");
     });
+
+    test("stages external tool package upgrades without writing absolute paths", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-xtools-package-stage-"));
+        const paths = testPaths(root);
+        try {
+            const result = await new ExternalToolPackageManagerComponent().stage(paths, {
+                sidecarId: "web.search",
+                tools: ["web.search"],
+                metadata: {
+                    command: "./tools/packages/web.search/bin/flyflor",
+                    id: "web.search",
+                    kind: "process-json",
+                    packageVersion: "1.2.3",
+                    schemaVersion: 1,
+                },
+            });
+
+            expect(result.state).toBe("staged");
+            const next = await Bun.file(result.nextManifestPath!).text();
+            expect(next).toContain("./tools/packages/web.search/bin/flyflor");
+            expect(next).not.toContain(root);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
 });
 
 function hiddenReasons(
@@ -517,6 +691,7 @@ function hiddenReasons(
 
 function testPaths(root: string): FlyflorPaths {
     return {
+        appRoot: join(root, "project"),
         cacheDir: join(root, "cache"),
         configDir: join(root, "config"),
         home: join(root, "home"),

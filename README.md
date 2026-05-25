@@ -58,6 +58,17 @@ Chinese companion: [README.zh.cn.md](README.zh.cn.md).
 
 ## Run
 
+Remote-first install commands:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.source.sh | bash
+curl -fsSL https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.docker.sh | bash
+irm https://raw.githubusercontent.com/flyflor/flyflor/master/scripts/install.ps1
+```
+
+Local development:
+
 ```bash
 bun install
 bun run install:templates

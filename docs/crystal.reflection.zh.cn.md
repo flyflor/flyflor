@@ -28,6 +28,14 @@ Memory 是热的、适应性的。Crystal 是稳定的、可复用的。
 
 Memory 可以 decay、compress 和 recall 近期材料。Crystal 应保存通过 evidence 检查的可复用方法或知识。两层都可以引用 ledger provenance，但都不会把原始 `brain.db` event rows 直接变成 prompt context。
 
+Executive/ASK 证据也可以进入 reflection candidate，但仍不能直接升格 Gem：
+
+- `subagent.batch` Durable Job 暂停、完成或失败会把 `jobId`、progress、child status、tool counts 和 ASK id 写入 `brain.db` execution-job ledger。
+- 高权限 ASK 可以携带 `crystalCandidates`，例如 `execution-job` 或 `tool-stability`。
+- `ReflectionWorker` 把这些结构化字段转成 `sourceKind = "executive-ask-candidate"` 的候选证据。
+- 证据权重只让 candidate 留档和等待质量门；Gem 升格仍必须通过 `CrystalReflectionComponent.evaluateGemQualityGate()`。
+- `other` ASK 回答可以作为 evidence provenance，但 runtime 不解析其自然语言语义。
+
 ## Vector 与 Drift
 
 Crystal vector 逻辑支持 recall 和 repair，不做业务 intent routing。Tokenizer、hash、cosine 和 freshness 逻辑属于 crystal vector owner。Recall scores 是资源指标，不是语义关键词规则。

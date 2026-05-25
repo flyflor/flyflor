@@ -95,7 +95,7 @@ class XToolsInitializer {
                 "browser.cdp": {
                     command: this.packageCommand(options.targetDir, "browser-cdp", options.runnerName),
                     args: ["xtool-sidecar", "browser.cdp"],
-                    cwd: "project",
+                    cwd: "app",
                     env: {
                         FLYFLOR_BROWSER_CDP_URL: options.cdpUrl,
                     },
@@ -114,7 +114,7 @@ class XToolsInitializer {
                 "computer.native": {
                     command: this.packageCommand(options.targetDir, "computer-native", options.runnerName),
                     args: ["xtool-sidecar", "computer.native"],
-                    cwd: "project",
+                    cwd: "app",
                     config: {
                         mouseCommand: "",
                         mouseArgs: [],
@@ -133,7 +133,7 @@ class XToolsInitializer {
                 "computer.use": {
                     command: this.packageCommand(options.targetDir, "computer-use", options.runnerName),
                     args: ["xtool-sidecar", "computer.use"],
-                    cwd: "project",
+                    cwd: "app",
                     config: {
                         backend: "delegate",
                         delegateCommand: "",
@@ -148,7 +148,7 @@ class XToolsInitializer {
                 "media.local": {
                     command: this.packageCommand(options.targetDir, "media", options.runnerName),
                     args: ["xtool-sidecar", "media.local"],
-                    cwd: "project",
+                    cwd: "app",
                     config: {
                         providerUrl: "",
                         providerHeaders: {},
@@ -166,7 +166,7 @@ class XToolsInitializer {
                 "web.search": {
                     command: this.packageCommand(options.targetDir, "search-web", options.runnerName),
                     args: ["xtool-sidecar", "web.search"],
-                    cwd: "project",
+                    cwd: "app",
                     config: {
                         cacheTtlMs: 600000,
                         providers: [],
@@ -183,7 +183,7 @@ class XToolsInitializer {
                 "utility.local": {
                     command: this.packageCommand(options.targetDir, "utility", options.runnerName),
                     args: ["xtool-sidecar", "utility.local"],
-                    cwd: "project",
+                    cwd: "app",
                     config: {
                         lspCommand: "",
                         lspArgs: [],
@@ -214,7 +214,7 @@ class XToolsInitializer {
                     mock: true,
                     command: this.packageCommand(options.targetDir, "mock", options.runnerName),
                     args: ["xtool-sidecar", "mock.xtools"],
-                    cwd: "project",
+                    cwd: "app",
                     timeoutMs: 2000,
                     maxOutputBytes: 65536,
                     tools: [

@@ -852,6 +852,14 @@
   验证：`bun test tests/web.search.sidecar.test.ts tests/external.tools.test.ts tests/executive.manifest.test.ts tests/install.script.test.ts`；`bun run check`；`git diff --check`。
 - 状态：已完成
   执行者：main-codex
+  范围：executive-ask-tools-relative-path-complete
+  摘要：完成 `PLAN.md` 全部 Phase 0-15：ASK owner 分层、多问题推荐方案和固定 other；Durable Execution Job 与 brain.db execution-job ledger；`execution.job.*` socket 只读查询；外部工具 stability snapshot；package staging/next/apply/previous 升级事务；工具稳定性触发 `tool-stability` Executive ASK；ASK/job/tool-stability 结构化 evidence 进入 Crystal candidate；同步 runtime/external/crystal/boundaries/ws/OpenAPI/Apifox 文档。
+  原因：执行层需要可暂停、可恢复、可审计、可查询，外挂工具需要相对路径、稳定性判定和升级状态，ASK 作为一等闭环器官要能承接预算、子代理、工具稳定性和结晶候选。
+  效率：保持 `brain.db` 只做 ledger/query/replay/audit/detail，不参与 prompt/context assembly；socket job query 不调用 Runtime、模型或工具；工具层仍是 descriptor-only + process-json，内核不 import `tools/packages`。
+  验证：`bun test tests/ask.parse.test.ts tests/ask.wire.test.ts tests/ask.normalizer.test.ts tests/ask.presentation.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts tests/external.tools.test.ts tests/install.script.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/reflection.thread.test.ts tests/computer.coding.tools.test.ts --timeout 30000`；`bun test tests/skill.mcp.test.ts tests/ask.reply.test.ts --timeout 30000`；`bun run check`；`bun run docs:check`；`bun run build:binary`；`git diff --check`。
+
+- 状态：已完成
+  执行者：main-codex
   范围：main-planning-socket-seal
   摘要：收口当前 `master` 未提交改动，新增 runtime planning route、`task.plan.decide` WS 控制命令、planning/blackboard 边界提示词、事件分类和 OpenAPI/Apifox 示例；修正 Apifox 中 `task.plan.decide` 期望返回，真实返回为 `task.snapshot`。
   原因：TUI/Rust 前端需要区分 act/plan 交互模式，计划确认必须走显式 WS 控制命令和 DB read model，而不是让 live turn 或前端自行猜测状态。
@@ -913,3 +921,19 @@
   原因：用户要求“读完整项目”“搜索多个在线资料”“浏览器登录截图上传”等复合动作压缩成一个父级额度，而不是让主执行循环被许多底层工具调用耗尽；是否拆分必须由模型决策，不能硬编码关键词或任务类型。
   效率：新增模型规划提示词、planner、runtime 注入路径和 focused 回归；保留 `subagent.batch` 原有 sandbox/audit/provenance 链路，未修改 Memory、Scope、ASK、Crystal 主链。
   验证：`bun run docs:check`；`bun run check`；`bun test tests/skill.mcp.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`；`git diff --check`。
+
+- 状态：部分完成
+  执行者：main-codex
+  范围：executive-ask-tools-relative-path-v1
+  摘要：按用户要求先创建 `PLAN.md` 执行账本；修复子代理 child `needs_user` 不稳定进入 ASK 的结构问题；扩展 ASK 协议为 authority/source/resumePolicy + 多问题推荐方案 + 固定 other；Executive pause ASK 现在输出执行策略、预算策略和子代理策略三组结构化问题；外挂工具 manifest 支持 schema v2 与 `cwd:"app"`，默认 xtools registry/installer 使用 app-relative 路径，绝对 sidecar command 变为 unavailable。
+  原因：执行层需要具备长 loop 可暂停、可恢复、可审计的能力；ASK 是高权限闭环器官，不能让子代理阻塞降级成普通工具失败；外挂工具配置必须减少绝对路径复杂度，避免 `.config`、源码、二进制和工具 package 对不上。
+  效率：本次先完成 Phase 0/1/2/4/8/9 的可验证切片，未展开 Durable Job store、brain.db job ledger、socket job query、稳定性状态机和升级事务，避免一次改动过大。
+  验证：`bun test tests/ask.parse.test.ts tests/ask.wire.test.ts tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts --timeout 30000`；`bun test tests/external.tools.test.ts tests/install.script.test.ts --timeout 30000`；`bun run check`。
+
+- 状态：已完成
+  执行者：main-codex
+  范围：executive-ask-job-ledger-v1
+  摘要：完成 Phase 3/5/6：ASK 拆成 `AskComponent` owner，parser/normalizer/policy/presentation/ledger 分层；`subagent.batch` 升级为 Execution Job v1，返回 jobId、childJobId、progress 和 ASK job 引用；Execution Job 生命周期写入 `brain.db` append-only `execution-job` 事件。
+  原因：执行层暂停、子代理阻塞和长任务进度必须可见、可审计、可恢复；`brain.db` 只做 ledger/query/replay/audit/detail，不能存完整 prompt 或大型工具输出。
+  效率：保持旧 `parseAgentAsk`、`AgentAskParser`、runtime `renderAskReplyText`/`buildAskMetadata` 兼容导出；新增 job owner 不改变工具 sandbox/approval/audit 边界。
+  验证：`bun test tests/ask.parse.test.ts tests/ask.reply.test.ts tests/ask.wire.test.ts tests/ask.normalizer.test.ts tests/ask.presentation.test.ts tests/executive.tool.runtime.test.ts tests/skill.mcp.test.ts tests/external.tools.test.ts tests/install.script.test.ts --timeout 30000`；`bun run check`；`git diff --check`。

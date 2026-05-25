@@ -7,7 +7,11 @@ import { RuntimeMcpToolExecutor, WorkspaceToolset, GitToolset, ProcessToolset } 
 import { createSandboxPolicy, SandboxQuotaTracker } from "../src/agent/sandbox/index.ts";
 import { NullEventSink, RuntimeEventType, type EventSink } from "../src/events/index.ts";
 import {
+    CapabilitySource,
     SandboxMode,
+    ToolCategory,
+    ToolPermission,
+    ToolScope,
     ToolApprovalMode,
 } from "../src/protocol/contracts/index.ts";
 
@@ -400,6 +404,104 @@ describe("computer coding tools", () => {
             argv: expect.arrayContaining(["alpha beta", "gamma"]),
             exitCode: 0,
             stdout: "alpha beta|gamma\n",
+        });
+    });
+
+    test("external tool stability blocks execution before process spawn", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-tool-stability-"));
+        const paths = testPaths(root);
+        const config = await loadConfigForPaths(paths);
+        const executor = new RuntimeMcpToolExecutor(config, new NullEventSink(), new SandboxQuotaTracker());
+        const result = firstExecution(await executor.executeCalls(
+            [{ server: "user", tool: "web.search", input: { query: "flyflor" } }],
+            {
+                catalog: [
+                    {
+                        server: "user",
+                        tool: {
+                            name: "web.search",
+                            description: "Search the web",
+                            inputSchema: { type: "object" },
+                        },
+                    },
+                ],
+                gitToolset: new GitToolset(paths),
+                processToolset: new ProcessToolset(paths),
+                pluginCapabilityCatalog: [],
+                requiresApproval: false,
+                requestId: crypto.randomUUID(),
+                userToolCatalog: [
+                    {
+                        catalog: {
+                            server: "user",
+                            tool: {
+                                name: "web.search",
+                                description: "Search the web",
+                                inputSchema: { type: "object" },
+                            },
+                        },
+                        tool: {
+                            enabled: true,
+                            manifestSource: "project",
+                            executor: {
+                                args: [],
+                                command: "./tools/packages/web.search/bin/flyflor",
+                                cwd: "app",
+                                kind: "process-json",
+                                maxOutputBytes: 1000,
+                                timeoutMs: 1000,
+                            },
+                            stability: {
+                                command: "./tools/packages/web.search/bin/flyflor",
+                                discovery: "configured",
+                                effective: "unavailable",
+                                manifest: "valid",
+                                path: {
+                                    base: "app",
+                                    command: "./tools/packages/web.search/bin/flyflor",
+                                    mode: "relative",
+                                    portable: true,
+                                    rootSafe: true,
+                                    state: "unresolved",
+                                },
+                                probe: "unavailable",
+                                reason: "external sidecar command is unavailable",
+                                runtime: "failed",
+                                sandbox: "allowed",
+                                toolNames: ["web.search"],
+                                upgrade: "idle",
+                                version: "unknown",
+                            },
+                            descriptor: {
+                                category: ToolCategory.Network,
+                                concurrencySafe: true,
+                                description: "Search the web",
+                                exclusive: false,
+                                inputSchema: { type: "object" },
+                                name: "web.search",
+                                permission: ToolPermission.Network,
+                                readOnly: true,
+                                resultLimit: { maxChars: 4000 },
+                                scope: [ToolScope.Core],
+                                source: CapabilitySource.User,
+                            },
+                        },
+                    },
+                ],
+                workspaceToolset: new WorkspaceToolset(paths),
+            },
+        ));
+
+        expect(result).toMatchObject({
+            ok: false,
+            error: "external sidecar command is unavailable",
+            result: {
+                raw: {
+                    toolStability: {
+                        effective: "unavailable",
+                    },
+                },
+            },
         });
     });
 });

@@ -23,6 +23,7 @@ import {
     type TaskPlanDecisionAction as TaskPlanDecisionActionType,
 } from "../contracts/index.ts";
 import { classifyRuntimeEvent, RuntimeEventType } from "../../events/index.ts";
+import type { ExecutionJobSnapshot } from "../../executive/job/index.ts";
 import type { ExternalKitCatalogSnapshot } from "../contracts/index.ts";
 
 export type GatewayControlAckPayload = Record<string, unknown> & {
@@ -255,7 +256,10 @@ export interface GatewayControlExecutiveLoopGuardSnapshot {
 }
 
 export interface GatewayControlLongHorizonLoopSnapshot {
+    ask?: import("../contracts/index.ts").AgentAsk;
     askId: string;
+    job?: ExecutionJobSnapshot;
+    jobId?: string;
     loopGuardReason?: string;
     loopGuardSnapshot?: GatewayControlExecutiveLoopGuardSnapshot;
     message: string;
@@ -649,6 +653,9 @@ export function classifyGatewayControlSemanticType(
         case GatewayControlMessageType.CapabilityCatalogGet:
         case GatewayControlMessageType.CapabilityCatalogSnapshot:
         case GatewayControlMessageType.ClientHello:
+        case GatewayControlMessageType.ExecutionJobDetailGet:
+        case GatewayControlMessageType.ExecutionJobList:
+        case GatewayControlMessageType.ExecutionJobSnapshot:
         case GatewayControlMessageType.GatewayStatusGet:
         case GatewayControlMessageType.GatewayStatusSnapshot:
         case GatewayControlMessageType.AskDetailGet:

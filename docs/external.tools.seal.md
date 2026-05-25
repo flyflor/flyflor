@@ -44,6 +44,12 @@ Each installer writes `tools/external.tools.jsonc` by default and creates `tools
 
 `external.tools.jsonc` entries must stay JSONC-compatible and must be treated as descriptor/config data. The Bun kernel may discover descriptors and pass opaque sidecar config, but it must not load sidecar implementation files from the config directory or from `./tools`.
 
+All persisted sidecar commands are portable. v2 manifests use `cwd: "app"` and relative commands such as `./tools/packages/<id>/bin/flyflor`; PATH commands such as `bun` remain allowed for development fixtures. Absolute commands and app-root escapes are marked unavailable by the stability component and never become runnable descriptors.
+
+Each external descriptor now carries a stability snapshot with `discovery`, `manifest`, `path`, `version`, `probe`, `runtime`, `sandbox`, `upgrade`, and `effective`. Socket/TUI surfaces can show the full reason, while the model only sees tools whose effective state is available or explicitly tolerated as degraded.
+
+Package upgrade flow is staged: package metadata is written under `.staging`, the next registry is written as `external.tools.jsonc.next`, and apply moves the staged package into `tools/packages/<id>` while preserving the previous package under `.previous`. Applying, failed, or rollback-required upgrades hide the tool from the model and can trigger an Executive ASK.
+
 ## Failure Semantics
 
 Provider and delegate failures are visible protocol outcomes:
@@ -52,6 +58,7 @@ Provider and delegate failures are visible protocol outcomes:
 - `failed` means the dependency exists but this invocation failed.
 - Failure payloads must preserve machine-readable context such as tool name, rejected path, provider status, process exit code, stderr summary, or file error reason.
 - Missing optional sidecars must not fail kernel startup. They remain visible as disabled descriptors, including `sourceId: "external:missing"` where applicable.
+- Stability failures are structured; Executive does not parse error strings to decide whether to ASK.
 
 This keeps TUI and socket clients able to explain why a tool is not runnable without guessing from log text.
 

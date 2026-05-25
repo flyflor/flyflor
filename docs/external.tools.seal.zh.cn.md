@@ -44,6 +44,12 @@
 
 `external.tools.jsonc` 条目必须保持 JSONC 兼容，并且只能作为 descriptor/config 数据处理。Bun 内核可以发现 descriptor 并透传 opaque sidecar config，但不能从 config 目录或 `./tools` 加载 sidecar 实现文件。
 
+所有持久化 sidecar command 都必须可迁移。v2 manifest 使用 `cwd: "app"` 和 `./tools/packages/<id>/bin/flyflor` 这类相对命令；`bun` 这类 PATH command 仍允许用于开发 fixture。绝对命令和逃出 app root 的命令会被稳定性组件标记为 unavailable，不能成为可运行 descriptor。
+
+每个外挂 descriptor 现在都携带稳定性快照，字段包括 `discovery`、`manifest`、`path`、`version`、`probe`、`runtime`、`sandbox`、`upgrade` 和 `effective`。Socket/TUI 可以展示完整原因；模型只会看到 effective 为 available 或显式允许 degraded 的工具。
+
+工具包升级采用 staging 事务：package metadata 先写入 `.staging`，next registry 写为 `external.tools.jsonc.next`，apply 时把 staged package 移入 `tools/packages/<id>`，旧包保存在 `.previous`。applying、failed 或 rollback-required 状态会隐藏工具，并可触发 Executive ASK。
+
 ## 失败语义
 
 Provider 与 delegate 失败是可见协议结果：
@@ -52,6 +58,7 @@ Provider 与 delegate 失败是可见协议结果：
 - `failed` 表示依赖存在，但本次调用失败。
 - 失败 payload 必须保留机器可读上下文，例如 tool name、被拒路径、provider status、process exit code、stderr 摘要或文件错误原因。
 - 可选 sidecar 缺失不能导致内核启动失败。缺失项仍作为 disabled descriptor 可见，适用时携带 `sourceId: "external:missing"`。
+- 稳定性失败是结构化状态；Executive 不从错误文本字符匹配判断是否 ASK。
 
 这样 TUI 和 socket 客户端可以解释工具为什么不可运行，而不是从日志文本里猜。
 

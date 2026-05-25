@@ -84,7 +84,7 @@ if ($Mode -eq "mock") {
                 mock = $true
                 command = $MockRunner
                 args = @("xtool-sidecar", "mock.xtools")
-                cwd = "project"
+                cwd = "app"
                 timeoutMs = 2000
                 maxOutputBytes = 65536
                 tools = @(
@@ -104,7 +104,7 @@ if ($Mode -eq "mock") {
             "browser.cdp" = @{
                 command = $BrowserCdpRunner
                 args = @("xtool-sidecar", "browser.cdp")
-                cwd = "project"
+                cwd = "app"
                 env = @{ FLYFLOR_BROWSER_CDP_URL = $CdpUrl }
                 timeoutMs = 8000
                 maxOutputBytes = 65536
@@ -113,7 +113,7 @@ if ($Mode -eq "mock") {
             "computer.native" = @{
                 command = $ComputerNativeRunner
                 args = @("xtool-sidecar", "computer.native")
-                cwd = "project"
+                cwd = "app"
                 config = @{ mouseCommand = ""; mouseArgs = @(); keyboardCommand = ""; keyboardArgs = @() }
                 timeoutMs = 10000
                 maxOutputBytes = 65536
@@ -122,7 +122,7 @@ if ($Mode -eq "mock") {
             "computer.use" = @{
                 command = $ComputerUseRunner
                 args = @("xtool-sidecar", "computer.use")
-                cwd = "project"
+                cwd = "app"
                 config = @{ backend = "delegate"; delegateCommand = ""; delegateArgs = @(); cuaCommand = "cua-driver"; cuaArgs = @() }
                 timeoutMs = 20000
                 maxOutputBytes = 524288
@@ -131,7 +131,7 @@ if ($Mode -eq "mock") {
             "media.local" = @{
                 command = $MediaRunner
                 args = @("xtool-sidecar", "media.local")
-                cwd = "project"
+                cwd = "app"
                 config = @{ providerUrl = ""; providerHeaders = @{}; localCommands = @{} }
                 timeoutMs = 30000
                 maxOutputBytes = 262144
@@ -140,7 +140,7 @@ if ($Mode -eq "mock") {
             "web.search" = @{
                 command = $SearchWebRunner
                 args = @("xtool-sidecar", "web.search")
-                cwd = "project"
+                cwd = "app"
                 config = @{ cacheTtlMs = 600000; providers = @() }
                 timeoutMs = 10000
                 maxOutputBytes = 65536
@@ -149,7 +149,7 @@ if ($Mode -eq "mock") {
             "utility.local" = @{
                 command = $UtilityRunner
                 args = @("xtool-sidecar", "utility.local")
-                cwd = "project"
+                cwd = "app"
                 config = @{ lspCommand = ""; lspArgs = @(); taskCommand = ""; taskArgs = @() }
                 timeoutMs = 30000
                 maxOutputBytes = 262144

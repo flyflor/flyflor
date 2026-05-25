@@ -43,6 +43,8 @@ export const MemoryEventType = {
     BehaviorCorrection: "behavior-correction",
     /** 工作记忆到期清理前的隔离压缩审计；不进 prompt recall / summary / CrystalComponent。 */
     HotMemoryCompression: "hot-memory-compression",
+    /** Executive durable job 生命周期账本；只用于 audit/replay/query，不进入 prompt assembly。 */
+    ExecutionJob: "execution-job",
 } as const;
 
 export type MemoryEventType = (typeof MemoryEventType)[keyof typeof MemoryEventType];
@@ -203,6 +205,46 @@ export interface BehaviorCorrectionContent {
     factPreview?: string;
     currentUserTextPreview: string;
     previousAssistantTextPreview: string;
+}
+
+export const ExecutionJobEventKind = {
+    Created: "job.created",
+    StageChanged: "job.stage.changed",
+    ChildStarted: "job.child.started",
+    ChildCompleted: "job.child.completed",
+    ChildFailed: "job.child.failed",
+    ChildNeedsUser: "job.child.needs_user",
+    ToolExecuted: "job.tool.executed",
+    PausedAsk: "job.paused.ask",
+    Completed: "job.completed",
+    Failed: "job.failed",
+} as const;
+
+export type ExecutionJobEventKind =
+    (typeof ExecutionJobEventKind)[keyof typeof ExecutionJobEventKind];
+
+export interface ExecutionJobLedgerContent {
+    askId?: string;
+    childJobId?: string;
+    crystalCandidate?: Record<string, unknown>;
+    error?: string;
+    jobId: string;
+    kind: ExecutionJobEventKind;
+    packageVersion?: string;
+    parentJobId?: string;
+    progress?: Record<string, unknown>;
+    requestId?: string;
+    sidecarId?: string;
+    sourceKey?: string;
+    stage?: string;
+    status?: string;
+    summary?: string;
+    tool?: {
+        key: string;
+        ok: boolean;
+        error?: string;
+    };
+    ts: number;
 }
 
 /**

@@ -38,6 +38,51 @@ External tool failures are part of the protocol, not log-only diagnostics:
 
 The sidecar may receive opaque config from `external.tools.jsonc`, but semantic decisions still belong to the model/output protocol or Executive resource metrics. Sidecars must not infer user intent from natural-language text.
 
+## Relative Paths And Stability Snapshot
+
+`external.tools.jsonc` v2 keeps package commands portable:
+
+```jsonc
+{
+  "schemaVersion": 2,
+  "sidecars": {
+    "web.search": {
+      "command": "./tools/packages/search-web/bin/flyflor",
+      "cwd": "app",
+      "tools": ["web.search", "web.fetch", "web.extract", "web.download"]
+    }
+  }
+}
+```
+
+Persistent config and manifests must store relative commands or PATH commands only. `cwd: "app"` resolves against `paths.appRoot`; `cwd: "project"` remains a compatibility alias for the same app-root anchor. `cwd: "config"` and `cwd: "workspace"` are explicit alternate anchors. Runtime may resolve absolute paths for IO, but it must not write those absolute paths back into config or manifest files.
+
+Discovery attaches a structured stability snapshot to every external tool descriptor:
+
+- `discovery`: `configured | missing | disabled`
+- `manifest`: `valid | invalid`
+- `path`: `resolved | unresolved | outside-root-denied`, plus mode/base/portable/rootSafe details
+- `version`: `compatible | incompatible | unknown`
+- `probe`: `healthy | degraded | unavailable | skipped`
+- `runtime`: `ready | failed | timed-out | schema-error`
+- `sandbox`: `allowed | approval-required | denied | quota-limited`
+- `upgrade`: `idle | staged | applying | rollback-required | failed`
+- `effective`: `available | degraded | unavailable | disabled`
+
+Tool Plan registers descriptors for diagnostics, but only `effective=available` or allowed `degraded` tools are visible to the model. Unavailable, disabled, incompatible, or upgrading tools remain hidden with `availability` diagnostics for TUI/socket rendering.
+
+## Upgrade Transaction
+
+External package upgrades are owned by `ExternalToolPackageManagerComponent`. The manager stages package metadata under `tools/packages/.staging/<id>@<version>`, writes `tools/external.tools.jsonc.next`, and applies by moving staged packages into `tools/packages/<id>` while preserving the previous package under `tools/packages/.previous`.
+
+Rules:
+
+- Package metadata and generated next manifests use relative commands only.
+- The kernel never imports package payload implementation files.
+- Upgrade states are reflected in the stability snapshot.
+- `upgrade=applying`, `rollback-required`, or `failed` hides the tool from the model.
+- High-risk repair, reinstall, or rollback decisions should enter ASK rather than being inferred from error text.
+
 ## Runtime Ownership
 
 - `tools/external.tools.jsonc` is the project-local external tool registry loaded by the kernel.

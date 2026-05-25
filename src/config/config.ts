@@ -59,6 +59,7 @@ export interface ModelProviderReadiness {
 }
 
 export interface FlyflorPaths {
+    appRoot?: string;
     home: string;
     configDir: string;
     storageDir: string;
@@ -1364,6 +1365,7 @@ function firstKey(record: Record<string, unknown>): string | undefined {
 
 function resolvePaths(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): FlyflorPaths {
     const home = resolveFlyflorHome(options);
+    const appRoot = home;
     const configDir = join(home, ".config");
     const xdgData = env("XDG_DATA_HOME") ?? join(homedir(), ".local", "share");
     const xdgCache = env("XDG_CACHE_HOME") ?? join(homedir(), ".cache");
@@ -1371,6 +1373,7 @@ function resolvePaths(options: Pick<FlyflorConfigLoadOptions, "home"> = {}): Fly
     const projectFlyflorDir = join(projectDir, ".flyflor");
 
     return {
+        appRoot,
         home,
         configDir,
         storageDir: join(configDir, "storage"),

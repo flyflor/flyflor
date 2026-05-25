@@ -287,6 +287,9 @@
           "error",
           "event.subscribe",
           "event.unsubscribe",
+          "execution.job.detail.get",
+          "execution.job.list",
+          "execution.job.snapshot",
           "gateway.message.send",
           "gateway.status.get",
           "gateway.status.snapshot",
@@ -2005,6 +2008,12 @@
             "$ref": "#/components/schemas/ThoughtDetailGetEnvelope"
           },
           {
+            "$ref": "#/components/schemas/ExecutionJobListEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/ExecutionJobDetailGetEnvelope"
+          },
+          {
             "$ref": "#/components/schemas/GatewayMessageSendEnvelope"
           },
           {
@@ -2426,6 +2435,162 @@
             }
           }
         ]
+      },
+      "ExecutionJobListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "execution.job.list"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ExecutionJobDetailGetEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "execution.job.detail.get"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/QueryPayload"
+              }
+            }
+          }
+        ]
+      },
+      "ExecutionJobSnapshotPayload": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "cache": {
+            "$ref": "#/components/schemas/ReadCacheMetadata"
+          },
+          "data": {
+            "description": "Execution job read-model result. List commands return job snapshots; detail commands return one snapshot or null. The socket layer reads brain.db execution-job ledger events only.",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ExecutionJobSnapshot"
+                }
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionJobSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "ExecutionJobSnapshot": {
+        "type": "object",
+        "required": [
+          "jobId",
+          "children",
+          "toolCounts"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "parentJobId": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "childJobId",
+                "toolCalls"
+              ],
+              "properties": {
+                "childJobId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "toolCalls": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "toolCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "askId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "errorSummary": {
+            "type": "string"
+          },
+          "crystalCandidateSummary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
       }
     },
     "examples": {
@@ -2995,10 +3160,65 @@
                   ],
                   "freeform": true,
                   "prompt": "这轮是否保留 wire v1 兼容？",
-                  "questionCount": 1,
-                  "questions": [],
-                  "reason": "clarification",
-                  "snapshotId": "ask-snapshot-1"
+                  "questionCount": 2,
+                  "questions": [
+                    {
+                      "id": "execution-strategy",
+                      "prompt": "下一步执行策略是什么？",
+                      "recommendedChoiceId": "continue-tools",
+                      "choices": [
+                        {
+                          "id": "continue-tools",
+                          "label": "继续执行",
+                          "value": "continue-tools",
+                          "description": "允许下一轮继续使用工具完成当前任务。",
+                          "recommended": true
+                        },
+                        {
+                          "id": "narrow-scope",
+                          "label": "缩小范围",
+                          "value": "narrow-scope",
+                          "description": "减少本轮目标，只处理最关键部分。"
+                        }
+                      ],
+                      "other": {
+                        "id": "other",
+                        "label": "其他",
+                        "freeform": true
+                      },
+                      "allowOther": true,
+                      "crystalCandidatePolicy": "candidate"
+                    },
+                    {
+                      "id": "budget-policy",
+                      "prompt": "是否调整下一轮工具预算？",
+                      "recommendedChoiceId": "increase-budget",
+                      "choices": [
+                        {
+                          "id": "increase-budget",
+                          "label": "增加一档预算",
+                          "value": "increase-budget",
+                          "recommended": true
+                        },
+                        {
+                          "id": "keep-budget",
+                          "label": "保持预算",
+                          "value": "keep-budget"
+                        }
+                      ],
+                      "other": {
+                        "id": "other",
+                        "label": "其他",
+                        "freeform": true
+                      },
+                      "allowOther": true
+                    }
+                  ],
+                  "reason": "policy-decision",
+                  "snapshotId": "ask-snapshot-1",
+                  "authority": "executive",
+                  "source": "executive",
+                  "resumePolicy": "continue"
                 },
                 "executiveToolLoop": {
                   "askId": "ask-loop-ask-1",
@@ -3128,7 +3348,20 @@
                   },
                   "stepCount": 8,
                   "stop": "ask",
-                  "toolBudgetExhausted": true
+                  "toolBudgetExhausted": true,
+                  "jobId": "job-1",
+                  "job": {
+                    "jobId": "job-1",
+                    "status": "needs-user",
+                    "stage": "paused",
+                    "progress": {
+                      "childTotal": 2,
+                      "childCompleted": 1,
+                      "childFailed": 0,
+                      "childNeedsUser": 1,
+                      "toolCalls": 3
+                    }
+                  }
                 },
                 "ask": {
                   "choiceCount": 1,
@@ -3148,14 +3381,121 @@
                     },
                     "stepCount": 8,
                     "stop": "ask",
-                    "toolBudgetExhausted": true
+                    "toolBudgetExhausted": true,
+                    "jobId": "job-1",
+                    "job": {
+                      "jobId": "job-1",
+                      "status": "needs-user",
+                      "stage": "paused",
+                      "progress": {
+                        "childTotal": 2,
+                        "childCompleted": 1,
+                        "childFailed": 0,
+                        "childNeedsUser": 1,
+                        "toolCalls": 3
+                      }
+                    }
                   },
                   "freeform": true,
                   "prompt": "工具预算耗尽，是否继续？",
-                  "questionCount": 0,
-                  "questions": [],
+                  "questionCount": 3,
+                  "questions": [
+                    {
+                      "id": "execution-strategy",
+                      "prompt": "下一步执行策略是什么？",
+                      "recommendedChoiceId": "continue-tools",
+                      "choices": [
+                        {
+                          "id": "continue-tools",
+                          "label": "继续执行",
+                          "recommended": true
+                        },
+                        {
+                          "id": "narrow-scope",
+                          "label": "缩小范围"
+                        },
+                        {
+                          "id": "stop-and-crystalize",
+                          "label": "停止并结晶"
+                        }
+                      ],
+                      "other": {
+                        "id": "other",
+                        "label": "其他",
+                        "freeform": true
+                      },
+                      "allowOther": true,
+                      "crystalCandidatePolicy": "candidate"
+                    },
+                    {
+                      "id": "budget-policy",
+                      "prompt": "是否调整下一轮工具预算？",
+                      "recommendedChoiceId": "increase-budget",
+                      "choices": [
+                        {
+                          "id": "increase-budget",
+                          "label": "增加一档预算",
+                          "recommended": true
+                        },
+                        {
+                          "id": "keep-budget",
+                          "label": "保持预算"
+                        },
+                        {
+                          "id": "user-budget",
+                          "label": "自定义预算"
+                        }
+                      ],
+                      "other": {
+                        "id": "other",
+                        "label": "其他",
+                        "freeform": true
+                      },
+                      "allowOther": true
+                    },
+                    {
+                      "id": "subagent-policy",
+                      "prompt": "是否调整子代理执行方式？",
+                      "recommendedChoiceId": "keep-subagents",
+                      "choices": [
+                        {
+                          "id": "keep-subagents",
+                          "label": "按当前拆分继续",
+                          "recommended": true
+                        },
+                        {
+                          "id": "reduce-subagents",
+                          "label": "减少子代理"
+                        },
+                        {
+                          "id": "no-subagents",
+                          "label": "不使用子代理"
+                        }
+                      ],
+                      "other": {
+                        "id": "other",
+                        "label": "其他",
+                        "freeform": true
+                      },
+                      "allowOther": true
+                    }
+                  ],
                   "reason": "other",
-                  "snapshotId": "ask-loop-snapshot-1"
+                  "snapshotId": "ask-loop-snapshot-1",
+                  "crystalCandidates": [
+                    {
+                      "kind": "execution-job",
+                      "jobId": "job-1",
+                      "status": "needs-user",
+                      "progress": {
+                        "childTotal": 2,
+                        "childCompleted": 1,
+                        "childFailed": 0,
+                        "childNeedsUser": 1,
+                        "toolCalls": 3
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -3691,6 +4031,86 @@
               ],
               "nextBeforeTs": null
             }
+          }
+        }
+      },
+      "ExecutionJobList": {
+        "summary": "execution.job.list read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-execution-job-list-1",
+          "type": "execution.job.list",
+          "at": "2026-05-22T00:00:05.900Z",
+          "requestId": "req-execution-job-list-1",
+          "payload": {
+            "limit": 20,
+            "status": "all"
+          }
+        }
+      },
+      "ExecutionJobDetailGet": {
+        "summary": "execution.job.detail.get read-model query",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-execution-job-detail-1",
+          "type": "execution.job.detail.get",
+          "at": "2026-05-22T00:00:05.920Z",
+          "requestId": "req-execution-job-detail-1",
+          "payload": {
+            "jobId": "job-1"
+          }
+        }
+      },
+      "ExecutionJobSnapshot": {
+        "summary": "execution.job.snapshot read-model response",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-execution-job-snapshot-1",
+          "type": "execution.job.snapshot",
+          "at": "2026-05-22T00:00:05.950Z",
+          "requestId": "req-execution-job-list-1",
+          "correlationId": "env-execution-job-list-1",
+          "payload": {
+            "cache": {
+              "hit": false,
+              "key": "execution.job.list:{\"limit\":20,\"status\":\"all\"}",
+              "ttlMs": 1500
+            },
+            "data": [
+              {
+                "jobId": "job-1",
+                "requestId": "req-turn-loop-1",
+                "status": "needs-user",
+                "stage": "paused",
+                "progress": {
+                  "childTotal": 2,
+                  "childCompleted": 1,
+                  "childFailed": 0,
+                  "childNeedsUser": 1,
+                  "toolCalls": 3
+                },
+                "children": [
+                  {
+                    "childJobId": "child-job-1",
+                    "status": "completed",
+                    "toolCalls": 2
+                  },
+                  {
+                    "childJobId": "child-job-2",
+                    "status": "needs-user",
+                    "toolCalls": 1
+                  }
+                ],
+                "toolCounts": {
+                  "user.web.search": 2,
+                  "workspace.read": 1
+                },
+                "askId": "ask-loop-1",
+                "startedAt": "2026-05-22T00:00:01.000Z",
+                "updatedAt": "2026-05-22T00:00:05.900Z",
+                "crystalCandidateSummary": "Child helper needs user guidance before it can continue."
+              }
+            ]
           }
         }
       }

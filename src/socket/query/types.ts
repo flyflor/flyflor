@@ -28,6 +28,7 @@ export interface SocketQueryDetailInput {
     askId?: string;
     blackboardTurnId?: string;
     forkId?: string;
+    jobId?: string;
     replayId?: string;
     scopeId?: string;
     taskPlanId?: string;
@@ -75,6 +76,36 @@ export interface SocketQueryReplayInput extends SocketQueryOwnerInput {
 
 export interface SocketQueryCrystalInput extends SocketQueryPageInput {
     bucket?: string;
+}
+
+export interface SocketQueryExecutionJobInput extends SocketQueryPageInput {
+    jobId?: string;
+    ownerKey?: string;
+    requestId?: string;
+    status?: string;
+}
+
+export interface SocketExecutionJobSnapshot {
+    askId?: string;
+    children: Array<{
+        childJobId: string;
+        status?: string;
+        toolCalls: number;
+    }>;
+    completedAt?: string;
+    createdAt?: string;
+    crystalCandidateSummary?: string;
+    errorSummary?: string;
+    events: MemoryEventRecord[];
+    jobId: string;
+    parentJobId?: string;
+    progress?: Record<string, unknown>;
+    requestId?: string;
+    stage?: string;
+    startedAt?: string;
+    status?: string;
+    toolCounts: Record<string, number>;
+    updatedAt?: string;
 }
 
 export interface SocketAskSnapshot {
@@ -226,6 +257,8 @@ export interface SocketQueryComponentPort {
     historyDetail(input: SocketQueryDetailInput): Promise<SocketHistoryDetailSnapshot | undefined>;
     historyList(input: SocketQueryHistoryInput): GatewayControlHistoryTurnSnapshot[];
     initialize(): Promise<void>;
+    executionJobDetail(input: SocketQueryDetailInput): SocketExecutionJobSnapshot | undefined;
+    executionJobList(input: SocketQueryExecutionJobInput): SocketExecutionJobSnapshot[];
     replayDetail(input: SocketQueryDetailInput): Promise<SocketReplayDetailSnapshot | undefined>;
     replayList(input: SocketQueryReplayInput): ReplayRecord[];
     scopeDetail(input: SocketQueryDetailInput): SocketScopeDetailSnapshot | undefined;

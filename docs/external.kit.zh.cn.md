@@ -38,6 +38,51 @@ Flyflor 暴露三层工具。三层可以叠加，但 owner 必须分开：
 
 sidecar 可以接收 `external.tools.jsonc` 里的 opaque config，但语义判断仍只属于模型输出协议或 Executive 资源指标。sidecar 不得从自然语言文本推断用户意图。
 
+## 相对路径与稳定性快照
+
+`external.tools.jsonc` v2 保持工具包命令可迁移：
+
+```jsonc
+{
+  "schemaVersion": 2,
+  "sidecars": {
+    "web.search": {
+      "command": "./tools/packages/search-web/bin/flyflor",
+      "cwd": "app",
+      "tools": ["web.search", "web.fetch", "web.extract", "web.download"]
+    }
+  }
+}
+```
+
+持久化配置和 manifest 只能保存相对命令或 PATH 命令。`cwd: "app"` 基于 `paths.appRoot` 解析；`cwd: "project"` 作为兼容别名继续指向同一 app-root anchor。`cwd: "config"` 与 `cwd: "workspace"` 是显式替代 anchor。runtime 内部可以解析绝对路径做 IO，但不得把解析后的绝对路径写回配置或 manifest。
+
+发现阶段会给每个外挂工具 descriptor 挂结构化稳定性快照：
+
+- `discovery`: `configured | missing | disabled`
+- `manifest`: `valid | invalid`
+- `path`: `resolved | unresolved | outside-root-denied`，并带 mode/base/portable/rootSafe 细节
+- `version`: `compatible | incompatible | unknown`
+- `probe`: `healthy | degraded | unavailable | skipped`
+- `runtime`: `ready | failed | timed-out | schema-error`
+- `sandbox`: `allowed | approval-required | denied | quota-limited`
+- `upgrade`: `idle | staged | applying | rollback-required | failed`
+- `effective`: `available | degraded | unavailable | disabled`
+
+Tool Plan 会注册 descriptor 以保留 diagnostics，但只有 `effective=available` 或允许的 `degraded` 工具会对模型可见。unavailable、disabled、incompatible 或 upgrading 工具会以 `availability` 诊断隐藏，供 TUI/socket 渲染原因。
+
+## 升级事务
+
+外挂包升级由 `ExternalToolPackageManagerComponent` 负责。manager 先把 package metadata 写到 `tools/packages/.staging/<id>@<version>`，再写 `tools/external.tools.jsonc.next`，应用时把 staged package 移到 `tools/packages/<id>`，并把旧包保留到 `tools/packages/.previous`。
+
+规则：
+
+- package metadata 和生成的 next manifest 只使用相对命令。
+- 内核禁止 import package payload 实现文件。
+- upgrade state 会进入稳定性快照。
+- `upgrade=applying`、`rollback-required` 或 `failed` 时，工具对模型隐藏。
+- 高风险修复、重装或回滚决策应进入 ASK，不能从错误文本里字符匹配推断。
+
 ## 运行目录归属
 
 - `tools/external.tools.jsonc` 是内核加载的项目本地外挂工具 registry。

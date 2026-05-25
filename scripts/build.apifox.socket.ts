@@ -123,6 +123,8 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
         clientFrame("ReplayDetailGet", "03 TUI Read Queries", ["ReplayDetailSnapshot"], examples),
         clientFrame("ThoughtDetailGet", "03 TUI Read Queries", ["ThoughtSnapshot"], examples),
         clientFrame("CrystalList", "03 TUI Read Queries", ["CrystalSnapshot"], examples),
+        clientFrame("ExecutionJobList", "03 TUI Read Queries", ["ExecutionJobSnapshot"], examples),
+        clientFrame("ExecutionJobDetailGet", "03 TUI Read Queries", ["ExecutionJobSnapshot"], examples),
 
         serverFrame("HistorySnapshot", "04 TUI Snapshots", examples),
         serverFrame("HistoryDetailSnapshot", "04 TUI Snapshots", examples),
@@ -140,6 +142,7 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
         serverFrame("ReplayDetailSnapshot", "04 TUI Snapshots", examples),
         serverFrame("ThoughtSnapshot", "04 TUI Snapshots", examples),
         serverFrame("CrystalSnapshot", "04 TUI Snapshots", examples),
+        serverFrame("ExecutionJobSnapshot", "04 TUI Snapshots", examples),
 
         clientFrame(
             "EventSubscribe",

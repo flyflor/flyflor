@@ -65,7 +65,9 @@
         "ReplayList",
         "ReplayDetailGet",
         "ThoughtDetailGet",
-        "CrystalList"
+        "CrystalList",
+        "ExecutionJobList",
+        "ExecutionJobDetailGet"
       ]
     },
     {
@@ -86,7 +88,8 @@
         "ReplaySnapshot",
         "ReplayDetailSnapshot",
         "ThoughtSnapshot",
-        "CrystalSnapshot"
+        "CrystalSnapshot",
+        "ExecutionJobSnapshot"
       ]
     },
     {
@@ -2054,7 +2057,10 @@
                           "questionCount",
                           "questions",
                           "reason",
-                          "snapshotId"
+                          "snapshotId",
+                          "authority",
+                          "source",
+                          "resumePolicy"
                         ],
                         "properties": {
                           "choiceCount": {
@@ -2090,12 +2096,77 @@
                           },
                           "questions": {
                             "type": "array",
-                            "items": {}
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "prompt",
+                                "recommendedChoiceId",
+                                "choices",
+                                "other",
+                                "allowOther",
+                                "crystalCandidatePolicy"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "prompt": {
+                                  "type": "string"
+                                },
+                                "recommendedChoiceId": {
+                                  "type": "string"
+                                },
+                                "choices": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                  }
+                                },
+                                "other": {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "freeform"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "freeform": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "additionalProperties": true
+                                },
+                                "allowOther": {
+                                  "type": "boolean"
+                                },
+                                "crystalCandidatePolicy": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": true
+                            }
                           },
                           "reason": {
                             "type": "string"
                           },
                           "snapshotId": {
+                            "type": "string"
+                          },
+                          "authority": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "resumePolicy": {
                             "type": "string"
                           }
                         },
@@ -2232,10 +2303,65 @@
                 ],
                 "freeform": true,
                 "prompt": "这轮是否保留 wire v1 兼容？",
-                "questionCount": 1,
-                "questions": [],
-                "reason": "clarification",
-                "snapshotId": "ask-snapshot-1"
+                "questionCount": 2,
+                "questions": [
+                  {
+                    "id": "execution-strategy",
+                    "prompt": "下一步执行策略是什么？",
+                    "recommendedChoiceId": "continue-tools",
+                    "choices": [
+                      {
+                        "id": "continue-tools",
+                        "label": "继续执行",
+                        "value": "continue-tools",
+                        "description": "允许下一轮继续使用工具完成当前任务。",
+                        "recommended": true
+                      },
+                      {
+                        "id": "narrow-scope",
+                        "label": "缩小范围",
+                        "value": "narrow-scope",
+                        "description": "减少本轮目标，只处理最关键部分。"
+                      }
+                    ],
+                    "other": {
+                      "id": "other",
+                      "label": "其他",
+                      "freeform": true
+                    },
+                    "allowOther": true,
+                    "crystalCandidatePolicy": "candidate"
+                  },
+                  {
+                    "id": "budget-policy",
+                    "prompt": "是否调整下一轮工具预算？",
+                    "recommendedChoiceId": "increase-budget",
+                    "choices": [
+                      {
+                        "id": "increase-budget",
+                        "label": "增加一档预算",
+                        "value": "increase-budget",
+                        "recommended": true
+                      },
+                      {
+                        "id": "keep-budget",
+                        "label": "保持预算",
+                        "value": "keep-budget"
+                      }
+                    ],
+                    "other": {
+                      "id": "other",
+                      "label": "其他",
+                      "freeform": true
+                    },
+                    "allowOther": true
+                  }
+                ],
+                "reason": "policy-decision",
+                "snapshotId": "ask-snapshot-1",
+                "authority": "executive",
+                "source": "executive",
+                "resumePolicy": "continue"
               },
               "executiveToolLoop": {
                 "askId": "ask-loop-ask-1",
@@ -2669,7 +2795,9 @@
                           "resume",
                           "stepCount",
                           "stop",
-                          "toolBudgetExhausted"
+                          "toolBudgetExhausted",
+                          "jobId",
+                          "job"
                         ],
                         "properties": {
                           "askId": {
@@ -2705,6 +2833,58 @@
                           },
                           "toolBudgetExhausted": {
                             "type": "boolean"
+                          },
+                          "jobId": {
+                            "type": "string"
+                          },
+                          "job": {
+                            "type": "object",
+                            "required": [
+                              "jobId",
+                              "status",
+                              "stage",
+                              "progress"
+                            ],
+                            "properties": {
+                              "jobId": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "progress": {
+                                "type": "object",
+                                "required": [
+                                  "childTotal",
+                                  "childCompleted",
+                                  "childFailed",
+                                  "childNeedsUser",
+                                  "toolCalls"
+                                ],
+                                "properties": {
+                                  "childTotal": {
+                                    "type": "integer"
+                                  },
+                                  "childCompleted": {
+                                    "type": "integer"
+                                  },
+                                  "childFailed": {
+                                    "type": "integer"
+                                  },
+                                  "childNeedsUser": {
+                                    "type": "integer"
+                                  },
+                                  "toolCalls": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "additionalProperties": true
+                              }
+                            },
+                            "additionalProperties": true
                           }
                         },
                         "additionalProperties": true
@@ -2720,7 +2900,8 @@
                           "questionCount",
                           "questions",
                           "reason",
-                          "snapshotId"
+                          "snapshotId",
+                          "crystalCandidates"
                         ],
                         "properties": {
                           "choiceCount": {
@@ -2754,7 +2935,9 @@
                               "resume",
                               "stepCount",
                               "stop",
-                              "toolBudgetExhausted"
+                              "toolBudgetExhausted",
+                              "jobId",
+                              "job"
                             ],
                             "properties": {
                               "askId": {
@@ -2790,6 +2973,58 @@
                               },
                               "toolBudgetExhausted": {
                                 "type": "boolean"
+                              },
+                              "jobId": {
+                                "type": "string"
+                              },
+                              "job": {
+                                "type": "object",
+                                "required": [
+                                  "jobId",
+                                  "status",
+                                  "stage",
+                                  "progress"
+                                ],
+                                "properties": {
+                                  "jobId": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "stage": {
+                                    "type": "string"
+                                  },
+                                  "progress": {
+                                    "type": "object",
+                                    "required": [
+                                      "childTotal",
+                                      "childCompleted",
+                                      "childFailed",
+                                      "childNeedsUser",
+                                      "toolCalls"
+                                    ],
+                                    "properties": {
+                                      "childTotal": {
+                                        "type": "integer"
+                                      },
+                                      "childCompleted": {
+                                        "type": "integer"
+                                      },
+                                      "childFailed": {
+                                        "type": "integer"
+                                      },
+                                      "childNeedsUser": {
+                                        "type": "integer"
+                                      },
+                                      "toolCalls": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "additionalProperties": true
+                                  }
+                                },
+                                "additionalProperties": true
                               }
                             },
                             "additionalProperties": true
@@ -2805,13 +3040,121 @@
                           },
                           "questions": {
                             "type": "array",
-                            "items": {}
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "prompt",
+                                "recommendedChoiceId",
+                                "choices",
+                                "other",
+                                "allowOther",
+                                "crystalCandidatePolicy"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "prompt": {
+                                  "type": "string"
+                                },
+                                "recommendedChoiceId": {
+                                  "type": "string"
+                                },
+                                "choices": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                  }
+                                },
+                                "other": {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "freeform"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "freeform": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "additionalProperties": true
+                                },
+                                "allowOther": {
+                                  "type": "boolean"
+                                },
+                                "crystalCandidatePolicy": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": true
+                            }
                           },
                           "reason": {
                             "type": "string"
                           },
                           "snapshotId": {
                             "type": "string"
+                          },
+                          "crystalCandidates": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "kind",
+                                "jobId",
+                                "status",
+                                "progress"
+                              ],
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "jobId": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "progress": {
+                                  "type": "object",
+                                  "required": [
+                                    "childTotal",
+                                    "childCompleted",
+                                    "childFailed",
+                                    "childNeedsUser",
+                                    "toolCalls"
+                                  ],
+                                  "properties": {
+                                    "childTotal": {
+                                      "type": "integer"
+                                    },
+                                    "childCompleted": {
+                                      "type": "integer"
+                                    },
+                                    "childFailed": {
+                                      "type": "integer"
+                                    },
+                                    "childNeedsUser": {
+                                      "type": "integer"
+                                    },
+                                    "toolCalls": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "additionalProperties": true
+                                }
+                              },
+                              "additionalProperties": true
+                            }
                           }
                         },
                         "additionalProperties": true
@@ -2858,7 +3201,20 @@
                 },
                 "stepCount": 8,
                 "stop": "ask",
-                "toolBudgetExhausted": true
+                "toolBudgetExhausted": true,
+                "jobId": "job-1",
+                "job": {
+                  "jobId": "job-1",
+                  "status": "needs-user",
+                  "stage": "paused",
+                  "progress": {
+                    "childTotal": 2,
+                    "childCompleted": 1,
+                    "childFailed": 0,
+                    "childNeedsUser": 1,
+                    "toolCalls": 3
+                  }
+                }
               },
               "ask": {
                 "choiceCount": 1,
@@ -2878,14 +3234,121 @@
                   },
                   "stepCount": 8,
                   "stop": "ask",
-                  "toolBudgetExhausted": true
+                  "toolBudgetExhausted": true,
+                  "jobId": "job-1",
+                  "job": {
+                    "jobId": "job-1",
+                    "status": "needs-user",
+                    "stage": "paused",
+                    "progress": {
+                      "childTotal": 2,
+                      "childCompleted": 1,
+                      "childFailed": 0,
+                      "childNeedsUser": 1,
+                      "toolCalls": 3
+                    }
+                  }
                 },
                 "freeform": true,
                 "prompt": "工具预算耗尽，是否继续？",
-                "questionCount": 0,
-                "questions": [],
+                "questionCount": 3,
+                "questions": [
+                  {
+                    "id": "execution-strategy",
+                    "prompt": "下一步执行策略是什么？",
+                    "recommendedChoiceId": "continue-tools",
+                    "choices": [
+                      {
+                        "id": "continue-tools",
+                        "label": "继续执行",
+                        "recommended": true
+                      },
+                      {
+                        "id": "narrow-scope",
+                        "label": "缩小范围"
+                      },
+                      {
+                        "id": "stop-and-crystalize",
+                        "label": "停止并结晶"
+                      }
+                    ],
+                    "other": {
+                      "id": "other",
+                      "label": "其他",
+                      "freeform": true
+                    },
+                    "allowOther": true,
+                    "crystalCandidatePolicy": "candidate"
+                  },
+                  {
+                    "id": "budget-policy",
+                    "prompt": "是否调整下一轮工具预算？",
+                    "recommendedChoiceId": "increase-budget",
+                    "choices": [
+                      {
+                        "id": "increase-budget",
+                        "label": "增加一档预算",
+                        "recommended": true
+                      },
+                      {
+                        "id": "keep-budget",
+                        "label": "保持预算"
+                      },
+                      {
+                        "id": "user-budget",
+                        "label": "自定义预算"
+                      }
+                    ],
+                    "other": {
+                      "id": "other",
+                      "label": "其他",
+                      "freeform": true
+                    },
+                    "allowOther": true
+                  },
+                  {
+                    "id": "subagent-policy",
+                    "prompt": "是否调整子代理执行方式？",
+                    "recommendedChoiceId": "keep-subagents",
+                    "choices": [
+                      {
+                        "id": "keep-subagents",
+                        "label": "按当前拆分继续",
+                        "recommended": true
+                      },
+                      {
+                        "id": "reduce-subagents",
+                        "label": "减少子代理"
+                      },
+                      {
+                        "id": "no-subagents",
+                        "label": "不使用子代理"
+                      }
+                    ],
+                    "other": {
+                      "id": "other",
+                      "label": "其他",
+                      "freeform": true
+                    },
+                    "allowOther": true
+                  }
+                ],
                 "reason": "other",
-                "snapshotId": "ask-loop-snapshot-1"
+                "snapshotId": "ask-loop-snapshot-1",
+                "crystalCandidates": [
+                  {
+                    "kind": "execution-job",
+                    "jobId": "job-1",
+                    "status": "needs-user",
+                    "progress": {
+                      "childTotal": 2,
+                      "childCompleted": 1,
+                      "childFailed": 0,
+                      "childNeedsUser": 1,
+                      "toolCalls": 3
+                    }
+                  }
+                ]
               }
             }
           }
@@ -4387,6 +4850,145 @@
         "requestId": "req-crystal-list-1",
         "payload": {
           "limit": 20
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
+        "ExecutionJobSnapshot"
+      ],
+      "folder": "03 TUI Read Queries",
+      "name": "ExecutionJobList",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "execution.job.list"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "limit",
+              "status"
+            ],
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "execution.job.list",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-execution-job-list-1",
+        "type": "execution.job.list",
+        "at": "2026-05-22T00:00:05.900Z",
+        "requestId": "req-execution-job-list-1",
+        "payload": {
+          "limit": 20,
+          "status": "all"
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
+        "ExecutionJobSnapshot"
+      ],
+      "folder": "03 TUI Read Queries",
+      "name": "ExecutionJobDetailGet",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "execution.job.detail.get"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "jobId"
+            ],
+            "properties": {
+              "jobId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "execution.job.detail.get",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-execution-job-detail-1",
+        "type": "execution.job.detail.get",
+        "at": "2026-05-22T00:00:05.920Z",
+        "requestId": "req-execution-job-detail-1",
+        "payload": {
+          "jobId": "job-1"
         }
       }
     },
@@ -6971,6 +7573,246 @@
       }
     },
     {
+      "direction": "server->client",
+      "expected": [],
+      "folder": "04 TUI Snapshots",
+      "name": "ExecutionJobSnapshot",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "correlationId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "execution.job.snapshot"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "cache",
+              "data"
+            ],
+            "properties": {
+              "cache": {
+                "type": "object",
+                "required": [
+                  "hit",
+                  "key",
+                  "ttlMs"
+                ],
+                "properties": {
+                  "hit": {
+                    "type": "boolean"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "ttlMs": {
+                    "type": "integer"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "jobId",
+                    "requestId",
+                    "status",
+                    "stage",
+                    "progress",
+                    "children",
+                    "toolCounts",
+                    "askId",
+                    "startedAt",
+                    "updatedAt",
+                    "crystalCandidateSummary"
+                  ],
+                  "properties": {
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "type": "string"
+                    },
+                    "progress": {
+                      "type": "object",
+                      "required": [
+                        "childTotal",
+                        "childCompleted",
+                        "childFailed",
+                        "childNeedsUser",
+                        "toolCalls"
+                      ],
+                      "properties": {
+                        "childTotal": {
+                          "type": "integer"
+                        },
+                        "childCompleted": {
+                          "type": "integer"
+                        },
+                        "childFailed": {
+                          "type": "integer"
+                        },
+                        "childNeedsUser": {
+                          "type": "integer"
+                        },
+                        "toolCalls": {
+                          "type": "integer"
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "childJobId",
+                          "status",
+                          "toolCalls"
+                        ],
+                        "properties": {
+                          "childJobId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "toolCalls": {
+                            "type": "integer"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    },
+                    "toolCounts": {
+                      "type": "object",
+                      "required": [
+                        "user.web.search",
+                        "workspace.read"
+                      ],
+                      "properties": {
+                        "user.web.search": {
+                          "type": "integer"
+                        },
+                        "workspace.read": {
+                          "type": "integer"
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "askId": {
+                      "type": "string"
+                    },
+                    "startedAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "crystalCandidateSummary": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "execution.job.snapshot",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-execution-job-snapshot-1",
+        "type": "execution.job.snapshot",
+        "at": "2026-05-22T00:00:05.950Z",
+        "requestId": "req-execution-job-list-1",
+        "correlationId": "env-execution-job-list-1",
+        "payload": {
+          "cache": {
+            "hit": false,
+            "key": "execution.job.list:{\"limit\":20,\"status\":\"all\"}",
+            "ttlMs": 1500
+          },
+          "data": [
+            {
+              "jobId": "job-1",
+              "requestId": "req-turn-loop-1",
+              "status": "needs-user",
+              "stage": "paused",
+              "progress": {
+                "childTotal": 2,
+                "childCompleted": 1,
+                "childFailed": 0,
+                "childNeedsUser": 1,
+                "toolCalls": 3
+              },
+              "children": [
+                {
+                  "childJobId": "child-job-1",
+                  "status": "completed",
+                  "toolCalls": 2
+                },
+                {
+                  "childJobId": "child-job-2",
+                  "status": "needs-user",
+                  "toolCalls": 1
+                }
+              ],
+              "toolCounts": {
+                "user.web.search": 2,
+                "workspace.read": 1
+              },
+              "askId": "ask-loop-1",
+              "startedAt": "2026-05-22T00:00:01.000Z",
+              "updatedAt": "2026-05-22T00:00:05.900Z",
+              "crystalCandidateSummary": "Child helper needs user guidance before it can continue."
+            }
+          ]
+        }
+      }
+    },
+    {
       "direction": "client->server",
       "expected": [
         "EventPublish",
@@ -7974,10 +8816,65 @@
               ],
               "freeform": true,
               "prompt": "这轮是否保留 wire v1 兼容？",
-              "questionCount": 1,
-              "questions": [],
-              "reason": "clarification",
-              "snapshotId": "ask-snapshot-1"
+              "questionCount": 2,
+              "questions": [
+                {
+                  "id": "execution-strategy",
+                  "prompt": "下一步执行策略是什么？",
+                  "recommendedChoiceId": "continue-tools",
+                  "choices": [
+                    {
+                      "id": "continue-tools",
+                      "label": "继续执行",
+                      "value": "continue-tools",
+                      "description": "允许下一轮继续使用工具完成当前任务。",
+                      "recommended": true
+                    },
+                    {
+                      "id": "narrow-scope",
+                      "label": "缩小范围",
+                      "value": "narrow-scope",
+                      "description": "减少本轮目标，只处理最关键部分。"
+                    }
+                  ],
+                  "other": {
+                    "id": "other",
+                    "label": "其他",
+                    "freeform": true
+                  },
+                  "allowOther": true,
+                  "crystalCandidatePolicy": "candidate"
+                },
+                {
+                  "id": "budget-policy",
+                  "prompt": "是否调整下一轮工具预算？",
+                  "recommendedChoiceId": "increase-budget",
+                  "choices": [
+                    {
+                      "id": "increase-budget",
+                      "label": "增加一档预算",
+                      "value": "increase-budget",
+                      "recommended": true
+                    },
+                    {
+                      "id": "keep-budget",
+                      "label": "保持预算",
+                      "value": "keep-budget"
+                    }
+                  ],
+                  "other": {
+                    "id": "other",
+                    "label": "其他",
+                    "freeform": true
+                  },
+                  "allowOther": true
+                }
+              ],
+              "reason": "policy-decision",
+              "snapshotId": "ask-snapshot-1",
+              "authority": "executive",
+              "source": "executive",
+              "resumePolicy": "continue"
             },
             "executiveToolLoop": {
               "askId": "ask-loop-ask-1",
@@ -8101,7 +8998,20 @@
               },
               "stepCount": 8,
               "stop": "ask",
-              "toolBudgetExhausted": true
+              "toolBudgetExhausted": true,
+              "jobId": "job-1",
+              "job": {
+                "jobId": "job-1",
+                "status": "needs-user",
+                "stage": "paused",
+                "progress": {
+                  "childTotal": 2,
+                  "childCompleted": 1,
+                  "childFailed": 0,
+                  "childNeedsUser": 1,
+                  "toolCalls": 3
+                }
+              }
             },
             "ask": {
               "choiceCount": 1,
@@ -8121,14 +9031,121 @@
                 },
                 "stepCount": 8,
                 "stop": "ask",
-                "toolBudgetExhausted": true
+                "toolBudgetExhausted": true,
+                "jobId": "job-1",
+                "job": {
+                  "jobId": "job-1",
+                  "status": "needs-user",
+                  "stage": "paused",
+                  "progress": {
+                    "childTotal": 2,
+                    "childCompleted": 1,
+                    "childFailed": 0,
+                    "childNeedsUser": 1,
+                    "toolCalls": 3
+                  }
+                }
               },
               "freeform": true,
               "prompt": "工具预算耗尽，是否继续？",
-              "questionCount": 0,
-              "questions": [],
+              "questionCount": 3,
+              "questions": [
+                {
+                  "id": "execution-strategy",
+                  "prompt": "下一步执行策略是什么？",
+                  "recommendedChoiceId": "continue-tools",
+                  "choices": [
+                    {
+                      "id": "continue-tools",
+                      "label": "继续执行",
+                      "recommended": true
+                    },
+                    {
+                      "id": "narrow-scope",
+                      "label": "缩小范围"
+                    },
+                    {
+                      "id": "stop-and-crystalize",
+                      "label": "停止并结晶"
+                    }
+                  ],
+                  "other": {
+                    "id": "other",
+                    "label": "其他",
+                    "freeform": true
+                  },
+                  "allowOther": true,
+                  "crystalCandidatePolicy": "candidate"
+                },
+                {
+                  "id": "budget-policy",
+                  "prompt": "是否调整下一轮工具预算？",
+                  "recommendedChoiceId": "increase-budget",
+                  "choices": [
+                    {
+                      "id": "increase-budget",
+                      "label": "增加一档预算",
+                      "recommended": true
+                    },
+                    {
+                      "id": "keep-budget",
+                      "label": "保持预算"
+                    },
+                    {
+                      "id": "user-budget",
+                      "label": "自定义预算"
+                    }
+                  ],
+                  "other": {
+                    "id": "other",
+                    "label": "其他",
+                    "freeform": true
+                  },
+                  "allowOther": true
+                },
+                {
+                  "id": "subagent-policy",
+                  "prompt": "是否调整子代理执行方式？",
+                  "recommendedChoiceId": "keep-subagents",
+                  "choices": [
+                    {
+                      "id": "keep-subagents",
+                      "label": "按当前拆分继续",
+                      "recommended": true
+                    },
+                    {
+                      "id": "reduce-subagents",
+                      "label": "减少子代理"
+                    },
+                    {
+                      "id": "no-subagents",
+                      "label": "不使用子代理"
+                    }
+                  ],
+                  "other": {
+                    "id": "other",
+                    "label": "其他",
+                    "freeform": true
+                  },
+                  "allowOther": true
+                }
+              ],
               "reason": "other",
-              "snapshotId": "ask-loop-snapshot-1"
+              "snapshotId": "ask-loop-snapshot-1",
+              "crystalCandidates": [
+                {
+                  "kind": "execution-job",
+                  "jobId": "job-1",
+                  "status": "needs-user",
+                  "progress": {
+                    "childTotal": 2,
+                    "childCompleted": 1,
+                    "childFailed": 0,
+                    "childNeedsUser": 1,
+                    "toolCalls": 3
+                  }
+                }
+              ]
             }
           }
         }
@@ -8580,6 +9597,77 @@
           ],
           "nextBeforeTs": null
         }
+      }
+    },
+    "ExecutionJobList": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-execution-job-list-1",
+      "type": "execution.job.list",
+      "at": "2026-05-22T00:00:05.900Z",
+      "requestId": "req-execution-job-list-1",
+      "payload": {
+        "limit": 20,
+        "status": "all"
+      }
+    },
+    "ExecutionJobDetailGet": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-execution-job-detail-1",
+      "type": "execution.job.detail.get",
+      "at": "2026-05-22T00:00:05.920Z",
+      "requestId": "req-execution-job-detail-1",
+      "payload": {
+        "jobId": "job-1"
+      }
+    },
+    "ExecutionJobSnapshot": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-execution-job-snapshot-1",
+      "type": "execution.job.snapshot",
+      "at": "2026-05-22T00:00:05.950Z",
+      "requestId": "req-execution-job-list-1",
+      "correlationId": "env-execution-job-list-1",
+      "payload": {
+        "cache": {
+          "hit": false,
+          "key": "execution.job.list:{\"limit\":20,\"status\":\"all\"}",
+          "ttlMs": 1500
+        },
+        "data": [
+          {
+            "jobId": "job-1",
+            "requestId": "req-turn-loop-1",
+            "status": "needs-user",
+            "stage": "paused",
+            "progress": {
+              "childTotal": 2,
+              "childCompleted": 1,
+              "childFailed": 0,
+              "childNeedsUser": 1,
+              "toolCalls": 3
+            },
+            "children": [
+              {
+                "childJobId": "child-job-1",
+                "status": "completed",
+                "toolCalls": 2
+              },
+              {
+                "childJobId": "child-job-2",
+                "status": "needs-user",
+                "toolCalls": 1
+              }
+            ],
+            "toolCounts": {
+              "user.web.search": 2,
+              "workspace.read": 1
+            },
+            "askId": "ask-loop-1",
+            "startedAt": "2026-05-22T00:00:01.000Z",
+            "updatedAt": "2026-05-22T00:00:05.900Z",
+            "crystalCandidateSummary": "Child helper needs user guidance before it can continue."
+          }
+        ]
       }
     },
     "AskDetailGet": {

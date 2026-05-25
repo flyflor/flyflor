@@ -1,4 +1,5 @@
 import { ExecutiveLoopGuardReason } from "../protocol/contracts/index.ts";
+import type { ExecutionJobSnapshot } from "./job/index.ts";
 import { ExecutiveLoopGuard } from "./loop.guard.ts";
 import type { ExecutiveLoopGuardDecision, ExecutiveLoopGuardSnapshot } from "./types.ts";
 
@@ -64,6 +65,14 @@ export interface ExecutiveToolRuntimeCallbacks<TCall extends ExecutiveToolCall, 
     knownToolNames(): ReadonlySet<string>;
     onBudgetBlocked?(call: TCall, decision: ExecutiveToolRuntimeBudgetDecision): TExecution;
     onExecution?(execution: TExecution, options: { loopGuardBlocked: boolean }): void;
+    onExecutionAskRequired?(
+        execution: TExecution,
+        context: {
+            budget: ExecutiveToolRuntimeBudgetSnapshot;
+            loopGuardSnapshot: ExecutiveLoopGuardSnapshot;
+            stepCount: number;
+        },
+    ): ExecutiveToolRuntimeAskRequired | undefined;
     onLoopGuardBlocked?(call: TCall, decision: ExecutiveLoopGuardDecision): TExecution;
     parse(raw: string): { calls: TCall[]; text: string };
     renderResults(executions: TExecution[]): string;
@@ -95,7 +104,10 @@ export interface ExecutiveToolRuntimeAskRequired {
     };
     readonly loopGuardReason?: ExecutiveLoopGuardReason;
     readonly loopGuardSnapshot?: ExecutiveLoopGuardSnapshot;
+    readonly job?: ExecutionJobSnapshot;
+    readonly jobId?: string;
     readonly message: string;
+    readonly toolStability?: Record<string, unknown>;
     readonly pause: {
         readonly mode: "pause";
         readonly options: readonly [
@@ -187,6 +199,20 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             }
 
             allExecutions.push(...blocked, ...executions, ...budgeted.blocked, ...resultBlocked);
+            const executionAsk = this.firstExecutionAskRequired(
+                [...executions, ...budgeted.blocked, ...resultBlocked],
+                input.callbacks,
+                budget.snapshot(),
+                loopGuard.snapshot(),
+                turn + 1,
+            );
+            if (executionAsk) {
+                return {
+                    askRequired: executionAsk,
+                    rawText: parsed.text || raw,
+                    executions: allExecutions,
+                };
+            }
             if (budgeted.blocked.length > 0) {
                 const decision = budgeted.decisions.at(-1);
                 const message = decision?.message ?? "Executive tool budget was exhausted.";
@@ -257,6 +283,25 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
             rawText: "",
             executions: allExecutions,
         };
+    }
+
+    private firstExecutionAskRequired<TCall extends ExecutiveToolCall, TExecution extends ExecutiveToolExecution<TCall>>(
+        executions: readonly TExecution[],
+        callbacks: ExecutiveToolRuntimeCallbacks<TCall, TExecution>,
+        budget: ExecutiveToolRuntimeBudgetSnapshot,
+        loopGuardSnapshot: ExecutiveLoopGuardSnapshot,
+        stepCount: number,
+    ): ExecutiveToolRuntimeAskRequired | undefined {
+        if (!callbacks.onExecutionAskRequired) return undefined;
+        for (const execution of executions) {
+            const askRequired = callbacks.onExecutionAskRequired(execution, {
+                budget,
+                loopGuardSnapshot,
+                stepCount,
+            });
+            if (askRequired) return askRequired;
+        }
+        return undefined;
     }
 
     private applyBudget(

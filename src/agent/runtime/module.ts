@@ -13,7 +13,11 @@ import type {
     TaskPlanRecord,
 } from "../../protocol/contracts/index.ts";
 import {
+    AskAuthority,
+    AskCrystalCandidatePolicy,
     AskReason,
+    AskResumePolicy,
+    AskSource,
     BlackboardMode,
     BlackboardTurnStatus,
     CapabilityExecutionKind,
@@ -40,11 +44,12 @@ import {
     type ExternalToolDefinition,
     type ManifestToolDefinition,
 } from "../../executive/index.ts";
+import { ExecutionJobComponent } from "../../executive/index.ts";
 import { Runtime as RuntimeBoundary } from "../../components/index.ts";
 import { Module } from "../di/decorators/index.ts";
 import { event, RuntimeEventType, type EventSink } from "../../events/index.ts";
 import { parseMemoryActions } from "../../cognitive/hippocampus/memory/actions/index.ts";
-import { AgentAskParser } from "../../cognitive/hippocampus/ask/index.ts";
+import { AskComponent } from "../../cognitive/hippocampus/ask/index.ts";
 import {
     ContextForkMergeKind,
     ContinuationGhostStore,
@@ -132,13 +137,7 @@ import {
 import { ScopeRecallComponent, ScopeRecallDecisionKind, type ScopeRecallDecision } from "../../cognitive/hippocampus/scope/index.ts";
 import { selectRuntimeSkills } from "./skills/index.ts";
 import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/index.ts";
-import {
-    buildAskMetadata,
-    elapsed,
-    scopeConstraintIdForContext,
-    renderAskReplyText,
-    renderUserContentWithAttachments,
-} from "./turn/index.ts";
+import { elapsed, scopeConstraintIdForContext, renderUserContentWithAttachments } from "./turn/index.ts";
 import { ReflectionWorker } from "./reflection/worker.ts";
 import { RuntimeSubagentBatchComponent, RuntimeSubtaskPlanComponent, SUBAGENT_BATCH_KEY } from "./subagent/index.ts";
 
@@ -289,6 +288,8 @@ interface RuntimeExecutiveAskRequired {
     budget?: ExecutiveToolRuntimeAskRequired["budget"];
     budgetExhaustedReason?: ExecutiveToolRuntimeAskRequired["budgetExhaustedReason"];
     crystalCandidate: ExecutiveToolRuntimeAskRequired["crystalCandidate"];
+    job?: ExecutiveToolRuntimeAskRequired["job"];
+    jobId?: ExecutiveToolRuntimeAskRequired["jobId"];
     loopGuardReason?: ExecutiveToolRuntimeAskRequired["loopGuardReason"];
     loopGuardSnapshot?: ExecutiveToolRuntimeAskRequired["loopGuardSnapshot"];
     message: string;
@@ -297,6 +298,7 @@ interface RuntimeExecutiveAskRequired {
     stepCount: number;
     stop: "ask";
     toolBudgetExhausted?: true;
+    toolStability?: ExecutiveToolRuntimeAskRequired["toolStability"];
 }
 
 @Module()
@@ -314,7 +316,7 @@ export class RuntimeModule extends RuntimeBoundary {
     protected readonly planningRoute: RuntimePlanningRouteComponent;
     protected readonly blackboardRoute: RuntimeBlackboardRouteComponent;
     protected readonly blackboardOutput: RuntimeBlackboardOutputComponent;
-    protected readonly agentAskParser: AgentAskParser;
+    protected readonly ask: AskComponent;
     protected readonly continuationDecisionParser: ContinuationDecisionParser;
     protected readonly identityAppendParser: IdentityAppendParser;
     protected readonly fastRouteEvaluator: FastRouteEvaluator;
@@ -358,7 +360,7 @@ export class RuntimeModule extends RuntimeBoundary {
         this.planningRoute = new RuntimePlanningRouteComponent();
         this.blackboardRoute = new RuntimeBlackboardRouteComponent();
         this.blackboardOutput = new RuntimeBlackboardOutputComponent();
-        this.agentAskParser = new AgentAskParser();
+        this.ask = new AskComponent();
         this.continuationDecisionParser = new ContinuationDecisionParser();
         this.identityAppendParser = new IdentityAppendParser();
         this.fastRouteEvaluator = new FastRouteEvaluator();
@@ -367,7 +369,12 @@ export class RuntimeModule extends RuntimeBoundary {
         this.mcpToolNeed = new RuntimeMcpToolNeedComponent();
         this.mcpToolExecutor = new RuntimeMcpToolExecutor(config, events, this.sandboxQuota);
         this.mcpCapabilityReader = new RuntimeMcpCapabilityReader(config, events, this.sandboxQuota, this.mcpToolPlan);
-        this.subagentBatch = new RuntimeSubagentBatchComponent(events);
+        this.subagentBatch = new RuntimeSubagentBatchComponent(
+            events,
+            ExecutionJobComponent.withLedger((jobEvent) => {
+                this.memory.recordExecutionJobEvent(jobEvent);
+            }),
+        );
         this.subtaskPlan = new RuntimeSubtaskPlanComponent();
         this.continuationGhosts = new ContinuationGhostStore(config.paths.storageDir);
         this.scopeRecall = new ScopeRecallComponent();
@@ -557,11 +564,11 @@ export class RuntimeModule extends RuntimeBoundary {
         return {
             messageId: crypto.randomUUID(),
             route: message.route,
-            text: renderAskReplyText(ask),
+            text: this.ask.renderReplyText(ask),
             metadata: {
                 kind: "ask" as const,
                 behaviorSnapshotId: `behavior-${context.requestId}`,
-                ask: buildAskMetadata(ask, `behavior-${context.requestId}`),
+                ask: this.ask.buildMetadata(ask, `behavior-${context.requestId}`),
                 continuation: {
                     resume: "failed",
                     reason,
@@ -1037,11 +1044,11 @@ export class RuntimeModule extends RuntimeBoundary {
                 ask,
                 reply: {
                     ...base.reply,
-                    text: renderAskReplyText(ask),
+                    text: this.ask.renderReplyText(ask),
                     metadata: {
                         ...base.reply.metadata,
                         kind: "ask",
-                        ask: buildAskMetadata(ask, behaviorSnapshotId),
+                        ask: this.ask.buildMetadata(ask, behaviorSnapshotId),
                         planningGate: this.planningGateMetadata(decision, prepared.interactionMode),
                     },
                 },
@@ -1504,7 +1511,9 @@ export class RuntimeModule extends RuntimeBoundary {
             gitToolset,
             processToolset,
             requestId: context.requestId,
+            ownerKey: continuityOwnerKey(message, context),
             sandbox,
+            sourceKey: sourceKeyForMessage(message, context),
             subagentBatch: this.subagentBatch,
             subagentInitialMessages: modelMessages,
             subagentGenerate: async (messages, _turn) => this.model.generate(messages as ModelMessage[], { signal: options.signal }),
@@ -1530,6 +1539,8 @@ export class RuntimeModule extends RuntimeBoundary {
                     RuntimeEventType.ExecutiveLoopPaused,
                     {
                         askId: generated.askRequired?.askId,
+                        job: generated.askRequired?.job,
+                        jobId: generated.askRequired?.jobId,
                         loopGuardReason: generated.askRequired?.loopGuardReason,
                         loopGuardSnapshot: generated.askRequired?.loopGuardSnapshot,
                         stepCount: generated.askRequired?.stepCount,
@@ -1588,7 +1599,7 @@ export class RuntimeModule extends RuntimeBoundary {
         // LF-R3 Ask 一等公民：从剥离 memory_actions + continuation_decisions + identity 后的剩余文本里解析
         // <agent_question> 块。ask 与 reply 同轮互斥；若发现 ask，可见正文用 ask.prompt
         // 渲染，原模型 reply 文本忽略。
-        const askParsed = this.agentAskParser.parse(planningParsed.text);
+        const askParsed = this.ask.parse(planningParsed.text);
         const visibleSource = this.visibleReplyTextFromModelOutput(askParsed.text, rawText);
         if (askParsed.dropped > 0) {
             this.events.publish(
@@ -1630,12 +1641,12 @@ export class RuntimeModule extends RuntimeBoundary {
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
-            text: ask ? renderAskReplyText(ask) : this.blackboardOutput.renderReplyText(visibleText, blackboardRun),
+            text: ask ? this.ask.renderReplyText(ask) : this.blackboardOutput.renderReplyText(visibleText, blackboardRun),
             metadata: {
                 ...(ask
                     ? {
                           kind: "ask" as const,
-                          ask: buildAskMetadata(ask, behaviorSnapshotId, generated.askRequired),
+                          ask: this.ask.buildMetadata(ask, behaviorSnapshotId, generated.askRequired),
                       }
                     : { kind: "reply" as const }),
                 behaviorSnapshotId,
@@ -1717,10 +1728,10 @@ export class RuntimeModule extends RuntimeBoundary {
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
-            text: renderAskReplyText(ask),
+            text: this.ask.renderReplyText(ask),
             metadata: {
                 kind: "ask" as const,
-                ask: buildAskMetadata(ask, behaviorSnapshotId, executiveAskRequired),
+                ask: this.ask.buildMetadata(ask, behaviorSnapshotId, executiveAskRequired),
                 behaviorSnapshotId,
                 blackboard: blackboardRun
                     ? this.blackboardOutput.metadataSnapshot(blackboardRun)
@@ -2019,20 +2030,126 @@ export class RuntimeModule extends RuntimeBoundary {
                 : "执行层连续遇到工具阻断。请补充下一步执行策略或调整约束后再继续。";
         const prompt = progressSummary ? `${basePrompt}\n\n已记录的工具进度：${progressSummary}` : basePrompt;
         return {
+            authority: AskAuthority.Executive,
             reason: AskReason.PolicyDecision,
+            resumePolicy: askRequired.toolBudgetExhausted === true ? AskResumePolicy.Continue : AskResumePolicy.Replan,
+            source: askRequired.toolStability ? AskSource.ToolStability : AskSource.Executive,
             prompt,
+            questions: [
+                {
+                    id: "execution-strategy",
+                    prompt: "下一步执行策略是什么？",
+                    choices: [
+                        {
+                            id: "continue-tools",
+                            label: "继续执行",
+                            value: "continue-tools",
+                            description: "允许下一轮继续使用工具完成当前任务。",
+                            recommended: true,
+                            executionPatch: { mode: "continue" },
+                        },
+                        {
+                            id: "narrow-scope",
+                            label: "缩小范围",
+                            value: "narrow-scope",
+                            description: "减少本轮目标，只处理最关键部分。",
+                            executionPatch: { mode: "narrow" },
+                        },
+                        {
+                            id: "stop-and-crystalize",
+                            label: "停止并结晶",
+                            value: "stop-and-crystalize",
+                            description: "停止当前执行循环，并把已得到的执行经验作为候选沉淀。",
+                            executionPatch: { mode: "stop" },
+                        },
+                    ],
+                    recommendedChoiceId: "continue-tools",
+                    other: { id: "other", label: "其他", freeform: true },
+                    allowOther: true,
+                    crystalCandidatePolicy: AskCrystalCandidatePolicy.Candidate,
+                    rationale: "executive-loop-strategy",
+                },
+                {
+                    id: "budget-policy",
+                    prompt: "是否调整下一轮工具预算？",
+                    choices: [
+                        {
+                            id: "increase-budget",
+                            label: "增加一档预算",
+                            value: "increase-budget",
+                            description: "适合任务仍然明确、只是当前额度不足的情况。",
+                            recommended: askRequired.toolBudgetExhausted === true,
+                            executionPatch: { budget: "increase-one-tier" },
+                        },
+                        {
+                            id: "keep-budget",
+                            label: "保持预算",
+                            value: "keep-budget",
+                            description: "适合先让模型重新规划，不扩大执行面。",
+                            recommended: askRequired.toolBudgetExhausted !== true,
+                            executionPatch: { budget: "keep" },
+                        },
+                        {
+                            id: "user-budget",
+                            label: "自定义预算",
+                            value: "user-budget",
+                            description: "你可以在其他输入里指定更具体的工具轮数或限制。",
+                            executionPatch: { budget: "user-defined" },
+                        },
+                    ],
+                    recommendedChoiceId: askRequired.toolBudgetExhausted === true ? "increase-budget" : "keep-budget",
+                    other: { id: "other", label: "其他", freeform: true },
+                    allowOther: true,
+                    rationale: "executive-loop-budget",
+                },
+                {
+                    id: "subagent-policy",
+                    prompt: "是否调整子代理执行方式？",
+                    choices: [
+                        {
+                            id: "keep-subagents",
+                            label: "按当前拆分继续",
+                            value: "keep-subagents",
+                            description: "保留已规划的子任务和工具隔离策略。",
+                            recommended: true,
+                            executionPatch: { subagents: "keep" },
+                        },
+                        {
+                            id: "reduce-subagents",
+                            label: "减少子代理",
+                            value: "reduce-subagents",
+                            description: "降低并发和上下文分叉，适合需要更稳的串行推进。",
+                            executionPatch: { subagents: "reduce" },
+                        },
+                        {
+                            id: "no-subagents",
+                            label: "不使用子代理",
+                            value: "no-subagents",
+                            description: "回到单执行循环，适合任务范围较小或需要强一致判断。",
+                            executionPatch: { subagents: "disable" },
+                        },
+                    ],
+                    recommendedChoiceId: "keep-subagents",
+                    other: { id: "other", label: "其他", freeform: true },
+                    allowOther: true,
+                    rationale: "executive-loop-subagent-policy",
+                },
+            ],
             choices: [
                 {
+                    id: "continue-tools",
                     label: "继续执行",
                     value: "continue-tools",
                     description: "允许下一轮继续使用工具完成当前任务。",
                 },
                 {
+                    id: "narrow-scope",
                     label: "缩小范围",
                     value: "narrow-scope",
                     description: "减少本轮目标，只处理最关键部分。",
                 },
                 {
+                    id: "stop-and-crystalize",
                     label: "停止并结晶",
                     value: "stop-and-crystalize",
                     description: "停止当前执行循环，并把已得到的执行经验作为候选沉淀。",
@@ -2040,6 +2157,26 @@ export class RuntimeModule extends RuntimeBoundary {
             ],
             freeform: true,
             relatedIds: failureSummary,
+            ...(askRequired.job || askRequired.toolStability
+                ? {
+                      crystalCandidates: [
+                          ...(askRequired.job
+                              ? [{
+                                    kind: "execution-job",
+                                    jobId: askRequired.jobId,
+                                    progress: askRequired.job.progress,
+                                    status: askRequired.job.status,
+                                }]
+                              : []),
+                          ...(askRequired.toolStability
+                              ? [{
+                                    kind: "tool-stability",
+                                    stability: askRequired.toolStability,
+                                }]
+                              : []),
+                      ],
+                  }
+                : {}),
             rationale: askRequired.toolBudgetExhausted === true
                 ? "executive-tool-loop:budget"
                 : `executive-tool-loop:guard:${askRequired.loopGuardReason ?? "blocked"}`,
@@ -2092,7 +2229,9 @@ export class RuntimeModule extends RuntimeBoundary {
             context: enrichedContext,
             visibleText,
             blackboardRun,
-            executiveToolLoop: generated.executiveAskRequired,
+            executiveToolLoop: generated.executiveAskRequired
+                ? { ...generated.executiveAskRequired, ...(generated.ask ? { ask: generated.ask } : {}) }
+                : undefined,
             provenance: {
                 mcpCalls: mcpCallProvenance,
                 skillNames: selectedSkillNames,
@@ -2341,8 +2480,10 @@ export class RuntimeModule extends RuntimeBoundary {
             subagentRenderResults: (executions: McpToolCallExecution[]) => string;
             approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
             approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
+            ownerKey?: string;
             requestId: string;
             sandbox: AssembledTurnContext["sandbox"];
+            sourceKey?: string;
         },
     ): Promise<{
         askRequired?: RuntimeExecutiveAskRequired;
@@ -2404,8 +2545,10 @@ export class RuntimeModule extends RuntimeBoundary {
                 subagentGenerate: mcp.subagentGenerate,
                 subagentInitialMessages: mcp.subagentInitialMessages,
                 subagentRenderResults: mcp.subagentRenderResults,
+                ownerKey: mcp.ownerKey,
                 requestId: mcp.requestId,
                 requiresApproval: mcp.requiresApproval,
+                sourceKey: mcp.sourceKey,
                 approveMcpToolCall: mcp.approveMcpToolCall,
                 approveUserToolCall: mcp.approveUserToolCall,
                 sandboxPolicy: mcp.sandbox,

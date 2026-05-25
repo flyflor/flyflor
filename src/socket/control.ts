@@ -735,6 +735,16 @@ export class SocketControlHub implements EventSink {
                 this.requiredQueries().crystalList(payload),
             ),
         );
+        this.handlers.set(GatewayControlMessageType.ExecutionJobList, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ExecutionJobSnapshot, (payload) =>
+                this.requiredQueries().executionJobList(payload),
+            ),
+        );
+        this.handlers.set(GatewayControlMessageType.ExecutionJobDetailGet, (socket, envelope) =>
+            this.handleQuery(socket, envelope, GatewayControlMessageType.ExecutionJobSnapshot, (payload) =>
+                this.requiredQueries().executionJobDetail(payload),
+            ),
+        );
     }
 
     private requiredQueries(): SocketQueryComponentPort {

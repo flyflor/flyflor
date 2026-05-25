@@ -507,6 +507,12 @@ describe("Gateway Control protocol", () => {
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.HistorySnapshot)).toBe(
             GatewayControlSemanticType.Data,
         );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ExecutionJobList)).toBe(
+            GatewayControlSemanticType.Data,
+        );
+        expect(classifyGatewayControlSemanticType(GatewayControlMessageType.ExecutionJobSnapshot)).toBe(
+            GatewayControlSemanticType.Data,
+        );
         expect(classifyGatewayControlSemanticType(GatewayControlMessageType.Error)).toBe(
             GatewayControlSemanticType.Error,
         );

@@ -342,6 +342,62 @@ describe("ExecutiveToolRuntime", () => {
         expect(result.rawText).toBe("");
     });
 
+    test("lets runtime promote structured execution results into ask-required", async () => {
+        const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
+
+        const result = await runtime.run({
+            initialMessages: [],
+            maxTurns: 2,
+            noMoreToolsMessage: "no more tools",
+            callbacks: {
+                execute: async (batch) =>
+                    batch.map((item) => ({
+                        call: item,
+                        ok: false,
+                        error: "child needs user",
+                        result: { kind: "subagent-needs-user" },
+                    })),
+                generate: async () => "batch",
+                knownToolNames: () => new Set(["subagent.batch"]),
+                onExecutionAskRequired: (_execution, context) => ({
+                    askId: "ask-from-execution",
+                    budget: context.budget,
+                    crystalCandidate: {
+                        kind: "executive-loop-pause",
+                        reason: "subagent-needs-user",
+                        summary: "child needs user",
+                    },
+                    loopGuardSnapshot: context.loopGuardSnapshot,
+                    message: "child needs user",
+                    pause: {
+                        mode: "pause",
+                        options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+                    },
+                    resume: { mode: "continue" },
+                    stepCount: context.stepCount,
+                    stop: "ask",
+                }),
+                parse: () => ({ text: "", calls: [call("subagent.batch", { tasks: [{ id: "blocked" }] })] }),
+                renderResults: () => "",
+                toolDescriptor: () => ({
+                    batchBudgetUnit: "batch",
+                    concurrencySafe: true,
+                    exclusive: false,
+                    readOnly: true,
+                }),
+            },
+        });
+
+        expect(result.askRequired).toEqual(expect.objectContaining({
+            askId: "ask-from-execution",
+            message: "child needs user",
+            stepCount: 1,
+            stop: "ask",
+        }));
+        expect(result.rawText).toBe("batch");
+        expect(result.executions).toHaveLength(1);
+    });
+
     test("separates model turns, execution operations, and risk quota in budget pauses", async () => {
         const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
         const executions: TestToolExecution[] = [];

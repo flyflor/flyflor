@@ -98,7 +98,10 @@ export interface MemoryEpisodeProvenance {
     }>;
     subagentBatches?: Array<{
         batchId?: string;
+        job?: Record<string, unknown>;
+        jobId?: string;
         children: Array<{
+            childJobId?: string;
             id: string;
             ok: boolean;
             status: string;

@@ -16,6 +16,7 @@ import type {
     SocketQueryBlackboardInput,
     SocketQueryComponentPort,
     SocketQueryCrystalInput,
+    SocketQueryExecutionJobInput,
     SocketQueryDetailInput,
     SocketQueryForkInput,
     SocketQueryHistoryInput,
@@ -164,6 +165,14 @@ export class SocketQueryComponent implements SocketQueryComponentPort {
 
     public askDetail(input: SocketQueryDetailInput): SocketAskSnapshot | undefined {
         return this.brain.askDetail(input);
+    }
+
+    public executionJobList(input: SocketQueryExecutionJobInput) {
+        return this.brain.listExecutionJobs(input);
+    }
+
+    public executionJobDetail(input: SocketQueryDetailInput) {
+        return this.brain.executionJobDetail(input);
     }
 
     public blackboardList(input: SocketQueryBlackboardInput): Promise<BlackboardTurn[]> {

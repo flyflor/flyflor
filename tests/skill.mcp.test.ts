@@ -2200,10 +2200,16 @@ describe("Skill and MCP capability config", () => {
         ]);
         expect(reply.metadata?.subagentBatches).toEqual([
             expect.objectContaining({
+                job: expect.objectContaining({
+                    jobId: expect.any(String),
+                    progress: expect.objectContaining({ childCompleted: 2, childTotal: 2 }),
+                    status: "completed",
+                }),
+                jobId: expect.any(String),
                 needsUser: false,
                 children: [
-                    expect.objectContaining({ id: "a", ok: true, status: "completed", toolCalls: 1 }),
-                    expect.objectContaining({ id: "b", ok: true, status: "completed", toolCalls: 1 }),
+                    expect.objectContaining({ childJobId: expect.any(String), id: "a", ok: true, status: "completed", toolCalls: 1 }),
+                    expect.objectContaining({ childJobId: expect.any(String), id: "b", ok: true, status: "completed", toolCalls: 1 }),
                 ],
             }),
         ]);
@@ -2225,6 +2231,15 @@ describe("Skill and MCP capability config", () => {
                     subagentNeedsUser: 0,
                 }),
             );
+            const jobRows = db
+                .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
+                .all() as Array<{ content: string }>;
+            const jobEvents = jobRows.map((row) => JSON.parse(row.content) as { kind: string; jobId: string; progress?: unknown });
+            expect(jobEvents.map((event) => event.kind)).toEqual(
+                expect.arrayContaining(["job.created", "job.child.completed", "job.tool.executed", "job.completed"]),
+            );
+            const jobIds = new Set(jobEvents.map((event) => event.jobId));
+            expect(jobIds.size).toBe(1);
         } finally {
             db.close();
         }
@@ -2289,7 +2304,7 @@ describe("Skill and MCP capability config", () => {
         expect(childStarts[1]?.payload?.allowedTools).toEqual(["workspace.read"]);
     });
 
-    test("subagent.batch returns needs_user without directly creating an ask", async () => {
+    test("subagent.batch child needs_user pauses parent turn with ASK", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-needs-user-"));
         const paths = testPaths(root);
         await installTestTemplates(paths);
@@ -2308,11 +2323,22 @@ describe("Skill and MCP capability config", () => {
             now: new Date().toISOString(),
         });
 
-        expect(reply.metadata?.kind).toBe("reply");
+        expect(reply.metadata?.kind).toBe("ask");
+        expect((reply.metadata?.ask as { rationale?: unknown } | undefined)?.rationale).toBe("executive-tool-loop:guard:unknown-tool-repeat");
+        expect((reply.metadata?.ask as { executiveToolLoop?: { jobId?: unknown; job?: unknown } } | undefined)?.executiveToolLoop).toEqual(
+            expect.objectContaining({
+                job: expect.objectContaining({
+                    progress: expect.objectContaining({ childNeedsUser: 1, childTotal: 1 }),
+                    status: "needs-user",
+                }),
+                jobId: expect.any(String),
+            }),
+        );
         expect(reply.metadata?.subagentBatches).toEqual([
             expect.objectContaining({
+                jobId: expect.any(String),
                 needsUser: true,
-                children: [expect.objectContaining({ id: "blocked", status: "needs_user" })],
+                children: [expect.objectContaining({ childJobId: expect.any(String), id: "blocked", status: "needs_user" })],
             }),
         ]);
         expect(reply.metadata?.mcpToolExecutions).toEqual([
@@ -2332,6 +2358,14 @@ describe("Skill and MCP capability config", () => {
                     subagentNeedsUser: 1,
                 }),
             );
+            const jobRows = db
+                .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
+                .all() as Array<{ content: string }>;
+            const jobEvents = jobRows.map((row) => JSON.parse(row.content) as { askId?: string; kind: string; jobId: string });
+            expect(jobEvents.map((event) => event.kind)).toEqual(
+                expect.arrayContaining(["job.created", "job.child.needs_user", "job.paused.ask", "job.completed"]),
+            );
+            expect(jobEvents.some((event) => event.askId && event.kind === "job.paused.ask")).toBe(true);
         } finally {
             db.close();
         }

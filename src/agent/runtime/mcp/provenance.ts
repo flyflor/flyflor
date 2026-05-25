@@ -44,15 +44,18 @@ export function mcpExecutionsToSubagentProvenance(
         if (`${execution.call.server}.${execution.call.tool}` !== SUBAGENT_BATCH_KEY) return [];
         const raw = execution.result?.raw;
         if (!raw || typeof raw !== "object") return [];
-        const batch = raw as { batchId?: unknown; needsUser?: unknown; results?: unknown };
+        const batch = raw as { batchId?: unknown; job?: unknown; jobId?: unknown; needsUser?: unknown; results?: unknown };
         if (!Array.isArray(batch.results)) return [];
         return [{
             batchId: typeof batch.batchId === "string" ? batch.batchId : undefined,
+            job: readRecord(batch.job),
+            jobId: typeof batch.jobId === "string" ? batch.jobId : undefined,
             needsUser: batch.needsUser === true,
             children: batch.results.flatMap((child) => {
                 if (!child || typeof child !== "object") return [];
-                const value = child as { id?: unknown; ok?: unknown; status?: unknown; toolCalls?: unknown };
+                const value = child as { childJobId?: unknown; id?: unknown; ok?: unknown; status?: unknown; toolCalls?: unknown };
                 return [{
+                    childJobId: typeof value.childJobId === "string" ? value.childJobId : undefined,
                     id: typeof value.id === "string" ? value.id : "unknown",
                     ok: value.ok === true,
                     status: typeof value.status === "string" ? value.status : "unknown",
@@ -61,6 +64,11 @@ export function mcpExecutionsToSubagentProvenance(
             }),
         }];
     });
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    return value as Record<string, unknown>;
 }
 
 /**

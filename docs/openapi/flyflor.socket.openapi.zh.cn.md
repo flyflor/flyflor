@@ -7,7 +7,7 @@
 - 当前真实 transport 是 `/ws` WebSocket，HTTP 只保留 `/health` 和 `/ws` upgrade。
 - `gateway.*` 是 `flyflor.ws.v1` 的 v1 兼容 wire 名称，不代表架构主语仍是 Gateway。
 - `history.list` 只查询 `brain.db` 生命账本，用于 ledger/query/replay/audit，不做 session restore，不是 prompt 容器，也不参与 context assembly。
-- `scope.list`、`fork.detail.get`、`ask.list`、`blackboard.detail.get`、`task.list`、`replay.list`、`thought.detail.get`、`crystal.list` 等查询命令只读 DB/read-model，不调用 RuntimeModule、模型、工具或 prompt/context assembly。
+- `scope.list`、`fork.detail.get`、`ask.list`、`blackboard.detail.get`、`task.list`、`replay.list`、`thought.detail.get`、`crystal.list`、`execution.job.list` 等查询命令只读 DB/read-model，不调用 RuntimeModule、模型、工具或 prompt/context assembly。
 - `clientId`、`conversationKey`、`threadId`、`user.id` 只用于 live peer、routing、audit、dedup、reply anchor，不承担也不创建认知连续性。
 - 真正上下文装配来自当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive 可见能力面。
 
@@ -34,6 +34,8 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - `TurnFinalWithAsk` 展示 `turn.final.reply.metadata.ask`。
 - `TurnFinalWithPlanning` 展示带 task plan、fork、replay snapshot 的 `turn.final.reply.metadata.planning`。
 - `TurnFinalWithExecutiveLoopPause` 同时展示 `reply.metadata.executiveToolLoop` 和 `reply.metadata.ask.executiveToolLoop`。
+- `ExecutionJobList`、`ExecutionJobDetailGet` 和 `ExecutionJobSnapshot` 展示由 `brain.db` execution-job ledger 支撑的 Durable Job 只读查询。
+- ASK 示例使用 `questions[]`、`recommendedChoiceId` 和固定 `other` 选项；root `choices` 只保留给旧客户端兼容。
 - `GatewayStatusSnapshot.payload.status.controlState` 展示当前 socket 可见的 ASK、Scope、Fork 和 Executive loop snapshot，来源是真实 turn metadata 与 runtime events。
 - `EventSubscribe`、`ExecutiveLoopPausedEvent`、`ExecutiveLoopResumedEvent` 展示生命周期事件时间线。当前轮权威状态仍以 `turn.final.reply.metadata` 为准。
 - `InvalidGatewayMessageSend` 接 `InvalidPayloadError` 覆盖缺少 `payload.text` 时的结构化 `invalid-payload` 响应。
@@ -47,6 +49,7 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - `activeProject` 只是 `activeScope` 的兼容别名；新的 Apifox example 优先使用 `activeScope`。
 - `HistorySnapshot` 可以携带 reply metadata、task plan、replay 和 context fork snapshot，但这些只是 ledger replay 数据，不要回填成 prompt context。
 - read-model query 命令返回的 `*.snapshot.payload.data` 只是 TUI 可检查状态，不要回填成 prompt context。
+- `execution.job.snapshot.payload.data` 只是长任务进度/审计数据，不是 prompt 容器，也不能当认知连续性来源。
 - 只有 `GatewayMessageSend` 进入 live turn execution；query 命令必须保持可脱离的 DB 读取。
 - `GatewayStatusSnapshot.payload.status.controlState` 只是 client read model；它不是新的 context owner、session restore surface 或 prompt assembly source。
 - `conversationKey`、`threadId`、`user.id` 适合用于 Apifox 关联和路由断言，但它们不是 memory owner。

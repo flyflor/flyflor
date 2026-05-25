@@ -54,7 +54,7 @@ import { ScopeMemoryStore } from "./scope/index.ts";
 import { ContextForkStore, type ContextForkStoreSource } from "./fork/index.ts";
 import { BrainStore, type BrainPromptAtomWrite } from "./brain/index.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary/index.ts";
-import { AskReason, MemoryEventStatus, MemoryEventType, ReplayRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type ContinuationContextEventContent, ContinuationContextReason, ContinuationDecisionKind, type ContinuationDecision, type ContinuationSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ScopeRecord, type ReplayRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, ReplayRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type ExecutionJobLedgerContent, type ContinuationContextEventContent, ContinuationContextReason, ContinuationDecisionKind, type ContinuationDecision, type ContinuationSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ScopeRecord, type ReplayRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
 import { MemoryMatrixAggregator } from "./recall/index.ts";
 import { CrystalMemoryComponent } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore, type PendingScopeOffer, type PendingSkillOffer } from "./sqlite/index.ts";
@@ -547,6 +547,52 @@ export class MemoryModule extends Memory {
             this.events.publish(
                 event(RuntimeEventType.MemoryBrainWriteFailed, {
                     op: "behavior.snapshot",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            throw err;
+        }
+    }
+
+    /**
+     * Executive Job ledger is append-only audit/replay data.
+     *
+     * It deliberately writes bounded structured summaries only; no prompt text,
+     * full tool output, or sidecar stderr is stored here.
+     */
+    public recordExecutionJobEvent(input: {
+        content: ExecutionJobLedgerContent;
+        ownerKey?: string;
+        parentId?: string;
+        sourceKey?: string;
+    }): string | null {
+        if (!this.brainOpened) return null;
+        const eventId = `execution-job-${input.content.kind}-${input.content.jobId}-${crypto.randomUUID()}`;
+        try {
+            this.brain.appendEvent({
+                id: eventId,
+                ts: input.content.ts,
+                ownerKey: input.ownerKey ?? input.content.jobId,
+                sourceKey: input.sourceKey ?? input.content.sourceKey,
+                type: MemoryEventType.ExecutionJob,
+                role: ModelRole.Assistant,
+                content: input.content as unknown as Record<string, unknown>,
+                parentId: input.parentId,
+                importance: 0.25,
+            });
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainEventWritten, {
+                    eventId,
+                    jobId: input.content.jobId,
+                    kind: input.content.kind,
+                }),
+            );
+            return eventId;
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "execution.job",
+                    jobId: input.content.jobId,
                     message: err instanceof Error ? err.message : String(err),
                 }),
             );
@@ -3306,8 +3352,11 @@ function normalizeEpisodeProvenance(provenance: MemoryEpisodeProvenance): Memory
         }));
     const subagentBatches = (provenance.subagentBatches ?? []).slice(0, 4).map((batch) => ({
         batchId: batch.batchId,
+        job: batch.job,
+        jobId: batch.jobId,
         needsUser: batch.needsUser,
         children: batch.children.slice(0, 8).map((child) => ({
+            childJobId: child.childJobId,
             id: child.id,
             ok: child.ok,
             status: child.status,

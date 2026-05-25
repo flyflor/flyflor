@@ -178,6 +178,26 @@ describe("RuntimeMcpToolPlanComponent", () => {
             externalTools: [
                 {
                     available: false,
+                    stability: {
+                        discovery: "configured",
+                        effective: "unavailable",
+                        manifest: "valid",
+                        path: {
+                            base: "app",
+                            command: "./tools/packages/browser/bin/flyflor",
+                            mode: "relative",
+                            portable: true,
+                            rootSafe: true,
+                            state: "unresolved",
+                        },
+                        probe: "unavailable",
+                        reason: "external sidecar command is unavailable",
+                        runtime: "failed",
+                        sandbox: "allowed",
+                        toolNames: ["browser.open"],
+                        upgrade: "idle",
+                        version: "unknown",
+                    },
                     unavailableReason: "external sidecar command is unavailable",
                     tool: {
                         enabled: true,

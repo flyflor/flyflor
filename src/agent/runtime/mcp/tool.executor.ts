@@ -25,10 +25,14 @@ import {
 import {
     ExecutiveToolRuntime,
     ComputerProfileComponent,
+    type ExecutionJobToolExecution,
     McpCatalogAdapter,
+    type ExternalToolStability,
     type ExecutiveLoopGuardDecision,
+    type ExecutiveLoopGuardSnapshot,
     type ExecutiveToolBudgetExhaustedReason,
     type ExecutiveToolRuntimeBudget,
+    type ExecutiveToolRuntimeBudgetSnapshot,
     type ExecutiveToolRuntimeBudgetDecision,
     type ExecutiveToolRuntimeAskRequired,
     type ExecutiveToolRuntimeDescriptor,
@@ -46,6 +50,7 @@ import {
     SUBAGENT_BATCH_KEY,
     SUBAGENT_BATCH_TOOL,
     SUBAGENT_SERVER,
+    type SubagentBatchResult,
 } from "../subagent/index.ts";
 
 const BUILTIN_SHELL_SERVER = "shell";
@@ -60,7 +65,9 @@ export interface RuntimeMcpToolExecutorInput {
     pluginCapabilityCatalog: RuntimePluginCapabilityCatalogEntry[];
     requiresApproval: boolean;
     requestId: string;
+    ownerKey?: string;
     sandboxPolicy?: SandboxPolicy;
+    sourceKey?: string;
     subagentBatch?: RuntimeSubagentBatchComponent;
     subagentGenerate?: (messages: unknown[], turn: number) => Promise<string>;
     subagentInitialMessages?: ModelMessage[];
@@ -127,6 +134,8 @@ export class RuntimeMcpToolExecutor {
                         options.loopGuardBlocked ? false : input.toolExecution.requiresApproval,
                         this.sandboxPolicyForInput(input.toolExecution).mode,
                     ),
+                onExecutionAskRequired: (execution, context) =>
+                    this.executionAskRequired(execution, context),
                 onLoopGuardBlocked: (call, decision) => this.loopGuardExecution(call, decision, input.toolExecution.requestId),
                 parse: (raw) => {
                     const parsed = input.parse(raw);
@@ -213,7 +222,7 @@ export class RuntimeMcpToolExecutor {
                 ));
                 continue;
             }
-            const userTool = input.userToolCatalog.find(
+        const userTool = input.userToolCatalog.find(
                 (entry) => call.server === USER_TOOL_SERVER && entry.tool.descriptor.name === call.tool,
             );
             if (userTool) {
@@ -370,6 +379,21 @@ export class RuntimeMcpToolExecutor {
         if (!schemaCheck.ok) {
             return { call, ok: false, error: `user tool input violates inputSchema: ${schemaCheck.errors.join("; ")}` };
         }
+        const stability = this.externalToolStability(tool);
+        if (stability && stability.effective !== "available" && stability.effective !== "degraded") {
+            return {
+                call,
+                ok: false,
+                error: stability.reason ?? "external tool is unavailable",
+                result: {
+                    isError: true,
+                    raw: {
+                        error: stability.reason,
+                        toolStability: stability,
+                    },
+                },
+            };
+        }
         const result = await invokeUserTool({
             approve: approveUserToolCall,
             executionKind: this.computerProfile.isComputerControlled(tool.descriptor)
@@ -398,6 +422,21 @@ export class RuntimeMcpToolExecutor {
             },
             error: result.error,
         };
+    }
+
+    private externalToolStability(tool: ManifestToolDefinition): ExternalToolStability | undefined {
+        const raw = tool.stability;
+        if (!raw || typeof raw !== "object") return undefined;
+        const effective = (raw as { effective?: unknown }).effective;
+        if (
+            effective !== "available" &&
+            effective !== "degraded" &&
+            effective !== "unavailable" &&
+            effective !== "disabled"
+        ) {
+            return undefined;
+        }
+        return raw as ExternalToolStability;
     }
 
     private async executePluginCapabilityCall(
@@ -628,9 +667,15 @@ export class RuntimeMcpToolExecutor {
             const result = await input.subagentBatch.run({
                 batch: parsed.batch,
                 parent: {
+                    budget: {
+                        modelToolTurnBudget: parsed.batch.maxToolTurns,
+                        executionOperationBudget: parsed.batch.maxToolTurns,
+                    },
                     catalog: input.catalog,
                     initialMessages: input.subagentInitialMessages,
+                    ownerKey: input.ownerKey,
                     requestId: input.requestId,
+                    sourceKey: input.sourceKey,
                 },
                 child: {
                     approveMcpToolCall: input.approveMcpToolCall,
@@ -643,19 +688,129 @@ export class RuntimeMcpToolExecutor {
                         catalog: [...catalog],
                         requestId: childRequestId,
                     }),
+                recordToolExecution: (execution, childJobId) => this.executionJobToolExecution(execution, childJobId),
             });
             return {
                 call,
                 ok: !result.needsUser && result.results.every((item) => item.ok),
                 result: {
                     isError: result.needsUser || result.results.some((item) => !item.ok),
-                    raw: result,
+                    raw: result.needsUser ? { kind: "subagent-needs-user", ...result } : result,
                 },
                 error: result.needsUser ? "subagent.batch returned needs_user." : undefined,
             };
         } catch (error) {
             return { call, ok: false, error: error instanceof Error ? error.message : String(error) };
         }
+    }
+
+    private executionAskRequired(
+        execution: McpToolCallExecution,
+        context: {
+            budget: ExecutiveToolRuntimeBudgetSnapshot;
+            loopGuardSnapshot: ExecutiveLoopGuardSnapshot;
+            stepCount: number;
+        },
+    ): ExecutiveToolRuntimeAskRequired | undefined {
+        const batch = this.subagentNeedsUserResult(execution);
+        if (!batch) {
+            return this.toolStabilityAskRequired(execution, context);
+        }
+        const child = batch.results.find((result) => result.status === "needs_user");
+        const childAsk = batch.askRequired ?? child?.askRequired;
+        const message = childAsk?.message ?? batch.needsUserReason ?? "A helper task needs user guidance before it can continue.";
+        return {
+            askId: childAsk?.askId ?? crypto.randomUUID(),
+            budget: context.budget,
+            budgetExhaustedReason: childAsk?.budgetExhaustedReason,
+            crystalCandidate: childAsk?.crystalCandidate ?? {
+                kind: "executive-loop-pause",
+                reason: "subagent-needs-user",
+                summary: message,
+            },
+            loopGuardReason: childAsk?.loopGuardReason,
+            loopGuardSnapshot: childAsk?.loopGuardSnapshot ?? context.loopGuardSnapshot,
+            job: childAsk?.job ?? batch.job,
+            jobId: childAsk?.jobId ?? batch.jobId,
+            message,
+            pause: childAsk?.pause ?? {
+                mode: "pause",
+                options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+            },
+            resume: childAsk?.resume ?? { mode: "continue" },
+            stepCount: context.stepCount,
+            stop: "ask",
+            ...(childAsk?.toolBudgetExhausted === true ? { toolBudgetExhausted: true } : {}),
+        };
+    }
+
+    private toolStabilityAskRequired(
+        execution: McpToolCallExecution,
+        context: {
+            budget: ExecutiveToolRuntimeBudgetSnapshot;
+            loopGuardSnapshot: ExecutiveLoopGuardSnapshot;
+            stepCount: number;
+        },
+    ): ExecutiveToolRuntimeAskRequired | undefined {
+        const stability = this.toolStabilityResult(execution);
+        if (!stability) return undefined;
+        const toolName = `${execution.call.server}.${execution.call.tool}`;
+        const message = `External tool stability blocked ${toolName}: ${stability.reason ?? stability.effective}.`;
+        return {
+            askId: crypto.randomUUID(),
+            budget: context.budget,
+            crystalCandidate: {
+                kind: "executive-loop-pause",
+                reason: "tool-stability",
+                summary: message,
+            },
+            loopGuardSnapshot: context.loopGuardSnapshot,
+            message,
+            pause: {
+                mode: "pause",
+                options: [{ mode: "continue" }, { mode: "narrow" }, { mode: "stop" }],
+            },
+            resume: { mode: "continue" },
+            stepCount: context.stepCount,
+            stop: "ask",
+            toolStability: stability as unknown as Record<string, unknown>,
+        };
+    }
+
+    private executionJobToolExecution(
+        execution: McpToolCallExecution & { call: McpToolCallRequest & { key: string } },
+        childJobId?: string,
+    ): ExecutionJobToolExecution {
+        return {
+            childJobId,
+            error: execution.error,
+            ok: execution.ok,
+            server: execution.call.server,
+            tool: execution.call.tool,
+        };
+    }
+
+    private subagentNeedsUserResult(execution: McpToolCallExecution): (SubagentBatchResult & { kind: "subagent-needs-user" }) | undefined {
+        if (execution.call.server !== SUBAGENT_SERVER || execution.call.tool !== SUBAGENT_BATCH_TOOL) return undefined;
+        const raw = execution.result?.raw;
+        if (!raw || typeof raw !== "object") return undefined;
+        const value = raw as Partial<SubagentBatchResult> & { kind?: unknown };
+        if (value.kind !== "subagent-needs-user" || value.needsUser !== true || !Array.isArray(value.results)) {
+            return undefined;
+        }
+        return value as SubagentBatchResult & { kind: "subagent-needs-user" };
+    }
+
+    private toolStabilityResult(execution: McpToolCallExecution): ExternalToolStability | undefined {
+        if (execution.call.server !== USER_TOOL_SERVER) return undefined;
+        const raw = execution.result?.raw;
+        if (!raw || typeof raw !== "object") return undefined;
+        const value = raw as { toolStability?: unknown };
+        const stability = value.toolStability;
+        if (!stability || typeof stability !== "object") return undefined;
+        const effective = (stability as { effective?: unknown }).effective;
+        if (effective !== "unavailable" && effective !== "disabled") return undefined;
+        return stability as ExternalToolStability;
     }
 
     private readShellRunSpec(call: McpToolCallRequest):

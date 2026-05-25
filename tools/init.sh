@@ -105,7 +105,7 @@ if [ "$MODE" = "mock" ]; then
             "mock": true,
             "command": "$MOCK_RUNNER",
             "args": ["xtool-sidecar", "mock.xtools"],
-            "cwd": "project",
+            "cwd": "app",
             "timeoutMs": 2000,
             "maxOutputBytes": 65536,
             "tools": [
@@ -127,7 +127,7 @@ else
         "browser.cdp": {
             "command": "$BROWSER_CDP_RUNNER",
             "args": ["xtool-sidecar", "browser.cdp"],
-            "cwd": "project",
+            "cwd": "app",
             "env": { "FLYFLOR_BROWSER_CDP_URL": "$CDP_URL" },
             "timeoutMs": 8000,
             "maxOutputBytes": 65536,
@@ -136,7 +136,7 @@ else
         "computer.native": {
             "command": "$COMPUTER_NATIVE_RUNNER",
             "args": ["xtool-sidecar", "computer.native"],
-            "cwd": "project",
+            "cwd": "app",
             "config": { "mouseCommand": "", "mouseArgs": [], "keyboardCommand": "", "keyboardArgs": [] },
             "timeoutMs": 10000,
             "maxOutputBytes": 65536,
@@ -145,7 +145,7 @@ else
         "computer.use": {
             "command": "$COMPUTER_USE_RUNNER",
             "args": ["xtool-sidecar", "computer.use"],
-            "cwd": "project",
+            "cwd": "app",
             "config": { "backend": "delegate", "delegateCommand": "", "delegateArgs": [], "cuaCommand": "cua-driver", "cuaArgs": [] },
             "timeoutMs": 20000,
             "maxOutputBytes": 524288,
@@ -154,7 +154,7 @@ else
         "media.local": {
             "command": "$MEDIA_RUNNER",
             "args": ["xtool-sidecar", "media.local"],
-            "cwd": "project",
+            "cwd": "app",
             "config": { "providerUrl": "", "providerHeaders": {}, "localCommands": {} },
             "timeoutMs": 30000,
             "maxOutputBytes": 262144,
@@ -163,7 +163,7 @@ else
         "web.search": {
             "command": "$SEARCH_WEB_RUNNER",
             "args": ["xtool-sidecar", "web.search"],
-            "cwd": "project",
+            "cwd": "app",
             "config": { "cacheTtlMs": 600000, "providers": [] },
             "timeoutMs": 10000,
             "maxOutputBytes": 65536,
@@ -172,7 +172,7 @@ else
         "utility.local": {
             "command": "$UTILITY_RUNNER",
             "args": ["xtool-sidecar", "utility.local"],
-            "cwd": "project",
+            "cwd": "app",
             "config": { "lspCommand": "", "lspArgs": [], "taskCommand": "", "taskArgs": [] },
             "timeoutMs": 30000,
             "maxOutputBytes": 262144,

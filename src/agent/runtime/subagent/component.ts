@@ -11,6 +11,7 @@ import {
 import type { ToolDescriptor } from "../../../executive/index.ts";
 import type { ExecutiveJsonObject } from "../../../executive/index.ts";
 import { ExecutiveToolRuntime } from "../../../executive/index.ts";
+import { ExecutionJobComponent, type ExecutionJob } from "../../../executive/index.ts";
 import { parseMcpToolCalls, type McpToolCallExecution, type McpToolCallRequest, type McpToolCatalogEntry } from "../../mcp/index.ts";
 import {
     SUBAGENT_BATCH_KEY,
@@ -30,7 +31,10 @@ const MAX_SUBAGENT_TASKS = 24;
 
 @Component()
 export class RuntimeSubagentBatchComponent extends Runtime {
-    public constructor(private readonly events?: EventSink) {
+    public constructor(
+        private readonly events?: EventSink,
+        private readonly jobs: ExecutionJobComponent = new ExecutionJobComponent(),
+    ) {
         super();
     }
 
@@ -119,22 +123,33 @@ export class RuntimeSubagentBatchComponent extends Runtime {
     public async run(input: SubagentBatchExecutorInput): Promise<SubagentBatchResult> {
         const batchId = crypto.randomUUID();
         const concurrency = this.clampPositiveInt(input.batch.concurrency, DEFAULT_SUBAGENT_CONCURRENCY, MAX_SUBAGENT_CONCURRENCY);
+        const job = this.jobs.create({
+            budget: input.parent.budget,
+            childIds: input.batch.tasks.map((task, index) => task.id ?? `child-${index + 1}`),
+            ownerKey: input.parent.ownerKey,
+            requestId: input.parent.requestId,
+            sourceKey: input.parent.sourceKey,
+        });
+        this.jobs.markRunning(job.jobId);
         this.events?.publish(
             event(RuntimeEventType.SubagentBatchStart, {
                 batchId,
                 concurrency,
+                jobId: job.jobId,
                 parentRequestId: input.parent.requestId,
                 tasks: input.batch.tasks.length,
             }, input.parent.requestId),
         );
         const results = await this.mapConcurrent(input.batch.tasks, concurrency, (task, index) =>
-            this.runChild(batchId, task, index, input),
+            this.runChild(batchId, job, task, index, input),
         );
+        const finishedJob = this.jobs.finish(job.jobId);
         this.events?.publish(
             event(RuntimeEventType.SubagentBatchEnd, {
                 batchId,
                 completed: results.filter((result) => result.status === "completed").length,
                 failed: results.filter((result) => result.status === "failed").length,
+                jobId: job.jobId,
                 needsUser: results.filter((result) => result.status === "needs_user").length,
                 parentRequestId: input.parent.requestId,
             }, input.parent.requestId),
@@ -142,39 +157,58 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         return {
             batchId,
             concurrency,
+            job: this.jobs.snapshot(job.jobId),
+            jobId: finishedJob?.jobId ?? job.jobId,
             needsUser: results.some((result) => result.status === "needs_user"),
+            needsUserReason: results.find((result) => result.status === "needs_user")?.error,
+            askRequired: results.find((result) => result.askRequired)?.askRequired,
             results,
         };
     }
 
     private async runChild(
         batchId: string,
+        job: ExecutionJob,
         task: SubagentTask,
         index: number,
         input: SubagentBatchExecutorInput,
     ): Promise<SubagentChildResult> {
         const id = task.id ?? `child-${index + 1}`;
+        const childJobId = job.children[index]?.childJobId;
         const catalog = this.narrowCatalog(input.parent.catalog, task.toolAllowlist);
         const childRequestId = `${input.parent.requestId}:subagent:${batchId}:${id}`;
+        if (childJobId) this.jobs.markChildRunning(job.jobId, childJobId);
         this.events?.publish(
             event(RuntimeEventType.SubagentChildStart, {
                 batchId,
                 childId: id,
+                childJobId,
+                jobId: job.jobId,
                 allowedTools: catalog.map((entry) => `${entry.server}.${entry.tool.name}`),
                 parentRequestId: input.parent.requestId,
             }, childRequestId),
         );
         if (catalog.length === 0) {
+            if (childJobId) {
+                this.jobs.completeChild(job.jobId, {
+                    childJobId,
+                    status: "failed",
+                    toolExecutions: [],
+                });
+            }
             this.events?.publish(
                 event(RuntimeEventType.SubagentChildEnd, {
                     batchId,
                     childId: id,
+                    childJobId,
+                    jobId: job.jobId,
                     parentRequestId: input.parent.requestId,
                     status: "failed",
                     toolCalls: 0,
                 }, childRequestId),
             );
             return {
+                childJobId,
                 id,
                 ok: false,
                 status: "failed",
@@ -208,19 +242,41 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             },
         });
         const status = result.askRequired ? "needs_user" : result.executions.every((execution) => execution.ok) ? "completed" : "failed";
+        if (childJobId) {
+            this.jobs.completeChild(job.jobId, {
+                askRequired: result.askRequired,
+                childJobId,
+                status,
+                toolExecutions: result.executions.map((execution) =>
+                    input.recordToolExecution
+                        ? input.recordToolExecution(execution, childJobId)
+                        : {
+                              childJobId,
+                              error: execution.error,
+                              ok: execution.ok,
+                              server: execution.call.server,
+                              tool: execution.call.tool,
+                          },
+                ),
+            });
+        }
         this.events?.publish(
             event(RuntimeEventType.SubagentChildEnd, {
                 batchId,
                 childId: id,
+                childJobId,
+                jobId: job.jobId,
                 parentRequestId: input.parent.requestId,
                 status,
                 toolCalls: result.executions.length,
             }, childRequestId),
         );
         return {
+            childJobId,
             id,
             ok: status === "completed",
             status,
+            askRequired: result.askRequired,
             text: result.rawText || undefined,
             error: result.askRequired?.message,
             toolCalls: result.executions,

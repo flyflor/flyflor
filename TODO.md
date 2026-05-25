@@ -907,3 +907,29 @@ Kernel V2 acceptance focus：
 - [x] 保持零字符工程：子任务是否开启、开启几个、允许哪些工具由模型结构化输出决定，代码只做 JSON/schema/catalog/resource 校验。
 - [x] 修正 OpenAPI/Apifox 契约：`SocketMessageType` 与新增 `fork.memory.*` 控制消息对齐，`EventSubscription.types` 与 `RuntimeEventType` 全量对齐。
 - [x] 运行验证：`bun run docs:check`；`bun run check`；`bun test tests/skill.mcp.test.ts tests/gateway.ws.test.ts tests/event.component.test.ts tests/runtime.planning.route.test.ts tests/runtime.mcp.tool.plan.test.ts --timeout 30000`。
+
+## 2026-05-26 执行层 ASK / Job / 工具稳定性完整封口
+
+- 状态：已完成
+- [x] 完成 `PLAN.md` 全部 Phase 0-15，并将执行账本状态更新为已完成。
+- [x] `execution.job.list` / `execution.job.detail.get` / `execution.job.snapshot` 已进入 `/ws`，只读 `brain.db` execution-job ledger。
+- [x] 外挂工具稳定性快照已覆盖 discovery、manifest、path、version、probe、runtime、sandbox、upgrade、effective；不可用、禁用、升级中工具对模型隐藏但保留 diagnostics。
+- [x] 外挂工具升级事务已具备 staging、next manifest、apply、previous package 骨架，持久化只写相对命令。
+- [x] 工具稳定性 unavailable / disabled 可形成 `tool-stability` 来源的 Executive ASK。
+- [x] ASK/job/tool-stability 结构化 evidence 已进入 Crystal candidate，Gem 升格仍由 quality gate 控制。
+- [x] 文档、OpenAPI 与 Apifox 示例已更新并通过 drift check。
+- [x] 运行验证：`bun test tests/ask.parse.test.ts tests/ask.wire.test.ts tests/ask.normalizer.test.ts tests/ask.presentation.test.ts tests/executive.tool.runtime.test.ts tests/runtime.mcp.tool.plan.test.ts tests/external.tools.test.ts tests/install.script.test.ts tests/gateway.ws.test.ts tests/protocol.control.test.ts tests/reflection.thread.test.ts tests/computer.coding.tools.test.ts --timeout 30000`；`bun test tests/skill.mcp.test.ts tests/ask.reply.test.ts --timeout 30000`；`bun run check`；`bun run docs:check`；`bun run build:binary`；`git diff --check`。
+
+## 2026-05-25 执行层 ASK 与相对路径第一阶段
+
+- 状态：部分完成
+- [x] 新增根目录 `PLAN.md` 执行账本，记录执行层、ASK、外挂工具、相对路径、稳定性、升级和 Crystal candidate 全量计划；后续只允许改状态或追加 amendment。
+- [x] 修复 `subagent.batch` child `needs_user` 被包装成普通 failed tool 的问题，父级 Executive loop 现在可由结构化工具结果提升为 ASK。
+- [x] ASK 协议新增 authority/source/resumePolicy、question recommendation、固定 `other` 选项和 Crystal candidate policy 字段，并保持旧 ASK 兼容。
+- [x] Executive 工具暂停 ASK 改为多问题结构，包含执行策略、预算策略和子代理策略，同时保留旧 choices 兼容面。
+- [x] 外挂工具 discovery 支持 schema v2 和 `cwd:"app"`，默认 xtools manifest/installer 改为 app-relative `./tools/packages/...`，绝对 command 标记 unavailable。
+- [x] Phase 3 `AskComponent` 已拆分为 parser、normalizer、policy、presentation、ledger 和 component owner，并保留旧导出兼容。
+- [x] Phase 5 Durable Execution Job v1 已完成：`subagent.batch` 现在有 parent jobId、childJobId、progress、needs-user 状态和 ASK metadata 引用。
+- [x] Phase 6 brain.db job ledger 已完成：Execution Job 生命周期写入 `memory_events.type='execution-job'`，只保存结构化摘要，不保存完整 prompt 或大型工具输出。
+- [ ] Phase 7 socket job query 仍待做。
+- [ ] Phase 10-13 工具稳定性状态机、升级事务、ASK 联动和 Crystal evidence 闭环仍待做。

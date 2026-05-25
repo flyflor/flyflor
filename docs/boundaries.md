@@ -162,8 +162,11 @@ Executive 是 `Capability / Tool / Trust / Loop`，中文叫能力工具信任�
 - 电脑控制必须走独立 `computerApproval` sandbox 面，不能继续混在普通 `mcp-tool` / `plugin` / `shell-hook` 审批里。
 - 用户自定义工具必须声明 schema、permission、scope、cwd/env 边界、输出限制和审批策略；缺任何一项都不能进入可见 Tool Plan。
 - Tool Plan 必须保留 hidden diagnostics，说明工具不可见是缺配置、缺凭据、平台不可用、权限不足、channel cap、sandbox deny 还是 loop guard 限制。
+- 外挂工具必须携带结构化 stability snapshot。路径、版本、probe、runtime、sandbox、upgrade 和 effective 状态由 `ExternalToolStabilityComponent` 判定；Tool Plan 只能把 `effective=available` 或允许 degraded 的工具暴露给模型，其余必须保留 diagnostics 并隐藏。
+- 外挂工具升级必须走 staging / next manifest / apply / previous package 事务。升级中、失败或 rollback-required 的工具不能被模型调用；修复或回滚决策必须进入 ASK 或显式用户操作，不能从错误文本推断。
 - Loop guard 必须能处理 unknown tool 重复调用、工具名漂移、同一失败调用反复执行、无进展循环、过量工具调用和非法 MCP/tool result。
 - Long-horizon loop 只能通过结构化 ask snapshot 和 `executive.loop.paused/resumed` 事件暂停或恢复；不得新增靠文本约定的隐藏 loop 控制协议。
+- Durable Execution Job 是 Executive 的长任务账本 owner。`subagent.batch` 必须产出 `jobId`，child `needs_user` 必须冒泡到父级 ASK，并把 job 生命周期写入 `brain.db` execution-job ledger。Socket job query 只能读 DB/read-model，禁止调用 Runtime、模型、工具或 prompt/context assembly。
 - Executive 实现仍遵守 OOP + use composition：业务能力用 class / Component / Module 表达，组合入口使用 `useXxx()`；不得新增专用 decorator、反射扫描、动态 import 或无归属 helper function。
 - Executive 实现仍遵守 Bun 二进制硬约束：不得依赖运行时读取 `node_modules`、native addon、postinstall 或用户机器额外 Node.js。
 

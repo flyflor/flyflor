@@ -195,7 +195,9 @@ export class RuntimeMcpToolPlanComponent extends Runtime {
             projectScoped: input.projectScoped,
             surface: this.surfaceForChannel(input.channel),
         });
-        const unavailable = externalTools.filter((entry) => !entry.available).map((entry) => entry.tool.descriptor.name);
+        const unavailable = externalTools
+            .filter((entry) => entry.stability.effective !== "available" && entry.stability.effective !== "degraded")
+            .map((entry) => entry.tool.descriptor.name);
         if (unavailable.length === 0) {
             return base;
         }

@@ -1,5 +1,4 @@
-import { access } from "node:fs/promises";
-import { delimiter, isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { parseJsonc, type FlyflorPaths } from "../../config/index.ts";
 import {
     CapabilitySource,
@@ -16,9 +15,14 @@ import {
     type ExecutiveJsonObject,
 } from "../types.ts";
 import type { ManifestToolDefinition, ToolManifestExecutor } from "../manifest.ts";
+import {
+    ExternalToolStabilityComponent,
+    type ExternalToolStability,
+    type ExternalToolUpgradeState,
+} from "./stability.ts";
 
 export interface ExternalToolManifestFile {
-    readonly schemaVersion?: 1;
+    readonly schemaVersion?: 1 | 2;
     readonly sidecars?: Record<string, ExternalToolSidecarShape>;
 }
 
@@ -26,18 +30,24 @@ export interface ExternalToolSidecarShape {
     readonly args?: string[];
     readonly command?: string;
     readonly config?: Record<string, unknown>;
-    readonly cwd?: "project" | "config";
+    readonly cwd?: "project" | "app" | "config" | "workspace";
     readonly enabled?: boolean;
     readonly env?: Record<string, string>;
     readonly maxOutputBytes?: number;
     readonly mock?: boolean;
+    readonly compatibleCore?: string;
+    readonly packageId?: string;
+    readonly packageVersion?: string;
+    readonly protocolVersion?: string;
     readonly timeoutMs?: number;
     readonly tools?: string[];
+    readonly upgrade?: ExternalToolUpgradeState;
 }
 
 export interface ExternalToolDefinition {
     readonly available: boolean;
     readonly sidecarId?: string;
+    readonly stability: ExternalToolStability;
     readonly tool: ManifestToolDefinition;
     readonly unavailableReason?: string;
 }
@@ -61,14 +71,21 @@ interface NormalizedSidecar {
     readonly args: readonly string[];
     readonly command?: string;
     readonly config?: Record<string, unknown>;
-    readonly cwd: "project" | "config";
+    readonly cwd: "project" | "app" | "config" | "workspace";
     readonly enabled: boolean;
     readonly env?: Record<string, string>;
     readonly id: string;
     readonly maxOutputBytes: number;
     readonly mock: boolean;
+    readonly compatibleCore?: string;
+    readonly manifestSource: "global" | "project";
+    readonly packageId?: string;
+    readonly packageVersion?: string;
+    readonly protocolVersion?: string;
+    readonly schemaVersion?: 1 | 2;
     readonly timeoutMs: number;
     readonly tools: readonly string[];
+    readonly upgrade?: ExternalToolUpgradeState;
 }
 
 interface ResolvedSidecar {
@@ -76,10 +93,11 @@ interface ResolvedSidecar {
     readonly executor?: ToolManifestExecutor;
     readonly id: string;
     readonly reason?: string;
+    readonly stability: ExternalToolStability;
     readonly tools: readonly string[];
 }
 
-const EXTERNAL_TOOL_SCHEMA_VERSION = 1;
+const EXTERNAL_TOOL_SCHEMA_VERSION = 2;
 
 const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
     browserTool("browser.open", "Open a URL in the external browser sidecar.", false, ["url"]),
@@ -120,6 +138,8 @@ const EXTERNAL_TOOL_SPECS: readonly ExternalToolSpec[] = [
  * stay deterministic.
  */
 export class ExternalToolDescriptorComponent {
+    private readonly stability = new ExternalToolStabilityComponent();
+
     public async load(paths: FlyflorPaths): Promise<ExternalToolDefinition[]> {
         const [globalFile, projectFile] = await Promise.all([
             this.read(paths, { global: true }),
@@ -129,10 +149,10 @@ export class ExternalToolDescriptorComponent {
         const specsByName = new Map(EXTERNAL_TOOL_SPECS.map((spec) => [spec.name, spec]));
         const sidecarByTool = this.sidecarByTool(sidecars, specsByName);
 
-        return EXTERNAL_TOOL_SPECS.map((spec) => {
+        return Promise.all(EXTERNAL_TOOL_SPECS.map((spec) => {
             const sidecar = sidecarByTool.get(spec.name);
-            return this.definitionFor(spec, sidecar);
-        });
+            return this.definitionFor(paths, spec, sidecar);
+        }));
     }
 
     public async read(
@@ -159,17 +179,30 @@ export class ExternalToolDescriptorComponent {
 
     public normalize(file: ExternalToolManifestFile): readonly NormalizedSidecar[] {
         const manifest = this.normalizeManifestFile(file);
-        return Object.entries(manifest.sidecars ?? {}).map(([id, shape]) => this.normalizeSidecar(id, shape));
+        return Object.entries(manifest.sidecars ?? {}).map(([id, shape]) =>
+            this.normalizeSidecar(id, shape, manifest.schemaVersion, "project")
+        );
     }
 
-    private definitionFor(spec: ExternalToolSpec, sidecar: ResolvedSidecar | undefined): ExternalToolDefinition {
+    private async definitionFor(
+        paths: FlyflorPaths,
+        spec: ExternalToolSpec,
+        sidecar: ResolvedSidecar | undefined,
+    ): Promise<ExternalToolDefinition> {
         const available = sidecar?.available === true;
         const tags = sidecar
             ? [...spec.tags, `sidecar:${sidecar.id}`]
             : [...spec.tags, "sidecar:missing"];
+        const stability = sidecar?.stability ?? await this.stability.inspect(paths, {
+            cwd: "app",
+            discovery: "missing",
+            manifest: "valid",
+            toolNames: [spec.name],
+        });
         return {
             available,
             sidecarId: sidecar?.id,
+            stability,
             tool: {
                 descriptor: {
                     category: spec.category,
@@ -190,8 +223,9 @@ export class ExternalToolDescriptorComponent {
                 enabled: true,
                 executor: sidecar?.executor,
                 manifestSource: "project",
+                stability,
             },
-            unavailableReason: available ? undefined : sidecar?.reason ?? "external sidecar is not configured",
+            unavailableReason: available ? undefined : sidecar?.reason ?? stability.reason,
         };
     }
 
@@ -203,22 +237,40 @@ export class ExternalToolDescriptorComponent {
     }
 
     private async resolveSidecar(paths: FlyflorPaths, sidecar: NormalizedSidecar): Promise<ResolvedSidecar> {
+        const discovery = !sidecar.enabled ? "disabled" : sidecar.command ? "configured" : "missing";
+        const stability = await this.stability.inspect(paths, {
+            command: sidecar.command,
+            compatibleCore: sidecar.compatibleCore,
+            cwd: sidecar.cwd,
+            discovery,
+            manifest: "valid",
+            manifestSource: sidecar.manifestSource,
+            packageId: sidecar.packageId,
+            packageVersion: sidecar.packageVersion,
+            protocolVersion: sidecar.protocolVersion,
+            schemaVersion: sidecar.schemaVersion,
+            sidecarId: sidecar.id,
+            toolNames: sidecar.tools,
+            upgrade: sidecar.upgrade,
+        });
         if (!sidecar.enabled) {
-            return { available: false, id: sidecar.id, reason: "external sidecar is disabled", tools: sidecar.tools };
+            return { available: false, id: sidecar.id, reason: stability.reason, stability, tools: sidecar.tools };
         }
         if (!sidecar.command) {
             return {
                 available: false,
                 id: sidecar.id,
-                reason: "external sidecar command is not configured",
+                reason: stability.reason,
+                stability,
                 tools: sidecar.tools,
             };
         }
-        if (!(await this.commandExists(paths, sidecar))) {
+        if (stability.effective !== "available" && stability.effective !== "degraded") {
             return {
                 available: false,
                 id: sidecar.id,
-                reason: "external sidecar command is unavailable",
+                reason: stability.reason,
+                stability,
                 tools: sidecar.tools,
             };
         }
@@ -235,6 +287,7 @@ export class ExternalToolDescriptorComponent {
                 timeoutMs: sidecar.timeoutMs,
             },
             id: sidecar.id,
+            stability,
             tools: sidecar.tools,
         };
     }
@@ -258,55 +311,14 @@ export class ExternalToolDescriptorComponent {
         globalFile: ExternalToolManifestFile,
         projectFile: ExternalToolManifestFile,
     ): readonly NormalizedSidecar[] {
-        const merged = {
-            ...(globalFile.sidecars ?? {}),
-            ...(projectFile.sidecars ?? {}),
-        };
-        return Object.entries(merged).map(([id, shape]) => this.normalizeSidecar(id, shape));
-    }
-
-    private async commandExists(paths: FlyflorPaths, sidecar: NormalizedSidecar): Promise<boolean> {
-        const command = sidecar.command;
-        if (!command) {
-            return false;
+        const merged = new Map<string, NormalizedSidecar>();
+        for (const [id, shape] of Object.entries(globalFile.sidecars ?? {})) {
+            merged.set(id, this.normalizeSidecar(id, shape, globalFile.schemaVersion, "global"));
         }
-        const candidate = this.commandCandidate(paths, command, sidecar.cwd);
-        if (candidate) {
-            return this.pathExists(candidate);
+        for (const [id, shape] of Object.entries(projectFile.sidecars ?? {})) {
+            merged.set(id, this.normalizeSidecar(id, shape, projectFile.schemaVersion, "project"));
         }
-        for (const dir of this.pathEntries()) {
-            if (await this.pathExists(join(dir, command))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private commandCandidate(paths: FlyflorPaths, command: string, cwd: "project" | "config"): string | undefined {
-        if (isAbsolute(command)) {
-            return command;
-        }
-        const first = command.charAt(0);
-        if (first === ".") {
-            return join(cwd === "config" ? paths.configDir : paths.projectDir, command);
-        }
-        return undefined;
-    }
-
-    private pathEntries(): string[] {
-        return (process.env.PATH ?? "")
-            .split(delimiter)
-            .map((entry) => entry.trim())
-            .filter((entry) => entry.length > 0);
-    }
-
-    private async pathExists(path: string): Promise<boolean> {
-        try {
-            await access(path);
-            return true;
-        } catch {
-            return false;
-        }
+        return [...merged.values()];
     }
 
     private normalizeManifestFile(value: unknown): ExternalToolManifestFile {
@@ -330,21 +342,43 @@ export class ExternalToolDescriptorComponent {
         };
     }
 
-    private normalizeSidecar(id: string, shape: ExternalToolSidecarShape): NormalizedSidecar {
+    private normalizeSidecar(
+        id: string,
+        shape: ExternalToolSidecarShape,
+        schemaVersion: 1 | 2 | undefined,
+        manifestSource: "global" | "project",
+    ): NormalizedSidecar {
         const path = `sidecars.${id}`;
         return {
             args: this.optionalStringArray(shape.args, `${path}.args`) ?? [],
             command: this.optionalNonEmptyString(shape.command, `${path}.command`),
             config: this.optionalObject(shape.config, `${path}.config`, true) as Record<string, unknown> | undefined,
+            compatibleCore: this.optionalNonEmptyString(shape.compatibleCore, `${path}.compatibleCore`),
             cwd: this.optionalCwd(shape.cwd, `${path}.cwd`) ?? "project",
             enabled: this.optionalBoolean(shape.enabled, `${path}.enabled`) ?? true,
             env: this.optionalStringRecord(shape.env, `${path}.env`),
             id,
+            manifestSource,
             maxOutputBytes: this.optionalPositiveInt(shape.maxOutputBytes, `${path}.maxOutputBytes`) ?? 64 * 1024,
             mock: this.optionalBoolean(shape.mock, `${path}.mock`) ?? false,
+            packageId: this.optionalNonEmptyString(shape.packageId, `${path}.packageId`),
+            packageVersion: this.optionalNonEmptyString(shape.packageVersion, `${path}.packageVersion`),
+            protocolVersion: this.optionalNonEmptyString(shape.protocolVersion, `${path}.protocolVersion`),
+            schemaVersion,
             timeoutMs: this.optionalPositiveInt(shape.timeoutMs, `${path}.timeoutMs`) ?? 10_000,
             tools: this.optionalToolNames(shape.tools, `${path}.tools`) ?? EXTERNAL_TOOL_SPECS.map((spec) => spec.name),
+            upgrade: this.optionalUpgrade(shape.upgrade, `${path}.upgrade`),
         };
+    }
+
+    private optionalUpgrade(value: unknown, path: string): ExternalToolUpgradeState | undefined {
+        if (value === undefined) {
+            return undefined;
+        }
+        if (value !== "idle" && value !== "staged" && value !== "applying" && value !== "rollback-required" && value !== "failed") {
+            throw new Error(`${path} must be idle, staged, applying, rollback-required or failed.`);
+        }
+        return value;
     }
 
     private optionalToolNames(value: unknown, path: string): readonly string[] | undefined {
@@ -361,14 +395,14 @@ export class ExternalToolDescriptorComponent {
         return names;
     }
 
-    private optionalSchemaVersion(value: unknown, path: string): 1 | undefined {
+    private optionalSchemaVersion(value: unknown, path: string): 1 | 2 | undefined {
         if (value === undefined) {
             return undefined;
         }
-        if (value !== EXTERNAL_TOOL_SCHEMA_VERSION) {
-            throw new Error(`${path} must be 1.`);
+        if (value !== 1 && value !== EXTERNAL_TOOL_SCHEMA_VERSION) {
+            throw new Error(`${path} must be 1 or 2.`);
         }
-        return EXTERNAL_TOOL_SCHEMA_VERSION;
+        return value;
     }
 
     private optionalStringArray(value: unknown, path: string): readonly string[] | undefined {
@@ -409,12 +443,12 @@ export class ExternalToolDescriptorComponent {
         return string;
     }
 
-    private optionalCwd(value: unknown, path: string): "project" | "config" | undefined {
+    private optionalCwd(value: unknown, path: string): "project" | "app" | "config" | "workspace" | undefined {
         if (value === undefined) {
             return undefined;
         }
-        if (value !== "project" && value !== "config") {
-            throw new Error(`${path} must be project or config.`);
+        if (value !== "project" && value !== "app" && value !== "config" && value !== "workspace") {
+            throw new Error(`${path} must be project, app, config or workspace.`);
         }
         return value;
     }

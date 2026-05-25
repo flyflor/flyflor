@@ -108,6 +108,8 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.ReplayDetailGet,
                         GatewayControlMessageType.ThoughtDetailGet,
                         GatewayControlMessageType.CrystalList,
+                        GatewayControlMessageType.ExecutionJobList,
+                        GatewayControlMessageType.ExecutionJobDetailGet,
                         GatewayControlMessageType.HistoryList,
                         GatewayControlMessageType.TaskPlanDecide,
                         GatewayControlMessageType.GatewayMessageSend,
@@ -927,6 +929,74 @@ describe("SocketControlHub", () => {
         }
     });
 
+    test("serves execution job snapshots from brain.db without runtime dispatch", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-execution-job-query-"));
+        try {
+            const paths = testPaths(root);
+            await mkdir(paths.configDir, { recursive: true });
+            const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
+            await brain.open();
+            for (const [index, content] of [
+                { kind: "job.created", jobId: "job-1", requestId: "req-job-1", status: "created", stage: "created", progress: { childTotal: 1 }, ts: 100 },
+                { kind: "job.child.started", jobId: "job-1", requestId: "req-job-1", childJobId: "child-job-1", status: "running", stage: "child-running", ts: 101 },
+                { kind: "job.tool.executed", jobId: "job-1", requestId: "req-job-1", childJobId: "child-job-1", tool: { key: "workspace.read", ok: true }, ts: 102 },
+                { kind: "job.completed", jobId: "job-1", requestId: "req-job-1", status: "completed", stage: "completed", progress: { childCompleted: 1, childTotal: 1 }, ts: 103 },
+            ].entries()) {
+                brain.appendEvent({
+                    id: `execution-job-event-${index + 1}`,
+                    ownerKey: "scope:scope-job",
+                    sourceKey: "req-job-1",
+                    ts: content.ts,
+                    type: MemoryEventType.ExecutionJob,
+                    role: ModelRole.Assistant,
+                    content,
+                    importance: 0.25,
+                });
+            }
+            brain.close();
+            const queries = new SocketQueryComponent(paths);
+            const hub = createHub({ queries });
+            const socket = fakeSocket();
+            hub.open(socket);
+
+            await hub.message(
+                socket,
+                JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobList, { limit: 5 }, { id: "job-list-1" })),
+            );
+            await hub.message(
+                socket,
+                JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobDetailGet, { jobId: "job-1" }, { id: "job-detail-1" })),
+            );
+
+            expect(sent(socket).find((envelope) => envelope.correlationId === "job-list-1")).toMatchObject({
+                type: GatewayControlMessageType.ExecutionJobSnapshot,
+                payload: {
+                    data: [
+                        expect.objectContaining({
+                            jobId: "job-1",
+                            requestId: "req-job-1",
+                            status: "completed",
+                            toolCounts: { "workspace.read": 1 },
+                        }),
+                    ],
+                },
+            });
+            expect(sent(socket).find((envelope) => envelope.correlationId === "job-detail-1")).toMatchObject({
+                type: GatewayControlMessageType.ExecutionJobSnapshot,
+                payload: {
+                    data: expect.objectContaining({
+                        children: [expect.objectContaining({ childJobId: "child-job-1", toolCalls: 1 })],
+                        jobId: "job-1",
+                    }),
+                },
+            });
+            hub.dispose();
+            queries.dispose();
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     test("deduplicates fork memory rows with the same structured source and summaries", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-fork-memory-dedupe-"));
         try {
@@ -1350,6 +1420,7 @@ describe("SocketControlHub", () => {
         let statusReads = 0;
         let historyReads = 0;
         let askReads = 0;
+        let jobReads = 0;
         const bus = new GlobalEventBus();
         const hub = createHub({
             createContextFork: async (record) => record,
@@ -1369,6 +1440,16 @@ describe("SocketControlHub", () => {
                             importance: 0.5,
                         },
                         status: "active",
+                    }];
+                },
+                executionJobList: () => {
+                    jobReads += 1;
+                    return [{
+                        children: [],
+                        events: [],
+                        jobId: `job-${jobReads}`,
+                        status: "completed",
+                        toolCounts: {},
                     }];
                 },
                 historyList: () => {
@@ -1405,10 +1486,13 @@ describe("SocketControlHub", () => {
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.HistoryList, { limit: 2 })));
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.AskList, { status: "all" })));
         await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.AskList, { status: "all" })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobList, { status: "all" })));
+        await hub.message(socket, JSON.stringify(createGatewayControlEnvelope(GatewayControlMessageType.ExecutionJobList, { status: "all" })));
 
         expect(statusReads).toBe(1);
         expect(historyReads).toBe(1);
         expect(askReads).toBe(1);
+        expect(jobReads).toBe(1);
         expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.GatewayStatusSnapshot).slice(-2))
             .toMatchObject([
                 { payload: { cache: { hit: false }, status: { cache: { hits: 0, misses: 1 } } } },
@@ -1423,6 +1507,11 @@ describe("SocketControlHub", () => {
             .toMatchObject([
                 { payload: { cache: { hit: false }, data: [{ event: { id: "ask-1" } }] } },
                 { payload: { cache: { hit: true }, data: [{ event: { id: "ask-1" } }] } },
+            ]);
+        expect(sent(socket).filter((envelope) => envelope.type === GatewayControlMessageType.ExecutionJobSnapshot).slice(-2))
+            .toMatchObject([
+                { payload: { cache: { hit: false }, data: [{ jobId: "job-1" }] } },
+                { payload: { cache: { hit: true }, data: [{ jobId: "job-1" }] } },
             ]);
 
         bus.publish({
@@ -3301,6 +3390,8 @@ function fakeQueries(overrides: Partial<SocketQueryComponentPort> = {}): SocketQ
         blackboardDetail: async () => undefined,
         blackboardList: async () => [],
         crystalList: () => [],
+        executionJobDetail: () => undefined,
+        executionJobList: () => [],
         forkDetail: async () => undefined,
         forkList: () => [],
         forkMemory: async () => ({ brainDb: { bytes: null, human: null, status: "unknown" }, forks: [] }),
