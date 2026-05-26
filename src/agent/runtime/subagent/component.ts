@@ -32,6 +32,7 @@ import {
 const DEFAULT_SUBAGENT_CONCURRENCY = 4;
 const MAX_SUBAGENT_CONCURRENCY = 8;
 const DEFAULT_CHILD_TOOL_TURNS = 8;
+const CHILD_READ_ONLY_EXECUTION_OPERATION_BUDGET = 128;
 const MAX_SUBAGENT_TASKS = 24;
 
 @Component()
@@ -245,10 +246,15 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         );
         if (catalog.length === 0) {
             const error = "No tools are available for this child task after narrowing.";
+            const askRequired = this.childNeedsUserAsk(error, {
+                job,
+                stepCount: 0,
+            });
             if (childJobId) {
                 this.jobs.completeChild(job.jobId, {
+                    askRequired,
                     childJobId,
-                    status: "failed",
+                    status: "needs_user",
                     toolExecutions: [],
                 });
             }
@@ -261,9 +267,12 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                         childJobId,
                         jobId: job.jobId,
                         parentRequestId: input.parent.requestId,
-                        status: "failed",
+                        status: "needs_user",
                         toolCalls: 0,
                         error,
+                        askId: askRequired.askId,
+                        askRequired: true,
+                        crystalCandidate: true,
                     },
                     childRequestId,
                 ),
@@ -272,7 +281,8 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                 childJobId,
                 id,
                 ok: false,
-                status: "failed",
+                status: "needs_user",
+                askRequired,
                 error,
                 noProgressReason: error,
                 toolCalls: [],
@@ -282,14 +292,12 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             McpToolCallRequest & { key: string },
             McpToolCallExecution & { call: McpToolCallRequest & { key: string } }
         >();
+        const childBudget = this.childBudget(input.batch.maxToolTurns ?? DEFAULT_CHILD_TOOL_TURNS, catalog);
         const result = await runtime.run({
-            budget: {
-                executionOperationBudget: Math.max(1, input.batch.maxToolTurns ?? DEFAULT_CHILD_TOOL_TURNS),
-                modelToolTurnBudget: Math.max(1, input.batch.maxToolTurns ?? DEFAULT_CHILD_TOOL_TURNS),
-            },
+            budget: childBudget,
             initialMessages: this.childMessages(input.parent.initialMessages, task, catalog),
             loopGuard: { maxUnknownToolRepeats: 0 },
-            maxTurns: Math.max(1, input.batch.maxToolTurns ?? DEFAULT_CHILD_TOOL_TURNS),
+            maxTurns: childBudget.modelToolTurnBudget,
             noMoreToolsMessage: "The helper task needs user guidance before it can continue.",
             callbacks: {
                 execute: (calls) => input.executeCalls(calls, catalog, childRequestId),
@@ -418,10 +426,57 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         if (result.askRequired.budgetExhaustedReason === "risk-quota") return false;
         const hasProgress = result.executions.length > 0 || result.rawText.trim().length > 0;
         if (!hasProgress) return false;
+        const failedExecution = result.executions.find((execution) => !execution.ok);
+        if (failedExecution) return false;
         return result.executions.every((execution) => {
             const descriptor = this.childDescriptor(execution.call, catalog);
             return descriptor?.readOnly !== false && descriptor?.risk !== "high";
         });
+    }
+
+    /**
+     * Child model turns remain bounded by maxToolTurns. Read-only child tools
+     * get a larger execution-operation allowance so one child turn can perform
+     * the expected read/tree/glob/search fan-out without weakening write,
+     * process, approval or high-risk protections.
+     */
+    private childBudget(maxToolTurns: number, catalog: readonly McpToolCatalogEntry[]) {
+        const modelToolTurnBudget = Math.max(1, maxToolTurns);
+        const readOnlyCatalog = catalog.every((entry) => this.isReadOnlyEntry(entry));
+        return {
+            executionOperationBudget: readOnlyCatalog
+                ? Math.max(modelToolTurnBudget, CHILD_READ_ONLY_EXECUTION_OPERATION_BUDGET)
+                : modelToolTurnBudget,
+            modelToolTurnBudget,
+            riskQuota: 0,
+        };
+    }
+
+    private childNeedsUserAsk(
+        message: string,
+        context: {
+            job: ExecutionJob;
+            stepCount: number;
+        },
+    ) {
+        return {
+            askId: crypto.randomUUID(),
+            crystalCandidate: {
+                kind: "executive-loop-pause" as const,
+                reason: "subagent-needs-user",
+                summary: message,
+            },
+            job: this.jobs.snapshot(context.job.jobId),
+            jobId: context.job.jobId,
+            message,
+            pause: {
+                mode: "pause" as const,
+                options: [{ mode: "continue" as const }, { mode: "narrow" as const }, { mode: "stop" as const }] as const,
+            },
+            resume: { mode: "continue" as const },
+            stepCount: context.stepCount,
+            stop: "ask" as const,
+        };
     }
 
     private childMessages(

@@ -19,6 +19,7 @@ import {
 } from "../src/agent/mcp/index.ts";
 import { RuntimeModule } from "../src/agent/runtime/index.ts";
 import { RuntimeSkillUsageEventHandler } from "../src/agent/runtime/events/index.ts";
+import { RuntimeSubagentBatchComponent } from "../src/agent/runtime/subagent/index.ts";
 import { createSandboxPolicy, decideCapabilityExecution } from "../src/agent/sandbox/index.ts";
 import {
     findSkill,
@@ -2716,6 +2717,223 @@ describe("Skill and MCP capability config", () => {
         } finally {
             db.close();
         }
+    });
+
+    test("subagent.batch charges adjacent parent batch calls as one operation", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-parent-budget-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "a.txt"), "first child\n");
+        await writeFile(join(root, "b.txt"), "second child\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"a","goal":"read a","toolAllowlist":["workspace.read"]}],"maxToolTurns":2}},{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"b","goal":"read b","toolAllowlist":["workspace.read"]}],"maxToolTurns":2}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"a.txt"}}]}</agent_tool_calls>',
+            "child a done",
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"b.txt"}}]}</agent_tool_calls>',
+            "child b done",
+            "Both batches finished.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(
+            gatewayMessage("run two helper batches"),
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { executiveToolBudget: { executionOperationBudget: 1, modelToolTurnBudget: 3 } },
+        );
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Both batches finished.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "subagent", tool: "batch" }),
+            expect.objectContaining({ ok: true, server: "subagent", tool: "batch" }),
+        ]);
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: false,
+                children: [expect.objectContaining({ id: "a", ok: true, status: "completed", toolCalls: 1 })],
+            }),
+            expect.objectContaining({
+                needsUser: false,
+                children: [expect.objectContaining({ id: "b", ok: true, status: "completed", toolCalls: 1 })],
+            }),
+        ]);
+        expect(sink.events.find((event) => event.type === RuntimeEventType.ExecutiveLoopPaused)).toBeUndefined();
+    });
+
+    test("subagent.batch read-only child tools are not capped by child execution operation budget", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-readonly-budget-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "multi read progress\n");
+        await writeFile(join(root, "notes.md"), "searchable child note\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"reader","goal":"inspect files","toolAllowlist":["workspace.read","workspace.tree","workspace.glob","workspace.search"]}],"maxToolTurns":1}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"tree","input":{"path":".","maxDepth":1}},{"server":"workspace","tool":"glob","input":{"pattern":"*.md"}},{"server":"workspace","tool":"read","input":{"path":"README.md"}},{"server":"workspace","tool":"search","input":{"query":"child","path":"notes.md"}}]}</agent_tool_calls>',
+            "Read-only batch progress was enough.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(gatewayMessage("delegate read-only inspection"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Read-only batch progress was enough.");
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: false,
+                children: [
+                    expect.objectContaining({
+                        id: "reader",
+                        limited: true,
+                        limitReason: "tool-budget-exhausted",
+                        ok: true,
+                        status: "completed",
+                        toolCalls: 4,
+                    }),
+                ],
+            }),
+        ]);
+        const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
+        try {
+            const jobRows = db
+                .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
+                .all() as Array<{ content: string }>;
+            const toolEvents = jobRows
+                .map((row) => JSON.parse(row.content) as { kind: string; tool?: Record<string, unknown> })
+                .filter((event) => event.kind === "job.tool.executed")
+                .map((event) => event.tool);
+            expect(toolEvents).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
+                    expect.objectContaining({ ok: true, server: "workspace", tool: "glob" }),
+                    expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+                    expect.objectContaining({ ok: true, server: "workspace", tool: "search" }),
+                ]),
+            );
+            expect(toolEvents).toHaveLength(4);
+        } finally {
+            db.close();
+        }
+    });
+
+    test("subagent.batch child schema errors still bubble as needs_user", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-schema-needs-user-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"bad-schema","goal":"bad schema","toolAllowlist":["workspace.read"]}],"maxToolTurns":1}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{}}]}</agent_tool_calls>',
+            "Should not be used as final.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(gatewayMessage("delegate bad schema"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).toBe("ask");
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: true,
+                children: [
+                    expect.objectContaining({
+                        id: "bad-schema",
+                        limited: false,
+                        status: "needs_user",
+                    }),
+                ],
+            }),
+        ]);
+        const childEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentChildEnd);
+        expect(childEnd?.payload).toEqual(
+            expect.objectContaining({
+                childId: "bad-schema",
+                askRequired: true,
+                limited: false,
+                status: "needs_user",
+                suppressedAskRequired: false,
+            }),
+        );
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: false, server: "subagent", tool: "batch" }),
+        ]);
+        expect(sink.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.ExecutiveLoopPaused,
+                    payload: expect.objectContaining({ toolBudgetExhausted: true }),
+                }),
+            ]),
+        );
+    });
+
+    test("subagent.batch child with no narrowed tools bubbles as needs_user", async () => {
+        const sink = new CapturingSink();
+        const component = new RuntimeSubagentBatchComponent(sink);
+
+        const result = await component.run({
+            batch: {
+                maxToolTurns: 1,
+                tasks: [{ id: "empty", goal: "no tools", toolAllowlist: ["external.missing"] }],
+            },
+            parent: {
+                catalog: [],
+                initialMessages: [],
+                requestId: crypto.randomUUID(),
+            },
+            child: {
+                generate: async () => {
+                    throw new Error("child model should not run without tools");
+                },
+                renderResults: () => "",
+            },
+            executeCalls: async () => {
+                throw new Error("child tools should not run without a catalog");
+            },
+        });
+
+        expect(result.needsUser).toBe(true);
+        expect(result.askRequired).toEqual(
+            expect.objectContaining({
+                jobId: result.jobId,
+                message: "No tools are available for this child task after narrowing.",
+                stop: "ask",
+            }),
+        );
+        expect(result.results).toEqual([
+            expect.objectContaining({
+                id: "empty",
+                status: "needs_user",
+                toolCalls: [],
+            }),
+        ]);
+        const childEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentChildEnd);
+        expect(childEnd?.payload).toEqual(
+            expect.objectContaining({
+                childId: "empty",
+                askRequired: true,
+                status: "needs_user",
+                toolCalls: 0,
+            }),
+        );
     });
 
     test("subagent.batch child needs_user pauses parent turn with ASK", async () => {
