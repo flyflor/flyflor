@@ -2461,10 +2461,57 @@ describe("Skill and MCP capability config", () => {
                 .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
                 .all() as Array<{ content: string }>;
             const jobEvents = jobRows.map(
-                (row) => JSON.parse(row.content) as { kind: string; jobId: string; progress?: unknown },
+                (row) =>
+                    JSON.parse(row.content) as {
+                        childId?: string;
+                        childJobId?: string;
+                        children?: Array<Record<string, unknown>>;
+                        kind: string;
+                        jobId: string;
+                        progress?: unknown;
+                        task?: Record<string, unknown>;
+                        tool?: Record<string, unknown>;
+                        toolCalls?: number;
+                    },
             );
             expect(jobEvents.map((event) => event.kind)).toEqual(
                 expect.arrayContaining(["job.created", "job.child.completed", "job.tool.executed", "job.completed"]),
+            );
+            expect(jobEvents.find((event) => event.kind === "job.created")?.children).toEqual([
+                expect.objectContaining({
+                    childId: "a",
+                    childJobId: expect.any(String),
+                    id: "a",
+                    task: expect.objectContaining({ goal: "read a" }),
+                    toolCalls: 0,
+                }),
+                expect.objectContaining({
+                    childId: "b",
+                    childJobId: expect.any(String),
+                    id: "b",
+                    task: expect.objectContaining({ goal: "read b" }),
+                    toolCalls: 0,
+                }),
+            ]);
+            expect(jobEvents.find((event) => event.kind === "job.child.completed")).toEqual(
+                expect.objectContaining({
+                    childId: expect.any(String),
+                    childJobId: expect.any(String),
+                    task: expect.objectContaining({ goal: expect.any(String) }),
+                    toolCalls: 1,
+                }),
+            );
+            expect(jobEvents.find((event) => event.kind === "job.tool.executed")?.tool).toEqual(
+                expect.objectContaining({
+                    durationMs: expect.any(Number),
+                    inputPreview: expect.any(Object),
+                    key: "workspace.read",
+                    ok: true,
+                    outputPreview: expect.any(Object),
+                    server: "workspace",
+                    status: "ok",
+                    tool: "read",
+                }),
             );
             const jobIds = new Set(jobEvents.map((event) => event.jobId));
             expect(jobIds.size).toBe(1);
@@ -2697,15 +2744,17 @@ describe("Skill and MCP capability config", () => {
                 .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
                 .all() as Array<{ content: string }>;
             const toolEvent = jobRows
-                .map((row) => JSON.parse(row.content) as { kind: string; tool?: Record<string, unknown>; childJobId?: string })
+                .map((row) => JSON.parse(row.content) as { childId?: string; kind: string; tool?: Record<string, unknown>; childJobId?: string })
                 .find((event) => event.kind === "job.tool.executed");
             expect(toolEvent).toEqual(
                 expect.objectContaining({
+                    childId: "reader",
                     childJobId: expect.any(String),
                     tool: expect.objectContaining({
                         key: "workspace.read",
                         server: "workspace",
                         tool: "read",
+                        status: "ok",
                         inputPreview: expect.any(Object),
                         outputPreview: expect.any(Object),
                         durationMs: expect.any(Number),

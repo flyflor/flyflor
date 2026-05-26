@@ -109,10 +109,13 @@ Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail st
 | `scope.list` / `scope.detail.get` | Scope records |
 | `task.list` / `task.detail.get` | Task plans |
 | `thought.detail.get` | Thought/detail projection |
+| `execution.job.list` / `execution.job.detail.get` | Execution job snapshots |
 
 Detail payloads 使用 `payload.data`。
 
 `task.plan.decide` 不是 read-model query；它是用于确认、补充或放弃待确认计划的显式 control write command。
+
+`execution.job.snapshot` 来自 `brain.db` execution-job ledger。`children[]` 携带 `childId` / `id`、`childJobId`、有限任务摘要、`status`、`toolCalls`、`limited` 和 `limitReason`；`toolExecutions[]` 携带 `childJobId`、`server`、`tool`、`key`、`ok` / `status`、有限 input/output preview、`error`、`durationMs`、`limited` 和 `limitReason`。这些字段只用于 TUI 链接 job / child / tool / model 审计，不是 prompt 容器。
 
 历史对话列表获取使用 `history.list`；detail lookup 使用 `history.snapshot` 和上面的 detail request family。
 

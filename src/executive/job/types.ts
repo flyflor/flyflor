@@ -51,16 +51,27 @@ export interface ExecutionJobToolExecution {
     readonly ok: boolean;
     readonly outputPreview?: Record<string, unknown>;
     readonly server: string;
+    readonly status?: string;
     readonly tool: string;
 }
 
+export interface ExecutionJobChildTaskSummary {
+    readonly goal?: string;
+    readonly id?: string;
+    readonly toolAllowlist?: readonly string[];
+}
+
 export interface ExecutionChildJob {
+    readonly childId: string;
     readonly childJobId: string;
     readonly completedAt?: string;
     readonly createdAt: string;
     readonly id: string;
+    readonly limited?: boolean;
+    readonly limitReason?: string;
     readonly parentJobId: string;
     readonly status: ExecutionJobStatus;
+    readonly task?: ExecutionJobChildTaskSummary;
     readonly toolCalls: number;
     readonly updatedAt: string;
 }
@@ -87,7 +98,10 @@ export interface ExecutionJob {
 
 export interface ExecutionJobCreateInput {
     readonly budget?: ExecutiveToolRuntimeBudget;
-    readonly childIds: readonly string[];
+    readonly children: readonly {
+        readonly id: string;
+        readonly task?: ExecutionJobChildTaskSummary;
+    }[];
     readonly ownerKey?: string;
     readonly parentJobId?: string;
     readonly requestId: string;

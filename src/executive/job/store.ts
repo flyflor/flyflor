@@ -1,6 +1,6 @@
 import { Component } from "../../agent/di/decorators/index.ts";
 import { CapabilityComponent } from "../../components/index.ts";
-import { ExecutionJobEventKind } from "../../protocol/contracts/index.ts";
+import { ExecutionJobEventKind, type ExecutionJobLedgerContent } from "../../protocol/contracts/index.ts";
 import {
     ExecutionJobStage,
     ExecutionJobStatus,
@@ -29,12 +29,14 @@ export class ExecutionJobStore extends CapabilityComponent {
     public create(input: ExecutionJobCreateInput): ExecutionJob {
         const now = new Date().toISOString();
         const jobId = crypto.randomUUID();
-        const children = input.childIds.map((id): ExecutionChildJob => ({
+        const children = input.children.map((child): ExecutionChildJob => ({
+            childId: child.id,
             childJobId: crypto.randomUUID(),
             createdAt: now,
-            id,
+            id: child.id,
             parentJobId: jobId,
             status: ExecutionJobStatus.Created,
+            task: child.task,
             toolCalls: 0,
             updatedAt: now,
         }));
@@ -54,7 +56,10 @@ export class ExecutionJobStore extends CapabilityComponent {
             updatedAt: now,
         };
         this.jobs.set(jobId, job);
-        this.emit(job, ExecutionJobEventKind.Created, { summary: `Execution job created with ${children.length} child tasks.` });
+        this.emit(job, ExecutionJobEventKind.Created, {
+            children: children.map((child) => this.childLedgerSnapshot(child)),
+            summary: `Execution job created with ${children.length} child tasks.`,
+        });
         return job;
     }
 
@@ -82,7 +87,9 @@ export class ExecutionJobStore extends CapabilityComponent {
         });
         const child = children.find((candidate) => candidate.childJobId === childJobId);
         this.emit(next, ExecutionJobEventKind.ChildStarted, {
+            childId: child?.childId,
             childJobId,
+            task: this.taskLedgerSnapshot(child?.task),
             summary: `Child job ${child?.id ?? childJobId} started.`,
         });
         return next;
@@ -98,6 +105,8 @@ export class ExecutionJobStore extends CapabilityComponent {
                 ? {
                       ...child,
                       completedAt: now,
+                      limited: this.childLimited(input.toolExecutions),
+                      limitReason: this.childLimitReason(input.toolExecutions),
                       status: childStatus,
                       toolCalls: input.toolExecutions.length,
                       updatedAt: now,
@@ -121,16 +130,23 @@ export class ExecutionJobStore extends CapabilityComponent {
             status: input.status === "needs_user" ? ExecutionJobStatus.NeedsUser : job.status,
             toolExecutions,
         });
+        const completedChild = children.find((child) => child.childJobId === input.childJobId);
         const kind = this.childLedgerKind(input.status);
         this.emit(next, kind, {
             askId: input.askRequired?.askId,
+            childId: completedChild?.childId,
             childJobId: input.childJobId,
             crystalCandidate: input.askRequired?.crystalCandidate,
             error: input.askRequired?.message,
+            limited: completedChild?.limited,
+            limitReason: completedChild?.limitReason,
+            task: this.taskLedgerSnapshot(completedChild?.task),
+            toolCalls: completedChild?.toolCalls,
             summary: `Child job ${input.childJobId} ${input.status}.`,
         });
         for (const execution of input.toolExecutions) {
             this.emit(next, ExecutionJobEventKind.ToolExecuted, {
+                childId: completedChild?.childId,
                 childJobId: input.childJobId,
                 error: execution.error,
                 summary: `${execution.server}.${execution.tool} ${execution.ok ? "ok" : "failed"}.`,
@@ -145,12 +161,14 @@ export class ExecutionJobStore extends CapabilityComponent {
                     limited: execution.limited,
                     limitReason: execution.limitReason,
                     ok: execution.ok,
+                    status: execution.status ?? (execution.ok ? "ok" : "failed"),
                 },
             });
         }
         if (input.askRequired) {
             this.emit(next, ExecutionJobEventKind.PausedAsk, {
                 askId: input.askRequired.askId,
+                childId: completedChild?.childId,
                 childJobId: input.childJobId,
                 crystalCandidate: input.askRequired.crystalCandidate,
                 summary: input.askRequired.message.slice(0, 240),
@@ -250,6 +268,36 @@ export class ExecutionJobStore extends CapabilityComponent {
             ownerKey: job.ownerKey,
             sourceKey: job.sourceKey,
         });
+    }
+
+    private childLedgerSnapshot(child: ExecutionChildJob): NonNullable<ExecutionJobLedgerContent["children"]>[number] {
+        return {
+            childId: child.childId,
+            childJobId: child.childJobId,
+            id: child.id,
+            limited: child.limited,
+            limitReason: child.limitReason,
+            status: child.status,
+            task: this.taskLedgerSnapshot(child.task),
+            toolCalls: child.toolCalls,
+        };
+    }
+
+    private taskLedgerSnapshot(task: ExecutionChildJob["task"] | undefined): Record<string, unknown> | undefined {
+        if (!task) return undefined;
+        return {
+            goal: task.goal,
+            id: task.id,
+            toolAllowlist: task.toolAllowlist,
+        };
+    }
+
+    private childLimited(executions: readonly { limited?: boolean }[]): boolean | undefined {
+        return executions.some((execution) => execution.limited === true) ? true : undefined;
+    }
+
+    private childLimitReason(executions: readonly { limitReason?: string }[]): string | undefined {
+        return executions.find((execution) => execution.limitReason)?.limitReason;
     }
 
     private progress(

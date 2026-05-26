@@ -999,10 +999,69 @@ describe("SocketControlHub", () => {
             const brain = new BrainStore({ dbPath: join(paths.configDir, "brain.db") });
             await brain.open();
             for (const [index, content] of [
-                { kind: "job.created", jobId: "job-1", requestId: "req-job-1", status: "created", stage: "created", progress: { childTotal: 1 }, ts: 100 },
-                { kind: "job.child.started", jobId: "job-1", requestId: "req-job-1", childJobId: "child-job-1", status: "running", stage: "child-running", ts: 101 },
-                { kind: "job.tool.executed", jobId: "job-1", requestId: "req-job-1", childJobId: "child-job-1", tool: { key: "workspace.read", ok: true }, ts: 102 },
-                { kind: "job.completed", jobId: "job-1", requestId: "req-job-1", status: "completed", stage: "completed", progress: { childCompleted: 1, childTotal: 1 }, ts: 103 },
+                {
+                    kind: "job.created",
+                    jobId: "job-1",
+                    requestId: "req-job-1",
+                    status: "created",
+                    stage: "created",
+                    progress: { childTotal: 1 },
+                    children: [
+                        {
+                            childId: "inspect",
+                            childJobId: "child-job-1",
+                            id: "inspect",
+                            status: "created",
+                            task: { id: "inspect", goal: "Inspect workspace files", toolAllowlist: ["workspace.read"] },
+                            toolCalls: 0,
+                        },
+                    ],
+                    ts: 100,
+                },
+                {
+                    kind: "job.child.started",
+                    jobId: "job-1",
+                    requestId: "req-job-1",
+                    childId: "inspect",
+                    childJobId: "child-job-1",
+                    status: "running",
+                    stage: "child-running",
+                    task: { id: "inspect", goal: "Inspect workspace files" },
+                    ts: 101,
+                },
+                {
+                    kind: "job.tool.executed",
+                    jobId: "job-1",
+                    requestId: "req-job-1",
+                    childId: "inspect",
+                    childJobId: "child-job-1",
+                    tool: {
+                        key: "workspace.read",
+                        ok: true,
+                        status: "ok",
+                        server: "workspace",
+                        tool: "read",
+                        inputPreview: { path: "README.md" },
+                        outputPreview: { text: "short output" },
+                        durationMs: 12,
+                        limited: true,
+                        limitReason: "tool-budget-exhausted",
+                    },
+                    ts: 102,
+                },
+                {
+                    kind: "job.child.completed",
+                    jobId: "job-1",
+                    requestId: "req-job-1",
+                    childId: "inspect",
+                    childJobId: "child-job-1",
+                    status: "completed",
+                    limited: true,
+                    limitReason: "tool-budget-exhausted",
+                    toolCalls: 1,
+                    ts: 103,
+                },
+                { kind: "job.completed", jobId: "job-1", requestId: "req-job-1", status: "completed", stage: "completed", progress: { childCompleted: 1, childTotal: 1, toolCalls: 1 }, ts: 104 },
             ].entries()) {
                 brain.appendEvent({
                     id: `execution-job-event-${index + 1}`,
@@ -1047,8 +1106,34 @@ describe("SocketControlHub", () => {
                 type: GatewayControlMessageType.ExecutionJobSnapshot,
                 payload: {
                     data: expect.objectContaining({
-                        children: [expect.objectContaining({ childJobId: "child-job-1", toolCalls: 1 })],
+                        children: [
+                            expect.objectContaining({
+                                childId: "inspect",
+                                childJobId: "child-job-1",
+                                id: "inspect",
+                                limited: true,
+                                limitReason: "tool-budget-exhausted",
+                                status: "completed",
+                                task: expect.objectContaining({ goal: "Inspect workspace files" }),
+                                toolCalls: 1,
+                            }),
+                        ],
                         jobId: "job-1",
+                        toolExecutions: [
+                            expect.objectContaining({
+                                childJobId: "child-job-1",
+                                durationMs: 12,
+                                inputPreview: { path: "README.md" },
+                                key: "workspace.read",
+                                limited: true,
+                                limitReason: "tool-budget-exhausted",
+                                ok: true,
+                                outputPreview: { text: "short output" },
+                                server: "workspace",
+                                status: "ok",
+                                tool: "read",
+                            }),
+                        ],
                     }),
                 },
             });
@@ -1512,6 +1597,7 @@ describe("SocketControlHub", () => {
                         jobId: `job-${jobReads}`,
                         status: "completed",
                         toolCounts: {},
+                        toolExecutions: [],
                     }];
                 },
                 historyList: () => {

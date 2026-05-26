@@ -283,22 +283,65 @@ export class SocketBrainReader {
         const first = contents[0];
         if (!first) return undefined;
         const last = contents[contents.length - 1] ?? first;
-        const children = new Map<string, { childJobId: string; status?: string; toolCalls: number }>();
+        const children = new Map<string, SocketExecutionJobSnapshot["children"][number]>();
+        const toolExecutions: SocketExecutionJobSnapshot["toolExecutions"] = [];
+        const childToolCounts = new Map<string, number>();
         const toolCounts: Record<string, number> = {};
         let errorSummary: string | undefined;
         let crystalCandidateSummary: string | undefined;
         for (const content of contents) {
+            for (const childContent of content.children ?? []) {
+                const child = children.get(childContent.childJobId) ?? { childJobId: childContent.childJobId, toolCalls: 0 };
+                children.set(childContent.childJobId, {
+                    ...child,
+                    childId: childContent.childId ?? child.childId ?? childContent.id,
+                    id: childContent.id ?? child.id ?? childContent.childId,
+                    limited: childContent.limited ?? child.limited,
+                    limitReason: childContent.limitReason ?? child.limitReason,
+                    status: childContent.status ?? child.status,
+                    task: childContent.task ?? child.task,
+                    toolCalls: childContent.toolCalls ?? child.toolCalls,
+                });
+            }
             if (content.childJobId) {
                 const child = children.get(content.childJobId) ?? { childJobId: content.childJobId, toolCalls: 0 };
-                if (content.status) child.status = content.status;
-                children.set(content.childJobId, child);
+                children.set(content.childJobId, {
+                    ...child,
+                    childId: content.childId ?? child.childId,
+                    id: content.childId ?? child.id,
+                    limited: content.limited ?? child.limited,
+                    limitReason: content.limitReason ?? child.limitReason,
+                    status: content.status ?? child.status,
+                    task: content.task ?? child.task,
+                    toolCalls: content.toolCalls ?? child.toolCalls,
+                });
             }
             if (content.tool) {
                 toolCounts[content.tool.key] = (toolCounts[content.tool.key] ?? 0) + 1;
+                toolExecutions.push({
+                    childJobId: content.childJobId,
+                    durationMs: content.tool.durationMs,
+                    error: content.tool.error,
+                    inputPreview: content.tool.inputPreview,
+                    key: content.tool.key,
+                    limited: content.tool.limited,
+                    limitReason: content.tool.limitReason,
+                    ok: content.tool.ok,
+                    outputPreview: content.tool.outputPreview,
+                    server: content.tool.server,
+                    status: content.tool.status ?? (content.tool.ok ? "ok" : "failed"),
+                    tool: content.tool.tool,
+                });
                 if (content.childJobId) {
                     const child = children.get(content.childJobId) ?? { childJobId: content.childJobId, toolCalls: 0 };
-                    child.toolCalls += 1;
-                    children.set(content.childJobId, child);
+                    const childToolCalls = (childToolCounts.get(content.childJobId) ?? 0) + 1;
+                    childToolCounts.set(content.childJobId, childToolCalls);
+                    children.set(content.childJobId, {
+                        ...child,
+                        limited: content.tool.limited ?? child.limited,
+                        limitReason: content.tool.limitReason ?? child.limitReason,
+                        toolCalls: Math.max(child.toolCalls, childToolCalls),
+                    });
                 }
             }
             if (!errorSummary && content.error) errorSummary = content.error;
@@ -322,6 +365,7 @@ export class SocketBrainReader {
             startedAt: new Date(events[0]?.ts ?? Date.now()).toISOString(),
             status: last.status,
             toolCounts,
+            toolExecutions,
             updatedAt: new Date(events[events.length - 1]?.ts ?? Date.now()).toISOString(),
         };
     }
