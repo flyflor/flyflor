@@ -9,6 +9,8 @@ Socket control is exposed at:
 
 `/ws` speaks JSON control/event envelopes from `src/protocol/control/envelope.ts`. The stable protocol name is `flyflor.ws.v1`. Message names such as `gateway.message.send` are wire compatibility names.
 
+For TUI and other external shells, `gateway.*`, `event.*` and query snapshot messages are the public vascular boundary. They expose live turn transport, RuntimeEvent emit/subscribe and read-model snapshots; they are not a private Runtime API and must not be extended with TUI-only runtime calls.
+
 ## Core Message Families
 
 Client-to-server messages include:
@@ -21,7 +23,8 @@ Client-to-server messages include:
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
-- `history.snapshot`
+- `fork.memory.get`
+- `task.plan.decide`
 - detail queries for ASK, Blackboard, Crystal, Fork, Replay, Scope, Task and Thought records
 
 Server-to-client messages include:
@@ -34,6 +37,7 @@ Server-to-client messages include:
 - `turn.final`
 - `turn.error`
 - `event.publish`
+- query snapshots such as `history.snapshot`, `ask.snapshot`, `fork.snapshot`, `fork.memory.snapshot`, `task.snapshot` and `execution.job.snapshot`
 
 ## Context Input
 
@@ -58,6 +62,10 @@ Conversation, user, thread and connection fields are routing/audit metadata. The
 | Event stream | `src/events` through socket subscription | Realtime runtime, ASK, memory, tool, gateway and execution events. |
 
 连接级 snapshot、turn 级 snapshot、事件流 must stay distinct. A status snapshot is not a replay record, and a ledger query is not a prompt context.
+
+Realtime panels should subscribe with `event.subscribe`; detail panels should refresh through snapshot queries. Event subscription selectors are closed over stable event classes and `RuntimeEventType` values. Unknown classes or types return `invalid-payload` and must not mutate peer subscription state.
+
+`task.plan.decide` is the explicit socket control write command for plan decisions. It is handled by socket control and applies through the task-plan query/write boundary; it is not a passive read-model snapshot query.
 
 ## Rust 最小接线清单
 

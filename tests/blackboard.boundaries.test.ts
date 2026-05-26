@@ -106,6 +106,67 @@ describe("Blackboard control boundary", () => {
 
         expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.BlackboardLeaseAcquired);
         expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.BlackboardLeaseReleased);
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardLeaseAcquired,
+                    payload: expect.objectContaining({
+                        scopeConstraintId: "stdio:account-a:chat-1:thread-1",
+                        turnId: first.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardTurnStart,
+                    payload: expect.objectContaining({
+                        scopeConstraintId: "stdio:account-a:chat-1:thread-1",
+                        turnId: first.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardMessageAppended,
+                    payload: expect.objectContaining({
+                        messageId: expect.any(String),
+                        turnId: first.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardWorkerStart,
+                    payload: expect.objectContaining({
+                        round: 1,
+                        turnId: first.turn.id,
+                        workerRole: TEST_ANALYSIS_ROLE,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardWorkerEnd,
+                    payload: expect.objectContaining({
+                        stepId: step.id,
+                        turnId: first.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardDecisionRequested,
+                    payload: expect.objectContaining({
+                        decisionId: decision.id,
+                        turnId: first.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardLeaseReleased,
+                    payload: expect.objectContaining({
+                        scopeConstraintId: "stdio:account-a:chat-1:thread-1",
+                        turnId: first.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardTurnEnd,
+                    payload: expect.objectContaining({
+                        status: BlackboardTurnStatus.NeedsUser,
+                        turnId: first.turn.id,
+                    }),
+                }),
+            ]),
+        );
         for (const item of events.events) {
             expect(() => JSON.stringify(item)).not.toThrow();
         }
@@ -720,6 +781,25 @@ describe("Blackboard control boundary", () => {
         // LF-R3 slice D：`flyflor-decision-form` 系统消息退役，结构化 decisions 才是契约。
         expect(finished?.messages.some((message) => message.content.includes("flyflor-decision-form"))).toBe(false);
         expect(events.events.map((item) => item.type)).toContain(RuntimeEventType.BlackboardLivelockDetected);
+        expect(events.events).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardLivelockDetected,
+                    payload: expect.objectContaining({
+                        blockers: expect.any(Array),
+                        reason: "peer-qa-open-issues",
+                        turnId: start.turn.id,
+                    }),
+                }),
+                expect.objectContaining({
+                    type: RuntimeEventType.BlackboardDecisionRequested,
+                    payload: expect.objectContaining({
+                        decisionId: finished?.decisions[0]?.id,
+                        turnId: start.turn.id,
+                    }),
+                }),
+            ]),
+        );
     });
 
     test("agreement without final outcome cannot terminate the blackboard", async () => {

@@ -42,6 +42,10 @@ Events 是 observability 和 coordination signals。它们不是 prompt 容器�
 
 `event.subscribe` 通过 `/ws` 暴露 RuntimeEvents。Subscription filters 使用 protocol 中的 event classes 和 event type names。实时 consumer 应订阅 events；历史 consumer 应查询 `src/socket/query` read models。
 
+`/ws` 的 `event.subscribe` / `event.publish` 和 snapshot query messages 是 TUI 与其他 thin clients 的公开边界。它们是血管层 transport contract，不是 Runtime 私有 API。Client 可以用 events 渲染实时 timeline 变化，再通过 `blackboard.detail.get`、`ask.detail.get`、`execution.job.detail.get` 或 `gateway.status.get` 等 query/read snapshot 读取权威 detail。
+
+稳定 event type selector 对 `RuntimeEventType` 闭合；未知 selector 必须返回 `invalid-payload`，且不得进入 socket subscription state。面向 TUI 的 event payload 必须携带 refresh 和 drilldown 所需稳定 id，包括 `executive.loop.paused` 的 `askId`，subagent events 的 `jobId` / `batchId` / `childId`，以及 Blackboard events 的 `turnId` 和 message/step/decision ids。
+
 ## 边界
 
 Event payloads 必须可 JSON 序列化。它们不能携带 socket、stream、function 或 class instance。

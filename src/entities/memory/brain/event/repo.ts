@@ -24,6 +24,7 @@ export interface BrainEventInput {
 
 export interface BrainEventListInput {
     codenameId?: string;
+    contextForkId?: string;
     limit?: number;
     sinceTs?: number;
     statusIn?: MemoryEventRecord extends never ? never : MemoryEventStatus[];
@@ -88,6 +89,11 @@ export class BrainEventRepo {
                 LEFT JOIN memory_state s ON s.event_id = e.id
                 WHERE (${input.ownerKey ?? null} IS NULL OR e.owner_key = ${input.ownerKey ?? null})
                   AND (${input.codenameId ?? null} IS NULL OR e.codename_id = ${input.codenameId ?? null})
+                  AND (
+                    ${input.contextForkId ?? null} IS NULL
+                    OR e.owner_key = ${input.contextForkId ? `fork:${input.contextForkId}` : null}
+                    OR json_extract(e.content, '$.contextForkId') = ${input.contextForkId ?? null}
+                  )
                   AND (${input.type ?? null} IS NULL OR e.type = ${input.type ?? null})
                   AND (${input.sinceTs ?? null} IS NULL OR e.ts >= ${input.sinceTs ?? null})
                   AND (${input.untilTs ?? null} IS NULL OR e.ts <= ${input.untilTs ?? null})

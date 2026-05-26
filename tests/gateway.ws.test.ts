@@ -525,6 +525,56 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("subscribes to all stable runtime event types while rejecting unknown types", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    { types: Object.values(RuntimeEventType) },
+                    { id: "runtime-event-subscribe-all-1", requestId: "req-runtime-event-subscribe-all-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "runtime-event-subscribe-all-1",
+            requestId: "req-runtime-event-subscribe-all-1",
+            type: GatewayControlMessageType.Ack,
+            payload: {
+                subscriptions: [{ types: Object.values(RuntimeEventType) }],
+            },
+        });
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    { types: ["runtime.unknown"] },
+                    { id: "runtime-event-subscribe-unknown-1", requestId: "req-runtime-event-subscribe-unknown-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "runtime-event-subscribe-unknown-1",
+            requestId: "req-runtime-event-subscribe-unknown-1",
+            type: GatewayControlMessageType.Error,
+            payload: {
+                code: GatewayControlErrorCode.InvalidPayload,
+                details: { type: "runtime.unknown" },
+                message: "event subscription types must use known runtime event types",
+            },
+        });
+        hub.dispose();
+    });
+
     test("delivers TUI topic refresh events for recall, ask, fork, blackboard, and todo panels", async () => {
         const bus = new GlobalEventBus();
         const topicTypes = [
@@ -812,6 +862,18 @@ describe("SocketControlHub", () => {
                 .map((envelope) => eventTypeFromEnvelope(envelope))).toEqual([
                     RuntimeEventType.BlackboardMessageAppended,
                     RuntimeEventType.BlackboardTurnEnd,
+                ]);
+            expect(sent(socket)
+                .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+                .map((envelope) => envelope.payload?.event?.payload)).toEqual([
+                    expect.objectContaining({
+                        messageId: expect.any(String),
+                        turnId: start.turn.id,
+                    }),
+                    expect.objectContaining({
+                        status: "converged",
+                        turnId: start.turn.id,
+                    }),
                 ]);
             expect(sent(socket).find((envelope) => envelope.correlationId === "blackboard-live-detail-1"))
                 .toMatchObject({
@@ -1630,7 +1692,7 @@ describe("SocketControlHub", () => {
         const hub = createHub({
             queries: fakeQueries({
                 historyList: (input) => {
-                expect(input).toEqual({ beforeTs: 200, limit: 2 });
+                expect(input).toEqual({ beforeTs: 200, contextForkId: "fork-1", limit: 2 });
                 return [
                     {
                         assistantText: "Assistant 1",
@@ -1706,7 +1768,7 @@ describe("SocketControlHub", () => {
             JSON.stringify(
                 createGatewayControlEnvelope(
                     GatewayControlMessageType.HistoryList,
-                    { beforeTs: 200, limit: 2 },
+                    { beforeTs: 200, contextForkId: "fork-1", limit: 2 },
                     { id: "history-list-1", requestId: "req-history-1" },
                 ),
             ),
@@ -1795,8 +1857,22 @@ describe("SocketControlHub", () => {
                 },
             });
             brain.appendEvent({
+                id: "event-other-fork",
+                ownerKey: "scope:scope-1",
+                sourceKey: "req-other-fork",
+                sourceSurface: Channel.Ws,
+                ts: 150,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    contextForkId: "fork-other",
+                    userText: "other fork user",
+                    assistantText: "other fork assistant",
+                },
+            });
+            brain.appendEvent({
                 id: "event-fork",
-                ownerKey: "fork:fork-1",
+                ownerKey: "scope:scope-1",
                 sourceKey: "req-fork",
                 sourceSurface: Channel.Ws,
                 ts: 200,
@@ -1808,12 +1884,48 @@ describe("SocketControlHub", () => {
                     assistantText: "fork assistant",
                 },
             });
+            brain.appendEvent({
+                id: "event-newer-root",
+                ownerKey: "scope:scope-1",
+                sourceKey: "req-newer-root",
+                sourceSurface: Channel.Ws,
+                ts: 300,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    userText: "newer root user",
+                    assistantText: "newer root assistant",
+                },
+            });
+            brain.appendEvent({
+                id: "event-owned-fork",
+                ownerKey: "fork:fork-1",
+                sourceKey: "req-owned-fork",
+                sourceSurface: Channel.Ws,
+                ts: 400,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    userText: "owned fork user",
+                    assistantText: "owned fork assistant",
+                },
+            });
             brain.close();
 
             const queries = new SocketQueryComponent(paths);
             await queries.initialize();
-            expect(queries.historyList({ scopeId: "scope-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-root"]);
-            expect(queries.historyList({ contextForkId: "fork-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-fork"]);
+            expect(queries.historyList({ scopeId: "scope-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-root", "event-newer-root"]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 10 }).map((turn) => turn.eventId)).toEqual([
+                "event-fork",
+                "event-owned-fork",
+            ]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 1 }).map((turn) => turn.eventId)).toEqual([
+                "event-owned-fork",
+            ]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 2, scopeId: "scope-1" }).map((turn) => turn.eventId)).toEqual([
+                "event-fork",
+                "event-owned-fork",
+            ]);
             queries.dispose();
         } finally {
             await rm(root, { recursive: true, force: true });

@@ -87,11 +87,14 @@ The socket contract includes:
 - `task.list`
 - `task.detail.get`
 - `task.snapshot`
+- `task.plan.decide`
 - `thought.detail.get`
 - `thought.snapshot`
 - `execution.job.list`
 - `execution.job.detail.get`
 - `execution.job.snapshot`
+- `fork.memory.get`
+- `fork.memory.snapshot`
 
 Error examples include `invalid-envelope` and `gateway.message.send payload requires text`.
 
@@ -101,7 +104,7 @@ Apifox scenario names include `ServerHello`, `ClientHello`, `GatewayStatusGet`, 
 
 ## Event Subscription
 
-Subscribe with control classes, not the old gateway class name:
+Subscribe with stable RuntimeEvent types. When classes are used, they must match the runtime classifier; executive loop pause/resume events are ASK-class events:
 
 ```json
 {
@@ -109,13 +112,13 @@ Subscribe with control classes, not the old gateway class name:
   "id": "subscribe-1",
   "type": "event.subscribe",
   "payload": {
-    "classes": ["control"],
+    "classes": ["ask"],
     "types": ["executive.loop.paused", "executive.loop.resumed"]
   }
 }
 ```
 
-Use `"classes": ["control"]`; do not use the old gateway event class.
+Use `"classes": ["ask"]` for ASK/executive-loop pause events, or omit `classes` and subscribe by exact `types`. Do not use the old gateway event class.
 
 ## Detail Query Envelope Matrix
 
@@ -129,6 +132,7 @@ Read-model queries are served from `src/socket/query`. They inspect ledger/detai
 | `blackboard.list` / `blackboard.detail.get` | `blackboard.snapshot` | blackboard SQLite tables |
 | `crystal.list` | `crystal.snapshot` | `crystal.db.crystal_gems` |
 | `fork.list` / `fork.detail.get` | `fork.snapshot` | `brain.db.context_forks` |
+| `fork.memory.get` | `fork.memory.snapshot` | recent `brain.db.context_forks` panel projection |
 | `replay.list` / `replay.detail.get` | `replay.snapshot` | `brain.db.replay_records` |
 | `scope.list` / `scope.detail.get` | `scope.snapshot` | `brain.db.scopes` + scope-local material |
 | `task.list` / `task.detail.get` | `task.snapshot` | `brain.db.task_plans` |
@@ -137,11 +141,15 @@ Read-model queries are served from `src/socket/query`. They inspect ledger/detai
 
 Detail payloads use `payload.data`. List commands return arrays; detail commands return an object or `null`.
 
+`task.plan.decide` is not a read-model query. It is an explicit control write command for confirming, revising or abandoning a pending task plan.
+
 ## 历史对话列表获取
 
 Use `history.list` to read the global `brain.db` ledger as a paged history list. The socket layer receives pagination input, calls the read-only `src/socket/query` read model, and returns `history.snapshot`.
 
 This is not a session restore path, a context owner, or a prompt assembly path. `clientCount` remains live peer pressure only.
+
+When `history.list.payload.contextForkId` is present, the read model narrows the ledger replay to that explicit context fork. It still does not infer continuity from transport identity.
 
 `history.detail.get -> history.snapshot` uses the same snapshot envelope family, but places the detail object in `payload.data`.
 

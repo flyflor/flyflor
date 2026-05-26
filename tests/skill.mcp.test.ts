@@ -1862,6 +1862,7 @@ describe("Skill and MCP capability config", () => {
                 expect.objectContaining({
                     type: RuntimeEventType.ExecutiveLoopPaused,
                     payload: expect.objectContaining({
+                        askId: expect.any(String),
                         stepCount: 1,
                         toolBudgetExhausted: true,
                     }),
@@ -2217,6 +2218,55 @@ describe("Skill and MCP capability config", () => {
         expect(startEvents).toHaveLength(2);
         expect(startEvents[0]?.payload?.allowedTools).toEqual(["workspace.read"]);
         expect(sink.events.map((event) => event.type)).toContain(RuntimeEventType.SubagentBatchEnd);
+        const batchStart = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchStart);
+        const batchEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchEnd);
+        expect(batchStart?.payload).toEqual(expect.objectContaining({
+            batchId: expect.any(String),
+            jobId: expect.any(String),
+            parentRequestId: expect.any(String),
+            tasks: 2,
+        }));
+        expect(batchEnd?.payload).toEqual(expect.objectContaining({
+            batchId: batchStart?.payload?.batchId,
+            completed: 2,
+            jobId: batchStart?.payload?.jobId,
+            parentRequestId: batchStart?.payload?.parentRequestId,
+        }));
+        expect(startEvents.map((event) => event.payload)).toEqual([
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                childId: "a",
+                childJobId: expect.any(String),
+                jobId: batchStart?.payload?.jobId,
+            }),
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                childId: "b",
+                childJobId: expect.any(String),
+                jobId: batchStart?.payload?.jobId,
+            }),
+        ]);
+        const childJobIds = new Map(startEvents.map((event) => [event.payload?.childId, event.payload?.childJobId]));
+        const childEndPayloads = sink.events
+            .filter((event) => event.type === RuntimeEventType.SubagentChildEnd)
+            .map((event) => event.payload)
+            .sort((left, right) => String(left?.childId).localeCompare(String(right?.childId)));
+        expect(childEndPayloads).toEqual([
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                childId: "a",
+                childJobId: childJobIds.get("a"),
+                jobId: batchStart?.payload?.jobId,
+                status: "completed",
+            }),
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                childId: "b",
+                childJobId: childJobIds.get("b"),
+                jobId: batchStart?.payload?.jobId,
+                status: "completed",
+            }),
+        ]);
         const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
         try {
             const row = db
@@ -2316,7 +2366,8 @@ describe("Skill and MCP capability config", () => {
             "Needs user final.",
             "[]",
         ]);
-        const runtime = new RuntimeModule(baseConfig, model, new CapturingSink());
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
 
         const reply = await runtime.handleMessage(gatewayMessage("fan out blocked"), {
             requestId: crypto.randomUUID(),
@@ -2344,6 +2395,15 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: false, server: "subagent", tool: "batch" }),
         ]);
+        const pause = sink.events.find((event) => event.type === RuntimeEventType.ExecutiveLoopPaused);
+        expect(pause?.payload).toEqual(expect.objectContaining({
+            askId: expect.any(String),
+            job: expect.objectContaining({
+                progress: expect.objectContaining({ childNeedsUser: 1, childTotal: 1 }),
+                status: "needs-user",
+            }),
+            jobId: expect.any(String),
+        }));
         const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
         try {
             const row = db
