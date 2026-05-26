@@ -28,6 +28,9 @@ export interface SubagentChildResult {
     readonly ok: boolean;
     readonly status: "completed" | "failed" | "needs_user";
     readonly askRequired?: ExecutiveToolRuntimeAskRequired;
+    readonly limited?: boolean;
+    readonly limitReason?: string;
+    readonly suppressedAskRequired?: boolean;
     readonly text?: string;
     readonly error?: string;
     readonly toolCalls: readonly McpToolCallExecution[];

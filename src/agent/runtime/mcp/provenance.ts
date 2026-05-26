@@ -6,11 +6,7 @@
  * user text or inferring business intent.
  */
 
-import {
-    describeMcpResult,
-    type McpResultSummary,
-    type McpToolCallExecution,
-} from "../../mcp/index.ts";
+import { describeMcpResult, type McpResultSummary, type McpToolCallExecution } from "../../mcp/index.ts";
 import type { MemoryEpisodeProvenance } from "../../../cognitive/hippocampus/memory/index.ts";
 import { CapabilityExecutionKind } from "../../../protocol/contracts/index.ts";
 import type { ExecutiveCapabilityExecutionMetadata } from "../../../executive/index.ts";
@@ -44,25 +40,45 @@ export function mcpExecutionsToSubagentProvenance(
         if (`${execution.call.server}.${execution.call.tool}` !== SUBAGENT_BATCH_KEY) return [];
         const raw = execution.result?.raw;
         if (!raw || typeof raw !== "object") return [];
-        const batch = raw as { batchId?: unknown; job?: unknown; jobId?: unknown; needsUser?: unknown; results?: unknown };
+        const batch = raw as {
+            batchId?: unknown;
+            job?: unknown;
+            jobId?: unknown;
+            needsUser?: unknown;
+            results?: unknown;
+        };
         if (!Array.isArray(batch.results)) return [];
-        return [{
-            batchId: typeof batch.batchId === "string" ? batch.batchId : undefined,
-            job: readRecord(batch.job),
-            jobId: typeof batch.jobId === "string" ? batch.jobId : undefined,
-            needsUser: batch.needsUser === true,
-            children: batch.results.flatMap((child) => {
-                if (!child || typeof child !== "object") return [];
-                const value = child as { childJobId?: unknown; id?: unknown; ok?: unknown; status?: unknown; toolCalls?: unknown };
-                return [{
-                    childJobId: typeof value.childJobId === "string" ? value.childJobId : undefined,
-                    id: typeof value.id === "string" ? value.id : "unknown",
-                    ok: value.ok === true,
-                    status: typeof value.status === "string" ? value.status : "unknown",
-                    toolCalls: Array.isArray(value.toolCalls) ? value.toolCalls.length : 0,
-                }];
-            }),
-        }];
+        return [
+            {
+                batchId: typeof batch.batchId === "string" ? batch.batchId : undefined,
+                job: readRecord(batch.job),
+                jobId: typeof batch.jobId === "string" ? batch.jobId : undefined,
+                needsUser: batch.needsUser === true,
+                children: batch.results.flatMap((child) => {
+                    if (!child || typeof child !== "object") return [];
+                    const value = child as {
+                        childJobId?: unknown;
+                        id?: unknown;
+                        limitReason?: unknown;
+                        limited?: unknown;
+                        ok?: unknown;
+                        status?: unknown;
+                        toolCalls?: unknown;
+                    };
+                    return [
+                        {
+                            childJobId: typeof value.childJobId === "string" ? value.childJobId : undefined,
+                            id: typeof value.id === "string" ? value.id : "unknown",
+                            limited: value.limited === true,
+                            limitReason: typeof value.limitReason === "string" ? value.limitReason : undefined,
+                            ok: value.ok === true,
+                            status: typeof value.status === "string" ? value.status : "unknown",
+                            toolCalls: Array.isArray(value.toolCalls) ? value.toolCalls.length : 0,
+                        },
+                    ];
+                }),
+            },
+        ];
     });
 }
 
@@ -140,8 +156,10 @@ function previewWorkspaceTreeResult(value: unknown): string {
 }
 
 function capabilityKindForExecution(execution: McpToolCallExecution): CapabilityExecutionKind {
-    if (`${execution.call.server}.${execution.call.tool}` === SUBAGENT_BATCH_KEY) return CapabilityExecutionKind.McpTool;
-    if (execution.call.server === "shell" || execution.call.server === "process") return CapabilityExecutionKind.ShellHook;
+    if (`${execution.call.server}.${execution.call.tool}` === SUBAGENT_BATCH_KEY)
+        return CapabilityExecutionKind.McpTool;
+    if (execution.call.server === "shell" || execution.call.server === "process")
+        return CapabilityExecutionKind.ShellHook;
     if (execution.call.server === "user") return CapabilityExecutionKind.Plugin;
     return CapabilityExecutionKind.McpTool;
 }
