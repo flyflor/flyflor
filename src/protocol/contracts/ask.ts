@@ -183,8 +183,28 @@ export interface AskAnswerPairContent {
     /** 回挂到发起该 ask 的 turn snapshot id。 */
     snapshotId: string;
     answerText: string;
+    /** Structured ASK answer from GatewayMessage.metadata.askAnswer. */
+    askAnswer?: AgentAskAnswerPayload;
     /** 用户的原 message id，便于跨表回查。 */
     answerMessageId?: string;
     /** 是否被新输入 cancel（abandoned）。默认 false（正常答复）。 */
     abandoned?: boolean;
+}
+
+export interface AgentAskAnswerItem {
+    /** Stable question id from AgentAskQuestion.id. */
+    questionId?: string;
+    /** Stable choice id from AgentAskChoice.id or the fixed other option. */
+    choiceId?: string;
+    /** User-visible answer text or freeform value, bounded at ingestion. */
+    text?: string;
+    /** Structured choice value, preserved for the owning ASK source. */
+    value?: unknown;
+    /** True when the user selected the freeform escape hatch. */
+    isOther?: boolean;
+}
+
+export interface AgentAskAnswerPayload extends AgentAskAnswerItem {
+    /** Batched multi-question answers. */
+    answers?: AgentAskAnswerItem[];
 }

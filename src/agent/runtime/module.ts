@@ -139,7 +139,7 @@ import { selectRuntimeSkills } from "./skills/index.ts";
 import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/index.ts";
 import { elapsed, scopeConstraintIdForContext, renderUserContentWithAttachments } from "./turn/index.ts";
 import { ReflectionWorker } from "./reflection/worker.ts";
-import { RuntimeSubagentBatchComponent, RuntimeSubtaskPlanComponent, SUBAGENT_BATCH_KEY } from "./subagent/index.ts";
+import { RuntimeSubagentBatchComponent, RuntimeSubtaskPlanComponent, SUBAGENT_BATCH_KEY, type SubagentTask } from "./subagent/index.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -1517,6 +1517,7 @@ export class RuntimeModule extends RuntimeBoundary {
             subagentBatch: this.subagentBatch,
             subagentInitialMessages: modelMessages,
             subagentGenerate: async (messages, _turn) => this.model.generate(messages as ModelMessage[], { signal: options.signal }),
+            subagentModel: this.modelAllocationSummary(),
             subagentRenderResults: renderMcpToolResults,
             approveMcpToolCall: options.approveMcpToolCall,
             approveUserToolCall: options.approveUserToolCall,
@@ -2411,8 +2412,18 @@ export class RuntimeModule extends RuntimeBoundary {
         messages: ModelMessage[],
         replyPrefix: string,
         options: RuntimeStreamOptions,
+        allocation: {
+            requestId: string;
+            scope: string;
+            agentRole: string;
+            reason: string;
+            source: string;
+            jobId?: string;
+            childId?: string;
+        },
     ): Promise<string> {
         this.throwIfAborted(options.signal);
+        this.publishModelAllocation(allocation);
         if (!options.onTextDelta) {
             return this.model.generate(messages, { signal: options.signal });
         }
@@ -2448,6 +2459,64 @@ export class RuntimeModule extends RuntimeBoundary {
         return rawText;
     }
 
+    private async generateModelTextWithoutStreaming(
+        messages: ModelMessage[],
+        options: RuntimeStreamOptions,
+        allocation: {
+            requestId: string;
+            scope: string;
+            agentRole: string;
+            reason: string;
+            source: string;
+            jobId?: string;
+            childId?: string;
+        },
+    ): Promise<string> {
+        this.throwIfAborted(options.signal);
+        this.publishModelAllocation(allocation);
+        return this.model.generate(messages, { signal: options.signal });
+    }
+
+    private publishModelAllocation(input: {
+        requestId: string;
+        scope: string;
+        agentRole: string;
+        reason: string;
+        source: string;
+        jobId?: string;
+        childId?: string;
+    }): string {
+        const allocationId = crypto.randomUUID();
+        const model = this.modelAllocationSummary(input.source);
+        this.events.publish(
+            event(
+                RuntimeEventType.ModelAllocationSelected,
+                {
+                    allocationId,
+                    requestId: input.requestId,
+                    ...(input.jobId ? { jobId: input.jobId } : {}),
+                    ...(input.childId ? { childId: input.childId } : {}),
+                    scope: input.scope,
+                    agentRole: input.agentRole,
+                    providerId: model.providerId,
+                    modelId: model.modelId,
+                    reason: input.reason,
+                    source: model.source,
+                },
+                input.requestId,
+            ),
+        );
+        return allocationId;
+    }
+
+    private modelAllocationSummary(source = "runtime.model.config"): { modelId: string; providerId: string; source: string } {
+        return {
+            modelId: this.config.model.model || "unknown",
+            providerId: this.config.model.providerId || this.config.model.provider || "unknown",
+            source,
+        };
+    }
+
     /**
      * Model protocol blocks are consumed by runtime/executive and must never
      * re-enter reply text or brain history. An empty stripped body is a valid
@@ -2475,8 +2544,13 @@ export class RuntimeModule extends RuntimeBoundary {
             gitToolset: GitToolset;
             processToolset: ProcessToolset;
             subagentBatch?: RuntimeSubagentBatchComponent;
-            subagentGenerate: (messages: unknown[], turn: number) => Promise<string>;
+            subagentGenerate: (messages: unknown[], turn: number, child?: SubagentTask) => Promise<string>;
             subagentInitialMessages: ModelMessage[];
+            subagentModel?: {
+                modelId: string;
+                providerId: string;
+                source: string;
+            };
             subagentRenderResults: (executions: McpToolCallExecution[]) => string;
             approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;
             approveUserToolCall?: (tool: ManifestToolDefinition) => boolean | Promise<boolean>;
@@ -2493,7 +2567,13 @@ export class RuntimeModule extends RuntimeBoundary {
     }> {
         if (!mcp.canExecuteTools || mcp.catalog.length === 0) {
             return {
-                rawText: await this.generateModelText(messages, replyPrefix, options),
+                rawText: await this.generateModelText(messages, replyPrefix, options, {
+                    requestId: mcp.requestId,
+                    scope: "main-turn",
+                    agentRole: "assistant",
+                    reason: "main-turn.generate",
+                    source: "runtime.main-turn",
+                }),
                 mcpToolCalls: [],
                 requiresApproval: mcp.requiresApproval,
             };
@@ -2501,7 +2581,7 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const budget = this.executiveToolBudget(options);
         const firstTurnStreamed = { value: false };
-        const initialToolProbe = await this.initialLocalPathProbe(messages, mcp.catalog, mcp.workspaceToolset, options);
+        const initialToolProbe = await this.initialLocalPathProbe(messages, mcp.catalog, mcp.workspaceToolset, options, mcp.requestId);
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
@@ -2515,8 +2595,20 @@ export class RuntimeModule extends RuntimeBoundary {
                 const modelTranscript = transcript as ModelMessage[];
                 const shouldStreamVisibleText = options.onTextDelta && (turn > 0 || firstTurnStreamed.value);
                 const raw = shouldStreamVisibleText
-                    ? await this.generateModelText(modelTranscript, replyPrefix, options)
-                    : await this.model.generate(modelTranscript, { signal: options.signal });
+                    ? await this.generateModelText(modelTranscript, replyPrefix, options, {
+                          requestId: mcp.requestId,
+                          scope: turn === 0 ? "main-turn" : "executive-loop",
+                          agentRole: "assistant",
+                          reason: turn === 0 ? "main-turn.generate" : "executive.tool-loop.generate",
+                          source: "runtime.executive-loop",
+                      })
+                    : await this.generateModelTextWithoutStreaming(modelTranscript, options, {
+                          requestId: mcp.requestId,
+                          scope: turn === 0 ? "main-turn" : "executive-loop",
+                          agentRole: "assistant",
+                          reason: turn === 0 ? "main-turn.generate" : "executive.tool-loop.generate",
+                          source: "runtime.executive-loop",
+                      });
                 const parsedCalls = parseMcpToolCalls(raw);
                 if (turn === 0 && parsedCalls.calls.length === 0) {
                     const forced = await this.decideInitialToolNeed(raw, modelTranscript, mcp, options);
@@ -2544,6 +2636,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 subagentBatch: mcp.subagentBatch,
                 subagentGenerate: mcp.subagentGenerate,
                 subagentInitialMessages: mcp.subagentInitialMessages,
+                subagentModel: mcp.subagentModel,
                 subagentRenderResults: mcp.subagentRenderResults,
                 ownerKey: mcp.ownerKey,
                 requestId: mcp.requestId,
@@ -2567,6 +2660,7 @@ export class RuntimeModule extends RuntimeBoundary {
         messages: ModelMessage[],
         mcp: {
             catalog: McpToolCatalogEntry[];
+            requestId?: string;
         },
         options: RuntimeStreamOptions,
     ): Promise<string | undefined> {
@@ -2574,6 +2668,15 @@ export class RuntimeModule extends RuntimeBoundary {
         if (!userMessage) return undefined;
         let decision: Awaited<ReturnType<RuntimeMcpToolNeedComponent["decide"]>>;
         try {
+            if (mcp.requestId) {
+                this.publishModelAllocation({
+                    requestId: mcp.requestId,
+                    scope: "tool-need",
+                    agentRole: "planner",
+                    reason: "initial-tool-need.generate",
+                    source: "runtime.tool-need",
+                });
+            }
             decision = await this.mcpToolNeed.decide({
                 assistantDraft,
                 catalog: mcp.catalog,
@@ -2594,6 +2697,7 @@ export class RuntimeModule extends RuntimeBoundary {
         messages: ModelMessage[],
         mcp: {
             catalog: McpToolCatalogEntry[];
+            requestId?: string;
         },
         options: RuntimeStreamOptions,
     ): Promise<string | undefined> {
@@ -2602,6 +2706,15 @@ export class RuntimeModule extends RuntimeBoundary {
         if (!mcp.catalog.some((entry) => `${entry.server}.${entry.tool.name}` === SUBAGENT_BATCH_KEY)) return undefined;
         let decision: ReturnType<RuntimeSubtaskPlanComponent["parse"]>;
         try {
+            if (mcp.requestId) {
+                this.publishModelAllocation({
+                    requestId: mcp.requestId,
+                    scope: "subtask-planning",
+                    agentRole: "planner",
+                    reason: "subtask-plan.generate",
+                    source: "runtime.subtask-plan",
+                });
+            }
             decision = await this.subtaskPlan.decide({
                 catalog: mcp.catalog,
                 model: this.model,
@@ -2621,6 +2734,7 @@ export class RuntimeModule extends RuntimeBoundary {
         catalog: McpToolCatalogEntry[],
         workspaceToolset: WorkspaceToolset,
         options: RuntimeStreamOptions,
+        requestId?: string,
     ): Promise<string | undefined> {
         const userMessage = [...messages].reverse().find((message) => message.role === ModelRole.User);
         if (!userMessage) return undefined;
@@ -2629,7 +2743,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const tool = await this.workspaceProbeTool(path, workspaceToolset);
         if (!tool) return undefined;
         if (tool === "tree") {
-            const delegated = await this.decideInitialDelegation(messages, { catalog }, options);
+            const delegated = await this.decideInitialDelegation(messages, { catalog, requestId }, options);
             if (delegated) return delegated;
         }
         const key = `workspace.${tool}`;

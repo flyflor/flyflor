@@ -1557,6 +1557,7 @@
                 "mcp.capability.catalog.built",
                 "mcp.tool.call.executed",
                 "mcp.tool.catalog.built",
+                "model.allocation.selected",
                 "provider.credential.missing",
                 "provider.request.failed",
                 "sandbox.tool.approval.requested",

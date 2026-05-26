@@ -29,6 +29,7 @@ export const RuntimeEventType = {
     McpCapabilityCatalogBuilt: "mcp.capability.catalog.built",
     McpToolCallExecuted: "mcp.tool.call.executed",
     McpToolCatalogBuilt: "mcp.tool.catalog.built",
+    ModelAllocationSelected: "model.allocation.selected",
     ProviderCredentialMissing: "provider.credential.missing",
     ProviderRequestFailed: "provider.request.failed",
     SandboxToolApprovalRequested: "sandbox.tool.approval.requested",

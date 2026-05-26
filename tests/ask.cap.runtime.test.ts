@@ -297,7 +297,7 @@ describe("LF-R3 slice D — runtime cap enforcement", () => {
                 expect(reply.text).toContain("I need two confirmations.");
                 expect(reply.text).toContain("1. Which workspace should I use?");
                 expect(reply.text).toContain("   1. main");
-                expect(reply.text).toContain("   3. Other — type your own answer");
+                expect(reply.text).toContain("   3. 其他 — type your own answer");
                 expect(reply.text).toContain("2. Should I proceed now?");
             } finally {
                 memory.dispose();
