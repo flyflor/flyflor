@@ -103,6 +103,7 @@ export interface MemoryEpisodeProvenance {
         children: Array<{
             childJobId?: string;
             id: string;
+            error?: string;
             limited?: boolean;
             limitReason?: string;
             ok: boolean;

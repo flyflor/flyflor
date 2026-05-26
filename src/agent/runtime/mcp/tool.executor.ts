@@ -785,16 +785,48 @@ export class RuntimeMcpToolExecutor {
     }
 
     private executionJobToolExecution(
-        execution: McpToolCallExecution & { call: McpToolCallRequest & { key: string } },
+        execution: McpToolCallExecution & {
+            call: McpToolCallRequest & { key: string };
+            limited?: boolean;
+            limitReason?: string;
+        },
         childJobId?: string,
     ): ExecutionJobToolExecution {
+        const raw = execution.result?.raw;
         return {
             childJobId,
+            durationMs: this.durationMs(raw),
             error: execution.error,
+            inputPreview: this.previewRecord(execution.call.input),
+            key: execution.call.key,
+            limited: execution.limited,
+            limitReason: execution.limitReason,
+            outputPreview: raw === undefined ? undefined : this.previewRecord(raw),
             ok: execution.ok,
             server: execution.call.server,
             tool: execution.call.tool,
         };
+    }
+
+    private previewRecord(value: unknown): Record<string, unknown> {
+        if (!value || typeof value !== "object") return { value };
+        const entries = Object.entries(value as Record<string, unknown>).slice(0, 8);
+        return Object.fromEntries(entries.map(([key, item]) => [key, this.previewValue(item)]));
+    }
+
+    private previewValue(value: unknown): unknown {
+        if (typeof value === "string") return value.slice(0, 240);
+        if (Array.isArray(value)) return value.slice(0, 8).map((item) => this.previewValue(item));
+        if (value && typeof value === "object") return this.previewRecord(value);
+        return value;
+    }
+
+    private durationMs(raw: unknown): number {
+        if (raw && typeof raw === "object") {
+            const value = (raw as { durationMs?: unknown }).durationMs;
+            if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value);
+        }
+        return 0;
     }
 
     private subagentNeedsUserResult(execution: McpToolCallExecution): (SubagentBatchResult & { kind: "subagent-needs-user" }) | undefined {

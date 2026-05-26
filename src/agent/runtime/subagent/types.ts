@@ -33,6 +33,7 @@ export interface SubagentChildResult {
     readonly suppressedAskRequired?: boolean;
     readonly text?: string;
     readonly error?: string;
+    readonly noProgressReason?: string;
     readonly toolCalls: readonly McpToolCallExecution[];
 }
 
@@ -77,7 +78,11 @@ export interface SubagentBatchExecutorInput {
         childRequestId: string,
     ) => Promise<Array<McpToolCallExecution & { call: McpToolCallRequest & { key: string } }>>;
     readonly recordToolExecution?: (
-        execution: McpToolCallExecution & { call: McpToolCallRequest & { key: string } },
+        execution: McpToolCallExecution & {
+            call: McpToolCallRequest & { key: string };
+            limited?: boolean;
+            limitReason?: string;
+        },
         childJobId?: string,
     ) => ExecutionJobToolExecution;
 }

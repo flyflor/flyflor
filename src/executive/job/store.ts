@@ -135,9 +135,16 @@ export class ExecutionJobStore extends CapabilityComponent {
                 error: execution.error,
                 summary: `${execution.server}.${execution.tool} ${execution.ok ? "ok" : "failed"}.`,
                 tool: {
-                    key: `${execution.server}.${execution.tool}`,
-                    ok: execution.ok,
+                    key: execution.key ?? `${execution.server}.${execution.tool}`,
+                    server: execution.server,
+                    tool: execution.tool,
+                    inputPreview: execution.inputPreview,
+                    outputPreview: execution.outputPreview,
                     error: execution.error?.slice(0, 240),
+                    durationMs: execution.durationMs,
+                    limited: execution.limited,
+                    limitReason: execution.limitReason,
+                    ok: execution.ok,
                 },
             });
         }

@@ -76,6 +76,32 @@ describe("computer coding tools", () => {
         )).rejects.toThrow("appears to be binary");
     });
 
+    test("workspace read preserves POSIX absolute paths and recovers approved missing slash paths", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-computer-path-normalize-"));
+        const paths = testPaths(root);
+        const workspace = new WorkspaceToolset(paths);
+        await writeFile(join(root, "README.md"), "absolute project read\n");
+
+        const absolute = await workspace.executeWithAccess(
+            { server: "workspace", tool: "read", input: { path: join(root, "README.md") } },
+            { approved: true, reason: "test" },
+        );
+        expect(absolute.raw).toMatchObject({ content: "absolute project read\n", path: "README.md" });
+
+        const recovered = await workspace.executeWithAccess(
+            { server: "workspace", tool: "read", input: { path: join(root, "README.md").slice(1) } },
+            { approved: true, reason: "test" },
+        );
+        expect(recovered.raw).toMatchObject({ content: "absolute project read\n", path: "README.md" });
+
+        await expect(
+            workspace.executeWithAccess(
+                { server: "workspace", tool: "read", input: { path: "Users/not-authorized/secret.txt" } },
+                { approved: true, reason: "test" },
+            ),
+        ).rejects.toThrow();
+    });
+
     test("workspace read/write/delete/patch execute through structured tool results", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-computer-workspace-"));
         const paths = testPaths(root);

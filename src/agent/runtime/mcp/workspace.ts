@@ -876,7 +876,85 @@ export class WorkspaceToolset {
         const rel = this.normalizePath(relative(displayRoot, fullPath));
         if (!rel.includes("/") && SKIPPED_TREE_ROOT_DIRS.has(name)) return true;
         const resolved = resolve(fullPath);
-        const runtimeDirs = [
+        const runtimeDirs = this.runtimeDirs();
+        return runtimeDirs.includes(resolved);
+    }
+
+    private async resolveExistingPath(path: string): Promise<{ outsideProject: boolean; target: string }> {
+        const root = await this.projectRoot();
+        const candidate = await realpath(await this.resolveReadablePathInput(root, path));
+        const rel = relative(root, candidate);
+        if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+            return { outsideProject: false, target: candidate };
+        }
+        return { outsideProject: true, target: candidate };
+    }
+
+    private async resolveWritablePath(path: string): Promise<{ outsideProject: boolean; target: string }> {
+        const root = await this.projectRoot();
+        const candidate = await this.resolveWritablePathInput(root, path);
+        const parent = await this.resolveWritableParent(dirname(candidate));
+        const target = resolve(parent.real, relative(parent.input, candidate));
+        const rel = relative(root, target);
+        if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+            return { outsideProject: false, target };
+        }
+        return { outsideProject: true, target };
+    }
+
+    private async projectRoot(): Promise<string> {
+        this.projectRootCache ??= await realpath(this.paths.projectDir);
+        return this.projectRootCache;
+    }
+
+    private async resolveReadablePathInput(root: string, path: string): Promise<string> {
+        this.assertPathInput(path);
+        if (isAbsolute(path)) return resolve(path);
+        const recovered = await this.recoverMissingRootSlash(path);
+        return recovered ?? resolve(root, path);
+    }
+
+    private async resolveWritablePathInput(root: string, path: string): Promise<string> {
+        this.assertPathInput(path);
+        if (isAbsolute(path)) return resolve(path);
+        const recovered = await this.recoverMissingRootSlash(path);
+        return recovered ?? resolve(root, path);
+    }
+
+    private assertPathInput(path: string): void {
+        if (path.includes("\u0000")) {
+            throw new Error("workspace path contains a NUL byte.");
+        }
+    }
+
+    private async recoverMissingRootSlash(path: string): Promise<string | undefined> {
+        const normalized = this.normalizePath(path.trim());
+        if (!this.looksLikeMissingLocalAbsolutePath(normalized)) return undefined;
+        const candidate = resolve(`/${normalized}`);
+        if (!this.isUnderAllowedRuntimeRoot(candidate)) return undefined;
+        if (!(await Bun.file(candidate).exists())) return undefined;
+        return candidate;
+    }
+
+    private looksLikeMissingLocalAbsolutePath(path: string): boolean {
+        return path.startsWith("Users/") || path.startsWith("private/") || path.startsWith("tmp/") || path.startsWith("var/");
+    }
+
+    private isUnderAllowedRuntimeRoot(candidate: string): boolean {
+        return this.accessibleRoots()
+            .map((root) => resolve(root))
+            .some((root) => {
+                const rel = relative(root, candidate);
+                return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+            });
+    }
+
+    private accessibleRoots(): string[] {
+        return [this.paths.projectDir, ...this.runtimeDirs()];
+    }
+
+    private runtimeDirs(): string[] {
+        return [
             this.paths.cacheDir,
             this.paths.configDir,
             this.paths.logDir,
@@ -895,37 +973,6 @@ export class WorkspaceToolset {
         ]
             .filter((path): path is string => typeof path === "string" && path.length > 0)
             .map((path) => resolve(path));
-        return runtimeDirs.includes(resolved);
-    }
-
-    private async resolveExistingPath(path: string): Promise<{ outsideProject: boolean; target: string }> {
-        const root = await this.projectRoot();
-        const candidate = await realpath(isAbsolute(path) ? path : resolve(root, path));
-        const rel = relative(root, candidate);
-        if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
-            return { outsideProject: false, target: candidate };
-        }
-        return { outsideProject: true, target: candidate };
-    }
-
-    private async resolveWritablePath(path: string): Promise<{ outsideProject: boolean; target: string }> {
-        if (path.includes("\u0000")) {
-            throw new Error("workspace path contains a NUL byte.");
-        }
-        const root = await this.projectRoot();
-        const candidate = isAbsolute(path) ? resolve(path) : resolve(root, path);
-        const parent = await this.resolveWritableParent(dirname(candidate));
-        const target = resolve(parent.real, relative(parent.input, candidate));
-        const rel = relative(root, target);
-        if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
-            return { outsideProject: false, target };
-        }
-        return { outsideProject: true, target };
-    }
-
-    private async projectRoot(): Promise<string> {
-        this.projectRootCache ??= await realpath(this.paths.projectDir);
-        return this.projectRootCache;
     }
 
     private requiredString(value: unknown, message: string): string {

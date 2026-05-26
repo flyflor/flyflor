@@ -220,7 +220,8 @@ export class RuntimeSubagentBatchComponent extends Runtime {
     ): Promise<SubagentChildResult> {
         const id = task.id ?? `child-${index + 1}`;
         const childJobId = job.children[index]?.childJobId;
-        const catalog = this.narrowCatalog(input.parent.catalog, task.toolAllowlist);
+        const allowlistError = this.allowlistError(task.toolAllowlist);
+        const catalog = allowlistError ? [] : this.narrowCatalog(input.parent.catalog, task.toolAllowlist);
         const childRequestId = `${input.parent.requestId}:subagent:${batchId}:${id}`;
         const allowedTools = catalog.map((entry) => `${entry.server}.${entry.tool.name}`);
         const model = this.modelSummary(input.parent.model);
@@ -244,6 +245,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             ),
         );
         if (catalog.length === 0) {
+            const error = allowlistError ?? "No tools are available for this child task after narrowing.";
             if (childJobId) {
                 this.jobs.completeChild(job.jobId, {
                     childJobId,
@@ -262,6 +264,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                         parentRequestId: input.parent.requestId,
                         status: "failed",
                         toolCalls: 0,
+                        error,
                     },
                     childRequestId,
                 ),
@@ -271,7 +274,8 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                 id,
                 ok: false,
                 status: "failed",
-                error: "No tools are available for this child task after narrowing.",
+                error,
+                noProgressReason: error,
                 toolCalls: [],
             };
         }
@@ -322,7 +326,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                     const parsed = parseMcpToolCalls(raw);
                     return {
                         text: parsed.text,
-                        calls: parsed.calls.map((call) => ({ ...call, key: `${call.server}.${call.tool}` })),
+                        calls: parsed.calls.map((call) => this.canonicalCall(call)),
                     };
                 },
                 renderResults: input.child.renderResults,
@@ -338,17 +342,24 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             : result.executions.every((execution) => execution.ok) || limited
               ? "completed"
               : "failed";
+        const auditedExecutions = result.executions.map((execution) => ({
+            ...execution,
+            limited,
+            limitReason,
+        }));
         if (childJobId) {
             this.jobs.completeChild(job.jobId, {
                 askRequired: hardAskRequired,
                 childJobId,
                 status,
-                toolExecutions: result.executions.map((execution) =>
+                toolExecutions: auditedExecutions.map((execution) =>
                     input.recordToolExecution
                         ? input.recordToolExecution(execution, childJobId)
                         : {
                               childJobId,
                               error: execution.error,
+                              limited: execution.limited,
+                              limitReason: execution.limitReason,
                               ok: execution.ok,
                               server: execution.call.server,
                               tool: execution.call.tool,
@@ -365,6 +376,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                     childJobId,
                     askId: hardAskRequired?.askId,
                     askRequired: Boolean(hardAskRequired),
+                    tool: this.auditToolSummary(result.executions, limited, limitReason),
                     jobId: job.jobId,
                     limited,
                     limitReason,
@@ -434,9 +446,8 @@ export class RuntimeSubagentBatchComponent extends Runtime {
     }
 
     private childDescriptor(call: McpToolCallRequest, catalog: readonly McpToolCatalogEntry[]) {
-        const entry = catalog.find(
-            (candidate) => candidate.server === call.server && candidate.tool.name === call.tool,
-        );
+        const key = this.toolKey(call);
+        const entry = catalog.find((candidate) => this.entryKey(candidate) === key);
         if (!entry) return undefined;
         return {
             concurrencySafe: this.isReadOnlyEntry(entry),
@@ -450,10 +461,10 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         parentCatalog: readonly McpToolCatalogEntry[],
         allowlist?: readonly string[],
     ): McpToolCatalogEntry[] {
-        const available = parentCatalog.filter((entry) => `${entry.server}.${entry.tool.name}` !== SUBAGENT_BATCH_KEY);
+        const available = parentCatalog.filter((entry) => this.entryKey(entry) !== SUBAGENT_BATCH_KEY);
         if (!allowlist || allowlist.length === 0) return available;
-        const allowed = new Set(allowlist);
-        return available.filter((entry) => allowed.has(`${entry.server}.${entry.tool.name}`));
+        const allowed = new Set(allowlist.map((entry) => this.normalizeToolKey(entry)).filter((entry) => entry.length > 0));
+        return available.filter((entry) => allowed.has(this.entryKey(entry)));
     }
 
     private isReadOnlyEntry(entry: McpToolCatalogEntry): boolean {
@@ -517,9 +528,86 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             if (typeof item !== "string" || item.trim().length === 0) {
                 return { ok: false, error: `${path} entries must be non-empty strings.` };
             }
-            if (item.trim() !== SUBAGENT_BATCH_KEY) out.push(item.trim());
+            const key = this.normalizeToolKey(item);
+            if (key !== SUBAGENT_BATCH_KEY) out.push(key);
         }
         return { ok: true, value: out };
+    }
+
+    private allowlistError(
+        allowlist: readonly string[] | undefined,
+    ): string | undefined {
+        if (!allowlist || allowlist.length === 0) return undefined;
+        const requested = allowlist.map((entry) => this.normalizeToolKey(entry)).filter((entry) => entry.length > 0);
+        if (requested.includes("workspace.list")) {
+            return "workspace.list is not available; use workspace.tree or workspace.glob.";
+        }
+        return undefined;
+    }
+
+    private canonicalCall(call: McpToolCallRequest): McpToolCallRequest & { key: string } {
+        const key = this.toolKey(call);
+        const dot = key.indexOf(".");
+        return {
+            ...call,
+            server: dot > 0 ? key.slice(0, dot) : call.server.trim(),
+            tool: dot > 0 ? key.slice(dot + 1) : call.tool.trim(),
+            key,
+        };
+    }
+
+    private entryKey(entry: McpToolCatalogEntry): string {
+        return this.normalizeToolKey(`${entry.server}.${entry.tool.name}`);
+    }
+
+    private toolKey(call: Pick<McpToolCallRequest, "server" | "tool">): string {
+        return this.normalizeToolKey(`${call.server}.${call.tool}`);
+    }
+
+    private normalizeToolKey(value: string): string {
+        return value.trim();
+    }
+
+    private auditToolSummary(
+        executions: readonly McpToolCallExecution[],
+        limited: boolean,
+        limitReason: string | undefined,
+    ): Record<string, unknown> | undefined {
+        const execution = executions.at(-1);
+        if (!execution) return undefined;
+        const raw = execution.result?.raw;
+        return {
+            key: `${execution.call.server}.${execution.call.tool}`,
+            server: execution.call.server,
+            tool: execution.call.tool,
+            inputPreview: this.previewRecord(execution.call.input),
+            outputPreview: raw === undefined ? undefined : this.previewRecord(raw),
+            error: execution.error,
+            durationMs: this.durationMs(raw),
+            limited,
+            limitReason,
+        };
+    }
+
+    private previewRecord(value: unknown): Record<string, unknown> {
+        if (!value || typeof value !== "object") return { value };
+        const entries = Object.entries(value as Record<string, unknown>).slice(0, 8);
+        return Object.fromEntries(entries.map(([key, item]) => [key, this.previewValue(item)]));
+    }
+
+    private previewValue(value: unknown): unknown {
+        if (typeof value === "string") return value.slice(0, 240);
+        if (Array.isArray(value)) return value.slice(0, 8).map((item) => this.previewValue(item));
+        if (value && typeof value === "object") return this.previewRecord(value);
+        return value;
+    }
+
+    private durationMs(raw: unknown): number {
+        if (raw && typeof raw === "object") {
+            const value = (raw as { durationMs?: unknown }).durationMs;
+            if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value);
+        }
+        return 0;
     }
 
     private clampPositiveInt(value: unknown, fallback: number, max: number): number {

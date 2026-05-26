@@ -2529,6 +2529,54 @@ describe("Skill and MCP capability config", () => {
         expect(childStarts[1]?.payload?.allowedTools).toEqual(["workspace.read"]);
     });
 
+    test("subagent.batch normalizes child tool allowlist aliases and rejects missing workspace.list with alternatives", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-tool-alias-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "alias read\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"tree","goal":"tree","toolAllowlist":["workspace.tree"]},{"id":"read","goal":"read","toolAllowlist":["workspace.read"]},{"id":"glob","goal":"glob","toolAllowlist":["workspace.glob"]},{"id":"list","goal":"list","toolAllowlist":["workspace.list"]}],"maxToolTurns":1}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"name":"workspace.tree","arguments":{"path":"."}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"tool_calls":[{"type":"function","function":{"name":"workspace.read","arguments":"{\\"path\\":\\"README.md\\"}"}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"tool":"workspace.glob","input":{"pattern":"*.md"}}]}</agent_tool_calls>',
+            "[]",
+            "Alias final.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(gatewayMessage("delegate aliases"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        const subagentBatches = reply.metadata?.subagentBatches as
+            | Array<{ children: Array<Record<string, unknown>> }>
+            | undefined;
+        expect(subagentBatches?.[0]?.children).toEqual([
+            expect.objectContaining({ id: "tree", ok: true, status: "completed", toolCalls: 1 }),
+            expect.objectContaining({ id: "read", ok: true, status: "completed", toolCalls: 1 }),
+            expect.objectContaining({ id: "glob", ok: true, status: "completed", toolCalls: 1 }),
+            expect.objectContaining({
+                id: "list",
+                ok: false,
+                status: "failed",
+                error: expect.stringContaining("workspace.list is not available; use workspace.tree or workspace.glob"),
+            }),
+        ]);
+        const childStarts = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
+        expect(childStarts.map((event) => event.payload?.allowedTools)).toEqual([
+            ["workspace.tree"],
+            ["workspace.read"],
+            ["workspace.glob"],
+            [],
+        ]);
+    });
+
     test("subagent.batch read-only child budget limit returns partial progress without parent ASK", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-limited-"));
         const paths = testPaths(root);
@@ -2576,12 +2624,25 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({
                 askRequired: false,
                 childId: "reader",
+                childJobId: expect.any(String),
                 limited: true,
                 limitReason: "tool-budget-exhausted",
                 status: "completed",
                 suppressedAskRequired: true,
+                tool: expect.objectContaining({
+                    key: "workspace.read",
+                    server: "workspace",
+                    tool: "read",
+                    inputPreview: expect.any(Object),
+                    outputPreview: expect.any(Object),
+                    durationMs: expect.any(Number),
+                    limited: true,
+                    limitReason: "tool-budget-exhausted",
+                }),
             }),
         );
+        const childEndTool = childEnd?.payload?.tool as { durationMs?: number } | undefined;
+        expect(childEndTool?.durationMs).toBeGreaterThanOrEqual(0);
         const batchEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchEnd);
         expect(batchEnd?.payload).toEqual(
             expect.objectContaining({
@@ -2590,6 +2651,32 @@ describe("Skill and MCP capability config", () => {
                 needsUser: 0,
             }),
         );
+        const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
+        try {
+            const jobRows = db
+                .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
+                .all() as Array<{ content: string }>;
+            const toolEvent = jobRows
+                .map((row) => JSON.parse(row.content) as { kind: string; tool?: Record<string, unknown>; childJobId?: string })
+                .find((event) => event.kind === "job.tool.executed");
+            expect(toolEvent).toEqual(
+                expect.objectContaining({
+                    childJobId: expect.any(String),
+                    tool: expect.objectContaining({
+                        key: "workspace.read",
+                        server: "workspace",
+                        tool: "read",
+                        inputPreview: expect.any(Object),
+                        outputPreview: expect.any(Object),
+                        durationMs: expect.any(Number),
+                        limited: true,
+                        limitReason: "tool-budget-exhausted",
+                    }),
+                }),
+            );
+        } finally {
+            db.close();
+        }
     });
 
     test("subagent.batch child needs_user pauses parent turn with ASK", async () => {

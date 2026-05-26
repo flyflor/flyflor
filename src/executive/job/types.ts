@@ -42,8 +42,14 @@ export interface ExecutionJobPause {
 
 export interface ExecutionJobToolExecution {
     readonly childJobId?: string;
+    readonly durationMs?: number;
     readonly error?: string;
+    readonly inputPreview?: Record<string, unknown>;
+    readonly key?: string;
+    readonly limited?: boolean;
+    readonly limitReason?: string;
     readonly ok: boolean;
+    readonly outputPreview?: Record<string, unknown>;
     readonly server: string;
     readonly tool: string;
 }

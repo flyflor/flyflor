@@ -62,6 +62,7 @@ export function mcpExecutionsToSubagentProvenance(
                         limitReason?: unknown;
                         limited?: unknown;
                         ok?: unknown;
+                        noProgressReason?: unknown;
                         status?: unknown;
                         toolCalls?: unknown;
                     };
@@ -72,6 +73,7 @@ export function mcpExecutionsToSubagentProvenance(
                             limited: value.limited === true,
                             limitReason: typeof value.limitReason === "string" ? value.limitReason : undefined,
                             ok: value.ok === true,
+                            error: typeof value.noProgressReason === "string" ? value.noProgressReason : undefined,
                             status: typeof value.status === "string" ? value.status : "unknown",
                             toolCalls: Array.isArray(value.toolCalls) ? value.toolCalls.length : 0,
                         },

@@ -242,7 +242,14 @@ export interface ExecutionJobLedgerContent {
     tool?: {
         key: string;
         ok: boolean;
+        durationMs?: number;
         error?: string;
+        inputPreview?: Record<string, unknown>;
+        limited?: boolean;
+        limitReason?: string;
+        outputPreview?: Record<string, unknown>;
+        server?: string;
+        tool?: string;
     };
     ts: number;
 }
