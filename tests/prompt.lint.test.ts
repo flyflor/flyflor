@@ -214,6 +214,8 @@ describe("lintPromptTemplates", () => {
         expect(canonical).toContain("sandbox/approval policy");
         expect(canonical).toContain("Do not describe yourself as limited to only viewing files");
         expect(canonical).toContain("do not claim operating-system or code execution is impossible");
+        expect(canonical).toContain("emit one `<agent_question>` block");
+        expect(canonical).toContain("prose questions are not structured question handoffs");
 
         expect(zh).toContain("读取和编辑工作区文件");
         expect(zh).toContain("运行命令或其他工具");
@@ -221,6 +223,23 @@ describe("lintPromptTemplates", () => {
         expect(zh).toContain("沙箱 / 审批策略");
         expect(zh).toContain("不要把自己描述成只能查看文件");
         expect(zh).toContain("不要声称无法执行操作系统或代码执行");
+        expect(zh).toContain("必须输出一个 `<agent_question>` block");
+        expect(zh).toContain("自然语言问题不是结构化提问交接");
+    });
+
+    test("mcp context directs package manifest edits through workspace tools", async () => {
+        const canonical = await readFile(join(process.cwd(), "templates", "prompts", "mcp.context.md"), "utf8");
+        const zh = await readFile(join(process.cwd(), "templates", "prompts", "mcp.context.zh.cn.md"), "utf8");
+
+        expect(canonical).toContain("package.json");
+        expect(canonical).toContain("update it with `workspace.edit`, `workspace.patch`, or `workspace.write`");
+        expect(canonical).toContain("Do not replace a requested manifest edit with instructions");
+        expect(canonical).toContain("`process.run` starts a local executable");
+
+        expect(zh).toContain("`package.json` script");
+        expect(zh).toContain("用 `workspace.edit`、`workspace.patch` 或 `workspace.write` 更新它");
+        expect(zh).toContain("不要把用户要求的 manifest 编辑替换成让用户自己运行命令的说明");
+        expect(zh).toContain("`process.run` 是以 `executable` 加 `argv[]` 启动本机可执行文件");
     });
 
     test("runtime prompt prose is not embedded in TypeScript source", async () => {

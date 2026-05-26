@@ -96,6 +96,8 @@ function buildFrames(examples: Record<string, JsonRecord>): FrameExample[] {
             ["TurnDelta", "TurnFinal", "TurnFinalWithAsk", "TurnFinalWithPlanning", "TurnFinalWithExecutiveLoopPause"],
             examples,
         ),
+        clientFrame("GatewayMessageInterrupt", "02 Live Turn", ["Ack", "TurnError"], examples),
+        clientFrame("GatewayMessageUndo", "02 Live Turn", ["Ack"], examples),
         clientFrame("InvalidGatewayMessageSend", "02 Live Turn", ["InvalidPayloadError"], examples),
         serverFrame("TurnDelta", "02 Live Turn", examples),
         serverFrame("TurnFinal", "02 Live Turn", examples),

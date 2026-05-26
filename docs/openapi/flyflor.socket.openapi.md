@@ -24,6 +24,7 @@ Notes:
 9. Send `HistoryList` and expect `HistorySnapshot`.
 10. Send `ScopeList`, `AskList`, or `ForkDetailGet` and expect the matching `*.snapshot.payload.data` read-model response.
 11. Send `GatewayMessageSend`; observe one or more `TurnDelta` frames and a final `TurnFinal`.
+12. If the live turn must be stopped, send `GatewayMessageInterrupt`; expect an `Ack` and a `TurnError` for the interrupted public message id.
 
 Apifox import note: the OpenAPI file documents `/ws` as an upgrade endpoint, but the scenario messages live under `components.examples`. For WebSocket tests, paste each example `value` as the outgoing JSON body and keep the `protocol`, `type`, and request ids intact.
 
@@ -37,6 +38,7 @@ Use the example set as reusable Apifox WebSocket messages:
 - `ExecutionJobList`, `ExecutionJobDetailGet`, and `ExecutionJobSnapshot` show Durable Job read-model queries backed by `brain.db` execution-job ledger events.
 - ASK examples use `questions[]`, `recommendedChoiceId`, and fixed `other` options; root `choices` remains a legacy compatibility surface.
 - `GatewayStatusSnapshot.payload.status.controlState` shows the current socket-visible ASK, Scope, Fork, and Executive loop snapshot, populated from real turn metadata and runtime events.
+- `GatewayMessageInterrupt` shows the explicit `gateway.message.interrupt` control command used by TUI/WS clients to stop an active live turn.
 - `EventSubscribe`, `ExecutiveLoopPausedEvent`, and `ExecutiveLoopResumedEvent` show the lifecycle event timeline. The current turn authority remains `turn.final.reply.metadata`.
 - `InvalidGatewayMessageSend` followed by `InvalidPayloadError` covers the structured `invalid-payload` response for missing `payload.text`.
 
@@ -51,6 +53,7 @@ Use the example set as reusable Apifox WebSocket messages:
 - `*.snapshot.payload.data` from read-model query commands is inspectable TUI state only. Do not feed it back as prompt context.
 - `execution.job.snapshot.payload.data` is long-task progress/audit data only. It is not a prompt container and must not be used as cognitive continuity.
 - Only `GatewayMessageSend` enters live turn execution; query commands must stay detachable DB reads.
+- `GatewayMessageInterrupt` only aborts an active live turn. It does not delete `brain.db`, rewrite history, or mutate Scope/Fork memory.
 - `GatewayStatusSnapshot.payload.status.controlState` is a read model for clients; it is not a new context owner, session restore surface, or prompt assembly source.
 - `conversationKey`, `threadId`, and `user.id` are useful for Apifox correlation and routing assertions, but they are not memory owners.
 

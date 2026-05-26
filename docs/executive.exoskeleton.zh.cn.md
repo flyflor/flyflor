@@ -86,7 +86,7 @@ Kernel context input 支持：
 - `mcpToolCalls`
 - `userToolCalls`
 
-当前 CLI 有 YOLO mode，也能渲染 tool/run events，但面向 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls` 的普通 per-turn approval UI 仍是后续任务。在闭环前，文档必须把它写成 gap，而不是完成行为。
+当前 CLI 有 YOLO mode，能渲染 tool/run events，并通过 `/approve` 为 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls` 暴露非 YOLO 的单轮 approval。
 
 ## Events And Metadata
 

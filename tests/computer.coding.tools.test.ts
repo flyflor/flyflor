@@ -295,7 +295,13 @@ describe("computer coding tools", () => {
             },
         });
         expect(events.events.find((item) => item.type === RuntimeEventType.McpToolCallExecuted)?.payload)
-            .toMatchObject({ sandboxMode: SandboxMode.Yolo });
+            .toMatchObject({
+                displayName: "workspace/read",
+                inputPreview: { path: "yolo.txt" },
+                key: "workspace.read",
+                sandboxMode: SandboxMode.Yolo,
+                status: "completed",
+            });
     });
 
     test("git failure returns command, exit code, and stderr summary", async () => {

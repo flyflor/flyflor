@@ -38,8 +38,8 @@ Typical client frame:
         "projectMemoryDir": "/workspace/example/.flyflor/memory"
       },
       "toolApprovals": {
-        "mcpToolCalls": [],
-        "userToolCalls": []
+        "mcpToolCalls": true,
+        "userToolCalls": true
       }
     }
   }
@@ -63,6 +63,7 @@ The socket contract includes:
 - `capability.catalog.get`
 - `capability.catalog.snapshot`
 - `gateway.message.send`
+- `gateway.message.interrupt`
 - `turn.delta`
 - `turn.final`
 - `turn.error`
@@ -307,7 +308,7 @@ This context is input to the kernel Executive loop. It is not a CLI-local execut
 - `tool.succeeded`
 - `tool.failed`
 
-The current CLI bootstrap does not yet request `capability.catalog.get`, and normal per-turn approval UX for `mcpToolCalls` / `userToolCalls` remains a follow-up.
+The current CLI bootstrap requests `capability.catalog.get`; `/approve` marks the next non-YOLO send with `toolApprovals.mcpToolCalls=true` and `toolApprovals.userToolCalls=true`. YOLO also sends these approvals, but carries separate high-privilege metadata.
 
 ## Tests
 

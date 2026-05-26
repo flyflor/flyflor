@@ -458,6 +458,15 @@ export class RuntimeModule extends RuntimeBoundary {
         return this.memory.createContextFork(record, source);
     }
 
+    public recordUndo(input: {
+        anchorEventId?: string;
+        anchorMessageId?: string;
+        reason?: string;
+        turnIndex?: number;
+    }): Promise<{ abandoned: number; undoEventId?: string }> {
+        return this.memory.recordUndo(input);
+    }
+
     public listContextForks(ownerKey: string, options: { limit?: number } = {}): ContextForkRecord[] {
         return this.memory.listContextForks(ownerKey, options);
     }
@@ -559,10 +568,10 @@ export class RuntimeModule extends RuntimeBoundary {
         const restoredMessage = snapshot.originalUserMessage
             ? {
                   ...message,
-                  text: snapshot.originalUserMessage,
                   metadata: {
                       ...(message.metadata ?? {}),
                       askAnswerOriginalText: message.text,
+                      continuationOriginalUserMessage: snapshot.originalUserMessage,
                   },
               }
             : message;

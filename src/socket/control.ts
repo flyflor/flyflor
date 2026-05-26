@@ -24,7 +24,9 @@ import {
     parseGatewayControlEnvelope,
     readGatewayControlForkCreateInput,
     readGatewayControlHistoryListInput,
+    readGatewayControlMessageInterruptInput,
     readGatewayControlMessageInput,
+    readGatewayControlMessageUndoInput,
     readGatewayControlQueryPayload,
     readGatewayControlSubscription,
     readGatewayControlTaskPlanDecideInput,
@@ -118,6 +120,7 @@ export interface SocketControlDispatchOptions {
     approveUserToolCall?: RuntimeStreamOptions["approveUserToolCall"];
     interactionMode?: RuntimeStreamOptions["interactionMode"];
     sandboxMode?: RuntimeStreamOptions["sandboxMode"];
+    signal?: RuntimeStreamOptions["signal"];
 }
 
 export type SocketControlMessageDispatcher = (
@@ -141,6 +144,7 @@ export interface SocketControlHubOptions {
     ) => Promise<ContextForkRecord>;
     dispatch: SocketControlMessageDispatcher;
     events: SocketControlEventBus;
+    recordUndo?: (input: { anchorEventId?: string; anchorMessageId?: string; reason?: string; turnIndex?: number }) => Promise<{ abandoned: number; undoEventId?: string }>;
     paths?: FlyflorPaths;
     queries?: SocketQueryComponentPort;
     status: () => SocketControlTransportStatusSnapshot;
@@ -150,6 +154,13 @@ type SocketControlHandler = (
     socket: SocketControlSocket,
     envelope: GatewayControlEnvelope,
 ) => void | Promise<void>;
+
+interface SocketControlActiveTurn {
+    controller: AbortController;
+    publicMessageId: string;
+    requestId: string;
+    socketClientId: string;
+}
 
 /**
  * Socket control/event transport for first-party clients.
@@ -163,6 +174,7 @@ export class SocketControlHub implements EventSink {
     private readonly clients = new Set<SocketControlSocket>();
     private readonly handlers = new Map<string, SocketControlHandler>();
     private readonly readCache = new SocketReadCache<Record<string, unknown>>();
+    private readonly activeTurns = new Map<string, SocketControlActiveTurn>();
     private capabilityCatalog: Record<string, unknown> | null = null;
     private controlState: GatewayControlStateSnapshot = {};
     private readonly unsubscribeEvents: () => void;
@@ -195,6 +207,12 @@ export class SocketControlHub implements EventSink {
         );
         this.handlers.set(GatewayControlMessageType.GatewayMessageSend, (socket, envelope) =>
             this.handleGatewayMessageSend(socket, envelope),
+        );
+        this.handlers.set(GatewayControlMessageType.GatewayMessageInterrupt, (socket, envelope) =>
+            this.handleGatewayMessageInterrupt(socket, envelope),
+        );
+        this.handlers.set(GatewayControlMessageType.GatewayMessageUndo, (socket, envelope) =>
+            this.handleGatewayMessageUndo(socket, envelope),
         );
         this.handlers.set(GatewayControlMessageType.Ping, (socket, envelope) => this.handlePing(socket, envelope));
         this.unsubscribeEvents = this.options.events.subscribe(this);
@@ -582,6 +600,13 @@ export class SocketControlHub implements EventSink {
         const publicMessageId = this.publicMessageId(gatewayMessage);
         const sandboxMode = this.sandboxModeFromMetadata(gatewayMessage.metadata);
         const interactionMode = this.interactionModeFromMetadata(gatewayMessage.metadata);
+        const controller = new AbortController();
+        this.activeTurns.set(context.requestId, {
+            controller,
+            publicMessageId,
+            requestId: context.requestId,
+            socketClientId: socket.data.clientId,
+        });
         this.log("turn.start", {
             channel: gatewayMessage.route.channel,
             clientId: socket.data.clientId,
@@ -612,6 +637,7 @@ export class SocketControlHub implements EventSink {
                     : undefined,
                 interactionMode,
                 sandboxMode,
+                signal: controller.signal,
             });
             this.log("turn.final", {
                 channel: gatewayMessage.route.channel,
@@ -649,10 +675,62 @@ export class SocketControlHub implements EventSink {
                 context.requestId,
             );
         } finally {
+            this.activeTurns.delete(context.requestId);
             if (sandboxMode === SandboxMode.Yolo) {
                 this.publishYoloAudit(RuntimeEventType.SandboxYoloExited, gatewayMessage, publicMessageId, context.requestId);
             }
         }
+    }
+
+    private handleGatewayMessageInterrupt(
+        socket: SocketControlSocket,
+        envelope: GatewayControlEnvelope,
+    ): void {
+        const input = readGatewayControlMessageInterruptInput(envelope.payload);
+        let interrupted = 0;
+        for (const [key, turn] of this.activeTurns) {
+            if (turn.socketClientId !== socket.data.clientId) continue;
+            if (input.requestId && turn.requestId !== input.requestId) continue;
+            if (input.messageId && turn.publicMessageId !== input.messageId) continue;
+            if (!input.requestId && !input.messageId && this.activeTurns.size !== 1) continue;
+            turn.controller.abort();
+            interrupted += 1;
+            this.activeTurns.delete(key);
+        }
+        this.log("turn.interrupt", {
+            clientId: socket.data.clientId,
+            interrupted,
+            messageId: input.messageId,
+            requestId: input.requestId,
+        });
+        this.send(socket, GatewayControlMessageType.Ack, buildGatewayControlAckPayload({
+            clientId: socket.data.clientId,
+            interrupted,
+            received: GatewayControlMessageType.GatewayMessageInterrupt,
+        }), envelope);
+    }
+
+    private async handleGatewayMessageUndo(
+        socket: SocketControlSocket,
+        envelope: GatewayControlEnvelope,
+    ): Promise<void> {
+        const input = readGatewayControlMessageUndoInput(envelope.payload);
+        this.invalidateReadCache();
+        const result = this.options.recordUndo
+            ? await this.options.recordUndo(input)
+            : { abandoned: 0, undoEventId: undefined };
+        this.log("turn.undo", {
+            anchorEventId: input.anchorEventId,
+            anchorMessageId: input.anchorMessageId,
+            clientId: socket.data.clientId,
+            abandoned: result.abandoned,
+        });
+        this.send(socket, GatewayControlMessageType.Ack, buildGatewayControlAckPayload({
+            abandoned: result.abandoned,
+            clientId: socket.data.clientId,
+            received: GatewayControlMessageType.GatewayMessageUndo,
+            undoEventId: result.undoEventId,
+        }), envelope);
     }
 
     private handlePing(socket: SocketControlSocket, envelope: GatewayControlEnvelope): void {

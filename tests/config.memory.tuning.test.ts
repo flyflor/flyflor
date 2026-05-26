@@ -197,4 +197,68 @@ describe("LF-P0 memory tuning defaults", () => {
             await rm(root, { recursive: true, force: true });
         }
     });
+
+    test("model context window is discovered from provider model metadata", async () => {
+        const { paths, root } = await makePaths();
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async () => new Response(JSON.stringify({
+            data: [
+                { id: "custom-1m", context_window: 1_000_000 },
+                { id: "custom-small", context_length: 32_000 },
+            ],
+        }), { status: 200 })) as unknown as typeof fetch;
+        try {
+            await writeFile(
+                configFileOf(paths),
+                JSON.stringify({
+                    model: {
+                        activeProvider: "custom",
+                        activeModel: "custom-1m",
+                        providers: {
+                            custom: {
+                                baseUrl: "https://models.example/v1",
+                                apiKey: "test-key",
+                            },
+                        },
+                    },
+                }),
+            );
+            const config = await loadConfigForPaths(paths);
+            expect(config.model.contextWindowTokens).toBe(1_000_000);
+        } finally {
+            globalThis.fetch = originalFetch;
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test("explicit model context window overrides discovered metadata", async () => {
+        const { paths, root } = await makePaths();
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async () => new Response(JSON.stringify({
+            data: [{ id: "custom-1m", context_window: 1_000_000 }],
+        }), { status: 200 })) as unknown as typeof fetch;
+        try {
+            await writeFile(
+                configFileOf(paths),
+                JSON.stringify({
+                    model: {
+                        activeProvider: "custom",
+                        activeModel: "custom-1m",
+                        providers: {
+                            custom: {
+                                baseUrl: "https://models.example/v1",
+                                apiKey: "test-key",
+                                contextWindowTokens: 777_000,
+                            },
+                        },
+                    },
+                }),
+            );
+            const config = await loadConfigForPaths(paths);
+            expect(config.model.contextWindowTokens).toBe(777_000);
+        } finally {
+            globalThis.fetch = originalFetch;
+            await rm(root, { recursive: true, force: true });
+        }
+    });
 });

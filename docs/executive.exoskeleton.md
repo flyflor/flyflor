@@ -86,7 +86,7 @@ The kernel context input supports:
 - `mcpToolCalls`
 - `userToolCalls`
 
-The current CLI has YOLO mode and renders tool/run events, but the normal per-turn approval UI for `toolApprovals.mcpToolCalls` and `toolApprovals.userToolCalls` is still a documented follow-up. Until that closes, docs must describe this as a gap, not as completed behavior.
+The current CLI has YOLO mode, renders tool/run events, and exposes `/approve` for one-turn non-YOLO approval through `toolApprovals.mcpToolCalls` and `toolApprovals.userToolCalls`.
 
 ## Events And Metadata
 

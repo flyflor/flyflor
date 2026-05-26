@@ -66,6 +66,7 @@ export class SocketModule extends Socket {
             },
             paths: this.paths,
             queries: this.queryComponent,
+            recordUndo: (input) => this.runtime.recordUndo(input),
             status: () => this.getStatusSnapshot(),
         });
         try {

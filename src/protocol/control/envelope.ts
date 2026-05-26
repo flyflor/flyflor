@@ -70,6 +70,22 @@ export type GatewayControlTurnErrorPayload = Record<string, unknown> & {
     messageId: string;
 };
 
+export interface GatewayControlMessageInterruptInput {
+    messageId?: string;
+    requestId?: string;
+}
+
+export type GatewayControlMessageInterruptPayload = Record<string, unknown> & GatewayControlMessageInterruptInput;
+
+export interface GatewayControlMessageUndoInput {
+    anchorEventId?: string;
+    anchorMessageId?: string;
+    reason?: string;
+    turnIndex?: number;
+}
+
+export type GatewayControlMessageUndoPayload = Record<string, unknown> & GatewayControlMessageUndoInput;
+
 export type GatewayControlTurnFinalPayload = Record<string, unknown> & {
     reply: GatewayReplyLike;
 };
@@ -633,6 +649,8 @@ export function classifyGatewayControlSemanticType(
 ): GatewayControlSemanticType {
     switch (type) {
         case GatewayControlMessageType.GatewayMessageSend:
+        case GatewayControlMessageType.GatewayMessageInterrupt:
+        case GatewayControlMessageType.GatewayMessageUndo:
         case GatewayControlMessageType.ForkCreate:
         case GatewayControlMessageType.TaskPlanDecide:
             return GatewayControlSemanticType.Input;
@@ -802,6 +820,26 @@ export function readGatewayControlMessageInput(payload: Record<string, unknown> 
             : undefined,
         attachments: Array.isArray(payload.attachments) ? payload.attachments as GatewayMessage["attachments"] : undefined,
         metadata: isRecord(payload.metadata) ? payload.metadata : undefined,
+    };
+}
+
+export function readGatewayControlMessageInterruptInput(
+    payload: Record<string, unknown> | undefined,
+): GatewayControlMessageInterruptInput {
+    return {
+        messageId: readString(payload?.messageId),
+        requestId: readString(payload?.requestId),
+    };
+}
+
+export function readGatewayControlMessageUndoInput(
+    payload: Record<string, unknown> | undefined,
+): GatewayControlMessageUndoInput {
+    return {
+        anchorEventId: readTrimmedString(payload?.anchorEventId, 160),
+        anchorMessageId: readTrimmedString(payload?.anchorMessageId, 160),
+        reason: readTrimmedString(payload?.reason, 600),
+        turnIndex: readNumber(payload?.turnIndex),
     };
 }
 

@@ -290,7 +290,9 @@
           "execution.job.detail.get",
           "execution.job.list",
           "execution.job.snapshot",
+          "gateway.message.interrupt",
           "gateway.message.send",
+          "gateway.message.undo",
           "gateway.status.get",
           "gateway.status.snapshot",
           "ask.detail.get",
@@ -1027,6 +1029,39 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "MessageInterruptPayload": {
+        "type": "object",
+        "description": "Optional target for gateway.message.interrupt. messageId is the public client message id; requestId is the runtime request correlation id.",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "MessageUndoPayload": {
+        "type": "object",
+        "description": "Append-only undo control command. It records an undo event and abandons active memory after the selected anchor without deleting brain.db history.",
+        "properties": {
+          "anchorEventId": {
+            "type": "string"
+          },
+          "anchorMessageId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "turnIndex": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "additionalProperties": true
@@ -1871,6 +1906,52 @@
           }
         ]
       },
+      "GatewayMessageInterruptEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "gateway.message.interrupt"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/MessageInterruptPayload"
+              }
+            }
+          }
+        ]
+      },
+      "GatewayMessageUndoEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SocketEnvelope"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "payload"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "gateway.message.undo"
+              },
+              "payload": {
+                "$ref": "#/components/schemas/MessageUndoPayload"
+              }
+            }
+          }
+        ]
+      },
       "ForkCreateEnvelope": {
         "allOf": [
           {
@@ -2016,6 +2097,12 @@
           },
           {
             "$ref": "#/components/schemas/GatewayMessageSendEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/GatewayMessageInterruptEnvelope"
+          },
+          {
+            "$ref": "#/components/schemas/GatewayMessageUndoEnvelope"
           },
           {
             "$ref": "#/components/schemas/EventSubscribeEnvelope"
@@ -2636,6 +2723,7 @@
                 "gateway.status.get",
                 "history.list",
                 "gateway.message.send",
+                "gateway.message.undo",
                 "ping"
               ],
               "semanticTypes": [
@@ -3081,6 +3169,35 @@
                 "userToolCalls": false
               }
             }
+          }
+        }
+      },
+      "GatewayMessageInterrupt": {
+        "summary": "gateway.message.interrupt stops an active live turn by public message id",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-message-interrupt-1",
+          "type": "gateway.message.interrupt",
+          "at": "2026-05-22T00:00:06.500Z",
+          "requestId": "req-turn-interrupt-1",
+          "payload": {
+            "messageId": "message-1"
+          }
+        }
+      },
+      "GatewayMessageUndo": {
+        "summary": "gateway.message.undo records a transcript rollback without deleting brain.db history",
+        "value": {
+          "protocol": "flyflor.ws.v1",
+          "id": "env-message-undo-1",
+          "type": "gateway.message.undo",
+          "at": "2026-05-22T00:00:06.750Z",
+          "requestId": "req-turn-undo-1",
+          "payload": {
+            "anchorEventId": "event-1",
+            "anchorMessageId": "message-1",
+            "reason": "cli.undo",
+            "turnIndex": 0
           }
         }
       },

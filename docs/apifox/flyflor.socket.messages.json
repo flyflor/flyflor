@@ -35,6 +35,8 @@
       "name": "02 Live Turn",
       "messages": [
         "GatewayMessageSend",
+        "GatewayMessageInterrupt",
+        "GatewayMessageUndo",
         "InvalidGatewayMessageSend",
         "TurnDelta",
         "TurnFinal",
@@ -1674,6 +1676,156 @@
               "userToolCalls": false
             }
           }
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
+        "Ack",
+        "TurnError"
+      ],
+      "folder": "02 Live Turn",
+      "name": "GatewayMessageInterrupt",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "gateway.message.interrupt"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "messageId"
+            ],
+            "properties": {
+              "messageId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "gateway.message.interrupt",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-message-interrupt-1",
+        "type": "gateway.message.interrupt",
+        "at": "2026-05-22T00:00:06.500Z",
+        "requestId": "req-turn-interrupt-1",
+        "payload": {
+          "messageId": "message-1"
+        }
+      }
+    },
+    {
+      "direction": "client->server",
+      "expected": [
+        "Ack"
+      ],
+      "folder": "02 Live Turn",
+      "name": "GatewayMessageUndo",
+      "schema": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "id",
+          "type",
+          "at",
+          "requestId",
+          "payload"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "flyflor.ws.v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "gateway.message.undo"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "anchorEventId",
+              "anchorMessageId",
+              "reason",
+              "turnIndex"
+            ],
+            "properties": {
+              "anchorEventId": {
+                "type": "string"
+              },
+              "anchorMessageId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "turnIndex": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "type": "gateway.message.undo",
+      "value": {
+        "protocol": "flyflor.ws.v1",
+        "id": "env-message-undo-1",
+        "type": "gateway.message.undo",
+        "at": "2026-05-22T00:00:06.750Z",
+        "requestId": "req-turn-undo-1",
+        "payload": {
+          "anchorEventId": "event-1",
+          "anchorMessageId": "message-1",
+          "reason": "cli.undo",
+          "turnIndex": 0
         }
       }
     },
@@ -8745,6 +8897,29 @@
             "userToolCalls": false
           }
         }
+      }
+    },
+    "GatewayMessageInterrupt": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-message-interrupt-1",
+      "type": "gateway.message.interrupt",
+      "at": "2026-05-22T00:00:06.500Z",
+      "requestId": "req-turn-interrupt-1",
+      "payload": {
+        "messageId": "message-1"
+      }
+    },
+    "GatewayMessageUndo": {
+      "protocol": "flyflor.ws.v1",
+      "id": "env-message-undo-1",
+      "type": "gateway.message.undo",
+      "at": "2026-05-22T00:00:06.750Z",
+      "requestId": "req-turn-undo-1",
+      "payload": {
+        "anchorEventId": "event-1",
+        "anchorMessageId": "message-1",
+        "reason": "cli.undo",
+        "turnIndex": 0
       }
     },
     "TurnDelta": {

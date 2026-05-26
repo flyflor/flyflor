@@ -253,12 +253,6 @@ export class ExecutiveToolRuntime<TCall extends ExecutiveToolCall, TExecution ex
                     executions: allExecutions,
                 };
             }
-            // If the model already emitted visible text and every concrete
-            // execution in this step failed, keep the user-facing reply instead
-            // of turning ordinary denials/schema failures into a guard ask.
-            if (parsed.text.length > 0 && executions.length > 0 && executions.every((execution) => !execution.ok)) {
-                return { rawText: parsed.text, executions: allExecutions };
-            }
             transcript.push(
                 this.assistantMessage(parsed.text || raw),
                 this.toolResultMessage(input.callbacks.renderResults([...blocked, ...executions, ...resultBlocked])),

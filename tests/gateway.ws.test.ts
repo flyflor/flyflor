@@ -113,6 +113,8 @@ describe("SocketControlHub", () => {
                         GatewayControlMessageType.HistoryList,
                         GatewayControlMessageType.TaskPlanDecide,
                         GatewayControlMessageType.GatewayMessageSend,
+                        GatewayControlMessageType.GatewayMessageInterrupt,
+                        GatewayControlMessageType.GatewayMessageUndo,
                         GatewayControlMessageType.Ping,
                     ]),
                 },
@@ -3217,6 +3219,63 @@ describe("SocketControlHub", () => {
             payload: {
                 message: "runtime failed",
                 messageId: "message-1",
+            },
+        });
+        hub.dispose();
+    });
+
+    test("interrupts an active gateway message through AbortSignal", async () => {
+        let releaseStarted!: () => void;
+        const started = new Promise<void>((resolve) => {
+            releaseStarted = resolve;
+        });
+        let aborted = false;
+        const hub = createHub({
+            dispatch: async (_message, options) => {
+                releaseStarted();
+                return await new Promise<GatewayReply>((_resolve, reject) => {
+                    options?.signal?.addEventListener("abort", () => {
+                        aborted = true;
+                        const error = new Error("The operation was stopped.");
+                        error.name = "AbortError";
+                        reject(error);
+                    });
+                });
+            },
+        });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        const sendPromise = hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(
+                GatewayControlMessageType.GatewayMessageSend,
+                { id: "message-interrupt-1", text: "long task" },
+                { id: "send-interrupt-1", requestId: "req-interrupt-1" },
+            )),
+        );
+        await started;
+        await hub.message(
+            socket,
+            JSON.stringify(createGatewayControlEnvelope(
+                GatewayControlMessageType.GatewayMessageInterrupt,
+                { messageId: "message-interrupt-1" },
+                { id: "interrupt-1", requestId: "req-interrupt-command-1" },
+            )),
+        );
+        await sendPromise;
+
+        expect(aborted).toBe(true);
+        expect(sent(socket).some((envelope) =>
+            envelope.type === GatewayControlMessageType.Ack
+            && (envelope.payload as { interrupted?: number }).interrupted === 1
+        )).toBe(true);
+        expect(sent(socket).at(-1)).toMatchObject({
+            requestId: "req-interrupt-1",
+            type: GatewayControlMessageType.TurnError,
+            payload: {
+                message: "The operation was stopped.",
+                messageId: "message-interrupt-1",
             },
         });
         hub.dispose();

@@ -177,6 +177,43 @@ describe("LF-R4 Continuation Context wiring", () => {
         }
     });
 
+    test("recordUndo appends audit event and abandons active continuation memory", async () => {
+        const config = await makeConfig();
+        const sink = new RecordingSink();
+        const memory = new MemoryModule(config, sink);
+        await memory.warmup();
+        try {
+            await memory.rememberTurn(
+                gatewayMessage("hi"),
+                gatewayReply("ask?", "rep-1"),
+                runtimeContext(),
+                [],
+                {},
+                askA,
+            );
+            const db = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
+            const anchor = db.query("SELECT id FROM memory_events WHERE type = 'event'").get() as { id: string };
+            db.close();
+
+            const before = memory.listActiveContinuations("fork:test-fork");
+            expect(before.length).toBe(1);
+            const result = await memory.recordUndo({ anchorEventId: anchor.id, reason: "test.undo", turnIndex: 0 });
+
+            expect(result.undoEventId).toStartWith("undo-");
+            expect(result.abandoned).toBeGreaterThanOrEqual(2);
+            expect(memory.listActiveContinuations("fork:test-fork")).toHaveLength(0);
+            const db2 = new Database(join(config.paths.configDir, "brain.db"), { readonly: true });
+            try {
+                const undo = db2.query("SELECT content FROM memory_events WHERE id = ?").get(result.undoEventId!) as { content: string };
+                expect(JSON.parse(undo.content).kind).toBe("gateway.message.undo");
+            } finally {
+                db2.close();
+            }
+        } finally {
+            memory.dispose();
+        }
+    });
+
     test("pinContinuation scales decayScore by continuation.pinHalflifeMultiplier and emits MemoryContinuationPinned", async () => {
         const config = await makeConfig();
         config.memory.tuning.continuation.pinHalflifeMultiplier = 4;

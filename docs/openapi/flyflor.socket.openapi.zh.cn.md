@@ -24,6 +24,7 @@
 9. 发送 `HistoryList`，预期 `HistorySnapshot`。
 10. 发送 `ScopeList`、`AskList` 或 `ForkDetailGet`，预期对应 `*.snapshot.payload.data` read-model 响应。
 11. 发送 `GatewayMessageSend`，观察一个或多个 `TurnDelta`，最后收到 `TurnFinal`。
+12. 如果需要停止 live turn，发送 `GatewayMessageInterrupt`，预期收到 `Ack`，随后收到该 public message id 的 `TurnError`。
 
 Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，但场景消息放在 `components.examples` 下。做 WebSocket 测试时，复制每个 example 的 `value` 作为 outgoing JSON body，保留其中的 `protocol`、`type` 和 request id。
 
@@ -37,6 +38,7 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - `ExecutionJobList`、`ExecutionJobDetailGet` 和 `ExecutionJobSnapshot` 展示由 `brain.db` execution-job ledger 支撑的 Durable Job 只读查询。
 - ASK 示例使用 `questions[]`、`recommendedChoiceId` 和固定 `other` 选项；root `choices` 只保留给旧客户端兼容。
 - `GatewayStatusSnapshot.payload.status.controlState` 展示当前 socket 可见的 ASK、Scope、Fork 和 Executive loop snapshot，来源是真实 turn metadata 与 runtime events。
+- `GatewayMessageInterrupt` 展示显式的 `gateway.message.interrupt` control command，供 TUI/WS client 停止 active live turn。
 - `EventSubscribe`、`ExecutiveLoopPausedEvent`、`ExecutiveLoopResumedEvent` 展示生命周期事件时间线。当前轮权威状态仍以 `turn.final.reply.metadata` 为准。
 - `InvalidGatewayMessageSend` 接 `InvalidPayloadError` 覆盖缺少 `payload.text` 时的结构化 `invalid-payload` 响应。
 
@@ -51,6 +53,7 @@ Apifox 导入提示：OpenAPI 文件会把 `/ws` 表达成 upgrade endpoint，�
 - read-model query 命令返回的 `*.snapshot.payload.data` 只是 TUI 可检查状态，不要回填成 prompt context。
 - `execution.job.snapshot.payload.data` 只是长任务进度/审计数据，不是 prompt 容器，也不能当认知连续性来源。
 - 只有 `GatewayMessageSend` 进入 live turn execution；query 命令必须保持可脱离的 DB 读取。
+- `GatewayMessageInterrupt` 只终断 active live turn。它不会删除 `brain.db`、改写 history，或修改 Scope/Fork memory。
 - `GatewayStatusSnapshot.payload.status.controlState` 只是 client read model；它不是新的 context owner、session restore surface 或 prompt assembly source。
 - `conversationKey`、`threadId`、`user.id` 适合用于 Apifox 关联和路由断言，但它们不是 memory owner。
 

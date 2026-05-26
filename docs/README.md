@@ -47,8 +47,8 @@ Official homepage: [https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 Current known closure gaps are documented instead of hidden:
 
 - Kernel local smoke examples use `ws://127.0.0.1:8788/ws`; the CLI default is `ws://127.0.0.1:8787/ws`.
-- The kernel exposes `server.hello` and `capability.catalog.get`; the current CLI bootstrap does not yet request the capability catalog.
-- Kernel context input supports `toolApprovals.mcpToolCalls` and `toolApprovals.userToolCalls`; the CLI currently documents and displays YOLO mode, while normal per-turn tool approval UX still needs closure.
+- The kernel exposes `server.hello` and `capability.catalog.get`; the CLI bootstrap requests the capability catalog.
+- Kernel context input supports `toolApprovals.mcpToolCalls` and `toolApprovals.userToolCalls`; the CLI exposes `/approve` for one-turn non-YOLO approval and also documents/displays YOLO mode.
 
 ## Archive
 

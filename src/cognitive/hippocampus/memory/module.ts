@@ -1840,6 +1840,70 @@ export class MemoryModule extends Memory {
         return rows.map((row) => historyTurnFromEvent(row, this.historyPlanningForEvent(row.id))).reverse();
     }
 
+    public async recordUndo(input: {
+        anchorEventId?: string;
+        anchorMessageId?: string;
+        reason?: string;
+        turnIndex?: number;
+    }): Promise<{ abandoned: number; undoEventId?: string }> {
+        if (!this.config.memory.enabled || !this.brainOpened) {
+            return { abandoned: 0 };
+        }
+        const anchor = input.anchorEventId ? this.brain.getEvent(input.anchorEventId) : null;
+        const ownerKey = anchor?.ownerKey ?? "gateway:undo";
+        const sourceKey = anchor?.sourceKey ?? input.anchorMessageId ?? "gateway.message.undo";
+        const undoEventId = `undo-${crypto.randomUUID()}`;
+        let abandoned = 0;
+        try {
+            if (anchor) {
+                const rows = this.brain.listEvents({
+                    ownerKey,
+                    sinceTs: anchor.ts,
+                    limit: 500,
+                    statusIn: [MemoryEventStatus.Live, MemoryEventStatus.Resumed],
+                });
+                for (const row of rows) {
+                    if (
+                        row.type === MemoryEventType.Event
+                        || row.type === MemoryEventType.Ask
+                        || row.type === MemoryEventType.ContinuationContext
+                        || row.type === MemoryEventType.AskAnswerPair
+                    ) {
+                        this.brain.upsertState(row.id, { status: MemoryEventStatus.Abandoned });
+                        abandoned += 1;
+                    }
+                }
+            }
+            this.brain.appendEvent({
+                id: undoEventId,
+                ts: Date.now(),
+                ownerKey,
+                sourceKey,
+                sourceSurface: "gateway",
+                type: MemoryEventType.Action,
+                role: ModelRole.System,
+                content: {
+                    kind: "gateway.message.undo",
+                    abandoned,
+                    anchorEventId: input.anchorEventId,
+                    anchorMessageId: input.anchorMessageId,
+                    reason: input.reason,
+                    turnIndex: input.turnIndex,
+                },
+                importance: 0.2,
+            });
+            return { abandoned, undoEventId };
+        } catch (err) {
+            this.events.publish(
+                event(RuntimeEventType.MemoryBrainWriteFailed, {
+                    op: "undo.record",
+                    message: err instanceof Error ? err.message : String(err),
+                }),
+            );
+            throw err;
+        }
+    }
+
     /**
      * Planning/fork/history write path. The semantic decision comes from model
      * protocol blocks or blackboard structured output; this component only

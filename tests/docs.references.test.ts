@@ -173,6 +173,8 @@ describe("documentation references", () => {
             "HistoryList",
             "HistorySnapshot",
             "GatewayMessageSend",
+            "GatewayMessageInterrupt",
+            "GatewayMessageUndo",
             "TurnDelta",
             "TurnFinal",
             "TurnFinalWithAsk",
@@ -228,6 +230,8 @@ describe("documentation references", () => {
             "#/components/schemas/ExecutionJobListEnvelope",
             "#/components/schemas/ExecutionJobDetailGetEnvelope",
             "#/components/schemas/GatewayMessageSendEnvelope",
+            "#/components/schemas/GatewayMessageInterruptEnvelope",
+            "#/components/schemas/GatewayMessageUndoEnvelope",
             "#/components/schemas/EventSubscribeEnvelope",
             "#/components/schemas/EventUnsubscribeEnvelope",
         ]);
@@ -298,6 +302,8 @@ describe("documentation references", () => {
             GatewayControlMessageType.HistoryList,
             GatewayControlMessageType.HistorySnapshot,
             GatewayControlMessageType.GatewayMessageSend,
+            GatewayControlMessageType.GatewayMessageInterrupt,
+            GatewayControlMessageType.GatewayMessageUndo,
             GatewayControlMessageType.TurnDelta,
             GatewayControlMessageType.TurnFinal,
             GatewayControlMessageType.TurnFinal,
@@ -393,6 +399,8 @@ describe("documentation references", () => {
             "CapabilityCatalogGet",
             "HistoryList",
             "GatewayMessageSend",
+            "GatewayMessageInterrupt",
+            "GatewayMessageUndo",
             "EventSubscribe",
             "EventUnsubscribe",
             "InvalidGatewayMessageSend",
@@ -515,6 +523,8 @@ describe("documentation references", () => {
 
         const clientMessages = messages.filter((message) => message.direction === "client->server");
         expect(clientMessages.map((message) => message.name)).toContain("GatewayMessageSend");
+        expect(clientMessages.map((message) => message.name)).toContain("GatewayMessageInterrupt");
+        expect(clientMessages.map((message) => message.name)).toContain("GatewayMessageUndo");
         expect(clientMessages.map((message) => message.name)).toContain("HistoryList");
         expect(clientMessages.map((message) => message.name)).toContain("ScopeDetailGet");
         expect(clientMessages.map((message) => message.name)).toContain("ForkCreate");
@@ -546,6 +556,7 @@ describe("documentation references", () => {
             expect(doc).toContain("CapabilityCatalogGet");
             expect(doc).toContain("HistoryList");
             expect(doc).toContain("GatewayMessageSend");
+            expect(doc).toContain("gateway.message.interrupt");
             expect(doc).toContain("TurnDelta");
             expect(doc).toContain("TurnFinal");
             expect(doc).toContain("TurnFinalWithAsk");

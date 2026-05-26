@@ -298,6 +298,11 @@ export interface ModelProviderConfig {
     models?: string[];
 }
 
+interface ProviderModelDescriptor {
+    contextWindowTokens?: number;
+    id: string;
+}
+
 export interface ModelRegistryConfig {
     activeModel?: string;
     activeProvider?: string;
@@ -992,14 +997,17 @@ async function buildModelConfig(
     // Model discovery may require auth; resolve config-provider secrets before
     // probing `/v1/models` so minimal relay profiles can omit the static list.
     const apiKey = resolveSecret(provider.apiKey, config?.secrets);
-    const models =
-        provider.models && provider.models.length > 0
-            ? provider.models
-            : await fetchProviderModelIds({ ...provider, type: providerKind, apiKey }).catch(() => []);
+    const discoveredModels = provider.contextWindowTokens || !canProbeProviderModels(provider, apiKey)
+        ? []
+        : await fetchProviderModels({ ...provider, type: providerKind, apiKey }).catch(() => []);
+    const models = provider.models && provider.models.length > 0
+        ? provider.models
+        : discoveredModels.map((entry) => entry.id);
     const model = config?.activeModel ?? provider.defaultModel ?? models[0];
     if (!model || model.trim().length === 0) {
         throw new Error(`Model provider ${providerId} does not define a default model.`);
     }
+    const discoveredContextWindowTokens = discoveredModels.find((entry) => modelIdsMatch(entry.id, model))?.contextWindowTokens;
     return {
         apiMode: provider.apiMode ?? ModelApiMode.ChatCompletions,
         providerId,
@@ -1008,7 +1016,10 @@ async function buildModelConfig(
         baseUrl: provider.baseUrl ?? "",
         apiKey,
         headers: provider.headers ?? {},
-        contextWindowTokens: provider.contextWindowTokens ?? knownModelContextWindowTokens(providerId, model) ?? undefined,
+        contextWindowTokens: provider.contextWindowTokens
+            ?? discoveredContextWindowTokens
+            ?? knownModelContextWindowTokens(providerId, model)
+            ?? undefined,
         maxTokens: provider.maxTokens ?? 4096,
         model,
         temperature: config?.temperature ?? 0.2,
@@ -1141,7 +1152,7 @@ function normalizeProviderProfile(id: string, provider: ModelProviderConfig): Mo
     };
 }
 
-async function fetchProviderModelIds(provider: ModelProviderConfig): Promise<string[]> {
+async function fetchProviderModels(provider: ModelProviderConfig): Promise<ProviderModelDescriptor[]> {
     if (provider.type !== ModelProviderKind.OpenAICompatible || !provider.baseUrl) {
         return [];
     }
@@ -1155,8 +1166,43 @@ async function fetchProviderModelIds(provider: ModelProviderConfig): Promise<str
     if (!response.ok) {
         return [];
     }
-    const payload = (await response.json()) as { data?: Array<{ id?: unknown }> };
-    return (payload.data ?? []).map((item) => item.id).filter((id): id is string => typeof id === "string" && id.length > 0);
+    const payload = (await response.json()) as { data?: Array<Record<string, unknown>> };
+    return (payload.data ?? []).flatMap((item) => {
+        const id = typeof item.id === "string" && item.id.length > 0 ? item.id : undefined;
+        if (!id) return [];
+        return [{
+            id,
+            contextWindowTokens: readModelContextWindowTokens(item),
+        }];
+    });
+}
+
+function modelIdsMatch(left: string, right: string): boolean {
+    return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+function canProbeProviderModels(provider: ModelProviderConfig, apiKey: SecretRef | string | undefined): boolean {
+    if (typeof apiKey === "string" && !isPlaceholderApiKey(apiKey)) return true;
+    if (apiKey && typeof apiKey !== "string") return true;
+    const baseUrl = provider.baseUrl?.toLowerCase() ?? "";
+    return baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1") || baseUrl.includes("host.docker.internal");
+}
+
+function readModelContextWindowTokens(item: Record<string, unknown>): number | undefined {
+    for (const key of ["contextWindowTokens", "context_window", "context_length", "max_context_tokens", "max_input_tokens", "input_token_limit"]) {
+        const value = item[key];
+        if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+            return Math.floor(value);
+        }
+    }
+    for (const key of ["metadata", "limits", "top_provider"]) {
+        const nested = item[key];
+        if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+            const value = readModelContextWindowTokens(nested as Record<string, unknown>);
+            if (value) return value;
+        }
+    }
+    return undefined;
 }
 
 function openAICompatibleModelsUrl(baseUrl: string): URL {

@@ -24,9 +24,28 @@ export class AttachmentSummaryRenderer extends Runtime {
     }
 
     public renderUserContentWithAttachments(message: GatewayMessage): string {
+        const continuation = this.renderContinuationAnswerContext(message);
         const summary = this.renderAttachmentSummary(message.attachments);
-        if (!summary) return message.text;
-        return message.text ? `${message.text}\n\n${summary}` : summary;
+        const content = continuation ? `${continuation}\n\n${message.text}` : message.text;
+        if (!summary) return content;
+        return content ? `${content}\n\n${summary}` : summary;
+    }
+
+    private renderContinuationAnswerContext(message: GatewayMessage): string {
+        const original = message.metadata?.continuationOriginalUserMessage;
+        const answer = message.metadata?.askAnswerOriginalText;
+        if (typeof original !== "string" || original.trim().length === 0) {
+            return "";
+        }
+        const lines = [
+            "[continuation-answer]",
+            "Original user request:",
+            original.slice(0, 4000),
+        ];
+        if (typeof answer === "string" && answer.trim().length > 0) {
+            lines.push("User answer to the pending ASK:", answer.slice(0, 2000));
+        }
+        return lines.join("\n");
     }
 }
 

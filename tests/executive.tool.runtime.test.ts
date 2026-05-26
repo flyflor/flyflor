@@ -240,6 +240,48 @@ describe("ExecutiveToolRuntime", () => {
         expect(transcriptSizes).toEqual([1, 3, 5]);
     });
 
+    test("feeds failed visible tool attempts back to the model for recovery", async () => {
+        const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
+        const renderedResults: string[] = [];
+
+        const result = await runtime.run({
+            initialMessages: [{ role: "user", content: "add package script" }],
+            maxTurns: 3,
+            noMoreToolsMessage: "no more tools",
+            callbacks: {
+                execute: async (batch) =>
+                    batch.map((item) => ({
+                        call: item,
+                        ok: false,
+                        error: "workspace.edit oldText was not found.",
+                    })),
+                generate: async (_messages, turn) => (turn === 0 ? "I will edit first." : "Recovered final."),
+                knownToolNames: () => new Set(["workspace.edit"]),
+                parse: (raw) =>
+                    raw === "I will edit first."
+                        ? { text: raw, calls: [call("workspace.edit", { path: "package.json" })] }
+                        : { text: raw, calls: [] },
+                renderResults: (executions) => {
+                    const rendered = JSON.stringify(executions.map((item) => item.error));
+                    renderedResults.push(rendered);
+                    return rendered;
+                },
+                toolDescriptor: (item) => descriptorFor(item.key),
+            },
+        });
+
+        expect(result.askRequired).toBeUndefined();
+        expect(result.rawText).toBe("Recovered final.");
+        expect(result.executions).toEqual([
+            expect.objectContaining({
+                call: call("workspace.edit", { path: "package.json" }),
+                error: "workspace.edit oldText was not found.",
+                ok: false,
+            }),
+        ]);
+        expect(renderedResults).toEqual(['["workspace.edit oldText was not found."]']);
+    });
+
     test("returns ask-required when max tool turns are exhausted", async () => {
         const runtime = new ExecutiveToolRuntime<TestToolCall, TestToolExecution>();
 

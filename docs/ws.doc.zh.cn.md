@@ -38,8 +38,8 @@ bun run socket
         "projectMemoryDir": "/workspace/example/.flyflor/memory"
       },
       "toolApprovals": {
-        "mcpToolCalls": [],
-        "userToolCalls": []
+        "mcpToolCalls": true,
+        "userToolCalls": true
       }
     }
   }
@@ -60,6 +60,7 @@ Socket contract 包含：
 - `capability.catalog.get`
 - `capability.catalog.snapshot`
 - `gateway.message.send`
+- `gateway.message.interrupt`
 - `turn.delta`
 - `turn.final`
 - `turn.error`
@@ -165,7 +166,7 @@ High-authority ASK 可以携带 `crystalCandidates`。这些 candidates 可以�
 - `tool.succeeded`
 - `tool.failed`
 
-当前 CLI bootstrap 还没有请求 `capability.catalog.get`，面向 `mcpToolCalls` / `userToolCalls` 的普通 per-turn approval UX 仍是后续任务。
+当前 CLI bootstrap 会请求 `capability.catalog.get`；`/approve` 会为下一次非 YOLO 发送标记 `toolApprovals.mcpToolCalls=true` 和 `toolApprovals.userToolCalls=true`。YOLO 也会发送这些 approvals，但额外携带高权限 metadata。
 
 ## Tests
 

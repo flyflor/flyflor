@@ -47,8 +47,8 @@
 当前已知闭环缺口必须写清楚，而不是在文档里隐藏：
 
 - Kernel 本地 smoke 示例使用 `ws://127.0.0.1:8788/ws`；CLI 默认值是 `ws://127.0.0.1:8787/ws`。
-- Kernel 暴露 `server.hello` 与 `capability.catalog.get`；当前 CLI bootstrap 还没有请求 capability catalog。
-- Kernel context input 支持 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls`；CLI 当前主要文档化并展示 YOLO mode，普通 per-turn tool approval UX 仍需要闭环。
+- Kernel 暴露 `server.hello` 与 `capability.catalog.get`；CLI bootstrap 会请求 capability catalog。
+- Kernel context input 支持 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls`；CLI 通过 `/approve` 暴露非 YOLO 的单轮 approval，并继续文档化和展示 YOLO mode。
 
 ## 归档
 

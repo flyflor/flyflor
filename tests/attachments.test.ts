@@ -53,6 +53,21 @@ describe("attachments rendering", () => {
         expect(text).toContain("[attachments]");
         expect(text).toContain("spec.pdf");
     });
+
+    test("renders continuation original request without replacing the ask answer", () => {
+        const message = makeMessage();
+        message.text = "prettier:all";
+        message.metadata = {
+            askAnswerOriginalText: "prettier:all",
+            continuationOriginalUserMessage: "Add lint:fix to package.json and QA it.",
+        };
+
+        const text = renderUserContentWithAttachments(message);
+        expect(text).toContain("[continuation-answer]");
+        expect(text).toContain("Add lint:fix to package.json and QA it.");
+        expect(text).toContain("User answer to the pending ASK:");
+        expect(text.endsWith("prettier:all")).toBe(true);
+    });
 });
 
 // Smoke-test: GatewayMessage type accepts the attachments field.

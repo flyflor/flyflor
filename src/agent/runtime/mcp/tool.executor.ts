@@ -230,7 +230,7 @@ export class RuntimeMcpToolExecutor {
                 ));
                 continue;
             }
-        const userTool = input.userToolCatalog.find(
+            const userTool = input.userToolCatalog.find(
                 (entry) => call.server === USER_TOOL_SERVER && entry.tool.descriptor.name === call.tool,
             );
             if (userTool) {
@@ -823,6 +823,39 @@ export class RuntimeMcpToolExecutor {
         return value;
     }
 
+    private previewText(value: unknown): string {
+        try {
+            return (typeof value === "string" ? value : JSON.stringify(value)).replace(/\s+/gu, " ").trim();
+        } catch {
+            return String(value);
+        }
+    }
+
+    private resultTailLines(value: unknown): string[] {
+        const text = this.resultTailText(value);
+        if (!text) return [];
+        return text
+            .split(/\r?\n/u)
+            .map((line) => line.trimEnd())
+            .filter((line) => line.trim().length > 0)
+            .slice(-3)
+            .map((line) => line.slice(0, 240));
+    }
+
+    private resultTailText(value: unknown): string {
+        if (value === undefined || value === null) return "";
+        if (typeof value === "string") return value;
+        if (typeof value === "object") {
+            const record = value as Record<string, unknown>;
+            const stdout = typeof record.stdout === "string" ? record.stdout : "";
+            const stderr = typeof record.stderr === "string" ? record.stderr : "";
+            const output = typeof record.output === "string" ? record.output : "";
+            const text = [stdout, stderr, output].filter((part) => part.trim().length > 0).join("\n");
+            if (text.trim()) return text;
+        }
+        return this.previewText(value);
+    }
+
     private durationMs(raw: unknown): number {
         if (raw && typeof raw === "object") {
             const value = (raw as { durationMs?: unknown }).durationMs;
@@ -892,14 +925,28 @@ export class RuntimeMcpToolExecutor {
         sandboxMode: string,
     ): void {
         const resultDescription = execution.result ? describeMcpResult(execution.result.raw) : undefined;
+        const key = this.callKey(execution.call);
+        const inputPreview = this.previewRecord(execution.call.input);
+        const resultTailLines = this.resultTailLines(execution.result?.raw);
         this.events.publish(
             event(
                 RuntimeEventType.McpToolCallExecuted,
                 {
+                    call: {
+                        inputPreview,
+                        server: execution.call.server,
+                        tool: execution.call.tool,
+                    },
+                    callId: this.executionCallId(requestId, execution.call),
+                    displayName: `${execution.call.server}/${execution.call.tool}`,
                     error: execution.error,
+                    inputPreview,
+                    key,
                     ok: execution.ok,
                     requiresApproval,
+                    resultTailLines,
                     sandboxMode,
+                    status: execution.ok ? "completed" : "failed",
                     ...(resultDescription
                         ? {
                               resultSummary: formatMcpResultSummary(resultDescription.summary, execution.result?.raw),
@@ -1027,6 +1074,10 @@ export class RuntimeMcpToolExecutor {
 
     private callKey(call: Pick<McpToolCallRequest, "server" | "tool">): string {
         return `${call.server}.${call.tool}`;
+    }
+
+    private executionCallId(requestId: string, call: Pick<McpToolCallRequest, "server" | "tool" | "input">): string {
+        return `${requestId}:${this.callKey(call)}:${this.previewText(call.input).slice(0, 48)}`;
     }
 
     private isWorkspaceWriteTool(toolName: string): boolean {

@@ -20,6 +20,7 @@ Client-to-server messages include:
 - `gateway.status.get`
 - `capability.catalog.get`
 - `gateway.message.send`
+- `gateway.message.interrupt`
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
@@ -70,9 +71,13 @@ Realtime panels should subscribe with `event.subscribe`; detail panels should re
 
 `task.plan.decide` is the explicit socket control write command for plan decisions. It is handled by socket control and applies through the task-plan query/write boundary; it is not a passive read-model snapshot query.
 
+`gateway.message.interrupt` is the explicit socket control command for stopping an active live turn. It targets the public `messageId` or request id and aborts the runtime through the same `AbortSignal` carried by dispatch options.
+
 ## Thin-Client Bootstrap
 
-Minimum read priority for Rust/TUI shells:
+Rust 最小接线清单:
+
+Minimum read priority for Rust/TUI shells（最小读取优先级建议）:
 
 1. Read `server.hello` for protocol and capability bootstrap.
 2. Send `capability.catalog.get` to get the visible capability/tool surface.
@@ -86,9 +91,9 @@ The Rust/TUI layer should not infer cognitive continuity from connection ids, us
 
 ## Current flyflor-cli Gap
 
-The current `flyflor-cli` bootstrap sends `client.hello`, `history.list`, `task.list`, `gateway.status.get`, `fork.memory.get`, and `event.subscribe`. It does not yet send `capability.catalog.get`, and it treats `server.hello` as future handshake metadata rather than a parsed bootstrap source.
+The current `flyflor-cli` bootstrap sends `client.hello`, `history.list`, `task.list`, `capability.catalog.get`, `gateway.status.get`, `fork.memory.get`, and `event.subscribe`. It treats `server.hello` as handshake metadata rather than a cognitive state source.
 
-This is a documentation and implementation gap for the tool-call closure. Until it is implemented, docs should say the CLI can render tool/run events and YOLO mode, but does not yet close normal capability catalog bootstrap or per-turn `toolApprovals` UX.
+Normal per-turn approval for non-YOLO flows is exposed by `flyflor-cli /approve`. It submits the kernel-shaped boolean `context.toolApprovals` bridge for the next send only. YOLO also submits the bridge, but remains separate high-privilege metadata. The CLI must never execute approved tools locally.
 
 ## Error
 

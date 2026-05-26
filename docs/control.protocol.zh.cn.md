@@ -20,6 +20,7 @@ Client-to-server messages 包括：
 - `gateway.status.get`
 - `capability.catalog.get`
 - `gateway.message.send`
+- `gateway.message.interrupt`
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
@@ -70,6 +71,8 @@ Realtime panels 应使用 `event.subscribe`；detail panels 应通过 snapshot q
 
 `task.plan.decide` 是 plan decision 的显式 socket control write command。它由 socket control 处理，并通过 task-plan query/write boundary 应用；它不是被动 read-model snapshot query。
 
+`gateway.message.interrupt` 是停止 active live turn 的显式 socket control command。它按 public `messageId` 或 request id 定位，并通过 dispatch options 中同一条 `AbortSignal` 终断 runtime。
+
 ## Thin-Client Bootstrap
 
 Rust/TUI shell 的最小读取优先级：
@@ -86,9 +89,9 @@ Rust/TUI 层不应从 connection id、user id、thread id、client id 或 transp
 
 ## 当前 flyflor-cli 缺口
 
-当前 `flyflor-cli` bootstrap 发送 `client.hello`、`history.list`、`task.list`、`gateway.status.get`、`fork.memory.get` 和 `event.subscribe`。它还没有发送 `capability.catalog.get`，并把 `server.hello` 当作未来 handshake metadata，而不是已解析的 bootstrap source。
+当前 `flyflor-cli` bootstrap 发送 `client.hello`、`history.list`、`task.list`、`capability.catalog.get`、`gateway.status.get`、`fork.memory.get` 和 `event.subscribe`。它把 `server.hello` 当作 handshake metadata，而不是认知状态来源。
 
-这是工具调用闭环的文档和实现缺口。在实现前，文档只能说 CLI 能渲染 tool/run events 和 YOLO mode，但还没有闭合普通 capability catalog bootstrap 或 per-turn `toolApprovals` UX。
+非 YOLO 流程下的普通 per-turn approval 由 `flyflor-cli /approve` 暴露。它只为下一次发送提交 kernel-shaped boolean `context.toolApprovals` bridge。YOLO 也会提交该 bridge，但仍是单独的高权限 metadata。CLI 绝不能本地执行已批准工具。
 
 ## Error
 
