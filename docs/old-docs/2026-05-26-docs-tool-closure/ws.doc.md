@@ -36,17 +36,11 @@ Typical client frame:
         "title": "Example",
         "projectDir": "/workspace/example",
         "projectMemoryDir": "/workspace/example/.flyflor/memory"
-      },
-      "toolApprovals": {
-        "mcpToolCalls": [],
-        "userToolCalls": []
       }
     }
   }
 }
 ```
-
-`gateway.*` is the wire-v1 compatibility vocabulary. The owner is `src/socket`, not a gateway architecture layer.
 
 ## Message Types
 
@@ -104,11 +98,9 @@ The socket contract includes:
 
 Error examples include `invalid-envelope` and `gateway.message.send payload requires text`.
 
-Apifox scenario names include `ServerHello`, `ClientHello`, `GatewayStatusGet`, `CapabilityCatalogGet`, `HistoryList`, `GatewayMessageSend`, `TurnDelta`, `TurnFinal`, `TurnFinalWithAsk`, `TurnFinalWithPlanning`, `TurnFinalWithExecutiveLoopPause`, and `InvalidPayloadError`.
+Apifox scenario names include `ServerHello`, `ClientHello`, `GatewayStatusGet`, `CapabilityCatalogGet`, `HistoryList`, `GatewayMessageSend`, `TurnDelta`, `TurnFinal`, `TurnFinalWithAsk`, `TurnFinalWithPlanning`, `TurnFinalWithExecutiveLoopPause` and `InvalidPayloadError`.
 
 `gateway.status.snapshot` includes `clientCount` as live WebSocket peer pressure. It is not a static channel count. The socket control hub also maintains `controlState` for active subscriptions and current control-plane state.
-
-Transport actor labels such as `ws-actor` are audit/routing metadata only. They do not select Scope, Memory, Crystal recall, or prompt continuity.
 
 ## Event Subscription
 
@@ -130,7 +122,7 @@ Use `"classes": ["ask"]` for ASK/executive-loop pause events, or omit `classes` 
 
 ## Detail Query Envelope Matrix
 
-Read-model queries are served from `src/socket/query`. They inspect ledger/detail state and do not call `RuntimeModule`, assemble prompts, run models, or execute tools.
+Read-model queries are served from `src/socket/query`. They inspect ledger/detail state and do not call `RuntimeModule`, assemble prompts, run models or execute tools.
 
 | Request | Response style | Source |
 | --- | --- | --- |
@@ -149,7 +141,7 @@ Read-model queries are served from `src/socket/query`. They inspect ledger/detai
 
 Detail payloads use `payload.data`. List commands return arrays; detail commands return an object or `null`.
 
-`task.plan.decide` is not a read-model query. It is an explicit control write command for confirming, revising, or abandoning a pending task plan.
+`task.plan.decide` is not a read-model query. It is an explicit control write command for confirming, revising or abandoning a pending task plan.
 
 ## 历史对话列表获取
 
@@ -213,7 +205,7 @@ High-authority ASK may carry `crystalCandidates`. Those candidates can enter ref
 
 ## Execution Job Query
 
-`subagent.batch` creates durable execution-job ledger rows when a parent job starts, pauses, completes, or fails. The socket query surface exposes those rows without invoking runtime logic.
+`subagent.batch` creates durable execution-job ledger rows when a parent job starts, pauses, completes or fails. The socket query surface exposes those rows without invoking runtime logic.
 
 Request:
 
@@ -253,6 +245,15 @@ Response:
         },
         "children": [
           {
+            "childId": "inspect",
+            "id": "inspect",
+            "childJobId": "child-1",
+            "task": { "goal": "Inspect workspace files" },
+            "status": "completed",
+            "toolCalls": 2,
+            "limited": false
+          },
+          {
             "childId": "blocked",
             "id": "blocked",
             "childJobId": "child-2",
@@ -276,38 +277,44 @@ Response:
             "durationMs": 12,
             "limited": false
           }
-        ]
+        ],
+        "toolCounts": {
+          "workspace.read": 1
+        },
+        "askId": "ask-1",
+        "crystalCandidateSummary": "Child task needs user guidance before continuing."
       }
-    ],
-    "cache": { "hit": false, "key": "execution-job:list", "ttlMs": 500 }
+    ]
   }
 }
 ```
 
 `execution.job.detail.get` uses `payload.jobId` and returns the same `execution.job.snapshot` type with one object or `null`.
 
-## Tool Approval Context
+## Metadata To Expect
 
-`gateway.message.send.payload.context` may carry:
+`turn.final` metadata may include:
 
 - `toolApprovals`
 - `mcpToolCalls`
 - `userToolCalls`
+- `executiveToolExecutions`
+- `executiveToolLoop`
+- `planning`
+- `ask`
 
-This context is input to the kernel Executive loop. It is not a CLI-local execution instruction. A client should show approval state and submit structured user decisions; the kernel remains the executor and ledger owner.
-
-## CLI Closure Status
-
-`flyflor-cli` currently renders Run timeline events such as:
+Loop pauses and resumes also appear as events:
 
 - `executive.loop.paused`
 - `executive.loop.resumed`
-- `mcp.tool.call.executed`
-- `tool.started`
-- `tool.succeeded`
-- `tool.failed`
 
-The current CLI bootstrap does not yet request `capability.catalog.get`, and normal per-turn approval UX for `mcpToolCalls` / `userToolCalls` remains a follow-up.
+## Actor And Context
+
+Socket actors such as `ws-actor` are transport identities. They do not define cognitive continuity.
+
+To select context, pass explicit `payload.context.activeScope`, `payload.context.contextForkId` or `payload.context.skillNames`.
+
+Runtime metadata may mention `MemoryComponent`, `CrystalComponent` and `brain.db` provenance. That provenance is for read models and audit; it is not direct prompt assembly. A future wire v2 may rename compatibility `gateway.*` messages, but the current wire v1 keeps those names. `/channels` remains absent.
 
 ## Tests
 

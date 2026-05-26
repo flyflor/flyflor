@@ -1,5 +1,14 @@
 # Flyflor 日志
 
+## 2026-05-26
+
+- 状态：已完成
+  执行者：main-codex
+  范围：documentation-tool-call-closure
+  摘要：按“文档只添加；语义修改先归档再重写”的规则，归档并重写 Flyflor 核心文档中的 architecture、memory、blackboard、executive、control、ws 和 docs index，同时归档并重写 sibling `flyflor-cli` 的 docs index、architecture、protocol、tui-model 和 development 文档。
+  原因：需要在实现工具调用闭环前，把智能生命体哲学分层、socket 血管边界、Executive 外骨骼、ASK/Blackboard/Memory/Crystal/Scope/Fork 关系，以及 CLI 当前缺口写成一致文档。
+  验证：待运行 `bun run docs:check`、focused docs tests 和 `cargo test`。
+
 ## 2026-05-25
 
 - 状态：已完成

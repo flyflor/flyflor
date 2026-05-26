@@ -1,21 +1,21 @@
 # Flyflor 文档
 
-本目录只保留当前 Bun kernel 契约。活跃文档必须维护英文 `.md` 与中文 `.zh.cn.md` 同步版本；误导实现、已经退役或只剩历史解释价值的材料统一移动到 [old-docs/](old-docs/)，并保留可追溯文件名。
+本目录只保留当前 Bun kernel 契约。活跃文档必须维护英文 `.md` 与中文 `.zh.cn.md` 同步版本；误导实现、已经退役或被新口径替代的材料统一移动到 `old-docs/`，并保留可追溯文件名。
 
 官方主页：[https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
 ## 阅读顺序
 
 1. [boundaries.zh.cn.md](boundaries.zh.cn.md) - 工程硬边界、OOP + use composition、JSONC 配置、Bun 二进制约束和零字符匹配红线。
-2. [architecture.zh.cn.md](architecture.zh.cn.md) - 项目哲学、源码目录地图、context plane 与 ledger/query plane。
+2. [architecture.zh.cn.md](architecture.zh.cn.md) - 哲学分层、源码 owner、context/ledger 分离、socket 血管边界、提示词分层和 flyflor-cli 关系。
 3. [directory.architecture.zh.cn.md](directory.architecture.zh.cn.md) - 源码 owner、命名规则和退役路径。
 4. [runtime.turn.zh.cn.md](runtime.turn.zh.cn.md) - 从 `/ws` 到 Memory、Crystal、Executive 和 events 的单轮主链。
-5. [memory.system.zh.cn.md](memory.system.zh.cn.md) - Memory、Crystal、Scope、codename、ContextFork、召回、遗忘和 `brain.db`。
-6. [blackboard.zh.cn.md](blackboard.zh.cn.md) - route decision、Blackboard worker 与 ASK 交还。
+5. [memory.system.zh.cn.md](memory.system.zh.cn.md) - 宪法层、热记忆、记忆树、召回、遗忘、向量偏移、Scope、codename、ContextFork、Crystal 和 `brain.db`。
+6. [blackboard.zh.cn.md](blackboard.zh.cn.md) - 路由、Blackboard worker、ASK 交还、当前轮 deliberation 和 query 边界。
 7. [crystal.reflection.zh.cn.md](crystal.reflection.zh.cn.md) - Crystal reflection、Gem 升格和 drift repair。
-8. [executive.exoskeleton.zh.cn.md](executive.exoskeleton.zh.cn.md) - Capability / Tool / Trust / Loop 与外部 sidecar。
-9. [control.protocol.zh.cn.md](control.protocol.zh.cn.md) - `/ws` control protocol 与 snapshot matrix。
-10. [ws.doc.zh.cn.md](ws.doc.zh.cn.md) - WebSocket 字段级手册。
+8. [executive.exoskeleton.zh.cn.md](executive.exoskeleton.zh.cn.md) - Capability / Tool / Trust / Loop、MCP、用户工具、sidecar、subagent、approval 和 CLI 工具调用闭环。
+9. [control.protocol.zh.cn.md](control.protocol.zh.cn.md) - `/ws` control protocol、snapshot matrix、thin-client bootstrap 和当前 CLI 闭环缺口。
+10. [ws.doc.zh.cn.md](ws.doc.zh.cn.md) - WebSocket 字段级手册和 detail query matrix。
 11. [runtime.events.zh.cn.md](runtime.events.zh.cn.md) - event class、timeline 和 subscription surface。
 12. [development.workflow.zh.cn.md](development.workflow.zh.cn.md) - worktree/tmux/Codex 协作流程。
 13. [project.report.zh.cn.md](project.report.zh.cn.md) - 当前架构报告。
@@ -31,16 +31,28 @@
 
 ## 核心口径
 
-- Runtime context 由当前输入、`MemoryComponent`、`CrystalComponent`、显式 `Scope/Fork` 和 Executive visible capability surface 装配。
-- `brain.db` 是按月 ledger/query/replay/audit/detail store，不是 prompt 容器。
-- `Scope` 是显式工作域。`ContextFork` 是 scope 下的显式分支。`codename` 是 anchor/proposal/recall boost，不是隐藏 context bucket。
-- ASK 负责闭合不确定性、scope promotion、fork merge conflict、crystallization gate 和 long-horizon loop pause。
-- `src/socket` 拥有 socket 血管层。`gateway.*` wire 名称只保留 compatibility 语义。
+- Flyflor 是 Bun + TypeScript 智能生命体内核。它不是 chat/session agent，也不是 CLI app。
+- Mindstream 是流体智力：模型调用、生成、route decision 和 turn-time reasoning。
+- Memory 是热的、可作用域化的、会衰减的记忆。Crystal 是可复用的晶体智力。`brain.db` 是 ledger/query/replay/audit/detail store。
+- `Scope` 是显式工作域。`ContextFork` 是显式分支。`codename` 是 scope promotion 前的 anchor/proposal/recall boost。
+- ASK 负责闭合不确定性、scope promotion、fork merge conflict、crystallization gate、tool-loop pause 和用户决策。
+- Executive 是行动外骨骼。工具、MCP、插件、skill、sidecar、用户工具、subagent、sandbox、quota、approval 和 audit 都通过它。
+- `src/socket` 拥有 socket 血管层。`gateway.*` 名称只保留 `flyflor.ws.v1` wire compatibility 语义。
 - HTTP surface 固定为 `/ws` 与 `/health`；`/channels` 不恢复。
+
+## flyflor-cli 闭环
+
+`flyflor-cli` 是外部 Rust TUI shell。它消费 `/ws` envelope、snapshot 和 event；它不能变成 kernel、memory owner、tool executor、prompt container 或 ledger writer。
+
+当前已知闭环缺口必须写清楚，而不是在文档里隐藏：
+
+- Kernel 本地 smoke 示例使用 `ws://127.0.0.1:8788/ws`；CLI 默认值是 `ws://127.0.0.1:8787/ws`。
+- Kernel 暴露 `server.hello` 与 `capability.catalog.get`；当前 CLI bootstrap 还没有请求 capability catalog。
+- Kernel context input 支持 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls`；CLI 当前主要文档化并展示 YOLO mode，普通 per-turn tool approval UX 仍需要闭环。
 
 ## 归档
 
-[old-docs/](old-docs/) 存放历史材料。它们可以解释过去决策，但不能定义当前 runtime 契约。
+`old-docs/` 存放历史材料。它们可以解释过去决策，但不能定义当前 runtime 契约。
 
 外部 Rust shell 参考只保留归档版本：
 
@@ -48,4 +60,4 @@
 - [old-docs/rust.connection.core.zh.cn.md](old-docs/rust.connection.core.zh.cn.md)
 - [old-docs/rust.gateway.shell.backlog.zh.cn.md](old-docs/rust.gateway.shell.backlog.zh.cn.md)
 
-2026-05-25 文档重产已将上一版活跃文档归档到 [old-docs/2026-05-25-docs-refresh/](old-docs/2026-05-25-docs-refresh/)。
+2026-05-25 和 2026-05-26 的活跃文档快照都已经归档在带日期的 `old-docs/` 子目录中。

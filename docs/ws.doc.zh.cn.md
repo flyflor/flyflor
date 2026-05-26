@@ -2,13 +2,13 @@
 
 ## Endpoint
 
-运行 socket kernel：
+启动 socket kernel：
 
 ```bash
 bun run socket
 ```
 
-Server 暴露：
+服务器暴露：
 
 - `GET /health`
 - `GET /ws`
@@ -19,7 +19,7 @@ Server 暴露：
 
 ## Envelope
 
-所有 WebSocket frames 都是 JSON envelope，control messages 使用 `flyflor.ws.v1`，event publications 使用 `flyflor.event.v1`。
+所有 WebSocket frame 都是 JSON envelope。Control messages 使用 `flyflor.ws.v1`，event publications 使用 `flyflor.event.v1`。
 
 典型 client frame：
 
@@ -36,16 +36,23 @@ Server 暴露：
         "title": "Example",
         "projectDir": "/workspace/example",
         "projectMemoryDir": "/workspace/example/.flyflor/memory"
+      },
+      "toolApprovals": {
+        "mcpToolCalls": [],
+        "userToolCalls": []
       }
     }
   }
 }
 ```
 
-## 重要类型
+`gateway.*` 是 wire-v1 compatibility vocabulary。Owner 是 `src/socket`，不是 gateway 架构层。
 
-Socket contract 包括：
+## Message Types
 
+Socket contract 包含：
+
+- `ack`
 - `server.hello`
 - `client.hello`
 - `gateway.status.get`
@@ -57,26 +64,30 @@ Socket contract 包括：
 - `turn.final`
 - `turn.error`
 - `event.subscribe`
+- `event.unsubscribe`
 - `event.publish`
 - `history.list`
+- `history.detail.get`
 - `history.snapshot`
 - `ask.list`
 - `ask.detail.get`
 - `ask.snapshot`
+- `blackboard.list`
 - `blackboard.detail.get`
+- `blackboard.snapshot`
 - `fork.memory.get`
 - `fork.memory.snapshot`
-- `task.plan.decide`
+- `execution.job.list`
+- `execution.job.detail.get`
+- `execution.job.snapshot`
 
 Error 示例包括 `invalid-envelope` 和 `gateway.message.send payload requires text`。
 
-Apifox scenario names 包括 `ServerHello`、`ClientHello`、`GatewayStatusGet`、`CapabilityCatalogGet`、`HistoryList`、`GatewayMessageSend`、`TurnDelta`、`TurnFinal`、`TurnFinalWithAsk`、`TurnFinalWithPlanning`、`TurnFinalWithExecutiveLoopPause` 和 `InvalidPayloadError`。
-
-`gateway.status.snapshot` 包含 `clientCount`，表示 live WebSocket peer pressure，不是静态 channel count。Socket control hub 也维护 `controlState`，用于 active subscriptions 和当前 control-plane state。
+`gateway.status.snapshot` 包含 `clientCount`，表示 live WebSocket peer pressure，不是静态 channel count。
 
 ## Event Subscription
 
-订阅使用稳定 RuntimeEvent types。使用 classes 时必须匹配 runtime classifier；executive loop pause/resume 属于 ASK class：
+订阅 stable RuntimeEvent types。使用 classes 时必须匹配 runtime classifier；executive loop pause/resume events 属于 ASK-class events：
 
 ```json
 {
@@ -90,11 +101,11 @@ Apifox scenario names 包括 `ServerHello`、`ClientHello`、`GatewayStatusGet`�
 }
 ```
 
-对 ASK/executive-loop pause events 使用 `"classes": ["ask"]`，也可以省略 `classes` 只按精确 `types` 订阅。不要使用旧 gateway event class。
+ASK/executive-loop pause events 使用 `"classes": ["ask"]`，或省略 `classes` 只按 exact `types` 订阅。不要使用旧 gateway event class。
 
 ## Detail Query Envelope Matrix
 
-Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail state，不装配 prompts。
+Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail state，不调用 `RuntimeModule`，不装配 prompt，不运行模型，也不执行工具。
 
 | Request | Response style |
 | --- | --- |
@@ -102,7 +113,6 @@ Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail st
 | `history.detail.get -> history.snapshot` | detail query mapped into snapshot payload |
 | `ask.list` / `ask.detail.get` | ASK records and pending snapshots |
 | `blackboard.list` / `blackboard.detail.get` | Blackboard detail and worker output |
-| `crystal.list` | Crystal/Gem read model |
 | `fork.list` / `fork.detail.get` | ContextFork records |
 | `fork.memory.get` | `fork.memory.snapshot` recent ContextFork panel projection |
 | `replay.list` / `replay.detail.get` | Replay records |
@@ -111,42 +121,53 @@ Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail st
 | `thought.detail.get` | Thought/detail projection |
 | `execution.job.list` / `execution.job.detail.get` | Execution job snapshots |
 
-Detail payloads 使用 `payload.data`。
+Detail payloads 使用 `payload.data`。List commands 返回数组；detail commands 返回 object 或 `null`。
 
-`task.plan.decide` 不是 read-model query；它是用于确认、补充或放弃待确认计划的显式 control write command。
+## 历史对话列表获取
 
-`execution.job.snapshot` 来自 `brain.db` execution-job ledger。`children[]` 携带 `childId` / `id`、`childJobId`、有限任务摘要、`status`、`toolCalls`、`limited` 和 `limitReason`；`toolExecutions[]` 携带 `childJobId`、`server`、`tool`、`key`、`ok` / `status`、有限 input/output preview、`error`、`durationMs`、`limited` 和 `limitReason`。这些字段只用于 TUI 链接 job / child / tool / model 审计，不是 prompt 容器。
+使用 `history.list` 将全局 `brain.db` ledger 读取为分页 history list。Socket 层接收 pagination input，调用 read-only `src/socket/query` read model，并返回 `history.snapshot`。
 
-历史对话列表获取使用 `history.list`；detail lookup 使用 `history.snapshot` 和上面的 detail request family。
+这不是 session restore path、context owner 或 prompt assembly path。`clientCount` 只表示 live peer pressure。
 
-当 `history.list.payload.contextForkId` 存在时，read model 会把 ledger replay 收窄到该显式 context fork。它仍然不会从 transport identity 推断连续性。
+当 `history.list.payload.contextForkId` 存在时，read model 将 ledger replay 缩小到该显式 context fork。它仍然不会从 transport identity 推断 continuity。
 
-## 预期 Metadata
+## ASK Metadata
 
-`turn.final` metadata 可能包含：
+`ask` 不是 live turn 的独立 transport message。它挂在：
+
+- `turn.final.payload.reply.metadata.kind === "ask"`
+- `turn.final.payload.reply.metadata.ask`
+
+新 client 应优先使用 `questions[]`。Root `choices` 保留给旧 client。
+
+每个 question 携带 1-3 个 owner/model choices 和一个 `recommendedChoiceId`。Runtime 总是添加固定 freeform `other` choice。`other` text 会作为 user evidence 存储，不会被 runtime 用 keyword 或 regex 语义解析。
+
+High-authority ASK 可以携带 `crystalCandidates`。这些 candidates 可以进入 reflection evidence，但 Gem promotion 仍由 Crystal quality checks gate。
+
+## Tool Approval Context
+
+`gateway.message.send.payload.context` 可以携带：
 
 - `toolApprovals`
 - `mcpToolCalls`
 - `userToolCalls`
-- `executiveToolExecutions`
-- `executiveToolLoop`
-- `planning`
-- `ask`
 
-Loop pause 和 resume 也会以 events 出现：
+这些 context 是 kernel Executive loop 的输入，不是 CLI-local execution instruction。Client 应展示 approval state 并提交结构化用户决策；kernel 仍是 executor 和 ledger owner。
+
+## CLI Closure Status
+
+`flyflor-cli` 当前会渲染 Run timeline events，例如：
 
 - `executive.loop.paused`
 - `executive.loop.resumed`
+- `mcp.tool.call.executed`
+- `tool.started`
+- `tool.succeeded`
+- `tool.failed`
 
-## Actor 与 Context
+当前 CLI bootstrap 还没有请求 `capability.catalog.get`，面向 `mcpToolCalls` / `userToolCalls` 的普通 per-turn approval UX 仍是后续任务。
 
-`ws-actor` 等 socket actors 是 transport identity。它们不定义认知连续性。
-
-选择 context 时，请传入显式 `payload.context.activeScope`、`payload.context.contextForkId` 或 `payload.context.skillNames`。
-
-Runtime metadata 可能提到 `MemoryComponent`、`CrystalComponent` 和 `brain.db` provenance。该 provenance 服务 read model 和 audit，不直接参与 prompt assembly。未来 wire v2 可以重命名 compatibility `gateway.*` messages，但当前 wire v1 保留这些名称。`/channels` 仍不存在。
-
-## 测试
+## Tests
 
 相关覆盖：
 

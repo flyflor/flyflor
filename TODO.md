@@ -10,6 +10,15 @@
 
 主源码移除口径：旧第一方 shell、`src/agent/gateway` 兼容壳和旧 CLI/TUI/channel adapter 主源码面不恢复；gateway 仅作为 `/ws` wire compatibility 名称保留。
 
+2026-05-26 文档对齐口径：本轮已按“先归档、再重写”处理会改变语义的活跃文档，归档目录为 `docs/old-docs/2026-05-26-docs-tool-closure/`。`flyflor-cli` 的对应文档归档在 sibling 仓库的 `docs/old-docs/2026-05-26-docs-tool-closure/`。
+
+当前工具调用闭环缺口：
+
+- Kernel 本地 socket smoke 示例仍使用 `ws://127.0.0.1:8788/ws`，而 `flyflor-cli` 默认连接 `ws://127.0.0.1:8787/ws`；实现前必须用 `FLYFLOR_WS_URL` 显式对齐。
+- Kernel `/ws` 已暴露 `server.hello`、`capability.catalog.get` 和 `capability.catalog.snapshot`；当前 `flyflor-cli` bootstrap 还未发送 `capability.catalog.get`。
+- Kernel context input 已支持 `toolApprovals.mcpToolCalls` 与 `toolApprovals.userToolCalls`；当前 `flyflor-cli` 只有 YOLO mode 与 tool/run event 可见性，普通 per-turn approval UX 仍未闭环。
+- 下一阶段实现必须先补测试，再改协议或 UI；CLI 只能提交用户决策和 approval payload，不能本地执行工具或写 `brain.db`。
+
 ## 已封板契约
 
 - 上下文装配是 `Memory + Crystal + explicit Scope/Fork + Executive visible capability surface`。

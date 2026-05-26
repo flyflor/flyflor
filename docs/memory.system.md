@@ -2,20 +2,20 @@
 
 ## Position
 
-Flyflor separates memory equipment from life ledger storage.
+Flyflor separates prompt equipment from life ledger storage.
 
-Context assembly uses Memory, Crystal and explicit Scope/Fork. `brain.db` records life history for ledger/query/replay/audit/detail, but it is not a prompt container and does not automatically restore current context.
+Context assembly uses constitution files, Memory, Crystal, explicit Scope, explicit ContextFork, and Executive visible capabilities. `brain.db` records life history for ledger/query/replay/audit/detail, but it is not a prompt container and does not automatically restore current context.
 
 ## Layers
 
 | Layer | Owner | Role |
 | --- | --- | --- |
-| Constitution | `src/cognitive/hippocampus/memory/markdown` and installed workspace files | Reads `SELF.md`, `IDENTITY.md`, `USER.md` and `MEMORY.md` as stable global profile material. |
-| Hot memory | `src/cognitive/hippocampus/memory/working`, `hot`, `recall`, `lifecycle` | Recent episodes, activation, TTL decay, compression, recall and anti-bloat. |
-| Memory tree / graph | `src/cognitive/hippocampus/memory/graph`, `recall/matrix.ts` | Association and recall structure driven by resource metrics, not keywords. |
-| Scope-local memory | `src/cognitive/hippocampus/memory/scope` and `src/cognitive/hippocampus/scope` | Scope constitution, project memory, scope vector/tree/hot memory and codename promotion. |
-| Crystal | `src/cognitive/crystal` | Stable reusable methods, Gem snapshots, vector recall and drift repair. |
-| Ledger | `src/cognitive/hippocampus/memory/brain`, `src/entities/memory/brain`, `src/socket/query` | Monthly `brain.db`, archives, detail, history, replay and audit. |
+| Constitution | `src/cognitive/hippocampus/memory/markdown`, workspace memory files, scope scaffolded files | Reads stable self/user/identity/memory/project rules such as `SELF.md`, `IDENTITY.md`, `USER.md`, `MEMORY.md`, `AGENTS.md`, and `project.memory.md`. |
+| Hot memory | `src/cognitive/hippocampus/memory/working`, `hot`, `recall`, `lifecycle` | Recent episodes, activation, TTL decay, compression, recall, and anti-bloat. |
+| Memory tree / graph | `src/cognitive/hippocampus/memory/graph`, `recall/matrix.ts` | Association structure, recall matrix, relation weight, cluster impact, and provenance. |
+| Scope-local memory | `src/cognitive/hippocampus/memory/scope`, `src/cognitive/hippocampus/scope` | Scope constitution, `project.memory.md`, scope vector/tree/hot memory, codename promotion, and task/fork continuity. |
+| Crystal | `src/cognitive/crystal` | Stable reusable methods, Gem snapshots, vector recall, and drift repair. |
+| Ledger | `src/cognitive/hippocampus/memory/brain`, `src/entities/memory/brain`, `src/socket/query` | Monthly `brain.db`, archives, detail, history, replay, ASK, task, fork, and audit rows. |
 
 ## `brain.db`
 
@@ -26,9 +26,10 @@ It stores and serves:
 - turn ledger rows
 - replay and detail anchors
 - audit material
-- blackboard detail references
+- Blackboard detail references
 - task plans and fork records
 - ASK and continuation records
+- execution-job rows
 - historical query snapshots through socket readers
 
 It does not:
@@ -36,13 +37,14 @@ It does not:
 - directly assemble model prompts
 - act as a session store
 - own scope continuity
-- infer current memory from `conversationKey`, `threadId`, user id or connection id
+- infer current memory from `conversationKey`, `threadId`, user id, client id, or connection id
+- authorize tools or approvals
 
-Archived months become read-only shards. The current month remains the writable ledger.
+Archived months become read-only shards. The current month remains writable.
 
 ## Hot Memory And Forgetting
 
-Hot memory is intentionally unstable. It keeps recent evidence available while decay, compression and consolidation decide what remains useful.
+Hot memory is intentionally unstable. It keeps recent evidence available while decay, compression, and consolidation decide what remains useful.
 
 Forgetting is not only deletion:
 
@@ -52,7 +54,18 @@ Forgetting is not only deletion:
 - Vector offsets and graph/matrix impact adjust recall weight.
 - Contradictory or stale Crystal evidence can be repaired instead of blindly reused.
 
-The production recall signals are numeric/resource signals such as embedding similarity, importance, recency, activation, cluster size, graph relation and provenance. They are not keyword intent rules.
+Production recall signals are numeric/resource signals such as embedding similarity, importance, recency, activation, cluster size, graph relation, vector offset, and provenance. They are not keyword intent rules.
+
+## Vector Offset And Recall
+
+Vector recall is an evidence-ranking mechanism, not a semantic authority by itself.
+
+- Embedding similarity proposes candidates.
+- Offset and graph/matrix signals adjust local ranking.
+- Provenance, owner key, scope, fork id, recency, and activation determine whether the candidate is safe to equip.
+- The model-facing prompt receives summarized/equipped memory, not raw vector rows.
+
+This keeps recall useful without letting approximate vector neighbors become hidden continuity owners.
 
 ## Scope And Codename
 
@@ -60,11 +73,11 @@ The production recall signals are numeric/resource signals such as embedding sim
 
 - local constitution
 - `project.memory.md`
-- `.flyflor/scope.db`-style vector/tree/hot-memory material
+- scope-local vector/tree/hot-memory material
 - local skills/MCP/plugin surfaces
 - fork and task-plan continuity
 
-`codename` is lighter. It is an anchor, proposal entry and recall boost before scope promotion. It does not automatically open a scope and is not a hidden context bucket.
+`codename` is lighter. It is an anchor, proposal entry, and recall boost before scope promotion. It does not automatically open a scope and is not a hidden context bucket.
 
 Scope recall is model-gated:
 
@@ -81,9 +94,9 @@ Fork details are kept in the ledger/query plane. Merge conflicts produce ASK rat
 
 ## Crystal Relationship
 
-Memory handles the hot and recent side of experience. Crystal handles stable reusable knowledge.
+Memory handles hot and recent experience. Crystal handles stable reusable knowledge.
 
-Crystal candidates can come from high-value ASK answers, completed forks, blackboard convergence, replay/task-plan outcomes and reflection evidence. Gem promotion is quality gated; it is not based on a raw transcript count or automatic event copying.
+Crystal candidates can come from high-value ASK answers, completed forks, Blackboard convergence, replay/task-plan outcomes, and reflection evidence. Gem promotion is quality gated; it is not based on a raw transcript count or automatic event copying.
 
 ## Prompt Rule
 
@@ -101,4 +114,5 @@ Disallowed prompt equipment:
 
 - raw `brain.db` event stream
 - transport session history as continuity
-- user/thread/conversation metadata as memory owner
+- user/thread/conversation/client metadata as memory owner
+- CLI-local transcript state as kernel memory
