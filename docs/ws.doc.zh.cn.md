@@ -98,14 +98,13 @@ Read-model queries 由 `src/socket/query` 服务。它们检查 ledger/detail st
 
 | Request | Response style |
 | --- | --- |
-| `history.list` | historical turn list |
-| `history.snapshot` | history snapshot |
+| `history.list` | `history.snapshot` historical turn list |
 | `history.detail.get -> history.snapshot` | detail query mapped into snapshot payload |
 | `ask.list` / `ask.detail.get` | ASK records and pending snapshots |
 | `blackboard.list` / `blackboard.detail.get` | Blackboard detail and worker output |
 | `crystal.list` | Crystal/Gem read model |
 | `fork.list` / `fork.detail.get` | ContextFork records |
-| `fork.memory.get` | recent ContextFork panel projection |
+| `fork.memory.get` | `fork.memory.snapshot` recent ContextFork panel projection |
 | `replay.list` / `replay.detail.get` | Replay records |
 | `scope.list` / `scope.detail.get` | Scope records |
 | `task.list` / `task.detail.get` | Task plans |
@@ -116,6 +115,8 @@ Detail payloads 使用 `payload.data`。
 `task.plan.decide` 不是 read-model query；它是用于确认、补充或放弃待确认计划的显式 control write command。
 
 历史对话列表获取使用 `history.list`；detail lookup 使用 `history.snapshot` 和上面的 detail request family。
+
+当 `history.list.payload.contextForkId` 存在时，read model 会把 ledger replay 收窄到该显式 context fork。它仍然不会从 transport identity 推断连续性。
 
 ## 预期 Metadata
 

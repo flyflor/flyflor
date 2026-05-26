@@ -86,6 +86,7 @@ export type GatewayControlCapabilityCatalogPayload = Record<string, unknown> & {
 
 export interface GatewayControlHistoryListInput {
     beforeTs?: number;
+    contextForkId?: string;
     limit?: number;
 }
 
@@ -874,9 +875,10 @@ function readGatewayControlToolApprovals(value: unknown): GatewayControlToolAppr
 export function readGatewayControlHistoryListInput(
     payload: Record<string, unknown> | undefined,
 ): GatewayControlHistoryListInput {
-    // history.list is global brain.db ledger query/replay. It deliberately has
-    // no sourceKey, user, session, Scope, or handshake filter and never
-    // participates in prompt/context assembly.
+    // history.list is a brain.db ledger query/replay. It deliberately has no
+    // sourceKey, user, session, Scope, or handshake filter and never
+    // participates in prompt/context assembly. A contextForkId may narrow the
+    // visible replay to one explicit fork ledger.
     if (!payload) {
         throw new GatewayControlProtocolError(
             GatewayControlErrorCode.InvalidPayload,
@@ -884,9 +886,11 @@ export function readGatewayControlHistoryListInput(
         );
     }
     const beforeTs = readNumber(payload.beforeTs);
+    const contextForkId = readTrimmedString(payload.contextForkId, 120);
     const limit = readNumber(payload.limit);
     return {
         beforeTs,
+        contextForkId,
         limit,
     };
 }

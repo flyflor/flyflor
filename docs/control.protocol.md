@@ -65,7 +65,7 @@ Conversation, user, thread and connection fields are routing/audit metadata. The
 
 Realtime panels should subscribe with `event.subscribe`; detail panels should refresh through snapshot queries. Event subscription selectors are closed over stable event classes and `RuntimeEventType` values. Unknown classes or types return `invalid-payload` and must not mutate peer subscription state.
 
-`task.plan.decide` is the explicit socket control write command for plan decisions. It is intentionally separate from the `src/socket/query` read-model surface.
+`task.plan.decide` is the explicit socket control write command for plan decisions. It is handled by socket control and applies through the task-plan query/write boundary; it is not a passive read-model snapshot query.
 
 ## Rust 最小接线清单
 

@@ -149,6 +149,8 @@ Use `history.list` to read the global `brain.db` ledger as a paged history list.
 
 This is not a session restore path, a context owner, or a prompt assembly path. `clientCount` remains live peer pressure only.
 
+When `history.list.payload.contextForkId` is present, the read model narrows the ledger replay to that explicit context fork. It still does not infer continuity from transport identity.
+
 `history.detail.get -> history.snapshot` uses the same snapshot envelope family, but places the detail object in `payload.data`.
 
 ## ASK Metadata

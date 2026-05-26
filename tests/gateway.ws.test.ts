@@ -1692,7 +1692,7 @@ describe("SocketControlHub", () => {
         const hub = createHub({
             queries: fakeQueries({
                 historyList: (input) => {
-                expect(input).toEqual({ beforeTs: 200, limit: 2 });
+                expect(input).toEqual({ beforeTs: 200, contextForkId: "fork-1", limit: 2 });
                 return [
                     {
                         assistantText: "Assistant 1",
@@ -1768,7 +1768,7 @@ describe("SocketControlHub", () => {
             JSON.stringify(
                 createGatewayControlEnvelope(
                     GatewayControlMessageType.HistoryList,
-                    { beforeTs: 200, limit: 2 },
+                    { beforeTs: 200, contextForkId: "fork-1", limit: 2 },
                     { id: "history-list-1", requestId: "req-history-1" },
                 ),
             ),

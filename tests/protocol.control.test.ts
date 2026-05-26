@@ -670,7 +670,11 @@ describe("Gateway Control protocol", () => {
             "task.plan.decide payload requires action confirm|revise|abandon",
         );
         expect(() => readGatewayControlHistoryListInput(undefined)).toThrow("history.list requires payload");
-        expect(readGatewayControlHistoryListInput({ limit: 10 })).toEqual({ beforeTs: undefined, limit: 10 });
+        expect(readGatewayControlHistoryListInput({ contextForkId: " fork-1 ", limit: 10 })).toEqual({
+            beforeTs: undefined,
+            contextForkId: "fork-1",
+            limit: 10,
+        });
         expect(() => normalizeGatewayControlMessage({ text: "" })).toThrow("gateway.message.send payload requires text");
     });
 
@@ -890,6 +894,7 @@ describe("Gateway Control protocol", () => {
         });
         expect(readGatewayControlHistoryListInput({ beforeTs: 100, limit: 2 })).toEqual({
             beforeTs: 100,
+            contextForkId: undefined,
             limit: 2,
         });
     });

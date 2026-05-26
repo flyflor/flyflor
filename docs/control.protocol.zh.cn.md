@@ -65,7 +65,7 @@ Conversation、user、thread 和 connection fields 是 routing/audit metadata。
 
 实时面板应该通过 `event.subscribe` 订阅；detail 面板应该通过 snapshot query 刷新。Event subscription selectors 对稳定 event classes 和 `RuntimeEventType` values 闭合。未知 class 或 type 返回 `invalid-payload`，且不得修改 peer subscription state。
 
-`task.plan.decide` 是计划决策的显式 socket control write command。它有意与 `src/socket/query` read-model surface 分开。
+`task.plan.decide` 是计划决策的显式 socket control write command。它由 socket control 处理，并通过 task-plan query/write boundary 落库；它不是被动 read-model snapshot query。
 
 ## Error
 
