@@ -29,6 +29,7 @@ import {
     McpCatalogAdapter,
     type ExternalToolStability,
     type ExecutiveLoopGuardDecision,
+    type ExecutiveLoopGuardOptions,
     type ExecutiveLoopGuardSnapshot,
     type ExecutiveToolBudgetExhaustedReason,
     type ExecutiveToolRuntimeBudget,
@@ -86,6 +87,7 @@ export interface RuntimeMcpToolLoopInput {
     budget: ExecutiveToolRuntimeBudget;
     generate: (messages: unknown[], turn: number) => Promise<string>;
     initialMessages: unknown[];
+    loopGuard?: ExecutiveLoopGuardOptions;
     maxTurns: number;
     noMoreToolsMessage: string;
     parse: (raw: string) => { calls: McpToolCallRequest[]; text: string };
@@ -125,7 +127,7 @@ export class RuntimeMcpToolExecutor {
         const result = await this.executive.run({
             budget: input.budget,
             initialMessages: input.initialMessages,
-            loopGuard: { maxUnknownToolRepeats: 1 },
+            loopGuard: input.loopGuard ?? { maxUnknownToolRepeats: 1 },
             maxTurns: input.maxTurns,
             noMoreToolsMessage: input.noMoreToolsMessage,
             callbacks: {

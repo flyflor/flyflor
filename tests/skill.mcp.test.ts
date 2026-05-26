@@ -2022,6 +2022,87 @@ describe("Skill and MCP capability config", () => {
         );
     });
 
+    test("structured ASK answer resumes the original task instead of treating the answer as a new prompt", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-ask-answer-auto-resume-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "one.txt"), "one\n");
+        await writeFile(join(root, "two.txt"), "two\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"one.txt"}}]}</agent_tool_calls>',
+            "[]",
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"two.txt"}}]}</agent_tool_calls>',
+            "Finished original inspection.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new CapturingSink());
+        const context = {
+            activeScope: {
+                id: "scope-runtime-auto-resume",
+                projectDir: paths.projectDir,
+                projectMemoryDir: paths.projectMemoryDir,
+            },
+        };
+
+        const paused = await runtime.handleMessage(
+            gatewayMessage("inspect both files and summarize"),
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 1 },
+        );
+
+        const continuation = {
+            mode: "continue",
+            snapshotId: paused.metadata?.behaviorSnapshotId,
+        };
+        expect(paused.metadata?.kind).toBe("ask");
+        expect(continuation).toEqual(expect.objectContaining({ mode: "continue" }));
+
+        const resumed = await runtime.handleMessage(
+            {
+                ...gatewayMessage("continue-tools\nincrease-budget\nkeep-subagents"),
+                metadata: {
+                    continuation,
+                    askAnswer: {
+                        answers: [
+                            {
+                                questionId: "execution-strategy",
+                                choiceId: "continue-tools",
+                                value: "continue-tools",
+                            },
+                            {
+                                questionId: "budget-policy",
+                                choiceId: "increase-budget",
+                                value: "increase-budget",
+                            },
+                            {
+                                questionId: "subagent-policy",
+                                choiceId: "keep-subagents",
+                                value: "keep-subagents",
+                            },
+                        ],
+                    },
+                },
+            },
+            {
+                ...context,
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+        );
+
+        expect(resumed.metadata?.kind).not.toBe("ask");
+        expect(resumed.text).toBe("Finished original inspection.");
+        expect(model.messages[2]?.some((message) => message.content.includes("inspect both files and summarize"))).toBe(
+            true,
+        );
+    });
+
     test("runtime follows through on short confirmations by executing structured tool calls", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-short-confirm-"));
         const paths = testPaths(root);
@@ -2306,6 +2387,35 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
             expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
         ]);
+    });
+
+    test("local project reads receive a completion-oriented default budget", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-local-project-budget-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        for (let index = 0; index < 140; index += 1) {
+            await writeFile(join(root, `file-${index}.txt`), `completion budget project ${index}\n`);
+        }
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const responses = [
+            ...Array.from({ length: 140 }, (_, index) =>
+                `<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"file-${index}.txt"}}]}</agent_tool_calls>`,
+            ),
+            "Completed the project read.",
+            "[]",
+        ];
+        const model = new SequencedModel(responses);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage(`read every file in ${root}`), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Completed the project read.");
+        expect(reply.metadata?.mcpToolExecutions).toHaveLength(140);
     });
 
     test("runtime executes subagent.batch with narrowed child tools and audit events", async () => {

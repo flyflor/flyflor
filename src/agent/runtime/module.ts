@@ -40,6 +40,7 @@ import {
     type CapabilityCatalogSnapshot,
     type CapabilitySummary,
     type ExecutiveCapabilityExecutionMetadata,
+    type ExecutiveLoopGuardOptions,
     type ExecutiveToolRuntimeAskRequired,
     type ExecutiveToolRuntimeBudget,
     type ExternalToolDefinition,
@@ -226,7 +227,11 @@ interface RuntimeMcpCapabilityCatalogBuild {
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
-const DEFAULT_MCP_TOOL_LOOP_LIMIT = 128;
+const DEFAULT_MCP_TOOL_LOOP_LIMIT = 192;
+const COMPLETION_MCP_TOOL_LOOP_LIMIT = 384;
+const CONTINUATION_MCP_TOOL_LOOP_LIMIT = 512;
+const COMPLETION_EXECUTION_OPERATION_LIMIT = 2_048;
+const CONTINUATION_EXECUTION_OPERATION_LIMIT = 4_096;
 const LOCAL_ABSOLUTE_PATH_PATTERN =
     /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
 const BUILTIN_SHELL_SERVER = "shell";
@@ -530,7 +535,7 @@ export class RuntimeModule extends RuntimeBoundary {
         message: GatewayMessage,
         context: RuntimeContext,
         request: ContinuationGhostResumeRequest,
-    ): Promise<{ context: RuntimeContext } | { reply: GatewayReply }> {
+    ): Promise<{ context: RuntimeContext; message: GatewayMessage; snapshot: ContinuationGhostSnapshot } | { reply: GatewayReply }> {
         const lookup = await this.continuationGhosts.lookup(request);
         if (lookup.status !== "found") {
             return {
@@ -551,6 +556,16 @@ export class RuntimeModule extends RuntimeBoundary {
         if (snapshot.continuationId) {
             this.memory.resumeContinuation(snapshot.continuationId);
         }
+        const restoredMessage = snapshot.originalUserMessage
+            ? {
+                  ...message,
+                  text: snapshot.originalUserMessage,
+                  metadata: {
+                      ...(message.metadata ?? {}),
+                      askAnswerOriginalText: message.text,
+                  },
+              }
+            : message;
         return {
             context: {
                 ...context,
@@ -558,6 +573,8 @@ export class RuntimeModule extends RuntimeBoundary {
                 activeProject: context.activeProject ?? snapshot.activeScope,
                 contextForkId: context.contextForkId ?? snapshot.contextForkId,
             },
+            message: restoredMessage,
+            snapshot,
         };
     }
 
@@ -659,36 +676,36 @@ export class RuntimeModule extends RuntimeBoundary {
         }
         const restored = resumeRead.request
             ? await this.restoreContinuationContext(message, context, resumeRead.request)
-            : { context };
+            : { context, message };
         if ("reply" in restored) {
             return restored.reply;
         }
         const turnOptions = this.applyAskAnswerExecutionStrategy(
-            options,
+            this.applyCompletionBudgetProfile(options, restored.message),
             this.readAskAnswerExecutionStrategy(message.metadata),
         );
         await this.inflight.markStart({
             requestId: restored.context.requestId,
             sourceKey: sourceKeyForMessage(message, restored.context),
             sourceSurface: sourceSurfaceForMessage(message),
-            originalUserMessage: message.text.slice(0, 500),
+            originalUserMessage: restored.message.text.slice(0, 500),
             startedAtMs: Date.now(),
         });
         try {
             this.throwIfAborted(turnOptions.signal);
-            const prepared = await this.prepareTurn(message, restored.context, turnOptions);
+            const prepared = await this.prepareTurn(restored.message, restored.context, turnOptions);
             this.throwIfAborted(turnOptions.signal);
-            const assembled = await this.assembleTurnContext(message, prepared, turnOptions);
+            const assembled = await this.assembleTurnContext(restored.message, prepared, turnOptions);
             this.throwIfAborted(turnOptions.signal);
-            const planningGate = await this.resolvePlanningGate(message, prepared, assembled, turnOptions);
+            const planningGate = await this.resolvePlanningGate(restored.message, prepared, assembled, turnOptions);
             this.throwIfAborted(turnOptions.signal);
             const generated = planningGate
-                ? this.generatePlanningGateReply(message, prepared, planningGate)
-                : await this.generateTurnReply(message, prepared, assembled, turnOptions);
+                ? this.generatePlanningGateReply(restored.message, prepared, planningGate)
+                : await this.generateTurnReply(restored.message, prepared, assembled, turnOptions);
 
             this.throwIfAborted(turnOptions.signal);
-            await this.persistTurnWithoutFailingReply(message, prepared, assembled, generated);
-            await this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
+            await this.persistTurnWithoutFailingReply(restored.message, prepared, assembled, generated);
+            await this.dispatchAsyncTurnTasks(restored.message, prepared, assembled, generated);
 
             prepared.ttfbDone();
             this.events.publish(
@@ -814,6 +831,38 @@ export class RuntimeModule extends RuntimeBoundary {
                 riskQuota: options.executiveToolBudget?.riskQuota,
             },
             maxToolTurns: Math.max(options.maxToolTurns ?? 0, modelToolTurnBudget),
+        };
+    }
+
+    private applyCompletionBudgetProfile(
+        options: RuntimeStreamOptions,
+        message: GatewayMessage,
+    ): RuntimeStreamOptions {
+        if (options.maxToolTurns !== undefined || options.executiveToolBudget?.modelToolTurnBudget !== undefined) {
+            return options;
+        }
+        const resumeRead = this.continuationGhosts.readResumeRequest(message.metadata);
+        const isContinuation = resumeRead.ok && resumeRead.request !== undefined;
+        LOCAL_ABSOLUTE_PATH_PATTERN.lastIndex = 0;
+        const hasLocalPath = LOCAL_ABSOLUTE_PATH_PATTERN.test(message.text);
+        LOCAL_ABSOLUTE_PATH_PATTERN.lastIndex = 0;
+        if (!isContinuation && !hasLocalPath) return options;
+        const modelToolTurnBudget = isContinuation ? CONTINUATION_MCP_TOOL_LOOP_LIMIT : COMPLETION_MCP_TOOL_LOOP_LIMIT;
+        const executionOperationBudget = isContinuation
+            ? CONTINUATION_EXECUTION_OPERATION_LIMIT
+            : COMPLETION_EXECUTION_OPERATION_LIMIT;
+        return {
+            ...options,
+            executiveToolBudget: {
+                ...options.executiveToolBudget,
+                executionOperationBudget: Math.max(
+                    options.executiveToolBudget?.executionOperationBudget ?? 0,
+                    executionOperationBudget,
+                ),
+                modelToolTurnBudget,
+                riskQuota: options.executiveToolBudget?.riskQuota,
+            },
+            maxToolTurns: modelToolTurnBudget,
         };
     }
 
@@ -2019,6 +2068,7 @@ export class RuntimeModule extends RuntimeBoundary {
                 ...(generated.executiveAskRequired
                     ? { executiveToolLoop: generated.executiveAskRequired as unknown as Record<string, unknown> }
                     : {}),
+                originalUserMessage: message.text.slice(0, 4000),
                 ownerKey: continuityOwnerKey(message, enrichedContext),
                 requestId: enrichedContext.requestId,
                 snapshotId: behaviorSnapshotId,
@@ -2779,6 +2829,7 @@ export class RuntimeModule extends RuntimeBoundary {
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
+            loopGuard: this.executiveLoopGuardForBudget(budget),
             maxTurns: budget.modelToolTurnBudget,
             noMoreToolsMessage: renderMcpToolBudgetExhaustedPrompt(),
             parse: parseMcpToolCalls,
@@ -3010,6 +3061,17 @@ export class RuntimeModule extends RuntimeBoundary {
                 configured?.modelToolTurnBudget ?? options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT,
             ),
             riskQuota: configured?.riskQuota,
+        };
+    }
+
+    private executiveLoopGuardForBudget(
+        budget: Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget,
+    ): ExecutiveLoopGuardOptions {
+        return {
+            maxCalls: Math.max(16, budget.modelToolTurnBudget * 4),
+            maxFailedCallRepeats: 2,
+            maxRepeatedCalls: Math.max(3, Math.ceil(budget.modelToolTurnBudget / 8)),
+            maxUnknownToolRepeats: 1,
         };
     }
 

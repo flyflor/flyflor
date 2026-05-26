@@ -24,6 +24,7 @@ export interface ContinuationGhostSnapshot {
     contextForkId?: string;
     createdAt: string;
     executiveToolLoop?: Record<string, unknown>;
+    originalUserMessage?: string;
     ownerKey: string;
     requestId?: string;
     snapshotId: string;
