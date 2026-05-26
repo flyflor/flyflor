@@ -53,6 +53,12 @@ export interface SubagentBatchExecutorInput {
     readonly parent: {
         readonly catalog: readonly McpToolCatalogEntry[];
         readonly budget?: {
+            /**
+             * Parent-visible contract for the batch job snapshot. Child runtime
+             * accounting below keeps model-loop turns separate from tool
+             * execution operations so read-only discovery fan-out is not
+             * capped by maxToolTurns.
+             */
             readonly executionOperationBudget?: number;
             readonly modelToolTurnBudget?: number;
             readonly riskQuota?: number;

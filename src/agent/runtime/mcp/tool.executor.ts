@@ -976,6 +976,7 @@ export class RuntimeMcpToolExecutor {
         if (!entry) return undefined;
         const descriptor = this.descriptorFromEntry(entry);
         return {
+            batchBudgetUnit: descriptor.batchBudgetUnit,
             concurrencySafe: descriptor.concurrencySafe,
             exclusive: descriptor.exclusive,
             readOnly: descriptor.readOnly,
