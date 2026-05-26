@@ -58,6 +58,8 @@ ASK is a normal runtime outcome. It appears when scope boundaries, fork merge co
 
 ASK v1 can carry multiple questions. Each question keeps one to three owner-proposed choices, a canonical `recommendedChoiceId`, and a fixed `other` option for user-owned freeform input. Runtime does not parse `other` text semantically; it preserves the answer as next-turn model input, audit data and possible Crystal evidence.
 
+When a thin client sends structured `metadata.askAnswer`, Memory stores the legacy single answer fields and the multi-question `answers[]` form in the `ask-answer-pair` content. `memory.ask.answered` publishes only a bounded summary of question ids, choice ids and freeform presence so TUI timelines can close the ASK loop without reading prompt text.
+
 ## Executive Loop Pause
 
 Executive tool execution can pause a turn instead of hiding retries:
@@ -66,6 +68,7 @@ Executive tool execution can pause a turn instead of hiding retries:
 - Runtime publishes `executive.loop.paused`.
 - The final reply metadata has `kind: "ask"` and includes the loop snapshot.
 - `subagent.batch` pauses include `jobId` / `job` metadata and write append-only `brain.db.memory_events.type = "execution-job"` rows.
+- `model.allocation.selected` is emitted before main-turn and subagent child model calls. The payload exposes `requestId`, optional job/child ids, scope, role, provider id, model id, reason and source only.
 - external tool stability pauses use ASK source `tool-stability` and preserve the stability snapshot.
 - A later user answer records an ask-answer pair and can publish `executive.loop.resumed`.
 

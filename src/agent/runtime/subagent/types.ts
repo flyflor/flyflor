@@ -57,6 +57,11 @@ export interface SubagentBatchExecutorInput {
         readonly ownerKey?: string;
         readonly requestId: string;
         readonly sourceKey?: string;
+        readonly model?: {
+            readonly providerId: string;
+            readonly modelId: string;
+            readonly source: string;
+        };
     };
     readonly child: {
         readonly approveMcpToolCall?: (call: McpToolCallRequest) => boolean | Promise<boolean>;

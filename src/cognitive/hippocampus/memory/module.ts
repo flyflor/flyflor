@@ -54,7 +54,7 @@ import { ScopeMemoryStore } from "./scope/index.ts";
 import { ContextForkStore, type ContextForkStoreSource } from "./fork/index.ts";
 import { BrainStore, type BrainPromptAtomWrite } from "./brain/index.ts";
 import { SummaryWorker, type SummaryRunResult } from "./summary/index.ts";
-import { AskReason, MemoryEventStatus, MemoryEventType, ReplayRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type ExecutionJobLedgerContent, type ContinuationContextEventContent, ContinuationContextReason, ContinuationDecisionKind, type ContinuationDecision, type ContinuationSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ScopeRecord, type ReplayRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
+import { AskReason, MemoryEventStatus, MemoryEventType, ReplayRecordKind, decayEq, deriveEqDirective, normalizeEqClassification, type AgentAsk, type AgentAskAnswerItem, type AgentAskAnswerPayload, type AskEventContent, type AskAnswerPairContent, type BehaviorCorrectionContent, type BehaviorSnapshotContent, type CodenameRecord, type ContextForkRecord, type EqClassification, type EqState, type ExecutionJobLedgerContent, type ContinuationContextEventContent, ContinuationContextReason, ContinuationDecisionKind, type ContinuationDecision, type ContinuationSnapshot, type IdentityAppendCandidate, type IdentityEventContent, type MemoryEventRecord, type ScopeRecord, type ReplayRecord, type TaskPlanRecord } from "../../../protocol/contracts/index.ts";
 import { MemoryMatrixAggregator } from "./recall/index.ts";
 import { CrystalMemoryComponent } from "../../crystal/memory/index.ts";
 import { SQLiteMemoryStore, type PendingScopeOffer, type PendingSkillOffer } from "./sqlite/index.ts";
@@ -2211,10 +2211,12 @@ export class MemoryModule extends Memory {
         if (!this.brainOpened) return;
         const ts = Date.parse(message.receivedAt);
         const nowMs = Number.isFinite(ts) ? ts : Date.now();
+        const askAnswer = this.readStructuredAskAnswer(message.metadata?.askAnswer);
         const content: AskAnswerPairContent = {
             askId: askEventId,
             snapshotId: snapshotId ?? `behavior-${message.id}`,
             answerText: message.text.slice(0, 4000),
+            ...(askAnswer ? { askAnswer } : {}),
             answerMessageId: message.id,
         };
         try {
@@ -2235,6 +2237,7 @@ export class MemoryModule extends Memory {
                     askEventId,
                     snapshotId: content.snapshotId,
                     sourceKey: sourceKeyForMessage(message, context),
+                    ...(askAnswer ? { askAnswer: this.askAnswerSummary(askAnswer) } : {}),
                 }),
             );
         } catch (err) {
@@ -2246,6 +2249,65 @@ export class MemoryModule extends Memory {
             );
             throw err;
         }
+    }
+
+    private readStructuredAskAnswer(value: unknown): AgentAskAnswerPayload | undefined {
+        if (!this.isRecord(value)) return undefined;
+        const legacy = this.readAskAnswerItem(value);
+        const rawAnswers = Array.isArray(value.answers)
+            ? value.answers
+                  .map((answer) => this.readAskAnswerItem(answer))
+                  .filter((answer): answer is AgentAskAnswerItem => Boolean(answer))
+            : [];
+        if (!legacy && rawAnswers.length === 0) return undefined;
+        return {
+            ...(legacy ?? {}),
+            ...(rawAnswers.length > 0 ? { answers: rawAnswers } : {}),
+        };
+    }
+
+    private readAskAnswerItem(value: unknown): AgentAskAnswerItem | undefined {
+        if (!this.isRecord(value)) return undefined;
+        const out: AgentAskAnswerItem = {};
+        const questionId = this.readBoundedString(value.questionId, 160);
+        if (questionId) out.questionId = questionId;
+        const choiceId = this.readBoundedString(value.choiceId, 160);
+        if (choiceId) out.choiceId = choiceId;
+        const text = this.readBoundedString(value.text, 4000);
+        if (text) out.text = text;
+        if (value.value !== undefined && this.isJsonSerializable(value.value)) out.value = value.value;
+        if (typeof value.isOther === "boolean") out.isOther = value.isOther;
+        return Object.keys(out).length > 0 ? out : undefined;
+    }
+
+    private askAnswerSummary(answer: AgentAskAnswerPayload): Record<string, unknown> {
+        const answers = answer.answers && answer.answers.length > 0 ? answer.answers : [answer];
+        return {
+            answerCount: answers.length,
+            questionIds: answers.map((item) => item.questionId).filter((id): id is string => Boolean(id)),
+            choiceIds: answers.map((item) => item.choiceId).filter((id): id is string => Boolean(id)),
+            hasFreeform: answers.some((item) => item.isOther === true || Boolean(item.text && !item.choiceId)),
+            legacy: !answer.answers || answer.answers.length === 0,
+        };
+    }
+
+    private readBoundedString(value: unknown, max: number): string | undefined {
+        if (typeof value !== "string") return undefined;
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed.slice(0, max) : undefined;
+    }
+
+    private isJsonSerializable(value: unknown): boolean {
+        try {
+            const encoded = JSON.stringify(value);
+            return typeof encoded === "string" && encoded.length <= 4000;
+        } catch {
+            return false;
+        }
+    }
+
+    private isRecord(value: unknown): value is Record<string, unknown> {
+        return typeof value === "object" && value !== null && !Array.isArray(value);
     }
 
     private recordAskEvent(

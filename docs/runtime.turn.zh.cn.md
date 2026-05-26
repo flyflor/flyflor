@@ -65,6 +65,8 @@ ASK v1 的结构化显示规则：
 - `other` 文本只作为下一轮模型输入、审计和 Crystal evidence，不由 runtime 做自然语言字符匹配解析。
 - 高权限 ASK 可以带 `crystalCandidates`，但只进入 candidate evidence，Gem 升格仍由 Crystal quality gate 决定。
 
+Thin client 发送结构化 `metadata.askAnswer` 时，Memory 会把 legacy 单答案字段和多问题 `answers[]` 一起写入 `ask-answer-pair` content。`memory.ask.answered` 只发布有界摘要：question ids、choice ids 和是否有 freeform，让 TUI timeline 可以闭合 ASK，而不读取 prompt text。
+
 ## Executive Loop Pause
 
 Executive tool execution 可以暂停 turn，而不是隐藏重试：
@@ -73,6 +75,7 @@ Executive tool execution 可以暂停 turn，而不是隐藏重试：
 - Runtime 发布 `executive.loop.paused`。
 - final reply metadata 带 `kind: "ask"`，并包含 loop snapshot。
 - 如果暂停来自 `subagent.batch`，snapshot 带 `jobId` / `job`，并同步写入 `brain.db.memory_events.type = "execution-job"`。
+- `model.allocation.selected` 在 main-turn 和 subagent child 模型调用前发布。Payload 只暴露 `requestId`、可选 job/child ids、scope、role、provider id、model id、reason 和 source。
 - 如果暂停来自外部工具稳定性，ASK source 为 `tool-stability`，metadata 带 stability snapshot。
 - 后续用户回答会记录 ask-answer pair，并可发布 `executive.loop.resumed`。
 

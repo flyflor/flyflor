@@ -23,6 +23,7 @@ Events 是 observability 和 coordination signals。它们不是 prompt 容器�
 - socket/gateway lifecycle：start、message received、dispatch failed
 - turn lifecycle：delta/final/error visibility
 - ASK lifecycle：ask created、answered、resumed
+- model allocation：`model.allocation.selected` 展示主轮、planner、subagent child 的 provider/model 选择，不携带 prompt text 或 secrets
 - Executive loop：`executive.loop.paused`、`executive.loop.resumed`
 - tool lifecycle：calls、approvals、failures 和 summaries
 - Memory/Crystal lifecycle：recall、consolidation、reflection 和 Gem evidence
@@ -44,7 +45,7 @@ Events 是 observability 和 coordination signals。它们不是 prompt 容器�
 
 `/ws` 的 `event.subscribe` / `event.publish` 和 snapshot query messages 是 TUI 与其他 thin clients 的公开边界。它们是血管层 transport contract，不是 Runtime 私有 API。Client 可以用 events 渲染实时 timeline 变化，再通过 `blackboard.detail.get`、`ask.detail.get`、`execution.job.detail.get` 或 `gateway.status.get` 等 query/read snapshot 读取权威 detail。
 
-稳定 event type selector 对 `RuntimeEventType` 闭合；未知 selector 必须返回 `invalid-payload`，且不得进入 socket subscription state。面向 TUI 的 event payload 必须携带 refresh 和 drilldown 所需稳定 id，包括 `executive.loop.paused` 的 `askId`，subagent events 的 `jobId` / `batchId` / `childId`，以及 Blackboard events 的 `turnId` 和 message/step/decision ids。
+稳定 event type selector 对 `RuntimeEventType` 闭合；未知 selector 必须返回 `invalid-payload`，且不得进入 socket subscription state。面向 TUI 的 event payload 必须携带 refresh 和 drilldown 所需稳定 id，包括 `executive.loop.paused` 的 `askId`、`model.allocation.selected` 的 `allocationId`，subagent events 的 `jobId` / `batchId` / `childId`，以及 Blackboard events 的 `turnId` 和 message/step/decision ids。
 
 ## 边界
 

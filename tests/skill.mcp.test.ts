@@ -2217,6 +2217,34 @@ describe("Skill and MCP capability config", () => {
         const startEvents = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
         expect(startEvents).toHaveLength(2);
         expect(startEvents[0]?.payload?.allowedTools).toEqual(["workspace.read"]);
+        expect(startEvents[0]?.payload).toEqual(expect.objectContaining({
+            childRequestId: expect.stringContaining(":subagent:"),
+            model: expect.objectContaining({
+                providerId: baseConfig.model.providerId,
+                modelId: baseConfig.model.model,
+            }),
+            task: expect.objectContaining({ id: "a", goal: "read a" }),
+        }));
+        const modelAllocations = sink.events.filter((event) => event.type === RuntimeEventType.ModelAllocationSelected);
+        expect(modelAllocations).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                payload: expect.objectContaining({
+                    agentRole: "assistant",
+                    providerId: baseConfig.model.providerId,
+                    modelId: baseConfig.model.model,
+                    scope: "main-turn",
+                }),
+            }),
+            expect.objectContaining({
+                payload: expect.objectContaining({
+                    agentRole: "subagent-child",
+                    childId: "a",
+                    providerId: baseConfig.model.providerId,
+                    modelId: baseConfig.model.model,
+                    scope: "subagent-child",
+                }),
+            }),
+        ]));
         expect(sink.events.map((event) => event.type)).toContain(RuntimeEventType.SubagentBatchEnd);
         const batchStart = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchStart);
         const batchEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchEnd);
@@ -2225,10 +2253,19 @@ describe("Skill and MCP capability config", () => {
             jobId: expect.any(String),
             parentRequestId: expect.any(String),
             tasks: 2,
+            taskSummaries: [
+                expect.objectContaining({ id: "a", goal: "read a" }),
+                expect.objectContaining({ id: "b", goal: "read b" }),
+            ],
         }));
         expect(batchEnd?.payload).toEqual(expect.objectContaining({
             batchId: batchStart?.payload?.batchId,
             completed: 2,
+            askRequired: false,
+            childJobs: expect.arrayContaining([
+                expect.objectContaining({ childId: "a", status: "completed", toolCalls: 1 }),
+                expect.objectContaining({ childId: "b", status: "completed", toolCalls: 1 }),
+            ]),
             jobId: batchStart?.payload?.jobId,
             parentRequestId: batchStart?.payload?.parentRequestId,
         }));
@@ -2257,6 +2294,9 @@ describe("Skill and MCP capability config", () => {
                 childId: "a",
                 childJobId: childJobIds.get("a"),
                 jobId: batchStart?.payload?.jobId,
+                askRequired: false,
+                crystalCandidate: false,
+                model: expect.objectContaining({ providerId: baseConfig.model.providerId, modelId: baseConfig.model.model }),
                 status: "completed",
             }),
             expect.objectContaining({
@@ -2264,6 +2304,9 @@ describe("Skill and MCP capability config", () => {
                 childId: "b",
                 childJobId: childJobIds.get("b"),
                 jobId: batchStart?.payload?.jobId,
+                askRequired: false,
+                crystalCandidate: false,
+                model: expect.objectContaining({ providerId: baseConfig.model.providerId, modelId: baseConfig.model.model }),
                 status: "completed",
             }),
         ]);

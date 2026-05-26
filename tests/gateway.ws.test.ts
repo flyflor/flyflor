@@ -865,7 +865,7 @@ describe("SocketControlHub", () => {
                 ]);
             expect(sent(socket)
                 .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
-                .map((envelope) => envelope.payload?.event?.payload)).toEqual([
+                .map((envelope) => eventPayloadFromEnvelope(envelope))).toEqual([
                     expect.objectContaining({
                         messageId: expect.any(String),
                         turnId: start.turn.id,
@@ -3543,6 +3543,11 @@ function readStatusCacheHits(envelope?: GatewayControlEnvelope): number {
 function eventTypeFromEnvelope(envelope: GatewayControlEnvelope): string | undefined {
     const payload = envelope.payload as { event?: { type?: unknown } } | undefined;
     return typeof payload?.event?.type === "string" ? payload.event.type : undefined;
+}
+
+function eventPayloadFromEnvelope(envelope: GatewayControlEnvelope): unknown {
+    const payload = envelope.payload as { event?: { payload?: unknown } } | undefined;
+    return payload?.event?.payload;
 }
 
 async function waitForEnvelope(socket: GatewayControlSocket): Promise<void> {

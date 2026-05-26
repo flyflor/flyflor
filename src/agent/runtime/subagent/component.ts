@@ -138,17 +138,29 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                 jobId: job.jobId,
                 parentRequestId: input.parent.requestId,
                 tasks: input.batch.tasks.length,
+                taskSummaries: input.batch.tasks.map((task, index) => this.taskSummary(task, index)),
             }, input.parent.requestId),
         );
         const results = await this.mapConcurrent(input.batch.tasks, concurrency, (task, index) =>
             this.runChild(batchId, job, task, index, input),
         );
         const finishedJob = this.jobs.finish(job.jobId);
+        const askResult = results.find((result) => result.askRequired);
         this.events?.publish(
             event(RuntimeEventType.SubagentBatchEnd, {
                 batchId,
                 completed: results.filter((result) => result.status === "completed").length,
                 failed: results.filter((result) => result.status === "failed").length,
+                askId: askResult?.askRequired?.askId,
+                askRequired: Boolean(askResult?.askRequired),
+                childJobs: results.map((result) => ({
+                    childId: result.id,
+                    childJobId: result.childJobId,
+                    status: result.status,
+                    toolCalls: result.toolCalls.length,
+                    askRequired: Boolean(result.askRequired),
+                })),
+                crystalCandidate: Boolean(askResult?.askRequired?.crystalCandidate),
                 jobId: job.jobId,
                 needsUser: results.filter((result) => result.status === "needs_user").length,
                 parentRequestId: input.parent.requestId,
@@ -161,7 +173,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             jobId: finishedJob?.jobId ?? job.jobId,
             needsUser: results.some((result) => result.status === "needs_user"),
             needsUserReason: results.find((result) => result.status === "needs_user")?.error,
-            askRequired: results.find((result) => result.askRequired)?.askRequired,
+            askRequired: askResult?.askRequired,
             results,
         };
     }
@@ -177,15 +189,21 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         const childJobId = job.children[index]?.childJobId;
         const catalog = this.narrowCatalog(input.parent.catalog, task.toolAllowlist);
         const childRequestId = `${input.parent.requestId}:subagent:${batchId}:${id}`;
+        const allowedTools = catalog.map((entry) => `${entry.server}.${entry.tool.name}`);
+        const model = this.modelSummary(input.parent.model);
+        let modelAllocationRef: string | undefined;
         if (childJobId) this.jobs.markChildRunning(job.jobId, childJobId);
         this.events?.publish(
             event(RuntimeEventType.SubagentChildStart, {
                 batchId,
                 childId: id,
                 childJobId,
+                childRequestId,
                 jobId: job.jobId,
-                allowedTools: catalog.map((entry) => `${entry.server}.${entry.tool.name}`),
+                allowedTools,
+                model,
                 parentRequestId: input.parent.requestId,
+                task: this.taskSummary(task, index),
             }, childRequestId),
         );
         if (catalog.length === 0) {
@@ -228,7 +246,26 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             noMoreToolsMessage: "The helper task needs user guidance before it can continue.",
             callbacks: {
                 execute: (calls) => input.executeCalls(calls, catalog, childRequestId),
-                generate: (messages, turn) => input.child.generate(messages, turn, task),
+                generate: (messages, turn) => {
+                    modelAllocationRef = crypto.randomUUID();
+                    this.events?.publish(
+                        event(RuntimeEventType.ModelAllocationSelected, {
+                            allocationId: modelAllocationRef,
+                            requestId: input.parent.requestId,
+                            jobId: job.jobId,
+                            childId: id,
+                            childJobId,
+                            childRequestId,
+                            scope: "subagent-child",
+                            agentRole: "subagent-child",
+                            providerId: model.providerId,
+                            modelId: model.modelId,
+                            reason: turn === 0 ? "subagent.child.generate.initial" : "subagent.child.generate.tool-loop",
+                            source: model.source,
+                        }, childRequestId),
+                    );
+                    return input.child.generate(messages, turn, task);
+                },
                 knownToolNames: () => new Set(catalog.map((entry) => `${entry.server}.${entry.tool.name}`)),
                 parse: (raw) => {
                     const parsed = parseMcpToolCalls(raw);
@@ -265,10 +302,16 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                 batchId,
                 childId: id,
                 childJobId,
+                askId: result.askRequired?.askId,
+                askRequired: Boolean(result.askRequired),
                 jobId: job.jobId,
+                model,
+                modelAllocationRef,
                 parentRequestId: input.parent.requestId,
                 status,
+                taskId: id,
                 toolCalls: result.executions.length,
+                crystalCandidate: Boolean(result.askRequired?.crystalCandidate),
             }, childRequestId),
         );
         return {
@@ -332,6 +375,22 @@ export class RuntimeSubagentBatchComponent extends Runtime {
             return entry.tool.name !== "write" && entry.tool.name !== "edit" && entry.tool.name !== "delete" && entry.tool.name !== "patch";
         }
         return entry.server !== "shell" && entry.server !== "process" && entry.server !== "user";
+    }
+
+    private taskSummary(task: SubagentTask, index: number): Record<string, unknown> {
+        return {
+            id: task.id ?? `child-${index + 1}`,
+            goal: task.goal.slice(0, 240),
+            toolAllowlist: task.toolAllowlist ?? [],
+        };
+    }
+
+    private modelSummary(model?: SubagentBatchExecutorInput["parent"]["model"]): { modelId: string; providerId: string; source: string } {
+        return {
+            modelId: model?.modelId ?? "unknown",
+            providerId: model?.providerId ?? "unknown",
+            source: model?.source ?? "runtime.subagent.fallback",
+        };
     }
 
     private async mapConcurrent<T, R>(

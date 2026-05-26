@@ -26,6 +26,7 @@ const EXPLICIT_CLASSES: Readonly<Record<string, RuntimeEventClassType>> = {
     [RuntimeEventType.MemoryRecallCompleted]: RuntimeEventClass.Read,
     [RuntimeEventType.MemoryRecallItem]: RuntimeEventClass.Read,
     [RuntimeEventType.MemoryRecallStarted]: RuntimeEventClass.Read,
+    [RuntimeEventType.ModelAllocationSelected]: RuntimeEventClass.Effect,
     [RuntimeEventType.ThoughtCompleted]: RuntimeEventClass.Read,
     [RuntimeEventType.ThoughtDelta]: RuntimeEventClass.Read,
     [RuntimeEventType.ThoughtStarted]: RuntimeEventClass.Read,

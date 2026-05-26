@@ -51,6 +51,7 @@ import {
     SUBAGENT_BATCH_TOOL,
     SUBAGENT_SERVER,
     type SubagentBatchResult,
+    type SubagentTask,
 } from "../subagent/index.ts";
 
 const BUILTIN_SHELL_SERVER = "shell";
@@ -69,8 +70,13 @@ export interface RuntimeMcpToolExecutorInput {
     sandboxPolicy?: SandboxPolicy;
     sourceKey?: string;
     subagentBatch?: RuntimeSubagentBatchComponent;
-    subagentGenerate?: (messages: unknown[], turn: number) => Promise<string>;
+    subagentGenerate?: (messages: unknown[], turn: number, child?: SubagentTask) => Promise<string>;
     subagentInitialMessages?: ModelMessage[];
+    subagentModel?: {
+        modelId: string;
+        providerId: string;
+        source: string;
+    };
     subagentRenderResults?: (executions: McpToolCallExecution[]) => string;
     userToolCatalog: RuntimeUserToolCatalogEntry[];
     workspaceToolset: WorkspaceToolset;
@@ -673,6 +679,7 @@ export class RuntimeMcpToolExecutor {
                     },
                     catalog: input.catalog,
                     initialMessages: input.subagentInitialMessages,
+                    model: input.subagentModel,
                     ownerKey: input.ownerKey,
                     requestId: input.requestId,
                     sourceKey: input.sourceKey,

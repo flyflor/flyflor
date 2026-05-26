@@ -167,7 +167,22 @@ describe("LF-R3 Ask first-class wiring", () => {
 
             // Turn 2: user's answer (no new ask). rememberTurn should write ask-answer-pair.
             await memory.rememberTurn(
-                gatewayMessage("I meant A", "msg-2"),
+                {
+                    ...gatewayMessage("I meant A", "msg-2"),
+                    metadata: {
+                        askAnswer: {
+                            answers: [
+                                {
+                                    questionId: "intent",
+                                    choiceId: "a",
+                                    text: "I meant A",
+                                    value: "A",
+                                    isOther: false,
+                                },
+                            ],
+                        },
+                    },
+                },
                 gatewayReply("Got it.", "rep-2"),
                 runtimeContext(),
             );
@@ -183,8 +198,14 @@ describe("LF-R3 Ask first-class wiring", () => {
                 };
                 const askContent = JSON.parse(askContentRow.content) as { snapshotId: string };
                 expect(ans[0]!.parent_id).toBe(askRow.id);
-                const ansContent = JSON.parse(ans[0]!.content) as { snapshotId: string };
+                const ansContent = JSON.parse(ans[0]!.content) as {
+                    askAnswer?: { answers?: Array<{ choiceId?: string; questionId?: string; value?: string }> };
+                    snapshotId: string;
+                };
                 expect(ansContent.snapshotId).toBe(askContent.snapshotId);
+                expect(ansContent.askAnswer?.answers).toEqual([
+                    expect.objectContaining({ questionId: "intent", choiceId: "a", value: "A" }),
+                ]);
                 const askState = db.query("SELECT status FROM memory_state WHERE event_id = ?").get(askRow.id) as
                     | { status: string }
                     | null;
@@ -196,7 +217,15 @@ describe("LF-R3 Ask first-class wiring", () => {
             } finally {
                 db.close();
             }
-            expect(sink.events.some((e) => e.type === RuntimeEventType.MemoryAskAnswered)).toBe(true);
+            expect(sink.events.find((e) => e.type === RuntimeEventType.MemoryAskAnswered)?.payload).toEqual(
+                expect.objectContaining({
+                    askAnswer: expect.objectContaining({
+                        answerCount: 1,
+                        choiceIds: ["a"],
+                        questionIds: ["intent"],
+                    }),
+                }),
+            );
             expect(sink.events).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
