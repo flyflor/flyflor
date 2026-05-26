@@ -31,8 +31,8 @@ import {
 
 const DEFAULT_SUBAGENT_CONCURRENCY = 4;
 const MAX_SUBAGENT_CONCURRENCY = 8;
-const DEFAULT_CHILD_TOOL_TURNS = 8;
-const CHILD_READ_ONLY_EXECUTION_OPERATION_BUDGET = 128;
+const DEFAULT_CHILD_TOOL_TURNS = 16;
+const CHILD_READ_ONLY_EXECUTION_OPERATION_BUDGET = 512;
 const MAX_SUBAGENT_TASKS = 24;
 
 @Component()
@@ -299,7 +299,7 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         const result = await runtime.run({
             budget: childBudget,
             initialMessages: this.childMessages(input.parent.initialMessages, task, catalog),
-            loopGuard: { maxUnknownToolRepeats: 0 },
+            loopGuard: this.childLoopGuard(childBudget.modelToolTurnBudget, catalog),
             maxTurns: childBudget.modelToolTurnBudget,
             noMoreToolsMessage: "The helper task needs user guidance before it can continue.",
             callbacks: {
@@ -452,6 +452,17 @@ export class RuntimeSubagentBatchComponent extends Runtime {
                 : modelToolTurnBudget,
             modelToolTurnBudget,
             riskQuota: 0,
+        };
+    }
+
+    private childLoopGuard(maxToolTurns: number, catalog: readonly McpToolCatalogEntry[]) {
+        const readOnlyCatalog = catalog.every((entry) => this.isReadOnlyEntry(entry));
+        if (!readOnlyCatalog) return { maxUnknownToolRepeats: 0 };
+        return {
+            maxCalls: Math.max(32, maxToolTurns * 8),
+            maxRepeatedCalls: Math.max(8, maxToolTurns),
+            maxFailedCallRepeats: 1,
+            maxUnknownToolRepeats: 0,
         };
     }
 

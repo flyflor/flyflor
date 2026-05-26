@@ -15,8 +15,8 @@ import {
 } from "./types.ts";
 
 const MAX_PLANNED_SUBTASKS = 8;
-const MAX_CHILD_TOOL_TURNS = 8;
-const DEFAULT_CHILD_TOOL_TURNS = 6;
+const MAX_CHILD_TOOL_TURNS = 16;
+const DEFAULT_CHILD_TOOL_TURNS = 12;
 
 export const RuntimeSubtaskPlanDecisionKind = {
     Continue: "continue",

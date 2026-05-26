@@ -2262,6 +2262,50 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
         ]);
+        expect(model.messages).toHaveLength(3);
+    });
+
+    test("structured askAnswer increase gives a large enough retry budget", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-ask-answer-large-budget-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "large structured budget resume\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"README.md"}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"tree","input":{"path":".","maxDepth":1}}]}</agent_tool_calls>',
+            "Large budget answer final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+        const message = {
+            ...gatewayMessage("continue after ASK with larger budget"),
+            metadata: {
+                askAnswer: {
+                    answers: [
+                        { questionId: "execution-strategy", choiceId: "continue-tools", value: "continue-tools" },
+                        { questionId: "budget-policy", choiceId: "increase-budget", value: "increase-budget" },
+                    ],
+                },
+            },
+        };
+
+        const reply = await runtime.handleMessage(
+            message,
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 1 },
+        );
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Large budget answer final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+            expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
+        ]);
     });
 
     test("runtime executes subagent.batch with narrowed child tools and audit events", async () => {
@@ -2876,6 +2920,47 @@ describe("Skill and MCP capability config", () => {
         } finally {
             db.close();
         }
+    });
+
+    test("subagent.batch default child budget handles longer read-only projects without ASK", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-long-readonly-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "long read-only project\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const responses = [
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"reader","goal":"inspect a larger project","toolAllowlist":["workspace.read","workspace.tree"]}]}}]}</agent_tool_calls>',
+            ...Array.from({ length: 10 }, () =>
+                '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"tree","input":{"path":".","maxDepth":1}},{"server":"workspace","tool":"read","input":{"path":"README.md"}}]}</agent_tool_calls>',
+            ),
+            "Long read-only child done.",
+            "Long read-only parent final.",
+            "[]",
+        ];
+        const model = new SequencedModel(responses);
+        const runtime = new RuntimeModule(baseConfig, model, new CapturingSink());
+
+        const reply = await runtime.handleMessage(gatewayMessage("delegate a longer read-only project inspection"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Long read-only parent final.");
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: false,
+                children: [
+                    expect.objectContaining({
+                        id: "reader",
+                        ok: true,
+                        status: "completed",
+                        toolCalls: 20,
+                    }),
+                ],
+            }),
+        ]);
     });
 
     test("subagent.batch child schema errors still bubble as needs_user", async () => {

@@ -226,7 +226,7 @@ interface RuntimeMcpCapabilityCatalogBuild {
 const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
-const DEFAULT_MCP_TOOL_LOOP_LIMIT = 64;
+const DEFAULT_MCP_TOOL_LOOP_LIMIT = 128;
 const LOCAL_ABSOLUTE_PATH_PATTERN =
     /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
 const BUILTIN_SHELL_SERVER = "shell";
@@ -796,8 +796,8 @@ export class RuntimeModule extends RuntimeBoundary {
         if (!strategy || strategy.budget !== "increase-one-tier") return options;
         const currentBudget = this.executiveToolBudget(options);
         const modelToolTurnBudget = Math.max(
-            currentBudget.modelToolTurnBudget + 4,
-            Math.ceil(currentBudget.modelToolTurnBudget * 1.5),
+            currentBudget.modelToolTurnBudget + 32,
+            Math.ceil(currentBudget.modelToolTurnBudget * 2),
         );
         return {
             ...options,
@@ -807,8 +807,8 @@ export class RuntimeModule extends RuntimeBoundary {
                     options.executiveToolBudget?.executionOperationBudget === undefined
                         ? undefined
                         : Math.max(
-                              options.executiveToolBudget.executionOperationBudget + 4,
-                              Math.ceil(options.executiveToolBudget.executionOperationBudget * 1.5),
+                              options.executiveToolBudget.executionOperationBudget + 32,
+                              Math.ceil(options.executiveToolBudget.executionOperationBudget * 2),
                           ),
                 modelToolTurnBudget,
                 riskQuota: options.executiveToolBudget?.riskQuota,
