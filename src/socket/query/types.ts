@@ -88,8 +88,13 @@ export interface SocketQueryExecutionJobInput extends SocketQueryPageInput {
 export interface SocketExecutionJobSnapshot {
     askId?: string;
     children: Array<{
+        childId?: string;
         childJobId: string;
+        id?: string;
+        limited?: boolean;
+        limitReason?: string;
         status?: string;
+        task?: Record<string, unknown>;
         toolCalls: number;
     }>;
     completedAt?: string;
@@ -105,6 +110,20 @@ export interface SocketExecutionJobSnapshot {
     startedAt?: string;
     status?: string;
     toolCounts: Record<string, number>;
+    toolExecutions: Array<{
+        childJobId?: string;
+        durationMs?: number;
+        error?: string;
+        inputPreview?: Record<string, unknown>;
+        key: string;
+        limited?: boolean;
+        limitReason?: string;
+        ok: boolean;
+        outputPreview?: Record<string, unknown>;
+        server?: string;
+        status?: string;
+        tool?: string;
+    }>;
     updatedAt?: string;
 }
 

@@ -244,8 +244,39 @@ Response:
           "toolCalls": 3
         },
         "children": [
-          { "childJobId": "child-1", "status": "completed", "toolCalls": 2 },
-          { "childJobId": "child-2", "status": "needs-user", "toolCalls": 1 }
+          {
+            "childId": "inspect",
+            "id": "inspect",
+            "childJobId": "child-1",
+            "task": { "goal": "Inspect workspace files" },
+            "status": "completed",
+            "toolCalls": 2,
+            "limited": false
+          },
+          {
+            "childId": "blocked",
+            "id": "blocked",
+            "childJobId": "child-2",
+            "task": { "goal": "Resolve blocked migration" },
+            "status": "needs-user",
+            "toolCalls": 1,
+            "limited": true,
+            "limitReason": "tool-budget-exhausted"
+          }
+        ],
+        "toolExecutions": [
+          {
+            "childJobId": "child-1",
+            "server": "workspace",
+            "tool": "read",
+            "key": "workspace.read",
+            "ok": true,
+            "status": "ok",
+            "inputPreview": { "path": "README.md" },
+            "outputPreview": { "text": "short bounded preview" },
+            "durationMs": 12,
+            "limited": false
+          }
         ],
         "toolCounts": {
           "workspace.read": 1

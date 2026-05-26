@@ -225,7 +225,18 @@ export type ExecutionJobEventKind =
 
 export interface ExecutionJobLedgerContent {
     askId?: string;
+    childId?: string;
     childJobId?: string;
+    children?: Array<{
+        childId?: string;
+        childJobId: string;
+        id?: string;
+        limited?: boolean;
+        limitReason?: string;
+        status?: string;
+        task?: Record<string, unknown>;
+        toolCalls?: number;
+    }>;
     crystalCandidate?: Record<string, unknown>;
     error?: string;
     jobId: string;
@@ -239,6 +250,9 @@ export interface ExecutionJobLedgerContent {
     stage?: string;
     status?: string;
     summary?: string;
+    limited?: boolean;
+    limitReason?: string;
+    task?: Record<string, unknown>;
     tool?: {
         key: string;
         ok: boolean;
@@ -249,8 +263,10 @@ export interface ExecutionJobLedgerContent {
         limitReason?: string;
         outputPreview?: Record<string, unknown>;
         server?: string;
+        status?: string;
         tool?: string;
     };
+    toolCalls?: number;
     ts: number;
 }
 

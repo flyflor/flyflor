@@ -147,7 +147,10 @@ export class RuntimeSubagentBatchComponent extends Runtime {
         );
         const job = this.jobs.create({
             budget: input.parent.budget,
-            childIds: input.batch.tasks.map((task, index) => task.id ?? `child-${index + 1}`),
+            children: input.batch.tasks.map((task, index) => ({
+                id: task.id ?? `child-${index + 1}`,
+                task: this.taskSummary(task, index),
+            })),
             ownerKey: input.parent.ownerKey,
             requestId: input.parent.requestId,
             sourceKey: input.parent.sourceKey,
