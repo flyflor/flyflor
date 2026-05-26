@@ -9,6 +9,8 @@ Socket control 暴露在：
 
 `/ws` 使用来自 `src/protocol/control/envelope.ts` 的 JSON control/event envelope。稳定协议名是 `flyflor.ws.v1`。`gateway.message.send` 等 message name 是 wire compatibility 名称。
 
+对 TUI 和其他外部 shell 来说，`gateway.*`、`event.*` 和 query snapshot messages 是公开血管层边界。它们暴露 live turn transport、RuntimeEvent emit/subscribe 和 read-model snapshots；它们不是 Runtime 私有 API，也不得扩展 TUI 专用 runtime calls。
+
 ## 核心消息族
 
 Client-to-server messages 包括：
@@ -58,6 +60,8 @@ Conversation、user、thread 和 connection fields 是 routing/audit metadata。
 | Event stream | `src/events` through socket subscription | Realtime runtime、ASK、memory、tool、gateway 和 execution events。 |
 
 连接级 snapshot、turn 级 snapshot、事件流必须保持区分。Status snapshot 不是 replay record，ledger query 也不是 prompt context。
+
+实时面板应该通过 `event.subscribe` 订阅；detail 面板应该通过 snapshot query 刷新。Event subscription selectors 对稳定 event classes 和 `RuntimeEventType` values 闭合。未知 class 或 type 返回 `invalid-payload`，且不得修改 peer subscription state。
 
 ## Error
 

@@ -1000,6 +1000,17 @@ describe("Gateway Control protocol", () => {
         });
     });
 
+    test("accepts every stable runtime event type as a socket subscription selector", () => {
+        const stableTypes = Object.values(RuntimeEventType);
+        const subscription = readGatewayControlSubscription({ types: stableTypes });
+
+        expect(subscription).toEqual({
+            classes: undefined,
+            requestId: undefined,
+            types: stableTypes,
+        });
+    });
+
     test("rejects unknown event subscription selectors before they enter socket state", () => {
         expect(() => readGatewayControlSubscription({ classes: ["unknown-class"] })).toThrow(
             "event subscription classes must use known runtime event classes",

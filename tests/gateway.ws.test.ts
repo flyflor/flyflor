@@ -525,6 +525,56 @@ describe("SocketControlHub", () => {
         hub.dispose();
     });
 
+    test("subscribes to all stable runtime event types while rejecting unknown types", async () => {
+        const bus = new GlobalEventBus();
+        const hub = createHub({ events: bus });
+        const socket = fakeSocket();
+        hub.open(socket);
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    { types: Object.values(RuntimeEventType) },
+                    { id: "runtime-event-subscribe-all-1", requestId: "req-runtime-event-subscribe-all-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "runtime-event-subscribe-all-1",
+            requestId: "req-runtime-event-subscribe-all-1",
+            type: GatewayControlMessageType.Ack,
+            payload: {
+                subscriptions: [{ types: Object.values(RuntimeEventType) }],
+            },
+        });
+
+        await hub.message(
+            socket,
+            JSON.stringify(
+                createGatewayControlEnvelope(
+                    GatewayControlMessageType.EventSubscribe,
+                    { types: ["runtime.unknown"] },
+                    { id: "runtime-event-subscribe-unknown-1", requestId: "req-runtime-event-subscribe-unknown-1" },
+                ),
+            ),
+        );
+
+        expect(sent(socket).at(-1)).toMatchObject({
+            correlationId: "runtime-event-subscribe-unknown-1",
+            requestId: "req-runtime-event-subscribe-unknown-1",
+            type: GatewayControlMessageType.Error,
+            payload: {
+                code: GatewayControlErrorCode.InvalidPayload,
+                details: { type: "runtime.unknown" },
+                message: "event subscription types must use known runtime event types",
+            },
+        });
+        hub.dispose();
+    });
+
     test("delivers TUI topic refresh events for recall, ask, fork, blackboard, and todo panels", async () => {
         const bus = new GlobalEventBus();
         const topicTypes = [
@@ -812,6 +862,18 @@ describe("SocketControlHub", () => {
                 .map((envelope) => eventTypeFromEnvelope(envelope))).toEqual([
                     RuntimeEventType.BlackboardMessageAppended,
                     RuntimeEventType.BlackboardTurnEnd,
+                ]);
+            expect(sent(socket)
+                .filter((envelope) => envelope.type === GatewayControlMessageType.EventPublish)
+                .map((envelope) => envelope.payload?.event?.payload)).toEqual([
+                    expect.objectContaining({
+                        messageId: expect.any(String),
+                        turnId: start.turn.id,
+                    }),
+                    expect.objectContaining({
+                        status: "converged",
+                        turnId: start.turn.id,
+                    }),
                 ]);
             expect(sent(socket).find((envelope) => envelope.correlationId === "blackboard-live-detail-1"))
                 .toMatchObject({

@@ -42,6 +42,10 @@ Important event families include:
 
 `event.subscribe` exposes RuntimeEvents through `/ws`. Subscription filters use event classes and event type names from the protocol. Realtime consumers should subscribe to events; historical consumers should query `src/socket/query` read models.
 
+`/ws` `event.subscribe` / `event.publish` and snapshot query messages are the public boundary for TUI and other thin clients. They are vascular transport contracts, not private Runtime APIs. A client can render timeline changes from events, then load authoritative detail through query/read snapshots such as `blackboard.detail.get`, `ask.detail.get`, `execution.job.detail.get` or `gateway.status.get`.
+
+Stable event type selectors are closed over `RuntimeEventType`; unknown selectors must return `invalid-payload` and must not enter socket subscription state. TUI-facing event payloads must carry stable ids needed for refresh and drilldown, including `askId` for `executive.loop.paused`, `jobId` / `batchId` / `childId` for subagent events, and `turnId` plus message/step/decision ids for Blackboard events.
+
 ## Boundary
 
 Event payloads must be JSON serializable. They cannot carry sockets, streams, functions or class instances.

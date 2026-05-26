@@ -9,6 +9,8 @@ Socket control is exposed at:
 
 `/ws` speaks JSON control/event envelopes from `src/protocol/control/envelope.ts`. The stable protocol name is `flyflor.ws.v1`. Message names such as `gateway.message.send` are wire compatibility names.
 
+For TUI and other external shells, `gateway.*`, `event.*` and query snapshot messages are the public vascular boundary. They expose live turn transport, RuntimeEvent emit/subscribe and read-model snapshots; they are not a private Runtime API and must not be extended with TUI-only runtime calls.
+
 ## Core Message Families
 
 Client-to-server messages include:
@@ -58,6 +60,8 @@ Conversation, user, thread and connection fields are routing/audit metadata. The
 | Event stream | `src/events` through socket subscription | Realtime runtime, ASK, memory, tool, gateway and execution events. |
 
 连接级 snapshot、turn 级 snapshot、事件流 must stay distinct. A status snapshot is not a replay record, and a ledger query is not a prompt context.
+
+Realtime panels should subscribe with `event.subscribe`; detail panels should refresh through snapshot queries. Event subscription selectors are closed over stable event classes and `RuntimeEventType` values. Unknown classes or types return `invalid-payload` and must not mutate peer subscription state.
 
 ## Rust 最小接线清单
 
