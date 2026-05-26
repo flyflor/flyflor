@@ -21,7 +21,6 @@ Client-to-server messages include:
 - `capability.catalog.get`
 - `gateway.message.send`
 - `gateway.message.interrupt`
-- `gateway.message.undo`
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
@@ -74,8 +73,6 @@ Realtime panels should subscribe with `event.subscribe`; detail panels should re
 
 `gateway.message.interrupt` is the explicit socket control command for stopping an active live turn. It targets the public `messageId` or request id and aborts the runtime through the same `AbortSignal` carried by dispatch options.
 
-`gateway.message.undo` is the explicit socket control command for transcript rollback. It records append-only undo audit and marks affected event, ASK, continuation, and ASK-answer memory state as abandoned. It does not delete `brain.db` history.
-
 ## Thin-Client Bootstrap
 
 Rust 最小接线清单:
@@ -92,17 +89,11 @@ Minimum read priority for Rust/TUI shells（最小读取优先级建议）:
 
 The Rust/TUI layer should not infer cognitive continuity from connection ids, user ids, thread ids, client ids, or transport actors. Scope and fork selection must come from explicit context payloads.
 
-## Current flyflor-cli Closure
+## Current flyflor-cli Gap
 
 The current `flyflor-cli` bootstrap sends `client.hello`, `history.list`, `task.list`, `capability.catalog.get`, `gateway.status.get`, `fork.memory.get`, and `event.subscribe`. It treats `server.hello` as handshake metadata rather than a cognitive state source.
 
 Normal per-turn approval for non-YOLO flows is exposed by `flyflor-cli /approve`. It submits the kernel-shaped boolean `context.toolApprovals` bridge for the next send only. YOLO also submits the bridge, but remains separate high-privilege metadata. The CLI must never execute approved tools locally.
-
-Typed ASK continuation is closed through `gateway.message.send` metadata. When the CLI has a pending ASK continuation and the user submits a plain answer, the next send carries that continuation metadata so Runtime restores the original ASK/task context.
-
-Undo is closed through `gateway.message.undo`. The CLI chooses the rollback anchor; the kernel owns audit, hot-memory abandonment, and ledger preservation.
-
-Model context windows are dynamic. `gateway.status.snapshot.model.contextWindowTokens` is resolved by the kernel from explicit config first, then provider `/models` metadata, then known fallback data, and may be `null` when unknown. Thin clients must render the value from the snapshot instead of hard-coding provider limits.
 
 ## Error
 

@@ -13,6 +13,9 @@
 - [todo.next.md](todo.next.md) — 发布前从根目录移出的下一阶段候选，只做规划参考，不作为当前运行契约。
 - [todo.active.md](todo.active.md) — 旧活跃 TODO 路径的归档指针；当前路线已移动到根目录 `TODO.md`。
 - [scripts/tui.history.seed.ts](scripts/tui.history.seed.ts) — TUI 历史滚动性能造数脚本，归档为手工参考，不属于发布脚本面。
+- [2026-05-25-docs-refresh/](2026-05-25-docs-refresh/) — 2026-05-25 活跃文档重产前快照。
+- [2026-05-26-docs-tool-closure/](2026-05-26-docs-tool-closure/) — 2026-05-26 工具闭环文档快照。
+- [2026-05-27-post-tool-closure/](2026-05-27-post-tool-closure/) — 2026-05-27 `/approve`、ASK typed continuation、`/undo`、动态 context-window 和 CLI 工具闭环复审前快照。
 
 ## R5 替代说明
 

@@ -493,6 +493,7 @@
                   "gateway.status.get",
                   "history.list",
                   "gateway.message.send",
+                  "gateway.message.undo",
                   "ping"
                 ],
                 "semanticTypes": [

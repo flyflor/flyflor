@@ -14,7 +14,7 @@
 6. [blackboard.zh.cn.md](blackboard.zh.cn.md) - 路由、Blackboard worker、ASK 交还、当前轮 deliberation 和 query 边界。
 7. [crystal.reflection.zh.cn.md](crystal.reflection.zh.cn.md) - Crystal reflection、Gem 升格和 drift repair。
 8. [executive.exoskeleton.zh.cn.md](executive.exoskeleton.zh.cn.md) - Capability / Tool / Trust / Loop、MCP、用户工具、sidecar、subagent、approval 和 CLI 工具调用闭环。
-9. [control.protocol.zh.cn.md](control.protocol.zh.cn.md) - `/ws` control protocol、snapshot matrix、thin-client bootstrap 和当前 CLI 闭环缺口。
+9. [control.protocol.zh.cn.md](control.protocol.zh.cn.md) - `/ws` control protocol、snapshot matrix、thin-client bootstrap 和当前 CLI 闭环状态。
 10. [ws.doc.zh.cn.md](ws.doc.zh.cn.md) - WebSocket 字段级手册和 detail query matrix。
 11. [runtime.events.zh.cn.md](runtime.events.zh.cn.md) - event class、timeline 和 subscription surface。
 12. [development.workflow.zh.cn.md](development.workflow.zh.cn.md) - worktree/tmux/Codex 协作流程。
@@ -44,11 +44,14 @@
 
 `flyflor-cli` 是外部 Rust TUI shell。它消费 `/ws` envelope、snapshot 和 event；它不能变成 kernel、memory owner、tool executor、prompt container 或 ledger writer。
 
-当前已知闭环缺口必须写清楚，而不是在文档里隐藏：
+当前闭环状态：
 
-- Kernel 本地 smoke 示例使用 `ws://127.0.0.1:8788/ws`；CLI 默认值是 `ws://127.0.0.1:8787/ws`。
+- Kernel 本地 smoke 示例使用 `ws://127.0.0.1:8788/ws`；CLI 默认值是 `ws://127.0.0.1:8787/ws`。默认值统一前使用 `FLYFLOR_WS_URL` 显式对齐。
 - Kernel 暴露 `server.hello` 与 `capability.catalog.get`；CLI bootstrap 会请求 capability catalog。
 - Kernel context input 支持 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls`；CLI 通过 `/approve` 暴露非 YOLO 的单轮 approval，并继续文档化和展示 YOLO mode。
+- ASK typed-answer continuation 已闭合：用户直接输入 `lint:fix` 或 `prettier:all` 等答案时，会携带最近 pending ASK continuation metadata，而不是开启一个丢上下文的新 turn。
+- `/undo` 是 kernel command（`gateway.message.undo`）。CLI 只选择用户消息锚点；kernel 追加 undo audit，并把受影响的热记忆、ASK、continuation state 标记为 abandoned，不删除 `brain.db`。
+- Model context-window 展示以 `gateway.status.snapshot.model.contextWindowTokens` 为权威；kernel 会按显式配置、provider model metadata、fallback mapping 的顺序解析后再交给 CLI 渲染。
 
 ## 归档
 

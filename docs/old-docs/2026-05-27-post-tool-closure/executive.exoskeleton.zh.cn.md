@@ -78,7 +78,7 @@ Loop guard 处理：
 
 `flyflor-cli` 只闭合 UI 一侧。它可以展示 capability snapshot、tool event、ASK pause、execution job 和 approval state；它不能本地执行工具，也不能绕过 kernel。
 
-## 当前 CLI 闭环
+## 当前 CLI 缺口
 
 Kernel context input 支持：
 
@@ -87,8 +87,6 @@ Kernel context input 支持：
 - `userToolCalls`
 
 当前 CLI 有 YOLO mode，能渲染 tool/run events，并通过 `/approve` 为 `toolApprovals.mcpToolCalls` 和 `toolApprovals.userToolCalls` 暴露非 YOLO 的单轮 approval。
-
-CLI 不执行工具。它只把 approval metadata、ASK continuation answer、`/undo` anchor 和 interrupt command 交回 kernel。工具失败和预算暂停会反馈给 Runtime，让模型恢复或产出 ASK，而不是以死掉的 tool loop 结束。
 
 ## Events And Metadata
 

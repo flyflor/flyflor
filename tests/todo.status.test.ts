@@ -74,8 +74,11 @@ describe("TODO status", () => {
         ]);
 
         expect(todo).toContain("本工作区最近一次封板验证已通过");
-        expect(todo).toContain("820 个测试通过");
-        expect(todo).toContain("`838 pass`，`0 fail`");
+        expect(todo).toContain("`244 pass`，`0 fail`");
+        expect(todo).toContain("`178 pass`，`0 fail`");
+        expect(todo).toContain("ASK typed answer continuation 已闭合");
+        expect(todo).toContain("gateway.message.undo");
+        expect(todo).toContain("最大上下文窗口已改为动态解析");
         expect(roadmap).toContain("Bun 内核封板已完成");
         expect(roadmap).toContain("0 漂移维护");
         expect(roadmap).toContain("TODO.md");

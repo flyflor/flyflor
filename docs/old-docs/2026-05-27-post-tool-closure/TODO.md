@@ -10,17 +10,14 @@
 
 主源码移除口径：旧第一方 shell、`src/agent/gateway` 兼容壳和旧 CLI/TUI/channel adapter 主源码面不恢复；gateway 仅作为 `/ws` wire compatibility 名称保留。
 
-2026-05-27 文档对齐口径：本轮已再次按“先归档、再重写/修订”处理会改变语义的活跃文档，归档目录为 `docs/old-docs/2026-05-27-post-tool-closure/`。`flyflor-cli` 的对应文档归档在 sibling 仓库的 `docs/old-docs/2026-05-27-post-tool-closure/`。
+2026-05-26 文档对齐口径：本轮已按“先归档、再重写”处理会改变语义的活跃文档，归档目录为 `docs/old-docs/2026-05-26-docs-tool-closure/`。`flyflor-cli` 的对应文档归档在 sibling 仓库的 `docs/old-docs/2026-05-26-docs-tool-closure/`。
 
-当前工具调用闭环状态：
+当前工具调用闭环缺口：
 
-- Kernel 本地 socket smoke 示例仍使用 `ws://127.0.0.1:8788/ws`，而 `flyflor-cli` 默认连接 `ws://127.0.0.1:8787/ws`；跨仓库联调仍建议用 `FLYFLOR_WS_URL` 显式对齐。
-- Kernel `/ws` 已暴露 `server.hello`、`capability.catalog.get` 和 `capability.catalog.snapshot`；`flyflor-cli` bootstrap 已发送 `capability.catalog.get`。
-- Kernel context input 已支持 `toolApprovals.mcpToolCalls` 与 `toolApprovals.userToolCalls`；`flyflor-cli /approve` 已闭合普通 per-turn approval UX，YOLO 仍是独立高权限模式。
-- ASK typed answer continuation 已闭合：用户直接输入 `lint:fix`、`prettier:all` 等答案时，CLI 会附带最近 pending ASK continuation metadata，kernel 保留原始任务和当前答案，不再开新 turn 丢上下文。
-- `/undo` 已从本地 UI 回滚升级为 `gateway.message.undo`：CLI 发送撤销 command，kernel 追加 undo audit event，并把撤销范围内的 event、ASK、continuation 和 ask-answer memory state 标记为 `abandoned`，不删除 `brain.db` 账本。
-- Model/Status 最大上下文窗口已改为动态解析：显式 `contextWindowTokens` 优先，其次 provider `/models` metadata，再退回已知 fallback；CLI 以 gateway 下发值为权威。
-- 下一阶段实现仍必须先补测试，再改协议或 UI；CLI 只能提交用户决策、continuation、undo 和 approval payload，不能本地执行工具或写 `brain.db`。
+- Kernel 本地 socket smoke 示例仍使用 `ws://127.0.0.1:8788/ws`，而 `flyflor-cli` 默认连接 `ws://127.0.0.1:8787/ws`；实现前必须用 `FLYFLOR_WS_URL` 显式对齐。
+- Kernel `/ws` 已暴露 `server.hello`、`capability.catalog.get` 和 `capability.catalog.snapshot`；当前 `flyflor-cli` bootstrap 还未发送 `capability.catalog.get`。
+- Kernel context input 已支持 `toolApprovals.mcpToolCalls` 与 `toolApprovals.userToolCalls`；当前 `flyflor-cli` 只有 YOLO mode 与 tool/run event 可见性，普通 per-turn approval UX 仍未闭环。
+- 下一阶段实现必须先补测试，再改协议或 UI；CLI 只能提交用户决策和 approval payload，不能本地执行工具或写 `brain.db`。
 
 ## 已封板契约
 
@@ -130,9 +127,8 @@ bun run build:binary
 
 - `bun run check`
 - `bun run docs:check`
-- `bun run test:kernel`，`244 pass`，`0 fail`
-- `flyflor-cli cargo fmt --check`
-- `flyflor-cli cargo test`，`178 pass`，`0 fail`
+- `bun run test`，820 个测试通过
+- `bun run test:kernel`，`838 pass`，`0 fail`
 - `bun run build:binary`
 
 ## 2026-05-25 文档重产

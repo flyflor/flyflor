@@ -21,7 +21,6 @@ Client-to-server messages 包括：
 - `capability.catalog.get`
 - `gateway.message.send`
 - `gateway.message.interrupt`
-- `gateway.message.undo`
 - `event.subscribe`
 - `event.unsubscribe`
 - `history.list`
@@ -74,8 +73,6 @@ Realtime panels 应使用 `event.subscribe`；detail panels 应通过 snapshot q
 
 `gateway.message.interrupt` 是停止 active live turn 的显式 socket control command。它按 public `messageId` 或 request id 定位，并通过 dispatch options 中同一条 `AbortSignal` 终断 runtime。
 
-`gateway.message.undo` 是 transcript rollback 的显式 socket control command。它追加 undo audit，并把受影响的 event、ASK、continuation 和 ASK-answer memory state 标记为 abandoned。它不会删除 `brain.db` 历史。
-
 ## Thin-Client Bootstrap
 
 Rust/TUI shell 的最小读取优先级：
@@ -90,17 +87,11 @@ Rust/TUI shell 的最小读取优先级：
 
 Rust/TUI 层不应从 connection id、user id、thread id、client id 或 transport actors 推断 cognitive continuity。Scope 和 fork selection 必须来自显式 context payload。
 
-## 当前 flyflor-cli 闭环
+## 当前 flyflor-cli 缺口
 
 当前 `flyflor-cli` bootstrap 发送 `client.hello`、`history.list`、`task.list`、`capability.catalog.get`、`gateway.status.get`、`fork.memory.get` 和 `event.subscribe`。它把 `server.hello` 当作 handshake metadata，而不是认知状态来源。
 
 非 YOLO 流程下的普通 per-turn approval 由 `flyflor-cli /approve` 暴露。它只为下一次发送提交 kernel-shaped boolean `context.toolApprovals` bridge。YOLO 也会提交该 bridge，但仍是单独的高权限 metadata。CLI 绝不能本地执行已批准工具。
-
-Typed ASK continuation 已通过 `gateway.message.send` metadata 闭合。CLI 持有 pending ASK continuation 且用户直接提交普通答案时，下一次发送会携带 continuation metadata，让 Runtime 恢复原始 ASK/task context。
-
-Undo 已通过 `gateway.message.undo` 闭合。CLI 只选择 rollback anchor；kernel 拥有 audit、热记忆 abandonment 和 ledger preservation。
-
-Model context window 是动态值。`gateway.status.snapshot.model.contextWindowTokens` 由 kernel 按显式配置、provider `/models` metadata、已知 fallback 的顺序解析；未知时可以是 `null`。Thin client 必须渲染 snapshot 值，不得硬编码 provider limit。
 
 ## Error
 

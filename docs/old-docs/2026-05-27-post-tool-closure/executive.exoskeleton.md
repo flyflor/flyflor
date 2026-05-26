@@ -78,7 +78,7 @@ The complete tool-call loop is:
 
 `flyflor-cli` closes only the UI side of that loop. It can display capability snapshots, tool events, ASK pauses, execution jobs, and approval state. It must not execute tools locally or bypass the kernel.
 
-## Current CLI Closure
+## Current CLI Gap
 
 The kernel context input supports:
 
@@ -87,8 +87,6 @@ The kernel context input supports:
 - `userToolCalls`
 
 The current CLI has YOLO mode, renders tool/run events, and exposes `/approve` for one-turn non-YOLO approval through `toolApprovals.mcpToolCalls` and `toolApprovals.userToolCalls`.
-
-The CLI does not execute tools. It sends approval metadata, ASK continuation answers, `/undo` anchors, and interrupt commands back to the kernel. Tool failures and budget pauses are fed back into Runtime so the model can recover or produce ASK instead of ending with a dead tool loop.
 
 ## Events And Metadata
 

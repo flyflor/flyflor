@@ -14,7 +14,7 @@ Official homepage: [https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 6. [blackboard.md](blackboard.md) - routing, Blackboard workers, ASK handoff, current-turn deliberation, and query boundaries.
 7. [crystal.reflection.md](crystal.reflection.md) - Crystal reflection, Gem promotion, and drift repair.
 8. [executive.exoskeleton.md](executive.exoskeleton.md) - Capability / Tool / Trust / Loop, MCP, user tools, sidecars, subagents, approval, and the CLI tool-call closure.
-9. [control.protocol.md](control.protocol.md) - `/ws` control protocol, snapshot matrix, thin-client bootstrap, and current CLI closure gaps.
+9. [control.protocol.md](control.protocol.md) - `/ws` control protocol, snapshot matrix, thin-client bootstrap, and current CLI closure state.
 10. [ws.doc.md](ws.doc.md) - field-level WebSocket manual and detail query matrix.
 11. [runtime.events.md](runtime.events.md) - event classes, timelines, and subscription surface.
 12. [development.workflow.md](development.workflow.md) - worktree/tmux/Codex collaboration flow.
@@ -44,11 +44,14 @@ Official homepage: [https://flyflor.qingshen.xin](https://flyflor.qingshen.xin)
 
 `flyflor-cli` is an external Rust TUI shell. It consumes `/ws` envelopes, snapshots, and events; it must not become the kernel, memory owner, tool executor, prompt container, or ledger writer.
 
-Current known closure gaps are documented instead of hidden:
+Current closure status:
 
-- Kernel local smoke examples use `ws://127.0.0.1:8788/ws`; the CLI default is `ws://127.0.0.1:8787/ws`.
+- Kernel local smoke examples use `ws://127.0.0.1:8788/ws`; the CLI default is `ws://127.0.0.1:8787/ws`. Use `FLYFLOR_WS_URL` until defaults are unified.
 - The kernel exposes `server.hello` and `capability.catalog.get`; the CLI bootstrap requests the capability catalog.
 - Kernel context input supports `toolApprovals.mcpToolCalls` and `toolApprovals.userToolCalls`; the CLI exposes `/approve` for one-turn non-YOLO approval and also documents/displays YOLO mode.
+- ASK typed-answer continuation is closed: plain replies such as `lint:fix` or `prettier:all` carry the latest pending ASK continuation metadata instead of starting a context-losing fresh turn.
+- `/undo` is a kernel command (`gateway.message.undo`). The CLI selects a user-message anchor; the kernel records append-only undo audit and abandons affected hot memory / ASK / continuation state without deleting `brain.db`.
+- Model context-window display is kernel-authoritative when `gateway.status.snapshot.model.contextWindowTokens` is present; the kernel resolves explicit config, provider model metadata, and fallback mapping before the CLI renders it.
 
 ## Archive
 
