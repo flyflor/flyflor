@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import type { FlyflorConfig } from "../../config/index.ts";
 import type {
     AgentAsk,
+    AgentAskAnswerItem,
     ContextForkRecord,
     GatewayMessage,
     GatewayReply,
@@ -85,13 +86,14 @@ import {
     type McpPromptGetResult,
     type McpResourceReadResult,
 } from "../mcp/index.ts";
-import {
-    createSandboxPolicy,
-    decideCapabilityExecution,
-    SandboxQuotaTracker,
-} from "../sandbox/index.ts";
+import { createSandboxPolicy, decideCapabilityExecution, SandboxQuotaTracker } from "../sandbox/index.ts";
 import { loadPromptTemplates, renderMcpToolBudgetExhaustedPrompt } from "../prompts/index.ts";
-import { continuityOwnerKey, renderRuntimeModelMessages, sourceKeyForMessage, sourceSurfaceForMessage } from "../context/index.ts";
+import {
+    continuityOwnerKey,
+    renderRuntimeModelMessages,
+    sourceKeyForMessage,
+    sourceSurfaceForMessage,
+} from "../context/index.ts";
 import { type BlackboardModule } from "../blackboard/index.ts";
 import { loadPlugins } from "../plugin/index.ts";
 import { loadSkills, loadSkillUsageSummary, type Skill } from "../skills/index.ts";
@@ -125,7 +127,12 @@ import {
     USER_TOOL_SERVER,
     WorkspaceToolset,
 } from "./mcp/index.ts";
-import { PlanningBlockParser, PlanningMetadataBuilder, RuntimePlanningRouteComponent, type RuntimePlanningRouteDecision } from "./planning/index.ts";
+import {
+    PlanningBlockParser,
+    PlanningMetadataBuilder,
+    RuntimePlanningRouteComponent,
+    type RuntimePlanningRouteDecision,
+} from "./planning/index.ts";
 import {
     FastRouteEvaluator,
     FileBackedFastRouteSnapshotStore,
@@ -134,12 +141,21 @@ import {
     type FastRouteResult,
     type FastRouteSnapshotStore,
 } from "./routing/index.ts";
-import { ScopeRecallComponent, ScopeRecallDecisionKind, type ScopeRecallDecision } from "../../cognitive/hippocampus/scope/index.ts";
+import {
+    ScopeRecallComponent,
+    ScopeRecallDecisionKind,
+    type ScopeRecallDecision,
+} from "../../cognitive/hippocampus/scope/index.ts";
 import { selectRuntimeSkills } from "./skills/index.ts";
 import { filterVisibleProtocolText, ProtocolVisibilityFilter } from "./streaming/index.ts";
 import { elapsed, scopeConstraintIdForContext, renderUserContentWithAttachments } from "./turn/index.ts";
 import { ReflectionWorker } from "./reflection/worker.ts";
-import { RuntimeSubagentBatchComponent, RuntimeSubtaskPlanComponent, SUBAGENT_BATCH_KEY, type SubagentTask } from "./subagent/index.ts";
+import {
+    RuntimeSubagentBatchComponent,
+    RuntimeSubtaskPlanComponent,
+    SUBAGENT_BATCH_KEY,
+    type SubagentTask,
+} from "./subagent/index.ts";
 
 export { promptApproveMcpToolCall, startHumanChat } from "./chat.ts";
 
@@ -165,6 +181,12 @@ export interface RuntimeStreamOptions {
     interactionMode?: InteractionModeType;
     /** One-turn high-permission sandbox override from structured control metadata. */
     sandboxMode?: SandboxMode;
+}
+
+interface RuntimeAskExecutionStrategy {
+    readonly mode?: "continue" | "narrow" | "stop";
+    readonly budget?: "increase-one-tier" | "keep" | "user-defined";
+    readonly subagents?: "keep" | "reduce" | "disable";
 }
 
 export interface RuntimeMcpResourceReadInput {
@@ -205,7 +227,8 @@ const MCP_TOOL_CATALOG_CACHE_TTL_MS = 30_000;
 const MCP_TOOL_CATALOG_CACHE_MAX_ENTRIES = 64;
 const MCP_TOOL_CATALOG_STALE_GRACE_MS = 5_000;
 const DEFAULT_MCP_TOOL_LOOP_LIMIT = 64;
-const LOCAL_ABSOLUTE_PATH_PATTERN = /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
+const LOCAL_ABSOLUTE_PATH_PATTERN =
+    /((?:\/[^\s"'()[\]{}<>，。；：！？、]+)+|[A-Za-z]:\\[^\s"'()[\]{}<>，。；：！？、]+)/gu;
 const BUILTIN_SHELL_SERVER = "shell";
 const BUILTIN_SHELL_TOOL = "run";
 const BUILTIN_SHELL_CATALOG_ENTRY: McpToolCatalogEntry = {
@@ -577,10 +600,7 @@ export class RuntimeModule extends RuntimeBoundary {
         };
     }
 
-    private async completeAnsweredAskGhost(
-        message: GatewayMessage,
-        answeredAskSnapshotId?: string,
-    ): Promise<void> {
+    private async completeAnsweredAskGhost(message: GatewayMessage, answeredAskSnapshotId?: string): Promise<void> {
         if (answeredAskSnapshotId) {
             await this.continuationGhosts.complete(answeredAskSnapshotId);
             return;
@@ -643,6 +663,10 @@ export class RuntimeModule extends RuntimeBoundary {
         if ("reply" in restored) {
             return restored.reply;
         }
+        const turnOptions = this.applyAskAnswerExecutionStrategy(
+            options,
+            this.readAskAnswerExecutionStrategy(message.metadata),
+        );
         await this.inflight.markStart({
             requestId: restored.context.requestId,
             sourceKey: sourceKeyForMessage(message, restored.context),
@@ -651,18 +675,18 @@ export class RuntimeModule extends RuntimeBoundary {
             startedAtMs: Date.now(),
         });
         try {
-            this.throwIfAborted(options.signal);
-            const prepared = await this.prepareTurn(message, restored.context, options);
-            this.throwIfAborted(options.signal);
-            const assembled = await this.assembleTurnContext(message, prepared, options);
-            this.throwIfAborted(options.signal);
-            const planningGate = await this.resolvePlanningGate(message, prepared, assembled, options);
-            this.throwIfAborted(options.signal);
+            this.throwIfAborted(turnOptions.signal);
+            const prepared = await this.prepareTurn(message, restored.context, turnOptions);
+            this.throwIfAborted(turnOptions.signal);
+            const assembled = await this.assembleTurnContext(message, prepared, turnOptions);
+            this.throwIfAborted(turnOptions.signal);
+            const planningGate = await this.resolvePlanningGate(message, prepared, assembled, turnOptions);
+            this.throwIfAborted(turnOptions.signal);
             const generated = planningGate
                 ? this.generatePlanningGateReply(message, prepared, planningGate)
-                : await this.generateTurnReply(message, prepared, assembled, options);
+                : await this.generateTurnReply(message, prepared, assembled, turnOptions);
 
-            this.throwIfAborted(options.signal);
+            this.throwIfAborted(turnOptions.signal);
             await this.persistTurnWithoutFailingReply(message, prepared, assembled, generated);
             await this.dispatchAsyncTurnTasks(message, prepared, assembled, generated);
 
@@ -676,6 +700,121 @@ export class RuntimeModule extends RuntimeBoundary {
         } finally {
             await this.inflight.markEnd(restored.context.requestId);
         }
+    }
+
+    private readAskAnswerExecutionStrategy(
+        metadata: Record<string, unknown> | undefined,
+    ): RuntimeAskExecutionStrategy | undefined {
+        const raw = metadata?.askAnswer;
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+        const payload = raw as Record<string, unknown>;
+        const answers = Array.isArray(payload.answers) ? payload.answers : [payload];
+        let strategy: RuntimeAskExecutionStrategy = {};
+        for (const answer of answers) {
+            if (!answer || typeof answer !== "object" || Array.isArray(answer)) continue;
+            strategy = this.mergeAskExecutionStrategy(
+                strategy,
+                this.askExecutionStrategyFromAnswer(answer as AgentAskAnswerItem & { executionPatch?: unknown }),
+            );
+        }
+        return Object.keys(strategy).length > 0 ? strategy : undefined;
+    }
+
+    private askExecutionStrategyFromAnswer(
+        answer: AgentAskAnswerItem & { executionPatch?: unknown },
+    ): RuntimeAskExecutionStrategy {
+        const fromPatch = this.askExecutionStrategyFromPatch(answer.executionPatch);
+        const tokens = [answer.choiceId, typeof answer.value === "string" ? answer.value : undefined].filter(
+            (token): token is string => Boolean(token),
+        );
+        return tokens.reduce(
+            (strategy, token) => this.mergeAskExecutionStrategy(strategy, this.askExecutionStrategyFromToken(token)),
+            fromPatch,
+        );
+    }
+
+    private askExecutionStrategyFromPatch(value: unknown): RuntimeAskExecutionStrategy {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+        const record = value as Record<string, unknown>;
+        return {
+            ...(record.mode === "continue" || record.mode === "narrow" || record.mode === "stop"
+                ? { mode: record.mode }
+                : {}),
+            ...(record.budget === "increase-one-tier" || record.budget === "keep" || record.budget === "user-defined"
+                ? { budget: record.budget }
+                : {}),
+            ...(record.subagents === "keep" || record.subagents === "reduce" || record.subagents === "disable"
+                ? { subagents: record.subagents }
+                : {}),
+        };
+    }
+
+    private askExecutionStrategyFromToken(token: string): RuntimeAskExecutionStrategy {
+        switch (token) {
+            case "continue-tools":
+                return { mode: "continue" };
+            case "narrow-scope":
+                return { mode: "narrow" };
+            case "stop-and-crystallize":
+            case "stop-and-crystalize":
+                return { mode: "stop" };
+            case "increase-budget":
+                return { budget: "increase-one-tier" };
+            case "keep-budget":
+                return { budget: "keep" };
+            case "user-budget":
+                return { budget: "user-defined" };
+            case "keep-subagents":
+                return { subagents: "keep" };
+            case "reduce-subagents":
+                return { subagents: "reduce" };
+            case "no-subagents":
+                return { subagents: "disable" };
+            default:
+                return {};
+        }
+    }
+
+    private mergeAskExecutionStrategy(
+        left: RuntimeAskExecutionStrategy,
+        right: RuntimeAskExecutionStrategy,
+    ): RuntimeAskExecutionStrategy {
+        const mode = right.mode ?? left.mode;
+        const budget = right.budget ?? left.budget;
+        const subagents = right.subagents ?? left.subagents;
+        return {
+            ...(mode ? { mode } : {}),
+            ...(budget ? { budget } : {}),
+            ...(subagents ? { subagents } : {}),
+        };
+    }
+
+    private applyAskAnswerExecutionStrategy(
+        options: RuntimeStreamOptions,
+        strategy?: RuntimeAskExecutionStrategy,
+    ): RuntimeStreamOptions {
+        if (!strategy || strategy.budget !== "increase-one-tier") return options;
+        const currentBudget = this.executiveToolBudget(options);
+        const modelToolTurnBudget = Math.max(
+            currentBudget.modelToolTurnBudget + 4,
+            Math.ceil(currentBudget.modelToolTurnBudget * 1.5),
+        );
+        return {
+            ...options,
+            executiveToolBudget: {
+                ...options.executiveToolBudget,
+                executionOperationBudget:
+                    options.executiveToolBudget?.executionOperationBudget === undefined
+                        ? undefined
+                        : Math.max(
+                              options.executiveToolBudget.executionOperationBudget + 4,
+                              Math.ceil(options.executiveToolBudget.executionOperationBudget * 1.5),
+                          ),
+                modelToolTurnBudget,
+                riskQuota: options.executiveToolBudget?.riskQuota,
+            },
+            maxToolTurns: Math.max(options.maxToolTurns ?? 0, modelToolTurnBudget),
+        };
     }
 
     /**
@@ -757,7 +896,8 @@ export class RuntimeModule extends RuntimeBoundary {
                 RuntimeEventType.ScopeRecallStarted,
                 {
                     detail: "Scanning persisted scope candidates, vector matches, and codename anchors before deciding whether to load a scope.",
-                    markdown: "### 回忆中\n\n- 扫描候选 Scope\n- 读取向量召回证据\n- 等待模型基于结构化候选决定是否装配",
+                    markdown:
+                        "### 回忆中\n\n- 扫描候选 Scope\n- 读取向量召回证据\n- 等待模型基于结构化候选决定是否装配",
                     phase: "recalling",
                     query: message.text,
                     summary: "正在检查是否需要装配 Scope 记忆",
@@ -771,7 +911,8 @@ export class RuntimeModule extends RuntimeBoundary {
                 RuntimeEventType.MemoryRecallStarted,
                 {
                     detail: "Scanning persisted scope candidates, vector matches, and codename anchors before deciding whether to load a scope.",
-                    markdown: "### 回忆中\n\n- 扫描候选 Scope\n- 读取向量召回证据\n- 等待模型基于结构化候选决定是否装配",
+                    markdown:
+                        "### 回忆中\n\n- 扫描候选 Scope\n- 读取向量召回证据\n- 等待模型基于结构化候选决定是否装配",
                     phase: "recalling",
                     query: message.text,
                     summary: "正在检查是否需要装配 Scope 记忆",
@@ -788,7 +929,10 @@ export class RuntimeModule extends RuntimeBoundary {
         const candidateItems = candidates.map((candidate) => this.scopeRecallCandidateTrace(candidate));
         context.recallTrace = {
             status: candidates.length > 0 ? "deciding" : "none",
-            summary: candidates.length > 0 ? `找到 ${candidates.length} 个候选 Scope，正在判断是否装配` : "没有找到可装配的 Scope 记忆",
+            summary:
+                candidates.length > 0
+                    ? `找到 ${candidates.length} 个候选 Scope，正在判断是否装配`
+                    : "没有找到可装配的 Scope 记忆",
             markdown: this.renderScopeRecallMarkdown(message.text, candidateItems),
             query: message.text,
             items: candidateItems,
@@ -815,7 +959,11 @@ export class RuntimeModule extends RuntimeBoundary {
         }
         if (candidates.length === 0) {
             this.events.publish(
-                event(RuntimeEventType.ScopeRecallDecided, { decision: ScopeRecallDecisionKind.None, candidates: 0 }, context.requestId),
+                event(
+                    RuntimeEventType.ScopeRecallDecided,
+                    { decision: ScopeRecallDecisionKind.None, candidates: 0 },
+                    context.requestId,
+                ),
             );
             this.events.publish(
                 event(
@@ -987,7 +1135,12 @@ export class RuntimeModule extends RuntimeBoundary {
     ): string {
         const lines = ["### 回忆中", "", `Query: ${query}`, "", `候选数: ${items.length}`];
         if (decision) {
-            lines.push("", `Decision: ${decision.decision}`, `Confidence: ${decision.confidence}`, `Reason: ${decision.reason}`);
+            lines.push(
+                "",
+                `Decision: ${decision.decision}`,
+                `Confidence: ${decision.confidence}`,
+                `Reason: ${decision.reason}`,
+            );
             if (decision.scope) lines.push(`Loaded scope: ${decision.scope.title ?? decision.scope.id}`);
         }
         for (const item of items.slice(0, 8)) {
@@ -1124,14 +1277,16 @@ export class RuntimeModule extends RuntimeBoundary {
             progress: 0,
             stepCount: 1,
             completedStepCount: 0,
-            step: [{
-                id: "step-1",
-                title,
-                detail: decision.planSummary ?? decision.reason,
-                order: 0,
-                progress: 0,
-                status: TaskPlanStatus.Waiting,
-            }],
+            step: [
+                {
+                    id: "step-1",
+                    title,
+                    detail: decision.planSummary ?? decision.reason,
+                    order: 0,
+                    progress: 0,
+                    status: TaskPlanStatus.Waiting,
+                },
+            ],
             createdAt: now,
             updatedAt: now,
         };
@@ -1149,7 +1304,9 @@ export class RuntimeModule extends RuntimeBoundary {
         };
     }
 
-    private readPlanDecision(metadata: Record<string, unknown> | undefined): { action?: string; planId?: string } | undefined {
+    private readPlanDecision(
+        metadata: Record<string, unknown> | undefined,
+    ): { action?: string; planId?: string } | undefined {
         const raw = metadata?.planDecision;
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
         const action = (raw as Record<string, unknown>).action;
@@ -1251,11 +1408,11 @@ export class RuntimeModule extends RuntimeBoundary {
                 ? ToolPermission.Execute
                 : pluginExecution.canExecute
                   ? ToolPermission.Execute
-                : userToolCatalog.length > 0
-                  ? ToolPermission.Execute
-                : mcpExecution.canExecute
-                  ? ToolPermission.Network
-                  : undefined,
+                  : userToolCatalog.length > 0
+                    ? ToolPermission.Execute
+                    : mcpExecution.canExecute
+                      ? ToolPermission.Network
+                      : undefined,
             projectScoped: Boolean(context.activeScope) || this.isLocalProjectSurface(sourceSurfaceForMessage(message)),
             prompts: mcpCatalogBuild.prompts,
             pluginCapabilities: pluginCapabilityCatalog,
@@ -1267,7 +1424,9 @@ export class RuntimeModule extends RuntimeBoundary {
         const visibleUserToolCatalog = capabilityPlan.userTools;
         const visibleExternalToolCatalog = capabilityPlan.externalTools;
         const visiblePluginCapabilityCatalog = capabilityPlan.pluginCapabilities;
-        const pluginToolCatalog = visiblePluginCapabilityCatalog.map((entry) => this.pluginCapabilityToolCatalogEntry(entry));
+        const pluginToolCatalog = visiblePluginCapabilityCatalog.map((entry) =>
+            this.pluginCapabilityToolCatalogEntry(entry),
+        );
         const toolCatalog = [
             ...capabilityPlan.tools,
             ...visibleUserToolCatalog.map((entry) => entry.catalog),
@@ -1304,7 +1463,7 @@ export class RuntimeModule extends RuntimeBoundary {
                     resources: visibleResourceNames,
                     servers: mcpServers.filter((server) => server.enabled).map((server) => server.name),
                     staleServers: mcpCatalogBuild.staleServers,
-                tools: toolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
+                    tools: toolCatalog.map((entry) => `${entry.server}.${entry.tool.name}`),
                     totals: {
                         prompts: visiblePromptNames.length,
                         resources: visibleResourceNames.length,
@@ -1384,19 +1543,21 @@ export class RuntimeModule extends RuntimeBoundary {
         ];
         return {
             builtAt: input.builtAt,
-            capabilities: descriptors.map((descriptor): CapabilitySummary => ({
-                category: descriptor.category,
-                computer: descriptor.computer,
-                concurrencySafe: descriptor.concurrencySafe,
-                exclusive: descriptor.exclusive,
-                name: descriptor.name,
-                permission: descriptor.permission,
-                readOnly: descriptor.readOnly,
-                scope: descriptor.scope,
-                source: descriptor.source,
-                sourceId: descriptor.sourceId,
-                tags: descriptor.tags,
-            })),
+            capabilities: descriptors.map(
+                (descriptor): CapabilitySummary => ({
+                    category: descriptor.category,
+                    computer: descriptor.computer,
+                    concurrencySafe: descriptor.concurrencySafe,
+                    exclusive: descriptor.exclusive,
+                    name: descriptor.name,
+                    permission: descriptor.permission,
+                    readOnly: descriptor.readOnly,
+                    scope: descriptor.scope,
+                    source: descriptor.source,
+                    sourceId: descriptor.sourceId,
+                    tags: descriptor.tags,
+                }),
+            ),
             failedSources: input.failedSources,
             hiddenCapabilities: input.hiddenCapabilities,
             staleSources: input.staleSources,
@@ -1439,8 +1600,7 @@ export class RuntimeModule extends RuntimeBoundary {
             pluginCapabilityCatalog: _pluginCapabilityCatalog,
             userToolCatalog,
             externalToolCatalog,
-        } =
-            assembled;
+        } = assembled;
         const behaviorSnapshotId = `behavior-${context.requestId}`;
 
         const scopeRecallAsk = prepared.scopeRecall?.ask;
@@ -1479,7 +1639,13 @@ export class RuntimeModule extends RuntimeBoundary {
                 blackboardContext: this.blackboardOutput.renderBlackboardPrompt(blackboardRun),
                 mcp: {
                     canExecuteTools: true,
-                    servers: this.builtinMcpServers(mcpServers, workspaceToolset, gitToolset, processToolset, shellExecution.canExecute),
+                    servers: this.builtinMcpServers(
+                        mcpServers,
+                        workspaceToolset,
+                        gitToolset,
+                        processToolset,
+                        shellExecution.canExecute,
+                    ),
                     tools: mcpToolCatalog,
                 },
                 memoryContext: memoryPrompt,
@@ -1492,20 +1658,25 @@ export class RuntimeModule extends RuntimeBoundary {
             ? this.blackboardOutput.renderReplyStreamingPrefix(blackboardRun)
             : this.blackboardOutput.renderReplyPrefix(blackboardRun);
         const generated = await this.generateTextWithMcpTools(modelMessages, replyPrefix, options, {
-            canExecuteTools: mcpExecution.canExecute || shellExecution.canExecute || workspaceToolset.catalog().length > 0,
-            requiresApproval: mcpExecution.requiresApproval || shellExecution.requiresApproval || pluginExecution.requiresApproval,
+            canExecuteTools:
+                mcpExecution.canExecute || shellExecution.canExecute || workspaceToolset.catalog().length > 0,
+            requiresApproval:
+                mcpExecution.requiresApproval || shellExecution.requiresApproval || pluginExecution.requiresApproval,
             catalog: mcpToolCatalog,
-            userToolCatalog: [...userToolCatalog, ...externalToolCatalog.map((entry) => ({
-                catalog: {
-                    server: USER_TOOL_SERVER,
-                    tool: {
-                        name: entry.tool.descriptor.name,
-                        description: entry.tool.descriptor.description,
-                        inputSchema: entry.tool.descriptor.inputSchema,
+            userToolCatalog: [
+                ...userToolCatalog,
+                ...externalToolCatalog.map((entry) => ({
+                    catalog: {
+                        server: USER_TOOL_SERVER,
+                        tool: {
+                            name: entry.tool.descriptor.name,
+                            description: entry.tool.descriptor.description,
+                            inputSchema: entry.tool.descriptor.inputSchema,
+                        },
                     },
-                },
-                tool: entry.tool,
-            }))],
+                    tool: entry.tool,
+                })),
+            ],
             pluginCapabilityCatalog: _pluginCapabilityCatalog,
             workspaceToolset,
             gitToolset,
@@ -1516,7 +1687,8 @@ export class RuntimeModule extends RuntimeBoundary {
             sourceKey: sourceKeyForMessage(message, context),
             subagentBatch: this.subagentBatch,
             subagentInitialMessages: modelMessages,
-            subagentGenerate: async (messages, _turn) => this.model.generate(messages as ModelMessage[], { signal: options.signal }),
+            subagentGenerate: async (messages, _turn) =>
+                this.model.generate(messages as ModelMessage[], { signal: options.signal }),
             subagentModel: this.modelAllocationSummary(),
             subagentRenderResults: renderMcpToolResults,
             approveMcpToolCall: options.approveMcpToolCall,
@@ -1642,7 +1814,9 @@ export class RuntimeModule extends RuntimeBoundary {
         const reply: GatewayReply = {
             messageId: crypto.randomUUID(),
             route: message.route,
-            text: ask ? this.ask.renderReplyText(ask) : this.blackboardOutput.renderReplyText(visibleText, blackboardRun),
+            text: ask
+                ? this.ask.renderReplyText(ask)
+                : this.blackboardOutput.renderReplyText(visibleText, blackboardRun),
             metadata: {
                 ...(ask
                     ? {
@@ -1657,7 +1831,12 @@ export class RuntimeModule extends RuntimeBoundary {
                           mode: "direct",
                           reason: "blackboard-controller-not-configured",
                       },
-                ...(prepared.enrichedContext.recallTrace ? { recall: prepared.enrichedContext.recallTrace, memory: { recall: prepared.enrichedContext.recallTrace } } : {}),
+                ...(prepared.enrichedContext.recallTrace
+                    ? {
+                          recall: prepared.enrichedContext.recallTrace,
+                          memory: { recall: prepared.enrichedContext.recallTrace },
+                      }
+                    : {}),
                 ...(prepared.enrichedContext.thoughtTrace ? { thought: prepared.enrichedContext.thoughtTrace } : {}),
                 memoryActions: parsed.actions.length,
                 planning: this.planningMetadataBuilder.build(
@@ -1740,7 +1919,9 @@ export class RuntimeModule extends RuntimeBoundary {
                           mode: "direct",
                           reason: "blackboard-controller-not-configured",
                       },
-                ...(context.recallTrace ? { recall: context.recallTrace, memory: { recall: context.recallTrace } } : {}),
+                ...(context.recallTrace
+                    ? { recall: context.recallTrace, memory: { recall: context.recallTrace } }
+                    : {}),
                 ...(context.thoughtTrace ? { thought: context.thoughtTrace } : {}),
                 ...(message.metadata?.continuation ? { continuation: { request: message.metadata.continuation } } : {}),
                 memoryActions: 0,
@@ -1835,7 +2016,9 @@ export class RuntimeModule extends RuntimeBoundary {
                 ...(continuation ? { continuationId: continuation.id } : {}),
                 ...(enrichedContext.contextForkId ? { contextForkId: enrichedContext.contextForkId } : {}),
                 createdAt: enrichedContext.now,
-                ...(generated.executiveAskRequired ? { executiveToolLoop: generated.executiveAskRequired as unknown as Record<string, unknown> } : {}),
+                ...(generated.executiveAskRequired
+                    ? { executiveToolLoop: generated.executiveAskRequired as unknown as Record<string, unknown> }
+                    : {}),
                 ownerKey: continuityOwnerKey(message, enrichedContext),
                 requestId: enrichedContext.requestId,
                 snapshotId: behaviorSnapshotId,
@@ -2162,30 +2345,32 @@ export class RuntimeModule extends RuntimeBoundary {
                 ? {
                       crystalCandidates: [
                           ...(askRequired.job
-                              ? [{
-                                    kind: "execution-job",
-                                    jobId: askRequired.jobId,
-                                    progress: askRequired.job.progress,
-                                    status: askRequired.job.status,
-                                }]
+                              ? [
+                                    {
+                                        kind: "execution-job",
+                                        jobId: askRequired.jobId,
+                                        progress: askRequired.job.progress,
+                                        status: askRequired.job.status,
+                                    },
+                                ]
                               : []),
                           ...(askRequired.toolStability
-                              ? [{
-                                    kind: "tool-stability",
-                                    stability: askRequired.toolStability,
-                                }]
+                              ? [
+                                    {
+                                        kind: "tool-stability",
+                                        stability: askRequired.toolStability,
+                                    },
+                                ]
                               : []),
                       ],
                   }
                 : {}),
-            rationale: askRequired.toolBudgetExhausted === true
-                ? "executive-tool-loop:budget"
-                : `executive-tool-loop:guard:${askRequired.loopGuardReason ?? "blocked"}`,
+            rationale:
+                askRequired.toolBudgetExhausted === true
+                    ? "executive-tool-loop:budget"
+                    : `executive-tool-loop:guard:${askRequired.loopGuardReason ?? "blocked"}`,
             continuationHint: {
-                title:
-                    askRequired.toolBudgetExhausted === true
-                        ? "Tool budget exhausted"
-                        : "Tool loop blocked",
+                title: askRequired.toolBudgetExhausted === true ? "Tool budget exhausted" : "Tool loop blocked",
                 contextHint: progressSummary
                     ? `${askRequired.message.slice(0, 160)} | ${progressSummary}`
                     : askRequired.message.slice(0, 200),
@@ -2254,12 +2439,11 @@ export class RuntimeModule extends RuntimeBoundary {
             await this.runAsyncTurnTask(
                 () =>
                     this.memory.recordDebateEpisode({
-                        ownerKey:
-                            enrichedContext.activeScope?.id
-                                ? `scope:${enrichedContext.activeScope.id}`
-                                : enrichedContext.contextForkId
-                                  ? `fork:${enrichedContext.contextForkId}`
-                                  : `turn:${message.id}`,
+                        ownerKey: enrichedContext.activeScope?.id
+                            ? `scope:${enrichedContext.activeScope.id}`
+                            : enrichedContext.contextForkId
+                              ? `fork:${enrichedContext.contextForkId}`
+                              : `turn:${message.id}`,
                         sourceKey: sourceKeyForMessage(message, context),
                         text: this.blackboardOutput.renderDebateEpisodeText(message.text, blackboardRun),
                         embedding,
@@ -2509,7 +2693,11 @@ export class RuntimeModule extends RuntimeBoundary {
         return allocationId;
     }
 
-    private modelAllocationSummary(source = "runtime.model.config"): { modelId: string; providerId: string; source: string } {
+    private modelAllocationSummary(source = "runtime.model.config"): {
+        modelId: string;
+        providerId: string;
+        source: string;
+    } {
         return {
             modelId: this.config.model.model || "unknown",
             providerId: this.config.model.providerId || this.config.model.provider || "unknown",
@@ -2581,7 +2769,13 @@ export class RuntimeModule extends RuntimeBoundary {
 
         const budget = this.executiveToolBudget(options);
         const firstTurnStreamed = { value: false };
-        const initialToolProbe = await this.initialLocalPathProbe(messages, mcp.catalog, mcp.workspaceToolset, options, mcp.requestId);
+        const initialToolProbe = await this.initialLocalPathProbe(
+            messages,
+            mcp.catalog,
+            mcp.workspaceToolset,
+            options,
+            mcp.requestId,
+        );
         const result = await this.mcpToolExecutor.runLoop({
             budget,
             initialMessages: messages,
@@ -2617,7 +2811,9 @@ export class RuntimeModule extends RuntimeBoundary {
                     if (delegated) return delegated;
                     if (options.onTextDelta && !firstTurnStreamed.value) {
                         firstTurnStreamed.value = true;
-                        await options.onTextDelta(`${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`);
+                        await options.onTextDelta(
+                            `${replyPrefix}${filterVisibleProtocolText(parsedCalls.text || raw)}`,
+                        );
                     }
                 }
                 if (turn === 0 && parsedCalls.calls.length > 0 && parsedCalls.text && options.onTextDelta) {
@@ -2749,11 +2945,13 @@ export class RuntimeModule extends RuntimeBoundary {
         const key = `workspace.${tool}`;
         if (!catalog.some((entry) => `${entry.server}.${entry.tool.name}` === key)) return undefined;
         return `<agent_tool_calls>${JSON.stringify({
-            calls: [{
-                server: "workspace",
-                tool,
-                input: tool === "tree" ? { path, maxDepth: 3, maxEntries: 200 } : { path },
-            }],
+            calls: [
+                {
+                    server: "workspace",
+                    tool,
+                    input: tool === "tree" ? { path, maxDepth: 3, maxEntries: 200 } : { path },
+                },
+            ],
         })}</agent_tool_calls>`;
     }
 
@@ -2801,11 +2999,16 @@ export class RuntimeModule extends RuntimeBoundary {
         }
     }
 
-    private executiveToolBudget(options: RuntimeStreamOptions): Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget {
+    private executiveToolBudget(
+        options: RuntimeStreamOptions,
+    ): Required<Pick<ExecutiveToolRuntimeBudget, "modelToolTurnBudget">> & ExecutiveToolRuntimeBudget {
         const configured = options.executiveToolBudget;
         return {
             executionOperationBudget: configured?.executionOperationBudget,
-            modelToolTurnBudget: Math.max(1, configured?.modelToolTurnBudget ?? options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT),
+            modelToolTurnBudget: Math.max(
+                1,
+                configured?.modelToolTurnBudget ?? options.maxToolTurns ?? DEFAULT_MCP_TOOL_LOOP_LIMIT,
+            ),
             riskQuota: configured?.riskQuota,
         };
     }
@@ -3204,7 +3407,13 @@ export class RuntimeModule extends RuntimeBoundary {
         );
 
         let currentRound = 0;
-        const onWorkerDone = async (ev: { round: number; workerName: string; workerRole: string; outputSummary: string; blockers: string[] }) => {
+        const onWorkerDone = async (ev: {
+            round: number;
+            workerName: string;
+            workerRole: string;
+            outputSummary: string;
+            blockers: string[];
+        }) => {
             if (ev.round !== currentRound) {
                 currentRound = ev.round;
                 this.events.publish(

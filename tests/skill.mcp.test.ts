@@ -31,7 +31,13 @@ import {
     validateSkill,
 } from "../src/agent/skills/index.ts";
 import { loadConfigForPaths, type FlyflorPaths } from "../src/config/index.ts";
-import { EventsComponent, NullEventSink, RuntimeEventBus, RuntimeEventType, type EventSink } from "../src/events/index.ts";
+import {
+    EventsComponent,
+    NullEventSink,
+    RuntimeEventBus,
+    RuntimeEventType,
+    type EventSink,
+} from "../src/events/index.ts";
 import {
     CapabilityExecutionKind,
     Channel,
@@ -49,8 +55,38 @@ import {
     type ModelMessage,
 } from "../src/protocol/contracts/index.ts";
 
-const MCP_TRANSPORT_TOKEN_HEADER = String.fromCharCode(109, 99, 112, 45, 115, 101, 115, 115, 105, 111, 110, 45, 105, 100);
-const MCP_TRANSPORT_TOKEN_RESPONSE_HEADER = String.fromCharCode(77, 99, 112, 45, 83, 101, 115, 115, 105, 111, 110, 45, 73, 100);
+const MCP_TRANSPORT_TOKEN_HEADER = String.fromCharCode(
+    109,
+    99,
+    112,
+    45,
+    115,
+    101,
+    115,
+    115,
+    105,
+    111,
+    110,
+    45,
+    105,
+    100,
+);
+const MCP_TRANSPORT_TOKEN_RESPONSE_HEADER = String.fromCharCode(
+    77,
+    99,
+    112,
+    45,
+    83,
+    101,
+    115,
+    115,
+    105,
+    111,
+    110,
+    45,
+    73,
+    100,
+);
 
 interface TestMcpToolCallProvenance {
     error?: string;
@@ -402,7 +438,13 @@ describe("Skill and MCP capability config", () => {
             const resource = await readMcpResource(paths, server, "https://mcp.test/resource/notes", {
                 timeoutMs: 2_000,
             });
-            const prompt = await getMcpPrompt(paths, server, "remote-review", { topic: "runtime" }, { timeoutMs: 2_000 });
+            const prompt = await getMcpPrompt(
+                paths,
+                server,
+                "remote-review",
+                { topic: "runtime" },
+                { timeoutMs: 2_000 },
+            );
 
             expect(server.transport).toBe("http");
             expect(tools).toEqual([
@@ -454,7 +496,11 @@ describe("Skill and MCP capability config", () => {
                         servers: unknown[],
                         canExecuteTools: boolean,
                         requestId: string,
-                    ) => Promise<{ entries: Array<{ server: string; tool: { name: string } }>; failedServers: string[]; staleServers: string[] }>;
+                    ) => Promise<{
+                        entries: Array<{ server: string; tool: { name: string } }>;
+                        failedServers: string[];
+                        staleServers: string[];
+                    }>;
                     mcpToolCatalogCache: Map<string, { expiresAt: number }>;
                 }
             ).buildMcpToolCatalog.bind(runtime);
@@ -942,9 +988,15 @@ describe("Skill and MCP capability config", () => {
         ]);
         expect(model.messages).toHaveLength(3);
         expect(model.messages[1]?.some((message) => message.role === ModelRole.User)).toBe(true);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("from-tool");
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("mcpCalls");
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("from-tool");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "from-tool",
+        );
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "mcpCalls",
+        );
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "from-tool",
+        );
         const usage = await loadSkillUsageSummary(paths);
         expect(usage.skills.runtime_helper).toMatchObject({
             mcpCallCount: 1,
@@ -1097,7 +1149,9 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toBe("Allowed final.");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(model.messages).toHaveLength(3);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("allowed");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "allowed",
+        );
     });
 
     test("runtime exposes and executes built-in shell.run when shell hooks are allowed", async () => {
@@ -1139,7 +1193,9 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages[0]?.find((message) => message.role === ModelRole.System)?.content).toContain(
             '"name": "run"',
         );
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(paths.projectDir);
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            paths.projectDir,
+        );
     });
 
     test("runtime exposes shell.run behind approval when shell hooks ask", async () => {
@@ -1356,7 +1412,9 @@ describe("Skill and MCP capability config", () => {
         expect(systemPrompt).toContain('"name": "edit"');
         expect(systemPrompt).toContain('"name": "delete"');
         expect(systemPrompt).not.toContain('"name": "shell"');
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("needle line");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "needle line",
+        );
     });
 
     test("runtime asks the model to choose a workspace tool when the first draft skips tool calls", async () => {
@@ -1384,7 +1442,9 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
         ]);
         expect(model.messages[1]?.[0]?.content).toContain("Tool catalog JSON");
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("project overview");
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "project overview",
+        );
     });
 
     test("runtime forces tool use for absolute local project analysis drafts", async () => {
@@ -1422,7 +1482,9 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages).toHaveLength(3);
         expect(model.messages[0]?.[0]?.content).toContain("delegate");
         expect(model.messages[1]?.[0]?.content).toContain('"name": "tree"');
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("src/main.ts");
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "src/main.ts",
+        );
     });
 
     test("runtime reads approved absolute files without relying on model tool JSON", async () => {
@@ -1433,26 +1495,22 @@ describe("Skill and MCP capability config", () => {
         await writeFile(externalFile, "absolute file contents\n");
 
         const baseConfig = await loadConfigForPaths(paths);
-        const model = new SequencedModel([
-            "文件内容是 absolute file contents。",
-            "[]",
-        ]);
+        const model = new SequencedModel(["文件内容是 absolute file contents。", "[]"]);
         const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
 
-        const reply = await runtime.handleMessage(
-            gatewayMessage(`读取这个文件 ${externalFile} 并总结。`),
-            {
-                requestId: crypto.randomUUID(),
-                now: new Date().toISOString(),
-            },
-        );
+        const reply = await runtime.handleMessage(gatewayMessage(`读取这个文件 ${externalFile} 并总结。`), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
 
         expect(reply.text).toBe("文件内容是 absolute file contents。");
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
         ]);
         expect(model.messages).toHaveLength(2);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("absolute file contents");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "absolute file contents",
+        );
     });
 
     test("initial local path probe executes tool calls and never leaks protocol blocks to stream, reply, or history", async () => {
@@ -1505,9 +1563,10 @@ describe("Skill and MCP capability config", () => {
         const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
         try {
             const row = db
-                .query<{ content: string }, [string]>(
-                    "SELECT content FROM memory_events WHERE type = ?1 ORDER BY ts DESC LIMIT 1",
-                )
+                .query<
+                    { content: string },
+                    [string]
+                >("SELECT content FROM memory_events WHERE type = ?1 ORDER BY ts DESC LIMIT 1")
                 .get(MemoryEventType.Event);
             const content = JSON.parse(row?.content ?? "{}") as { assistantText?: string };
             expect(content.assistantText).toBe("Probe final.");
@@ -1545,7 +1604,9 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({ ok: true, server: "workspace", tool: "tree" }),
         ]);
         expect(model.messages).toHaveLength(3);
-        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("README.md");
+        expect(model.messages[2]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "README.md",
+        );
     });
 
     test("runtime keeps skipped-tool drafts out of streamed output before forced workspace tools run", async () => {
@@ -1611,7 +1672,9 @@ describe("Skill and MCP capability config", () => {
         const systemPrompt = model.messages[0]?.find((message) => message.role === ModelRole.System)?.content ?? "";
         expect(systemPrompt).toContain('"name": "workspace"');
         expect(systemPrompt).toContain('"name": "read"');
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("ws local file");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "ws local file",
+        );
     });
 
     test("runtime exposes workspace write/edit/delete as approved file capabilities", async () => {
@@ -2006,9 +2069,7 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.kind).toBe("ask");
         expect(reply.text).toContain("执行层连续遇到工具阻断");
         expect(reply.metadata?.mcpToolExecutions).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ ok: false, server: "workspace", tool: "read" }),
-            ]),
+            expect.arrayContaining([expect.objectContaining({ ok: false, server: "workspace", tool: "read" })]),
         );
         expect(reply.metadata?.executiveToolLoop).toEqual(
             expect.objectContaining({
@@ -2087,9 +2148,12 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toBe("Loop final.");
         expect(reply.metadata?.mcpToolCalls).toBe(files.length);
         expect(model.messages).toHaveLength(files.length + 2);
-        expect(model.messages.at(-2)?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
-            "loop content file8.txt",
-        );
+        expect(
+            model.messages
+                .at(-2)
+                ?.filter((message) => message.role === ModelRole.User)
+                .at(-1)?.content,
+        ).toContain("loop content file8.txt");
     });
 
     test("runtime accepts batched workspace calls beyond the old per-message limit", async () => {
@@ -2122,9 +2186,7 @@ describe("Skill and MCP capability config", () => {
         expect(reply.text).toBe("Batch final.");
         expect(reply.metadata?.mcpToolCalls).toBe(files.length);
         expect(reply.metadata?.mcpToolExecutions).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
-            ]),
+            expect.arrayContaining([expect.objectContaining({ ok: true, server: "workspace", tool: "read" })]),
         );
         expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "batch content batch6.txt",
@@ -2157,6 +2219,48 @@ describe("Skill and MCP capability config", () => {
         expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
             "shape-compatible read",
         );
+    });
+
+    test("structured askAnswer choices can increase the next executive tool budget", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-ask-answer-budget-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "structured budget resume\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"README.md"}}]}</agent_tool_calls>',
+            "Budget answer final.",
+            "[]",
+        ]);
+        const runtime = new RuntimeModule(baseConfig, model, new NullEventSink());
+        const message = {
+            ...gatewayMessage("continue after ASK"),
+            metadata: {
+                askAnswer: {
+                    answers: [
+                        { questionId: "execution-strategy", choiceId: "continue-tools", value: "continue-tools" },
+                        { questionId: "budget-policy", choiceId: "increase-budget", value: "increase-budget" },
+                        { questionId: "subagent-policy", choiceId: "keep-subagents", value: "keep-subagents" },
+                    ],
+                },
+            },
+        };
+
+        const reply = await runtime.handleMessage(
+            message,
+            {
+                requestId: crypto.randomUUID(),
+                now: new Date().toISOString(),
+            },
+            { maxToolTurns: 1 },
+        );
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Budget answer final.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
+        ]);
     });
 
     test("runtime executes subagent.batch with narrowed child tools and audit events", async () => {
@@ -2209,66 +2313,86 @@ describe("Skill and MCP capability config", () => {
                 jobId: expect.any(String),
                 needsUser: false,
                 children: [
-                    expect.objectContaining({ childJobId: expect.any(String), id: "a", ok: true, status: "completed", toolCalls: 1 }),
-                    expect.objectContaining({ childJobId: expect.any(String), id: "b", ok: true, status: "completed", toolCalls: 1 }),
+                    expect.objectContaining({
+                        childJobId: expect.any(String),
+                        id: "a",
+                        ok: true,
+                        status: "completed",
+                        toolCalls: 1,
+                    }),
+                    expect.objectContaining({
+                        childJobId: expect.any(String),
+                        id: "b",
+                        ok: true,
+                        status: "completed",
+                        toolCalls: 1,
+                    }),
                 ],
             }),
         ]);
         const startEvents = sink.events.filter((event) => event.type === RuntimeEventType.SubagentChildStart);
         expect(startEvents).toHaveLength(2);
         expect(startEvents[0]?.payload?.allowedTools).toEqual(["workspace.read"]);
-        expect(startEvents[0]?.payload).toEqual(expect.objectContaining({
-            childRequestId: expect.stringContaining(":subagent:"),
-            model: expect.objectContaining({
-                providerId: baseConfig.model.providerId,
-                modelId: baseConfig.model.model,
+        expect(startEvents[0]?.payload).toEqual(
+            expect.objectContaining({
+                childRequestId: expect.stringContaining(":subagent:"),
+                model: expect.objectContaining({
+                    providerId: baseConfig.model.providerId,
+                    modelId: baseConfig.model.model,
+                }),
+                task: expect.objectContaining({ id: "a", goal: "read a" }),
             }),
-            task: expect.objectContaining({ id: "a", goal: "read a" }),
-        }));
+        );
         const modelAllocations = sink.events.filter((event) => event.type === RuntimeEventType.ModelAllocationSelected);
-        expect(modelAllocations).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-                payload: expect.objectContaining({
-                    agentRole: "assistant",
-                    providerId: baseConfig.model.providerId,
-                    modelId: baseConfig.model.model,
-                    scope: "main-turn",
+        expect(modelAllocations).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    payload: expect.objectContaining({
+                        agentRole: "assistant",
+                        providerId: baseConfig.model.providerId,
+                        modelId: baseConfig.model.model,
+                        scope: "main-turn",
+                    }),
                 }),
-            }),
-            expect.objectContaining({
-                payload: expect.objectContaining({
-                    agentRole: "subagent-child",
-                    childId: "a",
-                    providerId: baseConfig.model.providerId,
-                    modelId: baseConfig.model.model,
-                    scope: "subagent-child",
+                expect.objectContaining({
+                    payload: expect.objectContaining({
+                        agentRole: "subagent-child",
+                        childId: "a",
+                        providerId: baseConfig.model.providerId,
+                        modelId: baseConfig.model.model,
+                        scope: "subagent-child",
+                    }),
                 }),
-            }),
-        ]));
+            ]),
+        );
         expect(sink.events.map((event) => event.type)).toContain(RuntimeEventType.SubagentBatchEnd);
         const batchStart = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchStart);
         const batchEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchEnd);
-        expect(batchStart?.payload).toEqual(expect.objectContaining({
-            batchId: expect.any(String),
-            jobId: expect.any(String),
-            parentRequestId: expect.any(String),
-            tasks: 2,
-            taskSummaries: [
-                expect.objectContaining({ id: "a", goal: "read a" }),
-                expect.objectContaining({ id: "b", goal: "read b" }),
-            ],
-        }));
-        expect(batchEnd?.payload).toEqual(expect.objectContaining({
-            batchId: batchStart?.payload?.batchId,
-            completed: 2,
-            askRequired: false,
-            childJobs: expect.arrayContaining([
-                expect.objectContaining({ childId: "a", status: "completed", toolCalls: 1 }),
-                expect.objectContaining({ childId: "b", status: "completed", toolCalls: 1 }),
-            ]),
-            jobId: batchStart?.payload?.jobId,
-            parentRequestId: batchStart?.payload?.parentRequestId,
-        }));
+        expect(batchStart?.payload).toEqual(
+            expect.objectContaining({
+                batchId: expect.any(String),
+                jobId: expect.any(String),
+                parentRequestId: expect.any(String),
+                tasks: 2,
+                taskSummaries: [
+                    expect.objectContaining({ id: "a", goal: "read a" }),
+                    expect.objectContaining({ id: "b", goal: "read b" }),
+                ],
+            }),
+        );
+        expect(batchEnd?.payload).toEqual(
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                completed: 2,
+                askRequired: false,
+                childJobs: expect.arrayContaining([
+                    expect.objectContaining({ childId: "a", status: "completed", toolCalls: 1 }),
+                    expect.objectContaining({ childId: "b", status: "completed", toolCalls: 1 }),
+                ]),
+                jobId: batchStart?.payload?.jobId,
+                parentRequestId: batchStart?.payload?.parentRequestId,
+            }),
+        );
         expect(startEvents.map((event) => event.payload)).toEqual([
             expect.objectContaining({
                 batchId: batchStart?.payload?.batchId,
@@ -2296,7 +2420,10 @@ describe("Skill and MCP capability config", () => {
                 jobId: batchStart?.payload?.jobId,
                 askRequired: false,
                 crystalCandidate: false,
-                model: expect.objectContaining({ providerId: baseConfig.model.providerId, modelId: baseConfig.model.model }),
+                model: expect.objectContaining({
+                    providerId: baseConfig.model.providerId,
+                    modelId: baseConfig.model.model,
+                }),
                 status: "completed",
             }),
             expect.objectContaining({
@@ -2306,7 +2433,10 @@ describe("Skill and MCP capability config", () => {
                 jobId: batchStart?.payload?.jobId,
                 askRequired: false,
                 crystalCandidate: false,
-                model: expect.objectContaining({ providerId: baseConfig.model.providerId, modelId: baseConfig.model.model }),
+                model: expect.objectContaining({
+                    providerId: baseConfig.model.providerId,
+                    modelId: baseConfig.model.model,
+                }),
                 status: "completed",
             }),
         ]);
@@ -2327,7 +2457,9 @@ describe("Skill and MCP capability config", () => {
             const jobRows = db
                 .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
                 .all() as Array<{ content: string }>;
-            const jobEvents = jobRows.map((row) => JSON.parse(row.content) as { kind: string; jobId: string; progress?: unknown });
+            const jobEvents = jobRows.map(
+                (row) => JSON.parse(row.content) as { kind: string; jobId: string; progress?: unknown },
+            );
             expect(jobEvents.map((event) => event.kind)).toEqual(
                 expect.arrayContaining(["job.created", "job.child.completed", "job.tool.executed", "job.completed"]),
             );
@@ -2397,6 +2529,69 @@ describe("Skill and MCP capability config", () => {
         expect(childStarts[1]?.payload?.allowedTools).toEqual(["workspace.read"]);
     });
 
+    test("subagent.batch read-only child budget limit returns partial progress without parent ASK", async () => {
+        const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-limited-"));
+        const paths = testPaths(root);
+        await installTestTemplates(paths);
+        await writeFile(join(root, "README.md"), "partial read progress\n");
+
+        const baseConfig = await loadConfigForPaths(paths);
+        const model = new SequencedModel([
+            '<agent_tool_calls>{"calls":[{"server":"subagent","tool":"batch","input":{"tasks":[{"id":"reader","goal":"read readme","toolAllowlist":["workspace.read"]}],"maxToolTurns":1}}]}</agent_tool_calls>',
+            '<agent_tool_calls>{"calls":[{"server":"workspace","tool":"read","input":{"path":"README.md"}}]}</agent_tool_calls>',
+            "Partial progress was enough to answer.",
+            "[]",
+        ]);
+        const sink = new CapturingSink();
+        const runtime = new RuntimeModule(baseConfig, model, sink);
+
+        const reply = await runtime.handleMessage(gatewayMessage("read the project"), {
+            requestId: crypto.randomUUID(),
+            now: new Date().toISOString(),
+        });
+
+        expect(reply.metadata?.kind).not.toBe("ask");
+        expect(reply.text).toBe("Partial progress was enough to answer.");
+        expect(reply.metadata?.mcpToolExecutions).toEqual([
+            expect.objectContaining({ ok: true, server: "subagent", tool: "batch" }),
+        ]);
+        expect(reply.metadata?.subagentBatches).toEqual([
+            expect.objectContaining({
+                needsUser: false,
+                children: [
+                    expect.objectContaining({
+                        id: "reader",
+                        limited: true,
+                        limitReason: "tool-budget-exhausted",
+                        ok: true,
+                        status: "completed",
+                        toolCalls: 1,
+                    }),
+                ],
+            }),
+        ]);
+        expect(sink.events.find((event) => event.type === RuntimeEventType.ExecutiveLoopPaused)).toBeUndefined();
+        const childEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentChildEnd);
+        expect(childEnd?.payload).toEqual(
+            expect.objectContaining({
+                askRequired: false,
+                childId: "reader",
+                limited: true,
+                limitReason: "tool-budget-exhausted",
+                status: "completed",
+                suppressedAskRequired: true,
+            }),
+        );
+        const batchEnd = sink.events.find((event) => event.type === RuntimeEventType.SubagentBatchEnd);
+        expect(batchEnd?.payload).toEqual(
+            expect.objectContaining({
+                askRequired: false,
+                limited: 1,
+                needsUser: 0,
+            }),
+        );
+    });
+
     test("subagent.batch child needs_user pauses parent turn with ASK", async () => {
         const root = await mkdtemp(join(tmpdir(), "flyflor-runtime-subagent-needs-user-"));
         const paths = testPaths(root);
@@ -2418,8 +2613,13 @@ describe("Skill and MCP capability config", () => {
         });
 
         expect(reply.metadata?.kind).toBe("ask");
-        expect((reply.metadata?.ask as { rationale?: unknown } | undefined)?.rationale).toBe("executive-tool-loop:guard:unknown-tool-repeat");
-        expect((reply.metadata?.ask as { executiveToolLoop?: { jobId?: unknown; job?: unknown } } | undefined)?.executiveToolLoop).toEqual(
+        expect((reply.metadata?.ask as { rationale?: unknown } | undefined)?.rationale).toBe(
+            "executive-tool-loop:guard:unknown-tool-repeat",
+        );
+        expect(
+            (reply.metadata?.ask as { executiveToolLoop?: { jobId?: unknown; job?: unknown } } | undefined)
+                ?.executiveToolLoop,
+        ).toEqual(
             expect.objectContaining({
                 job: expect.objectContaining({
                     progress: expect.objectContaining({ childNeedsUser: 1, childTotal: 1 }),
@@ -2432,21 +2632,25 @@ describe("Skill and MCP capability config", () => {
             expect.objectContaining({
                 jobId: expect.any(String),
                 needsUser: true,
-                children: [expect.objectContaining({ childJobId: expect.any(String), id: "blocked", status: "needs_user" })],
+                children: [
+                    expect.objectContaining({ childJobId: expect.any(String), id: "blocked", status: "needs_user" }),
+                ],
             }),
         ]);
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: false, server: "subagent", tool: "batch" }),
         ]);
         const pause = sink.events.find((event) => event.type === RuntimeEventType.ExecutiveLoopPaused);
-        expect(pause?.payload).toEqual(expect.objectContaining({
-            askId: expect.any(String),
-            job: expect.objectContaining({
-                progress: expect.objectContaining({ childNeedsUser: 1, childTotal: 1 }),
-                status: "needs-user",
+        expect(pause?.payload).toEqual(
+            expect.objectContaining({
+                askId: expect.any(String),
+                job: expect.objectContaining({
+                    progress: expect.objectContaining({ childNeedsUser: 1, childTotal: 1 }),
+                    status: "needs-user",
+                }),
+                jobId: expect.any(String),
             }),
-            jobId: expect.any(String),
-        }));
+        );
         const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
         try {
             const row = db
@@ -2464,7 +2668,9 @@ describe("Skill and MCP capability config", () => {
             const jobRows = db
                 .query("SELECT content FROM memory_events WHERE type = 'execution-job' ORDER BY ts ASC")
                 .all() as Array<{ content: string }>;
-            const jobEvents = jobRows.map((row) => JSON.parse(row.content) as { askId?: string; kind: string; jobId: string });
+            const jobEvents = jobRows.map(
+                (row) => JSON.parse(row.content) as { askId?: string; kind: string; jobId: string },
+            );
             expect(jobEvents.map((event) => event.kind)).toEqual(
                 expect.arrayContaining(["job.created", "job.child.needs_user", "job.paused.ask", "job.completed"]),
             );
@@ -2566,7 +2772,9 @@ describe("Skill and MCP capability config", () => {
                 requestId: crypto.randomUUID(),
                 now: new Date().toISOString(),
             }),
-        ).rejects.toThrow("Invalid MCP tool call at mcpCalls[0].tool_calls[0].function.arguments: expected valid JSON object.");
+        ).rejects.toThrow(
+            "Invalid MCP tool call at mcpCalls[0].tool_calls[0].function.arguments: expected valid JSON object.",
+        );
     });
 
     test("workspace read can inspect paths outside the project root without write approval", async () => {
@@ -2600,7 +2808,9 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "read" }),
         ]);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("outside");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "outside",
+        );
     });
 
     test("workspace glob can inspect directories outside the project root without write approval", async () => {
@@ -2635,7 +2845,9 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.mcpToolExecutions).toEqual([
             expect.objectContaining({ ok: true, server: "workspace", tool: "glob" }),
         ]);
-        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain("outside.ts");
+        expect(model.messages[1]?.filter((message) => message.role === ModelRole.User).at(-1)?.content).toContain(
+            "outside.ts",
+        );
     });
 
     test("workspace tools can read approved absolute paths outside the project root", async () => {
@@ -2766,9 +2978,7 @@ describe("Skill and MCP capability config", () => {
         expect(reply.metadata?.kind).toBe("reply");
         expect(reply.metadata?.mcpToolCalls).toBe(1);
         expect(reply.metadata?.mcpToolExecutions).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({ ok: false, server: "fake", tool: "echo" }),
-            ]),
+            expect.arrayContaining([expect.objectContaining({ ok: false, server: "fake", tool: "echo" })]),
         );
     });
 });
@@ -2895,103 +3105,117 @@ process.stdin.on("end", () => {
 
 async function withFakeHttpMcpServer<T>(fn: (url: string) => Promise<T>): Promise<T> {
     let transportToken = "";
-    return withMockHttpMcpEndpoint("fake", async (request) => {
-        const payload = (await request.json()) as {
-            id?: number | string;
-            method?: string;
-            params?: Record<string, unknown>;
-        };
-        if (payload.method === "initialize") {
-            transportToken = crypto.randomUUID();
-            return jsonResponse(
-                {
+    return withMockHttpMcpEndpoint(
+        "fake",
+        async (request) => {
+            const payload = (await request.json()) as {
+                id?: number | string;
+                method?: string;
+                params?: Record<string, unknown>;
+            };
+            if (payload.method === "initialize") {
+                transportToken = crypto.randomUUID();
+                return jsonResponse(
+                    {
+                        jsonrpc: "2.0",
+                        id: payload.id,
+                        result: {
+                            protocolVersion: "2025-06-18",
+                            capabilities: {},
+                            serverInfo: { name: "fake-http", version: "1" },
+                        },
+                    },
+                    { [MCP_TRANSPORT_TOKEN_RESPONSE_HEADER]: transportToken },
+                );
+            }
+            if (payload.method === "notifications/initialized") {
+                return new Response(null, { status: 202 });
+            }
+            if (request.headers.get(MCP_TRANSPORT_TOKEN_HEADER) !== transportToken) {
+                return jsonResponse({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    error: { code: -32001, message: "missing transport token" },
+                });
+            }
+            if (payload.method === "tools/list") {
+                return jsonResponse({ jsonrpc: "2.0", id: payload.id, result: { tools: [httpEchoTool()] } });
+            }
+            if (payload.method === "resources/list") {
+                return jsonResponse({
                     jsonrpc: "2.0",
                     id: payload.id,
                     result: {
-                        protocolVersion: "2025-06-18",
-                        capabilities: {},
-                        serverInfo: { name: "fake-http", version: "1" },
+                        resources: [
+                            {
+                                uri: "https://mcp.test/resource/notes",
+                                name: "remote-notes",
+                                description: "Remote notes",
+                                mimeType: "text/plain",
+                            },
+                        ],
                     },
-                },
-                { [MCP_TRANSPORT_TOKEN_RESPONSE_HEADER]: transportToken },
-            );
-        }
-        if (payload.method === "notifications/initialized") {
-            return new Response(null, { status: 202 });
-        }
-        if (request.headers.get(MCP_TRANSPORT_TOKEN_HEADER) !== transportToken) {
-            return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing transport token" } });
-        }
-        if (payload.method === "tools/list") {
-            return jsonResponse({ jsonrpc: "2.0", id: payload.id, result: { tools: [httpEchoTool()] } });
-        }
-        if (payload.method === "resources/list") {
+                });
+            }
+            if (payload.method === "prompts/list") {
+                return jsonResponse({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    result: {
+                        prompts: [
+                            {
+                                name: "remote-review",
+                                description: "Remote review prompt",
+                                arguments: [{ name: "topic" }],
+                            },
+                        ],
+                    },
+                });
+            }
+            if (payload.method === "resources/read") {
+                return jsonResponse({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    result: {
+                        contents: [
+                            {
+                                uri: payload.params?.uri,
+                                mimeType: "text/plain",
+                                text: "remote notes",
+                            },
+                        ],
+                    },
+                });
+            }
+            if (payload.method === "prompts/get") {
+                const args = payload.params?.arguments as { topic?: unknown } | undefined;
+                return jsonResponse({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    result: {
+                        description: "Remote review prompt",
+                        messages: [
+                            { role: "user", content: { type: "text", text: `Review ${String(args?.topic ?? "")}` } },
+                        ],
+                    },
+                });
+            }
+            if (payload.method === "tools/call") {
+                const args = payload.params?.arguments as { text?: unknown } | undefined;
+                return jsonResponse({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    result: { isError: false, content: [{ type: "text", text: String(args?.text ?? "") }] },
+                });
+            }
             return jsonResponse({
                 jsonrpc: "2.0",
                 id: payload.id,
-                result: {
-                    resources: [
-                        {
-                            uri: "https://mcp.test/resource/notes",
-                            name: "remote-notes",
-                            description: "Remote notes",
-                            mimeType: "text/plain",
-                        },
-                    ],
-                },
+                error: { code: -32601, message: "method not found" },
             });
-        }
-        if (payload.method === "prompts/list") {
-            return jsonResponse({
-                jsonrpc: "2.0",
-                id: payload.id,
-                result: {
-                    prompts: [
-                        {
-                            name: "remote-review",
-                            description: "Remote review prompt",
-                            arguments: [{ name: "topic" }],
-                        },
-                    ],
-                },
-            });
-        }
-        if (payload.method === "resources/read") {
-            return jsonResponse({
-                jsonrpc: "2.0",
-                id: payload.id,
-                result: {
-                    contents: [
-                        {
-                            uri: payload.params?.uri,
-                            mimeType: "text/plain",
-                            text: "remote notes",
-                        },
-                    ],
-                },
-            });
-        }
-        if (payload.method === "prompts/get") {
-            const args = payload.params?.arguments as { topic?: unknown } | undefined;
-            return jsonResponse({
-                jsonrpc: "2.0",
-                id: payload.id,
-                result: {
-                    description: "Remote review prompt",
-                    messages: [{ role: "user", content: { type: "text", text: `Review ${String(args?.topic ?? "")}` } }],
-                },
-            });
-        }
-        if (payload.method === "tools/call") {
-            const args = payload.params?.arguments as { text?: unknown } | undefined;
-            return jsonResponse({
-                jsonrpc: "2.0",
-                id: payload.id,
-                result: { isError: false, content: [{ type: "text", text: String(args?.text ?? "") }] },
-            });
-        }
-        return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
-    }, fn);
+        },
+        fn,
+    );
 }
 
 async function withControllableHttpMcpServer<T>(
@@ -3018,7 +3242,11 @@ async function withControllableHttpMcpServer<T>(
                 return new Response(null, { status: 202 });
             }
             if (request.headers.get(MCP_TRANSPORT_TOKEN_HEADER) !== transportToken) {
-                return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32001, message: "missing transport token" } });
+                return jsonResponse({
+                    jsonrpc: "2.0",
+                    id: payload.id,
+                    error: { code: -32001, message: "missing transport token" },
+                });
             }
             if (payload.method === "tools/list") {
                 if (control.failToolsList) return new Response("catalog unavailable", { status: 503 });
@@ -3032,7 +3260,11 @@ async function withControllableHttpMcpServer<T>(
                     result: { isError: false, content: [{ type: "text", text: String(args?.text ?? "") }] },
                 });
             }
-            return jsonResponse({ jsonrpc: "2.0", id: payload.id, error: { code: -32601, message: "method not found" } });
+            return jsonResponse({
+                jsonrpc: "2.0",
+                id: payload.id,
+                error: { code: -32601, message: "method not found" },
+            });
         },
         (url) => fn(url, control),
     );
@@ -3064,7 +3296,11 @@ function jsonResponse(body: unknown, headers: Record<string, string> = {}): Resp
     });
 }
 
-function httpEchoTool(): { description: string; inputSchema: { properties: { text: { type: string } }; type: string }; name: string } {
+function httpEchoTool(): {
+    description: string;
+    inputSchema: { properties: { text: { type: string } }; type: string };
+    name: string;
+} {
     return {
         name: "echo",
         description: "Echo input text",
