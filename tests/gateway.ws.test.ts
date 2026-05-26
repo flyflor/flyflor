@@ -1857,8 +1857,22 @@ describe("SocketControlHub", () => {
                 },
             });
             brain.appendEvent({
+                id: "event-other-fork",
+                ownerKey: "scope:scope-1",
+                sourceKey: "req-other-fork",
+                sourceSurface: Channel.Ws,
+                ts: 150,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    contextForkId: "fork-other",
+                    userText: "other fork user",
+                    assistantText: "other fork assistant",
+                },
+            });
+            brain.appendEvent({
                 id: "event-fork",
-                ownerKey: "fork:fork-1",
+                ownerKey: "scope:scope-1",
                 sourceKey: "req-fork",
                 sourceSurface: Channel.Ws,
                 ts: 200,
@@ -1870,12 +1884,48 @@ describe("SocketControlHub", () => {
                     assistantText: "fork assistant",
                 },
             });
+            brain.appendEvent({
+                id: "event-newer-root",
+                ownerKey: "scope:scope-1",
+                sourceKey: "req-newer-root",
+                sourceSurface: Channel.Ws,
+                ts: 300,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    userText: "newer root user",
+                    assistantText: "newer root assistant",
+                },
+            });
+            brain.appendEvent({
+                id: "event-owned-fork",
+                ownerKey: "fork:fork-1",
+                sourceKey: "req-owned-fork",
+                sourceSurface: Channel.Ws,
+                ts: 400,
+                type: MemoryEventType.Event,
+                role: ModelRole.User,
+                content: {
+                    userText: "owned fork user",
+                    assistantText: "owned fork assistant",
+                },
+            });
             brain.close();
 
             const queries = new SocketQueryComponent(paths);
             await queries.initialize();
-            expect(queries.historyList({ scopeId: "scope-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-root"]);
-            expect(queries.historyList({ contextForkId: "fork-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-fork"]);
+            expect(queries.historyList({ scopeId: "scope-1", limit: 10 }).map((turn) => turn.eventId)).toEqual(["event-root", "event-newer-root"]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 10 }).map((turn) => turn.eventId)).toEqual([
+                "event-fork",
+                "event-owned-fork",
+            ]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 1 }).map((turn) => turn.eventId)).toEqual([
+                "event-owned-fork",
+            ]);
+            expect(queries.historyList({ contextForkId: "fork-1", limit: 2, scopeId: "scope-1" }).map((turn) => turn.eventId)).toEqual([
+                "event-fork",
+                "event-owned-fork",
+            ]);
             queries.dispose();
         } finally {
             await rm(root, { recursive: true, force: true });

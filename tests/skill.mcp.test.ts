@@ -2246,24 +2246,27 @@ describe("Skill and MCP capability config", () => {
                 jobId: batchStart?.payload?.jobId,
             }),
         ]);
-        expect(sink.events
+        const childJobIds = new Map(startEvents.map((event) => [event.payload?.childId, event.payload?.childJobId]));
+        const childEndPayloads = sink.events
             .filter((event) => event.type === RuntimeEventType.SubagentChildEnd)
-            .map((event) => event.payload)).toEqual([
-                expect.objectContaining({
-                    batchId: batchStart?.payload?.batchId,
-                    childId: "a",
-                    childJobId: startEvents[0]?.payload?.childJobId,
-                    jobId: batchStart?.payload?.jobId,
-                    status: "completed",
-                }),
-                expect.objectContaining({
-                    batchId: batchStart?.payload?.batchId,
-                    childId: "b",
-                    childJobId: startEvents[1]?.payload?.childJobId,
-                    jobId: batchStart?.payload?.jobId,
-                    status: "completed",
-                }),
-            ]);
+            .map((event) => event.payload)
+            .sort((left, right) => String(left?.childId).localeCompare(String(right?.childId)));
+        expect(childEndPayloads).toEqual([
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                childId: "a",
+                childJobId: childJobIds.get("a"),
+                jobId: batchStart?.payload?.jobId,
+                status: "completed",
+            }),
+            expect.objectContaining({
+                batchId: batchStart?.payload?.batchId,
+                childId: "b",
+                childJobId: childJobIds.get("b"),
+                jobId: batchStart?.payload?.jobId,
+                status: "completed",
+            }),
+        ]);
         const db = new Database(join(paths.configDir, "brain.db"), { readonly: true });
         try {
             const row = db

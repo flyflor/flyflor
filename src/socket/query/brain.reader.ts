@@ -70,16 +70,17 @@ export class SocketBrainReader {
     }
 
     public listHistory(input: SocketQueryHistoryInput): GatewayControlHistoryTurnSnapshot[] {
-        const ownerKey = ownerKeyFromScope(input.scopeId);
+        const ownerKey = input.contextForkId ? undefined : ownerKeyFromScope(input.scopeId);
         return this.brain
             .listEvents({
+                contextForkId: input.contextForkId,
                 ownerKey,
                 type: MemoryEventType.Event,
                 untilTs: input.beforeTs,
                 limit: input.limit ?? 20,
             })
-            .filter((event) => this.matchesContextFork(event, input.contextForkId))
             .filter((event) => input.contextForkId !== undefined || !event.ownerKey?.startsWith("fork:"))
+            .filter((event) => input.contextForkId !== undefined || typeof event.content.contextForkId !== "string")
             .map((event) => this.historyTurnFromEvent(event))
             .reverse();
     }
